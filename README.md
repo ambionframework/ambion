@@ -1,8 +1,6 @@
 # Ambion
 
-A minimalist framework for ambient-aware, always-on agents.
-
-[ambionframework.com](https://ambionframework.com)
+A minimalist framework for ambient-aware, always-on agents [ambionframework.com](https://ambionframework.com)
 
 ## Why
 
