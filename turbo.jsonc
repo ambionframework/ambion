@@ -1,0 +1,33 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"globalPassThroughEnv": [
+		"NODE_EXTRA_CA_CERTS",
+		"SSL_CERT_FILE",
+		"REQUESTS_CA_BUNDLE",
+		"CI",
+		// Read by scripts/publish.mjs, never by a cached task.
+		"NODE_AUTH_TOKEN",
+		"NPM_TOKEN",
+		"GITHUB_TOKEN"
+	],
+	"tasks": {
+		"dev": {
+			"persistent": true,
+			"cache": false
+		},
+		"build": {
+			"dependsOn": ["^build"],
+			"outputs": ["dist/**"]
+		},
+		// Type-checking a package needs its dependencies' emitted `.d.ts`, so it
+		// waits on the upstream builds rather than only on its own.
+		"check:types": {
+			"dependsOn": ["build", "^build"],
+			"outputLogs": "errors-only"
+		},
+		"test": {
+			"dependsOn": ["build", "^build"],
+			"outputLogs": "new-only"
+		}
+	}
+}
