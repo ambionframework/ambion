@@ -1,6 +1,6 @@
 # Ambion
 
-A minimalist framework for ambient-aware, always-on agents. TypeScript. Deployed on Cloudflare at scale. Inspired by Pi.
+A minimalist framework for ambient-aware, always-on agents.
 
 [ambionframework.com](https://ambionframework.com)
 
