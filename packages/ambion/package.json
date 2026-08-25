@@ -1,0 +1,50 @@
+{
+	"name": "@ambionframework/ambion",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "A minimalist framework for ambient-aware, always-on agents.",
+	"license": "Apache-2.0",
+	"homepage": "https://ambionframework.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ambionframework/ambion.git",
+		"directory": "packages/ambion"
+	},
+	"keywords": [
+		"agents",
+		"ambient",
+		"cloudflare",
+		"durable-objects",
+		"framework"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"publishConfig": {
+		"registry": "https://npm.pkg.github.com",
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsdown",
+		"check:types": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"devDependencies": {
+		"tsdown": "^0.22.14",
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11"
+	}
+}

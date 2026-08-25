@@ -1,0 +1,41 @@
+# build output
+dist/
+*.tsbuildinfo
+
+# dependencies
+node_modules/
+
+# caches
+.cache/
+.turbo/
+
+# logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# environment variables
+.env
+.env.local
+.env.*.local
+.dev.vars
+
+# Local registry credentials. The committed root .npmrc carries only the
+# @ambionframework -> GitHub Packages scope mapping; tokens live here.
+.npmrc.local
+
+# editors
+.idea/
+.vscode/settings.json
+*.code-workspace
+
+# macOS
+.DS_Store
+
+# wrangler local state
+.wrangler/
+worker-configuration.d.ts
+
+# Release tarballs, produced by scripts/publish.mjs
+dist-release/

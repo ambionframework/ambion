@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Turbo prints enough on failure; keep the happy path readable.
+  TURBO_TELEMETRY_DISABLED: 1
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check:format
+      - run: pnpm run check:types
+      - run: pnpm run check:lint
+
+  test:
+    name: Test on Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test
+
+  cli:
+    name: CLI smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+
+      # The published artifact is `bin/ambion.mjs` plus `dist/`, so the smoke
+      # test drives the real bin script rather than the TypeScript sources.
+      # It has no commands yet; what it proves is the chain that will carry
+      # them — the node guard, the bundle, and the runtime resolved across the
+      # workspace, which the help text reads from.
+      - name: ambion --version reports the manifest version
+        run: |
+          version="$(./packages/cli/bin/ambion.mjs --version)"
+          expected="$(node -p "require('./packages/cli/package.json').version")"
+          [ "$version" = "$expected" ] || {
+            echo "ambion --version said '$version', expected '$expected'" >&2
+            exit 1
+          }
+
+      - name: ambion --help resolves the runtime package
+        run: ./packages/cli/bin/ambion.mjs --help | grep -q '@ambionframework/ambion'
+
+      - name: an unknown command fails rather than passing quietly
+        run: |
+          if ./packages/cli/bin/ambion.mjs not-a-command >/dev/null 2>&1; then
+            echo 'Expected a non-zero exit for an unknown command.' >&2
+            exit 1
+          fi
+
+      - name: packages pack cleanly
+        run: |
+          node scripts/version.mjs --check
+          node scripts/publish.mjs --pack-only

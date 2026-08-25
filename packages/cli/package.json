@@ -1,0 +1,45 @@
+{
+	"name": "@ambionframework/cli",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "Command line interface for the Ambion agent framework.",
+	"license": "Apache-2.0",
+	"homepage": "https://ambionframework.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ambionframework/ambion.git",
+		"directory": "packages/cli"
+	},
+	"keywords": [
+		"ambion",
+		"agents",
+		"cli"
+	],
+	"bin": {
+		"ambion": "bin/ambion.mjs"
+	},
+	"files": [
+		"bin/ambion.mjs",
+		"dist"
+	],
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"publishConfig": {
+		"registry": "https://npm.pkg.github.com",
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsdown",
+		"check:types": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@ambionframework/ambion": "workspace:*"
+	},
+	"devDependencies": {
+		"tsdown": "^0.22.14",
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11"
+	}
+}

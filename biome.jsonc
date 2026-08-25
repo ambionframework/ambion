@@ -1,0 +1,54 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
+	"assist": { "actions": { "source": { "organizeImports": "on" } } },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"correctness": {
+				"noUnusedImports": "error",
+				"noUnusedVariables": "error",
+				// Source imports use bundler-resolved `.ts` specifiers, which this
+				// rule reads as a missing extension.
+				"useImportExtensions": "off"
+			},
+			"style": {
+				"useNodejsImportProtocol": "error",
+				"noNonNullAssertion": "error",
+				"noInferrableTypes": "off"
+			},
+			"suspicious": {
+				"noExplicitAny": "error",
+				// The CLI and the examples are console programs; `noConsole` is
+				// re-enabled for library source in the override below.
+				"noConsole": "off"
+			}
+		}
+	},
+	"vcs": {
+		"clientKind": "git",
+		"enabled": true,
+		"useIgnoreFile": true
+	},
+	// Formatting is Prettier's job (see prettier.config.js); Biome lints only.
+	"formatter": {
+		"enabled": false
+	},
+	"overrides": [
+		{
+			"includes": ["**/tsconfig.json", "**/tsconfig.*.json"],
+			"json": {
+				"parser": {
+					"allowComments": true,
+					"allowTrailingCommas": true
+				}
+			}
+		},
+		{
+			// The library must not write to stdout on its owner's behalf; hosts
+			// pass a logger in instead.
+			"includes": ["packages/ambion/src/**"],
+			"linter": { "rules": { "suspicious": { "noConsole": "error" } } }
+		}
+	]
+}

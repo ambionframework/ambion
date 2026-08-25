@@ -39,6 +39,30 @@ This single invariant is what makes the system small enough to reason about and 
 - **Always on, rarely running.** Agents are dormant between activations. Cost scales with events, not wall-clock time.
 - **Resumable by construction.** Because every interaction is a persisted thread, there is no session to lose.
 
+## Install
+
+Ambion publishes to GitHub Packages, which requires a token even to read — a
+public repository does not change that.
+
+Create a [classic PAT](https://github.com/settings/tokens/new?scopes=read:packages&description=Ambion)
+with `read:packages`, then in your project's `.npmrc`:
+
+```ini
+@ambionframework:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+The token is read from the environment, so the file is safe to commit.
+
+```sh
+export GITHUB_TOKEN=…
+npm install @ambionframework/ambion
+```
+
+In GitHub Actions the built-in `GITHUB_TOKEN` already carries the scope.
+[`docs/toolchain.md`](docs/toolchain.md) covers that, and verifying a release's
+provenance attestation.
+
 ## CLI
 
 ```sh
@@ -48,6 +72,24 @@ ambion deploy                # ship to Cloudflare
 ```
 
 Define agents in TypeScript, declare their tools, deploy. The framework owns activation, threading, and durability.
+
+None of these commands exist yet. The published `ambion` binary currently
+reports its version and nothing else; the commands arrive with the runtime.
+
+## Repository
+
+| Path              | Package                                                      |
+| ----------------- | ------------------------------------------------------------ |
+| `packages/ambion` | [`@ambionframework/ambion`](packages/ambion) — the runtime   |
+| `packages/cli`    | [`@ambionframework/cli`](packages/cli) — the `ambion` binary |
+
+```sh
+pnpm install
+pnpm check
+```
+
+[`docs/toolchain.md`](docs/toolchain.md) specifies the build, CI and release
+setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
 
 ## Design principles
 

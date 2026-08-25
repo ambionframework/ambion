@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        # Underscore, not a hyphen: `inputs.dry-run` parses as `inputs.dry`
+        # minus `run` in GitHub's expression language.
+        description: Build and pack without publishing
+        type: boolean
+        default: true
+      tag:
+        description: Dist-tag to publish under
+        type: string
+        default: latest
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Publishing to GitHub Packages with the built-in GITHUB_TOKEN.
+  packages: write
+  # Signing a build-provenance attestation for the release tarballs.
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    name: Publish to GitHub Packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Do not leave the job's token in .git/config for later steps to read.
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: '@ambionframework'
+
+      - run: pnpm install --frozen-lockfile
+
+      # A release is never the first time these run, but a tag can be cut from a
+      # commit CI never saw. Re-check before anything leaves the machine.
+      - run: pnpm run check:types
+      - run: pnpm run check:lint
+      - run: pnpm run build
+      - run: pnpm run test
+
+      - name: Versions agree across packages
+        run: node scripts/version.mjs --check
+
+      - name: Tag matches the package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./packages/ambion/package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $version." >&2
+            exit 1
+          fi
+
+      # Whether this run actually ships is decided once, here, and read by the
+      # steps below. A dispatch defaults to a dry run; a tag always publishes.
+      - name: Resolve release mode
+        id: mode
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: echo "publishing=$([ "$DRY_RUN" = "true" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+
+      # Pack once. Everything downstream — the attestation and the publish —
+      # operates on these exact bytes.
+      - name: Pack
+        run: node scripts/publish.mjs --pack-only
+
+      # Signing is skipped on a dry run: an attestation is a permanent public
+      # claim that these bytes were released, and on a dry run they were not.
+      - name: Attest build provenance
+        if: steps.mode.outputs.publishing == 'true'
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: dist-release/*.tgz
+
+      # Inputs reach the shell as environment variables, never spliced into the
+      # command line: a dispatch input is attacker-controlled text as far as this
+      # step is concerned.
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIST_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || 'latest' }}
+          PUBLISHING: ${{ steps.mode.outputs.publishing }}
+        run: |
+          args=(--skip-pack --tag "$DIST_TAG")
+          if [ "$PUBLISHING" != "true" ]; then
+            args+=(--dry-run)
+          fi
+          node scripts/publish.mjs "${args[@]}"
