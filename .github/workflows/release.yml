@@ -84,7 +84,7 @@ jobs:
       # claim that these bytes were released, and on a dry run they were not.
       - name: Attest build provenance
         if: steps.mode.outputs.publishing == 'true'
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist-release/*.tgz
 
