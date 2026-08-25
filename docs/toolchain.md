@@ -258,7 +258,7 @@ scope mapping lives in the committed root `.npmrc`; credentials never do
 Each package carries:
 
 ```json
-"publishConfig": { "registry": "https://npm.pkg.github.com", "access": "restricted" }
+"publishConfig": { "registry": "https://npm.pkg.github.com", "access": "public" }
 ```
 
 ### Versioning
@@ -340,13 +340,23 @@ inlined, so the file stays committable. The README carries the full walkthrough.
 
 This is the toolchain's biggest open question, and repository visibility does
 not resolve it. GitHub Packages gates the npm registry independently of the
-repo: a package published from a public repository still answers an anonymous
-request with `401 Unauthorized`, while a package that does not exist returns a
-plain `404` — so the 401 is an auth gate, not a privacy default. Verify it
-against any public package, for example:
+repo, and GitHub documents the gate rather than leaving it to be discovered:
+"You need an access token to publish, install, and delete private, internal, and
+public packages", and of the registries only the Container registry "allow[s]
+anonymous access and can be pulled without authentication".
+
+The registry's responses say the same thing. A package published from a public
+repository answers an anonymous request with `401` and
+`{"error":"authentication token not provided"}`, while a name that does not
+exist under the same owner answers `404` and names that owner — so the package
+resolves first and the 401 is an auth gate, not a privacy default or a
+not-found in disguise:
 
 ```sh
-curl -s -o /dev/null -w '%{http_code}\n' https://npm.pkg.github.com/@github%2frelative-time-element
+# published from a public repo → 401 authentication token not provided
+curl -s -w ' %{http_code}\n' https://npm.pkg.github.com/@github%2frelative-time-element
+# same owner, no such package → 404 does not exist under owner "github"
+curl -s -w ' %{http_code}\n' https://npm.pkg.github.com/@github%2fno-such-package
 ```
 
 Every consumer therefore needs a token, which is workable for a private or
