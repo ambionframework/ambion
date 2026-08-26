@@ -18,18 +18,17 @@ export interface SeatInfo {
 	name: string;
 	kind: 'agent' | 'human';
 	identity: string;
-	status: SeatStatus | 'human';
+	/** Agents only: the seat's live status. */
+	status?: SeatStatus;
 	/** Agents only: the id of the seat's downstream Pi session, `<room>:<agent>`. */
 	sessionId?: string;
 }
 
-/** The session's event stream: Pi's event grammar, lifted to the room. */
+/** The session's event stream: room-level facts, one event per fact. */
 export type SessionEvent =
 	| { type: 'delivery'; message: Message }
 	| { type: 'agent_start'; agent: string }
-	| { type: 'say_start'; agent: string; to?: string }
-	| { type: 'say_update'; agent: string; delta: string }
-	| { type: 'say_end'; agent: string; message: Message }
+	| { type: 'say'; agent: string; message: Message }
 	| { type: 'say_conflict'; agent: string; missed: Message[] }
 	| { type: 'tool_execution_start'; agent: string; toolName: string }
 	| { type: 'tool_execution_end'; agent: string; toolName: string }

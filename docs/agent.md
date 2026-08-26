@@ -137,7 +137,7 @@ const session = openSession({
 });
 
 const unsubscribe = session.subscribe((event) => {
-  if (event.type === 'say_update') process.stdout.write(event.delta);
+  if (event.type === 'say') console.log(`${event.agent}: ${event.message.text}`);
 });
 
 await session.deliver({ from: andrei, text: 'Draft the weekly. Anything to flag?' });
@@ -272,17 +272,15 @@ replayed long after its working view reset.
 ### Observing the room
 
 The session's observation surface is Pi's `Agent` API lifted one level: the
-same `subscribe(listener)` returning an unsubscribe function, the same event
-grammar, with one addition a room needs and a single agent does not — every
-event names its seat.
+same `subscribe(listener)` returning an unsubscribe function, an event per
+fact, and one property a room needs that a single agent does not — every
+event names its seat. The stream carries room-level facts only.
 
 ```ts
 type SessionEvent =
   | { type: 'delivery'; message: Message }
   | { type: 'agent_start'; agent: string }
-  | { type: 'say_start'; agent: string; to?: string }
-  | { type: 'say_update'; agent: string; delta: string }
-  | { type: 'say_end'; agent: string; message: Message }
+  | { type: 'say'; agent: string; message: Message }
   | { type: 'say_conflict'; agent: string; missed: Message[] }
   | { type: 'tool_execution_start'; agent: string; toolName: string }
   | { type: 'tool_execution_end'; agent: string; toolName: string }
@@ -292,10 +290,13 @@ type SessionEvent =
 ```
 
 The mapping is deliberate, so anyone who knows Pi already knows this: Pi's
-`agent_start`/`agent_end` are these, attributed; Pi's
-`message_start`/`message_update`/`message_end` surface here as
-`say_start`/`say_update`/`say_end`, streaming deltas and all, emitted only
-for `say` output; Pi's `tool_execution_*` pass through with the seat named.
+`agent_start`/`agent_end` are these, attributed; Pi's `tool_execution_*`
+pass through with the seat named. A `say` is atomic on the stream as it is
+on the record: one event, the whole message, exactly as it landed. Pi's
+`message_*` granularity — streaming deltas, partial turns — is deliberately
+not re-broadcast here: finer visibility is the seat's own layer, reached
+through Pi's hooks on the seat's downstream session, not by the room
+forwarding messages it did not speak.
 Four events are the room's own: `delivery`; `settled` — the moment no agent
 is active and nothing is queued; `say_conflict` — the lock of rule 5 refusing
 a say that raced past the record, so the host sees races being caught, not
@@ -359,7 +360,7 @@ proposal.
   identities (rule 7);
 - opening the same name twice yields the same record, and a fresh name yields
   an empty one;
-- a subscriber sees `delivery`, `agent_start`, `say` deltas, `agent_end` and
+- a subscriber sees `delivery`, `agent_start`, `say`, `agent_end` and
   `settled` in order; a turn that throws emits `error` — never a silent
   decline — and `abort()` quiets an active room, keeping what was already
   said (§5, Observing the room).

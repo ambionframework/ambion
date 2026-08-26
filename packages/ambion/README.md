@@ -17,7 +17,7 @@ const lead = defineAgent({
 });
 
 const session = openSession({ name: 'room', participants: [you, lead] });
-session.subscribe((e) => e.type === 'say_end' && console.log(`${e.agent}: ${e.message.text}`));
+session.subscribe((e) => e.type === 'say' && console.log(`${e.agent}: ${e.message.text}`));
 await session.deliver({ from: you, text: 'hello' });
 await session.settled();
 ```

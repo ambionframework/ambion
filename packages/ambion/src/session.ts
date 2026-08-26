@@ -6,7 +6,7 @@ import type {
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
 import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
-import type { Api, Model, Models, UserMessage } from '@earendil-works/pi-ai';
+import type { Api, Model, UserMessage } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { Type } from 'typebox';
 import {
@@ -27,14 +27,21 @@ const MESSAGE_ENTRY = 'ambion/message';
 
 const defaultRepo = new InMemorySessionRepo();
 
+/** Pi's model registry, built once on first use. */
+let builtinRegistry: ReturnType<typeof builtinModels> | undefined;
+const registry = () => (builtinRegistry ??= builtinModels());
+
 export interface OpenSessionOptions {
 	/** The session's name: open it again and you are back in it, record intact. */
 	name: string;
 	participants: readonly Participant[];
-	/** Override the model call — a scripted stream makes the room deterministic. */
+	/**
+	 * Override the model call — Pi's own extension surface, and the only one
+	 * here: a scripted stream makes the room deterministic, a custom stream
+	 * brings custom providers. When omitted, models resolve from Pi's builtin
+	 * registry, `provider/model-id`.
+	 */
 	streamFn?: StreamFn;
-	/** A pi-ai model registry; created on demand when omitted and no streamFn is given. */
-	models?: Models;
 	/** Pi's own session repository. Defaults to a process-wide `InMemorySessionRepo`. */
 	repo?: SessionRepo;
 }
@@ -92,7 +99,8 @@ class SessionImpl implements Session {
 	private readonly listeners = new Set<(event: SessionEvent) => void>();
 	private readonly settledWaiters: (() => void)[] = [];
 	private readonly streamFn: StreamFn;
-	private readonly models?: Models;
+	/** True when a custom streamFn is in play: it never reads the model, so a stub suffices. */
+	private readonly customStream: boolean;
 	private activeCount = 0;
 	private persistTail: Promise<void> = Promise.resolve();
 
@@ -125,25 +133,20 @@ class SessionImpl implements Session {
 			}
 		}
 
-		if (options.streamFn) {
-			this.streamFn = options.streamFn;
-			this.models = options.models;
-		} else {
-			const models = options.models ?? builtinModels();
-			this.models = models;
-			this.streamFn = (model, context, streamOptions) => {
+		this.customStream = options.streamFn !== undefined;
+		this.streamFn =
+			options.streamFn ??
+			((model, context, streamOptions) => {
 				const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
 				const resolved =
 					streamOptions?.apiKey || !envKey ? streamOptions : { ...streamOptions, apiKey: envKey };
-				return models.streamSimple(model, context, resolved);
-			};
-		}
+				return registry().streamSimple(model, context, resolved);
+			});
 	}
 
 	/** Open the name into its Pi session — creating it on first open — and load the record. */
 	private async openStore(repo: SessionRepo): Promise<PiSession> {
-		const known = (await repo.list()).find((metadata) => metadata.id === this.name);
-		const piSession = known ? await repo.open(known) : await repo.create({ id: this.name });
+		const piSession = await openOrCreate(repo, this.name);
 		const entries = await piSession.findEntries();
 		// findEntries does not promise append order; seq does.
 		entries.sort((a, b) => a.seq - b.seq);
@@ -163,11 +166,7 @@ class SessionImpl implements Session {
 	private seatSession(seat: SeatRuntime): Promise<PiSession> {
 		seat.piSeat ??= (async () => {
 			await this.ready;
-			const id = `${this.name}:${seat.def.name}`;
-			const known = (await this.repo.list()).find((metadata) => metadata.id === id);
-			return known
-				? await this.repo.open(known)
-				: await this.repo.create({ id, parentSessionId: this.name });
+			return openOrCreate(this.repo, `${this.name}:${seat.def.name}`, this.name);
 		})();
 		return seat.piSeat;
 	}
@@ -190,7 +189,7 @@ class SessionImpl implements Session {
 		const seq = this.record.length;
 		await this.persistTail;
 		this.emit({ type: 'delivery', message });
-		this.dispatch(message, seq);
+		this.dispatch(message, seq, true);
 	}
 
 	subscribe(listener: (event: SessionEvent) => void): () => void {
@@ -220,7 +219,7 @@ class SessionImpl implements Session {
 	seats(): SeatInfo[] {
 		const seats: SeatInfo[] = [];
 		for (const human of this.humans.values()) {
-			seats.push({ name: human.name, kind: 'human', identity: human.identity, status: 'human' });
+			seats.push({ name: human.name, kind: 'human', identity: human.identity });
 		}
 		for (const seat of this.agents.values()) {
 			seats.push({
@@ -264,29 +263,21 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * A delivery activates its target, or every idle non-passive agent.
-	 * Whatever arrives — directed or not — is steered into every colleague
-	 * still at work: the room hears everything on the record (rule 2).
+	 * Route a committed message — the room's whole policy in one place.
+	 * Every colleague still at work hears it as a steer (rule 2); a named
+	 * target is woken at rest, passive included (rules 1, 4). `wake` is
+	 * rule 4's asymmetry in one flag: a broadcast delivery wakes the idle
+	 * room, an agent's undirected say wakes no one who has gone idle.
 	 */
-	private dispatch(message: Message, seq: number): void {
+	private dispatch(message: Message, seq: number, wake: boolean): void {
 		const target = message.to !== undefined ? this.agents.get(message.to) : undefined;
 		for (const seat of this.agents.values()) {
-			if (seat.def.name === message.from || seat === target) continue;
+			if (seat.def.name === message.from) continue;
 			if (seat.active) {
 				this.steerInto(seat, message, seq);
-			} else if (message.to === undefined && !seat.passive) {
+			} else if (seat === target || (message.to === undefined && wake && !seat.passive)) {
 				this.activate(seat);
 			}
-		}
-		if (target) this.reach(target, message, seq);
-	}
-
-	/** Directed at a seat: steer it active, wake it idle — passive included. */
-	private reach(seat: SeatRuntime, message: Message, seq: number): void {
-		if (seat.active) {
-			this.steerInto(seat, message, seq);
-		} else {
-			this.activate(seat);
 		}
 	}
 
@@ -316,6 +307,9 @@ class SessionImpl implements Session {
 	private async run(seat: SeatRuntime): Promise<void> {
 		for (;;) {
 			try {
+				// A fresh view hands the seat the whole record: heard up to here.
+				seat.viewSeq = this.record.length;
+				seat.pendingSteers = [];
 				const agent = this.buildAgent(seat);
 				seat.agent = agent;
 				await agent.prompt(userMessage(this.renderContext(seat)));
@@ -424,15 +418,10 @@ class SessionImpl implements Session {
 				seat.viewSeq = seq;
 				seat.spoke = true;
 				await this.persistTail;
-				this.emit({ type: 'say_start', agent: seat.def.name, ...(to ? { to } : {}) });
-				this.emit({ type: 'say_update', agent: seat.def.name, delta: params.text });
-				this.emit({ type: 'say_end', agent: seat.def.name, message });
-				const target = to !== undefined ? this.agents.get(to) : undefined;
-				for (const other of this.agents.values()) {
-					if (other === seat || other === target || !other.active) continue;
-					this.steerInto(other, message, seq);
-				}
-				if (target) this.reach(target, message, seq);
+				// A say is atomic: one event, the whole message, exactly as it landed
+				// on the record. Finer granularity belongs to the seat's own layer.
+				this.emit({ type: 'say', agent: seat.def.name, message });
+				this.dispatch(message, seq, false);
 				const result: AgentToolResult<Record<string, never>> = {
 					content: [{ type: 'text', text: 'delivered' }],
 					details: {},
@@ -476,9 +465,6 @@ class SessionImpl implements Session {
 	}
 
 	private renderContext(seat: SeatRuntime): string {
-		// The view hands the seat the whole record: heard up to here.
-		seat.viewSeq = this.record.length;
-		seat.pendingSteers = [];
 		const transcript =
 			this.record.length === 0 ? '(the record is empty)' : this.record.map(renderLine).join('\n');
 		return [
@@ -490,24 +476,35 @@ class SessionImpl implements Session {
 	}
 
 	private resolveModel(def: AgentDefinition): Model<Api> {
-		if (this.models) {
-			const slash = def.model.indexOf('/');
-			if (slash > 0) {
-				const model = this.models.getModel(def.model.slice(0, slash), def.model.slice(slash + 1));
-				if (model) return model;
-			}
-			throw new Error(
-				`Unknown model '${def.model}' for agent '${def.name}': expected 'provider/model-id'.`,
-			);
+		if (this.customStream) {
+			// A custom streamFn never reads the model; a stub keeps Pi's loop satisfied.
+			return {
+				id: def.model,
+				name: def.model,
+				api: 'scripted',
+				provider: 'scripted',
+			} as unknown as Model<Api>;
 		}
-		// A scripted streamFn never reads the model; a stub keeps Pi's loop satisfied.
-		return {
-			id: def.model,
-			name: def.model,
-			api: 'scripted',
-			provider: 'scripted',
-		} as unknown as Model<Api>;
+		const slash = def.model.indexOf('/');
+		if (slash > 0) {
+			const model = registry().getModel(def.model.slice(0, slash), def.model.slice(slash + 1));
+			if (model) return model;
+		}
+		throw new Error(
+			`Unknown model '${def.model}' for agent '${def.name}': expected 'provider/model-id'.`,
+		);
 	}
+}
+
+/** Open an id into its Pi session, creating it on first open. */
+async function openOrCreate(
+	repo: SessionRepo,
+	id: string,
+	parentSessionId?: string,
+): Promise<PiSession> {
+	const known = (await repo.list()).find((metadata) => metadata.id === id);
+	if (known) return repo.open(known);
+	return repo.create(parentSessionId ? { id, parentSessionId } : { id });
 }
 
 function renderLine(message: Message): string {

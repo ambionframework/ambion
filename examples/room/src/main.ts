@@ -113,7 +113,7 @@ session.subscribe((event: SessionEvent) => {
 		case 'agent_start':
 			say(`${dim}· ${event.agent} is reading…${reset}`);
 			break;
-		case 'say_end': {
+		case 'say': {
 			const arrow = event.message.to ? ` → ${event.message.to}` : '';
 			say(`${paint(event.agent, `${event.agent}${arrow}:`)} ${event.message.text}`);
 			break;
@@ -173,7 +173,8 @@ async function handle(line: string): Promise<void> {
 	if (input === '/abort') return session.abort();
 	if (input === '/seats') {
 		for (const seat of session.seats()) {
-			console.log(`  ${seat.name} (${seat.kind}, ${seat.status}): ${seat.identity}`);
+			const status = seat.status ? `, ${seat.status}` : '';
+			console.log(`  ${seat.name} (${seat.kind}${status}): ${seat.identity}`);
 		}
 		return;
 	}

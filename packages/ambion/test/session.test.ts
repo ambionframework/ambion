@@ -152,7 +152,7 @@ describe('openSession', () => {
 		const events = collect(session);
 		session.subscribe((event) => {
 			if (event.type === 'agent_end' && event.agent === 'gamma') gammaIdle.resolve();
-			if (event.type === 'say_end' && event.agent === 'alpha') alphaSaid.resolve();
+			if (event.type === 'say' && event.agent === 'alpha') alphaSaid.resolve();
 		});
 
 		await session.deliver({ from: human, text: 'What is the answer?' });
@@ -219,7 +219,7 @@ describe('openSession', () => {
 		await session.settled();
 
 		expect(await session.messages()).toHaveLength(1);
-		expect(events.some((e) => e.type === 'say_start')).toBe(false);
+		expect(events.some((e) => e.type === 'say')).toBe(false);
 		const end = events.find((e) => e.type === 'agent_end');
 		expect(end).toMatchObject({ agent: 'shy', spoke: false });
 	});
@@ -340,9 +340,7 @@ describe('openSession', () => {
 		expect(events.map((e) => e.type)).toEqual([
 			'delivery',
 			'agent_start',
-			'say_start',
-			'say_update',
-			'say_end',
+			'say',
 			'agent_end',
 			'settled',
 		]);
@@ -429,7 +427,7 @@ describe('openSession', () => {
 		});
 		const events = collect(session);
 		session.subscribe((event) => {
-			if (event.type === 'say_end' && event.agent === 'first') firstSaid.resolve();
+			if (event.type === 'say' && event.agent === 'first') firstSaid.resolve();
 		});
 		await session.deliver({ from: human, text: 'thoughts?' });
 		await session.settled();
@@ -460,7 +458,7 @@ describe('openSession', () => {
 		});
 		const yieldEvents = collect(yielding);
 		yielding.subscribe((event) => {
-			if (event.type === 'say_end' && event.agent === 'first') yieldSaid.resolve();
+			if (event.type === 'say' && event.agent === 'first') yieldSaid.resolve();
 		});
 		await yielding.deliver({ from: human, text: 'thoughts?' });
 		await yielding.settled();
