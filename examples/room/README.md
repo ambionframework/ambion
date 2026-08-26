@@ -1,8 +1,9 @@
 # room
 
-An interactive multi-agent session in your terminal: three agents, one room,
-you. Each mechanic of [`docs/agent.md`](../../docs/agent.md) is observable by
-hand.
+An interactive multi-agent session in your terminal: a working room — an
+engineer, a designer, a product manager, an executive, a project manager —
+advancing an initiative you bring to it. Each mechanic of
+[`docs/agent.md`](../../docs/agent.md) is observable by hand.
 
 ```sh
 pnpm install && pnpm build      # once, at the repository root
@@ -14,22 +15,33 @@ ANTHROPIC_API_KEY=… pnpm start
 
 ## The cast
 
-| Seat         | Status  | What to watch                                            |
-| ------------ | ------- | -------------------------------------------------------- |
-| `pragma`     | idle    | Answers; calls the archivist in with a directed say      |
-| `contrarian` | idle    | Speaks only to disagree — silence is its normal outcome  |
-| `archivist`  | passive | Hears nothing until named: `@archivist …` or a colleague |
+| Seat       | Status  | What to watch                                                     |
+| ---------- | ------- | ----------------------------------------------------------------- |
+| `lead`     | idle    | Tech lead managing a team — feasibility, estimates, `team_status` |
+| `designer` | idle    | Speaks when the user experience is at stake; otherwise silent     |
+| `product`  | idle    | Owns scope and priority; pulls colleagues in with directed says   |
+| `exec`     | idle    | Engages only on resources and time to market — then decides       |
+| `planner`  | passive | The plan of record: hears nothing until named, keeps it current   |
+
+The room routes its own bookkeeping: when an estimate, a scope change, or a
+resource decision lands, whoever made it calls the `planner` in with a
+directed say — the passive seat wakes, folds the change into the plan, and
+goes back to rest.
 
 ## Things worth trying
 
-- **Silence**: ask a plain question. `pragma` answers; `contrarian` glances and
-  stays quiet — the dim `· contrarian stayed quiet` line is an agent declining.
-- **Engagement**: state a bad plan ("let's rewrite the backend in a weekend").
-  The same seat that stayed quiet now speaks.
-- **The passive seat**: `@archivist what did we decide about X?` — the only
-  ways to reach it are a directed delivery or a colleague's directed say. Ask
-  `pragma` something historical and watch it call the archivist in.
-- **Steering**: type again while agents are mid-turn. The message is injected
-  into the running turns — watch the replies fold it in.
+- **Kick off**: "we are shipping payments v2 this quarter — thoughts?" The
+  working seats look; `exec` stays quiet unless resources or dates are on the
+  table, and `planner` hears nothing at all.
+- **Silence**: ask a purely technical question. `designer` and `exec` glance
+  and decline — the dim `· designer stayed quiet` line is an agent choosing.
+- **Waking the executive**: ask for two more engineers, or whether the date
+  is worth hitting. The seat that ignored everything else now decides.
+- **The passive seat**: watch decisions get routed to `planner` by directed
+  say, then ask `@planner where are we?` for the plan of record and progress
+  summary.
+- **Steering**: type a correction while agents are mid-turn. It is injected
+  into the running turns — and a say that raced past it fails back and gets
+  redone (`· <agent> spoke over the room — retrying`).
 - **The record**: `/record` shows who said what, `from` stamped by the
   runtime. `/seats` shows live statuses; `/abort` quiets an active room.

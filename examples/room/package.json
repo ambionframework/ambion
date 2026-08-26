@@ -3,7 +3,7 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
-	"description": "An interactive multi-agent session: three agents, one terminal, you.",
+	"description": "An interactive multi-agent session: a working room advancing an initiative you bring to it.",
 	"scripts": {
 		"start": "node src/main.ts",
 		"check:types": "tsc --noEmit"
