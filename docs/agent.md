@@ -206,17 +206,25 @@ say({ to?: string; text: string });
 ```
 
 Ending a turn without calling `say` is declining — it leaves no mark on the
-record, the way a colleague reads the room and keeps working. The judgment
-lives in `instructions`; the runtime never decides for the agent. Glances are
-still billed — a room of three costs three looks per delivery — which is the
-honest price of a room, stated rather than hidden.
+record, the way a colleague reads the room and keeps working. The runtime's
+own prompt sets the bar for every seat: a reply must add something the record
+does not already hold — new information, a decision moved forward, or a
+genuinely different perspective — and a point already made, even in other
+words, is met with silence. Whether a given reply clears that bar is
+judgment, and the judgment lives in `instructions`; the runtime states the
+bar but never decides for the agent. Glances are still billed — a room of
+three costs three looks per delivery — which is the honest price of a room,
+stated rather than hidden.
 
 **4. A directed `say` is the deliberate act.** An undirected `say` speaks to
 the room: it steers colleagues still at work and wakes no one who has gone
 idle — so agents cannot ping-pong by accident. `say({ to: 'writer' })` speaks
 _and_ wakes the named colleague, idle or passive; every escalation is
 explicit, on the record, and paid for on purpose. Directed at a human, it
-addresses the reader and wakes nothing, since humans are not run.
+addresses the reader and wakes nothing, since humans are not run. The
+runtime's prompt pairs this with a rule against rehearsal: a question only
+one participant can answer is asked with one directed `say`, never posed to
+the room first — a `say` is a message, not a thought.
 
 **5. An agent's status is `active`, `idle`, or `passive`.** Active: taking a
 turn now. Idle: at rest, woken by any delivery. Passive: at rest, woken only
@@ -226,8 +234,10 @@ as `passive(archivist)`, and readable, like all statuses, from
 nothing, costing nothing, until someone asks.
 
 **6. Identity is injected; provenance is stamped.** Every agent's context
-carries the roster — each participant's name, kind, identity and status — so
-the room always knows who is in it and how to address them. On the record,
+carries the roster — each participant's name, kind, identity and status,
+with the statuses spelled out so a seat knows a broadcast will not reach the
+passive colleague in the corner — so the room always knows who is in it and
+how to address them. On the record,
 `from` is written by the runtime from the seated handle: the host delivers as
 a defined human, `say` is stamped with its agent, and only participants
 speak. No one self-reports who they are.
