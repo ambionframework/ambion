@@ -39,3 +39,6 @@ worker-configuration.d.ts
 
 # Release tarballs, produced by scripts/publish.mjs
 dist-release/
+
+# local secrets and ad-hoc end-to-end scripts
+.e2e/

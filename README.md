@@ -10,34 +10,27 @@ Ambion models **presence**. Agents don't run — they wait. They subscribe to th
 
 ## Core model
 
-Five primitives. Nothing else.
+Four primitives today, more to come.
 
-**Workspace** — the unit of deployment. Multiple agents collaborate on a shared list of tasks.
+**Agent** — `defineAgent` makes an agent: a name, an identity the room reads, instructions, a model, and tools. A value, not a process. [`docs/agent.md`](docs/agent.md) specifies it: a vanilla [Pi](https://pi.dev/docs/latest/sdk) agent that speaks only when spoken to — and not always then.
 
-**Agent** — an always-on participant in a workspace. Agents hold tools to manage tasks, timers, and their own subscriptions.
+**Human** — `defineHuman` seats a person as a typed participant: named, carrying an identity agents read and address, on the record like anyone else. A session can seat several.
 
-**Task** — a shared work item on the workspace list. Tasks can carry subscriptions.
+**Tool** — `defineTool`, a facade over Pi's own: same shape, one import. What an agent can do beyond speaking is exactly what its author gave it.
 
-**Subscription** — the only activation mechanism. Every subscription is a thread supporting bidirectional, multi-turn message exchange:
-
-- Human ↔ agent steering and querying is a subscription.
-- Agent ↔ agent interaction is a subscription — the same mechanism, no special case.
-- Certain subscriptions support input filtering, so agents wake only on what matters.
-- Agents create, modify, and drop subscriptions themselves.
-
-**Timer** — standalone or attached to a task. A timer can carry a subscription, turning the passage of time into just another message on a thread.
+**Session** — `openSession` opens a named room: open a name again and you are back in it, record intact. A delivery activates the idle agents in parallel; replies steer colleagues still at work; each agent decides whether to speak, to whom, and which colleague — passive experts included — to call in. Silence leaves no mark, and provenance is stamped by the runtime, never self-reported.
 
 ## The invariant
 
-There is exactly one way an agent activates: **a message arrives on a subscription.** Human input, peer messages, task events, timers — all reach an agent through the same door.
+There is exactly one way an agent activates: **a message is delivered into a session it belongs to** — by a human, a host, or a colleague's directed reply. And even then, it may decline.
 
-This single invariant is what makes the system small enough to reason about and durable enough to run unattended.
+The larger design — workspaces, channels with read/write contracts, timers, batching, a virtual shell with a durable filesystem, tasks, the tenant — arrives one document at a time, each on top of this core.
 
 ## Runtime
 
-- **Edge-native.** Workspaces map onto Cloudflare Durable Objects; threads are durable state, not in-memory sessions.
 - **Always on, rarely running.** Agents are dormant between activations. Cost scales with events, not wall-clock time.
-- **Resumable by construction.** Because every interaction is a persisted thread, there is no session to lose.
+- **Node first.** The core runs in-process, tested in vitest; the edge deployment (Cloudflare Durable Objects) is a designed destination, tackled later.
+- **Storage-ready.** Sessions run in memory today behind a storage interface, so durability is a later implementation, not an API change.
 
 ## Install
 
@@ -94,9 +87,9 @@ setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
 ## Design principles
 
 1. One activation mechanism.
-2. Everything is a thread.
-3. Agents manage their own attention (subscriptions and timers are agent-controlled).
-4. Minimal surface: five primitives, one invariant.
+2. Everything is a message on a record.
+3. Agents manage their own attention — deciding not to engage included.
+4. Minimal surface: four primitives, one invariant, one dependency that does the rest.
 
 ## License
 
