@@ -189,7 +189,7 @@ class SessionImpl implements Session {
 		const seq = this.record.length;
 		await this.persistTail;
 		this.emit({ type: 'delivery', message });
-		this.dispatch(message, seq, true);
+		this.dispatch(message, seq);
 	}
 
 	subscribe(listener: (event: SessionEvent) => void): () => void {
@@ -263,19 +263,22 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * Route a committed message — the room's whole policy in one place.
-	 * Every colleague still at work hears it as a steer (rule 2); a named
-	 * target is woken at rest, passive included (rules 1, 4). `wake` is
-	 * rule 4's asymmetry in one flag: a broadcast delivery wakes the idle
-	 * room, an agent's undirected say wakes no one who has gone idle.
+	 * Route a committed message — the room's whole policy in one place, the
+	 * same for a human's delivery and an agent's say. Every colleague still
+	 * at work hears it as a steer (rule 2). A broadcast wakes the idle room,
+	 * passive seats excepted (rule 1); a directed message focuses attention
+	 * instead — it wakes exactly its target, passive included, and leaves
+	 * the rest of the idle room at rest (rule 4). What keeps a room from
+	 * echoing itself is not routing but the bar for speaking (rule 3) and
+	 * the lock (rule 5): a woken seat that has nothing to add declines.
 	 */
-	private dispatch(message: Message, seq: number, wake: boolean): void {
+	private dispatch(message: Message, seq: number): void {
 		const target = message.to !== undefined ? this.agents.get(message.to) : undefined;
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
 			if (seat.active) {
 				this.steerInto(seat, message, seq);
-			} else if (seat === target || (message.to === undefined && wake && !seat.passive)) {
+			} else if (seat === target || (message.to === undefined && !seat.passive)) {
 				this.activate(seat);
 			}
 		}
@@ -421,7 +424,7 @@ class SessionImpl implements Session {
 				// A say is atomic: one event, the whole message, exactly as it landed
 				// on the record. Finer granularity belongs to the seat's own layer.
 				this.emit({ type: 'say', agent: seat.def.name, message });
-				this.dispatch(message, seq, false);
+				this.dispatch(message, seq);
 				const result: AgentToolResult<Record<string, never>> = {
 					content: [{ type: 'text', text: 'delivered' }],
 					details: {},

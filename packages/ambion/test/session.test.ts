@@ -100,7 +100,7 @@ const collect = (session: { subscribe(l: (e: SessionEvent) => void): () => void 
 // -- the milestone tests -----------------------------------------------------
 
 describe('openSession', () => {
-	it('activates idle agents in parallel, steers a working colleague, never re-activates an idle one', async () => {
+	it('activates idle agents in parallel, steers a working colleague, wakes an idle one', async () => {
 		const gammaIdle = deferred();
 		const alphaSaid = deferred();
 		const alpha = defineAgent({
@@ -161,13 +161,15 @@ describe('openSession', () => {
 		const texts = (await session.messages()).map((m) => `${m.from}: ${m.text}`);
 		expect(texts).toContain('alpha: the answer is 42');
 		expect(texts).toContain('beta: ack: 42');
+		expect(texts).toHaveLength(3); // woken seats declined: glances, not messages
 		// beta answered with alpha's reply in view, delivered mid-turn or on re-read
 		expect(betaContexts.some((c) => c.includes('the answer is 42'))).toBe(true);
-		// gamma glanced exactly once: an undirected say never re-activates the idle
+		// a say wakes the idle room: gamma, idle when alpha spoke, glanced again —
+		// and the round still settled, because woken seats with nothing to add decline
 		const gammaStarts = events.filter(
 			(e) => e.type === 'agent_start' && e.agent === 'gamma',
 		).length;
-		expect(gammaStarts).toBe(1);
+		expect(gammaStarts).toBeGreaterThanOrEqual(2);
 	});
 
 	it('resets the working view at idle: a new activation reads the record, not the old turn', async () => {
@@ -241,7 +243,8 @@ describe('openSession', () => {
 			name: sessionName('passive'),
 			participants: [human, front, passive(archivist)],
 			streamFn: scripted((_context, agent, call) => {
-				if (agent === 'archivist') return call === 1 ? speak('Q2 was 1.2M') : quiet();
+				// archivist answers the asker directly — directed at a human wakes nothing
+				if (agent === 'archivist') return call === 1 ? speak('Q2 was 1.2M', 'andrei') : quiet();
 				// front: on its second look (the second broadcast), call the archivist in
 				if (call === 2) return speak('what was Q2?', 'archivist');
 				return quiet();

@@ -171,14 +171,16 @@ Beyond identity, the mechanics are eight rules. The first six are the room's
 routing and voice; all of the routing is one function, `dispatch` in
 `session.ts`.
 
-**1. A delivery activates every idle agent, in parallel.** Passive seats sit
-out (rule 6); everyone else evaluates at once, and replies land on the record
-in arrival order. With one agent this degenerates to ordinary chat: the room
-is the general case, the assistant its size-one instance. A delivery may also
-be directed: `deliver({ from, to, text })` activates exactly the named
-participant, waking it idle or passive — the same addressing `say` gives
-agents, at the host's door. `to` is a participant handle; directed at a human
-it is an address for the reader and wakes nothing.
+**1. Every message activates every idle agent, in parallel.** A human's
+delivery and a colleague's undirected `say` route identically: passive seats
+sit out (rule 6); everyone else at rest evaluates at once, and replies land
+on the record in arrival order — so a reply that lands after colleagues went
+idle is still heard, not stranded until the next delivery. With one agent
+this degenerates to ordinary chat: the room is the general case, the
+assistant its size-one instance. A message may also be directed:
+`deliver({ from, to, text })` and `say({ to })` activate exactly the named
+participant, waking it idle or passive. `to` is a participant handle;
+directed at a human it is an address for the reader and wakes nothing.
 
 **2. Whatever arrives mid-turn is steered in — and working views reset at
 idle.** Replies and deliveries alike, directed or not: each arrival is
@@ -201,17 +203,21 @@ moved forward, or a genuinely different perspective — and a point already
 made, even in other words, is met with silence. Whether a reply clears the
 bar is judgment, and the judgment lives in `instructions`; the runtime states
 the bar but never decides for the agent. Glances are still billed — a room of
-three costs three looks per delivery — the honest price of a room, stated
-rather than hidden.
+three costs three looks per message, replies included — the honest price of a
+room, stated rather than hidden. The bar is also what keeps the room from
+echoing itself: every reply wakes the idle room (rule 1), so what prevents
+ping-pong is not routing but judgment — a woken seat with nothing to add
+declines, and the lock (rule 5) refuses the duplicate that slips through.
 
-**4. A directed `say` is the deliberate act.** An undirected `say` speaks to
-the room and wakes no one who has gone idle — so agents cannot ping-pong by
-accident. `say({ to: 'writer' })` speaks _and_ wakes the named colleague,
-idle or passive; every escalation is explicit, on the record, and paid for on
-purpose. Directed at a human, it addresses the reader. The runtime's prompt
-pairs this with a rule against rehearsal: a question only one participant can
-answer is asked with one directed `say`, never posed to the room first — a
-`say` is a message, not a thought.
+**4. A directed `say` focuses the room's attention.** An undirected `say`
+speaks to everyone, like any message. `say({ to: 'writer' })` narrows it: the
+named colleague is woken, idle or passive — the only way a passive seat hears
+anything — and the rest of the idle room stays at rest; every escalation is
+explicit, on the record, and paid for on purpose. Directed at a human, it
+addresses the reader and wakes nothing. The runtime's prompt pairs this with
+a rule against rehearsal: a question only one participant can answer is asked
+with one directed `say`, never posed to the room first — a `say` is a
+message, not a thought.
 
 **5. No one speaks over the room.** A `say` commits only against a record its
 seat has heard in full — the view it was handed, plus every steer that has
@@ -227,7 +233,7 @@ as `say_conflict`, and the guarantee is the point: every message on the
 record was spoken by a seat that had heard everything before it.
 
 **6. An agent's status is `active`, `idle`, or `passive`.** Active: taking a
-turn now. Idle: at rest, woken by any delivery. Passive: at rest, woken only
+turn now. Idle: at rest, woken by any broadcast. Passive: at rest, woken only
 when named — by a colleague's directed `say` or a directed delivery — seated
 as `passive(archivist)`, and readable from `session.seats()`. A passive seat
 is the expert in the corner: hearing nothing, costing nothing, until someone
@@ -319,7 +325,7 @@ and Ambion adds no storage layer of its own.
 The milestone tests live in
 [`packages/ambion/test/session.test.ts`](../packages/ambion/test/session.test.ts),
 one per claim this document makes loudly: parallel activation with mid-turn
-steering and no re-activation of the idle (rules 1–2, 4); working views reset
+steering, and a reply waking the idle room (rules 1–2, 4); working views reset
 at idle (rule 2); silence leaves no mark (rule 3); directed wake, passive
 included, and broadcasts never waking a passive seat (rules 1, 4, 6); a
 racing say refused with what it missed — retry commits, standing down leaves
