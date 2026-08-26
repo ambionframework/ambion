@@ -63,6 +63,8 @@ interface SeatRuntime {
 	passive: boolean;
 	active: boolean;
 	spoke: boolean;
+	/** Pi's abort() cancels the run but not its queues; this stops the rebuild loop too. */
+	aborted: boolean;
 	agent?: Agent;
 	/** The seat's downstream Pi session — every activation's full turns, kept for audit. */
 	piSeat?: Promise<PiSession>;
@@ -105,6 +107,7 @@ class SessionImpl implements Session {
 					passive: isPassiveSeat(participant),
 					active: false,
 					spoke: false,
+					aborted: false,
 				});
 			} else {
 				throw new Error('Participants must come from defineAgent, defineHuman, or passive().');
@@ -188,7 +191,10 @@ class SessionImpl implements Session {
 
 	abort(): void {
 		for (const seat of this.agents.values()) {
-			if (seat.active) seat.agent?.abort();
+			if (seat.active) {
+				seat.aborted = true;
+				seat.agent?.abort();
+			}
 		}
 	}
 
@@ -268,6 +274,7 @@ class SessionImpl implements Session {
 	private activate(seat: SeatRuntime): void {
 		seat.active = true;
 		seat.spoke = false;
+		seat.aborted = false;
 		this.activeCount += 1;
 		this.emit({ type: 'agent_start', agent: seat.def.name });
 		void this.run(seat).finally(() => {
@@ -294,6 +301,9 @@ class SessionImpl implements Session {
 					this.emit({ type: 'error', agent: seat.def.name, error: failure });
 					return;
 				}
+				// An aborted turn stays cancelled: Pi's abort() ends the run but
+				// leaves its queues, and a queued steer must not rebuild the turn.
+				if (seat.aborted) return;
 				// A steer that raced past the run's last drain is not lost: the
 				// message is already on the record, so a fresh view carries it.
 				if (!agent.hasQueuedMessages()) return;

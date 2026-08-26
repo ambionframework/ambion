@@ -373,6 +373,26 @@ describe('openSession', () => {
 		await hung.settled();
 		expect(hungEvents.some((e) => e.type === 'error')).toBe(false);
 		expect(await hung.messages()).toHaveLength(1);
+
+		// an abort with a steer still queued must not rebuild the turn it cancelled
+		let racingCalls = 0;
+		const racingStarted = deferred();
+		const racing = openSession({
+			name: sessionName('abort-steer'),
+			participants: [human, solo],
+			streamFn: scripted(() => {
+				racingCalls += 1;
+				racingStarted.resolve();
+				return new Promise<never>(() => {});
+			}),
+		});
+		await racing.deliver({ from: human, text: 'hang' });
+		await racingStarted.promise;
+		await racing.deliver({ from: human, text: 'mid-turn note' }); // queues a steer into the hung run
+		racing.abort();
+		await racing.settled();
+		expect(racingCalls).toBe(1);
+		expect(await racing.messages()).toHaveLength(2);
 	});
 
 	it("keeps each seat's turns in a downstream Pi session, parented to the room", async () => {
