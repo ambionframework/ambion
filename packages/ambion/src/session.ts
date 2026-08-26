@@ -1,0 +1,481 @@
+import type {
+	AgentTool,
+	AgentToolResult,
+	Session as PiSession,
+	SessionRepo,
+	StreamFn,
+} from '@earendil-works/pi-agent-core';
+import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
+import type { Api, Model, Models, UserMessage } from '@earendil-works/pi-ai';
+import { builtinModels } from '@earendil-works/pi-ai/providers/all';
+import { Type } from 'typebox';
+import {
+	type AgentDefinition,
+	type HumanDefinition,
+	isAgent,
+	isAmbionTool,
+	isHuman,
+	isPassiveSeat,
+	type Message,
+	type Participant,
+	type SeatInfo,
+	type SessionEvent,
+} from './types.ts';
+
+/** The record lives as custom entries of this type in a Pi session. */
+const MESSAGE_ENTRY = 'ambion/message';
+
+const defaultRepo = new InMemorySessionRepo();
+
+export interface OpenSessionOptions {
+	/** The session's name: open it again and you are back in it, record intact. */
+	name: string;
+	participants: readonly Participant[];
+	/** Override the model call — a scripted stream makes the room deterministic. */
+	streamFn?: StreamFn;
+	/** A pi-ai model registry; created on demand when omitted and no streamFn is given. */
+	models?: Models;
+	/** Pi's own session repository. Defaults to a process-wide `InMemorySessionRepo`. */
+	repo?: SessionRepo;
+}
+
+export interface Deliver {
+	from: HumanDefinition;
+	/** Directed delivery: activates exactly the named participant, waking it idle or passive. */
+	to?: AgentDefinition | HumanDefinition;
+	text: string;
+}
+
+export interface Session {
+	readonly name: string;
+	deliver(input: Deliver): Promise<void>;
+	subscribe(listener: (event: SessionEvent) => void): () => void;
+	/** Resolves when no agent is active and nothing is queued. */
+	settled(): Promise<void>;
+	/** Cancel every active turn; what was said stays, what was mid-flight ends without speaking. */
+	abort(): void;
+	messages(): Promise<Message[]>;
+	seats(): SeatInfo[];
+}
+
+interface SeatRuntime {
+	def: AgentDefinition;
+	passive: boolean;
+	active: boolean;
+	spoke: boolean;
+	agent?: Agent;
+	/** The seat's downstream Pi session — every activation's full turns, kept for audit. */
+	piSeat?: Promise<PiSession>;
+}
+
+export function openSession(options: OpenSessionOptions): Session {
+	return new SessionImpl(options);
+}
+
+class SessionImpl implements Session {
+	readonly name: string;
+	private readonly repo: SessionRepo;
+	private readonly ready: Promise<PiSession>;
+	private readonly record: Message[] = [];
+	private readonly humans = new Map<string, HumanDefinition>();
+	private readonly agents = new Map<string, SeatRuntime>();
+	private readonly listeners = new Set<(event: SessionEvent) => void>();
+	private readonly settledWaiters: (() => void)[] = [];
+	private readonly streamFn: StreamFn;
+	private readonly models?: Models;
+	private activeCount = 0;
+
+	constructor(options: OpenSessionOptions) {
+		this.name = options.name;
+		this.repo = options.repo ?? defaultRepo;
+		this.ready = this.openStore(this.repo);
+
+		for (const participant of options.participants) {
+			const def = isPassiveSeat(participant) ? participant.agent : participant;
+			if (this.humans.has(def.name) || this.agents.has(def.name)) {
+				throw new Error(
+					`Duplicate participant name '${def.name}': one name names one participant.`,
+				);
+			}
+			if (isHuman(def)) {
+				this.humans.set(def.name, def);
+			} else if (isAgent(def)) {
+				this.agents.set(def.name, {
+					def,
+					passive: isPassiveSeat(participant),
+					active: false,
+					spoke: false,
+				});
+			} else {
+				throw new Error('Participants must come from defineAgent, defineHuman, or passive().');
+			}
+		}
+
+		if (options.streamFn) {
+			this.streamFn = options.streamFn;
+			this.models = options.models;
+		} else {
+			const models = options.models ?? builtinModels();
+			this.models = models;
+			this.streamFn = (model, context, streamOptions) => {
+				const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
+				const resolved =
+					streamOptions?.apiKey || !envKey ? streamOptions : { ...streamOptions, apiKey: envKey };
+				return models.streamSimple(model, context, resolved);
+			};
+		}
+	}
+
+	/** Open the name into its Pi session — creating it on first open — and load the record. */
+	private async openStore(repo: SessionRepo): Promise<PiSession> {
+		const known = (await repo.list()).find((metadata) => metadata.id === this.name);
+		const piSession = known ? await repo.open(known) : await repo.create({ id: this.name });
+		const entries = await piSession.findEntries();
+		// findEntries does not promise append order; seq does.
+		entries.sort((a, b) => a.seq - b.seq);
+		for (const entry of entries) {
+			if (entry.type === 'custom' && entry.customType === MESSAGE_ENTRY) {
+				this.record.push(entry.data as Message);
+			}
+		}
+		return piSession;
+	}
+
+	/**
+	 * The seat's downstream Pi session, `<room>:<agent>`, parented to the
+	 * room's — where every activation's full turns land, so hands stay
+	 * auditable after the fact even though working views reset at idle.
+	 */
+	private seatSession(seat: SeatRuntime): Promise<PiSession> {
+		seat.piSeat ??= (async () => {
+			await this.ready;
+			const id = `${this.name}:${seat.def.name}`;
+			const known = (await this.repo.list()).find((metadata) => metadata.id === id);
+			return known
+				? await this.repo.open(known)
+				: await this.repo.create({ id, parentSessionId: this.name });
+		})();
+		return seat.piSeat;
+	}
+
+	async deliver(input: Deliver): Promise<void> {
+		const from = this.humans.get(input.from?.name ?? '');
+		if (!from || from !== input.from) {
+			throw new Error('deliver() takes a seated human handle as from.');
+		}
+		let to: string | undefined;
+		if (input.to) {
+			const name = input.to.name;
+			if (!this.humans.has(name) && !this.agents.has(name)) {
+				throw new Error(`Cannot direct a delivery to '${name}': not seated in this session.`);
+			}
+			to = name;
+		}
+		const message = await this.append(from.name, to, input.text);
+		this.emit({ type: 'delivery', message });
+		this.dispatch(message);
+	}
+
+	subscribe(listener: (event: SessionEvent) => void): () => void {
+		this.listeners.add(listener);
+		return () => this.listeners.delete(listener);
+	}
+
+	settled(): Promise<void> {
+		if (this.activeCount === 0) return Promise.resolve();
+		return new Promise((resolve) => this.settledWaiters.push(resolve));
+	}
+
+	abort(): void {
+		for (const seat of this.agents.values()) {
+			if (seat.active) seat.agent?.abort();
+		}
+	}
+
+	async messages(): Promise<Message[]> {
+		await this.ready;
+		return [...this.record];
+	}
+
+	seats(): SeatInfo[] {
+		const seats: SeatInfo[] = [];
+		for (const human of this.humans.values()) {
+			seats.push({ name: human.name, kind: 'human', identity: human.identity, status: 'human' });
+		}
+		for (const seat of this.agents.values()) {
+			seats.push({
+				name: seat.def.name,
+				kind: 'agent',
+				identity: seat.def.identity,
+				status: seat.active ? 'active' : seat.passive ? 'passive' : 'idle',
+				sessionId: `${this.name}:${seat.def.name}`,
+			});
+		}
+		return seats;
+	}
+
+	// -- the room ------------------------------------------------------------
+
+	private async append(from: string, to: string | undefined, text: string): Promise<Message> {
+		const piSession = await this.ready;
+		const message: Message = { from, text, at: new Date().toISOString() };
+		if (to) message.to = to;
+		this.record.push(message);
+		await piSession.appendCustomEntry(MESSAGE_ENTRY, message);
+		return message;
+	}
+
+	private emit(event: SessionEvent): void {
+		for (const listener of this.listeners) {
+			try {
+				listener(event);
+			} catch {
+				// A listener's failure is the listener's problem, never the room's.
+			}
+		}
+	}
+
+	/** A delivery activates its target, or every idle non-passive agent; active agents are steered. */
+	private dispatch(message: Message): void {
+		if (message.to !== undefined) {
+			const seat = this.agents.get(message.to);
+			if (seat) this.reach(seat, message);
+			return;
+		}
+		for (const seat of this.agents.values()) {
+			if (seat.def.name === message.from) continue;
+			if (seat.active) {
+				this.steerInto(seat, message);
+			} else if (!seat.passive) {
+				this.activate(seat);
+			}
+		}
+	}
+
+	/** Directed at a seat: steer it active, wake it idle — passive included. */
+	private reach(seat: SeatRuntime, message: Message): void {
+		if (seat.active) {
+			this.steerInto(seat, message);
+		} else {
+			this.activate(seat);
+		}
+	}
+
+	private steerInto(seat: SeatRuntime, message: Message): void {
+		seat.agent?.steer(userMessage(`[new] ${renderLine(message)}`));
+	}
+
+	private activate(seat: SeatRuntime): void {
+		seat.active = true;
+		seat.spoke = false;
+		this.activeCount += 1;
+		this.emit({ type: 'agent_start', agent: seat.def.name });
+		void this.run(seat).finally(() => {
+			seat.active = false;
+			seat.agent = undefined;
+			this.emit({ type: 'agent_end', agent: seat.def.name, spoke: seat.spoke });
+			this.activeCount -= 1;
+			if (this.activeCount === 0) {
+				this.emit({ type: 'settled' });
+				for (const resolve of this.settledWaiters.splice(0)) resolve();
+			}
+		});
+	}
+
+	private async run(seat: SeatRuntime): Promise<void> {
+		for (;;) {
+			try {
+				const agent = this.buildAgent(seat);
+				seat.agent = agent;
+				await agent.prompt(userMessage(this.renderContext(seat)));
+				await this.persistRun(seat, agent);
+				const failure = runFailure(agent);
+				if (failure) {
+					this.emit({ type: 'error', agent: seat.def.name, error: failure });
+					return;
+				}
+				// A steer that raced past the run's last drain is not lost: the
+				// message is already on the record, so a fresh view carries it.
+				if (!agent.hasQueuedMessages()) return;
+				agent.clearAllQueues();
+			} catch (error) {
+				this.emit({ type: 'error', agent: seat.def.name, error: toError(error) });
+				return;
+			}
+		}
+	}
+
+	private async persistRun(seat: SeatRuntime, agent: Agent): Promise<void> {
+		const piSeat = await this.seatSession(seat);
+		await piSeat.appendCustomEntry('ambion/activation', { at: new Date().toISOString() });
+		for (const message of agent.state.messages) {
+			// Provider messages may carry undefined-valued fields, which Pi's
+			// durability check rejects; a JSON round-trip drops them.
+			await piSeat.appendMessage(JSON.parse(JSON.stringify(message)));
+		}
+	}
+
+	private buildAgent(seat: SeatRuntime): Agent {
+		const agent = new Agent({
+			streamFn: this.streamFn,
+			initialState: {
+				systemPrompt: this.systemPrompt(seat),
+				model: this.resolveModel(seat.def),
+				thinkingLevel: 'off',
+				tools: [this.sayTool(seat), ...seat.def.tools.map(toPiTool)],
+				messages: [],
+			},
+		});
+		agent.subscribe((event) => {
+			if (event.type === 'tool_execution_start' && event.toolName !== 'say') {
+				this.emit({
+					type: 'tool_execution_start',
+					agent: seat.def.name,
+					toolName: event.toolName,
+				});
+			} else if (event.type === 'tool_execution_end' && event.toolName !== 'say') {
+				this.emit({ type: 'tool_execution_end', agent: seat.def.name, toolName: event.toolName });
+			}
+		});
+		return agent;
+	}
+
+	private sayTool(seat: SeatRuntime): AgentTool {
+		return {
+			name: 'say',
+			label: 'say',
+			description:
+				'Speak on the record. Omit `to` to address the room; set `to` to a participant name ' +
+				'to address them directly — a directed say to an agent also calls them in. ' +
+				'Ending your turn without calling say is declining to speak.',
+			parameters: Type.Object({
+				to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
+				text: Type.String(),
+			}),
+			execute: async (_toolCallId, rawParams) => {
+				const params = rawParams as { to?: string; text: string };
+				const to = params.to?.trim() ? params.to.trim() : undefined;
+				if (to !== undefined && !this.humans.has(to) && !this.agents.has(to)) {
+					throw new Error(`Unknown participant '${to}'. Address someone from the roster.`);
+				}
+				if (to === seat.def.name) {
+					throw new Error('You cannot address yourself.');
+				}
+				const message = await this.append(seat.def.name, to, params.text);
+				seat.spoke = true;
+				this.emit({ type: 'say_start', agent: seat.def.name, ...(to ? { to } : {}) });
+				this.emit({ type: 'say_update', agent: seat.def.name, delta: params.text });
+				this.emit({ type: 'say_end', agent: seat.def.name, message });
+				if (to !== undefined) {
+					const target = this.agents.get(to);
+					if (target) this.reach(target, message);
+				} else {
+					for (const other of this.agents.values()) {
+						if (other !== seat && other.active) this.steerInto(other, message);
+					}
+				}
+				const result: AgentToolResult<Record<string, never>> = {
+					content: [{ type: 'text', text: 'delivered' }],
+					details: {},
+				};
+				return result;
+			},
+		};
+	}
+
+	private systemPrompt(seat: SeatRuntime): string {
+		const roster = this.seats()
+			.map((s) => `- ${s.name} (${s.kind === 'human' ? 'human' : s.status}): ${s.identity}`)
+			.join('\n');
+		return [
+			`You are '${seat.def.name}', an agent seated in the session '${this.name}' — a shared`,
+			`room with a record. Every participant sees what is said; nobody sees your tool use.`,
+			``,
+			`The roster:`,
+			roster,
+			``,
+			`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
+			`your turn without saying anything, and no mark is left. A directed say (to: a name)`,
+			`calls that agent in; use it deliberately — attention costs money. Messages arriving`,
+			`mid-turn are marked [new]; fold them into what you are doing.`,
+			``,
+			`Your identity, as the room knows it: ${seat.def.identity}`,
+			``,
+			`Your instructions:`,
+			seat.def.instructions.trim(),
+		].join('\n');
+	}
+
+	private renderContext(seat: SeatRuntime): string {
+		const transcript =
+			this.record.length === 0 ? '(the record is empty)' : this.record.map(renderLine).join('\n');
+		return [
+			`The record of '${this.name}' so far:`,
+			transcript,
+			``,
+			`Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`,
+		].join('\n');
+	}
+
+	private resolveModel(def: AgentDefinition): Model<Api> {
+		if (this.models) {
+			const slash = def.model.indexOf('/');
+			if (slash > 0) {
+				const model = this.models.getModel(def.model.slice(0, slash), def.model.slice(slash + 1));
+				if (model) return model;
+			}
+			throw new Error(
+				`Unknown model '${def.model}' for agent '${def.name}': expected 'provider/model-id'.`,
+			);
+		}
+		// A scripted streamFn never reads the model; a stub keeps Pi's loop satisfied.
+		return {
+			id: def.model,
+			name: def.model,
+			api: 'scripted',
+			provider: 'scripted',
+		} as unknown as Model<Api>;
+	}
+}
+
+function renderLine(message: Message): string {
+	return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}`;
+}
+
+function userMessage(text: string): UserMessage {
+	return { role: 'user', content: text, timestamp: Date.now() };
+}
+
+function toError(value: unknown): Error {
+	return value instanceof Error ? value : new Error(String(value));
+}
+
+function runFailure(agent: Agent): Error | undefined {
+	const last = agent.state.messages.at(-1);
+	if (last && 'stopReason' in last && last.stopReason === 'error') {
+		return new Error(('errorMessage' in last && last.errorMessage) || 'The turn failed.');
+	}
+	return undefined;
+}
+
+function toPiTool(tool: unknown): AgentTool {
+	if (isAmbionTool(tool)) {
+		return {
+			name: tool.name,
+			label: tool.name,
+			description: tool.description,
+			parameters: tool.parameters,
+			execute: async (_toolCallId, params, signal) => {
+				const result = await tool.execute(params, signal);
+				return typeof result === 'string'
+					? { content: [{ type: 'text', text: result }], details: {} }
+					: result;
+			},
+		};
+	}
+	const raw = tool as AgentTool & { label?: string };
+	if (typeof raw?.name !== 'string' || typeof raw?.execute !== 'function') {
+		throw new Error('Tools must come from defineTool (Ambion or Pi).');
+	}
+	return raw.label ? raw : { ...raw, label: raw.name };
+}
