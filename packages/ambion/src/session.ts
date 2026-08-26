@@ -65,6 +65,14 @@ interface SeatRuntime {
 	spoke: boolean;
 	/** Pi's abort() cancels the run but not its queues; this stops the rebuild loop too. */
 	aborted: boolean;
+	/**
+	 * How much of the record this seat has provably heard: the prefix its view
+	 * rendered, advanced as steers land in the transcript and by its own says.
+	 * A say commits only against a fully heard record — see sayTool.
+	 */
+	viewSeq: number;
+	/** Record seqs of steers enqueued to the live agent, awaiting their drain (FIFO). */
+	pendingSteers: number[];
 	agent?: Agent;
 	/** The seat's downstream Pi session — every activation's full turns, kept for audit. */
 	piSeat?: Promise<PiSession>;
@@ -86,6 +94,7 @@ class SessionImpl implements Session {
 	private readonly streamFn: StreamFn;
 	private readonly models?: Models;
 	private activeCount = 0;
+	private persistTail: Promise<void> = Promise.resolve();
 
 	constructor(options: OpenSessionOptions) {
 		this.name = options.name;
@@ -108,6 +117,8 @@ class SessionImpl implements Session {
 					active: false,
 					spoke: false,
 					aborted: false,
+					viewSeq: 0,
+					pendingSteers: [],
 				});
 			} else {
 				throw new Error('Participants must come from defineAgent, defineHuman, or passive().');
@@ -174,9 +185,12 @@ class SessionImpl implements Session {
 			}
 			to = name;
 		}
-		const message = await this.append(from.name, to, input.text);
+		await this.ready;
+		const message = this.commit(from.name, to, input.text);
+		const seq = this.record.length;
+		await this.persistTail;
 		this.emit({ type: 'delivery', message });
-		this.dispatch(message);
+		this.dispatch(message, seq);
 	}
 
 	subscribe(listener: (event: SessionEvent) => void): () => void {
@@ -222,12 +236,20 @@ class SessionImpl implements Session {
 
 	// -- the room ------------------------------------------------------------
 
-	private async append(from: string, to: string | undefined, text: string): Promise<Message> {
-		const piSession = await this.ready;
+	/**
+	 * Claim the record's next slot, synchronously — the say tool's conflict
+	 * check and this push must share one tick, or a rival say could slip
+	 * between them. Persistence follows in commit order on a write chain.
+	 * Callers run after `ready` (deliver awaits it; a say implies a run).
+	 */
+	private commit(from: string, to: string | undefined, text: string): Message {
 		const message: Message = { from, text, at: new Date().toISOString() };
 		if (to) message.to = to;
 		this.record.push(message);
-		await piSession.appendCustomEntry(MESSAGE_ENTRY, message);
+		this.persistTail = this.persistTail.then(async () => {
+			const piSession = await this.ready;
+			await piSession.appendCustomEntry(MESSAGE_ENTRY, message);
+		});
 		return message;
 	}
 
@@ -241,33 +263,35 @@ class SessionImpl implements Session {
 		}
 	}
 
-	/** A delivery activates its target, or every idle non-passive agent; active agents are steered. */
-	private dispatch(message: Message): void {
-		if (message.to !== undefined) {
-			const seat = this.agents.get(message.to);
-			if (seat) this.reach(seat, message);
-			return;
-		}
+	/**
+	 * A delivery activates its target, or every idle non-passive agent.
+	 * Whatever arrives — directed or not — is steered into every colleague
+	 * still at work: the room hears everything on the record (rule 2).
+	 */
+	private dispatch(message: Message, seq: number): void {
+		const target = message.to !== undefined ? this.agents.get(message.to) : undefined;
 		for (const seat of this.agents.values()) {
-			if (seat.def.name === message.from) continue;
+			if (seat.def.name === message.from || seat === target) continue;
 			if (seat.active) {
-				this.steerInto(seat, message);
-			} else if (!seat.passive) {
+				this.steerInto(seat, message, seq);
+			} else if (message.to === undefined && !seat.passive) {
 				this.activate(seat);
 			}
 		}
+		if (target) this.reach(target, message, seq);
 	}
 
 	/** Directed at a seat: steer it active, wake it idle — passive included. */
-	private reach(seat: SeatRuntime, message: Message): void {
+	private reach(seat: SeatRuntime, message: Message, seq: number): void {
 		if (seat.active) {
-			this.steerInto(seat, message);
+			this.steerInto(seat, message, seq);
 		} else {
 			this.activate(seat);
 		}
 	}
 
-	private steerInto(seat: SeatRuntime, message: Message): void {
+	private steerInto(seat: SeatRuntime, message: Message, seq: number): void {
+		seat.pendingSteers.push(seq);
 		seat.agent?.steer(userMessage(`[new] ${renderLine(message)}`));
 	}
 
@@ -337,7 +361,15 @@ class SessionImpl implements Session {
 			},
 		});
 		agent.subscribe((event) => {
-			if (event.type === 'tool_execution_start' && event.toolName !== 'say') {
+			if (event.type === 'message_start' && event.message.role === 'user') {
+				// A steer has landed in the transcript: the seat has now heard it.
+				// Steers drain FIFO, so the oldest pending seq is the one that landed.
+				const content = event.message.content;
+				if (typeof content === 'string' && content.startsWith('[new] ')) {
+					const seq = seat.pendingSteers.shift();
+					if (seq !== undefined) seat.viewSeq = Math.max(seat.viewSeq, seq);
+				}
+			} else if (event.type === 'tool_execution_start' && event.toolName !== 'say') {
 				this.emit({
 					type: 'tool_execution_start',
 					agent: seat.def.name,
@@ -371,19 +403,36 @@ class SessionImpl implements Session {
 				if (to === seat.def.name) {
 					throw new Error('You cannot address yourself.');
 				}
-				const message = await this.append(seat.def.name, to, params.text);
+				// Optimistic locking: a say commits only against a record its seat
+				// has heard in full. The check and the commit below share one tick,
+				// so exactly one of two racing says wins; the loser's failure carries
+				// what it missed — a steer with a delivery guarantee.
+				if (this.record.length > seat.viewSeq) {
+					const missed = this.record.slice(seat.viewSeq);
+					seat.viewSeq = this.record.length;
+					this.emit({ type: 'say_conflict', agent: seat.def.name, missed });
+					throw new Error(
+						[
+							'Not delivered — the room moved while you were speaking. New on the record:',
+							...missed.map(renderLine),
+							'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
+						].join('\n'),
+					);
+				}
+				const message = this.commit(seat.def.name, to, params.text);
+				const seq = this.record.length;
+				seat.viewSeq = seq;
 				seat.spoke = true;
+				await this.persistTail;
 				this.emit({ type: 'say_start', agent: seat.def.name, ...(to ? { to } : {}) });
 				this.emit({ type: 'say_update', agent: seat.def.name, delta: params.text });
 				this.emit({ type: 'say_end', agent: seat.def.name, message });
-				if (to !== undefined) {
-					const target = this.agents.get(to);
-					if (target) this.reach(target, message);
-				} else {
-					for (const other of this.agents.values()) {
-						if (other !== seat && other.active) this.steerInto(other, message);
-					}
+				const target = to !== undefined ? this.agents.get(to) : undefined;
+				for (const other of this.agents.values()) {
+					if (other === seat || other === target || !other.active) continue;
+					this.steerInto(other, message, seq);
 				}
+				if (target) this.reach(target, message, seq);
 				const result: AgentToolResult<Record<string, never>> = {
 					content: [{ type: 'text', text: 'delivered' }],
 					details: {},
@@ -415,7 +464,9 @@ class SessionImpl implements Session {
 			`directed say — never announce to the room what you are about to do, and never pose a`,
 			`question undirected that only one participant can answer: a say is a message, not a`,
 			`thought. Messages arriving mid-turn are marked [new]; fold them into what you are`,
-			`doing — and if a colleague has just made your point, let it stand.`,
+			`doing — and if a colleague has just made your point, let it stand. A say fails if`,
+			`the room moved while you were speaking: the failure lists what you missed — read`,
+			`it, and speak again only if your reply still adds something.`,
 			``,
 			`Your identity, as the room knows it: ${seat.def.identity}`,
 			``,
@@ -425,6 +476,9 @@ class SessionImpl implements Session {
 	}
 
 	private renderContext(seat: SeatRuntime): string {
+		// The view hands the seat the whole record: heard up to here.
+		seat.viewSeq = this.record.length;
+		seat.pendingSteers = [];
 		const transcript =
 			this.record.length === 0 ? '(the record is empty)' : this.record.map(renderLine).join('\n');
 		return [

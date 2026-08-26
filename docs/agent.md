@@ -172,10 +172,10 @@ interface Message {
 }
 ```
 
-Beyond identity, the mechanics are seven rules:
+Beyond identity, the mechanics are eight rules:
 
 **1. A delivery activates every idle agent, in parallel.** Passive seats sit
-out (rule 5); everyone else evaluates at once, and replies land on the record
+out (rule 6); everyone else evaluates at once, and replies land on the record
 in arrival order. With one agent this degenerates to ordinary chat: the room
 is the general case, the assistant its size-one instance.
 
@@ -217,23 +217,37 @@ three costs three looks per delivery — which is the honest price of a room,
 stated rather than hidden.
 
 **4. A directed `say` is the deliberate act.** An undirected `say` speaks to
-the room: it steers colleagues still at work and wakes no one who has gone
-idle — so agents cannot ping-pong by accident. `say({ to: 'writer' })` speaks
-_and_ wakes the named colleague, idle or passive; every escalation is
-explicit, on the record, and paid for on purpose. Directed at a human, it
-addresses the reader and wakes nothing, since humans are not run. The
-runtime's prompt pairs this with a rule against rehearsal: a question only
-one participant can answer is asked with one directed `say`, never posed to
-the room first — a `say` is a message, not a thought.
+the room and wakes no one who has gone idle — so agents cannot ping-pong by
+accident; like every arrival, it steers colleagues still at work (rule 2).
+`say({ to: 'writer' })` speaks _and_ wakes the named colleague, idle or
+passive; every escalation is explicit, on the record, and paid for on
+purpose. Directed at a human, it addresses the reader and wakes nothing,
+since humans are not run. The runtime's prompt pairs this with a rule against
+rehearsal: a question only one participant can answer is asked with one
+directed `say`, never posed to the room first — a `say` is a message, not a
+thought.
 
-**5. An agent's status is `active`, `idle`, or `passive`.** Active: taking a
+**5. No one speaks over the room.** A `say` commits only against a record its
+seat has heard in full — the view it was handed, plus every arrival steered
+in since. If the record moved past that, the say fails without landing, and
+the failure carries the messages the seat missed: the same steering contract,
+enforced at the tool boundary, where delivery is guaranteed rather than
+best-effort. The seat then decides again with the room in view — speak
+because something is still worth adding, or go quiet because the point
+stands; rule 3's bar, now with the hearing enforced. First to commit wins,
+ties are impossible (a commit and its check share one tick), and a room with
+no races pays nothing. The refusal shows on the stream as `say_conflict`,
+and the guarantee is the point: every message on the record was spoken by a
+seat that had heard everything before it.
+
+**6. An agent's status is `active`, `idle`, or `passive`.** Active: taking a
 turn now. Idle: at rest, woken by any delivery. Passive: at rest, woken only
 when named — by a colleague's directed `say` or a directed delivery — seated
 as `passive(archivist)`, and readable, like all statuses, from
 `session.seats()`. A passive seat is the expert in the corner: hearing
 nothing, costing nothing, until someone asks.
 
-**6. Identity is injected; provenance is stamped.** Every agent's context
+**7. Identity is injected; provenance is stamped.** Every agent's context
 carries the roster — each participant's name, kind, identity and status,
 with the statuses spelled out so a seat knows a broadcast will not reach the
 passive colleague in the corner — so the room always knows who is in it and
@@ -242,7 +256,7 @@ how to address them. On the record,
 a defined human, `say` is stamped with its agent, and only participants
 speak. No one self-reports who they are.
 
-**7. The room hears what you said, not your keystrokes — and the keystrokes
+**8. The room hears what you said, not your keystrokes — and the keystrokes
 are kept.** Each agent's tool calls belong to its own working context; other
 participants see its `say`s only. Pi's context projection hooks
 (`entryProjectors`, `toProviderMessages`) carry this, so a shared room costs a
@@ -269,6 +283,7 @@ type SessionEvent =
   | { type: 'say_start'; agent: string; to?: string }
   | { type: 'say_update'; agent: string; delta: string }
   | { type: 'say_end'; agent: string; message: Message }
+  | { type: 'say_conflict'; agent: string; missed: Message[] }
   | { type: 'tool_execution_start'; agent: string; toolName: string }
   | { type: 'tool_execution_end'; agent: string; toolName: string }
   | { type: 'agent_end'; agent: string; spoke: boolean }
@@ -281,14 +296,16 @@ The mapping is deliberate, so anyone who knows Pi already knows this: Pi's
 `message_start`/`message_update`/`message_end` surface here as
 `say_start`/`say_update`/`say_end`, streaming deltas and all, emitted only
 for `say` output; Pi's `tool_execution_*` pass through with the seat named.
-Three events are the room's own: `delivery`, `settled` — the moment no agent
-is active and nothing is queued — and `error`, which is how a failed turn is
-distinguished from a quiet one. **Silence is a decision; an error is an
+Four events are the room's own: `delivery`; `settled` — the moment no agent
+is active and nothing is queued; `say_conflict` — the lock of rule 5 refusing
+a say that raced past the record, so the host sees races being caught, not
+silently retried; and `error`, which is how a failed turn is distinguished
+from a quiet one. **Silence is a decision; an error is an
 event.** A crashed tool or a refused model call never masquerades as
 declining: it reaches the host on the stream, and leaves no mark on the
 record.
 
-One distinction keeps rule 7 honest: the event stream is the host's
+One distinction keeps rule 8 honest: the event stream is the host's
 instrument panel, not a seat at the table. Participants' contexts never see
 each other's tool executions; the stream sees everything, because the host
 operating the room is the tenant's own code, and debugging a room means
@@ -324,7 +341,7 @@ Pi's storage surface and adds no storage layer of its own.
 the CI smoke test, and nothing else — an abstraction nobody can run is a
 proposal.
 
-**What proves it.** Seven tests, one per claim this document makes loudly:
+**What proves it.** Eight tests, one per claim this document makes loudly:
 
 - a delivery activates the idle agents in parallel, and a reply arriving
   while a colleague still works is steered into that colleague's turn — while
@@ -333,10 +350,13 @@ proposal.
   previous turn's working view (rule 2);
 - an agent that does not call `say` leaves no mark on the record (rule 3);
 - a directed `say` or directed delivery wakes exactly its target, passive
-  included; a broadcast never wakes a passive seat (rules 1, 4–5);
+  included; a broadcast never wakes a passive seat (rules 1, 4, 6);
+- a `say` racing past the record fails back with what was missed — the
+  retry commits, standing down leaves no mark, and the room shows the
+  refusal as `say_conflict` (rule 5);
 - `from` is what the runtime stamped from the seated handle, regardless of
   what the content claimed, and each agent's context carries the roster with
-  identities (rule 6);
+  identities (rule 7);
 - opening the same name twice yields the same record, and a fresh name yields
   an empty one;
 - a subscriber sees `delivery`, `agent_start`, `say` deltas, `agent_end` and

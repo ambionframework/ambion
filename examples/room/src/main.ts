@@ -125,6 +125,11 @@ session.subscribe((event: SessionEvent) => {
 			if (!event.spoke && !errored.delete(event.agent))
 				say(`${dim}· ${event.agent} stayed quiet${reset}`);
 			break;
+		case 'say_conflict':
+			say(
+				`${dim}· ${event.agent} spoke over the room (${event.missed.length} missed) — retrying${reset}`,
+			);
+			break;
 		case 'error':
 			errored.add(event.agent);
 			say(`${red}! ${event.agent}: ${event.error.message}${reset}`);

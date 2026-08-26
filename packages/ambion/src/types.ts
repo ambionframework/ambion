@@ -30,6 +30,7 @@ export type SessionEvent =
 	| { type: 'say_start'; agent: string; to?: string }
 	| { type: 'say_update'; agent: string; delta: string }
 	| { type: 'say_end'; agent: string; message: Message }
+	| { type: 'say_conflict'; agent: string; missed: Message[] }
 	| { type: 'tool_execution_start'; agent: string; toolName: string }
 	| { type: 'tool_execution_end'; agent: string; toolName: string }
 	| { type: 'agent_end'; agent: string; spoke: boolean }

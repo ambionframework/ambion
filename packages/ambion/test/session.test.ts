@@ -395,6 +395,81 @@ describe('openSession', () => {
 		expect(await racing.messages()).toHaveLength(2);
 	});
 
+	it('fails a say that races past the record, delivering what was missed', async () => {
+		// Two seats answer the same broadcast; the slower one commits blind.
+		// The losing say must fail back with the winner's message, and the
+		// retry — now with the point in view — must commit cleanly.
+		const firstSaid = deferred();
+		const first = defineAgent({
+			name: 'first',
+			identity: 'Fast.',
+			instructions: 'answer',
+			model: 'scripted/first',
+		});
+		const second = defineAgent({
+			name: 'second',
+			identity: 'Slow.',
+			instructions: 'answer',
+			model: 'scripted/second',
+		});
+		const secondContexts: string[] = [];
+		const session = openSession({
+			name: sessionName('race'),
+			participants: [human, first, second],
+			streamFn: scripted(async (context, agent, call) => {
+				if (agent === 'first') return call === 1 ? speak('the point') : quiet();
+				secondContexts.push(contextText(context));
+				if (call === 1) {
+					await firstSaid.promise; // commit blind, after the record moved
+					return speak('the same point, again');
+				}
+				if (call === 2) return speak('a genuinely different angle');
+				return quiet();
+			}),
+		});
+		const events = collect(session);
+		session.subscribe((event) => {
+			if (event.type === 'say_end' && event.agent === 'first') firstSaid.resolve();
+		});
+		await session.deliver({ from: human, text: 'thoughts?' });
+		await session.settled();
+
+		const texts = (await session.messages()).map((m) => m.text);
+		expect(texts).toEqual(['thoughts?', 'the point', 'a genuinely different angle']);
+		const conflicts = events.filter((e) => e.type === 'say_conflict');
+		expect(conflicts).toHaveLength(1);
+		expect(conflicts[0]).toMatchObject({ agent: 'second' });
+		expect(conflicts[0]?.type === 'say_conflict' && conflicts[0].missed[0]?.text).toBe('the point');
+		// the failure reached the model as a tool result carrying the missed line
+		expect(secondContexts[1]).toContain('Not delivered');
+		expect(secondContexts[1]).toContain('the point');
+
+		// standing down after a conflict leaves no mark, like any decline
+		const yieldSaid = deferred();
+		const yielding = openSession({
+			name: sessionName('race-yield'),
+			participants: [human, first, second],
+			streamFn: scripted(async (_context, agent, call) => {
+				if (agent === 'first') return call === 1 ? speak('the point') : quiet();
+				if (call === 1) {
+					await yieldSaid.promise;
+					return speak('me too');
+				}
+				return quiet('point already made');
+			}),
+		});
+		const yieldEvents = collect(yielding);
+		yielding.subscribe((event) => {
+			if (event.type === 'say_end' && event.agent === 'first') yieldSaid.resolve();
+		});
+		await yielding.deliver({ from: human, text: 'thoughts?' });
+		await yielding.settled();
+
+		expect(await yielding.messages()).toHaveLength(2);
+		const end = yieldEvents.find((e) => e.type === 'agent_end' && e.agent === 'second');
+		expect(end).toMatchObject({ spoke: false });
+	});
+
 	it("keeps each seat's turns in a downstream Pi session, parented to the room", async () => {
 		const repo = new InMemorySessionRepo();
 		const solo = defineAgent({
