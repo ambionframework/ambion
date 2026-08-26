@@ -28,7 +28,7 @@ import {
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 
-const MODEL = process.env['AMBION_MODEL'] ?? 'anthropic/claude-sonnet-4-5';
+const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-4-5';
 
 // -- one tool, so tool_execution events are visible ---------------------------
 
@@ -244,7 +244,7 @@ async function handle(line: string): Promise<void> {
 }
 
 console.log(`\nThe room is open. Model: ${MODEL} (set AMBION_MODEL to change).`);
-if (!process.env['ANTHROPIC_API_KEY']) {
+if (!process.env.ANTHROPIC_API_KEY) {
 	console.log(`${red}ANTHROPIC_API_KEY is not set — agents will fail to answer.${reset}`);
 }
 help();
