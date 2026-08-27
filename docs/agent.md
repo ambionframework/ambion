@@ -351,12 +351,13 @@ long records; the workspace and the tenant; tasks. They arrive one document
 at a time, each earning its way in against the same test: does it add a
 second way to do something that has one?
 
-The first of them is [`presence.md`](presence.md), a proposal: it separates
-opening a room from entering it, so several people can be in one persistent
-session at once and every agent reads who is actually there. It is the one
-design so far that changes this core instead of sitting on top of it —
-`deliver` moves from the session to a visit — so it stays a proposal, not a
-contract, until somebody builds it.
+The first of them is [`presence.md`](presence.md), a proposal: it takes
+people out of `openSession` entirely. A session seats agents; a person
+enters it and leaves it, several people at once, and every agent reads who
+is in the room now. It is the one design so far that changes this core
+instead of sitting on top of it — §4 and rule 7 get rewritten, and `deliver`
+moves from the session to a visit — so it stays a proposal, not a contract,
+until somebody builds it.
 
 ---
 

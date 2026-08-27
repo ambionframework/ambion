@@ -1,71 +1,100 @@
 # Presence
 
-This document is a proposal. Nothing in it is built. The runtime today has
-no `enter`, no visit, and no presence status — a human is seated by
-`openSession` and stays seated, and `session.deliver` speaks for them
-whether or not anybody is there.
+This document is a proposal. Nothing in it is built. The runtime today
+seats a human with `openSession`, alongside the agents, and keeps them
+seated for the life of the opening.
 
 It answers one question the core leaves open. A session is persistent and
-ambient: agents wait in it, and a delivery activates them. A human opens
+ambient: agents wait in it, and a delivery activates them. A person opens
 the same session to read what happened and to steer what happens next.
-Those are not the same act, and the runtime cannot tell them apart.
+Those are not the same act, they do not have the same lifetime, and the
+runtime cannot tell them apart.
 
-> **Seating is membership. Entering is presence.** `openSession` says who
-> belongs to the room. `enter` says who is in it now.
+> **`openSession` opens a room of agents. `enter` puts a person in it.**
+> Agents belong to the session. People visit it.
 
-Several people can be in one room at once. Each attaches on their own, acts
-on their own, and stops paying attention on their own. The room must track
-that correctly, and must tell the agents, because an agent that asks a
-question of an empty room is wasting the ask.
+Several people can visit one room at once. Each attaches on their own, acts
+on their own, and stops paying attention on their own. The room tracks that
+and tells the agents, because an agent that asks a question of an empty room
+is wasting the ask.
 
 ---
 
 ## 1. The distinction
 
-The core has one entry point for a person:
-
-```ts
-const session = openSession({ name: 'initiative', participants: [andrei, lead, designer] });
-await session.deliver({ from: andrei, text: 'Draft the weekly.' });
-```
-
-`andrei` is on the roster from the moment the session opens. Every agent
-reads him in its context as a participant. But the value proves nothing
-about attention. It is a definition, not a person, and the room holds it
-whether Andrei is reading, asleep, or on another continent. Three failures
-follow.
-
-**The roster lies.** An agent sees `andrei (human)` and reasonably directs a
-`say` at him. Nobody reads it for six hours. The agent had no way to know.
-
-**The host has no seam.** A host with two people watching one room — a
-terminal and a browser — has one `deliver` and one handle. It cannot report
-that one of them closed the tab.
-
-**Provenance is checked, not structural.** `deliver` verifies that `from` is
-a seated handle. That catches a typo. It does not catch a host that keeps
-delivering as a person who left an hour ago.
-
-The proposal adds one verb and one value. Membership stays where it is.
-
----
-
-## 2. Seating and entering
-
-`openSession` does not change:
+The core has one list, and it holds two kinds of thing:
 
 ```ts
 const session = openSession({
   name: 'initiative',
-  participants: [andrei, mara, lead, designer, passive(planner)],
+  participants: [andrei, lead, designer, passive(planner)],
+});
+await session.deliver({ from: andrei, text: 'Draft the weekly.' });
+```
+
+`andrei` and `lead` sit in the same array, and the array is wrong about
+both of them. Three failures follow.
+
+**The two have different lifetimes.** An agent belongs to the room. It is
+the room's composition, it is the same on every opening, and it waits there
+between activations — this is the whole thesis of an ambient runtime. A
+person is not composition. They arrive, read, steer, and go. Putting the
+two in one list says they are the same kind of member, and every question
+after that gets harder: is a person who is asleep still in the room? Does
+reopening the session bring them back?
+
+**The roster lies.** An agent reads `andrei (human)` in its context and
+reasonably directs a `say` at him. Nobody reads it for six hours. The agent
+had no way to know, because the value proves nothing about attention. It is
+a definition, not a person.
+
+**The host has no seam.** A host with two people watching one room — a
+terminal and a browser — has one `deliver` and one handle. It cannot report
+that one of them closed the tab, and it cannot tell the room that the last
+one left.
+
+The proposal takes people out of `openSession` and gives them a verb.
+
+---
+
+## 2. openSession seats agents
+
+```ts
+const session = openSession({
+  name: 'initiative',
+  agents: [lead, designer, product, passive(planner)],
 });
 ```
 
-`andrei` and `mara` are members. The room knows their names, their
-identities, and that a `say` may be addressed to them. They are not in the
-room. A member who has not entered is **absent**.
+That is the room: four agents, one record, one name. Open the name again
+and you are back in it, record intact. Nothing else about `openSession`
+changes — the identity rules, the duplicate-name refusal, `streamFn`,
+`repo`, the storage — all of it holds as `docs/agent.md` states it.
 
-Entering is the second verb:
+The room runs whether or not anybody is watching. This is the normal case,
+not the edge case: agents wait, a colleague's directed `say` wakes another
+colleague, and the record fills up with nobody reading it. A person who
+opens the session later reads what happened.
+
+`participants` becomes `agents`, because that is what the field now holds.
+The type stays a union of the two ways to seat an agent:
+
+```ts
+export type AgentSeat = AgentDefinition | PassiveSeat;
+```
+
+`Participant` survives as a narrower thing — who may be addressed by name:
+
+```ts
+export type Participant = AgentDefinition | HumanDefinition;
+```
+
+`defineHuman` is unchanged and still returns a value. It is no longer a
+participant of an opening; it is what a person enters as.
+
+---
+
+## 3. Entering
 
 ```ts
 const visit = await session.enter(andrei, { idleTimeout: 15 * 60_000 });
@@ -79,32 +108,36 @@ await visit.leave();
 
 `deliver` moves from the session to the visit. That is the point of the
 change, not a side effect of it. **You cannot speak into a room you have
-not entered.** Provenance stops being a check the runtime performs and
-becomes a property of the handle the host holds. A host that wants to
-deliver as Andrei must hold a live visit for Andrei, and the visit ends
-when Andrei leaves.
+not entered.** Provenance stops being a check the runtime performs on a
+handle it was passed and becomes a property of the handle the host holds. A
+host that wants to deliver as Andrei must hold a live visit for Andrei, and
+the visit ends when Andrei leaves.
 
 Reading stays on the session. `messages()`, `seats()` and `subscribe()`
-answer whether or not anybody is present, because a host renders a dashboard
-of an unattended room the same way it renders one with three people in it.
-Reviewing is not acting.
+answer whether or not anybody is present, because a host renders an
+unattended room the same way it renders one with three people in it.
+Reviewing is not acting, and a dashboard is not a visitor.
 
-`enter` refuses a human who is not in `participants`. This is a consistency
-rule, not a security boundary: the room addresses participants by name, and
-a name that is not on the roster cannot be addressed. The host still
-authenticates the person. Ambion never sees a credential.
+Anybody may enter. There is no guest list, because there is no longer a
+place to put one — and the room does not need it. The host authenticates
+the person and vouches for the name and identity it passes; Ambion never
+sees a credential and adds no user store. `enter` refuses exactly one
+thing: a name an agent already holds, because the room addresses
+participants by name and two claimants make `say({ to })` ambiguous. It is
+the same refusal `openSession` already makes, at the moment the second
+claim arrives.
 
 ---
 
-## 3. The visit
+## 4. The visit
 
 One person, many visits. One visit, one attachment.
 
 A person who opens the room in a terminal and in a browser has two visits.
-They are one member with one seat and one name on the record. This is the
-whole of the multi-attachment answer: the runtime counts visits and derives
-the person's status from them, so closing one tab does not make somebody
-absent who is still watching in the other.
+They are one person with one name on the record. This is the whole of the
+multi-attachment answer: the runtime counts visits and derives the person's
+status from them, so closing one tab does not make somebody absent who is
+still reading in the other.
 
 ```ts
 export interface EnterOptions {
@@ -119,7 +152,6 @@ export interface Visit {
   readonly human: HumanDefinition;
   /** This attachment, not this person. Opaque, stable, unique in the session. */
   readonly id: string;
-  /** 'present' or 'away'. A visit that left is not readable; its handle throws. */
   readonly status: VisitStatus;
   deliver(input: { to?: Participant; text: string }): Promise<void>;
   /** The host reports that the person acted. Returns an away visit to present. */
@@ -135,57 +167,77 @@ replaces `touch()`, which is a metaphor.
 The id is `<name>#<n>` — `andrei#1`, `andrei#2` — counted per session. It is
 readable in a log and deterministic in a test. Treat it as opaque.
 
-`deliver` on a visit that left throws. So does `acted()`. A handle to a
-finished visit is a stale handle, and the runtime says so rather than
-accepting a message from a person who is gone.
+`deliver` and `acted()` on a visit that left throw. A handle to a finished
+visit is a stale handle, and the runtime says so rather than accepting a
+message from a person who is gone.
+
+Two visits by one name are the same person. A second `enter` with the same
+name and the same identity attaches another visit to that person. A second
+`enter` with the same name and a different identity is refused: one name is
+one identity for the life of the opening, and the alternative is a roster
+that changes under the agents reading it.
 
 ---
 
-## 4. Presence
+## 5. Presence, and the names a room learns
 
-A visit has two states. A seat has three.
+A visit has two states. A person has three.
 
 ```ts
 export type VisitStatus = 'present' | 'away';
 export type PresenceStatus = VisitStatus | 'absent';
 ```
 
-- **present** — the person acted within the timeout. They are reading.
-- **away** — the person is attached, but has not acted for longer than the
-  timeout. They will read this later.
-- **absent** — the person is a member and has no live visit. They are not
-  in the room.
+- **present** — they acted within the timeout. They are reading.
+- **away** — they are attached and have not acted for longer than the
+  timeout. They read this later.
+- **absent** — they entered this session at some point and hold no live
+  visit now. They are not in the room.
 
-A seat's presence derives from its visits, and the rule is one sentence:
+A person's presence derives from their visits, and the rule is one
+sentence:
 
-> A seat is **present** if any of its visits is present, **away** if it has
-> visits and all of them are away, and **absent** if it has no visits.
+> Somebody is **present** if any of their visits is present, **away** if
+> they have visits and all of them are away, and **absent** if they have
+> none.
 
 That rule is what "tracked correctly" means. Six cases follow from it, and
 the proposal claims all six:
 
-1. Two visits, one leaves — the seat stays present.
-2. The last visit leaves — the seat turns absent.
-3. One visit turns away, another is present — the seat stays present.
-4. Every visit turns away — the seat turns away.
+1. Two visits, one leaves — the person stays present.
+2. The last visit leaves — the person turns absent.
+3. One visit turns away, another is present — the person stays present.
+4. Every visit turns away — the person turns away.
 5. An away visit delivers — that visit returns to present, and so does the
-   seat. Delivering is acting.
-6. A member who never entered stays absent, and a `say` may still be
-   addressed to them.
+   person. Delivering is acting.
+6. A person who left is still addressable. A `say` directed at them lands on
+   the record and waits; they read it when they come back.
 
-Presence is live. It is not on the record and it does not survive the
-process. Reopen a name and you get the record back and an empty room. That
-is correct: presence is an attachment to a running session, and a session
-that is not running has nobody in it.
+Case 6 needs one mechanic, and it is the only one this section adds:
+**the room learns a name when somebody enters, and does not forget it while
+the room is open.** Without it, an agent that reads `andrei (human,
+present)` in its roster and calls `say({ to: 'andrei' })` two seconds later
+would fail because Andrei closed his laptop in between. With it, the say
+lands, addressed, and waits. The known names bound at the number of people
+who have actually visited, which is a small number of real people.
 
-The transitions are still auditable. Each one lands in the room's own Pi
-session as a custom entry, `ambion/presence`, the way each activation
-already lands in a seat's session as `ambion/activation`. It is a trail for
-review, not part of `messages()`. The record holds what was said.
+Reopening the name is a new opening. The record comes back and the room is
+empty — nobody is present, and nobody is absent either, because the room has
+learned no names yet. Messages on the record still carry the `to` they were
+stamped with. This is the core's own rule, unchanged: the record belongs to
+the name, and the seats belong to the opening.
+
+Presence itself is live. It is not on the record and it does not survive the
+process, because presence is an attachment to a running session and a
+session that is not running has nobody in it. The transitions are still
+auditable: each one lands in the room's own Pi session as a custom entry,
+`ambion/presence`, the way each activation already lands in a seat's session
+as `ambion/activation`. It is a trail for review, not part of `messages()`.
+The record holds what was said.
 
 ---
 
-## 5. The inactivity timeout
+## 6. The inactivity timeout
 
 `idleTimeout` is milliseconds without an act. `enter` takes it per visit,
 because the host knows the medium — a terminal, a tab, a webhook — and one
@@ -220,34 +272,43 @@ active. Whether anybody is watching is a different fact.
 
 ---
 
-## 6. What agents see
+## 7. What agents see
 
 This is where the addition earns its place. Presence is not host
 bookkeeping; it is context, and it changes what an agent does.
 
-The roster line gains the human's presence:
+The roster is the agents, always, and the people the room has learned:
 
 ```
 The roster (active: taking a turn now; idle: hears every message; passive: hears
 only a say directed at them):
-- andrei (human, present): Founder. Owns the weekly. Bring him blockers, not status.
-- mara (human, away): Design lead. Decides on the experience.
 - lead (idle): Tech lead. Owns feasibility, estimates, and sequencing.
+- designer (idle): Product designer. Guards the user experience.
 - planner (passive): Project manager. Keeps the plan of record.
+
+In the room now:
+- andrei (present): Founder. Owns the weekly. Bring him blockers, not status.
+- mara (away): Design lead. Decides on the experience.
 ```
 
-And the system prompt gains one paragraph:
+Two lists, because they are two facts. The agents are the room's
+composition and never move. The people change between one activation and
+the next, and an agent that reads them in a separate list reads the change
+as a change. When the second list is empty the prompt says so plainly:
+`Nobody is in the room.`
 
-> A human's status says whether they are reading. Present: they are in the
-> room now. Away: they are in the room and have not acted recently. Absent:
-> they are not in the room. A say directed at a human who is away or absent
-> is a note they read later, not a question they answer now. When no human is
-> present, work for the record: state what you decided and why, and do not
-> wait for an answer that nobody is there to give.
+The system prompt gains one paragraph:
+
+> The second list is the people in the room and how they are reading.
+> Present: they are here now. Away: they are here and have not acted
+> recently. Absent: they were here and left. A say directed at somebody who
+> is away or absent is a note they read later, not a question they answer
+> now. When nobody is in the room, work for the record: state what you
+> decided and why, and do not wait for an answer that nobody is there to
+> give.
 
 An agent that knows the room is empty writes differently from one that
-thinks somebody is waiting. That difference is the whole return on this
-document.
+thinks somebody is waiting. That difference is the return on this document.
 
 Presence enters an agent's context at activation, with the rest of the
 roster. A person who enters while an agent is mid-turn does not appear in
@@ -256,7 +317,7 @@ idle, and the next activation reads the room as it is then.
 
 ---
 
-## 7. What does not change
+## 8. What does not change
 
 Four things stay exactly as they are, and each one is a decision.
 
@@ -271,32 +332,33 @@ activation.
 
 **Routing does not consult presence.** `dispatch` is unchanged. A message
 from an away person routes like a message from a present one, because it is
-the same message. A `say` directed at a human still wakes nothing — it is an
-address for a reader, present or not.
+the same message. A `say` directed at a person still wakes nothing — it is
+an address for a reader, present or not.
 
 **The record is unchanged.** `Message` keeps its four fields. Enter, leave,
 away and return are not messages, because nobody said them.
 
 ---
 
-## 8. Observing presence
+## 9. Observing presence
 
 Four events, one per fact, in the shape the stream already uses:
 
 ```ts
 type SessionEvent =
   | /* … the nine events of the core, unchanged … */
-  | { type: 'visit_enter';  human: string; visit: string; seat: PresenceStatus }
-  | { type: 'visit_away';   human: string; visit: string; seat: PresenceStatus }
-  | { type: 'visit_return'; human: string; visit: string; seat: PresenceStatus }
-  | { type: 'visit_leave';  human: string; visit: string; seat: PresenceStatus };
+  | { type: 'visit_enter';  human: string; visit: string; presence: PresenceStatus }
+  | { type: 'visit_away';   human: string; visit: string; presence: PresenceStatus }
+  | { type: 'visit_return'; human: string; visit: string; presence: PresenceStatus }
+  | { type: 'visit_leave';  human: string; visit: string; presence: PresenceStatus };
 ```
 
 Every event names the attachment that changed and the person's status
 afterwards. The two levels are both needed and they disagree: when Andrei's
 first tab goes idle and his second is live, `visit_away` fires with
-`seat: 'present'`. A host that manages sockets reads `visit`. A host that
-renders "who is here" reads `human` and `seat`, and ignores the rest.
+`presence: 'present'`. A host that manages sockets reads `visit`. A host
+that renders "who is here" reads `human` and `presence`, and ignores the
+rest.
 
 The pull side gains one call beside `seats()`:
 
@@ -313,9 +375,9 @@ export interface VisitInfo {
 session.visits(): VisitInfo[];
 ```
 
-`seats()` answers who belongs and who is here. `visits()` answers how they
-are attached. `SeatInfo` becomes a discriminated union, because a human seat
-and an agent seat no longer carry the same fields:
+`seats()` answers who is in the room. `visits()` answers how they are
+attached. `SeatInfo` becomes a discriminated union, because an agent seat
+and a person no longer carry the same fields:
 
 ```ts
 export type SeatInfo =
@@ -324,16 +386,42 @@ export type SeatInfo =
 ```
 
 This breaks `seat.status` for callers that read it without narrowing —
-`examples/room` is one. The smaller change is a flat `presence?:` field
-beside the optional `status?:`, at the cost of a type that lets you ask an
-agent for its presence. The union is the better shape and the churn is two
-lines.
+`examples/room` is one, and it is two lines.
 
 ---
 
-## 9. The change in the code
+## 10. What this changes in the contract
 
-Nine edits, all in `packages/ambion/src`. The runtime keeps its two
+`docs/agent.md` is the contract for shipped code, and three parts of it stop
+being true when this lands. The proposal is reviewable against them.
+
+**§4, `defineHuman`.** "A human is a participant, not an operator: seated
+like an agent, on the roster like an agent, on the record like an agent." On
+the record: still true, and the stamping paragraph holds word for word.
+Seated like an agent: no. A person is not seated by `openSession` at all,
+and §4 gets rewritten around entering.
+
+**§5, `openSession`.** The example seats `andrei` in `participants` and
+calls `session.deliver`. Both change. "The seats belong to the opening" is
+sharpened rather than replaced: agent seats belong to the opening, and a
+person's presence belongs to their visit.
+
+**§5, rule 7, "Identity is injected."** "Every agent's context carries the
+roster — each participant's name, kind, identity and status." It carries two
+lists now, and the second one varies between activations of the same room.
+The rule's other half — provenance is stamped, never self-reported — gets
+stronger, not weaker: `from` now comes from a live visit instead of a handle
+the caller chose.
+
+Rules 1 through 6 and rule 8 are untouched. So is every one of the eleven
+tests in `packages/ambion/test/session.test.ts`, except where they call
+`deliver`.
+
+---
+
+## 11. The change in the code
+
+Ten edits, all in `packages/ambion/src`. The runtime keeps its two
 concerns: participants as values, and the session as a room. Presence is
 part of the room — who is in it — not a third thing. Ambion still writes no
 model loop, no transport, no authentication, and no user store. The host
@@ -341,23 +429,33 @@ opens the socket and names the person; the runtime counts and derives.
 
 | File         | Change                                                                         |
 | ------------ | ------------------------------------------------------------------------------ |
+| `define.ts`  | `defineHuman` unchanged; its doc comment stops calling the value a participant |
+| `types.ts`   | `AgentSeat`; `Participant` narrows to agent-or-human                           |
 | `types.ts`   | `VisitStatus`, `PresenceStatus`, `VisitInfo`; `SeatInfo` becomes a union       |
 | `types.ts`   | Four `visit_*` events on `SessionEvent`                                        |
-| `session.ts` | `VisitRuntime` per attachment; a `Map<string, VisitRuntime[]>` keyed by human  |
+| `session.ts` | `participants` becomes `agents`; `seat()` drops its human branch               |
+| `session.ts` | `VisitRuntime` per attachment; `Map<string, VisitRuntime[]>` keyed by name     |
 | `session.ts` | `enter()`, and `Visit` with `deliver`, `acted`, `leave`                        |
 | `session.ts` | `deliver` moves off `Session`; the body is reused, `from` comes from the visit |
-| `session.ts` | `seatPresence()` and `visitStatus()` — pure, both read by `seats()`            |
+| `session.ts` | `presenceOf()` and `visitStatus()` — pure, both read by `seats()`              |
 | `session.ts` | One `unref`'d timer per present visit; armed, cleared, re-armed on each act    |
-| `session.ts` | `systemPrompt` renders presence in the roster and gains the paragraph in §6    |
+| `session.ts` | `systemPrompt` renders the two lists and gains the paragraph in §7             |
 | `index.ts`   | Export `Visit`, `VisitInfo`, `VisitStatus`, `PresenceStatus`, `EnterOptions`   |
 
-Hosts migrate in one line each:
+`dispatch` and `sayTool` need no change at all. `dispatch` reads the agent
+map, which people never enter. `sayTool` validates `to` against the agent
+map and the people map, and the people map is now filled by `enter` instead
+of by `openSession` — the same lookup against a differently filled map.
+
+Hosts migrate in three lines:
 
 ```ts
 // before
+const session = openSession({ name: 'initiative', participants: [andrei, lead, designer] });
 await session.deliver({ from: andrei, text: 'Draft the weekly.' });
 
 // after
+const session = openSession({ name: 'initiative', agents: [lead, designer] });
 const visit = await session.enter(andrei);
 await visit.deliver({ text: 'Draft the weekly.' });
 ```
@@ -372,42 +470,51 @@ second one would cost more than it buys.
 
 ---
 
-## 10. What would prove it
+## 12. What would prove it
 
 One milestone test per claim this document makes loudly, in the style of
 `packages/ambion/test/session.test.ts`:
 
-1. A member who has not entered is absent, and an agent can still address
-   them.
-2. `enter` seats a presence, activates nothing, and leaves no mark on the
-   record.
+1. A room of agents alone opens, runs a full exchange, and settles with
+   nobody present.
+2. `enter` puts a person in the room, activates nothing, and leaves no mark
+   on the record.
 3. Two people enter, both deliver, and the record stamps each from their own
    visit.
-4. One person, two visits: one leaves, the seat stays present; the second
-   leaves, the seat turns absent.
+4. One person, two visits: one leaves and the person stays present; the
+   second leaves and the person turns absent.
 5. A visit turns away after `idleTimeout` with the clock advanced, and
-   `visit_away` carries the seat's status.
-6. One of two visits turns away and the seat stays present; both turn away
-   and the seat turns away.
+   `visit_away` carries the person's status.
+6. One of two visits turns away and the person stays present; both turn away
+   and the person turns away.
 7. An away visit delivers, returns to present, and the message routes
    normally.
-8. `deliver` and `acted()` on a left visit throw.
-9. `leave()` twice is not an error.
-10. The roster an agent reads names each human's presence, and an empty room
-    says so.
+8. A person leaves, and an agent's directed `say` still lands on the record
+   addressed to them.
+9. `deliver` and `acted()` on a left visit throw; `leave()` twice does not.
+10. `enter` refuses a name an agent holds, and refuses a second identity for
+    a name already in the room.
+11. The roster an agent reads carries both lists, and an empty room says so.
 
 ---
 
-## 11. Rejected alternatives
+## 13. Rejected alternatives
+
+**A guest list of people at open time.** `openSession({ agents, humans })`:
+the people who may enter, declared, with presence layered on top. It buys
+one thing — an agent may address somebody who has never visited — and costs
+the lifetime distinction this whole document is about, by putting two kinds
+of member in one call again. The room learning names on entry (§5) recovers
+most of what the guest list bought.
 
 **Presence as messages on the record.** "andrei joined" as a `Message`.
 Rejected twice over: the record holds what participants said, and nobody
 said it; and every message activates the idle room, so joining would wake
-five agents to read a line about a door.
+four agents to read a line about a door.
 
-**One `defineHuman` per connection.** Two tabs would be two participants
-with two names, and names are unique. The person is one seat. The
-attachment is the thing there can be many of.
+**One `defineHuman` per connection.** Two tabs would be two people with two
+names. The person is one name. The attachment is the thing there can be many
+of.
 
 **Inferring presence from reads.** Treating `messages()` as evidence of
 attention. A poller is not a reader, and the runtime cannot tell them apart.
@@ -423,38 +530,41 @@ asks nothing about how the host learned it.
 
 ---
 
-## 12. Open questions
+## 14. Open questions
 
 Five decisions this document takes, each of which could go the other way.
 
-1. **Should `idleTimeout` have a default?** The proposal says no: omit it
-   and a visit never turns away. A default of ten or fifteen minutes would
-   make the common case shorter and the surprising case surprising.
+1. **Does the room forget?** §5 says a room never forgets a name while it is
+   open, so a `say` to somebody who left still lands. The alternative is to
+   forget on the last leave and refuse the say, which makes the roster
+   smaller and the mid-turn race real.
 
-2. **Should a read cursor come with this?** "Enter to review" implies
+2. **Should `idleTimeout` have a default?** The proposal says no: omit it and
+   a visit never turns away. A default of ten or fifteen minutes would make
+   the common case shorter and the surprising case surprising.
+
+3. **Should a read cursor come with this?** "Enter to review" implies
    unread. `visit.seen(seq)` and `visit.unread()` would mirror the agents'
    own `viewSeq` and cost little. It is left out to keep the proposal to one
    idea, and it is the first candidate to add.
 
-3. **Should a host be able to deliver without a person?** A cron or a
-   webhook has no human to enter as. It cannot today either, so nothing
-   regresses — but a room that works unattended will want it, and the answer
-   is probably a participant kind, not a hole in `enter`.
+4. **Should a host be able to deliver without a person?** A cron or a webhook
+   has nobody to enter as, and after this change there is nothing but agents
+   at open time. It cannot deliver today either, so nothing regresses — but
+   an unattended room will want it, and the answer is probably a third kind
+   of definition, not a hole in `enter`.
 
-4. **Does an away person still get directed says?** The proposal says yes,
-   unchanged: the message lands on the record and they read it later. The
-   alternative is to let an agent see that nobody will answer and choose
-   differently, which is what §6 already tells it to do.
-
-5. **`SeatInfo` as a union, or a flat optional field?** The proposal takes
-   the union and pays two lines of churn in the example.
+5. **`agents`, or keep the name `participants`?** The proposal renames the
+   field, because it now holds one kind of thing and the old name says
+   otherwise. Keeping `participants` costs nothing at the call site and one
+   sentence of explanation forever.
 
 ---
 
-## 13. Later
+## 15. Later
 
 Presence is the fact a workspace needs before it can have channels: a
 channel with read/write contracts must know who is reading. Two things sit
 directly on top of this document and are not in it — the read cursor of
-question 2, and per-person notification when an agent addresses somebody who
-is away. Both are additions to the visit. Neither changes the core.
+question 3, and notifying somebody an agent addressed while they were away.
+Both are additions to the visit. Neither changes the core.
