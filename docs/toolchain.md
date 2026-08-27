@@ -203,6 +203,9 @@ Rules worth knowing:
   The library will never write to stdout on its host's behalf; a host passes a
   logger in. The CLI and the examples are console programs and are exempt.
 - `useNodejsImportProtocol: error` — `node:fs`, never `fs`.
+- `noExcessiveCognitiveComplexity: error`, budget **10** — **15** under
+  `**/test/**`. Biome ships this rule at `info` with a threshold of 15, which
+  is a number nothing checks; here it fails the build like every other rule.
 - Knip runs as part of `check:lint`, so an unused export fails the build rather
   than accumulating.
 - `--error-on-warnings` is not decoration. Biome exits `0` on warnings by
@@ -212,17 +215,36 @@ Rules worth knowing:
   `biome-ignore` with a reason (see `packages/cli/src/commands/init.ts`, where
   `${GITHUB_TOKEN}` has to reach the file literally).
 
+### The complexity budget
+
+Two numbers, and they are not a double standard. Biome charges a nested
+function for the nesting it sits in, so a branch inside `describe` → `it`
+scores three where the same branch in a plain function scores one; on one
+budget a test would hit the wall three times sooner than the code it exercises.
+The wider budget measures a test body from where it actually starts. A test
+that has become a program still fails — the tree's worst test scores 8.
+
+The runtime's densest method, `SessionImpl.dispatch`, sits at exactly 10.
+Routing is the room's whole policy and is meant to stay one readable piece, so
+it has no headroom on purpose: the next branch added to it is a decision
+someone takes deliberately rather than a drift nobody measures. Everything else
+in the tree scores 9 or below.
+
+The budget is a lint rule, not a separate job, so it runs wherever
+`check:lint` runs — the `check` job on a pull request, and the gate the release
+re-runs before it publishes. There was nothing to add to `ci.yml`.
+
 ---
 
 ## 8. Continuous integration (`.github/workflows/ci.yml`)
 
 Three jobs, on push to `main`, on every pull request, and on demand.
 
-| Job       | What it proves                               |
-| --------- | -------------------------------------------- |
-| **check** | Formatting, types, lint, and Knip on Node 22 |
-| **test**  | The suite passes on Node 22 **and** 24       |
-| **cli**   | The published artifact actually works        |
+| Job       | What it proves                                                      |
+| --------- | ------------------------------------------------------------------- |
+| **check** | Formatting, types, lint, the complexity budget, and Knip on Node 22 |
+| **test**  | The suite passes on Node 22 **and** 24                              |
+| **cli**   | The published artifact actually works                               |
 
 The `cli` job is the one that matters most and the one a unit test cannot
 replace. It builds, then drives `packages/cli/bin/ambion.mjs` — the exact file

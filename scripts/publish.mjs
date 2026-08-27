@@ -53,69 +53,96 @@ function alreadyPublished(registry, name, version) {
 	return result.status === 0 && result.stdout.trim() === version;
 }
 
+/**
+ * Pack every package into `outDir`. Returns false once a pack has failed, and
+ * the exit code is already set by then — the caller only has to stop.
+ */
+async function pack(packages, outDir) {
+	// A stale tarball from an earlier version must never be published by a
+	// later run, so the directory starts empty every time.
+	await rm(outDir, { recursive: true, force: true });
+	await mkdir(outDir, { recursive: true });
+	for (const entry of packages) {
+		const result = run('pnpm', ['pack', '--pack-destination', outDir], {
+			cwd: entry.dir,
+			stdio: 'inherit',
+		});
+		if (result.status !== 0) {
+			fail(`Failed to pack ${entry.manifest.name}.`, result.status);
+			return false;
+		}
+		console.log(`packed  ${tarballName(entry.manifest.name, entry.manifest.version)}`);
+	}
+	return true;
+}
+
+/**
+ * Publish one packed tarball. 'skipped' is the idempotent path — this exact
+ * name@version is already on the registry — and 'failed' has set the exit code.
+ */
+function publishOne(entry, { registry, outDir, tag, dryRun }) {
+	const { name, version } = entry.manifest;
+	if (alreadyPublished(registry, name, version)) {
+		console.log(`skip    ${name}@${version} (already on ${registry})`);
+		return 'skipped';
+	}
+	const tarball = resolve(outDir, tarballName(name, version));
+	const args = ['publish', tarball, '--registry', registry, '--tag', tag];
+	if (dryRun) args.push('--dry-run');
+	console.log(`publish ${name}@${version}${dryRun ? ' (dry run)' : ''}`);
+	const result = run('npm', args, { cwd: ROOT, stdio: 'inherit' });
+	if (result.status !== 0) {
+		fail(`Failed to publish ${name}@${version}.`, result.status);
+		return 'failed';
+	}
+	return 'published';
+}
+
 async function main(argv) {
-	const dryRun = argv.includes('--dry-run');
-	const packOnly = argv.includes('--pack-only');
-	const skipPack = argv.includes('--skip-pack');
-	const tag = readFlag(argv, '--tag') ?? 'latest';
-	const outDir = resolve(ROOT, OUT_DIR);
+	const options = {
+		dryRun: argv.includes('--dry-run'),
+		tag: readFlag(argv, '--tag') ?? 'latest',
+		outDir: resolve(ROOT, OUT_DIR),
+	};
 	const packages = await publishablePackages();
 
 	if (packages.length === 0) {
 		fail('No publishable packages found.');
 		return;
 	}
-	const registry = resolveRegistry(packages);
+	options.registry = resolveRegistry(packages);
 	// Throws, naming the offenders, if the packages have drifted apart.
 	sharedVersion(packages);
 
-	if (!skipPack) {
-		// A stale tarball from an earlier version must never be published by a
-		// later run, so the directory starts empty every time.
-		await rm(outDir, { recursive: true, force: true });
-		await mkdir(outDir, { recursive: true });
-		for (const entry of packages) {
-			const result = run('pnpm', ['pack', '--pack-destination', outDir], {
-				cwd: entry.dir,
-				stdio: 'inherit',
-			});
-			if (result.status !== 0) {
-				fail(`Failed to pack ${entry.manifest.name}.`, result.status);
-				return;
-			}
-			console.log(`packed  ${tarballName(entry.manifest.name, entry.manifest.version)}`);
-		}
-	}
+	if (!argv.includes('--skip-pack') && !(await pack(packages, options.outDir))) return;
 
-	if (packOnly) {
-		console.log(`${packages.length} tarball(s) in ${outDir}.`);
+	if (argv.includes('--pack-only')) {
+		console.log(`${packages.length} tarball(s) in ${options.outDir}.`);
 		return;
 	}
 
-	if (!dryRun && !process.env.NODE_AUTH_TOKEN && !process.env.NPM_TOKEN) {
+	if (!options.dryRun && !process.env.NODE_AUTH_TOKEN && !process.env.NPM_TOKEN) {
 		fail('Set NODE_AUTH_TOKEN (a token with `write:packages`) before publishing.');
 		return;
 	}
 
+	const published = publishAll(packages, options);
+	if (published === undefined) return;
+	console.log(`${published} package(s) published, ${packages.length - published} skipped.`);
+}
+
+/**
+ * Publish every packed tarball, returning how many were actually pushed — or
+ * undefined once one has failed, the exit code already set by then.
+ */
+function publishAll(packages, options) {
 	let published = 0;
 	for (const entry of packages) {
-		const { name, version } = entry.manifest;
-		if (alreadyPublished(registry, name, version)) {
-			console.log(`skip    ${name}@${version} (already on ${registry})`);
-			continue;
-		}
-		const tarball = resolve(outDir, tarballName(name, version));
-		const args = ['publish', tarball, '--registry', registry, '--tag', tag];
-		if (dryRun) args.push('--dry-run');
-		console.log(`publish ${name}@${version}${dryRun ? ' (dry run)' : ''}`);
-		const result = run('npm', args, { cwd: ROOT, stdio: 'inherit' });
-		if (result.status !== 0) {
-			fail(`Failed to publish ${name}@${version}.`, result.status);
-			return;
-		}
-		published += 1;
+		const outcome = publishOne(entry, options);
+		if (outcome === 'failed') return undefined;
+		if (outcome === 'published') published += 1;
 	}
-	console.log(`${published} package(s) published, ${packages.length - published} skipped.`);
+	return published;
 }
 
 function fail(message, code = 1) {

@@ -65,6 +65,16 @@ function scripted(script: Script): StreamFn {
 	};
 }
 
+/**
+ * Route a script by seat: one entry per agent that has lines, `quiet()` for the
+ * rest. Keeping the seats apart is what keeps each one readable — a single
+ * callback branching on `agent` buries the scenario in an if-chain.
+ */
+const byAgent = (seats: Record<string, Script>): Script => {
+	const table = new Map(Object.entries(seats));
+	return (context, agent, call) => (table.get(agent) ?? (() => quiet()))(context, agent, call);
+};
+
 const speak = (text: string, to?: string) =>
 	fauxAssistantMessage([fauxToolCall('say', to ? { to, text } : { text })], {
 		stopReason: 'toolUse',
@@ -126,28 +136,27 @@ describe('openSession', () => {
 		const session = openSession({
 			name: sessionName('parallel'),
 			participants: [human, alpha, beta, gamma],
-			streamFn: scripted(async (context, agent, call) => {
-				if (agent === 'gamma') return quiet();
-				if (agent === 'alpha') {
-					if (call === 1) {
+			streamFn: scripted(
+				byAgent({
+					alpha: async (_context, _agent, call) => {
+						if (call !== 1) return quiet();
 						await gammaIdle.promise; // let gamma go idle before alpha speaks
 						return speak('the answer is 42');
-					}
-					return quiet();
-				}
-				// beta: hold the first turn open until alpha has spoken, so the
-				// reply reaches beta as a mid-turn arrival, not fresh context.
-				if (call === 1) {
-					await alphaSaid.promise;
-					return quiet('waiting');
-				}
-				betaContexts.push(contextText(context));
-				if (!betaAcked && contextText(context).includes('the answer is 42')) {
-					betaAcked = true;
-					return speak('ack: 42');
-				}
-				return quiet();
-			}),
+					},
+					// beta: hold the first turn open until alpha has spoken, so the
+					// reply reaches beta as a mid-turn arrival, not fresh context.
+					beta: async (context, _agent, call) => {
+						if (call === 1) {
+							await alphaSaid.promise;
+							return quiet('waiting');
+						}
+						betaContexts.push(contextText(context));
+						if (betaAcked || !contextText(context).includes('the answer is 42')) return quiet();
+						betaAcked = true;
+						return speak('ack: 42');
+					},
+				}),
+			),
 		});
 		const events = collect(session);
 		session.subscribe((event) => {
@@ -242,13 +251,16 @@ describe('openSession', () => {
 		const session = openSession({
 			name: sessionName('passive'),
 			participants: [human, front, passive(archivist)],
-			streamFn: scripted((_context, agent, call) => {
-				// archivist answers the asker directly — directed at a human wakes nothing
-				if (agent === 'archivist') return call === 1 ? speak('Q2 was 1.2M', 'andrei') : quiet();
-				// front: on its second look (the second broadcast), call the archivist in
-				if (call === 2) return speak('what was Q2?', 'archivist');
-				return quiet();
-			}),
+			streamFn: scripted(
+				byAgent({
+					// archivist answers the asker directly — directed at a human wakes nothing
+					archivist: (_context, _agent, call) =>
+						call === 1 ? speak('Q2 was 1.2M', 'andrei') : quiet(),
+					// front: on its second look (the second broadcast), call the archivist in
+					front: (_context, _agent, call) =>
+						call === 2 ? speak('what was Q2?', 'archivist') : quiet(),
+				}),
+			),
 		});
 		const events = collect(session);
 		const starts = (name: string) =>
@@ -417,16 +429,19 @@ describe('openSession', () => {
 		const session = openSession({
 			name: sessionName('race'),
 			participants: [human, first, second],
-			streamFn: scripted(async (context, agent, call) => {
-				if (agent === 'first') return call === 1 ? speak('the point') : quiet();
-				secondContexts.push(contextText(context));
-				if (call === 1) {
-					await firstSaid.promise; // commit blind, after the record moved
-					return speak('the same point, again');
-				}
-				if (call === 2) return speak('a genuinely different angle');
-				return quiet();
-			}),
+			streamFn: scripted(
+				byAgent({
+					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
+					second: async (context, _agent, call) => {
+						secondContexts.push(contextText(context));
+						if (call === 1) {
+							await firstSaid.promise; // commit blind, after the record moved
+							return speak('the same point, again');
+						}
+						return call === 2 ? speak('a genuinely different angle') : quiet();
+					},
+				}),
+			),
 		});
 		const events = collect(session);
 		session.subscribe((event) => {
@@ -450,14 +465,16 @@ describe('openSession', () => {
 		const yielding = openSession({
 			name: sessionName('race-yield'),
 			participants: [human, first, second],
-			streamFn: scripted(async (_context, agent, call) => {
-				if (agent === 'first') return call === 1 ? speak('the point') : quiet();
-				if (call === 1) {
-					await yieldSaid.promise;
-					return speak('me too');
-				}
-				return quiet('point already made');
-			}),
+			streamFn: scripted(
+				byAgent({
+					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
+					second: async (_context, _agent, call) => {
+						if (call !== 1) return quiet('point already made');
+						await yieldSaid.promise;
+						return speak('me too');
+					},
+				}),
+			),
 		});
 		const yieldEvents = collect(yielding);
 		yielding.subscribe((event) => {
