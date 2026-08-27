@@ -170,7 +170,10 @@ export interface Visit {
 ```
 
 `acted()` names the fact the host reports, not a command to the runtime. It
-replaces `touch()`, which is a metaphor.
+replaces `touch()`, which is a metaphor. It stays synchronous even when it
+returns somebody from away and writes a `returned` notice: the notice takes
+its seq in the same tick and persists on the same write chain as every other
+entry, which is what `commit` already does for a say.
 
 The id is `<name>#<n>` — `andrei#1`, `andrei#2` — counted per session. It is
 readable in a log and deterministic in a test. Treat it as opaque.
@@ -244,8 +247,9 @@ absent to present, `away`, `returned`, and `left` on the last visit going.
 Attachment-level detail stays on the event stream, where §11 puts it, and
 off the shared record where every agent would have to read it.
 
-The seq is monotonic, assigned when the entry commits, and strictly ordered
-over both kinds. The core already needs this and already approximates it
+The seq counts from 1, is monotonic, is assigned when the entry commits, and
+is strictly ordered over both kinds. A cursor is exclusive: `since` names an
+entry the reader has, and the read starts after it. The core already needs this and already approximates it
 with `record.length`; naming it is what lets a cursor point into a record
 that holds two kinds of thing. It is not Pi's storage seq — that stays
 Pi's, and `openStore` keeps sorting replayed entries by it.
@@ -278,22 +282,25 @@ sentence:
 > they have visits and all of them are away, and **absent** if they have
 > none.
 
-That rule is what "tracked correctly" means. Six cases follow from it, and
-the proposal claims all six:
+That rule is what "tracked correctly" means. Seven cases follow from it, and
+the proposal claims all seven. A notice marks a change of status, so four of
+them write nothing:
 
-1. Two visits, one leaves — the person stays present, and no notice is
-   written, because their status did not change.
-2. The last visit leaves — the person turns absent and a `left` notice
+1. A second visit opens while the person is present — no notice, because
+   their status did not change. Only the first `enter` of a stretch writes
+   `entered`.
+2. Two visits, one leaves — the person stays present, and again no notice.
+3. The last visit leaves — the person turns absent and a `left` notice
    lands.
-3. One visit turns away, another is present — the person stays present, and
+4. One visit turns away, another is present — the person stays present, and
    again no notice.
-4. Every visit turns away — the person turns away and an `away` notice lands.
-5. An away visit delivers — that visit returns to present, so does the
+5. Every visit turns away — the person turns away and an `away` notice lands.
+6. An away visit delivers — that visit returns to present, so does the
    person, and a `returned` notice lands. Delivering is acting.
-6. A person who left is still addressable. A `say` directed at them lands on
+7. A person who left is still addressable. A `say` directed at them lands on
    the record and waits; they read it when they come back.
 
-Case 6 needs the room to know the name, and the record is where it knows it
+Case 7 needs the room to know the name, and the record is where it knows it
 from. **A room learns every name in its record, and a record does not
 forget.** An agent that reads `andrei (present)` in its roster and calls
 `say({ to: 'andrei' })` two seconds after Andrei closed his laptop still
@@ -594,29 +601,33 @@ part of the room — who is in it — not a third thing, and it introduces no
 store, no transport, no authentication, and no user directory. The host
 opens the socket and names the person; the runtime records and derives.
 
-| File         | Change                                                                           |
-| ------------ | -------------------------------------------------------------------------------- |
-| `define.ts`  | `defineHuman` unchanged; its comment stops calling the value a participant       |
-| `types.ts`   | `Seq`, `Notice`, `Entry`; `Message` gains `kind` and `seq`                       |
-| `types.ts`   | `AgentSeat`; `Participant` narrows to agent-or-human                             |
-| `types.ts`   | `VisitStatus`, `PresenceStatus`, `VisitInfo`; `SeatInfo` becomes a union         |
-| `types.ts`   | Four `visit_*` events and `notice` on `SessionEvent`                             |
-| `session.ts` | `participants` becomes `agents`; `seat()` drops its human branch                 |
-| `session.ts` | `commit()` assigns the seq and takes a notice as well as a message               |
-| `session.ts` | `openStore` replays both entry types and restores the seq counter                |
-| `session.ts` | `VisitRuntime` per attachment; `Map<string, VisitRuntime[]>` keyed by name       |
-| `session.ts` | `enter()`, and `Visit` with `deliver`, `acted`, `leave`, and `since` as a getter |
-| `session.ts` | `deliver` moves off `Session`; the body is reused, `from` comes from the visit   |
-| `session.ts` | `presenceOf()` and `visitStatus()` — pure, both read by `seats()`                |
-| `session.ts` | One `unref`'d timer per present visit; armed, cleared, re-armed on each act      |
-| `session.ts` | `messages()` becomes `record({ since })`; `renderContext` renders notices        |
-| `session.ts` | `systemPrompt` renders the two lists and gains the paragraph in §9               |
-| `index.ts`   | Export the new types, and re-export Pi's `JsonlSessionRepo`                      |
+| File         | Change                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| `define.ts`  | `defineHuman` unchanged; its comment stops calling the value a participant                                    |
+| `types.ts`   | `Seq`, `Notice`, `Entry`; `Message` gains `kind` and `seq`                                                    |
+| `types.ts`   | `AgentSeat`; `Participant` narrows to agent-or-human                                                          |
+| `types.ts`   | `VisitStatus`, `PresenceStatus`, `VisitInfo`; `SeatInfo` becomes a union                                      |
+| `types.ts`   | Four `visit_*` events and `notice` on `SessionEvent`                                                          |
+| `session.ts` | `participants` becomes `agents`; `seat()` drops its human branch                                              |
+| `session.ts` | `commit()` assigns the seq and takes a notice as well as a message                                            |
+| `session.ts` | `openStore` replays both entry types, restores the seq counter, and rebuilds the known names from the notices |
+| `session.ts` | `VisitRuntime` per attachment; `Map<string, VisitRuntime[]>` keyed by name                                    |
+| `session.ts` | `enter()`, and `Visit` with `deliver`, `acted`, `leave`, and `since` as a getter                              |
+| `session.ts` | `deliver` moves off `Session`; the body is reused, `from` comes from the visit                                |
+| `session.ts` | `presenceOf()` and `visitStatus()` — pure, both read by `seats()`                                             |
+| `session.ts` | One `unref`'d timer per present visit; armed, cleared, re-armed on each act                                   |
+| `session.ts` | `messages()` becomes `record({ since })`; `renderContext` renders notices                                     |
+| `session.ts` | `systemPrompt` renders the two lists and gains the paragraph in §9                                            |
+| `index.ts`   | Export the new types, and re-export Pi's `JsonlSessionRepo`                                                   |
 
 Two functions the record's new shape touches, and neither is a rewrite.
-`dispatch` takes messages and never sees a notice. `sayTool`'s lock compares
-the last message seq, not the last entry seq — the one line in this document
-that is easy to implement backwards, and §5 says why.
+`dispatch` takes messages and never sees a notice. `sayTool` changes in one
+line and depends on one: its lock compares the last message seq, not the last
+entry seq — the line in this document that is easiest to implement backwards,
+and §5 says why — and its `to` lookup still reads the map of known names,
+which `openStore` must now fill from the replayed notices rather than from
+`openSession`. Miss that and a reopened room refuses every say addressed to
+somebody who was in it yesterday.
 
 Hosts migrate in three lines:
 
@@ -653,8 +664,8 @@ One milestone test per claim this document makes loudly, in the style of
    turn commits.
 4. Two people enter, both deliver, and the record stamps each from their own
    visit.
-5. One person, two visits: the first leaves and writes no notice; the second
-   leaves and writes `left`.
+5. One person, two visits: the second `enter` writes no notice, the first
+   visit leaving writes none either, and the second leaving writes `left`.
 6. A visit turns away after `idleTimeout` with the clock advanced, and an
    `away` notice lands at the right seq.
 7. One of two visits turns away and no notice lands; both turn away and one
@@ -675,7 +686,9 @@ One milestone test per claim this document makes loudly, in the style of
 15. A session is closed and reopened on the same repo: the names come back,
     a returning person's `since` is the seq it was, and seqs continue rather
     than restart.
-16. The roster an agent reads carries both lists and the transcript carries
+16. In a reopened session an agent's `say` to a name that only the replayed
+    notices know is accepted, not refused.
+17. The roster an agent reads carries both lists and the transcript carries
     the notices; an empty room says so.
 
 ---
