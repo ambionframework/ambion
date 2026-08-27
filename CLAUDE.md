@@ -18,6 +18,16 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs |
 | `examples/room`     | Runnable example                                                               |
 
+## Thesis
+
+Complex software does not come from one large agent that receives more context
+as it asks for it. It comes from many agents, each expert in one domain. The
+platform provides the shared capabilities. A workspace built for collaboration
+holds the agents. Keep this framing in `README.md` and `docs/`.
+
+The session is that workspace today. Workspaces, channels, and the shared
+filesystem are designed and not built. Write about them as design, not as code.
+
 ## Commands
 
 ```sh
