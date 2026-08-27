@@ -18,9 +18,9 @@ on their own, and stops paying attention on their own. The room tracks that
 and tells the agents, because an agent that asks a question of an empty room
 is wasting the ask.
 
-Tracking it properly buys a second thing. A room that knows when somebody
-stopped reading can tell them what they missed, and it needs no cursor from
-the host to do it. That is §7.
+Presence adds no store. Every arrival and departure lands on the record the
+room already keeps, in the same order as everything else, and everything
+else in this document is read back out of it.
 
 ---
 
@@ -54,10 +54,10 @@ a definition, not a person.
 
 **The host has no seam.** A host with two people watching one room — a
 terminal and a browser — has one `deliver` and one handle. It cannot report
-that one of them closed the tab, and it cannot tell the room that the last
-one left.
+that one of them closed the tab.
 
-The proposal takes people out of `openSession` and gives them a verb.
+The proposal takes people out of `openSession`, gives them a verb, and puts
+what the verb does on the record.
 
 ---
 
@@ -117,19 +117,19 @@ handle it was passed and becomes a property of the handle the host holds. A
 host that wants to deliver as Andrei must hold a live visit for Andrei, and
 the visit ends when Andrei leaves.
 
-Reading stays on the session. `messages()`, `seats()` and `subscribe()`
-answer whether or not anybody is present, because a host renders an
-unattended room the same way it renders one with three people in it.
-Reviewing is not acting, and a dashboard is not a visitor.
+Reading stays on the session. `record()`, `seats()` and `subscribe()` answer
+whether or not anybody is present, because a host renders an unattended room
+the same way it renders one with three people in it. Reviewing is not
+acting, and a dashboard is not a visitor.
 
 Anybody may enter. There is no guest list, because there is no longer a
 place to put one — and the room does not need it. The host authenticates
 the person and vouches for the name and identity it passes; Ambion never
-sees a credential and adds no user store. `enter` refuses exactly one
+sees a credential and adds no user store. The name is the person, and it is
+the name a returning visitor is matched on, so a host that gives two people
+one name gives them one seat and one history. `enter` refuses exactly one
 thing: a name an agent already holds, because the room addresses
-participants by name and two claimants make `say({ to })` ambiguous. It is
-the same refusal `openSession` already makes, at the moment the second
-claim arrives.
+participants by name and two claimants make `say({ to })` ambiguous.
 
 ---
 
@@ -157,8 +157,9 @@ export interface Visit {
   /** This attachment, not this person. Opaque, stable, unique in the session. */
   readonly id: string;
   readonly status: VisitStatus;
-  /** Where this person stopped reading last — a cursor into the record.
-   *  `undefined` when the room holds no bookmark for them. See §7. */
+  /** A live read, not a snapshot: the seq of this person's most recent
+   *  `away` or `left` notice, or `undefined` when the record holds none.
+   *  It moves when they stop reading and holds while they read. See §8. */
   readonly since: number | undefined;
   deliver(input: { to?: Participant; text: string }): Promise<void>;
   /** The host reports that the person acted. Returns an away visit to present. */
@@ -186,7 +187,76 @@ that changes under the agents reading it.
 
 ---
 
-## 5. Presence, and the names a room learns
+## 5. The record holds notices
+
+The record holds what happened in the room, and until now everything that
+happened was something a participant said. Presence adds a second kind of
+entry, and it is the only structural change this document makes:
+
+```ts
+/** Monotonic, assigned when the entry commits, strictly ordered, never reused. */
+type Seq = number;
+
+export interface Message {
+  kind: 'message';
+  seq: Seq;
+  at: string; // ISO, stamped by the runtime at the moment it landed
+  from: string; // a participant's name — stamped by the runtime, never claimed
+  to?: string; // present when the delivery or say was directed
+  text: string;
+}
+
+export interface Notice {
+  kind: 'notice';
+  seq: Seq;
+  at: string;
+  who: string; // the person this is about
+  change: 'entered' | 'away' | 'returned' | 'left';
+}
+
+export type Entry = Message | Notice;
+```
+
+**A notice is a fact the room recorded. A message is a thing a participant
+said.** That is the whole distinction, and three rules follow from it.
+
+**1. A notice does not activate anything, and does not steer.** This is the
+core's design principle 1, unweakened: there is exactly one way an agent
+activates, and it is a message delivered into a session it belongs to. A
+notice lands, takes a seq, and waits to be read at the next activation.
+Nobody wakes to be told that a door opened, and nobody's running turn is
+interrupted to be told either — an interruption costs a model call, and the
+room already handles the case that would justify one: it never forgets a
+name, so a `say` to somebody who left still lands (§6).
+
+**2. A notice does not fail a `say`.** Rule 5 of the core refuses a say
+whose seat did not hear the whole record, so that every message was spoken
+by somebody who had heard everything before it. It compares against
+messages. A notice raises the record's seq without invalidating anybody's
+turn, because nobody needs to have heard that Andrei went away in order to
+have earned the right to speak. Implement this wrong and a busy room refuses
+most of its says.
+
+**3. A notice is written per person, not per attachment.** Andrei's second
+tab is host bookkeeping; the room records only that Andrei's own status
+changed. The four changes are the four transitions of §6: `entered` on
+absent to present, `away`, `returned`, and `left` on the last visit going.
+Attachment-level detail stays on the event stream, where §11 puts it, and
+off the shared record where every agent would have to read it.
+
+The seq is monotonic, assigned when the entry commits, and strictly ordered
+over both kinds. The core already needs this and already approximates it
+with `record.length`; naming it is what lets a cursor point into a record
+that holds two kinds of thing. It is not Pi's storage seq — that stays
+Pi's, and `openStore` keeps sorting replayed entries by it.
+
+Records written before this change carry neither field. `openStore` reads a
+missing `kind` as `'message'` and assigns a missing `seq` from replay order,
+which is the order those messages already had.
+
+---
+
+## 6. Presence
 
 A visit has two states. A person has three.
 
@@ -198,8 +268,8 @@ export type PresenceStatus = VisitStatus | 'absent';
 - **present** — they acted within the timeout. They are reading.
 - **away** — they are attached and have not acted for longer than the
   timeout. They read this later.
-- **absent** — they entered this session at some point and hold no live
-  visit now. They are not in the room.
+- **absent** — the record has seen them and they hold no live visit. They
+  are not in the room.
 
 A person's presence derives from their visits, and the rule is one
 sentence:
@@ -211,45 +281,36 @@ sentence:
 That rule is what "tracked correctly" means. Six cases follow from it, and
 the proposal claims all six:
 
-1. Two visits, one leaves — the person stays present.
-2. The last visit leaves — the person turns absent.
-3. One visit turns away, another is present — the person stays present.
-4. Every visit turns away — the person turns away.
-5. An away visit delivers — that visit returns to present, and so does the
-   person. Delivering is acting.
+1. Two visits, one leaves — the person stays present, and no notice is
+   written, because their status did not change.
+2. The last visit leaves — the person turns absent and a `left` notice
+   lands.
+3. One visit turns away, another is present — the person stays present, and
+   again no notice.
+4. Every visit turns away — the person turns away and an `away` notice lands.
+5. An away visit delivers — that visit returns to present, so does the
+   person, and a `returned` notice lands. Delivering is acting.
 6. A person who left is still addressable. A `say` directed at them lands on
    the record and waits; they read it when they come back.
 
-Case 6 needs one mechanic, and it is the only one this section adds:
-**the room learns a name when somebody enters, and does not forget it while
-the room is open.** Without it, an agent that reads `andrei (human,
-present)` in its roster and calls `say({ to: 'andrei' })` two seconds later
-would fail because Andrei closed his laptop in between. With it, the say
-lands, addressed, and waits. The number of known names is bounded by the
-number of people who actually visited, which is a small number of real
-people.
+Case 6 needs the room to know the name, and the record is where it knows it
+from. **A room learns every name in its record, and a record does not
+forget.** An agent that reads `andrei (present)` in its roster and calls
+`say({ to: 'andrei' })` two seconds after Andrei closed his laptop still
+lands the message. So does an agent in a session reopened next week, because
+replaying the record replays the notices. The known names are bounded by the
+people who actually visited, which is a small number of real people.
 
-Reopening the name is a new opening. The record comes back and the room is
-empty — nobody is present, and nobody is absent either, because the room has
-learned no names yet. Messages on the record still carry the `to` they were
-stamped with. This is the core's own rule, unchanged: the record belongs to
-the name, and the seats belong to the opening.
-
-Presence itself is live. It is not on the record and it does not survive the
-process, because presence is an attachment to a running session and a
-session that is not running has nobody in it. The transitions are still
-auditable: each one lands in the room's own Pi session as a custom entry,
-`ambion/presence`, the way each activation already lands in a seat's session
-as `ambion/activation`. It is a trail for review, not part of `messages()`.
-The record holds what was said.
-
-One number inside that trail is an exception, and §7 is about it: where each
-name stopped reading is durable, because a catch-up that forgets on restart
-answers the wrong question on the day it matters.
+Presence itself is live — it is a fact about attachments, and attachments
+die with the process. What survives is the record of how it changed, and
+that is enough to rebuild everything this document needs: who has ever been
+here, who was here last, and where each of them stopped reading. A session
+reopened after a restart shows nobody present, because nobody is, and shows
+every name it has ever seen, because it read them back.
 
 ---
 
-## 6. The inactivity timeout
+## 7. The inactivity timeout
 
 `idleTimeout` is milliseconds without an act. `enter` takes it per visit,
 because the host knows the medium — a terminal, a tab, a webhook — and one
@@ -258,7 +319,7 @@ for every visit that does not set its own. Omit both and a visit never turns
 away on its own; it stays present until it leaves.
 
 Two acts reset it: `deliver` and `acted()`. Reading does not. A host that
-polls `messages()` every second is not a person paying attention, and the
+polls `record()` every second is not a person paying attention, and the
 runtime cannot tell the two apart from the inside. **Attention is claimed,
 not inferred.** `acted()` is the seam through which the host — which knows
 what a real keystroke is — makes the claim.
@@ -270,156 +331,170 @@ status(visit, now) = now - visit.lastActedAt < visit.idleTimeout ? 'present' : '
 ```
 
 `seats()` and `visits()` compute it on read. The timer only makes the change
-observable on time: one timer per present visit, armed at `enter`, cleared
-and armed again on each act, cleared when the visit turns away or leaves. An
-away visit holds no timer. The timer is `unref`'d, so a room full of idle
-people never keeps Node alive.
+observable on time, and makes the notice land when it happened: one timer
+per present visit, armed at `enter`, cleared and armed again on each act,
+cleared when the visit turns away or leaves. An away visit holds no timer.
+The timer is `unref`'d, so a room full of idle people never keeps Node alive.
 
 Deriving the status rather than storing it is what keeps the answer right
 when the timer is wrong. A suspended laptop fires its timers late. `seats()`
 still reports away, because it subtracts two numbers.
+
+Because an away visit holds no timer, `away` fires at most once per stretch
+of attention. A person in and out all day writes a few notices, not one per
+tick. The record does not fill up with a clock.
 
 The timeout does not touch `settled()`. `settled()` reports that no agent is
 active. Whether anybody is watching is a different fact.
 
 ---
 
-## 7. Catch-up
+## 8. Catch-up
 
-Tracking visits properly gives one thing free, and it is the thing a person
-entering a room actually wants: what happened while they were not reading.
+Notices on the record give catch-up for nothing, and give it exactly.
 
-The room already holds the two facts. It knows the length of the record, and
-it knows the moment each person stopped reading. Catch-up is the subtraction.
+The record already holds when each person stopped reading, in strict order
+with everything else. The bookmark a catch-up needs is not a number kept
+somewhere; it is an entry.
 
 ```ts
 const visit = await session.enter(andrei);
-const missed = await session.messages({ since: visit.since });
+const missed = await session.record({ since: visit.since });
 ```
 
-`visit.since` is a cursor: the length of the record at the moment this person
-last stopped reading. `messages({ since })` returns everything from there.
-`since` is `undefined` when the room holds no bookmark for this name — they
-have not been here before — and the host says welcome and shows the record,
-or the last page of it, instead of "you missed four thousand messages".
+`visit.since` is the seq of this person's most recent `away` or `left`
+notice. `record({ since })` returns every entry after it. `since` is
+`undefined` when the record holds neither — they have not been here
+before — and the host says welcome and shows the tail of the record instead
+of "you missed four thousand entries".
 
-**The bookmark is set when somebody stops reading, not when they leave.**
-Away and absent are one fact here: nobody is looking. A person whose visit turns
-away at 14:00 and who acts again at 16:00 gets the two hours they missed,
-exactly like a person who closed the tab and came back. One rule covers both,
-and it is the rule §6 already states — acting is the only evidence of
-attention the runtime has.
+**The anchor is where they stopped reading, not where they left.** Away and
+absent are one fact here: nobody is looking. A person whose visit turns away
+at 14:00 and acts again at 16:00 gets the two hours they missed, exactly
+like a person who closed the tab and came back. One rule covers both, and it
+is the rule §7 already states — acting is the only evidence of attention the
+runtime has.
 
-**The bookmark is frozen until they stop reading again.** It does not move
-when they act, when a message lands, or when a second visit opens. The divider a
-host draws in the transcript stays where it was drawn for the whole stretch
-of attention, so somebody who reads for an hour still sees where they came in.
+**The anchor holds while they read.** `since` is a live read of the record,
+so it moves the moment an `away` or `left` notice lands and then holds until
+the next one. It does not move when they act, when a message lands, or when
+a second visit opens. The divider a host draws in the transcript stays where
+it was drawn for the whole stretch of attention.
 
-The cursor is a count of messages, and it is the coordinate the agents
-already use. `viewSeq` is the prefix a seat has provably heard, and rule 5 of
-the core checks it before it lets that seat speak. People and agents measure
-the same record the same way, and counting stays correct forever because rule
-8 promises the record is never rewritten for anyone.
+Three things this buys that a separate bookmark did not:
 
-### The bookmark is durable
+**Ordering is exact, not approximate.** An anchor and the entries it points
+past are the same kind of thing in one sequence, committed on one path. There
+is no window in which a message lands between a person going away and the
+mark being written, because there is no second write. A bookmark kept beside
+the record has that race; a bookmark that _is_ the record cannot.
 
-This is the one piece of presence that survives the process, and §5 says
-presence does not. The exception is deliberate, and it is one number per name.
+**Durability is free.** The record persists through Pi's `SessionRepo`
+already, and `openStore` already replays it. A person returning to a session
+reopened after a restart is matched by name against the notices that came
+back with everything else. Nothing new is stored, so nothing new can be lost,
+and `JsonlSessionRepo` makes this real today.
 
-A persistent session outlives a process. If the bookmark dies with the
-process, every restart tells everybody that they have never been here. The
-first person back after a restart is the person with the most to catch up
-on, and they are the person the feature would fail.
+**What you missed includes who was here.** Catch-up returns the arrivals and
+departures interleaved with what was said, in order, because they are on the
+same record. A person reads that the room went quiet at 15:00 because
+everybody left, not just that it went quiet.
 
-So the bookmark is written where the record is: the room's own Pi session, as
-the `ambion/presence` entry §5 already proposes for audit. The entry carries the
-name and the cursor. `openStore` replays it on open, the way it already
-replays the record, and the room knows where each name left off.
+One failure stays, and it fails in the safe direction. If the process dies
+while somebody is present, no `left` notice is written, because nothing
+observed them leaving. On reopen their anchor is their previous `away` or
+`left`, so they are shown more than they missed rather than less. Over-
+delivery is the right way for this to break.
 
-Bookmarks are not membership. A name in the bookmark map is not on the
-roster and cannot be addressed. Agents address the people in the room (§8),
-and the room learns those by `enter`. A bookmark is a number the room keeps
-against a name: it reads the number once when that name enters, and writes
-it once when that name stops reading.
-
-What the bookmark does not cover is what the agents did. `messages({ since })`
-returns what was said, because the record holds what was said. The turns and
-tool calls in between are in each seat's own downstream session, where rule 8
-of the core puts them.
+What catch-up does not cover is what the agents did. The record holds what
+was said and who was here. The turns and tool calls in between are in each
+seat's own downstream session, where rule 8 of the core puts them.
 
 ---
 
-## 8. What agents see
+## 9. What agents see
 
 This is where the addition earns its place. Presence is not host
 bookkeeping; it is context, and it changes what an agent does.
 
-The roster is the agents, always, and the people the room has learned:
+Notices render in the transcript, in order, beside what was said:
 
 ```
-The roster (active: taking a turn now; idle: hears every message; passive: hears
-only a say directed at them):
+The record of 'initiative' so far:
+[andrei] Draft the weekly. Anything to flag?
+[lead → andrei] Two engineers for three weeks, assuming the migration holds.
+· andrei is away
+[designer] Cutting that flow costs a step nobody has counted.
+· andrei left
+```
+
+And the roster carries the current answer, so an agent does not have to
+replay the notices to know who is here:
+
+```
+The agents (active: taking a turn now; idle: hears every message; passive:
+hears only a say directed at them):
 - lead (idle): Tech lead. Owns feasibility, estimates, and sequencing.
 - designer (idle): Product designer. Guards the user experience.
 - planner (passive): Project manager. Keeps the plan of record.
 
-In the room now:
-- andrei (present): Founder. Owns the weekly. Bring him blockers, not status.
-- mara (away): Design lead. Decides on the experience.
+The people this room knows:
+- andrei (absent): Founder. Owns the weekly. Bring him blockers, not status.
+- mara (present): Design lead. Decides on the experience.
 ```
 
-Two lists, because they are two facts. The agents are the room's
-composition and never move. The people change between one activation and
-the next, and an agent that reads them in a separate list reads the change
-as a change. When the second list is empty the prompt says so plainly:
-`Nobody is in the room.`
+Two lists, because they are two facts, and the second one is derived from
+the first record rather than stored beside it. The agents are the room's
+composition and never move. The people change between one activation and the
+next. When nobody is in the room the prompt says so plainly:
+`Nobody is in the room now.`
 
 The system prompt gains one paragraph:
 
-> The second list is the people in the room and how they are reading.
+> The second list is the people this room has seen and how they are reading.
 > Present: they are here now. Away: they are here and have not acted
-> recently. Absent: they were here and left. A say directed at somebody who
-> is away or absent is a note they read later, not a question they answer
-> now. When nobody is in the room, work for the record: state what you
-> decided and why, and do not wait for an answer that nobody is there to
-> give.
+> recently. Absent: they are not here. The record marks each change where it
+> happened. A say directed at somebody who is away or absent is a note they
+> read later, not a question they answer now. When nobody is in the room,
+> work for the record: state what you decided and why, and do not wait for an
+> answer that nobody is there to give.
 
 An agent that knows the room is empty writes differently from one that
 thinks somebody is waiting. That difference is the return on this document.
 
 Presence enters an agent's context at activation, with the rest of the
-roster. A person who enters while an agent is mid-turn does not appear in
-that turn. This is rule 2 of the core, unchanged: working views reset at
-idle, and the next activation reads the room as it is then.
+record. A person who enters while an agent is mid-turn does not appear in
+that turn — the notice is on the record, and the next activation reads it.
+This is rule 2 of the core, unchanged: working views reset at idle.
 
 ---
 
-## 9. What does not change
+## 10. What does not change
 
 Four things stay exactly as they are, and each one is a decision.
 
-**Entering does not activate anything.** A visit is not a message. Nobody
-wakes, nothing lands on the record, and the room stays quiet. Design
-principle 1 holds: there is exactly one way an agent activates, and it is a
-message delivered into a session.
+**Activation.** Notices neither activate an idle agent nor steer an active
+one. There is still exactly one way an agent activates.
 
-**Leaving does not activate anything either**, and neither does turning
-away. The host sees it on the stream. The agents see it at their next
-activation.
-
-**Routing does not consult presence.** `dispatch` is unchanged. A message
+**Routing.** `dispatch` is unchanged, and it never sees a notice. A message
 from an away person routes like a message from a present one, because it is
 the same message. A `say` directed at a person still wakes nothing — it is
 an address for a reader, present or not.
 
-**The record is unchanged.** `Message` keeps its four fields. Enter, leave,
-away and return are not messages, because nobody said them.
+**Provenance.** `from` is still stamped by the runtime and never claimed. It
+is stamped harder: it comes from a live visit rather than from a handle the
+caller picked. A notice has no `from` at all, because nobody said it.
+
+**Storage.** Nothing is added. The record is one Pi session's custom
+entries, as it is today, with one more `customType` alongside the one it
+already uses.
 
 ---
 
-## 10. Observing presence
+## 11. Observing presence
 
-Four events, one per fact, in the shape the stream already uses:
+The stream keeps attachment granularity, which the record deliberately does
+not carry:
 
 ```ts
 type SessionEvent =
@@ -427,17 +502,22 @@ type SessionEvent =
   | { type: 'visit_enter';  human: string; visit: string; presence: PresenceStatus }
   | { type: 'visit_away';   human: string; visit: string; presence: PresenceStatus }
   | { type: 'visit_return'; human: string; visit: string; presence: PresenceStatus }
-  | { type: 'visit_leave';  human: string; visit: string; presence: PresenceStatus };
+  | { type: 'visit_leave';  human: string; visit: string; presence: PresenceStatus }
+  | { type: 'notice';       notice: Notice };
 ```
 
-Every event names the attachment that changed and the person's status
-afterwards. The two levels are both needed and they disagree: when Andrei's
-first tab goes idle and his second is live, `visit_away` fires with
-`presence: 'present'`. A host that manages sockets reads `visit`. A host
-that renders "who is here" reads `human` and `presence`, and ignores the
-rest.
+The four `visit_*` events name the attachment that changed and the person's
+status afterwards. They fire on every attachment change. `notice` fires only
+when the person's own status changed, and carries the entry that landed on
+the record — so a host can tell the two apart without inferring. When
+Andrei's first tab goes idle and his second is live, `visit_away` fires with
+`presence: 'present'` and no `notice` follows, because Andrei is still
+reading.
 
-The pull side gains one call beside `seats()`:
+This is the core's own distinction, held: the event stream is the host's
+instrument panel, and the record is what participants read.
+
+The pull side:
 
 ```ts
 export interface VisitInfo {
@@ -445,19 +525,22 @@ export interface VisitInfo {
   human: string;
   status: VisitStatus;
   via?: string;
-  enteredAt: string;    // ISO, stamped by the runtime
-  lastActedAt: string;  // ISO, stamped by the runtime
+  enteredAt: string;   // ISO, stamped by the runtime
+  lastActedAt: string; // ISO, stamped by the runtime
   since: number | undefined;
 }
 
+session.record(options?: { since?: Seq }): Promise<Entry[]>;
 session.visits(): VisitInfo[];
-session.messages(options?: { since?: number }): Promise<Message[]>;
 ```
 
-`seats()` answers who is in the room. `visits()` answers how they are
-attached. `messages()` keeps answering the whole record when it is called
-with nothing, and answers §7's question when it is called with a cursor. `SeatInfo` becomes a discriminated union, because an agent seat
-and a person no longer carry the same fields:
+`record()` replaces `messages()`. One record, one reader: it returns
+everything the room recorded, in seq order, and a host that wants only what
+was said filters on `kind`. Keeping both would be two ways to read one
+thing, and it would make the shorter name return the less complete answer.
+
+`seats()` answers who is in the room, and `SeatInfo` becomes a discriminated
+union, because an agent seat and a person no longer carry the same fields:
 
 ```ts
 export type SeatInfo =
@@ -470,9 +553,9 @@ This breaks `seat.status` for callers that read it without narrowing —
 
 ---
 
-## 11. What this changes in the contract
+## 12. What this changes in the contract
 
-`docs/agent.md` is the contract for shipped code, and three parts of it stop
+`docs/agent.md` is the contract for shipped code, and four parts of it stop
 being true when this lands. The proposal is reviewable against them.
 
 **§4, `defineHuman`.** "A human is a participant, not an operator: seated
@@ -486,51 +569,54 @@ calls `session.deliver`. Both change. "The seats belong to the opening" is
 sharpened rather than replaced: agent seats belong to the opening, and a
 person's presence belongs to their visit.
 
+**§5, "What the record holds is one shape".** It holds two now, and every
+entry carries a seq. The four fields of a message are unchanged and two are
+added.
+
 **§5, rule 7, "Identity is injected."** "Every agent's context carries the
 roster — each participant's name, kind, identity and status." It carries two
 lists now, and the second one varies between activations of the same room.
 The rule's other half — provenance is stamped, never self-reported — gets
-stronger, not weaker: `from` now comes from a live visit instead of a handle
-the caller chose.
+stronger, not weaker.
 
-Rules 1 through 6 and rule 8 are untouched. So is every one of the eleven
+Rules 1 through 6 and rule 8 are untouched, and rules 1 and 5 are untouched
+precisely because a notice is not a message. So is every one of the eleven
 tests in `packages/ambion/test/session.test.ts`, except where they call
-`deliver`.
+`deliver` or read a message's shape.
 
 ---
 
-## 12. The change in the code
+## 13. The change in the code
 
 Fourteen edits, all in `packages/ambion/src`. The runtime keeps its two
 concerns: participants as values, and the session as a room. Presence is
-part of the room — who is in it — not a third thing. Ambion still writes no
-model loop, no transport, no authentication, and no user store. The host
-opens the socket and names the person; the runtime counts and derives.
+part of the room — who is in it — not a third thing, and it introduces no
+store, no transport, no authentication, and no user directory. The host
+opens the socket and names the person; the runtime records and derives.
 
-| File         | Change                                                                         |
-| ------------ | ------------------------------------------------------------------------------ |
-| `define.ts`  | `defineHuman` unchanged; its doc comment stops calling the value a participant |
-| `types.ts`   | `AgentSeat`; `Participant` narrows to agent-or-human                           |
-| `types.ts`   | `VisitStatus`, `PresenceStatus`, `VisitInfo`; `SeatInfo` becomes a union       |
-| `types.ts`   | Four `visit_*` events on `SessionEvent`                                        |
-| `session.ts` | `participants` becomes `agents`; `seat()` drops its human branch               |
-| `session.ts` | `VisitRuntime` per attachment; `Map<string, VisitRuntime[]>` keyed by name     |
-| `session.ts` | `enter()`, and `Visit` with `deliver`, `acted`, `leave`                        |
-| `session.ts` | `deliver` moves off `Session`; the body is reused, `from` comes from the visit |
-| `session.ts` | `presenceOf()` and `visitStatus()` — pure, both read by `seats()`              |
-| `session.ts` | One `unref`'d timer per present visit; armed, cleared, re-armed on each act    |
-| `session.ts` | `systemPrompt` renders the two lists and gains the paragraph in §8             |
-| `session.ts` | A bookmark map, name to cursor; written when a person stops reading            |
-| `session.ts` | `openStore` replays `ambion/presence` entries and rebuilds the bookmarks       |
-| `session.ts` | `messages()` takes `{ since }` and slices the record                           |
-| `index.ts`   | Export `Visit`, `VisitInfo`, `VisitStatus`, `PresenceStatus`, `EnterOptions`   |
+| File         | Change                                                                           |
+| ------------ | -------------------------------------------------------------------------------- |
+| `define.ts`  | `defineHuman` unchanged; its comment stops calling the value a participant       |
+| `types.ts`   | `Seq`, `Notice`, `Entry`; `Message` gains `kind` and `seq`                       |
+| `types.ts`   | `AgentSeat`; `Participant` narrows to agent-or-human                             |
+| `types.ts`   | `VisitStatus`, `PresenceStatus`, `VisitInfo`; `SeatInfo` becomes a union         |
+| `types.ts`   | Four `visit_*` events and `notice` on `SessionEvent`                             |
+| `session.ts` | `participants` becomes `agents`; `seat()` drops its human branch                 |
+| `session.ts` | `commit()` assigns the seq and takes a notice as well as a message               |
+| `session.ts` | `openStore` replays both entry types and restores the seq counter                |
+| `session.ts` | `VisitRuntime` per attachment; `Map<string, VisitRuntime[]>` keyed by name       |
+| `session.ts` | `enter()`, and `Visit` with `deliver`, `acted`, `leave`, and `since` as a getter |
+| `session.ts` | `deliver` moves off `Session`; the body is reused, `from` comes from the visit   |
+| `session.ts` | `presenceOf()` and `visitStatus()` — pure, both read by `seats()`                |
+| `session.ts` | One `unref`'d timer per present visit; armed, cleared, re-armed on each act      |
+| `session.ts` | `messages()` becomes `record({ since })`; `renderContext` renders notices        |
+| `session.ts` | `systemPrompt` renders the two lists and gains the paragraph in §9               |
+| `index.ts`   | Export the new types, and re-export Pi's `JsonlSessionRepo`                      |
 
-The bookmark map is the only durable addition, and it reuses `openStore`, which
-already replays entries in `seq` order and already skips the entry types it
-does not know. `dispatch` and `sayTool` need no change at all. `dispatch`
-reads the agent map, which people never enter. `sayTool` validates `to` against the agent
-map and the people map, and the people map is now filled by `enter` instead
-of by `openSession` — the same lookup against a differently filled map.
+Two functions the record's new shape touches, and neither is a rewrite.
+`dispatch` takes messages and never sees a notice. `sayTool`'s lock compares
+the last message seq, not the last entry seq — the one line in this document
+that is easy to implement backwards, and §5 says why.
 
 Hosts migrate in three lines:
 
@@ -555,76 +641,87 @@ second one would cost more than it buys.
 
 ---
 
-## 13. What would prove it
+## 14. What would prove it
 
 One milestone test per claim this document makes loudly, in the style of
 `packages/ambion/test/session.test.ts`:
 
 1. A room of agents alone opens, runs a full exchange, and settles with
    nobody present.
-2. `enter` puts a person in the room, activates nothing, and leaves no mark
-   on the record.
-3. Two people enter, both deliver, and the record stamps each from their own
+2. `enter` writes an `entered` notice, and activates nothing — no agent runs.
+3. A notice landing mid-turn does not steer, and does not fail the say that
+   turn commits.
+4. Two people enter, both deliver, and the record stamps each from their own
    visit.
-4. One person, two visits: one leaves and the person stays present; the
-   second leaves and the person turns absent.
-5. A visit turns away after `idleTimeout` with the clock advanced, and
-   `visit_away` carries the person's status.
-6. One of two visits turns away and the person stays present; both turn away
-   and the person turns away.
-7. An away visit delivers, returns to present, and the message routes
+5. One person, two visits: the first leaves and writes no notice; the second
+   leaves and writes `left`.
+6. A visit turns away after `idleTimeout` with the clock advanced, and an
+   `away` notice lands at the right seq.
+7. One of two visits turns away and no notice lands; both turn away and one
+   does.
+8. An away visit delivers, a `returned` notice lands, and the message routes
    normally.
-8. A person leaves, and an agent's directed `say` still lands on the record
+9. A person leaves, and an agent's directed `say` still lands on the record
    addressed to them.
-9. `deliver` and `acted()` on a left visit throw; `leave()` twice does not.
-10. `enter` refuses a name an agent holds, and refuses a second identity for
+10. `deliver` and `acted()` on a left visit throw; `leave()` twice does not.
+11. `enter` refuses a name an agent holds, and refuses a second identity for
     a name already in the room.
-11. The roster an agent reads carries both lists, and an empty room says so.
-12. A first visit reports `since` as `undefined`; a person who leaves and
-    enters again reports the record length at the moment they left.
-13. `messages({ since })` returns exactly what landed after that point, and
-    `messages()` with nothing still returns the whole record.
-14. A visit that turns away and returns reports the length at the moment it
-    turned away, not the moment it returned.
-15. `since` does not move while a person stays present, and a second visit
-    opened mid-stretch reports the same cursor as the first.
-16. A session is closed and reopened on the same repo, and a returning name
-    reports the cursor it left with.
+12. `since` is `undefined` on a first visit, and the seq of the `left` notice
+    on the next one.
+13. `since` does not move while a person reads, and moves when they turn
+    away — read from the same visit, before and after.
+14. `record({ since })` returns exactly the entries after that seq, messages
+    and notices interleaved in order; `record()` returns everything.
+15. A session is closed and reopened on the same repo: the names come back,
+    a returning person's `since` is the seq it was, and seqs continue rather
+    than restart.
+16. The roster an agent reads carries both lists and the transcript carries
+    the notices; an empty room says so.
 
 ---
 
-## 14. Rejected alternatives
+## 15. Rejected alternatives
 
-**A guest list of people at open time.** `openSession({ agents, humans })`:
-the people who may enter, declared, with presence layered on top. It buys
-one thing — an agent may address somebody who has never visited — and costs
-the lifetime distinction this whole document is about, by putting two kinds
-of member in one call again. The room learning names on entry (§5) recovers
-most of what the guest list bought.
+**A presence store beside the record.** An earlier draft of this document
+kept presence in a live map, wrote an audit entry for transitions, and kept
+a separate durable bookmark of where each name stopped reading. It was
+wrong, and the reasons are worth keeping. It invented a second store for
+facts the record could hold. It made ordering approximate, because a mark
+written beside the record races the record. It made durability an argument
+rather than a consequence. And it failed the core's own measure — does this
+add a second way to do something that has one — which the runtime applies to
+every other addition. The record was already the room's ordered, persisted
+log of what happened. Presence is what happened.
 
-**Presence as messages on the record.** "andrei joined" as a `Message`.
-Rejected twice over: the record holds what participants said, and nobody
-said it; and every message activates the idle room, so joining would wake
-four agents to read a line about a door.
+That draft rejected notices for two reasons. One was taste: the record holds
+what participants said, and nobody said a join. The other was mechanical and
+real: every message activates the idle room, so a join would wake four agents
+to read a line about a door. §5 answers the mechanical one by making a notice
+not a message — no activation, no steer, no failed say — and the taste one is
+worth less than exact ordering and free durability.
 
 **One `defineHuman` per connection.** Two tabs would be two people with two
 names. The person is one name. The attachment is the thing there can be many
-of.
+of, and it stays off the record for the same reason.
 
-**Inferring presence from reads.** Treating `messages()` as evidence of
+**Inferring presence from reads.** Treating `record()` as evidence of
 attention. A poller is not a reader, and the runtime cannot tell them apart.
 `acted()` puts the claim where the knowledge is.
 
 **A read cursor the host claims.** `visit.seen(seq)`, with unread derived
-from it. It answers a question the runtime cannot check — what somebody read
-— and it makes every host keep a cursor it must store, migrate and get
-right. §7 answers the question the runtime can check, out of state it keeps
-anyway: what landed while nobody was looking. A host that genuinely wants
-per-person read state can still keep it, against the same cursor.
+from it. It answers a question the runtime cannot check — what somebody
+read — and it makes every host keep a cursor it must store and migrate. §8
+answers the question the runtime can check, out of a record it keeps anyway.
+A host that wants per-person read state can still keep it, against the same
+seq.
+
+**A guest list of people at open time.** `openSession({ agents, humans })`.
+It buys one thing — addressing somebody who has never visited — and costs
+the lifetime distinction this whole document is about. The record learning
+names (§6) recovers what it bought.
 
 **A separate `joinSession(name)` beside `openSession(name)`.** Two ways to
-reach one room. `enter` on the opened session is enough, and it keeps the
-session as the single thing that owns the name.
+reach one room. `enter` on the opened session is enough.
 
 **A heartbeat protocol in the runtime.** Sockets, pings and timeouts on the
 wire are the host's concern. The runtime takes one call — `acted()` — and
@@ -632,24 +729,25 @@ asks nothing about how the host learned it.
 
 ---
 
-## 15. Open questions
+## 16. Open questions
 
 Six decisions this document takes, each of which could go the other way.
 
-1. **Does the room forget?** §5 says a room never forgets a name while it is
-   open, so a `say` to somebody who left still lands. The alternative is to
-   forget on the last leave and refuse the say, which makes the roster
-   smaller and the mid-turn race real. Note that §7 splits this in two: the
-   roster forgets on reopen, and the bookmarks do not.
+1. **Should a notice ever steer?** The proposal says never: an interruption
+   costs a model call, and the case that would justify one is already
+   handled. The argument the other way is a long turn in a room somebody
+   just left, where the agent keeps writing for a reader who is gone.
 
 2. **Should `idleTimeout` have a default?** The proposal says no: omit it and
-   a visit never turns away. A default of ten or fifteen minutes would make
-   the common case shorter and the surprising case surprising.
+   a visit never turns away, and no `away` notice is ever written. A default
+   of ten or fifteen minutes would make the common case shorter and the
+   surprising case surprising.
 
-3. **Do bookmarks ever get pruned?** The map holds one number per name that
-   has ever visited, forever. That is small for a team and unbounded for a
-   room the public walks through. Pruning by age or count is easy and
-   arbitrary; leaving it to grow is honest until it is not.
+3. **Does a crash while somebody is present deserve a synthetic notice?** §8
+   accepts over-delivery: no `left` was observed, so none is written, and the
+   person is shown more than they missed. `openStore` could instead append a
+   `left` for anybody the record leaves dangling. That is tidier and puts an
+   event on the record that nothing observed.
 
 4. **Should a host be able to deliver without a person?** A cron or a webhook
    has nobody to enter as, and after this change there is nothing but agents
@@ -662,25 +760,22 @@ Six decisions this document takes, each of which could go the other way.
    otherwise. Keeping `participants` costs nothing at the call site and one
    sentence of explanation forever.
 
-6. **One bookmark per person, or one per attachment?** The proposal keeps one
-   per person, so reading on a phone moves the bookmark for the laptop too.
-   That is right for one person with two windows on one conversation, and
-   wrong for somebody who reads a little on their phone and expects the
-   laptop to hold the whole thread. Per-attachment needs the host to name the
-   attachment stably across reconnects, which is `via`, and which the runtime
-   cannot check.
+6. **Does `record()` fully replace `messages()`?** The proposal says yes, so
+   that one method returns the whole record. Keeping `messages()` for hosts
+   that only render chat is a convenience, and a second way to read one
+   thing.
 
 ---
 
-## 16. Later
+## 17. Later
 
 Presence is the fact a workspace needs before it can have channels: a
-channel with read/write contracts must know who is reading, and a bookmark
-per channel is the same number this document keeps per room.
+channel with read/write contracts must know who is reading, and a channel's
+record carries the same notices this one does.
 
 Two things sit directly on top and are not in here. Notifying somebody an
-agent addressed while they were away: the room knows they were away and knows
-the message was directed, so it holds both halves already. And catching up
-across rooms — one person, many sessions, one answer to "what did I miss" —
+agent addressed while they were away: the record holds both halves already —
+the directed message, and the `away` notice before it. And catching up across
+rooms, one person and many sessions with one answer to "what did I miss",
 which is a workspace concern, because it needs something that holds the
 rooms. Neither changes the core.

@@ -353,9 +353,10 @@ second way to do something that has one?
 
 The first of them is [`presence.md`](presence.md), a proposal: it takes
 people out of `openSession` entirely. A session seats agents; a person
-enters it and leaves it, several people at once, and every agent reads who
-is in the room now. It is the one design so far that changes this core
-instead of sitting on top of it — §4 and rule 7 get rewritten, and `deliver`
+enters it and leaves it, several people at once, and the record marks each
+arrival and departure where it happened. It is the one design so far that
+changes this core instead of sitting on top of it — the record holds a
+second kind of entry, every entry carries a sequence number, and `deliver`
 moves from the session to a visit — so it stays a proposal, not a contract,
 until somebody builds it.
 
