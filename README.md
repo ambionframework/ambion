@@ -29,15 +29,15 @@ Four primitives today, more to come.
 
 **Agent** — `defineAgent` makes an agent: a name, an identity the room reads, instructions, a model, and tools. A value, not a process. [`docs/agent.md`](docs/agent.md) specifies it: a vanilla [Pi](https://pi.dev/docs/latest/sdk) agent that speaks only when spoken to — and not always then.
 
-**Human** — `defineHuman` seats a person as a typed participant: named, carrying an identity agents read and address, on the record like anyone else. A session can seat several.
+**Human** — `defineHuman` names a person: an identity agents read and address, on the record like anyone else. People are not seated at open time — they enter a session and leave it, several at once and from several devices, and the room tracks who is reading. Arriving is a message, so the agents wake for it. [`docs/presence.md`](docs/presence.md) specifies it.
 
 **Tool** — `defineTool`, a facade over Pi's own: same shape, one import. What an agent can do beyond speaking is exactly what its author gave it.
 
-**Session** — `openSession` opens a named room: open a name again and you are back in it, record intact. A delivery activates the idle agents in parallel; replies steer colleagues still at work; each agent decides whether to speak, to whom, and which colleague — passive experts included — to call in. Silence leaves no mark, and provenance is stamped by the runtime, never self-reported.
+**Session** — `openSession` opens a named room of agents, with a goal that says what the room is for: open a name again and you are back in it, record intact. A delivery activates the idle agents in parallel; replies steer colleagues still at work; each agent decides whether to speak, to whom, and which colleague — passive experts included — to call in. Silence leaves no mark, and provenance is stamped by the runtime, never self-reported.
 
 ## The invariant
 
-There is exactly one way an agent activates: **a message is delivered into a session it belongs to** — by a human, a host, or a colleague's directed reply. And even then, it may decline.
+There is exactly one way an agent activates: **a message is delivered into a session it belongs to** — by a person speaking, a person arriving or leaving, or a colleague's directed reply. And even then, it may decline.
 
 The larger design — workspaces, channels with read/write contracts, timers, batching, a virtual shell with a durable filesystem, tasks, the tenant — arrives one document at a time, each on top of this core.
 
