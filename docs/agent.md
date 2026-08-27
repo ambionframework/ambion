@@ -353,12 +353,13 @@ second way to do something that has one?
 
 The first of them is [`presence.md`](presence.md), a proposal: it takes
 people out of `openSession` entirely. A session seats agents; a person
-enters it and leaves it, several people at once, and the record marks each
-arrival and departure where it happened. It is the one design so far that
-changes this core instead of sitting on top of it — the record holds a
-second kind of entry, every entry carries a sequence number, and `deliver`
-moves from the session to a visit — so it stays a proposal, not a contract,
-until somebody builds it.
+enters it and leaves it, several people at once, and arriving is a message
+like any other — so rule 1 activates the room when somebody walks in, and an
+agent that knows the session's goal can tell them what they missed. It is
+the one design so far that changes this core instead of sitting on top of
+it — a message carries a kind and a sequence number, `openSession` gains a
+goal, and `deliver` moves from the session to a visit — so it stays a
+proposal, not a contract, until somebody builds it.
 
 ---
 
