@@ -15,7 +15,7 @@ Four primitives, and the whole of it fits in one sentence:
 > colleague to call in.**
 
 Everything Ambion intends beyond this — the virtual shell and workspace
-filesystem, channels and their read/write contracts, timers, batching,
+filesystem, sources and channels with their contracts, timers, batching,
 routing, the tenant — is deliberately out of scope for now, and will arrive
 as its own documents. This one is the buildable core.
 
@@ -345,11 +345,12 @@ every rule above is observable by hand.
 
 Each of these is designed to sit on top of this core without changing it:
 the virtual shell and workspace filesystem (just-bash behind Pi's
-`ExecutionEnv`); channels, with their read/write contracts, batching, timers
-and routing; durable sessions that survive teardown; per-seat compaction of
+`ExecutionEnv`); sources and channels, with their contracts, batching,
+timers and routing; durable sessions that survive teardown; per-seat compaction of
 long records; the workspace and the tenant; tasks. They arrive one document
 at a time, each earning its way in against the same test: does it add a
-second way to do something that has one?
+second way to do something that has one? [`concepts.md`](concepts.md) fixes
+what arrives; [`roadmap.md`](roadmap.md) fixes the order.
 
 ---
 

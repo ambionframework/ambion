@@ -24,7 +24,7 @@ Four primitives today, more to come.
 
 There is exactly one way an agent activates: **a message is delivered into a session it belongs to** — by a human, a host, or a colleague's directed reply. And even then, it may decline.
 
-The larger design — workspaces, channels with read/write contracts, timers, batching, a virtual shell with a durable filesystem, tasks, the tenant — arrives one document at a time, each on top of this core.
+The larger design — workspaces, sources and channels with their contracts, timers, batching, a virtual shell with a durable filesystem, tasks, the tenant — arrives one document at a time, each on top of this core: [`docs/concepts.md`](docs/concepts.md) fixes what, [`docs/roadmap.md`](docs/roadmap.md) fixes when.
 
 ## Runtime
 

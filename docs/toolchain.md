@@ -408,7 +408,8 @@ Two, both intentional:
 
 Called out so their absence reads as a decision rather than an oversight:
 
-- **The framework itself** — workspace, agent, task, subscription, timer. This
+- **The framework itself** — workspace, agent, task, source, channel,
+  timer. This
   repository is the scaffold that will carry it: the packages are placeholders,
   and the runtime lands in a follow-up so it can be reviewed as a design rather
   than as a rider on a tooling change.
