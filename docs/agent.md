@@ -351,6 +351,13 @@ long records; the workspace and the tenant; tasks. They arrive one document
 at a time, each earning its way in against the same test: does it add a
 second way to do something that has one?
 
+The first of them is [`presence.md`](presence.md), a proposal: it separates
+opening a room from entering it, so several people can be in one persistent
+session at once and every agent reads who is actually there. It is the one
+design so far that changes this core instead of sitting on top of it —
+`deliver` moves from the session to a visit — so it stays a proposal, not a
+contract, until somebody builds it.
+
 ---
 
 ## 8. The measure
