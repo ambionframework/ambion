@@ -103,6 +103,24 @@ still read it — they are simply not told to act on it, because without a
 purpose there is nothing to weigh the arrival against. That is honest
 degradation rather than a feature that appears to work and judges badly.
 
+The whole option shape, with the two additions in place:
+
+```ts
+export interface OpenSessionOptions {
+  name: string;
+  agents: readonly AgentSeat[];
+  /** What the room is for. One or two sentences, read by every agent. */
+  goal?: string;
+  /** The house default for visits that do not set their own. */
+  idleTimeout?: number;
+  streamFn?: StreamFn;
+  repo?: SessionRepo;
+}
+```
+
+A visit's timeout is the first of three that is set: the one `enter` was
+given, then the session's, then fifteen minutes.
+
 Everything else about `openSession` is unchanged — the identity rules, the
 duplicate-name refusal, `streamFn`, `repo`, the storage — all of it holds as
 `docs/agent.md` states it. The goal belongs to the opening, as the seats do:
@@ -245,6 +263,15 @@ delivered into a session activates every idle agent. Arriving delivers a
 message. Nothing is special-cased, and nothing had to be weakened to let a
 door count.
 
+**Rule 2 holds exactly, and this is the one to think about.** Whatever
+arrives mid-turn is steered into every active agent, and a presence message
+arrives like any other — an agent at work learns that Andrei walked in, at
+the next safe point, without finishing blind. The steer renders the same
+line the transcript does, `[new] · andrei arrived`, so a seat never sees a
+message with no text and no explanation of it. This is a real cost that §7
+counts: a presence message bills a glance from every idle seat and a steer
+into every active one.
+
 **Rule 5 holds exactly.** A `say` commits only against a record its seat has
 heard in full, and an arrival is part of that record. An agent composing a
 reply when Andrei walks in has its say refused and is told what it missed —
@@ -261,6 +288,13 @@ runtime observed itself rather than took somebody's word for.
 **Provenance without content.** A presence message has no `text`, because the
 person said nothing. Writing one with text like `"(entered the room)"` would
 put words in their mouth under their name, which rule 7 exists to prevent.
+
+**The room changes before the message does.** A visit is registered before
+its `arrived` commits and unregistered before its `left` does, so every agent
+the message activates reads a roster that agrees with it. Get this backwards
+and a seat is woken to be told Andrei left by a roster that still says he is
+present. The same holds for `away` and `returned`: the status changes, then
+the message that reports it takes its seq.
 
 Two of the four kinds come from a deliberate act and two from a clock.
 `arrived` and `left` follow `enter()` and `leave()`. `away` follows a timer
@@ -369,10 +403,11 @@ still reports away, because it subtracts two numbers.
 
 ### What presence costs
 
-Every presence message wakes every idle agent, because it is a message. The
-core prices this honestly for what is said and this document prices it the
-same way: a room of three costs three looks when somebody arrives. Most of
-those looks produce silence, and silence is still billed.
+Every presence message wakes every idle agent and steers every active one,
+because it is a message. The core prices this honestly for what is said and
+this document prices it the same way: a room of three costs three looks when
+somebody arrives, and a colleague mid-turn pays a steer on top. Most of those
+looks produce silence, and silence is still billed.
 
 Because `idleTimeout` has a default, **a room pays for presence unless it
 opts out**. This is the deliberate choice and it is worth stating without
@@ -690,17 +725,19 @@ One milestone test per claim this document makes loudly, in the style of
 1. A room of agents alone opens, runs a full exchange, and settles with
    nobody present.
 2. `enter` commits an `arrived` message and activates every idle agent, and a
-   passive seat sits out.
+   passive seat sits out. The roster the woken agents read already shows the
+   arrival, and the one they read on a `left` already shows the departure.
 3. An agent replies to an arrival with a directed say, and the arrival
    carries no `text`.
-4. An arrival landing mid-turn refuses the say that turn commits, and the
-   failure names the arrival.
+4. An arrival landing mid-turn steers the active agent, renders as a `[new]`
+   line, and refuses the say that turn commits with a failure naming it.
 5. Two people enter, both deliver, and the record stamps each from their own
    visit.
 6. One person, two visits: the second `enter` commits nothing, the first
    visit leaving commits nothing, and the second leaving commits `left`.
-7. A visit turns away fifteen minutes after its last act with no
-   `idleTimeout` given, and `away` commits at the right seq; with
+7. A visit takes its timeout from `enter`, then the session, then fifteen
+   minutes, and turns away that long after its last act; `away` commits at
+   the right seq; with
    `idleTimeout: Infinity` no timer is armed and it never does.
 8. One of two visits turns away and nothing commits; both turn away and
    `away` does.
