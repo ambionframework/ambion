@@ -8,6 +8,21 @@ Most agent frameworks model **invocation**: a request comes in, a workflow runs,
 
 Ambion models **presence**. Agents don't run — they wait. They subscribe to the things they care about and wake when something happens. Policies over workflows.
 
+Most agent products model **the monolith**: one large agent, given more context
+as it asks for it. Progressive disclosure holds it together. Every domain you
+add makes the prompt longer and every other domain harder to reason about, and
+no one owns the result.
+
+Ambion models **the team**. Many agents, each one expert in a single domain and
+accountable for it. They draw on capabilities the platform provides — the
+session, the record, tools — instead of each one carrying a private copy. They
+work in a workspace built for collaboration, where an agent reads what a
+colleague did and calls that colleague in by name. The complexity lives in the
+composition, not in one prompt.
+
+The session is that workspace today. Workspaces, channels, and the shared
+filesystem are designed and not built.
+
 ## Core model
 
 Four primitives today, more to come.
@@ -89,7 +104,8 @@ setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
 1. One activation mechanism.
 2. Everything is a message on a record.
 3. Agents manage their own attention — deciding not to engage included.
-4. Minimal surface: four primitives, one invariant, one dependency that does the rest.
+4. Many domain agents, not one monolith. The platform shares the capabilities.
+5. Minimal surface: four primitives, one invariant, one dependency that does the rest.
 
 ## License
 
