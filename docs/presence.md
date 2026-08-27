@@ -93,9 +93,15 @@ knows the roster. It does not know what the room is for. Without that, an
 arrival is a fact an agent cannot judge: it can see that Andrei is here and
 has no way to decide whether that matters. `goal` is to a session what
 `identity` is to an agent — one or two sentences, public, in every
-participant's context. It is optional, and a room without one still works;
-its agents just have less to reason with, and the prompt says the goal is
-not stated rather than inventing one.
+participant's context.
+
+`goal` is optional, and what it gates is deliberate: **a room with no goal
+does not ask its agents to judge arrivals.** §9's paragraph about who to
+speak to when somebody walks in renders only when a goal is set. Presence
+still lands on the record and still shows in the roster, and the agents
+still read it — they are simply not told to act on it, because without a
+purpose there is nothing to weigh the arrival against. That is honest
+degradation rather than a feature that appears to work and judges badly.
 
 Everything else about `openSession` is unchanged — the identity rules, the
 duplicate-name refusal, `streamFn`, `repo`, the storage — all of it holds as
@@ -156,7 +162,8 @@ still reading in the other.
 
 ```ts
 export interface EnterOptions {
-  /** Milliseconds without an act, after which the visit turns away. Omit: never. */
+  /** Milliseconds without an act, after which the visit turns away.
+   *  Defaults to fifteen minutes. `Infinity` means never. */
   idleTimeout?: number;
   /** A label the host chooses — 'terminal', 'web', a device id. The runtime stores
    *  it and gives it back. It changes nothing. */
@@ -328,9 +335,15 @@ here, who was here last, when, and where each of them stopped reading.
 
 ## 7. The inactivity timeout
 
-`idleTimeout` is milliseconds without an act. `enter` takes it per visit,
-because the host knows the medium — a terminal, a tab, a webhook — and one
-room can hold all three. `openSession` takes it too, as the house default.
+`idleTimeout` is milliseconds without an act, and it **defaults to fifteen
+minutes**. `enter` takes it per visit, because the host knows the medium — a
+terminal, a tab, a webhook — and one room can hold all three. `openSession`
+takes it too, as the house default for the visits that do not set their own.
+
+`Infinity` turns it off: the visit stays present until it leaves, and no
+`away` or `returned` message is ever written for it. It needs no special
+case in the rule below — `now - lastActedAt < Infinity` is always true — and
+exactly one in the timer, which is armed only for a finite timeout.
 
 Two acts reset it: `deliver` and `acted()`. Reading does not. A host that
 polls `messages()` every second is not a person paying attention, and the
@@ -361,14 +374,25 @@ core prices this honestly for what is said and this document prices it the
 same way: a room of three costs three looks when somebody arrives. Most of
 those looks produce silence, and silence is still billed.
 
-Two things bound it, and both already exist. **Away fires at most once per
+Because `idleTimeout` has a default, **a room pays for presence unless it
+opts out**. This is the deliberate choice and it is worth stating without
+softening: call `enter` and do nothing else, and four kinds of message can
+wake every idle seat.
+
+One thing bounds it and two turn it off. **Away fires at most once per
 stretch of attention**, because an away visit holds no timer — a person in
-and out all day writes a few messages, not one per tick. And **the cost is
-opt-in**: omit `idleTimeout` and no `away` or `returned` message is ever
-written, leaving only the two a person causes deliberately. A room that
-wants presence recorded but not reacted to seats its agents with `passive`,
-which the core already provides: a passive seat hears no broadcast, so it
-hears no arrival either, until somebody names it.
+and out all day writes a few messages, not one per tick. **`Infinity`**
+removes the two clock-driven kinds entirely, leaving only the arrivals and
+departures a person causes deliberately. And **`passive`** removes the
+glance rather than the message: a passive seat hears no broadcast, so it
+hears no arrival either, until somebody names it, while the record keeps
+everything.
+
+One combination is worth avoiding, and it is the one a host falls into by
+doing nothing. A room with no `goal` still activates on all four kinds, and
+its agents are not told what to do with an arrival (§2) — so it pays the
+full price of presence for judgement it never asked for. A room without a
+goal should pass `idleTimeout: Infinity`, or state a goal.
 
 The timeout does not touch `settled()`. `settled()` reports that no agent is
 active. Whether anybody is watching is a different fact.
@@ -473,7 +497,9 @@ always needed and never had: without it an agent cannot tell a three-day gap
 from a three-minute one. **The gap** — `last here 3 days ago` — is derived
 from the record, not stored, because the arrivals are on it.
 
-The system prompt gains one paragraph, and most of it is about not speaking:
+The system prompt gains one paragraph, and most of it is about not speaking.
+It renders only when the session has a goal (§2) — an agent with nothing to
+weigh an arrival against is not asked to weigh one:
 
 > An arrival is a message like any other and the bar for speaking is the
 > same. Most arrivals need nothing said. Speak to somebody who has just
@@ -621,9 +647,9 @@ authentication, and no user directory.
 | `session.ts` | `enter()`, and `Visit` with `deliver`, `acted`, `leave`, and `since` as a getter                              |
 | `session.ts` | `deliver` moves off `Session`; the body is reused, `from` comes from the visit                                |
 | `session.ts` | `presenceOf()` and `visitStatus()` — pure, both read by `seats()`                                             |
-| `session.ts` | One `unref`'d timer per present visit; armed, cleared, re-armed on each act                                   |
+| `session.ts` | One `unref`'d timer per present visit, armed only for a finite timeout; the default is fifteen minutes        |
 | `session.ts` | `messages()` takes `{ since }`; `renderContext` renders the goal, the time, relative ages, and presence lines |
-| `session.ts` | `systemPrompt` renders the two lists and gains the paragraph in §9                                            |
+| `session.ts` | `systemPrompt` renders the two lists, and the goal and §9's paragraph only when a goal is set                 |
 | `index.ts`   | Export the new types, and re-export Pi's `JsonlSessionRepo`                                                   |
 
 `dispatch` and `sayTool` need no change of behaviour, which is the point of
@@ -673,8 +699,9 @@ One milestone test per claim this document makes loudly, in the style of
    visit.
 6. One person, two visits: the second `enter` commits nothing, the first
    visit leaving commits nothing, and the second leaving commits `left`.
-7. A visit turns away after `idleTimeout` with the clock advanced, and `away`
-   commits at the right seq; with no `idleTimeout`, it never does.
+7. A visit turns away fifteen minutes after its last act with no
+   `idleTimeout` given, and `away` commits at the right seq; with
+   `idleTimeout: Infinity` no timer is armed and it never does.
 8. One of two visits turns away and nothing commits; both turn away and
    `away` does.
 9. An away visit delivers, `returned` commits before the delivery, and both
@@ -696,8 +723,9 @@ One milestone test per claim this document makes loudly, in the style of
 17. In a reopened session an agent's `say` to a name that only the replayed
     arrivals know is accepted, not refused.
 18. The context an agent reads carries the goal, the time, both lists with
-    each person's gap, and the presence lines in the transcript; a room with
-    no goal and nobody in it says both plainly.
+    each person's gap, and the presence lines in the transcript.
+19. A room with no goal renders neither the goal line nor the arrival
+    paragraph, and still commits and routes presence messages normally.
 
 ---
 
@@ -750,34 +778,25 @@ asks nothing about how the host learned it.
 
 ## 16. Open questions
 
-Five decisions this document takes, each of which could go the other way.
+Four of the five questions this document carried are decided, and each
+decision lives in the section it belongs to. **All four presence kinds
+activate** (§5), because one rule is worth more than the saving.
+**`idleTimeout` defaults to fifteen minutes and `Infinity` turns it off**
+(§7), so presence works without being asked for and can be refused in one
+argument. **`goal` is optional and gates the arrival paragraph** (§2, §9), so
+a room without a purpose degrades honestly instead of judging badly. **A
+crash that leaves somebody dangling is accepted as over-delivery** (§8),
+because the record holds only what the runtime observed.
 
-1. **Should `away` and `returned` activate?** They are the two of four kinds
-   that come from a clock rather than a person, and they are the ones that
-   cost without anybody having done anything. The proposal activates on all
-   four, because one rule is worth more than the saving, and because §7's two
-   levers — omit `idleTimeout`, or seat agents `passive` — already turn the
-   cost off. Activating only on `arrived` and `left` is the alternative.
+One stays open, and it is the one this document cannot answer alone.
 
-2. **Should `idleTimeout` have a default?** The proposal says no, and that
-   choice now also decides whether `away` and `returned` exist at all. A
-   default would quietly opt every room into two more message kinds.
-
-3. **Should `goal` be required?** The proposal makes it optional, so a room
-   can exist before its purpose is written down. But §9's whole argument is
-   that an agent cannot judge an arrival without it, and an optional field
-   that the main feature depends on is a trap.
-
-4. **Does a crash while somebody is present deserve a synthetic `left`?** §8
-   accepts over-delivery: nothing observed them leaving, so nothing is
-   written. `openStore` could append one for anybody the record leaves
-   dangling, which is tidier and puts a message on the record that nothing
-   observed.
-
-5. **Should a host be able to deliver without a person?** A cron or a webhook
-   has nobody to enter as. It cannot deliver today either, so nothing
-   regresses — but an unattended room will want it, and the answer is
-   probably a third kind of definition, not a hole in `enter`.
+**Should a host be able to deliver without a person?** A cron, a webhook or a
+scheduled job has nobody to enter as, and after this change there is nothing
+but agents at open time. It cannot deliver today either, so nothing
+regresses — but an ambient runtime whose whole pitch is rooms that work
+unattended will want it, and the answer is probably a third kind of
+definition beside `defineAgent` and `defineHuman`, not a hole in `enter`.
+That is its own document.
 
 ---
 
