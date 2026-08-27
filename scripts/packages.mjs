@@ -19,27 +19,34 @@ const GROUPS = ['packages', 'examples'];
 export async function publishablePackages() {
 	const found = [];
 	for (const group of GROUPS) {
-		let entries;
-		try {
-			entries = await readdir(join(ROOT, group), { withFileTypes: true });
-		} catch {
-			continue;
-		}
-		for (const entry of entries) {
-			if (!entry.isDirectory()) continue;
-			const dir = join(ROOT, group, entry.name);
-			const manifestPath = join(dir, 'package.json');
-			let manifest;
-			try {
-				manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-			} catch {
-				continue;
-			}
-			if (manifest.private === true) continue;
-			found.push({ dir, manifestPath, manifest });
+		for (const dir of await groupDirs(group)) {
+			const entry = await readPackage(dir);
+			if (entry) found.push(entry);
 		}
 	}
 	return found.sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
+}
+
+/** The package directories of one workspace group; a group that is absent has none. */
+async function groupDirs(group) {
+	const root = join(ROOT, group);
+	try {
+		const entries = await readdir(root, { withFileTypes: true });
+		return entries.filter((entry) => entry.isDirectory()).map((entry) => join(root, entry.name));
+	} catch {
+		return [];
+	}
+}
+
+/** A directory's manifest, or undefined when it has none or declares itself private. */
+async function readPackage(dir) {
+	const manifestPath = join(dir, 'package.json');
+	try {
+		const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+		return manifest.private === true ? undefined : { dir, manifestPath, manifest };
+	} catch {
+		return undefined;
+	}
 }
 
 /** The one version every publishable package must share. */

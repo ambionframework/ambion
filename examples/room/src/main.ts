@@ -204,40 +204,54 @@ function help(): void {
 	);
 }
 
+function showSeats(): void {
+	for (const seat of session.seats()) {
+		const status = seat.status ? `, ${seat.status}` : '';
+		console.log(`  ${seat.name} (${seat.kind}${status}): ${seat.identity}`);
+	}
+}
+
+async function showRecord(): Promise<void> {
+	for (const m of await session.messages()) {
+		console.log(`  [${m.from}${m.to ? ` → ${m.to}` : ''}] ${m.text}`);
+	}
+}
+
+/** Everything that is not a message. One entry per line of `help()`. */
+const commands = new Map<string, () => void | Promise<void>>(
+	// A Map, not an object: the key is whatever the user typed, and a plain
+	// object would answer `toString` with something from Object.prototype.
+	Object.entries({
+		'/help': help,
+		'/seats': showSeats,
+		'/record': showRecord,
+		'/abort': () => session.abort(),
+		'/quit': () => {
+			rl.close();
+			process.exit(0);
+		},
+	}),
+);
+
+/** `@name text` reaches one seat; anything else reaches the room. */
+async function deliver(input: string): Promise<void> {
+	const directed = /^@([a-z-]+)\s+(.+)$/.exec(input);
+	if (!directed) return session.deliver({ from: you, text: input });
+	const target = byName[directed[1] as keyof typeof byName];
+	if (!target || target === you) {
+		console.log(`${red}no such agent: ${directed[1]}${reset}`);
+		return;
+	}
+	await session.deliver({ from: you, to: target, text: directed[2] as string });
+}
+
 async function handle(line: string): Promise<void> {
 	const input = line.trim();
 	if (input === '') return;
-	if (input === '/quit') {
-		rl.close();
-		process.exit(0);
-	}
-	if (input === '/help') return help();
-	if (input === '/abort') return session.abort();
-	if (input === '/seats') {
-		for (const seat of session.seats()) {
-			const status = seat.status ? `, ${seat.status}` : '';
-			console.log(`  ${seat.name} (${seat.kind}${status}): ${seat.identity}`);
-		}
-		return;
-	}
-	if (input === '/record') {
-		for (const m of await session.messages()) {
-			console.log(`  [${m.from}${m.to ? ` → ${m.to}` : ''}] ${m.text}`);
-		}
-		return;
-	}
-	const directed = /^@([a-z-]+)\s+(.+)$/.exec(input);
+	const command = commands.get(input);
+	if (command) return command();
 	try {
-		if (directed) {
-			const target = byName[directed[1] as keyof typeof byName];
-			if (!target || target === you) {
-				console.log(`${red}no such agent: ${directed[1]}${reset}`);
-				return;
-			}
-			await session.deliver({ from: you, to: target, text: directed[2] as string });
-		} else {
-			await session.deliver({ from: you, text: input });
-		}
+		await deliver(input);
 	} catch (error) {
 		console.log(`${red}${error instanceof Error ? error.message : String(error)}${reset}`);
 	}

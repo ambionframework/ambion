@@ -5,6 +5,16 @@
 		"enabled": true,
 		"rules": {
 			"preset": "recommended",
+			// A complexity budget, enforced rather than reported. Biome ships this
+			// rule at `info` with a threshold of 15, which is a number nothing
+			// checks; 10 is the bar this repository actually holds, and it is an
+			// error like every other rule here.
+			"complexity": {
+				"noExcessiveCognitiveComplexity": {
+					"level": "error",
+					"options": { "maxAllowedComplexity": 10 }
+				}
+			},
 			"correctness": {
 				"noUnusedImports": "error",
 				"noUnusedVariables": "error",
@@ -53,6 +63,23 @@
 			// pass a logger in instead.
 			"includes": ["packages/ambion/src/**"],
 			"linter": { "rules": { "suspicious": { "noConsole": "error" } } }
+		},
+		{
+			// Biome charges a nested function for the nesting it sits in, so
+			// inside `describe` → `it` every branch costs three rather than one.
+			// Tests keep a budget — one that has become a program still fails —
+			// but it is measured from where a test body actually starts.
+			"includes": ["**/test/**"],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noExcessiveCognitiveComplexity": {
+							"level": "error",
+							"options": { "maxAllowedComplexity": 15 }
+						}
+					}
+				}
+			}
 		}
 	]
 }

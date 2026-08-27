@@ -1,4 +1,5 @@
 import type {
+	AgentEvent,
 	AgentTool,
 	AgentToolResult,
 	Session as PiSession,
@@ -30,6 +31,14 @@ const defaultRepo = new InMemorySessionRepo();
 /** Pi's model registry, built once on first use. */
 let builtinRegistry: ReturnType<typeof builtinModels> | undefined;
 const registry = () => (builtinRegistry ??= builtinModels());
+
+/** The default model call: Pi's builtin registry, keyed from the provider's env var. */
+const registryStream: StreamFn = (model, context, streamOptions) => {
+	const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
+	const resolved =
+		streamOptions?.apiKey || !envKey ? streamOptions : { ...streamOptions, apiKey: envKey };
+	return registry().streamSimple(model, context, resolved);
+};
 
 export interface OpenSessionOptions {
 	/** The session's name: open it again and you are back in it, record intact. */
@@ -108,40 +117,33 @@ class SessionImpl implements Session {
 		this.name = options.name;
 		this.repo = options.repo ?? defaultRepo;
 		this.ready = this.openStore(this.repo);
-
-		for (const participant of options.participants) {
-			const def = isPassiveSeat(participant) ? participant.agent : participant;
-			if (this.humans.has(def.name) || this.agents.has(def.name)) {
-				throw new Error(
-					`Duplicate participant name '${def.name}': one name names one participant.`,
-				);
-			}
-			if (isHuman(def)) {
-				this.humans.set(def.name, def);
-			} else if (isAgent(def)) {
-				this.agents.set(def.name, {
-					def,
-					passive: isPassiveSeat(participant),
-					active: false,
-					spoke: false,
-					aborted: false,
-					viewSeq: 0,
-					pendingSteers: [],
-				});
-			} else {
-				throw new Error('Participants must come from defineAgent, defineHuman, or passive().');
-			}
-		}
-
+		for (const participant of options.participants) this.seat(participant);
 		this.customStream = options.streamFn !== undefined;
-		this.streamFn =
-			options.streamFn ??
-			((model, context, streamOptions) => {
-				const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
-				const resolved =
-					streamOptions?.apiKey || !envKey ? streamOptions : { ...streamOptions, apiKey: envKey };
-				return registry().streamSimple(model, context, resolved);
-			});
+		this.streamFn = options.streamFn ?? registryStream;
+	}
+
+	/** Seat one participant, refusing a name the room already knows. */
+	private seat(participant: Participant): void {
+		const def = isPassiveSeat(participant) ? participant.agent : participant;
+		if (this.humans.has(def.name) || this.agents.has(def.name)) {
+			throw new Error(`Duplicate participant name '${def.name}': one name names one participant.`);
+		}
+		if (isHuman(def)) {
+			this.humans.set(def.name, def);
+			return;
+		}
+		if (!isAgent(def)) {
+			throw new Error('Participants must come from defineAgent, defineHuman, or passive().');
+		}
+		this.agents.set(def.name, {
+			def,
+			passive: isPassiveSeat(participant),
+			active: false,
+			spoke: false,
+			aborted: false,
+			viewSeq: 0,
+			pendingSteers: [],
+		});
 	}
 
 	/** Open the name into its Pi session — creating it on first open — and load the record. */
@@ -358,25 +360,29 @@ class SessionImpl implements Session {
 			},
 		});
 		agent.subscribe((event) => {
-			if (event.type === 'message_start' && event.message.role === 'user') {
-				// A steer has landed in the transcript: the seat has now heard it.
-				// Steers drain FIFO, so the oldest pending seq is the one that landed.
-				const content = event.message.content;
-				if (typeof content === 'string' && content.startsWith('[new] ')) {
-					const seq = seat.pendingSteers.shift();
-					if (seq !== undefined) seat.viewSeq = Math.max(seat.viewSeq, seq);
-				}
-			} else if (event.type === 'tool_execution_start' && event.toolName !== 'say') {
-				this.emit({
-					type: 'tool_execution_start',
-					agent: seat.def.name,
-					toolName: event.toolName,
-				});
-			} else if (event.type === 'tool_execution_end' && event.toolName !== 'say') {
-				this.emit({ type: 'tool_execution_end', agent: seat.def.name, toolName: event.toolName });
-			}
+			this.noteSteer(seat, event);
+			this.relayToolUse(seat, event);
 		});
 		return agent;
+	}
+
+	/**
+	 * A steer has landed in the transcript: the seat has now heard it. Steers
+	 * drain FIFO, so the oldest pending seq is the one that landed.
+	 */
+	private noteSteer(seat: SeatRuntime, event: AgentEvent): void {
+		if (event.type !== 'message_start' || event.message.role !== 'user') return;
+		const content = event.message.content;
+		if (typeof content !== 'string' || !content.startsWith('[new] ')) return;
+		const seq = seat.pendingSteers.shift();
+		if (seq !== undefined) seat.viewSeq = Math.max(seat.viewSeq, seq);
+	}
+
+	/** The room sees that hands moved; `say` is the room's own event, not a tool's. */
+	private relayToolUse(seat: SeatRuntime, event: AgentEvent): void {
+		if (event.type !== 'tool_execution_start' && event.type !== 'tool_execution_end') return;
+		if (event.toolName === 'say') return;
+		this.emit({ type: event.type, agent: seat.def.name, toolName: event.toolName });
 	}
 
 	private sayTool(seat: SeatRuntime): AgentTool {
