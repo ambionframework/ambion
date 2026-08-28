@@ -7,7 +7,8 @@ shipped: the whole runtime lives in
 [`session.ts`](../packages/ambion/src/session.ts), the public shapes in
 [`types.ts`](../packages/ambion/src/types.ts).
 
-Four primitives, and the whole of it fits in one sentence:
+Four things to define and a session to put them in, and the whole of it fits
+in one sentence:
 
 > **`defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
 > gives agents hands, and `startSession` brings up a named room the agents
@@ -210,6 +211,7 @@ type Message =
       seq: number;
       at: string;
       from: string; // stamped from the visit the runtime observed
+      identity?: string; // on 'arrived' alone: how the room knew them
     };
 ```
 
@@ -222,8 +224,9 @@ routing and voice; all of the routing is one function, `dispatch` in
 `session.ts`.
 
 **1. Every message activates every idle agent, in parallel.** A human's
-delivery and a colleague's undirected `say` route identically: passive seats
-sit out (rule 6); everyone else at rest evaluates at once, and replies land
+delivery, a person arriving and a colleague's undirected `say` route
+identically: seats sit out when their attention is too narrow for it (rule 6);
+everyone else at rest evaluates at once, and replies land
 on the record in arrival order — so a reply that lands after colleagues went
 idle is still heard, not stranded until the next delivery. With one agent
 this degenerates to ordinary chat: the room is the general case, the
@@ -282,12 +285,23 @@ tick), and a room with no races pays nothing. The refusal shows on the stream
 as `say_conflict`, and the guarantee is the point: every message on the
 record was spoken by a seat that had heard everything before it.
 
-**6. An agent's status is `active`, `idle`, or `passive`.** Active: taking a
-turn now. Idle: at rest, woken by any broadcast. Passive: at rest, woken only
-when named — by a colleague's directed `say` or a directed delivery — seated
-as `passive(archivist)`, and readable from `session.seats()`. A passive seat
-is the expert in the corner: hearing nothing, costing nothing, until someone
-asks.
+**6. A seat has a status and an attention, and they are different things.**
+Status is runtime: `active` (taking a turn now) or `idle` (at rest).
+Attention is a seating choice, and it is what rule 1 defers to when it says
+who sits out — one widening scale, from the narrowest:
+
+- `named` — hears nothing but a message addressed to it, seated as
+  `passive(archivist)`. The expert in the corner: hearing nothing, costing
+  nothing, until someone asks.
+- `broadcast` — also hears anything a participant said. The default, and what
+  a bare agent in `agents` gets.
+- `presence` — also wakes when somebody arrives, leaves or goes quiet, seated
+  as `attentive(concierge)`.
+
+Both are readable from `session.seats()`, so a seat that is `named` and
+running is describable, which one enum could not do. Attention belongs to the
+seating rather than to `defineAgent`, so the same agent can be the quiet
+corner in one room and the one who meets people in another.
 
 **7. Identity is injected; provenance is stamped.** Every agent's context
 carries the session's goal, the time, and two rosters — the agents, with
@@ -429,4 +443,4 @@ itself owning retries or context windows or a tool format — the wrapper has
 become a reimplementation, and the right response is to delete Ambion's
 version.
 
-Four primitives. One dependency that does the rest.
+Four things to define. One dependency that does the rest.

@@ -6,8 +6,8 @@ import {
 	type AmbionTool,
 	HUMAN_BRAND,
 	type HumanDefinition,
-	type PassiveSeat,
 	SEAT_BRAND,
+	type SeatedAgent,
 	TOOL_BRAND,
 } from './types.ts';
 
@@ -51,9 +51,23 @@ export function defineHuman(options: DefineHumanOptions): HumanDefinition {
 	};
 }
 
-/** Seat an agent passively: at rest, woken only when named. */
-export function passive(agent: AgentDefinition): PassiveSeat {
-	return { [SEAT_BRAND]: true, agent };
+/**
+ * Seat an agent at the narrow end of attention: it hears nothing but a message
+ * addressed to it by name. The expert in the corner, costing nothing until
+ * somebody asks.
+ */
+export function passive(agent: AgentDefinition): SeatedAgent {
+	return { [SEAT_BRAND]: true, agent, attention: 'named' };
+}
+
+/**
+ * Seat an agent at the wide end: besides everything said, it also wakes when
+ * somebody arrives, leaves or goes quiet. Most seats should not — an arrival
+ * asks nothing, so a seat that answers one is guessing — but a seat whose job
+ * is to meet people needs it.
+ */
+export function attentive(agent: AgentDefinition): SeatedAgent {
+	return { [SEAT_BRAND]: true, agent, attention: 'presence' };
 }
 
 export interface DefineToolOptions<TParameters extends TSchema> {

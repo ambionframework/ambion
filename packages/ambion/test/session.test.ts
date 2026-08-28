@@ -334,7 +334,7 @@ describe('startSession', () => {
 		const said = (await session.messages()).at(-1);
 		expect(said?.from).toBe('liar'); // stamped, regardless of what the content claimed
 		const roster = contexts.at(-1) ?? '';
-		expect(roster).toContain('- aside (passive): Watches quietly.');
+		expect(roster).toContain('- aside (idle, named only): Watches quietly.');
 		expect(roster).toContain('- andrei (present'); // the people, and how they are reading
 		expect(roster).toContain('Founder. Owns the room.');
 

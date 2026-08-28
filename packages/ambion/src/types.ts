@@ -44,7 +44,16 @@ export function isSpoken(message: Message): message is SpokenMessage {
 	return message.kind === 'said';
 }
 
-export type SeatStatus = 'active' | 'idle' | 'passive';
+/** Whether a seat is taking a turn. Runtime state, not a seating choice. */
+export type SeatStatus = 'active' | 'idle';
+
+/**
+ * What wakes a seat, as the widest kind of message it activates for. One
+ * widening scale, not a set of flags: `named` hears only a message addressed
+ * to it, `broadcast` also hears anything a participant said, and `presence`
+ * also hears somebody arriving, leaving or going quiet.
+ */
+export type Attention = 'named' | 'broadcast' | 'presence';
 
 /** A visit is present or away. A person is also absent when they hold none. */
 export type VisitStatus = 'present' | 'away';
@@ -55,6 +64,7 @@ export interface AgentSeatInfo {
 	name: string;
 	identity: string;
 	status: SeatStatus;
+	attention: Attention;
 	/** The id of the seat's downstream Pi session, `<room>:<agent>`. */
 	sessionId: string;
 }
@@ -131,14 +141,15 @@ export interface HumanDefinition {
 	readonly identity: string;
 }
 
-/** A seat marker produced by `passive(agent)`. */
-export interface PassiveSeat {
+/** An agent with its attention chosen, from `passive()` or `attentive()`. */
+export interface SeatedAgent {
 	readonly [SEAT_BRAND]: true;
 	readonly agent: AgentDefinition;
+	readonly attention: Attention;
 }
 
-/** What `startSession` seats: an agent, idle or passive. */
-export type AgentSeat = AgentDefinition | PassiveSeat;
+/** What `startSession` seats: an agent on its own, or one with an attention. */
+export type AgentSeat = AgentDefinition | SeatedAgent;
 
 /** Who may be addressed by name. */
 export type Participant = AgentDefinition | HumanDefinition;
@@ -147,7 +158,7 @@ export function isAgent(p: unknown): p is AgentDefinition {
 	return typeof p === 'object' && p !== null && AGENT_BRAND in p;
 }
 
-export function isPassiveSeat(p: unknown): p is PassiveSeat {
+export function isSeatedAgent(p: unknown): p is SeatedAgent {
 	return typeof p === 'object' && p !== null && SEAT_BRAND in p;
 }
 

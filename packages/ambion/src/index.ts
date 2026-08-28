@@ -17,7 +17,7 @@ export {
 	JsonlSessionRepo,
 } from '@earendil-works/pi-agent-core';
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
-export { defineAgent, defineHuman, defineTool, passive } from './define.ts';
+export { attentive, defineAgent, defineHuman, defineTool, passive } from './define.ts';
 export type {
 	ReadSessionOptions,
 	Session,
@@ -38,14 +38,15 @@ export type {
 	AgentSeat,
 	AgentSeatInfo,
 	AmbionTool,
+	Attention,
 	HumanDefinition,
 	HumanSeatInfo,
 	Message,
 	Participant,
-	PassiveSeat,
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
+	SeatedAgent,
 	SeatInfo,
 	SeatStatus,
 	Seq,

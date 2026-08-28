@@ -5,8 +5,8 @@ the room knows, and what the agents do about it. The code lives with the
 rest of the runtime in [`packages/ambion/src`](../packages/ambion/src) — the
 visit and the timer in [`session.ts`](../packages/ambion/src/session.ts), the
 shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
-[`agent.md`](agent.md) first: this document assumes its eight rules and adds
-nothing that breaks one.
+[`agent.md`](agent.md) first: this document assumes its eight rules and breaks
+none of them — presence widens rule 6 rather than making an exception to rule 1.
 
 One sentence:
 
@@ -244,24 +244,28 @@ delivered into a session activates every idle agent. Arriving delivers a
 message. Nothing is special-cased, and nothing was weakened to let a door
 count.
 
-**Rule 4 decides who hears it, and that is nobody.** A presence message
-carries no `to` and is addressed to nobody: it commits, takes its seq, and
-wakes no idle seat, ever. This is rule 4 taken to its limit, not an exception
-to rule 1.
+**Rule 6 decides who wakes for it, and by default that is nobody.** The
+session routes a presence message exactly like any other; each seat's
+attention says whether it is wide enough to be woken by one. A bare agent
+sits at `broadcast` and is not, so opening a workspace wakes nothing. An
+agent seated `attentive(concierge)` sits at `presence` and is.
 
-It is addressed to nobody because an arrival has no words in it. Every other
-message says what it wants; an arrival says only that somebody is here, so a
-seat that answers one is guessing at the request — and a room of three
-products guessing hands a person three briefings they never asked for the
+The default is the narrow one because an arrival has no words in it. Every
+other message says what it wants; an arrival says only that somebody is here,
+so a seat that answers one is guessing at the request — and a room of three
+products all guessing hands a person three briefings they never asked for the
 moment they open it. That cost scales with how many people use the workspace,
 not with how much work there is. §8 is what actually briefs a returning
-person, and it costs nothing until they ask.
+person, and it costs nothing until they ask. A seat whose job is to meet
+people is the case that wants `attentive`, and it is one seat, not all of
+them.
 
-**Rule 2 is the whole point of routing a presence message.** Whatever arrives
-mid-turn is steered into every active agent, and a presence message arrives
-like any other: `[new] · andrei arrived` lands in the running turn at the next
-safe point. A seat at rest is not woken and reads it at its next activation; a
-seat already working is told while it can still act on it.
+**Rule 2 reaches every seat already at work, whatever its attention.**
+Whatever arrives mid-turn is steered into every active agent, and a presence
+message arrives like any other: `[new] · andrei arrived` lands in the running
+turn at the next safe point. Attention governs waking, never hearing — a seat
+at `broadcast` is not woken by an arrival but is told about one it is already
+working through.
 
 That is what presence routing is for, and it is not a consolation prize for
 not activating. A seat drafting a reply when the person it concerns walks in —
@@ -397,10 +401,13 @@ reports away, because it subtracts two numbers.
 
 ### What presence costs
 
-A presence message costs one commit and no model call. It lands on the
-record, wakes nobody, and is read at the next activation by whoever the next
-real message wakes. A seat already at work pays a steer — one round on a turn
-it was running anyway, not a turn of its own.
+A presence message costs one commit, and no model call unless a seat is
+seated `attentive`. It lands on the record, wakes nobody at the default
+attention, and is read at the next activation by whoever the next message
+wakes. A seat already at work pays a steer — one round on a turn it was
+running anyway, not a turn of its own. Rule 5 counts it like any other
+message, so a say drafted across an arrival is refused and re-aimed at
+whoever is now reading; that is the lock working, not an exception to it.
 
 Three things bound the rest. **Away fires at most once
 per stretch of attention**, because an away visit holds no timer — a person

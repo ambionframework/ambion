@@ -25,7 +25,7 @@ filesystem are designed and not built.
 
 ## Core model
 
-Four primitives today, more to come.
+Four things to define, and a session to put them in.
 
 **Agent** — `defineAgent` makes an agent: a name, an identity the room reads, instructions, a model, and tools. A value, not a process. [`docs/agent.md`](docs/agent.md) specifies it: a vanilla [Pi](https://pi.dev/docs/latest/sdk) agent that speaks only when spoken to — and not always then.
 
@@ -105,7 +105,7 @@ setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
 2. Everything is a message on a record.
 3. Agents manage their own attention — deciding not to engage included.
 4. Many domain agents, not one monolith. The platform shares the capabilities.
-5. Minimal surface: four primitives, one invariant, one dependency that does the rest.
+5. Minimal surface: four things to define, one invariant, one dependency that does the rest.
 
 ## License
 

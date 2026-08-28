@@ -12,11 +12,13 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+	attentive,
 	defineAgent,
 	defineHuman,
 	InMemorySessionRepo,
 	isSpoken,
 	type Message,
+	passive,
 	readSession,
 	type Session,
 	type SessionEvent,
@@ -102,7 +104,7 @@ describe('presence', () => {
 		expect(session.visits()).toHaveLength(0);
 	});
 
-	it('commits an arrival and wakes nobody, because arrivals are quiet by default', async () => {
+	it('commits an arrival and wakes nobody, because no seat watches for one by default', async () => {
 		const session = track(open());
 		const seen = events(session);
 		await visitSession(session, andrei);
@@ -111,6 +113,31 @@ describe('presence', () => {
 		expect(await kinds(session)).toEqual(['arrived']);
 		expect(seen.some((e) => e.type === 'agent_start')).toBe(false);
 		expect(contexts).toHaveLength(0); // no seat was handed a context at all
+	});
+
+	it('wakes a seat that watches arrivals, and only that seat', async () => {
+		const greeter = defineAgent({
+			name: 'greeter',
+			identity: 'Meets people.',
+			instructions: 'greet',
+			model: 'scripted/greeter',
+		});
+		const quiet2 = defineAgent({
+			name: 'aside',
+			identity: 'Named only.',
+			instructions: 'wait',
+			model: 'scripted/aside',
+		});
+		const session = track(open({ agents: [watcher, attentive(greeter), passive(quiet2)] }));
+		const seen = events(session);
+		await visitSession(session, andrei);
+		await session.settled();
+
+		const woke = seen.filter((e) => e.type === 'agent_start').map((e) => e.agent);
+		expect(woke).toEqual(['greeter']); // not watcher, not the passive seat
+		// the roster tells every seat which of them watches for this
+		expect(contexts.at(-1)).toContain('- greeter (active, watches arrivals)');
+		expect(contexts.at(-1)).toContain('- aside (idle, named only)');
 	});
 
 	it('steers a seat already at work, which is the whole of what presence routing does', async () => {

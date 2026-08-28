@@ -21,10 +21,11 @@ import {
 import {
 	type AgentDefinition,
 	type AgentSeat,
+	type Attention,
 	type HumanDefinition,
 	isAgent,
 	isAmbionTool,
-	isPassiveSeat,
+	isSeatedAgent,
 	isSpoken,
 	type Message,
 	type Participant,
@@ -80,11 +81,6 @@ export interface StartSessionOptions {
 	repo?: SessionRepo;
 }
 
-/** Who a committed message is for: a participant name, or one of these two. */
-const ROOM = Symbol('room');
-const NOBODY = Symbol('nobody');
-type Audience = string | typeof ROOM | typeof NOBODY;
-
 export interface ReadSessionOptions {
 	repo?: SessionRepo;
 }
@@ -126,7 +122,8 @@ export interface Visit {
 
 interface SeatRuntime {
 	def: AgentDefinition;
-	passive: boolean;
+	/** What wakes this seat. Chosen at seating, not by the definition. */
+	attention: Attention;
 	active: boolean;
 	spoke: boolean;
 	/** Pi's abort() cancels the run but not its queues; this stops the rebuild loop too. */
@@ -325,7 +322,7 @@ class SessionImpl implements Session {
 
 	/** Seat one agent, refusing a name the room already knows. */
 	private seat(seat: AgentSeat): void {
-		const def = isPassiveSeat(seat) ? seat.agent : seat;
+		const def = isSeatedAgent(seat) ? seat.agent : seat;
 		if (!isAgent(def)) {
 			throw new Error('Agents must come from defineAgent or passive().');
 		}
@@ -334,7 +331,7 @@ class SessionImpl implements Session {
 		}
 		this.agents.set(def.name, {
 			def,
-			passive: isPassiveSeat(seat),
+			attention: isSeatedAgent(seat) ? seat.attention : 'broadcast',
 			active: false,
 			spoke: false,
 			aborted: false,
@@ -386,7 +383,8 @@ class SessionImpl implements Session {
 				kind: 'agent',
 				name: seat.def.name,
 				identity: seat.def.identity,
-				status: seat.active ? 'active' : seat.passive ? 'passive' : 'idle',
+				status: seat.active ? 'active' : 'idle',
+				attention: seat.attention,
 				sessionId: `${this.name}:${seat.def.name}`,
 			});
 		}
@@ -665,17 +663,12 @@ class SessionImpl implements Session {
 	 * directed message wakes exactly its target, passive included (rule 4).
 	 */
 	private dispatch(message: Message): void {
-		// A presence message is addressed to nobody, so it wakes no idle seat —
-		// rule 4 taken to its limit, not an exception to rule 1. Reaching a
-		// colleague already at work is the whole of what it is for: rule 2
-		// steers it in, and the seat pitches what it was going to say at
-		// whoever is actually reading now.
-		const audience = isSpoken(message) ? (message.to ?? ROOM) : NOBODY;
-		const target = typeof audience === 'string' ? this.agents.get(audience) : undefined;
+		const to = isSpoken(message) ? message.to : undefined;
+		const target = to === undefined ? undefined : this.agents.get(to);
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
 			if (seat.active) this.steerInto(seat, message);
-			else if (wakes(seat, target, audience)) this.activate(seat);
+			else if (wakes(seat, target, message)) this.activate(seat);
 		}
 	}
 
@@ -910,8 +903,9 @@ class SessionImpl implements Session {
 		return [
 			renderClock(now),
 			``,
-			`The agents (active: taking a turn now; idle: hears every message; passive: hears`,
-			`only a say directed at them):`,
+			`The agents (active: taking a turn now; idle: at rest. A seat marked "named only"`,
+			`hears nothing but a say addressed to it; one marked "watches arrivals" also wakes`,
+			`when somebody arrives or leaves; the rest wake on anything said):`,
 			renderAgents(this.seats()),
 			``,
 			`The people (present: reading now; away: here, not reading; absent: not here):`,
@@ -948,8 +942,9 @@ class SessionImpl implements Session {
 /** What a seat does with a presence line that lands while it is working. */
 const AUDIENCE_PARAGRAPH = [
 	`Who is reading can change while you work. An arrival, a departure or somebody going`,
-	`quiet reaches you as a [new] line mid-turn. It is never a request — nobody asked you`,
-	`anything by opening the workspace — so it never means start something new, and you`,
+	`quiet reaches you as a [new] line mid-turn, and wakes you outright if your seat watches`,
+	`for it. It is never a request — nobody asked you anything by opening the workspace —`,
+	`so it never means start something new, and you`,
 	`never greet, never say that you noticed, and never summarise the record back to the`,
 	`room. Use it to aim what you were already going to say: pitch it at whoever is`,
 	`actually reading now, say the part that needs them while they are still there, and`,
@@ -958,11 +953,15 @@ const AUDIENCE_PARAGRAPH = [
 	`decided and why, and do not wait for an answer that nobody is there to give.`,
 ];
 
-/** A directed message wakes its target alone; a broadcast wakes every idle seat. */
-function wakes(seat: SeatRuntime, target: SeatRuntime | undefined, audience: Audience): boolean {
-	if (audience === NOBODY) return false;
-	if (audience === ROOM) return !seat.passive;
-	return seat === target;
+/**
+ * A directed message wakes its target alone. A broadcast wakes every idle seat
+ * whose attention is wide enough for it — rule 1 routes, rule 6 decides who
+ * sits out, and a presence message is routed like any other.
+ */
+function wakes(seat: SeatRuntime, target: SeatRuntime | undefined, message: Message): boolean {
+	if (isSpoken(message) && message.to !== undefined) return seat === target;
+	if (seat.attention === 'named') return false;
+	return isSpoken(message) || seat.attention === 'presence';
 }
 
 function statusOf(visit: VisitRuntime, now: number): VisitStatus {

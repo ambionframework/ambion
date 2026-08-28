@@ -83,9 +83,19 @@ function unseenDividers(people: PersonView[]): Map<Seq, string[]> {
 	return dividers;
 }
 
+const ATTENTION_NOTE: Record<string, string> = {
+	named: 'named only',
+	presence: 'watches arrivals',
+};
+
 export function renderAgents(seats: SeatInfo[]): string {
 	const agents = seats.filter((seat) => seat.kind === 'agent');
-	return agents.map((seat) => `- ${seat.name} (${seat.status}): ${seat.identity}`).join('\n');
+	return agents
+		.map((seat) => {
+			const note = ATTENTION_NOTE[seat.attention];
+			return `- ${seat.name} (${seat.status}${note ? `, ${note}` : ''}): ${seat.identity}`;
+		})
+		.join('\n');
 }
 
 /** Who the room knows, how they are reading, and what they have not read. */
