@@ -354,7 +354,7 @@ function wakes(seat, target, message) {
 
 **The guard belongs to the author.** An earlier draft put it on the message
 kind, `isSummary(message)`, which held for the one thing an aide writes today
-and would have held for nothing it writes tomorrow. §11 lets an aide speak
+and would have held for nothing it writes tomorrow. §12 lets an aide speak
 during an exchange; a rule about summaries would not have covered that, and
 the boundary would have been prose rather than code.
 
