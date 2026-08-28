@@ -10,9 +10,9 @@ shipped: the whole runtime lives in
 Four primitives, and the whole of it fits in one sentence:
 
 > **`defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
-> gives agents hands, and `openSession` opens a named room the agents live in
-> and people enter — each agent deciding for itself whether to speak, to whom,
-> and which colleague to call in.**
+> gives agents hands, and `startSession` brings up a named room the agents
+> work in and people visit — each agent deciding for itself whether to speak,
+> to whom, and which colleague to call in.**
 
 Everything Ambion intends beyond this — the virtual shell and workspace
 filesystem, channels and their read/write contracts, timers, batching,
@@ -41,7 +41,7 @@ it.
 
 Two things. If a third appears, it is a design failure and should be pushed
 back into a dependency or dropped. The single extension point is Pi's own:
-`openSession` accepts a `streamFn` — a scripted stream makes the room
+`startSession` accepts a `streamFn` — a scripted stream makes the room
 deterministic (this is how [the tests](../packages/ambion/test/session.test.ts)
 run), a custom stream brings custom providers. There is no Ambion model
 registry: without a `streamFn`, models resolve as `provider/model-id` from
@@ -116,21 +116,27 @@ the record like an agent. `identity` is how the room knows them. What a human
 never has: instructions, tools, or a model — humans are not run, and a `say`
 directed at one wakes nothing.
 
-A human is not seated by `openSession`. The value is what somebody enters as:
-`session.enter(andrei)` returns a visit, the visit delivers, and the runtime
-stamps the record from it — who-said-what is never something the content
-claimed. Several people hold visits at once, and each one's presence is a
-fact the agents read. [`presence.md`](presence.md) is the contract for that,
+A human is not composition and is not passed to `startSession`. The value is
+what somebody visits as: `visitSession(session, andrei)` returns a visit, the
+visit delivers, and the runtime stamps the record from it — who-said-what is
+never something the content claimed. Several people hold visits at once, and
+each one's presence is a fact the agents read. [`presence.md`](presence.md) is the contract for that,
 and for the arrival a visit puts on the record.
 
 ---
 
-## 5. openSession
+## 5. startSession
 
 ```ts
-import { openSession, passive } from '@ambionframework/ambion';
+import {
+  readSession,
+  startSession,
+  stopSession,
+  visitSession,
+  passive,
+} from '@ambionframework/ambion';
 
-const session = openSession({
+const session = startSession({
   name: 'weekly',
   goal: 'Draft the weekly digest and flag what does not hold.',
   agents: [researcher, writer, passive(archivist)],
@@ -140,28 +146,51 @@ const unsubscribe = session.subscribe((event) => {
   if (event.type === 'say') console.log(`${event.agent}: ${event.message.text}`);
 });
 
-const visit = await session.enter(andrei);
+const visit = await visitSession(session, andrei);
 await visit.deliver({ text: 'Draft the weekly. Anything to flag?' });
 await session.settled();
 
-for (const message of await session.messages()) {
+await stopSession(session);
+
+// later, in any process, with no agents standing up
+for (const message of await readSession('weekly').messages()) {
   console.log(`${message.from}: ${message.text}`);
 }
 ```
 
-A session is a named entity, and the verb is honest about it: `openSession`
-opens, it does not create. Open a name that has never been opened and the
-room is empty; open it again and you are back in it, record intact — like a
-file, not like an object. Two rules of identity follow. **The record belongs
-to the name**: what was said in `'weekly'` is there whenever `'weekly'` is
-opened, for as long as the storage lives. **The seats belong to the
-opening**: the agents passed to `openSession` are the room's composition this
-time, so a session can be reopened with a different roster and the record
-still shows who said what, stamped then, not inferred now. A person is not
-composition and is not passed here; they enter and leave, and
-[`presence.md`](presence.md) has the rest. Names are unique across the
-roster — `openSession` refuses a duplicate, and so does `enter`, rather than
+Three verbs, and each does one thing. **`startSession` sets up the context
+where the agents work.** It takes the room's composition and brings it to
+life: from here on the seats are live, a message activates them, and timers
+run. **`stopSession` takes it down**: every active turn is aborted, every
+visit is closed, every timer is cleared, the write chain drains, and the
+handle refuses further use. **`readSession` reads a name and starts
+nothing** — the record, and who was in it, with no seat standing up and
+nothing to bill. You can read a room that is not running; you cannot speak
+into one. A person is the fourth verb and lives in
+[`presence.md`](presence.md): `visitSession` puts them in a running room.
+
+A session is a named entity that outlives any run of it. Three rules of
+identity follow.
+
+**The record belongs to the name.** What was said in `'weekly'` is there
+whenever `'weekly'` is read, for as long as the storage lives, whether or not
+anything is running.
+
+**The run belongs to `startSession`.** The agents passed are the room's
+composition for this run, so a name can be started again with a different
+roster and the record still shows who said what, stamped then, not inferred
+now. A long-lived room is many runs over one record, and `readSession`
+reaches the record between them.
+
+**One run per name.** `startSession` refuses a name already running in this
+process, because two live rooms over one record would each replay it, each
+append to it, and diverge. Names are unique inside a roster too —
+`startSession` refuses a duplicate, and so does `visitSession` — rather than
 letting `say({ to })` become ambiguous.
+
+`startSession` is synchronous and the room is usable at once; the replay it
+needs is awaited by the first call that needs it. `stopSession` returns a
+promise, because draining is the point of calling it.
 
 What the record holds is one union (`Message` in `types.ts`): what a
 participant said, and what a person did.
@@ -325,17 +354,24 @@ resolves on acceptance — the message is on the record and activations are
 dispatched — never on completion, because a parallel round has no single
 caller to return to. The round's end is `settled()`: a promise that resolves
 when the room is quiet, which is also the moment a host learns that nobody
-chose to speak. And one control: `abort()`. It cancels every active turn —
-Pi's own abort, fanned out — and the room settles; what was said stays, what
-was mid-flight ends without speaking, and an aborted turn stays cancelled
-even if a steer was still queued against it. `messages()` and `seats()` are
-the pull side; the stream is the push side — nothing a listener can learn
-that the pulls cannot, only sooner.
+chose to speak. And two controls. `abort()` cancels every active turn — Pi's
+own abort, fanned out — and the room settles; what was said stays, what was
+mid-flight ends without speaking, and an aborted turn stays cancelled even if
+a steer was still queued against it. The room is still running afterwards.
+`stopSession` is the one that ends it, and it is `abort()` plus everything
+else a run holds: the visits close, the timers clear, the writes drain, and
+the handle is spent. `messages()` and `seats()` are the pull side; the stream
+is the push side — nothing a listener can learn that the pulls cannot, only
+sooner.
+
+`readSession(name, { repo })` returns the pull side alone — `messages()`,
+`seats()`, `subscribe()` — and `Session` extends it, so code that only reads
+takes the narrower type and cannot start anything by accident.
 
 Storage is Pi's, not an invention of Ambion's. The record lives in a Pi
 session — each message a custom entry, replayed in `seq` order on reopen —
-obtained from Pi's own `SessionRepo`, which `openSession` accepts and
-defaults to an in-process `InMemorySessionRepo`. A name that outlives the
+obtained from Pi's own `SessionRepo`, which `startSession` and `readSession`
+accept and default to an in-process `InMemorySessionRepo`. A name that outlives the
 process is a durable `SessionRepo` implementation, not a new abstraction:
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage surface
 and Ambion adds no storage layer of its own.
@@ -376,9 +412,9 @@ at a time, each earning its way in against the same test: does it add a
 second way to do something that has one?
 
 The first of them is shipped: [`presence.md`](presence.md), which takes
-people out of `openSession` and gives them a verb. A session seats agents; a
-person enters and leaves, several at once, and arriving is a message like any
-other — so rule 1 activates the room when somebody walks in, and an agent
+people out of the room's composition and gives them a verb of their own. A
+run seats agents; a person visits and leaves, several at once, and arriving
+is a message like any other — so rule 1 activates the room when somebody walks in, and an agent
 that knows the session's goal tells them what they missed. It is the one
 document so far that reaches into this core rather than sitting on top of
 it, and the shapes above carry the result.
