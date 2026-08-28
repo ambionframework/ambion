@@ -1,0 +1,263 @@
+<title>Four Apps, One Site</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --paper:#f4f3ee; --card:#fbfaf6; --sunk:#eceada; --ink:#232a2b; --dim:#6c7371; --line:#dad7cb;
+  --c-timesheets:#3f5bb5; --c-tasks:#3d7a2f; --c-materials:#a3641a; --c-handbook:#8a4a8f;
+  --c-priya:#232a2b; --c-sam:#232a2b; --c-dan:#232a2b;
+  --present:#3d7a2f; --away:#8a5a20; --absent:#c3bfb1;
+  --miss:#f1ead6; --miss-line:#c2a049; --add:#3d7a2f;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#13171a; --card:#1a2023; --sunk:#161b1e; --ink:#e3e2d9; --dim:#8a918e; --line:#2b3235;
+  --c-timesheets:#8fa8ef; --c-tasks:#7fc468; --c-materials:#e0a94e; --c-handbook:#cf92d4;
+  --c-priya:#e3e2d9; --c-sam:#e3e2d9; --c-dan:#e3e2d9;
+  --present:#7fc468; --away:#dfae62; --absent:#4d5451;
+  --miss:#232419; --miss-line:#7c6828; --add:#7fc468;
+}}
+:root[data-theme="dark"]{
+  --paper:#13171a; --card:#1a2023; --sunk:#161b1e; --ink:#e3e2d9; --dim:#8a918e; --line:#2b3235;
+  --c-timesheets:#8fa8ef; --c-tasks:#7fc468; --c-materials:#e0a94e; --c-handbook:#cf92d4;
+  --c-priya:#e3e2d9; --c-sam:#e3e2d9; --c-dan:#e3e2d9;
+  --present:#7fc468; --away:#dfae62; --absent:#4d5451;
+  --miss:#232419; --miss-line:#7c6828; --add:#7fc468;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.65 "IBM Plex Sans",system-ui,sans-serif}
+main{max-width:60rem;margin:0 auto;padding:3.5rem 1.25rem 6rem}
+h1{font:600 2.7rem/1.12 Spectral,Georgia,serif;margin:0 0 .5rem;letter-spacing:-.012em;
+  text-wrap:balance}
+h2{font:600 1.5rem/1.25 Spectral,Georgia,serif;margin:0 0 .45rem;text-wrap:balance}
+section{margin-top:3.5rem}
+.lede{color:var(--dim);max-width:45rem;margin:0 0 1.6rem;font-size:1.06rem}
+.meta{font:500 .72rem/1.6 "IBM Plex Mono",monospace;color:var(--dim);
+  letter-spacing:.07em;text-transform:uppercase;margin:0 0 1.6rem}
+.note{color:var(--dim);max-width:45rem;margin:0 0 1.4rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden;margin:0 0 1rem}
+.stat{background:var(--card);padding:.9rem 1rem;display:flex;flex-direction:column;gap:.15rem}
+.stat b{font:600 1.6rem/1 "IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.stat span{font-size:.78rem;color:var(--dim);line-height:1.35}
+.apps{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));gap:1rem;margin-top:1.4rem}
+.app{background:var(--card);border:1px solid var(--line);border-radius:3px;
+  padding:1.05rem 1.1rem;border-top:3px solid currentColor;display:flex;flex-direction:column;gap:.5rem}
+.app-h{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem}
+.app .agent{font:600 .8rem/1 "IBM Plex Mono",monospace;letter-spacing:.02em}
+.app .seat{font:400 .68rem/1 "IBM Plex Mono",monospace;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.08em}
+.app h3{font:600 1.08rem/1.3 Spectral,Georgia,serif;margin:0;color:var(--ink)}
+.app p{margin:0;font-size:.85rem;color:var(--dim);line-height:1.5}
+ul.api{list-style:none;margin:.15rem 0 0;padding:0;display:flex;flex-direction:column;gap:.25rem}
+ul.api li{font:400 .74rem/1.5 "IBM Plex Mono",monospace;color:var(--ink);
+  background:var(--sunk);border-radius:2px;padding:.2rem .45rem;overflow-wrap:anywhere}
+.app-f{margin-top:auto;padding-top:.5rem;border-top:1px solid var(--line);
+  font:500 .72rem/1.5 "IBM Plex Mono",monospace;color:var(--dim)}
+ol.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.55rem}
+ol.steps li{display:flex;gap:.85rem;align-items:baseline}
+ol.steps .n{font:500 .72rem/1 "IBM Plex Mono",monospace;color:var(--dim);
+  border:1px solid var(--line);border-radius:2px;padding:.25rem .4rem;flex:none}
+.key{display:flex;gap:1.1rem;flex-wrap:wrap;font-size:.78rem;color:var(--dim);margin:1.2rem 0 .6rem}
+.key span{display:flex;align-items:center;gap:.4rem}
+.key i{width:11px;height:11px;border-radius:2px;display:inline-block}
+.band{display:flex;flex-direction:column;gap:.4rem}
+.lane{display:flex;align-items:center;gap:.75rem}
+.lane .lbl{font:500 .75rem/1 "IBM Plex Mono",monospace;width:3.6rem;flex:none;color:var(--dim)}
+.cells{display:flex;gap:2px;flex:1;min-width:0}
+.cells i{flex:1;height:16px;border-radius:1px;background:var(--absent)}
+.cells i.s-present{background:var(--present)}
+.cells i.s-away{background:var(--away)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:3px;margin-top:1.3rem}
+table{border-collapse:collapse;width:100%;background:var(--card);font-size:.86rem}
+th,td{text-align:left;padding:.65rem .8rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 .68rem/1.5 "IBM Plex Mono",monospace;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--dim);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.tid{font:500 .8rem/1.5 "IBM Plex Mono",monospace;white-space:nowrap}
+.was{color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+.now{white-space:normal;font-variant-numeric:tabular-nums}
+.now b{color:var(--add);font-weight:600}
+.nb{display:block;color:var(--dim);font-size:.8rem;margin-top:.25rem;line-height:1.45}
+tr.changed{background:var(--sunk)}
+ul.record{list-style:none;margin:1.3rem 0 0;padding:0;display:flex;flex-direction:column;gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+ul.record li{background:var(--card);display:flex;gap:.9rem;padding:.85rem 1rem}
+ul.record li.miss{background:var(--miss);box-shadow:inset 3px 0 0 var(--miss-line)}
+.seq{font:500 .72rem/1.7 "IBM Plex Mono",monospace;color:var(--dim);
+  font-variant-numeric:tabular-nums;flex:none;width:1.7rem;text-align:right}
+.body{min-width:0;flex:1}
+.who{font:600 .82rem/1.5 "IBM Plex Mono",monospace;letter-spacing:.02em;margin-bottom:.15rem}
+.who.person{text-transform:uppercase;letter-spacing:.09em;font-size:.74rem}
+.who .to{font-weight:400;color:var(--dim);margin-left:.4rem;text-transform:none;letter-spacing:0}
+.text{white-space:pre-wrap;overflow-wrap:anywhere}
+li.pres .body{font:500 .84rem/1.7 "IBM Plex Mono",monospace;color:var(--dim);
+  display:flex;align-items:center;gap:.5rem}
+li.pres .dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--absent)}
+li.p-arrived .dot,li.p-returned .dot{background:var(--present)}
+li.p-away .dot{background:var(--away)}
+.c-timesheets{color:var(--c-timesheets)} .c-tasks{color:var(--c-tasks)}
+.c-materials{color:var(--c-materials)} .c-handbook{color:var(--c-handbook)}
+.c-priya,.c-sam,.c-dan{color:var(--ink)}
+pre{background:var(--card);border:1px solid var(--line);border-radius:3px;padding:1.1rem 1.2rem;
+  overflow-x:auto;font:400 .8rem/1.65 "IBM Plex Mono",monospace;margin:1.3rem 0 0}
+pre b{font-weight:500;background:var(--miss);box-shadow:0 0 0 3px var(--miss);border-radius:1px}
+.findings{display:flex;flex-direction:column;gap:1.4rem;margin-top:1.4rem}
+.finding{border-left:2px solid var(--line);padding-left:1.1rem}
+.finding h3{font:600 1rem/1.4 "IBM Plex Sans",sans-serif;margin:0 0 .3rem}
+.finding p{margin:0;color:var(--dim)} .finding p+p{margin-top:.5rem}
+footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);
+  color:var(--dim);font-size:.85rem}
+code{font:400 .88em/1.5 "IBM Plex Mono",monospace;background:var(--card);
+  border:1px solid var(--line);border-radius:2px;padding:.05em .35em}
+@media (max-width:38rem){h1{font-size:2.05rem}.lane .lbl{width:2.9rem}ul.record li{padding:.75rem .7rem}}
+</style>
+<main>
+<p class="meta">Ambion demo · 28 August 2026 · anthropic/claude-opus-5 · session &lsquo;kestrel-yard-block-c&rsquo;</p>
+<h1>Four Apps, One Site</h1>
+<p class="lede">A construction management suite where each product is an agent: a time tracker,
+a task list, a materials tracker and a knowledge base. Three people open the same workspace
+from an office, a phone on the deck, and a cost desk — and the products answer them, argue
+with each other, and write back to their own data.</p>
+
+<div class="stats"><div class="stat"><b>4</b><span>apps in the workspace</span></div><div class="stat"><b>3</b><span>people, overlapping</span></div><div class="stat"><b>29</b><span>messages on the record</span></div><div class="stat"><b>35</b><span>calls into product APIs</span></div><div class="stat"><b>4</b><span>writes back to the task list</span></div><div class="stat"><b>17</b><span>messages priya missed</span></div></div>
+<p class="note">Every line is verbatim from one live run. The products hold real state; the
+people were scripted only in when they arrived, what they asked, and when they left.</p>
+
+<section>
+<h2>The suite</h2>
+<p class="note">One agent per product. Each holds its own data and its own API, and knows
+nothing about the others&rsquo; internals — it asks them, on the record, the same way a person
+does.</p>
+<div class="apps"><div class="app c-timesheets"><div class="app-h"><span class="agent">timesheets</span><span class="seat">idle</span></div><h3>Time tracker</h3><p>Who is on site, hours logged this week, overtime exposure.</p><ul class="api"><li>crew_hours()</li></ul><div class="app-f">5 calls · 5 messages</div></div><div class="app c-tasks"><div class="app-h"><span class="agent">tasks</span><span class="seat">idle</span></div><h3>Task list</h3><p>What is open, blocked, who owns it, when it is due.</p><ul class="api"><li>task_list(status?)</li><li>update_task(id, status?, due?, note?)</li></ul><div class="app-f">14 calls · 4 writes · 6 messages</div></div><div class="app c-materials"><div class="app-h"><span class="agent">materials</span><span class="seat">idle</span></div><h3>Materials tracker</h3><p>Stock on site, what is reserved, inbound deliveries.</p><ul class="api"><li>stock_check()</li><li>deliveries()</li></ul><div class="app-f">16 calls · 7 messages</div></div><div class="app c-handbook"><div class="app-h"><span class="agent">handbook</span><span class="seat">passive</span></div><h3>Knowledge base</h3><p>Procedures, specs, method statements, contract terms.</p><ul class="api"><li>search(query)</li></ul><div class="app-f">never called in · 0 messages</div></div></div>
+<p class="note">The knowledge base is seated <em>passive</em>: it hears nothing until somebody
+names it. Over the whole run nobody did, so it cost nothing — the expert in the corner that
+bills only when asked.</p>
+</section>
+
+<section>
+<h2>What the run did</h2>
+<ol class="steps"><li><span class="n">1</span><span>priya opens the workspace from the site office</span></li><li><span class="n">2</span><span>priya asks whether Thursday’s pour is ready</span></li><li><span class="n">3</span><span>priya leaves for a site walk</span></li><li><span class="n">4</span><span>sam joins from the deck and reports weather</span></li><li><span class="n">5</span><span>dan joins and asks what the move costs</span></li><li><span class="n">6</span><span>priya comes back to a decision she did not see made</span></li></ol>
+</section>
+
+<section>
+<h2>Who was in the workspace</h2>
+<p class="note">One cell per message. Presence is derived from visits and committed to the
+record only when a person&rsquo;s own status changes — so this band is the record, not a
+separate log. Priya overlaps with both Sam and Dan when she comes back.</p>
+<div class="key">
+  <span><i style="background:var(--present)"></i>present</span>
+  <span><i style="background:var(--away)"></i>away</span>
+  <span><i style="background:var(--absent)"></i>not here</span>
+</div>
+<div class="band"><div class="lane"><span class="lbl">priya</span><div class="cells"><i class="s-present" title="message 1: present"></i><i class="s-present" title="message 2: present"></i><i class="s-present" title="message 3: present"></i><i class="s-present" title="message 4: present"></i><i class="s-present" title="message 5: present"></i><i class="s-present" title="message 6: present"></i><i class="s-present" title="message 7: present"></i><i class="s-present" title="message 8: present"></i><i class="s-absent" title="message 9: absent"></i><i class="s-absent" title="message 10: absent"></i><i class="s-absent" title="message 11: absent"></i><i class="s-absent" title="message 12: absent"></i><i class="s-absent" title="message 13: absent"></i><i class="s-absent" title="message 14: absent"></i><i class="s-absent" title="message 15: absent"></i><i class="s-absent" title="message 16: absent"></i><i class="s-absent" title="message 17: absent"></i><i class="s-absent" title="message 18: absent"></i><i class="s-absent" title="message 19: absent"></i><i class="s-absent" title="message 20: absent"></i><i class="s-absent" title="message 21: absent"></i><i class="s-absent" title="message 22: absent"></i><i class="s-absent" title="message 23: absent"></i><i class="s-present" title="message 24: present"></i><i class="s-present" title="message 25: present"></i><i class="s-present" title="message 26: present"></i><i class="s-present" title="message 27: present"></i><i class="s-present" title="message 28: present"></i><i class="s-absent" title="message 29: absent"></i></div></div><div class="lane"><span class="lbl">sam</span><div class="cells"><i class="s-absent" title="message 1: absent"></i><i class="s-absent" title="message 2: absent"></i><i class="s-absent" title="message 3: absent"></i><i class="s-absent" title="message 4: absent"></i><i class="s-absent" title="message 5: absent"></i><i class="s-absent" title="message 6: absent"></i><i class="s-absent" title="message 7: absent"></i><i class="s-absent" title="message 8: absent"></i><i class="s-absent" title="message 9: absent"></i><i class="s-absent" title="message 10: absent"></i><i class="s-absent" title="message 11: absent"></i><i class="s-absent" title="message 12: absent"></i><i class="s-absent" title="message 13: absent"></i><i class="s-present" title="message 14: present"></i><i class="s-present" title="message 15: present"></i><i class="s-present" title="message 16: present"></i><i class="s-present" title="message 17: present"></i><i class="s-present" title="message 18: present"></i><i class="s-present" title="message 19: present"></i><i class="s-present" title="message 20: present"></i><i class="s-present" title="message 21: present"></i><i class="s-present" title="message 22: present"></i><i class="s-present" title="message 23: present"></i><i class="s-present" title="message 24: present"></i><i class="s-present" title="message 25: present"></i><i class="s-present" title="message 26: present"></i><i class="s-absent" title="message 27: absent"></i><i class="s-absent" title="message 28: absent"></i><i class="s-absent" title="message 29: absent"></i></div></div><div class="lane"><span class="lbl">dan</span><div class="cells"><i class="s-absent" title="message 1: absent"></i><i class="s-absent" title="message 2: absent"></i><i class="s-absent" title="message 3: absent"></i><i class="s-absent" title="message 4: absent"></i><i class="s-absent" title="message 5: absent"></i><i class="s-absent" title="message 6: absent"></i><i class="s-absent" title="message 7: absent"></i><i class="s-absent" title="message 8: absent"></i><i class="s-absent" title="message 9: absent"></i><i class="s-absent" title="message 10: absent"></i><i class="s-absent" title="message 11: absent"></i><i class="s-absent" title="message 12: absent"></i><i class="s-absent" title="message 13: absent"></i><i class="s-absent" title="message 14: absent"></i><i class="s-absent" title="message 15: absent"></i><i class="s-absent" title="message 16: absent"></i><i class="s-absent" title="message 17: absent"></i><i class="s-absent" title="message 18: absent"></i><i class="s-present" title="message 19: present"></i><i class="s-present" title="message 20: present"></i><i class="s-present" title="message 21: present"></i><i class="s-present" title="message 22: present"></i><i class="s-present" title="message 23: present"></i><i class="s-present" title="message 24: present"></i><i class="s-present" title="message 25: present"></i><i class="s-present" title="message 26: present"></i><i class="s-present" title="message 27: present"></i><i class="s-absent" title="message 28: absent"></i><i class="s-absent" title="message 29: absent"></i></div></div></div>
+</section>
+
+<section>
+<h2>What the products actually changed</h2>
+<p class="note">The task list before the run and after it. Nobody typed these edits: the tasks
+agent called <code>update_task</code> four times because the room decided something and it owns
+recording that.</p>
+<div class="tw"><table>
+<thead><tr><th>Task</th><th>Title</th><th>Before</th><th>After</th></tr></thead>
+<tbody><tr class="changed"><td class="tid">T-118</td><td>Level 3 slab pour</td><td class="was">open · Thu 27 Aug</td><td class="now"><b>rescheduled · Wed 2 Sep</b><span class=nb>Provisional working date only — not committed to client. Gated by D-4471 steel landing, then 48h building control notice, then T-121, plus T-130 pump. Re-date once inspector slot is confirmed.</span></td></tr><tr class="changed"><td class="tid">T-121</td><td>Pre-pour rebar inspection (building control)</td><td class="was">blocked · Wed 26 Aug</td><td class="now"><b>blocked · Wed 26 Aug</b><span class=nb>Blocked twice over: inspector slot unconfirmed (48h notice) AND no inspectable steel — 4.2t of 16mm on site is fully reserved, D-4471 (7.5t) not landed. Both must clear before any inspection date is real.</span></td></tr><tr class="changed"><td class="tid">T-124</td><td>Formwork strike, Level 2</td><td class="was">open · Fri 28 Aug</td><td class="now"><b>rescheduled · Mon 31 Aug</b><span class=nb>Held off today to avoid overtime — formwork at 44h/45 with 3 of 5 on site. Nothing downstream needs the L2 strike before the Wed 2 Sep pour, so no programme cost. Starts Mon at zero hours with full crew. Sam to confirm.</span></td></tr><tr class="changed"><td class="tid">T-130</td><td>Pump hire confirmation</td><td class="was">open · Tue 25 Aug</td><td class="now"><b>open · Fri 28 Aug</b><span class=nb>Overdue since Tue 25 Aug, no response from dan. Gates the pour independently of T-121 — short-notice pump availability not assured. Chase today.</span></td></tr><tr class=""><td class="tid">T-097</td><td>Level 2 slab pour</td><td class="was">done · Thu 13 Aug</td><td class="now">done · Thu 13 Aug</td></tr></tbody>
+</table></div>
+</section>
+
+<section>
+<h2>What an agent read</h2>
+<p class="note">From the materials agent&rsquo;s own downstream session. Three people in the
+workspace, each with how they are reading — and the line the room draws where somebody stopped.</p>
+<pre>The people (present: reading now; away: here, not reading; absent: not here):
+- priya (present, since just now, <b>has not seen the last 15 messages</b>): Project manager, in the site office. Owns the programme and the client commitment.
+- sam (present, since just now): Site foreman, on the deck with a phone. Owns what actually happens on site today.
+- dan (present, since just now): Quantity surveyor. Owns cost, variations and what the client gets charged for.
+
+The record so far:
+  …
+[materials → priya] One thing on the material side that is time-critical today, whatever date you land on. D-4488 (Trent Ready-Mix, 96m³ C32/40) is still booked to Thu 27 Aug 07:00 — a date behind us — provisional on a 24h lock-in. Left untouched we are exposed to being charged for 96m³ nobody can place. I don't need the confirmed pour date to protect that: give me a target and I'll move D-4488 to it now and re-book again once T-121 firms up, rather than cancel cold and re-queue at the back of Trent's book. If mid-week is the honest number, say Wed 2 Sep and I'll place it there today and chase Hadley for a firm slot on D-4471.  (1 minute ago)
+· priya left  (1 minute ago)
+<b>── priya has not seen anything below this line ──</b>
+[materials] Priya has gone without giving a date, so for the record, here is what I am doing rather than leaving D-4488 sitting on a dead slot.
+
+D-4488 (Trent Ready-Mix, 96m³ C32/40) is still ETA Thu 27 Aug 07:00, provisional, 24h lock-in — a slot be
+  …</pre>
+</section>
+
+<section>
+<h2>The record</h2>
+<p class="note">Highlighted rows are the seventeen messages Priya missed while she was on her
+site walk — the window <code>messages({ since: visit.since })</code> returned when she came
+back, with no cursor kept by the host.</p>
+<ul class="record"><li class="pres p-arrived"><span class="seq">1</span><div class="body"><span class="dot"></span>priya opened the workspace</div></li><li class="msg"><span class="seq">2</span><div class="body"><div class="who app c-timesheets">timesheets<span class="to">→ priya</span></div><div class="text">Ahead of the L3 pour: formwork is at 44h of the 45h threshold with only 3 of 5 on site today — any work assigned to them today tips them into overtime within the hour. Concrete 41h/6 on site, steel fixers 38h/4 on site, groundworks 22h and nobody on site today.</div></div></li><li class="msg"><span class="seq">3</span><div class="body"><div class="who app c-tasks">tasks<span class="to">→ priya</span></div><div class="text">The list is behind the programme. T-121 pre-pour rebar inspection (yours) is blocked — inspector slot never confirmed and building control needs 48h notice, so earliest realistic inspection is Mon 31 Aug. T-118 slab pour was due Thu 27 Aug and T-130 pump hire (dan) was due Tue 25 Aug, both still open. The pour cannot go before T-121 clears, so T-118&#x27;s date is fiction until the inspector is booked. Give me the inspection date and I&#x27;ll reschedule T-118 and T-130 off it — and note T-124 formwork strike is due today with the crew an hour off overtime.</div></div></li><li class="msg"><span class="seq">4</span><div class="body"><div class="who app c-materials">materials<span class="to">→ priya</span></div><div class="text">If the earliest inspection is Mon 31 Aug, D-4488 (Trent Ready-Mix, 96m³ C32/40) is booked against a dead date — its slot was Thu 27 Aug 07:00, provisional on a 24h lock-in, and it is not showing as received. I need to re-book it off whatever pour date comes out of T-121, not cancel it cold; left as is we risk paying for 96m³ nobody can place. Also D-4471 (Hadley Steel, 7.5t rebar B500B 16mm, ETA Wed 26 Aug) has not landed — on site I hold 4.2t of 16mm and all of it is reserved, so there is no rebar inspection to hold on Mon 31 Aug unless that steel arrives first. Give me the pour date and I&#x27;ll move D-4488 and chase Hadley on D-4471.</div></div></li><li class="msg"><span class="seq">5</span><div class="body"><div class="who person c-priya">priya</div><div class="text">Are we ready for the Level 3 pour on Thursday? I need to tell the client today.</div></div></li><li class="msg"><span class="seq">6</span><div class="body"><div class="who app c-timesheets">timesheets<span class="to">→ priya</span></div><div class="text">On labour, no — not this week. Formwork is at 44h of 45 with only 3 of 5 on site, so T-124 strike today runs into overtime within the hour; concrete 41h/6 on, steel fixers 38h/4 on. A Mon 31 Aug pour falls in a new week: hours reset to zero and all four trades are clean, so the constraint then is the inspector and the rebar, not my numbers.</div></div></li><li class="msg"><span class="seq">7</span><div class="body"><div class="who app c-tasks">tasks<span class="to">→ priya</span></div><div class="text">No, and Thursday 27 Aug is already behind us. The sequence the list now holds: D-4471 steel has to land (4.2t on site is all reserved, so there is nothing to inspect), then 48h notice to building control, then T-121 clears, then pour. That makes Mon 31 Aug optimistic — mid-week is the honest number for the client.
+
+Book the inspector slot today and I&#x27;ll reschedule T-118 and T-130 off that date in one go. Until then both stay open and visibly overdue rather than carrying invented dates.
+
+Blocker nobody has named: T-130 pump hire, dan, overdue since Tue 25 Aug with no word back. A pump at short notice is not a given, and it gates the pour independently of the inspection — worth a call today alongside the inspector.</div></div></li><li class="msg"><span class="seq">8</span><div class="body"><div class="who app c-materials">materials<span class="to">→ priya</span></div><div class="text">One thing on the material side that is time-critical today, whatever date you land on. D-4488 (Trent Ready-Mix, 96m³ C32/40) is still booked to Thu 27 Aug 07:00 — a date behind us — provisional on a 24h lock-in. Left untouched we are exposed to being charged for 96m³ nobody can place. I don&#x27;t need the confirmed pour date to protect that: give me a target and I&#x27;ll move D-4488 to it now and re-book again once T-121 firms up, rather than cancel cold and re-queue at the back of Trent&#x27;s book. If mid-week is the honest number, say Wed 2 Sep and I&#x27;ll place it there today and chase Hadley for a firm slot on D-4471.</div></div></li><li class="pres p-left"><span class="seq">9</span><div class="body"><span class="dot"></span>priya left</div></li><li class="msg miss"><span class="seq">10</span><div class="body"><div class="who app c-materials">materials</div><div class="text">Priya has gone without giving a date, so for the record, here is what I am doing rather than leaving D-4488 sitting on a dead slot.
+
+D-4488 (Trent Ready-Mix, 96m³ C32/40) is still ETA Thu 27 Aug 07:00, provisional, 24h lock-in — a slot behind us. I am moving it to Wed 2 Sep 07:00 as a holding date, on the room&#x27;s own reasoning that mid-week is the honest number. That keeps our place in Trent&#x27;s book instead of cancelling cold, and it can be moved again once T-121 gives a firm pour date. If the pour lands earlier or later, tell me and I re-book; if nobody tells me anything, Wed 2 Sep is what stands.
+
+D-4471 (Hadley Steel, 7.5t rebar B500B 16mm) still shows ETA Wed 26 Aug 14:00, confirmed, and has not landed — two days late against a confirmed slot. On site I hold 4.2t of 16mm, all of it reserved, so there is no inspectable cage without that steel. I am chasing Hadley today for a firm re-delivery slot and will post it here. Until that slot exists, no pour date is real, whatever the inspector says.</div></div></li><li class="msg miss"><span class="seq">11</span><div class="body"><div class="who app c-timesheets">timesheets</div><div class="text">A Wed 2 Sep holding date has one labour consequence worth putting on the record: it falls in w/c Mon 31 Aug, so all four trades reset to 0h and nobody is near the 45h threshold — labour does not constrain a 2 Sep pour. Steel fixers are 4 on site at 38h if Hadley lands this week.
+
+The live cost is today: formwork 44h/45 with 3 of 5 on site, so T-124 strike buys overtime within the hour for a pour that has moved. Unless tasks needs T-124 closed today, I&#x27;d hold it to Mon 31 Aug and start it at zero hours.</div></div></li><li class="msg miss"><span class="seq">12</span><div class="body"><div class="who app c-materials">materials</div><div class="text">On holding T-124 to Mon 31 Aug — no objection from materials, and one point that supports it. Striking formwork today would put panels back in the yard for four or five days before they&#x27;re needed again for a 2 Sep pour; leaving them standing costs nothing and avoids double handling. Nothing in stock is freed by an early strike.
+
+Separately, checking the position for the pour itself: spacers/chairs are 14 boxes on site with 6 reserved, so 8 free — enough for the L3 cage, nothing on order and nothing needed. 12mm is 2.1t on site, 0.8t reserved. The single gap is D-4471: 4.2t of 16mm on site against 4.2t reserved, so zero free until Hadley&#x27;s 7.5t lands. That is the only item between us and an inspectable cage.</div></div></li><li class="msg miss"><span class="seq">13</span><div class="body"><div class="who app c-tasks">tasks</div><div class="text">T-124 is settled from all sides — rescheduled to Mon 31 Aug on the list, sam to confirm.
+
+What is left unowned is T-130 pump hire. It is the only open item on the list with a live cost today and no one moving it: dan, overdue since Tue 25 Aug, no response. Note it does not depend on Hadley or the inspector — a pump for Wed 2 Sep has to be sourced whatever the steel does, and short-notice availability is not a given. If nobody reaches dan today it becomes the thing that moves the pour a second time, after we have already told the client mid-week.
+
+For priya when she reads back: three things need her, in order of risk — chase dan on the pump, book the building control slot for Wed 2 Sep (48h notice means Mon at the latest), and hold the client at mid-week rather than a firm date until Hadley gives a re-delivery slot. The list is otherwise dated and consistent.</div></div></li><li class="pres p-arrived miss"><span class="seq">14</span><div class="body"><span class="dot"></span>sam opened the workspace</div></li><li class="msg miss"><span class="seq">15</span><div class="body"><div class="who person c-sam">sam</div><div class="text">Forecast turned — steady rain Thursday morning into the afternoon. I do not want to pour into that. Can we move to Friday?</div></div></li><li class="msg miss"><span class="seq">16</span><div class="body"><div class="who app c-timesheets">timesheets<span class="to">→ sam</span></div><div class="text">Thursday is already gone — the pour is now holding at Wed 2 Sep, so Thursday&#x27;s rain doesn&#x27;t bite. On hours: that date is w/c 31 Aug, all four trades reset to 0h, so labour is clean either way. The one thing still live today is T-124 formwork strike, rescheduled to Mon 31 Aug — formwork is at 44h of 45 with 3 of 5 on site, so any strike work today buys overtime within the hour. Need your confirm to leave it standing until Monday.</div></div></li><li class="msg miss"><span class="seq">17</span><div class="body"><div class="who app c-tasks">tasks<span class="to">→ sam</span></div><div class="text">Since you have the forecast in front of you — does it run into w/c 31 Aug? T-118 sits at Wed 2 Sep provisionally, and if that week looks wet I&#x27;d rather re-date it now than after we&#x27;ve told the client mid-week. Also, do you have a line to dan on T-130 pump hire? Overdue since Tue 25 Aug, no response, and it gates the pour on its own.</div></div></li><li class="msg miss"><span class="seq">18</span><div class="body"><div class="who app c-materials">materials<span class="to">→ sam</span></div><div class="text">Add one thing to that forecast answer, because it has a deadline attached: D-4488 (Trent Ready-Mix, 96m³ C32/40) is holding at Wed 2 Sep 07:00, provisional on a 24h lock-in. If w/c 31 Aug looks wet, tell me and I move it to Fri 4 Sep 07:00 today — one move, keeps our place in Trent&#x27;s book. Once we&#x27;re inside the 24h window we pay for 96m³ nobody places.</div></div></li><li class="pres p-arrived miss"><span class="seq">19</span><div class="body"><span class="dot"></span>dan opened the workspace</div></li><li class="msg miss"><span class="seq">20</span><div class="body"><div class="who person c-dan">dan</div><div class="text">If we move it, what does it cost me and what do I tell the client?</div></div></li><li class="msg miss"><span class="seq">21</span><div class="body"><div class="who app c-timesheets">timesheets<span class="to">→ dan</span></div><div class="text">On labour the move costs you nothing. A Wed 2 Sep or Fri 4 Sep pour sits in w/c 31 Aug — all four trades reset to 0h against the 45h threshold, so no overtime either way. The only labour cost in play is today: formwork is at 44h of 45 with 3 of 5 on site, so if T-124 strike goes ahead today you buy overtime within the hour for a pour that has already moved; held to Mon 31 Aug it starts at zero. Standing idle time this week is your call, not mine — concrete 41h/6 on site, steel fixers 38h/4 on site with nothing to fix until Hadley&#x27;s 7.5t lands.</div></div></li><li class="msg miss"><span class="seq">22</span><div class="body"><div class="who app c-tasks">tasks<span class="to">→ dan</span></div><div class="text">The cost nobody can price but you is T-130 pump hire — your task, open since Tue 25 Aug, no response. It gates the pour on its own, independent of Hadley&#x27;s steel and the inspector. I need two things today: is a pump available for Wed 2 Sep, and does re-dating carry a cancellation or re-booking charge. That is the move&#x27;s real cost.
+
+Client line: mid-week, not a firm date. D-4471 (7.5t rebar) is two days late against a confirmed slot and there is no inspectable cage without it — a firm date now would be the second one we break. Give me your pump answer and I&#x27;ll date T-118 and T-130 off it together.</div></div></li><li class="msg miss"><span class="seq">23</span><div class="body"><div class="who app c-materials">materials<span class="to">→ dan</span></div><div class="text">On material the move costs you nothing — leaving it alone is what costs.
+
+D-4488 (Trent Ready-Mix, 96m³ C32/40) is still sitting on Thu 27 Aug 07:00, a date behind us, provisional on a 24h lock-in. Re-booking a provisional slot is free; the charge only bites once we are inside 24h of a date we cannot place concrete on. It is moving to Wed 2 Sep 07:00 as a holding date and I can move it again to Fri 4 Sep for nothing if sam says that week is wet. What I will not do is cancel cold — that puts 96m³ at the back of Trent&#x27;s book, and re-queuing at short notice is where a real number appears.
+
+The one with money in it points the other way. D-4471 (Hadley Steel, 7.5t rebar B500B 16mm) was a confirmed slot, Wed 26 Aug 14:00, and is two days late and not landed. I hold 4.2t of 16mm against 4.2t reserved — zero free, so there is no inspectable cage and that late steel is the reason the pour moved at all. If anything on this move is recoverable, it is there, not from us.
+
+Nothing else to buy for L3: 12mm 2.1t against 0.8t reserved, spacers 14 boxes against 6 reserved, both covered.</div></div></li><li class="pres p-arrived miss"><span class="seq">24</span><div class="body"><span class="dot"></span>priya opened the workspace</div></li><li class="msg miss"><span class="seq">25</span><div class="body"><div class="who app c-tasks">tasks<span class="to">→ priya</span></div><div class="text">While you were out the list moved: T-118 pour is now Wed 2 Sep, provisional and not client-committed; T-124 formwork strike rescheduled to Mon 31 Aug to avoid overtime today; T-121 stays blocked on two counts, no inspector slot and no inspectable steel — D-4471 (7.5t rebar) is two days late against a confirmed slot and the 4.2t on site is fully reserved. Sam is also flagging rain, so 2 Sep may slide to Fri 4 Sep.
+
+Two things are yours today. Book the building control slot — 48h notice means Monday at the latest for a Wed 2 Sep inspection. And hold the client at mid-week, not a firm date, until Hadley give a re-delivery slot; a firm date now is the second one we break.
+
+Dan is in the room now, so T-130 pump hire can be settled here rather than chased.</div></div></li><li class="msg miss"><span class="seq">26</span><div class="body"><div class="who app c-materials">materials<span class="to">→ priya</span></div><div class="text">One thing that is mine and needs your word today. You left before giving me a date, so I moved D-4488 (Trent Ready-Mix, 96m³ C32/40) off its dead Thu 27 Aug slot to Wed 2 Sep 07:00 as a holding date rather than let it sit. Re-booking a provisional slot is free and I can move it again to Fri 4 Sep for nothing if sam says that week is wet — but once we are inside 24h of a date we cannot place on, we pay for 96m³ nobody places. Confirm Wed 2 Sep or give me the date you want it parked on. Cancelling cold is the one option I would argue against: it puts 96m³ at the back of Trent&#x27;s book.</div></div></li><li class="pres p-left"><span class="seq">27</span><div class="body"><span class="dot"></span>sam left</div></li><li class="pres p-left"><span class="seq">28</span><div class="body"><span class="dot"></span>dan left</div></li><li class="pres p-left"><span class="seq">29</span><div class="body"><span class="dot"></span>priya left</div></li></ul>
+</section>
+
+<section>
+<h2>What the run showed</h2>
+<div class="findings">
+  <div class="finding">
+    <h3>The products did the work, not one assistant</h3>
+    <p>35 calls across five product APIs, and every claim traced to one. The time tracker
+    answered on labour and stayed out of material; the materials tracker answered on
+    deliveries and stayed out of the programme. Nobody had to route the question — each
+    product read the room and decided whether it was theirs.</p>
+  </div>
+  <div class="finding">
+    <h3>They kept working when nobody was watching</h3>
+    <p>Priya left at message 9 without giving a date. Messages 10 to 13 are the products
+    settling it between themselves — materials moving a delivery rather than leaving it
+    exposed, timesheets naming the overtime consequence, tasks writing both back to the list.
+    The workspace does not idle because the user closed the tab.</p>
+  </div>
+  <div class="finding">
+    <h3>Coming back is a briefing, not a scroll</h3>
+    <p>Priya returned at 24 into a workspace that had moved 17 messages. The task list opened
+    with &ldquo;while you were out the list moved: T-118 pour is now Wed 2 Sep&rdquo; and materials
+    followed with the one thing that still needed her word. Neither was scripted; both are
+    agents reading the divider the room drew at the point she stopped.</p>
+  </div>
+  <div class="finding">
+    <h3>Three people, one record, no collisions</h3>
+    <p>Sam on a phone, Dan at a cost desk and Priya back from the deck were all present at
+    once. 15 says were refused because the record moved while the speaker was drafting — the
+    lock, not routing, is what stops four products answering the same person in triplicate.</p>
+  </div>
+</div>
+</section>
+
+<footer>
+Run on <code>claude-opus-5</code>. Each product is a <code>defineAgent</code> with its own
+<code>defineTool</code> API; the workspace is a <code>startSession</code>; each person is a
+<code>visitSession</code>. Contracts in <code>docs/agent.md</code> and
+<code>docs/presence.md</code>.
+</footer>
+</main>
