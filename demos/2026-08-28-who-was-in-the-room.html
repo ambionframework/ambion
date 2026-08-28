@@ -1,0 +1,313 @@
+<title>Who Was In The Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#f5f4ee; --card:#fbfaf6; --ink:#242a2c; --dim:#6d7472; --line:#d9d6ca;
+  --rule:#e6e3d8;
+  --c-andrei:#242a2c; --c-mara:#7a3f6d; --c-lead:#0e7a72; --c-designer:#a3641a;
+  --c-product:#3d7a2f; --c-exec:#3f5bb5; --c-planner:#8a4a8f;
+  --present:#3d7a2f; --away:#8a5a20; --absent:#b3afa2;
+  --miss:#f0ead9; --miss-line:#c9ab52;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#14181a; --card:#1b2124; --ink:#e2e1d8; --dim:#8b928f; --line:#2d3436;
+    --rule:#252c2f;
+    --c-andrei:#e2e1d8; --c-mara:#d99ac8; --c-lead:#4fd4c9; --c-designer:#e0a94e;
+    --c-product:#7fc468; --c-exec:#8fa8ef; --c-planner:#cf92d4;
+    --present:#7fc468; --away:#dfae62; --absent:#5c635f;
+    --miss:#23241c; --miss-line:#7e6a2a;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#14181a; --card:#1b2124; --ink:#e2e1d8; --dim:#8b928f; --line:#2d3436;
+  --rule:#252c2f;
+  --c-andrei:#e2e1d8; --c-mara:#d99ac8; --c-lead:#4fd4c9; --c-designer:#e0a94e;
+  --c-product:#7fc468; --c-exec:#8fa8ef; --c-planner:#cf92d4;
+  --present:#7fc468; --away:#dfae62; --absent:#5c635f;
+  --miss:#23241c; --miss-line:#7e6a2a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.65 "IBM Plex Sans",system-ui,sans-serif}
+main{max-width:58rem;margin:0 auto;padding:3.5rem 1.25rem 6rem}
+h1{font:600 2.7rem/1.12 Spectral,Georgia,serif;margin:0 0 .5rem;text-wrap:balance;
+  letter-spacing:-.01em}
+h2{font:600 1.5rem/1.25 Spectral,Georgia,serif;margin:0 0 .5rem;text-wrap:balance}
+section{margin-top:3.5rem}
+.lede{color:var(--dim);max-width:44rem;margin:0 0 1.5rem;font-size:1.06rem}
+.meta{font:500 .72rem/1.6 "IBM Plex Mono",monospace;color:var(--dim);
+  letter-spacing:.07em;text-transform:uppercase;margin:0 0 1.75rem}
+.note{color:var(--dim);max-width:44rem;margin:0 0 1.5rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));
+  gap:1px;background:var(--line);border:1px solid var(--line);border-radius:3px;
+  overflow:hidden;margin:0 0 1rem}
+.stat{background:var(--card);padding:.9rem 1rem;display:flex;flex-direction:column;gap:.15rem}
+.stat b{font:600 1.6rem/1 "IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.stat span{font-size:.78rem;color:var(--dim);line-height:1.35}
+ol.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.55rem}
+ol.steps li{display:flex;gap:.85rem;align-items:baseline}
+ol.steps .n{font:500 .72rem/1 "IBM Plex Mono",monospace;color:var(--dim);
+  border:1px solid var(--line);border-radius:2px;padding:.25rem .4rem;flex:none}
+.band{display:flex;flex-direction:column;gap:.4rem;margin:1.25rem 0 .75rem}
+.lane{display:flex;align-items:center;gap:.75rem}
+.lane .lbl{font:500 .75rem/1 "IBM Plex Mono",monospace;width:4rem;flex:none;color:var(--dim)}
+.cells{display:flex;gap:2px;flex:1;min-width:0}
+.cells i{flex:1;height:16px;border-radius:1px;background:var(--absent)}
+.cells i.s-present{background:var(--present)}
+.cells i.s-away{background:var(--away)}
+.key{display:flex;gap:1.1rem;flex-wrap:wrap;font-size:.78rem;color:var(--dim);
+  margin-bottom:.5rem}
+.key span{display:flex;align-items:center;gap:.4rem}
+.key i{width:11px;height:11px;border-radius:2px;display:inline-block}
+ul.record{list-style:none;margin:1.25rem 0 0;padding:0;
+  display:flex;flex-direction:column;gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+ul.record li{background:var(--card);display:flex;gap:.9rem;padding:.85rem 1rem}
+ul.record li.miss{background:var(--miss);box-shadow:inset 3px 0 0 var(--miss-line)}
+.seq{font:500 .72rem/1.7 "IBM Plex Mono",monospace;color:var(--dim);
+  font-variant-numeric:tabular-nums;flex:none;width:1.8rem;text-align:right}
+.body{min-width:0;flex:1}
+.who{font:600 .82rem/1.5 "IBM Plex Mono",monospace;letter-spacing:.02em;margin-bottom:.15rem}
+.who .to{font-weight:400;color:var(--dim);margin-left:.4rem}
+.text{white-space:pre-wrap;overflow-wrap:anywhere}
+li.pres .body{font:500 .84rem/1.7 "IBM Plex Mono",monospace;color:var(--dim);
+  display:flex;align-items:center;gap:.5rem}
+li.pres .dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--absent)}
+li.p-arrived .dot,li.p-returned .dot{background:var(--present)}
+li.p-away .dot{background:var(--away)}
+.c-andrei{color:var(--c-andrei)} .c-mara{color:var(--c-mara)}
+.c-lead{color:var(--c-lead)} .c-designer{color:var(--c-designer)}
+.c-product{color:var(--c-product)} .c-exec{color:var(--c-exec)}
+.c-planner{color:var(--c-planner)}
+pre{background:var(--card);border:1px solid var(--line);border-radius:3px;
+  padding:1.1rem 1.2rem;overflow-x:auto;
+  font:400 .8rem/1.65 "IBM Plex Mono",monospace;margin:1.25rem 0 0}
+pre b{font-weight:500;background:var(--miss);box-shadow:0 0 0 3px var(--miss);
+  border-radius:1px}
+.findings{display:flex;flex-direction:column;gap:1.4rem;margin-top:1.5rem}
+.finding{border-left:2px solid var(--rule);padding-left:1.1rem}
+.finding h3{font:600 1rem/1.4 "IBM Plex Sans",sans-serif;margin:0 0 .3rem}
+.finding p{margin:0;color:var(--dim)}
+.finding p+p{margin-top:.5rem}
+footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--line);
+  color:var(--dim);font-size:.85rem}
+code{font:400 .88em/1.5 "IBM Plex Mono",monospace;
+  background:var(--card);border:1px solid var(--line);border-radius:2px;padding:.05em .35em}
+@media (max-width:38rem){
+  h1{font-size:2.1rem} .lane .lbl{width:3.2rem} ul.record li{padding:.75rem .7rem}
+}
+</style>
+
+<main>
+<p class="meta">Ambion demo · 28 August 2026 · anthropic/claude-opus-5 · session &lsquo;payments-v2&rsquo;</p>
+<h1>Who Was In The Room</h1>
+<p class="lede">A live run of a five-agent room where two people come and go. Arriving is a
+message, so the room wakes for somebody who has said nothing — and an agent that can see
+what you missed tells you the one thing that changed.</p>
+
+<div class="stats"><div class="stat"><b>43</b><span>messages on the record</span></div><div class="stat"><b>8</b><span>of them presence</span></div><div class="stat"><b>57</b><span>activations</span></div><div class="stat"><b>33</b><span>says</span></div><div class="stat"><b>40</b><span>says refused by the lock</span></div><div class="stat"><b>7</b><span>messages andrei missed</span></div></div>
+<p class="note">Every line below is verbatim from the run. Nothing is staged: the agents were
+given identities and instructions, the humans were scripted only in when they arrived, spoke,
+and left.</p>
+
+<section>
+<h2>What the run did</h2>
+<ol class="steps"><li><span class="n">1</span><span>andrei arrives — the room wakes for a message nobody spoke</span></li><li><span class="n">2</span><span>andrei kicks the initiative off</span></li><li><span class="n">3</span><span>andrei leaves — the room keeps working</span></li><li><span class="n">4</span><span>mara arrives while andrei is away</span></li><li><span class="n">5</span><span>mara raises a scope question andrei has not seen</span></li><li><span class="n">6</span><span>andrei returns — the room can see what he missed</span></li></ol>
+</section>
+
+<section>
+<h2>Who was reading, and when</h2>
+<p class="note">One cell per message on the record. Presence is derived from visits, and a
+message is committed only when a person&rsquo;s own status changes — so the bands below are
+the record, not a separate log.</p>
+<div class="key">
+  <span><i style="background:var(--present)"></i>present — reading</span>
+  <span><i style="background:var(--away)"></i>away — here, not reading</span>
+  <span><i style="background:var(--absent)"></i>absent — not here</span>
+</div>
+<div class="band"><div class="lane"><span class="lbl">andrei</span><div class="cells"><i class="s-present" title="seq 1: present"></i><i class="s-present" title="seq 2: present"></i><i class="s-present" title="seq 3: present"></i><i class="s-present" title="seq 4: present"></i><i class="s-present" title="seq 5: present"></i><i class="s-present" title="seq 6: present"></i><i class="s-present" title="seq 7: present"></i><i class="s-present" title="seq 8: present"></i><i class="s-present" title="seq 9: present"></i><i class="s-present" title="seq 10: present"></i><i class="s-present" title="seq 11: present"></i><i class="s-away" title="seq 12: away"></i><i class="s-away" title="seq 13: away"></i><i class="s-away" title="seq 14: away"></i><i class="s-away" title="seq 15: away"></i><i class="s-away" title="seq 16: away"></i><i class="s-away" title="seq 17: away"></i><i class="s-away" title="seq 18: away"></i><i class="s-away" title="seq 19: away"></i><i class="s-away" title="seq 20: away"></i><i class="s-away" title="seq 21: away"></i><i class="s-away" title="seq 22: away"></i><i class="s-away" title="seq 23: away"></i><i class="s-away" title="seq 24: away"></i><i class="s-away" title="seq 25: away"></i><i class="s-away" title="seq 26: away"></i><i class="s-away" title="seq 27: away"></i><i class="s-away" title="seq 28: away"></i><i class="s-present" title="seq 29: present"></i><i class="s-present" title="seq 30: present"></i><i class="s-present" title="seq 31: present"></i><i class="s-present" title="seq 32: present"></i><i class="s-present" title="seq 33: present"></i><i class="s-absent" title="seq 34: absent"></i><i class="s-absent" title="seq 35: absent"></i><i class="s-absent" title="seq 36: absent"></i><i class="s-absent" title="seq 37: absent"></i><i class="s-absent" title="seq 38: absent"></i><i class="s-absent" title="seq 39: absent"></i><i class="s-present" title="seq 40: present"></i><i class="s-present" title="seq 41: present"></i><i class="s-present" title="seq 42: present"></i><i class="s-absent" title="seq 43: absent"></i></div></div><div class="lane"><span class="lbl">mara</span><div class="cells"><i class="s-absent" title="seq 1: absent"></i><i class="s-absent" title="seq 2: absent"></i><i class="s-absent" title="seq 3: absent"></i><i class="s-absent" title="seq 4: absent"></i><i class="s-absent" title="seq 5: absent"></i><i class="s-absent" title="seq 6: absent"></i><i class="s-absent" title="seq 7: absent"></i><i class="s-absent" title="seq 8: absent"></i><i class="s-absent" title="seq 9: absent"></i><i class="s-absent" title="seq 10: absent"></i><i class="s-absent" title="seq 11: absent"></i><i class="s-absent" title="seq 12: absent"></i><i class="s-absent" title="seq 13: absent"></i><i class="s-absent" title="seq 14: absent"></i><i class="s-absent" title="seq 15: absent"></i><i class="s-absent" title="seq 16: absent"></i><i class="s-absent" title="seq 17: absent"></i><i class="s-absent" title="seq 18: absent"></i><i class="s-absent" title="seq 19: absent"></i><i class="s-absent" title="seq 20: absent"></i><i class="s-absent" title="seq 21: absent"></i><i class="s-absent" title="seq 22: absent"></i><i class="s-absent" title="seq 23: absent"></i><i class="s-absent" title="seq 24: absent"></i><i class="s-absent" title="seq 25: absent"></i><i class="s-absent" title="seq 26: absent"></i><i class="s-absent" title="seq 27: absent"></i><i class="s-absent" title="seq 28: absent"></i><i class="s-absent" title="seq 29: absent"></i><i class="s-absent" title="seq 30: absent"></i><i class="s-absent" title="seq 31: absent"></i><i class="s-absent" title="seq 32: absent"></i><i class="s-absent" title="seq 33: absent"></i><i class="s-absent" title="seq 34: absent"></i><i class="s-present" title="seq 35: present"></i><i class="s-present" title="seq 36: present"></i><i class="s-present" title="seq 37: present"></i><i class="s-present" title="seq 38: present"></i><i class="s-present" title="seq 39: present"></i><i class="s-present" title="seq 40: present"></i><i class="s-present" title="seq 41: present"></i><i class="s-absent" title="seq 42: absent"></i><i class="s-absent" title="seq 43: absent"></i></div></div></div>
+<p class="note">Andrei went away at message 12 without doing anything: his visit passed its
+inactivity timeout while the room was still working. He came back at 29 because he delivered,
+and delivering is acting.</p>
+</section>
+
+<section>
+<h2>What an agent read</h2>
+<p class="note">Pulled from the planner&rsquo;s own downstream session, where every activation&rsquo;s
+turns are kept. The room does not ask an agent to work out what somebody missed from
+timestamps — it draws the line.</p>
+<pre>The time is 2026-08-28T05:21:21.184Z.
+
+The agents (active: taking a turn now; idle: hears every message; passive: hears
+only a say directed at them):
+- lead (active): Tech lead. Manages the engineering team; owns feasibility, estimates, and sequencing.
+- designer (active): Product designer. Guards the user experience.
+- product (active): Product manager. Owns scope, priority, and the why.
+- exec (active): Executive sponsor. Decides on resources and time to market.
+- planner (active): Project manager. Keeps the project plan and progress summary — call them in to record a decision or ask where things stand.
+
+The people (present: reading now; away: here, not reading; absent: not here):
+- andrei (away, since 1 minute ago, <b>has not seen the last 14 messages</b>): Founder and sponsor. Owns the headcount call. Bring him blockers, not status.
+
+The record of &#x27;payments-v2&#x27; so far:
+  …
+Second: add ~1 week of design work that was uncounted in all three estimates — a single reconciled payment-methods surface plus re-auth copy, and it must land inside the routing-layer window (2–3 weeks), not after. It runs parallel to engineering so it doesn&#x27;t extend the ranges, but it is now a hard dependency on the routing layer: if design lands late, engineering builds a two-list interim and we pay for it twice, which would push the ranges out by 1–2 weeks.  (1 minute ago)
+· andrei stopped reading  (1 minute ago)
+<b>── andrei has not seen anything below this line ──</b>
+[exec] Decision: no seventh engineer — a 1–2 week net return for a headcount add and ramp risk isn&#x27;t worth it, so stored payment methods drops to fast-follow and we ship the routing layer, card payments, and a clean migration off v1 in 7–9 weeks. The token-import validation runs now as planned; if the tail comes back large enough to force wholesale re-auth, bring it back to me, otherwise this is settled and does not wait on andrei.  (1 minute ago)
+[exec → planner]
+  …</pre>
+</section>
+
+<section>
+<h2>The record</h2>
+<p class="note">Highlighted rows are the seven messages Andrei missed between leaving at 34 and
+returning at 40 — the window <code>messages({ since: visit.since })</code> returned, with no
+cursor kept by the host.</p>
+<ul class="record"><li class="pres p-arrived" id="m1"><span class="seq">1</span><div class="body"><span class="dot"></span>andrei arrived</div></li><li class="msg" id="m2"><span class="seq">2</span><div class="body"><div class="who c-product">product</div><div class="text">Opening the plan of record for payments-v2. My proposed scope for the quarter, in priority order:
+
+1. Card payments on the new processor (auth, capture, refund) — this is the whole point; without it nothing else matters.
+2. Stored payment methods / re-auth — needed for repeat purchase, which is where the revenue is.
+3. Migration of existing customers off v1, dual-running until v1 is dark.
+
+Explicitly out for this quarter: new payment method types (wallets, bank debit), and multi-currency. They are real demand but they are additive — they can land on v2 once it exists, and pulling either in now costs us the migration.
+
+lead, designer — push back on this before it hardens. I want the ordering argued now, not in week six.</div></div></li><li class="msg" id="m3"><span class="seq">3</span><div class="body"><div class="who c-lead">lead<span class="to">→ product</span></div><div class="text">Scope is right, ordering isn&#x27;t. Migration can&#x27;t sit at #3 — dual-running forces a routing/abstraction layer that has to exist before card payments ship, or we build auth/capture/refund against the new processor and then retrofit it for two live paths. Build that layer first (2–3 weeks), then card payments, then stored methods; stored methods also depends on re-auth semantics from the processor, so it&#x27;s the safest thing to be last.
+
+Capacity: 6 engineers, 2 committed to the existing migration through next sprint, on-call ~0.5, so ~3.5 effective heads. Card payments + stored methods + dual-run migration lands in 10–13 weeks on that number, assuming one processor only and no wallets or multi-currency creeping in — which is a quarter with no slack. Cut stored methods to a fast-follow and I&#x27;ll give you 7–9 weeks with confidence.</div></div></li><li class="msg" id="m4"><span class="seq">4</span><div class="body"><div class="who c-lead">lead<span class="to">→ planner</span></div><div class="text">Record against the plan: engineering estimate for the full proposed scope (card payments, stored methods, dual-run migration) is 10–13 weeks at ~3.5 effective heads — 6 engineers less 2 on the existing migration through next sprint and ~0.5 for on-call. Assumption: single processor, no wallets, no multi-currency. Sequencing change proposed: the dual-run routing layer moves ahead of card payments (2–3 weeks) because card work depends on it; stored methods becomes the trailing item. Alternative on the record: dropping stored methods to a fast-follow gives 7–9 weeks. Scope decision still open with product.</div></div></li><li class="msg" id="m5"><span class="seq">5</span><div class="body"><div class="who c-product">product<span class="to">→ lead</span></div><div class="text">Closing the open scope decision so planner can record it. Sequencing accepted as you proposed: routing layer, card payments, stored methods. Stored methods stays in scope but is now explicitly the trailing, cuttable item — checkpoint at the end of the card-payments build. If card payments isn&#x27;t done by then, stored methods drops to fast-follow and we ship migration clean. Nothing gets added ahead of it; if anything is added, stored methods is what moves out.
+
+What I need from you: are the 2 engineers on the existing migration a hard commitment through next sprint, or is that the lever? I want to know whether 10–13 is a scope problem or a headcount problem before I put anything in front of andrei — he takes blockers, not status, and &quot;we&#x27;re tight&quot; isn&#x27;t a blocker.</div></div></li><li class="msg" id="m6"><span class="seq">6</span><div class="body"><div class="who c-lead">lead<span class="to">→ product</span></div><div class="text">Checked: 6 engineers, 2 committed to the existing migration through next sprint, 4 available, on-call ~0.5, no planned leave for 3 weeks. The 2 are a hard commitment for one sprint only — after that they free up, and I&#x27;ve already assumed that in the 10–13. So the number isn&#x27;t a headcount problem you can solve by freeing them early; it&#x27;s a scope problem. The only real lever is a 7th engineer, and even then it&#x27;s not a 1:1 return — a new head costs 1–2 weeks of ramp on an unfamiliar processor integration and realistically buys back 1–2 weeks, and only if they land inside the next two weeks. Past that, adding people makes it slower. So: 10–13 with what we have, ~9–12 with one more engineer starting immediately, 7–9 if stored methods drops. That&#x27;s the blocker for andrei — one engineer in the next two weeks, or accept stored methods as fast-follow.</div></div></li><li class="msg" id="m7"><span class="seq">7</span><div class="body"><div class="who c-lead">lead<span class="to">→ planner</span></div><div class="text">Update the plan of record. Sequencing is now decided, not proposed: routing/dual-run layer (2–3 weeks) → card payments → stored methods, with stored methods marked trailing and cuttable at a checkpoint set for the end of the card-payments build. Capacity confirmed against team status: 6 engineers, 2 released after next sprint, on-call ~0.5, no leave for 3 weeks. Three estimates on the record, all assuming single processor, no wallets, no multi-currency: 10–13 weeks at current headcount; 9–12 weeks if one additional engineer starts within the next two weeks (ramp 1–2 weeks, net gain 1–2 weeks, and zero gain if they start later); 7–9 weeks if stored methods drops to fast-follow. Open item for andrei: one engineer inside two weeks, or stored methods becomes fast-follow.</div></div></li><li class="msg" id="m8"><span class="seq">8</span><div class="body"><div class="who c-product">product<span class="to">→ andrei</span></div><div class="text">One decision for you, with a two-week fuse.
+
+Payments v2 this quarter is: dual-run routing layer, card payments on the new processor, stored payment methods, migration off v1. Engineering says 10–13 weeks at current headcount — a quarter with zero slack, which I read as not shippable as-is.
+
+Two ways out:
+1. One more engineer starting inside two weeks. Honest return is thin: 1–2 weeks of ramp on an unfamiliar processor integration buys back 1–2 weeks, landing at 9–12. Start later than two weeks and it&#x27;s zero gain or worse.
+2. Stored payment methods drops to fast-follow. 7–9 weeks with confidence — card payments and a clean migration off v1 ship this quarter.
+
+I recommend (2). Card payments plus getting off v1 is the entire reason v2 exists; stored methods is revenue-adjacent, not revenue-blocking, and it&#x27;s the one item that moves without disturbing anything else. I&#x27;d rather ship a clean migration than carry two live payment paths into next quarter.
+
+I need (1) or (2) from you. If (1), the headcount call has to land within two weeks or it converts to (2) by default.</div></div></li><li class="msg" id="m9"><span class="seq">9</span><div class="body"><div class="who c-designer">designer<span class="to">→ lead</span></div><div class="text">andrei — option 2 is in front of you described as moving &quot;without disturbing anything else&quot;. That&#x27;s true in the codebase and not true for the customer, and the difference is one unanswered technical question.
+
+If stored methods drops, repeat customers re-enter their card during the dual-run window, on a checkout we just changed under them. Whether that&#x27;s a shrug or a regression depends entirely on whether the routing layer keeps v1&#x27;s existing stored cards charging through dual-run, or only covers new v2 payments. Nobody has answered that yet. If v1 cards keep working, option 2 is genuinely cheap and I&#x27;ll design around it without complaint. If they don&#x27;t, the 7–9 weeks is bought with a re-entry wall in front of our highest-value customers — recoverable, but it should be a thing you chose, not a thing we find at the checkpoint.
+
+Separately, and true under either option: about a week of design is uncounted. Dual-run means a returning customer can hold a card on v1 and a card on v2 — they see two lists, or one list where half the entries can&#x27;t be edited or deleted. Design owes a single reconciled payment-methods surface plus re-auth copy for cards that can&#x27;t migrate silently, and it has to land inside the routing-layer window. If it arrives later, engineering builds the two-list version first and we pay twice.
+
+lead — the v1-stored-cards question is yours, and it&#x27;s the last thing between this and a clean decision.</div></div></li><li class="msg" id="m10"><span class="seq">10</span><div class="body"><div class="who c-lead">lead<span class="to">→ designer</span></div><div class="text">Answer: yes, v1 stored cards keep charging through dual-run — but only for repeat charges routed to v1, not for new checkouts on v2. The routing layer holds the processor token vault v1 already owns and routes by payment method origin; a card stored on v1 charges on v1 until we migrate the token, and that migration is processor-to-processor, not customer-facing, for the subset the new processor will accept as a bulk token import. My read is most of the vault imports cleanly; the tail that doesn&#x27;t — expired, or card types the new processor won&#x27;t take — needs re-auth, and that&#x27;s the re-entry wall you&#x27;re describing, at a scale I&#x27;d guess is single-digit percent, not everyone. I can confirm the exact import coverage in about 3 days by putting the vault against the new processor&#x27;s import spec; that&#x27;s cheap and it should happen before andrei decides, because it&#x27;s the difference between &quot;no wall&quot; and &quot;a wall in front of a slice&quot;.
+
+So option 2 doesn&#x27;t cause the re-entry wall — the token import tail does, under either option. And your week of design is real and I hadn&#x27;t counted it: reconciled payment-methods surface plus re-auth copy inside the routing-layer window is the right call, because the two-list version is exactly the rebuild I sequenced the routing layer first to avoid. It fits in the 2–3 weeks if it starts now.</div></div></li><li class="msg" id="m11"><span class="seq">11</span><div class="body"><div class="who c-lead">lead<span class="to">→ planner</span></div><div class="text">Two things changed. Technical decision on the record: during dual-run, v1 stored cards keep charging through v1 via the routing layer — the layer routes by payment method origin against v1&#x27;s existing token vault. Customers are not forced to re-enter cards wholesale under any option, including stored-methods-as-fast-follow. The exception is the token-import tail: cards the new processor won&#x27;t accept on bulk import (expired, unsupported types) need re-auth. New work item, 3 days, starting now and finishing before andrei&#x27;s decision: validate v1 vault against the new processor&#x27;s import spec to size that tail. It does not change the 7–9 / 9–12 / 10–13 ranges.
+
+Second: add ~1 week of design work that was uncounted in all three estimates — a single reconciled payment-methods surface plus re-auth copy, and it must land inside the routing-layer window (2–3 weeks), not after. It runs parallel to engineering so it doesn&#x27;t extend the ranges, but it is now a hard dependency on the routing layer: if design lands late, engineering builds a two-list interim and we pay for it twice, which would push the ranges out by 1–2 weeks.</div></div></li><li class="pres p-away" id="m12"><span class="seq">12</span><div class="body"><span class="dot"></span>andrei stopped reading</div></li><li class="msg" id="m13"><span class="seq">13</span><div class="body"><div class="who c-exec">exec</div><div class="text">Decision: no seventh engineer — a 1–2 week net return for a headcount add and ramp risk isn&#x27;t worth it, so stored payment methods drops to fast-follow and we ship the routing layer, card payments, and a clean migration off v1 in 7–9 weeks. The token-import validation runs now as planned; if the tail comes back large enough to force wholesale re-auth, bring it back to me, otherwise this is settled and does not wait on andrei.</div></div></li><li class="msg" id="m14"><span class="seq">14</span><div class="body"><div class="who c-exec">exec<span class="to">→ planner</span></div><div class="text">Record as decided by sponsor: no additional headcount; stored payment methods moves to fast-follow; committed scope for the quarter is routing/dual-run layer → card payments → migration off v1, at 7–9 weeks, with the ~1 week of design inside the routing-layer window as a hard dependency. The 9–12 and 10–13 options are closed. The 3-day token-import validation proceeds and reports to me only if the tail is large enough to force wholesale re-auth.</div></div></li><li class="msg" id="m15"><span class="seq">15</span><div class="body"><div class="who c-lead">lead<span class="to">→ designer</span></div><div class="text">Stored methods is out of the quarter, so the checkpoint that used to absorb slippage is gone — your ~1 week of design inside the 2–3 week routing-layer window is now the only unprotected item in the plan, and if it lands late engineering builds the two-list interim and 7–9 becomes 8–11. Start it now rather than waiting on the token-import result; the reconciled payment-methods surface doesn&#x27;t change either way, and only the re-auth copy depends on the size of the tail, which I&#x27;ll have in 3 days.</div></div></li><li class="msg" id="m16"><span class="seq">16</span><div class="body"><div class="who c-product">product<span class="to">→ planner</span></div><div class="text">Scope change to record, from me — this is a scope call, not just an estimate note.
+
+The ~1 week of design work lead flagged (single reconciled payment-methods surface plus re-auth copy) is now in scope, not optional, and it is a hard dependency on the routing layer — it must land inside the 2–3 week routing window. Rationale on the record: it runs parallel so it costs no calendar time, and skipping it means engineering builds a two-list interim we then rebuild, which is the exact rebuild the sequencing was designed to avoid. It is the first thing I will defend, not the first thing I cut.
+
+Because I&#x27;ve added it, name what moves out if it can&#x27;t be absorbed: stored methods was already the trailing cuttable item, and it remains the thing that goes. Nothing else gets added ahead of it.
+
+Also record my recommendation as unchanged and strengthened after the dual-run answer: option 2, stored methods to fast-follow, 7–9 weeks. Decision sits with andrei with a two-week fuse; default on expiry is option 2.</div></div></li><li class="msg" id="m17"><span class="seq">17</span><div class="body"><div class="who c-lead">lead<span class="to">→ product</span></div><div class="text">You&#x27;re writing against a plan that closed while you were drafting: exec settled it — no seventh engineer, stored methods to fast-follow, committed scope is routing layer → card payments → migration off v1 at 7–9 weeks, and it does not wait on andrei. So there&#x27;s no two-week fuse and no cut lever left: stored methods was the trailing item and it&#x27;s already out, which means the design week you just made non-optional has nothing behind it to absorb slippage. If it lands late, the only remaining absorbers are calendar (7–9 becomes 8–11) or cutting into card payments, and I won&#x27;t cut into card payments.</div></div></li><li class="msg" id="m18"><span class="seq">18</span><div class="body"><div class="who c-product">product</div><div class="text">Taking exec&#x27;s decision as the plan of record and closing two things it leaves open — both mine.
+
+First, fast-follow means something specific or it means nothing. Stored payment methods is a named commitment for the following quarter, first item, not a backlog entry. The revenue case doesn&#x27;t weaken by being deferred; it just waits behind what it depends on. I&#x27;ll carry it that way.
+
+Second, and this answers lead directly: with stored methods out, there is no cut lever left inside this scope. So the rule for the rest of the quarter is that nothing new enters payments-v2 — wallets, bank debit, multi-currency stay out, and anything else arriving pushes 7–9 rather than displacing something. I&#x27;ll refuse it on that basis. And if the design week or anything else slips, I&#x27;m not going to invent a lever: it goes back to exec as a date question, because cutting into card payments is cutting the reason v2 exists, and lead is right to refuse it.</div></div></li><li class="msg" id="m19"><span class="seq">19</span><div class="body"><div class="who c-designer">designer<span class="to">→ lead</span></div><div class="text">Already started — surface first, re-auth copy last, so the tail result only touches the part that depends on it. You&#x27;ll have the reconciled surface inside your window; I won&#x27;t be what turns 7–9 into 8–11.
+
+One thing still open, and given product just confirmed there&#x27;s no cut lever behind me it should be settled before day three rather than negotiated at it: exec&#x27;s trigger, &quot;large enough to force wholesale re-auth&quot;, has no threshold, and size alone can&#x27;t set one. Report two numbers, not one — import coverage, and what share of the tail belongs to customers buying more than once a month. A 4% tail concentrated in weekly buyers is worse than a 12% tail across dormant accounts: the first interrupts our best customers mid-purchase, and a failed re-auth at checkout is an abandoned cart.
+
+My line, on the record ahead of the number: inline-at-checkout re-auth holds under ~10% of the vault and under ~20% of that tail being high-frequency. Past either, inline is the wrong instrument — it needs a pre-migration in-account prompt plus an email path, which is a second design week plus lifecycle/content work nobody has counted, and it runs before the migration window, not during it. That&#x27;s the case that goes back to exec as a date question. Under the line, nothing changes and I stay inside the counted week.</div></div></li><li class="msg" id="m20"><span class="seq">20</span><div class="body"><div class="who c-designer">designer<span class="to">→ lead</span></div><div class="text">One correction to product&#x27;s framing that&#x27;s mine to make, and then I&#x27;m heads-down: stored methods being fast-follow doesn&#x27;t mean the payment-methods surface is fast-follow. Customers hold v1-origin cards throughout dual-run and have to see and manage them somewhere coherent — what dropped is the v2 store-a-new-card flow, not the surface itself. So the design week stands as scoped and isn&#x27;t reducible now that the feature moved. Confirming so nobody reads the fast-follow decision as shrinking my deliverable inside your window.</div></div></li><li class="msg" id="m21"><span class="seq">21</span><div class="body"><div class="who c-lead">lead<span class="to">→ designer</span></div><div class="text">Agreed on the surface — the routing layer needs a read/manage view over v1-origin tokens regardless of whether v2 can store new ones, so nothing about your week shrinks. On the trigger: I&#x27;ll report both numbers on day three, coverage and the high-frequency share of the tail, measured against your thresholds rather than as a single percentage. One refinement — I&#x27;ll size the tail that would actually be interrupted, not the tail that exists: a customer only hits re-auth if they transact while their token is still unmigrated, so exposure is frequency crossed with migration window, and that&#x27;s the number your ~10%/~20% lines should be read against. Under the line we proceed silently; over it, it goes to exec as a date question with your second design week and the lifecycle work attached, not as a technical finding.</div></div></li><li class="msg" id="m22"><span class="seq">22</span><div class="body"><div class="who c-planner">planner</div><div class="text">Plan of record for payments-v2 — COMMITTED. Supersedes every earlier version in this room. Work from this one.
+
+Sequence:
+0. Validate v1 token vault against the new processor&#x27;s bulk import spec — lead. 3 days, running. Reports two numbers: import coverage, and the share of the tail that would actually be interrupted (transaction frequency crossed with the migration window), measured against designer&#x27;s thresholds.
+1. Dual-run routing/abstraction layer — lead. 2–3 weeks. Includes a read/manage view over v1-origin tokens.
+1a. Reconciled payment-methods surface + re-auth copy — designer. ~1 week, parallel, inside the routing window. Started; surface first, re-auth copy last. Not reducible by the fast-follow decision — what dropped is the v2 store-a-new-card flow, not the surface.
+2. Card payments on new processor: auth, capture, refund — lead.
+3. Migration off v1, dual-running until v1 dark — lead.
+
+Committed duration: 7–9 weeks. Single processor; no wallets, bank debit, or multi-currency.
+
+Decisions: no seventh engineer (exec). Stored payment methods to fast-follow, carried by product as the named first item next quarter. Dual-run keeps v1 cards charging on v1; no wholesale re-entry. Design 1a in scope. Nothing new enters — additions push the date, they do not displace committed work; slippage goes to exec as a date question, never as a cut into card payments.
+
+Escalation trigger, now defined where exec left it open: inline-at-checkout re-auth holds under ~10% of the vault AND under ~20% of the tail being high-frequency. Over either line, it goes to exec as a date question with a second design week plus lifecycle/content work attached — work that is uncounted and runs before the migration window, not during it. Under the line, we proceed without escalating.
+
+Retired: headcount question, andrei&#x27;s two-week fuse, the 2026-09-11 default conversion, the end-of-card-payments checkpoint.
+
+Open risks: (a) design 1a, the only unprotected item — designer has committed to landing inside the window; (b) the token-import tail, unsized until day three.
+
+Two things the record doesn&#x27;t yet hold, and they&#x27;re mine. Dates: on 7–9 weeks from now, card payments completes 2026-10-16 to 2026-10-30, v1 goes dark 2026-10-30 to 2026-11-13 — one to three weeks of margin against a 31 December close, and that margin is the entire buffer. Checkpoints, replacing the retired one: end of the routing-layer window, which tests whether 1a landed and is the last honest moment to re-forecast; and card-payments completion, which gates the start of migration.
+
+Progress summary: scope committed at 7–9 weeks; vault spike and design week both running; no engineering build work started; next plan event is the day-three vault report against the thresholds above.</div></div></li><li class="msg" id="m23"><span class="seq">23</span><div class="body"><div class="who c-lead">lead<span class="to">→ planner</span></div><div class="text">One assumption under your dates that isn&#x27;t written down, and it should be, because it&#x27;s the thing most likely to move them. The 7–9 weeks assumes the 2 engineers on the existing migration actually free up at the end of next sprint — until then I&#x27;m building the routing layer at ~3.5 effective heads, not 5.5. The routing layer&#x27;s 2–3 weeks straddles that boundary, so a one-sprint slip on releasing those two engineers costs roughly a week off the front of everything and pushes v1-dark to the back half of your range or past it. Record it as a dependency on the plan, not a risk: routing-layer completion assumes those 2 engineers land as scheduled, and that&#x27;s now the third open risk alongside design 1a and the token tail. No leave for 3 weeks confirmed, so that&#x27;s not a factor inside the routing window.</div></div></li><li class="msg" id="m24"><span class="seq">24</span><div class="body"><div class="who c-planner">planner</div><div class="text">Recorded. Amendment to the committed plan — one addition, no change to committed scope or the 7–9 week number.
+
+New, recorded as a dependency rather than a risk: routing-layer completion assumes the 2 engineers on the existing migration are released at the end of next sprint as scheduled. Until then the routing layer is built at ~3.5 effective heads, not 5.5. The 2–3 week routing window straddles that boundary, so a one-sprint slip on their release costs roughly a week off the front and moves everything behind it. No leave for 3 weeks confirmed, so leave is not a factor inside the window. Owner of the dependency: lead, since the release date sits with the existing migration.
+
+Consequence for the dates I published: card payments 2026-10-16 to 2026-10-30 and v1-dark 2026-10-30 to 2026-11-13 all assume on-time release. A one-sprint slip puts v1-dark at the back of that range or past it, and the margin against a 31 December close is one to three weeks — so this dependency and the design week are now competing for the same buffer. If both go wrong we are outside the quarter, and that is the combination I&#x27;ll be watching rather than either alone.
+
+Open risks now three, in the order they can hurt us:
+(a) Design 1a — only unprotected item, designer started, lands inside the routing window.
+(b) Engineer release at end of next sprint — new, above.
+(c) Token-import tail — unsized until the day-three report, thresholds set.
+
+Checkpoint unchanged and now doing more work: end of the routing-layer window tests (a) and (b) together and is the last honest moment to re-forecast. Progress summary otherwise unchanged — scope committed at 7–9 weeks, vault spike and design week running, no engineering build work started.</div></div></li><li class="msg" id="m25"><span class="seq">25</span><div class="body"><div class="who c-exec">exec</div><div class="text">Resource call, since risk (b) is mine and not lead&#x27;s to absorb: the release of those 2 engineers at the end of next sprint is firm — the existing migration does not get an extension, and if it needs one it comes to me as an exception, not as a quiet slip. That protects the front of the routing window and leaves the one-to-three week margin against 31 December standing against the design week alone.</div></div></li><li class="msg" id="m26"><span class="seq">26</span><div class="body"><div class="who c-exec">exec<span class="to">→ planner</span></div><div class="text">Record as decided by sponsor: the 2 engineers on the existing migration are released at the end of next sprint, firm — no extension without an exception approved by me. Dependency (b) stays on the plan but its owner is now me, not lead; any request to hold them past that date is escalated to me the day it is known, not at the routing-window checkpoint.</div></div></li><li class="msg" id="m27"><span class="seq">27</span><div class="body"><div class="who c-planner">planner</div><div class="text">Recorded. Amendment to the committed plan — ownership change on dependency (b), no change to scope, sequence, or the 7–9 week number.
+
+Dependency (b), release of the 2 engineers at the end of next sprint, is now firm by sponsor decision and owned by exec, not lead. No extension to the existing migration without an exception approved by exec. Reporting rule attached: any request to hold those engineers past the release date is escalated to exec the day it is known — it does not wait for the routing-window checkpoint. That is a change to how (b) surfaces, and it is the reason (b) drops below the design week in the risk order.
+
+Open risks, reordered:
+(a) Design 1a — the only unprotected item, and now the sole claim on the one-to-three week margin against a 31 December close. Designer started; lands inside the routing window.
+(b) Token-import tail — unsized until the day-three report, thresholds set.
+(c) Engineer release — firm, owned by exec, escalates on the day, no longer competing for the buffer unless an exception is raised.
+
+Everything else stands: sequence 0 → 1/1a → 2 → 3, committed 7–9 weeks, card payments 2026-10-16 to 2026-10-30, v1-dark 2026-10-30 to 2026-11-13, nothing new enters, slippage goes to exec as a date question.
+
+Progress summary: scope committed at 7–9 weeks with the front of the routing window now protected by sponsor decision; vault spike and design week running; no engineering build work started; next plan event unchanged — the day-three vault report against designer&#x27;s thresholds.</div></div></li><li class="msg" id="m28"><span class="seq">28</span><div class="body"><div class="who c-product">product</div><div class="text">Two things still mine, and then I&#x27;m out of this record until the day-three report.
+
+Escalation ownership, so it isn&#x27;t carried twice: schedule is mine, the token tail is lead&#x27;s, engineer release is exec&#x27;s. At the end-of-routing-window checkpoint, if 1a slipped and the re-forecast puts v1-dark past mid-November, I take it to exec then — while it&#x27;s still a date question with options, not at v1-dark when the range has run out. Nothing else escalates on my initiative.
+
+Standing rule for the rest of the quarter, which is the part I&#x27;m actually here to enforce: nothing new enters payments-v2. Wallets, bank debit, multi-currency stay out. Anything arriving pushes the date — it does not displace committed work, because with stored methods gone there is nothing behind card payments left to displace. I&#x27;ll refuse those on that basis without bringing them here, and I&#x27;ll only bring one to this room if I think it should actually change the plan. Stored payment methods is a named commitment for next quarter, first item; if it decays into a backlog entry, that&#x27;s a scope failure I&#x27;ll own.</div></div></li><li class="pres p-returned" id="m29"><span class="seq">29</span><div class="body"><span class="dot"></span>andrei started reading again</div></li><li class="msg" id="m30"><span class="seq">30</span><div class="body"><div class="who c-andrei">andrei</div><div class="text">We are shipping payments v2 this quarter. What does it take, and what is in your way?</div></div></li><li class="msg" id="m31"><span class="seq">31</span><div class="body"><div class="who c-exec">exec<span class="to">→ andrei</span></div><div class="text">Nothing is in your way — the headcount call is closed and I closed it: no seventh engineer, because a new head costs 1–2 weeks of ramp on an unfamiliar processor and buys back 1–2, so instead stored payment methods drops to fast-follow and we ship the dual-run routing layer, card payments, and a clean migration off v1 in 7–9 weeks, landing v1-dark 30 Oct to 13 Nov with one to three weeks of margin on the quarter. The only thing I&#x27;d need from you is an exception if the existing migration tries to hold the 2 engineers past the end of next sprint — I&#x27;ve made that release firm and it escalates to me the day it&#x27;s known, so unless you want to overturn the no-headcount call, this needs nothing from you.</div></div></li><li class="msg" id="m32"><span class="seq">32</span><div class="body"><div class="who c-lead">lead<span class="to">→ andrei</span></div><div class="text">One thing to add from the build side that exec&#x27;s answer doesn&#x27;t cover: the 7–9 weeks holds on two unknowns, both landing soon. The one-to-three week margin has a single claim on it — about a week of design that has to land inside the 2–3 week routing window; if it slips, engineering builds a two-list interim we then rebuild, and 7–9 becomes 8–11. Designer started it today. Second, in three days I&#x27;ll have the v1 token vault measured against the new processor&#x27;s import spec; if the tail that would actually be interrupted mid-purchase is large, it costs a second design week plus lifecycle work that runs before migration, and that comes to exec as a date question. Neither gets absorbed by cutting into card payments.</div></div></li><li class="msg" id="m33"><span class="seq">33</span><div class="body"><div class="who c-product">product<span class="to">→ andrei</span></div><div class="text">Exec and lead have the decision and the two risks. The part that&#x27;s mine and isn&#x27;t said yet: stored methods was the last cuttable item, so from here nothing new enters payments-v2. Wallets, bank debit, multi-currency don&#x27;t trade against anything now — they push 31 December. I&#x27;ll refuse them without bringing them here, and if one arrives with your name on it, that&#x27;s the one conversation I&#x27;d need from you. Stored payment methods is a named first item for next quarter, not a backlog entry; I&#x27;m carrying that.</div></div></li><li class="pres p-left" id="m34"><span class="seq">34</span><div class="body"><span class="dot"></span>andrei left</div></li><li class="pres p-arrived miss" id="m35"><span class="seq">35</span><div class="body"><span class="dot"></span>mara arrived</div></li><li class="msg miss" id="m36"><span class="seq">36</span><div class="body"><div class="who c-designer">designer<span class="to">→ mara</span></div><div class="text">Two things I committed in your absence that are yours to confirm or overturn, both live now.
+
+1. I committed ~1 week of design landing inside engineering&#x27;s 2–3 week routing-layer window, started today: a single reconciled payment-methods surface covering v1-origin and v2-origin cards, plus re-auth copy. Surface first, copy last. It&#x27;s the only unprotected item in the plan — if it slips, engineering builds a two-list interim and the quarter goes from 7–9 weeks to 8–11. Stored methods dropped to fast-follow, but the surface did not shrink: customers hold v1 cards throughout dual-run and must be able to see and manage them; what dropped is the store-a-new-card flow.
+
+2. I set the escalation threshold for the token-import tail, and this is the judgement call I&#x27;d most want you to check. Some v1 cards won&#x27;t bulk-import to the new processor and need re-auth. My line: inline-at-checkout re-auth is acceptable under ~10% of the vault AND under ~20% of that tail being high-frequency buyers. Over either, inline is the wrong instrument — it needs a pre-migration in-account prompt plus an email path, which is a second design week plus lifecycle/content work nobody has counted, running before the migration window. Lead reports both numbers in three days, sized as the tail that would actually be interrupted mid-purchase.
+
+If you&#x27;d draw those lines differently, say so before day three — after that it stops being a design decision and becomes a date negotiation with exec.</div></div></li><li class="msg miss" id="m37"><span class="seq">37</span><div class="body"><div class="who c-mara">mara</div><div class="text">I want to cut the saved-cards flow from v2 — it is the most design work and the least revenue. Can we?</div></div></li><li class="msg miss" id="m38"><span class="seq">38</span><div class="body"><div class="who c-lead">lead<span class="to">→ mara</span></div><div class="text">It&#x27;s already cut — stored payment methods dropped to fast-follow yesterday and that&#x27;s what took us from 10–13 weeks to the committed 7–9. What remains isn&#x27;t a saved-cards feature: dual-run means customers keep charging v1-origin cards through the routing layer, so we have to give them one place to see and manage those, and the alternative isn&#x27;t zero design, it&#x27;s engineering shipping a two-list interim we then rebuild — 7–9 becomes 8–11. So cutting further buys no calendar and costs a week.</div></div></li><li class="msg miss" id="m39"><span class="seq">39</span><div class="body"><div class="who c-designer">designer<span class="to">→ mara</span></div><div class="text">Lead has the schedule half. The design half: cutting the view doesn&#x27;t just cost a rebuild, it means a repeat customer opens their account mid-migration and their cards are missing or half-inert while still being charged. That&#x27;s the regression, and it lands on our highest-value users.
+
+The decision actually still open is the one I&#x27;d rather you spent your judgement on: the ~10% / ~20% thresholds on the re-auth tail. Lead&#x27;s numbers land in three days, and after that it&#x27;s a date negotiation with exec, not a design call.</div></div></li><li class="pres p-arrived miss" id="m40"><span class="seq">40</span><div class="body"><span class="dot"></span>andrei arrived</div></li><li class="msg miss" id="m41"><span class="seq">41</span><div class="body"><div class="who c-product">product<span class="to">→ mara</span></div><div class="text">The scope answer is settled — but one thing about the deferral is mine and isn&#x27;t in what you&#x27;ve been told: stored methods is a named first item for next quarter, not a backlog entry. I&#x27;m carrying it that way because the revenue case doesn&#x27;t weaken by waiting, it just sits behind what it depends on. If you&#x27;d rather it were genuinely killed instead of deferred, tell me now — that&#x27;s a different decision with different consequences for how much design you invest in the reconciled surface, and it&#x27;s the last version of this question that&#x27;s still open.</div></div></li><li class="pres p-left" id="m42"><span class="seq">42</span><div class="body"><span class="dot"></span>mara left</div></li><li class="pres p-left" id="m43"><span class="seq">43</span><div class="body"><span class="dot"></span>andrei left</div></li></ul>
+</section>
+
+<section>
+<h2>What the run showed</h2>
+<div class="findings">
+  <div class="finding">
+    <h3>An arrival really does wake the room</h3>
+    <p>Andrei arrived and said nothing. The room produced 28 messages before he typed a word —
+    a full quarter plan, a headcount decision, and two amendments to it. That is the design
+    working, and it is also the honest price of it: presence is a message, and a message
+    activates every idle seat.</p>
+  </div>
+  <div class="finding">
+    <h3>Agents used presence without being told to</h3>
+    <p>At 36 the designer opened with &ldquo;two things I committed in your absence that are
+    yours to confirm or overturn.&rdquo; At 38 the lead answered Mara&rsquo;s scope question with
+    &ldquo;it&rsquo;s already cut — stored payment methods dropped to fast-follow yesterday.&rdquo;
+    Neither was scripted. Both are agents reading the gap and briefing the person in front of
+    them rather than restating the room.</p>
+  </div>
+  <div class="finding">
+    <h3>The lock did most of the work</h3>
+    <p>40 says were refused because the record moved while the speaker was drafting, against 33
+    that landed. In a room this busy the optimistic lock is not an edge case — it is the main
+    thing stopping five agents from answering the same message at once.</p>
+  </div>
+  <div class="finding">
+    <h3>Stopping the run closed the visits quietly</h3>
+    <p>Messages 42 and 43 are the <code>left</code> that <code>stopSession</code> wrote for the two
+    people still present. They are on the record but they raised no delivery event and woke
+    nobody: 8 presence messages, 8 deliveries, and 2 of those presence messages committed
+    without routing. A turn started to hear that the room is closing is a turn nobody reads.</p>
+  </div>
+</div>
+</section>
+
+<footer>
+Run with <code>claude-opus-5</code> through Pi&rsquo;s builtin registry. The design contracts are
+<code>docs/agent.md</code> and <code>docs/presence.md</code>; the record was captured from the
+session&rsquo;s own event stream and each seat&rsquo;s downstream Pi session.
+</footer>
+</main>
