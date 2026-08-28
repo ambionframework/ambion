@@ -16,7 +16,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `packages/cli`      | The `ambion` binary                                                            |
 | `docs/agent.md`     | Design contract for the core — read before changing the runtime                |
 | `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                 |
-| `docs/avatar.md`    | Design for the reader a person brings into a room — not built                  |
+| `docs/avatar.md`    | Design for the checkpoint a person's reader writes — not built                 |
 | `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs |
 | `examples/site`     | Runnable example                                                               |
 | `demos/`            | One dated report per merged change — regenerate on the branch, then leave it   |
