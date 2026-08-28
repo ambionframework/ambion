@@ -233,6 +233,8 @@ interface Presence {
   seq: Seq;
   at: string;
   from: string;
+  /** How the room knew them, on `arrived` alone. */
+  identity?: string;
 }
 
 export type Message = Spoken | Presence;
@@ -260,6 +262,11 @@ which is correct: it reconsiders now that he is here. This is also what
 keeps five agents from all greeting the same arrival. The first commits and
 the rest are told the room moved, which is when rule 3 tells them to stand
 down.
+
+An `arrived` carries the identity the room knew them by, and it is the only
+thing a presence message adds to a name. A run does not inherit its people
+from the last one, so the record is where the next run learns who has been
+here: without the identity, a replayed name is a name with no roster line.
 
 **Rule 7 holds, and gets stronger.** `from` is stamped by the runtime from
 the live visit. A presence message is the one entry on the record that the
@@ -455,6 +462,10 @@ did observe them leaving — the room is going away underneath them. So every
 anchor survives a planned restart exactly, and the next run picks each person
 up where they stopped reading.
 
+These are the one kind of message the room commits without routing. Every
+other message activates the idle room, and this one has nobody to activate: a
+turn started to hear that the room is closing is a turn nobody reads.
+
 That leaves one case, and it fails in the safe direction. If the process dies
 rather than stopping, no `left` is written, because nothing observed anything.
 On the next run each of those people is anchored at their previous `away` or
@@ -502,13 +513,27 @@ The record so far:
 Take your turn, planner: say something, or end your turn to stay silent.
 ```
 
-Three things beyond the record, each pulling its weight. **The goal** comes
+Four things beyond the record, each pulling its weight. **The goal** comes
 from `startSession` and is what makes "does this arrival matter" answerable at
 all. **The time**, absolute at the top and relative on each line, is what a
 persistent ambient room needs and a bare transcript never gives: without it
-an agent cannot tell a three-day gap from a three-minute one. **The gap** —
-`last here 3 days ago` — is derived from the record, not stored, because the
-arrivals are on it.
+an agent cannot tell a three-day gap from a three-minute one. **The gap** is
+derived from the record, not stored, because the arrivals are on it.
+
+And **the divider**. Knowing that Andrei has been gone three days is not the
+same as knowing what he missed, and an agent that has to work it out by
+reading dates will get it wrong. So the room draws the line for it, at each
+person's anchor:
+
+```
+· andrei left                                             3 days ago
+── andrei has not seen anything below this line ──
+[exec] Approved two more engineers for the quarter.       1 day ago
+```
+
+One divider per person in the room, at the seq where they stopped reading,
+and a count beside their name in the roster. An agent does not compute what
+somebody missed; it reads it.
 
 The system prompt carries one paragraph about arrivals, and most of it is
 about not speaking. It renders only when the session has a goal (§2): an
@@ -593,29 +618,31 @@ export type SeatInfo =
 ## 11. What proves it
 
 The milestone tests live in
-[`packages/ambion/test/presence.test.ts`](../packages/ambion/test/presence.test.ts),
-one per claim this document makes loudly: a room of agents alone opening,
-running an exchange and settling with nobody present; `visitSession` committing an
-`arrived` that activates the idle room while a passive seat sits out, against
-a roster that already shows the arrival; an arrival steering an active agent
-and refusing the say that turn commits; two people entering and the record
-stamping each from their own visit; one person's second visit committing
-nothing, and only the last leave committing `left`; the timeout resolving
-the visit then the run then fifteen minutes, and `Infinity` arming no timer;
-one of two visits turning away silently and both turning away committing
-`away`; an away visit delivering, `returned` landing before its delivery; a
-directed `say` still landing for somebody who left; a left visit throwing on
-`deliver` and `acted()` while `leave()` twice does not; `visitSession` refusing an
-agent's name and a second identity; `since` undefined on a first visit, then
-the seq of the `left`, holding while a person reads and moving when they turn
-away; `messages({ since })` returning exactly what followed, spoken and
-presence interleaved; `stopSession` committing `left` for everybody present
-and then refusing the visits it closed; a name started again on the same repo
-bringing back the names, the anchors and the seq counter, and accepting a
-`say` to a name only the replayed arrivals know; and the rendered context carrying the goal, the
-time, both lists and the presence lines — with a goal-less room rendering
-neither the goal nor the arrival paragraph, and routing presence normally
-anyway. All in-process, in vitest, with fake timers where the clock matters.
+[`presence.test.ts`](../packages/ambion/test/presence.test.ts), one per claim
+this document makes loudly: a room of agents running and settling with nobody
+present; `visitSession` committing an `arrived` that activates the idle room
+while a passive seat sits out, against a roster that already shows it; a
+presence message carrying no text and stamping `from` off the visit; two
+people delivering and the record stamping each from their own; a second visit
+committing nothing and only the last leave committing `left`, with the stream
+carrying both attachments; a visit turning away on its timeout and never on
+`Infinity`; the timeout resolving the visit, then the run, then fifteen
+minutes; one of two visits turning away silently and both turning away
+committing `away`; an away visit delivering with `returned` landing first; a
+name still on the roster after it left and after the run that knew it ended;
+a stale visit refusing `deliver` and `acted` while `leave` twice does not;
+`since` undefined on a first visit, then the seq of the `left`, holding while
+a person reads and moving when they stop; `messages({ since })` returning both
+kinds in order; `stopSession` closing its visits without waking anybody;
+`readSession` reading a stopped name with no agent standing up; and the
+rendered context carrying the goal, the clock, each person's unseen count and
+the divider — with a goal-less room rendering neither the goal nor the arrival
+paragraph and routing presence anyway. All in-process, in vitest, on a
+scripted stream, with fake timers where the clock matters.
+
+The rules this document shares with the core are proved beside them, in
+[`session.test.ts`](../packages/ambion/test/session.test.ts), which now runs
+every one of them through a visit.
 
 ---
 

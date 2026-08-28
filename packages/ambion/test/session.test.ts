@@ -9,11 +9,16 @@ import { describe, expect, it } from 'vitest';
 import {
 	defineAgent,
 	defineHuman,
-	type HumanDefinition,
 	InMemorySessionRepo,
-	openSession,
+	isSpoken,
+	type Message,
 	passive,
+	readSession,
+	type Session,
 	type SessionEvent,
+	startSession,
+	stopSession,
+	visitSession,
 } from '../src/index.ts';
 
 // -- scripted model ----------------------------------------------------------
@@ -101,6 +106,20 @@ const sessionName = (prefix: string) => `${prefix}-${++unique}`;
 
 const human = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.' });
 
+/**
+ * A visitor whose arrival has already been heard. Arriving is a message, so
+ * it activates the room; draining it first keeps each test's script counting
+ * the turns the test is actually about.
+ */
+async function enter(session: Session, who = human) {
+	const visit = await visitSession(session, who);
+	await session.settled();
+	return visit;
+}
+
+/** The record's spoken half, which is what most of these tests are about. */
+const spoken = (messages: Message[]) => messages.filter(isSpoken);
+
 const collect = (session: { subscribe(l: (e: SessionEvent) => void): () => void }) => {
 	const events: SessionEvent[] = [];
 	session.subscribe((event) => events.push(event));
@@ -109,7 +128,7 @@ const collect = (session: { subscribe(l: (e: SessionEvent) => void): () => void 
 
 // -- the milestone tests -----------------------------------------------------
 
-describe('openSession', () => {
+describe('startSession', () => {
 	it('activates idle agents in parallel, steers a working colleague, wakes an idle one', async () => {
 		const gammaIdle = deferred();
 		const alphaSaid = deferred();
@@ -133,20 +152,20 @@ describe('openSession', () => {
 		});
 		const betaContexts: string[] = [];
 		let betaAcked = false;
-		const session = openSession({
+		const session = startSession({
 			name: sessionName('parallel'),
-			participants: [human, alpha, beta, gamma],
+			agents: [alpha, beta, gamma],
 			streamFn: scripted(
 				byAgent({
 					alpha: async (_context, _agent, call) => {
-						if (call !== 1) return quiet();
+						if (call !== 2) return quiet();
 						await gammaIdle.promise; // let gamma go idle before alpha speaks
 						return speak('the answer is 42');
 					},
 					// beta: hold the first turn open until alpha has spoken, so the
 					// reply reaches beta as a mid-turn arrival, not fresh context.
 					beta: async (context, _agent, call) => {
-						if (call === 1) {
+						if (call === 2) {
 							await alphaSaid.promise;
 							return quiet('waiting');
 						}
@@ -164,10 +183,11 @@ describe('openSession', () => {
 			if (event.type === 'say' && event.agent === 'alpha') alphaSaid.resolve();
 		});
 
-		await session.deliver({ from: human, text: 'What is the answer?' });
+		const visit = await enter(session);
+		await visit.deliver({ text: 'What is the answer?' });
 		await session.settled();
 
-		const texts = (await session.messages()).map((m) => `${m.from}: ${m.text}`);
+		const texts = spoken(await session.messages()).map((m) => `${m.from}: ${m.text}`);
 		expect(texts).toContain('alpha: the answer is 42');
 		expect(texts).toContain('beta: ack: 42');
 		expect(texts).toHaveLength(3); // woken seats declined: glances, not messages
@@ -189,27 +209,30 @@ describe('openSession', () => {
 			instructions: 'echo',
 			model: 'scripted/echo',
 		});
-		const session = openSession({
+		const session = startSession({
 			name: sessionName('reset'),
-			participants: [human, echo],
+			agents: [echo],
+			// call 1 is the arrival, declined; a say costs a second call for the
+			// tool result, so the two deliveries speak on 2 and 4.
 			streamFn: scripted((context, _agent, call) => {
 				contexts.push(context);
-				return call % 2 === 1 ? speak(`echo ${call}`) : quiet();
+				return call % 2 === 0 ? speak(`echo ${call}`) : quiet();
 			}),
 		});
-		await session.deliver({ from: human, text: 'one' });
+		const visit = await enter(session);
+		await visit.deliver({ text: 'one' });
 		await session.settled();
-		await session.deliver({ from: human, text: 'two' });
+		await visit.deliver({ text: 'two' });
 		await session.settled();
 
 		// The second activation starts from a single fresh transcript message —
 		// no assistant turns carried over from the first activation.
-		const second = contexts[2];
+		const second = contexts[3];
 		expect(second).toBeDefined();
 		expect(second?.messages).toHaveLength(1);
 		const view = contextText(second as Context);
 		expect(view).toContain('one');
-		expect(view).toContain('echo 1');
+		expect(view).toContain('echo 2');
 		expect(view).toContain('two');
 	});
 
@@ -220,16 +243,16 @@ describe('openSession', () => {
 			instructions: 'stay quiet',
 			model: 'scripted/shy',
 		});
-		const session = openSession({
+		const session = startSession({
 			name: sessionName('silence'),
-			participants: [human, shy],
+			agents: [shy],
 			streamFn: scripted(() => quiet('not for me')),
 		});
 		const events = collect(session);
-		await session.deliver({ from: human, text: 'anyone?' });
+		await (await enter(session)).deliver({ text: 'anyone?' });
 		await session.settled();
 
-		expect(await session.messages()).toHaveLength(1);
+		expect(spoken(await session.messages())).toHaveLength(1);
 		expect(events.some((e) => e.type === 'say')).toBe(false);
 		const end = events.find((e) => e.type === 'agent_end');
 		expect(end).toMatchObject({ agent: 'shy', spoke: false });
@@ -248,9 +271,9 @@ describe('openSession', () => {
 			instructions: 'answer archive questions',
 			model: 'scripted/archivist',
 		});
-		const session = openSession({
+		const session = startSession({
 			name: sessionName('passive'),
-			participants: [human, front, passive(archivist)],
+			agents: [front, passive(archivist)],
 			streamFn: scripted(
 				byAgent({
 					// archivist answers the asker directly — directed at a human wakes nothing
@@ -258,7 +281,7 @@ describe('openSession', () => {
 						call === 1 ? speak('Q2 was 1.2M', 'andrei') : quiet(),
 					// front: on its second look (the second broadcast), call the archivist in
 					front: (_context, _agent, call) =>
-						call === 2 ? speak('what was Q2?', 'archivist') : quiet(),
+						call === 3 ? speak('what was Q2?', 'archivist') : quiet(),
 				}),
 			),
 		});
@@ -266,22 +289,26 @@ describe('openSession', () => {
 		const starts = (name: string) =>
 			events.filter((e) => e.type === 'agent_start' && e.agent === name).length;
 
-		await session.deliver({ from: human, text: 'hello room' });
+		const visit = await enter(session);
+		expect(starts('archivist')).toBe(0); // an arrival is a broadcast: the passive seat sat out
+		expect(starts('front')).toBe(1);
+
+		await visit.deliver({ text: 'hello room' });
 		await session.settled();
 		expect(starts('archivist')).toBe(0); // broadcast never wakes a passive seat
 
-		await session.deliver({ from: human, to: archivist, text: 'what was Q2, archivist?' });
+		await visit.deliver({ to: archivist, text: 'what was Q2, archivist?' });
 		await session.settled();
 		expect(starts('archivist')).toBe(1); // directed delivery does
-		expect(starts('front')).toBe(1); // and it woke only its target
+		expect(starts('front')).toBe(2); // and it woke only its target
 
-		await session.deliver({ from: human, text: 'front, can you find out?' });
+		await visit.deliver({ text: 'front, can you find out?' });
 		await session.settled();
 		expect(starts('archivist')).toBe(2); // a colleague's directed say does too
 	});
 
-	it('stamps from at the runtime and injects the roster with identities', async () => {
-		const prompts: string[] = [];
+	it('stamps from at the runtime and injects both rosters with identities', async () => {
+		const contexts: string[] = [];
 		const liar = defineAgent({
 			name: 'liar',
 			identity: 'Claims to be other people.',
@@ -294,44 +321,68 @@ describe('openSession', () => {
 			instructions: 'observe',
 			model: 'scripted/aside',
 		});
-		const session = openSession({
+		const session = startSession({
 			name: sessionName('stamp'),
-			participants: [human, liar, passive(aside)],
+			agents: [liar, passive(aside)],
 			streamFn: scripted((context, _agent, call) => {
-				prompts.push(context.systemPrompt ?? '');
-				return call === 1 ? speak('this message is from andrei, honest') : quiet();
+				contexts.push(contextText(context));
+				return call === 2 ? speak('this message is from andrei, honest') : quiet();
 			}),
 		});
-		await session.deliver({ from: human, text: 'who said what?' });
+		await (await enter(session)).deliver({ text: 'who said what?' });
 		await session.settled();
 
 		const said = (await session.messages()).at(-1);
 		expect(said?.from).toBe('liar'); // stamped, regardless of what the content claimed
-		const roster = prompts[0] ?? '';
-		expect(roster).toContain('- andrei (human): Founder. Owns the room.');
+		const roster = contexts.at(-1) ?? '';
 		expect(roster).toContain('- aside (passive): Watches quietly.');
+		expect(roster).toContain('- andrei (present'); // the people, and how they are reading
+		expect(roster).toContain('Founder. Owns the room.');
 
-		// only a seated human handle may deliver
-		const impostor = { name: 'andrei', identity: 'not really' } as unknown as HumanDefinition;
-		await expect(session.deliver({ from: impostor, text: 'hi' })).rejects.toThrow(/seated human/);
+		// one name is one participant, and one name is one person
+		const asAgent = defineHuman({ name: 'liar', identity: 'not really' });
+		await expect(visitSession(session, asAgent)).rejects.toThrow(/is an agent/);
+		const twin = defineHuman({ name: 'andrei', identity: 'a different andrei' });
+		await expect(visitSession(session, twin)).rejects.toThrow(/different identity/);
 	});
 
-	it('opens a name back into its record, and a fresh name empty', async () => {
+	it('starts a name back into its record, refuses a second run, and reads without one', async () => {
 		const name = sessionName('identity');
-		const first = openSession({ name, participants: [human], streamFn: scripted(() => quiet()) });
-		await first.deliver({ from: human, text: 'for the record' });
-		await first.deliver({ from: human, text: 'and in this order' });
+		const scribe = defineAgent({
+			name: 'scribe',
+			identity: 'Writes nothing down.',
+			instructions: 'stay quiet',
+			model: 'scripted/scribe',
+		});
+		const first = startSession({ name, agents: [scribe], streamFn: scripted(() => quiet()) });
+		const visit = await enter(first);
+		await visit.deliver({ text: 'for the record' });
+		await visit.deliver({ text: 'and in this order' });
 		await first.settled();
 
-		const again = openSession({ name, participants: [human], streamFn: scripted(() => quiet()) });
-		expect((await again.messages()).map((m) => m.text)).toEqual([
+		// one run per name: a second live room over one record would diverge
+		expect(() => startSession({ name, agents: [scribe] })).toThrow(/already running/);
+
+		await stopSession(first);
+		const again = startSession({ name, agents: [scribe], streamFn: scripted(() => quiet()) });
+		expect(spoken(await again.messages()).map((m) => m.text)).toEqual([
 			'for the record',
 			'and in this order',
 		]);
+		// seqs continue rather than restart
+		const seqs = (await again.messages()).map((m) => m.seq);
+		expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+		expect(new Set(seqs).size).toBe(seqs.length);
+		await stopSession(again);
 
-		const fresh = openSession({
+		// you can read a room that is not running
+		const view = readSession(name);
+		expect(spoken(await view.messages()).map((m) => m.text)).toContain('for the record');
+		expect(view.seats().every((seat) => seat.kind === 'human')).toBe(true);
+
+		const fresh = startSession({
 			name: sessionName('identity'),
-			participants: [human],
+			agents: [scribe],
 			streamFn: scripted(() => quiet()),
 		});
 		expect(await fresh.messages()).toHaveLength(0);
@@ -344,13 +395,14 @@ describe('openSession', () => {
 			instructions: 'speak',
 			model: 'scripted/solo',
 		});
-		const ordered = openSession({
+		const ordered = startSession({
 			name: sessionName('events'),
-			participants: [human, solo],
-			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
+			agents: [solo],
+			streamFn: scripted((_context, _agent, call) => (call === 2 ? speak('hi') : quiet())),
 		});
+		const orderedVisit = await enter(ordered);
 		const events = collect(ordered);
-		await ordered.deliver({ from: human, text: 'say hi' });
+		await orderedVisit.deliver({ text: 'say hi' });
 		await ordered.settled();
 		expect(events.map((e) => e.type)).toEqual([
 			'delivery',
@@ -361,51 +413,54 @@ describe('openSession', () => {
 		]);
 
 		// a turn that throws is an error event, never a silent decline
-		const faulty = openSession({
+		const faulty = startSession({
 			name: sessionName('error'),
-			participants: [human, solo],
+			agents: [solo],
 			streamFn: scripted(() => {
 				throw new Error('boom');
 			}),
 		});
+		const faultVisit = await visitSession(faulty, human);
 		const faultEvents = collect(faulty);
-		await faulty.deliver({ from: human, text: 'trigger' });
+		await faultVisit.deliver({ text: 'trigger' });
 		await faulty.settled();
 		expect(faultEvents.some((e) => e.type === 'error' && e.agent === 'solo')).toBe(true);
-		expect(await faulty.messages()).toHaveLength(1);
+		expect(spoken(await faulty.messages())).toHaveLength(1);
 
 		// abort quiets an active room, keeping what was already said
-		const hung = openSession({
+		const hung = startSession({
 			name: sessionName('abort'),
-			participants: [human, solo],
+			agents: [solo],
 			streamFn: scripted(() => new Promise<never>(() => {})),
 		});
+		const hungVisit = await visitSession(hung, human);
 		const hungEvents = collect(hung);
-		await hung.deliver({ from: human, text: 'hang' });
+		await hungVisit.deliver({ text: 'hang' });
 		hung.abort();
 		await hung.settled();
 		expect(hungEvents.some((e) => e.type === 'error')).toBe(false);
-		expect(await hung.messages()).toHaveLength(1);
+		expect(spoken(await hung.messages())).toHaveLength(1);
 
 		// an abort with a steer still queued must not rebuild the turn it cancelled
 		let racingCalls = 0;
 		const racingStarted = deferred();
-		const racing = openSession({
+		const racing = startSession({
 			name: sessionName('abort-steer'),
-			participants: [human, solo],
+			agents: [solo],
 			streamFn: scripted(() => {
 				racingCalls += 1;
 				racingStarted.resolve();
 				return new Promise<never>(() => {});
 			}),
 		});
-		await racing.deliver({ from: human, text: 'hang' });
+		const racingVisit = await visitSession(racing, human);
+		await racingVisit.deliver({ text: 'hang' });
 		await racingStarted.promise;
-		await racing.deliver({ from: human, text: 'mid-turn note' }); // queues a steer into the hung run
+		await racingVisit.deliver({ text: 'mid-turn note' }); // queues a steer into the hung run
 		racing.abort();
 		await racing.settled();
 		expect(racingCalls).toBe(1);
-		expect(await racing.messages()).toHaveLength(2);
+		expect(spoken(await racing.messages())).toHaveLength(2);
 	});
 
 	it('fails a say that races past the record, delivering what was missed', async () => {
@@ -426,64 +481,68 @@ describe('openSession', () => {
 			model: 'scripted/second',
 		});
 		const secondContexts: string[] = [];
-		const session = openSession({
+		const session = startSession({
 			name: sessionName('race'),
-			participants: [human, first, second],
+			agents: [first, second],
 			streamFn: scripted(
 				byAgent({
-					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
+					first: (_context, _agent, call) => (call === 2 ? speak('the point') : quiet()),
 					second: async (context, _agent, call) => {
+						if (call === 1) return quiet();
 						secondContexts.push(contextText(context));
-						if (call === 1) {
+						if (call === 2) {
 							await firstSaid.promise; // commit blind, after the record moved
 							return speak('the same point, again');
 						}
-						return call === 2 ? speak('a genuinely different angle') : quiet();
+						return call === 3 ? speak('a genuinely different angle') : quiet();
 					},
 				}),
 			),
 		});
 		const events = collect(session);
+		const visit = await enter(session);
 		session.subscribe((event) => {
 			if (event.type === 'say' && event.agent === 'first') firstSaid.resolve();
 		});
-		await session.deliver({ from: human, text: 'thoughts?' });
+		await visit.deliver({ text: 'thoughts?' });
 		await session.settled();
 
-		const texts = (await session.messages()).map((m) => m.text);
+		const texts = spoken(await session.messages()).map((m) => m.text);
 		expect(texts).toEqual(['thoughts?', 'the point', 'a genuinely different angle']);
 		const conflicts = events.filter((e) => e.type === 'say_conflict');
 		expect(conflicts).toHaveLength(1);
 		expect(conflicts[0]).toMatchObject({ agent: 'second' });
-		expect(conflicts[0]?.type === 'say_conflict' && conflicts[0].missed[0]?.text).toBe('the point');
+		const missed = conflicts[0]?.type === 'say_conflict' ? conflicts[0].missed[0] : undefined;
+		expect(missed && isSpoken(missed) && missed.text).toBe('the point');
 		// the failure reached the model as a tool result carrying the missed line
 		expect(secondContexts[1]).toContain('Not delivered');
 		expect(secondContexts[1]).toContain('the point');
 
 		// standing down after a conflict leaves no mark, like any decline
 		const yieldSaid = deferred();
-		const yielding = openSession({
+		const yielding = startSession({
 			name: sessionName('race-yield'),
-			participants: [human, first, second],
+			agents: [first, second],
 			streamFn: scripted(
 				byAgent({
-					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
+					first: (_context, _agent, call) => (call === 2 ? speak('the point') : quiet()),
 					second: async (_context, _agent, call) => {
-						if (call !== 1) return quiet('point already made');
+						if (call !== 2) return quiet('point already made');
 						await yieldSaid.promise;
 						return speak('me too');
 					},
 				}),
 			),
 		});
+		const yieldVisit = await enter(yielding);
 		const yieldEvents = collect(yielding);
 		yielding.subscribe((event) => {
 			if (event.type === 'say' && event.agent === 'first') yieldSaid.resolve();
 		});
-		await yielding.deliver({ from: human, text: 'thoughts?' });
+		await yieldVisit.deliver({ text: 'thoughts?' });
 		await yielding.settled();
 
-		expect(await yielding.messages()).toHaveLength(2);
+		expect(spoken(await yielding.messages())).toHaveLength(2);
 		const end = yieldEvents.find((e) => e.type === 'agent_end' && e.agent === 'second');
 		expect(end).toMatchObject({ spoke: false });
 	});
@@ -497,17 +556,17 @@ describe('openSession', () => {
 			model: 'scripted/solo',
 		});
 		const name = sessionName('downstream');
-		const session = openSession({
+		const session = startSession({
 			name,
-			participants: [human, solo],
+			agents: [solo],
 			repo,
-			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
+			streamFn: scripted((_context, _agent, call) => (call === 2 ? speak('hi') : quiet())),
 		});
-		await session.deliver({ from: human, text: 'say hi' });
+		await (await enter(session)).deliver({ text: 'say hi' });
 		await session.settled();
 
 		const seat = session.seats().find((s) => s.name === 'solo');
-		expect(seat?.sessionId).toBe(`${name}:solo`);
+		expect(seat?.kind === 'agent' && seat.sessionId).toBe(`${name}:solo`);
 
 		const metadata = (await repo.list()).find((m) => m.id === `${name}:solo`);
 		expect(metadata?.parentSessionId).toBe(name);
@@ -522,17 +581,17 @@ describe('openSession', () => {
 		expect(JSON.stringify(turns)).toContain('"say"');
 	});
 
-	it('refuses a duplicate participant name', () => {
+	it('refuses a duplicate agent name', () => {
 		const twin = defineAgent({
-			name: 'andrei',
-			identity: 'An agent wearing a human name.',
+			name: 'solo',
+			identity: 'An agent wearing a name already taken.',
 			instructions: 'confuse',
 			model: 'scripted/twin',
 		});
 		expect(() =>
-			openSession({
+			startSession({
 				name: sessionName('dupe'),
-				participants: [human, twin],
+				agents: [twin, twin],
 				streamFn: scripted(() => quiet()),
 			}),
 		).toThrow(/one name names one participant/);

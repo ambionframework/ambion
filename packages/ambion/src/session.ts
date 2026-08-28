@@ -11,22 +11,44 @@ import type { Api, Model, UserMessage } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { Type } from 'typebox';
 import {
+	type PersonView,
+	renderAgents,
+	renderClock,
+	renderLine,
+	renderPeople,
+	renderRecord,
+} from './render.ts';
+import {
 	type AgentDefinition,
+	type AgentSeat,
 	type HumanDefinition,
 	isAgent,
 	isAmbionTool,
-	isHuman,
 	isPassiveSeat,
+	isSpoken,
 	type Message,
 	type Participant,
+	type PresenceChange,
+	type PresenceMessage,
+	type PresenceStatus,
 	type SeatInfo,
+	type Seq,
 	type SessionEvent,
+	type SpokenMessage,
+	type VisitInfo,
+	type VisitStatus,
 } from './types.ts';
 
 /** The record lives as custom entries of this type in a Pi session. */
 const MESSAGE_ENTRY = 'ambion/message';
 
+/** Fifteen minutes without an act, unless the room or the visit says otherwise. */
+export const DEFAULT_IDLE_TIMEOUT = 15 * 60_000;
+
 const defaultRepo = new InMemorySessionRepo();
+
+/** One run per name: a second live room over one record would diverge from it. */
+const running = new Map<string, SessionImpl>();
 
 /** Pi's model registry, built once on first use. */
 let builtinRegistry: ReturnType<typeof builtinModels> | undefined;
@@ -40,38 +62,61 @@ const registryStream: StreamFn = (model, context, streamOptions) => {
 	return registry().streamSimple(model, context, resolved);
 };
 
-export interface OpenSessionOptions {
-	/** The session's name: open it again and you are back in it, record intact. */
+export interface StartSessionOptions {
+	/** The session's name: the record belongs to it, across every run. */
 	name: string;
-	participants: readonly Participant[];
+	agents: readonly AgentSeat[];
+	/** What the room is for. Read by every agent; gates the arrival paragraph. */
+	goal?: string;
+	/** The house default for visits that do not set their own. */
+	idleTimeout?: number;
 	/**
 	 * Override the model call — Pi's own extension surface, and the only one
 	 * here: a scripted stream makes the room deterministic, a custom stream
-	 * brings custom providers. When omitted, models resolve from Pi's builtin
-	 * registry, `provider/model-id`.
+	 * brings custom providers.
 	 */
 	streamFn?: StreamFn;
 	/** Pi's own session repository. Defaults to a process-wide `InMemorySessionRepo`. */
 	repo?: SessionRepo;
 }
 
-export interface Deliver {
-	from: HumanDefinition;
-	/** Directed delivery: activates exactly the named participant, waking it idle or passive. */
-	to?: AgentDefinition | HumanDefinition;
-	text: string;
+export interface ReadSessionOptions {
+	repo?: SessionRepo;
 }
 
-export interface Session {
+export interface VisitOptions {
+	/** Milliseconds without an act, after which the visit turns away. `Infinity` never. */
+	idleTimeout?: number;
+	/** A label the host chooses. The runtime stores it and gives it back. */
+	via?: string;
+}
+
+/** Reading a room takes no run: the pull side, and nothing that starts anything. */
+export interface SessionView {
 	readonly name: string;
-	deliver(input: Deliver): Promise<void>;
+	messages(options?: { since?: Seq }): Promise<Message[]>;
+	seats(): SeatInfo[];
 	subscribe(listener: (event: SessionEvent) => void): () => void;
+}
+
+export interface Session extends SessionView {
 	/** Resolves when no agent is active and nothing is queued. */
 	settled(): Promise<void>;
-	/** Cancel every active turn; what was said stays, what was mid-flight ends without speaking. */
+	/** Cancel every active turn. The room keeps running; `stopSession` ends it. */
 	abort(): void;
-	messages(): Promise<Message[]>;
-	seats(): SeatInfo[];
+	visits(): VisitInfo[];
+}
+
+export interface Visit {
+	readonly human: HumanDefinition;
+	readonly id: string;
+	readonly status: VisitStatus;
+	/** Where this person stopped reading last. A live read of the record. */
+	readonly since: Seq | undefined;
+	deliver(input: { to?: Participant; text: string }): Promise<void>;
+	/** The host reports that the person acted. Returns an away visit to present. */
+	acted(): void;
+	leave(): Promise<void>;
 }
 
 interface SeatRuntime {
@@ -82,82 +127,215 @@ interface SeatRuntime {
 	/** Pi's abort() cancels the run but not its queues; this stops the rebuild loop too. */
 	aborted: boolean;
 	/**
-	 * How much of the record this seat has provably heard: the prefix its view
+	 * How much of the record this seat has provably heard: the seq its view
 	 * rendered, advanced as steers land in the transcript and by its own says.
-	 * A say commits only against a fully heard record — see sayTool.
 	 */
-	viewSeq: number;
+	viewSeq: Seq;
 	/** Record seqs of steers enqueued to the live agent, awaiting their drain (FIFO). */
-	pendingSteers: number[];
+	pendingSteers: Seq[];
 	agent?: Agent;
-	/** The seat's downstream Pi session — every activation's full turns, kept for audit. */
 	piSeat?: Promise<PiSession>;
 }
 
-export function openSession(options: OpenSessionOptions): Session {
-	return new SessionImpl(options);
+interface VisitRuntime {
+	id: string;
+	human: HumanDefinition;
+	via?: string;
+	idleTimeout: number;
+	enteredAt: string;
+	lastActedAt: number;
+	gone: boolean;
+	timer?: ReturnType<typeof setTimeout>;
 }
+
+/** Sets up the context where the agents work. */
+export function startSession(options: StartSessionOptions): Session {
+	if (running.has(options.name)) {
+		throw new Error(
+			`Session '${options.name}' is already running: stop it before starting it again.`,
+		);
+	}
+	const session = new SessionImpl(options);
+	running.set(options.name, session);
+	return session;
+}
+
+/** Takes the room down: turns aborted, visits closed, timers cleared, writes drained. */
+export function stopSession(session: Session): Promise<void> {
+	if (!(session instanceof SessionImpl)) {
+		throw new Error('stopSession takes a session from startSession.');
+	}
+	return session.stop();
+}
+
+/** Puts a person in a running room. */
+export function visitSession(
+	session: Session,
+	human: HumanDefinition,
+	options: VisitOptions = {},
+): Promise<Visit> {
+	if (!(session instanceof SessionImpl)) {
+		throw new Error('visitSession takes a session from startSession.');
+	}
+	return session.visit(human, options);
+}
+
+/** Reads a name and starts nothing. A running name reads through its live room. */
+export function readSession(name: string, options: ReadSessionOptions = {}): SessionView {
+	return running.get(name) ?? new ReadOnlySession(name, options.repo ?? defaultRepo);
+}
+
+// -- the record --------------------------------------------------------------
+
+/**
+ * The replayed record. Both a run and a read need it, and neither needs the
+ * other's machinery, so it is the one thing they share.
+ */
+class RecordStore {
+	readonly entries: Message[] = [];
+	readonly ready: Promise<PiSession>;
+	nextSeq = 0;
+	private tail: Promise<void> = Promise.resolve();
+
+	constructor(
+		private readonly repo: SessionRepo,
+		private readonly name: string,
+	) {
+		this.ready = this.open();
+	}
+
+	private async open(): Promise<PiSession> {
+		const piSession = await openOrCreate(this.repo, this.name);
+		const found = await piSession.findEntries();
+		// findEntries does not promise append order; seq does.
+		found.sort((a, b) => a.seq - b.seq);
+		for (const entry of found) {
+			if (entry.type !== 'custom' || entry.customType !== MESSAGE_ENTRY) continue;
+			this.entries.push(restore(entry.data as Partial<Message>, this.entries.length + 1));
+		}
+		this.nextSeq = this.entries.at(-1)?.seq ?? 0;
+		return piSession;
+	}
+
+	/**
+	 * Claim the record's next seq, synchronously — the say tool's conflict
+	 * check and this push must share one tick, or a rival say could slip
+	 * between them. Persistence follows in commit order on a write chain.
+	 */
+	append<T extends Message>(message: Omit<T, 'seq'>): T {
+		const stamped = { ...message, seq: ++this.nextSeq } as T;
+		this.entries.push(stamped);
+		this.tail = this.tail.then(async () => {
+			const piSession = await this.ready;
+			await piSession.appendCustomEntry(MESSAGE_ENTRY, stamped);
+		});
+		return stamped;
+	}
+
+	drained(): Promise<void> {
+		return this.tail;
+	}
+
+	since(cursor: Seq | undefined): Message[] {
+		if (cursor === undefined) return [...this.entries];
+		return this.entries.filter((message) => message.seq > cursor);
+	}
+}
+
+/** Records written before kinds and seqs read as what they were: things said. */
+function restore(data: Partial<Message>, fallbackSeq: Seq): Message {
+	return { kind: 'said', ...data, seq: data.seq ?? fallbackSeq } as Message;
+}
+
+class ReadOnlySession implements SessionView {
+	private readonly store: RecordStore;
+
+	constructor(
+		readonly name: string,
+		repo: SessionRepo,
+	) {
+		this.store = new RecordStore(repo, name);
+	}
+
+	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
+		await this.store.ready;
+		return this.store.since(options.since);
+	}
+
+	/** A room that is not running has no agents standing up, and nobody in it. */
+	seats(): SeatInfo[] {
+		const seen = new Map<string, SeatInfo>();
+		for (const message of this.store.entries) {
+			if (message.kind !== 'arrived') continue;
+			seen.set(message.from, {
+				kind: 'human',
+				name: message.from,
+				identity: message.identity ?? '',
+				presence: 'absent',
+				visits: 0,
+			});
+		}
+		return [...seen.values()];
+	}
+
+	/** Nothing is running, so nothing happens. The listener is never called. */
+	subscribe(): () => void {
+		return () => {};
+	}
+}
+
+// -- the room ----------------------------------------------------------------
 
 class SessionImpl implements Session {
 	readonly name: string;
+	private readonly goal?: string;
+	private readonly idleTimeout: number;
 	private readonly repo: SessionRepo;
-	private readonly ready: Promise<PiSession>;
-	private readonly record: Message[] = [];
-	private readonly humans = new Map<string, HumanDefinition>();
+	private readonly store: RecordStore;
 	private readonly agents = new Map<string, SeatRuntime>();
+	private readonly people = new Map<string, HumanDefinition>();
+	private readonly visitsByName = new Map<string, VisitRuntime[]>();
 	private readonly listeners = new Set<(event: SessionEvent) => void>();
 	private readonly settledWaiters: (() => void)[] = [];
 	private readonly streamFn: StreamFn;
-	/** True when a custom streamFn is in play: it never reads the model, so a stub suffices. */
 	private readonly customStream: boolean;
 	private activeCount = 0;
-	private persistTail: Promise<void> = Promise.resolve();
+	private visitCount = 0;
+	private stopped = false;
 
-	constructor(options: OpenSessionOptions) {
+	constructor(options: StartSessionOptions) {
 		this.name = options.name;
+		this.goal = options.goal?.trim() || undefined;
+		this.idleTimeout = options.idleTimeout ?? DEFAULT_IDLE_TIMEOUT;
 		this.repo = options.repo ?? defaultRepo;
-		this.ready = this.openStore(this.repo);
-		for (const participant of options.participants) this.seat(participant);
+		this.store = new RecordStore(this.repo, this.name);
+		for (const seat of options.agents) this.seat(seat);
 		this.customStream = options.streamFn !== undefined;
 		this.streamFn = options.streamFn ?? registryStream;
 	}
 
-	/** Seat one participant, refusing a name the room already knows. */
-	private seat(participant: Participant): void {
-		const def = isPassiveSeat(participant) ? participant.agent : participant;
-		if (this.humans.has(def.name) || this.agents.has(def.name)) {
-			throw new Error(`Duplicate participant name '${def.name}': one name names one participant.`);
-		}
-		if (isHuman(def)) {
-			this.humans.set(def.name, def);
-			return;
-		}
+	private get record(): Message[] {
+		return this.store.entries;
+	}
+
+	/** Seat one agent, refusing a name the room already knows. */
+	private seat(seat: AgentSeat): void {
+		const def = isPassiveSeat(seat) ? seat.agent : seat;
 		if (!isAgent(def)) {
-			throw new Error('Participants must come from defineAgent, defineHuman, or passive().');
+			throw new Error('Agents must come from defineAgent or passive().');
+		}
+		if (this.agents.has(def.name)) {
+			throw new Error(`Duplicate agent name '${def.name}': one name names one participant.`);
 		}
 		this.agents.set(def.name, {
 			def,
-			passive: isPassiveSeat(participant),
+			passive: isPassiveSeat(seat),
 			active: false,
 			spoke: false,
 			aborted: false,
 			viewSeq: 0,
 			pendingSteers: [],
 		});
-	}
-
-	/** Open the name into its Pi session — creating it on first open — and load the record. */
-	private async openStore(repo: SessionRepo): Promise<PiSession> {
-		const piSession = await openOrCreate(repo, this.name);
-		const entries = await piSession.findEntries();
-		// findEntries does not promise append order; seq does.
-		entries.sort((a, b) => a.seq - b.seq);
-		for (const entry of entries) {
-			if (entry.type === 'custom' && entry.customType === MESSAGE_ENTRY) {
-				this.record.push(entry.data as Message);
-			}
-		}
-		return piSession;
 	}
 
 	/**
@@ -167,31 +345,10 @@ class SessionImpl implements Session {
 	 */
 	private seatSession(seat: SeatRuntime): Promise<PiSession> {
 		seat.piSeat ??= (async () => {
-			await this.ready;
+			await this.store.ready;
 			return openOrCreate(this.repo, `${this.name}:${seat.def.name}`, this.name);
 		})();
 		return seat.piSeat;
-	}
-
-	async deliver(input: Deliver): Promise<void> {
-		const from = this.humans.get(input.from?.name ?? '');
-		if (!from || from !== input.from) {
-			throw new Error('deliver() takes a seated human handle as from.');
-		}
-		let to: string | undefined;
-		if (input.to) {
-			const name = input.to.name;
-			if (!this.humans.has(name) && !this.agents.has(name)) {
-				throw new Error(`Cannot direct a delivery to '${name}': not seated in this session.`);
-			}
-			to = name;
-		}
-		await this.ready;
-		const message = this.commit(from.name, to, input.text);
-		const seq = this.record.length;
-		await this.persistTail;
-		this.emit({ type: 'delivery', message });
-		this.dispatch(message, seq);
 	}
 
 	subscribe(listener: (event: SessionEvent) => void): () => void {
@@ -206,52 +363,283 @@ class SessionImpl implements Session {
 
 	abort(): void {
 		for (const seat of this.agents.values()) {
-			if (seat.active) {
-				seat.aborted = true;
-				seat.agent?.abort();
-			}
+			if (!seat.active) continue;
+			seat.aborted = true;
+			seat.agent?.abort();
 		}
 	}
 
-	async messages(): Promise<Message[]> {
-		await this.ready;
-		return [...this.record];
+	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
+		await this.store.ready;
+		return this.store.since(options.since);
 	}
 
 	seats(): SeatInfo[] {
 		const seats: SeatInfo[] = [];
-		for (const human of this.humans.values()) {
-			seats.push({ name: human.name, kind: 'human', identity: human.identity });
-		}
 		for (const seat of this.agents.values()) {
 			seats.push({
-				name: seat.def.name,
 				kind: 'agent',
+				name: seat.def.name,
 				identity: seat.def.identity,
 				status: seat.active ? 'active' : seat.passive ? 'passive' : 'idle',
 				sessionId: `${this.name}:${seat.def.name}`,
 			});
 		}
+		for (const [name, identity] of this.knownPeople()) {
+			seats.push({
+				kind: 'human',
+				name,
+				identity,
+				presence: this.presenceOf(name),
+				visits: (this.visitsByName.get(name) ?? []).length,
+			});
+		}
 		return seats;
 	}
 
-	// -- the room ------------------------------------------------------------
+	visits(): VisitInfo[] {
+		const now = Date.now();
+		const all: VisitInfo[] = [];
+		for (const [name, visits] of this.visitsByName) {
+			for (const visit of visits) {
+				all.push({
+					id: visit.id,
+					human: name,
+					status: statusOf(visit, now),
+					via: visit.via,
+					enteredAt: visit.enteredAt,
+					lastActedAt: new Date(visit.lastActedAt).toISOString(),
+					since: this.sinceOf(name),
+				});
+			}
+		}
+		return all;
+	}
+
+	// -- presence ------------------------------------------------------------
 
 	/**
-	 * Claim the record's next slot, synchronously — the say tool's conflict
-	 * check and this push must share one tick, or a rival say could slip
-	 * between them. Persistence follows in commit order on a write chain.
-	 * Callers run after `ready` (deliver awaits it; a say implies a run).
+	 * Every name the room knows: the arrivals on its record, and whoever holds
+	 * a visit now. A run does not carry its people over from the last one —
+	 * the record does, which is why a `say` to somebody who was here yesterday
+	 * still lands.
 	 */
-	private commit(from: string, to: string | undefined, text: string): Message {
-		const message: Message = { from, text, at: new Date().toISOString() };
-		if (to) message.to = to;
-		this.record.push(message);
-		this.persistTail = this.persistTail.then(async () => {
-			const piSession = await this.ready;
-			await piSession.appendCustomEntry(MESSAGE_ENTRY, message);
+	private knownPeople(): Map<string, string> {
+		const known = new Map<string, string>();
+		for (const message of this.record) {
+			if (message.kind === 'arrived' && message.identity) known.set(message.from, message.identity);
+		}
+		for (const [name, human] of this.people) known.set(name, human.identity);
+		return known;
+	}
+
+	private knows(name: string): boolean {
+		if (this.people.has(name)) return true;
+		return this.record.some((message) => message.kind === 'arrived' && message.from === name);
+	}
+
+	/** Present if any visit is present, away if all are, absent with none. */
+	private presenceOf(name: string): PresenceStatus {
+		const visits = this.visitsByName.get(name) ?? [];
+		if (visits.length === 0) return 'absent';
+		const now = Date.now();
+		return visits.some((visit) => statusOf(visit, now) === 'present') ? 'present' : 'away';
+	}
+
+	/** The seq of this person's most recent `away` or `left`. */
+	private sinceOf(name: string): Seq | undefined {
+		for (let i = this.record.length - 1; i >= 0; i -= 1) {
+			const message = this.record[i];
+			if (!message || message.from !== name) continue;
+			if (message.kind === 'away' || message.kind === 'left') return message.seq;
+		}
+		return undefined;
+	}
+
+	async visit(human: HumanDefinition, options: VisitOptions): Promise<Visit> {
+		this.assertRunning();
+		this.assertVisitable(human);
+		await this.store.ready;
+		const before = this.presenceOf(human.name);
+		this.visitCount += 1;
+		const runtime: VisitRuntime = {
+			id: `${human.name}#${this.visitCount}`,
+			human,
+			via: options.via,
+			idleTimeout: options.idleTimeout ?? this.idleTimeout,
+			enteredAt: new Date().toISOString(),
+			lastActedAt: Date.now(),
+			gone: false,
+		};
+		// The room changes before the message does: a seat woken by the arrival
+		// must read a roster that already agrees with it.
+		this.visitsByName.set(human.name, [...(this.visitsByName.get(human.name) ?? []), runtime]);
+		this.people.set(human.name, human);
+		this.emit({
+			type: 'visit_enter',
+			human: human.name,
+			visit: runtime.id,
+			presence: this.presenceOf(human.name),
 		});
-		return message;
+		await this.notePresence(human.name, before, 'arrived', human.identity);
+		this.arm(runtime);
+		return this.handle(runtime);
+	}
+
+	private assertVisitable(human: HumanDefinition): void {
+		if (this.agents.has(human.name)) {
+			throw new Error(
+				`'${human.name}' is an agent in this session: one name names one participant.`,
+			);
+		}
+		const known = this.people.get(human.name);
+		if (known && known.identity !== human.identity) {
+			throw new Error(
+				`'${human.name}' is already in this session under a different identity: one name is one person.`,
+			);
+		}
+	}
+
+	private assertRunning(): void {
+		if (this.stopped) throw new Error(`Session '${this.name}' is stopped.`);
+	}
+
+	/**
+	 * Commit a presence message when — and only when — the person's own status
+	 * changed. A second tab is host bookkeeping and never reaches the record.
+	 */
+	private async notePresence(
+		name: string,
+		before: PresenceStatus,
+		kind: PresenceChange,
+		identity?: string,
+	): Promise<void> {
+		const after = this.presenceOf(name);
+		if (after === before) return;
+		const message = this.store.append<PresenceMessage>({
+			kind,
+			at: new Date().toISOString(),
+			from: name,
+			...(identity === undefined ? {} : { identity }),
+		});
+		await this.store.drained();
+		this.emit({ type: 'delivery', message });
+		this.dispatch(message);
+	}
+
+	private arm(visit: VisitRuntime): void {
+		clearTimeout(visit.timer);
+		visit.timer = undefined;
+		if (!Number.isFinite(visit.idleTimeout)) return;
+		const timer = setTimeout(() => void this.turnAway(visit), visit.idleTimeout);
+		timer.unref?.();
+		visit.timer = timer;
+	}
+
+	private async turnAway(visit: VisitRuntime): Promise<void> {
+		if (visit.gone || this.stopped) return;
+		visit.timer = undefined;
+		// The clock already made this visit away; the message only reports it.
+		await this.notePresence(visit.human.name, 'present', 'away');
+	}
+
+	private act(visit: VisitRuntime): void {
+		this.assertRunning();
+		if (visit.gone) throw new Error(`This visit has ended: ${visit.id}.`);
+		const before = this.presenceOf(visit.human.name);
+		visit.lastActedAt = Date.now();
+		this.arm(visit);
+		void this.notePresence(visit.human.name, before, 'returned');
+	}
+
+	private async endVisit(visit: VisitRuntime, silent: boolean): Promise<void> {
+		if (visit.gone) return;
+		const name = visit.human.name;
+		const before = this.presenceOf(name);
+		clearTimeout(visit.timer);
+		visit.timer = undefined;
+		visit.gone = true;
+		const rest = (this.visitsByName.get(name) ?? []).filter((other) => other !== visit);
+		if (rest.length === 0) this.visitsByName.delete(name);
+		else this.visitsByName.set(name, rest);
+		this.emit({
+			type: 'visit_leave',
+			human: name,
+			visit: visit.id,
+			presence: this.presenceOf(name),
+		});
+		if (silent) return;
+		await this.notePresence(name, before, 'left');
+	}
+
+	private handle(visit: VisitRuntime): Visit {
+		const session = this;
+		return {
+			human: visit.human,
+			id: visit.id,
+			get status() {
+				return statusOf(visit, Date.now());
+			},
+			get since() {
+				return session.sinceOf(visit.human.name);
+			},
+			async deliver(input) {
+				session.act(visit);
+				await session.deliverFrom(visit.human.name, input);
+			},
+			acted() {
+				session.act(visit);
+			},
+			leave() {
+				return session.endVisit(visit, false);
+			},
+		};
+	}
+
+	/** Closes the run: what is mid-flight ends, what is present is marked gone. */
+	async stop(): Promise<void> {
+		if (this.stopped) return;
+		this.abort();
+		await this.store.ready;
+		// A deliberate shutdown observed everybody leaving, so the record says
+		// so — but it wakes nobody: a turn started to hear that the room is
+		// closing is a turn nobody reads.
+		for (const name of [...this.visitsByName.keys()]) {
+			if (this.presenceOf(name) === 'absent') continue;
+			this.store.append<PresenceMessage>({
+				kind: 'left',
+				at: new Date().toISOString(),
+				from: name,
+			});
+		}
+		for (const visits of [...this.visitsByName.values()]) {
+			for (const visit of [...visits]) await this.endVisit(visit, true);
+		}
+		this.stopped = true;
+		await this.store.drained();
+		if (running.get(this.name) === this) running.delete(this.name);
+	}
+
+	// -- messages ------------------------------------------------------------
+
+	private async deliverFrom(
+		from: string,
+		input: { to?: Participant; text: string },
+	): Promise<void> {
+		const to = input.to?.name;
+		if (to !== undefined && !this.knows(to) && !this.agents.has(to)) {
+			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
+		}
+		const message = this.store.append<SpokenMessage>({
+			kind: 'said',
+			at: new Date().toISOString(),
+			from,
+			...(to === undefined ? {} : { to }),
+			text: input.text,
+		});
+		await this.store.drained();
+		this.emit({ type: 'delivery', message });
+		this.dispatch(message);
 	}
 
 	private emit(event: SessionEvent): void {
@@ -265,29 +653,24 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * Route a committed message — the room's whole policy in one place, the
-	 * same for a human's delivery and an agent's say. Every colleague still
-	 * at work hears it as a steer (rule 2). A broadcast wakes the idle room,
-	 * passive seats excepted (rule 1); a directed message focuses attention
-	 * instead — it wakes exactly its target, passive included, and leaves
-	 * the rest of the idle room at rest (rule 4). What keeps a room from
-	 * echoing itself is not routing but the bar for speaking (rule 3) and
-	 * the lock (rule 5): a woken seat that has nothing to add declines.
+	 * Route a committed message — the room's whole policy in one place, and
+	 * the same for what a person said, what a person did, and what a colleague
+	 * said. Every colleague still at work hears it as a steer (rule 2). A
+	 * broadcast wakes the idle room, passive seats excepted (rule 1); a
+	 * directed message wakes exactly its target, passive included (rule 4).
 	 */
-	private dispatch(message: Message, seq: number): void {
-		const target = message.to !== undefined ? this.agents.get(message.to) : undefined;
+	private dispatch(message: Message): void {
+		const to = isSpoken(message) ? message.to : undefined;
+		const target = to !== undefined ? this.agents.get(to) : undefined;
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
-			if (seat.active) {
-				this.steerInto(seat, message, seq);
-			} else if (seat === target || (message.to === undefined && !seat.passive)) {
-				this.activate(seat);
-			}
+			if (seat.active) this.steerInto(seat, message);
+			else if (wakes(seat, target, to)) this.activate(seat);
 		}
 	}
 
-	private steerInto(seat: SeatRuntime, message: Message, seq: number): void {
-		seat.pendingSteers.push(seq);
+	private steerInto(seat: SeatRuntime, message: Message): void {
+		seat.pendingSteers.push(message.seq);
 		seat.agent?.steer(userMessage(`[new] ${renderLine(message)}`));
 	}
 
@@ -302,10 +685,9 @@ class SessionImpl implements Session {
 			seat.agent = undefined;
 			this.emit({ type: 'agent_end', agent: seat.def.name, spoke: seat.spoke });
 			this.activeCount -= 1;
-			if (this.activeCount === 0) {
-				this.emit({ type: 'settled' });
-				for (const resolve of this.settledWaiters.splice(0)) resolve();
-			}
+			if (this.activeCount > 0) return;
+			this.emit({ type: 'settled' });
+			for (const resolve of this.settledWaiters.splice(0)) resolve();
 		});
 	}
 
@@ -313,7 +695,7 @@ class SessionImpl implements Session {
 		for (;;) {
 			try {
 				// A fresh view hands the seat the whole record: heard up to here.
-				seat.viewSeq = this.record.length;
+				seat.viewSeq = this.store.nextSeq;
 				seat.pendingSteers = [];
 				const agent = this.buildAgent(seat);
 				seat.agent = agent;
@@ -400,37 +782,22 @@ class SessionImpl implements Session {
 			execute: async (_toolCallId, rawParams) => {
 				const params = rawParams as { to?: string; text: string };
 				const to = params.to?.trim() ? params.to.trim() : undefined;
-				if (to !== undefined && !this.humans.has(to) && !this.agents.has(to)) {
-					throw new Error(`Unknown participant '${to}'. Address someone from the roster.`);
-				}
-				if (to === seat.def.name) {
-					throw new Error('You cannot address yourself.');
-				}
-				// Optimistic locking: a say commits only against a record its seat
-				// has heard in full. The check and the commit below share one tick,
-				// so exactly one of two racing says wins; the loser's failure carries
-				// what it missed — a steer with a delivery guarantee.
-				if (this.record.length > seat.viewSeq) {
-					const missed = this.record.slice(seat.viewSeq);
-					seat.viewSeq = this.record.length;
-					this.emit({ type: 'say_conflict', agent: seat.def.name, missed });
-					throw new Error(
-						[
-							'Not delivered — the room moved while you were speaking. New on the record:',
-							...missed.map(renderLine),
-							'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
-						].join('\n'),
-					);
-				}
-				const message = this.commit(seat.def.name, to, params.text);
-				const seq = this.record.length;
-				seat.viewSeq = seq;
+				this.assertAddressable(seat, to);
+				const conflict = this.conflict(seat);
+				if (conflict) throw conflict;
+				const message = this.store.append<SpokenMessage>({
+					kind: 'said',
+					at: new Date().toISOString(),
+					from: seat.def.name,
+					...(to === undefined ? {} : { to }),
+					text: params.text,
+				});
+				seat.viewSeq = message.seq;
 				seat.spoke = true;
-				await this.persistTail;
-				// A say is atomic: one event, the whole message, exactly as it landed
-				// on the record. Finer granularity belongs to the seat's own layer.
+				await this.store.drained();
+				// A say is atomic: one event, the whole message, exactly as it landed.
 				this.emit({ type: 'say', agent: seat.def.name, message });
-				this.dispatch(message, seq);
+				this.dispatch(message);
 				const result: AgentToolResult<Record<string, never>> = {
 					content: [{ type: 'text', text: 'delivered' }],
 					details: {},
@@ -440,18 +807,68 @@ class SessionImpl implements Session {
 		};
 	}
 
+	private assertAddressable(seat: SeatRuntime, to: string | undefined): void {
+		if (to === undefined) return;
+		if (!this.knows(to) && !this.agents.has(to)) {
+			throw new Error(`Unknown participant '${to}'. Address someone from the roster.`);
+		}
+		if (to === seat.def.name) throw new Error('You cannot address yourself.');
+	}
+
+	/**
+	 * Optimistic locking: a say commits only against a record its seat has
+	 * heard in full. The check and the append share one tick, so exactly one
+	 * of two racing says wins; the loser's failure carries what it missed.
+	 */
+	private conflict(seat: SeatRuntime): Error | undefined {
+		if (this.store.nextSeq <= seat.viewSeq) return undefined;
+		const missed = this.store.since(seat.viewSeq);
+		seat.viewSeq = this.store.nextSeq;
+		this.emit({ type: 'say_conflict', agent: seat.def.name, missed });
+		return new Error(
+			[
+				'Not delivered — the room moved while you were speaking. New on the record:',
+				...missed.map(renderLine),
+				'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
+			].join('\n'),
+		);
+	}
+
+	// -- what an agent reads -------------------------------------------------
+
+	/** One entry per person the room knows, with their gap and what they missed. */
+	private peopleViews(): PersonView[] {
+		const views: PersonView[] = [];
+		for (const [name, identity] of this.knownPeople()) {
+			const since = this.sinceOf(name);
+			views.push({
+				name,
+				identity,
+				presence: this.presenceOf(name),
+				changedAt: this.lastChangeAt(name),
+				since,
+				unseen: since === undefined ? 0 : this.store.since(since).length,
+			});
+		}
+		return views;
+	}
+
+	private lastChangeAt(name: string): string | undefined {
+		for (let i = this.record.length - 1; i >= 0; i -= 1) {
+			const message = this.record[i];
+			if (message && message.kind !== 'said' && message.from === name) return message.at;
+		}
+		return undefined;
+	}
+
 	private systemPrompt(seat: SeatRuntime): string {
-		const roster = this.seats()
-			.map((s) => `- ${s.name} (${s.kind === 'human' ? 'human' : s.status}): ${s.identity}`)
-			.join('\n');
-		return [
+		const lines = [
 			`You are '${seat.def.name}', an agent seated in the session '${this.name}' — a shared`,
 			`room with a record. Every participant sees what is said; nobody sees your tool use.`,
 			``,
-			`The roster (active: taking a turn now; idle: hears every message; passive: hears`,
-			`only a say directed at them — a broadcast will not reach a passive colleague):`,
-			roster,
-			``,
+		];
+		if (this.goal) lines.push(`This session exists to: ${this.goal}`, ``);
+		lines.push(
 			`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 			`your turn without saying anything, and no mark is left. Speak only when your reply`,
 			`adds something the record does not already hold — new information, a decision moved`,
@@ -466,19 +883,32 @@ class SessionImpl implements Session {
 			`the room moved while you were speaking: the failure lists what you missed — read`,
 			`it, and speak again only if your reply still adds something.`,
 			``,
+		);
+		if (this.goal) lines.push(...ARRIVAL_PARAGRAPH, ``);
+		lines.push(
 			`Your identity, as the room knows it: ${seat.def.identity}`,
 			``,
 			`Your instructions:`,
 			seat.def.instructions.trim(),
-		].join('\n');
+		);
+		return lines.join('\n');
 	}
 
 	private renderContext(seat: SeatRuntime): string {
-		const transcript =
-			this.record.length === 0 ? '(the record is empty)' : this.record.map(renderLine).join('\n');
+		const now = Date.now();
+		const people = this.peopleViews();
 		return [
+			renderClock(now),
+			``,
+			`The agents (active: taking a turn now; idle: hears every message; passive: hears`,
+			`only a say directed at them):`,
+			renderAgents(this.seats()),
+			``,
+			`The people (present: reading now; away: here, not reading; absent: not here):`,
+			renderPeople(people, now),
+			``,
 			`The record of '${this.name}' so far:`,
-			transcript,
+			renderRecord(this.record, people, now),
 			``,
 			`Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`,
 		].join('\n');
@@ -505,6 +935,33 @@ class SessionImpl implements Session {
 	}
 }
 
+/** What an agent does when somebody walks in. Rendered only when a goal is set. */
+const ARRIVAL_PARAGRAPH = [
+	`An arrival is a message like any other and the bar for speaking is the same. Most`,
+	`arrivals need nothing said. The record marks where each person stopped reading, so`,
+	`you can see what they have not seen. Speak to somebody who has just arrived when the`,
+	`record holds something that is theirs to decide, or when what changed while they were`,
+	`away changes what they do next — say what changed and what you need from them, in one`,
+	`message. Do not greet, do not say that you noticed them, and do not summarise the room`,
+	`to somebody who was here for all of it. When nobody is in the room, work for the`,
+	`record: state what you decided and why, and do not wait for an answer that nobody is`,
+	`there to give.`,
+];
+
+/** A directed message wakes its target alone; a broadcast wakes every idle seat. */
+function wakes(
+	seat: SeatRuntime,
+	target: SeatRuntime | undefined,
+	to: string | undefined,
+): boolean {
+	if (to !== undefined) return seat === target;
+	return !seat.passive;
+}
+
+function statusOf(visit: VisitRuntime, now: number): VisitStatus {
+	return now - visit.lastActedAt < visit.idleTimeout ? 'present' : 'away';
+}
+
 /** Open an id into its Pi session, creating it on first open. */
 async function openOrCreate(
 	repo: SessionRepo,
@@ -514,10 +971,6 @@ async function openOrCreate(
 	const known = (await repo.list()).find((metadata) => metadata.id === id);
 	if (known) return repo.open(known);
 	return repo.create(parentSessionId ? { id, parentSessionId } : { id });
-}
-
-function renderLine(message: Message): string {
-	return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}`;
 }
 
 function userMessage(text: string): UserMessage {

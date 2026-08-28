@@ -1,40 +1,103 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Static, TSchema } from 'typebox';
 
-/** One entry on a session's record. `from`/`at` are stamped by the runtime. */
-export interface Message {
+/** A position on the record: monotonic, assigned at commit, never reused. */
+export type Seq = number;
+
+/** What a participant said. */
+export interface SpokenMessage {
+	kind: 'said';
+	seq: Seq;
+	/** ISO timestamp, stamped by the runtime at the moment it landed. */
+	at: string;
 	/** A participant's name — stamped by the runtime, never claimed. */
 	from: string;
 	/** Present when the delivery or say was directed. */
 	to?: string;
 	text: string;
-	/** ISO timestamp, stamped by the runtime at the moment it landed. */
+}
+
+/** The four ways a person's presence changes. */
+export type PresenceChange = 'arrived' | 'away' | 'returned' | 'left';
+
+/**
+ * What a person did. It carries no text, because they said nothing: writing
+ * words under their name is what rule 7 exists to prevent.
+ */
+export interface PresenceMessage {
+	kind: PresenceChange;
+	seq: Seq;
 	at: string;
+	/** The person, stamped from the visit the runtime observed. */
+	from: string;
+	/**
+	 * How the room knew them, on `arrived` alone. Replay rebuilds the roster
+	 * from the record, and a name without an identity is not a roster line.
+	 */
+	identity?: string;
+}
+
+/** One entry on a session's record. */
+export type Message = SpokenMessage | PresenceMessage;
+
+export function isSpoken(message: Message): message is SpokenMessage {
+	return message.kind === 'said';
 }
 
 export type SeatStatus = 'active' | 'idle' | 'passive';
 
-export interface SeatInfo {
+/** A visit is present or away. A person is also absent when they hold none. */
+export type VisitStatus = 'present' | 'away';
+export type PresenceStatus = VisitStatus | 'absent';
+
+export interface AgentSeatInfo {
+	kind: 'agent';
 	name: string;
-	kind: 'agent' | 'human';
 	identity: string;
-	/** Agents only: the seat's live status. */
-	status?: SeatStatus;
-	/** Agents only: the id of the seat's downstream Pi session, `<room>:<agent>`. */
-	sessionId?: string;
+	status: SeatStatus;
+	/** The id of the seat's downstream Pi session, `<room>:<agent>`. */
+	sessionId: string;
+}
+
+export interface HumanSeatInfo {
+	kind: 'human';
+	name: string;
+	identity: string;
+	presence: PresenceStatus;
+	/** How many live visits hold this seat. */
+	visits: number;
+}
+
+export type SeatInfo = AgentSeatInfo | HumanSeatInfo;
+
+export interface VisitInfo {
+	id: string;
+	human: string;
+	status: VisitStatus;
+	via?: string;
+	/** ISO, stamped by the runtime. */
+	enteredAt: string;
+	/** ISO, stamped by the runtime. */
+	lastActedAt: string;
+	/** Where this person stopped reading last, or undefined when they never have. */
+	since: Seq | undefined;
 }
 
 /** The session's event stream: room-level facts, one event per fact. */
 export type SessionEvent =
 	| { type: 'delivery'; message: Message }
 	| { type: 'agent_start'; agent: string }
-	| { type: 'say'; agent: string; message: Message }
+	| { type: 'say'; agent: string; message: SpokenMessage }
 	| { type: 'say_conflict'; agent: string; missed: Message[] }
 	| { type: 'tool_execution_start'; agent: string; toolName: string }
 	| { type: 'tool_execution_end'; agent: string; toolName: string }
 	| { type: 'agent_end'; agent: string; spoke: boolean }
 	| { type: 'error'; agent: string; error: Error }
-	| { type: 'settled' };
+	| { type: 'settled' }
+	| { type: 'visit_enter'; human: string; visit: string; presence: PresenceStatus }
+	| { type: 'visit_away'; human: string; visit: string; presence: PresenceStatus }
+	| { type: 'visit_return'; human: string; visit: string; presence: PresenceStatus }
+	| { type: 'visit_leave'; human: string; visit: string; presence: PresenceStatus };
 
 export const TOOL_BRAND = Symbol.for('ambion.tool');
 export const AGENT_BRAND = Symbol.for('ambion.agent');
@@ -74,14 +137,14 @@ export interface PassiveSeat {
 	readonly agent: AgentDefinition;
 }
 
-export type Participant = AgentDefinition | HumanDefinition | PassiveSeat;
+/** What `startSession` seats: an agent, idle or passive. */
+export type AgentSeat = AgentDefinition | PassiveSeat;
+
+/** Who may be addressed by name. */
+export type Participant = AgentDefinition | HumanDefinition;
 
 export function isAgent(p: unknown): p is AgentDefinition {
 	return typeof p === 'object' && p !== null && AGENT_BRAND in p;
-}
-
-export function isHuman(p: unknown): p is HumanDefinition {
-	return typeof p === 'object' && p !== null && HUMAN_BRAND in p;
 }
 
 export function isPassiveSeat(p: unknown): p is PassiveSeat {

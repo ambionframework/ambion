@@ -22,9 +22,13 @@ import {
 	defineAgent,
 	defineHuman,
 	defineTool,
-	openSession,
+	isSpoken,
 	passive,
 	type SessionEvent,
+	startSession,
+	stopSession,
+	type Visit,
+	visitSession,
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 
@@ -122,10 +126,17 @@ const planner = defineAgent({
 
 // -- the room -----------------------------------------------------------------
 
-const session = openSession({
+const session = startSession({
 	name: 'initiative',
-	participants: [you, lead, designer, product, exec, passive(planner)],
+	goal: `
+		Advance the initiative the sponsor brings: decide scope, sequence the
+		work, and keep the plan of record current.
+	`,
+	agents: [lead, designer, product, exec, passive(planner)],
 });
+
+/** The room runs whether or not anybody watches; this is somebody watching. */
+let visit: Visit | undefined;
 
 const colors: Record<string, string> = {
 	lead: '\x1b[36m', // cyan
@@ -178,6 +189,10 @@ session.subscribe((event: SessionEvent) => {
 		case 'settled':
 			say(`${dim}— room is quiet —${reset}`);
 			break;
+		case 'delivery':
+			if (!isSpoken(event.message))
+				say(`${dim}· ${event.message.from} ${event.message.kind}${reset}`);
+			break;
 		default:
 			break;
 	}
@@ -193,6 +208,7 @@ function help(): void {
 			'  @<name> <text>    directed: wakes exactly that agent — @planner reaches the passive seat',
 			'  /seats            the roster with live statuses',
 			'  /record           the session record',
+			'  /missed           what landed since you last stopped reading',
 			'  /abort            cancel every active turn',
 			'  /quit             leave the room',
 			'',
@@ -206,14 +222,27 @@ function help(): void {
 
 function showSeats(): void {
 	for (const seat of session.seats()) {
-		const status = seat.status ? `, ${seat.status}` : '';
-		console.log(`  ${seat.name} (${seat.kind}${status}): ${seat.identity}`);
+		const state = seat.kind === 'agent' ? seat.status : seat.presence;
+		console.log(`  ${seat.name} (${seat.kind}, ${state}): ${seat.identity}`);
 	}
 }
 
 async function showRecord(): Promise<void> {
 	for (const m of await session.messages()) {
-		console.log(`  [${m.from}${m.to ? ` → ${m.to}` : ''}] ${m.text}`);
+		if (isSpoken(m)) console.log(`  [${m.from}${m.to ? ` → ${m.to}` : ''}] ${m.text}`);
+		else console.log(`  · ${m.from} ${m.kind}`);
+	}
+}
+
+/** What landed since this visitor last stopped reading. */
+async function showMissed(): Promise<void> {
+	const since = visit?.since;
+	if (since === undefined) {
+		console.log('  (you have not been here before — the whole record is new)');
+		return;
+	}
+	for (const m of await session.messages({ since })) {
+		console.log(isSpoken(m) ? `  [${m.from}] ${m.text}` : `  · ${m.from} ${m.kind}`);
 	}
 }
 
@@ -225,8 +254,11 @@ const commands = new Map<string, () => void | Promise<void>>(
 		'/help': help,
 		'/seats': showSeats,
 		'/record': showRecord,
+		'/missed': showMissed,
 		'/abort': () => session.abort(),
-		'/quit': () => {
+		'/quit': async () => {
+			await visit?.leave();
+			await stopSession(session);
 			rl.close();
 			process.exit(0);
 		},
@@ -235,14 +267,16 @@ const commands = new Map<string, () => void | Promise<void>>(
 
 /** `@name text` reaches one seat; anything else reaches the room. */
 async function deliver(input: string): Promise<void> {
+	const here = visit;
+	if (!here) return;
 	const directed = /^@([a-z-]+)\s+(.+)$/.exec(input);
-	if (!directed) return session.deliver({ from: you, text: input });
+	if (!directed) return here.deliver({ text: input });
 	const target = byName[directed[1] as keyof typeof byName];
 	if (!target || target === you) {
 		console.log(`${red}no such agent: ${directed[1]}${reset}`);
 		return;
 	}
-	await session.deliver({ from: you, to: target, text: directed[2] as string });
+	await here.deliver({ to: target, text: directed[2] as string });
 }
 
 async function handle(line: string): Promise<void> {
@@ -262,6 +296,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
 	console.log(`${red}ANTHROPIC_API_KEY is not set — agents will fail to answer.${reset}`);
 }
 help();
+visit = await visitSession(session, you);
 rl.setPrompt('you › ');
 rl.prompt();
 rl.on('line', (line) => {
