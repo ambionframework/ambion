@@ -82,14 +82,10 @@ do, and an arrival is then a fact it cannot judge. `goal` is to a session
 what `identity` is to an agent — one or two sentences, public, in every
 participant's context.
 
-`goal` is optional, and what it gates is deliberate: **a room with no goal
-does not ask its agents to judge arrivals.** §9's paragraph about who to
-speak to when somebody walks in renders only when a goal is set. Presence
-still lands on the record and still shows in the roster, and the agents
-still read it — they are simply not asked to act on it, because without a
-purpose there is nothing to weigh an arrival against.
+`goal` is optional. A room without one still works; its agents simply have
+less to weigh a question against, and the goal line does not render.
 
-The two options presence adds:
+The one option presence adds:
 
 ```ts
 export interface StartSessionOptions {
@@ -248,12 +244,31 @@ delivered into a session activates every idle agent. Arriving delivers a
 message. Nothing is special-cased, and nothing was weakened to let a door
 count.
 
-**Rule 2 holds exactly, and this is the one to think about.** Whatever
-arrives mid-turn is steered into every active agent, and a presence message
-arrives like any other — an agent at work learns that Andrei walked in, at
-the next safe point, without finishing blind. The steer renders the line the
-transcript renders, `[new] · andrei arrived`, so a seat never sees a message
-with no text and no explanation of it. §7 counts what that costs.
+**Rule 4 decides who hears it, and that is nobody.** A presence message
+carries no `to` and is addressed to nobody: it commits, takes its seq, and
+wakes no idle seat, ever. This is rule 4 taken to its limit, not an exception
+to rule 1.
+
+It is addressed to nobody because an arrival has no words in it. Every other
+message says what it wants; an arrival says only that somebody is here, so a
+seat that answers one is guessing at the request — and a room of three
+products guessing hands a person three briefings they never asked for the
+moment they open it. That cost scales with how many people use the workspace,
+not with how much work there is. §8 is what actually briefs a returning
+person, and it costs nothing until they ask.
+
+**Rule 2 is the whole point of routing a presence message.** Whatever arrives
+mid-turn is steered into every active agent, and a presence message arrives
+like any other: `[new] · andrei arrived` lands in the running turn at the next
+safe point. A seat at rest is not woken and reads it at its next activation; a
+seat already working is told while it can still act on it.
+
+That is what presence routing is for, and it is not a consolation prize for
+not activating. A seat drafting a reply when the person it concerns walks in —
+or walks out — can aim what it was already going to say: pitch it at whoever
+is reading now, say the part that needs them while they are still there, and
+drop what only mattered to somebody who has gone. It shapes an answer already
+being written. It never starts one.
 
 **Rule 5 holds exactly.** A `say` commits only against a record its seat has
 heard in full, and an arrival is part of that record. An agent composing a
@@ -382,18 +397,12 @@ reports away, because it subtracts two numbers.
 
 ### What presence costs
 
-Under the default it costs one commit and no model call. A presence message
-lands on the record, wakes nobody, and is read at the next activation by
-whoever the next real message wakes. That is the whole bill.
+A presence message costs one commit and no model call. It lands on the
+record, wakes nobody, and is read at the next activation by whoever the next
+real message wakes. A seat already at work pays a steer — one round on a turn
+it was running anyway, not a turn of its own.
 
-`arrivals: 'activate'` is where the cost is, and it is worth stating in
-full. Every presence message then wakes every idle agent, so a room of three
-pays three looks each time anybody opens it, leaves it, or crosses the
-timeout — and most of those looks produce silence, which is billed like
-everything else. The bill scales with how many people use the workspace and
-how many products it holds, not with how much work there is to do.
-
-Three things bound it, whichever policy is set. **Away fires at most once
+Three things bound the rest. **Away fires at most once
 per stretch of attention**, because an away visit holds no timer — a person
 in and out all day writes a few messages, not one per tick. **`Infinity`**
 removes the two clock-driven kinds entirely, leaving the arrivals and
@@ -530,24 +539,22 @@ One divider per person in the room, at the seq where they stopped reading,
 and a count beside their name in the roster. An agent does not compute what
 somebody missed; it reads it.
 
-The system prompt carries one paragraph about arrivals, and almost all of it
-is about not speaking. An arrival is not a request for a briefing: the bar
-for answering one is higher than the bar for answering a question, because
-the person did not ask anything. It renders only when the session has a goal
-(§2) — an agent with nothing to weigh an arrival against is not asked to
-weigh one.
+The system prompt carries one paragraph about presence, and it is about
+aiming rather than answering. A presence line reaching a working seat is never
+a request — nobody asked anything by opening the workspace — so it never
+starts a turn, and the paragraph says so. It renders in every room, with or
+without a goal, because it is about routing rather than purpose.
 
-> An arrival is a message like any other, and the bar for speaking is higher,
-> not lower. Somebody opening the workspace is not a request for a briefing,
-> and they can read the record themselves. Stay idle unless one of two things
-> is true: something needs their input before anybody can move, or something
-> they have not seen changes what they do next. If neither holds, end your
-> turn without speaking. When one does hold, say the one thing and name what
-> you need from them, in a sentence or two. Never greet, never say that you
-> noticed them, never summarise the record back to the room, and never speak
-> only because a colleague spoke. When nobody is in the room, work for the
-> record: state what you decided and why, and do not wait for an answer that
-> nobody is there to give.
+> Who is reading can change while you work. An arrival, a departure or
+> somebody going quiet reaches you as a [new] line mid-turn. It is never a
+> request — nobody asked you anything by opening the workspace — so it never
+> means start something new, and you never greet, never say that you noticed,
+> and never summarise the record back to the room. Use it to aim what you were
+> already going to say: pitch it at whoever is actually reading now, say the
+> part that needs them while they are still there, and drop what only mattered
+> to somebody who has gone. If it changes nothing about your turn, ignore it.
+> When nobody is in the room, work for the record: state what you decided and
+> why, and do not wait for an answer that nobody is there to give.
 
 The planner reading the context above has something worth saying: Andrei owns
 the headcount call, the exec approved two engineers a day after he left, and
@@ -636,8 +643,8 @@ a person reads and moving when they stop; `messages({ since })` returning both
 kinds in order; `stopSession` closing its visits without waking anybody;
 `readSession` reading a stopped name with no agent standing up; and the
 rendered context carrying the goal, the clock, each person's unseen count and
-the divider — with the arrival paragraph rendering only for a room that both
-states a goal and wakes on arrivals. All in-process, in vitest, on a
+the divider — with the goal rendering only when set and the presence paragraph
+rendering always. All in-process, in vitest, on a
 scripted stream, with fake timers where the clock matters.
 
 The rules this document shares with the core are proved beside them, in

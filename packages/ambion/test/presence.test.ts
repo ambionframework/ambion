@@ -1,6 +1,15 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earendil-works/pi-ai';
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+	let resolve!: () => void;
+	const promise = new Promise<void>((r) => {
+		resolve = r;
+	});
+	return { promise, resolve };
+}
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	defineAgent,
@@ -8,7 +17,6 @@ import {
 	InMemorySessionRepo,
 	isSpoken,
 	type Message,
-	passive,
 	readSession,
 	type Session,
 	type SessionEvent,
@@ -105,33 +113,31 @@ describe('presence', () => {
 		expect(contexts).toHaveLength(0); // no seat was handed a context at all
 	});
 
-	it('wakes the idle room on an arrival when the room asks for it, passive seats excepted', async () => {
-		const aside = defineAgent({
-			name: 'aside',
-			identity: 'The quiet corner.',
-			instructions: 'wait',
-			model: 'scripted/aside',
-		});
-		const session = track(open({ agents: [watcher, passive(aside)], arrivals: 'activate' }));
-		const seen = events(session);
-		await visitSession(session, andrei);
-		await session.settled();
-
-		const starts = seen.filter((e) => e.type === 'agent_start').map((e) => e.agent);
-		expect(starts).toEqual(['watcher']);
-		// the roster the woken seat read already showed the arrival
-		expect(contexts.at(-1)).toContain('andrei (present');
-		expect(contexts.at(-1)).toContain('· andrei arrived');
-	});
-
-	it('reaches a colleague already at work either way, because a steer is not an activation', async () => {
-		const session = track(open());
+	it('steers a seat already at work, which is the whole of what presence routing does', async () => {
+		const held = deferred();
+		const seen: string[] = [];
+		const holding: StreamFn = (_model, context) => {
+			seen.push(
+				context.messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n'),
+			);
+			const stream = createAssistantMessageEventStream();
+			const message = fauxAssistantMessage('nothing to add', { stopReason: 'stop' });
+			void held.promise.then(() => {
+				stream.push({ type: 'start', partial: message });
+				stream.push({ type: 'done', reason: 'stop', message });
+			});
+			return stream;
+		};
+		const session = track(open({ streamFn: holding }));
 		const visit = await visitSession(session, andrei);
-		await visit.deliver({ text: 'start something' });
-		await visitSession(session, mara); // lands while nobody is mid-turn here
+		await visit.deliver({ text: 'start something long' }); // watcher is now mid-turn
+		await visitSession(session, mara); // arrives while it works
+		held.resolve();
 		await session.settled();
-		// quiet or not, the arrival is on the record for the next activation to read
+
+		// the arrival never woke a second turn; it landed inside the running one
 		expect(await kinds(session)).toEqual(['arrived', 'said', 'arrived']);
+		expect(seen.some((c) => c.includes('[new] · mara arrived'))).toBe(true);
 	});
 
 	it('carries no text on a presence message, and stamps from the visit', async () => {
@@ -375,30 +381,24 @@ describe('presence', () => {
 		expect(view).toContain('while andrei is away');
 	});
 
-	it('renders the arrival paragraph only for a goal and a room that wakes', async () => {
-		// a goal, but arrivals are quiet: the goal renders, the paragraph does not
-		const quietRoom = track(open({ goal: 'Ship payments v2.' }));
-		const qv = await visitSession(quietRoom, andrei);
-		await qv.deliver({ text: 'anything' }); // quiet arrivals wake nobody, so ask
-		await quietRoom.settled();
+	it('renders the goal only when set, and always tells a seat what a presence line is for', async () => {
+		const withGoal = track(open({ goal: 'Ship payments v2.' }));
+		const gv = await visitSession(withGoal, andrei);
+		await gv.deliver({ text: 'anything' }); // arrivals wake nobody, so ask
+		await withGoal.settled();
 		const prompted = lastSystemPrompt();
 		expect(prompted).toContain('This session exists to: Ship payments v2.');
-		expect(prompted).not.toContain('An arrival is a message like any other');
-
-		prompts.length = 0;
-		const loud = track(open({ goal: 'Ship payments v2.', arrivals: 'activate' }));
-		await visitSession(loud, andrei);
-		await loud.settled();
-		expect(lastSystemPrompt()).toContain('An arrival is a message like any other');
+		expect(prompted).toContain('Who is reading can change while you work');
 
 		prompts.length = 0;
 		const without = track(open());
-		await visitSession(without, andrei);
+		const wv = await visitSession(without, andrei);
+		await wv.deliver({ text: 'anything' });
 		await without.settled();
 		const bare = lastSystemPrompt();
 		expect(bare).not.toContain('This session exists to:');
-		expect(bare).not.toContain('An arrival is a message like any other');
-		// presence still commits and still routes
-		expect(await kinds(without)).toEqual(['arrived']);
+		// the audience paragraph is about routing, not purpose, so it needs no goal
+		expect(bare).toContain('Who is reading can change while you work');
+		expect(await kinds(without)).toEqual(['arrived', 'said']);
 	});
 });

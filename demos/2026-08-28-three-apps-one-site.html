@@ -174,8 +174,9 @@ details.turn.ctx pre{margin:0 .9rem .7rem;font-size:.72rem}
 <p class="lede">A construction management suite where each product is an agent: a time tracker,
 a task list and a materials tracker. Three people open the same workspace from a site office,
 a phone on the deck and a cost desk — and the products answer the person in front of them,
-argue with each other, and write back to their own data. Opening the workspace wakes nobody:
-this run is the first under <code>arrivals: 'quiet'</code>.</p>
+argue with each other, and write back to their own data. Opening the workspace wakes nobody —
+it only reaches the products already at work, so they can aim what they were going to say at
+whoever is now reading.</p>
 
 <div class="stats">
   <div class="stat"><b>3</b><span>products, one agent each</span></div>
@@ -219,16 +220,19 @@ they will act on today, and what they do not want to hear about.</p>
 </section>
 
 <section>
-<h2>What opening the workspace should do</h2>
+<h2>What opening the workspace does</h2>
 <p class="note">An arrival is a message with no words in it. Every other message says what it
 wants; an arrival says only that somebody is here, so a product answering one is guessing at
 the request — and with three products guessing, opening the app produced three unsolicited
-briefings. <code>arrivals</code> is now a policy on the workspace, and it defaults to
-<code>'quiet'</code>: presence commits to the record, takes its sequence number, drives the
-roster and the catch-up anchor, and wakes nobody. The same scenario, run under each:</p>
+briefings. So a presence message now wakes nobody, ever. It commits to the record, takes its
+sequence number, drives the roster and the catch-up anchor, and reaches only the products
+already mid-turn — which is what it is actually good for: a product drafting a reply when the
+person it concerns walks in can aim it at them, or drop what only mattered to somebody who
+just left.</p>
+<p class="note">Both halves of that were measured on this same scenario, before and after:</p>
 <div class="tw"><table>
-<thead><tr><th>Same scenario, same products</th><th>arrivals: 'activate'</th>
-<th>arrivals: 'quiet'</th></tr></thead>
+<thead><tr><th>Same scenario, same products</th><th>arrival woke the room</th>
+<th>arrival only steers</th></tr></thead>
 <tbody><tr><td class="tid">Activations</td><td class="num">27</td><td class="num">21</td></tr><tr><td class="tid">Woken by a presence message</td><td class="num">15</td><td class="num">0</td></tr><tr><td class="tid">Messages said</td><td class="num">21</td><td class="num">22</td></tr><tr><td class="tid">Model turns, all seats</td><td class="num">231</td><td class="num">231</td></tr><tr><td class="tid">Turns per activation</td><td class="num">8.6</td><td class="num">11.0</td></tr><tr><td class="tid">Calls into product APIs</td><td class="num">61</td><td class="num">60</td></tr><tr><td class="tid">Writes to product state</td><td class="num">11</td><td class="num">15</td></tr><tr><td class="tid">Model cost</td><td class="num">$1.30</td><td class="num">$1.68</td></tr></tbody></table></div>
 <p class="note">The behaviour it was meant to fix is gone: not one activation in this run was
 caused by somebody arriving, leaving or going quiet. The cost went the other way, and that is
@@ -2131,14 +2135,14 @@ What does not reset is the ticket. Groundworks are still the sole holders of pum
     should look like.</p>
   </div>
   <div class="finding">
-    <h3>The quiet policy fixed the behaviour and not the bill</h3>
+    <h3>It fixed the behaviour and not the bill</h3>
     <p>Presence-triggered activations went from 15 to zero. Total model turns did not move at
     all: 231 in both runs. The same work happened in 21 activations instead of 27, at 11.0
     turns each instead of 8.6, and cost more rather than less. What the products would have
     said at the door they said later, to each other, at greater length.</p>
     <p>So the noise was never really about arrivals. Opening an app and being handed three
-    briefings you did not ask for is a genuine product defect and this policy removes it. The
-    cost shape belongs to something else: every say wakes every idle seat, and a room of three
+    briefings you did not ask for is a genuine product defect and this removes it. The cost
+    shape belongs to something else: every say wakes every idle seat, and a room of three
     products discussing among themselves is where the bill actually accumulates. That is worth
     fixing separately, and this run is the argument for it.</p>
   </div>
@@ -2146,7 +2150,11 @@ What does not reset is the ticket. Groundworks are still the sole holders of pum
 </section>
 
 <footer>
-Run on <code>claude-opus-5</code>. Each product is a <code>defineAgent</code> with its own
+Run on <code>claude-opus-5</code>. This run was captured while the behaviour was still a
+configurable policy; it is unchanged mechanically — no presence message woke a seat in it —
+but it predates the paragraph the prompt now carries telling a working seat what to do with a
+presence line. Two of its final activations failed on an exhausted API credit balance, and
+nothing after them ran. Each product is a <code>defineAgent</code> with its own
 <code>defineTool</code> API; the workspace is a <code>startSession</code>; each person is a
 <code>visitSession</code>. Contracts in <code>docs/agent.md</code> and
 <code>docs/presence.md</code>.

@@ -68,15 +68,6 @@ export interface StartSessionOptions {
 	agents: readonly AgentSeat[];
 	/** What the room is for. Read by every agent; gates the arrival paragraph. */
 	goal?: string;
-	/**
-	 * What a person arriving or leaving does to the idle room. `'quiet'` — the
-	 * default — commits the message and wakes nobody: presence reaches a seat
-	 * at its next activation, like anything else it did not need to be told at
-	 * once. `'activate'` treats it as a broadcast, so every idle seat looks.
-	 * A room pays per arrival times idle seats for that, and most looks produce
-	 * nothing, so it is worth asking for rather than inheriting.
-	 */
-	arrivals?: ArrivalPolicy;
 	/** The house default for visits that do not set their own. */
 	idleTimeout?: number;
 	/**
@@ -88,9 +79,6 @@ export interface StartSessionOptions {
 	/** Pi's own session repository. Defaults to a process-wide `InMemorySessionRepo`. */
 	repo?: SessionRepo;
 }
-
-/** Whether a person arriving or leaving wakes the idle room. */
-export type ArrivalPolicy = 'quiet' | 'activate';
 
 /** Who a committed message is for: a participant name, or one of these two. */
 const ROOM = Symbol('room');
@@ -306,7 +294,6 @@ class ReadOnlySession implements SessionView {
 class SessionImpl implements Session {
 	readonly name: string;
 	private readonly goal?: string;
-	private readonly arrivals: ArrivalPolicy;
 	private readonly idleTimeout: number;
 	private readonly repo: SessionRepo;
 	private readonly store: RecordStore;
@@ -324,7 +311,6 @@ class SessionImpl implements Session {
 	constructor(options: StartSessionOptions) {
 		this.name = options.name;
 		this.goal = options.goal?.trim() || undefined;
-		this.arrivals = options.arrivals ?? 'quiet';
 		this.idleTimeout = options.idleTimeout ?? DEFAULT_IDLE_TIMEOUT;
 		this.repo = options.repo ?? defaultRepo;
 		this.store = new RecordStore(this.repo, this.name);
@@ -679,24 +665,18 @@ class SessionImpl implements Session {
 	 * directed message wakes exactly its target, passive included (rule 4).
 	 */
 	private dispatch(message: Message): void {
-		const audience = this.audienceOf(message);
+		// A presence message is addressed to nobody, so it wakes no idle seat —
+		// rule 4 taken to its limit, not an exception to rule 1. Reaching a
+		// colleague already at work is the whole of what it is for: rule 2
+		// steers it in, and the seat pitches what it was going to say at
+		// whoever is actually reading now.
+		const audience = isSpoken(message) ? (message.to ?? ROOM) : NOBODY;
 		const target = typeof audience === 'string' ? this.agents.get(audience) : undefined;
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
 			if (seat.active) this.steerInto(seat, message);
 			else if (wakes(seat, target, audience)) this.activate(seat);
 		}
-	}
-
-	/**
-	 * Who a message is for: a name, the whole room, or nobody. A quiet presence
-	 * message is addressed to nobody — rule 4 taken to its limit, not an
-	 * exception to rule 1. It still reaches a colleague at work, because rule 2
-	 * steers whatever arrives mid-turn whoever it was for.
-	 */
-	private audienceOf(message: Message): Audience {
-		if (isSpoken(message)) return message.to ?? ROOM;
-		return this.arrivals === 'activate' ? ROOM : NOBODY;
 	}
 
 	private steerInto(seat: SeatRuntime, message: Message): void {
@@ -914,8 +894,7 @@ class SessionImpl implements Session {
 			`it, and speak again only if your reply still adds something.`,
 			``,
 		);
-		// Nothing to say about arrivals in a room where an arrival wakes nobody.
-		if (this.goal && this.arrivals === 'activate') lines.push(...ARRIVAL_PARAGRAPH, ``);
+		lines.push(...AUDIENCE_PARAGRAPH, ``);
 		lines.push(
 			`Your identity, as the room knows it: ${seat.def.identity}`,
 			``,
@@ -966,17 +945,17 @@ class SessionImpl implements Session {
 	}
 }
 
-/** What an agent does when somebody walks in. Rendered only when a goal is set. */
-const ARRIVAL_PARAGRAPH = [
-	`An arrival is a message like any other, and the bar for speaking is higher, not lower.`,
-	`Somebody opening the workspace is not a request for a briefing, and they can read the`,
-	`record themselves. Stay idle unless one of two things is true: something needs their`,
-	`input before anybody can move, or something they have not seen changes what they do`,
-	`next. If neither holds, end your turn without speaking. When one does hold, say the one`,
-	`thing and name what you need from them, in a sentence or two. Never greet, never say`,
-	`that you noticed them, never summarise the record back to the room, and never speak`,
-	`only because a colleague spoke. When nobody is in the room, work for the record: state`,
-	`what you decided and why, and do not wait for an answer that nobody is there to give.`,
+/** What a seat does with a presence line that lands while it is working. */
+const AUDIENCE_PARAGRAPH = [
+	`Who is reading can change while you work. An arrival, a departure or somebody going`,
+	`quiet reaches you as a [new] line mid-turn. It is never a request — nobody asked you`,
+	`anything by opening the workspace — so it never means start something new, and you`,
+	`never greet, never say that you noticed, and never summarise the record back to the`,
+	`room. Use it to aim what you were already going to say: pitch it at whoever is`,
+	`actually reading now, say the part that needs them while they are still there, and`,
+	`drop what only mattered to somebody who has gone. If it changes nothing about your`,
+	`turn, ignore it. When nobody is in the room, work for the record: state what you`,
+	`decided and why, and do not wait for an answer that nobody is there to give.`,
 ];
 
 /** A directed message wakes its target alone; a broadcast wakes every idle seat. */

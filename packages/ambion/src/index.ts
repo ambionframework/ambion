@@ -19,7 +19,6 @@ export {
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
 export { defineAgent, defineHuman, defineTool, passive } from './define.ts';
 export type {
-	ArrivalPolicy,
 	ReadSessionOptions,
 	Session,
 	SessionView,
