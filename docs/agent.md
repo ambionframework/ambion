@@ -420,7 +420,23 @@ hand there, and the products hold state they change.
 
 ---
 
-## 7. Later
+## 7. A gap the core has
+
+**An exchange has no end the room enforces.** Two agents that keep answering
+each other keep waking each other, and nothing stops them. The say lock pushes
+against it — a seat that speaks late is refused and told to reconsider, and
+rule 3 tells it to stand down — but that is pressure, not a bound. No run has
+hit it. It is written down because a room that waits for months will meet it
+eventually, and because anything built on quiescence assumes it does not
+happen.
+
+The fix belongs here, in the core, not in whatever notices the absence: a
+limit on how much work one message may cause, applied where rule 1 activates
+a seat.
+
+---
+
+## 8. Later
 
 Each of these is designed to sit on top of this core without changing it:
 the virtual shell and workspace filesystem (just-bash behind Pi's
@@ -440,7 +456,7 @@ it, and the shapes above carry the result.
 
 ---
 
-## 8. The measure
+## 9. The measure
 
 Ambion ships a multi-agent runtime and writes no agent loop: two definition
 helpers, a facade, and a room. If that ratio ever inverts — if Ambion finds

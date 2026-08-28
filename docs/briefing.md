@@ -8,14 +8,14 @@ agents and they talk it out. **Nothing here is built.** Read
 One sentence:
 
 > **A person asks a question. Several agents wake and work it out between
-> them. When the room goes quiet, that person's briefing agent writes the one
-> message the exchange resolved to — and from then on that message stands in
-> for the chatter, for everybody and for every seat activated afterwards.**
+> them. When the room goes quiet, that person's briefing agent writes one more
+> message — the answer the exchange arrived at — and a client shows them that
+> instead of the working.**
 
-This design covers one thing: **a question, the agents that answer it, and
-hiding the working.** It is not about presence, catch-up, or what a person
-sees when they arrive. [`presence.md`](presence.md) owns those and this
-document changes none of them.
+This design covers one thing: **a question, the agents that answer it, and one
+message that stands for the answer.** It is not about presence, catch-up, or
+what a person sees when they arrive. It does not compact anything. It adds one
+message to the record and takes nothing away.
 
 ---
 
@@ -23,21 +23,17 @@ document changes none of them.
 
 The run in [`demos/`](../demos) is the evidence.
 
-**A person reads a transcript instead of an answer.** Priya asked one
-question: _can I tell the client Thursday for the pour?_ It woke three
-products. They answered her, answered each other, corrected each other and
-refined their own answers. Ten agent messages landed before she left. Four
-addressed her. The room established that Thursday was impossible, why, and
-what would make Saturday possible. It never assembled that into an answer,
-because no participant has assembling as its job.
+Priya asked one question: _can I tell the client Thursday for the pour?_ It
+woke three products. They answered her, answered each other, corrected each
+other and refined their own answers. Ten agent messages landed before she
+left. Four addressed her.
 
-**The room re-reads all of it, for ever.** Each activation renders the whole
-record into a seat's context. Over 25 activations that run built 148,038
-characters of context, and **the record was 77% of it**. The first context was
-1,259 characters. The last was 10,081. Thirty messages did that.
+The room established that Thursday was impossible, why, and what would make
+Saturday possible. **It never assembled that into an answer**, because no
+participant has assembling as its job, and because the room's largest unit is
+one message.
 
-One thing answers both: **something has to stand in for an exchange once it is
-over.**
+So Priya read the room thinking out loud. She wanted the conclusion.
 
 ---
 
@@ -50,22 +46,21 @@ it goes quiet again.
 - **It closes** when no agent is active. `settled()` resolves.
 
 **Only a question opens one.** Arriving and leaving are messages, and they may
-wake a seat, but they do not open an exchange and are never briefed. A room
-where nobody asks anything is never briefed at all.
+wake a seat, but they open no exchange and are never briefed. A room where
+nobody asks anything is never briefed at all.
 
 **Quiescence is a true end, not a gap.** A seat that says something activates
 its readers inside its own `say`, before its own turn finishes, so the active
 count never dips to zero in the middle of a burst. A room that settles has
 finished, and will not start again on its own.
 
-Nothing between the edges needs counting. However many agents wake, however
-many times they answer each other, however many turns it takes — the exchange
-is done when the room is done.
-
 An exchange covers itself and nothing else: `from` is the question's seq,
 `through` is the last seq at the close. **It never reaches back past the
-question.** Whatever happened before the person asked is not theirs to be
-briefed on, and is somebody else's exchange or nobody's.
+question.**
+
+[`agent.md`](agent.md) §7 records the gap underneath this: nothing bounds how
+long an exchange may run. That is the core's to fix, and this design assumes
+it will be.
 
 ---
 
@@ -77,8 +72,7 @@ The rule the design serves:
 
 Most of the time the room may already have done that. One product answers,
 once, and that message is the answer. **A briefing agent does not engage.** The
-person reads what the product said, in that product's own words, with its own
-evidence.
+person reads what the product said, in that product's own words.
 
 It engages when the room did not:
 
@@ -96,18 +90,15 @@ What the run shows:
 | Questions asked                       | 3            |
 | Exchanges that would write a briefing | 3            |
 | Exchanges that would pass through     | 0            |
-| Agent messages consolidated           | **17 of 19** |
+| Agent messages inside an exchange     | **17 of 19** |
 | Agent messages outside any exchange   | 2            |
 
 **Every question in this run drew more than one answer, so the threshold never
 fired.** It is a rule about a case this run does not contain, and it is kept
 because the case is real: a single clean answer should reach a person in the
-voice that gave it. The two messages outside any exchange — a product speaking
-when somebody arrived — stay exactly as they are, because no question opened
-them.
+voice that gave it.
 
-An exchange with no agent message writes nothing. The room had nothing to say,
-and telling the person so is a host's business, not the record's.
+An exchange with no agent message writes nothing. The room had nothing to say.
 
 ---
 
@@ -133,8 +124,7 @@ opens his own exchange, and his own briefing agent writes it.
 This is a default, and the simplest one that works. Two variants are plausible
 and neither is chosen now: every person present at the close gets a briefing
 from their own agent, or a person who speaks during an exchange joins its
-ownership. Both cost more model calls per exchange, and neither is worth
-paying for before the default has run.
+ownership. Both cost more model calls per exchange.
 
 ---
 
@@ -154,7 +144,7 @@ export interface BriefingMessage {
   /** The person whose question opened the exchange. Always present. */
   to: string;
   text: string;
-  /** The exchange it stands in for: the question, and the work it caused. */
+  /** The exchange it answers: the question, and the work it caused. */
   covers: { from: Seq; through: Seq };
 }
 
@@ -167,63 +157,61 @@ was told. A briefing carries two fields no other message has — a reader and a
 span — because it is the only message written _for_ somebody rather than _to_
 the room.
 
----
-
-## 6. What the room shows afterwards
-
-**One record, one rendering, for everybody.** Where a briefing covers an
-exchange, the exchange renders as the briefing — in a seat's context, in a
-person's view, in the host's log:
-
-```
-[priya] Can I tell the client Thursday for the pour?          (2 hours ago)
-── 10 messages stand summarised below ──
-[priya-brief → priya] Thursday is out: the inspector needs 48h notice and is
-  not booked. Earliest is Saturday 30 Aug. It needs four things: …
-[sam] Rain all Thursday morning. I am not pouring into that.  (12 min ago)
-```
-
-There is no per-reader view to keep straight. Priya sees her briefing instead
-of the chatter, and so do Sam, Dan and every product. **The working is hidden
-from everyone, because it was working, not conversation.**
-
-Everything outside an exchange renders as it always did. A product that speaks
-when somebody arrives is read in its own words.
-
-**Compaction is a rendering rule, not a deletion.** The record keeps every
-message for ever, `messages()` returns all of them, and seqs do not move — so
-the say lock and the catch-up anchor are untouched. What changes is what a
-reader is handed. That is why this belongs in `render.ts`, beside the room's
-other prose, and why a host can always expand a covered span if it wants to
-offer that.
+`covers` is not an instruction to the runtime. It is what a client needs in
+order to know which messages this one answers.
 
 ---
 
-## 7. One briefing, because it is the shared premise
+## 6. The record only grows
 
-A briefing has two readers: its person, and every seat activated afterwards.
-The temptation is to write two documents — one shaped for the person, one
-complete for the room.
+**Nothing here replaces, rewrites, hides or removes a message.** A briefing is
+appended like every other message: it takes the next seq, it lands after
+everything it covers, and the messages it covers stay exactly where they are.
 
-**Do not.** The briefing is the one thing both the person and the room are
-guaranteed to have read. It is their shared premise. Two accounts of one
-exchange means the person's next question rests on one and the answer rests on
-the other, and neither side can tell that they have diverged.
+That is the point at which an earlier draft of this design went wrong. It made
+a briefing a checkpoint that stood in for its span in what a seat reads,
+which bought the room a smaller context and cost the record its one property
+worth defending. **The record is append-only, its seqs are monotonic, and the
+past does not change under a reader.**
 
-Two things follow.
+So the seats read what they always read: the whole record, chatter included,
+plus one briefing per exchange. A briefing is a message a colleague may find
+useful. It is not the room's memory and it does not replace the room's memory.
 
-**A briefing stands alone.** It cannot say "as discussed above", name who
-raised what, or assume its reader saw a message it covers. A follow-up
-question will be asked against it, and answered from it.
+Making a long record affordable is a real problem, and it is not this one.
+[`agent.md`](agent.md) §8 already lists per-seat compaction of long records as
+its own document. It should stay that way, because compacting what a seat
+reads and answering what a person asked are two jobs, and one message cannot
+be shaped for both without being worse at each.
 
-**What a briefing agent personalises is bounded.**
+---
 
-> **A briefing agent chooses order, emphasis, and length. It does not choose
-> what the room remembers.**
+## 7. Presentation belongs to the client
 
-Priya's briefing agent may lead with the decision she holds and put the
-tonnage last. It may not drop the tonnage, because dropping it is not a way of
-writing — it is the room forgetting. §13 says what that costs.
+A person should not read the working. That is a statement about presentation,
+and it is settled where presentation is settled: **in the client, not in the
+record and not on the wire.**
+
+The runtime commits messages in order and streams them. What a client does
+with them:
+
+- **While the room works**, render the chatter as a thinking state. Somebody
+  waiting sees that three products are working and can watch them do it, the
+  way any agent's own reasoning is shown. They are not being handed answers to
+  read.
+- **When the briefing lands**, fold the span it covers back into that thinking
+  state, and show the briefing as the answer. `covers` says exactly which
+  messages to fold.
+
+This asks one thing of a client that a plain log does not do: **it must be
+able to change how it presents past messages when a new message arrives.** A
+client that only appends cannot do this and will show the working as
+conversation.
+
+It also settles the question of what a person sees while they wait. They see
+the room thinking, which is honest, and they see the answer when there is one.
+No interim briefing is written, so there is never a second account of one
+exchange.
 
 ---
 
@@ -273,12 +261,12 @@ is all it does.
 A person may bring a briefing agent. Most will. Nothing requires it.
 
 **A question from somebody with no briefing agent is never briefed.** The
-exchange it opens runs and closes as it does today, and the record shows it
-whole, to everyone. A room where nobody brings one behaves in every respect as
-the room behaves now.
+exchange it opens runs and closes as it does today, and every reader sees it
+whole. A room where nobody brings one behaves in every respect as the room
+behaves now.
 
 That is the guarantee this design offers, and the reason it is safe to try:
-**it adds a writer, and it takes nothing away.**
+**it adds one message, and it takes nothing away.**
 
 ---
 
@@ -295,10 +283,10 @@ const priya = defineHuman({
     identity: 'Writes the briefings Priya reads.',
     model: 'anthropic/claude-sonnet-5',
     instructions: `
-      Answer Priya's question, once, for somebody who has read nothing else.
-      Lead with the decision she has to make and who holds it. Keep every fact
-      a colleague would need to work from — quantities, dates, owners, and
-      what is still unknown. Leave out who said what, and in which order.
+      Answer Priya's question, once, for somebody who has not read the working.
+      Lead with the decision she has to make and who holds it. Keep the facts
+      she needs to act — quantities, dates, owners, and what is still unknown.
+      Leave out who said what, and in which order.
     `,
   }),
 });
@@ -307,13 +295,14 @@ const priya = defineHuman({
 **A host never asks for a briefing.** Briefing is how the session works, not
 something the caller drives. A question opens an exchange, the room works, the
 room settles, and — if the room said more than one thing — the briefing is
-written and committed. It reaches a host on the `message` event that carries
-every message on the record:
+written and committed. It arrives on the `message` event that carries every
+message on the record:
 
 ```ts
 session.subscribe((event) => {
   if (event.type !== 'message') return;
-  if (event.message.kind === 'briefing') render(event.message);
+  if (event.message.kind === 'briefing') showAnswer(event.message);
+  else showThinking(event.message);
 });
 ```
 
@@ -327,17 +316,18 @@ kind. **That is the whole surface.**
 
 Stated so a later change has to argue with it:
 
-- **Not catch-up.** A person returning from two days away is
-  [`presence.md`](presence.md) §8's business, and the anchor there is
-  untouched. Arriving opens no exchange and writes no briefing.
-- **Not a working group.** Nothing convenes and nothing has members. The
-  exchange is bounded by quiescence, so who took part needs no recording.
+- **Not compaction.** Nothing is replaced in what a seat reads. Making a long
+  record affordable is [`agent.md`](agent.md) §8's business. §6.
+- **Not catch-up.** A person returning after two days is
+  [`presence.md`](presence.md) §8's business, and its anchor is untouched.
+  Arriving opens no exchange.
+- **Not a working group.** Nothing convenes and nothing has members.
 - **Not a new activation trigger.** Nothing wakes because the room went quiet.
   A briefing agent is called, never activated.
 - **Not a summariser of everything.** One answer is left as it was given, and
   anything outside an exchange is untouched.
-- **Not a deletion.** Compaction renders. The record forgets nothing.
-- **Not two accounts.** One briefing, because it is the shared premise. §7.
+- **Not a wire or storage format.** Folding the working is what a client does
+  with `covers`. §7.
 - **Not an obligation.** A person may have none, and then nothing changes.
 - **Not speaking for a person.** Ever.
 
@@ -345,38 +335,24 @@ Stated so a later change has to argue with it:
 
 ## 13. Open questions
 
-**Compaction is lossy, and the loss is invisible to whoever it hurts.** This
-decides whether the design is good. Materials established _"stock 11.7t
-against 11.7t required — full cover."_ If the briefing says "rebar is
-covered", a later question about tonnage cannot be answered, and the seat that
-needs the number does not know it is missing. §7 makes this the briefing
-agent's strictest duty, which is a prompt, not a guarantee. Three real answers
-exist and none is chosen here: give a seat a tool that reads a covered span;
-keep a covered span uncompacted for one further exchange; or accept the loss
-and measure it. **Do not build past this question.**
+**The person and the room read different things.** Priya's follow-up is asked
+against her briefing. The seats answering it read the whole record — the
+chatter, and the briefing. They have more than she does, not less, so the
+usual failure of a summary does not apply here. What is untested is the other
+direction: whether a question phrased in a briefing's words lands cleanly on
+seats that remember the argument behind it.
 
-**A person waits with nothing.** Priya asks and reads nothing until the room
-settles — twelve activations in the measured run. Showing progress means
-showing the working, which is what the design hides. An interim line is a
-second account, which §7 forbids. This is unresolved.
-
-**An exchange with no end never briefs.** Two agents that keep answering each
-other never settle. The room has no turn limit today and this design does not
-add one, but it is the first thing that would notice the absence.
+**A briefing is one more message in every seat's context.** Small, and in the
+wrong direction. The design pays it to keep the record honest, and §6 says why.
 
 **A run that stops mid-exchange writes no briefing.** `stopSession` aborts the
-turns in flight, so the exchange never closes. The chatter stays on the record
-uncompacted, and the person got no answer. That is honest, and it is also the
-worst case: the person asked and heard nothing.
+turns in flight, so the exchange never closes. The person asked and heard
+nothing, and the record shows exactly that: a question, some work, a shutdown.
+Accepted. A briefing here would summarise an argument that never finished.
 
-**A room without questions never compacts.** Agents working unattended, and
-rooms where nobody brings a briefing agent, produce records that nothing
-checkpoints. The growth in §1 continues. A room-level compactor is the obvious
-answer and is not designed here.
-
-**Briefings of briefings.** A later briefing covers an exchange whose span
-already holds one. That is how a long-lived room stays bounded, and it makes
-the record a tree rather than a line. One level is enough to test the idea.
+**What a client owes.** §7 asks a client to re-present past messages when a new
+one arrives. That is more than a log does, and no client here has done it yet.
+The example is where to find out whether it is as small as it sounds.
 
 ---
 
@@ -385,20 +361,18 @@ the record a tree rather than a line. One level is enough to test the idea.
 Run the same scenario twice: once as it stands, and once with a briefing agent
 for Priya.
 
-It works if her briefing answers what she asked and reads as a whole to
-somebody who has seen nothing else; if the two messages outside her exchange
-are untouched and still in the product's own voice; if the record still holds
-all thirty messages; if the run without a briefing agent is unchanged; and if
-**a seat activated after the briefing can still do its job from it.** The way
-to test that last one is to ask a follow-up whose answer is buried in the
-compacted span.
+It works if her briefing answers what she asked and reads whole to somebody who
+has not read the working; if the two messages outside her exchange are
+untouched and still in the product's own voice; if the record holds all thirty
+messages plus the briefings, in order, with nothing rewritten; and if the run
+without a briefing agent is unchanged.
 
-It fails if the briefing reads like minutes rather than an answer, if a seat
-answers worse after compaction than before, or if a person has to expand the
-covered span to trust what they were told.
+It fails if the briefing reads like minutes rather than an answer, if a
+follow-up asked in the briefing's words confuses the seats, or if the record
+has to change shape to make the presentation work.
 
-Three numbers: how many messages reach the person, how large a seat's context
-is at the tenth activation with and without briefings, and whether the answers
-hold up. The run in [`demos/`](../demos) is the baseline — 148,038 characters
-of context over 25 activations, 77% of it record, and 17 of 19 agent messages
-sitting inside three exchanges.
+Two numbers, and one judgement: how many messages a person must read per
+question, what a briefing costs against the exchange that produced it, and
+whether the answer is one somebody could act on. The run in
+[`demos/`](../demos) is the baseline — three questions, 17 of 19 agent
+messages inside them.
