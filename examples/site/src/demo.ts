@@ -61,7 +61,6 @@ const session = startSession({
 	goal: GOAL,
 	agents: AGENTS,
 	repo,
-	idleTimeout: 90_000,
 });
 
 /** Bookkeeping: correlate every activation with the message that caused it. */
@@ -136,7 +135,7 @@ await priyaVisit.leave();
 await session.settled();
 
 step('sam opens it from the deck with a forecast');
-const samVisit = await visitSession(session, sam, { via: 'phone' });
+const samVisit = await visitSession(session, sam);
 await samVisit.deliver({
 	text: 'Rain all Thursday morning. I am not pouring into that. What do you need from me to move it?',
 });
@@ -158,7 +157,6 @@ const missed =
 	priyaBack.since === undefined ? [] : await session.messages({ since: priyaBack.since });
 const sinceOnReturn = priyaBack.since;
 const seats = session.seats();
-const visits = session.visits();
 
 const seatSessions: {
 	agent: string;
@@ -198,7 +196,6 @@ writeFileSync(
 			missedOnReturn: missed,
 			sinceOnReturn,
 			seats,
-			visits,
 			seatSessions,
 			activations,
 			toolCalls: apiLog,

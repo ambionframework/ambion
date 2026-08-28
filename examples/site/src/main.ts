@@ -117,7 +117,7 @@ function who(): void {
 				`  ${paint(seat.name, seat.name)} (${seat.status}, ${seat.attention}): ${seat.identity}`,
 			);
 		} else {
-			console.log(`  ${paint(seat.name, seat.name)} (${seat.presence}, ${seat.visits} visits)`);
+			console.log(`  ${paint(seat.name, seat.name)} (${seat.presence}): ${seat.identity}`);
 		}
 	}
 }

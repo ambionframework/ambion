@@ -17,8 +17,8 @@ export interface SpokenMessage {
 	text: string;
 }
 
-/** The four ways a person's presence changes. */
-export type PresenceChange = 'arrived' | 'away' | 'returned' | 'left';
+/** The two ways a person's presence changes. */
+export type PresenceChange = 'arrived' | 'left';
 
 /**
  * What a person did. It carries no text, because they said nothing: writing
@@ -51,13 +51,12 @@ export type SeatStatus = 'active' | 'idle';
  * What wakes a seat, as the widest kind of message it activates for. One
  * widening scale, not a set of flags: `named` hears only a message addressed
  * to it, `broadcast` also hears anything a participant said, and `presence`
- * also hears somebody arriving, leaving or going quiet.
+ * also hears somebody arriving or leaving.
  */
 export type Attention = 'named' | 'broadcast' | 'presence';
 
-/** A visit is present or away. A person is also absent when they hold none. */
-export type VisitStatus = 'present' | 'away';
-export type PresenceStatus = VisitStatus | 'absent';
+/** A person is in the room or they are not. */
+export type PresenceStatus = 'present' | 'absent';
 
 export interface AgentSeatInfo {
 	kind: 'agent';
@@ -74,24 +73,9 @@ export interface HumanSeatInfo {
 	name: string;
 	identity: string;
 	presence: PresenceStatus;
-	/** How many live visits hold this seat. */
-	visits: number;
 }
 
 export type SeatInfo = AgentSeatInfo | HumanSeatInfo;
-
-export interface VisitInfo {
-	id: string;
-	human: string;
-	status: VisitStatus;
-	via?: string;
-	/** ISO, stamped by the runtime. */
-	enteredAt: string;
-	/** ISO, stamped by the runtime. */
-	lastActedAt: string;
-	/** Where this person stopped reading last, or undefined when they never have. */
-	since: Seq | undefined;
-}
 
 /** The session's event stream: room-level facts, one event per fact. */
 export type SessionEvent =
@@ -103,11 +87,7 @@ export type SessionEvent =
 	| { type: 'tool_execution_end'; agent: string; toolName: string }
 	| { type: 'agent_end'; agent: string; spoke: boolean }
 	| { type: 'error'; agent: string; error: Error }
-	| { type: 'settled' }
-	| { type: 'visit_enter'; human: string; visit: string; presence: PresenceStatus }
-	| { type: 'visit_away'; human: string; visit: string; presence: PresenceStatus }
-	| { type: 'visit_return'; human: string; visit: string; presence: PresenceStatus }
-	| { type: 'visit_leave'; human: string; visit: string; presence: PresenceStatus };
+	| { type: 'settled' };
 
 export const TOOL_BRAND = Symbol.for('ambion.tool');
 export const AGENT_BRAND = Symbol.for('ambion.agent');

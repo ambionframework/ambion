@@ -120,8 +120,8 @@ directed at one wakes nothing.
 A human is not composition and is not passed to `startSession`. The value is
 what somebody visits as: `visitSession(session, andrei)` returns a visit, the
 visit delivers, and the runtime stamps the record from it — who-said-what is
-never something the content claimed. Several people hold visits at once, and
-each one's presence is a fact the agents read. [`presence.md`](presence.md) is the contract for that,
+never something the content claimed. One person holds one visit, several
+people visit at once, and each one's presence is a fact the agents read. [`presence.md`](presence.md) is the contract for that,
 and for the arrival a visit puts on the record.
 
 ---
@@ -161,10 +161,9 @@ for (const message of await readSession('weekly').messages()) {
 
 Three verbs, and each does one thing. **`startSession` sets up the context
 where the agents work.** It takes the room's composition and brings it to
-life: from here on the seats are live, a message activates them, and timers
-run. **`stopSession` takes it down**: every active turn is aborted, every
-visit is closed, every timer is cleared, the write chain drains, and the
-handle refuses further use. **`readSession` reads a name and starts
+life: from here on the seats are live and a message activates them.
+**`stopSession` takes it down**: every active turn is aborted, every visit is
+closed, the write chain drains, and the handle refuses further use. **`readSession` reads a name and starts
 nothing** — the record, and who was in it, with no seat standing up and
 nothing to bill. You can read a room that is not running; you cannot speak
 into one. A person is the fourth verb and lives in
@@ -207,7 +206,7 @@ type Message =
       text: string;
     }
   | {
-      kind: 'arrived' | 'away' | 'returned' | 'left';
+      kind: 'arrived' | 'left';
       seq: number;
       at: string;
       from: string; // stamped from the visit the runtime observed
@@ -373,8 +372,8 @@ own abort, fanned out — and the room settles; what was said stays, what was
 mid-flight ends without speaking, and an aborted turn stays cancelled even if
 a steer was still queued against it. The room is still running afterwards.
 `stopSession` is the one that ends it, and it is `abort()` plus everything
-else a run holds: the visits close, the timers clear, the writes drain, and
-the handle is spent. `messages()` and `seats()` are the pull side; the stream
+else a run holds: the visits close, the writes drain, and the handle is
+spent. `messages()` and `seats()` are the pull side; the stream
 is the push side — nothing a listener can learn that the pulls cannot, only
 sooner.
 

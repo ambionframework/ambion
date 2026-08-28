@@ -3,7 +3,7 @@
 This document is the design contract for presence: who is in a session, how
 the room knows, and what the agents do about it. The code lives with the
 rest of the runtime in [`packages/ambion/src`](../packages/ambion/src) — the
-visit and the timer in [`session.ts`](../packages/ambion/src/session.ts), the
+visit and the roster in [`session.ts`](../packages/ambion/src/session.ts), the
 shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md) first: this document assumes its eight rules and breaks
 none of them — presence widens rule 6 rather than making an exception to rule 1.
@@ -22,8 +22,7 @@ One sentence:
 An agent belongs to the room. It is the room's composition, it is the same
 on every opening, and it waits there between activations — this is the whole
 of an ambient runtime. A person is not composition. They arrive, read,
-steer, and go, several of them at once, on their own schedules, from a
-terminal and a browser at the same time.
+steer, and go, several of them at once, on their own schedules.
 
 `startSession` takes the first and never the second. **Seating is
 composition. Visiting is presence.** Three things follow, and they are what
@@ -34,10 +33,10 @@ reading right now, so a `say` directed at somebody who is not there is a
 note they read later rather than a question that goes unanswered for six
 hours.
 
-**The host has a seam.** A person watching one room from a terminal and a
-browser holds two visits and one seat. Closing one tab does not make
-somebody absent who is still reading in the other, and the host reports each
-attachment without inventing a second person.
+**The host has a seam.** A person is in the room once or not at all, and the
+host decides what "in the room" means for its medium — a socket, a tab, a
+poll. A host that shows one person two tabs reconciles the tabs itself and
+tells the room one thing, so the room never invents a second person.
 
 **Arrival is information.** Somebody walking into a meeting after three days
 away is the most informative thing that happens all hour, and they said
@@ -67,7 +66,7 @@ const session = startSession({
 `agents` holds one kind of thing, in the two ways an agent is seated:
 
 ```ts
-export type AgentSeat = AgentDefinition | PassiveSeat;
+export type AgentSeat = AgentDefinition | SeatedAgent;
 ```
 
 `Participant` is the narrower thing — who may be addressed by name:
@@ -85,7 +84,7 @@ participant's context.
 `goal` is optional. A room without one still works; its agents simply have
 less to weigh a question against, and the goal line does not render.
 
-The one option presence adds:
+The one option presence reads:
 
 ```ts
 export interface StartSessionOptions {
@@ -93,15 +92,10 @@ export interface StartSessionOptions {
   agents: readonly AgentSeat[];
   /** What the room is for. One or two sentences, read by every agent. */
   goal?: string;
-  /** The house default for visits that do not set their own. */
-  idleTimeout?: number;
   streamFn?: StreamFn;
   repo?: SessionRepo;
 }
 ```
-
-A visit's timeout is the first of three that is set: the one `visitSession`
-was given, then the run's, then fifteen minutes.
 
 The goal belongs to the run, as the seats do: start the name again with a
 different goal and the record is intact under a new purpose.
@@ -115,12 +109,11 @@ reading it. Somebody who opens the session later reads what happened.
 ## 3. Visiting
 
 ```ts
-const visit = await visitSession(session, andrei, { idleTimeout: 15 * 60_000 });
+const visit = await visitSession(session, andrei);
 
 await visit.deliver({ text: 'Draft the weekly. Anything to flag?' });
 await visit.deliver({ to: lead, text: 'What does this cost us in engineers?' });
 
-visit.acted(); // the host reports a keystroke, a scroll, a click
 await visit.leave();
 ```
 
@@ -149,59 +142,41 @@ is presence and there is nothing to be present in.
 
 ## 4. The visit
 
-One person, many visits. One visit, one attachment.
-
-A person who opens the room in a terminal and in a browser has two visits
-and one name on the record. The runtime counts visits and derives the
-person's status from them.
+**One person, one visit.** A name is in the room or it is not, and
+`visitSession` returns the visit that name holds.
 
 ```ts
-export interface EnterOptions {
-  /** Milliseconds without an act, after which the visit turns away.
-   *  Defaults to fifteen minutes. `Infinity` means never. */
-  idleTimeout?: number;
-  /** A label the host chooses — 'terminal', 'web', a device id. The runtime
-   *  stores it and gives it back. It changes nothing. */
-  via?: string;
-}
-
 export interface Visit {
   readonly human: HumanDefinition;
-  /** This attachment, not this person. Opaque, stable, unique in the session. */
-  readonly id: string;
-  readonly status: VisitStatus;
   /** A live read, not a snapshot: the seq of this person's most recent
-   *  `away` or `left` message, or `undefined` when the record holds none.
-   *  It moves when they stop reading and holds while they read. See §8. */
+   *  `left` message, or `undefined` when the record holds none. It moves
+   *  when they leave and holds while they are here. See §8. */
   readonly since: Seq | undefined;
   deliver(input: { to?: Participant; text: string }): Promise<void>;
-  /** The host reports that the person acted. Returns an away visit to present. */
-  acted(): void;
   /** Idempotent: a host that closes a socket twice is not an error. */
   leave(): Promise<void>;
 }
 ```
 
-`acted()` names the fact the host reports, not a command to the runtime. It
-is the only thing the runtime asks of a host that knows what a real keystroke
-is; sockets, pings and timeouts on the wire stay the host's concern. It is
-synchronous even when it returns somebody from away and commits a `returned`
-message: the message takes its seq in the same tick and persists on the same
-write chain as every other entry, which is what `commit` does for a say.
+`visitSession` on a name that is already in the room commits nothing and
+hands back the same visit. So a host does not have to remember whether it
+opened one, and two tabs of one person do not make two people. The host
+decides when that person is gone; the room takes its word for it.
 
-The id is `<name>#<n>` — `andrei#1`, `andrei#2` — counted per session. It is
-readable in a log and deterministic in a test. Treat it as opaque.
+A second `visitSession` with the same name and a different identity is
+refused: one name is one identity for the life of the opening, and the
+alternative is a roster that changes under the agents reading it.
 
-`deliver` and `acted()` on a visit that left throw, and so do they on a visit
-whose run was stopped. A handle to a finished visit is a stale handle, and
-the runtime says so rather than accepting a message from a person who is
-gone, or into a room that is.
+`deliver` on a visit that left throws, and so does it on a visit whose run
+was stopped. A handle to a finished visit is a stale handle, and the runtime
+says so rather than accepting a message from a person who is gone, or into a
+room that is.
 
-Two visits by one name are the same person. A second `visitSession` with the
-same name and the same identity attaches another visit. A second with the
-same name and a different identity is refused: one name is one identity for
-the life of the opening, and the alternative is a roster that changes under
-the agents reading it.
+The runtime holds no clock over a visit. It does not guess that somebody
+stopped reading, and it writes no message that says they did. Attention is
+claimed, not inferred: what the room knows is that a person arrived and, when
+the host says so, that they left. A host that wants an idle tab treated as a
+departure calls `leave()`, which is the same fact stated once.
 
 ---
 
@@ -225,7 +200,7 @@ interface Spoken {
 }
 
 interface Presence {
-  kind: 'arrived' | 'away' | 'returned' | 'left';
+  kind: 'arrived' | 'left';
   seq: Seq;
   at: string;
   from: string;
@@ -297,13 +272,10 @@ to prevent. The kind carries the meaning and the renderer supplies the words.
 **The room changes before the message does.** A visit registers before its
 `arrived` commits and unregisters before its `left` does, so every agent the
 message activates reads a roster that agrees with it. Backwards, a seat is
-woken to be told Andrei left by a roster that still says he is present. The
-same holds for `away` and `returned`: the status changes, then the message
-that reports it takes its seq.
+woken to be told Andrei left by a roster that still says he is present.
 
-Two of the four kinds come from a deliberate act and two from a clock.
-`arrived` and `left` follow `visitSession()` and `leave()`. `away` follows a timer
-and `returned` follows `acted()`. All four activate.
+Both kinds come from a deliberate act: `arrived` follows `visitSession()`
+and `left` follows `leave()`. Nothing on the record comes from a clock.
 
 The seq counts from 1, is monotonic, is assigned when the message commits,
 and is strictly ordered. A cursor is exclusive: `since` names a message the
@@ -314,92 +286,42 @@ stays Pi's, and `openStore` sorts replayed entries by it.
 
 ## 6. Presence
 
-A visit has two states. A person has three.
+A person is in the room or they are not.
 
 ```ts
-export type VisitStatus = 'present' | 'away';
-export type PresenceStatus = VisitStatus | 'absent';
+export type PresenceStatus = 'present' | 'absent';
 ```
 
-- **present** — they acted within the timeout. They are reading.
-- **away** — they are attached and have not acted for longer than the
-  timeout. They read this later.
-- **absent** — the record has seen them and they hold no live visit. They
-  are not in the room.
+- **present** — they hold a live visit. They are reading.
+- **absent** — the record has seen them and they hold no visit. They read
+  this later.
 
-A person's presence derives from their visits:
+A presence message marks a change of that status, so two of these four cases
+write nothing at all:
 
-> Somebody is **present** if any of their visits is present, **away** if
-> they have visits and all of them are away, and **absent** if they have
-> none.
-
-A presence message marks a change of that status, so four of these seven
-cases write nothing at all:
-
-1. A second visit opens while the person is present — no message, because
-   their status did not change. Only the first visit of a stretch writes
-   `arrived`.
-2. Two visits, one leaves — the person stays present, and again nothing.
-3. The last visit leaves — the person turns absent and `left` commits.
-4. One visit turns away, another is present — the person stays present, and
-   again nothing.
-5. Every visit turns away — the person turns away and `away` commits.
-6. An away visit delivers — that visit returns to present, so does the
-   person, and `returned` commits before the delivery it came with.
-   Delivering is acting.
-7. A person who left is still addressable. A `say` directed at them lands on
+1. A second `visitSession` opens while the person is present — no message,
+   because their status did not change, and the same visit comes back.
+2. The visit leaves — the person turns absent and `left` commits.
+3. They visit again — the person turns present and `arrived` commits.
+4. A person who left is still addressable. A `say` directed at them lands on
    the record and waits; they read it when they come back.
 
-Case 7 needs the room to know the name, and the record is where it knows it
+Case 4 needs the room to know the name, and the record is where it knows it
 from. **A room learns every name in its record, and a record does not
 forget.** An agent that reads `andrei (present)` and calls
 `say({ to: 'andrei' })` two seconds after Andrei closed his laptop still
 lands the message. So does an agent in a session reopened next week, because
 replaying the record replays the arrivals.
 
-Presence itself is live: it is a fact about attachments, and attachments die
-with the process. What survives is the record of how it changed, and that
-rebuilds everything — who has ever been here, who was here last, when, and
-where each of them stopped reading. Presence is kept in one place, and the
-place is the record.
+Presence itself is live: it is a fact about a running room, and it dies with
+the process. What survives is the record of how it changed, and that rebuilds
+everything — who has ever been here, who was here last, when, and where each
+of them stopped reading. Presence is kept in one place, and the place is the
+record.
 
 ---
 
-## 7. The inactivity timeout
-
-`idleTimeout` is milliseconds without an act, and it **defaults to fifteen
-minutes**. `visitSession` takes it per visit, because the host knows the
-medium — a terminal, a tab, a webhook — and one room holds all three.
-`startSession` takes it as the house default for the visits that do not set
-their own.
-
-`Infinity` turns it off: the visit stays present until it leaves, and no
-`away` or `returned` message is written for it. It needs no special case in
-the rule below — `now - lastActedAt < Infinity` is always true — and exactly
-one in the timer, which is armed only for a finite timeout.
-
-Two acts reset it: `deliver` and `acted()`. Reading does not. A host that
-polls `messages()` every second is not a person paying attention, and the
-runtime cannot tell the two apart from the inside. **Attention is claimed,
-not inferred.**
-
-The mechanism is a pure function and a timer, in that order:
-
-```
-status(visit, now) = now - visit.lastActedAt < visit.idleTimeout ? 'present' : 'away'
-```
-
-`seats()` and `visits()` compute it on read. The timer makes the change
-observable on time and makes the message land when it happened: one timer
-per present visit, armed at the visit, cleared and armed again on each act,
-cleared when the visit turns away or leaves. An away visit holds no timer.
-The timer is `unref`'d, so a room full of idle people never keeps Node alive.
-
-Deriving the status rather than storing it keeps the answer right when the
-timer is wrong. A suspended laptop fires its timers late; `seats()` still
-reports away, because it subtracts two numbers.
-
-### What presence costs
+## 7. What presence costs
 
 A presence message costs one commit, and no model call unless a seat is
 seated `attentive`. It lands on the record, wakes nobody at the default
@@ -409,16 +331,14 @@ running anyway, not a turn of its own. Rule 5 counts it like any other
 message, so a say drafted across an arrival is refused and re-aimed at
 whoever is now reading; that is the lock working, not an exception to it.
 
-Three things bound the rest. **Away fires at most once
-per stretch of attention**, because an away visit holds no timer — a person
-in and out all day writes a few messages, not one per tick. **`Infinity`**
-removes the two clock-driven kinds entirely, leaving the arrivals and
-departures a person causes deliberately. And **`passive`** removes the
-glance rather than the message: a passive seat hears no broadcast, so it
-hears no arrival either, until somebody names it, while the record keeps
-everything.
+Two things bound the rest. **Only a deliberate act writes one.** No timer
+writes to the record, so a person who leaves a tab open all afternoon costs
+the room nothing, and the message count follows the number of times somebody
+opened or closed the workspace. And **`passive`** removes the glance rather
+than the message: a passive seat hears no broadcast, so it hears no arrival
+either, until somebody names it, while the record keeps everything.
 
-The timeout does not touch `settled()`. `settled()` reports that no agent is
+Presence does not touch `settled()`. `settled()` reports that no agent is
 active. Whether anybody is watching is a different fact.
 
 ---
@@ -434,29 +354,23 @@ const visit = await visitSession(session, andrei);
 const missed = await session.messages({ since: visit.since });
 ```
 
-`visit.since` is the seq of this person's most recent `away` or `left`
-message, and `messages({ since })` returns everything after it. `since` is
-`undefined` when the record holds neither — they have not been here
-before — and the host says welcome and shows the tail rather than four
-thousand messages.
-
-**The anchor is where they stopped reading, not where they left.** Away and
-absent are one fact here: nobody is looking. A person whose visit turns away
-at 14:00 and acts again at 16:00 gets the two hours they missed, exactly
-like a person who closed the tab and came back.
+`visit.since` is the seq of this person's most recent `left` message, and
+`messages({ since })` returns everything after it. `since` is `undefined`
+when the record holds none — they have not been here before — and the host
+says welcome and shows the tail rather than four thousand messages.
 
 **The anchor holds while they read.** `since` is a live read of the record,
-so it moves the moment an `away` or `left` message lands and then holds until
-the next one. It does not move when they act, when a message lands, or when
-a second visit opens. The divider a host draws in the transcript stays where
-it was drawn for the whole stretch of attention.
+so it moves the moment a `left` message lands and then holds until the next
+one. It does not move when they speak, when a message lands, or when they
+visit again. The divider a host draws in the transcript stays where it was
+drawn for the whole visit.
 
 Three things follow from the anchor being a message rather than a mark kept
 beside the record.
 
 **Ordering is exact.** An anchor and the messages past it are the same kind
 of thing in one sequence on one commit path. No message lands between a
-person going away and a mark being written, because there is no second write.
+person leaving and a mark being written, because there is no second write.
 
 **Durability is free.** The record persists through Pi's `SessionRepo` and
 `openStore` replays it. Nothing extra is stored, so nothing extra is lost,
@@ -479,8 +393,8 @@ turn started to hear that the room is closing is a turn nobody reads.
 
 That leaves one case, and it fails in the safe direction. If the process dies
 rather than stopping, no `left` is written, because nothing observed anything.
-On the next run each of those people is anchored at their previous `away` or
-`left`, so they are shown more than they missed rather than less. A crash
+On the next run each of those people is anchored at their previous `left`,
+so they are shown more than they missed rather than less. A crash
 widens a window; it never hides anything.
 
 Catch-up does not cover what the agents did. The record holds what was said
@@ -501,16 +415,17 @@ scope, sequence the work, and keep the plan of record current.
 
 The time is 2026-08-27 16:04 UTC.
 
-The agents (active: taking a turn now; idle: hears every message; passive:
-hears only a say directed at them):
+The agents (active: taking a turn now; idle: at rest. A seat marked "named
+only" hears nothing but a say addressed to it; one marked "watches arrivals"
+also wakes when somebody arrives or leaves; the rest wake on anything said):
 - lead (idle): Tech lead. Owns feasibility, estimates, and sequencing.
 - designer (idle): Product designer. Guards the user experience.
-- planner (passive): Project manager. Keeps the plan of record.
+- planner (idle, named only): Project manager. Keeps the plan of record.
 
-The people (present: reading now; away: here, not reading; absent: gone):
-- andrei (present, arrived just now, last here 3 days ago): Founder. Owns
-  the weekly. Bring him blockers, not status.
-- mara (absent, last here 20 minutes ago): Design lead.
+The people (present: in the room now; absent: not in the room):
+- andrei (present, since just now, has not seen the last 2 messages): Founder.
+  Owns the weekly. Bring him blockers, not status.
+- mara (absent, since 20 minutes ago): Design lead.
 
 The record so far:
 [andrei] Draft the weekly. Anything to flag?              3 days ago
@@ -552,9 +467,10 @@ a request — nobody asked anything by opening the workspace — so it never
 starts a turn, and the paragraph says so. It renders in every room, with or
 without a goal, because it is about routing rather than purpose.
 
-> Who is reading can change while you work. An arrival, a departure or
-> somebody going quiet reaches you as a [new] line mid-turn. It is never a
-> request — nobody asked you anything by opening the workspace — so it never
+> Who is reading can change while you work. An arrival or a departure reaches
+> you as a [new] line mid-turn, and wakes you outright if your seat watches
+> for it. It is never a request — nobody asked you anything by opening the
+> workspace — so it never
 > means start something new, and you never greet, never say that you noticed,
 > and never summarise the record back to the room. Use it to aim what you were
 > already going to say: pitch it at whoever is actually reading now, say the
@@ -579,52 +495,31 @@ record. This is rule 2 of the core: working views reset at idle.
 
 ```ts
 session.messages(options?: { since?: Seq }): Promise<Message[]>;
-session.visits(): VisitInfo[];
 ```
 
-The event stream keeps attachment granularity, which the record deliberately
-does not carry:
+**Presence adds no event of its own.** An arrival and a departure reach the
+stream on the existing `delivery` event, because that is what they are:
+messages the room committed. The nine events of the core are the whole
+stream, and a host that renders `delivery` renders presence for free.
 
-```ts
-type SessionEvent =
-  | /* … the nine events of the core, unchanged … */
-  | { type: 'visit_enter';  human: string; visit: string; presence: PresenceStatus }
-  | { type: 'visit_away';   human: string; visit: string; presence: PresenceStatus }
-  | { type: 'visit_return'; human: string; visit: string; presence: PresenceStatus }
-  | { type: 'visit_leave';  human: string; visit: string; presence: PresenceStatus };
-```
-
-The four `visit_*` events fire on every attachment change and name the
-person's status afterwards. A presence message that reaches the record
-arrives on the existing `delivery` event, because that is what it is. When
-Andrei's first tab goes idle and his second is live, `visit_away` fires with
-`presence: 'present'` and no delivery follows, because Andrei is still
-reading.
-
-This is the core's own distinction, held: the event stream is the host's
-instrument panel, and the record is what participants read. An attachment is
-host bookkeeping, so it never reaches the record — the room records that
-Andrei's own status changed, not that his second tab did.
-
-```ts
-export interface VisitInfo {
-  id: string;
-  human: string;
-  status: VisitStatus;
-  via?: string;
-  enteredAt: string; // ISO, stamped by the runtime
-  lastActedAt: string; // ISO, stamped by the runtime
-  since: Seq | undefined;
-}
-```
+That is the point of putting presence on the record rather than beside it. A
+second channel for "who is here" would have to be kept in step with the first,
+and the two would disagree the first time one of them dropped an event.
 
 `seats()` answers who is in the room, and `SeatInfo` is a discriminated
 union, because an agent seat and a person do not carry the same fields:
 
 ```ts
 export type SeatInfo =
-  | { kind: 'agent'; name: string; identity: string; status: SeatStatus; sessionId: string }
-  | { kind: 'human'; name: string; identity: string; presence: PresenceStatus; visits: number };
+  | {
+      kind: 'agent';
+      name: string;
+      identity: string;
+      status: SeatStatus;
+      attention: Attention;
+      sessionId: string;
+    }
+  | { kind: 'human'; name: string; identity: string; presence: PresenceStatus };
 ```
 
 ---
@@ -634,25 +529,22 @@ export type SeatInfo =
 The milestone tests live in
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts), one per claim
 this document makes loudly: a room of agents running and settling with nobody
-present; `visitSession` committing an `arrived` that activates the idle room
-while a passive seat sits out, against a roster that already shows it; a
-presence message carrying no text and stamping `from` off the visit; two
-people delivering and the record stamping each from their own; a second visit
-committing nothing and only the last leave committing `left`, with the stream
-carrying both attachments; a visit turning away on its timeout and never on
-`Infinity`; the timeout resolving the visit, then the run, then fifteen
-minutes; one of two visits turning away silently and both turning away
-committing `away`; an away visit delivering with `returned` landing first; a
-name still on the roster after it left and after the run that knew it ended;
-a stale visit refusing `deliver` and `acted` while `leave` twice does not;
-`since` undefined on a first visit, then the seq of the `left`, holding while
-a person reads and moving when they stop; `messages({ since })` returning both
-kinds in order; `stopSession` closing its visits without waking anybody;
-`readSession` reading a stopped name with no agent standing up; and the
-rendered context carrying the goal, the clock, each person's unseen count and
-the divider — with the goal rendering only when set and the presence paragraph
-rendering always. All in-process, in vitest, on a
-scripted stream, with fake timers where the clock matters.
+present; `visitSession` committing an `arrived` that wakes nobody at the
+default attention; an `attentive` seat woken by that same arrival while a
+`passive` seat and a plain one sit out, against a roster that already shows
+it; an arrival steering a seat already at work; a presence message carrying no
+text and stamping `from` off the visit; two people delivering and the record
+stamping each from their own; a second `visitSession` on one name committing
+nothing and returning the same visit, and one `left` when it leaves; a name
+still on the roster after it left and after the run that knew it ended; a
+stale visit refusing `deliver` while `leave` twice does not; `since` undefined
+on a first visit, then the seq of the `left`, holding while a person reads and
+moving when they leave again; `messages({ since })` returning both kinds in
+order; `stopSession` closing its visits without waking anybody; `readSession`
+reading a stopped name with no agent standing up; and the rendered context
+carrying the goal, the clock, each person's unseen count and the divider —
+with the goal rendering only when set and the presence paragraph rendering
+always. All in-process, in vitest, on a scripted stream.
 
 The rules this document shares with the core are proved beside them, in
 [`session.test.ts`](../packages/ambion/test/session.test.ts), which now runs
@@ -667,8 +559,8 @@ with read/write contracts must know who is reading, and a channel's record
 carries the same arrivals this one does.
 
 Three things sit directly on top and are not here. **Notifying somebody an
-agent addressed while they were away** — the record holds both halves
-already, the directed message and the `away` before it. **Catching up across
+agent addressed while they were absent** — the record holds both halves
+already, the directed message and the `left` before it. **Catching up across
 rooms**, one person and many sessions with one answer to "what did I miss",
 which needs something that holds the rooms. And **a sender that is not a
 person**: a cron, a webhook or a scheduled job has nobody to enter as, and an

@@ -24,15 +24,8 @@ export type {
 	SessionView,
 	StartSessionOptions,
 	Visit,
-	VisitOptions,
 } from './session.ts';
-export {
-	DEFAULT_IDLE_TIMEOUT,
-	readSession,
-	startSession,
-	stopSession,
-	visitSession,
-} from './session.ts';
+export { readSession, startSession, stopSession, visitSession } from './session.ts';
 export type {
 	AgentDefinition,
 	AgentSeat,
@@ -52,8 +45,6 @@ export type {
 	Seq,
 	SessionEvent,
 	SpokenMessage,
-	VisitInfo,
-	VisitStatus,
 } from './types.ts';
 export { isSpoken } from './types.ts';
 

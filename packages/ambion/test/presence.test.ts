@@ -101,7 +101,6 @@ describe('presence', () => {
 		await session.settled();
 		expect(await session.messages()).toHaveLength(0);
 		expect(session.seats().filter((s) => s.kind === 'human')).toHaveLength(0);
-		expect(session.visits()).toHaveLength(0);
 	});
 
 	it('commits an arrival and wakes nobody, because no seat watches for one by default', async () => {
@@ -193,94 +192,23 @@ describe('presence', () => {
 		]);
 	});
 
-	it('counts visits per person: only the first arrives and only the last leaves', async () => {
+	it('holds one visit per person: a second visit is the same visit', async () => {
 		const session = track(open());
 		const seen = events(session);
-		const terminal = await visitSession(session, andrei, { via: 'terminal' });
-		const browser = await visitSession(session, andrei, { via: 'web' });
+		const terminal = await visitSession(session, andrei);
+		const browser = await visitSession(session, andrei);
 		await session.settled();
+		expect(browser.human).toBe(terminal.human); // one person is in the room once, or not at all
 		expect(await kinds(session)).toEqual(['arrived']); // the second visit committed nothing
-		expect(session.visits()).toHaveLength(2);
 		expect(presenceOf(session, 'andrei')).toBe('present');
 
 		await terminal.leave();
-		expect(presenceOf(session, 'andrei')).toBe('present'); // still reading in the other
-		expect(await kinds(session)).toEqual(['arrived']);
-
-		await browser.leave();
 		await session.settled();
 		expect(presenceOf(session, 'andrei')).toBe('absent');
 		expect(await kinds(session)).toEqual(['arrived', 'left']);
-		// the stream carries every attachment, and names the person's status after
-		const leaves = seen.filter((e) => e.type === 'visit_leave');
-		expect(leaves.map((e) => e.type === 'visit_leave' && e.presence)).toEqual([
-			'present',
-			'absent',
-		]);
-	});
-
-	it('turns a visit away on the timeout, and never with Infinity', async () => {
-		vi.useFakeTimers();
-		const session = track(open({ idleTimeout: 60_000 }));
-		const visit = await visitSession(session, andrei);
-		expect(visit.status).toBe('present');
-
-		await vi.advanceTimersByTimeAsync(60_001);
-		expect(visit.status).toBe('away');
-		expect(presenceOf(session, 'andrei')).toBe('away');
-		expect(await kinds(session)).toEqual(['arrived', 'away']);
-
-		const forever = track(open({ idleTimeout: Number.POSITIVE_INFINITY }));
-		const patient = await visitSession(forever, andrei);
-		await vi.advanceTimersByTimeAsync(60 * 60_000);
-		expect(patient.status).toBe('present');
-		expect(await kinds(forever)).toEqual(['arrived']);
-	});
-
-	it('takes a timeout from the visit, then the run, then fifteen minutes', async () => {
-		vi.useFakeTimers();
-		const session = track(open({ idleTimeout: 60_000 }));
-		const short = await visitSession(session, andrei, { idleTimeout: 1_000 });
-		const house = await visitSession(session, mara);
-		await vi.advanceTimersByTimeAsync(1_001);
-		expect(short.status).toBe('away');
-		expect(house.status).toBe('present');
-
-		const defaulted = track(open());
-		const long = await visitSession(defaulted, andrei);
-		await vi.advanceTimersByTimeAsync(14 * 60_000);
-		expect(long.status).toBe('present');
-		await vi.advanceTimersByTimeAsync(2 * 60_000);
-		expect(long.status).toBe('away');
-	});
-
-	it('turns a person away only when every visit is', async () => {
-		vi.useFakeTimers();
-		const session = track(open({ idleTimeout: 60_000 }));
-		const first = await visitSession(session, andrei);
-		const second = await visitSession(session, andrei, { idleTimeout: 10 * 60_000 });
-
-		await vi.advanceTimersByTimeAsync(60_001);
-		expect(first.status).toBe('away');
-		expect(presenceOf(session, 'andrei')).toBe('present'); // the other is still reading
-		expect(await kinds(session)).toEqual(['arrived']);
-
-		await vi.advanceTimersByTimeAsync(10 * 60_000);
-		expect(second.status).toBe('away');
-		expect(presenceOf(session, 'andrei')).toBe('away');
-		expect(await kinds(session)).toEqual(['arrived', 'away']);
-	});
-
-	it('returns an away visit before the delivery it came with', async () => {
-		vi.useFakeTimers();
-		const session = track(open({ idleTimeout: 60_000 }));
-		const visit = await visitSession(session, andrei);
-		await vi.advanceTimersByTimeAsync(60_001);
-		expect(await kinds(session)).toEqual(['arrived', 'away']);
-
-		await visit.deliver({ text: 'back' });
-		expect(await kinds(session)).toEqual(['arrived', 'away', 'returned', 'said']);
-		expect(visit.status).toBe('present');
+		// leaving is a message like any other, and the stream carries it
+		const left = seen.filter((e) => e.type === 'delivery' && e.message.kind === 'left');
+		expect(left).toHaveLength(1);
 	});
 
 	it('still addresses somebody who left, and remembers them across a run', async () => {
@@ -308,13 +236,11 @@ describe('presence', () => {
 		const visit = await visitSession(session, andrei);
 		await visit.leave();
 		await expect(visit.leave()).resolves.toBeUndefined();
-		expect(() => visit.acted()).toThrow(/has ended/);
 		await expect(visit.deliver({ text: 'hello?' })).rejects.toThrow(/has ended/);
 	});
 
 	it('anchors since at where a person stopped reading, and holds it while they read', async () => {
-		vi.useFakeTimers();
-		const session = track(open({ idleTimeout: 60_000 }));
+		const session = track(open());
 		const first = await visitSession(session, andrei);
 		expect(first.since).toBeUndefined(); // never been here
 
@@ -328,9 +254,11 @@ describe('presence', () => {
 		await again.deliver({ text: 'after' });
 		expect(again.since).toBe(left?.seq); // it does not move while they read
 
-		await vi.advanceTimersByTimeAsync(60_001);
-		const away = (await session.messages()).find((m) => m.kind === 'away');
-		expect(again.since).toBe(away?.seq); // it moves when they stop
+		await again.leave();
+		await session.settled();
+		const second = (await session.messages()).filter((m) => m.kind === 'left').at(-1);
+		const back = await visitSession(session, andrei);
+		expect(back.since).toBe(second?.seq); // it moves when they leave again
 	});
 
 	it('reads only what followed a cursor, both kinds in order', async () => {
@@ -377,14 +305,12 @@ describe('presence', () => {
 		expect((await view.messages()).filter(isSpoken).map((m) => m.text)).toEqual(['for later']);
 		// no agents stand up, and everybody the record knows is absent
 		expect(view.seats()).toEqual([
-			{ kind: 'human', name: 'andrei', identity: andrei.identity, presence: 'absent', visits: 0 },
+			{ kind: 'human', name: 'andrei', identity: andrei.identity, presence: 'absent' },
 		]);
 	});
 
 	it('shows an agent the goal, the clock, and what each person has not seen', async () => {
-		const session = track(
-			open({ goal: 'Ship payments v2 this quarter.', idleTimeout: Number.POSITIVE_INFINITY }),
-		);
+		const session = track(open({ goal: 'Ship payments v2 this quarter.' }));
 		const visit = await visitSession(session, andrei);
 		await visit.deliver({ text: 'kicking this off' });
 		await visit.leave();

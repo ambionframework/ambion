@@ -43,10 +43,7 @@ export function renderLine(message: Message): string {
 }
 
 function verb(kind: Exclude<Message['kind'], 'said'>): string {
-	if (kind === 'arrived') return 'arrived';
-	if (kind === 'left') return 'left';
-	if (kind === 'away') return 'stopped reading';
-	return 'started reading again';
+	return kind === 'arrived' ? 'arrived' : 'left';
 }
 
 /**

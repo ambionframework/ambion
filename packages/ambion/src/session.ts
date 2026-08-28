@@ -36,15 +36,10 @@ import {
 	type Seq,
 	type SessionEvent,
 	type SpokenMessage,
-	type VisitInfo,
-	type VisitStatus,
 } from './types.ts';
 
 /** The record lives as custom entries of this type in a Pi session. */
 const MESSAGE_ENTRY = 'ambion/message';
-
-/** Fifteen minutes without an act, unless the room or the visit says otherwise. */
-export const DEFAULT_IDLE_TIMEOUT = 15 * 60_000;
 
 const defaultRepo = new InMemorySessionRepo();
 
@@ -69,8 +64,6 @@ export interface StartSessionOptions {
 	agents: readonly AgentSeat[];
 	/** What the room is for. Read by every agent; gates the arrival paragraph. */
 	goal?: string;
-	/** The house default for visits that do not set their own. */
-	idleTimeout?: number;
 	/**
 	 * Override the model call — Pi's own extension surface, and the only one
 	 * here: a scripted stream makes the room deterministic, a custom stream
@@ -83,13 +76,6 @@ export interface StartSessionOptions {
 
 export interface ReadSessionOptions {
 	repo?: SessionRepo;
-}
-
-export interface VisitOptions {
-	/** Milliseconds without an act, after which the visit turns away. `Infinity` never. */
-	idleTimeout?: number;
-	/** A label the host chooses. The runtime stores it and gives it back. */
-	via?: string;
 }
 
 /** Reading a room takes no run: the pull side, and nothing that starts anything. */
@@ -105,18 +91,13 @@ export interface Session extends SessionView {
 	settled(): Promise<void>;
 	/** Cancel every active turn. The room keeps running; `stopSession` ends it. */
 	abort(): void;
-	visits(): VisitInfo[];
 }
 
 export interface Visit {
 	readonly human: HumanDefinition;
-	readonly id: string;
-	readonly status: VisitStatus;
-	/** Where this person stopped reading last. A live read of the record. */
+	/** The seq of this person's last `left`, or undefined the first time. A live read. */
 	readonly since: Seq | undefined;
 	deliver(input: { to?: Participant; text: string }): Promise<void>;
-	/** The host reports that the person acted. Returns an away visit to present. */
-	acted(): void;
 	leave(): Promise<void>;
 }
 
@@ -139,17 +120,6 @@ interface SeatRuntime {
 	piSeat?: Promise<PiSession>;
 }
 
-interface VisitRuntime {
-	id: string;
-	human: HumanDefinition;
-	via?: string;
-	idleTimeout: number;
-	enteredAt: string;
-	lastActedAt: number;
-	gone: boolean;
-	timer?: ReturnType<typeof setTimeout>;
-}
-
 /** Sets up the context where the agents work. */
 export function startSession(options: StartSessionOptions): Session {
 	if (running.has(options.name)) {
@@ -170,16 +140,12 @@ export function stopSession(session: Session): Promise<void> {
 	return session.stop();
 }
 
-/** Puts a person in a running room. */
-export function visitSession(
-	session: Session,
-	human: HumanDefinition,
-	options: VisitOptions = {},
-): Promise<Visit> {
+/** Puts a person in a running room. One person is in it once, or not at all. */
+export function visitSession(session: Session, human: HumanDefinition): Promise<Visit> {
 	if (!(session instanceof SessionImpl)) {
 		throw new Error('visitSession takes a session from startSession.');
 	}
-	return session.visit(human, options);
+	return session.visit(human);
 }
 
 /** Reads a name and starts nothing. A running name reads through its live room. */
@@ -249,6 +215,84 @@ function restore(data: Partial<Message>, fallbackSeq: Seq): Message {
 	return { kind: 'said', ...data, seq: data.seq ?? fallbackSeq } as Message;
 }
 
+/** One person in the room, for as long as they are in it. */
+interface VisitRuntime {
+	human: HumanDefinition;
+	gone: boolean;
+}
+
+/**
+ * Who is in the room, and where each of them stopped reading. The record is
+ * the store. This holds the one fact a replay cannot rebuild: who is here
+ * now. Everything else it answers, it reads off the record.
+ */
+class Attendance {
+	private readonly inRoom = new Map<string, VisitRuntime>();
+
+	constructor(private readonly record: () => readonly Message[]) {}
+
+	enter(human: HumanDefinition): VisitRuntime {
+		const visit: VisitRuntime = { human, gone: false };
+		this.inRoom.set(human.name, visit);
+		return visit;
+	}
+
+	leave(name: string): void {
+		this.inRoom.delete(name);
+	}
+
+	visitOf(name: string): VisitRuntime | undefined {
+		return this.inRoom.get(name);
+	}
+
+	all(): VisitRuntime[] {
+		return [...this.inRoom.values()];
+	}
+
+	presenceOf(name: string): PresenceStatus {
+		return this.inRoom.has(name) ? 'present' : 'absent';
+	}
+
+	/** Every person the room knows: the arrivals on the record, and who is here. */
+	known(): Map<string, string> {
+		const known = new Map<string, string>();
+		for (const message of this.record()) {
+			if (message.kind !== 'arrived') continue;
+			known.set(message.from, message.identity ?? '');
+		}
+		for (const visit of this.inRoom.values()) known.set(visit.human.name, visit.human.identity);
+		return known;
+	}
+
+	knows(name: string): boolean {
+		return this.known().has(name);
+	}
+
+	/** The seq of this person's last `left`, or undefined before their first. */
+	sinceOf(name: string): Seq | undefined {
+		return this.lastPresence(name)?.seq;
+	}
+
+	/** When this person's presence last changed, ISO. */
+	lastChangeAt(name: string): string | undefined {
+		const record = this.record();
+		for (let i = record.length - 1; i >= 0; i -= 1) {
+			const message = record[i];
+			if (message && message.kind !== 'said' && message.from === name) return message.at;
+		}
+		return undefined;
+	}
+
+	private lastPresence(name: string): PresenceMessage | undefined {
+		const record = this.record();
+		for (let i = record.length - 1; i >= 0; i -= 1) {
+			const message = record[i];
+			if (message?.kind === 'left' && message.from === name) return message;
+		}
+		return undefined;
+	}
+}
+
 class ReadOnlySession implements SessionView {
 	private readonly store: RecordStore;
 
@@ -274,7 +318,6 @@ class ReadOnlySession implements SessionView {
 				name: message.from,
 				identity: message.identity ?? '',
 				presence: 'absent',
-				visits: 0,
 			});
 		}
 		return [...seen.values()];
@@ -291,24 +334,20 @@ class ReadOnlySession implements SessionView {
 class SessionImpl implements Session {
 	readonly name: string;
 	private readonly goal?: string;
-	private readonly idleTimeout: number;
 	private readonly repo: SessionRepo;
 	private readonly store: RecordStore;
 	private readonly agents = new Map<string, SeatRuntime>();
-	private readonly people = new Map<string, HumanDefinition>();
-	private readonly visitsByName = new Map<string, VisitRuntime[]>();
+	private readonly here = new Attendance(() => this.record);
 	private readonly listeners = new Set<(event: SessionEvent) => void>();
 	private readonly settledWaiters: (() => void)[] = [];
 	private readonly streamFn: StreamFn;
 	private readonly customStream: boolean;
 	private activeCount = 0;
-	private visitCount = 0;
 	private stopped = false;
 
 	constructor(options: StartSessionOptions) {
 		this.name = options.name;
 		this.goal = options.goal?.trim() || undefined;
-		this.idleTimeout = options.idleTimeout ?? DEFAULT_IDLE_TIMEOUT;
 		this.repo = options.repo ?? defaultRepo;
 		this.store = new RecordStore(this.repo, this.name);
 		for (const seat of options.agents) this.seat(seat);
@@ -388,105 +427,24 @@ class SessionImpl implements Session {
 				sessionId: `${this.name}:${seat.def.name}`,
 			});
 		}
-		for (const [name, identity] of this.knownPeople()) {
-			seats.push({
-				kind: 'human',
-				name,
-				identity,
-				presence: this.presenceOf(name),
-				visits: (this.visitsByName.get(name) ?? []).length,
-			});
+		for (const [name, identity] of this.here.known()) {
+			seats.push({ kind: 'human', name, identity, presence: this.here.presenceOf(name) });
 		}
 		return seats;
 	}
 
-	visits(): VisitInfo[] {
-		const now = Date.now();
-		const all: VisitInfo[] = [];
-		for (const [name, visits] of this.visitsByName) {
-			for (const visit of visits) {
-				all.push({
-					id: visit.id,
-					human: name,
-					status: statusOf(visit, now),
-					via: visit.via,
-					enteredAt: visit.enteredAt,
-					lastActedAt: new Date(visit.lastActedAt).toISOString(),
-					since: this.sinceOf(name),
-				});
-			}
-		}
-		return all;
-	}
-
-	// -- presence ------------------------------------------------------------
-
-	/**
-	 * Every name the room knows: the arrivals on its record, and whoever holds
-	 * a visit now. A run does not carry its people over from the last one —
-	 * the record does, which is why a `say` to somebody who was here yesterday
-	 * still lands.
-	 */
-	private knownPeople(): Map<string, string> {
-		const known = new Map<string, string>();
-		for (const message of this.record) {
-			if (message.kind === 'arrived' && message.identity) known.set(message.from, message.identity);
-		}
-		for (const [name, human] of this.people) known.set(name, human.identity);
-		return known;
-	}
-
-	private knows(name: string): boolean {
-		if (this.people.has(name)) return true;
-		return this.record.some((message) => message.kind === 'arrived' && message.from === name);
-	}
-
-	/** Present if any visit is present, away if all are, absent with none. */
-	private presenceOf(name: string): PresenceStatus {
-		const visits = this.visitsByName.get(name) ?? [];
-		if (visits.length === 0) return 'absent';
-		const now = Date.now();
-		return visits.some((visit) => statusOf(visit, now) === 'present') ? 'present' : 'away';
-	}
-
-	/** The seq of this person's most recent `away` or `left`. */
-	private sinceOf(name: string): Seq | undefined {
-		for (let i = this.record.length - 1; i >= 0; i -= 1) {
-			const message = this.record[i];
-			if (!message || message.from !== name) continue;
-			if (message.kind === 'away' || message.kind === 'left') return message.seq;
-		}
-		return undefined;
-	}
-
-	async visit(human: HumanDefinition, options: VisitOptions): Promise<Visit> {
+	/** Puts a person in the room. A second visit while they are here is the same visit. */
+	async visit(human: HumanDefinition): Promise<Visit> {
 		this.assertRunning();
 		this.assertVisitable(human);
 		await this.store.ready;
-		const before = this.presenceOf(human.name);
-		this.visitCount += 1;
-		const runtime: VisitRuntime = {
-			id: `${human.name}#${this.visitCount}`,
-			human,
-			via: options.via,
-			idleTimeout: options.idleTimeout ?? this.idleTimeout,
-			enteredAt: new Date().toISOString(),
-			lastActedAt: Date.now(),
-			gone: false,
-		};
+		const already = this.here.visitOf(human.name);
+		if (already) return this.handle(already);
 		// The room changes before the message does: a seat woken by the arrival
 		// must read a roster that already agrees with it.
-		this.visitsByName.set(human.name, [...(this.visitsByName.get(human.name) ?? []), runtime]);
-		this.people.set(human.name, human);
-		this.emit({
-			type: 'visit_enter',
-			human: human.name,
-			visit: runtime.id,
-			presence: this.presenceOf(human.name),
-		});
-		await this.notePresence(human.name, before, 'arrived', human.identity);
-		this.arm(runtime);
-		return this.handle(runtime);
+		const visit = this.here.enter(human);
+		await this.commitPresence(human.name, 'arrived', human.identity);
+		return this.handle(visit);
 	}
 
 	private assertVisitable(human: HumanDefinition): void {
@@ -495,8 +453,8 @@ class SessionImpl implements Session {
 				`'${human.name}' is an agent in this session: one name names one participant.`,
 			);
 		}
-		const known = this.people.get(human.name);
-		if (known && known.identity !== human.identity) {
+		const known = this.here.known().get(human.name);
+		if (known !== undefined && known !== human.identity) {
 			throw new Error(
 				`'${human.name}' is already in this session under a different identity: one name is one person.`,
 			);
@@ -507,18 +465,11 @@ class SessionImpl implements Session {
 		if (this.stopped) throw new Error(`Session '${this.name}' is stopped.`);
 	}
 
-	/**
-	 * Commit a presence message when — and only when — the person's own status
-	 * changed. A second tab is host bookkeeping and never reaches the record.
-	 */
-	private async notePresence(
+	private async commitPresence(
 		name: string,
-		before: PresenceStatus,
 		kind: PresenceChange,
 		identity?: string,
 	): Promise<void> {
-		const after = this.presenceOf(name);
-		if (after === before) return;
 		const message = this.store.append<PresenceMessage>({
 			kind,
 			at: new Date().toISOString(),
@@ -530,71 +481,30 @@ class SessionImpl implements Session {
 		this.dispatch(message);
 	}
 
-	private arm(visit: VisitRuntime): void {
-		clearTimeout(visit.timer);
-		visit.timer = undefined;
-		if (!Number.isFinite(visit.idleTimeout)) return;
-		const timer = setTimeout(() => void this.turnAway(visit), visit.idleTimeout);
-		timer.unref?.();
-		visit.timer = timer;
+	private assertLive(visit: VisitRuntime): void {
+		if (visit.gone) throw new Error(`${visit.human.name}'s visit has ended.`);
 	}
 
-	private async turnAway(visit: VisitRuntime): Promise<void> {
-		if (visit.gone || this.stopped) return;
-		visit.timer = undefined;
-		// The clock already made this visit away; the message only reports it.
-		await this.notePresence(visit.human.name, 'present', 'away');
-	}
-
-	private act(visit: VisitRuntime): void {
-		this.assertRunning();
-		if (visit.gone) throw new Error(`This visit has ended: ${visit.id}.`);
-		const before = this.presenceOf(visit.human.name);
-		visit.lastActedAt = Date.now();
-		this.arm(visit);
-		void this.notePresence(visit.human.name, before, 'returned');
-	}
-
-	private async endVisit(visit: VisitRuntime, silent: boolean): Promise<void> {
+	private async endVisit(visit: VisitRuntime): Promise<void> {
 		if (visit.gone) return;
-		const name = visit.human.name;
-		const before = this.presenceOf(name);
-		clearTimeout(visit.timer);
-		visit.timer = undefined;
 		visit.gone = true;
-		const rest = (this.visitsByName.get(name) ?? []).filter((other) => other !== visit);
-		if (rest.length === 0) this.visitsByName.delete(name);
-		else this.visitsByName.set(name, rest);
-		this.emit({
-			type: 'visit_leave',
-			human: name,
-			visit: visit.id,
-			presence: this.presenceOf(name),
-		});
-		if (silent) return;
-		await this.notePresence(name, before, 'left');
+		this.here.leave(visit.human.name);
+		await this.commitPresence(visit.human.name, 'left');
 	}
 
 	private handle(visit: VisitRuntime): Visit {
 		const session = this;
 		return {
 			human: visit.human,
-			id: visit.id,
-			get status() {
-				return statusOf(visit, Date.now());
-			},
 			get since() {
-				return session.sinceOf(visit.human.name);
+				return session.here.sinceOf(visit.human.name);
 			},
 			async deliver(input) {
-				session.act(visit);
+				session.assertLive(visit);
 				await session.deliverFrom(visit.human.name, input);
 			},
-			acted() {
-				session.act(visit);
-			},
 			leave() {
-				return session.endVisit(visit, false);
+				return session.endVisit(visit);
 			},
 		};
 	}
@@ -607,16 +517,14 @@ class SessionImpl implements Session {
 		// A deliberate shutdown observed everybody leaving, so the record says
 		// so — but it wakes nobody: a turn started to hear that the room is
 		// closing is a turn nobody reads.
-		for (const name of [...this.visitsByName.keys()]) {
-			if (this.presenceOf(name) === 'absent') continue;
+		for (const visit of this.here.all()) {
+			visit.gone = true;
+			this.here.leave(visit.human.name);
 			this.store.append<PresenceMessage>({
 				kind: 'left',
 				at: new Date().toISOString(),
-				from: name,
+				from: visit.human.name,
 			});
-		}
-		for (const visits of [...this.visitsByName.values()]) {
-			for (const visit of [...visits]) await this.endVisit(visit, true);
 		}
 		this.stopped = true;
 		await this.store.drained();
@@ -630,7 +538,7 @@ class SessionImpl implements Session {
 		input: { to?: Participant; text: string },
 	): Promise<void> {
 		const to = input.to?.name;
-		if (to !== undefined && !this.knows(to) && !this.agents.has(to)) {
+		if (to !== undefined && !this.here.knows(to) && !this.agents.has(to)) {
 			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
 		}
 		const message = this.store.append<SpokenMessage>({
@@ -812,7 +720,7 @@ class SessionImpl implements Session {
 
 	private assertAddressable(seat: SeatRuntime, to: string | undefined): void {
 		if (to === undefined) return;
-		if (!this.knows(to) && !this.agents.has(to)) {
+		if (!this.here.knows(to) && !this.agents.has(to)) {
 			throw new Error(`Unknown participant '${to}'. Address someone from the roster.`);
 		}
 		if (to === seat.def.name) throw new Error('You cannot address yourself.');
@@ -842,26 +750,18 @@ class SessionImpl implements Session {
 	/** One entry per person the room knows, with their gap and what they missed. */
 	private peopleViews(): PersonView[] {
 		const views: PersonView[] = [];
-		for (const [name, identity] of this.knownPeople()) {
-			const since = this.sinceOf(name);
+		for (const [name, identity] of this.here.known()) {
+			const since = this.here.sinceOf(name);
 			views.push({
 				name,
 				identity,
-				presence: this.presenceOf(name),
-				changedAt: this.lastChangeAt(name),
+				presence: this.here.presenceOf(name),
+				changedAt: this.here.lastChangeAt(name),
 				since,
 				unseen: since === undefined ? 0 : this.store.since(since).length,
 			});
 		}
 		return views;
-	}
-
-	private lastChangeAt(name: string): string | undefined {
-		for (let i = this.record.length - 1; i >= 0; i -= 1) {
-			const message = this.record[i];
-			if (message && message.kind !== 'said' && message.from === name) return message.at;
-		}
-		return undefined;
 	}
 
 	private systemPrompt(seat: SeatRuntime): string {
@@ -908,7 +808,7 @@ class SessionImpl implements Session {
 			`when somebody arrives or leaves; the rest wake on anything said):`,
 			renderAgents(this.seats()),
 			``,
-			`The people (present: reading now; away: here, not reading; absent: not here):`,
+			`The people (present: in the room now; absent: not in the room):`,
 			renderPeople(people, now),
 			``,
 			`The record of '${this.name}' so far:`,
@@ -941,9 +841,9 @@ class SessionImpl implements Session {
 
 /** What a seat does with a presence line that lands while it is working. */
 const AUDIENCE_PARAGRAPH = [
-	`Who is reading can change while you work. An arrival, a departure or somebody going`,
-	`quiet reaches you as a [new] line mid-turn, and wakes you outright if your seat watches`,
-	`for it. It is never a request — nobody asked you anything by opening the workspace —`,
+	`Who is reading can change while you work. An arrival or a departure reaches you as a`,
+	`[new] line mid-turn, and wakes you outright if your seat watches for it. It is never a`,
+	`request — nobody asked you anything by opening the workspace —`,
 	`so it never means start something new, and you`,
 	`never greet, never say that you noticed, and never summarise the record back to the`,
 	`room. Use it to aim what you were already going to say: pitch it at whoever is`,
@@ -962,10 +862,6 @@ function wakes(seat: SeatRuntime, target: SeatRuntime | undefined, message: Mess
 	if (isSpoken(message) && message.to !== undefined) return seat === target;
 	if (seat.attention === 'named') return false;
 	return isSpoken(message) || seat.attention === 'presence';
-}
-
-function statusOf(visit: VisitRuntime, now: number): VisitStatus {
-	return now - visit.lastActedAt < visit.idleTimeout ? 'present' : 'away';
 }
 
 /** Open an id into its Pi session, creating it on first open. */
