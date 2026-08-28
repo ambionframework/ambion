@@ -408,10 +408,11 @@ in-process, in vitest, on a scripted stream where determinism matters. What a
 person entering and leaving adds to these rules is proved beside them, in
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts).
 
-The runnable proof is [`examples/room`](../examples/room): an initiative room
-— a tech lead, a designer, a product manager, an executive, and a passive
-project manager the room calls in to keep the plan of record current — where
-every rule above is observable by hand.
+The runnable proof is [`examples/site`](../examples/site): a construction
+management suite where each product is an agent — a time tracker, a task list
+seated `attentive` so it meets people at the door, and a materials tracker —
+shared by three people who come and go. Every rule above is observable by
+hand there, and the products hold state they change.
 
 ---
 

@@ -27,7 +27,7 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
-  examples/room:
+  examples/site:
     dependencies:
       '@ambionframework/ambion':
         specifier: workspace:*

@@ -17,7 +17,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `docs/agent.md`     | Design contract for the core — read before changing the runtime                |
 | `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                 |
 | `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs |
-| `examples/room`     | Runnable example                                                               |
+| `examples/site`     | Runnable example                                                               |
 
 ## Thesis
 

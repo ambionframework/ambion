@@ -41,7 +41,7 @@ The design contract is [`docs/agent.md`](https://github.com/ambionframework/ambi
 with presence — who is in a session, and what the agents do about it — in
 [`docs/presence.md`](https://github.com/ambionframework/ambion/blob/main/docs/presence.md);
 a hands-on multi-agent room lives in
-[`examples/room`](https://github.com/ambionframework/ambion/tree/main/examples/room).
+[`examples/site`](https://github.com/ambionframework/ambion/tree/main/examples/site).
 
 ```sh
 npm install @ambionframework/ambion
