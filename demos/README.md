@@ -42,5 +42,7 @@ construction suite where each product is an agent with its own API, and three
 people open the same workspace from a site office, a phone and a cost desk.
 The report shows the shape the change landed on: a person visits a running
 room instead of being seated in it, arriving is a message on the record, a
-seat decides for itself whether an arrival wakes it, and a returning person is
-briefed from the record rather than from a cursor the host kept.
+seat decides for itself whether an arrival wakes it, and the catch-up anchor
+is a message on the record rather than a cursor the host kept. Every
+activation is in the report in full — the context each seat read, its
+reasoning, its API calls and results, and the says the lock refused.
