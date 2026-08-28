@@ -47,7 +47,7 @@ puts those inside each product's instructions, so every product carries a copy
 of every person. That is a modelling error. What Priya wants belongs to Priya.
 
 **An aide never decides and never acts as its person.** `deliver` stays the
-person's own act, in their own words. §10 draws that line and says how far the
+person's own act, in their own words. §11 draws that line and says how far the
 role may grow.
 
 The name sets the authority. An aide briefs, reminds, and says _"she will want
@@ -96,9 +96,11 @@ reading it too.
 It engages when the room did not:
 
 > **A summary is written when an exchange closes and holds more than one
-> message from other participants. One message needs no consolidation.**
+> message from the agents. One message needs no consolidation.**
 
-It counts messages, not speakers. The measured run's worst moment was one
+It counts what the room produced, not what people said into it: a second
+person speaking is a steer, and two people talking to each other is not
+something an aide consolidates. And it counts messages, not speakers. The measured run's worst moment was one
 product saying four separate things to Priya, and that needs consolidating as
 much as three products saying one each.
 
@@ -133,6 +135,12 @@ exchange:
 The room holds one name while an exchange is open and drops it at the close.
 That is run state, like the count of active seats. It does not survive a
 restart, and neither does an exchange.
+
+**An aide outlives its person's visit by one exchange.** Priya may ask and walk
+out before the room settles. The exchange is still hers, it still closes, and
+her aide still writes its summary — addressed to her, waiting for her. An
+exchange that opened is finished properly or not at all, and a person leaving
+is not a reason to leave the room's work unresolved.
 
 Sam may speak into Priya's exchange. His message steers whoever is working, as
 rule 2 says, and it neither opens an exchange nor changes who owns this one.
@@ -175,9 +183,11 @@ exchange came to. A summary carries two fields no other message has — a reader
 and a span — because it is the only message written _for_ somebody, about a
 range of the record.
 
-The kind is named for what it is rather than for who wrote it. An aide writes
-these today. A room-level compactor might write one later, over a stretch
-nobody asked about, and the record would not need a fourth kind for it.
+**A summary is always addressed to its person.** `to` is the person whose
+question opened the exchange, and it is never absent. That is what makes a
+summary a message somebody was told rather than a note the room left itself.
+A later room-level compactor, working over a stretch nobody asked about, is
+writing a different thing and needs its own kind.
 
 ---
 
@@ -210,12 +220,42 @@ It is also what makes the design pay for the room and not only for the person.
 Without it a seat's context grows with every message for ever. With it, an
 exchange costs the room one message once it is over.
 
-§14 states what that costs: a summary that drops a fact takes it out of every
-later context, and the seat that needs it does not know it is missing.
+§8 says why that is safe to do, and §15 says what it still costs.
 
 ---
 
-## 8. Presentation belongs to the client
+## 8. The record is discussion, not state
+
+This is what makes §7 safe, and it is a constraint on how a room is built
+rather than on what an aide writes.
+
+**A product answers out of its own data.** `stock_check()` returns 11.7 tonnes
+because that is what the materials tracker holds, not because somebody said so
+on the record. No product in the measured run answered outside its own API. So
+a fact that leaves a seat's context is not lost — the product that owns it
+reads it again, on demand, the next time anybody asks.
+
+**Anything that must survive an exchange belongs in a product's state.** What
+a summary can genuinely lose is not a fact but a commitment: _"Sam confirms
+rebar fixing by Friday"_, _"Dan approved the overtime"_. No API holds those
+unless a product wrote them down. In the measured run the task list wrote three
+of them, and one of them carried the entire Saturday contingency into T-121's
+note.
+
+That is the rule the room must keep for compaction to be safe:
+
+> **The record is what was said. It is not where anything is kept.** A
+> participant that establishes something durable writes it into the state it
+> owns, in the same turn.
+
+A room that keeps this loses nothing to a summary that it could not also have
+lost to a person who stopped reading. A room that does not keep it is storing
+its decisions in a transcript, and would have been fragile before an aide
+existed.
+
+---
+
+## 9. Presentation belongs to the client
 
 A person should not read the working. That is a statement about presentation,
 and it is settled in the client, not in the record and not on the wire.
@@ -235,36 +275,43 @@ able to change how it presents past messages when a new message arrives.** A
 client that only appends will show the working as conversation.
 
 **Everybody present folds the same range.** Sam watching Priya's exchange sees
-what she sees: the room thinking, then the answer it came to. The working is
-hidden from every reader, because it was working rather than conversation.
-There is no per-person view to keep straight.
+what she sees: the room thinking, then the answer it came to. This holds
+whether or not Sam brought an aide of his own — folding follows the summary
+that exists, not the reader. The working is hidden from every reader, because
+it was working rather than conversation, and there is no per-person view to
+keep straight.
 
 ---
 
-## 9. A summary wakes nobody
+## 10. Nothing an aide writes wakes anybody
 
 A summary that woke the room would start a new exchange about the exchange it
-just closed.
-
-The routing rule says so directly:
+just closed. So the routing rule refuses it — and it refuses on the author,
+not on the kind:
 
 ```ts
 function wakes(seat, target, message) {
-  if (isSummary(message)) return false;
+  if (fromAide(message)) return false;
   ...
 }
 ```
 
-One line, and it says what it means. An earlier draft leaned on an accident
-instead — a `said` directed at a person resolves to no agent, so it happens to
-wake nothing. A named kind lets the rule be stated rather than discovered.
+**The guard belongs to the author.** An earlier draft put it on the message
+kind, `isSummary(message)`, which held for the one thing an aide writes today
+and would have held for nothing it writes tomorrow. §11 lets an aide speak
+during an exchange; a rule about summaries would not have covered that, and
+the boundary would have been prose rather than code.
 
-Every seat still **reads** every summary. Waking and reading were always
-different questions.
+Written this way, one line enforces the whole of §11's rule at every rung. An
+aide may say anything into a room that is already working, and none of it can
+start work.
+
+Every seat still **reads** everything an aide writes. Waking and reading were
+always different questions.
 
 ---
 
-## 10. What an aide may become
+## 11. What an aide may become
 
 An aide is a person's counterpart, and the pull to give it more will be
 constant. The functions form a ladder, and the rungs look adjacent but are
@@ -281,18 +328,34 @@ not:
 4. **Remind and criticise.** Raise what its person has been waiting on, and
    check the answer against the question before the exchange closes.
 
-All four keep one rule, and it is the rule that decides whether an aide is
-still an aide:
+Rungs 3 and 4 are done **on behalf of its person, in a limited capacity**. The
+aide is not passing on a message she wrote. It is holding her interest in a
+room that is working, with authority she gave it by bringing it.
+
+Two words carry the weight, and they are worth separating:
+
+- **On behalf of** — the aide speaks in its own name, stamped `from` the aide,
+  carrying her interest. It never speaks _as_ her. No message on the record
+  ever bears her name because her aide wrote it. That is rule 7, at the one
+  place it is most tempting to bend.
+- **In a limited capacity** — it may shape what is already happening. It may
+  not make anything happen.
+
+Which is the rule that decides whether an aide is still an aide:
 
 > **An aide shapes, and never wakes.** It may steer a seat that is already
 > working. It may never activate one, never call a tool that changes a
 > product's state, and never speak under its person's name.
 
-That is checkable rather than tasteful. What it forbids, permanently:
+§10 enforces the first half in one line, at every rung, because the guard is on
+the author rather than on what it wrote. The rest is checkable by reading a
+definition: an aide is given no tools.
+
+What the rule forbids, permanently:
 
 - **Deciding.** An aide holds the brief. Its person holds the decision.
-- **Acting as them.** No message on the record ever carries their name because
-  their aide wrote it. Rule 7 is at its most tempting here.
+- **Acting as them.** See above; the runtime stamps `from`, so this is not a
+  matter of good behaviour.
 - **Causing work.** A room that woke because somebody's aide wanted something
   is a room being run by a proxy.
 
@@ -301,7 +364,7 @@ drift. Only rung 1 is specified below.
 
 ---
 
-## 11. It is optional
+## 12. It is optional
 
 A person may bring an aide. Most will. Nothing requires it.
 
@@ -315,7 +378,7 @@ nothing away that anybody can still reach.**
 
 ---
 
-## 12. The shape
+## 13. The shape
 
 One optional field, and no method:
 
@@ -357,7 +420,7 @@ kind. **That is the whole surface.**
 
 ---
 
-## 13. What this is not
+## 14. What this is not
 
 Stated so a later change has to argue with it:
 
@@ -370,22 +433,39 @@ Stated so a later change has to argue with it:
   anything outside an exchange is untouched.
 - **Not deletion.** The record keeps every message. Only a seat's context
   changes. §7.
-- **Not an orchestrator.** §10 draws the line and names what is forbidden.
+- **Not a place to keep anything.** A participant writes what must survive into
+  the state it owns. §8.
+- **Not an orchestrator.** §11 draws the line and names what is forbidden.
 - **Not an obligation.** A person may have none, and then nothing changes.
 
 ---
 
-## 14. Open questions
+## 15. Open questions
 
-**A summary is lossy, and the loss is invisible to whoever it hurts.** This is
-the risk that decides the design, and it is back because §7 is back. Materials
-established _"stock 11.7t against 11.7t required — full cover."_ If the summary
-says "rebar is covered", a later question about tonnage cannot be answered from
-the seat's context, and the seat does not know the number is missing. The
-aide's instructions make completeness its duty, which is a prompt, not a
-guarantee. Three answers exist and none is chosen: give a seat a tool that
-reads a covered range; hold a range uncompacted for one further exchange; or
-accept the loss and measure it. **Do not build past this question.**
+**What a summary loses, and why that is accepted.** A summarised range leaves
+the seats' context, so a fact the summary drops is gone from every later
+activation. That is accepted, on two conditions the design states rather than
+hopes for.
+
+The first is symmetry. **What never entered a person's context cannot come
+back as a question they ask.** They read the summary; the seats read the
+summary. Neither can be surprised by the other, because they hold the same
+premise — and the seats hold strictly more, since they also have everything
+after it and their own tools. The room is never behind the person it is
+answering.
+
+The second is §8. A fact is re-derivable, because the product that owns it
+reads it again. A commitment is durable, because whoever made it wrote it into
+their own state. **A room that keeps §8 loses nothing to a summary that it
+would not also lose to a person who stopped reading.**
+
+What remains, and is not solved: a person carries context from outside the
+session. Priya reads a delivery note on her desk and asks about a tonnage no
+summary prepared her for. The seats answer anyway, out of their own APIs —
+which is §8 again. The case that would genuinely break is a question about
+something established in a summarised range that no product owns, and §8
+exists to keep that class empty. Whether a real room keeps §8 is the thing to
+watch.
 
 **Quiescence is now a reason to spend money.** No seat activates when the room
 settles, so rule 1 keeps its letter. But the room now makes a model call that
@@ -407,7 +487,7 @@ chatter is one run away, and it would change what an aide has to do.
 
 ---
 
-## 15. What would prove it
+## 16. What would prove it
 
 Run the same scenario twice: once as it stands, and once with an aide for
 Priya.
