@@ -535,7 +535,7 @@ session. Priya reads a delivery note on her desk and asks about a tonnage no
 summary prepared her for. The seats answer anyway, out of their own APIs —
 which is §9 again. The case that would genuinely break is a question about
 something established in a summarised range that no product owns, and §9
-exists to keep that class empty. Whether a real room keeps §8 is the thing to
+exists to keep that class empty. Whether a real room keeps §9 is the thing to
 watch.
 
 **Quiescence is now a reason to spend money.** No seat activates when the room
