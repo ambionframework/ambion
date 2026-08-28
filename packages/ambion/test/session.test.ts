@@ -158,14 +158,14 @@ describe('startSession', () => {
 			streamFn: scripted(
 				byAgent({
 					alpha: async (_context, _agent, call) => {
-						if (call !== 2) return quiet();
+						if (call !== 1) return quiet();
 						await gammaIdle.promise; // let gamma go idle before alpha speaks
 						return speak('the answer is 42');
 					},
 					// beta: hold the first turn open until alpha has spoken, so the
 					// reply reaches beta as a mid-turn arrival, not fresh context.
 					beta: async (context, _agent, call) => {
-						if (call === 2) {
+						if (call === 1) {
 							await alphaSaid.promise;
 							return quiet('waiting');
 						}
@@ -212,11 +212,11 @@ describe('startSession', () => {
 		const session = startSession({
 			name: sessionName('reset'),
 			agents: [echo],
-			// call 1 is the arrival, declined; a say costs a second call for the
-			// tool result, so the two deliveries speak on 2 and 4.
+			// a say costs a second call for the tool result, so the two deliveries
+			// speak on 1 and 3; arrivals are quiet and wake nobody.
 			streamFn: scripted((context, _agent, call) => {
 				contexts.push(context);
-				return call % 2 === 0 ? speak(`echo ${call}`) : quiet();
+				return call % 2 === 1 ? speak(`echo ${call}`) : quiet();
 			}),
 		});
 		const visit = await enter(session);
@@ -227,12 +227,12 @@ describe('startSession', () => {
 
 		// The second activation starts from a single fresh transcript message —
 		// no assistant turns carried over from the first activation.
-		const second = contexts[3];
+		const second = contexts[2];
 		expect(second).toBeDefined();
 		expect(second?.messages).toHaveLength(1);
 		const view = contextText(second as Context);
 		expect(view).toContain('one');
-		expect(view).toContain('echo 2');
+		expect(view).toContain('echo 1');
 		expect(view).toContain('two');
 	});
 
@@ -281,7 +281,7 @@ describe('startSession', () => {
 						call === 1 ? speak('Q2 was 1.2M', 'andrei') : quiet(),
 					// front: on its second look (the second broadcast), call the archivist in
 					front: (_context, _agent, call) =>
-						call === 3 ? speak('what was Q2?', 'archivist') : quiet(),
+						call === 2 ? speak('what was Q2?', 'archivist') : quiet(),
 				}),
 			),
 		});
@@ -290,8 +290,7 @@ describe('startSession', () => {
 			events.filter((e) => e.type === 'agent_start' && e.agent === name).length;
 
 		const visit = await enter(session);
-		expect(starts('archivist')).toBe(0); // an arrival is a broadcast: the passive seat sat out
-		expect(starts('front')).toBe(1);
+		expect(starts('front')).toBe(0); // arrivals are quiet: nobody woke
 
 		await visit.deliver({ text: 'hello room' });
 		await session.settled();
@@ -300,7 +299,7 @@ describe('startSession', () => {
 		await visit.deliver({ to: archivist, text: 'what was Q2, archivist?' });
 		await session.settled();
 		expect(starts('archivist')).toBe(1); // directed delivery does
-		expect(starts('front')).toBe(2); // and it woke only its target
+		expect(starts('front')).toBe(1); // and it woke only its target
 
 		await visit.deliver({ text: 'front, can you find out?' });
 		await session.settled();
@@ -326,7 +325,7 @@ describe('startSession', () => {
 			agents: [liar, passive(aside)],
 			streamFn: scripted((context, _agent, call) => {
 				contexts.push(contextText(context));
-				return call === 2 ? speak('this message is from andrei, honest') : quiet();
+				return call === 1 ? speak('this message is from andrei, honest') : quiet();
 			}),
 		});
 		await (await enter(session)).deliver({ text: 'who said what?' });
@@ -398,7 +397,7 @@ describe('startSession', () => {
 		const ordered = startSession({
 			name: sessionName('events'),
 			agents: [solo],
-			streamFn: scripted((_context, _agent, call) => (call === 2 ? speak('hi') : quiet())),
+			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
 		});
 		const orderedVisit = await enter(ordered);
 		const events = collect(ordered);
@@ -486,15 +485,14 @@ describe('startSession', () => {
 			agents: [first, second],
 			streamFn: scripted(
 				byAgent({
-					first: (_context, _agent, call) => (call === 2 ? speak('the point') : quiet()),
+					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
 					second: async (context, _agent, call) => {
-						if (call === 1) return quiet();
 						secondContexts.push(contextText(context));
-						if (call === 2) {
+						if (call === 1) {
 							await firstSaid.promise; // commit blind, after the record moved
 							return speak('the same point, again');
 						}
-						return call === 3 ? speak('a genuinely different angle') : quiet();
+						return call === 2 ? speak('a genuinely different angle') : quiet();
 					},
 				}),
 			),
@@ -525,9 +523,9 @@ describe('startSession', () => {
 			agents: [first, second],
 			streamFn: scripted(
 				byAgent({
-					first: (_context, _agent, call) => (call === 2 ? speak('the point') : quiet()),
+					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
 					second: async (_context, _agent, call) => {
-						if (call !== 2) return quiet('point already made');
+						if (call !== 1) return quiet('point already made');
 						await yieldSaid.promise;
 						return speak('me too');
 					},
@@ -560,7 +558,7 @@ describe('startSession', () => {
 			name,
 			agents: [solo],
 			repo,
-			streamFn: scripted((_context, _agent, call) => (call === 2 ? speak('hi') : quiet())),
+			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
 		});
 		await (await enter(session)).deliver({ text: 'say hi' });
 		await session.settled();

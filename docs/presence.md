@@ -382,30 +382,25 @@ reports away, because it subtracts two numbers.
 
 ### What presence costs
 
-Every presence message wakes every idle agent and steers every active one,
-because it is a message. The core prices this honestly for what is said and
-presence is priced the same way: a room of three costs three looks when
-somebody arrives, and a colleague mid-turn pays a steer on top. Most of
-those looks produce silence, and silence is still billed.
+Under the default it costs one commit and no model call. A presence message
+lands on the record, wakes nobody, and is read at the next activation by
+whoever the next real message wakes. That is the whole bill.
 
-Because `idleTimeout` has a default, **a room pays for presence unless it
-opts out**. Call `visitSession` and do nothing else, and four kinds of message wake
-every idle seat.
+`arrivals: 'activate'` is where the cost is, and it is worth stating in
+full. Every presence message then wakes every idle agent, so a room of three
+pays three looks each time anybody opens it, leaves it, or crosses the
+timeout — and most of those looks produce silence, which is billed like
+everything else. The bill scales with how many people use the workspace and
+how many products it holds, not with how much work there is to do.
 
-One thing bounds it and two turn it off. **Away fires at most once per
-stretch of attention**, because an away visit holds no timer — a person in
-and out all day writes a few messages, not one per tick. **`Infinity`**
+Three things bound it, whichever policy is set. **Away fires at most once
+per stretch of attention**, because an away visit holds no timer — a person
+in and out all day writes a few messages, not one per tick. **`Infinity`**
 removes the two clock-driven kinds entirely, leaving the arrivals and
 departures a person causes deliberately. And **`passive`** removes the
 glance rather than the message: a passive seat hears no broadcast, so it
 hears no arrival either, until somebody names it, while the record keeps
 everything.
-
-One combination is worth avoiding, and it is the one a host falls into by
-doing nothing. A room with no `goal` still activates on all four kinds, and
-its agents are not asked what to do with an arrival (§2) — so it pays the
-full price of presence for judgement it never wanted. A room without a goal
-passes `idleTimeout: Infinity`, or states a goal.
 
 The timeout does not touch `settled()`. `settled()` reports that no agent is
 active. Whether anybody is watching is a different fact.
@@ -641,8 +636,8 @@ a person reads and moving when they stop; `messages({ since })` returning both
 kinds in order; `stopSession` closing its visits without waking anybody;
 `readSession` reading a stopped name with no agent standing up; and the
 rendered context carrying the goal, the clock, each person's unseen count and
-the divider — with a goal-less room rendering neither the goal nor the arrival
-paragraph and routing presence anyway. All in-process, in vitest, on a
+the divider — with the arrival paragraph rendering only for a room that both
+states a goal and wakes on arrivals. All in-process, in vitest, on a
 scripted stream, with fake timers where the clock matters.
 
 The rules this document shares with the core are proved beside them, in

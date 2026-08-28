@@ -94,24 +94,44 @@ describe('presence', () => {
 		expect(session.visits()).toHaveLength(0);
 	});
 
-	it('commits an arrival that activates the idle room, and a passive seat sits out', async () => {
+	it('commits an arrival and wakes nobody, because arrivals are quiet by default', async () => {
+		const session = track(open());
+		const seen = events(session);
+		await visitSession(session, andrei);
+		await session.settled();
+
+		expect(await kinds(session)).toEqual(['arrived']);
+		expect(seen.some((e) => e.type === 'agent_start')).toBe(false);
+		expect(contexts).toHaveLength(0); // no seat was handed a context at all
+	});
+
+	it('wakes the idle room on an arrival when the room asks for it, passive seats excepted', async () => {
 		const aside = defineAgent({
 			name: 'aside',
 			identity: 'The quiet corner.',
 			instructions: 'wait',
 			model: 'scripted/aside',
 		});
-		const session = track(open({ agents: [watcher, passive(aside)] }));
+		const session = track(open({ agents: [watcher, passive(aside)], arrivals: 'activate' }));
 		const seen = events(session);
 		await visitSession(session, andrei);
 		await session.settled();
 
-		expect(await kinds(session)).toEqual(['arrived']);
 		const starts = seen.filter((e) => e.type === 'agent_start').map((e) => e.agent);
 		expect(starts).toEqual(['watcher']);
 		// the roster the woken seat read already showed the arrival
 		expect(contexts.at(-1)).toContain('andrei (present');
 		expect(contexts.at(-1)).toContain('· andrei arrived');
+	});
+
+	it('reaches a colleague already at work either way, because a steer is not an activation', async () => {
+		const session = track(open());
+		const visit = await visitSession(session, andrei);
+		await visit.deliver({ text: 'start something' });
+		await visitSession(session, mara); // lands while nobody is mid-turn here
+		await session.settled();
+		// quiet or not, the arrival is on the record for the next activation to read
+		expect(await kinds(session)).toEqual(['arrived', 'said', 'arrived']);
 	});
 
 	it('carries no text on a presence message, and stamps from the visit', async () => {
@@ -235,6 +255,8 @@ describe('presence', () => {
 		const name = roomName();
 		const first = startSession({ name, agents: [watcher], streamFn: quiet, repo });
 		const visit = await visitSession(first, andrei);
+		await visit.deliver({ text: 'noting that I was here' });
+		await first.settled();
 		await visit.leave();
 		await first.settled();
 		expect(presenceOf(first, 'andrei')).toBe('absent');
@@ -340,6 +362,7 @@ describe('presence', () => {
 		await session.settled();
 
 		const back = await visitSession(session, andrei);
+		await back.deliver({ text: 'what moved?' }); // quiet arrivals wake nobody
 		await session.settled();
 		expect(back.since).toBeDefined();
 
@@ -352,13 +375,21 @@ describe('presence', () => {
 		expect(view).toContain('while andrei is away');
 	});
 
-	it('renders neither the goal nor the arrival paragraph without a goal', async () => {
-		const withGoal = track(open({ goal: 'Ship payments v2.' }));
-		await visitSession(withGoal, andrei);
-		await withGoal.settled();
+	it('renders the arrival paragraph only for a goal and a room that wakes', async () => {
+		// a goal, but arrivals are quiet: the goal renders, the paragraph does not
+		const quietRoom = track(open({ goal: 'Ship payments v2.' }));
+		const qv = await visitSession(quietRoom, andrei);
+		await qv.deliver({ text: 'anything' }); // quiet arrivals wake nobody, so ask
+		await quietRoom.settled();
 		const prompted = lastSystemPrompt();
 		expect(prompted).toContain('This session exists to: Ship payments v2.');
-		expect(prompted).toContain('An arrival is a message like any other');
+		expect(prompted).not.toContain('An arrival is a message like any other');
+
+		prompts.length = 0;
+		const loud = track(open({ goal: 'Ship payments v2.', arrivals: 'activate' }));
+		await visitSession(loud, andrei);
+		await loud.settled();
+		expect(lastSystemPrompt()).toContain('An arrival is a message like any other');
 
 		prompts.length = 0;
 		const without = track(open());

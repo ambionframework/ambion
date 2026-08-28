@@ -68,6 +68,15 @@ export interface StartSessionOptions {
 	agents: readonly AgentSeat[];
 	/** What the room is for. Read by every agent; gates the arrival paragraph. */
 	goal?: string;
+	/**
+	 * What a person arriving or leaving does to the idle room. `'quiet'` — the
+	 * default — commits the message and wakes nobody: presence reaches a seat
+	 * at its next activation, like anything else it did not need to be told at
+	 * once. `'activate'` treats it as a broadcast, so every idle seat looks.
+	 * A room pays per arrival times idle seats for that, and most looks produce
+	 * nothing, so it is worth asking for rather than inheriting.
+	 */
+	arrivals?: ArrivalPolicy;
 	/** The house default for visits that do not set their own. */
 	idleTimeout?: number;
 	/**
@@ -79,6 +88,14 @@ export interface StartSessionOptions {
 	/** Pi's own session repository. Defaults to a process-wide `InMemorySessionRepo`. */
 	repo?: SessionRepo;
 }
+
+/** Whether a person arriving or leaving wakes the idle room. */
+export type ArrivalPolicy = 'quiet' | 'activate';
+
+/** Who a committed message is for: a participant name, or one of these two. */
+const ROOM = Symbol('room');
+const NOBODY = Symbol('nobody');
+type Audience = string | typeof ROOM | typeof NOBODY;
 
 export interface ReadSessionOptions {
 	repo?: SessionRepo;
@@ -289,6 +306,7 @@ class ReadOnlySession implements SessionView {
 class SessionImpl implements Session {
 	readonly name: string;
 	private readonly goal?: string;
+	private readonly arrivals: ArrivalPolicy;
 	private readonly idleTimeout: number;
 	private readonly repo: SessionRepo;
 	private readonly store: RecordStore;
@@ -306,6 +324,7 @@ class SessionImpl implements Session {
 	constructor(options: StartSessionOptions) {
 		this.name = options.name;
 		this.goal = options.goal?.trim() || undefined;
+		this.arrivals = options.arrivals ?? 'quiet';
 		this.idleTimeout = options.idleTimeout ?? DEFAULT_IDLE_TIMEOUT;
 		this.repo = options.repo ?? defaultRepo;
 		this.store = new RecordStore(this.repo, this.name);
@@ -660,13 +679,24 @@ class SessionImpl implements Session {
 	 * directed message wakes exactly its target, passive included (rule 4).
 	 */
 	private dispatch(message: Message): void {
-		const to = isSpoken(message) ? message.to : undefined;
-		const target = to !== undefined ? this.agents.get(to) : undefined;
+		const audience = this.audienceOf(message);
+		const target = typeof audience === 'string' ? this.agents.get(audience) : undefined;
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
 			if (seat.active) this.steerInto(seat, message);
-			else if (wakes(seat, target, to)) this.activate(seat);
+			else if (wakes(seat, target, audience)) this.activate(seat);
 		}
+	}
+
+	/**
+	 * Who a message is for: a name, the whole room, or nobody. A quiet presence
+	 * message is addressed to nobody — rule 4 taken to its limit, not an
+	 * exception to rule 1. It still reaches a colleague at work, because rule 2
+	 * steers whatever arrives mid-turn whoever it was for.
+	 */
+	private audienceOf(message: Message): Audience {
+		if (isSpoken(message)) return message.to ?? ROOM;
+		return this.arrivals === 'activate' ? ROOM : NOBODY;
 	}
 
 	private steerInto(seat: SeatRuntime, message: Message): void {
@@ -884,7 +914,8 @@ class SessionImpl implements Session {
 			`it, and speak again only if your reply still adds something.`,
 			``,
 		);
-		if (this.goal) lines.push(...ARRIVAL_PARAGRAPH, ``);
+		// Nothing to say about arrivals in a room where an arrival wakes nobody.
+		if (this.goal && this.arrivals === 'activate') lines.push(...ARRIVAL_PARAGRAPH, ``);
 		lines.push(
 			`Your identity, as the room knows it: ${seat.def.identity}`,
 			``,
@@ -949,13 +980,10 @@ const ARRIVAL_PARAGRAPH = [
 ];
 
 /** A directed message wakes its target alone; a broadcast wakes every idle seat. */
-function wakes(
-	seat: SeatRuntime,
-	target: SeatRuntime | undefined,
-	to: string | undefined,
-): boolean {
-	if (to !== undefined) return seat === target;
-	return !seat.passive;
+function wakes(seat: SeatRuntime, target: SeatRuntime | undefined, audience: Audience): boolean {
+	if (audience === NOBODY) return false;
+	if (audience === ROOM) return !seat.passive;
+	return seat === target;
 }
 
 function statusOf(visit: VisitRuntime, now: number): VisitStatus {
