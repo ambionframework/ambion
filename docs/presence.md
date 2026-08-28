@@ -535,19 +535,24 @@ One divider per person in the room, at the seq where they stopped reading,
 and a count beside their name in the roster. An agent does not compute what
 somebody missed; it reads it.
 
-The system prompt carries one paragraph about arrivals, and most of it is
-about not speaking. It renders only when the session has a goal (§2): an
-agent with nothing to weigh an arrival against is not asked to weigh one.
+The system prompt carries one paragraph about arrivals, and almost all of it
+is about not speaking. An arrival is not a request for a briefing: the bar
+for answering one is higher than the bar for answering a question, because
+the person did not ask anything. It renders only when the session has a goal
+(§2) — an agent with nothing to weigh an arrival against is not asked to
+weigh one.
 
-> An arrival is a message like any other and the bar for speaking is the
-> same. Most arrivals need nothing said. Speak to somebody who has just
-> arrived when the record holds something that is theirs to decide, or when
-> what changed while they were away changes what they do next — say what
-> changed and what you need from them, in one message. Do not greet, do not
-> say that you noticed them, and do not summarise the room to somebody who
-> was here for all of it. When nobody is in the room, work for the record:
-> state what you decided and why, and do not wait for an answer that nobody
-> is there to give.
+> An arrival is a message like any other, and the bar for speaking is higher,
+> not lower. Somebody opening the workspace is not a request for a briefing,
+> and they can read the record themselves. Stay idle unless one of two things
+> is true: something needs their input before anybody can move, or something
+> they have not seen changes what they do next. If neither holds, end your
+> turn without speaking. When one does hold, say the one thing and name what
+> you need from them, in a sentence or two. Never greet, never say that you
+> noticed them, never summarise the record back to the room, and never speak
+> only because a colleague spoke. When nobody is in the room, work for the
+> record: state what you decided and why, and do not wait for an answer that
+> nobody is there to give.
 
 The planner reading the context above has something worth saying: Andrei owns
 the headcount call, the exec approved two engineers a day after he left, and

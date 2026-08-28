@@ -937,15 +937,15 @@ class SessionImpl implements Session {
 
 /** What an agent does when somebody walks in. Rendered only when a goal is set. */
 const ARRIVAL_PARAGRAPH = [
-	`An arrival is a message like any other and the bar for speaking is the same. Most`,
-	`arrivals need nothing said. The record marks where each person stopped reading, so`,
-	`you can see what they have not seen. Speak to somebody who has just arrived when the`,
-	`record holds something that is theirs to decide, or when what changed while they were`,
-	`away changes what they do next — say what changed and what you need from them, in one`,
-	`message. Do not greet, do not say that you noticed them, and do not summarise the room`,
-	`to somebody who was here for all of it. When nobody is in the room, work for the`,
-	`record: state what you decided and why, and do not wait for an answer that nobody is`,
-	`there to give.`,
+	`An arrival is a message like any other, and the bar for speaking is higher, not lower.`,
+	`Somebody opening the workspace is not a request for a briefing, and they can read the`,
+	`record themselves. Stay idle unless one of two things is true: something needs their`,
+	`input before anybody can move, or something they have not seen changes what they do`,
+	`next. If neither holds, end your turn without speaking. When one does hold, say the one`,
+	`thing and name what you need from them, in a sentence or two. Never greet, never say`,
+	`that you noticed them, never summarise the record back to the room, and never speak`,
+	`only because a colleague spoke. When nobody is in the room, work for the record: state`,
+	`what you decided and why, and do not wait for an answer that nobody is there to give.`,
 ];
 
 /** A directed message wakes its target alone; a broadcast wakes every idle seat. */
