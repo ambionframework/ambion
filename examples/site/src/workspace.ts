@@ -18,7 +18,7 @@ import {
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 
-export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-opus-5';
+export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
 export const WORKSPACE = 'kestrel-yard-block-c';
 
 export const GOAL = `
