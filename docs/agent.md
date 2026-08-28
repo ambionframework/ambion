@@ -144,7 +144,7 @@ const session = startSession({
 });
 
 const unsubscribe = session.subscribe((event) => {
-  if (event.type === 'say') console.log(`${event.agent}: ${event.message.text}`);
+  if (event.type === 'message') console.log(`${event.message.from}: ...`);
 });
 
 const visit = await visitSession(session, andrei);
@@ -331,9 +331,8 @@ names its seat. The stream carries room-level facts only (`SessionEvent` in
 
 ```ts
 type SessionEvent =
-  | { type: 'delivery'; message: Message }
+  | { type: 'message'; message: Message }
   | { type: 'agent_start'; agent: string }
-  | { type: 'say'; agent: string; message: Message }
   | { type: 'say_conflict'; agent: string; missed: Message[] }
   | { type: 'tool_execution_start'; agent: string; toolName: string }
   | { type: 'tool_execution_end'; agent: string; toolName: string }
@@ -342,13 +341,19 @@ type SessionEvent =
   | { type: 'settled' };
 ```
 
+**One message on the record, one `message` event.** What a person delivered,
+what an agent said, and a person arriving or leaving all reach the host the
+same way, because they are the same thing: an entry the room committed. Who
+wrote it is `message.from`, which the roster already names, so the stream does
+not split by author. The event is atomic as the record is: one event, the
+whole message, exactly as it landed.
+
 Pi's `agent_start`/`agent_end` are these, attributed; Pi's `tool_execution_*`
-pass through with the seat named. A `say` is atomic on the stream as it is on
-the record: one event, the whole message, exactly as it landed. Pi's
+pass through with the seat named. Pi's
 `message_*` granularity — streaming deltas, partial turns — is deliberately
 not re-broadcast: finer visibility is the seat's own layer, reached through
 Pi's hooks on the seat's downstream session, not the room forwarding messages
-it did not speak. Four events are the room's own: `delivery`; `settled` — the
+it did not speak. Four events are the room's own: `message`; `settled` — the
 moment no agent is active; `say_conflict` — rule 5's lock refusing a say that
 raced past the record, so the host sees races caught, not silently retried;
 and `error`, which distinguishes a failed turn from a quiet one. **Silence is

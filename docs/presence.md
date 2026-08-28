@@ -498,9 +498,11 @@ session.messages(options?: { since?: Seq }): Promise<Message[]>;
 ```
 
 **Presence adds no event of its own.** An arrival and a departure reach the
-stream on the existing `delivery` event, because that is what they are:
-messages the room committed. The nine events of the core are the whole
-stream, and a host that renders `delivery` renders presence for free.
+stream on the existing `message` event, because that is what they are:
+entries the room committed. The eight events of the core are the whole
+stream, and a host that renders `message` renders presence for free. The
+`left` messages `stopSession` writes reach it too: they wake nobody, and the
+host still hears the room empty.
 
 That is the point of putting presence on the record rather than beside it. A
 second channel for "who is here" would have to be kept in step with the first,

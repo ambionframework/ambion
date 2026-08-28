@@ -11,6 +11,7 @@
 import { writeFileSync } from 'node:fs';
 import {
 	InMemorySessionRepo,
+	isSpoken,
 	type Message,
 	type SessionEvent,
 	startSession,
@@ -32,6 +33,9 @@ import {
 } from './workspace.ts';
 
 const OUT = process.env.DEMO_OUT ?? 'demo-run.json';
+
+/** The commentary names the products, so it needs to know who is not one. */
+const PEOPLE = new Set([priya.name, sam.name, dan.name]);
 
 const repo = new InMemorySessionRepo();
 const NAME = WORKSPACE;
@@ -65,7 +69,7 @@ const session = startSession({
 
 /** Bookkeeping: correlate every activation with the message that caused it. */
 function track(event: SessionEvent, at: string): void {
-	if (event.type === 'delivery' || event.type === 'say') {
+	if (event.type === 'message') {
 		lastSeq = event.message.seq;
 		lastFrom = event.message.from;
 		return;
@@ -96,9 +100,9 @@ function track(event: SessionEvent, at: string): void {
 
 /** A running commentary, so the run is watchable while it happens. */
 function narrate(event: SessionEvent): void {
-	if (event.type === 'say') {
+	if (event.type === 'message' && isSpoken(event.message) && !PEOPLE.has(event.message.from)) {
 		const to = event.message.to ? ` → ${event.message.to}` : '';
-		process.stderr.write(`${event.agent}${to}: ${event.message.text.slice(0, 78)}\n`);
+		process.stderr.write(`${event.message.from}${to}: ${event.message.text.slice(0, 78)}\n`);
 	}
 	if (event.type === 'tool_execution_start') {
 		process.stderr.write(`  · ${event.agent}.${event.toolName}()\n`);

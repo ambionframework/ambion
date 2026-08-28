@@ -164,12 +164,19 @@ class RecordStore {
 	readonly ready: Promise<PiSession>;
 	nextSeq = 0;
 	private tail: Promise<void> = Promise.resolve();
+	/** The first write that failed since the last report. See `drained`. */
+	private failure: Error | undefined;
 
 	constructor(
 		private readonly repo: SessionRepo,
 		private readonly name: string,
 	) {
 		this.ready = this.open();
+		// A host can hold a session and read nothing from it for hours, so
+		// nothing may await `ready` for a long time. Mark the rejection handled
+		// here: a repo that cannot open must surface at the call that needs the
+		// store, and never as an unhandled rejection that ends the process.
+		void this.ready.catch(() => {});
 	}
 
 	private async open(): Promise<PiSession> {
@@ -179,7 +186,7 @@ class RecordStore {
 		found.sort((a, b) => a.seq - b.seq);
 		for (const entry of found) {
 			if (entry.type !== 'custom' || entry.customType !== MESSAGE_ENTRY) continue;
-			this.entries.push(restore(entry.data as Partial<Message>, this.entries.length + 1));
+			this.entries.push(entry.data as Message);
 		}
 		this.nextSeq = this.entries.at(-1)?.seq ?? 0;
 		return piSession;
@@ -193,26 +200,37 @@ class RecordStore {
 	append<T extends Message>(message: Omit<T, 'seq'>): T {
 		const stamped = { ...message, seq: ++this.nextSeq } as T;
 		this.entries.push(stamped);
-		this.tail = this.tail.then(async () => {
-			const piSession = await this.ready;
-			await piSession.appendCustomEntry(MESSAGE_ENTRY, stamped);
-		});
+		this.tail = this.tail
+			.then(async () => {
+				const piSession = await this.ready;
+				await piSession.appendCustomEntry(MESSAGE_ENTRY, stamped);
+			})
+			// One write that fails must not stop the next one. The chain keeps
+			// its order and remembers the failure; a repo that recovers writes
+			// again. Without this catch the chain stays rejected for good.
+			.catch((error: unknown) => {
+				this.failure ??= toError(error);
+			});
 		return stamped;
 	}
 
-	drained(): Promise<void> {
-		return this.tail;
+	/**
+	 * Wait for the writes in flight, then report a failed one. The report
+	 * clears it: the caller waiting on that write learns the record is
+	 * incomplete, and the room keeps running rather than failing for ever.
+	 */
+	async drained(): Promise<void> {
+		await this.tail;
+		const failure = this.failure;
+		if (failure === undefined) return;
+		this.failure = undefined;
+		throw failure;
 	}
 
 	since(cursor: Seq | undefined): Message[] {
 		if (cursor === undefined) return [...this.entries];
 		return this.entries.filter((message) => message.seq > cursor);
 	}
-}
-
-/** Records written before kinds and seqs read as what they were: things said. */
-function restore(data: Partial<Message>, fallbackSeq: Seq): Message {
-	return { kind: 'said', ...data, seq: data.seq ?? fallbackSeq } as Message;
 }
 
 /** One person in the room, for as long as they are in it. */
@@ -295,12 +313,14 @@ class Attendance {
 
 class ReadOnlySession implements SessionView {
 	private readonly store: RecordStore;
+	private readonly here: Attendance;
 
 	constructor(
 		readonly name: string,
 		repo: SessionRepo,
 	) {
 		this.store = new RecordStore(repo, name);
+		this.here = new Attendance(() => this.store.entries);
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
@@ -310,17 +330,12 @@ class ReadOnlySession implements SessionView {
 
 	/** A room that is not running has no agents standing up, and nobody in it. */
 	seats(): SeatInfo[] {
-		const seen = new Map<string, SeatInfo>();
-		for (const message of this.store.entries) {
-			if (message.kind !== 'arrived') continue;
-			seen.set(message.from, {
-				kind: 'human',
-				name: message.from,
-				identity: message.identity ?? '',
-				presence: 'absent',
-			});
-		}
-		return [...seen.values()];
+		return [...this.here.known()].map(([name, identity]) => ({
+			kind: 'human' as const,
+			name,
+			identity,
+			presence: this.here.presenceOf(name),
+		}));
 	}
 
 	/** Nothing is running, so nothing happens. The listener is never called. */
@@ -470,14 +485,24 @@ class SessionImpl implements Session {
 		kind: PresenceChange,
 		identity?: string,
 	): Promise<void> {
-		const message = this.store.append<PresenceMessage>({
-			kind,
-			at: new Date().toISOString(),
-			from: name,
-			...(identity === undefined ? {} : { identity }),
-		});
+		await this.publish(
+			this.store.append<PresenceMessage>({
+				kind,
+				at: new Date().toISOString(),
+				from: name,
+				...(identity === undefined ? {} : { identity }),
+			}),
+		);
+	}
+
+	/**
+	 * What happens to every message once it holds a seq: it persists, the host
+	 * hears about it, and the room routes it. One message, one event, one
+	 * order — stated here rather than at each of the three commit sites.
+	 */
+	private async publish(message: Message): Promise<void> {
 		await this.store.drained();
-		this.emit({ type: 'delivery', message });
+		this.emit({ type: 'message', message });
 		this.dispatch(message);
 	}
 
@@ -512,23 +537,33 @@ class SessionImpl implements Session {
 	/** Closes the run: what is mid-flight ends, what is present is marked gone. */
 	async stop(): Promise<void> {
 		if (this.stopped) return;
-		this.abort();
-		await this.store.ready;
-		// A deliberate shutdown observed everybody leaving, so the record says
-		// so — but it wakes nobody: a turn started to hear that the room is
-		// closing is a turn nobody reads.
-		for (const visit of this.here.all()) {
-			visit.gone = true;
-			this.here.leave(visit.human.name);
-			this.store.append<PresenceMessage>({
-				kind: 'left',
-				at: new Date().toISOString(),
-				from: visit.human.name,
-			});
-		}
+		// Stopped from here on: a visit that arrives during the shutdown is
+		// refused rather than seated into a room that is going away.
 		this.stopped = true;
-		await this.store.drained();
-		if (running.get(this.name) === this) running.delete(this.name);
+		try {
+			this.abort();
+			await this.store.ready;
+			// A deliberate shutdown observed everybody leaving, so the record
+			// says so, and the host hears it. It wakes nobody: a turn started
+			// to hear that the room is closing is a turn nobody reads.
+			for (const visit of this.here.all()) {
+				visit.gone = true;
+				this.here.leave(visit.human.name);
+				this.emit({
+					type: 'message',
+					message: this.store.append<PresenceMessage>({
+						kind: 'left',
+						at: new Date().toISOString(),
+						from: visit.human.name,
+					}),
+				});
+			}
+			await this.store.drained();
+		} finally {
+			// The name comes free whatever the repo did. A failed write must
+			// not leave a room that can never be started again.
+			if (running.get(this.name) === this) running.delete(this.name);
+		}
 	}
 
 	// -- messages ------------------------------------------------------------
@@ -541,16 +576,15 @@ class SessionImpl implements Session {
 		if (to !== undefined && !this.here.knows(to) && !this.agents.has(to)) {
 			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
 		}
-		const message = this.store.append<SpokenMessage>({
-			kind: 'said',
-			at: new Date().toISOString(),
-			from,
-			...(to === undefined ? {} : { to }),
-			text: input.text,
-		});
-		await this.store.drained();
-		this.emit({ type: 'delivery', message });
-		this.dispatch(message);
+		await this.publish(
+			this.store.append<SpokenMessage>({
+				kind: 'said',
+				at: new Date().toISOString(),
+				from,
+				...(to === undefined ? {} : { to }),
+				text: input.text,
+			}),
+		);
 	}
 
 	private emit(event: SessionEvent): void {
@@ -703,12 +737,10 @@ class SessionImpl implements Session {
 					...(to === undefined ? {} : { to }),
 					text: params.text,
 				});
+				// The seat has heard its own say before anybody else hears of it.
 				seat.viewSeq = message.seq;
 				seat.spoke = true;
-				await this.store.drained();
-				// A say is atomic: one event, the whole message, exactly as it landed.
-				this.emit({ type: 'say', agent: seat.def.name, message });
-				this.dispatch(message);
+				await this.publish(message);
 				const result: AgentToolResult<Record<string, never>> = {
 					content: [{ type: 'text', text: 'delivered' }],
 					details: {},

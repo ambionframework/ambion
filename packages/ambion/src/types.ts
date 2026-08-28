@@ -79,9 +79,13 @@ export type SeatInfo = AgentSeatInfo | HumanSeatInfo;
 
 /** The session's event stream: room-level facts, one event per fact. */
 export type SessionEvent =
-	| { type: 'delivery'; message: Message }
+	/**
+	 * A message landed on the record. Exactly one of these per message,
+	 * whoever wrote it: what a person delivered, what an agent said, and a
+	 * person arriving or leaving all reach a host the same way.
+	 */
+	| { type: 'message'; message: Message }
 	| { type: 'agent_start'; agent: string }
-	| { type: 'say'; agent: string; message: SpokenMessage }
 	| { type: 'say_conflict'; agent: string; missed: Message[] }
 	| { type: 'tool_execution_start'; agent: string; toolName: string }
 	| { type: 'tool_execution_end'; agent: string; toolName: string }

@@ -28,7 +28,7 @@ const session = startSession({
   goal: 'Answer what the person brings, and nothing else.',
   agents: [lead],
 });
-session.subscribe((e) => e.type === 'say' && console.log(`${e.agent}: ${e.message.text}`));
+session.subscribe((e) => e.type === 'message' && console.log(`${e.message.from} spoke`));
 
 const visit = await visitSession(session, you);
 await visit.deliver({ text: 'hello' });

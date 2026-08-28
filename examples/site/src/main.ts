@@ -52,16 +52,16 @@ session.subscribe((event: SessionEvent) => {
 		case 'agent_start':
 			show(`${dim}· ${event.agent} is reading…${reset}`);
 			break;
-		case 'say': {
-			const arrow = event.message.to ? ` → ${event.message.to}` : '';
-			show(`${paint(event.agent, `${event.agent}${arrow}:`)} ${event.message.text}`);
+		case 'message': {
+			const m = event.message;
+			if (!isSpoken(m)) {
+				show(`${dim}· ${m.from} ${m.kind}${reset}`);
+				break;
+			}
+			const arrow = m.to ? ` → ${m.to}` : '';
+			show(`${paint(m.from, `${m.from}${arrow}:`)} ${m.text}`);
 			break;
 		}
-		case 'delivery':
-			if (!isSpoken(event.message)) {
-				show(`${dim}· ${event.message.from} ${event.message.kind}${reset}`);
-			}
-			break;
 		case 'tool_execution_start':
 			show(`${dim}· ${event.agent} calls ${event.toolName}…${reset}`);
 			break;

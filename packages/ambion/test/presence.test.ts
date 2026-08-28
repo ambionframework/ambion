@@ -1,4 +1,4 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { Session as PiSession, SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earendil-works/pi-ai';
 
@@ -207,7 +207,7 @@ describe('presence', () => {
 		expect(presenceOf(session, 'andrei')).toBe('absent');
 		expect(await kinds(session)).toEqual(['arrived', 'left']);
 		// leaving is a message like any other, and the stream carries it
-		const left = seen.filter((e) => e.type === 'delivery' && e.message.kind === 'left');
+		const left = seen.filter((e) => e.type === 'message' && e.message.kind === 'left');
 		expect(left).toHaveLength(1);
 	});
 
@@ -353,5 +353,94 @@ describe('presence', () => {
 		// the audience paragraph is about routing, not purpose, so it needs no goal
 		expect(bare).toContain('Who is reading can change while you work');
 		expect(await kinds(without)).toEqual(['arrived', 'said']);
+	});
+});
+
+// -- a repository that fails ------------------------------------------------
+
+/** A Pi repository the test can break and mend, to see what the room does. */
+function brittleRepo(): { repo: SessionRepo; entries: unknown[]; fail: (on: boolean) => void } {
+	let failing = false;
+	const entries: unknown[] = [];
+	const piSession = {
+		id: 'brittle',
+		findEntries: async () => [],
+		appendCustomEntry: async (_type: string, data: unknown) => {
+			if (failing) throw new Error('the disk is full');
+			entries.push(data);
+		},
+		appendMessage: async () => {},
+	} as unknown as PiSession;
+	const repo = {
+		list: async () => [],
+		create: async () => piSession,
+		open: async () => piSession,
+	} as unknown as SessionRepo;
+	return { repo, entries, fail: (on: boolean) => (failing = on) };
+}
+
+describe('a repository that fails', () => {
+	it('reports one failed write, then writes again once the repository mends', async () => {
+		const { repo, entries, fail } = brittleRepo();
+		const session = startSession({ name: roomName(), agents: [watcher], streamFn: quiet, repo });
+		const visit = await visitSession(session, andrei);
+		expect(entries).toHaveLength(1);
+
+		fail(true);
+		await expect(visit.deliver({ text: 'lost' })).rejects.toThrow(/disk is full/);
+
+		// the chain carries on: a mended repository writes the next message
+		fail(false);
+		await expect(visit.deliver({ text: 'kept' })).resolves.toBeUndefined();
+		// the message that failed is gone from the repository, and only it
+		expect(entries).toHaveLength(2);
+		// the running room never lost it, so it still reads all three
+		expect(await session.messages()).toHaveLength(3);
+		await stopSession(session);
+	});
+
+	it('frees the name when the shutdown itself cannot write', async () => {
+		const { repo, fail } = brittleRepo();
+		const name = roomName();
+		const session = startSession({ name, agents: [watcher], streamFn: quiet, repo });
+		await visitSession(session, andrei);
+
+		fail(true);
+		await expect(stopSession(session)).rejects.toThrow(/disk is full/);
+		// a room that cannot be started again is worse than one that lost a write
+		const again = track(startSession({ name, agents: [watcher], streamFn: quiet, repo }));
+		expect(again.name).toBe(name);
+	});
+
+	it('surfaces a repository it cannot open, and never as an unhandled rejection', async () => {
+		const unreachable = {
+			list: async () => {
+				throw new Error('the repository is unreachable');
+			},
+			create: async () => {
+				throw new Error('the repository is unreachable');
+			},
+			open: async () => {
+				throw new Error('the repository is unreachable');
+			},
+		} as unknown as SessionRepo;
+		const loose: unknown[] = [];
+		const note = (reason: unknown) => loose.push(reason);
+		process.on('unhandledRejection', note);
+
+		const session = startSession({
+			name: roomName(),
+			agents: [watcher],
+			streamFn: quiet,
+			repo: unreachable,
+		});
+		// the failure waits for the call that needs the store
+		await expect(session.messages()).rejects.toThrow(/unreachable/);
+		await expect(visitSession(session, andrei)).rejects.toThrow(/unreachable/);
+		await expect(stopSession(session)).rejects.toThrow(/unreachable/);
+
+		await new Promise((resolve) => setImmediate(resolve));
+		process.off('unhandledRejection', note);
+		expect(loose).toHaveLength(0);
 	});
 });

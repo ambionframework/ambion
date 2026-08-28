@@ -180,7 +180,7 @@ describe('startSession', () => {
 		const events = collect(session);
 		session.subscribe((event) => {
 			if (event.type === 'agent_end' && event.agent === 'gamma') gammaIdle.resolve();
-			if (event.type === 'say' && event.agent === 'alpha') alphaSaid.resolve();
+			if (event.type === 'message' && event.message.from === 'alpha') alphaSaid.resolve();
 		});
 
 		const visit = await enter(session);
@@ -253,7 +253,7 @@ describe('startSession', () => {
 		await session.settled();
 
 		expect(spoken(await session.messages())).toHaveLength(1);
-		expect(events.some((e) => e.type === 'say')).toBe(false);
+		expect(events.some((e) => e.type === 'message' && e.message.from === 'shy')).toBe(false);
 		const end = events.find((e) => e.type === 'agent_end');
 		expect(end).toMatchObject({ agent: 'shy', spoke: false });
 	});
@@ -403,12 +403,17 @@ describe('startSession', () => {
 		const events = collect(ordered);
 		await orderedVisit.deliver({ text: 'say hi' });
 		await ordered.settled();
+		// one event per message on the record, whoever wrote it
 		expect(events.map((e) => e.type)).toEqual([
-			'delivery',
+			'message',
 			'agent_start',
-			'say',
+			'message',
 			'agent_end',
 			'settled',
+		]);
+		expect(events.flatMap((e) => (e.type === 'message' ? [e.message.from] : []))).toEqual([
+			'andrei',
+			'solo',
 		]);
 
 		// a turn that throws is an error event, never a silent decline
@@ -500,7 +505,7 @@ describe('startSession', () => {
 		const events = collect(session);
 		const visit = await enter(session);
 		session.subscribe((event) => {
-			if (event.type === 'say' && event.agent === 'first') firstSaid.resolve();
+			if (event.type === 'message' && event.message.from === 'first') firstSaid.resolve();
 		});
 		await visit.deliver({ text: 'thoughts?' });
 		await session.settled();
@@ -535,7 +540,7 @@ describe('startSession', () => {
 		const yieldVisit = await enter(yielding);
 		const yieldEvents = collect(yielding);
 		yielding.subscribe((event) => {
-			if (event.type === 'say' && event.agent === 'first') yieldSaid.resolve();
+			if (event.type === 'message' && event.message.from === 'first') yieldSaid.resolve();
 		});
 		await yieldVisit.deliver({ text: 'thoughts?' });
 		await yielding.settled();
