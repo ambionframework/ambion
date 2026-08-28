@@ -47,7 +47,7 @@ puts those inside each product's instructions, so every product carries a copy
 of every person. That is a modelling error. What Priya wants belongs to Priya.
 
 **An aide never decides and never acts as its person.** `deliver` stays the
-person's own act, in their own words. §11 draws that line and says how far the
+person's own act, in their own words. §12 draws that line and says how far the
 role may grow.
 
 The name sets the authority. An aide briefs, reminds, and says _"she will want
@@ -72,9 +72,14 @@ its readers inside its own `say`, before its own turn finishes, so the active
 count never dips to zero in the middle of a burst. A room that settles has
 finished, and will not start again on its own.
 
-An exchange covers itself and nothing else: `from` is the question's seq,
-`through` is the last seq at the close. **It never reaches back past the
-question.**
+An exchange covers itself and nothing else. `from` is the seq after this
+person's last summary, or their first question if they have none; `through` is
+the last seq when the summary commits. In the ordinary case those are the
+question and the close. **It never reaches back past a summary its person has
+already read**, and it is a live read of the record, not a cursor kept beside
+it.
+
+The close is a race, and §5 settles it with the lock the room already has.
 
 [`agent.md`](agent.md) §7 records the gap underneath this: nothing bounds how
 long an exchange may run. That is the core's to fix, and this design assumes
@@ -123,7 +128,58 @@ An exchange with no agent message writes nothing.
 
 ---
 
-## 5. Who owns an exchange
+## 5. A summary commits under the same lock as a say
+
+An aide takes seconds to write. The room is idle while it works, so a new
+question may land, open the next exchange and wake seats before the summary is
+ready. A summary that committed anyway would sit in the record after work it
+does not cover, and both readers would have to cope with a fold that is no
+longer next to the message doing the folding.
+
+Nothing new is needed. **Rule 5 already refuses a message that was drafted
+against a record that has moved**, and it refuses an aide exactly as it
+refuses a seat:
+
+> **A message commits only against a record its author has read in full.**
+
+The aide reads the record to `through` and drafts. At the moment it commits,
+the room checks: if the record has not moved, the summary lands immediately
+after the range it covers, contiguous and in order. If the record has moved,
+the commit is refused and the aide is handed what it missed — the same
+`missed` list a seat gets, for the same reason.
+
+**A refused summary drafts again at the next quiescence.** Its range is a live
+read, so the retry covers what it covered before plus whatever won the race.
+Two questions asked in quick succession become one summary, which is right:
+they were one conversation. If somebody else's exchange won the race, it falls
+inside the range too, and its person reads what happened while they were
+waiting. That is the price of the race, it is not wrong, and one message still
+serves.
+
+Three things follow, and each removes a problem the design would otherwise
+have.
+
+**A summary is always contiguous with what it covers.** So `render.ts`
+replaces a block that ends immediately before the summary, and a client folds a
+run that ends at the message it just received. Neither has to reason about
+interleaving.
+
+**`settled()` keeps its meaning.** The exchange does not have to stay open
+until its summary lands, and the room does not have to be held busy while an
+aide writes. Quiescence is still simply "no agent is active".
+
+**A failed model call is a refused commit with extra steps.** If the aide's
+turn errors, no summary is written, the range stays uncompacted and fully
+visible, and the next quiescence is another chance. The safe direction is the
+default, and it needed no special case.
+
+One naming consequence: the event the room emits on a refusal is currently
+`say_conflict`. The lock is not about says any more. It should be `conflict`,
+carrying the author and what they missed.
+
+---
+
+## 6. Who owns an exchange
 
 A room holds several people, and each may bring an aide. Only one writes per
 exchange:
@@ -154,7 +210,7 @@ ownership. Both cost more model calls per exchange.
 
 ---
 
-## 6. A summary is not something said
+## 7. A summary is not something said
 
 The record gains one kind. It is not a `said`, because nobody said it. A
 person did not hear it in a room; an aide wrote it.
@@ -170,7 +226,7 @@ export interface SummaryMessage {
   /** The person whose question opened the exchange. Always present. */
   to: string;
   text: string;
-  /** The exchange it stands for: the question, and the work it caused. */
+  /** The range it stands for, contiguous and ending just before this seq. */
   covers: { from: Seq; through: Seq };
 }
 
@@ -191,7 +247,7 @@ writing a different thing and needs its own kind.
 
 ---
 
-## 7. The record only grows. What a seat reads does not.
+## 8. The record only grows. What a seat reads does not.
 
 Two statements, and both hold.
 
@@ -220,13 +276,13 @@ It is also what makes the design pay for the room and not only for the person.
 Without it a seat's context grows with every message for ever. With it, an
 exchange costs the room one message once it is over.
 
-§8 says why that is safe to do, and §15 says what it still costs.
+§9 says why that is safe to do, and §16 says what it still costs.
 
 ---
 
-## 8. The record is discussion, not state
+## 9. The record is discussion, not state
 
-This is what makes §7 safe, and it is a constraint on how a room is built
+This is what makes §8 safe, and it is a constraint on how a room is built
 rather than on what an aide writes.
 
 **A product answers out of its own data.** `stock_check()` returns 11.7 tonnes
@@ -255,7 +311,7 @@ existed.
 
 ---
 
-## 9. Presentation belongs to the client
+## 10. Presentation belongs to the client
 
 A person should not read the working. That is a statement about presentation,
 and it is settled in the client, not in the record and not on the wire.
@@ -283,7 +339,7 @@ keep straight.
 
 ---
 
-## 10. Nothing an aide writes wakes anybody
+## 11. Nothing an aide writes wakes anybody
 
 A summary that woke the room would start a new exchange about the exchange it
 just closed. So the routing rule refuses it — and it refuses on the author,
@@ -302,7 +358,7 @@ and would have held for nothing it writes tomorrow. §11 lets an aide speak
 during an exchange; a rule about summaries would not have covered that, and
 the boundary would have been prose rather than code.
 
-Written this way, one line enforces the whole of §11's rule at every rung. An
+Written this way, one line enforces the whole of §12's rule at every rung. An
 aide may say anything into a room that is already working, and none of it can
 start work.
 
@@ -311,7 +367,7 @@ always different questions.
 
 ---
 
-## 11. What an aide may become
+## 12. What an aide may become
 
 An aide is a person's counterpart, and the pull to give it more will be
 constant. The functions form a ladder, and the rungs look adjacent but are
@@ -347,7 +403,7 @@ Which is the rule that decides whether an aide is still an aide:
 > working. It may never activate one, never call a tool that changes a
 > product's state, and never speak under its person's name.
 
-§10 enforces the first half in one line, at every rung, because the guard is on
+§11 enforces the first half in one line, at every rung, because the guard is on
 the author rather than on what it wrote. The rest is checkable by reading a
 definition: an aide is given no tools.
 
@@ -364,7 +420,7 @@ drift. Only rung 1 is specified below.
 
 ---
 
-## 12. It is optional
+## 13. It is optional
 
 A person may bring an aide. Most will. Nothing requires it.
 
@@ -378,7 +434,7 @@ nothing away that anybody can still reach.**
 
 ---
 
-## 13. The shape
+## 14. The shape
 
 One optional field, and no method:
 
@@ -418,9 +474,24 @@ session.subscribe((event) => {
 own span. `defineHuman` gains one optional field and the record gains one
 kind. **That is the whole surface.**
 
+**What an aide is handed.** The room's goal, the roster, and the range it is
+about to cover — the question and every message after it. Not the record before
+that range: a summary its person has already read is theirs, not its. On a
+refused commit it is handed the same `missed` list a seat gets, and drafts
+again over the widened range.
+
+**What an aide is given.** A model and instructions, and no tools. §12's rule —
+never call a tool that changes a product's state — is then a fact about the
+definition rather than a promise about behaviour.
+
+**Where its turn lands.** In a downstream session, `<room>:<person>`, beside
+the seats' own. Rule 8 keeps every activation auditable after the fact, and a
+summary is written by a model like any other turn. The one message that reaches
+a person should be the easiest thing in the room to check.
+
 ---
 
-## 14. What this is not
+## 15. What this is not
 
 Stated so a later change has to argue with it:
 
@@ -432,15 +503,15 @@ Stated so a later change has to argue with it:
 - **Not a summariser of everything.** One answer is left as it was given, and
   anything outside an exchange is untouched.
 - **Not deletion.** The record keeps every message. Only a seat's context
-  changes. §7.
+  changes. §8.
 - **Not a place to keep anything.** A participant writes what must survive into
-  the state it owns. §8.
-- **Not an orchestrator.** §11 draws the line and names what is forbidden.
+  the state it owns. §9.
+- **Not an orchestrator.** §12 draws the line and names what is forbidden.
 - **Not an obligation.** A person may have none, and then nothing changes.
 
 ---
 
-## 15. Open questions
+## 16. Open questions
 
 **What a summary loses, and why that is accepted.** A summarised range leaves
 the seats' context, so a fact the summary drops is gone from every later
@@ -454,16 +525,16 @@ premise — and the seats hold strictly more, since they also have everything
 after it and their own tools. The room is never behind the person it is
 answering.
 
-The second is §8. A fact is re-derivable, because the product that owns it
+The second is §9. A fact is re-derivable, because the product that owns it
 reads it again. A commitment is durable, because whoever made it wrote it into
-their own state. **A room that keeps §8 loses nothing to a summary that it
+their own state. **A room that keeps §9 loses nothing to a summary that it
 would not also lose to a person who stopped reading.**
 
 What remains, and is not solved: a person carries context from outside the
 session. Priya reads a delivery note on her desk and asks about a tonnage no
 summary prepared her for. The seats answer anyway, out of their own APIs —
-which is §8 again. The case that would genuinely break is a question about
-something established in a summarised range that no product owns, and §8
+which is §9 again. The case that would genuinely break is a question about
+something established in a summarised range that no product owns, and §9
 exists to keep that class empty. Whether a real room keeps §8 is the thing to
 watch.
 
@@ -471,13 +542,13 @@ watch.
 settles, so rule 1 keeps its letter. But the room now makes a model call that
 no message asked for, and that is a new kind of trigger. It is the seam where
 a later feature will want to hang an interim summary or a room-level
-compactor. §13 forbids both by name; the mechanism to add them exists.
+compactor. §15 forbids both by name; the mechanism to add them exists.
 
 **A run that stops mid-exchange writes no summary.** `stopSession` aborts the
 turns in flight, so the exchange never closes. The person asked and heard
 nothing, and the record shows a question, some work and a shutdown. Accepted.
 
-**What a client owes.** §8 asks a client to re-present past messages when a new
+**What a client owes.** §10 asks a client to re-present past messages when a new
 one arrives. That is more than a log does, and no client here has done it.
 
 **The room still chatters.** An aide makes ten messages readable. It does not
@@ -487,7 +558,7 @@ chatter is one run away, and it would change what an aide has to do.
 
 ---
 
-## 16. What would prove it
+## 17. What would prove it
 
 Run the same scenario twice: once as it stands, and once with an aide for
 Priya.
