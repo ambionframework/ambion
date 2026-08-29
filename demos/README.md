@@ -45,4 +45,7 @@ room instead of being seated in it, arriving is a message on the record, a
 seat decides for itself whether an arrival wakes it, and the catch-up anchor
 is a message on the record rather than a cursor the host kept. Every
 activation is in the report in full — the context each seat read, its
-reasoning, its API calls and results, and the says the lock refused.
+reasoning, its API calls and results, and the says the lock refused. The report
+also projects where an aide would have engaged, against
+[`docs/aide.md`](../docs/aide.md), which this branch designs and does not
+build.
