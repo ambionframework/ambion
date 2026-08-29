@@ -1,11 +1,12 @@
 {
-	"name": "@ambionframework-examples/room",
+	"name": "@ambionframework-examples/site",
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
-	"description": "An interactive multi-agent session: a working room advancing an initiative you bring to it.",
+	"description": "A construction management suite where each product is an agent and several people share the workspace.",
 	"scripts": {
 		"start": "node src/main.ts",
+		"demo": "node src/demo.ts",
 		"check:types": "tsc --noEmit"
 	},
 	"dependencies": {

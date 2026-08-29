@@ -7,12 +7,13 @@ shipped: the whole runtime lives in
 [`session.ts`](../packages/ambion/src/session.ts), the public shapes in
 [`types.ts`](../packages/ambion/src/types.ts).
 
-Four primitives, and the whole of it fits in one sentence:
+Four things to define and a session to put them in, and the whole of it fits
+in one sentence:
 
-> **`defineAgent` makes an agent, `defineHuman` seats a person, `defineTool`
-> gives agents hands, and `openSession` opens a named room where all of them
-> meet — each agent deciding for itself whether to speak, to whom, and which
-> colleague to call in.**
+> **`defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
+> gives agents hands, and `startSession` brings up a named room the agents
+> work in and people visit — each agent deciding for itself whether to speak,
+> to whom, and which colleague to call in.**
 
 Everything Ambion intends beyond this — the virtual shell and workspace
 filesystem, channels and their read/write contracts, timers, batching,
@@ -41,7 +42,7 @@ it.
 
 Two things. If a third appears, it is a design failure and should be pushed
 back into a dependency or dropped. The single extension point is Pi's own:
-`openSession` accepts a `streamFn` — a scripted stream makes the room
+`startSession` accepts a `streamFn` — a scripted stream makes the room
 deterministic (this is how [the tests](../packages/ambion/test/session.test.ts)
 run), a custom stream brings custom providers. There is no Ambion model
 registry: without a `streamFn`, models resolve as `provider/model-id` from
@@ -111,74 +112,125 @@ export const andrei = defineHuman({
 });
 ```
 
-A human is a participant, not an operator: seated like an agent, on the
-roster like an agent, on the record like an agent. `identity` is how the room
-knows them. A session can seat several humans. What a human never has:
-instructions, tools, or a model — humans are not run, and a `say` directed at
-one wakes nothing. What the handle is for: delivering. The host proxies the
-people it has authenticated by delivering with their handle as `from`, and
-the runtime stamps the record from the handle — who-said-what is never
-something the content claimed.
+A human is a participant, not an operator: on the roster like an agent, on
+the record like an agent. `identity` is how the room knows them. What a human
+never has: instructions, tools, or a model — humans are not run, and a `say`
+directed at one wakes nothing.
+
+A human is not composition and is not passed to `startSession`. The value is
+what somebody visits as: `visitSession(session, andrei)` returns a visit, the
+visit delivers, and the runtime stamps the record from it — who-said-what is
+never something the content claimed. One person holds one visit, several
+people visit at once, and each one's presence is a fact the agents read. [`presence.md`](presence.md) is the contract for that,
+and for the arrival a visit puts on the record.
 
 ---
 
-## 5. openSession
+## 5. startSession
 
 ```ts
-import { openSession, passive } from '@ambionframework/ambion';
+import {
+  readSession,
+  startSession,
+  stopSession,
+  visitSession,
+  passive,
+} from '@ambionframework/ambion';
 
-const session = openSession({
+const session = startSession({
   name: 'weekly',
-  participants: [andrei, researcher, writer, passive(archivist)],
+  goal: 'Draft the weekly digest and flag what does not hold.',
+  agents: [researcher, writer, passive(archivist)],
 });
 
 const unsubscribe = session.subscribe((event) => {
-  if (event.type === 'say') console.log(`${event.agent}: ${event.message.text}`);
+  if (event.type === 'message') console.log(`${event.message.from}: ...`);
 });
 
-await session.deliver({ from: andrei, text: 'Draft the weekly. Anything to flag?' });
+const visit = await visitSession(session, andrei);
+await visit.deliver({ text: 'Draft the weekly. Anything to flag?' });
 await session.settled();
 
-for (const message of await session.messages()) {
+await stopSession(session);
+
+// later, in any process, with no agents standing up
+for (const message of await readSession('weekly').messages()) {
   console.log(`${message.from}: ${message.text}`);
 }
 ```
 
-A session is a named entity, and the verb is honest about it: `openSession`
-opens, it does not create. Open a name that has never been opened and the
-room is empty; open it again and you are back in it, record intact — like a
-file, not like an object. Two rules of identity follow. **The record belongs
-to the name**: what was said in `'weekly'` is there whenever `'weekly'` is
-opened, for as long as the storage lives. **The seats belong to the
-opening**: the participants passed to `openSession` are who is in the room
-this time, so a session can be reopened with a different roster and the
-record still shows who said what, stamped then, not inferred now. Names are
-unique across the roster — `openSession` refuses a duplicate rather than
+Three verbs, and each does one thing. **`startSession` sets up the context
+where the agents work.** It takes the room's composition and brings it to
+life: from here on the seats are live and a message activates them.
+**`stopSession` takes it down**: every active turn is aborted, every visit is
+closed, the write chain drains, and the handle refuses further use. **`readSession` reads a name and starts
+nothing** — the record, and who was in it, with no seat standing up and
+nothing to bill. You can read a room that is not running; you cannot speak
+into one. A person is the fourth verb and lives in
+[`presence.md`](presence.md): `visitSession` puts them in a running room.
+
+A session is a named entity that outlives any run of it. Three rules of
+identity follow.
+
+**The record belongs to the name.** What was said in `'weekly'` is there
+whenever `'weekly'` is read, for as long as the storage lives, whether or not
+anything is running.
+
+**The run belongs to `startSession`.** The agents passed are the room's
+composition for this run, so a name can be started again with a different
+roster and the record still shows who said what, stamped then, not inferred
+now. A long-lived room is many runs over one record, and `readSession`
+reaches the record between them.
+
+**One run per name.** `startSession` refuses a name already running in this
+process, because two live rooms over one record would each replay it, each
+append to it, and diverge. Names are unique inside a roster too —
+`startSession` refuses a duplicate, and so does `visitSession` — rather than
 letting `say({ to })` become ambiguous.
 
-What the record holds is one shape (`Message` in `types.ts`):
+`startSession` is synchronous and the room is usable at once; the replay it
+needs is awaited by the first call that needs it. `stopSession` returns a
+promise, because draining is the point of calling it.
+
+What the record holds is one union (`Message` in `types.ts`): what a
+participant said, and what a person did.
 
 ```ts
-interface Message {
-  from: string; // a participant's name — stamped by the runtime, never claimed
-  to?: string; // present when the delivery or say was directed
-  text: string;
-  at: string; // stamped by the runtime, at the moment it landed
-}
+type Message =
+  | {
+      kind: 'said';
+      seq: number; // monotonic, assigned at commit, strictly ordered
+      at: string; // stamped by the runtime, at the moment it landed
+      from: string; // a participant's name — stamped by the runtime, never claimed
+      to?: string; // present when the delivery or say was directed
+      text: string;
+    }
+  | {
+      kind: 'arrived' | 'left';
+      seq: number;
+      at: string;
+      from: string; // stamped from the visit the runtime observed
+      identity?: string; // on 'arrived' alone: how the room knew them
+    };
 ```
+
+The second kind carries no `text`, because the person said nothing.
+[`presence.md`](presence.md) specifies it; every rule below applies to both
+kinds unchanged, which is why it is one union and not two records.
 
 Beyond identity, the mechanics are eight rules. The first six are the room's
 routing and voice; all of the routing is one function, `dispatch` in
 `session.ts`.
 
 **1. Every message activates every idle agent, in parallel.** A human's
-delivery and a colleague's undirected `say` route identically: passive seats
-sit out (rule 6); everyone else at rest evaluates at once, and replies land
+delivery, a person arriving and a colleague's undirected `say` route
+identically: seats sit out when their attention is too narrow for it (rule 6);
+everyone else at rest evaluates at once, and replies land
 on the record in arrival order — so a reply that lands after colleagues went
 idle is still heard, not stranded until the next delivery. With one agent
 this degenerates to ordinary chat: the room is the general case, the
 assistant its size-one instance. A message may also be directed:
-`deliver({ from, to, text })` and `say({ to })` activate exactly the named
+`visit.deliver({ to, text })` and `say({ to })` activate exactly the named
 participant, waking it idle or passive. `to` is a participant handle;
 directed at a human it is an address for the reader and wakes nothing.
 
@@ -232,20 +284,32 @@ tick), and a room with no races pays nothing. The refusal shows on the stream
 as `say_conflict`, and the guarantee is the point: every message on the
 record was spoken by a seat that had heard everything before it.
 
-**6. An agent's status is `active`, `idle`, or `passive`.** Active: taking a
-turn now. Idle: at rest, woken by any broadcast. Passive: at rest, woken only
-when named — by a colleague's directed `say` or a directed delivery — seated
-as `passive(archivist)`, and readable from `session.seats()`. A passive seat
-is the expert in the corner: hearing nothing, costing nothing, until someone
-asks.
+**6. A seat has a status and an attention, and they are different things.**
+Status is runtime: `active` (taking a turn now) or `idle` (at rest).
+Attention is a seating choice, and it is what rule 1 defers to when it says
+who sits out — one widening scale, from the narrowest:
+
+- `named` — hears nothing but a message addressed to it, seated as
+  `passive(archivist)`. The expert in the corner: hearing nothing, costing
+  nothing, until someone asks.
+- `broadcast` — also hears anything a participant said. The default, and what
+  a bare agent in `agents` gets.
+- `presence` — also wakes when somebody arrives, leaves or goes quiet, seated
+  as `attentive(concierge)`.
+
+Both are readable from `session.seats()`, so a seat that is `named` and
+running is describable, which one enum could not do. Attention belongs to the
+seating rather than to `defineAgent`, so the same agent can be the quiet
+corner in one room and the one who meets people in another.
 
 **7. Identity is injected; provenance is stamped.** Every agent's context
-carries the roster — each participant's name, kind, identity and status, with
-the statuses spelled out so a seat knows a broadcast will not reach the
-passive colleague in the corner. On the record, `from` is written by the
-runtime from the seated handle: the host delivers as a defined human, `say`
-is stamped with its agent, and only participants speak. No one self-reports
-who they are.
+carries the session's goal, the time, and two rosters — the agents, with
+their statuses spelled out so a seat knows a broadcast will not reach the
+passive colleague in the corner, and the people, with how long each one has
+been reading or gone. On the record, `from` is written by the runtime: `say`
+is stamped with its agent, a delivery is stamped from the live visit that
+made it, and an arrival is stamped from the visit the runtime observed
+opening. No one self-reports who they are.
 
 **8. The room hears what you said, not your keystrokes — and the keystrokes
 are kept.** Each agent's tool calls belong to its own working context; other
@@ -267,9 +331,8 @@ names its seat. The stream carries room-level facts only (`SessionEvent` in
 
 ```ts
 type SessionEvent =
-  | { type: 'delivery'; message: Message }
+  | { type: 'message'; message: Message }
   | { type: 'agent_start'; agent: string }
-  | { type: 'say'; agent: string; message: Message }
   | { type: 'say_conflict'; agent: string; missed: Message[] }
   | { type: 'tool_execution_start'; agent: string; toolName: string }
   | { type: 'tool_execution_end'; agent: string; toolName: string }
@@ -278,13 +341,19 @@ type SessionEvent =
   | { type: 'settled' };
 ```
 
+**One message on the record, one `message` event.** What a person delivered,
+what an agent said, and a person arriving or leaving all reach the host the
+same way, because they are the same thing: an entry the room committed. Who
+wrote it is `message.from`, which the roster already names, so the stream does
+not split by author. The event is atomic as the record is: one event, the
+whole message, exactly as it landed.
+
 Pi's `agent_start`/`agent_end` are these, attributed; Pi's `tool_execution_*`
-pass through with the seat named. A `say` is atomic on the stream as it is on
-the record: one event, the whole message, exactly as it landed. Pi's
+pass through with the seat named. Pi's
 `message_*` granularity — streaming deltas, partial turns — is deliberately
 not re-broadcast: finer visibility is the seat's own layer, reached through
 Pi's hooks on the seat's downstream session, not the room forwarding messages
-it did not speak. Four events are the room's own: `delivery`; `settled` — the
+it did not speak. Four events are the room's own: `message`; `settled` — the
 moment no agent is active; `say_conflict` — rule 5's lock refusing a say that
 raced past the record, so the host sees races caught, not silently retried;
 and `error`, which distinguishes a failed turn from a quiet one. **Silence is
@@ -303,17 +372,24 @@ resolves on acceptance — the message is on the record and activations are
 dispatched — never on completion, because a parallel round has no single
 caller to return to. The round's end is `settled()`: a promise that resolves
 when the room is quiet, which is also the moment a host learns that nobody
-chose to speak. And one control: `abort()`. It cancels every active turn —
-Pi's own abort, fanned out — and the room settles; what was said stays, what
-was mid-flight ends without speaking, and an aborted turn stays cancelled
-even if a steer was still queued against it. `messages()` and `seats()` are
-the pull side; the stream is the push side — nothing a listener can learn
-that the pulls cannot, only sooner.
+chose to speak. And two controls. `abort()` cancels every active turn — Pi's
+own abort, fanned out — and the room settles; what was said stays, what was
+mid-flight ends without speaking, and an aborted turn stays cancelled even if
+a steer was still queued against it. The room is still running afterwards.
+`stopSession` is the one that ends it, and it is `abort()` plus everything
+else a run holds: the visits close, the writes drain, and the handle is
+spent. `messages()` and `seats()` are the pull side; the stream
+is the push side — nothing a listener can learn that the pulls cannot, only
+sooner.
+
+`readSession(name, { repo })` returns the pull side alone — `messages()`,
+`seats()`, `subscribe()` — and `Session` extends it, so code that only reads
+takes the narrower type and cannot start anything by accident.
 
 Storage is Pi's, not an invention of Ambion's. The record lives in a Pi
 session — each message a custom entry, replayed in `seq` order on reopen —
-obtained from Pi's own `SessionRepo`, which `openSession` accepts and
-defaults to an in-process `InMemorySessionRepo`. A name that outlives the
+obtained from Pi's own `SessionRepo`, which `startSession` and `readSession`
+accept and default to an in-process `InMemorySessionRepo`. A name that outlives the
 process is a durable `SessionRepo` implementation, not a new abstraction:
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage surface
 and Ambion adds no storage layer of its own.
@@ -332,16 +408,35 @@ racing say refused with what it missed — retry commits, standing down leaves
 no mark (rule 5); provenance stamped and the roster injected (rule 7); the
 name opening back into its record; events in order, errors as events, abort
 quieting the room — including an abort with a steer still queued. All
-in-process, in vitest, on a scripted stream where determinism matters.
+in-process, in vitest, on a scripted stream where determinism matters. What a
+person entering and leaving adds to these rules is proved beside them, in
+[`presence.test.ts`](../packages/ambion/test/presence.test.ts).
 
-The runnable proof is [`examples/room`](../examples/room): an initiative room
-— a tech lead, a designer, a product manager, an executive, and a passive
-project manager the room calls in to keep the plan of record current — where
-every rule above is observable by hand.
+The runnable proof is [`examples/site`](../examples/site): a construction
+management suite where each product is an agent — a time tracker, a task list
+seated `attentive` so it meets people at the door, and a materials tracker —
+shared by three people who come and go. Every rule above is observable by
+hand there, and the products hold state they change.
 
 ---
 
-## 7. Later
+## 7. A gap the core has
+
+**An exchange has no end the room enforces.** Two agents that keep answering
+each other keep waking each other, and nothing stops them. The say lock pushes
+against it — a seat that speaks late is refused and told to reconsider, and
+rule 3 tells it to stand down — but that is pressure, not a bound. No run has
+hit it. It is written down because a room that waits for months will meet it
+eventually, and because anything built on quiescence assumes it does not
+happen.
+
+The fix belongs here, in the core, not in whatever notices the absence: a
+limit on how much work one message may cause, applied where rule 1 activates
+a seat.
+
+---
+
+## 8. Later
 
 Each of these is designed to sit on top of this core without changing it:
 the virtual shell and workspace filesystem (just-bash behind Pi's
@@ -351,9 +446,17 @@ long records; the workspace and the tenant; tasks. They arrive one document
 at a time, each earning its way in against the same test: does it add a
 second way to do something that has one?
 
+The first of them is shipped: [`presence.md`](presence.md), which takes
+people out of the room's composition and gives them a verb of their own. A
+run seats agents; a person visits and leaves, several at once, and arriving
+is a message like any other — so rule 1 activates the room when somebody walks in, and an agent
+that knows the session's goal tells them what they missed. It is the one
+document so far that reaches into this core rather than sitting on top of
+it, and the shapes above carry the result.
+
 ---
 
-## 8. The measure
+## 9. The measure
 
 Ambion ships a multi-agent runtime and writes no agent loop: two definition
 helpers, a facade, and a room. If that ratio ever inverts — if Ambion finds
@@ -361,4 +464,4 @@ itself owning retries or context windows or a tool format — the wrapper has
 become a reimplementation, and the right response is to delete Ambion's
 version.
 
-Four primitives. One dependency that does the rest.
+Four things to define. One dependency that does the rest.
