@@ -1,12 +1,13 @@
 # @ambionframework/ambion
 
-`defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
-gives agents hands, `seated` chooses what wakes an agent — with `passive` and
-`attentive` for the two points worth naming — and `startSession` brings up a
-named room the agents work in and people visit: `visitSession` puts somebody
-in it, `readSession` reads it without starting anything, `stopSession` takes
-it down. Each agent decides for itself whether to speak, to whom, and which
-colleague to call in.
+A runtime for ambient, always-on agents. Agents are plain values that wait
+in a named room; every event — a person speaking, arriving or leaving, a
+colleague's reply — enters as a message that activates exactly the agents
+it concerns, and each one decides for itself whether to speak, to whom, and
+which colleague to call in. `defineAgent` makes an agent, `defineHuman`
+names a person, `defineTool` gives agents hands, and `startSession` brings
+up the room: `visitSession` puts somebody in it, `readSession` reads it
+without starting anything, `stopSession` takes it down.
 
 ```ts
 import {

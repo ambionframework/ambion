@@ -26,13 +26,29 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 
 ## Thesis
 
-Complex software does not come from one large agent that receives more context
-as it asks for it. It comes from many agents, each expert in one domain. The
-platform provides the shared capabilities. A workspace built for collaboration
-holds the agents. Keep this framing in `README.md` and `docs/`.
+Every agent that keeps growing arrives at multi-agent collaboration; Ambion
+starts there. Complex software comes from many agents, each expert in one
+domain. The agent is the unit of context engineering, and it is the ownership
+boundary: one team owns one agent whole — its domain, its tools, its
+instructions, its model, its evals. An agent is as good as its context, and context engineering —
+progressive disclosure, tool and response shapes, guardrails, completion
+checks — composes inside one agent, where every technique serves the same
+domain. A single engine and a single context window cannot hold that boundary:
+a change for one domain lands in every domain's context, and a monolithic
+agent settles at a local maximum, where no team can improve its domain without
+degrading another's. Even the monolith arrives there (subagents); Ambion's
+agents are first-class, each with an owner. The platform provides the shared
+capabilities. A workspace built for collaboration holds the agents.
 
-The session is that workspace today. Workspaces, channels, and the shared
-filesystem are designed and not built. Write about them as design, not as code.
+Agents are ambient: they wait, and events activate them. A person speaking is
+one event source; timers, tasks and other systems are event sources of the
+same kind, and every one enters as a message. Keep both framings in
+`README.md` and `docs/`.
+
+The session is that workspace. `README.md` and `docs/` document what is
+implemented. Do not write about unbuilt concepts (workspaces, channels, the
+shared filesystem, deployment targets) there; deferred work goes in
+`FOLLOW_WORK.md`.
 
 ## Commands
 
@@ -81,8 +97,33 @@ Rules that carry the most weight here:
 Also: state facts, not claims. If a command or feature does not exist yet, say
 so plainly. Wrap Markdown prose at about 78 columns; Prettier preserves it.
 
-Existing prose in `README.md` and `docs/` predates this rule and is deliberately
-voiced. Do not rewrite it wholesale — apply STE to new and edited text.
+Optimize every page for a human scanning it:
+
+- A bold lead names each point. A reader of only the bold leads gets the
+  page's claims.
+- An enumeration is a bulleted or numbered list. Tabular facts are a table.
+- A paragraph stays under six lines of prose. Split at the natural break.
+- A diagram is welcome when it shows the mechanism. GitHub renders Mermaid.
+
+### Voice
+
+Write to get the job done. Do not educate, persuade, or lecture along the way.
+The reader wants the mechanism, once, and then the next mechanism.
+
+The reader has built an agent and has not yet met the scaling problems this
+project tackles. Ground a claim in what they have lived, then extrapolate to
+the scale they have not. Keep the field's vocabulary; do not flatten it to
+plain English.
+
+- Banned words: "load-bearing", "seam".
+- No contrastive framing as a rhetorical device: avoid "X, not Y",
+  "X rather than Y", "X instead of Y", "X — never Y". Say what a thing is or
+  does. A plain negative fact is fine when the reader needs it ("A human has
+  no tools").
+- Do not restate a point in a second formulation. One statement per point.
+
+`README.md` and `docs/` follow these rules. Hold every edit to the same
+standard.
 
 ## Git
 

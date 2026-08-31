@@ -1,70 +1,195 @@
 # Ambion
 
-A minimalist framework for ambient-aware, always-on agents [ambionframework.com](https://ambionframework.com)
+A minimalist framework for ambient, always-on agents.
+[ambionframework.com](https://ambionframework.com)
 
-## Why
+## The idea
 
-Most agent frameworks model **invocation**: a request comes in, a workflow runs, a result comes out.
+**Agents should wait for events.** An agent built on a request loop knows
+nothing between calls: when a deadline passes or a task completes,
+something else has to notice and invoke it. Ambion inverts the loop:
 
-Ambion models **presence**. Agents don't run — they wait. They subscribe to the things they care about and wake when something happens. Policies over workflows.
+- Agents wait in a session, and every event enters it as a message — a
+  person speaking, a person walking in, a timer firing, a task completing,
+  a system reporting.
+- A message activates exactly the agents it concerns. The rest stay at
+  rest.
+- Cost follows events. An idle session costs nothing.
 
-Most agent products model **the monolith**: one large agent, given more context
-as it asks for it. Progressive disclosure holds it together. Every domain you
-add makes the prompt longer and every other domain harder to reason about, and
-no one owns the result.
+**The agent is the unit of context engineering, and the ownership
+boundary.** Building one agent is already this work: choosing its tools
+and shaping their responses, disclosing context progressively, adding
+guardrails and completion checks. The techniques hold because they serve
+one domain. In a shared context window they collide — every change lands
+in every domain's context — and the shared agent settles at a local
+maximum, where no team can improve its domain without degrading another's.
+Ambion draws the boundary at the agent:
 
-Ambion models **the team**. Many agents, each one expert in a single domain and
-accountable for it. They draw on capabilities the platform provides — the
-session, the record, tools — instead of each one carrying a private copy. They
-work in a workspace built for collaboration, where an agent reads what a
-colleague did and calls that colleague in by name. The complexity lives in the
-composition, not in one prompt.
+- One team owns one agent whole: domain, tools, instructions, model,
+  evals.
+- Inside one agent every technique serves the same domain, so the
+  techniques compose.
+- A team improves its agent on its own schedule.
 
-The session is that workspace today. Workspaces, channels, and the shared
-filesystem are designed and not built.
+**Every agent that keeps growing arrives at multi-agent collaboration.
+Ambion starts there.** When one context window stops holding the work, the
+fix is subagents — a team, inside one engine, with no owners and no record
+of how it works together. Ambion makes the team first-class:
 
-## Core model
+- Agents with owners, working in a workspace built for collaboration.
+- An agent reads what a colleague did and calls that colleague in by name.
+- The platform provides what they share: the session and the record. The
+  complexity lives in the composition.
 
-Four things to define, and a session to put them in.
+## The activation rule
 
-**Agent** — `defineAgent` makes an agent: a name, an identity the room reads, instructions, a model, and tools. A value, not a process. [`docs/agent.md`](docs/agent.md) specifies it: a vanilla [Pi](https://pi.dev/docs/latest/sdk) agent that speaks only when spoken to — and not always then.
+An agent activates in exactly one way: **a message is delivered into a
+session it belongs to.** The runtime delivers three sources today:
 
-**Human** — `defineHuman` names a person: an identity agents read and address, on the record like anyone else. People are not part of a room's composition — they visit a running session and leave it, several at once and from several devices, and the room tracks who is reading. Arriving is a message, so the agents wake for it. [`docs/presence.md`](docs/presence.md) specifies it.
+- a person speaking,
+- a person arriving or leaving,
+- a colleague's directed reply.
 
-**Aide** — a person may bring one, as an optional field on `defineHuman` rather than a fifth thing to define: a `defineAgent` value that holds their brief and their preferences, and writes the one message they read when the room goes quiet. It is a seat like any other, seated where nothing said reaches it and woken by the close of its person's exchange. It never speaks for them, never wakes anybody, and carries no tools of its own — the one hand it holds is the runtime's, and it reaches the record. From the next activation the agents read its summary in place of the messages it stands for, so an exchange that is over costs the room one message instead of growing every context for ever. [`docs/aide.md`](docs/aide.md) specifies it.
+```mermaid
+flowchart LR
+    P((person)) -- "deliver · arrive · leave" --> R[(session record)]
+    R -- "activates by attention" --> A["agents, in parallel"]
+    A -- "say" --> R
+    R -- "round closes" --> D[aide]
+    D -- "one summary" --> R
+```
 
-**Tool** — `defineTool`, a facade over Pi's own: same shape, one import. What an agent can do beyond speaking is exactly what its author gave it.
+A delivery activates the idle agents in parallel; a message that arrives
+mid-turn steers the agents already at work. Each agent decides whether to
+speak, to whom, and which colleague to call in — and declining leaves no
+mark on the record. The runtime stamps who said what.
 
-**Attention** — what wakes a seat, chosen when the agent is seated rather than when it is defined: one widening scale from `none` (nothing said reaches it) through `named` (only a message addressed to it) and `broadcast` (anything said, the default) to `presence` (also somebody arriving or leaving). `seated(agent, attention)` picks a point, with `passive(agent)` and `attentive(agent)` as shorthand for the two worth naming; a bare agent takes the default. Every message has a reach, and a seat wakes when its attention is at least that wide — which is the whole routing rule, and the reason an aide is an ordinary seat rather than a special case.
+## The model
 
-**Session** — a named room that outlives any run of it. `startSession` brings one up from its agents and a goal that says what the room is for; `stopSession` takes it down; `readSession` reads the record between runs, with nothing standing up and nothing to bill. A delivery activates the idle agents in parallel; replies steer colleagues still at work; each agent decides whether to speak, to whom, and which colleague — the quiet expert in the corner included — to call in. Silence leaves no mark, and provenance is stamped by the runtime, never self-reported.
+Four functions build a room, and three verbs run it.
 
-## The invariant
+| Function       | What it does                                                                                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defineAgent`  | Makes an agent as a plain value: a name, an identity the room reads, private instructions, a model, tools. It speaks only when spoken to, and can decline. |
+| `defineHuman`  | Names a person: an identity the agents read and address. People visit a running session; an arrival is a message.                                          |
+| `defineTool`   | Declares what an agent can do beyond speaking. Pi's own tool shape, behind one import.                                                                     |
+| `startSession` | Brings up a named room from its agents and a goal.                                                                                                         |
+| `visitSession` | Puts a person in a running room; delivering belongs to the visit.                                                                                          |
+| `readSession`  | Reads the record between runs. Nothing stands up, nothing to bill.                                                                                         |
+| `stopSession`  | Takes the room down.                                                                                                                                       |
 
-There is exactly one way an agent activates: **a message is delivered into a session it belongs to** — by a person speaking, a person arriving or leaving, or a colleague's directed reply. And even then, it may decline.
+**Attention** decides what wakes a seat, chosen when the agent is seated
+(`seated(agent, attention)`; a bare agent takes the default):
 
-The larger design — workspaces, channels with read/write contracts, timers, batching, a virtual shell with a durable filesystem, tasks, the tenant — arrives one document at a time, each on top of this core.
+| Attention   | Shorthand   | Wakes on                                         |
+| ----------- | ----------- | ------------------------------------------------ |
+| `none`      | —           | Nothing said reaches it. Where an aide sits.     |
+| `named`     | `passive`   | A message addressed to it.                       |
+| `broadcast` | _(default)_ | Anything said.                                   |
+| `presence`  | `attentive` | Anything said, and somebody arriving or leaving. |
+
+Every message has a reach, and a seat wakes when its attention is at least
+that wide. That comparison is the whole routing rule.
+
+**The aide** is an optional agent a person brings, as a field on
+`defineHuman`:
+
+- It holds their brief and their preferences.
+- When their exchange closes — the room answered and went quiet — it
+  writes the one message they read, and from the next activation the
+  agents read that summary in place of the messages it stands for.
+- It never speaks for its person and never wakes anybody.
+
+The contracts: [`docs/agent.md`](docs/agent.md) for the core,
+[`docs/presence.md`](docs/presence.md) for people and visits,
+[`docs/aide.md`](docs/aide.md) for the aide.
+
+## Example
+
+A shared construction site. Each product is an agent; the people who run
+the site visit, ask, and leave.
+
+```ts
+import {
+  defineAgent,
+  defineHuman,
+  defineTool,
+  readSession,
+  startSession,
+  stopSession,
+  visitSession,
+} from '@ambionframework/ambion';
+import { Type } from 'typebox';
+
+const stockCheck = defineTool({
+  name: 'stock_check',
+  description: 'Read the current stock of a material.',
+  parameters: Type.Object({ material: Type.String() }),
+  execute: async ({ material }) => `${material}: ${await stock.level(material)} t`,
+});
+
+const materials = defineAgent({
+  name: 'materials',
+  identity: 'Tracks stock and deliveries.',
+  instructions: 'Answer from stock_check. Flag a shortfall; otherwise stay quiet.',
+  model: 'anthropic/claude-sonnet-4-5',
+  tools: [stockCheck],
+});
+// tasks and timesheet are defineAgent values of the same shape.
+
+const priya = defineHuman({
+  name: 'priya',
+  identity: 'Project manager. Owns the programme.',
+  aide: defineAgent({
+    name: 'priya-aide',
+    identity: "Holds Priya's brief.",
+    model: 'anthropic/claude-sonnet-4-5',
+    instructions: 'Lead with the decision Priya has to make. Four sentences at most.',
+  }),
+});
+
+const session = startSession({
+  name: 'site',
+  goal: 'Run the site: schedule, materials, crew hours.',
+  agents: [materials, tasks, timesheet],
+});
+
+const visit = await visitSession(session, priya);
+await visit.deliver({ text: 'Can I tell the client Thursday for the pour?' });
+await session.quiet(); // the room settled, and Priya's aide wrote her one answer
+
+await stopSession(session);
+
+// later, in any process, with no agents standing up
+for (const message of await readSession('site').messages()) {
+  console.log(`${message.from}: ${message.text}`);
+}
+```
+
+[`examples/site`](examples/site) is the full, runnable version of this
+room: three products, three people, and an aide for each.
 
 ## Runtime
 
-- **Always on, rarely running.** Agents are dormant between activations. Cost scales with events, not wall-clock time.
-- **Node first.** The core runs in-process, tested in vitest; the edge deployment (Cloudflare Durable Objects) is a designed destination, tackled later.
-- **Storage-ready.** Sessions run in memory today behind a storage interface, so durability is a later implementation, not an API change.
+- **Node, in-process.** The core runs in-process and is tested in vitest.
+- **Storage behind an interface.** Sessions persist through Pi's
+  `SessionRepo`: in-memory by default, durable (Pi's `JsonlSessionRepo`, or
+  your own) with no API change.
 
 ## Install
 
-Ambion publishes to GitHub Packages, which requires a token even to read — a
-public repository does not change that.
+Ambion publishes to GitHub Packages, which requires a token even to read —
+a public repository does not change that.
 
 Create a [classic PAT](https://github.com/settings/tokens/new?scopes=read:packages&description=Ambion)
-with `read:packages`, then in your project's `.npmrc`:
+with `read:packages`, then add to your project's `.npmrc`:
 
 ```ini
 @ambionframework:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-The token is read from the environment, so the file is safe to commit.
+The file reads the token from the environment, so it is safe to commit.
 
 ```sh
 export GITHUB_TOKEN=…
@@ -72,21 +197,8 @@ npm install @ambionframework/ambion
 ```
 
 In GitHub Actions the built-in `GITHUB_TOKEN` already carries the scope.
-[`docs/toolchain.md`](docs/toolchain.md) covers that, and verifying a release's
-provenance attestation.
-
-## CLI
-
-```sh
-npm create ambion@latest     # scaffold a workspace project
-ambion dev                   # run the workspace locally
-ambion deploy                # ship to Cloudflare
-```
-
-Define agents in TypeScript, declare their tools, deploy. The framework owns activation, threading, and durability.
-
-None of these commands exist yet. The published `ambion` binary currently
-reports its version and nothing else; the commands arrive with the runtime.
+[`docs/toolchain.md`](docs/toolchain.md) covers that, and how to verify a
+release's provenance attestation.
 
 ## Repository
 
@@ -95,22 +207,26 @@ reports its version and nothing else; the commands arrive with the runtime.
 | `packages/ambion` | [`@ambionframework/ambion`](packages/ambion) — the runtime   |
 | `packages/cli`    | [`@ambionframework/cli`](packages/cli) — the `ambion` binary |
 
+The `ambion` binary currently reports its version and nothing else.
+
 ```sh
 pnpm install
 pnpm check
 ```
 
-[`docs/toolchain.md`](docs/toolchain.md) specifies the build, CI and release
-setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
+[`docs/toolchain.md`](docs/toolchain.md) specifies the build, CI and
+release setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
 
 ## Design principles
 
 1. One activation mechanism.
 2. Everything is a message on a record.
-3. Agents manage their own attention — deciding not to engage included.
-4. Many domain agents, not one monolith. The platform shares the capabilities.
-5. What a person wants belongs to that person, not to every agent that answers them.
-6. Minimal surface: four things to define, one invariant, one dependency that does the rest.
+3. Agents manage their own attention; declining to engage is part of it.
+4. Many agents, each expert in one domain; the platform provides the
+   shared capabilities.
+5. What a person wants belongs to that person; their aide holds it.
+6. Minimal surface: four functions, one activation rule, one dependency
+   that does the rest.
 
 ## License
 
