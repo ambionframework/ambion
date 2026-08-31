@@ -22,10 +22,11 @@ showed.
 
 ## The runs
 
-| Date       | Report                                                      | Model      | Published                                                                        |
-| ---------- | ----------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------- |
-| 2026-08-26 | [The Room, Verbatim](2026-08-26-the-room-verbatim.html)     | sonnet-4-5 | [artifact](https://claude.ai/code/artifact/bb9a4ec2-2f2d-4ee0-8803-182e2bbc5797) |
-| 2026-08-28 | [Three Apps, One Site](2026-08-28-three-apps-one-site.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/e170799d-5176-491f-a887-9bde86f0ac02) |
+| Date       | Report                                                                | Model      | Published                                                                        |
+| ---------- | --------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------- |
+| 2026-08-26 | [The Room, Verbatim](2026-08-26-the-room-verbatim.html)               | sonnet-4-5 | [artifact](https://claude.ai/code/artifact/bb9a4ec2-2f2d-4ee0-8803-182e2bbc5797) |
+| 2026-08-28 | [Three Apps, One Site](2026-08-28-three-apps-one-site.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/e170799d-5176-491f-a887-9bde86f0ac02) |
+| 2026-08-31 | [One Exchange, One Message](2026-08-31-one-exchange-one-message.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/f73ba11a-3189-4313-9b97-b61d89bd7089) |
 
 ## What each run changed
 
@@ -48,3 +49,36 @@ activation is in the report in full — the context each seat read, its
 reasoning, its API calls and results, and the says the lock refused. The report
 also projects where an aide would have engaged, against
 [`docs/aide.md`](../docs/aide.md), which that change designed.
+
+**One Exchange, One Message.** The run that the aide was built against. It is
+the same suite and the same three people, and each person now brings an aide.
+Four questions open four exchanges, and each one closes into one message: 19
+agent messages become 4, of 94 words each on average. The report holds the
+comparison [`docs/aide.md`](../docs/aide.md) §18 asks for: the same scenario
+runs twice, once with the aides and once with none. The last seat activation
+reads 8,391 characters, with 14 messages that stand as 3 summaries; the same
+record with nothing folded is 11,698, so the fold takes 28% off what that seat
+reads. The two arms come out level this time — the room with aides in it says
+more — and the report says so. Priya comes back and asks about a range that
+left every seat's context, and the products answer her from the folds and
+their own APIs.
+
+The exchange the aide reads — a question, and everything the room does until
+it goes quiet again — is the room's own round, and it now says so: it has a
+file, a type, a reader on the session, and both edges on the event stream. The
+comparison run brings no aide at all and still reports four rounds. The aide
+is a seat like any other, seated at the narrow end of attention where nothing
+said reaches it, and woken by the close of its person's exchange. Attention is
+now the mechanism rather than a set of adjectives: `seated(agent, attention)`
+names a point on the scale, `passive` and `attentive` are one line each over
+it, and one comparison against a message's reach decides who wakes.
+
+Earlier runs of this report found three faults, and the report records what
+they changed. A summary used to start after its person's last summary, so a
+person who came back drew one message standing for two other people's
+exchanges; it now starts at the question that opened the exchange. A fold used
+to claim the message under it, which was false where two ranges overlapped; it
+now names the person its summary was written for, and this run contains that
+case. The summaries also read long, so the runtime now asks an aide for the
+answer and for what changed while the room worked, and for nothing else. One
+run put an empty message on the record, so `say` refuses one now.
