@@ -13,9 +13,9 @@ updates:
       # The toolchain moves together; a single PR is easier to validate than six.
       toolchain:
         patterns:
-          - '@biomejs/*'
           - knip
-          - prettier
+          - oxfmt
+          - oxlint
           - tsdown
           - turbo
           - typescript

@@ -5,7 +5,7 @@ Requires Node **>= 22.19** (or >= 23.6) and pnpm 10.
 ```sh
 pnpm install
 pnpm check      # build, typecheck, lint, test — the gate CI runs
-pnpm format     # biome --write, then prettier --write
+pnpm format     # oxlint --fix, then oxfmt
 ```
 
 Run both before pushing; CI runs the same commands, so a green local check is a

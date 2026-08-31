@@ -6,9 +6,9 @@ already implemented, so if a script and this document disagree, that is a bug in
 one of them.
 
 The structure follows [withastro/flue](https://github.com/withastro/flue) —
-pnpm workspaces driven by Turborepo, Biome for linting, Prettier for formatting,
-Knip for dead-code detection, tsdown for bundling, Vitest for tests — with two
-deliberate departures noted in [§10](#10-departures-from-flue).
+pnpm workspaces driven by Turborepo, oxlint for linting, oxfmt for formatting,
+Knip for dead-code detection, tsdown for bundling, Vitest for tests — with
+three deliberate departures noted in [§10](#10-departures-from-flue).
 
 ---
 
@@ -28,8 +28,10 @@ ambion/
 ├── .github/workflows/     ci.yml, release.yml
 ├── turbo.jsonc            task graph
 ├── tsconfig.base.json     the one set of compiler options
-├── biome.jsonc            lint rules (formatter disabled)
-├── prettier.config.js     formatting
+├── tools/
+│   └── cognitive-complexity.js  the complexity budget, as an oxlint rule
+├── .oxlintrc.jsonc        lint rules
+├── .oxfmtrc.jsonc         formatting
 ├── knip.json              unused code/dependency detection
 └── pnpm-workspace.yaml    packages/*, examples/*
 ```
@@ -68,8 +70,8 @@ and that machine is worth proving before there is anything riding on it.
 | Language        | **TypeScript 7**      | `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`         |
 | Bundler         | **tsdown** (rolldown) | ESM-only output plus `.d.mts`, one config per package                |
 | Tests           | **Vitest 4**          | Runs TypeScript sources directly; no build step for the inner loop   |
-| Lint            | **Biome 2**           | Fast; formatter switched off so it never fights Prettier             |
-| Format          | **Prettier 3**        | Tabs, single quotes, width 100, trailing commas                      |
+| Lint            | **oxlint 1**          | Fast; no formatter of its own, so it never fights oxfmt              |
+| Format          | **oxfmt 0.65**        | Tabs, single quotes, width 100, trailing commas; sorts imports       |
 | Dead code       | **Knip 6**            | Catches unused exports and undeclared dependencies                   |
 
 ### Version floor
@@ -173,17 +175,17 @@ implements them is picked up by the root commands with no further wiring.
 
 Root commands:
 
-| Command                    | Runs                                           |
-| -------------------------- | ---------------------------------------------- |
-| `pnpm build`               | `turbo build`                                  |
-| `pnpm test`                | `turbo test`                                   |
-| `pnpm check:types`         | `turbo run check:types`                        |
-| `pnpm check:lint`          | `biome lint . --error-on-warnings` then `knip` |
-| `pnpm check:format`        | `prettier . --check`                           |
-| `pnpm check`               | build → types → lint → test, in that order     |
-| `pnpm format`              | `biome check --write` then `prettier --write`  |
-| `pnpm version:set <x.y.z>` | Set one version across publishable packages    |
-| `pnpm publish:packages`    | Publish to GitHub Packages                     |
+| Command                    | Runs                                        |
+| -------------------------- | ------------------------------------------- |
+| `pnpm build`               | `turbo build`                               |
+| `pnpm test`                | `turbo test`                                |
+| `pnpm check:types`         | `turbo run check:types`                     |
+| `pnpm check:lint`          | `oxlint --deny-warnings` then `knip`        |
+| `pnpm check:format`        | `oxfmt --check .`                           |
+| `pnpm check`               | build → types → lint → test, in that order  |
+| `pnpm format`              | `oxlint --fix` then `oxfmt .`               |
+| `pnpm version:set <x.y.z>` | Set one version across publishable packages |
+| `pnpm publish:packages`    | Publish to GitHub Packages                  |
 
 `pnpm check` is what CI runs and what a contributor runs before pushing. There
 is one gate, not several that drift apart.
@@ -192,49 +194,74 @@ is one gate, not several that drift apart.
 
 ## 7. Lint and format split
 
-Biome lints; its formatter is **disabled**. Prettier formats. Two tools with one
-job each, so `pnpm format` is never a fight.
+oxlint lints and has no formatter. oxfmt formats and has no linter. Two tools
+with one job each, so `pnpm format` is never a fight.
+
+oxfmt also sorts imports, which is a job the previous toolchain gave to a third
+tool. `sortImports` is set with `newlinesBetween: false`, so the order is the
+one the tree already had and no blank lines appear between groups.
 
 Rules worth knowing:
 
-- `noExplicitAny: error` repo-wide. The runtime's public surface uses `unknown`
-  for message bodies and narrows at the edge.
-- `noConsole` is **error inside `packages/ambion/src/**`** and off elsewhere.
+- `typescript/no-explicit-any: error` repo-wide. The runtime's public surface
+  uses `unknown` for message bodies and narrows at the edge.
+- `no-console` is **error inside `packages/ambion/src/**`** and off elsewhere.
   The library will never write to stdout on its host's behalf; a host passes a
   logger in. The CLI and the examples are console programs and are exempt.
-- `useNodejsImportProtocol: error` — `node:fs`, never `fs`.
-- `noExcessiveCognitiveComplexity: error`, budget **10** — **15** under
-  `**/test/**`. Biome ships this rule at `info` with a threshold of 15, which
-  is a number nothing checks; here it fails the build like every other rule.
+- `unicorn/prefer-node-protocol: error` — `node:fs`, never `fs`.
+- `budget/cognitive-complexity: error`, budget **10** — **15** under
+  `**/test/**`. The rule is this repository's own; see below.
+- Three rules are **off** with a reason written at each one in `.oxlintrc.jsonc`
+  (`typescript/no-this-alias`, `unicorn/no-array-sort`,
+  `unicorn/no-useless-spread`). Each fires on a pattern this tree uses on
+  purpose, and `unicorn/no-useless-spread` would introduce a bug if applied:
+  the spread it reports guards a loop whose body deletes from the map it walks.
 - Knip runs as part of `check:lint`, so an unused export fails the build rather
   than accumulating.
-- `--error-on-warnings` is not decoration. Biome exits `0` on warnings by
-  default, which makes a lint step that reports problems and passes anyway —
-  exactly how warning backlogs start. Every configured rule is `error`, and
-  Biome's own default-warn rules block too. A deliberate exception is a one-line
-  `biome-ignore` with a reason (see `packages/cli/src/commands/init.ts`, where
-  `${GITHUB_TOKEN}` has to reach the file literally).
+- `--deny-warnings` is not decoration. oxlint exits `0` on warnings by default,
+  which makes a lint step that reports problems and passes anyway — exactly how
+  warning backlogs start. Every configured rule is `error`, and oxlint's own
+  default-warn rules block too. A deliberate exception is a one-line
+  `oxlint-disable-next-line` with a reason.
 
 ### The complexity budget
 
-Two numbers, and they are not a double standard. Biome charges a nested
+oxlint has no cognitive-complexity rule, so the repository carries one:
+`tools/cognitive-complexity.js`, loaded through oxlint's `jsPlugins` field. It
+is about a hundred lines and adds no dependency.
+
+Cognitive complexity is not cyclomatic complexity, and oxlint's `complexity`
+rule measures the latter. The two disagree about this tree in the direction
+that matters. `SessionImpl.dispatch` scores 9 of a 10 budget on the cognitive
+metric and 7 on the cyclomatic one, while the worst cyclomatic score in the
+tree — 12 — belongs to a console loop in `examples/`. Swapping the metric
+would take the pressure off the runtime's densest method and put it on demo
+code the budget never aimed at, so the rule stays cognitive.
+
+The rule follows the Sonar specification with the two deviations Biome makes,
+because the budget's two numbers were calibrated against Biome. It agrees with
+Biome on every function in the tree, at every budget from 1 to 20.
+
+Two numbers, and they are not a double standard. The rule charges a nested
 function for the nesting it sits in, so a branch inside `describe` → `it`
 scores three where the same branch in a plain function scores one; on one
 budget a test would hit the wall three times sooner than the code it exercises.
 The wider budget measures a test body from where it actually starts. A test
 that has become a program still fails — the tree's worst test scores 8.
 
-The runtime's densest method, `SessionImpl.dispatch`, sits at exactly 10.
-Routing is the room's whole policy and is meant to stay one readable piece, so
-it has no headroom on purpose: the next branch added to it is a decision
-someone takes deliberately rather than a drift nobody measures. Everything else
-in the tree scores 9 or below.
+The runtime's densest method, `SessionImpl.dispatch`, scores 9 against a budget
+of 10. Routing is the room's whole policy and is meant to stay one readable
+piece, so it has almost no headroom on purpose: the next branch added to it is
+a decision someone takes deliberately rather than a drift nobody measures.
+`SessionImpl.run` also scores 9. Everything else in the tree scores 8 or below.
+
+The rule measures itself along with everything else, which is why it is written
+as a visitor over the interesting node types rather than as one recursive walk.
+The walk scored 24 against a budget of 10.
 
 The budget is a lint rule, not a separate job, so it runs wherever
 `check:lint` runs — the `check` job on a pull request, and the gate the release
 re-runs before it publishes. There was nothing to add to `ci.yml`.
-
----
 
 ## 8. Continuous integration (`.github/workflows/ci.yml`)
 
@@ -391,7 +418,7 @@ correct for that move.
 
 ## 10. Departures from Flue
 
-Two, both intentional:
+Three, all intentional:
 
 1. **CI is fuller.** Flue's public workflows cover contributor approval and PR
    redirection; its build gate lives elsewhere. Ambion needs its own, so
@@ -401,6 +428,12 @@ Two, both intentional:
    a 90-line idempotent script is easier to audit than a release manager. This is
    the piece most likely to be replaced (Changesets) once the package count
    grows.
+3. **oxlint and oxfmt instead of Biome and Prettier.** One vendor for lint and
+   format, and oxfmt sorts imports as well, so three tools became two. The cost
+   is one rule the repository now owns (see [§7](#7-lint-and-format-split)) and
+   a dependency on `jsPlugins`, which oxlint documents as alpha and outside
+   semver. If that API changes, the budget breaks loudly at `check:lint` rather
+   than going quiet, which is the failure mode to prefer.
 
 ---
 

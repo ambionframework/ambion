@@ -1,7 +1,0 @@
-dist/
-node_modules/
-.turbo/
-pnpm-lock.yaml
-CHANGELOG.md
-# generated demo snapshots — whitespace is content
-demos/

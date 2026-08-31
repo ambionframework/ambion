@@ -13,21 +13,21 @@
 		"build": "turbo build",
 		"test": "turbo test",
 		"check": "turbo run build check:types && pnpm run check:lint && turbo run test",
-		"check:lint": "biome lint . --error-on-warnings && knip",
-		"check:format": "prettier . --cache --check",
+		"check:lint": "oxlint --deny-warnings && knip",
+		"check:format": "oxfmt --check .",
 		"check:knip": "knip",
 		"check:types": "turbo run check:types",
 		"format": "pnpm run format:lint && pnpm run format:style",
-		"format:lint": "biome check . --write",
-		"format:style": "prettier . --cache --write --list-different",
+		"format:lint": "oxlint --fix",
+		"format:style": "oxfmt .",
 		"version:set": "node scripts/version.mjs",
 		"publish:packages": "node scripts/publish.mjs"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.10",
 		"@types/node": "^26.2.0",
 		"knip": "^6.32.2",
-		"prettier": "^3.9.6",
+		"oxfmt": "^0.65.0",
+		"oxlint": "^1.80.0",
 		"turbo": "^2.10.11",
 		"typescript": "^7.0.2"
 	}

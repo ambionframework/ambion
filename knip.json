@@ -2,8 +2,8 @@
 	"$schema": "https://unpkg.com/knip@6/schema.json",
 	"workspaces": {
 		".": {
-			"entry": ["scripts/{version,publish}.mjs"],
-			"project": ["scripts/*.mjs"]
+			"entry": ["scripts/{version,publish}.mjs", "tools/cognitive-complexity.js"],
+			"project": ["scripts/*.mjs", "tools/*.js"]
 		},
 		"packages/*": {
 			"project": ["src/**/*.ts"]

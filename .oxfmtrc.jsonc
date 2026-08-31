@@ -1,0 +1,41 @@
+{
+	// Formatting for the whole tree. oxfmt replaces both Prettier (formatting)
+	// and Biome's organize-imports assist; oxlint lints and does not format.
+	"$schema": "./node_modules/oxfmt/configuration_schema.json",
+	"printWidth": 100,
+	"semi": true,
+	"singleQuote": true,
+	"tabWidth": 2,
+	"trailingComma": "all",
+	"useTabs": true,
+	// Biome sorted imports as an assist action. oxfmt sorts them as part of
+	// formatting, so the job stays with one tool. No blank line goes between
+	// the groups, which keeps the order the tree already had.
+	"sortImports": { "newlinesBetween": false },
+	// package.json key order is reviewed, not generated.
+	"sortPackageJson": false,
+	"ignorePatterns": [
+		"dist/",
+		"node_modules/",
+		".turbo/",
+		"pnpm-lock.yaml",
+		"CHANGELOG.md",
+		// Generated demo snapshots are captures, not source; whitespace is content.
+		"demos/"
+	],
+	"overrides": [
+		{
+			// GitHub renders these with spaces; tabs are for code. The exclusion
+			// keeps a config file named `.oxlintrc.jsonc` indenting like one
+			// named `turbo.jsonc`: `.*` matches it, and a later override wins.
+			"files": [".*", "**/*.md", "**/*.yml", "**/*.yaml", "**/*.toml"],
+			"excludeFiles": ["**/*.jsonc", ".*.jsonc"],
+			"options": { "useTabs": false }
+		},
+		{
+			// JSON with comments has no trailing-comma support in every reader.
+			"files": ["**/*.jsonc", ".*.jsonc"],
+			"options": { "trailingComma": "none", "useTabs": true }
+		}
+	]
+}

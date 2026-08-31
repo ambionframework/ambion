@@ -36,7 +36,7 @@ filesystem are designed and not built. Write about them as design, not as code.
 ```sh
 pnpm install
 pnpm check     # build, typecheck, lint, test — the gate CI runs
-pnpm format    # biome --write, then prettier --write
+pnpm format    # oxlint --fix, then oxfmt
 ```
 
 Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
@@ -51,7 +51,7 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
 - No `any`, no non-null assertions, no unused imports or variables.
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
 - Cognitive complexity: max 10 in source, 15 in tests.
-- Prettier formats (tabs, single quotes, width 100, semicolons); Biome lints.
+- oxfmt formats (tabs, single quotes, width 100, semicolons); oxlint lints.
 - Tests are vitest. A scripted `streamFn` makes a session deterministic.
 
 ## Writing documentation
@@ -75,7 +75,7 @@ Rules that carry the most weight here:
 8. **No slang, no metaphor, no ellipsis.** State the mechanism.
 
 Also: state facts, not claims. If a command or feature does not exist yet, say
-so plainly. Wrap Markdown prose at about 78 columns; Prettier preserves it.
+so plainly. Wrap Markdown prose at about 78 columns; oxfmt preserves it.
 
 Existing prose in `README.md` and `docs/` predates this rule and is deliberately
 voiced. Do not rewrite it wholesale — apply STE to new and edited text.

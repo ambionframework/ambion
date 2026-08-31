@@ -1,0 +1,57 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	// Formatting is oxfmt's job (see .oxfmtrc.jsonc); oxlint lints only.
+	"categories": {
+		"correctness": "error",
+		"suspicious": "error"
+	},
+	// `typescript`, `unicorn` and `oxc` are on by default. `import` is added for
+	// the ESM problems the previous Biome configuration caught.
+	"plugins": ["typescript", "unicorn", "oxc", "import"],
+	// oxlint has no cognitive-complexity rule, so the repository carries one.
+	// See `tools/cognitive-complexity.js`.
+	"jsPlugins": ["./tools/cognitive-complexity.js"],
+	"rules": {
+		// A complexity budget, enforced rather than reported. 10 is the bar this
+		// repository holds, and it is an error like every other rule here.
+		"budget/cognitive-complexity": ["error", { "max": 10 }],
+		"no-unused-vars": "error",
+		"typescript/no-explicit-any": "error",
+		"typescript/no-non-null-assertion": "error",
+		"typescript/no-inferrable-types": "off",
+		"unicorn/prefer-node-protocol": "error",
+		// Getters in an object literal cannot be arrow functions, so the session
+		// handle keeps `this` in a local. See `SessionImpl.handle`.
+		"typescript/no-this-alias": "off",
+		// The rule reads `[...copy].sort()` as a mutation of the original. Every
+		// call site here sorts an array it has just built.
+		"unicorn/no-array-sort": "off",
+		// The rule reads `for (const x of [...map.keys()])` as a needless copy.
+		// The copy is the point: the loop body deletes from the map it walks.
+		"unicorn/no-useless-spread": "off",
+		// Source imports use bundler-resolved `.ts` specifiers, which this rule
+		// reads as a missing extension.
+		"import/extensions": "off",
+		// The CLI and the examples are console programs; `no-console` is
+		// re-enabled for library source in the override below.
+		"no-console": "off"
+	},
+	// Generated demo snapshots are captures, not source.
+	"ignorePatterns": ["demos/", "**/dist/"],
+	"overrides": [
+		{
+			// The library must not write to stdout on its owner's behalf; hosts
+			// pass a logger in instead.
+			"files": ["packages/ambion/src/**"],
+			"rules": { "no-console": "error" }
+		},
+		{
+			// The rule charges a nested function for the nesting it sits in, so
+			// inside `describe` -> `it` every branch costs three rather than one.
+			// Tests keep a budget — one that has become a program still fails —
+			// but it is measured from where a test body actually starts.
+			"files": ["**/test/**"],
+			"rules": { "budget/cognitive-complexity": ["error", { "max": 15 }] }
+		}
+	]
+}
