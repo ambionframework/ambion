@@ -497,6 +497,14 @@ sooner.
 `seats()`, `subscribe()` — and `Session` extends it, so code that only reads
 takes the narrower type and cannot start anything by accident.
 
+One file per concern, and `session.ts` is the room that composes them: the
+record in [`record.ts`](../packages/ambion/src/record.ts), who is here in
+[`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes it
+in [`seat.ts`](../packages/ambion/src/seat.ts), the round in
+[`exchange.ts`](../packages/ambion/src/exchange.ts), what a person's aide
+writes in [`aide.ts`](../packages/ambion/src/aide.ts), and what any of them
+reads in [`render.ts`](../packages/ambion/src/render.ts).
+
 Storage is Pi's, not an invention of Ambion's. The record lives in a Pi
 session — each message a custom entry, replayed in `seq` order on reopen —
 obtained from Pi's own `SessionRepo`, which `startSession` and `readSession`

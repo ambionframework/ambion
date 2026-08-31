@@ -14,7 +14,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 
 | Path                | What                                                                           |
 | ------------------- | ------------------------------------------------------------------------------ |
-| `packages/ambion`   | The runtime. `define.ts`, `session.ts`, `types.ts`, `render.ts`                |
+| `packages/ambion`   | The runtime. One file per concern; `session.ts` is the room that composes them |
 | `packages/cli`      | The `ambion` binary                                                            |
 | `docs/agent.md`     | Design contract for the core — read before changing the runtime                |
 | `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                 |
