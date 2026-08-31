@@ -483,10 +483,11 @@ what follows.
 
 **Quiescence closes it.** The room settles when no agent is active, and a
 room that settles has finished: a seat that says something wakes its
-readers inside its own `say`, before its own turn ends, so the active count
-never dips to zero in the middle of a burst. `through` is the record as it
-stood at that moment, so a closed exchange names the range it turned out to
-hold.
+readers inside its own `say`, before its own activation ends, so the room is
+never briefly empty in the middle of a burst. What is running is read off the
+seats — a seat holds the activation it is taking — so there is no count beside
+them to keep in step. `through` is the record as it stood at that moment, so a
+closed exchange names the range it turned out to hold.
 
 **What lands while it is open steers it and changes nothing** — the owner,
 the range, and who the answer belongs to all stay fixed. A second question

@@ -215,7 +215,6 @@ class SessionImpl implements Session {
 	private readonly quietWaiters: (() => void)[] = [];
 	private readonly streamFn: StreamFn;
 	private readonly customStream: boolean;
-	private activeCount = 0;
 	private stopped = false;
 	/** The room's rounds: what a question opened, and what quiescence closes. */
 	private readonly exchanges = new Exchanges();
@@ -278,19 +277,29 @@ class SessionImpl implements Session {
 		return new Promise((resolve) => this.settledWaiters.push(resolve));
 	}
 
-	/** Whether a seat that speaks for itself is taking a turn. An aide is not one. */
+	/**
+	 * What is running. One fact, kept in one place: a seat holds its own
+	 * activation, so nothing counts them alongside and nothing can drift.
+	 */
+	private running(): SeatRuntime[] {
+		return [...this.agents.values()].filter(isActive);
+	}
+
+	/** Nothing at all is taking an activation. An aide writing is something. */
+	private idle(): boolean {
+		return this.running().length === 0;
+	}
+
+	/** Something that speaks for itself is taking one. An aide does not. */
 	private working(): boolean {
-		for (const seat of this.agents.values()) {
-			if (isActive(seat) && !this.aides.isAide(seat.def.name)) return true;
-		}
-		return false;
+		return this.running().some((seat) => !this.aides.isAide(seat.def.name));
 	}
 
 	quiet(): Promise<void> {
 		// The same condition the `quiet` event reports. A summary a race left
 		// owed is not work in flight: it waits for the next quiet room, and the
 		// room is quiet in the meantime.
-		if (this.activeCount === 0) return Promise.resolve();
+		if (this.idle()) return Promise.resolve();
 		return new Promise((resolve) => this.quietWaiters.push(resolve));
 	}
 
@@ -528,8 +537,9 @@ class SessionImpl implements Session {
 			persist: (agent) => persistTurns(this.seatSession(seat), agent),
 			emit: (event) => this.emit(event),
 		});
+		// The seat holding it is what makes the room busy: there is no count to
+		// keep in step, and so none to drift.
 		seat.activation = activation;
-		this.activeCount += 1;
 		this.emit({ type: 'activation_start', agent: seat.def.name });
 		// A summarising activation is one pass: it answers a room that moved with
 		// a redraft inside its own tool rather than a fresh activation.
@@ -543,7 +553,6 @@ class SessionImpl implements Session {
 					failed: activation.failed,
 				});
 				this.emit({ type: 'activation_end', agent: seat.def.name, spoke: activation.spoke });
-				this.activeCount -= 1;
 				// An exchange ends when the seats stop. An aide writing about one
 				// is not the room still working on it, so its own activation ends
 				// none — which also keeps a failing aide from retrying for ever.
@@ -551,7 +560,7 @@ class SessionImpl implements Session {
 					for (const resolve of this.settledWaiters.splice(0)) resolve();
 					this.closeExchange();
 				}
-				if (this.activeCount === 0) this.markQuiet();
+				if (this.idle()) this.markQuiet();
 			});
 	}
 
@@ -774,7 +783,7 @@ class SessionImpl implements Session {
 	 * has gone quiet.
 	 */
 	private markQuiet(): void {
-		if (this.stopped || this.activeCount > 0) return;
+		if (this.stopped || !this.idle()) return;
 		this.emit({ type: 'quiet' });
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
 	}
