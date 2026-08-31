@@ -20,8 +20,9 @@
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
+import { refusal } from './render.ts';
 import type { SeatRuntime } from './seat.ts';
-import { delivered, refusal } from './turn.ts';
+import { delivered } from './seat.ts';
 import type { Message, Seq, SummaryMessage } from './types.ts';
 import { isSpoken } from './types.ts';
 

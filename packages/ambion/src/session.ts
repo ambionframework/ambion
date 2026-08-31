@@ -13,25 +13,17 @@ import { Aides, type Draft, summariseTool } from './aide.ts';
 import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
-import { RecordStore } from './record.ts';
+import { openOrCreate, persistTurns, RecordStore, toError } from './record.ts';
 import {
 	type PersonView,
 	type RoomView,
+	refusal,
 	renderLine,
 	renderSystemPrompt,
 	renderTurnContext,
 	type SeatSpeaking,
 } from './render.ts';
-import { type SeatRuntime, toPiTool, wakes } from './seat.ts';
-import {
-	delivered,
-	openOrCreate,
-	persistTurns,
-	refusal,
-	runFailure,
-	toError,
-	userMessage,
-} from './turn.ts';
+import { delivered, runFailure, type SeatRuntime, toPiTool, userMessage, wakes } from './seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,

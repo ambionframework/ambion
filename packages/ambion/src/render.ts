@@ -209,6 +209,14 @@ function renderClock(now: number): string {
 	return `The time is ${new Date(now).toISOString()}.`;
 }
 
+/**
+ * What a refused author is told. The runtime states what it missed; the
+ * sentences around that belong to the kind of writing it was doing.
+ */
+export function refusal(opening: string, missed: Message[], advice: string): string {
+	return [opening, ...missed.map(renderLine), advice].join('\n');
+}
+
 // -- what a participant reads ------------------------------------------------
 
 /**

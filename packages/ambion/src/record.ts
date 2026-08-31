@@ -6,8 +6,7 @@
  * seqs one at a time, and persists on a chain that keeps commit order. What a
  * seat reads is a rendering of this (`render.ts`), never this itself.
  */
-import type { Session as PiSession, SessionRepo } from '@earendil-works/pi-agent-core';
-import { openOrCreate, toError } from './turn.ts';
+import type { Agent, Session as PiSession, SessionRepo } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from './types.ts';
 
 /** The record lives as custom entries of this type in a Pi session. */
@@ -89,4 +88,30 @@ export class RecordStore {
 		if (cursor === undefined) return [...this.entries];
 		return this.entries.filter((message) => message.seq > cursor);
 	}
+}
+
+/** Open an id into its Pi session, creating it on first open. */
+export async function openOrCreate(
+	repo: SessionRepo,
+	id: string,
+	parentSessionId?: string,
+): Promise<PiSession> {
+	const known = (await repo.list()).find((metadata) => metadata.id === id);
+	if (known) return repo.open(known);
+	return repo.create(parentSessionId ? { id, parentSessionId } : { id });
+}
+
+/** Every turn a model took, in the downstream session that owns it. */
+export async function persistTurns(open: Promise<PiSession>, agent: Agent): Promise<void> {
+	const piSeat = await open;
+	await piSeat.appendCustomEntry('ambion/activation', { at: new Date().toISOString() });
+	for (const message of agent.state.messages) {
+		// Provider messages may carry undefined-valued fields, which Pi's
+		// durability check rejects; a JSON round-trip drops them.
+		await piSeat.appendMessage(JSON.parse(JSON.stringify(message)));
+	}
+}
+
+export function toError(value: unknown): Error {
+	return value instanceof Error ? value : new Error(String(value));
 }
