@@ -1,5 +1,6 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Static, TSchema } from 'typebox';
+import type { ClosedExchange, Exchange } from './exchange.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = number;
@@ -70,11 +71,16 @@ export type SeatStatus = 'active' | 'idle';
 
 /**
  * What wakes a seat, as the widest kind of message it activates for. One
- * widening scale, not a set of flags: `named` hears only a message addressed
- * to it, `broadcast` also hears anything a participant said, and `presence`
- * also hears somebody arriving or leaving.
+ * widening scale, not a set of flags: `none` is woken by nothing said in the
+ * room, `named` hears a message addressed to it, `broadcast` also hears
+ * anything a participant said, and `presence` also hears somebody arriving or
+ * leaving.
+ *
+ * `none` is the seat that is present and unreachable — an aide, which writes
+ * for one person and wakes only when their exchange closes. Widening it is
+ * what lets an aide take part in the room like any other agent.
  */
-export type Attention = 'named' | 'broadcast' | 'presence';
+export type Attention = 'none' | 'named' | 'broadcast' | 'presence';
 
 /** A person is in the room or they are not. */
 export type PresenceStatus = 'present' | 'absent';
@@ -87,6 +93,8 @@ export interface AgentSeatInfo {
 	attention: Attention;
 	/** The id of the seat's downstream Pi session, `<room>:<agent>`. */
 	sessionId: string;
+	/** The person this seat writes for, when it is their aide. */
+	owner?: string;
 }
 
 export interface HumanSeatInfo {
@@ -120,7 +128,27 @@ export type SessionEvent =
 	| { type: 'tool_execution_end'; agent: string; toolName: string }
 	| { type: 'agent_end'; agent: string; spoke: boolean }
 	| { type: 'error'; agent: string; error: Error }
-	| { type: 'settled' };
+	/**
+	 * A person's question opened an exchange: the room has a round to work on,
+	 * and one person owns it. A client that folds the working under the
+	 * question it answered starts here, whether or not anybody brought an aide.
+	 */
+	| { type: 'exchange_opened'; exchange: Exchange }
+	/**
+	 * The room went quiet with an exchange open, so that exchange is over and
+	 * holds the range it turned out to cover. It arrives after `settled` and
+	 * before any summary: an aide is the first reader of this, not the only
+	 * one.
+	 */
+	| { type: 'exchange_closed'; exchange: ClosedExchange }
+	/** No seat is taking a turn. An aide may still be writing. */
+	| { type: 'settled' }
+	/**
+	 * No seat is taking a turn, and no aide still owes one. This is what a
+	 * host waits for when it wants the one message a person reads; `settled`
+	 * is what rule 5 needs, and it reports the seats alone.
+	 */
+	| { type: 'quiet' };
 
 export const TOOL_BRAND = Symbol.for('ambion.tool');
 export const AGENT_BRAND = Symbol.for('ambion.agent');
@@ -159,7 +187,7 @@ export interface HumanDefinition {
 	readonly aide?: AgentDefinition;
 }
 
-/** An agent with its attention chosen, from `passive()` or `attentive()`. */
+/** An agent with its attention chosen, from `seated()` or its two shorthands. */
 export interface SeatedAgent {
 	readonly [SEAT_BRAND]: true;
 	readonly agent: AgentDefinition;

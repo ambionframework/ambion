@@ -1,15 +1,24 @@
 import type {
 	AgentEvent,
 	AgentTool,
-	AgentToolResult,
 	Session as PiSession,
 	SessionRepo,
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
 import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
-import type { Api, Model, UserMessage } from '@earendil-works/pi-ai';
+import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { Type } from 'typebox';
+import {
+	AIDE_PARAGRAPH,
+	aideHeader,
+	type Draft,
+	draftOver,
+	SUMMARY_PARAGRAPH,
+	summariseTool,
+} from './aide.ts';
+import { seated } from './define.ts';
+import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import {
 	type PersonView,
 	renderAgents,
@@ -18,6 +27,15 @@ import {
 	renderPeople,
 	renderRecord,
 } from './render.ts';
+import {
+	delivered,
+	openOrCreate,
+	persistTurns,
+	refusal,
+	runFailure,
+	toError,
+	userMessage,
+} from './turn.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
@@ -88,8 +106,20 @@ export interface SessionView {
 }
 
 export interface Session extends SessionView {
+	/**
+	 * The question the room is working on, or nothing when nobody has asked.
+	 * Run state: a restart begins with none.
+	 */
+	exchange(): Exchange | undefined;
 	/** Resolves when no agent is active and nothing is queued. */
 	settled(): Promise<void>;
+	/**
+	 * Resolves when the room is quiet and every summary an exchange owed has
+	 * been written, declined or refused. `settled()` reports the seats alone,
+	 * which is what rule 5 needs it to mean; this is what a host waits for when
+	 * it wants the one message a person reads.
+	 */
+	quiet(): Promise<void>;
 	/** Cancel every active turn. The room keeps running; `stopSession` ends it. */
 	abort(): void;
 }
@@ -106,6 +136,17 @@ interface SeatRuntime {
 	def: AgentDefinition;
 	/** What wakes this seat. Chosen at seating, not by the definition. */
 	attention: Attention;
+	/**
+	 * The person this seat writes for, when it is their aide. It is what makes
+	 * a seat an aide: nothing it writes wakes anybody, a closed exchange of
+	 * theirs is what wakes it, and the summary it writes is addressed to them.
+	 */
+	owner?: string;
+	/**
+	 * The exchange this activation is closing, on a summarising turn. It holds
+	 * one tool instead of its own, and the range that tool commits against.
+	 */
+	closing?: Draft;
 	active: boolean;
 	spoke: boolean;
 	/** Pi's abort() cancels the run but not its queues; this stops the rebuild loop too. */
@@ -120,49 +161,6 @@ interface SeatRuntime {
 	agent?: Agent;
 	piSeat?: Promise<PiSession>;
 }
-
-/**
- * One person's aide, for the life of the run. It is not a seat: no message
- * activates it, and it takes a turn only when an exchange it owns closes.
- */
-interface AideRuntime {
-	def: AgentDefinition;
-	/** The person it holds. Its summaries are addressed to them and to nobody else. */
-	person: string;
-	/** Whether this turn's draft reached the record. The aide's own `spoke`. */
-	wrote: boolean;
-	/** How often the lock refused this turn. Two drafts, and then it stands down. */
-	refusals: number;
-	/** How often it called its tool this turn. Nothing else bounds the turn. */
-	calls: number;
-	agent?: Agent;
-	piSeat?: Promise<PiSession>;
-}
-
-/**
- * The range one summary stands for. It is read off the record when the aide
- * starts, and it widens when a race refuses the draft: the retry covers what
- * it covered before, plus whatever won.
- */
-interface SummaryRange {
-	from: Seq;
-	through: Seq;
-	messages: Message[];
-}
-
-/** One draft, and one redraft after a race. Then the room keeps moving without it. */
-const AIDE_DRAFTS = 2;
-
-/**
- * How often an aide may call its tool in one turn. A model that keeps calling
- * a tool that keeps refusing would run for ever, and nothing else here bounds
- * a turn — the same gap `agent.md` §7 records for the room, closed where it
- * can be closed.
- */
-const AIDE_CALLS = 4;
-
-/** What one aide's turn came to. Only a race or a failure is worth retrying. */
-type DraftOutcome = 'written' | 'declined' | 'refused';
 
 /** Sets up the context where the agents work. */
 export function startSession(options: StartSessionOptions): Session {
@@ -206,7 +204,7 @@ export function readSession(name: string, options: ReadSessionOptions = {}): Ses
 class RecordStore {
 	readonly entries: Message[] = [];
 	readonly ready: Promise<PiSession>;
-	nextSeq = 0;
+	lastSeq = 0;
 	private tail: Promise<void> = Promise.resolve();
 	/** The first write that failed since the last report. See `drained`. */
 	private failure: Error | undefined;
@@ -232,17 +230,17 @@ class RecordStore {
 			if (entry.type !== 'custom' || entry.customType !== MESSAGE_ENTRY) continue;
 			this.entries.push(entry.data as Message);
 		}
-		this.nextSeq = this.entries.at(-1)?.seq ?? 0;
+		this.lastSeq = this.entries.at(-1)?.seq ?? 0;
 		return piSession;
 	}
 
 	/**
-	 * Claim the record's next seq, synchronously — the say tool's conflict
-	 * check and this push must share one tick, or a rival say could slip
-	 * between them. Persistence follows in commit order on a write chain.
+	 * Take the next seq, synchronously — the say tool's conflict check and this
+	 * push must share one tick, or a rival say could slip between them.
+	 * Persistence follows in commit order on a write chain.
 	 */
 	append<T extends Message>(message: Omit<T, 'seq'>): T {
-		const stamped = { ...message, seq: ++this.nextSeq } as T;
+		const stamped = { ...message, seq: ++this.lastSeq } as T;
 		this.entries.push(stamped);
 		this.tail = this.tail
 			.then(async () => {
@@ -396,23 +394,23 @@ class SessionImpl implements Session {
 	private readonly repo: SessionRepo;
 	private readonly store: RecordStore;
 	private readonly agents = new Map<string, SeatRuntime>();
-	/** One aide per person who brought one, keyed by the person's name. */
-	private readonly aides = new Map<string, AideRuntime>();
-	/** The aides' own names, read on every dispatch to keep them from waking anybody. */
-	private readonly aideNames = new Set<string>();
+	/** The aide each person brought, keyed by the person. Aides are seats too. */
+	private readonly aideOf = new Map<string, SeatRuntime>();
 	private readonly here = new Attendance(() => this.record);
 	private readonly listeners = new Set<(event: SessionEvent) => void>();
 	private readonly settledWaiters: (() => void)[] = [];
+	private readonly quietWaiters: (() => void)[] = [];
 	private readonly streamFn: StreamFn;
 	private readonly customStream: boolean;
 	private activeCount = 0;
 	private stopped = false;
-	/** The person who owns the open exchange, while one is open. Run state. */
-	private exchange: string | undefined;
-	/** People whose summary a race refused. Each drafts again at the next quiescence. */
-	private readonly refused = new Set<string>();
-	/** Aides write one at a time, so a second summary drafts against the first. */
-	private aideTail: Promise<void> = Promise.resolve();
+	/** The room's rounds: what a question opened, and what quiescence closes. */
+	private readonly exchanges = new Exchanges();
+	/**
+	 * People who are owed a summary, and the seq their range starts at. A race
+	 * or a failed turn leaves one owed; the next quiet room writes it.
+	 */
+	private readonly owed = new Map<string, Seq>();
 
 	constructor(options: StartSessionOptions) {
 		this.name = options.name;
@@ -429,15 +427,15 @@ class SessionImpl implements Session {
 	}
 
 	/** Seat one agent, refusing a name the room already knows. */
-	private seat(seat: AgentSeat): void {
+	private seat(seat: AgentSeat): SeatRuntime {
 		const def = isSeatedAgent(seat) ? seat.agent : seat;
 		if (!isAgent(def)) {
-			throw new Error('Agents must come from defineAgent or passive().');
+			throw new Error('Agents must come from defineAgent or seated().');
 		}
-		if (this.agents.has(def.name)) {
+		if (this.agents.has(def.name) || this.here.knows(def.name)) {
 			throw new Error(`Duplicate agent name '${def.name}': one name names one participant.`);
 		}
-		this.agents.set(def.name, {
+		const seated: SeatRuntime = {
 			def,
 			attention: isSeatedAgent(seat) ? seat.attention : 'broadcast',
 			active: false,
@@ -445,7 +443,9 @@ class SessionImpl implements Session {
 			aborted: false,
 			viewSeq: 0,
 			pendingSteers: [],
-		});
+		};
+		this.agents.set(def.name, seated);
+		return seated;
 	}
 
 	/**
@@ -466,9 +466,29 @@ class SessionImpl implements Session {
 		return () => this.listeners.delete(listener);
 	}
 
+	exchange(): Exchange | undefined {
+		return this.exchanges.current();
+	}
+
 	settled(): Promise<void> {
-		if (this.activeCount === 0) return Promise.resolve();
+		if (!this.working()) return Promise.resolve();
 		return new Promise((resolve) => this.settledWaiters.push(resolve));
+	}
+
+	/** Whether a seat that speaks for itself is taking a turn. An aide is not one. */
+	private working(): boolean {
+		for (const seat of this.agents.values()) {
+			if (seat.active && seat.owner === undefined) return true;
+		}
+		return false;
+	}
+
+	quiet(): Promise<void> {
+		// The same condition the `quiet` event reports. A summary a race left
+		// owed is not work in flight: it waits for the next quiet room, and the
+		// room is quiet in the meantime.
+		if (this.activeCount === 0) return Promise.resolve();
+		return new Promise((resolve) => this.quietWaiters.push(resolve));
 	}
 
 	abort(): void {
@@ -477,9 +497,6 @@ class SessionImpl implements Session {
 			seat.aborted = true;
 			seat.agent?.abort();
 		}
-		// An aide's turn is not a seat's, and it is still a turn in flight. A
-		// cancelled draft writes nothing, which is the safe direction.
-		for (const aide of this.aides.values()) aide.agent?.abort();
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
@@ -497,10 +514,11 @@ class SessionImpl implements Session {
 				status: seat.active ? 'active' : 'idle',
 				attention: seat.attention,
 				sessionId: `${this.name}:${seat.def.name}`,
+				...(seat.owner === undefined ? {} : { owner: seat.owner }),
 			});
 		}
 		for (const [name, identity] of this.here.known()) {
-			const aide = this.aides.get(name)?.def.name;
+			const aide = this.aideOf.get(name)?.def.name;
 			seats.push({
 				kind: 'human',
 				name,
@@ -533,15 +551,13 @@ class SessionImpl implements Session {
 	 * properly or not at all.
 	 */
 	private bringAide(human: HumanDefinition): void {
-		if (!human.aide || this.aides.has(human.name)) return;
-		this.aides.set(human.name, {
-			def: human.aide,
-			person: human.name,
-			wrote: false,
-			refusals: 0,
-			calls: 0,
-		});
-		this.aideNames.add(human.aide.name);
+		if (!human.aide || this.aideOf.has(human.name)) return;
+		// Seated at the narrow end: nothing said in the room wakes an aide, and
+		// only the close of its person's exchange does. §12's rung 3 is this
+		// line widened, and a `say` in its hands.
+		const seat = this.seat(seated(human.aide, 'none'));
+		seat.owner = human.name;
+		this.aideOf.set(human.name, seat);
 	}
 
 	private assertVisitable(human: HumanDefinition): void {
@@ -550,24 +566,10 @@ class SessionImpl implements Session {
 				`'${human.name}' is an agent in this session: one name names one participant.`,
 			);
 		}
-		this.assertAideNameFree(human);
 		const known = this.here.known().get(human.name);
 		if (known !== undefined && known !== human.identity) {
 			throw new Error(
 				`'${human.name}' is already in this session under a different identity: one name is one person.`,
-			);
-		}
-	}
-
-	/** An aide writes on the record, so its name is one name like any other. */
-	private assertAideNameFree(human: HumanDefinition): void {
-		const aide = human.aide;
-		if (!aide || this.aides.get(human.name)?.def.name === aide.name) return;
-		const taken =
-			this.agents.has(aide.name) || this.here.knows(aide.name) || this.aideNames.has(aide.name);
-		if (taken) {
-			throw new Error(
-				`Aide name '${aide.name}' is taken in this session: one name names one participant.`,
 			);
 		}
 	}
@@ -598,25 +600,18 @@ class SessionImpl implements Session {
 	 */
 	private async publish(message: Message): Promise<void> {
 		await this.store.drained();
-		this.noteExchange(message);
+		// The message lands, then what it opened: a round is a fact about a
+		// message the host has already seen. Both come before the routing, so
+		// nothing wakes on a message the host has not heard about.
 		this.emit({ type: 'message', message });
+		this.noteExchange(message);
 		this.dispatch(message);
 	}
 
-	/**
-	 * A person's question opens an exchange and owns it, when no exchange is
-	 * open. An exchange closes when the room goes quiet, so in an idle room
-	 * that is always true; a seat woken by an arrival is working on nothing
-	 * anybody asked for, and the question that lands on top of it still owns
-	 * what follows. A message that lands into an open exchange steers the seats
-	 * already working and changes nothing — not the owner, and not which aide
-	 * writes at the close. Arriving and leaving open no exchange: nobody asked
-	 * anything by opening the workspace.
-	 */
+	/** A person's question opens a round, and the room says so. */
 	private noteExchange(message: Message): void {
-		if (this.exchange !== undefined) return;
-		if (!isSpoken(message) || !this.here.knows(message.from)) return;
-		this.exchange = message.from;
+		const opened = this.exchanges.note(message, this.here.knows(message.from));
+		if (opened) this.emit({ type: 'exchange_opened', exchange: opened });
 	}
 
 	private assertLive(visit: VisitRuntime): void {
@@ -676,6 +671,8 @@ class SessionImpl implements Session {
 			// The name comes free whatever the repo did. A failed write must
 			// not leave a room that can never be started again.
 			if (running.get(this.name) === this) running.delete(this.name);
+			// A stopped room never goes quiet on its own, so nobody waits on it.
+			for (const resolve of this.quietWaiters.splice(0)) resolve();
 		}
 	}
 
@@ -713,14 +710,14 @@ class SessionImpl implements Session {
 	/**
 	 * Route a committed message — the room's whole policy in one place, and
 	 * the same for what a person said, what a person did, and what a colleague
-	 * said. Every colleague still at work hears it as a steer (rule 2). A
-	 * broadcast wakes the idle room, passive seats excepted (rule 1); a
-	 * directed message wakes exactly its target, passive included (rule 4).
+	 * said. Every colleague still at work hears it as a steer (rule 2). What
+	 * wakes an idle seat is the attention it was seated at, against the reach
+	 * of the message (rules 1, 4 and 6, in `wakes` below).
 	 */
 	private dispatch(message: Message): void {
 		const to = isSpoken(message) ? message.to : undefined;
 		const target = to === undefined ? undefined : this.agents.get(to);
-		const fromAide = this.aideNames.has(message.from);
+		const fromAide = this.agents.get(message.from)?.owner !== undefined;
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
 			if (seat.active) this.steerInto(seat, message);
@@ -739,62 +736,69 @@ class SessionImpl implements Session {
 		seat.aborted = false;
 		this.activeCount += 1;
 		this.emit({ type: 'agent_start', agent: seat.def.name });
+		const closing = seat.closing;
 		void this.run(seat).finally(() => {
 			seat.active = false;
 			seat.agent = undefined;
+			if (closing) this.closedTurn(seat, closing);
 			this.emit({ type: 'agent_end', agent: seat.def.name, spoke: seat.spoke });
 			this.activeCount -= 1;
-			if (this.activeCount > 0) return;
-			this.emit({ type: 'settled' });
-			for (const resolve of this.settledWaiters.splice(0)) resolve();
-			// The room is quiet, so the exchange is over. `settled()` has already
-			// resolved: the room is never held busy while an aide writes.
-			this.closeExchange();
+			// A round ends when the seats stop. An aide writing about the round
+			// is not the room still working on it, so its own turn ends no round
+			// — which is also what keeps a failing aide from retrying for ever.
+			if (seat.owner === undefined && !this.working()) {
+				this.emit({ type: 'settled' });
+				for (const resolve of this.settledWaiters.splice(0)) resolve();
+				this.closeExchange();
+			}
+			if (this.activeCount === 0) this.markQuiet();
 		});
 	}
 
 	private async run(seat: SeatRuntime): Promise<void> {
-		for (;;) {
-			try {
-				// A fresh view hands the seat the whole record: heard up to here.
-				seat.viewSeq = this.store.nextSeq;
-				seat.pendingSteers = [];
-				const agent = this.buildAgent(seat);
-				seat.agent = agent;
-				await agent.prompt(userMessage(this.renderContext(seat)));
-				await this.persistRun(seat, agent);
-				const failure = runFailure(agent);
-				if (failure) {
-					this.emit({ type: 'error', agent: seat.def.name, error: failure });
-					return;
-				}
-				// An aborted turn stays cancelled: Pi's abort() ends the run but
-				// leaves its queues, and a queued steer must not rebuild the turn.
-				if (seat.aborted) return;
-				// A steer that raced past the run's last drain is not lost: the
-				// message is already on the record, so a fresh view carries it.
-				if (!agent.hasQueuedMessages()) return;
-				agent.clearAllQueues();
-			} catch (error) {
-				this.emit({ type: 'error', agent: seat.def.name, error: toError(error) });
-				return;
-			}
+		// A turn rebuilds while the room keeps moving under it, and ends when it
+		// has nothing left to read.
+		while (await this.takeTurn(seat)) {
+			// nothing: the next pass reads the record as it now stands.
 		}
+	}
+
+	/** One pass at a turn. True when a message landed and it must read again. */
+	private async takeTurn(seat: SeatRuntime): Promise<boolean> {
+		try {
+			// A fresh view hands the seat the whole record: heard up to here.
+			seat.viewSeq = this.store.lastSeq;
+			seat.pendingSteers = [];
+			const agent = this.buildAgent(seat);
+			seat.agent = agent;
+			await agent.prompt(userMessage(this.renderContext(seat)));
+			await this.persistRun(seat, agent);
+			const failure = runFailure(agent);
+			if (failure) return this.turnFailed(seat, failure);
+			// An aborted turn stays cancelled: Pi's abort() ends the run but
+			// leaves its queues, and a queued steer must not rebuild the turn.
+			// A summarising turn is one pass either way: its answer to a room
+			// that moved is the redraft inside `summarise`, not a fresh turn.
+			if (seat.aborted || seat.closing) return false;
+			// A steer that raced past the run's last drain is not lost: the
+			// message is already on the record, so a fresh view carries it.
+			if (!agent.hasQueuedMessages()) return false;
+			agent.clearAllQueues();
+			return true;
+		} catch (error) {
+			return this.turnFailed(seat, toError(error));
+		}
+	}
+
+	/** A turn that never reached the record. The room hears it and moves on. */
+	private turnFailed(seat: SeatRuntime, error: Error): false {
+		if (seat.closing) seat.closing.failed = true;
+		this.emit({ type: 'error', agent: seat.def.name, error });
+		return false;
 	}
 
 	private async persistRun(seat: SeatRuntime, agent: Agent): Promise<void> {
-		await this.persistTurns(this.seatSession(seat), agent);
-	}
-
-	/** Every turn a model took, in the downstream session that owns it. */
-	private async persistTurns(open: Promise<PiSession>, agent: Agent): Promise<void> {
-		const piSeat = await open;
-		await piSeat.appendCustomEntry('ambion/activation', { at: new Date().toISOString() });
-		for (const message of agent.state.messages) {
-			// Provider messages may carry undefined-valued fields, which Pi's
-			// durability check rejects; a JSON round-trip drops them.
-			await piSeat.appendMessage(JSON.parse(JSON.stringify(message)));
-		}
+		await persistTurns(this.seatSession(seat), agent);
 	}
 
 	private buildAgent(seat: SeatRuntime): Agent {
@@ -804,7 +808,7 @@ class SessionImpl implements Session {
 				systemPrompt: this.systemPrompt(seat),
 				model: this.resolveModel(seat.def),
 				thinkingLevel: 'off',
-				tools: [this.sayTool(seat), ...seat.def.tools.map(toPiTool)],
+				tools: this.handsFor(seat),
 				messages: [],
 			},
 		});
@@ -813,6 +817,30 @@ class SessionImpl implements Session {
 			this.relayToolUse(seat, event);
 		});
 		return agent;
+	}
+
+	/**
+	 * What a turn holds. A seat speaks and uses its own tools; an aide closing
+	 * an exchange holds one hand, and it reaches the record. `defineHuman`
+	 * refuses an aide that carries tools of its own, so there is nothing else
+	 * to leave out.
+	 */
+	private handsFor(seat: SeatRuntime): AgentTool[] {
+		const closing = seat.closing;
+		if (!closing || seat.owner === undefined) {
+			return [this.sayTool(seat), ...seat.def.tools.map(toPiTool)];
+		}
+		return [
+			summariseTool(seat.def.name, seat.owner, closing, {
+				stopped: () => this.stopped,
+				lastSeq: () => this.store.lastSeq,
+				claim: (author, draft) => this.claim<SummaryMessage>(author, draft),
+				publish: (message) => this.publish(message),
+				written: () => {
+					seat.spoke = true;
+				},
+			}),
+		];
 	}
 
 	/**
@@ -850,6 +878,13 @@ class SessionImpl implements Session {
 				const params = rawParams as { to?: string; text: string };
 				const to = params.to?.trim() ? params.to.trim() : undefined;
 				this.assertAddressable(seat, to);
+				const text = params.text.trim();
+				// A message with nothing in it still takes a seq, renders in
+				// every context after it, and stands inside whatever range a
+				// summary covers. Saying nothing is ending the turn.
+				if (text === '') {
+					throw new Error('The message is empty. Say something, or end your turn instead.');
+				}
 				const claimed = this.claim<SpokenMessage>(
 					{ name: seat.def.name, readThrough: seat.viewSeq },
 					{
@@ -857,12 +892,12 @@ class SessionImpl implements Session {
 						at: new Date().toISOString(),
 						from: seat.def.name,
 						...(to === undefined ? {} : { to }),
-						text: params.text,
+						text,
 					},
 				);
 				if ('missed' in claimed) {
 					// Refused, and now heard: the seat decides again against the record as it stands.
-					seat.viewSeq = this.store.nextSeq;
+					seat.viewSeq = this.store.lastSeq;
 					throw new Error(
 						refusal(
 							'Not delivered — the room moved while you were speaking. New on the record:',
@@ -882,10 +917,16 @@ class SessionImpl implements Session {
 
 	private assertAddressable(seat: SeatRuntime, to: string | undefined): void {
 		if (to === undefined) return;
-		if (!this.here.knows(to) && !this.agents.has(to)) {
+		const target = this.agents.get(to);
+		if (!this.here.knows(to) && !target) {
 			throw new Error(`Unknown participant '${to}'. Address someone from the roster.`);
 		}
 		if (to === seat.def.name) throw new Error('You cannot address yourself.');
+		// A seat at the narrow end wakes for nothing said, so addressing it
+		// would leave a message nobody reads. Say it to the room instead.
+		if (target?.attention === 'none') {
+			throw new Error(`'${to}' wakes for nothing said. Say it to the room, or to somebody else.`);
+		}
 	}
 
 	/**
@@ -899,7 +940,7 @@ class SessionImpl implements Session {
 		author: { name: string; readThrough: Seq },
 		draft: Omit<T, 'seq'>,
 	): { message: T } | { missed: Message[] } {
-		if (this.store.nextSeq > author.readThrough) {
+		if (this.store.lastSeq > author.readThrough) {
 			const missed = this.store.since(author.readThrough);
 			this.emit({ type: 'conflict', author: author.name, missed });
 			return { missed };
@@ -910,248 +951,88 @@ class SessionImpl implements Session {
 	// -- the aide ------------------------------------------------------------
 
 	/**
-	 * The exchange is over. Its owner's aide writes the one message that stands
-	 * for it, and any summary a race refused drafts again. Aides write in turn
-	 * on one chain, so a second summary drafts against a record the first has
-	 * already moved rather than racing it.
+	 * The room went quiet, so the round it was working on is over. The host
+	 * hears that before anything is written about it: an aide is the first
+	 * reader of a closed exchange and not the only one.
 	 */
 	private closeExchange(): void {
-		const owner = this.exchange;
-		this.exchange = undefined;
-		const owed = [...this.refused];
-		if (owner !== undefined && !owed.includes(owner)) owed.push(owner);
-		if (owed.length === 0) return;
-		this.aideTail = this.aideTail.then(() => this.summariseFor(owed));
+		const closing = this.exchanges.close(this.store.lastSeq);
+		if (closing) this.emit({ type: 'exchange_closed', exchange: closing });
+		this.summariseClosed(closing);
 	}
 
-	private async summariseFor(owed: string[]): Promise<void> {
-		for (const person of owed) {
-			if (this.stopped) return;
-			await this.summarise(person);
-		}
+	/**
+	 * What an aide makes of a closed exchange: its owner's aide wakes, and so
+	 * does any whose summary a race or a failure left owed. Nothing else in the
+	 * room wakes for a close — an aide is seated `none`, and the close is the
+	 * one thing that reaches it.
+	 */
+	private summariseClosed(closing: ClosedExchange | undefined): void {
+		if (closing) this.oweSummary(closing.owner, closing.from);
+		// Every quiet room is a chance to write what is owed, whatever made the
+		// room busy. An aide's own turn ends no round, so a failed draft waits
+		// for the next time the seats stop rather than retrying on itself.
+		for (const [person, from] of [...this.owed]) this.wakeAide(person, from);
+	}
+
+	/**
+	 * One person may be owed one summary. A second exchange that closes while
+	 * the first is still owed widens the range back to the earlier question,
+	 * because that is what its person has not read.
+	 */
+	private oweSummary(person: string, from: Seq): void {
+		if (!this.aideOf.has(person)) return;
+		const already = this.owed.get(person);
+		this.owed.set(person, already === undefined ? from : Math.min(already, from));
 	}
 
 	/**
 	 * One exchange, one message — when the room said more than one thing. One
 	 * answer is left as it was given, in the voice that gave it, and an
-	 * exchange the agents said nothing into writes nothing at all.
+	 * exchange the agents said nothing into wakes nobody at all.
 	 */
-	private async summarise(person: string): Promise<void> {
-		this.refused.delete(person);
-		const aide = this.aides.get(person);
-		if (!aide) return;
-		const range = this.summaryRange(person);
-		if (!range) return;
-		this.emit({ type: 'agent_start', agent: aide.def.name });
-		const outcome = await this.runAide(aide, range);
-		// An aide that stood down judged the room; it is not owed anything. A
-		// race or a failed turn is, and drafts again at the next quiescence.
-		if (outcome === 'refused') this.refused.add(person);
-		this.emit({ type: 'agent_end', agent: aide.def.name, spoke: outcome === 'written' });
-	}
-
-	/**
-	 * What this person's next summary would stand for, or nothing when one
-	 * message already serves. A live read of the record, not a cursor kept
-	 * beside it.
-	 */
-	private summaryRange(person: string): SummaryRange | undefined {
-		const from = this.coversFrom(person);
-		if (from === undefined) return undefined;
-		const through = this.store.nextSeq;
-		const messages = this.record.filter((m) => m.seq >= from && m.seq <= through);
-		const said = messages.filter((m) => isSpoken(m) && this.agents.has(m.from));
-		return said.length > 1 ? { from, through, messages } : undefined;
-	}
-
-	/**
-	 * Where this person's summary starts: the seq after their last summary, or
-	 * their first question when they have none. It never reaches back past a
-	 * summary they have already read.
-	 */
-	private coversFrom(person: string): Seq | undefined {
-		for (let i = this.record.length - 1; i >= 0; i -= 1) {
-			const message = this.record[i];
-			if (message?.kind === 'summary' && message.to === person) return message.seq + 1;
-		}
-		return this.record.find((m) => isSpoken(m) && m.from === person)?.seq;
-	}
-
-	/**
-	 * One turn, with one tool in it. An aide writes the way a seat speaks: it
-	 * calls the tool that commits, or it ends its turn and leaves no mark.
-	 */
-	private async runAide(aide: AideRuntime, range: SummaryRange): Promise<DraftOutcome> {
-		aide.wrote = false;
-		aide.refusals = 0;
-		aide.calls = 0;
-		const agent = new Agent({
-			streamFn: this.streamFn,
-			initialState: {
-				systemPrompt: this.aidePrompt(aide),
-				model: this.resolveModel(aide.def),
-				thinkingLevel: 'off',
-				// One tool, and it writes to the record. An aide holds no hands
-				// into a product's state: `defineHuman` refuses one that carries
-				// any, so §12's rule is a fact about the definition.
-				tools: [this.summariseTool(aide, range)],
-				messages: [],
-			},
-		});
-		aide.agent = agent;
-		try {
-			await agent.prompt(userMessage(this.aideContext(aide.person, range.messages)));
-			await this.persistTurns(this.aideSession(aide), agent);
-			const failure = runFailure(agent);
-			if (failure) throw failure;
-			if (aide.wrote) return 'written';
-			return aide.refusals > 0 ? 'refused' : 'declined';
-		} catch (error) {
-			this.emit({ type: 'error', agent: aide.def.name, error: toError(error) });
-			return 'refused';
-		} finally {
-			aide.agent = undefined;
-		}
-	}
-
-	/**
-	 * The aide's one hand, and it reaches the record and nothing else. It
-	 * commits under the same lock a say commits under, so a summary drafted
-	 * against a record that has moved is refused — and the refusal reaches the
-	 * aide inside its own turn, carrying what it missed, so the redraft happens
-	 * now rather than at the next quiescence.
-	 */
-	private summariseTool(aide: AideRuntime, range: SummaryRange): AgentTool {
-		return {
-			name: 'summarise',
-			label: 'summarise',
-			description:
-				`Write the one message ${aide.person} reads for this exchange. Call it once. ` +
-				'Ending your turn without calling it leaves the range whole, for whoever reads it.',
-			parameters: Type.Object({ text: Type.String() }),
-			execute: async (_toolCallId, rawParams) => {
-				const text = (rawParams as { text: string }).text.trim();
-				aide.calls += 1;
-				const stop = this.standDown(aide);
-				if (stop) return stop;
-				if (text === '') {
-					throw new Error(
-						`The message is empty. Write what ${aide.person} reads, or end your turn.`,
-					);
-				}
-				const claimed = this.claim<SummaryMessage>(
-					{ name: aide.def.name, readThrough: range.through },
-					{
-						kind: 'summary',
-						at: new Date().toISOString(),
-						from: aide.def.name,
-						to: aide.person,
-						text,
-						covers: { from: range.from, through: range.through },
-					},
-				);
-				if ('missed' in claimed) throw this.widen(aide, range, claimed.missed);
-				aide.wrote = true;
-				await this.publish(claimed.message);
-				return delivered();
-			},
-		};
-	}
-
-	/**
-	 * Why this turn cannot come good, when it cannot. Telling a model to stop
-	 * is not enough — one that keeps calling the tool would draft for ever —
-	 * so the result ends the turn itself. `terminate` is Pi's own way for a
-	 * tool to say that the loop is over, and the reason still reaches the
-	 * transcript, where rule 8 keeps it.
-	 */
-	private standDown(aide: AideRuntime): AgentToolResult<Record<string, never>> | undefined {
-		const why = this.stoppingReason(aide);
-		if (why === undefined) return undefined;
-		return {
-			content: [{ type: 'text', text: `${why} This turn is over.` }],
-			details: {},
-			terminate: true,
-		};
-	}
-
-	private stoppingReason(aide: AideRuntime): string | undefined {
-		if (this.stopped) return 'The room is closing.';
-		if (aide.wrote) return `You have already written ${aide.person}'s message for this exchange.`;
-		if (aide.refusals >= AIDE_DRAFTS) {
-			return 'The room is still moving. The range stays whole, and you write it when the room is quiet again.';
-		}
-		if (aide.calls > AIDE_CALLS) return 'You have tried this enough times.';
-		return undefined;
-	}
-
-	/**
-	 * A refused draft widens the range it covers. The messages that won the
-	 * race are now inside it, so the redraft stands for them too and the
-	 * summary stays contiguous with what it covers.
-	 */
-	private widen(aide: AideRuntime, range: SummaryRange, missed: Message[]): Error {
-		range.through = this.store.nextSeq;
-		range.messages.push(...missed);
-		aide.refusals += 1;
-		return new Error(
-			refusal(
-				'Not written — the room moved while you were drafting. It is now yours to cover too:',
-				missed,
-				`Write ${aide.person}'s message again, over the range as it now stands.`,
-			),
+	private wakeAide(person: string, from: Seq): void {
+		const seat = this.aideOf.get(person);
+		if (!seat || seat.active) return;
+		const draft = draftOver(this.record, from, this.store.lastSeq, (name) =>
+			this.speaksForItself(name),
 		);
+		this.owed.delete(person);
+		if (!draft) return;
+		seat.closing = draft;
+		this.activate(seat);
 	}
 
-	/** An aide's turns land beside the seats' own, in `<room>:<person>`. */
-	private aideSession(aide: AideRuntime): Promise<PiSession> {
-		aide.piSeat ??= (async () => {
-			await this.store.ready;
-			return openOrCreate(this.repo, `${this.name}:${aide.person}`, this.name);
-		})();
-		return aide.piSeat;
-	}
-
-	private aidePrompt(aide: AideRuntime): string {
-		const person = aide.person;
-		const lines = [
-			`You are '${aide.def.name}', ${person}'s aide in the session '${this.name}' — a shared`,
-			`room with a record. You are not seated in it. ${person} asked a question, the agents`,
-			`worked it out between them, and the room is quiet again.`,
-			``,
-		];
-		if (this.goal) lines.push(`This session exists to: ${this.goal}`, ``);
-		lines.push(...AIDE_PARAGRAPH, ``);
-		lines.push(
-			`Your identity, as the room knows it: ${aide.def.identity}`,
-			``,
-			`Your instructions:`,
-			aide.def.instructions.trim(),
-		);
-		return lines.join('\n');
+	/** A seat that speaks for itself: an agent in the room, and not somebody's aide. */
+	private speaksForItself(name: string): boolean {
+		const seat = this.agents.get(name);
+		return seat !== undefined && seat.owner === undefined;
 	}
 
 	/**
-	 * What an aide is handed: the room, the roster, and the range it is about
-	 * to cover. Not the record before that range — a summary its person has
-	 * already read is theirs, not its.
+	 * A summarising turn is over. It wrote, or it judged that one message
+	 * already served; a race or a failed turn leaves the range owed, and the
+	 * next closed exchange is another chance.
 	 */
-	private aideContext(person: string, range: readonly Message[]): string {
-		const now = Date.now();
-		return [
-			renderClock(now),
-			``,
-			`The agents in the room:`,
-			renderAgents(this.seats()),
-			``,
-			`The people (present: in the room now; absent: not in the room):`,
-			renderPeople(this.peopleViews(), now),
-			``,
-			`What the room did, from ${person}'s question to the moment it went quiet:`,
-			renderRecord(range, [], now),
-			``,
-			`Write ${person}'s message.`,
-		].join('\n');
+	private closedTurn(seat: SeatRuntime, draft: Draft): void {
+		seat.closing = undefined;
+		if (seat.spoke || seat.owner === undefined) return;
+		if (draft.refusals > 0 || draft.failed) this.oweSummary(seat.owner, draft.from);
+	}
+
+	/**
+	 * The room is quiet: no seat is taking a turn, and no aide still owes one.
+	 * A summary that a race refused is not work in flight — it waits for the
+	 * next quiescence, and the room is quiet in the meantime.
+	 *
+	 * A stopped room never reports this. Shutdown aborts the turns in flight
+	 * and drains whoever waited, and a room that is closing is not a room that
+	 * has gone quiet.
+	 */
+	private markQuiet(): void {
+		if (this.stopped || this.activeCount > 0) return;
+		this.emit({ type: 'quiet' });
+		for (const resolve of this.quietWaiters.splice(0)) resolve();
 	}
 
 	// -- what an agent reads -------------------------------------------------
@@ -1161,7 +1042,7 @@ class SessionImpl implements Session {
 		const views: PersonView[] = [];
 		for (const [name, identity] of this.here.known()) {
 			const since = this.here.sinceOf(name);
-			const aide = this.aides.get(name)?.def.name;
+			const aide = this.aideOf.get(name)?.def.name;
 			views.push({
 				name,
 				identity,
@@ -1176,13 +1057,29 @@ class SessionImpl implements Session {
 	}
 
 	private systemPrompt(seat: SeatRuntime): string {
-		const lines = [
-			`You are '${seat.def.name}', an agent seated in the session '${this.name}' — a shared`,
-			`room with a record. Every participant sees what is said; nobody sees your tool use.`,
-			``,
-		];
+		const lines =
+			seat.owner === undefined
+				? [
+						`You are '${seat.def.name}', an agent seated in the session '${this.name}' — a shared`,
+						`room with a record. Every participant sees what is said; nobody sees your tool use.`,
+						``,
+					]
+				: [...aideHeader(seat.def.name, seat.owner, this.name), ``];
 		if (this.goal) lines.push(`This session exists to: ${this.goal}`, ``);
+		lines.push(...this.duties(seat), ``);
 		lines.push(
+			`Your identity, as the room knows it: ${seat.def.identity}`,
+			``,
+			`Your instructions:`,
+			seat.def.instructions.trim(),
+		);
+		return lines.join('\n');
+	}
+
+	/** What this seat is for: an aide writes one message, a seat speaks or does not. */
+	private duties(seat: SeatRuntime): string[] {
+		if (seat.owner !== undefined) return AIDE_PARAGRAPH;
+		const lines = [
 			`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 			`your turn without saying anything, and no mark is left. Speak only when your reply`,
 			`adds something the record does not already hold — new information, a decision moved`,
@@ -1197,16 +1094,12 @@ class SessionImpl implements Session {
 			`the room moved while you were speaking: the failure lists what you missed — read`,
 			`it, and speak again only if your reply still adds something.`,
 			``,
-		);
-		lines.push(...AUDIENCE_PARAGRAPH, ``);
-		if (this.aides.size > 0) lines.push(...SUMMARY_PARAGRAPH, ``);
-		lines.push(
-			`Your identity, as the room knows it: ${seat.def.identity}`,
-			``,
-			`Your instructions:`,
-			seat.def.instructions.trim(),
-		);
-		return lines.join('\n');
+			...AUDIENCE_PARAGRAPH,
+		];
+		// A fold only renders in a room where somebody brought an aide, so only
+		// such a room tells its seats how to read one.
+		if (this.aideOf.size > 0) lines.push(``, ...SUMMARY_PARAGRAPH);
+		return lines;
 	}
 
 	private renderContext(seat: SeatRuntime): string {
@@ -1215,9 +1108,12 @@ class SessionImpl implements Session {
 		return [
 			renderClock(now),
 			``,
-			`The agents (active: taking a turn now; idle: at rest. A seat marked "named only"`,
-			`hears nothing but a say addressed to it; one marked "watches arrivals" also wakes`,
-			`when somebody arrives or leaves; the rest wake on anything said):`,
+			`The agents. Each is seated at one point of a scale — the widest kind of message`,
+			`that wakes it. Unmarked: anything said. "named only": a say addressed to it.`,
+			`"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":`,
+			`nothing reaches it and you cannot address it. "writes for <name>" is that`,
+			`person's aide, which writes the one message they read when their exchange closes.`,
+			`(active: taking a turn now; idle: at rest.)`,
 			renderAgents(this.seats()),
 			``,
 			`The people (present: in the room now; absent: not in the room):`,
@@ -1226,8 +1122,20 @@ class SessionImpl implements Session {
 			`The record of '${this.name}' so far:`,
 			renderRecord(this.record, people, now),
 			``,
-			`Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`,
+			this.askOf(seat),
 		].join('\n');
+	}
+
+	/** What this turn is for, in the last line the model reads. */
+	private askOf(seat: SeatRuntime): string {
+		const closing = seat.closing;
+		if (!closing || seat.owner === undefined) {
+			return `Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
+		}
+		return (
+			`${seat.owner}'s exchange is over: messages ${closing.from} to ${closing.through}. ` +
+			`Write the one message they read for it, or end your turn to leave the range whole.`
+		);
 	}
 
 	private resolveModel(def: AgentDefinition): Model<Api> {
@@ -1265,41 +1173,24 @@ const AUDIENCE_PARAGRAPH = [
 	`decided and why, and do not wait for an answer that nobody is there to give.`,
 ];
 
-/** What an aide is asked for, and the whole of what it may do. */
-const AIDE_PARAGRAPH = [
-	`Writing is the summarise tool. Give it the one message your person reads instead of the`,
-	`working: what they asked, answered once, for somebody who has not read a line of it. Keep`,
-	`the facts a colleague needs to act on it — quantities, dates, owners, what is still`,
-	`unknown, and who holds the decision. Leave out who said what, and in which order. Pass the`,
-	`message and nothing else: no preamble, no heading, no sign-off, and never a note about how`,
-	`you wrote it.`,
-	``,
-	`Ending your turn without calling summarise leaves the range whole, and every reader still`,
-	`sees all of it. Do that when there is nothing to consolidate — when what the room said`,
-	`already reads as one answer, and standing between your person and it would only add a`,
-	`voice. The tool fails if the room moved while you were drafting: it lists what landed,`,
-	`which your message now covers as well, so write it again over the range as it now stands.`,
-	``,
-	`What you write is not something you said in the room. Nobody hears it, no agent wakes`,
-	`because of it, and it never carries your person's name — the room stamps it as yours.`,
-	`You hold their brief; they hold the decision. You decide nothing, you act on nothing,`,
-	`and you never answer in their place.`,
-];
-
-/** What a seat makes of a range that has left its context. */
-const SUMMARY_PARAGRAPH = [
-	`Part of the record may read as "── N messages, summarised below ──", followed by one`,
-	`message from somebody's aide. An aide is that person's own counterpart: it wrote the one`,
-	`message that stands for what the room worked out, and you read it in place of those`,
-	`messages. Treat it as what happened. It asks you for nothing and it addresses one person,`,
-	`not you. If you need a fact it left out, read it again from your own tools rather than`,
-	`asking the room to repeat itself.`,
-];
+/** The attention scale, narrowest first. A seat hears what it is wide enough for. */
+const WIDTH: Record<Attention, number> = { none: 0, named: 1, broadcast: 2, presence: 3 };
 
 /**
- * A directed message wakes its target alone. A broadcast wakes every idle seat
- * whose attention is wide enough for it — rule 1 routes, rule 6 decides who
- * sits out, and a presence message is routed like any other.
+ * How wide a seat's attention has to be for this message to reach it: a
+ * directed say reaches the one it names, anything else said reaches the room,
+ * and a person arriving or leaving reaches the widest end.
+ */
+function reachOf(message: Message): Attention {
+	if (!isSpoken(message)) return 'presence';
+	return message.to === undefined ? 'broadcast' : 'named';
+}
+
+/**
+ * One rule, read off the scale: a seat wakes when its attention is at least as
+ * wide as the message's reach — and a directed message additionally wakes the
+ * one it names and nobody else. Rule 1 routes, rule 6 decides who sits out,
+ * and a presence message is routed like any other.
  */
 function wakes(
 	seat: SeatRuntime,
@@ -1312,49 +1203,9 @@ function wakes(
 	// author rather than on what it wrote, so it holds for anything an aide
 	// ever writes. Every seat still reads it.
 	if (fromAide) return false;
-	if (isSpoken(message) && message.to !== undefined) return seat === target;
-	if (seat.attention === 'named') return false;
-	return isSpoken(message) || seat.attention === 'presence';
-}
-
-/** Open an id into its Pi session, creating it on first open. */
-async function openOrCreate(
-	repo: SessionRepo,
-	id: string,
-	parentSessionId?: string,
-): Promise<PiSession> {
-	const known = (await repo.list()).find((metadata) => metadata.id === id);
-	if (known) return repo.open(known);
-	return repo.create(parentSessionId ? { id, parentSessionId } : { id });
-}
-
-/**
- * What a refused author is told. The runtime states what it missed; the
- * sentences around that belong to the kind of writing it was doing.
- */
-function refusal(opening: string, missed: Message[], advice: string): string {
-	return [opening, ...missed.map(renderLine), advice].join('\n');
-}
-
-/** What a write tool returns when the record took it. */
-function delivered(): AgentToolResult<Record<string, never>> {
-	return { content: [{ type: 'text', text: 'delivered' }], details: {} };
-}
-
-function userMessage(text: string): UserMessage {
-	return { role: 'user', content: text, timestamp: Date.now() };
-}
-
-function toError(value: unknown): Error {
-	return value instanceof Error ? value : new Error(String(value));
-}
-
-function runFailure(agent: Agent): Error | undefined {
-	const last = agent.state.messages.at(-1);
-	if (last && 'stopReason' in last && last.stopReason === 'error') {
-		return new Error(('errorMessage' in last && last.errorMessage) || 'The turn failed.');
-	}
-	return undefined;
+	const reach = reachOf(message);
+	if (WIDTH[seat.attention] < WIDTH[reach]) return false;
+	return reach === 'named' ? seat === target : true;
 }
 
 function toPiTool(tool: unknown): AgentTool {

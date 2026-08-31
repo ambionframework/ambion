@@ -3,6 +3,7 @@
  * already knows and returns text. Keeping it out of `session.ts` keeps the
  * room's mechanics and the room's prose from growing into each other.
  */
+import type { AgentSeatInfo, Attention } from './types.ts';
 import {
 	isSpoken,
 	isSummary,
@@ -10,6 +11,7 @@ import {
 	type PresenceStatus,
 	type SeatInfo,
 	type Seq,
+	type SummaryMessage,
 } from './types.ts';
 
 const MINUTE = 60_000;
@@ -55,38 +57,45 @@ export function renderLine(message: Message): string {
 	return `· ${message.from} ${message.kind}`;
 }
 
-/** One rendered row: a message on its own, or the run a summary stands for. */
-type Row = { line: Message } | { fold: Message[] };
+/** One rendered row: a message on its own, or the run one summary stands for. */
+type Row = { line: Message } | { fold: Message[]; by: SummaryMessage };
 
 /**
- * Every seq a summary stands for. A summary is never folded into another one:
- * the message that stands for a range must survive whatever covers it.
+ * The summary that stands for each seq one covers. A summary is never folded
+ * into another one: the message that stands for a range must survive whatever
+ * covers it.
+ *
+ * Ranges can nest, because a race widens the range a refused draft covers. A
+ * message then takes the nearest summary that stands for it — the first one
+ * committed after it — so a fold never claims a summary that is not its own.
  */
-function summarised(record: readonly Message[]): Set<Seq> {
-	const ranges = record.filter(isSummary).map((message) => message.covers);
-	const covered = new Set<Seq>();
-	if (ranges.length === 0) return covered;
+function foldedBy(record: readonly Message[]): Map<Seq, SummaryMessage> {
+	const summaries = record.filter(isSummary);
+	const by = new Map<Seq, SummaryMessage>();
+	if (summaries.length === 0) return by;
 	for (const message of record) {
 		if (isSummary(message)) continue;
-		if (ranges.some((range) => message.seq >= range.from && message.seq <= range.through)) {
-			covered.add(message.seq);
-		}
+		const stands = summaries.find(
+			({ covers }) => message.seq >= covers.from && message.seq <= covers.through,
+		);
+		if (stands) by.set(message.seq, stands);
 	}
-	return covered;
+	return by;
 }
 
 /** The record as rows, with each summarised run collapsed into one. */
 function rows(record: readonly Message[]): Row[] {
-	const covered = summarised(record);
+	const by = foldedBy(record);
 	const out: Row[] = [];
 	for (const message of record) {
-		if (!covered.has(message.seq)) {
+		const stands = by.get(message.seq);
+		if (!stands) {
 			out.push({ line: message });
 			continue;
 		}
 		const last = out.at(-1);
-		if (last && 'fold' in last) last.fold.push(message);
-		else out.push({ fold: [message] });
+		if (last && 'fold' in last && last.by === stands) last.fold.push(message);
+		else out.push({ fold: [message], by: stands });
 	}
 	return out;
 }
@@ -96,9 +105,10 @@ function rows(record: readonly Message[]): Row[] {
  * room stopped reading. The divider is what lets an agent tell somebody the
  * one thing they missed without re-reading the whole room to them.
  *
- * A range an aide has summarised renders as its count, and the summary that
- * stands for it renders next. The record keeps every message; what a seat
- * reads is a rendering of it, built fresh at each activation.
+ * A range an aide has summarised renders as its count and the person it was
+ * written for, and the summary that stands for it renders below. The record
+ * keeps every message; what a seat reads is a rendering of it, built fresh at
+ * each activation.
  */
 export function renderRecord(
 	record: readonly Message[],
@@ -115,7 +125,9 @@ export function renderRecord(
 }
 
 function renderRow(row: Row, now: number): string {
-	if ('fold' in row) return `── ${count(row.fold.length, 'message')}, summarised below ──`;
+	if ('fold' in row) {
+		return `── ${count(row.fold.length, 'message')}, summarised for ${row.by.to} below ──`;
+	}
 	return `${renderLine(row.line)}  (${ago(row.line.at, now)})`;
 }
 
@@ -139,19 +151,28 @@ function unseenDividers(people: PersonView[]): Map<Seq, string[]> {
 	return dividers;
 }
 
-const ATTENTION_NOTE: Record<string, string> = {
+/** What each point of the attention scale is called in a roster. */
+const ATTENTION_NOTE: Record<Attention, string> = {
+	none: 'wakes for nothing said',
 	named: 'named only',
+	broadcast: '',
 	presence: 'watches arrivals',
 };
 
 export function renderAgents(seats: SeatInfo[]): string {
 	const agents = seats.filter((seat) => seat.kind === 'agent');
 	return agents
-		.map((seat) => {
-			const note = ATTENTION_NOTE[seat.attention];
-			return `- ${seat.name} (${seat.status}${note ? `, ${note}` : ''}): ${seat.identity}`;
-		})
+		.map((seat) => `- ${seat.name} (${seatNotes(seat).join(', ')}): ${seat.identity}`)
 		.join('\n');
+}
+
+/** How a seat is reading, the way `notes` says how a person is reading. */
+function seatNotes(seat: AgentSeatInfo): string[] {
+	const parts: string[] = [seat.status];
+	const note = ATTENTION_NOTE[seat.attention];
+	if (note) parts.push(note);
+	if (seat.owner) parts.push(`writes for ${seat.owner}`);
+	return parts;
 }
 
 /** Who the room knows, how they are reading, and what they have not read. */

@@ -403,13 +403,18 @@ describe('startSession', () => {
 		const events = collect(ordered);
 		await orderedVisit.deliver({ text: 'say hi' });
 		await ordered.settled();
-		// one event per message on the record, whoever wrote it
+		// one event per message on the record, whoever wrote it, and the round
+		// that message opened around it. A room with no aide in it goes quiet in
+		// the same tick it settles: nothing is owed.
 		expect(events.map((e) => e.type)).toEqual([
 			'message',
+			'exchange_opened',
 			'agent_start',
 			'message',
 			'agent_end',
 			'settled',
+			'exchange_closed',
+			'quiet',
 		]);
 		expect(events.flatMap((e) => (e.type === 'message' ? [e.message.from] : []))).toEqual([
 			'andrei',

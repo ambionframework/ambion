@@ -4,6 +4,7 @@ import {
 	AGENT_BRAND,
 	type AgentDefinition,
 	type AmbionTool,
+	type Attention,
 	HUMAN_BRAND,
 	type HumanDefinition,
 	isAgent,
@@ -81,22 +82,36 @@ function assertAide(aide: AgentDefinition, person: string): void {
 }
 
 /**
- * Seat an agent at the narrow end of attention: it hears nothing but a message
- * addressed to it by name. The expert in the corner, costing nothing until
- * somebody asks.
+ * Seat one agent at one point of the attention scale — the widest kind of
+ * message that wakes it, and the whole of what a seating chooses. The general
+ * form; `passive` and `attentive` are the two points worth a name of their
+ * own, and `broadcast` is what a bare agent in `agents` gets.
+ *
+ * Attention belongs to the seating rather than to the agent, so the same
+ * definition is the quiet corner in one room and the one who meets people in
+ * another.
  */
-export function passive(agent: AgentDefinition): SeatedAgent {
-	return { [SEAT_BRAND]: true, agent, attention: 'named' };
+export function seated(agent: AgentDefinition, attention: Attention): SeatedAgent {
+	if (!isAgent(agent)) throw new Error('Agents must come from defineAgent.');
+	return { [SEAT_BRAND]: true, agent, attention };
 }
 
 /**
- * Seat an agent at the wide end: besides everything said, it also wakes when
- * somebody arrives, leaves or goes quiet. Most seats should not — an arrival
- * asks nothing, so a seat that answers one is guessing — but a seat whose job
- * is to meet people needs it.
+ * Seat an agent at `named`: it hears nothing but a message addressed to it by
+ * name. The expert in the corner, costing nothing until somebody asks.
+ */
+export function passive(agent: AgentDefinition): SeatedAgent {
+	return seated(agent, 'named');
+}
+
+/**
+ * Seat an agent at `presence`: besides everything said, it also wakes when
+ * somebody arrives or leaves. Most seats should not — an arrival asks
+ * nothing, so a seat that answers one is guessing — but a seat whose job is to
+ * meet people needs it.
  */
 export function attentive(agent: AgentDefinition): SeatedAgent {
-	return { [SEAT_BRAND]: true, agent, attention: 'presence' };
+	return seated(agent, 'presence');
 }
 
 export interface DefineToolOptions<TParameters extends TSchema> {
