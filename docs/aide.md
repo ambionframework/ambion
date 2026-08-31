@@ -55,6 +55,11 @@ it the seat it is, and both are data rather than machinery:
 - The close of its person's exchange wakes it, and that turn holds one tool,
   `summarise`, bound to the range it must stand for.
 
+A seat carries none of that. Which seat writes for whom, who is owed a
+message, and which aide is drafting one now are held by the aides themselves
+(`Aides` in [`aide.ts`](../packages/ambion/src/aide.ts)), so the room asks
+them rather than reading a field off every seat.
+
 §12's rung 3 — an aide that speaks while the room works — is those two lines
 widened: a `say` in its hands, and an attention that hears something. It is
 not a different kind of participant, and it never was; it was only ever a seat

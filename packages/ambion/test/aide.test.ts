@@ -269,12 +269,14 @@ function heldUntil(held: Promise<void>): Script {
 describe('the aide', () => {
 	it('writes one message for an exchange the room answered more than once', async () => {
 		const contexts: string[] = [];
+		const prompts: string[] = [];
 		const hands: string[] = [];
 		const session = open({
 			script: byName({
 				product: twoAnswers,
 				'priya-aide': (context, _name, call) => {
 					contexts.push(contextText(context));
+					prompts.push(context.systemPrompt ?? '');
 					hands.push((context.tools ?? []).map((tool) => tool.name).join(','));
 					return call === 1
 						? summarise('Thursday is out. Saturday holds if the rebar lands Wednesday.')
@@ -304,6 +306,14 @@ describe('the aide', () => {
 		expect(hands).toEqual(['summarise', 'summarise']);
 		expect(contexts[0]).toContain('Can I tell the client Thursday');
 		expect(contexts[0]).toContain('the inspector needs 48h notice');
+		// and it is addressed as the aide it is, not as a seat that speaks
+		expect(prompts[0]).toContain("priya's aide in the session");
+		expect(prompts[0]).toContain('Writing is the summarise tool');
+		expect(prompts[0]).not.toContain('Speaking is the say tool');
+		// the last line names the range this turn closes
+		expect(contexts[0]).toContain(
+			`priya's exchange is over: messages ${summary.covers.from} to ${summary.covers.through}`,
+		);
 	});
 
 	it('leaves one answer as it was given, in the voice that gave it', async () => {

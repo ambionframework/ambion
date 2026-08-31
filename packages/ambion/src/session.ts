@@ -9,7 +9,7 @@ import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { Type } from 'typebox';
-import { type Draft, draftOver, summariseTool } from './aide.ts';
+import { Aides, type Draft, summariseTool } from './aide.ts';
 import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
@@ -20,6 +20,7 @@ import {
 	renderLine,
 	renderSystemPrompt,
 	renderTurnContext,
+	type SeatSpeaking,
 } from './render.ts';
 import { type SeatRuntime, toPiTool, wakes } from './seat.ts';
 import {
@@ -195,8 +196,8 @@ class SessionImpl implements Session {
 	private readonly repo: SessionRepo;
 	private readonly store: RecordStore;
 	private readonly agents = new Map<string, SeatRuntime>();
-	/** The aide each person brought, keyed by the person. Aides are seats too. */
-	private readonly aideOf = new Map<string, SeatRuntime>();
+	/** The aides in this room: who writes for whom, who is owed, who is drafting. */
+	private readonly aides = new Aides();
 	private readonly here = new Attendance(() => this.record);
 	private readonly listeners = new Set<(event: SessionEvent) => void>();
 	private readonly settledWaiters: (() => void)[] = [];
@@ -207,11 +208,6 @@ class SessionImpl implements Session {
 	private stopped = false;
 	/** The room's rounds: what a question opened, and what quiescence closes. */
 	private readonly exchanges = new Exchanges();
-	/**
-	 * People who are owed a summary, and the seq their range starts at. A race
-	 * or a failed turn leaves one owed; the next quiet room writes it.
-	 */
-	private readonly owed = new Map<string, Seq>();
 
 	constructor(options: StartSessionOptions) {
 		this.name = options.name;
@@ -279,7 +275,7 @@ class SessionImpl implements Session {
 	/** Whether a seat that speaks for itself is taking a turn. An aide is not one. */
 	private working(): boolean {
 		for (const seat of this.agents.values()) {
-			if (seat.active && seat.owner === undefined) return true;
+			if (seat.active && !this.aides.isAide(seat.def.name)) return true;
 		}
 		return false;
 	}
@@ -308,6 +304,7 @@ class SessionImpl implements Session {
 	seats(): SeatInfo[] {
 		const seats: SeatInfo[] = [];
 		for (const seat of this.agents.values()) {
+			const owner = this.aides.ownerOf(seat.def.name);
 			seats.push({
 				kind: 'agent',
 				name: seat.def.name,
@@ -315,11 +312,11 @@ class SessionImpl implements Session {
 				status: seat.active ? 'active' : 'idle',
 				attention: seat.attention,
 				sessionId: `${this.name}:${seat.def.name}`,
-				...(seat.owner === undefined ? {} : { owner: seat.owner }),
+				...(owner === undefined ? {} : { owner }),
 			});
 		}
 		for (const [name, identity] of this.here.known()) {
-			const aide = this.aideOf.get(name)?.def.name;
+			const aide = this.aides.forPerson(name)?.def.name;
 			seats.push({
 				kind: 'human',
 				name,
@@ -352,13 +349,11 @@ class SessionImpl implements Session {
 	 * properly or not at all.
 	 */
 	private bringAide(human: HumanDefinition): void {
-		if (!human.aide || this.aideOf.has(human.name)) return;
+		if (!human.aide || this.aides.has(human.name)) return;
 		// Seated at the narrow end: nothing said in the room wakes an aide, and
 		// only the close of its person's exchange does. §12's rung 3 is this
 		// line widened, and a `say` in its hands.
-		const seat = this.seat(seated(human.aide, 'none'));
-		seat.owner = human.name;
-		this.aideOf.set(human.name, seat);
+		this.aides.bring(this.seat(seated(human.aide, 'none')), human.name);
 	}
 
 	private assertVisitable(human: HumanDefinition): void {
@@ -518,7 +513,7 @@ class SessionImpl implements Session {
 	private dispatch(message: Message): void {
 		const to = isSpoken(message) ? message.to : undefined;
 		const target = to === undefined ? undefined : this.agents.get(to);
-		const fromAide = this.agents.get(message.from)?.owner !== undefined;
+		const fromAide = this.aides.isAide(message.from);
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
 			if (seat.active) this.steerInto(seat, message);
@@ -537,17 +532,16 @@ class SessionImpl implements Session {
 		seat.aborted = false;
 		this.activeCount += 1;
 		this.emit({ type: 'agent_start', agent: seat.def.name });
-		const closing = seat.closing;
 		void this.run(seat).finally(() => {
 			seat.active = false;
 			seat.agent = undefined;
-			if (closing) this.closedTurn(seat, closing);
+			this.aides.turnEnded(seat, seat.spoke);
 			this.emit({ type: 'agent_end', agent: seat.def.name, spoke: seat.spoke });
 			this.activeCount -= 1;
 			// A round ends when the seats stop. An aide writing about the round
 			// is not the room still working on it, so its own turn ends no round
 			// — which is also what keeps a failing aide from retrying for ever.
-			if (seat.owner === undefined && !this.working()) {
+			if (!this.aides.isAide(seat.def.name) && !this.working()) {
 				this.emit({ type: 'settled' });
 				for (const resolve of this.settledWaiters.splice(0)) resolve();
 				this.closeExchange();
@@ -572,7 +566,7 @@ class SessionImpl implements Session {
 			seat.pendingSteers = [];
 			const agent = this.buildAgent(seat);
 			seat.agent = agent;
-			await agent.prompt(userMessage(renderTurnContext(seat, this.view())));
+			await agent.prompt(userMessage(renderTurnContext(this.speaking(seat), this.view())));
 			await this.persistRun(seat, agent);
 			const failure = runFailure(agent);
 			if (failure) return this.turnFailed(seat, failure);
@@ -580,7 +574,7 @@ class SessionImpl implements Session {
 			// leaves its queues, and a queued steer must not rebuild the turn.
 			// A summarising turn is one pass either way: its answer to a room
 			// that moved is the redraft inside `summarise`, not a fresh turn.
-			if (seat.aborted || seat.closing) return false;
+			if (seat.aborted || this.aides.draftOf(seat.def.name)) return false;
 			// A steer that raced past the run's last drain is not lost: the
 			// message is already on the record, so a fresh view carries it.
 			if (!agent.hasQueuedMessages()) return false;
@@ -593,13 +587,26 @@ class SessionImpl implements Session {
 
 	/** A turn that never reached the record. The room hears it and moves on. */
 	private turnFailed(seat: SeatRuntime, error: Error): false {
-		if (seat.closing) seat.closing.failed = true;
+		const closing = this.aides.draftOf(seat.def.name);
+		if (closing) closing.failed = true;
 		this.emit({ type: 'error', agent: seat.def.name, error });
 		return false;
 	}
 
 	private async persistRun(seat: SeatRuntime, agent: Agent): Promise<void> {
 		await persistTurns(this.seatSession(seat), agent);
+	}
+
+	/**
+	 * What the prose is given of the seat taking this turn. The aides hold both
+	 * facts; a seat holds neither.
+	 */
+	private speaking(seat: SeatRuntime): SeatSpeaking {
+		return {
+			def: seat.def,
+			owner: this.aides.ownerOf(seat.def.name),
+			closing: this.aides.draftOf(seat.def.name),
+		};
 	}
 
 	/** What the prose is given of this room, built fresh for each turn. */
@@ -610,7 +617,7 @@ class SessionImpl implements Session {
 			seats: this.seats(),
 			people: this.peopleViews(),
 			record: this.record,
-			hasAides: this.aideOf.size > 0,
+			hasAides: this.aides.size > 0,
 		};
 	}
 
@@ -618,7 +625,7 @@ class SessionImpl implements Session {
 		const agent = new Agent({
 			streamFn: this.streamFn,
 			initialState: {
-				systemPrompt: renderSystemPrompt(seat, this.view()),
+				systemPrompt: renderSystemPrompt(this.speaking(seat), this.view()),
 				model: this.resolveModel(seat.def),
 				thinkingLevel: 'off',
 				tools: this.handsFor(seat),
@@ -644,8 +651,10 @@ class SessionImpl implements Session {
 		// person's exchange; when something else does — a wider attention, per
 		// FOLLOW_WORK.md — it must arrive with empty hands until somebody adds a
 		// `say` here on purpose. §12's rung 3 is a decision, not a consequence.
-		if (seat.owner !== undefined) {
-			return seat.closing ? [this.summarise(seat, seat.owner, seat.closing)] : [];
+		const owner = this.aides.ownerOf(seat.def.name);
+		if (owner !== undefined) {
+			const closing = this.aides.draftOf(seat.def.name);
+			return closing ? [this.summarise(seat, owner, closing)] : [];
 		}
 		return [this.sayTool(seat), ...seat.def.tools.map(toPiTool)];
 	}
@@ -782,62 +791,30 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * What an aide makes of a closed exchange: its owner's aide wakes, and so
-	 * does any whose summary a race or a failure left owed. Nothing else in the
-	 * room wakes for a close — an aide is seated `none`, and the close is the
-	 * one thing that reaches it.
+	 * What an aide makes of a closed exchange: its owner is owed the one
+	 * message that stands for it, and every aide owed one takes its turn.
+	 * Nothing else in the room wakes for a close — an aide is seated `none`,
+	 * and the close is the one thing that reaches it.
+	 *
+	 * Every quiet room is a chance to write what is owed, whatever made the
+	 * room busy. An aide's own turn ends no round, so a failed draft waits for
+	 * the next time the seats stop rather than retrying on itself.
 	 */
 	private summariseClosed(closing: ClosedExchange | undefined): void {
-		if (closing) this.oweSummary(closing.owner, closing.from);
-		// Every quiet room is a chance to write what is owed, whatever made the
-		// room busy. An aide's own turn ends no round, so a failed draft waits
-		// for the next time the seats stop rather than retrying on itself.
-		for (const [person, from] of [...this.owed]) this.wakeAide(person, from);
-	}
-
-	/**
-	 * One person may be owed one summary. A second exchange that closes while
-	 * the first is still owed widens the range back to the earlier question,
-	 * because that is what its person has not read.
-	 */
-	private oweSummary(person: string, from: Seq): void {
-		if (!this.aideOf.has(person)) return;
-		const already = this.owed.get(person);
-		this.owed.set(person, already === undefined ? from : Math.min(already, from));
-	}
-
-	/**
-	 * One exchange, one message — when the room said more than one thing. One
-	 * answer is left as it was given, in the voice that gave it, and an
-	 * exchange the agents said nothing into wakes nobody at all.
-	 */
-	private wakeAide(person: string, from: Seq): void {
-		const seat = this.aideOf.get(person);
-		if (!seat || seat.active) return;
-		const draft = draftOver(this.record, from, this.store.lastSeq, (name) =>
+		if (closing) this.aides.owe(closing.owner, closing.from);
+		const due = this.aides.turnsDue(this.record, this.store.lastSeq, (name) =>
 			this.speaksForItself(name),
 		);
-		this.owed.delete(person);
-		if (!draft) return;
-		seat.closing = draft;
-		this.activate(seat);
-	}
-
-	/** A seat that speaks for itself: an agent in the room, and not somebody's aide. */
-	private speaksForItself(name: string): boolean {
-		const seat = this.agents.get(name);
-		return seat !== undefined && seat.owner === undefined;
+		for (const { seat } of due) this.activate(seat);
 	}
 
 	/**
-	 * A summarising turn is over. It wrote, or it judged that one message
-	 * already served; a race or a failed turn leaves the range owed, and the
-	 * next closed exchange is another chance.
+	 * A seat that speaks for itself: an agent in this room, and not somebody's
+	 * aide. It is what the threshold counts — what the room produced, not what
+	 * a person said into it, and not what an aide wrote about it.
 	 */
-	private closedTurn(seat: SeatRuntime, draft: Draft): void {
-		seat.closing = undefined;
-		if (seat.spoke || seat.owner === undefined) return;
-		if (draft.refusals > 0 || draft.failed) this.oweSummary(seat.owner, draft.from);
+	private speaksForItself(name: string): boolean {
+		return this.agents.has(name) && !this.aides.isAide(name);
 	}
 
 	/**
@@ -862,7 +839,7 @@ class SessionImpl implements Session {
 		const views: PersonView[] = [];
 		for (const [name, identity] of this.here.known()) {
 			const since = this.here.sinceOf(name);
-			const aide = this.aideOf.get(name)?.def.name;
+			const aide = this.aides.forPerson(name)?.def.name;
 			views.push({
 				name,
 				identity,

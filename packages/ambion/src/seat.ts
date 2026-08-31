@@ -12,7 +12,6 @@
  * attention is at least that wide.
  */
 import type { Agent, AgentTool, Session as PiSession } from '@earendil-works/pi-agent-core';
-import type { Draft } from './aide.ts';
 import type { AgentDefinition, Attention, Message, Seq } from './types.ts';
 import { isAmbionTool, isSpoken } from './types.ts';
 
@@ -20,17 +19,6 @@ export interface SeatRuntime {
 	def: AgentDefinition;
 	/** What wakes this seat. Chosen at seating, not by the definition. */
 	attention: Attention;
-	/**
-	 * The person this seat writes for, when it is their aide. It is what makes
-	 * a seat an aide: nothing it writes wakes anybody, a closed exchange of
-	 * theirs is what wakes it, and the summary it writes is addressed to them.
-	 */
-	owner?: string;
-	/**
-	 * The exchange this activation is closing, on a summarising turn. It holds
-	 * one tool instead of its own, and the range that tool commits against.
-	 */
-	closing?: Draft;
 	active: boolean;
 	spoke: boolean;
 	/** Pi's abort() cancels the run but not its queues; this stops the rebuild loop too. */
