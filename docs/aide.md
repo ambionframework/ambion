@@ -44,6 +44,22 @@ One message answers both.
 An aide is a person's counterpart in a room: one aide, one person, for as long
 as they are in it.
 
+**It is a seat.** It is seated when its person arrives, it takes the same turn
+every other agent takes, its turns land in a downstream session of its own,
+and the record's lock refuses it exactly as it refuses a say. Two things make
+it the seat it is, and both are data rather than machinery:
+
+- It is seated at `none`, the narrow end of the attention scale
+  ([`agent.md`](agent.md) rule 6): nothing said in the room wakes it, and it
+  cannot be addressed.
+- The close of its person's exchange wakes it, and that turn holds one tool,
+  `summarise`, bound to the range it must stand for.
+
+§12's rung 3 — an aide that speaks while the room works — is those two lines
+widened: a `say` in its hands, and an attention that hears something. It is
+not a different kind of participant, and it never was; it was only ever a seat
+nothing reaches.
+
 It holds two things nothing else in the room holds. **The brief** — what its
 person asked, and what they are trying to decide. **The preferences** — what
 they act on, what they ignore, how long an answer they read. Put those inside
@@ -63,35 +79,36 @@ the tonnage"_. It does not run the room and it does not answer for anyone.
 
 ## 3. The exchange
 
-The unit is the **exchange**: a question, and everything the room does until it
-goes quiet again. The room goes from idle, to active, and back to idle.
+The unit is the **exchange**, and it is the core's, not the aide's:
+[`agent.md`](agent.md) specifies it, and
+[`exchange.ts`](../packages/ambion/src/exchange.ts) is where it lives. A
+question, and everything the room does until it goes quiet again. A person's
+question opens one; quiescence closes it; what lands in between steers the
+seats already working and changes nothing.
 
-- **It opens** when a person's `said` lands and no exchange is open.
-- **It closes** when no agent is active. `settled()` resolves.
+An aide is the first thing to read a closed exchange and not the only one — a
+client folds the working under the question it answered, and a host measures a
+round somebody asked for. A room where nobody brings an aide still has
+exchanges, and its host still hears them open and close.
 
-**Only a question opens one.** Arriving and leaving are messages, and they may
-wake a seat, but they open no exchange and are never summarised. A room where
-nobody asks anything is never summarised at all.
+What matters here is what an aide makes of one:
 
-In an idle room no exchange is open, because one closes the moment the room
-goes quiet. So the first clause reads as "into an idle room" almost always. It
-is written on the exchange rather than on the room's status for the case that
-is busy and has no owner: somebody arrives, the seat that watches the door
-wakes, and the question lands on top of work nobody asked for. The question
-still owns what follows. A rule read off the room's status would leave that
-question unsummarised for ever.
+- **It is what a summary stands for.** One exchange, one message.
+- **Only a question opens one**, so arriving and leaving are never summarised,
+  and a room where nobody asks anything is never summarised at all.
+- **Quiescence is a true end, not a gap.** A room that settles has finished,
+  and will not start again on its own, so a summary written at the close is
+  written over work that is over.
 
-**Quiescence is a true end, not a gap.** A seat that says something activates
-its readers inside its own `say`, before its own turn finishes, so the active
-count never dips to zero in the middle of a burst. A room that settles has
-finished, and will not start again on its own.
+An exchange covers itself and nothing else. `from` is the question that
+opened it; `through` is the last seq when the summary commits. **A summary
+stands for one exchange, and never for anything before it.** The room holds
+`from` while the exchange is open, the same way it holds the owner, and
+`through` is a live read of the record rather than a cursor kept beside it.
 
-An exchange covers itself and nothing else. `from` is the seq after this
-person's last summary, or their first question if they have none; `through` is
-the last seq when the summary commits. In the ordinary case those are the
-question and the close. **It never reaches back past a summary its person has
-already read**, and it is a live read of the record, not a cursor kept beside
-it.
+A person who walks back into a room after two days is not summarised for the
+two days. What they missed is presence's business (§15), and their next
+question opens a range of its own.
 
 The close is a race, and §5 settles it with the lock the room already has.
 
@@ -180,6 +197,21 @@ they were one conversation. If somebody else's exchange won the race, it falls
 inside the range too, and its person reads what happened while they were
 waiting. That is the price of the race, it is not wrong, and one message still
 serves.
+
+**A race is the only way two ranges overlap**, and a widened range can hold a
+summary written for somebody else. The rendering says whose each fold is:
+
+```
+── 3 messages, summarised for priya below ──
+── 3 messages, summarised for sam below ──
+[sam-aide → sam] …
+[priya-aide → priya] …
+```
+
+Each message takes the nearest summary that stands for it, and a summary is
+never folded into another one. So a fold never claims a message that stands
+for something else, and a reader is never told that the summary under a fold
+covers more than it does.
 
 Three things follow, and each removes a problem the design would otherwise
 have.
@@ -286,7 +318,7 @@ the session renders the range as its count and the summary that stands for it:
 
 ```
 · priya arrived                                               (2 hours ago)
-── 11 messages, summarised below ──
+── 11 messages, summarised for priya below ──
 [priya-aide → priya] Thursday is out: the inspector needs 48h notice and is
   not booked. Earliest is Saturday 30 Aug. It needs four things: …
 [sam] Rain all Thursday morning. I am not pouring into that.  (12 min ago)
@@ -495,10 +527,9 @@ const priya = defineHuman({
     identity: "Holds Priya's brief.",
     model: 'anthropic/claude-sonnet-5',
     instructions: `
-      Answer Priya's question, once, for somebody who has not read the working.
-      Lead with the decision she has to make and who holds it. Keep the facts a
-      colleague would need to work from — quantities, dates, owners, and what
-      is still unknown. Leave out who said what, and in which order.
+      Lead with the decision Priya has to make and who holds it. Give her the
+      facts that decision turns on — quantities, dates, owners, what is still
+      unknown — and cut everything else the room said. Four sentences at most.
     `,
   }),
 });
@@ -520,22 +551,40 @@ session.subscribe((event) => {
 
 `Visit` is unchanged, and there is no cursor to pass: the exchange names its
 own span. `defineHuman` takes one optional field, the record holds one more
-kind, and a person's seat names the aide they brought (`SeatInfo`, in
-[`presence.md`](presence.md) §10). **That is the whole surface.**
+kind, a person's seat names the aide they brought and the aide's own seat
+names its person (`SeatInfo`, in [`presence.md`](presence.md) §10), and a host
+that wants the one message waits for `quiet()` rather than `settled()`.
+**That is the whole surface.**
 
-**`settled()` does not wait for an aide.** It reports that no agent is active,
-which is the meaning §5 needs it to keep, and the aide starts after that. So a
-host that wants the summary before it does the next thing waits for the
-`message` event that carries it, rather than for the room. Nothing holds the
-room busy while an aide writes.
-[`examples/site/src/demo.ts`](../examples/site/src/demo.ts) shows that wait,
-and it is the only thing an aide asks of a host.
+**`settled()` does not wait for an aide, and `quiet()` does.** `settled()`
+reports that no seat which speaks for itself is taking a turn — an aide
+writing about a round is not the room still working on it, which is the
+meaning §5 needs, and it is why an aide's own turn closes no exchange and
+cannot retry itself for ever. `quiet()` resolves when no seat is taking a turn
+**and** no aide still owes one, and a `quiet` event says the same thing to a
+listener. That is what a host waits for when it wants the one message a person
+reads. Nothing holds the room busy while an aide writes: the two promises name
+two different moments rather than one moment that means two things.
+[`examples/site/src/demo.ts`](../examples/site/src/demo.ts) waits with
+`quiet()`, and it is the only thing an aide asks of a host.
 
-**What an aide is handed.** The room's goal, the roster, and the range it is
-about to cover — the question and every message after it. Not the record before
-that range: a summary its person has already read is theirs, not its. A refused
-draft is told what landed, in the failure the tool returns, and the range it
-drafts again over holds those messages too.
+**What an aide is handed.** The same context every seat reads — the room's
+goal, the roster, and the record as it renders now — and one line more: the
+range it is closing, named at the end where a seat is asked to take its turn.
+It reads the record folded, so what its person has already read stands there
+as the summary that stands for it, and what this exchange said stands there in
+full. That is one renderer for the room rather than two, and it is what §16's
+symmetry rests on: an aide reads exactly what the seats read. A refused draft
+is told what landed, in the failure the tool returns, and the range it drafts
+again over holds those messages too.
+
+**What the runtime asks of every aide.** Answer the question, and nothing
+beside it. Keep a fact only when the answer depends on it. Keep what changed
+while the room worked — a correction, a decision, a date that moved — because
+its person did not see it happen. Drop everything else the room raised,
+however true. The instructions on the definition say what this person acts on
+and how much they read; the runtime says what a summary is for. A room that
+asked for both in the definition would repeat itself in every aide.
 
 **What an aide is given.** A model, instructions, and one tool of the
 runtime's: `summarise({ text })`. It writes to the record and nothing else — no
@@ -563,10 +612,11 @@ can be closed.
 folds, and only in a room where somebody brought an aide. A room with no aide
 in it renders no fold, and no paragraph about one.
 
-**Where its turn lands.** In a downstream session, `<room>:<person>`, beside
-the seats' own. Rule 8 keeps every activation auditable after the fact, and a
-summary is written by a model like any other turn. The one message that reaches
-a person should be the easiest thing in the room to check.
+**Where its turn lands.** In a downstream session of its own,
+`<room>:<aide>`, by the same rule as every other seat. Rule 8 keeps every
+activation auditable after the fact, and a summary is written by a model like
+any other turn. The one message that reaches a person should be the easiest
+thing in the room to check.
 
 ---
 
@@ -576,7 +626,8 @@ Stated so a later change has to argue with it:
 
 - **Not catch-up.** A person returning after two days is
   [`presence.md`](presence.md) §8's business, and its anchor is untouched.
-  Arriving opens no exchange.
+  Arriving opens no exchange, and a summary stands for one exchange (§3), so
+  no summary ever reaches back over what somebody missed.
 - **Not a working group.** Nothing convenes and nothing has members.
 - **Not a new activation trigger.** No seat wakes because the room went quiet.
 - **Not a summariser of everything.** One answer is left as it was given, and
@@ -623,18 +674,27 @@ message asked for, and that is a second kind of trigger. It is the seam where
 a later feature will want to hang an interim summary or a room-level
 compactor. §15 forbids both by name; the mechanism to add them exists.
 
+**An aborted round still closes its exchange.** `abort()` cancels the turns in
+flight and the room settles, so the exchange it was working on closes and its
+owner's aide writes for it. That is right — the exchange ended, and its person
+still gets what the room reached before it was cut off — but the message stands
+for work somebody stopped. `stopSession` is the other case, below.
+
 **A run that stops mid-exchange writes no summary.** `stopSession` aborts the
 turns in flight, so the exchange never closes. It aborts a draft in flight for
 the same reason, and a draft that does finish after the stop commits nothing.
 The person asked and heard nothing, and the record shows a question, some work
 and a shutdown. Accepted.
 
-**A first summary reaches back as far as the record does.** `from` is the seq
-after this person's last summary, and a person who has none is covered from
-their first question. In a room they have used for a week without an aide,
-their first summary covers the week. The rule is right — they have read none
-of it — but the first one is expensive, and nothing bounds it. A person who
-joins a long record is the case to watch.
+**A widened range is bounded by a race, and nothing else.** A summary covers
+one exchange, so the only thing that can make a range large is what lands
+while the aide drafts. That is seconds of room, not days of record. It is the
+right bound to have, and it is the one the design leans on now that a range no
+longer reaches back to a person's last summary.
+
+**A stopped room never reports that it is quiet.** `quiet` says that no seat is
+taking a turn and no aide still owes one. A room that is closing is neither, so
+shutdown drains whoever waited on `quiet()` and emits nothing afterwards.
 
 **A summary can be owed for ever.** A race is handled inside the turn, but a
 turn that fails outright, or that runs out of drafts, waits for the next
@@ -682,8 +742,16 @@ document makes loudly:
 - The person whose question opened the exchange owns it, and a second person
   speaking into it gets nothing. §6.
 - An aide outlives its person's visit by one exchange. §6.
-- An aide's turns land in `<room>:<person>`, and the aide it brought is named
-  on the seat a host reads. §14.
+- An aide's turns land in a downstream session of its own, and the room lists
+  it as the seat it is, seated `none` and writing for its person. §2, §14.
+- A second summary for the same person stands for their second question, and
+  never for the exchange before it. §3.
+- A room goes quiet when the summary lands, and settles before it. §14.
+- A fold names the person its summary was written for, and two overlapping
+  ranges stay apart. §5, §8.
+- An empty say is refused, so nothing empty stands inside a range. §4.
+- A room with a summary owed is quiet, because owing one is not working on
+  one; and a stopped room never reports that it went quiet. §5, §16.
 - `defineHuman` refuses an aide that holds tools or takes its person's name,
   and `visitSession` refuses one whose name the room already holds. §12, §14.
 
@@ -695,29 +763,30 @@ rather than in every product's instructions.
 
 ---
 
-## 18. What would still prove it
+## 18. What proved it in a room
 
 The tests prove the mechanism. They do not prove that the one message is worth
-reading, and that needs a live run.
+reading, and that needed a live run.
 
-Run the same scenario twice: once with the aides taken out of
-[`workspace.ts`](../examples/site/src/workspace.ts), and once as it stands.
+The run is
+[`demos/2026-08-31-one-exchange-one-message.html`](../demos/2026-08-31-one-exchange-one-message.html):
+the same scenario twice, once with the aides taken out of
+[`workspace.ts`](../examples/site/src/workspace.ts) and once as it stands.
 
-It works if Priya's summary answers what she asked and reads whole to somebody
-who has not read the working; if the two messages outside her exchange are
-untouched and still in the product's own voice; if the record holds every
-message plus the summaries with nothing rewritten; if a seat's context at the
-tenth activation is smaller with the aides than without them; and if **a seat
-activated after the summary can still do its job from it.** The scripted run
-asks that last question outright: Priya comes back and asks a follow-up whose
-answer is inside the range that has left every seat's context.
+What it showed. Four questions opened four exchanges, and each one closed into
+one message: 21 agent messages became 4, of 102 words on average. A seat
+activated after a summary still did its job, answering from the folds and its
+own API because the record no longer held what it told her.
 
-It fails if the summary reads like minutes rather than an answer, if a seat
-answers worse after the range leaves its context, or if the record has to
-change shape to make the presentation work.
+What it cost. The last seat activation read 4,934 characters, with 19 messages
+standing as 3 summaries; the same record unfolded is 9,833 — the fold halved
+what that seat read. The run with no aides ended at 7,624 characters for 26
+messages, against this run's 38: the room with aides in it said half as much
+again and each seat still read a third less.
 
-Three numbers: how many messages a person reads per question, how large a
-seat's context is at the tenth activation with and without an aide, and
-whether the answers hold up. The run in [`demos/`](../demos) is the
-baseline — three questions, 17 of 19 agent messages inside them, 148,038
-characters of context over 25 activations. **That comparison is not run.**
+What it changed. Three things in this document came from those runs rather than
+from the tests: §3's range, which used to start after a person's last summary
+and now starts at their question; §5's fold, which now names the person it was
+written for; and §14's paragraph, which now asks an aide for the answer and
+what changed, and for nothing else. An earlier run of the same scenario wrote
+summaries of 158 words. All of it is in the report.
