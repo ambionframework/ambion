@@ -19,6 +19,8 @@ import {
 } from './aide.ts';
 import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
+import { Attendance, type VisitRuntime } from './presence.ts';
+import { RecordStore } from './record.ts';
 import {
 	type PersonView,
 	renderAgents,
@@ -27,6 +29,7 @@ import {
 	renderPeople,
 	renderRecord,
 } from './render.ts';
+import { type SeatRuntime, toPiTool, wakes } from './seat.ts';
 import {
 	delivered,
 	openOrCreate,
@@ -39,26 +42,20 @@ import {
 import {
 	type AgentDefinition,
 	type AgentSeat,
-	type Attention,
 	type HumanDefinition,
 	isAgent,
-	isAmbionTool,
 	isSeatedAgent,
 	isSpoken,
 	type Message,
 	type Participant,
 	type PresenceChange,
 	type PresenceMessage,
-	type PresenceStatus,
 	type SeatInfo,
 	type Seq,
 	type SessionEvent,
 	type SpokenMessage,
 	type SummaryMessage,
 } from './types.ts';
-
-/** The record lives as custom entries of this type in a Pi session. */
-const MESSAGE_ENTRY = 'ambion/message';
 
 const defaultRepo = new InMemorySessionRepo();
 
@@ -132,36 +129,6 @@ export interface Visit {
 	leave(): Promise<void>;
 }
 
-interface SeatRuntime {
-	def: AgentDefinition;
-	/** What wakes this seat. Chosen at seating, not by the definition. */
-	attention: Attention;
-	/**
-	 * The person this seat writes for, when it is their aide. It is what makes
-	 * a seat an aide: nothing it writes wakes anybody, a closed exchange of
-	 * theirs is what wakes it, and the summary it writes is addressed to them.
-	 */
-	owner?: string;
-	/**
-	 * The exchange this activation is closing, on a summarising turn. It holds
-	 * one tool instead of its own, and the range that tool commits against.
-	 */
-	closing?: Draft;
-	active: boolean;
-	spoke: boolean;
-	/** Pi's abort() cancels the run but not its queues; this stops the rebuild loop too. */
-	aborted: boolean;
-	/**
-	 * How much of the record this seat has provably heard: the seq its view
-	 * rendered, advanced as steers land in the transcript and by its own says.
-	 */
-	viewSeq: Seq;
-	/** Record seqs of steers enqueued to the live agent, awaiting their drain (FIFO). */
-	pendingSteers: Seq[];
-	agent?: Agent;
-	piSeat?: Promise<PiSession>;
-}
-
 /** Sets up the context where the agents work. */
 export function startSession(options: StartSessionOptions): Session {
 	if (running.has(options.name)) {
@@ -193,164 +160,6 @@ export function visitSession(session: Session, human: HumanDefinition): Promise<
 /** Reads a name and starts nothing. A running name reads through its live room. */
 export function readSession(name: string, options: ReadSessionOptions = {}): SessionView {
 	return running.get(name) ?? new ReadOnlySession(name, options.repo ?? defaultRepo);
-}
-
-// -- the record --------------------------------------------------------------
-
-/**
- * The replayed record. Both a run and a read need it, and neither needs the
- * other's machinery, so it is the one thing they share.
- */
-class RecordStore {
-	readonly entries: Message[] = [];
-	readonly ready: Promise<PiSession>;
-	lastSeq = 0;
-	private tail: Promise<void> = Promise.resolve();
-	/** The first write that failed since the last report. See `drained`. */
-	private failure: Error | undefined;
-
-	constructor(
-		private readonly repo: SessionRepo,
-		private readonly name: string,
-	) {
-		this.ready = this.open();
-		// A host can hold a session and read nothing from it for hours, so
-		// nothing may await `ready` for a long time. Mark the rejection handled
-		// here: a repo that cannot open must surface at the call that needs the
-		// store, and never as an unhandled rejection that ends the process.
-		void this.ready.catch(() => {});
-	}
-
-	private async open(): Promise<PiSession> {
-		const piSession = await openOrCreate(this.repo, this.name);
-		const found = await piSession.findEntries();
-		// findEntries does not promise append order; seq does.
-		found.sort((a, b) => a.seq - b.seq);
-		for (const entry of found) {
-			if (entry.type !== 'custom' || entry.customType !== MESSAGE_ENTRY) continue;
-			this.entries.push(entry.data as Message);
-		}
-		this.lastSeq = this.entries.at(-1)?.seq ?? 0;
-		return piSession;
-	}
-
-	/**
-	 * Take the next seq, synchronously — the say tool's conflict check and this
-	 * push must share one tick, or a rival say could slip between them.
-	 * Persistence follows in commit order on a write chain.
-	 */
-	append<T extends Message>(message: Omit<T, 'seq'>): T {
-		const stamped = { ...message, seq: ++this.lastSeq } as T;
-		this.entries.push(stamped);
-		this.tail = this.tail
-			.then(async () => {
-				const piSession = await this.ready;
-				await piSession.appendCustomEntry(MESSAGE_ENTRY, stamped);
-			})
-			// One write that fails must not stop the next one. The chain keeps
-			// its order and remembers the failure; a repo that recovers writes
-			// again. Without this catch the chain stays rejected for good.
-			.catch((error: unknown) => {
-				this.failure ??= toError(error);
-			});
-		return stamped;
-	}
-
-	/**
-	 * Wait for the writes in flight, then report a failed one. The report
-	 * clears it: the caller waiting on that write learns the record is
-	 * incomplete, and the room keeps running rather than failing for ever.
-	 */
-	async drained(): Promise<void> {
-		await this.tail;
-		const failure = this.failure;
-		if (failure === undefined) return;
-		this.failure = undefined;
-		throw failure;
-	}
-
-	since(cursor: Seq | undefined): Message[] {
-		if (cursor === undefined) return [...this.entries];
-		return this.entries.filter((message) => message.seq > cursor);
-	}
-}
-
-/** One person in the room, for as long as they are in it. */
-interface VisitRuntime {
-	human: HumanDefinition;
-	gone: boolean;
-}
-
-/**
- * Who is in the room, and where each of them stopped reading. The record is
- * the store. This holds the one fact a replay cannot rebuild: who is here
- * now. Everything else it answers, it reads off the record.
- */
-class Attendance {
-	private readonly inRoom = new Map<string, VisitRuntime>();
-
-	constructor(private readonly record: () => readonly Message[]) {}
-
-	enter(human: HumanDefinition): VisitRuntime {
-		const visit: VisitRuntime = { human, gone: false };
-		this.inRoom.set(human.name, visit);
-		return visit;
-	}
-
-	leave(name: string): void {
-		this.inRoom.delete(name);
-	}
-
-	visitOf(name: string): VisitRuntime | undefined {
-		return this.inRoom.get(name);
-	}
-
-	all(): VisitRuntime[] {
-		return [...this.inRoom.values()];
-	}
-
-	presenceOf(name: string): PresenceStatus {
-		return this.inRoom.has(name) ? 'present' : 'absent';
-	}
-
-	/** Every person the room knows: the arrivals on the record, and who is here. */
-	known(): Map<string, string> {
-		const known = new Map<string, string>();
-		for (const message of this.record()) {
-			if (message.kind !== 'arrived') continue;
-			known.set(message.from, message.identity ?? '');
-		}
-		for (const visit of this.inRoom.values()) known.set(visit.human.name, visit.human.identity);
-		return known;
-	}
-
-	knows(name: string): boolean {
-		return this.known().has(name);
-	}
-
-	/** The seq of this person's last `left`, or undefined before their first. */
-	sinceOf(name: string): Seq | undefined {
-		return this.lastPresence(name)?.seq;
-	}
-
-	/** When this person's presence last changed, ISO. */
-	lastChangeAt(name: string): string | undefined {
-		const record = this.record();
-		for (let i = record.length - 1; i >= 0; i -= 1) {
-			const message = record[i];
-			if (message && message.kind !== 'said' && message.from === name) return message.at;
-		}
-		return undefined;
-	}
-
-	private lastPresence(name: string): PresenceMessage | undefined {
-		const record = this.record();
-		for (let i = record.length - 1; i >= 0; i -= 1) {
-			const message = record[i];
-			if (message?.kind === 'left' && message.from === name) return message;
-		}
-		return undefined;
-	}
 }
 
 class ReadOnlySession implements SessionView {
@@ -1181,60 +990,3 @@ const AUDIENCE_PARAGRAPH = [
 	`turn, ignore it. When nobody is in the room, work for the record: state what you`,
 	`decided and why, and do not wait for an answer that nobody is there to give.`,
 ];
-
-/** The attention scale, narrowest first. A seat hears what it is wide enough for. */
-const WIDTH: Record<Attention, number> = { none: 0, named: 1, broadcast: 2, presence: 3 };
-
-/**
- * How wide a seat's attention has to be for this message to reach it: a
- * directed say reaches the one it names, anything else said reaches the room,
- * and a person arriving or leaving reaches the widest end.
- */
-function reachOf(message: Message): Attention {
-	if (!isSpoken(message)) return 'presence';
-	return message.to === undefined ? 'broadcast' : 'named';
-}
-
-/**
- * One rule, read off the scale: a seat wakes when its attention is at least as
- * wide as the message's reach — and a directed message additionally wakes the
- * one it names and nobody else. Rule 1 routes, rule 6 decides who sits out,
- * and a presence message is routed like any other.
- */
-function wakes(
-	seat: SeatRuntime,
-	target: SeatRuntime | undefined,
-	message: Message,
-	fromAide: boolean,
-): boolean {
-	// Nothing an aide writes wakes anybody: a room that woke because somebody's
-	// aide wanted something is a room run by a proxy. The guard is on the
-	// author rather than on what it wrote, so it holds for anything an aide
-	// ever writes. Every seat still reads it.
-	if (fromAide) return false;
-	const reach = reachOf(message);
-	if (WIDTH[seat.attention] < WIDTH[reach]) return false;
-	return reach === 'named' ? seat === target : true;
-}
-
-function toPiTool(tool: unknown): AgentTool {
-	if (isAmbionTool(tool)) {
-		return {
-			name: tool.name,
-			label: tool.name,
-			description: tool.description,
-			parameters: tool.parameters,
-			execute: async (_toolCallId, params, signal) => {
-				const result = await tool.execute(params, signal);
-				return typeof result === 'string'
-					? { content: [{ type: 'text', text: result }], details: {} }
-					: result;
-			},
-		};
-	}
-	const raw = tool as AgentTool & { label?: string };
-	if (typeof raw?.name !== 'string' || typeof raw?.execute !== 'function') {
-		throw new Error('Tools must come from defineTool (Ambion or Pi).');
-	}
-	return raw.label ? raw : { ...raw, label: raw.name };
-}
