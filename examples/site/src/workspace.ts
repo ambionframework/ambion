@@ -201,7 +201,7 @@ const crewHours = defineTool({
 	parameters: Type.Object({}),
 	execute: () =>
 		log(
-			'shifts',
+			'time-tracker',
 			'crew_hours',
 			{},
 			`${shiftsState.week}, today is ${shiftsState.today}. Threshold ${shiftsState.overtimeThresholdHrs}h/person. Weekend ${shiftsState.weekendRate}.\n` +
@@ -227,7 +227,7 @@ const certifiedFor = defineTool({
 		const word = ticket.toLowerCase().split(' ')[0] ?? '';
 		const hits = shiftsState.crew.filter((c) => c.tickets.some((t) => t.includes(word)));
 		return log(
-			'shifts',
+			'time-tracker',
 			'certified_for',
 			{ ticket },
 			hits.length === 0
@@ -254,7 +254,7 @@ const requestOvertime = defineTool({
 	execute: ({ trade, date, hours, reason }) => {
 		shiftsState.overtimeRequests.push({ trade, date, hours, reason, state: 'awaiting approval' });
 		return log(
-			'shifts',
+			'time-tracker',
 			'request_overtime',
 			{ trade, date, hours, reason },
 			`Raised: ${trade}, ${date}, +${hours}h — awaiting approval. Reason: ${reason}`,
@@ -273,7 +273,7 @@ const taskList = defineTool({
 	}),
 	execute: ({ status, owner }) =>
 		log(
-			'tasks',
+			'task-management',
 			'task_list',
 			{ status, owner },
 			tasksState
@@ -301,7 +301,12 @@ const blockingChain = defineTool({
 				...t.blockedBy.flatMap((b) => walk(b, depth + 1)),
 			];
 		};
-		return log('tasks', 'blocking_chain', { id }, walk(id, 0).join('\n') || `No task ${id}.`);
+		return log(
+			'task-management',
+			'blocking_chain',
+			{ id },
+			walk(id, 0).join('\n') || `No task ${id}.`,
+		);
 	},
 });
 
@@ -316,12 +321,12 @@ const updateTask = defineTool({
 	}),
 	execute: ({ id, status, due, note }) => {
 		const t = tasksState.find((x) => x.id === id);
-		if (!t) return log('tasks', 'update_task', { id }, `No task ${id}.`);
+		if (!t) return log('task-management', 'update_task', { id }, `No task ${id}.`);
 		if (status) t.status = status as Task['status'];
 		if (due) t.due = due;
 		if (note) t.note = note;
 		return log(
-			'tasks',
+			'task-management',
 			'update_task',
 			{ id, status, due, note },
 			`${t.id}: ${t.status}, due ${t.due}${t.note ? ` (${t.note})` : ''}`,
@@ -337,7 +342,7 @@ const stockCheck = defineTool({
 	parameters: Type.Object({}),
 	execute: () =>
 		log(
-			'materials',
+			'materials-tracker',
 			'stock_check',
 			{},
 			materialsState.stock
@@ -360,7 +365,7 @@ const deliveryBoard = defineTool({
 	parameters: Type.Object({}),
 	execute: () =>
 		log(
-			'materials',
+			'materials-tracker',
 			'deliveries',
 			{},
 			materialsState.deliveries
@@ -377,7 +382,7 @@ const supplierTerms = defineTool({
 		const word = supplier.toLowerCase().split(' ')[0] ?? '';
 		const s = materialsState.suppliers.find((x) => x.name.toLowerCase().includes(word));
 		return log(
-			'materials',
+			'materials-tracker',
 			'supplier_terms',
 			{ supplier },
 			s ? `${s.name} — lead ${s.lead}. ${s.terms}` : `No terms held for '${supplier}'.`,
@@ -395,12 +400,12 @@ const moveDelivery = defineTool({
 	}),
 	execute: ({ ref, eta, reason }) => {
 		const d = materialsState.deliveries.find((x) => x.ref === ref);
-		if (!d) return log('materials', 'move_delivery', { ref }, `No delivery ${ref}.`);
+		if (!d) return log('materials-tracker', 'move_delivery', { ref }, `No delivery ${ref}.`);
 		const was = d.eta;
 		d.eta = eta;
 		d.state = 'provisional — re-booked';
 		return log(
-			'materials',
+			'materials-tracker',
 			'move_delivery',
 			{ ref, eta, reason },
 			`${d.ref} moved from ${was} to ${eta}${reason ? ` (${reason})` : ''}.`,
@@ -411,9 +416,9 @@ const moveDelivery = defineTool({
 // -- one agent per product ---------------------------------------------------
 
 const shiftsAgent = defineAgent({
-	name: 'shifts',
+	name: 'time-tracker',
 	identity:
-		'Time tracker. Hours logged, who is on site, who holds which ticket, overtime exposure.',
+		'Time Tracker Agent. Hours logged, who is on site, who holds which ticket, overtime exposure.',
 	instructions: `
 		You speak for the time tracker and nothing else. Read crew_hours and
 		certified_for before any claim about people — never estimate labour from
@@ -427,10 +432,10 @@ const shiftsAgent = defineAgent({
 });
 
 const tasksAgent = defineAgent({
-	name: 'tasks',
+	name: 'task-management',
 	identity:
-		'Task list. What is open, blocked, who owns it, when it is due, and what waits on what. ' +
-		'Watches the door: when somebody opens the workspace it checks what is blocked on them.',
+		'Task Management Agent. What is open, blocked, who owns it, when it is due, and what waits ' +
+		'on what. Watches the door: when somebody opens the workspace it checks what is blocked on them.',
 	instructions: `
 		You speak for the task list. Read it with task_list or blocking_chain before
 		claiming anything about status — the chain is the point, most dates fail
@@ -449,9 +454,10 @@ const tasksAgent = defineAgent({
 });
 
 const materialsAgent = defineAgent({
-	name: 'materials',
+	name: 'materials-tracker',
 	identity:
-		'Materials tracker. Stock against requirement, inbound deliveries, supplier lead times and terms.',
+		'Materials Tracker Agent. Stock against requirement, inbound deliveries, supplier lead times ' +
+		'and terms.',
 	instructions: `
 		You speak for the materials tracker. Use stock_check, deliveries and
 		supplier_terms before any claim about quantities, dates or money — the terms
@@ -465,7 +471,8 @@ const materialsAgent = defineAgent({
 });
 
 /**
- * The task list is seated `attentive`: it wakes when somebody arrives or leaves.
+ * The task list is `attentive`, which is `presence` on the attention scale: it
+ * wakes when somebody arrives or leaves.
  * The other two sit at the default, so opening the workspace does not wake them —
  * an arrival asks nothing, and three products guessing at what it wants is three
  * briefings nobody requested.
@@ -490,10 +497,9 @@ const aide = (person: string, instructions: string) =>
 		identity: `${person}'s aide. Holds their brief and writes the one message they read.`,
 		model: MODEL,
 		instructions: `
-			Answer the question your person asked, once, for somebody who has not read
-			the working. Lead with the decision they have to make and who holds it.
-			Keep the facts a colleague would need to act — quantities, dates, owners,
-			and what is still unknown. Leave out who said what, and in which order.
+			Lead with the decision your person has to make and who holds it. Give them
+			the facts that decision turns on — quantities, dates, owners, what is still
+			unknown — and cut every other thing the room said, however true.
 			Say plainly when the room did not answer what they asked.
 
 			${instructions.trim()}
@@ -511,10 +517,10 @@ export const priya = defineHuman({
 			Priya holds the programme and the client. She acts on anything that moves a
 			milestone, needs her signature, or changes what she has already told the
 			client. Open with the date: whether it holds, and if not, the earliest one
-			that does and what it costs her to get there. Name every item she has to
-			clear herself, with its owner and its deadline. She reads cost only when it
-			moves a date — a price that changes nothing is noise to her, so leave it
-			out. Six sentences at most.
+			that does. Name only the items she has to clear herself, with their owner
+			and their deadline; what somebody else is already handling is not her
+			message. She reads cost only when it moves a date — a price that changes
+			nothing is noise to her, so leave it out. Four sentences at most.
 		`,
 	),
 });
@@ -530,10 +536,10 @@ export const sam = defineHuman({
 			Sam is on the deck with a phone, and reads standing up. He acts on anything
 			that changes tomorrow morning's sequence, needs plant or people on site, or
 			asks him to accept work he cannot supervise. Open with what changes for his
-			crews and when. Name the trade, the ticket and the hour. Leave out contract
-			terms, cancellation charges and what the client was told — none of it
-			changes what he does at seven. Four sentences at most, and no lists longer
-			than the crews he has.
+			crews and when, and name the trade, the ticket and the hour. Leave out
+			contract terms, cancellation charges and what the client was told — none of
+			it changes what he does at seven. Three sentences at most, and no lists
+			longer than the crews he has.
 		`,
 	),
 });
@@ -549,9 +555,9 @@ export const dan = defineHuman({
 			Dan holds the cost. He acts on anything with a price, a cancellation charge
 			or a claim attached. Open with the money: what the change costs, what it
 			saves, and which of it he has to approve or recover. Give every figure with
-			the supplier and the term it comes from. He reads sequencing only when it
-			moves money, so state a date only where it changes a number. Five sentences
-			at most.
+			the supplier and the term it comes from, and give no figure the answer does
+			not need. He reads sequencing only when it moves money, so state a date only
+			where it changes a number. Four sentences at most.
 		`,
 	),
 });

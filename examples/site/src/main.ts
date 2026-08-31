@@ -10,6 +10,7 @@
  */
 import * as readline from 'node:readline';
 import {
+	type Attention,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -30,9 +31,9 @@ const visits = new Map<string, Visit>();
 let speaking = 'priya';
 
 const colours: Record<string, string> = {
-	shifts: '\x1b[34m',
-	tasks: '\x1b[32m',
-	materials: '\x1b[33m',
+	'time-tracker': '\x1b[34m',
+	'task-management': '\x1b[32m',
+	'materials-tracker': '\x1b[33m',
 	priya: '\x1b[36m',
 	sam: '\x1b[35m',
 	dan: '\x1b[31m',
@@ -92,7 +93,19 @@ session.subscribe((event: SessionEvent) => {
 			errored.add(event.agent);
 			show(`${red}! ${event.agent}: ${event.error.message}${reset}`);
 			break;
-		case 'settled':
+		// The round somebody asked for. A client that could re-render would fold
+		// the working between these two into a thinking state; a terminal cannot,
+		// so it draws the boundary instead.
+		case 'exchange_opened':
+			show(`${dim}— ${event.exchange.owner} asked; the workspace is working —${reset}`);
+			break;
+		case 'exchange_closed':
+			show(
+				`${dim}— the round is over (${event.exchange.from}–${event.exchange.through}) —${reset}`,
+			);
+			break;
+		// Quiet, not settled: settled is the seats alone, and an aide writes after it.
+		case 'quiet':
 			show(`${dim}— the workspace is quiet —${reset}`);
 			break;
 		default:
@@ -125,11 +138,20 @@ function help(): void {
 	);
 }
 
+/** What wakes a seat, in the words the roster uses rather than the enum. */
+const WAKES: Record<Attention, string> = {
+	none: 'for nothing said',
+	named: 'only when named',
+	broadcast: 'on anything said',
+	presence: 'on anything said, and on arrivals',
+};
+
 function who(): void {
 	for (const seat of session.seats()) {
 		if (seat.kind === 'agent') {
+			const owner = seat.owner ? `, writes for ${seat.owner}` : '';
 			console.log(
-				`  ${paint(seat.name, seat.name)} (${seat.status}, ${seat.attention}): ${seat.identity}`,
+				`  ${paint(seat.name, seat.name)} (${seat.status}, wakes ${WAKES[seat.attention]}${owner}): ${seat.identity}`,
 			);
 		} else {
 			const aide = seat.aide ? `, brings ${seat.aide}` : '';

@@ -37,9 +37,6 @@ const OUT = process.env.DEMO_OUT ?? 'demo-run.json';
 
 /** The commentary names the products, so it needs to know who is not one. */
 const PEOPLE = new Set([priya.name, sam.name, dan.name]);
-/** An aide is not a seat: it takes a turn when an exchange closes, and no message wakes it. */
-const AIDES = new Set([priya, sam, dan].flatMap((p) => (p.aide ? [p.aide.name] : [])));
-
 const repo = new InMemorySessionRepo();
 const NAME = WORKSPACE;
 const timeline: { at: string; event: SessionEvent }[] = [];
@@ -117,35 +114,23 @@ function narrate(event: SessionEvent): void {
 	if (event.type === 'tool_execution_start') {
 		process.stderr.write(`  · ${event.agent}.${event.toolName}()\n`);
 	}
+	if (event.type === 'exchange_closed') {
+		const { owner, from, through } = event.exchange;
+		process.stderr.write(`  — ${owner}'s round closed (${from}–${through})\n`);
+	}
 	if (event.type === 'error') process.stderr.write(`! ${event.agent}: ${event.error.message}\n`);
 }
 
 /**
- * An aide writes after the room is quiet, and `settled()` does not wait for
- * one: the room is never held busy while an aide works. A report wants what
- * they wrote, so this run waits for them itself.
+ * `settled()` is the seats alone, and an aide writes after it: the room is
+ * never held busy while one works. `quiet()` is the room with the summaries
+ * in it, which is what a report wants.
  */
-let aidesWorking = 0;
-const aideWaiters: (() => void)[] = [];
-
-function noteAide(event: SessionEvent): void {
-	if (event.type === 'agent_start' && AIDES.has(event.agent)) aidesWorking += 1;
-	if (event.type !== 'agent_end' || !AIDES.has(event.agent)) return;
-	aidesWorking -= 1;
-	if (aidesWorking === 0) for (const resolve of aideWaiters.splice(0)) resolve();
-}
-
-/** Quiet, and every aide that had something to write has written it. */
-async function quiescent(): Promise<void> {
-	await session.settled();
-	for (let waited = 0; waited < 3; waited += 1) await new Promise((r) => setImmediate(r));
-	while (aidesWorking > 0) await new Promise<void>((resolve) => aideWaiters.push(resolve));
-}
+const quiescent = () => session.quiet();
 
 session.subscribe((event) => {
 	const at = new Date().toISOString();
 	track(event, at);
-	noteAide(event);
 	narrate(event);
 	timeline.push(
 		event.type === 'error'
@@ -203,6 +188,10 @@ const missed =
 	priyaBack.since === undefined ? [] : await session.messages({ since: priyaBack.since });
 const sinceOnReturn = priyaBack.since;
 const seats = session.seats();
+/** The seats that write for somebody: an aide is a seat with an owner. */
+const aides = new Set(
+	seats.flatMap((seat) => (seat.kind === 'agent' && seat.owner ? [seat.name] : [])),
+);
 
 /**
  * Every downstream session the run wrote: `<room>:<agent>` for a seat, and
@@ -232,7 +221,9 @@ for (const metadata of await repo.list()) {
 	const slug = metadata.id.slice(NAME.length + 1);
 	seatSessions.push({
 		agent: slug,
-		kind: PEOPLE.has(slug) ? 'aide' : 'agent',
+		// An aide is a seat like any other; the roster says which seat writes
+		// for a person, and that is the only thing that tells them apart.
+		kind: aides.has(slug) ? 'aide' : 'agent',
 		sessionId: metadata.id,
 		blocks,
 	});

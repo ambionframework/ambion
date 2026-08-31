@@ -20,13 +20,16 @@ defaults to `anthropic/claude-sonnet-5`.
 
 ## What to look for
 
-**Opening the workspace wakes one seat, not all of them.** The task list is
-seated `attentive`, so it wakes when somebody arrives and checks what is
-blocked on them. The other two sit at the default and do not: an arrival asks
-nothing, and three products guessing at what it wants is three briefings
-nobody requested. Try `/join dan` and watch which seats read it.
+**Opening the workspace wakes one seat, not all of them.** Each seat is seated
+at one point of an attention scale — the widest kind of message that wakes it.
+The task list is `attentive` (`presence`), so it wakes when somebody arrives
+and checks what is blocked on them. The other two sit at the default and do
+not: an arrival asks nothing, and three products guessing at what it wants is
+three briefings nobody requested. The three aides sit at the narrow end, where
+nothing said reaches them at all. Try `/join dan` and watch which seats read
+it.
 
-**Waking is not answering.** `· shifts read it and stayed idle` is a product
+**Waking is not answering.** `· time-tracker read it and stayed idle` is a product
 deciding the question was not its own. Those decisions never reach the
 record, so the terminal is the only place you see them.
 
@@ -45,12 +48,18 @@ their own data. The task list rewrites due dates and the materials tracker
 moves deliveries because the room decided something, not because anyone
 typed an edit.
 
+**A question opens a round.** `— priya asked; the workspace is working —`
+marks it, and `— the round is over (3–7) —` marks the moment the seats stop.
+That is the exchange, and it is the room's own: it opens whether or not
+anybody brought an aide, and a client that could re-render would fold the
+working between those two lines into a thinking state.
+
 **One question, one message back.** Ask "can I promise Thursday for the
-pour?" and watch three products answer it between them. When the room goes
-quiet, the aide of whoever asked writes the one message they read instead of
-the working, marked `∎` and carrying the span it stands for. `/summaries`
-lists them. A question the room answers once draws no summary at all: one
-answer is left in the voice that gave it.
+pour?" and watch three products answer it between them. When the round closes,
+the aide of whoever asked writes the one message they read instead of the
+working, marked `∎` and carrying the span it stands for. `/summaries` lists
+them. A question the room answers once draws no summary at all: one answer is
+left in the voice that gave it.
 
 **Each aide writes for one person.** Ask the same question as `priya`, then
 as `sam`, then as `dan`, and compare the three. Priya's opens with the date,
