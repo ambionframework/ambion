@@ -774,15 +774,19 @@ the same scenario twice, once with the aides taken out of
 [`workspace.ts`](../examples/site/src/workspace.ts) and once as it stands.
 
 What it showed. Four questions opened four exchanges, and each one closed into
-one message: 21 agent messages became 4, of 102 words on average. A seat
+one message: 19 agent messages became 4, of 94 words on average. A seat
 activated after a summary still did its job, answering from the folds and its
 own API because the record no longer held what it told her.
 
-What it cost. The last seat activation read 4,934 characters, with 19 messages
-standing as 3 summaries; the same record unfolded is 9,833 — the fold halved
-what that seat read. The run with no aides ended at 7,624 characters for 26
-messages, against this run's 38: the room with aides in it said half as much
-again and each seat still read a third less.
+What it cost. The last seat activation read 8,391 characters, with 14 messages
+standing as 3 summaries; the same record unfolded is 11,698, so the fold took
+28% off what that seat read. That is the number to trust — one room, rendered
+twice. Across the two arms it is muddier: the run with no aides ended at 8,266
+characters for 29 messages against this run's 36, so the two came out level.
+The room with aides in it said more, and folding what it said gave the saving
+back rather than banking it. Earlier runs of the same pair, on rooms that
+talked at more similar lengths, ended a third to a half apart in the fold's
+favour. What a person reads does not move: one message per question.
 
 What it changed. Three things in this document came from those runs rather than
 from the tests: §3's range, which used to start after a person's last summary
