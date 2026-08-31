@@ -112,6 +112,6 @@ export async function persistTurns(open: Promise<PiSession>, agent: Agent): Prom
 	}
 }
 
-export function toError(value: unknown): Error {
+function toError(value: unknown): Error {
 	return value instanceof Error ? value : new Error(String(value));
 }

@@ -530,10 +530,16 @@ reads takes the narrower type and cannot start anything by accident.
 One file per concern, and `session.ts` is the room that composes them: the
 record in [`record.ts`](../packages/ambion/src/record.ts), who is here in
 [`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes
-it in [`seat.ts`](../packages/ambion/src/seat.ts), the round in
+it in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
+[`turn.ts`](../packages/ambion/src/turn.ts), the round in
 [`exchange.ts`](../packages/ambion/src/exchange.ts), what a person's aide
 writes in [`aide.ts`](../packages/ambion/src/aide.ts), and what any of them
 reads in [`render.ts`](../packages/ambion/src/render.ts).
+
+**A seat is seated for the run; a turn lasts seconds.** What a turn has heard,
+what landed while it worked, and whether it left a mark belong to the turn and
+end with it — which is why rule 5's `readThrough` is a turn's fact rather than
+a seat's.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — obtained from Pi's own

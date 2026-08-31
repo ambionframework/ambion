@@ -20,8 +20,7 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { refusal } from './render.ts';
-import type { SeatRuntime } from './seat.ts';
-import { delivered } from './seat.ts';
+import { delivered, isActive, type SeatRuntime } from './seat.ts';
 import type { Message, Seq, SummaryMessage } from './types.ts';
 import { isSpoken } from './types.ts';
 
@@ -48,8 +47,6 @@ export interface Draft {
 	through: Seq;
 	refusals: number;
 	calls: number;
-	/** The turn ended without reaching the record, so the room still owes it. */
-	failed: boolean;
 }
 
 /**
@@ -71,7 +68,7 @@ function draftOver(
 		(m) => m.seq >= from && m.seq <= through && isSpoken(m) && fromSeat(m.from),
 	);
 	if (said.length < 2) return undefined;
-	return { from, through, refusals: 0, calls: 0, failed: false };
+	return { from, through, refusals: 0, calls: 0 };
 }
 
 /** What the summarise tool needs of the room: the record's lock, and little else. */
@@ -266,7 +263,7 @@ export class Aides {
 		const due: { seat: SeatRuntime; draft: Draft }[] = [];
 		for (const [person, from] of [...this.owed]) {
 			const seat = this.byPerson.get(person);
-			if (!seat || seat.active) continue;
+			if (!seat || isActive(seat)) continue;
 			this.owed.delete(person);
 			const draft = draftOver(record, from, through, fromSeat);
 			if (!draft) continue;
@@ -281,12 +278,14 @@ export class Aides {
 	 * already served; a race or a failed turn leaves the range owed, and the
 	 * next quiet room is another chance.
 	 */
-	turnEnded(seat: SeatRuntime, wrote: boolean): void {
+	turnEnded(seat: SeatRuntime, outcome: { wrote: boolean; failed: boolean }): void {
 		const person = this.owners.get(seat.def.name);
 		const draft = this.drafts.get(seat.def.name);
 		this.drafts.delete(seat.def.name);
-		if (person === undefined || draft === undefined || wrote) return;
-		if (draft.refusals > 0 || draft.failed) this.owe(person, draft.from);
+		if (person === undefined || draft === undefined || outcome.wrote) return;
+		// A race or a turn that never reached the record leaves the range owed.
+		// An aide that stood down judged the room, and is owed nothing for it.
+		if (draft.refusals > 0 || outcome.failed) this.owe(person, draft.from);
 	}
 
 	/** A cancelled draft writes nothing, which is the safe direction. */

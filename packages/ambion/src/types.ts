@@ -1,3 +1,10 @@
+/**
+ * The vocabulary: what a room is made of, as types.
+ *
+ * Every name here is one a host reads or writes — a message on the record, a
+ * seat in the roster, an event on the stream, a definition it wrote itself.
+ * Nothing in this file does anything; the files beside it are what happens.
+ */
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Static, TSchema } from 'typebox';
 import type { ClosedExchange, Exchange } from './exchange.ts';
