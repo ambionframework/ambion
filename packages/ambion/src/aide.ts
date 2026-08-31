@@ -8,8 +8,7 @@
  * things make it the seat it is, and both are data rather than machinery:
  *
  * - It is seated at the narrow end of attention, `none`, so nothing said in
- *   the room wakes it. Widening that and handing it a `say` is the whole cost
- *   of `aide.md` §12's rung 3, when somebody decides to build it.
+ *   the room wakes it.
  * - A closed exchange wakes it, and only its owner's. That turn holds one
  *   tool, `summarise`, bound to the range it must stand for.
  *

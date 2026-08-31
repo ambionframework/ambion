@@ -342,9 +342,8 @@ class SessionImpl implements Session {
 	 */
 	private bringAide(human: HumanDefinition): void {
 		if (!human.aide || this.aides.has(human.name)) return;
-		// Seated at the narrow end: nothing said in the room wakes an aide, and
-		// only the close of its person's exchange does. §12's rung 3 is this
-		// line widened, and a `say` in its hands.
+		// Seated at the narrow end: nothing said in the room wakes an aide;
+		// only the close of its person's exchange does.
 		this.aides.bring(this.seat(seated(human.aide, 'none')), human.name);
 	}
 
@@ -641,7 +640,7 @@ class SessionImpl implements Session {
 		// it was woken for. Nothing wakes an aide today but the close of its
 		// person's exchange; when something else does — a wider attention, per
 		// FOLLOW_WORK.md — it must arrive with empty hands until somebody adds a
-		// `say` here on purpose. §12's rung 3 is a decision, not a consequence.
+		// `say` here on purpose. aide.md §12 makes that a deliberate decision.
 		const owner = this.aides.ownerOf(seat.def.name);
 		if (owner !== undefined) {
 			const closing = this.aides.draftOf(seat.def.name);

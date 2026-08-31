@@ -19,7 +19,8 @@ ambion/
 ├── packages/
 │   ├── ambion/            @ambionframework/ambion   — the runtime library
 │   └── cli/               @ambionframework/cli      — the `ambion` binary
-├── examples/              (empty; the workspace already globs it)
+├── examples/
+│   └── site/              the runnable example: a multi-agent room
 ├── scripts/
 │   ├── packages.mjs       shared, side-effect-free: finds the publishable packages
 │   ├── version.mjs        set/verify the single version across them
@@ -34,10 +35,9 @@ ambion/
 └── pnpm-workspace.yaml    packages/*, examples/*
 ```
 
-**Rule.** `packages/*` is publishable. `examples/*` is private and exists to be
-run — the CI smoke test will drive an example through the real bin script, so an
-example that breaks fails the build. There are none yet; the glob is in place so
-the first one needs no config change.
+**Rule.** `packages/*` is publishable. `examples/*` is private and exists to
+be run. `examples/site` is the runnable example; the gate type-checks it with
+everything else, so an example that breaks fails the build.
 
 ### Package graph
 
@@ -46,16 +46,17 @@ the first one needs no config change.
 ```
 
 Internal dependencies use `workspace:*` and are rewritten to the published
-version by pnpm at pack time. That one edge is load-bearing for this scaffold:
+version by pnpm at pack time. That one edge is what the scaffold exercises:
 the CLI's help text reads a constant out of the runtime package, so the smoke
 test fails if turbo builds them out of order, if the `exports` map is wrong, or
 if the workspace protocol does not resolve.
 
 ### What the packages do
 
-Nothing yet, deliberately. Both are placeholders that build, type-check, pack
-and publish. This document describes the machine that will carry the framework,
-and that machine is worth proving before there is anything riding on it.
+`@ambionframework/ambion` is the runtime; [`agent.md`](agent.md),
+[`presence.md`](presence.md) and [`aide.md`](aide.md) are its contracts.
+`@ambionframework/cli` is the `ambion` binary; it currently reports its
+version and nothing else.
 
 ---
 
@@ -74,11 +75,10 @@ and that machine is worth proving before there is anything riding on it.
 
 ### Version floor
 
-Node **>= 22.19**. This is not arbitrary: `ambion dev` loads a user's
-`ambion.config.ts` through Node's own type stripping, with no bundler in the
-path. Type stripping is on by default from 22.18 and from 23.6, so 23.0–23.5 is
-explicitly excluded. `packages/cli/bin/ambion.mjs` enforces this at runtime,
-before any modern syntax is parsed.
+Node **>= 22.19**. The floor tracks Node's own type stripping: it is on by
+default from 22.18 and from 23.6, so 23.0–23.5 is explicitly excluded.
+`packages/cli/bin/ambion.mjs` enforces the floor at runtime, before any modern
+syntax is parsed.
 
 ---
 
@@ -94,9 +94,9 @@ on npm are typically caught and yanked within hours, so a short quarantine turns
 
 One consequence worth knowing: a dependency floor pinned to a same-day release
 cannot resolve, because no satisfying version is old enough. That is the gate
-working, not a bug. The fix is to widen the floor (this is why `@types/node` is
-`^26.2.0` and not `^26.3.0`), not to add the package to
-`minimumReleaseAgeExclude`.
+working as designed. The fix is to widen the floor (this is why `@types/node`
+is `^26.2.0` and not `^26.3.0`); adding the package to
+`minimumReleaseAgeExclude` defeats the gate.
 
 **Block install scripts.** pnpm 10 refuses to run `preinstall`/`install`/
 `postinstall` unless a package is allowlisted. `onlyBuiltDependencies` is the
@@ -117,10 +117,9 @@ with `actions/attest-build-provenance` before publishing them (see
 gh attestation verify ambionframework-ambion-0.1.0.tgz --repo ambionframework/ambion
 ```
 
-Two supporting settings: `engine-strict=true` fails the install on an
-unsupported Node instead of at some later, more confusing point; and CI always
-installs with `--frozen-lockfile`, so a lockfile that disagrees with the
-manifests is a build failure rather than a silent re-resolution.
+Two supporting settings: `engine-strict=true` fails the install immediately
+on an unsupported Node; and CI always installs with `--frozen-lockfile`, so a
+lockfile that disagrees with the manifests is a build failure.
 
 ---
 
@@ -153,9 +152,9 @@ dev         persistent, never cached
 ```
 
 `check:types` and `test` wait on upstream builds because the CLI type-checks
-against the runtime's _emitted_ declarations, not its sources. That is the same
-resolution a published consumer gets, so a broken `exports` map fails here
-rather than after release.
+against the runtime's _emitted_ declarations. That is the same
+resolution a published consumer gets, so a broken `exports` map fails here,
+before release.
 
 ---
 
@@ -186,7 +185,7 @@ Root commands:
 | `pnpm publish:packages`    | Publish to GitHub Packages                     |
 
 `pnpm check` is what CI runs and what a contributor runs before pushing. There
-is one gate, not several that drift apart.
+is one gate, so nothing drifts apart.
 
 ---
 
@@ -208,16 +207,15 @@ Rules worth knowing:
   is a number nothing checks; here it fails the build like every other rule.
 - Knip runs as part of `check:lint`, so an unused export fails the build rather
   than accumulating.
-- `--error-on-warnings` is not decoration. Biome exits `0` on warnings by
+- `--error-on-warnings` does real work. Biome exits `0` on warnings by
   default, which makes a lint step that reports problems and passes anyway —
   exactly how warning backlogs start. Every configured rule is `error`, and
   Biome's own default-warn rules block too. A deliberate exception is a one-line
-  `biome-ignore` with a reason (see `packages/cli/src/commands/init.ts`, where
-  `${GITHUB_TOKEN}` has to reach the file literally).
+  `biome-ignore` with a reason; the tree currently has none.
 
 ### The complexity budget
 
-Two numbers, and they are not a double standard. Biome charges a nested
+Two numbers, and one standard behind them. Biome charges a nested
 function for the nesting it sits in, so a branch inside `describe` → `it`
 scores three where the same branch in a plain function scores one; on one
 budget a test would hit the wall three times sooner than the code it exercises.
@@ -226,12 +224,11 @@ that has become a program still fails — the tree's worst test scores 8.
 
 The runtime's densest method, `SessionImpl.dispatch`, sits at exactly 10.
 Routing is the room's whole policy and is meant to stay one readable piece, so
-it has no headroom on purpose: the next branch added to it is a decision
-someone takes deliberately rather than a drift nobody measures. Everything else
+it has no headroom on purpose: the next branch added to it forces a
+deliberate decision. Everything else
 in the tree scores 9 or below.
 
-The budget is a lint rule, not a separate job, so it runs wherever
-`check:lint` runs — the `check` job on a pull request, and the gate the release
+The budget is a lint rule, so it runs wherever `check:lint` runs — the `check` job on a pull request, and the gate the release
 re-runs before it publishes. There was nothing to add to `ci.yml`.
 
 ---
@@ -256,11 +253,11 @@ that ships — to:
 3. run an unknown command and assert a non-zero exit, so "does nothing yet"
    never quietly becomes "succeeds at anything";
 4. confirm versions agree, then `pnpm pack` every package — the same packing the
-   release does, so a broken `files` list fails on a pull request rather than at
-   publish time.
+   release does, so a broken `files` list fails on a pull request, well
+   before publish.
 
-There are no commands to smoke-test yet. What these steps prove is the path a
-command will travel: the Node floor guard in `bin/ambion.mjs`, the tsdown
+The CLI has no commands yet. What these steps prove is the path every
+invocation travels: the Node floor guard in `bin/ambion.mjs`, the tsdown
 bundle, and cross-package resolution.
 
 Concurrency is per-ref with `cancel-in-progress`, so a re-push supersedes the
@@ -309,19 +306,19 @@ is a permanent public claim that these bytes were released, and on a dry run
 they were not.
 
 Both scripts are plain CLIs over `scripts/packages.mjs`, which has no top-level
-side effects. That separation is load-bearing, not stylistic — a module that is
+side effects. That separation prevents a real failure — a module that is
 both a library and a command runs its command when someone imports it, and
 parses the _importer's_ argv while doing so.
 
-The registry comes from each package's `publishConfig.registry` rather than a
-constant in the script, so the manifests npm actually reads are the only place
-it is written down; a package that disagrees fails the run by name. Attesting it and then publishing _it_ — rather than re-running
-`npm pack` at publish time — means the signed bytes and the published bytes are
-the same bytes.
+The registry comes from each package's `publishConfig.registry`, so the
+manifests npm actually reads are the only place it is written down; a package
+that disagrees fails the run by name. Attesting the packed tarballs and then
+publishing those same files means the signed bytes and the published bytes are
+the same bytes; a second `npm pack` at publish time would break that.
 
 The script is **idempotent**: it queries the registry for each `name@version` and
 skips what is already there. A release that fails halfway is finished by
-re-running it, not restarted. It refuses to run when versions disagree, and
+re-running it. It refuses to run when versions disagree, and
 refuses to publish without a token. `--dry-run` and `--tag` are supported.
 
 ### The release workflow (`.github/workflows/release.yml`)
@@ -342,7 +339,7 @@ Permissions are `contents: read`, `packages: write`, plus `id-token: write` and
 `attestations: write` for the signature.
 
 A tag can be cut from a commit CI never saw, so the release re-runs the full
-gate rather than trusting a green check elsewhere. The tag-match step means
+gate itself. The tag-match step means
 `v0.1.0` cannot publish `0.0.9`.
 
 ### Consuming a published package
@@ -356,13 +353,13 @@ GitHub Packages requires authentication even for reads:
 ```
 
 A classic PAT with `read:packages` is enough to install; in GitHub Actions the
-built-in `GITHUB_TOKEN` already has it. `ambion init` writes both lines into
-every scaffolded project — the token is referenced by environment variable, never
-inlined, so the file stays committable. The README carries the full walkthrough.
+built-in `GITHUB_TOKEN` already has it. The token is referenced by environment
+variable, never inlined, so the file stays committable. The README carries the
+full walkthrough.
 
 This is the toolchain's biggest open question, and repository visibility does
 not resolve it. GitHub Packages gates the npm registry independently of the
-repo, and GitHub documents the gate rather than leaving it to be discovered:
+repo, and GitHub documents the gate:
 "You need an access token to publish, install, and delete private, internal, and
 public packages", and of the registries only the Container registry "allow[s]
 anonymous access and can be pulled without authentication".
@@ -371,8 +368,8 @@ The registry's responses say the same thing. A package published from a public
 repository answers an anonymous request with `401` and
 `{"error":"authentication token not provided"}`, while a name that does not
 exist under the same owner answers `404` and names that owner — so the package
-resolves first and the 401 is an auth gate, not a privacy default or a
-not-found in disguise:
+resolves first, and the 401 is purely an auth gate on a package the registry
+knows:
 
 ```sh
 # published from a public repo → 401 authentication token not provided
@@ -395,27 +392,9 @@ Two, both intentional:
 
 1. **CI is fuller.** Flue's public workflows cover contributor approval and PR
    redirection; its build gate lives elsewhere. Ambion needs its own, so
-   `ci.yml` and `release.yml` are written here rather than borrowed.
-2. **Lockstep versioning with a hand-rolled release script**, instead of
-   per-package versions and a changelog tool. With two packages that must agree,
+   `ci.yml` and `release.yml` are written here from scratch.
+2. **Lockstep versioning with a hand-rolled release script.** Flue versions
+   per package with a changelog tool. With two packages that must agree,
    a 90-line idempotent script is easier to audit than a release manager. This is
    the piece most likely to be replaced (Changesets) once the package count
    grows.
-
----
-
-## 11. Deliberately not here yet
-
-Called out so their absence reads as a decision rather than an oversight:
-
-- **The framework itself** — workspace, agent, task, subscription, timer. This
-  repository is the scaffold that will carry it: the packages are placeholders,
-  and the runtime lands in a follow-up so it can be reviewed as a design rather
-  than as a rider on a tooling change.
-- **`@ambionframework/cloudflare`** — the Durable Object adapter. Neither it nor
-  `ambion deploy` exists yet.
-- **`npm create ambion@latest`** — the README's scaffolding entry point, and
-  `ambion init` behind it.
-- **Coverage thresholds, changesets, a docs site, integration tests against
-  workerd.** All reasonable next steps; none needed to make the current gate
-  meaningful.
