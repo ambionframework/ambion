@@ -11,7 +11,13 @@
  * than about the room: every message has a reach, and a seat wakes when its
  * attention is at least that wide.
  */
-import type { Agent, AgentTool, Session as PiSession } from '@earendil-works/pi-agent-core';
+import type {
+	Agent,
+	AgentTool,
+	AgentToolResult,
+	Session as PiSession,
+} from '@earendil-works/pi-agent-core';
+import type { UserMessage } from '@earendil-works/pi-ai';
 import type { AgentDefinition, Attention, Message, Seq } from './types.ts';
 import { isAmbionTool, isSpoken } from './types.ts';
 
@@ -89,4 +95,21 @@ export function toPiTool(tool: unknown): AgentTool {
 		throw new Error('Tools must come from defineTool (Ambion or Pi).');
 	}
 	return raw.label ? raw : { ...raw, label: raw.name };
+}
+
+export function userMessage(text: string): UserMessage {
+	return { role: 'user', content: text, timestamp: Date.now() };
+}
+
+export function runFailure(agent: Agent): Error | undefined {
+	const last = agent.state.messages.at(-1);
+	if (last && 'stopReason' in last && last.stopReason === 'error') {
+		return new Error(('errorMessage' in last && last.errorMessage) || 'The turn failed.');
+	}
+	return undefined;
+}
+
+/** What a write tool returns when the record took it. */
+export function delivered(): AgentToolResult<Record<string, never>> {
+	return { content: [{ type: 'text', text: 'delivered' }], details: {} };
 }
