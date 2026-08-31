@@ -542,7 +542,6 @@ class SessionImpl implements Session {
 			// is not the room still working on it, so its own turn ends no round
 			// — which is also what keeps a failing aide from retrying for ever.
 			if (!this.aides.isAide(seat.def.name) && !this.working()) {
-				this.emit({ type: 'settled' });
 				for (const resolve of this.settledWaiters.splice(0)) resolve();
 				this.closeExchange();
 			}

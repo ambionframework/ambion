@@ -405,14 +405,13 @@ describe('startSession', () => {
 		await ordered.settled();
 		// one event per message on the record, whoever wrote it, and the round
 		// that message opened around it. A room with no aide in it goes quiet in
-		// the same tick it settles: nothing is owed.
+		// the same tick the round closes: nothing is owed.
 		expect(events.map((e) => e.type)).toEqual([
 			'message',
 			'exchange_opened',
 			'agent_start',
 			'message',
 			'agent_end',
-			'settled',
 			'exchange_closed',
 			'quiet',
 		]);

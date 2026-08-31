@@ -141,12 +141,15 @@ export type SessionEvent =
 	 * one.
 	 */
 	| { type: 'exchange_closed'; exchange: ClosedExchange }
-	/** No seat is taking a turn. An aide may still be writing. */
-	| { type: 'settled' }
 	/**
-	 * No seat is taking a turn, and no aide still owes one. This is what a
-	 * host waits for when it wants the one message a person reads; `settled`
-	 * is what rule 5 needs, and it reports the seats alone.
+	 * Nothing is running: no seat is taking a turn, and no aide still owes a
+	 * message. The room's own last word on a stretch of work.
+	 *
+	 * There is no event for the seats stopping. A host that wants the round is
+	 * told by `exchange_closed`, which says whose it was and what it covered;
+	 * a host that wants to act in the window before a summary lands waits on
+	 * `settled()`, because that is a caller's concern rather than something
+	 * that happened to the room.
 	 */
 	| { type: 'quiet' };
 

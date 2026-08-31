@@ -832,7 +832,8 @@ describe('an exchange', () => {
 		const order = events.map((e) => e.type);
 		const closed = order.indexOf('exchange_closed');
 		const summary = events.findIndex((e) => e.type === 'message' && e.message.kind === 'summary');
-		expect(closed).toBeGreaterThan(order.indexOf('settled'));
+		// the round is over, then what stands for it, then the room is quiet
+		expect(closed).toBeGreaterThan(order.lastIndexOf('agent_end', closed));
 		expect(summary).toBeGreaterThan(closed);
 		expect(order.indexOf('quiet')).toBeGreaterThan(summary);
 	});

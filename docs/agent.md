@@ -382,7 +382,6 @@ type SessionEvent =
   | { type: 'error'; agent: string; error: Error }
   | { type: 'exchange_opened'; exchange: Exchange }
   | { type: 'exchange_closed'; exchange: ClosedExchange }
-  | { type: 'settled' }
   | { type: 'quiet' };
 ```
 
@@ -481,9 +480,11 @@ is never held busy while one writes. `quiet()` is the second moment — no agent
 at all is taking a turn — for a host that wants the one message a person reads
 ([`aide.md`](aide.md) §14). The two differ because an aide is a seat like any
 other and its turn is a turn, and the difference is what keeps a round's end
-from moving when somebody brings one. The order at the end of a round is fixed:
-`settled`, then `exchange_closed`, then whatever is written about it, then
-`quiet`. And two controls. `abort()` cancels every active turn — Pi's
+from moving when somebody brings one. The window between the two is the only
+place a caller can act while a summary is being drafted, which is why
+`settled()` is a promise and not an event. The order at the end of a round is
+fixed: `settled()` resolves, then `exchange_closed`, then whatever is written
+about it, then `quiet`. And two controls. `abort()` cancels every active turn — Pi's
 own abort, fanned out — and the room settles; what was said stays, what was
 mid-flight ends without speaking, and an aborted turn stays cancelled even if
 a steer was still queued against it. The room is still running afterwards.
