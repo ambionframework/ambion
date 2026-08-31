@@ -9,25 +9,17 @@ import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { Type } from 'typebox';
-import {
-	AIDE_PARAGRAPH,
-	aideHeader,
-	type Draft,
-	draftOver,
-	SUMMARY_PARAGRAPH,
-	summariseTool,
-} from './aide.ts';
+import { type Draft, draftOver, summariseTool } from './aide.ts';
 import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
 import { RecordStore } from './record.ts';
 import {
 	type PersonView,
-	renderAgents,
-	renderClock,
+	type RoomView,
 	renderLine,
-	renderPeople,
-	renderRecord,
+	renderSystemPrompt,
+	renderTurnContext,
 } from './render.ts';
 import { type SeatRuntime, toPiTool, wakes } from './seat.ts';
 import {
@@ -580,7 +572,7 @@ class SessionImpl implements Session {
 			seat.pendingSteers = [];
 			const agent = this.buildAgent(seat);
 			seat.agent = agent;
-			await agent.prompt(userMessage(this.renderContext(seat)));
+			await agent.prompt(userMessage(renderTurnContext(seat, this.view())));
 			await this.persistRun(seat, agent);
 			const failure = runFailure(agent);
 			if (failure) return this.turnFailed(seat, failure);
@@ -610,11 +602,23 @@ class SessionImpl implements Session {
 		await persistTurns(this.seatSession(seat), agent);
 	}
 
+	/** What the prose is given of this room, built fresh for each turn. */
+	private view(): RoomView {
+		return {
+			name: this.name,
+			goal: this.goal,
+			seats: this.seats(),
+			people: this.peopleViews(),
+			record: this.record,
+			hasAides: this.aideOf.size > 0,
+		};
+	}
+
 	private buildAgent(seat: SeatRuntime): Agent {
 		const agent = new Agent({
 			streamFn: this.streamFn,
 			initialState: {
-				systemPrompt: this.systemPrompt(seat),
+				systemPrompt: renderSystemPrompt(seat, this.view()),
 				model: this.resolveModel(seat.def),
 				thinkingLevel: 'off',
 				tools: this.handsFor(seat),
@@ -872,90 +876,6 @@ class SessionImpl implements Session {
 		return views;
 	}
 
-	private systemPrompt(seat: SeatRuntime): string {
-		const lines =
-			seat.owner === undefined
-				? [
-						`You are '${seat.def.name}', an agent seated in the session '${this.name}' — a shared`,
-						`room with a record. Every participant sees what is said; nobody sees your tool use.`,
-						``,
-					]
-				: [...aideHeader(seat.def.name, seat.owner, this.name), ``];
-		if (this.goal) lines.push(`This session exists to: ${this.goal}`, ``);
-		lines.push(...this.duties(seat), ``);
-		lines.push(
-			`Your identity, as the room knows it: ${seat.def.identity}`,
-			``,
-			`Your instructions:`,
-			seat.def.instructions.trim(),
-		);
-		return lines.join('\n');
-	}
-
-	/** What this seat is for: an aide writes one message, a seat speaks or does not. */
-	private duties(seat: SeatRuntime): string[] {
-		if (seat.owner !== undefined) return AIDE_PARAGRAPH;
-		const lines = [
-			`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
-			`your turn without saying anything, and no mark is left. Speak only when your reply`,
-			`adds something the record does not already hold — new information, a decision moved`,
-			`forward, or a genuinely different perspective. A point already made does not need a`,
-			`second voice; restating it in your own words is repetition, not contribution — stay`,
-			`silent instead. A directed say (to: a name) calls that agent in; use it deliberately —`,
-			`attention costs money. When a colleague holds the answer, ask them directly with one`,
-			`directed say — never announce to the room what you are about to do, and never pose a`,
-			`question undirected that only one participant can answer: a say is a message, not a`,
-			`thought. Messages arriving mid-turn are marked [new]; fold them into what you are`,
-			`doing — and if a colleague has just made your point, let it stand. A say fails if`,
-			`the room moved while you were speaking: the failure lists what you missed — read`,
-			`it, and speak again only if your reply still adds something.`,
-			``,
-			...AUDIENCE_PARAGRAPH,
-		];
-		// A fold only renders in a room where somebody brought an aide, so only
-		// such a room tells its seats how to read one.
-		if (this.aideOf.size > 0) lines.push(``, ...SUMMARY_PARAGRAPH);
-		return lines;
-	}
-
-	private renderContext(seat: SeatRuntime): string {
-		const now = Date.now();
-		const people = this.peopleViews();
-		return [
-			renderClock(now),
-			``,
-			`The agents. Each is seated at one point of a scale — the widest kind of message`,
-			`that wakes it. Unmarked: anything said. "named only": a say addressed to it.`,
-			`"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":`,
-			`nothing reaches it and you cannot address it. "writes for <name>" is that`,
-			`person's aide, which writes the one message they read when their exchange closes.`,
-			`(active: taking a turn now; idle: at rest.)`,
-			renderAgents(this.seats()),
-			``,
-			`The people (present: in the room now; absent: not in the room):`,
-			renderPeople(people, now),
-			``,
-			`The record of '${this.name}' so far:`,
-			renderRecord(this.record, people, now),
-			``,
-			this.askOf(seat),
-		].join('\n');
-	}
-
-	/** What this turn is for, in the last line the model reads. */
-	private askOf(seat: SeatRuntime): string {
-		const closing = seat.closing;
-		if (seat.owner !== undefined) {
-			// An aide woken by anything but a close has nothing to do with the
-			// turn, and no hands to do it with. See `handsFor`.
-			return closing
-				? `${seat.owner}'s exchange is over: messages ${closing.from} to ${closing.through}. ` +
-						`Write the one message they read for it, or end your turn to leave the range whole.`
-				: `Nothing is asked of you: read the room, and end your turn.`;
-		}
-		return `Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
-	}
-
 	private resolveModel(def: AgentDefinition): Model<Api> {
 		if (this.customStream) {
 			// A custom streamFn never reads the model; a stub keeps Pi's loop satisfied.
@@ -976,17 +896,3 @@ class SessionImpl implements Session {
 		);
 	}
 }
-
-/** What a seat does with a presence line that lands while it is working. */
-const AUDIENCE_PARAGRAPH = [
-	`Who is reading can change while you work. An arrival or a departure reaches you as a`,
-	`[new] line mid-turn, and wakes you outright if your seat watches for it. It is never a`,
-	`request — nobody asked you anything by opening the workspace —`,
-	`so it never means start something new, and you`,
-	`never greet, never say that you noticed, and never summarise the record back to the`,
-	`room. Use it to aim what you were already going to say: pitch it at whoever is`,
-	`actually reading now, say the part that needs them while they are still there, and`,
-	`drop what only mattered to somebody who has gone. If it changes nothing about your`,
-	`turn, ignore it. When nobody is in the room, work for the record: state what you`,
-	`decided and why, and do not wait for an answer that nobody is there to give.`,
-];
