@@ -826,21 +826,28 @@ class SessionImpl implements Session {
 	 * to leave out.
 	 */
 	private handsFor(seat: SeatRuntime): AgentTool[] {
-		const closing = seat.closing;
-		if (!closing || seat.owner === undefined) {
-			return [this.sayTool(seat), ...seat.def.tools.map(toPiTool)];
+		// An aide's hands are the runtime's, and it holds them only for the turn
+		// it was woken for. Nothing wakes an aide today but the close of its
+		// person's exchange; when something else does — a wider attention, per
+		// FOLLOW_WORK.md — it must arrive with empty hands until somebody adds a
+		// `say` here on purpose. §12's rung 3 is a decision, not a consequence.
+		if (seat.owner !== undefined) {
+			return seat.closing ? [this.summarise(seat, seat.owner, seat.closing)] : [];
 		}
-		return [
-			summariseTool(seat.def.name, seat.owner, closing, {
-				stopped: () => this.stopped,
-				lastSeq: () => this.store.lastSeq,
-				claim: (author, draft) => this.claim<SummaryMessage>(author, draft),
-				publish: (message) => this.publish(message),
-				written: () => {
-					seat.spoke = true;
-				},
-			}),
-		];
+		return [this.sayTool(seat), ...seat.def.tools.map(toPiTool)];
+	}
+
+	/** The one hand an aide is given, bound to the range it must stand for. */
+	private summarise(seat: SeatRuntime, person: string, closing: Draft): AgentTool {
+		return summariseTool(seat.def.name, person, closing, {
+			stopped: () => this.stopped,
+			lastSeq: () => this.store.lastSeq,
+			claim: (author, draft) => this.claim<SummaryMessage>(author, draft),
+			publish: (message) => this.publish(message),
+			written: () => {
+				seat.spoke = true;
+			},
+		});
 	}
 
 	/**
@@ -1129,13 +1136,15 @@ class SessionImpl implements Session {
 	/** What this turn is for, in the last line the model reads. */
 	private askOf(seat: SeatRuntime): string {
 		const closing = seat.closing;
-		if (!closing || seat.owner === undefined) {
-			return `Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
+		if (seat.owner !== undefined) {
+			// An aide woken by anything but a close has nothing to do with the
+			// turn, and no hands to do it with. See `handsFor`.
+			return closing
+				? `${seat.owner}'s exchange is over: messages ${closing.from} to ${closing.through}. ` +
+						`Write the one message they read for it, or end your turn to leave the range whole.`
+				: `Nothing is asked of you: read the room, and end your turn.`;
 		}
-		return (
-			`${seat.owner}'s exchange is over: messages ${closing.from} to ${closing.through}. ` +
-			`Write the one message they read for it, or end your turn to leave the range whole.`
-		);
+		return `Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
 	}
 
 	private resolveModel(def: AgentDefinition): Model<Api> {

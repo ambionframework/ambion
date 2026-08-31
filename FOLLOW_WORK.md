@@ -34,6 +34,11 @@ lets aides speak_ — rather than a code change in the runtime.
   Probably an event and not a message, but that is an argument to have.
 - **Who may do it.** A host, certainly. An agent, never — a room where an
   agent can widen its own attention is a room that can make itself expensive.
+- **What an aide holds when something else wakes it.** Nothing, today:
+  `handsFor` gives an aide the `summarise` tool for the turn a close woke it
+  for, and empty hands otherwise, so a wider attention alone buys a seat that
+  reads the room and ends its turn. Rung 3 is a `say` added there on purpose,
+  with the paragraph that says when waking somebody's aide is worth the money.
 
 **Where.** `Attention` and `wakes` in
 [`packages/ambion/src/session.ts`](packages/ambion/src/session.ts), `seated`
