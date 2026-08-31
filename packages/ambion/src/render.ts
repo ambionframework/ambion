@@ -227,13 +227,17 @@ export interface RoomView {
 	readonly hasAides: boolean;
 }
 
-/** What the prose is given of the seat taking the turn. */
+/**
+ * What the prose is given of the seat taking the turn. Both facts are asked
+ * for outright rather than left optional: a room that stops holding one must
+ * say so, instead of a missing field quietly turning an aide into a seat.
+ */
 export interface SeatSpeaking {
 	readonly def: { name: string; identity: string; instructions: string };
-	/** The person this seat writes for, when it is their aide. */
-	readonly owner?: string;
-	/** The range this turn is closing, when a closed exchange woke it. */
-	readonly closing?: { from: Seq; through: Seq };
+	/** The person this seat writes for, or nothing when it writes for nobody. */
+	readonly owner: string | undefined;
+	/** The range this turn is closing, or nothing when a message woke it. */
+	readonly closing: { from: Seq; through: Seq } | undefined;
 }
 
 export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {

@@ -20,8 +20,10 @@
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
+import type { SeatRuntime } from './seat.ts';
 import { delivered, refusal } from './turn.ts';
-import { isSpoken, type Message, type Seq, type SummaryMessage } from './types.ts';
+import type { Message, Seq, SummaryMessage } from './types.ts';
+import { isSpoken } from './types.ts';
 
 /** One draft, and one redraft after a race. Then the room keeps moving without it. */
 const AIDE_DRAFTS = 2;
@@ -59,7 +61,7 @@ export interface Draft {
  * counts messages rather than speakers — one product saying four things needs
  * consolidating as much as three products saying one each.
  */
-export function draftOver(
+function draftOver(
 	record: readonly Message[],
 	from: Seq,
 	through: Seq,
@@ -183,4 +185,112 @@ function widen(draft: Draft, person: string, missed: Message[], lastSeq: Seq): E
 			`Write ${person}'s message again, over the range as it now stands.`,
 		),
 	);
+}
+
+/**
+ * The aides in one room: who each writes for, which of them owes a message,
+ * and which is drafting one now.
+ *
+ * A seat knows nothing about any of this. An aide is a seat like every other,
+ * and what makes it an aide is held here — so the room asks *the aides* whether
+ * a name writes for somebody, rather than every seat carrying the answer.
+ */
+export class Aides {
+	/** The aide each person brought, keyed by the person. */
+	private readonly byPerson = new Map<string, SeatRuntime>();
+	/** The person each aide writes for, keyed by the aide's own name. */
+	private readonly owners = new Map<string, string>();
+	/**
+	 * People owed a message, and the seq their range starts at. A race or a
+	 * failed turn leaves one owed; the next quiet room writes it.
+	 */
+	private readonly owed = new Map<string, Seq>();
+	/** The range each aide is closing, while its turn runs. */
+	private readonly drafts = new Map<string, Draft>();
+
+	/** Seat an aide for a person. One aide, one person, for the life of the run. */
+	bring(seat: SeatRuntime, person: string): void {
+		this.byPerson.set(person, seat);
+		this.owners.set(seat.def.name, person);
+	}
+
+	has(person: string): boolean {
+		return this.byPerson.has(person);
+	}
+
+	get size(): number {
+		return this.byPerson.size;
+	}
+
+	/** The person this seat writes for, or nothing when it writes for nobody. */
+	ownerOf(name: string): string | undefined {
+		return this.owners.get(name);
+	}
+
+	/** Whether this name is somebody's aide. It answers about aides and nothing else. */
+	isAide(name: string): boolean {
+		return this.owners.has(name);
+	}
+
+	/** The aide a person brought, by that person's name. */
+	forPerson(person: string): SeatRuntime | undefined {
+		return this.byPerson.get(person);
+	}
+
+	/** What this aide is closing, while it is closing it. */
+	draftOf(name: string): Draft | undefined {
+		return this.drafts.get(name);
+	}
+
+	/**
+	 * One person may be owed one message. A second exchange that closes while
+	 * the first is still owed widens the range back to the earlier question,
+	 * because that is what its person has not read.
+	 */
+	owe(person: string, from: Seq): void {
+		if (!this.byPerson.has(person)) return;
+		const already = this.owed.get(person);
+		this.owed.set(person, already === undefined ? from : Math.min(already, from));
+	}
+
+	/**
+	 * The turns to take now, one per person owed a message: the range each
+	 * aide would stand for, or nothing where one message already serves. An
+	 * aide already drafting is left alone, and stays owed.
+	 */
+	turnsDue(
+		record: readonly Message[],
+		through: Seq,
+		fromSeat: (name: string) => boolean,
+	): { seat: SeatRuntime; draft: Draft }[] {
+		const due: { seat: SeatRuntime; draft: Draft }[] = [];
+		for (const [person, from] of [...this.owed]) {
+			const seat = this.byPerson.get(person);
+			if (!seat || seat.active) continue;
+			this.owed.delete(person);
+			const draft = draftOver(record, from, through, fromSeat);
+			if (!draft) continue;
+			this.drafts.set(seat.def.name, draft);
+			due.push({ seat, draft });
+		}
+		return due;
+	}
+
+	/**
+	 * A summarising turn is over. It wrote, or it judged that one message
+	 * already served; a race or a failed turn leaves the range owed, and the
+	 * next quiet room is another chance.
+	 */
+	turnEnded(seat: SeatRuntime, wrote: boolean): void {
+		const person = this.owners.get(seat.def.name);
+		const draft = this.drafts.get(seat.def.name);
+		this.drafts.delete(seat.def.name);
+		if (person === undefined || draft === undefined || wrote) return;
+		if (draft.refusals > 0 || draft.failed) this.owe(person, draft.from);
+	}
+
+	/** A cancelled draft writes nothing, which is the safe direction. */
+	abort(): void {
+		this.drafts.clear();
+	}
 }
