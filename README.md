@@ -31,6 +31,8 @@ Four things to define, and a session to put them in.
 
 **Human** — `defineHuman` names a person: an identity agents read and address, on the record like anyone else. People are not part of a room's composition — they visit a running session and leave it, several at once and from several devices, and the room tracks who is reading. Arriving is a message, so the agents wake for it. [`docs/presence.md`](docs/presence.md) specifies it.
 
+**Aide** — a person may bring one, as an optional field on `defineHuman` rather than a fifth thing to define: a `defineAgent` value that holds their brief and their preferences, and writes the one message they read when the room goes quiet. It is not seated, so no message activates it. It never speaks for them, never wakes anybody, and carries no tools of its own — the one hand it holds is the runtime's, and it reaches the record. From the next activation the agents read its summary in place of the messages it stands for, so an exchange that is over costs the room one message instead of growing every context for ever. [`docs/aide.md`](docs/aide.md) specifies it.
+
 **Tool** — `defineTool`, a facade over Pi's own: same shape, one import. What an agent can do beyond speaking is exactly what its author gave it.
 
 **Session** — a named room that outlives any run of it. `startSession` brings one up from its agents and a goal that says what the room is for; `stopSession` takes it down; `readSession` reads the record between runs, with nothing standing up and nothing to bill. A delivery activates the idle agents in parallel; replies steer colleagues still at work; each agent decides whether to speak, to whom, and which colleague — passive experts included — to call in. Silence leaves no mark, and provenance is stamped by the runtime, never self-reported.
@@ -105,7 +107,8 @@ setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
 2. Everything is a message on a record.
 3. Agents manage their own attention — deciding not to engage included.
 4. Many domain agents, not one monolith. The platform shares the capabilities.
-5. Minimal surface: four things to define, one invariant, one dependency that does the rest.
+5. What a person wants belongs to that person, not to every agent that answers them.
+6. Minimal surface: four things to define, one invariant, one dependency that does the rest.
 
 ## License
 

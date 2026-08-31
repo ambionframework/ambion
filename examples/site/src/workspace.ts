@@ -5,7 +5,8 @@
  * Three products hold their own state and their own API and know nothing of
  * each other's internals: they ask on the record, the way a person does. Three
  * people share the workspace from a site office, a phone on the deck and a
- * cost desk, and each one's identity says what they will act on today.
+ * cost desk, and each one brings an aide that holds what they act on and
+ * writes the one message they read.
  *
  * `main.ts` opens this interactively. `demo.ts` drives one scripted run of it.
  */
@@ -471,32 +472,88 @@ const materialsAgent = defineAgent({
  */
 export const AGENTS = [shiftsAgent, attentive(tasksAgent), materialsAgent];
 
-// -- the people, and what each of them is here to decide ----------------------
+// -- the people, and the aide each of them brings ----------------------------
+
+/**
+ * An identity is the public face: what a person owns, and what only they can
+ * do. It is what every product reads to decide whom to address.
+ *
+ * What each person will act on, and how much of it they read, is not the
+ * room's business. That belongs to the person, so it lives in their aide's
+ * instructions and nowhere else. Before aides, every product carried a copy of
+ * every person's preferences, and each new person made every product's prompt
+ * longer.
+ */
+const aide = (person: string, instructions: string) =>
+	defineAgent({
+		name: `${person}-aide`,
+		identity: `${person}'s aide. Holds their brief and writes the one message they read.`,
+		model: MODEL,
+		instructions: `
+			Answer the question your person asked, once, for somebody who has not read
+			the working. Lead with the decision they have to make and who holds it.
+			Keep the facts a colleague would need to act — quantities, dates, owners,
+			and what is still unknown. Leave out who said what, and in which order.
+			Say plainly when the room did not answer what they asked.
+
+			${instructions.trim()}
+		`,
+	});
 
 export const priya = defineHuman({
 	name: 'priya',
 	identity:
 		'Project manager, site office. Owns the programme and what the client is promised. ' +
-		'Acts on anything that moves a milestone, needs her signature, or changes what she has ' +
-		'already told the client — she is the only one who can book building control and commit ' +
-		'a date. Does not want cost detail unless it changes a date.',
+		'She is the only one who can book building control and commit a date to the client.',
+	aide: aide(
+		'priya',
+		`
+			Priya holds the programme and the client. She acts on anything that moves a
+			milestone, needs her signature, or changes what she has already told the
+			client. Open with the date: whether it holds, and if not, the earliest one
+			that does and what it costs her to get there. Name every item she has to
+			clear herself, with its owner and its deadline. She reads cost only when it
+			moves a date — a price that changes nothing is noise to her, so leave it
+			out. Six sentences at most.
+		`,
+	),
 });
 
 export const sam = defineHuman({
 	name: 'sam',
 	identity:
 		'Site foreman, on the deck with a phone. Owns what the crews actually do tomorrow morning. ' +
-		'Acts on anything that changes tomorrow’s sequence, needs plant or people on site, or asks ' +
-		'him to accept work he cannot supervise. He can move labour and plant the same day and ' +
-		'nobody else can. Not interested in contract terms or client comms.',
+		'He can move labour and plant the same day and nobody else can.',
+	aide: aide(
+		'sam',
+		`
+			Sam is on the deck with a phone, and reads standing up. He acts on anything
+			that changes tomorrow morning's sequence, needs plant or people on site, or
+			asks him to accept work he cannot supervise. Open with what changes for his
+			crews and when. Name the trade, the ticket and the hour. Leave out contract
+			terms, cancellation charges and what the client was told — none of it
+			changes what he does at seven. Four sentences at most, and no lists longer
+			than the crews he has.
+		`,
+	),
 });
 
 export const dan = defineHuman({
 	name: 'dan',
 	identity:
 		'Quantity surveyor. Owns cost, variations and what the client is charged. ' +
-		'Acts on anything with a price, a cancellation charge or a claim attached, and owns the ' +
-		'hire orders. Approves overtime spend. Not interested in sequencing unless it moves money.',
+		'He owns the hire orders and approves overtime spend.',
+	aide: aide(
+		'dan',
+		`
+			Dan holds the cost. He acts on anything with a price, a cancellation charge
+			or a claim attached. Open with the money: what the change costs, what it
+			saves, and which of it he has to approve or recover. Give every figure with
+			the supplier and the term it comes from. He reads sequencing only when it
+			moves money, so state a date only where it changes a number. Five sentences
+			at most.
+		`,
+	),
 });
 
 export const PEOPLE: Record<string, HumanDefinition> = { priya, sam, dan };

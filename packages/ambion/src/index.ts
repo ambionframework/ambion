@@ -5,8 +5,9 @@
  * gives agents hands, and `startSession` brings up a named room the agents
  * work in and people visit. `stopSession` takes it down, `readSession` reads
  * a name without starting anything, and `visitSession` puts a person in a
- * running room. The design contracts live in docs/agent.md and
- * docs/presence.md.
+ * running room. A person may bring an aide, which writes the one message they
+ * read when an exchange closes. The design contracts live in docs/agent.md,
+ * docs/presence.md and docs/aide.md.
  */
 
 export type { SessionMetadata, SessionRepo, SessionStorage } from '@earendil-works/pi-agent-core';
@@ -45,8 +46,9 @@ export type {
 	Seq,
 	SessionEvent,
 	SpokenMessage,
+	SummaryMessage,
 } from './types.ts';
-export { isSpoken } from './types.ts';
+export { isSpoken, isSummary } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

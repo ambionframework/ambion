@@ -39,7 +39,10 @@ await stopSession(session);
 
 The design contract is [`docs/agent.md`](https://github.com/ambionframework/ambion/blob/main/docs/agent.md),
 with presence — who is in a session, and what the agents do about it — in
-[`docs/presence.md`](https://github.com/ambionframework/ambion/blob/main/docs/presence.md);
+[`docs/presence.md`](https://github.com/ambionframework/ambion/blob/main/docs/presence.md),
+and the aide a person may bring — which writes the one message they read when
+the room goes quiet — in
+[`docs/aide.md`](https://github.com/ambionframework/ambion/blob/main/docs/aide.md);
 a hands-on multi-agent room lives in
 [`examples/site`](https://github.com/ambionframework/ambion/tree/main/examples/site).
 

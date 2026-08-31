@@ -3,7 +3,14 @@
  * already knows and returns text. Keeping it out of `session.ts` keeps the
  * room's mechanics and the room's prose from growing into each other.
  */
-import type { Message, PresenceStatus, SeatInfo, Seq } from './types.ts';
+import {
+	isSpoken,
+	isSummary,
+	type Message,
+	type PresenceStatus,
+	type SeatInfo,
+	type Seq,
+} from './types.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -19,6 +26,8 @@ export interface PersonView {
 	/** Where they stopped reading, and how much has landed since. */
 	since: Seq | undefined;
 	unseen: number;
+	/** The name of the aide they brought, when they brought one. */
+	aide?: string;
 }
 
 /** A gap a person can read, not a duration a machine can parse. */
@@ -34,22 +43,62 @@ function plural(n: number, unit: string): string {
 	return `${count(n, unit)} ago`;
 }
 
-/** One line of the record. A presence message has no text, so it reads as an aside. */
+/**
+ * One line of the record. A presence message has no text, so it reads as an
+ * aside; a summary reads like anything else addressed to one person, because
+ * that is what it is.
+ */
 export function renderLine(message: Message): string {
-	if (message.kind === 'said') {
+	if (isSpoken(message) || isSummary(message)) {
 		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}`;
 	}
-	return `· ${message.from} ${verb(message.kind)}`;
+	return `· ${message.from} ${message.kind}`;
 }
 
-function verb(kind: Exclude<Message['kind'], 'said'>): string {
-	return kind === 'arrived' ? 'arrived' : 'left';
+/** One rendered row: a message on its own, or the run a summary stands for. */
+type Row = { line: Message } | { fold: Message[] };
+
+/**
+ * Every seq a summary stands for. A summary is never folded into another one:
+ * the message that stands for a range must survive whatever covers it.
+ */
+function summarised(record: readonly Message[]): Set<Seq> {
+	const ranges = record.filter(isSummary).map((message) => message.covers);
+	const covered = new Set<Seq>();
+	if (ranges.length === 0) return covered;
+	for (const message of record) {
+		if (isSummary(message)) continue;
+		if (ranges.some((range) => message.seq >= range.from && message.seq <= range.through)) {
+			covered.add(message.seq);
+		}
+	}
+	return covered;
+}
+
+/** The record as rows, with each summarised run collapsed into one. */
+function rows(record: readonly Message[]): Row[] {
+	const covered = summarised(record);
+	const out: Row[] = [];
+	for (const message of record) {
+		if (!covered.has(message.seq)) {
+			out.push({ line: message });
+			continue;
+		}
+		const last = out.at(-1);
+		if (last && 'fold' in last) last.fold.push(message);
+		else out.push({ fold: [message] });
+	}
+	return out;
 }
 
 /**
  * The record, with each line's age, and a divider where each person in the
  * room stopped reading. The divider is what lets an agent tell somebody the
  * one thing they missed without re-reading the whole room to them.
+ *
+ * A range an aide has summarised renders as its count, and the summary that
+ * stands for it renders next. The record keeps every message; what a seat
+ * reads is a rendering of it, built fresh at each activation.
  */
 export function renderRecord(
 	record: readonly Message[],
@@ -59,13 +108,23 @@ export function renderRecord(
 	if (record.length === 0) return '(the record is empty)';
 	const dividers = unseenDividers(people);
 	const lines: string[] = [];
-	for (const message of record) {
-		lines.push(`${renderLine(message)}  (${ago(message.at, now)})`);
-		for (const name of dividers.get(message.seq) ?? []) {
-			lines.push(`── ${name} has not seen anything below this line ──`);
-		}
+	for (const row of rows(record)) {
+		lines.push(renderRow(row, now), ...divide(row, dividers));
 	}
 	return lines.join('\n');
+}
+
+function renderRow(row: Row, now: number): string {
+	if ('fold' in row) return `── ${count(row.fold.length, 'message')}, summarised below ──`;
+	return `${renderLine(row.line)}  (${ago(row.line.at, now)})`;
+}
+
+/** A person's divider lands where they stopped reading, folded or not. */
+function divide(row: Row, dividers: Map<Seq, string[]>): string[] {
+	const seqs = 'fold' in row ? row.fold.map((message) => message.seq) : [row.line.seq];
+	return seqs.flatMap((seq) =>
+		(dividers.get(seq) ?? []).map((name) => `── ${name} has not seen anything below this line ──`),
+	);
 }
 
 /** Seq to the people whose divider sits right after it. */
@@ -107,6 +166,7 @@ function notes(person: PersonView, now: number): string {
 	const parts: string[] = [person.presence];
 	if (person.changedAt) parts.push(`since ${ago(person.changedAt, now)}`);
 	if (person.unseen > 0) parts.push(`has not seen the last ${count(person.unseen, 'message')}`);
+	if (person.aide) parts.push(`brings ${person.aide}`);
 	return parts.join(', ');
 }
 

@@ -37,11 +37,32 @@ export interface PresenceMessage {
 	identity?: string;
 }
 
+/**
+ * What one exchange came to. An aide writes it. Nobody speaks it, so it is not
+ * a `said`: a person did not hear it in a room.
+ */
+export interface SummaryMessage {
+	kind: 'summary';
+	seq: Seq;
+	at: string;
+	/** The aide that wrote it. */
+	from: string;
+	/** The person whose question opened the exchange. Always present. */
+	to: string;
+	text: string;
+	/** The range it stands for, contiguous and ending just before this seq. */
+	covers: { from: Seq; through: Seq };
+}
+
 /** One entry on a session's record. */
-export type Message = SpokenMessage | PresenceMessage;
+export type Message = SpokenMessage | PresenceMessage | SummaryMessage;
 
 export function isSpoken(message: Message): message is SpokenMessage {
 	return message.kind === 'said';
+}
+
+export function isSummary(message: Message): message is SummaryMessage {
+	return message.kind === 'summary';
 }
 
 /** Whether a seat is taking a turn. Runtime state, not a seating choice. */
@@ -73,6 +94,8 @@ export interface HumanSeatInfo {
 	name: string;
 	identity: string;
 	presence: PresenceStatus;
+	/** The name of the aide they brought, when they brought one. */
+	aide?: string;
 }
 
 export type SeatInfo = AgentSeatInfo | HumanSeatInfo;
@@ -81,12 +104,18 @@ export type SeatInfo = AgentSeatInfo | HumanSeatInfo;
 export type SessionEvent =
 	/**
 	 * A message landed on the record. Exactly one of these per message,
-	 * whoever wrote it: what a person delivered, what an agent said, and a
-	 * person arriving or leaving all reach a host the same way.
+	 * whoever wrote it: what a person delivered, what an agent said, what an
+	 * aide wrote, and a person arriving or leaving all reach a host the same
+	 * way.
 	 */
 	| { type: 'message'; message: Message }
 	| { type: 'agent_start'; agent: string }
-	| { type: 'say_conflict'; agent: string; missed: Message[] }
+	/**
+	 * The lock refused a message drafted against a record that had moved. It
+	 * names the author rather than the seat: a seat's say and an aide's summary
+	 * are refused the same way, for the same reason.
+	 */
+	| { type: 'conflict'; author: string; missed: Message[] }
 	| { type: 'tool_execution_start'; agent: string; toolName: string }
 	| { type: 'tool_execution_end'; agent: string; toolName: string }
 	| { type: 'agent_end'; agent: string; spoke: boolean }
@@ -123,6 +152,11 @@ export interface HumanDefinition {
 	readonly [HUMAN_BRAND]: true;
 	readonly name: string;
 	readonly identity: string;
+	/**
+	 * The person's counterpart in a room: it holds their brief, writes the one
+	 * message they read at the end of an exchange, and never speaks for them.
+	 */
+	readonly aide?: AgentDefinition;
 }
 
 /** An agent with its attention chosen, from `passive()` or `attentive()`. */

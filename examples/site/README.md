@@ -3,16 +3,20 @@
 A construction management suite where each product is an agent: a time
 tracker, a task list and a materials tracker. Three people share the
 workspace — a project manager in the site office, a foreman on the deck with
-a phone, and a quantity surveyor at a cost desk.
+a phone, and a quantity surveyor at a cost desk. Each of them brings an aide.
 
 Each product holds its own state and its own API and knows nothing of the
 others' internals. It asks them on the record, the way a person does.
 
 ```sh
 cd examples/site
-ANTHROPIC_API_KEY=… pnpm start   # open it in your terminal
-ANTHROPIC_API_KEY=… pnpm demo    # one scripted run, captured as JSON
+echo 'ANTHROPIC_API_KEY=…' > .env   # git ignores it; both scripts read it
+pnpm start                          # open it in your terminal
+pnpm demo                           # one scripted run, captured as JSON
 ```
+
+`AMBION_MODEL` picks the model every product and every aide runs on. It
+defaults to `anthropic/claude-sonnet-5`.
 
 ## What to look for
 
@@ -26,9 +30,10 @@ nobody requested. Try `/join dan` and watch which seats read it.
 deciding the question was not its own. Those decisions never reach the
 record, so the terminal is the only place you see them.
 
-**Presence is context, not a notification.** Leave somebody in the room and
-let the timeout pass. The next product to speak knows they stopped reading,
-and says so.
+**Presence is context, not a notification.** Nothing infers that somebody
+stopped reading: `/leave sam` is what says so, and no clock writes anything.
+The next product to speak reads that Sam is absent, when he left, and how much
+he has not seen.
 
 **Coming back is a briefing.** `/leave priya`, let the others work, then
 `/join priya` and `/missed`. The room marks where each person stopped
@@ -40,13 +45,32 @@ their own data. The task list rewrites due dates and the materials tracker
 moves deliveries because the room decided something, not because anyone
 typed an edit.
 
+**One question, one message back.** Ask "can I promise Thursday for the
+pour?" and watch three products answer it between them. When the room goes
+quiet, the aide of whoever asked writes the one message they read instead of
+the working, marked `∎` and carrying the span it stands for. `/summaries`
+lists them. A question the room answers once draws no summary at all: one
+answer is left in the voice that gave it.
+
+**Each aide writes for one person.** Ask the same question as `priya`, then
+as `sam`, then as `dan`, and compare the three. Priya's opens with the date,
+Sam's with what changes for his crews at seven, Dan's with the money. Nothing
+in the products knows any of that — the preferences live in the aides, in
+`workspace.ts`, and each person's live in theirs alone.
+
+**A summarised range leaves the products' context.** After a summary lands,
+ask a follow-up whose answer was inside the range it stands for. The products
+answer from the summary and from their own APIs, because the record is
+discussion and the products hold the state.
+
 ## The files
 
-| File           | What                                                              |
-| -------------- | ----------------------------------------------------------------- |
-| `workspace.ts` | The products, their APIs and their state; the people and the goal |
-| `main.ts`      | The workspace open in your terminal                               |
-| `demo.ts`      | One scripted run, written out as JSON for a report                |
+| File           | What                                                                        |
+| -------------- | --------------------------------------------------------------------------- |
+| `workspace.ts` | The products, their APIs and their state; the people, their aides, the goal |
+| `main.ts`      | The workspace open in your terminal                                         |
+| `demo.ts`      | One scripted run, written out as JSON for a report                          |
 
-The contracts are [`docs/agent.md`](../../docs/agent.md) and
-[`docs/presence.md`](../../docs/presence.md).
+The contracts are [`docs/agent.md`](../../docs/agent.md),
+[`docs/presence.md`](../../docs/presence.md) and
+[`docs/aide.md`](../../docs/aide.md).

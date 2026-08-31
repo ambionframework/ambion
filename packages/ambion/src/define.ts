@@ -6,6 +6,7 @@ import {
 	type AmbionTool,
 	HUMAN_BRAND,
 	type HumanDefinition,
+	isAgent,
 	SEAT_BRAND,
 	type SeatedAgent,
 	TOOL_BRAND,
@@ -40,15 +41,43 @@ export interface DefineHumanOptions {
 	name: string;
 	/** How the room knows them — agents read it and address them accordingly. */
 	identity: string;
+	/**
+	 * The aide this person brings: an agent that holds their brief and their
+	 * preferences, and writes the one message they read when an exchange
+	 * closes. Optional — a person with no aide is never summarised.
+	 */
+	aide?: AgentDefinition;
 }
 
 export function defineHuman(options: DefineHumanOptions): HumanDefinition {
 	assertName(options.name);
+	if (options.aide) assertAide(options.aide, options.name);
 	return {
 		[HUMAN_BRAND]: true,
 		name: options.name,
 		identity: options.identity,
+		...(options.aide === undefined ? {} : { aide: options.aide }),
 	};
+}
+
+/**
+ * An aide shapes what a room already does, and never makes anything happen. It
+ * carries no tools of its own, so the rule is a fact about the definition
+ * rather than a promise about behaviour: the one hand the runtime gives it
+ * writes to the record and reaches nothing else.
+ */
+function assertAide(aide: AgentDefinition, person: string): void {
+	if (!isAgent(aide)) {
+		throw new Error(`The aide for '${person}' must come from defineAgent.`);
+	}
+	if (aide.name === person) {
+		throw new Error(`An aide takes a name of its own: '${person}' is the person it holds.`);
+	}
+	if (aide.tools.length > 0) {
+		throw new Error(
+			`Aide '${aide.name}' holds tools: an aide shapes what a room does and never acts in it.`,
+		);
+	}
 }
 
 /**
