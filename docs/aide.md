@@ -1,8 +1,12 @@
 # The aide
 
-This document is the design for the aide: the optional agent a person brings
-into a session, which holds their brief and turns the room's work into one
-message they read. **Nothing here is built.** Read [`agent.md`](agent.md) and
+This document is the design contract for the aide: the optional agent a person
+brings into a session, which holds their brief and turns the room's work into
+one message they read. It is shipped. The code lives with the rest of the
+runtime in [`packages/ambion/src`](../packages/ambion/src) — the exchange and
+the summary in [`session.ts`](../packages/ambion/src/session.ts), the fold a
+seat reads in [`render.ts`](../packages/ambion/src/render.ts), the shapes in
+[`types.ts`](../packages/ambion/src/types.ts). Read [`agent.md`](agent.md) and
 [`presence.md`](presence.md) first.
 
 One sentence:
@@ -42,9 +46,11 @@ as they are in it.
 
 It holds two things nothing else in the room holds. **The brief** — what its
 person asked, and what they are trying to decide. **The preferences** — what
-they act on, what they ignore, how long an answer they read. Today the demo
-puts those inside each product's instructions, so every product carries a copy
-of every person. That is a modelling error. What Priya wants belongs to Priya.
+they act on, what they ignore, how long an answer they read. Put those inside
+each product's instructions and every product carries a copy of every person,
+so each new person lengthens every product's prompt. That is a modelling
+error. What Priya wants belongs to Priya, so it lives in her aide and nowhere
+else.
 
 **An aide never decides and never acts as its person.** `deliver` stays the
 person's own act, in their own words. §12 draws that line and says how far the
@@ -60,12 +66,20 @@ the tonnage"_. It does not run the room and it does not answer for anyone.
 The unit is the **exchange**: a question, and everything the room does until it
 goes quiet again. The room goes from idle, to active, and back to idle.
 
-- **It opens** when a person's `said` lands in an idle room.
+- **It opens** when a person's `said` lands and no exchange is open.
 - **It closes** when no agent is active. `settled()` resolves.
 
 **Only a question opens one.** Arriving and leaving are messages, and they may
 wake a seat, but they open no exchange and are never summarised. A room where
 nobody asks anything is never summarised at all.
+
+In an idle room no exchange is open, because one closes the moment the room
+goes quiet. So the first clause reads as "into an idle room" almost always. It
+is written on the exchange rather than on the room's status for the case that
+is busy and has no owner: somebody arrives, the seat that watches the door
+wakes, and the question lands on top of work nobody asked for. The question
+still owns what follows. A rule read off the room's status would leave that
+question unsummarised for ever.
 
 **Quiescence is a true end, not a gap.** A seat that says something activates
 its readers inside its own `say`, before its own turn finishes, so the active
@@ -145,11 +159,22 @@ refuses a seat:
 The aide reads the record to `through` and drafts. At the moment it commits,
 the room checks: if the record has not moved, the summary lands immediately
 after the range it covers, contiguous and in order. If the record has moved,
-the commit is refused and the aide is handed what it missed — the same
-`missed` list a seat gets, for the same reason.
+the commit is refused, and the host hears the same `conflict` event a refused
+seat raises, naming the aide and what it missed.
 
-**A refused summary drafts again at the next quiescence.** Its range is a live
-read, so the retry covers what it covered before plus whatever won the race.
+**A refused aide is told, in its own turn.** It writes by calling a tool
+(§14), so the refusal reaches it the way a refused say reaches a seat: as the
+tool's failure, listing what landed. The range widens to hold those messages,
+and the aide drafts again over it immediately. It gets two drafts. After the
+second refusal the room is moving faster than the aide writes, and the turn
+ends rather than drafting for ever.
+
+**A summary the turn could not land drafts again at the next quiescence.** Its
+range is a live read, so the retry covers what it covered before plus whatever
+won the race. The two halves of the rule divide the work: the aide redrafts
+inside its turn while that is still useful, and the next quiet room catches a
+turn that ran out of drafts or failed outright.
+
 Two questions asked in quick succession become one summary, which is right:
 they were one conversation. If somebody else's exchange won the race, it falls
 inside the range too, and its person reads what happened while they were
@@ -171,11 +196,11 @@ aide writes. Quiescence is still simply "no agent is active".
 **A failed model call is a refused commit with extra steps.** If the aide's
 turn errors, no summary is written, the range stays uncompacted and fully
 visible, and the next quiescence is another chance. The safe direction is the
-default, and it needed no special case.
+default, and it takes no special case.
 
-One naming consequence: the event the room emits on a refusal is currently
-`say_conflict`. The lock is not about says any more. It should be `conflict`,
-carrying the author and what they missed.
+The event the room emits on a refusal is `conflict`, and it carries the author
+and what they missed. It names the author rather than the seat, because the
+lock is not about says alone.
 
 ---
 
@@ -184,9 +209,9 @@ carrying the author and what they missed.
 A room holds several people, and each may bring an aide. Only one writes per
 exchange:
 
-> **A person's question into an idle room opens an exchange and owns it.
-> Messages that land while the room is active steer the seats already working
-> and change nothing — not the owner, and not which aide writes at the close.**
+> **A person's question opens an exchange and owns it. Messages that land into
+> an open exchange steer the seats already working and change nothing — not the
+> owner, and not which aide writes at the close.**
 
 The room holds one name while an exchange is open and drops it at the close.
 That is run state, like the count of active seats. It does not survive a
@@ -257,15 +282,21 @@ monotonic, and `messages()` returns every message for ever. The past does not
 change under a reader.
 
 **A summarised range leaves the seats' context.** From the next activation,
-the session renders the range as its summary instead of its messages:
+the session renders the range as its count and the summary that stands for it:
 
 ```
-[priya] Can I tell the client Thursday for the pour?          (2 hours ago)
-── 10 messages, summarised below ──
+· priya arrived                                               (2 hours ago)
+── 11 messages, summarised below ──
 [priya-aide → priya] Thursday is out: the inspector needs 48h notice and is
   not booked. Earliest is Saturday 30 Aug. It needs four things: …
 [sam] Rain all Thursday morning. I am not pouring into that.  (12 min ago)
 ```
+
+The question folds with the answers, because the range starts at the question
+(§3). Nothing is lost by that: the summary answers what she asked, so it
+carries the question inside it. `renderRecord` reads the fold off the record
+itself — a summary carries the range it stands for — so the renderer keeps no
+state and a seat reads the same room whoever renders it.
 
 **Storage and context are different questions.** What a session keeps is the
 record. What a seat is handed at an activation is a rendering of it, built
@@ -337,6 +368,13 @@ that exists, not the reader. The working is hidden from every reader, because
 it was working rather than conversation, and there is no per-person view to
 keep straight.
 
+The example client does the smaller half of this. A terminal cannot re-present
+what it has already printed, so
+[`main.ts`](../examples/site/src/main.ts) marks a summary with `∎` and prints
+the span it stands for — `∎ priya-aide → priya (2–12)` — rather than folding
+the lines above it. Folding is the job of a client that can re-render, and
+`covers` is what it needs to do it.
+
 ---
 
 ## 11. Nothing an aide writes wakes anybody
@@ -346,17 +384,17 @@ just closed. So the routing rule refuses it — and it refuses on the author,
 not on the kind:
 
 ```ts
-function wakes(seat, target, message) {
-  if (fromAide(message)) return false;
+function wakes(seat, target, message, fromAide) {
+  if (fromAide) return false;
   ...
 }
 ```
 
-**The guard belongs to the author.** An earlier draft put it on the message
-kind, `isSummary(message)`, which held for the one thing an aide writes today
-and would have held for nothing it writes tomorrow. §12 lets an aide speak
-during an exchange; a rule about summaries would not have covered that, and
-the boundary would have been prose rather than code.
+**The guard belongs to the author.** A guard on the message kind —
+`isSummary(message)` — holds for the one thing an aide writes today and for
+nothing it writes tomorrow. §12 lets an aide speak during an exchange, and a
+rule about summaries does not cover that: the boundary would be prose rather
+than code.
 
 Written this way, one line enforces the whole of §12's rule at every rung. An
 aide may say anything into a room that is already working, and none of it can
@@ -373,8 +411,8 @@ An aide is a person's counterpart, and the pull to give it more will be
 constant. The functions form a ladder, and the rungs look adjacent but are
 not:
 
-1. **Consolidate.** Write the summary of an exchange. **This is what gets
-   built.**
+1. **Consolidate.** Write the summary of an exchange. **This is the rung the
+   runtime implements.**
 2. **Hold preferences.** Shape that summary to what its person acts on. Comes
    with rung 1: it is the aide's instructions, not new machinery.
 3. **Speak during the work.** Tell the seats mid-exchange that _"Priya will
@@ -405,7 +443,9 @@ Which is the rule that decides whether an aide is still an aide:
 
 §11 enforces the first half in one line, at every rung, because the guard is on
 the author rather than on what it wrote. The rest is checkable by reading a
-definition: an aide is given no tools.
+definition: an aide carries no tools of its own, and `defineHuman` refuses one
+that does. What it holds is the runtime's, and the runtime hands it nothing
+that reaches a product.
 
 What the rule forbids, permanently:
 
@@ -418,6 +458,14 @@ What the rule forbids, permanently:
 Rungs 3 and 4 are named so that building them is a decision rather than a
 drift. Only rung 1 is specified below.
 
+Rung 1 gives them a shape to arrive in. An aide writes by calling a tool, so
+rung 3 is a second tool — a `say` that speaks into a room already working —
+rather than a new mechanism. §11's guard is what keeps that safe: it refuses
+on the author, so nothing an aide says through any tool can wake a seat. The
+tools an aide holds are the runtime's own, and they reach the record and
+nothing else; a tool into a product's state is what §12 forbids, and what
+`defineHuman` refuses.
+
 ---
 
 ## 13. It is optional
@@ -425,9 +473,9 @@ drift. Only rung 1 is specified below.
 A person may bring an aide. Most will. Nothing requires it.
 
 **A question from somebody with no aide is never summarised.** The exchange it
-opens runs and closes as it does today, every reader sees it whole, and no
-range leaves any seat's context. A room where nobody brings an aide behaves in
-every respect as the room behaves now.
+opens runs and closes with nothing written at the end of it, every reader sees
+it whole, and no range leaves any seat's context. A room where nobody brings
+an aide is a room an aide changes in no respect.
 
 That is the guarantee this design offers: **it adds one message, and it takes
 nothing away that anybody can still reach.**
@@ -471,18 +519,49 @@ session.subscribe((event) => {
 ```
 
 `Visit` is unchanged, and there is no cursor to pass: the exchange names its
-own span. `defineHuman` gains one optional field and the record gains one
-kind. **That is the whole surface.**
+own span. `defineHuman` takes one optional field, the record holds one more
+kind, and a person's seat names the aide they brought (`SeatInfo`, in
+[`presence.md`](presence.md) §10). **That is the whole surface.**
+
+**`settled()` does not wait for an aide.** It reports that no agent is active,
+which is the meaning §5 needs it to keep, and the aide starts after that. So a
+host that wants the summary before it does the next thing waits for the
+`message` event that carries it, rather than for the room. Nothing holds the
+room busy while an aide writes.
+[`examples/site/src/demo.ts`](../examples/site/src/demo.ts) shows that wait,
+and it is the only thing an aide asks of a host.
 
 **What an aide is handed.** The room's goal, the roster, and the range it is
 about to cover — the question and every message after it. Not the record before
-that range: a summary its person has already read is theirs, not its. On a
-refused commit it is handed the same `missed` list a seat gets, and drafts
-again over the widened range.
+that range: a summary its person has already read is theirs, not its. A refused
+draft is told what landed, in the failure the tool returns, and the range it
+drafts again over holds those messages too.
 
-**What an aide is given.** A model and instructions, and no tools. §12's rule —
-never call a tool that changes a product's state — is then a fact about the
-definition rather than a promise about behaviour.
+**What an aide is given.** A model, instructions, and one tool of the
+runtime's: `summarise({ text })`. It writes to the record and nothing else — no
+`to`, because a summary is always addressed to its person. `defineHuman`
+refuses an aide that carries tools of its own, so §12's rule — never call a
+tool that changes a product's state — stays a fact about the definition rather
+than a promise about behaviour.
+
+**Writing is a tool, and silence is a decision.** An aide that ends its turn
+without calling `summarise` leaves the range whole, and every reader still sees
+all of it. That is rule 3 of the core, for an aide: when the room's answer
+already reads as one answer, standing between a person and it would only add a
+voice. The threshold in §4 sits underneath as a cost floor — below it the room
+spends no model call at all — and above it the judgment is the aide's, where
+the rest of the judgment lives.
+
+**A turn is bounded by the tool, not by the model's good sense.** Two drafts
+per turn (§5), and a cap on how often the tool may be called at all. A model
+that keeps calling a tool that keeps refusing would draft for ever, so the
+tool ends the turn itself rather than asking the model to stop. Nothing else
+here bounds a turn — which is [`agent.md`](agent.md) §7's gap, closed where it
+can be closed.
+
+**What the room reads it as.** A seat's context carries one paragraph about
+folds, and only in a room where somebody brought an aide. A room with no aide
+in it renders no fold, and no paragraph about one.
 
 **Where its turn lands.** In a downstream session, `<room>:<person>`, beside
 the seats' own. Rule 8 keeps every activation auditable after the fact, and a
@@ -538,18 +617,35 @@ something established in a summarised range that no product owns, and §9
 exists to keep that class empty. Whether a real room keeps §9 is the thing to
 watch.
 
-**Quiescence is now a reason to spend money.** No seat activates when the room
-settles, so rule 1 keeps its letter. But the room now makes a model call that
-no message asked for, and that is a new kind of trigger. It is the seam where
+**Quiescence is a reason to spend money.** No seat activates when the room
+settles, so rule 1 keeps its letter. But the room makes a model call that no
+message asked for, and that is a second kind of trigger. It is the seam where
 a later feature will want to hang an interim summary or a room-level
 compactor. §15 forbids both by name; the mechanism to add them exists.
 
 **A run that stops mid-exchange writes no summary.** `stopSession` aborts the
-turns in flight, so the exchange never closes. The person asked and heard
-nothing, and the record shows a question, some work and a shutdown. Accepted.
+turns in flight, so the exchange never closes. It aborts a draft in flight for
+the same reason, and a draft that does finish after the stop commits nothing.
+The person asked and heard nothing, and the record shows a question, some work
+and a shutdown. Accepted.
 
-**What a client owes.** §10 asks a client to re-present past messages when a new
-one arrives. That is more than a log does, and no client here has done it.
+**A first summary reaches back as far as the record does.** `from` is the seq
+after this person's last summary, and a person who has none is covered from
+their first question. In a room they have used for a week without an aide,
+their first summary covers the week. The rule is right — they have read none
+of it — but the first one is expensive, and nothing bounds it. A person who
+joins a long record is the case to watch.
+
+**A summary can be owed for ever.** A race is handled inside the turn, but a
+turn that fails outright, or that runs out of drafts, waits for the next
+quiescence — and a room that is never woken again never has one. The range
+stays whole and every reader still sees it, so nothing is lost; but the one
+message never arrives, and nothing reports that it is owed. A run that ends
+the day with an owed summary is the case to watch.
+
+**What a client owes.** §10 asks a client to re-present past messages when a
+new one arrives. That is more than a log does, and no client in this repository
+does it.
 
 **The room still chatters.** An aide makes ten messages readable. It does not
 make the room produce fewer, and the say instruction still rewards adding
@@ -558,18 +654,63 @@ chatter is one run away, and it would change what an aide has to do.
 
 ---
 
-## 17. What would prove it
+## 17. What proves it
 
-Run the same scenario twice: once as it stands, and once with an aide for
-Priya.
+The milestone tests live in
+[`aide.test.ts`](../packages/ambion/test/aide.test.ts), one per claim this
+document makes loudly:
 
-It works if her summary answers what she asked and reads whole to somebody who
-has not read the working; if the two messages outside her exchange are
-untouched and still in the product's own voice; if the record holds all thirty
-messages plus the summaries with nothing rewritten; if a seat's context at the
-tenth activation is smaller than it is today; and if **a seat activated after
-the summary can still do its job from it.** Test the last by asking a
-follow-up whose answer is inside the summarised range.
+- An exchange the room answered twice closes into one message, addressed to
+  its person, contiguous with the range it covers, drafted from that range and
+  with one hand that reaches the record and nothing else. §3, §4, §7, §14.
+- One answer is left as it was given, in the voice that gave it. §4.
+- A person with no aide is never summarised, in a room whose prompt does not
+  mention a fold. §13.
+- A summary wakes nobody, and the next activation reads the fold and the
+  summary in place of the messages, while the record keeps every one of them.
+  §8, §11.
+- A question that lands while a seat works on what nobody asked for still
+  opens an exchange and owns it. §3.
+- A draft refused because the room moved raises `conflict`, and the aide
+  redrafts over the widened range inside the same turn. §5.
+- An aide that keeps drafting into a room that keeps moving is stopped by the
+  runtime rather than by its own good sense, and writes at the next
+  quiescence. §5, §14.
+- An aide that stands down without writing is owed nothing for it. §14.
+- A turn that fails outright leaves the summary owed until the next quiet
+  room. §16.
+- The person whose question opened the exchange owns it, and a second person
+  speaking into it gets nothing. §6.
+- An aide outlives its person's visit by one exchange. §6.
+- An aide's turns land in `<room>:<person>`, and the aide it brought is named
+  on the seat a host reads. §14.
+- `defineHuman` refuses an aide that holds tools or takes its person's name,
+  and `visitSession` refuses one whose name the room already holds. §12, §14.
+
+All in-process, in vitest, on a scripted stream.
+
+The runnable proof is [`examples/site`](../examples/site), where each of the
+three people brings an aide, and what each of them acts on lives in that aide
+rather than in every product's instructions.
+
+---
+
+## 18. What would still prove it
+
+The tests prove the mechanism. They do not prove that the one message is worth
+reading, and that needs a live run.
+
+Run the same scenario twice: once with the aides taken out of
+[`workspace.ts`](../examples/site/src/workspace.ts), and once as it stands.
+
+It works if Priya's summary answers what she asked and reads whole to somebody
+who has not read the working; if the two messages outside her exchange are
+untouched and still in the product's own voice; if the record holds every
+message plus the summaries with nothing rewritten; if a seat's context at the
+tenth activation is smaller with the aides than without them; and if **a seat
+activated after the summary can still do its job from it.** The scripted run
+asks that last question outright: Priya comes back and asks a follow-up whose
+answer is inside the range that has left every seat's context.
 
 It fails if the summary reads like minutes rather than an answer, if a seat
 answers worse after the range leaves its context, or if the record has to
@@ -579,4 +720,4 @@ Three numbers: how many messages a person reads per question, how large a
 seat's context is at the tenth activation with and without an aide, and
 whether the answers hold up. The run in [`demos/`](../demos) is the
 baseline — three questions, 17 of 19 agent messages inside them, 148,038
-characters of context over 25 activations.
+characters of context over 25 activations. **That comparison is not run.**

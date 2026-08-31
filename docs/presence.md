@@ -208,8 +208,12 @@ interface Presence {
   identity?: string;
 }
 
-export type Message = Spoken | Presence;
+export type Message = Spoken | Presence | Summary;
 ```
+
+`Summary` is the third kind, and it belongs to [`aide.md`](aide.md) rather
+than to this document: an aide writes it, nobody speaks it, and it opens and
+closes no visit.
 
 Every rule of the core applies to a presence message unchanged, and that is
 the whole reason for this shape.
@@ -407,11 +411,12 @@ downstream session, where rule 8 of the core puts them.
 
 An arrival is worth waking for only if an agent can judge it, and judging it
 takes three things: what the room is for, what time it is, and how long this
-person has been gone. The context an agent reads on Andrei's arrival:
+person has been gone. What an agent reads on Andrei's arrival — the goal from
+its system prompt, and then the activation's own message:
 
 ```
-The session 'initiative' exists to: Ship payments v2 this quarter. Decide
-scope, sequence the work, and keep the plan of record current.
+This session exists to: Ship payments v2 this quarter. Decide scope, sequence
+the work, and keep the plan of record current.
 
 The time is 2026-08-27 16:04 UTC.
 
@@ -521,7 +526,14 @@ export type SeatInfo =
       attention: Attention;
       sessionId: string;
     }
-  | { kind: 'human'; name: string; identity: string; presence: PresenceStatus };
+  | {
+      kind: 'human';
+      name: string;
+      identity: string;
+      presence: PresenceStatus;
+      /** The aide they brought, when they brought one. See aide.md. */
+      aide?: string;
+    };
 ```
 
 ---
@@ -560,7 +572,12 @@ Presence is the fact a workspace needs before it can have channels: a channel
 with read/write contracts must know who is reading, and a channel's record
 carries the same arrivals this one does.
 
-Three things sit directly on top and are not here. **Notifying somebody an
+One thing sits directly on top and is built: [`aide.md`](aide.md), the aide a
+person brings. Presence is what makes it possible to say whose exchange this
+is, and a person's aide outlives their visit by one exchange — they may ask
+and walk out, and the answer still gets written for them.
+
+Three more sit on top and are not here. **Notifying somebody an
 agent addressed while they were absent** — the record holds both halves
 already, the directed message and the `left` before it. **Catching up across
 rooms**, one person and many sessions with one answer to "what did I miss",

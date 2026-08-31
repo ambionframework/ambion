@@ -3,15 +3,19 @@
  *
  * Three products wait in it. You visit as one of three people, and can open a
  * second and third visit to watch presence work with more than one of you in
- * the room at once.
+ * the room at once. Each person brings an aide: ask a question, let the room
+ * work it out, and read the one message your aide writes when it goes quiet.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm start   (from examples/site)
  */
 import * as readline from 'node:readline';
 import {
 	isSpoken,
+	isSummary,
+	type Message,
 	readSession,
 	type SessionEvent,
+	type SummaryMessage,
 	startSession,
 	stopSession,
 	type Visit,
@@ -32,6 +36,9 @@ const colours: Record<string, string> = {
 	priya: '\x1b[36m',
 	sam: '\x1b[35m',
 	dan: '\x1b[31m',
+	'priya-aide': '\x1b[96m',
+	'sam-aide': '\x1b[95m',
+	'dan-aide': '\x1b[91m',
 };
 const dim = '\x1b[2m';
 const red = '\x1b[31m';
@@ -54,6 +61,12 @@ session.subscribe((event: SessionEvent) => {
 			break;
 		case 'message': {
 			const m = event.message;
+			if (isSummary(m)) {
+				// The one message its person reads instead of the working. The
+				// range it stands for is above it, and it wakes nobody.
+				show(`${paint(m.from, `∎ ${m.from} → ${m.to}`)} (${span(m)}): ${m.text}`);
+				break;
+			}
 			if (!isSpoken(m)) {
 				show(`${dim}· ${m.from} ${m.kind}${reset}`);
 				break;
@@ -70,9 +83,9 @@ session.subscribe((event: SessionEvent) => {
 				show(`${dim}· ${event.agent} read it and stayed idle${reset}`);
 			}
 			break;
-		case 'say_conflict':
+		case 'conflict':
 			show(
-				`${dim}· ${event.agent} was refused — the record moved (${event.missed.length} missed)${reset}`,
+				`${dim}· ${event.author} was refused — the record moved (${event.missed.length} missed)${reset}`,
 			);
 			break;
 		case 'error':
@@ -100,11 +113,13 @@ function help(): void {
 			'  /record           everything on the record',
 			'  /missed           what landed since you last stopped reading',
 			'  /api              every call the products made into their own data',
+			'  /summaries        what each aide wrote, and the range it stands for',
 			'  /abort            cancel every turn in flight',
 			'  /quit             leave, stop the workspace, and exit',
 			'',
 			'  The task list watches the door. Try /join dan and see whether it has',
 			'  anything of his; then ask "can I promise Thursday for the pour?"',
+			'  When the room goes quiet, your aide writes the one message you read.',
 			'',
 		].join('\n'),
 	);
@@ -117,15 +132,32 @@ function who(): void {
 				`  ${paint(seat.name, seat.name)} (${seat.status}, ${seat.attention}): ${seat.identity}`,
 			);
 		} else {
-			console.log(`  ${paint(seat.name, seat.name)} (${seat.presence}): ${seat.identity}`);
+			const aide = seat.aide ? `, brings ${seat.aide}` : '';
+			console.log(`  ${paint(seat.name, seat.name)} (${seat.presence}${aide}): ${seat.identity}`);
 		}
 	}
 }
 
+const span = (m: SummaryMessage) => `${m.covers.from}–${m.covers.through}`;
+
+/** One line per entry, whoever wrote it: three kinds, one record. */
+function line(m: Message): string {
+	if (isSummary(m)) return `[${m.seq}] ∎ ${m.from} → ${m.to} (${span(m)}): ${m.text}`;
+	if (isSpoken(m)) return `[${m.seq}] ${m.from}${m.to ? ` → ${m.to}` : ''}: ${m.text}`;
+	return `[${m.seq}] · ${m.from} ${m.kind}`;
+}
+
 async function record(): Promise<void> {
-	for (const m of await session.messages()) {
-		if (isSpoken(m)) console.log(`  [${m.seq}] ${m.from}${m.to ? ` → ${m.to}` : ''}: ${m.text}`);
-		else console.log(`  [${m.seq}] · ${m.from} ${m.kind}`);
+	for (const m of await session.messages()) console.log(`  ${line(m)}`);
+}
+
+/** One exchange, one message: what each aide wrote, and what it stands for. */
+async function summaries(): Promise<void> {
+	const written = (await session.messages()).filter(isSummary);
+	if (written.length === 0) return console.log('  (no aide has written yet)');
+	for (const m of written) {
+		console.log(`  [${m.seq}] ${paint(m.from, m.from)} → ${m.to}, for ${span(m)}:`);
+		console.log(`      ${m.text.replace(/\n/g, '\n      ')}`);
 	}
 }
 
@@ -135,11 +167,7 @@ async function missed(): Promise<void> {
 		console.log('  (you have not stopped reading yet — nothing to catch up on)');
 		return;
 	}
-	for (const m of await session.messages({ since })) {
-		console.log(
-			isSpoken(m) ? `  [${m.seq}] ${m.from}: ${m.text}` : `  [${m.seq}] · ${m.from} ${m.kind}`,
-		);
-	}
+	for (const m of await session.messages({ since })) console.log(`  ${line(m)}`);
 }
 
 function api(): void {
@@ -180,6 +208,7 @@ const commands = new Map<string, (arg: string) => void | Promise<void>>(
 		'/record': record,
 		'/missed': missed,
 		'/api': api,
+		'/summaries': summaries,
 		'/join': join,
 		'/leave': leave,
 		'/as': (name: string) => {

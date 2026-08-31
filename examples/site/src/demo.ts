@@ -1,10 +1,10 @@
 /**
  * One scripted run of the workspace, captured as JSON for a demo report.
  *
- * The products, their APIs and the people all live in `workspace.ts`; this
- * file only decides who arrives, what they ask, and when they leave — then
- * writes out the event timeline, every activation with its outcome, and each
- * product's own downstream session.
+ * The products, their APIs, the people and their aides all live in
+ * `workspace.ts`; this file only decides who arrives, what they ask, and when
+ * they leave — then writes out the event timeline, every activation with its
+ * outcome, what each aide wrote, and each seat's own downstream session.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm demo   (from examples/site)
  */
@@ -12,6 +12,7 @@ import { writeFileSync } from 'node:fs';
 import {
 	InMemorySessionRepo,
 	isSpoken,
+	isSummary,
 	type Message,
 	type SessionEvent,
 	startSession,
@@ -36,6 +37,8 @@ const OUT = process.env.DEMO_OUT ?? 'demo-run.json';
 
 /** The commentary names the products, so it needs to know who is not one. */
 const PEOPLE = new Set([priya.name, sam.name, dan.name]);
+/** An aide is not a seat: it takes a turn when an exchange closes, and no message wakes it. */
+const AIDES = new Set([priya, sam, dan].flatMap((p) => (p.aide ? [p.aide.name] : [])));
 
 const repo = new InMemorySessionRepo();
 const NAME = WORKSPACE;
@@ -87,10 +90,12 @@ function track(event: SessionEvent, at: string): void {
 		openBySeat.set(event.agent, a);
 		return;
 	}
-	const open = openBySeat.get('agent' in event ? event.agent : '');
+	const open = openBySeat.get(
+		'agent' in event ? event.agent : 'author' in event ? event.author : '',
+	);
 	if (!open) return;
 	if (event.type === 'tool_execution_start') open.tools.push(event.toolName);
-	if (event.type === 'say_conflict') open.conflicts += 1;
+	if (event.type === 'conflict') open.conflicts += 1;
 	if (event.type === 'agent_end') {
 		open.endedAt = at;
 		open.spoke = event.spoke;
@@ -100,6 +105,11 @@ function track(event: SessionEvent, at: string): void {
 
 /** A running commentary, so the run is watchable while it happens. */
 function narrate(event: SessionEvent): void {
+	if (event.type === 'message' && isSummary(event.message)) {
+		const m = event.message;
+		process.stderr.write(`∎ ${m.from} → ${m.to} (${m.covers.from}–${m.covers.through})\n`);
+		process.stderr.write(`  ${m.text.replace(/\n/g, '\n  ')}\n`);
+	}
 	if (event.type === 'message' && isSpoken(event.message) && !PEOPLE.has(event.message.from)) {
 		const to = event.message.to ? ` → ${event.message.to}` : '';
 		process.stderr.write(`${event.message.from}${to}: ${event.message.text.slice(0, 78)}\n`);
@@ -110,9 +120,32 @@ function narrate(event: SessionEvent): void {
 	if (event.type === 'error') process.stderr.write(`! ${event.agent}: ${event.error.message}\n`);
 }
 
+/**
+ * An aide writes after the room is quiet, and `settled()` does not wait for
+ * one: the room is never held busy while an aide works. A report wants what
+ * they wrote, so this run waits for them itself.
+ */
+let aidesWorking = 0;
+const aideWaiters: (() => void)[] = [];
+
+function noteAide(event: SessionEvent): void {
+	if (event.type === 'agent_start' && AIDES.has(event.agent)) aidesWorking += 1;
+	if (event.type !== 'agent_end' || !AIDES.has(event.agent)) return;
+	aidesWorking -= 1;
+	if (aidesWorking === 0) for (const resolve of aideWaiters.splice(0)) resolve();
+}
+
+/** Quiet, and every aide that had something to write has written it. */
+async function quiescent(): Promise<void> {
+	await session.settled();
+	for (let waited = 0; waited < 3; waited += 1) await new Promise((r) => setImmediate(r));
+	while (aidesWorking > 0) await new Promise<void>((resolve) => aideWaiters.push(resolve));
+}
+
 session.subscribe((event) => {
 	const at = new Date().toISOString();
 	track(event, at);
+	noteAide(event);
 	narrate(event);
 	timeline.push(
 		event.type === 'error'
@@ -128,33 +161,42 @@ const step = (s: string) => {
 
 step('priya opens the workspace to confirm the pour date for the client');
 const priyaVisit = await visitSession(session, priya);
-await session.settled();
+await quiescent();
 
-step('priya asks the question she has to answer today');
+step('priya asks the question she has to answer today; her aide writes the answer');
 await priyaVisit.deliver({ text: 'Can I tell the client Thursday for the Level 3 pour, or not?' });
-await session.settled();
+await quiescent();
 
 step('priya leaves for a site walk without giving a new date');
 await priyaVisit.leave();
-await session.settled();
+await quiescent();
 
-step('sam opens it from the deck with a forecast');
+step('sam opens it from the deck with a forecast; his aide writes for a man on a deck');
 const samVisit = await visitSession(session, sam);
 await samVisit.deliver({
 	text: 'Rain all Thursday morning. I am not pouring into that. What do you need from me to move it?',
 });
-await session.settled();
+await quiescent();
 
-step('dan opens it to price the move');
+step('dan opens it to price the move; his aide writes the money');
 const danVisit = await visitSession(session, dan);
 await danVisit.deliver({
 	text: 'What does moving cost, and is there anything of mine holding this up?',
 });
-await session.settled();
+await quiescent();
 
 step('priya comes back to decisions she did not see made');
 const priyaBack = await visitSession(session, priya);
-await session.settled();
+await quiescent();
+
+// The proof the design asks for: a follow-up whose answer sits inside a range
+// that has left every seat's context. The seats answer it from their summary
+// and their own APIs, not from the messages the fold replaced.
+step('priya asks a follow-up about a range the seats now read as one message');
+await priyaBack.deliver({
+	text: 'Remind me what Saturday needs from me before I ring the client.',
+});
+await quiescent();
 
 const finalRecord: Message[] = await session.messages();
 const missed =
@@ -162,8 +204,13 @@ const missed =
 const sinceOnReturn = priyaBack.since;
 const seats = session.seats();
 
+/**
+ * Every downstream session the run wrote: `<room>:<agent>` for a seat, and
+ * `<room>:<person>` for the aide that writes for them.
+ */
 const seatSessions: {
 	agent: string;
+	kind: 'agent' | 'aide';
 	sessionId: string;
 	blocks: { at: string; turns: unknown[] }[];
 }[] = [];
@@ -182,7 +229,13 @@ for (const metadata of await repo.list()) {
 		const message = (entry as { message?: unknown }).message;
 		if (message !== undefined) blocks.at(-1)?.turns.push(message);
 	}
-	seatSessions.push({ agent: metadata.id.slice(NAME.length + 1), sessionId: metadata.id, blocks });
+	const slug = metadata.id.slice(NAME.length + 1);
+	seatSessions.push({
+		agent: slug,
+		kind: PEOPLE.has(slug) ? 'aide' : 'agent',
+		sessionId: metadata.id,
+		blocks,
+	});
 }
 
 await stopSession(session);
@@ -197,6 +250,7 @@ writeFileSync(
 			steps,
 			timeline,
 			record: await session.messages().catch(() => finalRecord),
+			summaries: finalRecord.filter(isSummary),
 			missedOnReturn: missed,
 			sinceOnReturn,
 			seats,
@@ -206,7 +260,13 @@ writeFileSync(
 			tasksAfter: tasksState,
 			deliveriesAfter: materialsState.deliveries,
 			overtimeAfter: shiftsState.overtimeRequests,
-			people: [priya, sam, dan].map((p) => ({ name: p.name, identity: p.identity })),
+			people: [priya, sam, dan].map((p) => ({
+				name: p.name,
+				identity: p.identity,
+				aide: p.aide
+					? { name: p.aide.name, identity: p.aide.identity, instructions: p.aide.instructions }
+					: undefined,
+			})),
 		},
 		null,
 		2,

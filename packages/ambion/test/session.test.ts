@@ -512,10 +512,10 @@ describe('startSession', () => {
 
 		const texts = spoken(await session.messages()).map((m) => m.text);
 		expect(texts).toEqual(['thoughts?', 'the point', 'a genuinely different angle']);
-		const conflicts = events.filter((e) => e.type === 'say_conflict');
+		const conflicts = events.filter((e) => e.type === 'conflict');
 		expect(conflicts).toHaveLength(1);
-		expect(conflicts[0]).toMatchObject({ agent: 'second' });
-		const missed = conflicts[0]?.type === 'say_conflict' ? conflicts[0].missed[0] : undefined;
+		expect(conflicts[0]).toMatchObject({ author: 'second' });
+		const missed = conflicts[0]?.type === 'conflict' ? conflicts[0].missed[0] : undefined;
 		expect(missed && isSpoken(missed) && missed.text).toBe('the point');
 		// the failure reached the model as a tool result carrying the missed line
 		expect(secondContexts[1]).toContain('Not delivered');

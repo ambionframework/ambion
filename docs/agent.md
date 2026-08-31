@@ -117,6 +117,11 @@ the record like an agent. `identity` is how the room knows them. What a human
 never has: instructions, tools, or a model — humans are not run, and a `say`
 directed at one wakes nothing.
 
+One optional field goes with them: `aide`, an agent that holds their brief and
+writes the one message they read when an exchange closes. It is not seated, no
+message activates it, and nothing it writes wakes anybody.
+[`aide.md`](aide.md) is the contract for it.
+
 A human is not composition and is not passed to `startSession`. The value is
 what somebody visits as: `visitSession(session, andrei)` returns a visit, the
 visit delivers, and the runtime stamps the record from it — who-said-what is
@@ -193,7 +198,7 @@ needs is awaited by the first call that needs it. `stopSession` returns a
 promise, because draining is the point of calling it.
 
 What the record holds is one union (`Message` in `types.ts`): what a
-participant said, and what a person did.
+participant said, what a person did, and what one exchange came to.
 
 ```ts
 type Message =
@@ -211,12 +216,23 @@ type Message =
       at: string;
       from: string; // stamped from the visit the runtime observed
       identity?: string; // on 'arrived' alone: how the room knew them
+    }
+  | {
+      kind: 'summary';
+      seq: number;
+      at: string;
+      from: string; // the aide that wrote it
+      to: string; // the person whose question opened the exchange
+      text: string;
+      covers: { from: number; through: number }; // the range it stands for
     };
 ```
 
 The second kind carries no `text`, because the person said nothing.
-[`presence.md`](presence.md) specifies it; every rule below applies to both
-kinds unchanged, which is why it is one union and not two records.
+[`presence.md`](presence.md) specifies it. The third is written by an aide
+when an exchange closes, and nobody spoke it; [`aide.md`](aide.md) specifies
+it. Every rule below applies to all three kinds unchanged, which is why it is
+one union and not three records.
 
 Beyond identity, the mechanics are eight rules. The first six are the room's
 routing and voice; all of the routing is one function, `dispatch` in
@@ -271,9 +287,10 @@ a rule against rehearsal: a question only one participant can answer is asked
 with one directed `say`, never posed to the room first — a `say` is a
 message, not a thought.
 
-**5. No one speaks over the room.** A `say` commits only against a record its
-seat has heard in full — the view it was handed, plus every steer that has
-landed in its transcript since (`viewSeq` in `session.ts`). If the record
+**5. No one speaks over the room.** A message commits only against a record
+its author has read in full. For a seat that is its `say`, against the view it
+was handed plus every steer that has landed in its transcript since (`viewSeq`
+in `session.ts`). If the record
 moved past that, the say fails without landing, and the failure carries the
 messages the seat missed: the same steering contract, enforced at the tool
 boundary, where delivery is guaranteed rather than best-effort. The seat then
@@ -281,8 +298,10 @@ decides again — speak because something is still worth adding, or go quiet
 because the point stands; rule 3's bar, now with the hearing enforced. First
 to commit wins, ties are impossible (the check and the commit share one
 tick), and a room with no races pays nothing. The refusal shows on the stream
-as `say_conflict`, and the guarantee is the point: every message on the
-record was spoken by a seat that had heard everything before it.
+as `conflict`, which names the author rather than the seat: an aide's summary
+is refused at the same boundary, for the same reason. The guarantee is the
+point: every message on the record was written by somebody who had read
+everything before it.
 
 **6. A seat has a status and an attention, and they are different things.**
 Status is runtime: `active` (taking a turn now) or `idle` (at rest).
@@ -333,7 +352,7 @@ names its seat. The stream carries room-level facts only (`SessionEvent` in
 type SessionEvent =
   | { type: 'message'; message: Message }
   | { type: 'agent_start'; agent: string }
-  | { type: 'say_conflict'; agent: string; missed: Message[] }
+  | { type: 'conflict'; author: string; missed: Message[] }
   | { type: 'tool_execution_start'; agent: string; toolName: string }
   | { type: 'tool_execution_end'; agent: string; toolName: string }
   | { type: 'agent_end'; agent: string; spoke: boolean }
@@ -342,8 +361,9 @@ type SessionEvent =
 ```
 
 **One message on the record, one `message` event.** What a person delivered,
-what an agent said, and a person arriving or leaving all reach the host the
-same way, because they are the same thing: an entry the room committed. Who
+what an agent said, a person arriving or leaving, and the summary an aide
+wrote all reach the host the same way, because they are the same thing: an
+entry the room committed. Who
 wrote it is `message.from`, which the roster already names, so the stream does
 not split by author. The event is atomic as the record is: one event, the
 whole message, exactly as it landed.
@@ -354,7 +374,7 @@ pass through with the seat named. Pi's
 not re-broadcast: finer visibility is the seat's own layer, reached through
 Pi's hooks on the seat's downstream session, not the room forwarding messages
 it did not speak. Four events are the room's own: `message`; `settled` — the
-moment no agent is active; `say_conflict` — rule 5's lock refusing a say that
+moment no agent is active; `conflict` — rule 5's lock refusing a message that
 raced past the record, so the host sees races caught, not silently retried;
 and `error`, which distinguishes a failed turn from a quiet one. **Silence is
 a decision; an error is an event.** A crashed tool or a refused model call
@@ -372,7 +392,9 @@ resolves on acceptance — the message is on the record and activations are
 dispatched — never on completion, because a parallel round has no single
 caller to return to. The round's end is `settled()`: a promise that resolves
 when the room is quiet, which is also the moment a host learns that nobody
-chose to speak. And two controls. `abort()` cancels every active turn — Pi's
+chose to speak. It reports that no agent is active and nothing more: an aide
+writing a summary is not a seat taking a turn, and the room is never held busy
+while one works. And two controls. `abort()` cancels every active turn — Pi's
 own abort, fanned out — and the room settles; what was said stays, what was
 mid-flight ends without speaking, and an aborted turn stays cancelled even if
 a steer was still queued against it. The room is still running afterwards.
@@ -410,13 +432,16 @@ name opening back into its record; events in order, errors as events, abort
 quieting the room — including an abort with a steer still queued. All
 in-process, in vitest, on a scripted stream where determinism matters. What a
 person entering and leaving adds to these rules is proved beside them, in
-[`presence.test.ts`](../packages/ambion/test/presence.test.ts).
+[`presence.test.ts`](../packages/ambion/test/presence.test.ts), and what the
+aide a person brings adds is proved in
+[`aide.test.ts`](../packages/ambion/test/aide.test.ts).
 
 The runnable proof is [`examples/site`](../examples/site): a construction
 management suite where each product is an agent — a time tracker, a task list
 seated `attentive` so it meets people at the door, and a materials tracker —
-shared by three people who come and go. Every rule above is observable by
-hand there, and the products hold state they change.
+shared by three people who come and go, each bringing an aide of their own.
+Every rule above is observable by hand there, and the products hold state they
+change.
 
 ---
 
@@ -428,7 +453,8 @@ against it — a seat that speaks late is refused and told to reconsider, and
 rule 3 tells it to stand down — but that is pressure, not a bound. No run has
 hit it. It is written down because a room that waits for months will meet it
 eventually, and because anything built on quiescence assumes it does not
-happen.
+happen. [`aide.md`](aide.md) is built on it: an aide writes when the room goes
+quiet, so a room that never goes quiet never gets its one message.
 
 The fix belongs here, in the core, not in whatever notices the absence: a
 limit on how much work one message may cause, applied where rule 1 activates
@@ -446,13 +472,23 @@ long records; the workspace and the tenant; tasks. They arrive one document
 at a time, each earning its way in against the same test: does it add a
 second way to do something that has one?
 
-The first of them is shipped: [`presence.md`](presence.md), which takes
-people out of the room's composition and gives them a verb of their own. A
-run seats agents; a person visits and leaves, several at once, and arriving
-is a message like any other — so rule 1 activates the room when somebody walks in, and an agent
-that knows the session's goal tells them what they missed. It is the one
-document so far that reaches into this core rather than sitting on top of
-it, and the shapes above carry the result.
+Two of them are built. [`presence.md`](presence.md) takes people out of the
+room's composition and gives them a verb of their own. A run seats agents; a
+person visits and leaves, several at once, and arriving is a message like any
+other — so rule 1 activates the room when somebody walks in, and an agent that
+knows the session's goal tells them what they missed.
+
+[`aide.md`](aide.md) is the second, and it hangs on the quiet at the end of a
+round rather than on an activation. A person may bring an aide; when an
+exchange closes and the agents said more than one thing into it, that aide
+writes the one message its person reads, and from the next activation the
+seats read it in place of the range. It adds one optional field, one kind of
+message and no verb, and it breaks no rule above: rule 5's lock refuses a
+summary exactly as it refuses a say, and rule 1 never activates a seat because
+an aide wrote something.
+
+Both reach into this core rather than sitting on top of it, and the shapes
+above carry the result.
 
 ---
 
