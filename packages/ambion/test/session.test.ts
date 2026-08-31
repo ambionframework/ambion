@@ -179,7 +179,7 @@ describe('startSession', () => {
 		});
 		const events = collect(session);
 		session.subscribe((event) => {
-			if (event.type === 'agent_end' && event.agent === 'gamma') gammaIdle.resolve();
+			if (event.type === 'activation_end' && event.agent === 'gamma') gammaIdle.resolve();
 			if (event.type === 'message' && event.message.from === 'alpha') alphaSaid.resolve();
 		});
 
@@ -196,7 +196,7 @@ describe('startSession', () => {
 		// a say wakes the idle room: gamma, idle when alpha spoke, glanced again —
 		// and the round still settled, because woken seats with nothing to add decline
 		const gammaStarts = events.filter(
-			(e) => e.type === 'agent_start' && e.agent === 'gamma',
+			(e) => e.type === 'activation_start' && e.agent === 'gamma',
 		).length;
 		expect(gammaStarts).toBeGreaterThanOrEqual(2);
 	});
@@ -254,7 +254,7 @@ describe('startSession', () => {
 
 		expect(spoken(await session.messages())).toHaveLength(1);
 		expect(events.some((e) => e.type === 'message' && e.message.from === 'shy')).toBe(false);
-		const end = events.find((e) => e.type === 'agent_end');
+		const end = events.find((e) => e.type === 'activation_end');
 		expect(end).toMatchObject({ agent: 'shy', spoke: false });
 	});
 
@@ -287,7 +287,7 @@ describe('startSession', () => {
 		});
 		const events = collect(session);
 		const starts = (name: string) =>
-			events.filter((e) => e.type === 'agent_start' && e.agent === name).length;
+			events.filter((e) => e.type === 'activation_start' && e.agent === name).length;
 
 		const visit = await enter(session);
 		expect(starts('front')).toBe(0); // arrivals are quiet: nobody woke
@@ -409,9 +409,9 @@ describe('startSession', () => {
 		expect(events.map((e) => e.type)).toEqual([
 			'message',
 			'exchange_opened',
-			'agent_start',
+			'activation_start',
 			'message',
-			'agent_end',
+			'activation_end',
 			'exchange_closed',
 			'quiet',
 		]);
@@ -550,7 +550,7 @@ describe('startSession', () => {
 		await yielding.settled();
 
 		expect(spoken(await yielding.messages())).toHaveLength(2);
-		const end = yieldEvents.find((e) => e.type === 'agent_end' && e.agent === 'second');
+		const end = yieldEvents.find((e) => e.type === 'activation_end' && e.agent === 'second');
 		expect(end).toMatchObject({ spoke: false });
 	});
 

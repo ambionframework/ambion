@@ -57,7 +57,7 @@ const show = (line: string) => {
 const errored = new Set<string>();
 session.subscribe((event: SessionEvent) => {
 	switch (event.type) {
-		case 'agent_start':
+		case 'activation_start':
 			show(`${dim}· ${event.agent} is reading…${reset}`);
 			break;
 		case 'message': {
@@ -79,7 +79,7 @@ session.subscribe((event: SessionEvent) => {
 		case 'tool_execution_start':
 			show(`${dim}· ${event.agent} calls ${event.toolName}…${reset}`);
 			break;
-		case 'agent_end':
+		case 'activation_end':
 			if (!event.spoke && !errored.delete(event.agent)) {
 				show(`${dim}· ${event.agent} read it and stayed idle${reset}`);
 			}

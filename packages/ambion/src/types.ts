@@ -124,7 +124,12 @@ export type SessionEvent =
 	 * way.
 	 */
 	| { type: 'message'; message: Message }
-	| { type: 'agent_start'; agent: string }
+	/**
+	 * The room woke a seat. One per activation, however many requests to a
+	 * provider it takes: an activation is the room's span, and Pi's own `turn`
+	 * — one request and the tools it calls — never surfaces here.
+	 */
+	| { type: 'activation_start'; agent: string }
 	/**
 	 * The lock refused a message drafted against a record that had moved. It
 	 * names the author rather than the seat: a seat's say and an aide's summary
@@ -133,10 +138,11 @@ export type SessionEvent =
 	| { type: 'conflict'; author: string; missed: Message[] }
 	| { type: 'tool_execution_start'; agent: string; toolName: string }
 	| { type: 'tool_execution_end'; agent: string; toolName: string }
-	| { type: 'agent_end'; agent: string; spoke: boolean }
+	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
+	| { type: 'activation_end'; agent: string; spoke: boolean }
 	| { type: 'error'; agent: string; error: Error }
 	/**
-	 * A person's question opened an exchange: the room has a round to work on,
+	 * A person's question opened an exchange: the room has an exchange to work on,
 	 * and one person owns it. A client that folds the working under the
 	 * question it answered starts here, whether or not anybody brought an aide.
 	 */
@@ -152,7 +158,7 @@ export type SessionEvent =
 	 * Nothing is running: no seat is taking a turn, and no aide still owes a
 	 * message. The room's own last word on a stretch of work.
 	 *
-	 * There is no event for the seats stopping. A host that wants the round is
+	 * There is no event for the seats stopping. A host that wants the exchange is
 	 * told by `exchange_closed`, which says whose it was and what it covered;
 	 * a host that wants to act in the window before a summary lands waits on
 	 * `settled()`, because that is a caller's concern rather than something

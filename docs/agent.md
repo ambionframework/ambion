@@ -390,11 +390,11 @@ names its seat. The stream carries room-level facts only (`SessionEvent` in
 ```ts
 type SessionEvent =
   | { type: 'message'; message: Message }
-  | { type: 'agent_start'; agent: string }
+  | { type: 'activation_start'; agent: string }
   | { type: 'conflict'; author: string; missed: Message[] }
   | { type: 'tool_execution_start'; agent: string; toolName: string }
   | { type: 'tool_execution_end'; agent: string; toolName: string }
-  | { type: 'agent_end'; agent: string; spoke: boolean }
+  | { type: 'activation_end'; agent: string; spoke: boolean }
   | { type: 'error'; agent: string; error: Error }
   | { type: 'exchange_opened'; exchange: Exchange }
   | { type: 'exchange_closed'; exchange: ClosedExchange }
@@ -409,12 +409,23 @@ which the roster already names, so the stream does not split by author. The
 event is atomic as the record is: one event, the whole message, exactly as
 it landed.
 
-Pi's `agent_start`/`agent_end` are these, attributed; Pi's
-`tool_execution_*` pass through with the seat named. Pi's `message_*`
+`activation_start`/`activation_end` are the room's own, not Pi's forwarded:
+Pi emits an `agent_start` per _run_ — one `prompt()` — and an activation is
+one or more runs, because a message landing mid-activation rebuilds it
+against the record as it now stands. Pi's `tool_execution_*` do pass through,
+with the seat named. Pi's `message_*`
 granularity — streaming deltas, partial turns — is deliberately left out of
 the stream: finer visibility is the seat's own layer, reached through Pi's
 hooks on the seat's downstream session. The room forwards only messages it
 committed.
+
+**Three spans, and two of them are ours.** Pi has a _turn_: one request to a
+provider and the tools it calls. Pi has a _run_: one `prompt()`, and the turns
+inside it. Ambion has an **activation** — the room waking a seat, which is one
+or more runs — and an **exchange**, a person's question and every activation
+until the room goes quiet. The two words this document uses are `activation`
+and `exchange`; `turn` in these pages is Pi's, or plain English in a sentence
+a model reads.
 
 Three events are the room's own:
 
@@ -436,7 +447,7 @@ other's tool executions. The stream sees them, because the host operating
 the room is the code that owns it, and debugging a room means watching
 hands as well as hearing voices.
 
-### The exchange: the room's own round
+### The exchange: the room's own unit of work
 
 A room is a sequence of rounds, and the rounds have one shape. **A person
 asks something, several agents wake and work it out between them, and the
@@ -487,29 +498,31 @@ exchange is run state: a restart begins with none, because the record keeps
 what was said and nobody is mid-question after a restart.
 
 **What reads it.** A person's aide is a seat that a closed exchange wakes,
-and the one message it writes stands for that round ([`aide.md`](aide.md)).
+and the one message it writes stands for that exchange ([`aide.md`](aide.md)).
 A client folds the working under the question it answered and shows the
-round as a thinking state — which it can do from these two events alone, in
+exchange as a thinking state — which it can do from these two events alone, in
 a room where nobody brought an aide. A host that measures what a room costs
-measures it per round, because a round is what somebody asked for.
+measures it per exchange, because that is what somebody asked for. A later
+room-level compactor stands over a stretch of closed exchanges rather than
+over a message count.
 
 Two completion signals, for the two things a host waits on, and two
 controls:
 
 - **`deliver()`** resolves on acceptance — the message is on the record
-  and activations are dispatched. It never waits for completion, because a
-  parallel round has no single caller to return to.
-- **`settled()`** is the round's end: a promise that resolves when the
+  and activations are dispatched. It never waits for completion, because activations run in
+  parallel and have no single caller to return to.
+- **`settled()`** is the exchange's end: a promise that resolves when the
   seats stop, which is also the moment a host learns that nobody chose to
   speak. It reports that no seat which speaks for itself is taking a turn.
-  An aide writing about a round is not the room still working on it, so
+  An aide writing about an exchange is not the room still working on it, so
   the room is never held busy while one writes.
 - **`quiet()`** is the second moment — no agent at all is taking a turn —
   for a host that wants the one message a person reads
   ([`aide.md`](aide.md) §14). The two differ because an aide is a seat
   like any other and its turn is a turn, and the difference is what keeps
-  a round's end fixed when somebody brings one. The order at the end of a
-  round is fixed: `settled()` resolves, then `exchange_closed`, then
+  an exchange's end fixed when somebody brings one. The order at the end of an
+  exchange is fixed: `settled()` resolves, then `exchange_closed`, then
   whatever is written about it, then `quiet`.
 - **`abort()`** cancels every active turn — Pi's own abort, fanned out —
   and the room settles. What was said stays, what was mid-flight ends
@@ -529,9 +542,9 @@ reads takes the narrower type and cannot start anything by accident.
 
 One file per concern, and `session.ts` is the room that composes them: the
 record in [`record.ts`](../packages/ambion/src/record.ts), who is here in
-[`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes
-it in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
-[`turn.ts`](../packages/ambion/src/turn.ts), the round in
+[`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes it
+in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
+[`activation.ts`](../packages/ambion/src/activation.ts), the exchange in
 [`exchange.ts`](../packages/ambion/src/exchange.ts), what a person's aide
 writes in [`aide.ts`](../packages/ambion/src/aide.ts), and what any of them
 reads in [`render.ts`](../packages/ambion/src/render.ts).
@@ -572,9 +585,9 @@ one per claim this document makes loudly:
 
 The exchange is proved beside the aide that first reads one, in
 [`aide.test.ts`](../packages/ambion/test/aide.test.ts): a question opens a
-round and quiescence closes it, holding the range it covered; an arrival
-opens none and a second message into an open one changes nothing; and a
-round closes before anything is written about it. All in-process, in
+exchange and quiescence closes it, holding the range it covered; an arrival
+opens none and a second message into an open one changes nothing; and an
+exchange closes before anything is written about it. All in-process, in
 vitest, on a scripted stream where determinism matters. What a person
 entering and leaving adds to these rules is proved beside them, in
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts), and what

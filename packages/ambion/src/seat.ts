@@ -16,7 +16,7 @@ import type {
 	AgentToolResult,
 	Session as PiSession,
 } from '@earendil-works/pi-agent-core';
-import type { Turn } from './turn.ts';
+import type { Activation } from './activation.ts';
 import type { AgentDefinition, Attention, Message } from './types.ts';
 import { isAmbionTool, isSpoken } from './types.ts';
 
@@ -25,18 +25,18 @@ export interface SeatRuntime {
 	/** What wakes this seat. Chosen at seating, not by the definition. */
 	attention: Attention;
 	/**
-	 * The turn this seat is taking, while it is taking one. Everything that
-	 * lasts seconds lives there; everything here lasts as long as the seat is
-	 * seated. A seat is active when it has one.
+	 * The activation this seat is taking, while it is taking one. Everything
+	 * that lasts seconds lives there; everything here lasts as long as the seat
+	 * is seated. A seat is active when it has one.
 	 */
-	turn?: Turn;
+	activation?: Activation;
 	/** The seat's own downstream Pi session, opened once and kept for the run. */
 	piSeat?: Promise<PiSession>;
 }
 
-/** Whether this seat is taking a turn now. Runtime state, not a seating choice. */
+/** Whether this seat is taking an activation now. Runtime state, not a seating choice. */
 export function isActive(seat: SeatRuntime): boolean {
-	return seat.turn !== undefined;
+	return seat.activation !== undefined;
 }
 
 /** The attention scale, narrowest first. A seat hears what it is wide enough for. */

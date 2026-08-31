@@ -4,7 +4,7 @@
  *
  * Everything with a life of its own has left. The record is `record.ts`, who
  * is here is `presence.ts`, a seat and what wakes it is `seat.ts`, one
- * activation is `turn.ts`, a round is `exchange.ts`, a person's aide is
+ * activation is `activation.ts`, an exchange is `exchange.ts`, a person's aide is
  * `aide.ts`, and every sentence a participant reads is `render.ts`. What is
  * left is what only a room can do:
  *
@@ -15,7 +15,7 @@
  * - **Route.** Who hears a message, and who wakes for it.
  * - **Give a turn what only the room knows.** The model, the prompt, the
  *   hands, and the room as it stands at that moment.
- * - **Say when it has stopped.** A round closed, and nothing running.
+ * - **Say when it has stopped.** An exchange closed, and nothing running.
  */
 import type {
 	AgentTool,
@@ -27,6 +27,7 @@ import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { Type } from 'typebox';
+import { Activation } from './activation.ts';
 import { Aides, type Draft, summariseTool } from './aide.ts';
 import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
@@ -42,7 +43,6 @@ import {
 	type SeatSpeaking,
 } from './render.ts';
 import { delivered, isActive, type SeatRuntime, toPiTool, wakes } from './seat.ts';
-import { Turn } from './turn.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
@@ -295,7 +295,7 @@ class SessionImpl implements Session {
 	}
 
 	abort(): void {
-		for (const seat of this.agents.values()) seat.turn?.abort();
+		for (const seat of this.agents.values()) seat.activation?.abort();
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
@@ -397,7 +397,7 @@ class SessionImpl implements Session {
 	 */
 	private async publish(message: Message): Promise<void> {
 		await this.store.drained();
-		// The message lands, then what it opened: a round is a fact about a
+		// The message lands, then what it opened: an exchange is a fact about a
 		// message the host has already seen. Both come before the routing, so
 		// nothing wakes on a message the host has not heard about.
 		this.emit({ type: 'message', message });
@@ -405,7 +405,7 @@ class SessionImpl implements Session {
 		this.dispatch(message);
 	}
 
-	/** A person's question opens a round, and the room says so. */
+	/** A person's question opens an exchange, and the room says so. */
 	private noteExchange(message: Message): void {
 		const opened = this.exchanges.note(message, this.here.knows(message.from));
 		if (opened) this.emit({ type: 'exchange_opened', exchange: opened });
@@ -517,33 +517,36 @@ class SessionImpl implements Session {
 		const fromAide = this.aides.isAide(message.from);
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
-			if (seat.turn) seat.turn.steer(message, renderLine(message));
+			if (seat.activation) seat.activation.steer(message, renderLine(message));
 			else if (wakes(seat, target, message, fromAide)) this.activate(seat);
 		}
 	}
 
 	private activate(seat: SeatRuntime): void {
-		const turn = new Turn(seat.def.name, this.store.lastSeq, {
-			open: (t) => this.open(seat, t),
+		const activation = new Activation(seat.def.name, this.store.lastSeq, {
+			open: (running) => this.open(seat, running),
 			persist: (agent) => persistTurns(this.seatSession(seat), agent),
 			emit: (event) => this.emit(event),
 		});
-		seat.turn = turn;
+		seat.activation = activation;
 		this.activeCount += 1;
-		this.emit({ type: 'agent_start', agent: seat.def.name });
-		// A summarising turn is one pass: it answers a room that moved with a
-		// redraft inside its own tool rather than a fresh turn.
+		this.emit({ type: 'activation_start', agent: seat.def.name });
+		// A summarising activation is one pass: it answers a room that moved with
+		// a redraft inside its own tool rather than a fresh activation.
 		const rebuilds = this.aides.draftOf(seat.def.name) === undefined;
-		void turn
+		void activation
 			.run(rebuilds, () => this.store.lastSeq)
 			.finally(() => {
-				seat.turn = undefined;
-				this.aides.turnEnded(seat, { wrote: turn.spoke, failed: turn.failed });
-				this.emit({ type: 'agent_end', agent: seat.def.name, spoke: turn.spoke });
+				seat.activation = undefined;
+				this.aides.activationEnded(seat, {
+					wrote: activation.spoke,
+					failed: activation.failed,
+				});
+				this.emit({ type: 'activation_end', agent: seat.def.name, spoke: activation.spoke });
 				this.activeCount -= 1;
-				// A round ends when the seats stop. An aide writing about the round
-				// is not the room still working on it, so its own turn ends no round
-				// — which is also what keeps a failing aide from retrying for ever.
+				// An exchange ends when the seats stop. An aide writing about one
+				// is not the room still working on it, so its own activation ends
+				// none — which also keeps a failing aide from retrying for ever.
 				if (!this.aides.isAide(seat.def.name) && !this.working()) {
 					for (const resolve of this.settledWaiters.splice(0)) resolve();
 					this.closeExchange();
@@ -577,11 +580,11 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * What a turn is given: the model it runs on, the prompt it is addressed
+	 * What an activation is given: the model it runs on, the prompt it is addressed
 	 * by, the hands it holds, and the room as it stands right now. Only the
 	 * room knows any of that, and it builds them fresh for every pass.
 	 */
-	private open(seat: SeatRuntime, turn: Turn): { agent: Agent; context: string } {
+	private open(seat: SeatRuntime, activation: Activation): { agent: Agent; context: string } {
 		const speaking = this.speaking(seat);
 		const view = this.view();
 		const agent = new Agent({
@@ -590,7 +593,7 @@ class SessionImpl implements Session {
 				systemPrompt: renderSystemPrompt(speaking, view),
 				model: this.resolveModel(seat.def),
 				thinkingLevel: 'off',
-				tools: this.handsFor(seat, turn),
+				tools: this.handsFor(seat, activation),
 				messages: [],
 			},
 		});
@@ -603,7 +606,7 @@ class SessionImpl implements Session {
 	 * refuses an aide that carries tools of its own, so there is nothing else
 	 * to leave out.
 	 */
-	private handsFor(seat: SeatRuntime, turn: Turn): AgentTool[] {
+	private handsFor(seat: SeatRuntime, activation: Activation): AgentTool[] {
 		// An aide's hands are the runtime's, and it holds them only for the turn
 		// it was woken for. Nothing wakes an aide today but the close of its
 		// person's exchange; when something else does — a wider attention, per
@@ -612,25 +615,30 @@ class SessionImpl implements Session {
 		const owner = this.aides.ownerOf(seat.def.name);
 		if (owner !== undefined) {
 			const closing = this.aides.draftOf(seat.def.name);
-			return closing ? [this.summarise(seat, turn, owner, closing)] : [];
+			return closing ? [this.summarise(seat, activation, owner, closing)] : [];
 		}
-		return [this.sayTool(seat, turn), ...seat.def.tools.map(toPiTool)];
+		return [this.sayTool(seat, activation), ...seat.def.tools.map(toPiTool)];
 	}
 
 	/** The one hand an aide is given, bound to the range it must stand for. */
-	private summarise(seat: SeatRuntime, turn: Turn, person: string, closing: Draft): AgentTool {
+	private summarise(
+		seat: SeatRuntime,
+		activation: Activation,
+		person: string,
+		closing: Draft,
+	): AgentTool {
 		return summariseTool(seat.def.name, person, closing, {
 			stopped: () => this.stopped,
 			lastSeq: () => this.store.lastSeq,
 			claim: (author, draft) => this.claim<SummaryMessage>(author, draft),
 			publish: (message) => this.publish(message),
 			written: () => {
-				turn.spoke = true;
+				activation.spoke = true;
 			},
 		});
 	}
 
-	private sayTool(seat: SeatRuntime, turn: Turn): AgentTool {
+	private sayTool(seat: SeatRuntime, activation: Activation): AgentTool {
 		return {
 			name: 'say',
 			label: 'say',
@@ -654,7 +662,7 @@ class SessionImpl implements Session {
 					throw new Error('The message is empty. Say something, or end your turn instead.');
 				}
 				const claimed = this.claim<SpokenMessage>(
-					{ name: seat.def.name, readThrough: turn.readThrough },
+					{ name: seat.def.name, readThrough: activation.readThrough },
 					{
 						kind: 'said',
 						at: new Date().toISOString(),
@@ -665,7 +673,7 @@ class SessionImpl implements Session {
 				);
 				if ('missed' in claimed) {
 					// Refused, and now heard: the seat decides again against the record as it stands.
-					turn.heard(this.store.lastSeq);
+					activation.heard(this.store.lastSeq);
 					throw new Error(
 						refusal(
 							'Not delivered — the room moved while you were speaking. New on the record:',
@@ -675,8 +683,8 @@ class SessionImpl implements Session {
 					);
 				}
 				// The seat has heard its own say before anybody else hears of it.
-				turn.heard(claimed.message.seq);
-				turn.spoke = true;
+				activation.heard(claimed.message.seq);
+				activation.spoke = true;
 				await this.publish(claimed.message);
 				return delivered();
 			},
@@ -719,7 +727,7 @@ class SessionImpl implements Session {
 	// -- the aide ------------------------------------------------------------
 
 	/**
-	 * The room went quiet, so the round it was working on is over. The host
+	 * The room went quiet, so the exchange it was working on is over. The host
 	 * hears that before anything is written about it: an aide is the first
 	 * reader of a closed exchange and not the only one.
 	 */
@@ -736,12 +744,12 @@ class SessionImpl implements Session {
 	 * and the close is the one thing that reaches it.
 	 *
 	 * Every quiet room is a chance to write what is owed, whatever made the
-	 * room busy. An aide's own turn ends no round, so a failed draft waits for
+	 * room busy. An aide's own activation ends no exchange, so a failed draft waits for
 	 * the next time the seats stop rather than retrying on itself.
 	 */
 	private summariseClosed(closing: ClosedExchange | undefined): void {
 		if (closing) this.aides.owe(closing.owner, closing.from);
-		const due = this.aides.turnsDue(this.record, this.store.lastSeq, (name) =>
+		const due = this.aides.activationsDue(this.record, this.store.lastSeq, (name) =>
 			this.speaksForItself(name),
 		);
 		for (const { seat } of due) this.activate(seat);

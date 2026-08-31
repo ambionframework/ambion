@@ -87,7 +87,11 @@ Rules that carry the most weight here:
 2. **Short sentences.** Max 20 words for an instruction, 25 for a description.
 3. **One topic per paragraph**, max 6 sentences.
 4. **One word, one meaning.** Pick a term and keep it. An activation is always
-   an activation, never a trigger, a call, or a wake.
+   an activation, never a trigger, a call, a wake — or a turn. The room has two
+   spans and two words: an **activation** is the room waking one seat, an
+   **exchange** is a person's question and every activation until the room goes
+   quiet. `turn` belongs to Pi, where it means one request to a provider, and
+   `round` belongs to nobody.
 5. **Simple tenses.** Present for how things work, imperative for instructions.
 6. **Keep articles and relative pronouns.** "The agent that waits", not "agent
    waits".

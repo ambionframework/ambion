@@ -110,7 +110,7 @@ describe('presence', () => {
 		await session.settled();
 
 		expect(await kinds(session)).toEqual(['arrived']);
-		expect(seen.some((e) => e.type === 'agent_start')).toBe(false);
+		expect(seen.some((e) => e.type === 'activation_start')).toBe(false);
 		expect(contexts).toHaveLength(0); // no seat was handed a context at all
 	});
 
@@ -132,7 +132,7 @@ describe('presence', () => {
 		await visitSession(session, andrei);
 		await session.settled();
 
-		const woke = seen.filter((e) => e.type === 'agent_start').map((e) => e.agent);
+		const woke = seen.filter((e) => e.type === 'activation_start').map((e) => e.agent);
 		expect(woke).toEqual(['greeter']); // not watcher, not the passive seat
 		// the roster tells every seat which of them watches for this
 		expect(contexts.at(-1)).toContain('- greeter (active, watches arrivals)');
@@ -288,7 +288,7 @@ describe('presence', () => {
 		const view = readSession(session.name);
 		expect((await view.messages()).map((m) => m.kind)).toEqual(['arrived', 'left']);
 		// a turn started to hear that the room is closing is a turn nobody reads
-		expect(seen.some((e) => e.type === 'agent_start')).toBe(false);
+		expect(seen.some((e) => e.type === 'activation_start')).toBe(false);
 		await expect(visit.deliver({ text: 'still there?' })).rejects.toThrow();
 	});
 

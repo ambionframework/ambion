@@ -332,8 +332,8 @@ place is the record.
 A presence message costs one commit, and no model call unless a seat is
 seated `attentive`. It lands on the record, wakes nobody at the default
 attention, and is read at the next activation by whoever the next message
-wakes. A seat already at work pays a steer — one round on a turn it was
-running anyway, and no turn of its own. Rule 5 counts it like any other
+wakes. A seat already at work pays a steer — one line in an activation it was
+running anyway, and no activation of its own. Rule 5 counts it like any other
 message, so a say drafted across an arrival is refused and re-aimed at
 whoever is now reading; that is the lock working, with no exception made.
 

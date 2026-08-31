@@ -207,7 +207,7 @@ function nextSummary(session: Session): Promise<SummaryMessage> {
 function aideEnded(session: Session, aide = 'priya-aide'): Promise<void> {
 	return new Promise((resolve) => {
 		const off = session.subscribe((event) => {
-			if (event.type !== 'agent_end' || event.agent !== aide) return;
+			if (event.type !== 'activation_end' || event.agent !== aide) return;
 			off();
 			resolve();
 		});
@@ -373,7 +373,7 @@ describe('the aide', () => {
 
 		// nothing an aide writes activates a seat
 		const landed = events.findIndex((e) => e.type === 'message' && e.message === summary);
-		expect(events.slice(landed).filter((e) => e.type === 'agent_start')).toHaveLength(0);
+		expect(events.slice(landed).filter((e) => e.type === 'activation_start')).toHaveLength(0);
 
 		await visit.deliver({ text: 'And the pump?' });
 		await quiescent(session);
@@ -534,9 +534,9 @@ describe('the aide', () => {
 		expect(calls).toHaveLength(1);
 		expect(summaries(await session.messages())).toHaveLength(0);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
-		expect(events.filter((e) => e.type === 'agent_end' && e.agent === 'priya-aide')).toMatchObject([
-			{ spoke: false },
-		]);
+		expect(
+			events.filter((e) => e.type === 'activation_end' && e.agent === 'priya-aide'),
+		).toMatchObject([{ spoke: false }]);
 	});
 
 	it('drafts again at the next quiescence when its turn fails outright', async () => {
@@ -833,7 +833,7 @@ describe('an exchange', () => {
 		const closed = order.indexOf('exchange_closed');
 		const summary = events.findIndex((e) => e.type === 'message' && e.message.kind === 'summary');
 		// the round is over, then what stands for it, then the room is quiet
-		expect(closed).toBeGreaterThan(order.lastIndexOf('agent_end', closed));
+		expect(closed).toBeGreaterThan(order.lastIndexOf('activation_end', closed));
 		expect(summary).toBeGreaterThan(closed);
 		expect(order.indexOf('quiet')).toBeGreaterThan(summary);
 	});

@@ -9,12 +9,12 @@
  *
  * - It is seated at the narrow end of attention, `none`, so nothing said in
  *   the room wakes it.
- * - A closed exchange wakes it, and only its owner's. That turn holds one
+ * - A closed exchange wakes it, and only its owner's. That activation holds one
  *   tool, `summarise`, bound to the range it must stand for.
  *
  * What is left in this file is what an aide *is*: the range a summary stands
  * for, the tool that commits one, and what a model is told the one message is
- * for. The turn itself is the room's, in `session.ts`, and it is the same turn
+ * for. The activation itself is the room's, in `session.ts`, and it is the same one
  * every seat takes.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
@@ -36,7 +36,7 @@ const AIDE_DRAFTS = 2;
 const AIDE_CALLS = 4;
 
 /**
- * One summarising turn's own state. The range is read off the record when the
+ * One summarising activation's own state. The range is read off the record when the
  * turn starts, and it widens when a race refuses the draft, so the retry
  * stands for what won. Nothing here outlives the turn.
  */
@@ -91,7 +91,7 @@ export interface SummaryRoom {
  * The aide's one hand, and it reaches the record and nothing else. It commits
  * under the same lock a say commits under, so a summary drafted against a
  * record that has moved is refused — and the refusal reaches the aide inside
- * its own turn, carrying what it missed, so the redraft happens now rather
+ * its own activation, carrying what it missed, so the redraft happens now rather
  * than at the next quiescence.
  *
  * `defineHuman` refuses an aide that carries tools of its own, so §12's rule —
@@ -139,7 +139,7 @@ export function summariseTool(
 }
 
 /**
- * Why this turn cannot come good, when it cannot. Telling a model to stop is
+ * Why this activation cannot come good, when it cannot. Telling a model to stop is
  * not enough — one that keeps calling the tool would draft for ever — so the
  * result ends the turn itself. `terminate` is Pi's own way for a tool to say
  * that the loop is over, and the reason still reaches the transcript, where
@@ -251,11 +251,11 @@ export class Aides {
 	}
 
 	/**
-	 * The turns to take now, one per person owed a message: the range each
-	 * aide would stand for, or nothing where one message already serves. An
-	 * aide already drafting is left alone, and stays owed.
+	 * The activations to take now, one per person owed a message: the range
+	 * each aide would stand for, or nothing where one message already serves.
+	 * An aide already drafting is left alone, and stays owed.
 	 */
-	turnsDue(
+	activationsDue(
 		record: readonly Message[],
 		through: Seq,
 		fromSeat: (name: string) => boolean,
@@ -274,16 +274,16 @@ export class Aides {
 	}
 
 	/**
-	 * A summarising turn is over. It wrote, or it judged that one message
-	 * already served; a race or a failed turn leaves the range owed, and the
-	 * next quiet room is another chance.
+	 * A summarising activation is over. It wrote, or it judged that one message
+	 * already served; a race or a failure leaves the range owed, and the next
+	 * quiet room is another chance.
 	 */
-	turnEnded(seat: SeatRuntime, outcome: { wrote: boolean; failed: boolean }): void {
+	activationEnded(seat: SeatRuntime, outcome: { wrote: boolean; failed: boolean }): void {
 		const person = this.owners.get(seat.def.name);
 		const draft = this.drafts.get(seat.def.name);
 		this.drafts.delete(seat.def.name);
 		if (person === undefined || draft === undefined || outcome.wrote) return;
-		// A race or a turn that never reached the record leaves the range owed.
+		// A race, or an activation that never reached the record, leaves it owed.
 		// An aide that stood down judged the room, and is owed nothing for it.
 		if (draft.refusals > 0 || outcome.failed) this.owe(person, draft.from);
 	}

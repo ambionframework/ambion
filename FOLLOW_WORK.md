@@ -69,9 +69,9 @@ retry separately. See [`docs/aide.md`](docs/aide.md) §5.
 
 ## Exchanges are run state
 
-`Exchanges` holds the open round in memory, so a restart begins with none —
+`Exchanges` holds the open exchange in memory, so a restart begins with none —
 right for a room mid-question, and a limit for anything that wants to work
-over past rounds. A closed exchange is an owner and a range, so it is
+over past exchanges. A closed exchange is an owner and a range, so it is
 derivable from the record; nothing derives it today. See
 [`docs/agent.md`](docs/agent.md), _The exchange_.
 

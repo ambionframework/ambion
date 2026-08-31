@@ -88,8 +88,9 @@ steers the seats already working and changes nothing.
 
 An aide is the first thing to read a closed exchange, and other readers
 exist beside it: a client folds the working under the question it answered,
-and a host measures a round somebody asked for. A room where nobody brings
-an aide still has exchanges, and its host still hears them open and close.
+and a host measures an exchange somebody asked for. A room where nobody
+brings an aide still has exchanges, and its host still hears them open and
+close.
 
 What matters here is what an aide makes of one:
 
@@ -521,7 +522,7 @@ whole surface.**
 
 **`settled()` does not wait for an aide, and `quiet()` does.** `settled()`
 reports that no seat which speaks for itself is taking a turn — an aide
-writing about a round is not the room still working on it, which is the
+writing about an exchange is not the room still working on it, which is the
 meaning §5 needs, and it is why an aide's own turn closes no exchange and
 cannot retry itself for ever. `quiet()` resolves when no seat is taking a
 turn **and** no aide still owes one, and a `quiet` event says the same
@@ -637,10 +638,10 @@ settles, so rule 1 keeps its letter. But the room makes a model call that
 no message asked for, and that is a second kind of trigger. §15 bounds it:
 the close of an exchange, one aide, one message.
 
-**An aborted round still closes its exchange.** `abort()` cancels the turns
-in flight and the room settles, so the exchange it was working on closes
-and its owner's aide writes for it. That is right — the exchange ended, and
-its person still gets what the room reached before it was cut off — but the
+**An aborted exchange still closes.** `abort()` cancels the activations in
+flight and the room settles, so the exchange it was working on closes and
+its owner's aide writes for it. That is right — the exchange ended, and its
+person still gets what the room reached before it was cut off — but the
 message stands for work somebody stopped. `stopSession` is the other case,
 below.
 
