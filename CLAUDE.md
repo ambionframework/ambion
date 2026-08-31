@@ -48,9 +48,10 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
 
 - Pi (`@earendil-works/pi-agent-core`) owns the model loop, tools, transcript.
   Ambion owns only participants-as-values and the session. A third concern is a
-  design failure: push it into a dependency or drop it. `render.ts` is the
-  session's own prose — what a seat reads — and stays pure and stateless so it
-  does not become one.
+  design failure: push it into a dependency or drop it. `render.ts` is
+  everything a participant reads — prompts, roster, record, the ask at the end
+  of a turn — and stays pure and stateless so it does not become one. What the
+  room says to a developer stays with the mechanism that says it.
 - No `any`, no non-null assertions, no unused imports or variables.
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
 - Cognitive complexity: max 10 in source, 15 in tests.
