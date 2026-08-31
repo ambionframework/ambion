@@ -1,10 +1,12 @@
 # @ambionframework/ambion
 
 `defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
-gives agents hands, and `startSession` brings up a named room the agents work
-in and people visit — `visitSession` puts somebody in it, `readSession` reads
-it without starting anything, `stopSession` takes it down. Each agent decides
-for itself whether to speak, to whom, and which colleague to call in.
+gives agents hands, `seated` chooses what wakes an agent — with `passive` and
+`attentive` for the two points worth naming — and `startSession` brings up a
+named room the agents work in and people visit: `visitSession` puts somebody
+in it, `readSession` reads it without starting anything, `stopSession` takes
+it down. Each agent decides for itself whether to speak, to whom, and which
+colleague to call in.
 
 ```ts
 import {

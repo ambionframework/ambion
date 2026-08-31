@@ -22,6 +22,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { renderRecord } from '../src/render.ts';
 
 // -- scripted model ----------------------------------------------------------
 
@@ -213,10 +214,9 @@ function aideEnded(session: Session, aide = 'priya-aide'): Promise<void> {
 	});
 }
 
-/** Quiet, and long enough for an aide that was going to write to have written. */
-async function quiescent(session: Session): Promise<void> {
-	await session.settled();
-	for (let waited = 0; waited < 6; waited += 1) await tick();
+/** Quiet: no seat is taking a turn, and no aide still owes a message. */
+function quiescent(session: Session): Promise<void> {
+	return session.quiet();
 }
 
 const summaries = (record: Message[]) => record.filter((m) => m.kind === 'summary');
@@ -242,6 +242,16 @@ const answersEach: Script = (_context, _name, call) => {
 	if (call === 3 || call === 5) return quiet();
 	return speak(`answer ${call}`);
 };
+
+/** Two answers to every question it is asked. */
+const twoAnswersEach: Script = (_context, _name, call) =>
+	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
+
+/** An aide that writes once per turn, however many turns it takes. */
+const writesEach =
+	(text: string): Script =>
+	(_context, _name, call) =>
+		call % 2 === 1 ? summarise(`${text} ${call}`) : quiet();
 
 /** A product that is still reading when the room changes under it. */
 function heldUntil(held: Promise<void>): Script {
@@ -326,7 +336,7 @@ describe('the aide', () => {
 		expect(said(await session.messages())).toHaveLength(3);
 		expect(summaries(await session.messages())).toHaveLength(0);
 		// a room where nobody brought one reads exactly as it read before
-		expect(prompts[0]).not.toContain('summarised below');
+		expect(prompts[0]).not.toContain('summarised for');
 	});
 
 	it('wakes nobody, and every seat reads it at the next activation', async () => {
@@ -360,12 +370,12 @@ describe('the aide', () => {
 
 		// the range left the seat's context, and the summary stands for it
 		const read = contexts.at(-1) ?? '';
-		expect(read).toContain('── 3 messages, summarised below ──');
+		expect(read).toContain('── 3 messages, summarised for priya below ──');
 		expect(read).toContain('[priya-aide → priya] Thursday is out; Saturday holds.');
 		expect(read).not.toContain('the inspector needs 48h notice');
 		expect(read).toContain('brings priya-aide');
 		// a room where somebody brought one tells its seats how to read a fold
-		expect(prompts[0]).toContain('summarised below');
+		expect(prompts[0]).toContain('summarised for <name> below');
 		// the record keeps every message, and nothing was rewritten
 		expect(said(await session.messages())).toContain(
 			'Thursday is out: the inspector needs 48h notice.',
@@ -592,7 +602,7 @@ describe('the aide', () => {
 		expect(summary.covers.through).toBe(summary.seq - 1);
 	});
 
-	it("keeps an aide's turns in a downstream Pi session named for its person", async () => {
+	it("keeps an aide's turns in a downstream session of its own, like any seat", async () => {
 		const repo = new InMemorySessionRepo();
 		const session = open({
 			repo,
@@ -606,8 +616,11 @@ describe('the aide', () => {
 		await written;
 		await ended;
 
-		const metadata = (await repo.list()).find((m) => m.id === `${session.name}:priya`);
+		const metadata = (await repo.list()).find((m) => m.id === `${session.name}:priya-aide`);
 		expect(metadata).toBeDefined();
+		// and the room lists it as the seat it is, with the person it writes for
+		const seat = session.seats().find((s) => s.name === 'priya-aide');
+		expect(seat).toMatchObject({ kind: 'agent', owner: 'priya', attention: 'none' });
 		const piSeat = metadata && (await repo.open(metadata));
 		const entries = (await piSeat?.findEntries()) ?? [];
 		expect(entries.some((e) => e.type === 'custom' && e.customType === 'ambion/activation')).toBe(
@@ -631,6 +644,105 @@ describe('the aide', () => {
 		await expect(visitSession(session, clash)).rejects.toThrow(/one name names one participant/);
 	});
 
+	it('covers one exchange, and never reaches back over the one before it', async () => {
+		const session = open({
+			script: byName({ product: twoAnswersEach, 'priya-aide': writesEach('the answer') }),
+		});
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await quiescent(session);
+		await visit.deliver({ text: 'And what does Saturday need?' });
+		await quiescent(session);
+
+		const record = await session.messages();
+		const written = summaries(record);
+		expect(written).toHaveLength(2);
+		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
+		// the second stands for her second question, not for everything since her first
+		expect(written[1]?.covers.from).toBe(questions[1]?.seq);
+		expect(written[1]?.covers.from).toBeGreaterThan(written[0]?.seq ?? 0);
+		expect(written[0]?.covers.from).toBe(questions[0]?.seq);
+	});
+
+	it('goes quiet when the summary lands, and settles before it', async () => {
+		const session = open({
+			script: byName({ product: twoAnswers, 'priya-aide': writes('Thursday is out.') }),
+		});
+		const events = collect(session);
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await session.settled();
+		// settled reports the seats alone: the aide has not written yet
+		expect(summaries(await session.messages())).toHaveLength(0);
+
+		await session.quiet();
+		expect(summaries(await session.messages())).toHaveLength(1);
+		const wrote = events.findIndex((e) => e.type === 'message' && e.message.kind === 'summary');
+		const quiet = events.findIndex((e) => e.type === 'quiet');
+		expect(quiet).toBeGreaterThan(wrote);
+	});
+
+	it('refuses an empty say, so an empty message never stands inside a range', async () => {
+		const contexts: string[] = [];
+		const session = open({
+			script: byName({
+				product: (context, _name, call) => {
+					contexts.push(contextText(context));
+					if (call === 1) return speak('   ');
+					if (call === 2) return speak('Thursday is out.');
+					return quiet();
+				},
+			}),
+		});
+
+		const visit = await visitSession(session, alone);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await quiescent(session);
+
+		expect(said(await session.messages())).toEqual([
+			'Can I tell the client Thursday?',
+			'Thursday is out.',
+		]);
+		expect(contexts.at(-1)).toContain('The message is empty');
+	});
+
+	it('is quiet with a summary owed, because owing one is not working on one', async () => {
+		const session = open({
+			script: byName({ product: twoAnswers, 'priya-aide': broken }),
+		});
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await quiescent(session);
+
+		// the turn failed, so the summary is owed and the range is still whole
+		expect(summaries(await session.messages())).toHaveLength(0);
+		// and a host asking again is not made to wait for work nobody is doing
+		await expect(session.quiet()).resolves.toBeUndefined();
+	});
+
+	it('does not report that a stopped room went quiet', async () => {
+		const session = open({
+			script: byName({ product: twoAnswers, 'priya-aide': writes('The one message.') }),
+		});
+		const events = collect(session);
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		// Shutdown while the room still owes a summary: the turns are aborted,
+		// whoever waited on quiet is drained, and nothing is quiet afterwards.
+		const waiting = session.quiet();
+		await stopSession(session);
+		await waiting;
+		const after = events.length;
+		await tick();
+		await tick();
+
+		expect(events.slice(after).map((e) => e.type)).not.toContain('quiet');
+	});
+
 	it('names the aide on the seat a host reads', async () => {
 		const session = open({ script: byName({}) });
 		await visitSession(session, priya);
@@ -638,6 +750,142 @@ describe('the aide', () => {
 
 		const seat = session.seats().find((s) => s.name === 'priya');
 		expect(seat?.kind === 'human' && seat.aide).toBe('priya-aide');
+	});
+});
+
+describe('an exchange', () => {
+	/** The room's own round: it opens and closes whether or not anybody brought an aide. */
+	it('opens on a question, closes on quiescence, and holds the range it covered', async () => {
+		const session = open({ script: byName({ product: twoAnswers }) });
+		const events = collect(session);
+
+		const visit = await visitSession(session, alone);
+		expect(session.exchange()).toBeUndefined();
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		// it is open while the room works, and it names who asked
+		expect(session.exchange()?.owner).toBe('priya');
+		await quiescent(session);
+
+		expect(session.exchange()).toBeUndefined();
+		const record = await session.messages();
+		const question = record.find(isSpoken);
+		const opened = events.filter((e) => e.type === 'exchange_opened');
+		const closed = events.filter((e) => e.type === 'exchange_closed');
+		expect(opened).toHaveLength(1);
+		expect(closed).toHaveLength(1);
+		expect(opened[0]).toMatchObject({ exchange: { owner: 'priya', from: question?.seq } });
+		expect(closed[0]).toMatchObject({
+			exchange: { owner: 'priya', from: question?.seq, through: record.at(-1)?.seq },
+		});
+		// no aide in this room, and the round is still a fact the host hears
+		expect(summaries(record)).toHaveLength(0);
+	});
+
+	it('opens for nobody but a person, and never twice at once', async () => {
+		const session = open({
+			agents: [product, attentive(greeter)],
+			script: byName({
+				product: answersEach,
+				// It meets the arrival once; a seat that speaks on every activation
+				// would keep waking the other one, and the room would never settle.
+				greeter: (_context, _name, call) => (call === 1 ? speak('who just arrived?') : quiet()),
+			}),
+		});
+		const events = collect(session);
+
+		// arriving wakes the seat that watches the door and opens nothing
+		const visit = await visitSession(session, alone);
+		await quiescent(session);
+		expect(events.filter((e) => e.type === 'exchange_opened')).toHaveLength(0);
+		expect(session.exchange()).toBeUndefined();
+
+		// a second message into an open exchange steers it and changes nothing
+		await visit.deliver({ text: 'first' });
+		const owner = session.exchange();
+		await visit.deliver({ text: 'second' });
+		expect(session.exchange()).toEqual(owner);
+		await quiescent(session);
+		expect(events.filter((e) => e.type === 'exchange_opened')).toHaveLength(1);
+		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(1);
+	});
+
+	it('closes before the summary that stands for it', async () => {
+		const session = open({
+			script: byName({ product: twoAnswers, 'priya-aide': writes('Thursday is out.') }),
+		});
+		const events = collect(session);
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await quiescent(session);
+
+		const order = events.map((e) => e.type);
+		const closed = order.indexOf('exchange_closed');
+		const summary = events.findIndex((e) => e.type === 'message' && e.message.kind === 'summary');
+		expect(closed).toBeGreaterThan(order.indexOf('settled'));
+		expect(summary).toBeGreaterThan(closed);
+		expect(order.indexOf('quiet')).toBeGreaterThan(summary);
+	});
+});
+
+describe('a fold', () => {
+	const at = new Date().toISOString();
+	const say = (seq: number, from: string, text: string, to?: string): Message => ({
+		kind: 'said',
+		seq,
+		at,
+		from,
+		...(to === undefined ? {} : { to }),
+		text,
+	});
+	const stands = (seq: number, aide: string, person: string, from: number, through: number) =>
+		({
+			kind: 'summary',
+			seq,
+			at,
+			from: aide,
+			to: person,
+			text: `the message ${person} reads`,
+			covers: { from, through },
+		}) satisfies Message;
+
+	it('names the person its summary was written for', () => {
+		const record = [
+			say(1, 'priya', 'Can I tell the client Thursday?'),
+			say(2, 'product', 'No.', 'priya'),
+			say(3, 'colleague', 'Nor from here.', 'priya'),
+			stands(4, 'priya-aide', 'priya', 1, 3),
+		];
+
+		expect(renderRecord(record, [], Date.parse(at))).toContain(
+			'── 3 messages, summarised for priya below ──',
+		);
+	});
+
+	/**
+	 * A race widens the range a refused draft covers, so one summary can stand
+	 * for another. The fold above each one still names the person it is for.
+	 */
+	it('keeps two overlapping ranges apart', () => {
+		const record = [
+			say(1, 'priya', 'Can I tell the client Thursday?'),
+			say(2, 'product', 'No.', 'priya'),
+			say(3, 'colleague', 'Nor from here.', 'priya'),
+			say(4, 'sam', 'What do you need from me?'),
+			say(5, 'product', 'A date.', 'sam'),
+			say(6, 'colleague', 'And the plant.', 'sam'),
+			stands(7, 'sam-aide', 'sam', 4, 6),
+			stands(8, 'priya-aide', 'priya', 1, 7),
+		];
+
+		const lines = renderRecord(record, [], Date.parse(at)).split('\n');
+
+		expect(lines).toEqual([
+			'── 3 messages, summarised for priya below ──',
+			'── 3 messages, summarised for sam below ──',
+			'[sam-aide → sam] the message sam reads  (just now)',
+			'[priya-aide → priya] the message priya reads  (just now)',
+		]);
 	});
 });
 
