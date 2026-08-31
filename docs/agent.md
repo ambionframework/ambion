@@ -118,9 +118,9 @@ never has: instructions, tools, or a model — humans are not run, and a `say`
 directed at one wakes nothing.
 
 One optional field goes with them: `aide`, an agent that holds their brief and
-writes the one message they read when an exchange closes. It is not seated, no
-message activates it, and nothing it writes wakes anybody.
-[`aide.md`](aide.md) is the contract for it.
+writes the one message they read when an exchange closes. It is a seat at the
+narrow end of attention: nothing said reaches it, no message activates it, and
+nothing it writes wakes anybody. [`aide.md`](aide.md) is the contract for it.
 
 A human is not composition and is not passed to `startSession`. The value is
 what somebody visits as: `visitSession(session, andrei)` returns a visit, the
@@ -247,7 +247,7 @@ idle is still heard, not stranded until the next delivery. With one agent
 this degenerates to ordinary chat: the room is the general case, the
 assistant its size-one instance. A message may also be directed:
 `visit.deliver({ to, text })` and `say({ to })` activate exactly the named
-participant, waking it idle or passive. `to` is a participant handle;
+participant, waking it however narrowly it is seated. `to` is a participant handle;
 directed at a human it is an address for the reader and wakes nothing.
 
 **2. Whatever arrives mid-turn is steered in — and working views reset at
@@ -264,7 +264,9 @@ views are ephemeral.
 **3. Speaking is a tool; silence is the default.** An activated agent holds
 one built-in tool, `say({ to?, text })` (`sayTool` in `session.ts`). Ending a
 turn without calling it is declining — no mark on the record, the way a
-colleague reads the room and keeps working. The runtime's prompt
+colleague reads the room and keeps working. Saying nothing is also declining:
+the tool refuses an empty text, because a message with nothing in it still
+takes a seq, renders in every context after it, and wakes whoever hears it. The runtime's prompt
 (`systemPrompt` in `session.ts`) sets the bar for every seat: a reply must
 add something the record does not already hold — new information, a decision
 moved forward, or a genuinely different perspective — and a point already
@@ -279,7 +281,8 @@ declines, and the lock (rule 5) refuses the duplicate that slips through.
 
 **4. A directed `say` focuses the room's attention.** An undirected `say`
 speaks to everyone, like any message. `say({ to: 'writer' })` narrows it: the
-named colleague is woken, idle or passive — the only way a passive seat hears
+named colleague is woken, however narrowly it is seated — the only way a
+seat at `named` hears
 anything — and the rest of the idle room stays at rest; every escalation is
 explicit, on the record, and paid for on purpose. Directed at a human, it
 addresses the reader and wakes nothing. The runtime's prompt pairs this with
@@ -308,23 +311,43 @@ Status is runtime: `active` (taking a turn now) or `idle` (at rest).
 Attention is a seating choice, and it is what rule 1 defers to when it says
 who sits out — one widening scale, from the narrowest:
 
-- `named` — hears nothing but a message addressed to it, seated as
-  `passive(archivist)`. The expert in the corner: hearing nothing, costing
-  nothing, until someone asks.
+- `none` — nothing said in the room reaches it, and it cannot be addressed:
+  a directed say to it is refused rather than left unread. The seat that is
+  present and unreachable, waiting for something other than a message. An
+  aide sits here ([`aide.md`](aide.md)), woken by the close of its person's
+  exchange and by nothing else.
+- `named` — hears a message addressed to it, seated as `passive(archivist)`.
+  The expert in the corner: hearing nothing, costing nothing, until someone
+  asks.
 - `broadcast` — also hears anything a participant said. The default, and what
   a bare agent in `agents` gets.
-- `presence` — also wakes when somebody arrives, leaves or goes quiet, seated
-  as `attentive(concierge)`.
+- `presence` — also wakes when somebody arrives or leaves, seated as
+  `attentive(concierge)`.
+
+**The scale is the mechanism; the words are shorthand for points on it.**
+`seated(agent, attention)` is the general form, and `passive` and `attentive`
+are one line each over it — the two points a room names often enough to be
+worth a word. A bare agent takes the default, and `none` is the runtime's own:
+it is where an aide sits, and nothing in a room's composition asks for it.
+
+The routing is the scale, and reads as one line (`wakes` in `session.ts`):
+every message has a **reach** — `named` for a directed say, `broadcast` for
+anything else said, `presence` for somebody arriving or leaving — and a seat
+wakes when its attention is at least that wide. A directed message
+additionally wakes the one it names and nobody else, which is what makes it a
+focusing act rather than a louder one.
 
 Both are readable from `session.seats()`, so a seat that is `named` and
 running is describable, which one enum could not do. Attention belongs to the
 seating rather than to `defineAgent`, so the same agent can be the quiet
-corner in one room and the one who meets people in another.
+corner in one room and the one who meets people in another — and an aide can
+be given a wider one the day it is meant to take part in the room, without
+becoming a different kind of thing.
 
 **7. Identity is injected; provenance is stamped.** Every agent's context
 carries the session's goal, the time, and two rosters — the agents, with
 their statuses spelled out so a seat knows a broadcast will not reach the
-passive colleague in the corner, and the people, with how long each one has
+colleague seated `passive` in the corner, and the people, with how long each one has
 been reading or gone. On the record, `from` is written by the runtime: `say`
 is stamped with its agent, a delivery is stamped from the live visit that
 made it, and an arrival is stamped from the visit the runtime observed
@@ -357,7 +380,10 @@ type SessionEvent =
   | { type: 'tool_execution_end'; agent: string; toolName: string }
   | { type: 'agent_end'; agent: string; spoke: boolean }
   | { type: 'error'; agent: string; error: Error }
-  | { type: 'settled' };
+  | { type: 'exchange_opened'; exchange: Exchange }
+  | { type: 'exchange_closed'; exchange: ClosedExchange }
+  | { type: 'settled' }
+  | { type: 'quiet' };
 ```
 
 **One message on the record, one `message` event.** What a person delivered,
@@ -387,14 +413,77 @@ each other's tool executions; the stream sees them, because the host
 operating the room is the tenant's own code, and debugging a room means
 watching hands as well as hearing voices.
 
+### The exchange: the room's own round
+
+A room is not a stream of unrelated messages. **A person asks something,
+several agents wake and work it out between them, and the room goes quiet
+again.** That shape is the exchange, and it is the room's, not any one
+feature's ([`exchange.ts`](../packages/ambion/src/exchange.ts)):
+
+```ts
+interface Exchange {
+  /** The person whose question opened it, and who owns what follows. */
+  owner: string;
+  /** The seq of that question: where the exchange starts. */
+  from: Seq;
+  at: string;
+}
+
+interface ClosedExchange extends Exchange {
+  /** The last seq on the record when the room went quiet. */
+  through: Seq;
+}
+```
+
+Three sentences hold the whole rule.
+
+**A person's question opens one, when no exchange is open.** Nothing else
+does. An agent speaking into a quiet room opens nothing, because a room that
+talks to itself is not answering anybody; arriving and leaving open nothing,
+because nobody asked anything by opening a workspace. The clause is written on
+the exchange rather than on the room's status, for the case that is busy and
+has no owner: somebody arrives, the seat that watches the door wakes, and a
+question lands on top of work nobody asked for. That question still owns what
+follows.
+
+**Quiescence closes it.** The room settles when no agent is active, and a room
+that settles has finished: a seat that says something wakes its readers inside
+its own `say`, before its own turn ends, so the active count never dips to
+zero in the middle of a burst. `through` is the record as it stood at that
+moment, so a closed exchange names the range it turned out to hold.
+
+**What lands while it is open steers it and changes nothing** — not the owner,
+not the range, not who the answer belongs to. A second question from the same
+person, or a word from somebody else, reaches the seats already working
+(rule 2) and starts nothing new.
+
+`exchange()` reads the open one, and the stream carries both edges. It is run
+state: a restart begins with none, because the record keeps what was said and
+nobody is mid-question after a restart.
+
+**What reads it.** The aide is the first thing and not the last: its person's
+aide is a seat that a closed exchange wakes, and the one message it writes
+stands for that round ([`aide.md`](aide.md)). A client folds the working under
+the question it answered and shows the round as a thinking state — which it
+can do from these two events alone, in a room where nobody brought an aide. A
+host that measures what a room costs measures it per round, because a round is
+what somebody asked for. A later room-level compactor stands over a stretch of
+closed exchanges rather than over a message count.
+
 Two completion signals, for the two things a host waits on. `deliver()`
 resolves on acceptance — the message is on the record and activations are
 dispatched — never on completion, because a parallel round has no single
 caller to return to. The round's end is `settled()`: a promise that resolves
-when the room is quiet, which is also the moment a host learns that nobody
-chose to speak. It reports that no agent is active and nothing more: an aide
-writing a summary is not a seat taking a turn, and the room is never held busy
-while one works. And two controls. `abort()` cancels every active turn — Pi's
+when the seats stop, which is also the moment a host learns that nobody chose
+to speak. It reports that no seat which speaks for itself is taking a turn:
+an aide writing about a round is not the room still working on it, so the room
+is never held busy while one writes. `quiet()` is the second moment — no agent
+at all is taking a turn — for a host that wants the one message a person reads
+([`aide.md`](aide.md) §14). The two differ because an aide is a seat like any
+other and its turn is a turn, and the difference is what keeps a round's end
+from moving when somebody brings one. The order at the end of a round is fixed:
+`settled`, then `exchange_closed`, then whatever is written about it, then
+`quiet`. And two controls. `abort()` cancels every active turn — Pi's
 own abort, fanned out — and the room settles; what was said stays, what was
 mid-flight ends without speaking, and an aborted turn stays cancelled even if
 a steer was still queued against it. The room is still running afterwards.
@@ -424,12 +513,17 @@ The milestone tests live in
 [`packages/ambion/test/session.test.ts`](../packages/ambion/test/session.test.ts),
 one per claim this document makes loudly: parallel activation with mid-turn
 steering, and a reply waking the idle room (rules 1–2, 4); working views reset
-at idle (rule 2); silence leaves no mark (rule 3); directed wake, passive
-included, and broadcasts never waking a passive seat (rules 1, 4, 6); a
+at idle (rule 2); silence leaves no mark (rule 3); a directed wake reaching a
+seat at `named`, and a broadcast never reaching one (rules 1, 4, 6); a
 racing say refused with what it missed — retry commits, standing down leaves
 no mark (rule 5); provenance stamped and the roster injected (rule 7); the
 name opening back into its record; events in order, errors as events, abort
-quieting the room — including an abort with a steer still queued. All
+quieting the room — including an abort with a steer still queued. The exchange
+is proved beside the aide that first reads one, in
+[`aide.test.ts`](../packages/ambion/test/aide.test.ts): a question opens a
+round and quiescence closes it, holding the range it covered; an arrival opens
+none and a second message into an open one changes nothing; and a round closes
+before anything is written about it. All
 in-process, in vitest, on a scripted stream where determinism matters. What a
 person entering and leaving adds to these rules is proved beside them, in
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts), and what the

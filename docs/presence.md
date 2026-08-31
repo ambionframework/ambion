@@ -339,7 +339,7 @@ Two things bound the rest. **Only a deliberate act writes one.** No timer
 writes to the record, so a person who leaves a tab open all afternoon costs
 the room nothing, and the message count follows the number of times somebody
 opened or closed the workspace. And **`passive`** removes the glance rather
-than the message: a passive seat hears no broadcast, so it hears no arrival
+than the message: a seat at `named` hears no broadcast, so it hears no arrival
 either, until somebody names it, while the record keeps everything.
 
 Presence does not touch `settled()`. `settled()` reports that no agent is
@@ -525,6 +525,8 @@ export type SeatInfo =
       status: SeatStatus;
       attention: Attention;
       sessionId: string;
+      /** The person this seat writes for, when it is their aide. See aide.md. */
+      owner?: string;
     }
   | {
       kind: 'human';
