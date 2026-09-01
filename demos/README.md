@@ -27,12 +27,13 @@ showed.
 | 2026-08-26 | [The Room, Verbatim](2026-08-26-the-room-verbatim.html)               | sonnet-4-5 | [artifact](https://claude.ai/code/artifact/bb9a4ec2-2f2d-4ee0-8803-182e2bbc5797) |
 | 2026-08-28 | [Three Apps, One Site](2026-08-28-three-apps-one-site.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/e170799d-5176-491f-a887-9bde86f0ac02) |
 | 2026-08-31 | [One Exchange, One Message](2026-08-31-one-exchange-one-message.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/f73ba11a-3189-4313-9b97-b61d89bd7089) |
+| 2026-08-31 | [How Each Person Reads](2026-08-31-how-each-person-reads.html)     | sonnet-5   | [artifact](https://claude.ai/code/artifact/203189de-f717-4e0e-9793-b991947349de) |
 
 ## What each run changed
 
 **The Room, Verbatim.** The first live run of the core, before presence
-existed. Five agents and one person, every activation shown in full. The person is a
-participant here, seated with the agents — which is what the next change
+existed. Five agents and one person, every activation shown in full. The person
+is a participant here, seated with the agents — which is what the next change
 undid. It proved the say lock in the open: of the 32 says the agents
 attempted, 13 were refused because the record moved while the seat was
 drafting. The lock is what keeps a room of agents from all answering the same
@@ -82,3 +83,23 @@ now names the person its summary was written for, and this run contains that
 case. The summaries also read long, so the runtime now asks an aide for the
 answer and for what changed while the room worked, and for nothing else. One
 run put an empty message on the record, so `say` refuses one now.
+
+**How Each Person Reads.** The run that settled what an aide holds. An aide was
+documented as holding two things: its person's brief, and their preferences. A
+question is a message with a seq, and what a person owns is their `identity`,
+which every seat's context already carries. Both were names for something the
+aide reads, so [`docs/aide.md`](../docs/aide.md) §2 now holds the one fact no
+message carries: how its person reads. The three aides in the example stopped
+opening with a restatement of who their person is, and their briefs are a third
+shorter — 1,410 characters to 960. The summaries came out at 100 words against
+95 in the run before, so a third less instruction bought the same message.
+
+Inside the run, the same record rendered twice is the number to trust: the last
+seat activation read 4,940 characters with 17 messages standing as 3 summaries,
+against 9,003 with nothing folded, so the fold took 45% off what that seat read.
+
+The comparison arm answers the same four questions with the aide removed from
+every person. It read 7,275 characters into its last seat against this run's
+4,940, so this time the room with aides in it read less for saying more. The run
+before this one came out level on that row. One run does not settle that, and
+the report says which rows are structural and which move with the model.
