@@ -5,7 +5,7 @@
  * Three products hold their own state and their own API and know nothing of
  * each other's internals: they ask on the record, the way a person does. Three
  * people share the workspace from a site office, a phone on the deck and a
- * cost desk, and each one brings an aide that holds what they act on and
+ * cost desk, and each one brings an assistant that holds what they act on and
  * writes the one message they read.
  *
  * `main.ts` opens this interactively. `demo.ts` drives one scripted run of it.
@@ -479,24 +479,24 @@ const materialsAgent = defineAgent({
  */
 export const AGENTS = [shiftsAgent, attentive(tasksAgent), materialsAgent];
 
-// -- the people, and the aide each of them brings ----------------------------
+// -- the people, and the assistant each of them brings ----------------------------
 
 /**
  * An identity is the public face: what a person owns, and what only they can
- * do. Every product reads it to decide whom to address, and so does the aide.
+ * do. Every product reads it to decide whom to address, and so does the assistant.
  *
  * How a person reads is a different fact: what an answer leads with, what to
  * cut, and how much of one they take. That belongs to the person, so it lives
- * in their aide's instructions and nowhere else. Before aides, every product
+ * in their assistant's instructions and nowhere else. Before assistants, every product
  * carried a copy of it for every person, and each new person made every
  * product's prompt longer.
  *
- * An aide reads the identity in its context, so nothing here repeats it.
+ * An assistant reads the identity in its context, so nothing here repeats it.
  */
-const aide = (person: string, instructions: string) =>
+const assistant = (person: string, instructions: string) =>
 	defineAgent({
-		name: `${person}-aide`,
-		identity: `${person}'s aide. Holds how they read and writes the one message they read.`,
+		name: `${person}-assistant`,
+		identity: `${person}'s assistant. Holds how they read and writes the one message they read.`,
 		model: MODEL,
 		instructions: `
 			Lead with the decision your person has to make and who holds it. Give them
@@ -513,7 +513,7 @@ export const priya = defineHuman({
 	identity:
 		'Project manager, site office. Owns the programme and what the client is promised. ' +
 		'She is the only one who can book building control and commit a date to the client.',
-	aide: aide(
+	assistant: assistant(
 		'priya',
 		`
 			Open with the date: whether it holds, and if not, the earliest one that
@@ -530,7 +530,7 @@ export const sam = defineHuman({
 	identity:
 		'Site foreman, on the deck with a phone. Owns what the crews actually do tomorrow morning. ' +
 		'He can move labour and plant the same day and nobody else can.',
-	aide: aide(
+	assistant: assistant(
 		'sam',
 		`
 			Sam reads standing up. Open with what changes for his crews and when, and
@@ -547,7 +547,7 @@ export const dan = defineHuman({
 	identity:
 		'Quantity surveyor. Owns cost, variations and what the client is charged. ' +
 		'He owns the hire orders and approves overtime spend.',
-	aide: aide(
+	assistant: assistant(
 		'dan',
 		`
 			Open with the money: what the change costs, what it saves, and which of it

@@ -6,8 +6,8 @@ Guidance for Claude Code in this repository.
 
 Ambion — a minimalist framework for ambient-aware, always-on agents. Agents wait
 in a session and activate only when a message is delivered to them. Four
-primitives: `defineAgent`, `defineHuman`, `defineTool`, `startSession`. A person
-may bring an aide, which writes the one message they read when the room goes
+primitives: `defineAgent`, `defineHuman`, `defineTool`, `startSession`. A
+person's assistant writes the one message they read when the room goes
 quiet.
 
 pnpm workspace, Node >= 22.19, ESM only, TypeScript.
@@ -18,7 +18,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `packages/cli`      | The `ambion` binary                                                            |
 | `docs/agent.md`     | Design contract for the core — read before changing the runtime                |
 | `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                 |
-| `docs/aide.md`      | Design contract for the aide, a person's counterpart in a room                 |
+| `docs/assistant.md` | Design contract for the assistant, a person's counterpart in a room            |
 | `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs |
 | `examples/site`     | Runnable example                                                               |
 | `demos/`            | One dated report per merged change — regenerate on the branch, then leave it   |

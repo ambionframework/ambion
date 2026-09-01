@@ -3,8 +3,8 @@
  *
  * Three products wait in it. You visit as one of three people, and can open a
  * second and third visit to watch presence work with more than one of you in
- * the room at once. Each person brings an aide: ask a question, let the room
- * work it out, and read the one message your aide writes when it goes quiet.
+ * the room at once. Each person brings an assistant: ask a question, let the room
+ * work it out, and read the one message your assistant writes when it goes quiet.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm start   (from examples/site)
  */
@@ -37,9 +37,9 @@ const colours: Record<string, string> = {
 	priya: '\x1b[36m',
 	sam: '\x1b[35m',
 	dan: '\x1b[31m',
-	'priya-aide': '\x1b[96m',
-	'sam-aide': '\x1b[95m',
-	'dan-aide': '\x1b[91m',
+	'priya-assistant': '\x1b[96m',
+	'sam-assistant': '\x1b[95m',
+	'dan-assistant': '\x1b[91m',
 };
 const dim = '\x1b[2m';
 const red = '\x1b[31m';
@@ -104,7 +104,7 @@ session.subscribe((event: SessionEvent) => {
 				`${dim}— the exchange is over (${event.exchange.from}–${event.exchange.through}) —${reset}`,
 			);
 			break;
-		// Quiet, not settled: settled is the seats alone, and an aide writes after it.
+		// Quiet, not settled: settled is the seats alone, and an assistant writes after it.
 		case 'quiet':
 			show(`${dim}— the workspace is quiet —${reset}`);
 			break;
@@ -126,13 +126,13 @@ function help(): void {
 			'  /record           everything on the record',
 			'  /missed           what landed since you last stopped reading',
 			'  /api              every call the products made into their own data',
-			'  /summaries        what each aide wrote, and the range it stands for',
+			'  /summaries        what each assistant wrote, and the range it stands for',
 			'  /abort            cancel every activation in flight',
 			'  /quit             leave, stop the workspace, and exit',
 			'',
 			'  The task list watches the door. Try /join dan and see whether it has',
 			'  anything of his; then ask "can I promise Thursday for the pour?"',
-			'  When the room goes quiet, your aide writes the one message you read.',
+			'  When the room goes quiet, your assistant writes the one message you read.',
 			'',
 		].join('\n'),
 	);
@@ -154,8 +154,10 @@ function who(): void {
 				`  ${paint(seat.name, seat.name)} (${seat.status}, wakes ${WAKES[seat.attention]}${owner}): ${seat.identity}`,
 			);
 		} else {
-			const aide = seat.aide ? `, brings ${seat.aide}` : '';
-			console.log(`  ${paint(seat.name, seat.name)} (${seat.presence}${aide}): ${seat.identity}`);
+			const assistant = seat.assistant ? `, brings ${seat.assistant}` : '';
+			console.log(
+				`  ${paint(seat.name, seat.name)} (${seat.presence}${assistant}): ${seat.identity}`,
+			);
 		}
 	}
 }
@@ -173,10 +175,10 @@ async function record(): Promise<void> {
 	for (const m of await session.messages()) console.log(`  ${line(m)}`);
 }
 
-/** One exchange, one message: what each aide wrote, and what it stands for. */
+/** One exchange, one message: what each assistant wrote, and what it stands for. */
 async function summaries(): Promise<void> {
 	const written = (await session.messages()).filter(isSummary);
-	if (written.length === 0) return console.log('  (no aide has written yet)');
+	if (written.length === 0) return console.log('  (no assistant has written yet)');
 	for (const m of written) {
 		console.log(`  [${m.seq}] ${paint(m.from, m.from)} → ${m.to}, for ${span(m)}:`);
 		console.log(`      ${m.text.replace(/\n/g, '\n      ')}`);

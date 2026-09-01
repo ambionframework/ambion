@@ -3,7 +3,7 @@
  * again. The room goes from idle, to active, and back to idle, and one person
  * owns what happens in between.
  *
- * This is the room's own unit of work, not the aide's. An aide is the first
+ * This is the room's own unit of work, not the assistant's. An assistant is the first
  * thing that reads it — it writes one message per exchange — and it is not the
  * last: a client folds the working under the question it answered, a host
  * measures what an exchange cost, and a later compactor stands over a stretch of
@@ -22,7 +22,7 @@
  * - **What lands while it is open steers it and changes nothing.** Not the
  *   owner, not the range, not who the answer belongs to.
  *
- * The design contract is `docs/agent.md`; `docs/aide.md` says what an aide
+ * The design contract is `docs/agent.md`; `docs/assistant.md` says what an assistant
  * makes of one.
  */
 import { isSpoken, type Message, type Seq } from './types.ts';

@@ -55,8 +55,25 @@ const watcher = defineAgent({
 	model: 'scripted/watcher',
 });
 
-const andrei = defineHuman({ name: 'andrei', identity: 'Founder. Owns the weekly.' });
-const mara = defineHuman({ name: 'mara', identity: 'Design lead.' });
+/** A trivial assistant: every human needs one, and nothing here tests what it writes. */
+const assistantFor = (person: string) =>
+	defineAgent({
+		name: `${person}-assistant`,
+		identity: `${person}'s assistant.`,
+		instructions: 'stay quiet',
+		model: 'scripted/assistant',
+	});
+
+const andrei = defineHuman({
+	name: 'andrei',
+	identity: 'Founder. Owns the weekly.',
+	assistant: assistantFor('andrei'),
+});
+const mara = defineHuman({
+	name: 'mara',
+	identity: 'Design lead.',
+	assistant: assistantFor('mara'),
+});
 
 let unique = 0;
 const roomName = () => `presence-${++unique}`;

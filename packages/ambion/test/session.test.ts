@@ -104,7 +104,15 @@ function contextText(context: Context): string {
 let unique = 0;
 const sessionName = (prefix: string) => `${prefix}-${++unique}`;
 
-const human = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.' });
+/** A trivial assistant: every human needs one, and nothing here tests what it writes. */
+const assistant = defineAgent({
+	name: 'andrei-assistant',
+	identity: "andrei's assistant.",
+	instructions: 'stay quiet',
+	model: 'scripted/assistant',
+});
+
+const human = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.', assistant });
 
 /**
  * A visitor whose arrival has already been heard. Arriving is a message, so
@@ -339,9 +347,9 @@ describe('startSession', () => {
 		expect(roster).toContain('Founder. Owns the room.');
 
 		// one name is one participant, and one name is one person
-		const asAgent = defineHuman({ name: 'liar', identity: 'not really' });
+		const asAgent = defineHuman({ name: 'liar', identity: 'not really', assistant });
 		await expect(visitSession(session, asAgent)).rejects.toThrow(/is an agent/);
-		const twin = defineHuman({ name: 'andrei', identity: 'a different andrei' });
+		const twin = defineHuman({ name: 'andrei', identity: 'a different andrei', assistant });
 		await expect(visitSession(session, twin)).rejects.toThrow(/different identity/);
 	});
 
@@ -404,7 +412,7 @@ describe('startSession', () => {
 		await orderedVisit.deliver({ text: 'say hi' });
 		await ordered.settled();
 		// one event per message on the record, whoever wrote it, and the exchange
-		// that message opened around it. A room with no aide in it goes quiet in
+		// that message opened around it. A room with no assistant in it goes quiet in
 		// the same tick the exchange closes: nothing is owed.
 		expect(events.map((e) => e.type)).toEqual([
 			'message',

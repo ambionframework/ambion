@@ -7,9 +7,9 @@
  * named room the agents work in and people visit. A person's question opens an exchange, the room
  * works, and quiescence closes it — the exchange every other feature reads. `stopSession` takes it down, `readSession` reads
  * a name without starting anything, and `visitSession` puts a person in a
- * running room. A person may bring an aide, which writes the one message they
- * read when an exchange closes. The design contracts live in docs/agent.md,
- * docs/presence.md and docs/aide.md.
+ * running room. A person's assistant writes the one message they read when
+ * an exchange closes. The design contracts live in docs/agent.md,
+ * docs/presence.md and docs/assistant.md.
  */
 
 export type { SessionMetadata, SessionRepo, SessionStorage } from '@earendil-works/pi-agent-core';

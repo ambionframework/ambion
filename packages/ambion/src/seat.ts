@@ -62,13 +62,13 @@ export function wakes(
 	seat: SeatRuntime,
 	target: SeatRuntime | undefined,
 	message: Message,
-	fromAide: boolean,
+	fromAssistant: boolean,
 ): boolean {
-	// Nothing an aide writes wakes anybody: a room that woke because somebody's
-	// aide wanted something is a room run by a proxy. The guard is on the
-	// author rather than on what it wrote, so it holds for anything an aide
+	// Nothing an assistant writes wakes anybody: a room that woke because somebody's
+	// assistant wanted something is a room run by a proxy. The guard is on the
+	// author rather than on what it wrote, so it holds for anything an assistant
 	// ever writes. Every seat still reads it.
-	if (fromAide) return false;
+	if (fromAssistant) return false;
 	const reach = reachOf(message);
 	if (WIDTH[seat.attention] < WIDTH[reach]) return false;
 	return reach === 'named' ? seat === target : true;
