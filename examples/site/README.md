@@ -3,7 +3,7 @@
 A construction management suite where each product is an agent: a time
 tracker, a task list and a materials tracker. Three people share the
 workspace — a project manager in the site office, a foreman on the deck with
-a phone, and a quantity surveyor at a cost desk. Each of them brings an aide.
+a phone, and a quantity surveyor at a cost desk. Each of them brings an assistant.
 
 Each product holds its own state and its own API and knows nothing of the
 others' internals. It asks them on the record, the way a person does.
@@ -15,7 +15,7 @@ pnpm start                          # open it in your terminal
 pnpm demo                           # one scripted run, captured as JSON
 ```
 
-`AMBION_MODEL` picks the model every product and every aide runs on. It
+`AMBION_MODEL` picks the model every product and every assistant runs on. It
 defaults to `anthropic/claude-sonnet-5`.
 
 ## What to look for
@@ -25,7 +25,7 @@ at one point of an attention scale — the widest kind of message that wakes it.
 The task list is `attentive` (`presence`), so it wakes when somebody arrives
 and checks what is blocked on them. The other two sit at the default and do
 not: an arrival asks nothing, and three products guessing at what it wants is
-three briefings nobody requested. The three aides sit at the narrow end, where
+three briefings nobody requested. The three assistants sit at the narrow end, where
 nothing said reaches them at all. Try `/join dan` and watch which seats read
 it.
 
@@ -50,21 +50,21 @@ typed an edit.
 
 **A question opens an exchange.** `— priya asked; the workspace is working —`
 marks it, and `— the exchange is over (3–7) —` marks the moment the seats stop.
-That is the exchange, and it is the room's own: it opens whether or not
-anybody brought an aide, and a client that could re-render would fold the
-working between those two lines into a thinking state.
+That is the exchange, and it is the room's own: it opens the same way whoever
+asks, and a client that could re-render would fold the working between those
+two lines into a thinking state.
 
 **One question, one message back.** Ask "can I promise Thursday for the
 pour?" and watch three products answer it between them. When the exchange closes,
-the aide of whoever asked writes the one message they read instead of the
+the assistant of whoever asked writes the one message they read instead of the
 working, marked `∎` and carrying the span it stands for. `/summaries` lists
 them. A question the room answers once draws no summary at all: one answer is
 left in the voice that gave it.
 
-**Each aide writes for one person.** Ask the same question as `priya`, then
+**Each assistant writes for one person.** Ask the same question as `priya`, then
 as `sam`, then as `dan`, and compare the three. Priya's opens with the date,
 Sam's with what changes for his crews at seven, Dan's with the money. Nothing
-in the products knows any of that — the preferences live in the aides, in
+in the products knows any of that — the preferences live in the assistants, in
 `workspace.ts`, and each person's live in theirs alone.
 
 **A summarised range leaves the products' context.** After a summary lands,
@@ -74,12 +74,12 @@ discussion and the products hold the state.
 
 ## The files
 
-| File           | What                                                                        |
-| -------------- | --------------------------------------------------------------------------- |
-| `workspace.ts` | The products, their APIs and their state; the people, their aides, the goal |
-| `main.ts`      | The workspace open in your terminal                                         |
-| `demo.ts`      | One scripted run, written out as JSON for a report                          |
+| File           | What                                                                             |
+| -------------- | -------------------------------------------------------------------------------- |
+| `workspace.ts` | The products, their APIs and their state; the people, their assistants, the goal |
+| `main.ts`      | The workspace open in your terminal                                              |
+| `demo.ts`      | One scripted run, written out as JSON for a report                               |
 
 The contracts are [`docs/agent.md`](../../docs/agent.md),
 [`docs/presence.md`](../../docs/presence.md) and
-[`docs/aide.md`](../../docs/aide.md).
+[`docs/assistant.md`](../../docs/assistant.md).

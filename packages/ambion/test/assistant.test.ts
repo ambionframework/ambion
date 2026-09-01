@@ -32,7 +32,7 @@ type Script = (
 	call: number,
 ) => AssistantMessage | Promise<AssistantMessage>;
 
-/** A deterministic streamFn, routed on the name in the prompt. An aide is named there too. */
+/** A deterministic streamFn, routed on the name in the prompt. An assistant is named there too. */
 function scripted(script: Script): StreamFn {
 	const calls = new Map<string, number>();
 	return (_model, context, options) => {
@@ -79,11 +79,11 @@ const speak = (text: string) =>
 
 const quiet = (thought = 'nothing to add') => fauxAssistantMessage(thought, { stopReason: 'stop' });
 
-/** An aide writes by calling its own tool. It has no say, because it says nothing. */
+/** An assistant writes by calling its own tool. It has no say, because it says nothing. */
 const summarise = (text: string) =>
 	fauxAssistantMessage([fauxToolCall('summarise', { text })], { stopReason: 'toolUse' });
 
-/** The ordinary aide: it writes once, then ends its activation. */
+/** The ordinary assistant: it writes once, then ends its activation. */
 const writes =
 	(text: string): Script =>
 	(_context, _name, call) =>
@@ -112,7 +112,7 @@ function contextText(context: Context): string {
 // -- the room ----------------------------------------------------------------
 
 let unique = 0;
-const roomName = () => `aide-${++unique}`;
+const roomName = () => `assistant-${++unique}`;
 
 const product = defineAgent({
 	name: 'product',
@@ -139,27 +139,24 @@ const colleague = defineAgent({
 const priya = defineHuman({
 	name: 'priya',
 	identity: 'Project manager. Owns the programme.',
-	aide: defineAgent({
-		name: 'priya-aide',
+	assistant: defineAgent({
+		name: 'priya-assistant',
 		identity: 'Holds how Priya reads.',
 		instructions: 'Lead with the decision she has to make. Leave out who said what.',
-		model: 'scripted/aide',
+		model: 'scripted/assistant',
 	}),
 });
 
 const sam = defineHuman({
 	name: 'sam',
 	identity: 'Site foreman.',
-	aide: defineAgent({
-		name: 'sam-aide',
+	assistant: defineAgent({
+		name: 'sam-assistant',
 		identity: 'Holds how Sam reads.',
 		instructions: 'Lead with what he has to do tomorrow.',
-		model: 'scripted/aide',
+		model: 'scripted/assistant',
 	}),
 });
-
-/** The same person, with nobody to write for her. */
-const alone = defineHuman({ name: 'priya', identity: 'Project manager. Owns the programme.' });
 
 const started: Session[] = [];
 
@@ -189,7 +186,7 @@ const collect = (session: Session) => {
 	return seen;
 };
 
-/** An aide writes after the room is quiet, so a test waits for what it wrote. */
+/** An assistant writes after the room is quiet, so a test waits for what it wrote. */
 function nextSummary(session: Session): Promise<SummaryMessage> {
 	return new Promise((resolve) => {
 		const off = session.subscribe((event) => {
@@ -201,21 +198,21 @@ function nextSummary(session: Session): Promise<SummaryMessage> {
 }
 
 /**
- * The named aide's activation is over, whatever it decided. A summary commits
+ * The named assistant's activation is over, whatever it decided. A summary commits
  * inside the tool call, so the activation runs on for a moment after the
  * message lands.
  */
-function aideEnded(session: Session, aide = 'priya-aide'): Promise<void> {
+function assistantEnded(session: Session, assistant = 'priya-assistant'): Promise<void> {
 	return new Promise((resolve) => {
 		const off = session.subscribe((event) => {
-			if (event.type !== 'activation_end' || event.agent !== aide) return;
+			if (event.type !== 'activation_end' || event.agent !== assistant) return;
 			off();
 			resolve();
 		});
 	});
 }
 
-/** Quiet: no seat is taking an activation, and no aide still owes a message. */
+/** Quiet: no seat is taking an activation, and no assistant still owes a message. */
 function quiescent(session: Session): Promise<void> {
 	return session.quiet();
 }
@@ -248,7 +245,7 @@ const answersEach: Script = (_context, _name, call) => {
 const twoAnswersEach: Script = (_context, _name, call) =>
 	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
 
-/** An aide that writes once per activation, however many activations it takes. */
+/** An assistant that writes once per activation, however many activations it takes. */
 const writesEach =
 	(text: string): Script =>
 	(_context, _name, call) =>
@@ -267,7 +264,7 @@ function heldUntil(held: Promise<void>): Script {
 	};
 }
 
-describe('the aide', () => {
+describe('the assistant', () => {
 	it('writes one message for an exchange the room answered more than once', async () => {
 		const contexts: string[] = [];
 		const prompts: string[] = [];
@@ -275,7 +272,7 @@ describe('the aide', () => {
 		const session = open({
 			script: byName({
 				product: twoAnswers,
-				'priya-aide': (context, _name, call) => {
+				'priya-assistant': (context, _name, call) => {
 					contexts.push(contextText(context));
 					prompts.push(context.systemPrompt ?? '');
 					hands.push((context.tools ?? []).map((tool) => tool.name).join(','));
@@ -286,14 +283,14 @@ describe('the aide', () => {
 			}),
 		});
 		const written = nextSummary(session);
-		const ended = aideEnded(session);
+		const ended = assistantEnded(session);
 
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday for the pour?' });
 		const summary = await written;
 		await ended;
 
-		expect(summary.from).toBe('priya-aide');
+		expect(summary.from).toBe('priya-assistant');
 		expect(summary.to).toBe('priya');
 		expect(summary.text).toContain('Saturday');
 		// contiguous: it lands immediately after the range it stands for
@@ -303,14 +300,14 @@ describe('the aide', () => {
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said', 'said', 'summary']);
 
-		// what an aide is handed: the range it covers, and one hand that reaches the record
+		// what an assistant is handed: the range it covers, and one hand that reaches the record
 		expect(hands).toEqual(['summarise', 'summarise']);
 		expect(contexts[0]).toContain('Can I tell the client Thursday');
 		expect(contexts[0]).toContain('the inspector needs 48h notice');
-		// what its person owns reaches it in the roster, so an aide holds no copy
+		// what its person owns reaches it in the roster, so an assistant holds no copy
 		expect(contexts[0]).toContain('Project manager. Owns the programme.');
-		// and it is addressed as the aide it is, not as a seat that speaks
-		expect(prompts[0]).toContain("priya's aide in the session");
+		// and it is addressed as the assistant it is, not as a seat that speaks
+		expect(prompts[0]).toContain("priya's assistant in the session");
 		expect(prompts[0]).toContain('Writing is the summarise tool');
 		expect(prompts[0]).not.toContain('Speaking is the say tool');
 		// the last line names the range this activation closes
@@ -321,7 +318,7 @@ describe('the aide', () => {
 
 	it('leaves one answer as it was given, in the voice that gave it', async () => {
 		const session = open({
-			script: byName({ product: oneAnswer, 'priya-aide': writes('nobody asked for this') }),
+			script: byName({ product: oneAnswer, 'priya-assistant': writes('nobody asked for this') }),
 		});
 
 		const visit = await visitSession(session, priya);
@@ -329,27 +326,6 @@ describe('the aide', () => {
 		await quiescent(session);
 
 		expect(summaries(await session.messages())).toHaveLength(0);
-	});
-
-	it('writes nothing for a person who brought no aide', async () => {
-		const prompts: string[] = [];
-		const session = open({
-			script: byName({
-				product: (context, name, call) => {
-					prompts.push(context.systemPrompt ?? '');
-					return twoAnswers(context, name, call);
-				},
-			}),
-		});
-
-		const visit = await visitSession(session, alone);
-		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await quiescent(session);
-
-		expect(said(await session.messages())).toHaveLength(3);
-		expect(summaries(await session.messages())).toHaveLength(0);
-		// a room where nobody brought one reads exactly as it read before
-		expect(prompts[0]).not.toContain('summarised for');
 	});
 
 	it('wakes nobody, and every seat reads it at the next activation', async () => {
@@ -363,7 +339,7 @@ describe('the aide', () => {
 					if (call > 3) return quiet();
 					return twoAnswers(context, name, call);
 				},
-				'priya-aide': writes('Thursday is out; Saturday holds.'),
+				'priya-assistant': writes('Thursday is out; Saturday holds.'),
 			}),
 		});
 		const events = collect(session);
@@ -374,7 +350,7 @@ describe('the aide', () => {
 		const summary = await written;
 		await quiescent(session);
 
-		// nothing an aide writes activates a seat
+		// nothing an assistant writes activates a seat
 		const landed = events.findIndex((e) => e.type === 'message' && e.message === summary);
 		expect(events.slice(landed).filter((e) => e.type === 'activation_start')).toHaveLength(0);
 
@@ -384,9 +360,9 @@ describe('the aide', () => {
 		// the range left the seat's context, and the summary stands for it
 		const read = contexts.at(-1) ?? '';
 		expect(read).toContain('── 3 messages, summarised for priya below ──');
-		expect(read).toContain('[priya-aide → priya] Thursday is out; Saturday holds.');
+		expect(read).toContain('[priya-assistant → priya] Thursday is out; Saturday holds.');
 		expect(read).not.toContain('the inspector needs 48h notice');
-		expect(read).toContain('brings priya-aide');
+		expect(read).toContain('brings priya-assistant');
 		// a room where somebody brought one tells its seats how to read a fold
 		expect(prompts[0]).toContain('summarised for <name> below');
 		// the record keeps every message, and nothing was rewritten
@@ -405,7 +381,7 @@ describe('the aide', () => {
 					if (call === 1) await greeting.promise;
 					return quiet();
 				},
-				'priya-aide': writes('Thursday is out; Saturday holds.'),
+				'priya-assistant': writes('Thursday is out; Saturday holds.'),
 			}),
 		});
 		const written = nextSummary(session);
@@ -427,7 +403,7 @@ describe('the aide', () => {
 		const session = open({
 			script: byName({
 				product: answersEach,
-				'priya-aide': async (context, _name, call) => {
+				'priya-assistant': async (context, _name, call) => {
 					if (call === 1) await held.promise;
 					if (call === 2) refusals.push(contextText(context));
 					return call > 2 ? quiet() : summarise(`draft ${call}`);
@@ -439,7 +415,7 @@ describe('the aide', () => {
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
 		await session.settled();
-		// the aide has read its range and is drafting against it
+		// the assistant has read its range and is drafting against it
 		await tick();
 
 		const written = nextSummary(session);
@@ -451,8 +427,8 @@ describe('the aide', () => {
 
 		const conflicts = events.filter((e) => e.type === 'conflict');
 		expect(conflicts).toHaveLength(1);
-		expect(conflicts[0]).toMatchObject({ author: 'priya-aide' });
-		// the refusal reached the aide as a tool result, carrying what it missed
+		expect(conflicts[0]).toMatchObject({ author: 'priya-assistant' });
+		// the refusal reached the assistant as a tool result, carrying what it missed
 		expect(refusals[0]).toContain('Not written');
 		expect(refusals[0]).toContain('And the pump?');
 
@@ -471,9 +447,9 @@ describe('the aide', () => {
 		const session = open({
 			script: byName({
 				product: answersEach,
-				// an aide that never gives up: what stops it is the runtime, not the script
-				// an aide that never gives up: what stops it is the runtime, not the script
-				'priya-aide': async (context, _name, call) => {
+				// an assistant that never gives up: what stops it is the runtime, not the script
+				// an assistant that never gives up: what stops it is the runtime, not the script
+				'priya-assistant': async (context, _name, call) => {
 					drafts.push(contextText(context));
 					if (call === 1) await first.promise;
 					if (call === 2) await second.promise;
@@ -488,13 +464,13 @@ describe('the aide', () => {
 		await session.settled();
 		await tick();
 
-		// two arrivals move the record under the aide, and wake nobody
+		// two arrivals move the record under the assistant, and wake nobody
 		const his = await visitSession(session, sam);
 		first.resolve();
 		await tick();
 		await his.leave();
 		second.resolve();
-		const stoodDown = aideEnded(session);
+		const stoodDown = assistantEnded(session);
 		await stoodDown;
 
 		expect(events.filter((e) => e.type === 'conflict')).toHaveLength(2);
@@ -517,7 +493,7 @@ describe('the aide', () => {
 			agents: [product, attentive(greeter)],
 			script: byName({
 				product: twoAnswers,
-				'priya-aide': (_context, name) => {
+				'priya-assistant': (_context, name) => {
 					calls.push(name);
 					// one answer in two voices reads as one answer: nothing to consolidate
 					return quiet();
@@ -538,7 +514,7 @@ describe('the aide', () => {
 		expect(summaries(await session.messages())).toHaveLength(0);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
 		expect(
-			events.filter((e) => e.type === 'activation_end' && e.agent === 'priya-aide'),
+			events.filter((e) => e.type === 'activation_end' && e.agent === 'priya-assistant'),
 		).toMatchObject([{ spoke: false }]);
 	});
 
@@ -547,7 +523,7 @@ describe('the aide', () => {
 			agents: [product, attentive(greeter)],
 			script: byName({
 				product: twoAnswers,
-				'priya-aide': (context, name, call) => {
+				'priya-assistant': (context, name, call) => {
 					if (call === 1) return broken(context, name, call);
 					return call === 2 ? summarise('written the second time') : quiet();
 				},
@@ -576,8 +552,8 @@ describe('the aide', () => {
 			agents: [product, colleague],
 			script: byName({
 				product: heldUntil(working.promise),
-				'priya-aide': writes("Priya's message."),
-				'sam-aide': writes("Sam's message."),
+				'priya-assistant': writes("Priya's message."),
+				'sam-assistant': writes("Sam's message."),
 			}),
 		});
 		const written = nextSummary(session);
@@ -600,7 +576,7 @@ describe('the aide', () => {
 		const session = open({
 			script: byName({
 				product: heldUntil(working.promise),
-				'priya-aide': writes('The answer, waiting for her.'),
+				'priya-assistant': writes('The answer, waiting for her.'),
 			}),
 		});
 		const written = nextSummary(session);
@@ -615,24 +591,24 @@ describe('the aide', () => {
 		expect(summary.covers.through).toBe(summary.seq - 1);
 	});
 
-	it("keeps an aide's turns in a downstream session of its own, like any seat", async () => {
+	it("keeps an assistant's turns in a downstream session of its own, like any seat", async () => {
 		const repo = new InMemorySessionRepo();
 		const session = open({
 			repo,
-			script: byName({ product: twoAnswers, 'priya-aide': writes('The one message.') }),
+			script: byName({ product: twoAnswers, 'priya-assistant': writes('The one message.') }),
 		});
 		const written = nextSummary(session);
-		const ended = aideEnded(session);
+		const ended = assistantEnded(session);
 
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
 		await written;
 		await ended;
 
-		const metadata = (await repo.list()).find((m) => m.id === `${session.name}:priya-aide`);
+		const metadata = (await repo.list()).find((m) => m.id === `${session.name}:priya-assistant`);
 		expect(metadata).toBeDefined();
 		// and the room lists it as the seat it is, with the person it writes for
-		const seat = session.seats().find((s) => s.name === 'priya-aide');
+		const seat = session.seats().find((s) => s.name === 'priya-assistant');
 		expect(seat).toMatchObject({ kind: 'agent', owner: 'priya', attention: 'none' });
 		const piSeat = metadata && (await repo.open(metadata));
 		const entries = (await piSeat?.findEntries()) ?? [];
@@ -641,15 +617,15 @@ describe('the aide', () => {
 		);
 	});
 
-	it('refuses an aide whose name the room already holds', async () => {
+	it('refuses an assistant whose name the room already holds', async () => {
 		const clash = defineHuman({
 			name: 'mara',
 			identity: 'Design lead.',
-			aide: defineAgent({
+			assistant: defineAgent({
 				name: 'product',
 				identity: 'Holds how she reads.',
 				instructions: 'summarise',
-				model: 'scripted/aide',
+				model: 'scripted/assistant',
 			}),
 		});
 		const session = open({ script: byName({}) });
@@ -659,7 +635,7 @@ describe('the aide', () => {
 
 	it('covers one exchange, and never reaches back over the one before it', async () => {
 		const session = open({
-			script: byName({ product: twoAnswersEach, 'priya-aide': writesEach('the answer') }),
+			script: byName({ product: twoAnswersEach, 'priya-assistant': writesEach('the answer') }),
 		});
 
 		const visit = await visitSession(session, priya);
@@ -680,14 +656,14 @@ describe('the aide', () => {
 
 	it('goes quiet when the summary lands, and settles before it', async () => {
 		const session = open({
-			script: byName({ product: twoAnswers, 'priya-aide': writes('Thursday is out.') }),
+			script: byName({ product: twoAnswers, 'priya-assistant': writes('Thursday is out.') }),
 		});
 		const events = collect(session);
 
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
 		await session.settled();
-		// settled reports the seats alone: the aide has not written yet
+		// settled reports the seats alone: the assistant has not written yet
 		expect(summaries(await session.messages())).toHaveLength(0);
 
 		await session.quiet();
@@ -710,7 +686,7 @@ describe('the aide', () => {
 			}),
 		});
 
-		const visit = await visitSession(session, alone);
+		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
 		await quiescent(session);
 
@@ -723,7 +699,7 @@ describe('the aide', () => {
 
 	it('is quiet with a summary owed, because owing one is not working on one', async () => {
 		const session = open({
-			script: byName({ product: twoAnswers, 'priya-aide': broken }),
+			script: byName({ product: twoAnswers, 'priya-assistant': broken }),
 		});
 
 		const visit = await visitSession(session, priya);
@@ -738,7 +714,7 @@ describe('the aide', () => {
 
 	it('does not report that a stopped room went quiet', async () => {
 		const session = open({
-			script: byName({ product: twoAnswers, 'priya-aide': writes('The one message.') }),
+			script: byName({ product: twoAnswers, 'priya-assistant': writes('The one message.') }),
 		});
 		const events = collect(session);
 
@@ -756,23 +732,23 @@ describe('the aide', () => {
 		expect(events.slice(after).map((e) => e.type)).not.toContain('quiet');
 	});
 
-	it('names the aide on the seat a host reads', async () => {
+	it('names the assistant on the seat a host reads', async () => {
 		const session = open({ script: byName({}) });
 		await visitSession(session, priya);
 		await session.settled();
 
 		const seat = session.seats().find((s) => s.name === 'priya');
-		expect(seat?.kind === 'human' && seat.aide).toBe('priya-aide');
+		expect(seat?.kind === 'human' && seat.assistant).toBe('priya-assistant');
 	});
 });
 
 describe('an exchange', () => {
-	/** The room's own exchange: it opens and closes whether or not anybody brought an aide. */
+	/** The room's own exchange: it opens and closes on its own, whatever an assistant makes of it. */
 	it('opens on a question, closes on quiescence, and holds the range it covered', async () => {
 		const session = open({ script: byName({ product: twoAnswers }) });
 		const events = collect(session);
 
-		const visit = await visitSession(session, alone);
+		const visit = await visitSession(session, priya);
 		expect(session.exchange()).toBeUndefined();
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
 		// it is open while the room works, and it names who asked
@@ -790,7 +766,7 @@ describe('an exchange', () => {
 		expect(closed[0]).toMatchObject({
 			exchange: { owner: 'priya', from: question?.seq, through: record.at(-1)?.seq },
 		});
-		// no aide in this room, and the exchange is still a fact the host hears
+		// priya's assistant is not scripted here, so it reads and stays quiet
 		expect(summaries(record)).toHaveLength(0);
 	});
 
@@ -807,7 +783,7 @@ describe('an exchange', () => {
 		const events = collect(session);
 
 		// arriving wakes the seat that watches the door and opens nothing
-		const visit = await visitSession(session, alone);
+		const visit = await visitSession(session, priya);
 		await quiescent(session);
 		expect(events.filter((e) => e.type === 'exchange_opened')).toHaveLength(0);
 		expect(session.exchange()).toBeUndefined();
@@ -824,7 +800,7 @@ describe('an exchange', () => {
 
 	it('closes before the summary that stands for it', async () => {
 		const session = open({
-			script: byName({ product: twoAnswers, 'priya-aide': writes('Thursday is out.') }),
+			script: byName({ product: twoAnswers, 'priya-assistant': writes('Thursday is out.') }),
 		});
 		const events = collect(session);
 
@@ -852,12 +828,12 @@ describe('a fold', () => {
 		...(to === undefined ? {} : { to }),
 		text,
 	});
-	const stands = (seq: number, aide: string, person: string, from: number, through: number) =>
+	const stands = (seq: number, assistant: string, person: string, from: number, through: number) =>
 		({
 			kind: 'summary',
 			seq,
 			at,
-			from: aide,
+			from: assistant,
 			to: person,
 			text: `the message ${person} reads`,
 			covers: { from, through },
@@ -868,7 +844,7 @@ describe('a fold', () => {
 			say(1, 'priya', 'Can I tell the client Thursday?'),
 			say(2, 'product', 'No.', 'priya'),
 			say(3, 'colleague', 'Nor from here.', 'priya'),
-			stands(4, 'priya-aide', 'priya', 1, 3),
+			stands(4, 'priya-assistant', 'priya', 1, 3),
 		];
 
 		expect(renderRecord(record, [], Date.parse(at))).toContain(
@@ -888,8 +864,8 @@ describe('a fold', () => {
 			say(4, 'sam', 'What do you need from me?'),
 			say(5, 'product', 'A date.', 'sam'),
 			say(6, 'colleague', 'And the plant.', 'sam'),
-			stands(7, 'sam-aide', 'sam', 4, 6),
-			stands(8, 'priya-aide', 'priya', 1, 7),
+			stands(7, 'sam-assistant', 'sam', 4, 6),
+			stands(8, 'priya-assistant', 'priya', 1, 7),
 		];
 
 		const lines = renderRecord(record, [], Date.parse(at)).split('\n');
@@ -897,14 +873,21 @@ describe('a fold', () => {
 		expect(lines).toEqual([
 			'── 3 messages, summarised for priya below ──',
 			'── 3 messages, summarised for sam below ──',
-			'[sam-aide → sam] the message sam reads  (just now)',
-			'[priya-aide → priya] the message priya reads  (just now)',
+			'[sam-assistant → sam] the message sam reads  (just now)',
+			'[priya-assistant → priya] the message priya reads  (just now)',
 		]);
 	});
 });
 
 describe('defineHuman', () => {
-	it('refuses an aide with hands', () => {
+	it('refuses a human definition with no assistant', () => {
+		const noAssistant = { name: 'priya', identity: 'Project manager.' } as unknown as Parameters<
+			typeof defineHuman
+		>[0];
+		expect(() => defineHuman(noAssistant)).toThrow(/must come from defineAgent/);
+	});
+
+	it('refuses an assistant with hands', () => {
 		const book = defineTool({
 			name: 'book_inspector',
 			description: 'Book the inspector.',
@@ -915,27 +898,27 @@ describe('defineHuman', () => {
 			defineHuman({
 				name: 'priya',
 				identity: 'Project manager.',
-				aide: defineAgent({
-					name: 'priya-aide',
+				assistant: defineAgent({
+					name: 'priya-assistant',
 					identity: 'Holds how she reads.',
 					instructions: 'summarise',
-					model: 'scripted/aide',
+					model: 'scripted/assistant',
 					tools: [book],
 				}),
 			}),
 		).toThrow(/never acts in it/);
 	});
 
-	it('refuses an aide that takes its person’s name', () => {
+	it('refuses an assistant that takes its person’s name', () => {
 		expect(() =>
 			defineHuman({
 				name: 'priya',
 				identity: 'Project manager.',
-				aide: defineAgent({
+				assistant: defineAgent({
 					name: 'priya',
 					identity: 'Holds how she reads.',
 					instructions: 'summarise',
-					model: 'scripted/aide',
+					model: 'scripted/assistant',
 				}),
 			}),
 		).toThrow(/name of its own/);

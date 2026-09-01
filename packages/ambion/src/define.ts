@@ -5,7 +5,7 @@
  * None of them starts anything or holds any state: a definition is a value,
  * and the same one is the quiet corner in one room and the one who meets
  * people in another. What each refuses is as much of the contract as what it
- * takes — a name the room can address, an aide with no hands of its own.
+ * takes — a name the room can address, an assistant with no hands of its own.
  */
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Static, TSchema } from 'typebox';
@@ -52,41 +52,40 @@ export interface DefineHumanOptions {
 	/** How the room knows them — agents read it and address them accordingly. */
 	identity: string;
 	/**
-	 * The aide this person brings: an agent that holds how they read, and writes
-	 * the one message they read when an exchange closes. What they own is
-	 * `identity`, which every seat reads. Optional — a person with no aide is
-	 * never summarised.
+	 * The person's assistant: an agent that holds how they read, and writes the
+	 * one message they read when an exchange closes. What they own is
+	 * `identity`, which every seat reads. Every person brings one.
 	 */
-	aide?: AgentDefinition;
+	assistant: AgentDefinition;
 }
 
 export function defineHuman(options: DefineHumanOptions): HumanDefinition {
 	assertName(options.name);
-	if (options.aide) assertAide(options.aide, options.name);
+	assertAssistant(options.assistant, options.name);
 	return {
 		[HUMAN_BRAND]: true,
 		name: options.name,
 		identity: options.identity,
-		...(options.aide === undefined ? {} : { aide: options.aide }),
+		assistant: options.assistant,
 	};
 }
 
 /**
- * An aide shapes what a room already does, and never makes anything happen. It
+ * An assistant shapes what a room already does, and never makes anything happen. It
  * carries no tools of its own, so the rule is a fact about the definition
  * rather than a promise about behaviour: the one hand the runtime gives it
  * writes to the record and reaches nothing else.
  */
-function assertAide(aide: AgentDefinition, person: string): void {
-	if (!isAgent(aide)) {
-		throw new Error(`The aide for '${person}' must come from defineAgent.`);
+function assertAssistant(assistant: AgentDefinition, person: string): void {
+	if (!isAgent(assistant)) {
+		throw new Error(`The assistant for '${person}' must come from defineAgent.`);
 	}
-	if (aide.name === person) {
-		throw new Error(`An aide takes a name of its own: '${person}' is the person it holds.`);
+	if (assistant.name === person) {
+		throw new Error(`An assistant takes a name of its own: '${person}' is the person it holds.`);
 	}
-	if (aide.tools.length > 0) {
+	if (assistant.tools.length > 0) {
 		throw new Error(
-			`Aide '${aide.name}' holds tools: an aide shapes what a room does and never acts in it.`,
+			`Assistant '${assistant.name}' holds tools: an assistant shapes what a room does and never acts in it.`,
 		);
 	}
 }

@@ -213,8 +213,8 @@ interface Presence {
 export type Message = Spoken | Presence | Summary;
 ```
 
-`Summary` is the third kind, and it belongs to [`aide.md`](aide.md): an
-aide writes it, nobody speaks it, and it opens and closes no visit.
+`Summary` is the third kind, and it belongs to [`assistant.md`](assistant.md): an
+assistant writes it, nobody speaks it, and it opens and closes no visit.
 
 Every rule of the core applies to a presence message unchanged, and that is
 the whole reason for this shape.
@@ -533,7 +533,7 @@ export type SeatInfo =
       status: SeatStatus;
       attention: Attention;
       sessionId: string;
-      /** The person this seat writes for, when it is their aide. See aide.md. */
+      /** The person this seat writes for, when it is their assistant. See assistant.md. */
       owner?: string;
     }
   | {
@@ -541,8 +541,9 @@ export type SeatInfo =
       name: string;
       identity: string;
       presence: PresenceStatus;
-      /** The aide they brought, when they brought one. See aide.md. */
-      aide?: string;
+      /** The assistant they brought. Absent while it is still run state from a
+       * restart they have not yet revisited. See assistant.md. */
+      assistant?: string;
     };
 ```
 

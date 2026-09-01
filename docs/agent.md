@@ -16,7 +16,7 @@ Four functions build a room, and one sentence holds the whole of it:
 
 Two documents build on this core and are also shipped:
 [`presence.md`](presence.md) puts people in a running room, and
-[`aide.md`](aide.md) adds the aide a person may bring.
+[`assistant.md`](assistant.md) adds the assistant every person brings.
 
 ---
 
@@ -106,11 +106,17 @@ agent's only hands in this cut.
 ## 4. defineHuman
 
 ```ts
-import { defineHuman } from '@ambionframework/ambion';
+import { defineAgent, defineHuman } from '@ambionframework/ambion';
 
 export const andrei = defineHuman({
   name: 'andrei',
   identity: 'Founder. Owns the weekly. Bring him blockers only.',
+  assistant: defineAgent({
+    name: 'andrei-assistant',
+    identity: 'Holds how andrei reads.',
+    model: 'anthropic/claude-sonnet-5',
+    instructions: 'Lead with blockers. Four sentences at most.',
+  }),
 });
 ```
 
@@ -119,10 +125,10 @@ agent. `identity` is how the room knows them. A human has no instructions,
 no tools, and no model, because humans are never run — a `say` directed at
 one wakes nothing.
 
-One optional field goes with them: `aide`, an agent that holds how its
+One required field goes with them: `assistant`, an agent that holds how its
 person reads. It writes the one message they read when an exchange closes.
 It is a seat at the narrow end of attention: nothing said reaches it, no message
-activates it, and nothing it writes wakes anybody. [`aide.md`](aide.md) is
+activates it, and nothing it writes wakes anybody. [`assistant.md`](assistant.md) is
 the contract for it.
 
 A human is outside a room's composition, so `startSession` never takes one.
@@ -231,7 +237,7 @@ type Message =
       kind: 'summary';
       seq: number;
       at: string;
-      from: string; // the aide that wrote it
+      from: string; // the assistant that wrote it
       to: string; // the person whose question opened the exchange
       text: string;
       covers: { from: number; through: number }; // the range it stands for
@@ -239,8 +245,8 @@ type Message =
 ```
 
 The second kind carries no `text`, because the person said nothing.
-[`presence.md`](presence.md) specifies it. The third is written by an aide
-when an exchange closes, and nobody spoke it; [`aide.md`](aide.md)
+[`presence.md`](presence.md) specifies it. The third is written by an assistant
+when an exchange closes, and nobody spoke it; [`assistant.md`](assistant.md)
 specifies it. Every rule below applies to all three kinds unchanged, which
 is why the record holds one union and one sequence.
 
@@ -318,7 +324,7 @@ rule 3's bar, now with the hearing enforced.
 First to commit wins, ties are
 impossible (the check and the commit share one tick), and a room with no
 races pays nothing. The refusal shows on the stream as `conflict`, which
-names the author: an aide's summary is refused at the same boundary, for
+names the author: an assistant's summary is refused at the same boundary, for
 the same reason. The guarantee is the point: every message on the record
 was written by somebody who had read everything before it.
 
@@ -330,7 +336,7 @@ who sits out — one widening scale, from the narrowest:
 - `none` — nothing said in the room reaches it, and it cannot be addressed:
   the runtime refuses a directed say to it, so no message waits unread. The seat that is
   present and unreachable, waiting for something other than a message. An
-  aide sits here ([`aide.md`](aide.md)), woken by the close of its person's
+  assistant sits here ([`assistant.md`](assistant.md)), woken by the close of its person's
   exchange and by nothing else.
 - `named` — hears a message addressed to it, seated as `passive(archivist)`.
   The expert in the corner: hearing nothing, costing nothing, until someone
@@ -344,7 +350,7 @@ who sits out — one widening scale, from the narrowest:
 `seated(agent, attention)` is the general form, and `passive` and
 `attentive` are one line each over it — the two points a room names often
 enough to be worth a word. A bare agent takes the default. `none` is the
-runtime's own point: it is where an aide sits, and nothing in a room's
+runtime's own point: it is where an assistant sits, and nothing in a room's
 composition asks for it.
 
 The routing is the scale, and reads as one line (`wakes` in `seat.ts`):
@@ -358,7 +364,7 @@ Both are readable from `session.seats()`, so a seat that is `named` and
 running is describable, which one enum could not do. Attention belongs to
 the seating, and `defineAgent` knows nothing about it, so the same agent
 can be the quiet corner in one room and the one who meets people in
-another — and an aide can be given a wider attention the day it is meant to
+another — and an assistant can be given a wider attention the day it is meant to
 take part in the room, while staying the same kind of thing.
 
 **7. Identity is injected; provenance is stamped.** Every agent's context
@@ -403,7 +409,7 @@ type SessionEvent =
 
 **One message on the record, one `message` event.** What a person
 delivered, what an agent said, a person arriving or leaving, and the
-summary an aide wrote all reach the host the same way, because they are the
+summary an assistant wrote all reach the host the same way, because they are the
 same thing: an entry the room committed. Who wrote it is `message.from`,
 which the roster already names, so the stream does not split by author. The
 event is atomic as the record is: one event, the whole message, exactly as
@@ -498,13 +504,14 @@ already working (rule 2) and starts nothing new.
 exchange is run state: a restart begins with none, because the record keeps
 what was said and nobody is mid-question after a restart.
 
-**What reads it.** A person's aide is a seat that a closed exchange wakes,
-and the one message it writes stands for that exchange ([`aide.md`](aide.md)).
+**What reads it.** A person's assistant is a seat that a closed exchange wakes,
+and the one message it writes stands for that exchange ([`assistant.md`](assistant.md)).
 A client folds the working under the question it answered and shows the
-exchange as a thinking state — which it can do from these two events alone, in
-a room where nobody brought an aide. A host that measures what a room costs
-measures it per exchange, because that is what somebody asked for. A later
-room-level compactor stands over a stretch of closed exchanges.
+exchange as a thinking state — which it can do from these two events alone,
+whether or not the assistant writes anything for this particular one (it may
+not: [`assistant.md`](assistant.md) §4). A host that measures what a room
+costs measures it per exchange, because that is what somebody asked for. A
+later room-level compactor stands over a stretch of closed exchanges.
 
 Two completion signals, for the two things a host waits on, and two
 controls:
@@ -516,11 +523,11 @@ controls:
   seats stop, which is also the moment a host learns that nobody chose to
   speak. It reports that no seat which speaks for itself is taking an
   activation.
-  An aide writing about an exchange is not the room still working on it, so
+  An assistant writing about an exchange is not the room still working on it, so
   the room is never held busy while one writes.
 - **`quiet()`** is the second moment — no agent at all is taking an activation —
   for a host that wants the one message a person reads
-  ([`aide.md`](aide.md) §14). The two differ because an aide is a seat
+  ([`assistant.md`](assistant.md) §14). The two differ because an assistant is a seat
   like any other, and its activation counts. That difference keeps an
   exchange's end fixed when somebody brings one. The order at the end of an
   exchange is fixed: `settled()` resolves, then `exchange_closed`, then
@@ -547,8 +554,8 @@ record in [`record.ts`](../packages/ambion/src/record.ts), who is here in
 [`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes it
 in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
 [`activation.ts`](../packages/ambion/src/activation.ts), the exchange in
-[`exchange.ts`](../packages/ambion/src/exchange.ts), what a person's aide
-writes in [`aide.ts`](../packages/ambion/src/aide.ts), and what any of them
+[`exchange.ts`](../packages/ambion/src/exchange.ts), what a person's assistant
+writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), and what any of them
 reads in [`render.ts`](../packages/ambion/src/render.ts).
 
 **A seat is seated for the run. An activation lasts seconds.** What an
@@ -585,21 +592,21 @@ one per claim this document makes loudly:
 - events in order, errors as events, abort quieting the room — including
   an abort with a steer still queued.
 
-The exchange is proved beside the aide that first reads one, in
-[`aide.test.ts`](../packages/ambion/test/aide.test.ts): a question opens a
+The exchange is proved beside the assistant that first reads one, in
+[`assistant.test.ts`](../packages/ambion/test/assistant.test.ts): a question opens a
 exchange and quiescence closes it, holding the range it covered; an arrival
 opens none and a second message into an open one changes nothing; and an
 exchange closes before anything is written about it. All in-process, in
 vitest, on a scripted stream where determinism matters. What a person
 entering and leaving adds to these rules is proved beside them, in
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts), and what
-the aide a person brings adds is proved in
-[`aide.test.ts`](../packages/ambion/test/aide.test.ts).
+the assistant a person brings adds is proved in
+[`assistant.test.ts`](../packages/ambion/test/assistant.test.ts).
 
 The runnable proof is [`examples/site`](../examples/site): a construction
 management suite where each product is an agent — a time tracker, a task
 list seated `attentive` so it meets people at the door, and a materials
-tracker — shared by three people who come and go, each bringing an aide of
+tracker — shared by three people who come and go, each bringing an assistant of
 their own. Every rule above is observable by hand there, and the products
 hold state they change.
 
@@ -613,8 +620,8 @@ say lock pushes against it — a seat that speaks late is refused and told to
 reconsider, and rule 3 tells it to stand down — but that is pressure
 without a hard bound. No run has hit it. It is written down because a room
 that waits for months will meet it eventually, and because anything built
-on quiescence assumes it does not happen. [`aide.md`](aide.md) is built on
-it: an aide writes when the room goes quiet, so a room that never goes
+on quiescence assumes it does not happen. [`assistant.md`](assistant.md) is built on
+it: an assistant writes when the room goes quiet, so a room that never goes
 quiet never gets its one message.
 
 ---

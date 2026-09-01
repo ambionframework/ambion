@@ -55,7 +55,7 @@ flowchart LR
     P((person)) -- "deliver · arrive · leave" --> R[(session record)]
     R -- "activates by attention" --> A["agents, in parallel"]
     A -- "say" --> R
-    R -- "exchange closes" --> D[aide]
+    R -- "exchange closes" --> D[assistant]
     D -- "one summary" --> R
 ```
 
@@ -81,17 +81,17 @@ Four functions build a room, and three verbs run it.
 **Attention** decides what wakes a seat, chosen when the agent is seated
 (`seated(agent, attention)`; a bare agent takes the default):
 
-| Attention   | Shorthand   | Wakes on                                         |
-| ----------- | ----------- | ------------------------------------------------ |
-| `none`      | —           | Nothing said reaches it. Where an aide sits.     |
-| `named`     | `passive`   | A message addressed to it.                       |
-| `broadcast` | _(default)_ | Anything said.                                   |
-| `presence`  | `attentive` | Anything said, and somebody arriving or leaving. |
+| Attention   | Shorthand   | Wakes on                                          |
+| ----------- | ----------- | ------------------------------------------------- |
+| `none`      | —           | Nothing said reaches it. Where an assistant sits. |
+| `named`     | `passive`   | A message addressed to it.                        |
+| `broadcast` | _(default)_ | Anything said.                                    |
+| `presence`  | `attentive` | Anything said, and somebody arriving or leaving.  |
 
 Every message has a reach, and a seat wakes when its attention is at least
 that wide. That comparison is the whole routing rule.
 
-**The aide** is an optional agent a person brings, as a field on
+**The assistant** is the agent every person brings, as a required field on
 `defineHuman`:
 
 - It holds how its person reads: what an answer leads with, and how much
@@ -104,7 +104,7 @@ that wide. That comparison is the whole routing rule.
 
 The contracts: [`docs/agent.md`](docs/agent.md) for the core,
 [`docs/presence.md`](docs/presence.md) for people and visits,
-[`docs/aide.md`](docs/aide.md) for the aide.
+[`docs/assistant.md`](docs/assistant.md) for the assistant.
 
 ## Example
 
@@ -142,8 +142,8 @@ const materials = defineAgent({
 const priya = defineHuman({
   name: 'priya',
   identity: 'Project manager. Owns the programme.',
-  aide: defineAgent({
-    name: 'priya-aide',
+  assistant: defineAgent({
+    name: 'priya-assistant',
     identity: 'Holds how Priya reads.',
     model: 'anthropic/claude-sonnet-4-5',
     instructions: 'Lead with the decision Priya has to make. Four sentences at most.',
@@ -158,7 +158,7 @@ const session = startSession({
 
 const visit = await visitSession(session, priya);
 await visit.deliver({ text: 'Can I tell the client Thursday for the pour?' });
-await session.quiet(); // the room settled, and Priya's aide wrote her one answer
+await session.quiet(); // the room settled, and Priya's assistant wrote her one answer
 
 await stopSession(session);
 
@@ -169,7 +169,7 @@ for (const message of await readSession('site').messages()) {
 ```
 
 [`examples/site`](examples/site) is the full, runnable version of this
-room: three products, three people, and an aide for each.
+room: three products, three people, and an assistant for each.
 
 ## Runtime
 
@@ -226,7 +226,7 @@ release setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
 3. Agents manage their own attention; declining to engage is part of it.
 4. Many agents, each expert in one domain; the platform provides the
    shared capabilities.
-5. What a person wants belongs to that person; their aide holds it.
+5. What a person wants belongs to that person; their assistant holds it.
 6. Minimal surface: four functions, one activation rule, one dependency
    that does the rest.
 

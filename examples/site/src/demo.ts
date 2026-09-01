@@ -1,10 +1,10 @@
 /**
  * One scripted run of the workspace, captured as JSON for a demo report.
  *
- * The products, their APIs, the people and their aides all live in
+ * The products, their APIs, the people and their assistants all live in
  * `workspace.ts`; this file only decides who arrives, what they ask, and when
  * they leave — then writes out the event timeline, every activation with its
- * outcome, what each aide wrote, and each seat's own downstream session.
+ * outcome, what each assistant wrote, and each seat's own downstream session.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm demo   (from examples/site)
  */
@@ -122,7 +122,7 @@ function narrate(event: SessionEvent): void {
 }
 
 /**
- * `settled()` is the seats alone, and an aide writes after it: the room is
+ * `settled()` is the seats alone, and an assistant writes after it: the room is
  * never held busy while one works. `quiet()` is the room with the summaries
  * in it, which is what a report wants.
  */
@@ -148,7 +148,7 @@ step('priya opens the workspace to confirm the pour date for the client');
 const priyaVisit = await visitSession(session, priya);
 await quiescent();
 
-step('priya asks the question she has to answer today; her aide writes the answer');
+step('priya asks the question she has to answer today; her assistant writes the answer');
 await priyaVisit.deliver({ text: 'Can I tell the client Thursday for the Level 3 pour, or not?' });
 await quiescent();
 
@@ -156,14 +156,14 @@ step('priya leaves for a site walk without giving a new date');
 await priyaVisit.leave();
 await quiescent();
 
-step('sam opens it from the deck with a forecast; his aide writes for a man on a deck');
+step('sam opens it from the deck with a forecast; his assistant writes for a man on a deck');
 const samVisit = await visitSession(session, sam);
 await samVisit.deliver({
 	text: 'Rain all Thursday morning. I am not pouring into that. What do you need from me to move it?',
 });
 await quiescent();
 
-step('dan opens it to price the move; his aide writes the money');
+step('dan opens it to price the move; his assistant writes the money');
 const danVisit = await visitSession(session, dan);
 await danVisit.deliver({
 	text: 'What does moving cost, and is there anything of mine holding this up?',
@@ -188,18 +188,18 @@ const missed =
 	priyaBack.since === undefined ? [] : await session.messages({ since: priyaBack.since });
 const sinceOnReturn = priyaBack.since;
 const seats = session.seats();
-/** The seats that write for somebody: an aide is a seat with an owner. */
-const aides = new Set(
+/** The seats that write for somebody: an assistant is a seat with an owner. */
+const assistants = new Set(
 	seats.flatMap((seat) => (seat.kind === 'agent' && seat.owner ? [seat.name] : [])),
 );
 
 /**
  * Every downstream session the run wrote: `<room>:<agent>` for a seat, and
- * `<room>:<person>` for the aide that writes for them.
+ * `<room>:<person>` for the assistant that writes for them.
  */
 const seatSessions: {
 	agent: string;
-	kind: 'agent' | 'aide';
+	kind: 'agent' | 'assistant';
 	sessionId: string;
 	blocks: { at: string; turns: unknown[] }[];
 }[] = [];
@@ -221,9 +221,9 @@ for (const metadata of await repo.list()) {
 	const slug = metadata.id.slice(NAME.length + 1);
 	seatSessions.push({
 		agent: slug,
-		// An aide is a seat like any other; the roster says which seat writes
+		// An assistant is a seat like any other; the roster says which seat writes
 		// for a person, and that is the only thing that tells them apart.
-		kind: aides.has(slug) ? 'aide' : 'agent',
+		kind: assistants.has(slug) ? 'assistant' : 'agent',
 		sessionId: metadata.id,
 		blocks,
 	});
@@ -254,9 +254,11 @@ writeFileSync(
 			people: [priya, sam, dan].map((p) => ({
 				name: p.name,
 				identity: p.identity,
-				aide: p.aide
-					? { name: p.aide.name, identity: p.aide.identity, instructions: p.aide.instructions }
-					: undefined,
+				assistant: {
+					name: p.assistant.name,
+					identity: p.assistant.identity,
+					instructions: p.assistant.instructions,
+				},
 			})),
 		},
 		null,
