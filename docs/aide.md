@@ -45,15 +45,15 @@ One message answers both.
 An aide is a person's counterpart in a room: one aide, one person, for as
 long as they are in it.
 
-**It is a seat.** It is seated when its person arrives, it takes the same
-turn every other agent takes, its turns land in a downstream session of its
-own, and the record's lock refuses it exactly as it refuses a say. Two
+**It is a seat.** It is seated when its person arrives, the room activates
+it as it activates every other agent, its turns land in a downstream session
+of its own, and the record's lock refuses it exactly as it refuses a say. Two
 things make it the seat it is, and both are data:
 
 - It is seated at `none`, the narrow end of the attention scale
   ([`agent.md`](agent.md) rule 6): nothing said in the room wakes it, and
   it cannot be addressed.
-- The close of its person's exchange wakes it, and that turn holds one
+- The close of its person's exchange wakes it, and that activation holds one
   tool, `summarise`, bound to the range it must stand for.
 
 A seat carries none of that. Which aide writes for whom, who is owed a
@@ -88,8 +88,9 @@ steers the seats already working and changes nothing.
 
 An aide is the first thing to read a closed exchange, and other readers
 exist beside it: a client folds the working under the question it answered,
-and a host measures a round somebody asked for. A room where nobody brings
-an aide still has exchanges, and its host still hears them open and close.
+and a host measures an exchange somebody asked for. A room where nobody
+brings an aide still has exchanges, and its host still hears them open and
+close.
 
 What matters here is what an aide makes of one:
 
@@ -181,18 +182,19 @@ immediately after the range it covers, contiguous and in order. If the
 record has moved, the commit is refused, and the host hears the same
 `conflict` event a refused seat raises, naming the aide and what it missed.
 
-**A refused aide is told, in its own turn.** It writes by calling a tool
+**A refused aide is told, in its own activation.** It writes by calling a tool
 (§14), so the refusal reaches it the way a refused say reaches a seat: as
 the tool's failure, listing what landed. The range widens to hold those
 messages, and the aide drafts again over it immediately. It gets two
 drafts. After the second refusal the room is moving faster than the aide
-writes, and the turn ends.
+writes, and the activation ends.
 
-**A summary the turn could not land drafts again at the next quiescence.**
+**A summary the activation could not land drafts again at the next
+quiescence.**
 Its range is a live read, so the retry covers what it covered before plus
 whatever won the race. The two halves of the rule divide the work: the aide
-redrafts inside its turn while that is still useful, and the next quiet
-room catches a turn that ran out of drafts or failed outright.
+redrafts inside its activation while that is still useful, and the next quiet
+room catches an activation that ran out of drafts or failed outright.
 
 Two questions asked in quick succession become one summary, which is right:
 they were one conversation. If somebody else's exchange won the race, it
@@ -228,7 +230,8 @@ summary lands, and the room is never held busy while an aide writes.
 Quiescence is still simply "no agent is active".
 
 **A failed model call is a refused commit with extra steps.** If the aide's
-turn errors, no summary is written, the range stays uncompacted and fully
+activation errors, no summary is written, the range stays uncompacted and
+fully
 visible, and the next quiescence is another chance. The safe direction is
 the default, and it takes no special case.
 
@@ -520,11 +523,11 @@ and a host that wants the one message waits for `quiet()`. **That is the
 whole surface.**
 
 **`settled()` does not wait for an aide, and `quiet()` does.** `settled()`
-reports that no seat which speaks for itself is taking a turn — an aide
-writing about a round is not the room still working on it, which is the
-meaning §5 needs, and it is why an aide's own turn closes no exchange and
-cannot retry itself for ever. `quiet()` resolves when no seat is taking a
-turn **and** no aide still owes one, and a `quiet` event says the same
+reports that no seat which speaks for itself is taking an activation — an
+aide writing about an exchange is not the room still working on it, which is
+the meaning §5 needs, and it is why an aide's own activation closes no
+exchange and cannot retry itself for ever. `quiet()` resolves when no seat is
+taking an activation **and** no aide still owes one, and a `quiet` event says the same
 thing to a listener. That is what a host waits for when it wants the one
 message a person reads. Nothing holds the room busy while an aide writes:
 the two promises name two different moments.
@@ -558,27 +561,29 @@ rule — never call a tool that changes a product's state — stays a
 checkable fact about the definition.
 
 **Writing is a tool, and silence is a decision.** An aide that ends its
-turn without calling `summarise` leaves the range whole, and every reader
+activation without calling `summarise` leaves the range whole, and every reader
 still sees all of it. That is rule 3 of the core, for an aide: when the
 room's answer already reads as one answer, standing between a person and it
 would only add a voice. The threshold in §4 sits underneath as a cost
 floor — below it the room spends no model call at all — and above it the
 judgment is the aide's, where the rest of the judgment lives.
 
-**The tool bounds a turn.** Two drafts per turn (§5), and a cap on how
-often the tool may be called at all.
+**The tool bounds an activation.** Two drafts per activation (§5), and a cap
+on how often the tool may be called at all.
 A model that keeps calling a tool that keeps refusing would draft for ever,
-so the tool ends the turn itself. Nothing else here bounds a turn — which
+so the tool ends the activation itself. Nothing else here bounds an
+activation — which
 is [`agent.md`](agent.md) §7's gap, closed where it can be closed.
 
 **What the room reads it as.** A seat's context carries one paragraph about
 folds, and only in a room where somebody brought an aide. A room with no
 aide in it renders no fold, and no paragraph about one.
 
-**Where its turn lands.** In a downstream session of its own,
+**Where its activation lands.** In a downstream session of its own,
 `<room>:<aide>`, by the same rule as every other seat. Rule 8 keeps every
 activation auditable after the fact, and a summary is written by a model
-like any other turn. The one message that reaches a person should be the
+like any other activation. The one message that reaches a person should be
+the
 easiest thing in the room to check.
 
 ---
@@ -637,15 +642,15 @@ settles, so rule 1 keeps its letter. But the room makes a model call that
 no message asked for, and that is a second kind of trigger. §15 bounds it:
 the close of an exchange, one aide, one message.
 
-**An aborted round still closes its exchange.** `abort()` cancels the turns
-in flight and the room settles, so the exchange it was working on closes
-and its owner's aide writes for it. That is right — the exchange ended, and
-its person still gets what the room reached before it was cut off — but the
+**An aborted exchange still closes.** `abort()` cancels the activations in
+flight and the room settles, so the exchange it was working on closes and
+its owner's aide writes for it. That is right — the exchange ended, and its
+person still gets what the room reached before it was cut off — but the
 message stands for work somebody stopped. `stopSession` is the other case,
 below.
 
 **A run that stops mid-exchange writes no summary.** `stopSession` aborts
-the turns in flight, so the exchange never closes. It aborts a draft in
+the activations in flight, so the exchange never closes. It aborts a draft in
 flight for the same reason, and a draft that does finish after the stop
 commits nothing. The person asked and heard nothing, and the record shows a
 question, some work and a shutdown. Accepted.
@@ -657,12 +662,13 @@ right bound to have, and it is the one the design leans
 on now that a range no longer reaches back to a person's last summary.
 
 **A stopped room never reports that it is quiet.** `quiet` says that no
-seat is taking a turn and no aide still owes one. A room that is closing is
+seat is taking an activation and no aide still owes one. A room that is
+closing is
 neither, so shutdown drains whoever waited on `quiet()` and emits nothing
 afterwards.
 
-**A summary can be owed for ever.** A race is handled inside the turn, but
-a turn that fails outright, or that runs out of drafts, waits for the next
+**A summary can be owed for ever.** A race is handled inside the activation,
+but an activation that fails outright, or that runs out of drafts, waits for the next
 quiescence — and a room that is never woken again never has one. The range
 stays whole and every reader still sees it, so nothing is lost; but the one
 message never arrives, and nothing reports that it is owed. A run that ends
@@ -698,11 +704,12 @@ document makes loudly:
 - A question that lands while a seat works on what nobody asked for still
   opens an exchange and owns it. §3.
 - A draft refused because the room moved raises `conflict`, and the aide
-  redrafts over the widened range inside the same turn. §5.
+  redrafts over the widened range inside the same activation. §5.
 - An aide that keeps drafting into a room that keeps moving is stopped by
   the runtime, and writes at the next quiescence. §5, §14.
 - An aide that stands down without writing is owed nothing for it. §14.
-- A turn that fails outright leaves the summary owed until the next quiet
+- An activation that fails outright leaves the summary owed until the next
+  quiet
   room. §16.
 - The person whose question opened the exchange owns it, and a second
   person speaking into it gets nothing. §6.

@@ -242,9 +242,9 @@ whose job is to meet people is the case that wants `attentive`, and a room
 needs only that one seat at `presence`.
 
 **Rule 2 reaches every seat already at work, whatever its attention.**
-Whatever arrives mid-turn is steered into every active agent, and a
+Whatever arrives mid-activation is steered into every active agent, and a
 presence message arrives like any other: `[new] · andrei arrived` lands in
-the running turn at the next safe point. Attention governs waking alone,
+the running activation at the next safe point. Attention governs waking alone,
 never hearing — a seat at `broadcast` is never woken by an arrival, and is
 still told about one it is already working through.
 
@@ -332,8 +332,8 @@ place is the record.
 A presence message costs one commit, and no model call unless a seat is
 seated `attentive`. It lands on the record, wakes nobody at the default
 attention, and is read at the next activation by whoever the next message
-wakes. A seat already at work pays a steer — one round on a turn it was
-running anyway, and no turn of its own. Rule 5 counts it like any other
+wakes. A seat already at work pays a steer — one line in an activation it was
+running anyway, and no activation of its own. Rule 5 counts it like any other
 message, so a say drafted across an arrival is refused and re-aimed at
 whoever is now reading; that is the lock working, with no exception made.
 
@@ -396,7 +396,8 @@ each person up where they stopped reading.
 
 These are the one kind of message the room commits without routing. Every
 other message activates the idle room, and this one has nobody to activate:
-a turn started to hear that the room is closing is a turn nobody reads.
+an activation started to hear that the room is closing is an activation
+nobody reads.
 
 That leaves one case, and it fails in the safe direction. If the process
 dies before it can stop, no `left` is written, because nothing observed
@@ -474,7 +475,8 @@ somebody missed; it reads it.
 
 The system prompt carries one paragraph about presence, and it is about
 aiming. A presence line reaching a working seat is never a request — nobody
-asked anything by opening the workspace — so it never starts a turn, and
+asked anything by opening the workspace — so it never starts an activation,
+and
 the paragraph says so. It renders in every room, with or without a goal,
 because it is about routing.
 

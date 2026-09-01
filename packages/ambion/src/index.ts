@@ -5,7 +5,7 @@
  * gives agents hands, `seated` chooses what wakes one — with `passive` and
  * `attentive` for the two points worth naming — and `startSession` brings up a
  * named room the agents work in and people visit. A person's question opens an exchange, the room
- * works, and quiescence closes it — the round every other feature reads. `stopSession` takes it down, `readSession` reads
+ * works, and quiescence closes it — the exchange every other feature reads. `stopSession` takes it down, `readSession` reads
  * a name without starting anything, and `visitSession` puts a person in a
  * running room. A person may bring an aide, which writes the one message they
  * read when an exchange closes. The design contracts live in docs/agent.md,
@@ -21,7 +21,7 @@ export {
 } from '@earendil-works/pi-agent-core';
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
 export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from './define.ts';
-// The room's own round: what a question opened, and what quiescence closed.
+// The room's own exchange: what a question opened, and what quiescence closed.
 export type { ClosedExchange, Exchange } from './exchange.ts';
 export type {
 	ReadSessionOptions,

@@ -1,5 +1,23 @@
+/**
+ * The room: the one place where a record, the seats around it, the people
+ * visiting it and the exchanges they open become behaviour.
+ *
+ * Everything with a life of its own has left. The record is `record.ts`, who
+ * is here is `presence.ts`, a seat and what wakes it is `seat.ts`, one
+ * activation is `activation.ts`, an exchange is `exchange.ts`, a person's aide is
+ * `aide.ts`, and every sentence a participant reads is `render.ts`. What is
+ * left is what only a room can do:
+ *
+ * - **Compose.** Seat the agents, admit the people, bring the aides they
+ *   bring, and take it all down again.
+ * - **Commit.** One lock, one seq at a time, for every author (rule 5), and
+ *   one `message` event per message however it was written.
+ * - **Route.** Who hears a message, and who wakes for it.
+ * - **Give an activation what only the room knows.** The model, the prompt, the
+ *   hands, and the room as it stands at that moment.
+ * - **Say when it has stopped.** An exchange closed, and nothing running.
+ */
 import type {
-	AgentEvent,
 	AgentTool,
 	Session as PiSession,
 	SessionRepo,
@@ -9,11 +27,12 @@ import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { Type } from 'typebox';
+import { Activation } from './activation.ts';
 import { Aides, type Draft, summariseTool } from './aide.ts';
 import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
-import { openOrCreate, persistTurns, RecordStore, toError } from './record.ts';
+import { openOrCreate, persistTurns, RecordStore } from './record.ts';
 import {
 	type PersonView,
 	type RoomView,
@@ -23,7 +42,7 @@ import {
 	renderTurnContext,
 	type SeatSpeaking,
 } from './render.ts';
-import { delivered, runFailure, type SeatRuntime, toPiTool, userMessage, wakes } from './seat.ts';
+import { delivered, isActive, type SeatRuntime, toPiTool, wakes } from './seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
@@ -102,7 +121,7 @@ export interface Session extends SessionView {
 	 * it wants the one message a person reads.
 	 */
 	quiet(): Promise<void>;
-	/** Cancel every active turn. The room keeps running; `stopSession` ends it. */
+	/** Cancel every activation in flight. The room keeps running; `stopSession` ends it. */
 	abort(): void;
 }
 
@@ -126,7 +145,7 @@ export function startSession(options: StartSessionOptions): Session {
 	return session;
 }
 
-/** Takes the room down: turns aborted, visits closed, timers cleared, writes drained. */
+/** Takes the room down: activations aborted, visits closed, timers cleared, writes drained. */
 export function stopSession(session: Session): Promise<void> {
 	if (!(session instanceof SessionImpl)) {
 		throw new Error('stopSession takes a session from startSession.');
@@ -196,9 +215,8 @@ class SessionImpl implements Session {
 	private readonly quietWaiters: (() => void)[] = [];
 	private readonly streamFn: StreamFn;
 	private readonly customStream: boolean;
-	private activeCount = 0;
 	private stopped = false;
-	/** The room's rounds: what a question opened, and what quiescence closes. */
+	/** The room's exchanges: what a question opened, and what quiescence closes. */
 	private readonly exchanges = new Exchanges();
 
 	constructor(options: StartSessionOptions) {
@@ -227,11 +245,6 @@ class SessionImpl implements Session {
 		const seated: SeatRuntime = {
 			def,
 			attention: isSeatedAgent(seat) ? seat.attention : 'broadcast',
-			active: false,
-			spoke: false,
-			aborted: false,
-			viewSeq: 0,
-			pendingSteers: [],
 		};
 		this.agents.set(def.name, seated);
 		return seated;
@@ -264,28 +277,34 @@ class SessionImpl implements Session {
 		return new Promise((resolve) => this.settledWaiters.push(resolve));
 	}
 
-	/** Whether a seat that speaks for itself is taking a turn. An aide is not one. */
+	/**
+	 * What is running. One fact, kept in one place: a seat holds its own
+	 * activation, so nothing counts them alongside and nothing can drift.
+	 */
+	private running(): SeatRuntime[] {
+		return [...this.agents.values()].filter(isActive);
+	}
+
+	/** Nothing at all is taking an activation. An aide writing is something. */
+	private idle(): boolean {
+		return this.running().length === 0;
+	}
+
+	/** Something that speaks for itself is taking one. An aide does not. */
 	private working(): boolean {
-		for (const seat of this.agents.values()) {
-			if (seat.active && !this.aides.isAide(seat.def.name)) return true;
-		}
-		return false;
+		return this.running().some((seat) => !this.aides.isAide(seat.def.name));
 	}
 
 	quiet(): Promise<void> {
 		// The same condition the `quiet` event reports. A summary a race left
 		// owed is not work in flight: it waits for the next quiet room, and the
 		// room is quiet in the meantime.
-		if (this.activeCount === 0) return Promise.resolve();
+		if (this.idle()) return Promise.resolve();
 		return new Promise((resolve) => this.quietWaiters.push(resolve));
 	}
 
 	abort(): void {
-		for (const seat of this.agents.values()) {
-			if (!seat.active) continue;
-			seat.aborted = true;
-			seat.agent?.abort();
-		}
+		for (const seat of this.agents.values()) seat.activation?.abort();
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
@@ -301,7 +320,7 @@ class SessionImpl implements Session {
 				kind: 'agent',
 				name: seat.def.name,
 				identity: seat.def.identity,
-				status: seat.active ? 'active' : 'idle',
+				status: isActive(seat) ? 'active' : 'idle',
 				attention: seat.attention,
 				sessionId: `${this.name}:${seat.def.name}`,
 				...(owner === undefined ? {} : { owner }),
@@ -387,7 +406,7 @@ class SessionImpl implements Session {
 	 */
 	private async publish(message: Message): Promise<void> {
 		await this.store.drained();
-		// The message lands, then what it opened: a round is a fact about a
+		// The message lands, then what it opened: an exchange is a fact about a
 		// message the host has already seen. Both come before the routing, so
 		// nothing wakes on a message the host has not heard about.
 		this.emit({ type: 'message', message });
@@ -395,7 +414,7 @@ class SessionImpl implements Session {
 		this.dispatch(message);
 	}
 
-	/** A person's question opens a round, and the room says so. */
+	/** A person's question opens an exchange, and the room says so. */
 	private noteExchange(message: Message): void {
 		const opened = this.exchanges.note(message, this.here.knows(message.from));
 		if (opened) this.emit({ type: 'exchange_opened', exchange: opened });
@@ -439,8 +458,8 @@ class SessionImpl implements Session {
 			this.abort();
 			await this.store.ready;
 			// A deliberate shutdown observed everybody leaving, so the record
-			// says so, and the host hears it. It wakes nobody: a turn started
-			// to hear that the room is closing is a turn nobody reads.
+			// says so, and the host hears it. It wakes nobody: an activation
+			// started to hear that the room is closing is an activation nobody reads.
 			for (const visit of this.here.all()) {
 				visit.gone = true;
 				this.here.leave(visit.human.name);
@@ -507,88 +526,46 @@ class SessionImpl implements Session {
 		const fromAide = this.aides.isAide(message.from);
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
-			if (seat.active) this.steerInto(seat, message);
+			if (seat.activation) seat.activation.steer(message, renderLine(message));
 			else if (wakes(seat, target, message, fromAide)) this.activate(seat);
 		}
 	}
 
-	private steerInto(seat: SeatRuntime, message: Message): void {
-		seat.pendingSteers.push(message.seq);
-		seat.agent?.steer(userMessage(`[new] ${renderLine(message)}`));
-	}
-
 	private activate(seat: SeatRuntime): void {
-		seat.active = true;
-		seat.spoke = false;
-		seat.aborted = false;
-		this.activeCount += 1;
-		this.emit({ type: 'agent_start', agent: seat.def.name });
-		void this.run(seat).finally(() => {
-			seat.active = false;
-			seat.agent = undefined;
-			this.aides.turnEnded(seat, seat.spoke);
-			this.emit({ type: 'agent_end', agent: seat.def.name, spoke: seat.spoke });
-			this.activeCount -= 1;
-			// A round ends when the seats stop. An aide writing about the round
-			// is not the room still working on it, so its own turn ends no round
-			// — which is also what keeps a failing aide from retrying for ever.
-			if (!this.aides.isAide(seat.def.name) && !this.working()) {
-				for (const resolve of this.settledWaiters.splice(0)) resolve();
-				this.closeExchange();
-			}
-			if (this.activeCount === 0) this.markQuiet();
+		const activation = new Activation(seat.def.name, this.store.lastSeq, {
+			open: (running) => this.open(seat, running),
+			persist: (agent) => persistTurns(this.seatSession(seat), agent),
+			emit: (event) => this.emit(event),
 		});
-	}
-
-	private async run(seat: SeatRuntime): Promise<void> {
-		// A turn rebuilds while the room keeps moving under it, and ends when it
-		// has nothing left to read.
-		while (await this.takeTurn(seat)) {
-			// nothing: the next pass reads the record as it now stands.
-		}
-	}
-
-	/** One pass at a turn. True when a message landed and it must read again. */
-	private async takeTurn(seat: SeatRuntime): Promise<boolean> {
-		try {
-			// A fresh view hands the seat the whole record: heard up to here.
-			seat.viewSeq = this.store.lastSeq;
-			seat.pendingSteers = [];
-			const agent = this.buildAgent(seat);
-			seat.agent = agent;
-			await agent.prompt(userMessage(renderTurnContext(this.speaking(seat), this.view())));
-			await this.persistRun(seat, agent);
-			const failure = runFailure(agent);
-			if (failure) return this.turnFailed(seat, failure);
-			// An aborted turn stays cancelled: Pi's abort() ends the run but
-			// leaves its queues, and a queued steer must not rebuild the turn.
-			// A summarising turn is one pass either way: its answer to a room
-			// that moved is the redraft inside `summarise`, not a fresh turn.
-			if (seat.aborted || this.aides.draftOf(seat.def.name)) return false;
-			// A steer that raced past the run's last drain is not lost: the
-			// message is already on the record, so a fresh view carries it.
-			if (!agent.hasQueuedMessages()) return false;
-			agent.clearAllQueues();
-			return true;
-		} catch (error) {
-			return this.turnFailed(seat, toError(error));
-		}
-	}
-
-	/** A turn that never reached the record. The room hears it and moves on. */
-	private turnFailed(seat: SeatRuntime, error: Error): false {
-		const closing = this.aides.draftOf(seat.def.name);
-		if (closing) closing.failed = true;
-		this.emit({ type: 'error', agent: seat.def.name, error });
-		return false;
-	}
-
-	private async persistRun(seat: SeatRuntime, agent: Agent): Promise<void> {
-		await persistTurns(this.seatSession(seat), agent);
+		// The seat holding it is what makes the room busy: there is no count to
+		// keep in step, and so none to drift.
+		seat.activation = activation;
+		this.emit({ type: 'activation_start', agent: seat.def.name });
+		// A summarising activation is one pass: it answers a room that moved with
+		// a redraft inside its own tool rather than a fresh activation.
+		const rebuilds = this.aides.draftOf(seat.def.name) === undefined;
+		void activation
+			.run(rebuilds, () => this.store.lastSeq)
+			.finally(() => {
+				seat.activation = undefined;
+				this.aides.activationEnded(seat, {
+					wrote: activation.spoke,
+					failed: activation.failed,
+				});
+				this.emit({ type: 'activation_end', agent: seat.def.name, spoke: activation.spoke });
+				// An exchange ends when the seats stop. An aide writing about one
+				// is not the room still working on it, so its own activation ends
+				// none — which also keeps a failing aide from retrying for ever.
+				if (!this.aides.isAide(seat.def.name) && !this.working()) {
+					for (const resolve of this.settledWaiters.splice(0)) resolve();
+					this.closeExchange();
+				}
+				if (this.idle()) this.markQuiet();
+			});
 	}
 
 	/**
-	 * What the prose is given of the seat taking this turn. The aides hold both
+	 * What the prose is given of the seat taking this activation. The aides hold both
 	 * facts; a seat holds neither.
 	 */
 	private speaking(seat: SeatRuntime): SeatSpeaking {
@@ -599,7 +576,7 @@ class SessionImpl implements Session {
 		};
 	}
 
-	/** What the prose is given of this room, built fresh for each turn. */
+	/** What the prose is given of this room, built fresh for each activation. */
 	private view(): RoomView {
 		return {
 			name: this.name,
@@ -611,32 +588,35 @@ class SessionImpl implements Session {
 		};
 	}
 
-	private buildAgent(seat: SeatRuntime): Agent {
+	/**
+	 * What an activation is given: the model it runs on, the prompt it is addressed
+	 * by, the hands it holds, and the room as it stands right now. Only the
+	 * room knows any of that, and it builds them fresh for every pass.
+	 */
+	private open(seat: SeatRuntime, activation: Activation): { agent: Agent; context: string } {
+		const speaking = this.speaking(seat);
+		const view = this.view();
 		const agent = new Agent({
 			streamFn: this.streamFn,
 			initialState: {
-				systemPrompt: renderSystemPrompt(this.speaking(seat), this.view()),
+				systemPrompt: renderSystemPrompt(speaking, view),
 				model: this.resolveModel(seat.def),
 				thinkingLevel: 'off',
-				tools: this.handsFor(seat),
+				tools: this.handsFor(seat, activation),
 				messages: [],
 			},
 		});
-		agent.subscribe((event) => {
-			this.noteSteer(seat, event);
-			this.relayToolUse(seat, event);
-		});
-		return agent;
+		return { agent, context: renderTurnContext(speaking, view) };
 	}
 
 	/**
-	 * What a turn holds. A seat speaks and uses its own tools; an aide closing
+	 * What an activation holds. A seat speaks and uses its own tools; an aide closing
 	 * an exchange holds one hand, and it reaches the record. `defineHuman`
 	 * refuses an aide that carries tools of its own, so there is nothing else
 	 * to leave out.
 	 */
-	private handsFor(seat: SeatRuntime): AgentTool[] {
-		// An aide's hands are the runtime's, and it holds them only for the turn
+	private handsFor(seat: SeatRuntime, activation: Activation): AgentTool[] {
+		// An aide's hands are the runtime's, and it holds them only for the activation
 		// it was woken for. Nothing wakes an aide today but the close of its
 		// person's exchange; when something else does — a wider attention, per
 		// FOLLOW_WORK.md — it must arrive with empty hands until somebody adds a
@@ -644,44 +624,30 @@ class SessionImpl implements Session {
 		const owner = this.aides.ownerOf(seat.def.name);
 		if (owner !== undefined) {
 			const closing = this.aides.draftOf(seat.def.name);
-			return closing ? [this.summarise(seat, owner, closing)] : [];
+			return closing ? [this.summarise(seat, activation, owner, closing)] : [];
 		}
-		return [this.sayTool(seat), ...seat.def.tools.map(toPiTool)];
+		return [this.sayTool(seat, activation), ...seat.def.tools.map(toPiTool)];
 	}
 
 	/** The one hand an aide is given, bound to the range it must stand for. */
-	private summarise(seat: SeatRuntime, person: string, closing: Draft): AgentTool {
+	private summarise(
+		seat: SeatRuntime,
+		activation: Activation,
+		person: string,
+		closing: Draft,
+	): AgentTool {
 		return summariseTool(seat.def.name, person, closing, {
 			stopped: () => this.stopped,
 			lastSeq: () => this.store.lastSeq,
 			claim: (author, draft) => this.claim<SummaryMessage>(author, draft),
 			publish: (message) => this.publish(message),
 			written: () => {
-				seat.spoke = true;
+				activation.spoke = true;
 			},
 		});
 	}
 
-	/**
-	 * A steer has landed in the transcript: the seat has now heard it. Steers
-	 * drain FIFO, so the oldest pending seq is the one that landed.
-	 */
-	private noteSteer(seat: SeatRuntime, event: AgentEvent): void {
-		if (event.type !== 'message_start' || event.message.role !== 'user') return;
-		const content = event.message.content;
-		if (typeof content !== 'string' || !content.startsWith('[new] ')) return;
-		const seq = seat.pendingSteers.shift();
-		if (seq !== undefined) seat.viewSeq = Math.max(seat.viewSeq, seq);
-	}
-
-	/** The room sees that hands moved; `say` is the room's own event, not a tool's. */
-	private relayToolUse(seat: SeatRuntime, event: AgentEvent): void {
-		if (event.type !== 'tool_execution_start' && event.type !== 'tool_execution_end') return;
-		if (event.toolName === 'say') return;
-		this.emit({ type: event.type, agent: seat.def.name, toolName: event.toolName });
-	}
-
-	private sayTool(seat: SeatRuntime): AgentTool {
+	private sayTool(seat: SeatRuntime, activation: Activation): AgentTool {
 		return {
 			name: 'say',
 			label: 'say',
@@ -700,12 +666,12 @@ class SessionImpl implements Session {
 				const text = params.text.trim();
 				// A message with nothing in it still takes a seq, renders in
 				// every context after it, and stands inside whatever range a
-				// summary covers. Saying nothing is ending the turn.
+				// summary covers. Saying nothing is ending the activation.
 				if (text === '') {
 					throw new Error('The message is empty. Say something, or end your turn instead.');
 				}
 				const claimed = this.claim<SpokenMessage>(
-					{ name: seat.def.name, readThrough: seat.viewSeq },
+					{ name: seat.def.name, readThrough: activation.readThrough },
 					{
 						kind: 'said',
 						at: new Date().toISOString(),
@@ -716,7 +682,7 @@ class SessionImpl implements Session {
 				);
 				if ('missed' in claimed) {
 					// Refused, and now heard: the seat decides again against the record as it stands.
-					seat.viewSeq = this.store.lastSeq;
+					activation.heard(this.store.lastSeq);
 					throw new Error(
 						refusal(
 							'Not delivered — the room moved while you were speaking. New on the record:',
@@ -726,8 +692,8 @@ class SessionImpl implements Session {
 					);
 				}
 				// The seat has heard its own say before anybody else hears of it.
-				seat.viewSeq = claimed.message.seq;
-				seat.spoke = true;
+				activation.heard(claimed.message.seq);
+				activation.spoke = true;
 				await this.publish(claimed.message);
 				return delivered();
 			},
@@ -770,7 +736,7 @@ class SessionImpl implements Session {
 	// -- the aide ------------------------------------------------------------
 
 	/**
-	 * The room went quiet, so the round it was working on is over. The host
+	 * The room went quiet, so the exchange it was working on is over. The host
 	 * hears that before anything is written about it: an aide is the first
 	 * reader of a closed exchange and not the only one.
 	 */
@@ -782,17 +748,17 @@ class SessionImpl implements Session {
 
 	/**
 	 * What an aide makes of a closed exchange: its owner is owed the one
-	 * message that stands for it, and every aide owed one takes its turn.
+	 * message that stands for it, and the room activates every aide owed one.
 	 * Nothing else in the room wakes for a close — an aide is seated `none`,
 	 * and the close is the one thing that reaches it.
 	 *
 	 * Every quiet room is a chance to write what is owed, whatever made the
-	 * room busy. An aide's own turn ends no round, so a failed draft waits for
+	 * room busy. An aide's own activation ends no exchange, so a failed draft waits for
 	 * the next time the seats stop rather than retrying on itself.
 	 */
 	private summariseClosed(closing: ClosedExchange | undefined): void {
 		if (closing) this.aides.owe(closing.owner, closing.from);
-		const due = this.aides.turnsDue(this.record, this.store.lastSeq, (name) =>
+		const due = this.aides.activationsDue(this.record, this.store.lastSeq, (name) =>
 			this.speaksForItself(name),
 		);
 		for (const { seat } of due) this.activate(seat);
@@ -808,16 +774,16 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * The room is quiet: no seat is taking a turn, and no aide still owes one.
+	 * The room is quiet: no seat is taking an activation, and no aide still owes one.
 	 * A summary that a race refused is not work in flight — it waits for the
 	 * next quiescence, and the room is quiet in the meantime.
 	 *
-	 * A stopped room never reports this. Shutdown aborts the turns in flight
+	 * A stopped room never reports this. Shutdown aborts the activations in flight
 	 * and drains whoever waited, and a room that is closing is not a room that
 	 * has gone quiet.
 	 */
 	private markQuiet(): void {
-		if (this.stopped || this.activeCount > 0) return;
+		if (this.stopped || !this.idle()) return;
 		this.emit({ type: 'quiet' });
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
 	}

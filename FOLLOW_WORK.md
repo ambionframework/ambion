@@ -24,8 +24,8 @@ lets aides speak_ — rather than a code change in the runtime.
 
 **What it needs deciding.**
 
-- **A seat mid-turn.** Narrowing a seat that is active must not cancel its
-  turn, and widening one must not wake it retroactively for messages it has
+- **A seat mid-activation.** Narrowing a seat that is active must not cancel
+  its activation, and widening one must not wake it retroactively for messages it has
   already missed. The likely rule: reseating takes effect at the next
   activation, and the record says nothing about it.
 - **Whether it is on the record.** Presence is a message because the room's
@@ -35,9 +35,10 @@ lets aides speak_ — rather than a code change in the runtime.
 - **Who may do it.** A host, certainly. An agent, never — a room where an
   agent can widen its own attention is a room that can make itself expensive.
 - **What an aide holds when something else wakes it.** Nothing, today:
-  `handsFor` gives an aide the `summarise` tool for the turn a close woke it
+  `handsFor` gives an aide the `summarise` tool for the activation a close
+  woke it
   for, and empty hands otherwise, so a wider attention alone buys a seat that
-  reads the room and ends its turn. Rung 3 is a `say` added there on purpose,
+  reads the room and ends its activation. Rung 3 is a `say` added there on purpose,
   with the paragraph that says when waking somebody's aide is worth the money.
 
 **Where.** `Attention` and `wakes` in
@@ -63,15 +64,16 @@ in the runtime. Worth re-measuring once aides speak.
 ## A test for the owed-summary merge
 
 `oweSummary` merges a person's owed range with `Math.min`, so somebody owed a
-summary from a failed turn who asks again gets one message covering both
+summary from a failed activation who asks again gets one message covering
+both
 exchanges. Nothing pins that behaviour; the tests cover the failure and the
 retry separately. See [`docs/aide.md`](docs/aide.md) §5.
 
 ## Exchanges are run state
 
-`Exchanges` holds the open round in memory, so a restart begins with none —
+`Exchanges` holds the open exchange in memory, so a restart begins with none —
 right for a room mid-question, and a limit for anything that wants to work
-over past rounds. A closed exchange is an owner and a range, so it is
+over past exchanges. A closed exchange is an owner and a range, so it is
 derivable from the record; nothing derives it today. See
 [`docs/agent.md`](docs/agent.md), _The exchange_.
 

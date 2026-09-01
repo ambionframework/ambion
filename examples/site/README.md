@@ -48,14 +48,14 @@ their own data. The task list rewrites due dates and the materials tracker
 moves deliveries because the room decided something, not because anyone
 typed an edit.
 
-**A question opens a round.** `— priya asked; the workspace is working —`
-marks it, and `— the round is over (3–7) —` marks the moment the seats stop.
+**A question opens an exchange.** `— priya asked; the workspace is working —`
+marks it, and `— the exchange is over (3–7) —` marks the moment the seats stop.
 That is the exchange, and it is the room's own: it opens whether or not
 anybody brought an aide, and a client that could re-render would fold the
 working between those two lines into a thinking state.
 
 **One question, one message back.** Ask "can I promise Thursday for the
-pour?" and watch three products answer it between them. When the round closes,
+pour?" and watch three products answer it between them. When the exchange closes,
 the aide of whoever asked writes the one message they read instead of the
 working, marked `∎` and carrying the span it stands for. `/summaries` lists
 them. A question the room answers once draws no summary at all: one answer is

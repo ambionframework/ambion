@@ -1,3 +1,12 @@
+/**
+ * The values you write before a room exists.
+ *
+ * An agent, a person, a tool, and where a seat sits on the attention scale.
+ * None of them starts anything or holds any state: a definition is a value,
+ * and the same one is the quiet corner in one room and the one who meets
+ * people in another. What each refuses is as much of the contract as what it
+ * takes — a name the room can address, an aide with no hands of its own.
+ */
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Static, TSchema } from 'typebox';
 import {

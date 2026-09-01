@@ -55,12 +55,12 @@ flowchart LR
     P((person)) -- "deliver · arrive · leave" --> R[(session record)]
     R -- "activates by attention" --> A["agents, in parallel"]
     A -- "say" --> R
-    R -- "round closes" --> D[aide]
+    R -- "exchange closes" --> D[aide]
     D -- "one summary" --> R
 ```
 
 A delivery activates the idle agents in parallel; a message that arrives
-mid-turn steers the agents already at work. Each agent decides whether to
+mid-activation steers the agents already at work. Each agent decides whether to
 speak, to whom, and which colleague to call in — and declining leaves no
 mark on the record. The runtime stamps who said what.
 

@@ -6,7 +6,7 @@
  * This is the room's own unit of work, not the aide's. An aide is the first
  * thing that reads it — it writes one message per exchange — and it is not the
  * last: a client folds the working under the question it answered, a host
- * measures what a round cost, and a later compactor stands over a stretch of
+ * measures what an exchange cost, and a later compactor stands over a stretch of
  * them. So the rule lives here, on its own, and every reader takes it from the
  * same place.
  *

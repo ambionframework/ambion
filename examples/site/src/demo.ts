@@ -74,7 +74,7 @@ function track(event: SessionEvent, at: string): void {
 		lastFrom = event.message.from;
 		return;
 	}
-	if (event.type === 'agent_start') {
+	if (event.type === 'activation_start') {
 		const a: Activation = {
 			agent: event.agent,
 			trigger: lastSeq,
@@ -93,7 +93,7 @@ function track(event: SessionEvent, at: string): void {
 	if (!open) return;
 	if (event.type === 'tool_execution_start') open.tools.push(event.toolName);
 	if (event.type === 'conflict') open.conflicts += 1;
-	if (event.type === 'agent_end') {
+	if (event.type === 'activation_end') {
 		open.endedAt = at;
 		open.spoke = event.spoke;
 		openBySeat.delete(event.agent);
@@ -116,7 +116,7 @@ function narrate(event: SessionEvent): void {
 	}
 	if (event.type === 'exchange_closed') {
 		const { owner, from, through } = event.exchange;
-		process.stderr.write(`  — ${owner}'s round closed (${from}–${through})\n`);
+		process.stderr.write(`  — ${owner}'s exchange closed (${from}–${through})\n`);
 	}
 	if (event.type === 'error') process.stderr.write(`! ${event.agent}: ${event.error.message}\n`);
 }
