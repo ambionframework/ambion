@@ -51,7 +51,7 @@ function scripted(script: Script): StreamFn {
 			stream.push({ type: 'start', partial: message });
 			stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
 		};
-		// A stream that ignores the signal keeps answering a cancelled turn for ever.
+		// A stream that ignores the signal keeps answering a cancelled activation for ever.
 		const aborted = () =>
 			finish(fauxAssistantMessage('', { stopReason: 'aborted', errorMessage: 'aborted' }));
 		if (options?.signal?.aborted) {
@@ -83,13 +83,13 @@ const quiet = (thought = 'nothing to add') => fauxAssistantMessage(thought, { st
 const summarise = (text: string) =>
 	fauxAssistantMessage([fauxToolCall('summarise', { text })], { stopReason: 'toolUse' });
 
-/** The ordinary aide: it writes once, then ends its turn. */
+/** The ordinary aide: it writes once, then ends its activation. */
 const writes =
 	(text: string): Script =>
 	(_context, _name, call) =>
 		call === 1 ? summarise(text) : quiet();
 
-/** A turn that fails outright: no draft, nothing written, and an error on the stream. */
+/** An activation that fails outright: no draft, nothing written, and an error on the stream. */
 const broken: Script = () =>
 	fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'the model failed' });
 
@@ -201,20 +201,21 @@ function nextSummary(session: Session): Promise<SummaryMessage> {
 }
 
 /**
- * The named aide's turn is over, whatever it decided. A summary commits inside
- * the tool call, so the turn runs on for a moment after the message lands.
+ * The named aide's activation is over, whatever it decided. A summary commits
+ * inside the tool call, so the activation runs on for a moment after the
+ * message lands.
  */
 function aideEnded(session: Session, aide = 'priya-aide'): Promise<void> {
 	return new Promise((resolve) => {
 		const off = session.subscribe((event) => {
-			if (event.type !== 'agent_end' || event.agent !== aide) return;
+			if (event.type !== 'activation_end' || event.agent !== aide) return;
 			off();
 			resolve();
 		});
 	});
 }
 
-/** Quiet: no seat is taking a turn, and no aide still owes a message. */
+/** Quiet: no seat is taking an activation, and no aide still owes a message. */
 function quiescent(session: Session): Promise<void> {
 	return session.quiet();
 }
@@ -247,7 +248,7 @@ const answersEach: Script = (_context, _name, call) => {
 const twoAnswersEach: Script = (_context, _name, call) =>
 	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
 
-/** An aide that writes once per turn, however many turns it takes. */
+/** An aide that writes once per activation, however many activations it takes. */
 const writesEach =
 	(text: string): Script =>
 	(_context, _name, call) =>
@@ -310,7 +311,7 @@ describe('the aide', () => {
 		expect(prompts[0]).toContain("priya's aide in the session");
 		expect(prompts[0]).toContain('Writing is the summarise tool');
 		expect(prompts[0]).not.toContain('Speaking is the say tool');
-		// the last line names the range this turn closes
+		// the last line names the range this activation closes
 		expect(contexts[0]).toContain(
 			`priya's exchange is over: messages ${summary.covers.from} to ${summary.covers.through}`,
 		);
@@ -373,7 +374,7 @@ describe('the aide', () => {
 
 		// nothing an aide writes activates a seat
 		const landed = events.findIndex((e) => e.type === 'message' && e.message === summary);
-		expect(events.slice(landed).filter((e) => e.type === 'agent_start')).toHaveLength(0);
+		expect(events.slice(landed).filter((e) => e.type === 'activation_start')).toHaveLength(0);
 
 		await visit.deliver({ text: 'And the pump?' });
 		await quiescent(session);
@@ -418,7 +419,7 @@ describe('the aide', () => {
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
 	});
 
-	it('refuses a draft the room moved past, and redrafts inside the same turn', async () => {
+	it('refuses a draft the room moved past, and redrafts inside the same activation', async () => {
 		const held = deferred();
 		const refusals: string[] = [];
 		const session = open({
@@ -496,7 +497,7 @@ describe('the aide', () => {
 
 		expect(events.filter((e) => e.type === 'conflict')).toHaveLength(2);
 		expect(summaries(await session.messages())).toHaveLength(0);
-		// the turn ended after the second refusal rather than drafting for ever
+		// the activation ended after the second refusal, and did not draft for ever
 		expect(drafts).toHaveLength(3);
 
 		// the range is still owed, and the next quiescence writes it
@@ -534,12 +535,12 @@ describe('the aide', () => {
 		expect(calls).toHaveLength(1);
 		expect(summaries(await session.messages())).toHaveLength(0);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
-		expect(events.filter((e) => e.type === 'agent_end' && e.agent === 'priya-aide')).toMatchObject([
-			{ spoke: false },
-		]);
+		expect(
+			events.filter((e) => e.type === 'activation_end' && e.agent === 'priya-aide'),
+		).toMatchObject([{ spoke: false }]);
 	});
 
-	it('drafts again at the next quiescence when its turn fails outright', async () => {
+	it('drafts again at the next quiescence when its activation fails outright', async () => {
 		const session = open({
 			agents: [product, attentive(greeter)],
 			script: byName({
@@ -558,7 +559,7 @@ describe('the aide', () => {
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
 		expect(summaries(await session.messages())).toHaveLength(0);
 
-		// a failed turn leaves the summary owed, and the next quiet room writes it
+		// a failed activation leaves the summary owed, and the next quiet room writes it
 		const written = nextSummary(session);
 		await visitSession(session, sam);
 		const summary = await written;
@@ -727,7 +728,7 @@ describe('the aide', () => {
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
 		await quiescent(session);
 
-		// the turn failed, so the summary is owed and the range is still whole
+		// the activation failed, so the summary is owed and the range is still whole
 		expect(summaries(await session.messages())).toHaveLength(0);
 		// and a host asking again is not made to wait for work nobody is doing
 		await expect(session.quiet()).resolves.toBeUndefined();
@@ -741,7 +742,7 @@ describe('the aide', () => {
 
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		// Shutdown while the room still owes a summary: the turns are aborted,
+		// Shutdown while the room still owes a summary: the activations are aborted,
 		// whoever waited on quiet is drained, and nothing is quiet afterwards.
 		const waiting = session.quiet();
 		await stopSession(session);
@@ -764,7 +765,7 @@ describe('the aide', () => {
 });
 
 describe('an exchange', () => {
-	/** The room's own round: it opens and closes whether or not anybody brought an aide. */
+	/** The room's own exchange: it opens and closes whether or not anybody brought an aide. */
 	it('opens on a question, closes on quiescence, and holds the range it covered', async () => {
 		const session = open({ script: byName({ product: twoAnswers }) });
 		const events = collect(session);
@@ -787,7 +788,7 @@ describe('an exchange', () => {
 		expect(closed[0]).toMatchObject({
 			exchange: { owner: 'priya', from: question?.seq, through: record.at(-1)?.seq },
 		});
-		// no aide in this room, and the round is still a fact the host hears
+		// no aide in this room, and the exchange is still a fact the host hears
 		expect(summaries(record)).toHaveLength(0);
 	});
 
@@ -832,8 +833,8 @@ describe('an exchange', () => {
 		const order = events.map((e) => e.type);
 		const closed = order.indexOf('exchange_closed');
 		const summary = events.findIndex((e) => e.type === 'message' && e.message.kind === 'summary');
-		// the round is over, then what stands for it, then the room is quiet
-		expect(closed).toBeGreaterThan(order.lastIndexOf('agent_end', closed));
+		// the exchange is over, then what stands for it, then the room is quiet
+		expect(closed).toBeGreaterThan(order.lastIndexOf('activation_end', closed));
 		expect(summary).toBeGreaterThan(closed);
 		expect(order.indexOf('quiet')).toBeGreaterThan(summary);
 	});

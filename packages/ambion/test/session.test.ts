@@ -109,7 +109,7 @@ const human = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.' 
 /**
  * A visitor whose arrival has already been heard. Arriving is a message, so
  * it activates the room; draining it first keeps each test's script counting
- * the turns the test is actually about.
+ * the activations the test is actually about.
  */
 async function enter(session: Session, who = human) {
 	const visit = await visitSession(session, who);
@@ -162,8 +162,8 @@ describe('startSession', () => {
 						await gammaIdle.promise; // let gamma go idle before alpha speaks
 						return speak('the answer is 42');
 					},
-					// beta: hold the first turn open until alpha has spoken, so the
-					// reply reaches beta as a mid-turn arrival, not fresh context.
+					// beta: hold the first activation open until alpha has spoken, so
+					// the reply reaches beta as a mid-activation arrival, not fresh context.
 					beta: async (context, _agent, call) => {
 						if (call === 1) {
 							await alphaSaid.promise;
@@ -179,7 +179,7 @@ describe('startSession', () => {
 		});
 		const events = collect(session);
 		session.subscribe((event) => {
-			if (event.type === 'agent_end' && event.agent === 'gamma') gammaIdle.resolve();
+			if (event.type === 'activation_end' && event.agent === 'gamma') gammaIdle.resolve();
 			if (event.type === 'message' && event.message.from === 'alpha') alphaSaid.resolve();
 		});
 
@@ -191,17 +191,17 @@ describe('startSession', () => {
 		expect(texts).toContain('alpha: the answer is 42');
 		expect(texts).toContain('beta: ack: 42');
 		expect(texts).toHaveLength(3); // woken seats declined: glances, not messages
-		// beta answered with alpha's reply in view, delivered mid-turn or on re-read
+		// beta answered with alpha's reply in view, delivered mid-activation or on re-read
 		expect(betaContexts.some((c) => c.includes('the answer is 42'))).toBe(true);
 		// a say wakes the idle room: gamma, idle when alpha spoke, glanced again —
-		// and the round still settled, because woken seats with nothing to add decline
+		// and the exchange still settled, because woken seats with nothing to add decline
 		const gammaStarts = events.filter(
-			(e) => e.type === 'agent_start' && e.agent === 'gamma',
+			(e) => e.type === 'activation_start' && e.agent === 'gamma',
 		).length;
 		expect(gammaStarts).toBeGreaterThanOrEqual(2);
 	});
 
-	it('resets the working view at idle: a new activation reads the record, not the old turn', async () => {
+	it('resets the working view at idle: a new activation reads the record, not the old activation', async () => {
 		const contexts: Context[] = [];
 		const echo = defineAgent({
 			name: 'echo',
@@ -254,7 +254,7 @@ describe('startSession', () => {
 
 		expect(spoken(await session.messages())).toHaveLength(1);
 		expect(events.some((e) => e.type === 'message' && e.message.from === 'shy')).toBe(false);
-		const end = events.find((e) => e.type === 'agent_end');
+		const end = events.find((e) => e.type === 'activation_end');
 		expect(end).toMatchObject({ agent: 'shy', spoke: false });
 	});
 
@@ -287,7 +287,7 @@ describe('startSession', () => {
 		});
 		const events = collect(session);
 		const starts = (name: string) =>
-			events.filter((e) => e.type === 'agent_start' && e.agent === name).length;
+			events.filter((e) => e.type === 'activation_start' && e.agent === name).length;
 
 		const visit = await enter(session);
 		expect(starts('front')).toBe(0); // arrivals are quiet: nobody woke
@@ -403,15 +403,15 @@ describe('startSession', () => {
 		const events = collect(ordered);
 		await orderedVisit.deliver({ text: 'say hi' });
 		await ordered.settled();
-		// one event per message on the record, whoever wrote it, and the round
+		// one event per message on the record, whoever wrote it, and the exchange
 		// that message opened around it. A room with no aide in it goes quiet in
-		// the same tick the round closes: nothing is owed.
+		// the same tick the exchange closes: nothing is owed.
 		expect(events.map((e) => e.type)).toEqual([
 			'message',
 			'exchange_opened',
-			'agent_start',
+			'activation_start',
 			'message',
-			'agent_end',
+			'activation_end',
 			'exchange_closed',
 			'quiet',
 		]);
@@ -420,7 +420,7 @@ describe('startSession', () => {
 			'solo',
 		]);
 
-		// a turn that throws is an error event, never a silent decline
+		// an activation that throws is an error event, never a silent decline
 		const faulty = startSession({
 			name: sessionName('error'),
 			agents: [solo],
@@ -449,7 +449,7 @@ describe('startSession', () => {
 		expect(hungEvents.some((e) => e.type === 'error')).toBe(false);
 		expect(spoken(await hung.messages())).toHaveLength(1);
 
-		// an abort with a steer still queued must not rebuild the turn it cancelled
+		// an abort with a steer still queued must not rebuild the activation it cancelled
 		let racingCalls = 0;
 		const racingStarted = deferred();
 		const racing = startSession({
@@ -550,7 +550,7 @@ describe('startSession', () => {
 		await yielding.settled();
 
 		expect(spoken(await yielding.messages())).toHaveLength(2);
-		const end = yieldEvents.find((e) => e.type === 'agent_end' && e.agent === 'second');
+		const end = yieldEvents.find((e) => e.type === 'activation_end' && e.agent === 'second');
 		expect(end).toMatchObject({ spoke: false });
 	});
 

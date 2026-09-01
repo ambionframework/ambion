@@ -2,7 +2,7 @@
  * A seat: one agent in one room, and what wakes it.
  *
  * A seat is the agent plus everything the room knows about it while it is
- * seated — where its attention sits on the scale, whether it is taking a turn,
+ * seated — where its attention sits on the scale, whether it is taking an activation,
  * how much of the record it has provably heard. The agent definition is a
  * value and says none of that: the same definition is the quiet corner in one
  * room and the one who meets people in another.
@@ -12,32 +12,31 @@
  * attention is at least that wide.
  */
 import type {
-	Agent,
 	AgentTool,
 	AgentToolResult,
 	Session as PiSession,
 } from '@earendil-works/pi-agent-core';
-import type { UserMessage } from '@earendil-works/pi-ai';
-import type { AgentDefinition, Attention, Message, Seq } from './types.ts';
+import type { Activation } from './activation.ts';
+import type { AgentDefinition, Attention, Message } from './types.ts';
 import { isAmbionTool, isSpoken } from './types.ts';
 
 export interface SeatRuntime {
 	def: AgentDefinition;
 	/** What wakes this seat. Chosen at seating, not by the definition. */
 	attention: Attention;
-	active: boolean;
-	spoke: boolean;
-	/** Pi's abort() cancels the run but not its queues; this stops the rebuild loop too. */
-	aborted: boolean;
 	/**
-	 * How much of the record this seat has provably heard: the seq its view
-	 * rendered, advanced as steers land in the transcript and by its own says.
+	 * The activation this seat is taking, while it is taking one. Everything
+	 * that lasts seconds lives there; everything here lasts as long as the seat
+	 * is seated. A seat is active when it has one.
 	 */
-	viewSeq: Seq;
-	/** Record seqs of steers enqueued to the live agent, awaiting their drain (FIFO). */
-	pendingSteers: Seq[];
-	agent?: Agent;
+	activation?: Activation;
+	/** The seat's own downstream Pi session, opened once and kept for the run. */
 	piSeat?: Promise<PiSession>;
+}
+
+/** Whether this seat is taking an activation now. Runtime state, not a seating choice. */
+export function isActive(seat: SeatRuntime): boolean {
+	return seat.activation !== undefined;
 }
 
 /** The attention scale, narrowest first. A seat hears what it is wide enough for. */
@@ -95,18 +94,6 @@ export function toPiTool(tool: unknown): AgentTool {
 		throw new Error('Tools must come from defineTool (Ambion or Pi).');
 	}
 	return raw.label ? raw : { ...raw, label: raw.name };
-}
-
-export function userMessage(text: string): UserMessage {
-	return { role: 'user', content: text, timestamp: Date.now() };
-}
-
-export function runFailure(agent: Agent): Error | undefined {
-	const last = agent.state.messages.at(-1);
-	if (last && 'stopReason' in last && last.stopReason === 'error') {
-		return new Error(('errorMessage' in last && last.errorMessage) || 'The turn failed.');
-	}
-	return undefined;
 }
 
 /** What a write tool returns when the record took it. */

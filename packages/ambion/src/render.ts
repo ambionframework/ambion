@@ -5,7 +5,7 @@
  * name, a log line — and those live where the mechanism lives. And it says
  * them to a *participant*: the system prompt a seat is given, the roster and
  * the record it reads at each activation, and the one line that tells it what
- * this turn is for. All of that is here.
+ * this activation is for. All of that is here.
  *
  * Every function is pure. It takes a `RoomView` — a picture of the room, not
  * the room — and returns text, so what a participant reads can be built,
@@ -236,7 +236,7 @@ export interface RoomView {
 }
 
 /**
- * What the prose is given of the seat taking the turn. Both facts are asked
+ * What the prose is given of the seat taking the activation. Both facts are asked
  * for outright rather than left optional: a room that stops holding one must
  * say so, instead of a missing field quietly turning an aide into a seat.
  */
@@ -244,7 +244,7 @@ export interface SeatSpeaking {
 	readonly def: { name: string; identity: string; instructions: string };
 	/** The person this seat writes for, or nothing when it writes for nobody. */
 	readonly owner: string | undefined;
-	/** The range this turn is closing, or nothing when a message woke it. */
+	/** The range this activation is closing, or nothing when a message woke it. */
 	readonly closing: { from: Seq; through: Seq } | undefined;
 }
 
@@ -318,12 +318,12 @@ export function renderTurnContext(seat: SeatSpeaking, room: RoomView): string {
 	].join('\n');
 }
 
-/** What this turn is for, in the last line the model reads. */
+/** What this activation is for, in the last line the model reads. */
 function askOf(seat: SeatSpeaking): string {
 	const closing = seat.closing;
 	if (seat.owner !== undefined) {
-		// An aide woken by anything but a close has nothing to do with the
-		// turn, and no hands to do it with. See `handsFor`.
+		// An aide woken by anything but a close has nothing to do in the
+		// activation, and no hands to do it with. See `handsFor`.
 		return closing
 			? `${seat.owner}'s exchange is over: messages ${closing.from} to ${closing.through}. ` +
 					`Write the one message they read for it, or end your turn to leave the range whole.`

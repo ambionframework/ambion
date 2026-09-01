@@ -57,7 +57,7 @@ const show = (line: string) => {
 const errored = new Set<string>();
 session.subscribe((event: SessionEvent) => {
 	switch (event.type) {
-		case 'agent_start':
+		case 'activation_start':
 			show(`${dim}· ${event.agent} is reading…${reset}`);
 			break;
 		case 'message': {
@@ -79,7 +79,7 @@ session.subscribe((event: SessionEvent) => {
 		case 'tool_execution_start':
 			show(`${dim}· ${event.agent} calls ${event.toolName}…${reset}`);
 			break;
-		case 'agent_end':
+		case 'activation_end':
 			if (!event.spoke && !errored.delete(event.agent)) {
 				show(`${dim}· ${event.agent} read it and stayed idle${reset}`);
 			}
@@ -93,7 +93,7 @@ session.subscribe((event: SessionEvent) => {
 			errored.add(event.agent);
 			show(`${red}! ${event.agent}: ${event.error.message}${reset}`);
 			break;
-		// The round somebody asked for. A client that could re-render would fold
+		// The exchange somebody asked for. A client that could re-render would fold
 		// the working between these two into a thinking state; a terminal cannot,
 		// so it draws the boundary instead.
 		case 'exchange_opened':
@@ -101,7 +101,7 @@ session.subscribe((event: SessionEvent) => {
 			break;
 		case 'exchange_closed':
 			show(
-				`${dim}— the round is over (${event.exchange.from}–${event.exchange.through}) —${reset}`,
+				`${dim}— the exchange is over (${event.exchange.from}–${event.exchange.through}) —${reset}`,
 			);
 			break;
 		// Quiet, not settled: settled is the seats alone, and an aide writes after it.
@@ -127,7 +127,7 @@ function help(): void {
 			'  /missed           what landed since you last stopped reading',
 			'  /api              every call the products made into their own data',
 			'  /summaries        what each aide wrote, and the range it stands for',
-			'  /abort            cancel every turn in flight',
+			'  /abort            cancel every activation in flight',
 			'  /quit             leave, stop the workspace, and exit',
 			'',
 			'  The task list watches the door. Try /join dan and see whether it has',

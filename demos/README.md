@@ -31,7 +31,7 @@ showed.
 ## What each run changed
 
 **The Room, Verbatim.** The first live run of the core, before presence
-existed. Five agents and one person, every turn shown in full. The person is a
+existed. Five agents and one person, every activation shown in full. The person is a
 participant here, seated with the agents — which is what the next change
 undid. It proved the say lock in the open: of the 32 says the agents
 attempted, 13 were refused because the record moved while the seat was
@@ -64,9 +64,9 @@ left every seat's context, and the products answer her from the folds and
 their own APIs.
 
 The exchange the aide reads — a question, and everything the room does until
-it goes quiet again — is the room's own round, and it now says so: it has a
+it goes quiet again — is the room's own exchange, and it now says so: it has a
 file, a type, a reader on the session, and both edges on the event stream. The
-comparison run brings no aide at all and still reports four rounds. The aide
+comparison run brings no aide at all and still reports four exchanges. The aide
 is a seat like any other, seated at the narrow end of attention where nothing
 said reaches it, and woken by the close of its person's exchange. Attention is
 now the mechanism rather than a set of adjectives: `seated(agent, attention)`
