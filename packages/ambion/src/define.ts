@@ -52,9 +52,10 @@ export interface DefineHumanOptions {
 	/** How the room knows them — agents read it and address them accordingly. */
 	identity: string;
 	/**
-	 * The aide this person brings: an agent that holds their brief and their
-	 * preferences, and writes the one message they read when an exchange
-	 * closes. Optional — a person with no aide is never summarised.
+	 * The aide this person brings: an agent that holds how they read, and writes
+	 * the one message they read when an exchange closes. What they own is
+	 * `identity`, which every seat reads. Optional — a person with no aide is
+	 * never summarised.
 	 */
 	aide?: AgentDefinition;
 }

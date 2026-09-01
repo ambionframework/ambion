@@ -141,7 +141,7 @@ const priya = defineHuman({
 	identity: 'Project manager. Owns the programme.',
 	aide: defineAgent({
 		name: 'priya-aide',
-		identity: "Holds Priya's brief.",
+		identity: 'Holds how Priya reads.',
 		instructions: 'Lead with the decision she has to make. Leave out who said what.',
 		model: 'scripted/aide',
 	}),
@@ -152,7 +152,7 @@ const sam = defineHuman({
 	identity: 'Site foreman.',
 	aide: defineAgent({
 		name: 'sam-aide',
-		identity: "Holds Sam's brief.",
+		identity: 'Holds how Sam reads.',
 		instructions: 'Lead with what he has to do tomorrow.',
 		model: 'scripted/aide',
 	}),
@@ -307,6 +307,8 @@ describe('the aide', () => {
 		expect(hands).toEqual(['summarise', 'summarise']);
 		expect(contexts[0]).toContain('Can I tell the client Thursday');
 		expect(contexts[0]).toContain('the inspector needs 48h notice');
+		// what its person owns reaches it in the roster, so an aide holds no copy
+		expect(contexts[0]).toContain('Project manager. Owns the programme.');
 		// and it is addressed as the aide it is, not as a seat that speaks
 		expect(prompts[0]).toContain("priya's aide in the session");
 		expect(prompts[0]).toContain('Writing is the summarise tool');
@@ -645,7 +647,7 @@ describe('the aide', () => {
 			identity: 'Design lead.',
 			aide: defineAgent({
 				name: 'product',
-				identity: 'Holds her brief.',
+				identity: 'Holds how she reads.',
 				instructions: 'summarise',
 				model: 'scripted/aide',
 			}),
@@ -915,7 +917,7 @@ describe('defineHuman', () => {
 				identity: 'Project manager.',
 				aide: defineAgent({
 					name: 'priya-aide',
-					identity: 'Holds her brief.',
+					identity: 'Holds how she reads.',
 					instructions: 'summarise',
 					model: 'scripted/aide',
 					tools: [book],
@@ -931,7 +933,7 @@ describe('defineHuman', () => {
 				identity: 'Project manager.',
 				aide: defineAgent({
 					name: 'priya',
-					identity: 'Holds her brief.',
+					identity: 'Holds how she reads.',
 					instructions: 'summarise',
 					model: 'scripted/aide',
 				}),

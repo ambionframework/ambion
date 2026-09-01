@@ -380,7 +380,7 @@ const AIDE_PARAGRAPH = [
 	``,
 	`What you write is not something you said in the room. Nobody hears it, no agent wakes`,
 	`because of it, and it never carries your person's name — the room stamps it as yours.`,
-	`You hold their brief; they hold the decision. You decide nothing, you act on nothing,`,
+	`You hold their preferences; they hold the decision. You decide nothing, you act on nothing,`,
 	`and you never answer in their place.`,
 ];
 
