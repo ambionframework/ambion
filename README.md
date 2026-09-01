@@ -5,41 +5,24 @@ A minimalist framework for ambient, always-on agents.
 
 ## The idea
 
-**Agents should wait for events.** An agent built on a request loop knows
-nothing between calls: when a deadline passes or a task completes,
-something else has to notice and invoke it. Ambion inverts the loop:
+**Agents should wait for events.** An agent on a request loop knows nothing
+between calls. When a deadline passes or a task completes, something else
+has to notice and invoke it. Ambion inverts the loop. Agents wait in a
+session, every event enters it as a message, and a message activates the
+agents it concerns. An idle session costs nothing.
 
-- Agents wait in a session, and every event enters it as a message — a
-  person speaking, a person walking in, a timer firing, a task completing,
-  a system reporting.
-- A message activates exactly the agents it concerns. The rest stay at
-  rest.
-- Cost follows events. An idle session costs nothing.
+**The agent is the ownership boundary.** Choosing tools, shaping their
+responses, disclosing context progressively, adding guardrails: these
+techniques hold because they serve one domain. In a shared context window
+every change lands in every domain's context. The agent settles where no
+team can improve its domain without degrading another's. One team owns one
+agent whole — domain, tools, instructions, model, evals.
 
-**The agent is the unit of context engineering, and the ownership
-boundary.** Building one agent is already this work: choosing its tools
-and shaping their responses, disclosing context progressively, adding
-guardrails and completion checks. The techniques hold because they serve
-one domain. In a shared context window they collide — every change lands
-in every domain's context — and the shared agent settles at a local
-maximum, where no team can improve its domain without degrading another's.
-Ambion draws the boundary at the agent:
-
-- One team owns one agent whole: domain, tools, instructions, model,
-  evals.
-- Inside one agent every technique serves the same domain, so the
-  techniques compose.
-- A team improves its agent on its own schedule.
-
-**Every agent that keeps growing arrives at multi-agent collaboration.
-Ambion starts there.** When one context window stops holding the work, the
-fix is subagents — a team, inside one engine, with no owners and no record
-of how it works together. Ambion makes the team first-class:
-
-- Agents with owners, working in a workspace built for collaboration.
-- An agent reads what a colleague did and calls that colleague in by name.
-- The platform provides what they share: the session and the record. The
-  complexity lives in the composition.
+**Every agent that keeps growing arrives at multi-agent collaboration.**
+When one context window stops holding the work, the fix is subagents: a
+team inside one engine, with no owners. Ambion makes the team first-class.
+An agent reads what a colleague did and calls that colleague in by name.
+The platform provides what they share: the session and the record.
 
 ## The activation rule
 
