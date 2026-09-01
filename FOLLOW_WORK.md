@@ -5,6 +5,47 @@ what it is, what it costs, and where the reasoning already lives. The design
 contracts in [`docs/`](docs) hold the open questions about a design; this file
 holds the work.
 
+## Steering an exchange from what a person holds
+
+**What.** An aide's preferences shape one message, and they shape it after
+the work is done. The same preferences could aim the room while it works.
+Sam never reads contract terms, so three seats spending an activation on
+them is money his aide already knew to save. The rule is deterministic: it
+reads what a person holds and what a message is, so the room can run it as
+a check, and it costs no activation.
+
+**Why.** The preferences are in one place already
+([`docs/aide.md`](docs/aide.md) §2), and today they reach the room only at
+the close. A person who has said what they act on has said something the
+room could use while it is still deciding what to say. It is also the
+cheapest of the three rungs in §12: a check costs nothing, and rung 3 pays
+for an activation.
+
+**What it needs deciding.**
+
+- **Whether the aide is the right holder.** A deterministic rule is not a
+  seat, and the aide is a seat. The rule could be a field on the person that
+  the room reads when it builds a context, which keeps every invariant below
+  intact. The argument for the aide is that a person's preferences belong in
+  one place. The argument against is that a seat that never runs is a
+  strange home for a check.
+- **Which invariant it touches.** Three hold today: an aide is seated
+  `none`, `handsFor` gives it empty hands outside a close, and `wakes`
+  refuses to wake anybody for what an aide writes. A steer that reaches a
+  running seat as a `[new]` line touches the third, because the room would
+  carry an aide's words to a seat that did not ask for them.
+- **What it may steer.** Rule 2 says what arrives mid-activation is steered
+  in and changes nothing else. A preference that suppresses a line is a
+  different act from one that adds one, and only the second is a steer.
+- **What a seat is told.** A seat that is aimed and does not know it will
+  argue with the room. The paragraph that explains a fold
+  (`SUMMARY_PARAGRAPH`) is the precedent.
+
+**Where.** `dispatch` and `handsFor` in
+[`session.ts`](packages/ambion/src/session.ts), `wakes` in
+[`seat.ts`](packages/ambion/src/seat.ts), the aide's paragraphs in
+[`render.ts`](packages/ambion/src/render.ts).
+
 ## Reseating: attention that a running room can change
 
 **What.** A seat's attention is chosen when the agent is seated and never
@@ -41,9 +82,10 @@ lets aides speak_ — rather than a code change in the runtime.
   reads the room and ends its activation. Rung 3 is a `say` added there on purpose,
   with the paragraph that says when waking somebody's aide is worth the money.
 
-**Where.** `Attention` and `wakes` in
-[`packages/ambion/src/session.ts`](packages/ambion/src/session.ts), `seated`
-in [`define.ts`](packages/ambion/src/define.ts).
+**Where.** `wakes` in
+[`packages/ambion/src/seat.ts`](packages/ambion/src/seat.ts), `Attention` in
+[`types.ts`](packages/ambion/src/types.ts), `seated` in
+[`define.ts`](packages/ambion/src/define.ts).
 
 ## Waking an aide costs money, and nothing says when it is worth it
 
@@ -63,7 +105,7 @@ in the runtime. Worth re-measuring once aides speak.
 
 ## A test for the owed-summary merge
 
-`oweSummary` merges a person's owed range with `Math.min`, so somebody owed a
+`Aides.owe` merges a person's owed range with `Math.min`, so somebody owed a
 summary from a failed activation who asks again gets one message covering
 both
 exchanges. Nothing pins that behaviour; the tests cover the failure and the
@@ -79,8 +121,8 @@ derivable from the record; nothing derives it today. See
 
 ## A second non-seat writer
 
-The room owes summaries through a small scheduler: `owed`, `wakeAide`,
-`closedTurn`. If a room-level compactor ever arrives
+The room owes summaries through a small scheduler: `owe`, `activationsDue`
+and `activationEnded`, held by `Aides`. If a room-level compactor ever arrives
 ([`docs/aide.md`](docs/aide.md) §16 forbids it by name today), it wants the
 same scheduler. Two writers is the point at which it should become its own
 thing rather than three fields on the session.

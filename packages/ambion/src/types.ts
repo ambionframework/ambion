@@ -197,7 +197,7 @@ export interface HumanDefinition {
 	readonly name: string;
 	readonly identity: string;
 	/**
-	 * The person's counterpart in a room: it holds their brief, writes the one
+	 * The person's counterpart in a room: it holds how they read, writes the one
 	 * message they read at the end of an exchange, and never speaks for them.
 	 */
 	readonly aide?: AgentDefinition;

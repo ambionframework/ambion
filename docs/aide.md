@@ -1,9 +1,9 @@
 # The aide
 
 This document is the design contract for the aide: the optional agent a
-person brings into a session, which holds their brief and turns the room's
-work into one message they read. It is shipped. The code lives with the
-rest of the runtime in [`packages/ambion/src`](../packages/ambion/src) —
+person brings into a session, which holds how they read and turns the
+room's work into one message. It is shipped. The code lives with the rest
+of the runtime in [`packages/ambion/src`](../packages/ambion/src) —
 the exchange and the summary in
 [`session.ts`](../packages/ambion/src/session.ts), the fold a seat reads in
 [`render.ts`](../packages/ambion/src/render.ts), the shapes in
@@ -61,19 +61,27 @@ message, and which is drafting one now are held by the aides themselves
 (`Aides` in [`aide.ts`](../packages/ambion/src/aide.ts)); the room asks
 them, and no seat carries a field for it.
 
-An aide holds two things nothing else in the room holds. **The brief** — what
-its person asked, and what they are trying to decide. **The preferences** —
-what they act on, what they ignore, how long an answer they read. Put those
-inside each product's instructions and every product carries a copy of
-every person, so each new person lengthens every product's prompt. That is
-a modelling error. What Priya wants belongs to Priya, so it lives in her
-aide and nowhere else.
+An aide holds one thing nothing else in the room holds: **how its person
+reads.** What an answer has to lead with, what to cut, and how much of one
+they will take.
+
+Two facts about a person sit outside it. What they own and what only they
+can do is their `identity`, which every seat reads and the aide reads with
+them. What they asked is a message with a seq, and a closed exchange names
+the seq it started at. An aide that holds either one carries a copy of
+something already in its context.
+
+Put the reading preferences inside each product's instructions and every
+product carries a copy of every person, so each new person lengthens every
+product's prompt. That is a modelling error. How Priya reads belongs to
+Priya, so it lives in her aide and nowhere else.
 
 **An aide never decides and never acts as its person.** `deliver` stays the
 person's own act, in their own words. §12 draws that line.
 
-The name sets the authority. An aide briefs, reminds, and says _"she will
-want the tonnage"_. It never runs the room and it never answers for anyone.
+The name sets the authority. An aide writes for its person, reminds, and
+says _"she will want the tonnage"_. It never runs the room and it never
+answers for anyone.
 
 ---
 
@@ -449,7 +457,8 @@ that reaches a product.
 
 What the rule forbids, permanently:
 
-- **Deciding.** An aide holds the brief. Its person holds the decision.
+- **Deciding.** An aide holds how its person reads. Its person holds the
+  decision.
 - **Acting as them.** The aide writes in its own name, stamped `from` the
   aide. No message on the record ever bears its person's name because the
   aide wrote it — the runtime stamps `from`, so machinery enforces this.
@@ -458,8 +467,8 @@ What the rule forbids, permanently:
   something is a room being run by a proxy.
 
 The runtime implements one function: consolidate. The aide writes the
-summary of an exchange, and its instructions shape that summary to what
-its person acts on. It writes by calling a tool, and the tools it holds
+summary of an exchange, and its instructions shape that summary to how
+its person reads. It writes by calling a tool, and the tools it holds
 are the runtime's own: they reach the record and nothing else. A tool into
 a product's state is what this rule forbids, and what `defineHuman`
 refuses.
@@ -490,7 +499,7 @@ const priya = defineHuman({
   identity: 'Project manager, site office. Owns the programme.',
   aide: defineAgent({
     name: 'priya-aide',
-    identity: "Holds Priya's brief.",
+    identity: 'Holds how Priya reads.',
     model: 'anthropic/claude-sonnet-5',
     instructions: `
       Lead with the decision Priya has to make and who holds it. Give her the
@@ -548,10 +557,9 @@ range it drafts again over holds those messages too.
 beside it. Keep a fact only when the answer depends on it. Keep what
 changed while the room worked — a correction, a decision, a date that
 moved — because its person did not see it happen. Drop everything else the
-room raised, however true. The instructions on the definition say what this
-person acts on and how much they read; the runtime says what a summary is
-for. A room that asked for both in the definition would repeat itself in
-every aide.
+room raised, however true. The instructions on the definition say how this
+person reads; the runtime says what a summary is for. A room that asked for
+both in the definition would repeat itself in every aide.
 
 **What an aide is given.** A model, instructions, and one tool of the
 runtime's: `summarise({ text })`. It writes to the record and nothing
@@ -732,8 +740,8 @@ document makes loudly:
 All in-process, in vitest, on a scripted stream.
 
 The runnable proof is [`examples/site`](../examples/site), where each of
-the three people brings an aide, and what each of them acts on lives in
-that aide alone; no product's instructions carry a copy.
+the three people brings an aide, and how each of them reads lives in that
+aide alone; no product's instructions carry a copy.
 
 ---
 

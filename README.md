@@ -94,7 +94,9 @@ that wide. That comparison is the whole routing rule.
 **The aide** is an optional agent a person brings, as a field on
 `defineHuman`:
 
-- It holds their brief and their preferences.
+- It holds how its person reads: what an answer leads with, and how much
+  of one they take. What they own is their `identity`, which every seat
+  reads.
 - When their exchange closes — the room answered and went quiet — it
   writes the one message they read, and from the next activation the
   agents read that summary in place of the messages it stands for.
@@ -142,7 +144,7 @@ const priya = defineHuman({
   identity: 'Project manager. Owns the programme.',
   aide: defineAgent({
     name: 'priya-aide',
-    identity: "Holds Priya's brief.",
+    identity: 'Holds how Priya reads.',
     model: 'anthropic/claude-sonnet-4-5',
     instructions: 'Lead with the decision Priya has to make. Four sentences at most.',
   }),

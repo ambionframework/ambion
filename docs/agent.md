@@ -119,9 +119,9 @@ agent. `identity` is how the room knows them. A human has no instructions,
 no tools, and no model, because humans are never run — a `say` directed at
 one wakes nothing.
 
-One optional field goes with them: `aide`, an agent that holds their brief
-and writes the one message they read when an exchange closes. It is a seat
-at the narrow end of attention: nothing said reaches it, no message
+One optional field goes with them: `aide`, an agent that holds how its
+person reads. It writes the one message they read when an exchange closes.
+It is a seat at the narrow end of attention: nothing said reaches it, no message
 activates it, and nothing it writes wakes anybody. [`aide.md`](aide.md) is
 the contract for it.
 

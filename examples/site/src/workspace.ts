@@ -483,18 +483,20 @@ export const AGENTS = [shiftsAgent, attentive(tasksAgent), materialsAgent];
 
 /**
  * An identity is the public face: what a person owns, and what only they can
- * do. It is what every product reads to decide whom to address.
+ * do. Every product reads it to decide whom to address, and so does the aide.
  *
- * What each person will act on, and how much of it they read, is not the
- * room's business. That belongs to the person, so it lives in their aide's
- * instructions and nowhere else. Before aides, every product carried a copy of
- * every person's preferences, and each new person made every product's prompt
- * longer.
+ * How a person reads is a different fact: what an answer leads with, what to
+ * cut, and how much of one they take. That belongs to the person, so it lives
+ * in their aide's instructions and nowhere else. Before aides, every product
+ * carried a copy of it for every person, and each new person made every
+ * product's prompt longer.
+ *
+ * An aide reads the identity in its context, so nothing here repeats it.
  */
 const aide = (person: string, instructions: string) =>
 	defineAgent({
 		name: `${person}-aide`,
-		identity: `${person}'s aide. Holds their brief and writes the one message they read.`,
+		identity: `${person}'s aide. Holds how they read and writes the one message they read.`,
 		model: MODEL,
 		instructions: `
 			Lead with the decision your person has to make and who holds it. Give them
@@ -514,13 +516,11 @@ export const priya = defineHuman({
 	aide: aide(
 		'priya',
 		`
-			Priya holds the programme and the client. She acts on anything that moves a
-			milestone, needs her signature, or changes what she has already told the
-			client. Open with the date: whether it holds, and if not, the earliest one
-			that does. Name only the items she has to clear herself, with their owner
-			and their deadline; what somebody else is already handling is not her
-			message. She reads cost only when it moves a date — a price that changes
-			nothing is noise to her, so leave it out. Four sentences at most.
+			Open with the date: whether it holds, and if not, the earliest one that
+			does. Name only the items she has to clear herself, with their owner and
+			their deadline; what somebody else is already handling is not her message.
+			She reads cost only when it moves a date, so leave out a price that changes
+			nothing. Four sentences at most.
 		`,
 	),
 });
@@ -533,13 +533,11 @@ export const sam = defineHuman({
 	aide: aide(
 		'sam',
 		`
-			Sam is on the deck with a phone, and reads standing up. He acts on anything
-			that changes tomorrow morning's sequence, needs plant or people on site, or
-			asks him to accept work he cannot supervise. Open with what changes for his
-			crews and when, and name the trade, the ticket and the hour. Leave out
-			contract terms, cancellation charges and what the client was told — none of
-			it changes what he does at seven. Three sentences at most, and no lists
-			longer than the crews he has.
+			Sam reads standing up. Open with what changes for his crews and when, and
+			name the trade, the ticket and the hour. Leave out contract terms,
+			cancellation charges and what the client was told: none of it changes what
+			he does at seven. Three sentences at most, and no lists longer than the
+			crews he has.
 		`,
 	),
 });
@@ -552,12 +550,11 @@ export const dan = defineHuman({
 	aide: aide(
 		'dan',
 		`
-			Dan holds the cost. He acts on anything with a price, a cancellation charge
-			or a claim attached. Open with the money: what the change costs, what it
-			saves, and which of it he has to approve or recover. Give every figure with
-			the supplier and the term it comes from, and give no figure the answer does
-			not need. He reads sequencing only when it moves money, so state a date only
-			where it changes a number. Four sentences at most.
+			Open with the money: what the change costs, what it saves, and which of it
+			he has to approve or recover. Give every figure with the supplier and the
+			term it comes from, and give no figure the answer does not need. He reads
+			sequencing only when it moves money, so state a date only where it changes
+			a number. Four sentences at most.
 		`,
 	),
 });

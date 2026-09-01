@@ -1,6 +1,7 @@
 /**
- * The aide: a person's counterpart in a room. It holds their brief, and when
- * an exchange they opened closes, it writes the one message they read.
+ * The aide: a person's counterpart in a room. It holds how its person reads,
+ * and when an exchange they opened closes, it writes the one message they
+ * read.
  *
  * **An aide is a seat.** It is seated when its person arrives, the room
  * activates it the way it activates every other agent, its turns land in its
