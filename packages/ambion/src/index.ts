@@ -1,5 +1,5 @@
 /**
- * The Ambion runtime: five primitives, one dependency that does the rest.
+ * The Ambion runtime: five primitives, and a dependency for every other concern.
  *
  * `defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
  * gives agents hands, `defineWorkspace` names the identity and data boundary

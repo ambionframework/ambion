@@ -89,16 +89,22 @@ export function defineWorkspace(options: DefineWorkspaceOptions): WorkspaceHandl
 }
 
 /**
- * Retires a workspace for good. The backend performs the hard deletion, then
- * the handle is marked destroyed and its name comes free. A connected agent's
- * next `ctx.workspace()` resolves undefined, and its next built-in tool call
- * fails. A second call on the same handle does nothing.
+ * Retires a workspace for good. The handle is marked destroyed first, so a
+ * tool call that lands while the backend deletes resolves undefined and a
+ * second call on the same handle does nothing. The backend then performs the
+ * hard deletion, and the name comes free. A backend that fails to delete
+ * leaves the workspace live, and the caller sees the failure.
  */
 export async function destroyWorkspace(workspace: WorkspaceHandle): Promise<void> {
 	const state = stateOf(workspace);
 	if (state.destroyed) return;
-	await state.backend.destroy();
 	state.destroyed = true;
+	try {
+		await state.backend.destroy();
+	} catch (error) {
+		state.destroyed = false;
+		throw error;
+	}
 	taken.delete(state.name);
 }
 

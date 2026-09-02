@@ -141,6 +141,22 @@ describe('defineWorkspace', () => {
 		await destroyWorkspace(again);
 	});
 
+	it('stays live when the backend fails to delete, so a retry is possible', async () => {
+		let attempts = 0;
+		const flaky: WorkspaceBackend = {
+			connect: () => memoryBackend().connect(agent('nobody')),
+			destroy: async () => {
+				if (++attempts === 1) throw new Error('disk busy');
+			},
+		};
+		const site = defineWorkspace({ name: 'site-flaky', backend: flaky });
+		await expect(destroyWorkspace(site)).rejects.toThrow('disk busy');
+		expect(() => defineWorkspace({ name: 'site-flaky' })).toThrow(/already defined/);
+		await destroyWorkspace(site);
+		expect(attempts).toBe(2);
+		await destroyWorkspace(defineWorkspace({ name: 'site-flaky' }));
+	});
+
 	it('refuses a name the room could not address', () => {
 		expect(() => defineWorkspace({ name: 'Team Site' })).toThrow(/Invalid workspace name/);
 	});

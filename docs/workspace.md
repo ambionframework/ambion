@@ -134,12 +134,16 @@ import { destroyWorkspace } from '@ambionframework/ambion';
 await destroyWorkspace(teamSite);
 ```
 
-It calls `WorkspaceBackend.destroy()` (§7) once. That call performs the
-hard deletion: a directory-backed workspace's files, a real-machine
-backend's provisioned users and their homes, the in-memory default's
-filesystem. `destroyWorkspace` then marks the handle destroyed and frees
-its name. A later `defineWorkspace` call for the same name is accepted and
-starts from nothing.
+It marks the handle destroyed, then calls `WorkspaceBackend.destroy()`
+(§7) once. That call performs the hard deletion: a directory-backed
+workspace's files, a real-machine backend's provisioned users and their
+homes, the in-memory default's filesystem. The mark comes first so a tool
+call that lands while the backend deletes resolves `undefined` (§4), and a
+second `destroyWorkspace` on the same handle does nothing. A backend that
+fails to delete leaves the workspace live, and the caller sees the
+failure. Once the deletion is done, `destroyWorkspace` frees the name. A
+later `defineWorkspace` call for the same name is accepted and starts from
+nothing.
 
 **A connected agent's next `ctx.workspace()` call sees the mark.** Every
 call resolves fresh (§4), so there is no cached value to invalidate. A
