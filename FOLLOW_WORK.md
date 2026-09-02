@@ -117,7 +117,7 @@ retry separately. See [`docs/assistant.md`](docs/assistant.md) §5.
 right for a room mid-question, and a limit for anything that wants to work
 over past exchanges. A closed exchange is an owner and a range, so it is
 derivable from the record; nothing derives it today. See
-[`docs/agent.md`](docs/agent.md), _The exchange_.
+[`docs/exchange.md`](docs/exchange.md) §5.
 
 ## A second non-seat writer
 
