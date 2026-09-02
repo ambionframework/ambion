@@ -261,3 +261,32 @@ joins it.
 where `ExecutionEnv` was adopted without adopting `AgentHarness`; Pi's
 own `harness/agent-harness.ts` and `harness/types.ts`
 (`@earendil-works/pi-agent-core`) define what `AgentHarness` actually is.
+
+## Roles as collaboration patterns
+
+**What.** A seat today has one choice, attention: what wakes it. A role
+would add what it does once awake: leader, reviewer, coordinator,
+specialist. The patterns people already rely on in a meeting, written
+down once and applied to a room.
+
+**Why.** Attention decides who hears a message. It says nothing about
+who answers first, who checks an answer, or who closes a question. Today
+each agent's instructions hold that judgment alone. A role names the
+pattern in one place, and a room composes patterns the way it composes
+agents. At the limit, Ambion is the framework that defines the
+collaboration patterns people and agents work in.
+
+**What it needs deciding.**
+
+- Whether a role is a seating choice, the way attention is, or a field on
+  the agent. Attention belongs to the seating so that one agent can sit
+  differently in two rooms, and a role is probably the same kind of thing.
+- What a role changes: the seat's instructions, its attention, or the
+  order the room wakes seats in. Only the first keeps the routing rule as
+  one comparison ([`docs/agent.md`](docs/agent.md) rule 6).
+- Who assigns roles. The assistant never runs the room
+  ([`docs/assistant.md`](docs/assistant.md) §2), so assigning roles is a
+  different seat's work, or the host's.
+
+**Where.** `seated` in [`define.ts`](packages/ambion/src/define.ts), the
+roster in [`render.ts`](packages/ambion/src/render.ts).

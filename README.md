@@ -3,85 +3,55 @@
 A minimalist framework for ambient, always-on agents.
 [ambionframework.com](https://ambionframework.com)
 
-## The idea
+## The bet
 
-**Agents should wait for events.** An agent built on a request loop knows
-nothing between calls: when a deadline passes or a task completes,
-something else has to notice and invoke it. Ambion inverts the loop:
+A single agent scales until its context window holds one domain too
+many. You have felt the first step: a skill or a tool added for one task
+made another task worse. The model reads the window whole, so every
+domain in it changes how every other domain behaves. A context window
+cannot integrate an unbounded number of domains.
 
-- Agents wait in a session, and every event enters it as a message — a
-  person speaking, a person walking in, a timer firing, a task completing,
-  a system reporting.
-- A message activates exactly the agents it concerns. The rest stay at
-  rest.
-- Cost follows events. An idle session costs nothing.
+That limit sets the module boundary. A module is a unit one team can
+change without impacting other teams doing similar work, and nothing
+inside a shared window passes that test. The smallest unit that does is
+a whole agent: one context window, one domain, one team that owns it.
+The agent is the atomic module of intelligence. Subagents split the
+window and keep the boundary inside the parent.
 
-**The agent is the unit of context engineering, and the ownership
-boundary.** Building one agent is already this work: choosing its tools
-and shaping their responses, disclosing context progressively, adding
-guardrails and completion checks. The techniques hold because they serve
-one domain. In a shared context window they collide — every change lands
-in every domain's context — and the shared agent settles at a local
-maximum, where no team can improve its domain without degrading another's.
-Ambion draws the boundary at the agent:
+Once the agent is the unit, an application that keeps expanding becomes
+many agents, and the problem that matters changes. Routing sends a task
+to one agent. A complex task needs several to step in, read what the
+others did, and add their part. Every agentic application that expands
+in scope discovers this: the problem to solve is agent-to-agent
+collaboration.
 
-- One team owns one agent whole: domain, tools, instructions, model,
-  evals.
-- Inside one agent every technique serves the same domain, so the
-  techniques compose.
-- A team improves its agent on its own schedule.
+Ambion is my take on it. Agents share one record, people work in the
+room beside them, and every person brings an assistant that holds how
+they read, so nobody reads a swarm. They read one message.
 
-**Every agent that keeps growing arrives at multi-agent collaboration.
-Ambion starts there.** When one context window stops holding the work, the
-fix is subagents — a team, inside one engine, with no owners and no record
-of how it works together. Ambion makes the team first-class:
+## What ships today
 
-- Agents with owners, working in a room built for collaboration.
-- An agent reads what a colleague did and calls that colleague in by name.
-- The platform provides what they share: the session and the record. The
-  complexity lives in the composition.
+- **A runtime.** Node, in-process, tested in vitest. Pi owns the model
+  loop, tools and transcript; just-bash owns the filesystem and shell.
+- **Three event sources.** A person speaking, a person arriving or
+  leaving, and a colleague speaking. A timer, a task or a system reporting
+  is an event of the same kind, and none is delivered yet.
+- **A record that outlives a run,** through Pi's `SessionRepo`: in memory
+  by default, durable behind the same interface.
+- **A workspace** per agent: a shared filesystem and shell, in memory or
+  over a real directory.
+- **A binary** that reports its version and nothing else.
 
-## The activation rule
+## The mechanisms
 
-An agent activates in exactly one way: **a message is delivered into a
-session it belongs to.** The runtime delivers three sources today:
+Every event is a message on the record, and a message wakes the agents
+it reaches. The rules below say who wakes, who speaks, and what a person
+reads. [`demos/`](demos) holds live runs with every activation in full.
 
-- a person speaking,
-- a person arriving or leaving,
-- a colleague's directed reply.
-
-```mermaid
-flowchart LR
-    P((person)) -- "deliver · arrive · leave" --> R[(session record)]
-    R -- "activates by attention" --> A["agents, in parallel"]
-    A -- "say" --> R
-    R -- "exchange closes" --> D[assistant]
-    D -- "one summary" --> R
-```
-
-A delivery activates the idle agents in parallel; a message that arrives
-mid-activation steers the agents already at work. Each agent decides whether to
-speak, to whom, and which colleague to call in — and declining leaves no
-mark on the record. The runtime stamps who said what.
-
-## The model
-
-Five functions build a room, and four verbs run it.
-
-| Function           | What it does                                                                                                                                               |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `defineAgent`      | Makes an agent as a plain value: a name, an identity the room reads, private instructions, a model, tools. It speaks only when spoken to, and can decline. |
-| `defineHuman`      | Names a person: an identity the agents read and address. People visit a running session; an arrival is a message.                                          |
-| `defineTool`       | Declares what an agent can do beyond speaking. Pi's own tool shape, behind one import.                                                                     |
-| `defineWorkspace`  | Names the identity and data boundary an agent's tools reach into: a shared filesystem and shell, durable by its name.                                      |
-| `startSession`     | Brings up a named room from its agents and a goal.                                                                                                         |
-| `visitSession`     | Puts a person in a running room; delivering belongs to the visit.                                                                                          |
-| `readSession`      | Reads the record between runs. Nothing stands up, nothing to bill.                                                                                         |
-| `stopSession`      | Takes the room down.                                                                                                                                       |
-| `destroyWorkspace` | Retires a workspace for good, files included.                                                                                                              |
-
-**Attention** decides what wakes a seat, chosen when the agent is seated
-(`seated(agent, attention)`; a bare agent takes the default):
+**Attention decides who wakes.** Every message has a reach, every seat
+has an attention, and a seat wakes when its attention is at least as
+wide as the reach. A directed message wakes the one participant it names
+and nobody else. An idle room costs nothing.
 
 | Attention   | Shorthand   | Wakes on                                          |
 | ----------- | ----------- | ------------------------------------------------- |
@@ -90,43 +60,73 @@ Five functions build a room, and four verbs run it.
 | `broadcast` | _(default)_ | Anything said.                                    |
 | `presence`  | `attentive` | Anything said, and somebody arriving or leaving.  |
 
-Every message has a reach, and a seat wakes when its attention is at least
-that wide. That comparison is the whole routing rule.
+**Speaking is a tool, and silence is the default.** An activated agent
+holds one built-in tool, `say`. An activation that ends without calling
+it leaves no mark. The runtime sets one bar: a reply must add something
+the record does not already hold. The judgment lives in the agent's
+instructions.
 
-**The assistant** is the agent every person brings, as a required field on
-`defineHuman`:
+**A message commits against a record its author has read in full.** A
+`say` that raced past unread messages is refused at the tool boundary,
+and the refusal carries what it missed. The agent decides again: add
+something, or stand down. Every message on the record was written by
+somebody who had read everything before it.
 
-- It holds how its person reads: what an answer leads with, and how much
-  of one they take. What they own is their `identity`, which every seat
-  reads.
-- When their exchange closes — the room answered and went quiet — it
-  writes the one message they read, and from the next activation the
-  agents read that summary in place of the messages it stands for.
-- It never speaks for its person and never wakes anybody.
+**A question opens an exchange, and quiet closes it.** Agents wake and
+work it out between them. Whatever lands in between steers the agents
+already working and changes nothing. The person who asked owns the
+exchange until it closes, even after they leave. `deliver` returns when
+the question is on the record, and `settled()` resolves at the close.
+Cost is measured per exchange.
 
-**The workspace** is what an agent connects to when it is defined, as an
-optional field on `defineAgent`:
+**An assistant writes the one message its person reads.** Every person
+brings one: an agent that holds how they read, and nothing else. When
+their exchange closes with more than one agent message, it writes the
+summary they read. One answer stands as it was given. From the next
+activation the agents read the summary in place of the messages it
+stands for.
 
-- It is a container of persistent entities, durable by its own name. Today
-  that is a shared filesystem and shell; every agent that connects gets its
-  own home in it.
-- An agent that names one holds `read`, `write`, `edit` and `bash` on every
-  activation, and every custom tool reaches the same workspace through
-  `ctx.workspace()`.
-- Without a backend it lives in memory. `directoryBackend(path)` writes
-  through to a real directory.
+**Arriving and leaving are messages.** A seat at `presence` wakes on
+them, and an agent that knows the room's goal tells the person what they
+missed. The roster every agent reads says who is reading right now, so a
+reply to somebody absent is written as a note.
 
-```ts
-const teamSite = defineWorkspace({ name: 'team-site' });
+**Provenance is stamped.** The runtime writes `from` at the moment a
+message lands. Tool calls stay in an agent's own working context, and
+other participants read its `say`s only. The record is canonical, and it
+is there whenever the name is read, running or idle.
 
-const scribe = defineAgent({
-  name: 'scribe',
-  identity: 'Keeps the site log.',
-  instructions: 'Append each decision to ~/log.md, and say when you have.',
-  model: 'anthropic/claude-sonnet-5',
-  workspace: teamSite,
-});
+```mermaid
+flowchart LR
+    P((person)) -- "deliver · arrive · leave" --> R[(session record)]
+    R -- "wakes by attention" --> A["agents, in parallel"]
+    A -- "say" --> R
+    R -- "exchange closes" --> D[assistant]
+    D -- "one summary" --> R
 ```
+
+## The surface
+
+Five functions build a room, and four verbs run it.
+
+| Function           | What it does                                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `defineAgent`      | Makes an agent as a plain value: name, identity the room reads, private instructions, model, tools, workspace.   |
+| `defineHuman`      | Names a person: an identity the agents read and address, and the assistant they bring.                           |
+| `defineTool`       | Declares what an agent can do beyond speaking. Pi's own tool shape, behind one import.                           |
+| `defineWorkspace`  | Names a shared filesystem and shell that an agent's tools reach into. Durable by its name; in memory by default. |
+| `startSession`     | Brings up a named room from its agents and a goal.                                                               |
+| `visitSession`     | Puts a person in a running room. Delivering belongs to the visit.                                                |
+| `readSession`      | Reads the record between runs. Nothing stands up, nothing to bill.                                               |
+| `stopSession`      | Takes the room down.                                                                                             |
+| `destroyWorkspace` | Retires a workspace for good, files included.                                                                    |
+
+`seated(agent, attention)` chooses what wakes a seat; `passive` and
+`attentive` name the two points a room asks for most. `settled()` resolves
+when the agents stop and `quiet()` when the assistant has finished too.
+`subscribe` streams every room-level fact to the host: each message, each
+activation, each refused race, each error, and both edges of every
+exchange.
 
 The contracts: [`docs/agent.md`](docs/agent.md) for the core,
 [`docs/exchange.md`](docs/exchange.md) for the exchange,
@@ -136,7 +136,7 @@ The contracts: [`docs/agent.md`](docs/agent.md) for the core,
 
 ## Example
 
-A shared construction site. Each product is an agent; the people who run
+A shared construction site. Each product is an agent. The people who run
 the site visit, ask, and leave.
 
 ```ts
@@ -196,21 +196,13 @@ for (const message of await readSession('site').messages()) {
 }
 ```
 
-[`examples/site`](examples/site) is the full, runnable version of this
-room: three products, three people, and an assistant for each.
-
-## Runtime
-
-- **Node, in-process.** The core runs in-process and is tested in vitest.
-- **Storage behind an interface.** Sessions persist through Pi's
-  `SessionRepo`: in-memory by default, durable (Pi's `JsonlSessionRepo`, or
-  your own) with no API change.
+[`examples/site`](examples/site) is the runnable version: three products,
+three people, an assistant for each. [`demos/`](demos) holds one dated
+report per merged change, each a real run of that room.
 
 ## Install
 
-Ambion publishes to GitHub Packages, which requires a token even to read —
-a public repository does not change that.
-
+Ambion publishes to GitHub Packages, which requires a token even to read.
 Create a [classic PAT](https://github.com/settings/tokens/new?scopes=read:packages&description=Ambion)
 with `read:packages`, then add to your project's `.npmrc`:
 
@@ -246,17 +238,6 @@ pnpm check
 
 [`docs/toolchain.md`](docs/toolchain.md) specifies the build, CI and
 release setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
-
-## Design principles
-
-1. One activation mechanism.
-2. Everything is a message on a record.
-3. Agents manage their own attention; declining to engage is part of it.
-4. Many agents, each expert in one domain; the platform provides the
-   shared capabilities.
-5. What a person wants belongs to that person; their assistant holds it.
-6. Minimal surface: five functions, one activation rule, and every other
-   concern pushed into a dependency.
 
 ## License
 
