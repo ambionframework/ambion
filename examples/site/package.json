@@ -3,7 +3,7 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
-	"description": "A construction management suite where each product is an agent and several people share the workspace.",
+	"description": "A construction management suite where each product is an agent and several people share the room.",
 	"scripts": {
 		"start": "node --env-file-if-exists=.env src/main.ts",
 		"demo": "node --env-file-if-exists=.env src/demo.ts",

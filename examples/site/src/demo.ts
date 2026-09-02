@@ -1,8 +1,8 @@
 /**
- * One scripted run of the workspace, captured as JSON for a demo report.
+ * One scripted run of the room, captured as JSON for a demo report.
  *
  * The products, their APIs, the people and their assistants all live in
- * `workspace.ts`; this file only decides who arrives, what they ask, and when
+ * `room.ts`; this file only decides who arrives, what they ask, and when
  * they leave — then writes out the event timeline, every activation with its
  * outcome, what each assistant wrote, and each seat's own downstream session.
  *
@@ -27,18 +27,18 @@ import {
 	MODEL,
 	materialsState,
 	priya,
+	ROOM_NAME,
 	sam,
 	shiftsState,
 	tasksState,
-	WORKSPACE,
-} from './workspace.ts';
+} from './room.ts';
 
 const OUT = process.env.DEMO_OUT ?? 'demo-run.json';
 
 /** The commentary names the products, so it needs to know who is not one. */
 const PEOPLE = new Set([priya.name, sam.name, dan.name]);
 const repo = new InMemorySessionRepo();
-const NAME = WORKSPACE;
+const NAME = ROOM_NAME;
 const timeline: { at: string; event: SessionEvent }[] = [];
 const steps: { at: string; step: string }[] = [];
 
@@ -58,7 +58,7 @@ interface Activation {
 const activations: Activation[] = [];
 const openBySeat = new Map<string, Activation>();
 let lastSeq = 0;
-let lastFrom = '(the workspace opening)';
+let lastFrom = '(the room opening)';
 
 const session = startSession({
 	name: NAME,
@@ -144,7 +144,7 @@ const step = (s: string) => {
 	steps.push({ at: new Date().toISOString(), step: s });
 };
 
-step('priya opens the workspace to confirm the pour date for the client');
+step('priya opens the room to confirm the pour date for the client');
 const priyaVisit = await visitSession(session, priya);
 await quiescent();
 

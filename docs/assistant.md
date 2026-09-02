@@ -767,7 +767,7 @@ worth reading, and that needed a live run.
 The run is
 [`demos/2026-08-31-one-exchange-one-message.html`](../demos/2026-08-31-one-exchange-one-message.html):
 the same scenario twice, once with the assistants taken out of
-[`workspace.ts`](../examples/site/src/workspace.ts) and once as it stands.
+[`room.ts`](../examples/site/src/room.ts) and once as it stands.
 
 What it showed. Four questions opened four exchanges, and each one closed
 into one message: 19 agent messages became 4, of 94 words on average. A

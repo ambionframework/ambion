@@ -339,7 +339,7 @@ function askOf(seat: SeatSpeaking): string {
 const AUDIENCE_PARAGRAPH = [
 	`Who is reading can change while you work. An arrival or a departure reaches you as a`,
 	`[new] line mid-turn, and wakes you outright if your seat watches for it. It is never a`,
-	`request — nobody asked you anything by opening the workspace —`,
+	`request — nobody asked you anything by opening the room —`,
 	`so it never means start something new, and you`,
 	`never greet, never say that you noticed, and never summarise the record back to the`,
 	`room. Use it to aim what you were already going to say: pitch it at whoever is`,

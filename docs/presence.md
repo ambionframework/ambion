@@ -227,7 +227,7 @@ count.
 **Rule 6 decides who wakes for it, and by default that is nobody.** The
 session routes a presence message exactly like any other; each seat's
 attention says whether it is wide enough to be woken by one. A bare agent
-sits at `broadcast` and is too narrow, so opening a workspace wakes
+sits at `broadcast` and is too narrow, so opening a room wakes
 nothing. An agent seated `attentive(concierge)` sits at `presence` and
 wakes.
 
@@ -236,7 +236,7 @@ other message says what it wants; an arrival says only that somebody is
 here, so a seat that answers one is guessing at the request — and a room of
 three products all guessing hands a person three briefings they never asked
 for the moment they open it. That cost scales with how many people use the
-workspace, and stays flat with how much work there is. §8 is what actually
+room, and stays flat with how much work there is. §8 is what actually
 briefs a returning person, and it costs nothing until they ask. A seat
 whose job is to meet people is the case that wants `attentive`, and a room
 needs only that one seat at `presence`.
@@ -340,7 +340,7 @@ whoever is now reading; that is the lock working, with no exception made.
 Two things bound the rest. **Only a deliberate act writes one.** No timer
 writes to the record, so a person who leaves a tab open all afternoon costs
 the room nothing, and the message count follows the number of times
-somebody opened or closed the workspace. And **`passive`** removes the
+somebody opened or closed the room. And **`passive`** removes the
 glance and keeps the message: a seat at `named` hears no broadcast, so it
 hears no arrival either, until somebody names it, while the record keeps
 everything.
@@ -475,7 +475,7 @@ somebody missed; it reads it.
 
 The system prompt carries one paragraph about presence, and it is about
 aiming. A presence line reaching a working seat is never a request — nobody
-asked anything by opening the workspace — so it never starts an activation,
+asked anything by opening the room — so it never starts an activation,
 and
 the paragraph says so. It renders in every room, with or without a goal,
 because it is about routing.
@@ -483,7 +483,7 @@ because it is about routing.
 > Who is reading can change while you work. An arrival or a departure
 > reaches you as a [new] line mid-turn, and wakes you outright if your seat
 > watches for it. It is never a request — nobody asked you anything by
-> opening the workspace — so it never means start something new, and you
+> opening the room — so it never means start something new, and you
 > never greet, never say that you noticed, and never summarise the record
 > back to the room. Use it to aim what you were already going to say: pitch
 > it at whoever is actually reading now, say the part that needs them while

@@ -4,7 +4,7 @@
  *
  * Three products hold their own state and their own API and know nothing of
  * each other's internals: they ask on the record, the way a person does. Three
- * people share the workspace from a site office, a phone on the deck and a
+ * people share the room from a site office, a phone on the deck and a
  * cost desk, and each one brings an assistant that holds what they act on and
  * writes the one message they read.
  *
@@ -20,7 +20,7 @@ import {
 import { Type } from 'typebox';
 
 export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
-export const WORKSPACE = 'kestrel-yard-block-c';
+export const ROOM_NAME = 'kestrel-yard-block-c';
 
 export const GOAL = `
 	Deliver Block C at Kestrel Yard on programme and to spec. The Level 3 slab
@@ -435,7 +435,7 @@ const tasksAgent = defineAgent({
 	name: 'task-management',
 	identity:
 		'Task Management Agent. What is open, blocked, who owns it, when it is due, and what waits ' +
-		'on what. Watches the door: when somebody opens the workspace it checks what is blocked on them.',
+		'on what. Watches the door: when somebody opens the room it checks what is blocked on them.',
 	instructions: `
 		You speak for the task list. Read it with task_list or blocking_chain before
 		claiming anything about status — the chain is the point, most dates fail
@@ -443,7 +443,7 @@ const tasksAgent = defineAgent({
 		the plan, write it back with update_task and say which task changed and how.
 		Name the owner of a blocking link rather than the room.
 
-		Your seat watches arrivals, so you wake when somebody opens the workspace and
+		Your seat watches arrivals, so you wake when somebody opens the room and
 		nobody else does. That is not licence to brief them. Look at what is blocked
 		on the person who just arrived; say something only if the list holds an item
 		that is theirs and that nobody can move without them, and then say only that
@@ -473,7 +473,7 @@ const materialsAgent = defineAgent({
 /**
  * The task list is `attentive`, which is `presence` on the attention scale: it
  * wakes when somebody arrives or leaves.
- * The other two sit at the default, so opening the workspace does not wake them —
+ * The other two sit at the default, so opening the room does not wake them —
  * an arrival asks nothing, and three products guessing at what it wants is three
  * briefings nobody requested.
  */
