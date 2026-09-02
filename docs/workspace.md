@@ -589,6 +589,12 @@ machine, and just-bash's virtual shell is at least a wall between an
 agent's commands and its own mount. `NodeExecutionEnv` cannot serve as the
 in-memory default, because it runs against a real directory.
 
+**The in-memory default holds 128 MB.** `InMemoryFs` takes a byte limit at
+construction, and the default backend sets one (`MEMORY_LIMIT_BYTES` in
+`just-bash.ts`). A write past it throws `ENOSPC`, which reaches the tool as
+a failure that names the limit. A directory backend has no such cap: the
+disk under it is the limit.
+
 **`cleanup()` is a no-op.** `ExecutionEnv` requires the method. just-bash
 exposes no dispose or close on a `Bash` instance or on its filesystems. A
 garbage collector reclaims the memory once `destroyWorkspace` (§2) drops
@@ -663,7 +669,10 @@ already exists` on `InMemoryFs`, `file already exists` on `ReadWriteFs`),
   `err(ExecutionError('timeout'))` when its own timer fired.
   `ShellExecOptions.timeout` is per call and in seconds; just-bash offers no
   per-call limit, so the adapter builds one from an `AbortController` and a
-  timer (`Deadline` in `bash-env.ts`).
+  timer (`Deadline` in `bash-env.ts`). A call that names no timeout gets 30
+  seconds (`DEFAULT_TIMEOUT_SECONDS`). Pi's `bash` tool passes the model's
+  `timeout` and nothing when the model gives none, so a command that never
+  ends cannot hold an activation open.
 - **Implement `listDir` as one `readdir` plus one `lstat` per entry.** Pi's
   `FileInfo` carries `size` and `mtimeMs`. just-bash's optional
   `readdirWithFileTypes` returns names and kinds only, so the per-entry

@@ -8,8 +8,10 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from '@earendil-works/pi-ai';
+import { Bash, InMemoryFs } from 'just-bash';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
 import {
 	type AgentDefinition,
 	defineAgent,
@@ -26,7 +28,7 @@ import {
 	visitSession,
 	type WorkspaceBackend,
 } from '../src/index.ts';
-import { memoryBackend } from '../src/just-bash.ts';
+import { MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
 
 // -- scripted model ----------------------------------------------------------
 
@@ -466,6 +468,35 @@ describe('the just-bash adapter', () => {
 			ok: false,
 			error: { code: 'timeout' },
 		});
+	});
+
+	it('gives a command that names no timeout the default, and stops it there', async () => {
+		expect(DEFAULT_TIMEOUT_SECONDS).toBe(30);
+		const fs = new InMemoryFs();
+		const short = new BashEnv(new Bash({ fs, cwd: '/' }), '/', { timeout: 0.05 });
+		expect(await short.exec('sleep 5')).toMatchObject({ ok: false, error: { code: 'timeout' } });
+		expect(await short.exec('echo quick')).toMatchObject({
+			ok: true,
+			value: { stdout: 'quick\n' },
+		});
+		// A caller's own timeout wins over the default.
+		expect(await short.exec('sleep 0.1; echo late', { timeout: 1 })).toMatchObject({
+			ok: true,
+			value: { stdout: 'late\n' },
+		});
+	});
+
+	it('holds 128 MB in memory, and refuses the write that goes past it', async () => {
+		expect(MEMORY_LIMIT_BYTES).toBe(128 * 1024 * 1024);
+		const { env: alpha } = await env();
+		const half = new Uint8Array(MEMORY_LIMIT_BYTES / 2);
+		expect(await alpha.writeFile('first', half)).toEqual({ ok: true, value: undefined });
+		// The second half does not fit beside the layout `Bash` seeds into a fresh filesystem.
+		const over = await alpha.writeFile('second', half);
+		expect(over.ok).toBe(false);
+		expect(!over.ok && over.error.message).toMatch(/ENOSPC/);
+		await alpha.remove('first');
+		expect(await alpha.writeFile('second', half)).toEqual({ ok: true, value: undefined });
 	});
 
 	it('creates /tmp before a temp file needs it, and appends to it', async () => {

@@ -55,16 +55,24 @@ function toFileError(error: unknown, path: string): FileError {
 
 const TMP = '/tmp';
 
+/** What a command gets when its caller names no timeout. Pi's `bash` tool names none by default. */
+export const DEFAULT_TIMEOUT_SECONDS = 30;
+
 const randomName = () => randomBytes(6).toString('hex');
 
 export class BashEnv implements ExecutionEnv {
 	readonly cwd: string;
 
+	/** The timeout, in seconds, for a command whose caller names none. */
+	private readonly timeout: number;
+
 	constructor(
 		private readonly bash: Bash,
 		private readonly home: string,
+		options: { timeout?: number } = {},
 	) {
 		this.cwd = home;
+		this.timeout = options.timeout ?? DEFAULT_TIMEOUT_SECONDS;
 	}
 
 	/** Run one filesystem call, and turn whatever it throws into a `FileError`. */
@@ -212,13 +220,15 @@ export class BashEnv implements ExecutionEnv {
 	 * once, and then resolves: Pi's `bash` tool stops accepting output on the
 	 * line after `exec` returns. The deadline is a timer on an abort
 	 * controller of the adapter's own, so exit 124 from the caller's signal
-	 * and exit 124 from the timer come back as different errors.
+	 * and exit 124 from the timer come back as different errors. A call that
+	 * names no timeout gets the adapter's default, so a command that never
+	 * ends cannot hold an activation open.
 	 */
 	async exec(
 		command: string,
 		options: ShellExecOptions = {},
 	): Promise<Result<{ stdout: string; stderr: string; exitCode: number }, ExecutionError>> {
-		const deadline = new Deadline(options.abortSignal, options.timeout);
+		const deadline = new Deadline(options.abortSignal, options.timeout ?? this.timeout);
 		try {
 			const result = await this.bash.exec(command, {
 				cwd: options.cwd === undefined ? undefined : this.resolve(options.cwd),

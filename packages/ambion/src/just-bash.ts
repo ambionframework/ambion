@@ -31,12 +31,17 @@ async function connectOver(fs: IFileSystem, agent: AgentDefinition): Promise<Bas
 	return new BashEnv(new Bash({ fs, cwd: home, env: { HOME: home } }), home);
 }
 
+/** How much the in-memory default holds, in bytes. A write past it fails with `ENOSPC`. */
+export const MEMORY_LIMIT_BYTES = 128 * 1024 * 1024;
+
+const inMemory = () => new InMemoryFs(undefined, { maxTotalBytes: MEMORY_LIMIT_BYTES });
+
 /** The default: an in-memory filesystem that lives as long as the handle. */
 export function memoryBackend(): WorkspaceBackend {
-	let fs: InMemoryFs | undefined = new InMemoryFs();
+	let fs: InMemoryFs | undefined = inMemory();
 	return {
 		connect(agent) {
-			if (fs === undefined) fs = new InMemoryFs();
+			if (fs === undefined) fs = inMemory();
 			return connectOver(fs, agent);
 		},
 		async destroy() {
