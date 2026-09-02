@@ -36,7 +36,7 @@ Ambion starts there.** When one context window stops holding the work, the
 fix is subagents — a team, inside one engine, with no owners and no record
 of how it works together. Ambion makes the team first-class:
 
-- Agents with owners, working in a workspace built for collaboration.
+- Agents with owners, working in a room built for collaboration.
 - An agent reads what a colleague did and calls that colleague in by name.
 - The platform provides what they share: the session and the record. The
   complexity lives in the composition.

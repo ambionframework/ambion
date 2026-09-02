@@ -1,5 +1,5 @@
 /**
- * The workspace, open in your terminal.
+ * The room, open in your terminal.
  *
  * Three products wait in it. You visit as one of three people, and can open a
  * second and third visit to watch presence work with more than one of you in
@@ -22,9 +22,9 @@ import {
 	type Visit,
 	visitSession,
 } from '@ambionframework/ambion';
-import { AGENTS, apiLog, GOAL, MODEL, PEOPLE, WORKSPACE } from './workspace.ts';
+import { AGENTS, apiLog, GOAL, MODEL, PEOPLE, ROOM_NAME } from './room.ts';
 
-const session = startSession({ name: WORKSPACE, goal: GOAL, agents: AGENTS });
+const session = startSession({ name: ROOM_NAME, goal: GOAL, agents: AGENTS });
 
 /** Who is in the room, by name. A person may be here more than once. */
 const visits = new Map<string, Visit>();
@@ -97,7 +97,7 @@ session.subscribe((event: SessionEvent) => {
 		// the working between these two into a thinking state; a terminal cannot,
 		// so it draws the boundary instead.
 		case 'exchange_opened':
-			show(`${dim}— ${event.exchange.owner} asked; the workspace is working —${reset}`);
+			show(`${dim}— ${event.exchange.owner} asked; the room is working —${reset}`);
 			break;
 		case 'exchange_closed':
 			show(
@@ -106,7 +106,7 @@ session.subscribe((event: SessionEvent) => {
 			break;
 		// Quiet, not settled: settled is the seats alone, and an assistant writes after it.
 		case 'quiet':
-			show(`${dim}— the workspace is quiet —${reset}`);
+			show(`${dim}— the room is quiet —${reset}`);
 			break;
 		default:
 			break;
@@ -128,7 +128,7 @@ function help(): void {
 			'  /api              every call the products made into their own data',
 			'  /summaries        what each assistant wrote, and the range it stands for',
 			'  /abort            cancel every activation in flight',
-			'  /quit             leave, stop the workspace, and exit',
+			'  /quit             leave, stop the room, and exit',
 			'',
 			'  The task list watches the door. Try /join dan and see whether it has',
 			'  anything of his; then ask "can I promise Thursday for the pour?"',
@@ -249,7 +249,7 @@ const commands = new Map<string, (arg: string) => void | Promise<void>>(
 async function say(input: string): Promise<void> {
 	const visit = visits.get(speaking);
 	if (!visit)
-		return console.log(`${red}${speaking} is not in the workspace — /join ${speaking}${reset}`);
+		return console.log(`${red}${speaking} is not in the room — /join ${speaking}${reset}`);
 	const directed = /^@([a-z-]+)\s+(.+)$/.exec(input);
 	if (!directed) return visit.deliver({ text: input });
 	const [, name, text] = directed;
@@ -271,14 +271,14 @@ async function handle(line: string): Promise<void> {
 	}
 }
 
-console.log(`\n${WORKSPACE} is running. Model: ${MODEL} (set AMBION_MODEL to change).`);
+console.log(`\n${ROOM_NAME} is running. Model: ${MODEL} (set AMBION_MODEL to change).`);
 if (!process.env.ANTHROPIC_API_KEY) {
 	console.log(`${red}ANTHROPIC_API_KEY is not set — the products will fail to answer.${reset}`);
 }
 console.log(
-	`${dim}Reading it takes no run: readSession('${WORKSPACE}') works from anywhere.${reset}`,
+	`${dim}Reading it takes no run: readSession('${ROOM_NAME}') works from anywhere.${reset}`,
 );
-void readSession(WORKSPACE);
+void readSession(ROOM_NAME);
 help();
 await join('priya');
 rl.setPrompt(`${speaking} › `);

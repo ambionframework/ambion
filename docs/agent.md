@@ -481,7 +481,7 @@ Three sentences hold the whole rule.
 **A person's question opens one, when no exchange is open.** Nothing else
 does. An agent speaking into a quiet room opens nothing, because a room
 that talks to itself is answering nobody; arriving and leaving open
-nothing, because nobody asked anything by opening a workspace. The clause
+nothing, because nobody asked anything by opening a room. The clause
 is written on the exchange itself, for the case where the room is busy and
 has no owner: somebody arrives, the seat that watches the door wakes, and a
 question lands on top of work nobody asked for. That question still owns

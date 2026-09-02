@@ -2,7 +2,7 @@
 
 A construction management suite where each product is an agent: a time
 tracker, a task list and a materials tracker. Three people share the
-workspace — a project manager in the site office, a foreman on the deck with
+room — a project manager in the site office, a foreman on the deck with
 a phone, and a quantity surveyor at a cost desk. Each of them brings an assistant.
 
 Each product holds its own state and its own API and knows nothing of the
@@ -20,7 +20,7 @@ defaults to `anthropic/claude-sonnet-5`.
 
 ## What to look for
 
-**Opening the workspace wakes one seat, not all of them.** Each seat is seated
+**Opening the room wakes one seat, not all of them.** Each seat is seated
 at one point of an attention scale — the widest kind of message that wakes it.
 The task list is `attentive` (`presence`), so it wakes when somebody arrives
 and checks what is blocked on them. The other two sit at the default and do
@@ -48,7 +48,7 @@ their own data. The task list rewrites due dates and the materials tracker
 moves deliveries because the room decided something, not because anyone
 typed an edit.
 
-**A question opens an exchange.** `— priya asked; the workspace is working —`
+**A question opens an exchange.** `— priya asked; the room is working —`
 marks it, and `— the exchange is over (3–7) —` marks the moment the seats stop.
 That is the exchange, and it is the room's own: it opens the same way whoever
 asks, and a client that could re-render would fold the working between those
@@ -65,7 +65,7 @@ left in the voice that gave it.
 as `sam`, then as `dan`, and compare the three. Priya's opens with the date,
 Sam's with what changes for his crews at seven, Dan's with the money. Nothing
 in the products knows any of that — the preferences live in the assistants, in
-`workspace.ts`, and each person's live in theirs alone.
+`room.ts`, and each person's live in theirs alone.
 
 **A summarised range leaves the products' context.** After a summary lands,
 ask a follow-up whose answer was inside the range it stands for. The products
@@ -74,11 +74,11 @@ discussion and the products hold the state.
 
 ## The files
 
-| File           | What                                                                             |
-| -------------- | -------------------------------------------------------------------------------- |
-| `workspace.ts` | The products, their APIs and their state; the people, their assistants, the goal |
-| `main.ts`      | The workspace open in your terminal                                              |
-| `demo.ts`      | One scripted run, written out as JSON for a report                               |
+| File      | What                                                                             |
+| --------- | -------------------------------------------------------------------------------- |
+| `room.ts` | The products, their APIs and their state; the people, their assistants, the goal |
+| `main.ts` | The room open in your terminal                                                   |
+| `demo.ts` | One scripted run, written out as JSON for a report                               |
 
 The contracts are [`docs/agent.md`](../../docs/agent.md),
 [`docs/presence.md`](../../docs/presence.md) and

@@ -19,6 +19,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `docs/agent.md`     | Design contract for the core — read before changing the runtime                |
 | `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                 |
 | `docs/assistant.md` | Design contract for the assistant, a person's counterpart in a room            |
+| `docs/workspace.md` | Design contract for the workspace, ahead of the code — read before it lands    |
 | `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs |
 | `examples/site`     | Runnable example                                                               |
 | `demos/`            | One dated report per merged change — regenerate on the branch, then leave it   |
@@ -38,16 +39,17 @@ a change for one domain lands in every domain's context, and a monolithic
 agent settles at a local maximum, where no team can improve its domain without
 degrading another's. Even the monolith arrives there (subagents); Ambion's
 agents are first-class, each with an owner. The platform provides the shared
-capabilities. A workspace built for collaboration holds the agents.
+capabilities. A room built for collaboration holds the agents.
 
 Agents are ambient: they wait, and events activate them. A person speaking is
 one event source; timers, tasks and other systems are event sources of the
 same kind, and every one enters as a message. Keep both framings in
 `README.md` and `docs/`.
 
-The session is that workspace. `README.md` and `docs/` document what is
-implemented. Do not write about unbuilt concepts (workspaces, channels, the
-shared filesystem, deployment targets) there; deferred work goes in
+`README.md` and `docs/` document what is implemented. `docs/workspace.md` is
+the one exception: it specifies the workspace ahead of the code, because an
+agent already needs the boundary it draws. Do not write about other
+unbuilt concepts (channels, deployment targets) there; deferred work goes in
 `FOLLOW_WORK.md`.
 
 ## Commands

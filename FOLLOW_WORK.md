@@ -100,7 +100,7 @@ An assistant is a seat, so it is in the roster every seat reads: measured at abo
 480 characters of a seat context averaging 3,800 in the example — 13%, spent
 describing seats that today cannot be addressed. Most of it is the example
 repeating a verbose `identity` three times, so the first fix is in
-[`examples/site/src/workspace.ts`](examples/site/src/workspace.ts) rather than
+[`examples/site/src/room.ts`](examples/site/src/room.ts) rather than
 in the runtime. Worth re-measuring once assistants speak.
 
 ## A test for the owed-summary merge
@@ -126,3 +126,86 @@ and `activationEnded`, held by `Assistants`. If a room-level compactor ever arri
 ([`docs/assistant.md`](docs/assistant.md) §16 forbids it by name today), it wants the
 same scheduler. Two writers is the point at which it should become its own
 thing rather than three fields on the session.
+
+## A credentials boundary for tool calls leaving the workspace
+
+**What.** [`docs/workspace.md`](docs/workspace.md) §1 draws the workspace's
+boundary at the sandbox: what a tool can do inside it, through the runtime's
+own construction of each `Workspace` value. A tool call that reaches
+outside — an external API, a secret, another service — needs a second
+boundary, sketched as a credentials provider paired with a sidecar proxy:
+something that injects a credential or issues a short-lived token per call,
+so a workspace's own trust (it provisions an agent's identity and checks
+nothing beyond its name, §7) never has to extend to what a tool reaches
+beyond it.
+
+**Why.** Today a tool's `execute` function reaches whatever a host wires it
+to (`docs/agent.md` §3), with no distinction between a call that stays
+local and one that leaves. A workspace's filesystem boundary
+([`docs/workspace.md`](docs/workspace.md) §1, §8) has no answer for a tool
+that calls out to a real API, and a real deployment needs one before it
+hands an agent anything with network access.
+
+**What it needs deciding.**
+
+- Whether this is a workspace concern (a third kind of persistent entity,
+  under [`docs/workspace.md`](docs/workspace.md) §1's model) or a separate
+  primitive entirely.
+- What a sidecar proxy actually mediates: a network path every outbound
+  call is forced through, or a narrower set of tools the workspace marks
+  as external.
+- Whether a token is minted per call, per activation, or per agent, and
+  what a "short-lived" window actually is.
+- How this interacts with `ToolContext`
+  ([`docs/workspace.md`](docs/workspace.md) §4) and `defineTool`'s own
+  `execute` shape (`docs/agent.md` §3), neither of which takes any notion
+  of a credential today.
+
+**Where.** [`docs/workspace.md`](docs/workspace.md) §1 names the boundary
+and scopes it out to this entry; `ToolContext` in
+[`docs/workspace.md`](docs/workspace.md) §4 is the most natural place for
+a credential to reach a tool call now, alongside `defineTool`'s `execute`
+in [`docs/agent.md`](docs/agent.md) §3.
+
+## Whether Agent or AgentHarness is Ambion's foundation
+
+**What.** Ambion's runtime imports Pi's lower-level `Agent` class
+(`activation.ts`, `seat.ts`), not `AgentHarness`
+(`@earendil-works/pi-agent-core`'s `harness/agent-harness.ts`) — a
+heavier engine Pi ships beside it, with its own session tree, lanes,
+compaction, and tree navigation. Nobody chose `Agent` over `AgentHarness`
+on purpose; it is what the runtime already used before this question was
+ever asked.
+
+**Why.** [`docs/workspace.md`](docs/workspace.md) §6 reuses part of what
+the harness package exports — `Workspace` holds a plain `ExecutionEnv`
+as its own `env` property — while keeping `Workspace` itself and
+`ToolContext` (§4) outside anything `AgentHarness` provides. That split
+holds today because `Agent` and `AgentHarness` overlap only at the edges.
+`AgentHarness` also ships its own tool-context mechanism,
+`AgentHarnessToolContextSource`, resolved once per turn and handed to an
+`AgentHarnessTool`'s `execute`; `ToolContext` covers the same ground at a
+narrower scope, resolved once per tool call against `defineTool`'s own
+shape. A workspace is the first concept this project has built that sits
+this close to ground `AgentHarness` already covers. A concept that sits
+closer still is a real possibility once reminders and tasks
+(`docs/workspace.md` §11) or anything with its own turn-scoped state
+joins it.
+
+**What it needs deciding.**
+
+- Whether `Agent` stays the right foundation once a second and a third
+  workspace-adjacent concept land, or whether `AgentHarness` already
+  solves problems this project would otherwise rebuild piece by piece.
+- What adopting `AgentHarness` would cost: its own session model
+  (`SessionTree`, lanes), compaction, and tree navigation, none of which
+  [`agent.md`](docs/agent.md) or `session.ts` has a use for today.
+- Whether `ToolContext`'s own resolution (`docs/workspace.md` §4) should
+  become Ambion's own provider for `AgentHarnessOptions.toolContext`, if
+  `Agent` is ever replaced by `AgentHarness`.
+
+**Where.** `packages/ambion/src/activation.ts` and `seat.ts` hold today's
+`Agent` imports; [`docs/workspace.md`](docs/workspace.md) §4 and §6 are
+where `ExecutionEnv` was adopted without adopting `AgentHarness`; Pi's
+own `harness/agent-harness.ts` and `harness/types.ts`
+(`@earendil-works/pi-agent-core`) define what `AgentHarness` actually is.
