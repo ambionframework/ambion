@@ -24,11 +24,11 @@
 		"publish:packages": "node scripts/publish.mjs"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.5.10",
+		"@biomejs/biome": "^2.5.11",
 		"@types/node": "^26.2.0",
-		"knip": "^6.32.2",
+		"knip": "^6.33.0",
 		"prettier": "^3.9.6",
-		"turbo": "^2.10.11",
+		"turbo": "^2.10.12",
 		"typescript": "^7.0.2"
 	}
 }
