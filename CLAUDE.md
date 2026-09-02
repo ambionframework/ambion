@@ -12,18 +12,19 @@ quiet.
 
 pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 
-| Path                | What                                                                           |
-| ------------------- | ------------------------------------------------------------------------------ |
-| `packages/ambion`   | The runtime. One file per concern; `session.ts` is the room that composes them |
-| `packages/cli`      | The `ambion` binary                                                            |
-| `docs/agent.md`     | Design contract for the core — read before changing the runtime                |
-| `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                 |
-| `docs/assistant.md` | Design contract for the assistant, a person's counterpart in a room            |
-| `docs/workspace.md` | Design contract for the workspace, ahead of the code — read before it lands    |
-| `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs |
-| `examples/site`     | Runnable example                                                               |
-| `demos/`            | One dated report per merged change — regenerate on the branch, then leave it   |
-| `FOLLOW_WORK.md`    | Work a branch decided not to do, and why it is worth doing                     |
+| Path                | What                                                                             |
+| ------------------- | -------------------------------------------------------------------------------- |
+| `packages/ambion`   | The runtime. One file per concern; `session.ts` is the room that composes them   |
+| `packages/cli`      | The `ambion` binary                                                              |
+| `docs/agent.md`     | Design contract for the core — read before changing the runtime                  |
+| `docs/exchange.md`  | Design contract for the exchange, the room's unit of work — read with `agent.md` |
+| `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                   |
+| `docs/assistant.md` | Design contract for the assistant, a person's counterpart in a room              |
+| `docs/workspace.md` | Design contract for the workspace, ahead of the code — read before it lands      |
+| `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs   |
+| `examples/site`     | Runnable example                                                                 |
+| `demos/`            | One dated report per merged change — regenerate on the branch, then leave it     |
+| `FOLLOW_WORK.md`    | Work a branch decided not to do, and why it is worth doing                       |
 
 ## Thesis
 
