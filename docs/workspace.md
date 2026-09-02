@@ -558,6 +558,14 @@ creates parent directories, but `ls ~` before the first write fails with
 `ENOENT`. `connect`'s `mkdir` (§7) makes the home exist on both. Neither
 filesystem starts with `/tmp` (§9).
 
+**`/dev/null` is a plain file on both filesystems.** just-bash seeds an
+empty `/dev/null` into a fresh `InMemoryFs` and treats it as a file: a
+command that redirects into it appends to it (probed: `echo hi >/dev/null`
+leaves three bytes there). `ReadWriteFs` starts without `/dev`, so the same
+redirect creates `dev/null` under the root, on disk. A directory backend
+therefore holds whatever agents discarded, and [`FOLLOW_WORK.md`](../FOLLOW_WORK.md)
+tracks it.
+
 **`env.cwd` is the agent's home for the life of the `env`, and nothing
 tracks it further.** Pi's `FileSystem` declares `cwd` as a plain property,
 and the adapter (§9) writes it once, at construction. Every `exec` runs

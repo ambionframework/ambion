@@ -39,6 +39,9 @@ export const GOAL = `
 	the materials position and the labour plan consistent with what the site
 	actually decides. The site drive holds the documents the site works to:
 	the pour plan, the forecast, building control's rules and the site diary.
+	On site, today is Tue 25 Aug. The products, the drive and the plan all
+	keep the site's calendar; the room's clock is not the site's date, and a
+	record dated this week is current.
 `;
 
 // -- the site drive ----------------------------------------------------------

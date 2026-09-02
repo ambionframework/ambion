@@ -167,6 +167,29 @@ and scopes it out to this entry; `ToolContext` in
 a credential to reach a tool call now, alongside `defineTool`'s `execute`
 in [`docs/agent.md`](docs/agent.md) §3.
 
+## `/dev/null` on the just-bash backends is a file
+
+**What.** just-bash treats `/dev/null` as a plain file. A command that
+redirects into it appends to it, and on `directoryBackend` the redirect
+creates `dev/null` under the root, on disk
+([`docs/workspace.md`](docs/workspace.md) §8). The first live run of the
+example left one there: a product wrote `cat … 2>/dev/null`, and the drive
+gained a file.
+
+**Why.** An agent that discards output expects it gone. A file that grows
+with every redirect is a slow leak in memory and a surprise on disk, and
+the `bash` tool's own description promises a Unix shell.
+
+**What it needs deciding.**
+
+- Whether the adapter intercepts `/dev/null` (a `MountableFs` over the
+  workspace's filesystem with a discarding mount at `/dev`), or whether the
+  fix belongs upstream in just-bash.
+- Whether `connect` should seed `/dev` into a `ReadWriteFs` the way just-bash
+  seeds it into an `InMemoryFs`, so the two backends at least agree.
+
+**Where.** `connectOver` in [`just-bash.ts`](packages/ambion/src/just-bash.ts).
+
 ## A backend on a real machine
 
 **What.** A `WorkspaceBackend` whose `connect` creates a real OS user when

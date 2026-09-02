@@ -28,6 +28,7 @@ showed.
 | 2026-08-28 | [Three Apps, One Site](2026-08-28-three-apps-one-site.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/e170799d-5176-491f-a887-9bde86f0ac02) |
 | 2026-08-31 | [One Exchange, One Message](2026-08-31-one-exchange-one-message.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/f73ba11a-3189-4313-9b97-b61d89bd7089) |
 | 2026-08-31 | [How Each Person Reads](2026-08-31-how-each-person-reads.html)     | sonnet-5   | [artifact](https://claude.ai/code/artifact/203189de-f717-4e0e-9793-b991947349de) |
+| 2026-09-02 | [The Site Drive](2026-09-02-the-site-drive.html)                     | sonnet-5   | [artifact](https://claude.ai/code/artifact/bb026bd2-1ce3-4aeb-b496-68416695bb63) |
 
 ## What each run changed
 
@@ -103,3 +104,25 @@ every person. It read 7,275 characters into its last seat against this run's
 4,940, so this time the room with aides in it read less for saying more. The run
 before this one came out level on that row. One run does not settle that, and
 the report says which rows are structural and which move with the model.
+
+**The Site Drive.** The run that the workspace was built against. The same
+suite and the same three people, and the three products now share one
+workspace: the site drive, a directory holding the method statement for the
+pour, the week's forecast, building control's booking rules and the site
+diary. Each product is told which document to read before it speaks and
+appends one line to the diary when it changes its own state. The pour moved
+from Thursday to Friday on two facts that live only on the drive: the plan's
+own rain limit against the forecast, and building control's 48-hour notice
+against a Wednesday rebar delivery. The products made 15 calls on the drive,
+6 reads and 9 diary lines, beside 47 calls into their own APIs, and the
+materials tracker moved the concrete order free of charge.
+
+Two runs came before it, and the report records what each one changed. The
+first made four drive calls: the task list never opened building control's
+rules because its own task note still carried the rule, so the note now
+points at the file, and each product's instruction to read before it speaks
+is imperative. The second run read every record as a week stale, because the
+runtime stamps the real date into every context and the scenario is set on
+25 August; the goal now names the site's calendar. One artefact remains: a
+`2>/dev/null` created `dev/null` on the drive, because just-bash treats that
+path as a plain file. `FOLLOW_WORK.md` holds it.
