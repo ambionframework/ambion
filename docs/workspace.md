@@ -15,8 +15,8 @@ One sentence:
 > **A workspace is the identity and data boundary an agent connects to when
 > it is defined — a container of persistent entities, each reachable from a
 > tool through a context object and built fresh at the moment the tool
-> runs: a shared filesystem and computer today, and reminders and tasks
-> once they exist.**
+> runs: a shared filesystem and computer, the reminders an agent sets for
+> itself, and tasks once they exist.**
 
 The facts stated here about `just-bash` (3.4.2) and
 `@earendil-works/pi-agent-core` (0.84.3) come from probe scripts run
@@ -52,8 +52,8 @@ injecting a credential or issuing a short-lived token per call.
 leaves it out.
 
 **A workspace is a container of persistent entities, each of a different
-kind.** The filesystem and shell (§8) are one kind. Reminders and tasks
-(§11) are a second, once they exist. Nothing bounds the set to these two.
+kind.** The filesystem and shell (§8) are one kind. Reminders (§11) are a
+second. Tasks are not built. Nothing bounds the set to these kinds.
 Every kind reaches a tool the same way, through `ToolContext` (§4), and
 every kind is held under the workspace's own name for as long as the
 workspace lasts.
@@ -61,9 +61,8 @@ workspace lasts.
 **A workspace outlives any agent or session that uses it**, the same way a
 session's record outlives any one run (`agent.md` §5). It is durable by its
 own name (§2). An agent defined later can connect to a workspace an earlier
-agent used and find what is there. A reminder, once §11 exists, attaches to
-the session where the work happens, so the workspace that holds it has to
-survive past that session.
+agent used and find what is there. A reminder (§11) attaches to the session
+it was set in, so the workspace that holds it survives past that session.
 
 **A session connects to no workspace of its own.** A workspace is optional
 per agent (§3). One room may seat agents that connect to different
@@ -174,12 +173,12 @@ absent for an agent that reasons and nothing else.
 connects to no workspace, the same way a human carries no tools (`agent.md`
 §4). A workspace matters once an agent has something to reach through it.
 
-**`defineAgent` refuses a `tools` entry named `read`, `write`, `edit`, or
-`bash` for an agent that names a workspace.** Those four names are the
-built-in set (§5). A custom tool with one of those names would fight the
+**`defineAgent` refuses a `tools` entry named `read`, `write`, `edit`,
+`bash`, `remind` or `cancel_reminder` for an agent that names a
+workspace.** Those six names are the built-in set (§5, §11). A custom tool with one of those names would fight the
 built-in for the same name on the model's menu, or replace it silently.
 `defineAgent` has the `tools` array and the `workspace` argument in hand,
-so it makes the check itself. An agent with no workspace keeps all four
+so it makes the check itself. An agent with no workspace keeps all six
 names free.
 
 **`defineHuman` refuses an assistant that names a workspace**, the same way
@@ -243,7 +242,7 @@ does three things, in order:
 1. The agent has no `workspace` field: resolve `undefined`.
 2. The handle is destroyed (§2): resolve `undefined`.
 3. Otherwise call `WorkspaceBackend.connect(agent, ctx.signal)` (§7) and
-   resolve `{ name, env }` (§6).
+   resolve `{ name, env, reminders }` (§6).
 
 Nothing is cached between calls. The `env` a tool receives is a new one
 every time — a new `Bash` instance, for the in-memory default. §5's
@@ -315,9 +314,10 @@ exports four tool factories — `createReadTool`, `createWriteTool`,
 `createEditTool`, `createBashTool` — each returning an `AgentHarnessTool`
 named `read`, `write`, `edit`, and `bash`. Called with no options, each
 gives Pi's tool unmodified: the same parameter schema, description, and
-behavior Pi's harness gives a model. A workspace-connected agent gets
-exactly these four. Pi's `harness/tools/index.ts` exports no fifth tool, so
-this project invents none.
+behavior Pi's harness gives a model. A workspace-connected agent gets these
+four, and two of Ambion's own beside them: `remind` and `cancel_reminder`,
+which reach the reminders the workspace holds for that agent
+([`reminder.md`](reminder.md) §2).
 
 ```ts
 import {
@@ -393,9 +393,9 @@ built to take. A hand-written Pi-native tool has no such argument.
 **An agent with no workspace gets none of the built-in tools.** They bind
 per activation, conditioned on the agent's `workspace` field.
 
-**Connecting means all four; there is no opt-out.** An agent whose
-`defineAgent` names a workspace gets `read`, `write`, `edit`, and `bash` on
-every activation. An agent that wants filesystem access only through
+**Connecting means all six; there is no opt-out.** An agent whose
+`defineAgent` names a workspace gets `read`, `write`, `edit`, `bash`,
+`remind` and `cancel_reminder` on every activation. An agent that wants filesystem access only through
 narrower custom tools has no way to name a workspace and decline the four.
 §12 lists this as open.
 
@@ -409,6 +409,7 @@ import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 interface Workspace {
   readonly name: string;
   readonly env: ExecutionEnv;
+  readonly reminders: Reminders;
 }
 ```
 
@@ -424,7 +425,8 @@ duplicates a dependency a design failure, so `Workspace` reuses the
 contract as it stands.
 
 **`env` is one property so a later kind of entity gets a property beside
-it.** Reminders and tasks (§11) join as a second property. `ExecutionEnv`
+it.** `reminders` is that second property ([`reminder.md`](reminder.md)
+§7), and tasks would be a third. `ExecutionEnv`
 owns names such as `remove`, `exists`, `exec`, `cleanup`, and `cwd`. A
 `Workspace` that spread those members across its own surface would leave a
 reminder API to avoid every one of them. `name` sits beside `env` because
@@ -446,23 +448,27 @@ import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 interface WorkspaceBackend {
   connect(agent: AgentDefinition, signal?: AbortSignal): Promise<ExecutionEnv>;
   destroy(): Promise<void>;
+  readonly reminders: ReminderStore;
 }
 ```
 
-**A `WorkspaceBackend` is a plain object with two functions; nothing about
-it asks for a class.** TypeScript checks the shape structurally, so a
-`directoryBackend(path)` call returning `{ connect, destroy }` satisfies
-`WorkspaceBackend` the same way a hand-written object literal would. Both
-functions close over whatever the factory captured — a path, a naming
-convention for OS users — which is the only state a backend needs, since
-`connect` remembers nothing between its own calls (below).
+**A `WorkspaceBackend` is a plain object with two functions and a store;
+nothing about it asks for a class.** TypeScript checks the shape
+structurally, so a `directoryBackend(path)` call returning
+`{ connect, destroy, reminders }` satisfies `WorkspaceBackend` the same way
+a hand-written object literal would. The functions close over whatever the
+factory captured — a path, a naming convention for OS users — which is the
+only state a backend needs, since `connect` remembers nothing between its
+own calls (below).
 
-**Two jobs live here: building one agent's environment, and hard
-deletion.** `connect(agent)` returns the `ExecutionEnv` that becomes
-`Workspace.env` (§6), already rooted at that agent's own home and already
-carrying whatever identity the backend gives an agent. `destroy()` deletes
-everything the backend holds under the workspace's name; only the backend
-knows how (§2).
+**Three jobs live here: building one agent's environment, holding the
+reminders, and hard deletion.** `connect(agent)` returns the `ExecutionEnv`
+that becomes `Workspace.env` (§6), already rooted at that agent's own home
+and already carrying whatever identity the backend gives an agent.
+`reminders` is the `ReminderStore` [`reminder.md`](reminder.md) §3
+specifies: three functions, `list`, `put` and `remove`. `destroy()` deletes
+everything the backend holds under the workspace's name, reminders
+included; only the backend knows how (§2).
 
 **`connect` builds the whole environment; the runtime builds none of it.**
 A shape that handed the runtime a shared filesystem root and left it to
@@ -600,9 +606,13 @@ exposes no dispose or close on a `Bash` instance or on its filesystems. A
 garbage collector reclaims the memory once `destroyWorkspace` (§2) drops
 the references.
 
+**Both backends keep reminders in the filesystem they hold**, one JSON file
+per reminder under `/.ambion/reminders/` ([`reminder.md`](reminder.md)
+§3). The store is inside the nominal boundary with everything else.
+
 **`destroy()` drops the filesystem, or deletes the directory.** For the
 in-memory default it releases the `InMemoryFs`. For a directory backend it
-removes the root's contents and leaves the root.
+removes the root's contents and leaves the root. The reminders go with it.
 
 ---
 
@@ -701,25 +711,29 @@ stays a candidate, work this document does not commit to.
 
 ## 11. Reminders and tasks
 
-A workspace is where reminders and tasks live, once they exist. Neither is
-built. Together they are the second persistent entity kind under §1's
-model; the filesystem and shell are the first. What is already true, and
-bounds the design:
+A workspace is where reminders live, and where tasks will live. Reminders
+are built, and [`reminder.md`](reminder.md) is their contract. Tasks are
+not. Together they are the second persistent entity kind under §1's model;
+the filesystem and shell are the first.
 
 [`README.md`](../README.md)'s idea section names a timer firing and a task
 completing as event sources, entering a session as a message like any
-other, on the same terms as a person speaking or arriving. If a reminder or
-a task is nothing more than where such an event is scheduled from,
-`agent.md` rule 1 covers what happens next — every message activates every
-idle agent whose attention is wide enough — and the session side needs
-nothing new.
+other, on the same terms as a person speaking or arriving. A reminder is
+where such an event is scheduled from, and `agent.md` rule 1 covers what
+happens next: the message wakes the agent that set it, and nobody else.
 
 What a workspace adds is the part rule 1 does not cover: somewhere to hold
-a reminder between the moment it is set and the moment it fires, attached
-to the session it concerns, and durable across a restart the way a
+a reminder between the moment it is set and the moment it is due, attached
+to the session it was set in, and durable across a restart the way a
 session's record is (`agent.md` §5). That storage belongs to the workspace,
-as its own entity kind, and it reaches a tool the same way the filesystem
-does: through `ToolContext` (§4), as a second property on `Workspace` (§6).
+as its own entity kind, behind the backend (§7). It reaches a tool the same
+way the filesystem does: through `ToolContext` (§4), as the second property
+on `Workspace` (§6), and through two built-in tools beside the four (§5).
+The clock that delivers one belongs to the session, because nothing about
+a workspace runs (§2); [`reminder.md`](reminder.md) §4 draws that line.
+
+A task is what this section still owes: state that outlives its
+deliveries, and a completion that enters the room as a message.
 
 ---
 
@@ -751,8 +765,9 @@ claim this document makes loudly:
 - `defineAgent` refusing a custom tool under one of the four built-in
   names, and `defineHuman` refusing an assistant that names a workspace
   (§3);
-- a connected agent's activation holding `read`, `write`, `edit` and
-  `bash` beside `say`, and a plain agent holding `say` alone (§5);
+- a connected agent's activation holding `read`, `write`, `edit`, `bash`,
+  `remind` and `cancel_reminder` beside `say`, and a plain agent holding
+  `say` alone (§5);
 - two agents on one workspace sharing every file, each rooted at its own
   home, and a home that does not exist until the agent's first tool asks
   for it (§7, §8);
@@ -771,8 +786,8 @@ claim this document makes loudly:
 All in-process, in vitest, on a scripted stream where determinism matters.
 
 **What is built.** `defineWorkspace`, `destroyWorkspace`, `ToolContext`,
-the four built-in tools, the just-bash adapter, the in-memory default and
-`directoryBackend`. `startSession`'s public signature did not change (§3).
+the six built-in tools, the just-bash adapter, the in-memory default and
+`directoryBackend`, and the reminder store in both. `startSession`'s public signature did not change (§3).
 `handsFor()` in `session.ts` binds the four built-ins beside what
 `toPiTool` (`seat.ts`) already did, and `toPiTool` takes the seat's agent
 so it can build a `ToolContext` for a `defineTool`-built tool. No
@@ -781,5 +796,5 @@ or [`examples/site`](../examples/site) changed: none of those agents uses a
 filesystem tool.
 
 **What is not built.** The real-machine backend (§10) stays a candidate,
-and reminders and tasks (§11) are specified only as far as where they will
-live.
+and tasks (§11) are specified only as far as where they will live.
+[`reminder.md`](reminder.md) §10 lists what the reminder proves.

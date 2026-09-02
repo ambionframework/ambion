@@ -22,13 +22,67 @@ import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
 import { BashEnv } from './bash-env.ts';
-import type { AgentDefinition, WorkspaceBackend } from './types.ts';
+import type { AgentDefinition, Reminder, ReminderStore, WorkspaceBackend } from './types.ts';
 
 /** Build one agent's environment over the workspace's filesystem. */
 async function connectOver(fs: IFileSystem, agent: AgentDefinition): Promise<BashEnv> {
 	const home = `/home/${agent.name}`;
 	await fs.mkdir(home, { recursive: true });
 	return new BashEnv(new Bash({ fs, cwd: home, env: { HOME: home } }), home);
+}
+
+/** Where both backends hold reminders: one JSON file per reminder, in the workspace's own filesystem. */
+export const REMINDER_DIR = '/.ambion/reminders';
+
+/** A file in the store that is not a reminder is left alone and never listed. */
+function isReminder(value: unknown): value is Reminder {
+	if (typeof value !== 'object' || value === null) return false;
+	const r = value as Record<string, unknown>;
+	return ['id', 'owner', 'session', 'text', 'due', 'setAt'].every((k) => typeof r[k] === 'string');
+}
+
+/**
+ * The reminder store, over whichever filesystem the backend holds. A
+ * destroyed backend has no filesystem: its store lists nothing and refuses
+ * a write.
+ */
+function remindersOver(
+	filesystem: () => IFileSystem | Promise<IFileSystem> | undefined,
+): ReminderStore {
+	const live = async (): Promise<IFileSystem> => {
+		const fs = await filesystem();
+		if (fs === undefined) throw new Error('The workspace is destroyed: nothing holds a reminder.');
+		return fs;
+	};
+	return {
+		async list() {
+			const fs = await filesystem();
+			if (fs === undefined || !(await fs.exists(REMINDER_DIR))) return [];
+			const names = (await fs.readdir(REMINDER_DIR)).filter((name) => name.endsWith('.json'));
+			const read = names.map(async (name) => parse(await fs.readFile(`${REMINDER_DIR}/${name}`)));
+			return (await Promise.all(read)).filter(isReminder);
+		},
+		async put(reminder) {
+			const fs = await live();
+			await fs.mkdir(REMINDER_DIR, { recursive: true });
+			await fs.writeFile(
+				`${REMINDER_DIR}/${reminder.id}.json`,
+				JSON.stringify(reminder, null, '\t'),
+			);
+		},
+		async remove(id) {
+			const fs = await live();
+			await fs.rm(`${REMINDER_DIR}/${id}.json`, { force: true });
+		},
+	};
+}
+
+function parse(text: string): unknown {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return undefined;
+	}
 }
 
 /** How much the in-memory default holds, in bytes. A write past it fails with `ENOSPC`. */
@@ -47,6 +101,7 @@ export function memoryBackend(): WorkspaceBackend {
 		async destroy() {
 			fs = undefined;
 		},
+		reminders: remindersOver(() => fs),
 	};
 }
 
@@ -65,6 +120,7 @@ export function directoryBackend(root: string): WorkspaceBackend {
 	};
 	return {
 		connect: async (agent) => connectOver(await filesystem(), agent),
+		reminders: remindersOver(filesystem),
 		async destroy() {
 			fs = undefined;
 			const entries = await readdir(root).catch(() => []);

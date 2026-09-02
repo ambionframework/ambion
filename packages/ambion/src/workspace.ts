@@ -17,7 +17,9 @@
  *   of a backend's `connect`.
  * - **The built-in tools.** Pi's own `read`, `write`, `edit` and `bash`,
  *   bound to a connected agent's activation with the one argument Pi's tool is
- *   missing: the environment the workspace built for that agent.
+ *   missing: the environment the workspace built for that agent. Beside them,
+ *   `remind` and `cancel_reminder`, which reach the reminders the workspace
+ *   holds for that agent (`reminder.ts`).
  *
  * The design contract is docs/workspace.md.
  */
@@ -34,8 +36,16 @@ import {
 } from '@earendil-works/pi-agent-core';
 import { memoryBackend } from './just-bash.ts';
 import {
+	type Clock,
+	cancelReminderTool,
+	type Reach,
+	remindersFor,
+	remindTool,
+} from './reminder.ts';
+import {
 	type AgentDefinition,
 	isWorkspace,
+	type ReminderStore,
 	type ToolContext,
 	WORKSPACE_BRAND,
 	type Workspace,
@@ -44,7 +54,14 @@ import {
 } from './types.ts';
 
 /** The names a workspace binds to every connected agent. `defineAgent` keeps them free. */
-export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(['read', 'write', 'edit', 'bash']);
+export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set([
+	'read',
+	'write',
+	'edit',
+	'bash',
+	'remind',
+	'cancel_reminder',
+]);
 
 /** One handle per name: two handles over one backend would each destroy it. */
 const taken = new Set<string>();
@@ -113,6 +130,12 @@ function stateOf(workspace: WorkspaceHandle): WorkspaceState {
 	return workspace as WorkspaceState;
 }
 
+/** The reminders a workspace holds, for the room that arms them. Nothing, once destroyed. */
+export function reminderStoreOf(workspace: WorkspaceHandle): ReminderStore | undefined {
+	const state = stateOf(workspace);
+	return state.destroyed ? undefined : state.backend.reminders;
+}
+
 function assertWorkspaceName(name: string): void {
 	if (!/^[a-z][a-z0-9-]*$/.test(name)) {
 		throw new Error(
@@ -127,12 +150,17 @@ function assertWorkspaceName(name: string): void {
  * What a tool's `execute` receives beside its parameters. `workspace()`
  * resolves fresh on every call and caches nothing, so a destroy mid-activation
  * is visible to the very next call, and two agents' calls running in parallel
- * each build their own environment from their own agent's field.
+ * each build their own environment from their own agent's field. The clock is
+ * the run's: a reminder set through the value is armed in that run.
  */
-export function toolContext(agent: AgentDefinition, signal?: AbortSignal): ToolContext {
+export function toolContext(
+	agent: AgentDefinition,
+	clock: Clock,
+	signal?: AbortSignal,
+): ToolContext {
 	return {
 		signal,
-		workspace: () => connect(agent, signal),
+		workspace: () => connect(agent, clock, signal),
 	};
 }
 
@@ -143,13 +171,18 @@ export function toolContext(agent: AgentDefinition, signal?: AbortSignal): ToolC
  */
 async function connect(
 	agent: AgentDefinition,
+	clock: Clock,
 	signal?: AbortSignal,
 ): Promise<Workspace | undefined> {
 	if (agent.workspace === undefined) return undefined;
 	const state = stateOf(agent.workspace);
 	if (state.destroyed) return undefined;
 	const env = await state.backend.connect(agent, signal);
-	return { name: state.name, env };
+	return {
+		name: state.name,
+		env,
+		reminders: remindersFor(agent.name, state.backend.reminders, clock),
+	};
 }
 
 // -- the built-in tools ------------------------------------------------------
@@ -159,10 +192,11 @@ type BuiltinTool = AgentHarnessTool<ExecutionToolContext>;
 
 /**
  * The hands a workspace gives an agent: Pi's own `read`, `write`, `edit` and
- * `bash`, unmodified, bound to this agent. An agent with no workspace gets
- * none; an agent with one gets all four, on every activation.
+ * `bash`, unmodified, bound to this agent, and `remind` and `cancel_reminder`
+ * over the reminders the workspace holds for it. An agent with no workspace
+ * gets none; an agent with one gets all six, on every activation.
  */
-export function builtinTools(agent: AgentDefinition): AgentTool[] {
+export function builtinTools(agent: AgentDefinition, clock: Clock): AgentTool[] {
 	if (agent.workspace === undefined) return [];
 	const builtins: BuiltinTool[] = [
 		createReadTool(),
@@ -170,7 +204,25 @@ export function builtinTools(agent: AgentDefinition): AgentTool[] {
 		createEditTool(),
 		createBashTool(),
 	];
-	return builtins.map((tool) => bind(tool, agent));
+	const reach: Reach = async (signal) => (await live(agent, clock, signal)).reminders;
+	return [
+		...builtins.map((tool) => bind(tool, agent, clock)),
+		remindTool(reach),
+		cancelReminderTool(reach),
+	];
+}
+
+/** A built-in reaches a workspace that is there, or fails the call: a destroyed handle is the one way it is not. */
+async function live(
+	agent: AgentDefinition,
+	clock: Clock,
+	signal?: AbortSignal,
+): Promise<Workspace> {
+	const workspace = await connect(agent, clock, signal);
+	if (workspace === undefined) {
+		throw new Error(`Workspace '${agent.workspace?.name}' is destroyed: nothing to reach.`);
+	}
+	return workspace;
 }
 
 /**
@@ -182,12 +234,9 @@ export function builtinTools(agent: AgentDefinition): AgentTool[] {
  * and one edit would be lost. Running the batch one call at a time restores
  * the order the queue gave.
  */
-function bind(tool: BuiltinTool, agent: AgentDefinition): AgentTool {
+function bind(tool: BuiltinTool, agent: AgentDefinition, clock: Clock): AgentTool {
 	const bound: AgentTool['execute'] = async (toolCallId, params, signal, onUpdate) => {
-		const workspace = await connect(agent, signal);
-		if (workspace === undefined) {
-			throw new Error(`Workspace '${agent.workspace?.name}' is destroyed: nothing to reach.`);
-		}
+		const workspace = await live(agent, clock, signal);
 		return tool.execute(toolCallId, params, signal, onUpdate, { env: workspace.env });
 	};
 	return { ...tool, executionMode: 'sequential', execute: bound } as AgentTool;

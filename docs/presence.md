@@ -215,6 +215,8 @@ export type Message = Spoken | Presence | Summary;
 
 `Summary` is the third kind, and it belongs to [`assistant.md`](assistant.md): an
 assistant writes it, nobody speaks it, and it opens and closes no visit.
+`Reminder` is the fourth, and it belongs to [`reminder.md`](reminder.md):
+an agent wrote it earlier for itself, and the clock lands it.
 
 Every rule of the core applies to a presence message unchanged, and that is
 the whole reason for this shape.
@@ -281,7 +283,9 @@ the message activates reads a roster that agrees with it. Backwards, a seat
 is woken to be told Andrei left by a roster that still says he is present.
 
 Both kinds come from a deliberate act: `arrived` follows `visitSession()`
-and `left` follows `leave()`. Nothing on the record comes from a clock.
+and `left` follows `leave()`. No presence message comes from a clock. The
+one message a clock lands is a reminder, and an agent set it on purpose
+([`reminder.md`](reminder.md) §5).
 
 The seq counts from 1, is monotonic, is assigned when the message commits,
 and is strictly ordered. A cursor is exclusive: `since` names a message the
@@ -338,8 +342,8 @@ message, so a say drafted across an arrival is refused and re-aimed at
 whoever is now reading; that is the lock working, with no exception made.
 
 Two things bound the rest. **Only a deliberate act writes one.** No timer
-writes to the record, so a person who leaves a tab open all afternoon costs
-the room nothing, and the message count follows the number of times
+writes a presence message, so a person who leaves a tab open all afternoon
+costs the room nothing, and the message count follows the number of times
 somebody opened or closed the room. And **`passive`** removes the
 glance and keeps the message: a seat at `named` hears no broadcast, so it
 hears no arrival either, until somebody names it, while the record keeps

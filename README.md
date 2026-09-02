@@ -44,17 +44,20 @@ of how it works together. Ambion makes the team first-class:
 ## The activation rule
 
 An agent activates in exactly one way: **a message is delivered into a
-session it belongs to.** The runtime delivers three sources today:
+session it belongs to.** The runtime delivers four sources today:
 
 - a person speaking,
 - a person arriving or leaving,
-- a colleague's directed reply.
+- a colleague's directed reply,
+- a reminder the agent set for itself, coming due.
 
 ```mermaid
 flowchart LR
     P((person)) -- "deliver · arrive · leave" --> R[(session record)]
+    C((clock)) -- "reminder due" --> R
     R -- "activates by attention" --> A["agents, in parallel"]
     A -- "say" --> R
+    A -- "remind" --> C
     R -- "exchange closes" --> D[assistant]
     D -- "one summary" --> R
 ```
@@ -73,7 +76,7 @@ Five functions build a room, and four verbs run it.
 | `defineAgent`      | Makes an agent as a plain value: a name, an identity the room reads, private instructions, a model, tools. It speaks only when spoken to, and can decline. |
 | `defineHuman`      | Names a person: an identity the agents read and address. People visit a running session; an arrival is a message.                                          |
 | `defineTool`       | Declares what an agent can do beyond speaking. Pi's own tool shape, behind one import.                                                                     |
-| `defineWorkspace`  | Names the identity and data boundary an agent's tools reach into: a shared filesystem and shell, durable by its name.                                      |
+| `defineWorkspace`  | Names the identity and data boundary an agent's tools reach into: a shared filesystem and shell, and the reminders an agent sets, durable by its name.     |
 | `startSession`     | Brings up a named room from its agents and a goal.                                                                                                         |
 | `visitSession`     | Puts a person in a running room; delivering belongs to the visit.                                                                                          |
 | `readSession`      | Reads the record between runs. Nothing stands up, nothing to bill.                                                                                         |
@@ -108,13 +111,18 @@ that wide. That comparison is the whole routing rule.
 optional field on `defineAgent`:
 
 - It is a container of persistent entities, durable by its own name. Today
-  that is a shared filesystem and shell; every agent that connects gets its
-  own home in it.
-- An agent that names one holds `read`, `write`, `edit` and `bash` on every
-  activation, and every custom tool reaches the same workspace through
-  `ctx.workspace()`.
+  that is a shared filesystem and shell, and the reminders an agent sets;
+  every agent that connects gets its own home in it.
+- An agent that names one holds `read`, `write`, `edit`, `bash`, `remind`
+  and `cancel_reminder` on every activation, and every custom tool reaches
+  the same workspace through `ctx.workspace()`.
 - Without a backend it lives in memory. `directoryBackend(path)` writes
   through to a real directory.
+
+**The reminder** is how an agent waits. It writes a text and a time with
+`remind`, and when the time comes the room commits the text as a message
+from that agent and wakes it, alone. The workspace holds the reminder
+between runs, and the run that seats the agent delivers it.
 
 ```ts
 const teamSite = defineWorkspace({ name: 'team-site' });
@@ -132,7 +140,8 @@ The contracts: [`docs/agent.md`](docs/agent.md) for the core,
 [`docs/exchange.md`](docs/exchange.md) for the exchange,
 [`docs/presence.md`](docs/presence.md) for people and visits,
 [`docs/assistant.md`](docs/assistant.md) for the assistant,
-[`docs/workspace.md`](docs/workspace.md) for the workspace.
+[`docs/workspace.md`](docs/workspace.md) for the workspace,
+[`docs/reminder.md`](docs/reminder.md) for the reminder.
 
 ## Example
 

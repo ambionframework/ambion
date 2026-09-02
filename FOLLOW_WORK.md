@@ -167,6 +167,50 @@ and scopes it out to this entry; `ToolContext` in
 a credential to reach a tool call now, alongside `defineTool`'s `execute`
 in [`docs/agent.md`](docs/agent.md) §3.
 
+## A calendar form for reminders
+
+**What.** `remind` takes a time, a delay and a rate: `at`, `after` and
+`every` ([`docs/reminder.md`](docs/reminder.md) §2). _Every weekday at
+07:00_ is a calendar rule, and none of the three writes it. A cron
+expression is the usual form.
+
+**Why.** A product that opens the day with a check wants one reminder that
+knows about weekends. Without a calendar form it sets one for every morning
+and reads its own reminder on Saturday.
+
+**What it needs deciding.**
+
+- A parser of Ambion's own, or a dependency. `agent.md`'s code rules push
+  a third concern into a dependency, and a cron library is a small one.
+- Which time zone a calendar rule keeps. `at` is ISO with an offset; a cron
+  expression has none, and the room's clock is UTC.
+- Whether the same field carries both forms, or a fourth field joins the
+  three.
+
+**Where.** `draftReminder` and `nextDue` in
+[`reminder.ts`](packages/ambion/src/reminder.ts); the `ReminderInput` shape
+in [`types.ts`](packages/ambion/src/types.ts).
+
+## Tasks: the entity a reminder is not
+
+**What.** [`docs/workspace.md`](docs/workspace.md) §11 names tasks beside
+reminders as the second entity kind a workspace holds. A reminder is
+delivered and done. A task is state that outlives its deliveries, with a
+completion that enters the room as a message, the way
+[`README.md`](README.md) names a task completing as an event source.
+
+**Why.** The reminder is built and proves the shape: a store behind the
+backend, a clock on the run, a message kind with a reach, and a tool bound
+beside the four. A task reuses every one of those and adds the state.
+
+**What it needs deciding.** What a task holds between deliveries, who may
+complete one, and whether a completion wakes the owner alone the way a
+reminder does.
+
+**Where.** [`reminder.ts`](packages/ambion/src/reminder.ts) is the shape to
+copy; `Workspace` in [`types.ts`](packages/ambion/src/types.ts) takes a
+third property.
+
 ## `/dev/null` on the just-bash backends is a file
 
 **What.** just-bash treats `/dev/null` as a plain file. A command that
@@ -240,9 +284,10 @@ holds today because `Agent` and `AgentHarness` overlap only at the edges.
 narrower scope, resolved once per tool call against `defineTool`'s own
 shape. A workspace is the first concept this project has built that sits
 this close to ground `AgentHarness` already covers. A concept that sits
-closer still is a real possibility once reminders and tasks
+closer still is a real possibility now that reminders
+(`docs/reminder.md`) hold a clock on the run, and once tasks
 (`docs/workspace.md` §11) or anything with its own turn-scoped state
-joins it.
+joins them.
 
 **What it needs deciding.**
 

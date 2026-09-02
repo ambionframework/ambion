@@ -11,6 +11,7 @@
 import * as readline from 'node:readline';
 import {
 	type Attention,
+	isReminder,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -54,28 +55,36 @@ const show = (line: string) => {
 	rl.prompt(true);
 };
 
+/** One line per message, whoever wrote it: four kinds, one record. */
+function showMessage(m: Message): void {
+	if (isSummary(m)) {
+		// The one message its person reads instead of the working. The
+		// range it stands for is above it, and it wakes nobody.
+		show(`${paint(m.from, `∎ ${m.from} → ${m.to}`)} (${span(m)}): ${m.text}`);
+		return;
+	}
+	if (isReminder(m)) {
+		// A reminder the agent set for itself, come due: it wakes that agent alone.
+		show(`${dim}· reminder for ${paint(m.from, m.from)}${dim}: ${m.text}${reset}`);
+		return;
+	}
+	if (!isSpoken(m)) {
+		show(`${dim}· ${m.from} ${m.kind}${reset}`);
+		return;
+	}
+	const arrow = m.to ? ` → ${m.to}` : '';
+	show(`${paint(m.from, `${m.from}${arrow}:`)} ${m.text}`);
+}
+
 const errored = new Set<string>();
 session.subscribe((event: SessionEvent) => {
 	switch (event.type) {
 		case 'activation_start':
 			show(`${dim}· ${event.agent} is reading…${reset}`);
 			break;
-		case 'message': {
-			const m = event.message;
-			if (isSummary(m)) {
-				// The one message its person reads instead of the working. The
-				// range it stands for is above it, and it wakes nobody.
-				show(`${paint(m.from, `∎ ${m.from} → ${m.to}`)} (${span(m)}): ${m.text}`);
-				break;
-			}
-			if (!isSpoken(m)) {
-				show(`${dim}· ${m.from} ${m.kind}${reset}`);
-				break;
-			}
-			const arrow = m.to ? ` → ${m.to}` : '';
-			show(`${paint(m.from, `${m.from}${arrow}:`)} ${m.text}`);
+		case 'message':
+			showMessage(event.message);
 			break;
-		}
 		case 'tool_execution_start':
 			show(`${dim}· ${event.agent} calls ${event.toolName}…${reset}`);
 			break;
@@ -165,9 +174,10 @@ function who(): void {
 
 const span = (m: SummaryMessage) => `${m.covers.from}–${m.covers.through}`;
 
-/** One line per entry, whoever wrote it: three kinds, one record. */
+/** One line per entry, whoever wrote it: four kinds, one record. */
 function line(m: Message): string {
 	if (isSummary(m)) return `[${m.seq}] ∎ ${m.from} → ${m.to} (${span(m)}): ${m.text}`;
+	if (isReminder(m)) return `[${m.seq}] · reminder for ${m.from}: ${m.text}`;
 	if (isSpoken(m)) return `[${m.seq}] ${m.from}${m.to ? ` → ${m.to}` : ''}: ${m.text}`;
 	return `[${m.seq}] · ${m.from} ${m.kind}`;
 }

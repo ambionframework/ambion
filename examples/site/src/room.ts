@@ -11,7 +11,9 @@
  * The three products share one workspace: the site drive, a directory of
  * the documents the site works to. Each product reads the documents its
  * claims rest on, and every product appends to the site diary when it
- * changes its own state.
+ * changes its own state. The drive also holds the reminders the products
+ * set for themselves: a delivery due at 14:00 is a reminder for 14:00, and
+ * the product that set it wakes then to check it landed.
  *
  * `main.ts` opens this interactively. `demo.ts` drives one scripted run of it.
  */
@@ -74,10 +76,14 @@ export const SITE_DRIVE = defineWorkspace({
 	backend: directoryBackend(DRIVE_ROOT),
 });
 
-/** Every file on the drive, as a host reads it: relative path and text. */
+/**
+ * Every document on the drive, as a host reads it: relative path and text.
+ * The runtime's own store under `.ambion/` holds reminders, and is not a
+ * document.
+ */
 export function driveFiles(): { path: string; text: string }[] {
 	return readdirSync(DRIVE_ROOT, { recursive: true, withFileTypes: true })
-		.filter((entry) => entry.isFile())
+		.filter((entry) => entry.isFile() && !entry.parentPath.includes('/.ambion'))
 		.map((entry) => {
 			const full = join(entry.parentPath, entry.name);
 			return { path: full.slice(DRIVE_ROOT.length + 1), text: readFileSync(full, 'utf8') };
@@ -100,6 +106,10 @@ const DRIVE_BRIEF = `
 	/site/diary/${TODAY}.md, with bash:
 	echo "- HH:MM <your name> — what changed, and why" >> /site/diary/${TODAY}.md
 	Append, and never rewrite a diary file: a colleague may be writing to it too.
+	When what you need is not on the record yet — a delivery with an ETA, an
+	approval a person owes, a slot that opens tomorrow — set a reminder with
+	remind for that moment, and check it then. Say in its text what to check
+	and what to do if it did not happen.
 `;
 
 // -- the products' state -----------------------------------------------------

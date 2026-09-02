@@ -11,8 +11,10 @@
  * the room down, `readSession` reads a name without starting anything,
  * `visitSession` puts a person in a running room, and `destroyWorkspace`
  * retires a workspace for good. A person's assistant writes the one message
- * they read when an exchange closes. The design contracts live in
- * docs/agent.md, docs/presence.md, docs/assistant.md and docs/workspace.md.
+ * they read when an exchange closes. An agent that names a workspace sets
+ * reminders for itself, and each one comes back as a message that wakes it.
+ * The design contracts live in docs/agent.md, docs/presence.md,
+ * docs/assistant.md, docs/workspace.md and docs/reminder.md.
  */
 
 export type {
@@ -55,6 +57,11 @@ export type {
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
+	Reminder,
+	ReminderInput,
+	ReminderMessage,
+	ReminderStore,
+	Reminders,
 	SeatedAgent,
 	SeatInfo,
 	SeatStatus,
@@ -67,7 +74,7 @@ export type {
 	WorkspaceBackend,
 	WorkspaceHandle,
 } from './types.ts';
-export { isSpoken, isSummary } from './types.ts';
+export { isReminder, isSpoken, isSummary } from './types.ts';
 export type { DefineWorkspaceOptions } from './workspace.ts';
 export { defineWorkspace, destroyWorkspace } from './workspace.ts';
 

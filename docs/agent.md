@@ -14,12 +14,13 @@ Four functions build a room, and one sentence holds the whole of it:
 > work in and people visit — each agent deciding for itself whether to speak,
 > to whom, and which colleague to call in.**
 
-Four documents build on this core and are also shipped:
+Five documents build on this core and are also shipped:
 [`exchange.md`](exchange.md) specifies the exchange, the room's own unit of
 work; [`presence.md`](presence.md) puts people in a running room;
-[`assistant.md`](assistant.md) adds the assistant every person brings; and
+[`assistant.md`](assistant.md) adds the assistant every person brings;
 [`workspace.md`](workspace.md) gives an agent's tools a boundary to reach
-into.
+into; and [`reminder.md`](reminder.md) lets an agent wake itself at a time
+it chose.
 
 ---
 
@@ -107,8 +108,9 @@ as its second: `ctx.workspace()` resolves the agent's workspace, and
 string or Pi's full content shape. A tool defined with Pi's own
 `defineTool` works unchanged (`toPiTool` in `seat.ts` accepts both), so
 learning Pi's format is the same as learning Ambion's. An agent that names
-a workspace also holds four built-in tools, `read`, `write`, `edit` and
-`bash` ([`workspace.md`](workspace.md) §5).
+a workspace also holds six built-in tools: `read`, `write`, `edit` and
+`bash` ([`workspace.md`](workspace.md) §5), and `remind` and
+`cancel_reminder` ([`reminder.md`](reminder.md) §2).
 
 ---
 
@@ -223,7 +225,8 @@ needs is awaited by the first call that needs it. `stopSession` returns a
 promise, because draining is the point of calling it.
 
 The record holds one union (`Message` in `types.ts`): what a participant
-said, what a person did, and what one exchange came to.
+said, what a person did, what one exchange came to, and what an agent asked
+to be told.
 
 ```ts
 type Message =
@@ -250,14 +253,25 @@ type Message =
       to: string; // the person whose question opened the exchange
       text: string;
       covers: { from: number; through: number }; // the range it stands for
+    }
+  | {
+      kind: 'reminder';
+      seq: number;
+      at: string;
+      from: string; // the agent that set it — stamped from the reminder's owner
+      text: string;
+      setAt: string; // when the agent set it
     };
 ```
 
 The second kind carries no `text`, because the person said nothing.
 [`presence.md`](presence.md) specifies it. The third is written by an assistant
 when an exchange closes, and nobody spoke it; [`assistant.md`](assistant.md)
-specifies it. Every rule below applies to all three kinds unchanged, which
-is why the record holds one union and one sequence.
+specifies it. The fourth is a reminder come due: an agent wrote it earlier
+for its later self, and the room's clock landed it;
+[`reminder.md`](reminder.md) specifies it. Every rule below applies to all
+four kinds unchanged, which is why the record holds one union and one
+sequence.
 
 Beyond identity, the mechanics are eight rules. The first six are the
 room's routing and voice; all of the routing is one function, `dispatch` in
@@ -276,7 +290,8 @@ A message
 may also be directed: `visit.deliver({ to, text })` and `say({ to })`
 activate exactly the named participant, waking it however narrowly it is
 seated. `to` is a participant handle; directed at a human it addresses the
-reader and wakes nothing.
+reader and wakes nothing. A reminder is directed at the agent that set it,
+and it is the one message whose author wakes for it.
 
 **2. Whatever arrives mid-activation is steered in, and working views reset at
 idle.** Replies and deliveries alike, directed or undirected: each arrival
@@ -363,9 +378,10 @@ runtime's own point: it is where an assistant sits, and nothing in a room's
 composition asks for it.
 
 The routing is the scale, and reads as one line (`wakes` in `seat.ts`):
-every message has a **reach** — `named` for a directed say, `broadcast` for
-anything else said, `presence` for somebody arriving or leaving — and a
-seat wakes when its attention is at least that wide. A directed message
+every message has a **reach** — `named` for a directed say and for a
+reminder, `broadcast` for anything else said, `presence` for somebody
+arriving or leaving — and a seat wakes when its attention is at least that
+wide. A directed message
 additionally wakes the one it names and nobody else, which is what makes it
 a focusing act.
 
@@ -417,9 +433,9 @@ type SessionEvent =
 ```
 
 **One message on the record, one `message` event.** What a person
-delivered, what an agent said, a person arriving or leaving, and the
-summary an assistant wrote all reach the host the same way, because they are the
-same thing: an entry the room committed. Who wrote it is `message.from`,
+delivered, what an agent said, a person arriving or leaving, the summary an
+assistant wrote and a reminder come due all reach the host the same way,
+because they are the same thing: an entry the room committed. Who wrote it is `message.from`,
 which the roster already names, so the stream does not split by author. The
 event is atomic as the record is: one event, the whole message, exactly as
 it landed.
@@ -514,7 +530,9 @@ in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
 [`exchange.ts`](../packages/ambion/src/exchange.ts), what a person's assistant
 writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), what an
 agent's tools reach into in
-[`workspace.ts`](../packages/ambion/src/workspace.ts), and what any of them
+[`workspace.ts`](../packages/ambion/src/workspace.ts), a reminder and the
+clock that delivers it in
+[`reminder.ts`](../packages/ambion/src/reminder.ts), and what any of them
 reads in [`render.ts`](../packages/ambion/src/render.ts).
 
 **A seat is seated for the run. An activation lasts seconds.** What an

@@ -12,6 +12,7 @@ import { writeFileSync } from 'node:fs';
 import {
 	destroyWorkspace,
 	InMemorySessionRepo,
+	isReminder,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -42,8 +43,8 @@ const OUT = process.env.DEMO_OUT ?? 'demo-run.json';
 
 /** The commentary names the products, so it needs to know who is not one. */
 const PEOPLE = new Set([priya.name, sam.name, dan.name]);
-/** The four tools a workspace binds; every other tool is a product's own API. */
-const WORKSPACE_TOOLS = new Set(['read', 'write', 'edit', 'bash']);
+/** The six tools a workspace binds; every other tool is a product's own API. */
+const WORKSPACE_TOOLS = new Set(['read', 'write', 'edit', 'bash', 'remind', 'cancel_reminder']);
 const repo = new InMemorySessionRepo();
 const NAME = ROOM_NAME;
 const timeline: { at: string; event: SessionEvent }[] = [];
@@ -116,17 +117,24 @@ function toolLine(event: { agent: string; toolName: string }): string {
 	return `  · ${event.agent}.${event.toolName}()${where}\n`;
 }
 
-/** A running commentary, so the run is watchable while it happens. */
-function narrate(event: SessionEvent): void {
-	if (event.type === 'message' && isSummary(event.message)) {
-		const m = event.message;
+/** One line per message the products wrote: a summary, a reminder come due, or a say. */
+function narrateMessage(m: Message): void {
+	if (isSummary(m)) {
 		process.stderr.write(`∎ ${m.from} → ${m.to} (${m.covers.from}–${m.covers.through})\n`);
 		process.stderr.write(`  ${m.text.replace(/\n/g, '\n  ')}\n`);
 	}
-	if (event.type === 'message' && isSpoken(event.message) && !PEOPLE.has(event.message.from)) {
-		const to = event.message.to ? ` → ${event.message.to}` : '';
-		process.stderr.write(`${event.message.from}${to}: ${event.message.text.slice(0, 78)}\n`);
+	if (isReminder(m)) {
+		process.stderr.write(`· reminder for ${m.from}: ${m.text.slice(0, 78)}\n`);
 	}
+	if (isSpoken(m) && !PEOPLE.has(m.from)) {
+		const to = m.to ? ` → ${m.to}` : '';
+		process.stderr.write(`${m.from}${to}: ${m.text.slice(0, 78)}\n`);
+	}
+}
+
+/** A running commentary, so the run is watchable while it happens. */
+function narrate(event: SessionEvent): void {
+	if (event.type === 'message') narrateMessage(event.message);
 	if (event.type === 'tool_execution_start') process.stderr.write(toolLine(event));
 	if (event.type === 'exchange_closed') {
 		const { owner, from, through } = event.exchange;

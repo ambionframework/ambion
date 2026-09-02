@@ -147,6 +147,7 @@ describe('defineWorkspace', () => {
 		let attempts = 0;
 		const flaky: WorkspaceBackend = {
 			connect: () => memoryBackend().connect(agent('nobody')),
+			reminders: memoryBackend().reminders,
 			destroy: async () => {
 				if (++attempts === 1) throw new Error('disk busy');
 			},
@@ -163,7 +164,7 @@ describe('defineWorkspace', () => {
 		expect(() => defineWorkspace({ name: 'Team Site' })).toThrow(/Invalid workspace name/);
 	});
 
-	it('keeps the four built-in names free for an agent that names a workspace', async () => {
+	it('keeps the built-in names free for an agent that names a workspace', async () => {
 		const site = defineWorkspace({ name: name('reserved') });
 		const read = defineTool({
 			name: 'read',
@@ -178,6 +179,9 @@ describe('defineWorkspace', () => {
 		expect(() =>
 			agent('other', { workspace: site, tools: [{ name: 'bash', execute() {} }] }),
 		).toThrow(/'bash' is a built-in/);
+		expect(() =>
+			agent('timer', { workspace: site, tools: [{ name: 'remind', execute() {} }] }),
+		).toThrow(/'remind' is a built-in/);
 		expect(() => agent('fake', { workspace: { name: 'x' } as never })).toThrow(
 			/must come from defineWorkspace/,
 		);
@@ -197,7 +201,7 @@ describe('defineWorkspace', () => {
 // -- the built-in tools ------------------------------------------------------
 
 describe('the built-in tools', () => {
-	it('bind read, write, edit and bash to a connected agent, and nothing to a plain one', async () => {
+	it('bind read, write, edit, bash, remind and cancel_reminder to a connected agent, and nothing to a plain one', async () => {
 		const site = defineWorkspace({ name: name('hands') });
 		const seen = new Map<string, string[]>();
 		await run([agent('connected', { workspace: site }), agent('plain')], {
@@ -210,7 +214,15 @@ describe('the built-in tools', () => {
 				return quiet();
 			},
 		});
-		expect(seen.get('connected')).toEqual(['say', 'read', 'write', 'edit', 'bash']);
+		expect(seen.get('connected')).toEqual([
+			'say',
+			'read',
+			'write',
+			'edit',
+			'bash',
+			'remind',
+			'cancel_reminder',
+		]);
 		expect(seen.get('plain')).toEqual(['say']);
 		await destroyWorkspace(site);
 	});
@@ -327,6 +339,7 @@ describe('ToolContext', () => {
 				connects.push(who.name);
 				return inner.connect(who, signal);
 			},
+			reminders: inner.reminders,
 			destroy: () => inner.destroy(),
 		};
 		const site = defineWorkspace({ name: name('context'), backend: counting });
@@ -374,6 +387,7 @@ describe('ToolContext', () => {
 			connect: async () => {
 				throw new Error('no such host');
 			},
+			reminders: memoryBackend().reminders,
 			destroy: async () => {},
 		};
 		const site = defineWorkspace({ name: name('broken'), backend: broken });

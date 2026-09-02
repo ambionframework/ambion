@@ -62,8 +62,24 @@ export interface SummaryMessage {
 	covers: { from: Seq; through: Seq };
 }
 
+/**
+ * A reminder that came due. The agent that set it wrote the text, at an
+ * earlier time, for its later self; the room's clock decides when it lands.
+ * It is not a `said`: nobody spoke at the moment it landed.
+ */
+export interface ReminderMessage {
+	kind: 'reminder';
+	seq: Seq;
+	at: string;
+	/** The agent that set it — stamped by the runtime from the reminder's owner. */
+	from: string;
+	text: string;
+	/** When the agent set it, ISO. */
+	setAt: string;
+}
+
 /** One entry on a session's record. */
-export type Message = SpokenMessage | PresenceMessage | SummaryMessage;
+export type Message = SpokenMessage | PresenceMessage | SummaryMessage | ReminderMessage;
 
 export function isSpoken(message: Message): message is SpokenMessage {
 	return message.kind === 'said';
@@ -71,6 +87,10 @@ export function isSpoken(message: Message): message is SpokenMessage {
 
 export function isSummary(message: Message): message is SummaryMessage {
 	return message.kind === 'summary';
+}
+
+export function isReminder(message: Message): message is ReminderMessage {
+	return message.kind === 'reminder';
 }
 
 /** Whether a seat is taking an activation. Runtime state, not a seating choice. */
@@ -211,13 +231,71 @@ export interface WorkspaceHandle {
 }
 
 /**
- * What a tool receives from `ctx.workspace()`: the workspace's name and the
- * environment the backend built for the calling agent. `env` is one property
- * so a later kind of entity gets a property beside it.
+ * What a tool receives from `ctx.workspace()`: the workspace's name, the
+ * environment the backend built for the calling agent, and the reminders the
+ * calling agent holds. `env` is one property so a later kind of entity gets a
+ * property beside it; `reminders` is the second such kind.
  */
 export interface Workspace {
 	readonly name: string;
 	readonly env: ExecutionEnv;
+	readonly reminders: Reminders;
+}
+
+/**
+ * A reminder: a text an agent wrote for its later self, held in a workspace
+ * until it is due, and delivered into one session as a message that wakes the
+ * agent that set it.
+ */
+export interface Reminder {
+	/** The store's own id for it, assigned when it is set. */
+	readonly id: string;
+	/** The agent that set it, and the only one it wakes. */
+	readonly owner: string;
+	/** The session it is delivered into: the one it was set in. */
+	readonly session: string;
+	readonly text: string;
+	/** When it is next due, ISO. */
+	readonly due: string;
+	/** The interval it repeats at, in milliseconds. Absent for a reminder delivered once. */
+	readonly every?: number;
+	/** When it was set, ISO. */
+	readonly setAt: string;
+}
+
+/** What a caller gives to set a reminder. Exactly one of `at` and `after`. */
+export interface ReminderInput {
+	readonly text: string;
+	/** When it is due, ISO 8601, in the future. */
+	readonly at?: string;
+	/** How long from now: a count and a unit, such as `'90s'`, `'20m'`, `'2h'`, `'3d'`. */
+	readonly after?: string;
+	/** Repeat at this interval once due, in the same form. At least one minute. */
+	readonly every?: string;
+}
+
+/**
+ * The calling agent's reminders in its workspace, bound to the session the
+ * tool call runs in. `set` holds the reminder in the workspace and arms it in
+ * that session; `list` and `cancel` reach the agent's own reminders alone.
+ */
+export interface Reminders {
+	set(input: ReminderInput): Promise<Reminder>;
+	list(): Promise<Reminder[]>;
+	/** True when a reminder of the calling agent's was removed. */
+	cancel(id: string): Promise<boolean>;
+}
+
+/**
+ * Where a backend holds reminders. `list` returns every reminder in the
+ * workspace, `put` writes one by its id, and `remove` deletes one. The room
+ * reads the store back at the moment a reminder is due, so the store is what
+ * decides whether one is still set.
+ */
+export interface ReminderStore {
+	list(): Promise<Reminder[]>;
+	put(reminder: Reminder): Promise<void>;
+	remove(id: string): Promise<void>;
 }
 
 /**
@@ -233,6 +311,8 @@ export interface WorkspaceBackend {
 	connect(agent: AgentDefinition, signal?: AbortSignal): Promise<ExecutionEnv>;
 	/** Delete everything the backend holds for this workspace. Called once. */
 	destroy(): Promise<void>;
+	/** The reminders the workspace holds, for every agent that connects to it. */
+	readonly reminders: ReminderStore;
 }
 
 export interface AgentDefinition {

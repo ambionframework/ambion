@@ -54,8 +54,9 @@ if the workspace protocol does not resolve.
 ### What the packages do
 
 `@ambionframework/ambion` is the runtime; [`agent.md`](agent.md),
-[`presence.md`](presence.md), [`assistant.md`](assistant.md) and
-[`workspace.md`](workspace.md) are its contracts.
+[`exchange.md`](exchange.md), [`presence.md`](presence.md),
+[`assistant.md`](assistant.md), [`workspace.md`](workspace.md) and
+[`reminder.md`](reminder.md) are its contracts.
 `@ambionframework/cli` is the `ambion` binary; it currently reports its
 version and nothing else.
 

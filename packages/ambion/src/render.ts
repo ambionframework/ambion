@@ -12,8 +12,9 @@
  * diffed and tested without starting anything. The room's mechanics hold no
  * sentences, and this file holds no state.
  */
-import type { AgentSeatInfo, Attention } from './types.ts';
+import type { AgentSeatInfo, Attention, Reminder } from './types.ts';
 import {
+	isReminder,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -48,13 +49,16 @@ export interface PersonView {
 function ago(at: string, now: number): string {
 	const elapsed = now - Date.parse(at);
 	if (!Number.isFinite(elapsed) || elapsed < MINUTE) return 'just now';
-	if (elapsed < HOUR) return plural(Math.floor(elapsed / MINUTE), 'minute');
-	if (elapsed < DAY) return plural(Math.floor(elapsed / HOUR), 'hour');
-	return plural(Math.floor(elapsed / DAY), 'day');
+	return `${spanText(elapsed)} ago`;
 }
 
-function plural(n: number, unit: string): string {
-	return `${count(n, unit)} ago`;
+/** A duration in the largest unit that fits it: `2 hours`, `3 days`, `45 seconds`. */
+export function spanText(ms: number): string {
+	const span = Math.max(0, ms);
+	if (span < MINUTE) return count(Math.floor(span / 1000), 'second');
+	if (span < HOUR) return count(Math.floor(span / MINUTE), 'minute');
+	if (span < DAY) return count(Math.floor(span / HOUR), 'hour');
+	return count(Math.floor(span / DAY), 'day');
 }
 
 /**
@@ -66,6 +70,7 @@ export function renderLine(message: Message): string {
 	if (isSpoken(message) || isSummary(message)) {
 		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}`;
 	}
+	if (isReminder(message)) return `· reminder for ${message.from}: ${message.text}`;
 	return `· ${message.from} ${message.kind}`;
 }
 
@@ -249,6 +254,11 @@ export interface SeatSpeaking {
 	readonly owner: string | undefined;
 	/** The range this activation is closing, or nothing when a message woke it. */
 	readonly closing: { from: Seq; through: Seq } | undefined;
+	/**
+	 * What this seat is waiting for in this run, soonest first, or nothing
+	 * when it names no workspace and so can set none.
+	 */
+	readonly reminders: readonly Reminder[] | undefined;
 }
 
 export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
@@ -294,6 +304,8 @@ function duties(seat: SeatSpeaking, room: RoomView): string[] {
 	// A fold only renders in a room where somebody brought an assistant, so only
 	// such a room tells its seats how to read one.
 	if (room.hasAssistants) lines.push(``, ...SUMMARY_PARAGRAPH);
+	// Only a seat that can set a reminder is told what one is.
+	if (seat.reminders !== undefined) lines.push(``, ...REMINDER_PARAGRAPH);
 	return lines;
 }
 
@@ -313,6 +325,7 @@ export function renderTurnContext(seat: SeatSpeaking, room: RoomView): string {
 		``,
 		`The people (present: in the room now; absent: not in the room):`,
 		renderPeople(people, now),
+		...renderReminders(seat.reminders, now),
 		``,
 		`The record of '${room.name}' so far:`,
 		renderRecord(room.record, people, now),
@@ -333,6 +346,27 @@ function askOf(seat: SeatSpeaking): string {
 			: `Nothing is asked of you: read the room, and end your turn.`;
 	}
 	return `Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
+}
+
+/** What one seat is waiting for. Rendered for a seat that can set a reminder, even when it has none. */
+function renderReminders(reminders: readonly Reminder[] | undefined, now: number): string[] {
+	if (reminders === undefined) return [];
+	const lines = reminders.map((reminder) => `- ${reminderNote(reminder, now)}: ${reminder.text}`);
+	return [
+		``,
+		`Your reminders (each reaches you alone, on the record, when it is due):`,
+		lines.length === 0 ? `(none set)` : lines.join('\n'),
+	];
+}
+
+function reminderNote(reminder: Reminder, now: number): string {
+	const parts = [
+		reminder.id,
+		`due in ${spanText(Date.parse(reminder.due) - now)} (${reminder.due})`,
+	];
+	if (reminder.every !== undefined) parts.push(`then every ${spanText(reminder.every)}`);
+	parts.push(`set ${ago(reminder.setAt, now)}`);
+	return parts.join(', ');
 }
 
 /** What a seat does with a presence line that lands while it is working. */
@@ -385,6 +419,19 @@ const ASSISTANT_PARAGRAPH = [
 	`because of it, and it never carries your person's name — the room stamps it as yours.`,
 	`You hold their preferences; they hold the decision. You decide nothing, you act on nothing,`,
 	`and you never answer in their place.`,
+];
+
+/** What a reminder is for, told only to a seat that can set one. */
+const REMINDER_PARAGRAPH = [
+	`Waiting is the remind tool. When what you need is not on the record yet — a delivery that`,
+	`lands at 14:00, a reply that is not due until Monday — set a reminder instead of guessing`,
+	`or asking the room to wait. It reaches you alone, as a line on the record, at the time you`,
+	`named, and wakes you; nobody else wakes for it, and every seat reads it. Write its text for`,
+	`a reader with no memory of this turn: what to check, and why. A line reading`,
+	`"· reminder for <you>" is one of yours coming due: do what it was set for, and speak only`,
+	`if the room needs the result. It asks nobody anything and opens no exchange. Your pending`,
+	`reminders are listed above the record; cancel one with cancel_reminder when it no longer`,
+	`serves.`,
 ];
 
 /** What a seat makes of a range that has left its context. */

@@ -15,6 +15,8 @@
  * - **Route.** Who hears a message, and who wakes for it.
  * - **Give an activation what only the room knows.** The model, the prompt, the
  *   hands, and the room as it stands at that moment.
+ * - **Keep the clock.** Arm every reminder set into this room, and deliver
+ *   each one as a message when it is due.
  * - **Say when it has stopped.** An exchange closed, and nothing running.
  */
 import type {
@@ -33,6 +35,7 @@ import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
 import { openOrCreate, persistTurns, RecordStore } from './record.ts';
+import { Clock } from './reminder.ts';
 import {
 	type PersonView,
 	type RoomView,
@@ -42,25 +45,29 @@ import {
 	renderTurnContext,
 	type SeatSpeaking,
 } from './render.ts';
-import { delivered, isActive, type SeatRuntime, toPiTool, wakes } from './seat.ts';
+import { delivered, isActive, type SeatRuntime, targetOf, toPiTool, wakes } from './seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
 	type HumanDefinition,
 	isAgent,
+	isReminder,
 	isSeatedAgent,
-	isSpoken,
 	type Message,
 	type Participant,
 	type PresenceChange,
 	type PresenceMessage,
+	type Reminder,
+	type ReminderMessage,
+	type ReminderStore,
 	type SeatInfo,
 	type Seq,
 	type SessionEvent,
 	type SpokenMessage,
 	type SummaryMessage,
+	type WorkspaceHandle,
 } from './types.ts';
-import { builtinTools } from './workspace.ts';
+import { builtinTools, reminderStoreOf } from './workspace.ts';
 
 const defaultRepo = new InMemorySessionRepo();
 
@@ -113,7 +120,11 @@ export interface Session extends SessionView {
 	 * Run state: a restart begins with none.
 	 */
 	exchange(): Exchange | undefined;
-	/** Resolves when no agent is active and nothing is queued. */
+	/**
+	 * Resolves when no agent is active and nothing is queued. A reminder left
+	 * due from an earlier run is delivered first, so nothing resolves before
+	 * the room has woken for it.
+	 */
 	settled(): Promise<void>;
 	/**
 	 * Resolves when the room is quiet and every summary an exchange owed has
@@ -219,6 +230,10 @@ class SessionImpl implements Session {
 	private stopped = false;
 	/** The room's exchanges: what a question opened, and what quiescence closes. */
 	private readonly exchanges = new Exchanges();
+	/** The reminders armed for this run, and what to do when one is due. */
+	private readonly clock: Clock;
+	/** The reminders an earlier run left in the seats' workspaces, armed again. */
+	private readonly armed: Promise<void>;
 
 	constructor(options: StartSessionOptions) {
 		this.name = options.name;
@@ -228,6 +243,15 @@ class SessionImpl implements Session {
 		for (const seat of options.agents) this.seat(seat);
 		this.customStream = options.streamFn !== undefined;
 		this.streamFn = options.streamFn ?? registryStream;
+		this.clock = new Clock({
+			session: this.name,
+			deliver: (reminder) => this.deliverReminder(reminder),
+			failed: (reminder, error) => this.emit({ type: 'error', agent: reminder.owner, error }),
+		});
+		this.armed = this.armStored();
+		// Surfaces at the first `settled()` or `quiet()`, the way a store that
+		// cannot open surfaces at the first call that needs the record.
+		void this.armed.catch(() => {});
 	}
 
 	private get record(): Message[] {
@@ -273,9 +297,10 @@ class SessionImpl implements Session {
 		return this.exchanges.current();
 	}
 
-	settled(): Promise<void> {
-		if (!this.working()) return Promise.resolve();
-		return new Promise((resolve) => this.settledWaiters.push(resolve));
+	async settled(): Promise<void> {
+		await this.armed;
+		if (!this.working()) return;
+		await new Promise<void>((resolve) => this.settledWaiters.push(resolve));
 	}
 
 	/**
@@ -296,12 +321,13 @@ class SessionImpl implements Session {
 		return this.running().some((seat) => !this.assistants.isAssistant(seat.def.name));
 	}
 
-	quiet(): Promise<void> {
+	async quiet(): Promise<void> {
+		await this.armed;
 		// The same condition the `quiet` event reports. A summary a race left
 		// owed is not work in flight: it waits for the next quiet room, and the
 		// room is quiet in the meantime.
-		if (this.idle()) return Promise.resolve();
-		return new Promise((resolve) => this.quietWaiters.push(resolve));
+		if (this.idle()) return;
+		await new Promise<void>((resolve) => this.quietWaiters.push(resolve));
 	}
 
 	abort(): void {
@@ -457,6 +483,8 @@ class SessionImpl implements Session {
 		this.stopped = true;
 		try {
 			this.abort();
+			// What is armed stays in its workspace: the next run arms it again.
+			this.clock.clear();
 			await this.store.ready;
 			// A deliberate shutdown observed everybody leaving, so the record
 			// says so, and the host hears it. It wakes nobody: an activation
@@ -522,11 +550,13 @@ class SessionImpl implements Session {
 	 * of the message (rules 1, 4 and 6, in `wakes` below).
 	 */
 	private dispatch(message: Message): void {
-		const to = isSpoken(message) ? message.to : undefined;
+		const to = targetOf(message);
 		const target = to === undefined ? undefined : this.agents.get(to);
 		const fromAssistant = this.assistants.isAssistant(message.from);
 		for (const seat of this.agents.values()) {
-			if (seat.def.name === message.from) continue;
+			// A seat never hears its own say. A reminder is the one message its
+			// author asked to hear: it wrote it for this moment.
+			if (seat.def.name === message.from && !isReminder(message)) continue;
 			if (seat.activation) seat.activation.steer(message, renderLine(message));
 			else if (wakes(seat, target, message, fromAssistant)) this.activate(seat);
 		}
@@ -574,6 +604,8 @@ class SessionImpl implements Session {
 			def: seat.def,
 			owner: this.assistants.ownerOf(seat.def.name),
 			closing: this.assistants.draftOf(seat.def.name),
+			reminders:
+				seat.def.workspace === undefined ? undefined : this.clock.pendingFor(seat.def.name),
 		};
 	}
 
@@ -630,8 +662,8 @@ class SessionImpl implements Session {
 		}
 		return [
 			this.sayTool(seat, activation),
-			...builtinTools(seat.def),
-			...seat.def.tools.map((tool) => toPiTool(tool, seat.def)),
+			...builtinTools(seat.def, this.clock),
+			...seat.def.tools.map((tool) => toPiTool(tool, seat.def, this.clock)),
 		];
 	}
 
@@ -737,6 +769,55 @@ class SessionImpl implements Session {
 			return { missed };
 		}
 		return { message: this.store.append<T>(draft) };
+	}
+
+	// -- the clock -----------------------------------------------------------
+
+	/**
+	 * Arm what an earlier run left: every reminder in a seated agent's
+	 * workspace that was set into this session, by an agent seated now. One
+	 * already due is delivered at once, soonest first. A reminder whose owner
+	 * is not seated this run waits in its store for a run that seats it.
+	 */
+	private async armStored(): Promise<void> {
+		await this.store.ready;
+		const stores = new Map<WorkspaceHandle, ReminderStore>();
+		for (const seat of this.agents.values()) {
+			const handle = seat.def.workspace;
+			if (handle === undefined || stores.has(handle)) continue;
+			const store = reminderStoreOf(handle);
+			if (store) stores.set(handle, store);
+		}
+		for (const [handle, store] of stores) {
+			const held = (await store.list()).filter((reminder) => this.seatsReminder(reminder, handle));
+			held.sort((a, b) => Date.parse(a.due) - Date.parse(b.due));
+			for (const reminder of held) await this.clock.arm(reminder, store);
+		}
+	}
+
+	/** Whether this run delivers a stored reminder: set into this session, by a seat that is here and names its workspace. */
+	private seatsReminder(reminder: Reminder, handle: WorkspaceHandle): boolean {
+		if (reminder.session !== this.name) return false;
+		return this.agents.get(reminder.owner)?.def.workspace === handle;
+	}
+
+	/**
+	 * A reminder is due: it lands on the record as the message its owner
+	 * wrote for this moment, stamped from that owner, and the routing wakes
+	 * the owner alone. It commits under no lock, the way a presence message
+	 * does: the room observed the clock, and nobody drafted against the record.
+	 */
+	private async deliverReminder(reminder: Reminder): Promise<void> {
+		if (this.stopped) return;
+		await this.publish(
+			this.store.append<ReminderMessage>({
+				kind: 'reminder',
+				at: new Date().toISOString(),
+				from: reminder.owner,
+				text: reminder.text,
+				setAt: reminder.setAt,
+			}),
+		);
 	}
 
 	// -- the assistant ------------------------------------------------------------

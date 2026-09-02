@@ -17,8 +17,9 @@ import type {
 	Session as PiSession,
 } from '@earendil-works/pi-agent-core';
 import type { Activation } from './activation.ts';
+import type { Clock } from './reminder.ts';
 import type { AgentDefinition, Attention, Message } from './types.ts';
-import { isAmbionTool, isSpoken } from './types.ts';
+import { isAmbionTool, isReminder, isSpoken } from './types.ts';
 import { toolContext } from './workspace.ts';
 
 export interface SeatRuntime {
@@ -46,11 +47,18 @@ const WIDTH: Record<Attention, number> = { none: 0, named: 1, broadcast: 2, pres
 /**
  * How wide a seat's attention has to be for this message to reach it: a
  * directed say reaches the one it names, anything else said reaches the room,
- * and a person arriving or leaving reaches the widest end.
+ * a reminder reaches the agent that set it, and a person arriving or leaving
+ * reaches the widest end.
  */
 function reachOf(message: Message): Attention {
-	if (!isSpoken(message)) return 'presence';
-	return message.to === undefined ? 'broadcast' : 'named';
+	if (isSpoken(message)) return message.to === undefined ? 'broadcast' : 'named';
+	return isReminder(message) ? 'named' : 'presence';
+}
+
+/** Whom a message names: a directed say names its `to`, a reminder names the agent that set it. */
+export function targetOf(message: Message): string | undefined {
+	if (isSpoken(message)) return message.to;
+	return isReminder(message) ? message.from : undefined;
 }
 
 /**
@@ -81,7 +89,7 @@ export function wakes(
  * reaches a workspace; a Pi-native tool passes through as it is, and its
  * signature has no room for one.
  */
-export function toPiTool(tool: unknown, agent: AgentDefinition): AgentTool {
+export function toPiTool(tool: unknown, agent: AgentDefinition, clock: Clock): AgentTool {
 	if (isAmbionTool(tool)) {
 		return {
 			name: tool.name,
@@ -89,7 +97,7 @@ export function toPiTool(tool: unknown, agent: AgentDefinition): AgentTool {
 			description: tool.description,
 			parameters: tool.parameters,
 			execute: async (_toolCallId, params, signal) => {
-				const result = await tool.execute(params, toolContext(agent, signal));
+				const result = await tool.execute(params, toolContext(agent, clock, signal));
 				return typeof result === 'string'
 					? { content: [{ type: 'text', text: result }], details: {} }
 					: result;
@@ -103,7 +111,7 @@ export function toPiTool(tool: unknown, agent: AgentDefinition): AgentTool {
 	return raw.label ? raw : { ...raw, label: raw.name };
 }
 
-/** What a write tool returns when the record took it. */
-export function delivered(): AgentToolResult<Record<string, never>> {
-	return { content: [{ type: 'text', text: 'delivered' }], details: {} };
+/** What a write tool returns when the record took it, or when the store did what was asked. */
+export function delivered(text = 'delivered'): AgentToolResult<Record<string, never>> {
+	return { content: [{ type: 'text', text }], details: {} };
 }
