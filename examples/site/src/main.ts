@@ -22,7 +22,7 @@ import {
 	type Visit,
 	visitSession,
 } from '@ambionframework/ambion';
-import { AGENTS, apiLog, GOAL, MODEL, PEOPLE, ROOM_NAME } from './room.ts';
+import { AGENTS, apiLog, DRIVE_ROOT, driveFiles, GOAL, MODEL, PEOPLE, ROOM_NAME } from './room.ts';
 
 const session = startSession({ name: ROOM_NAME, goal: GOAL, agents: AGENTS });
 
@@ -126,6 +126,7 @@ function help(): void {
 			'  /record           everything on the record',
 			'  /missed           what landed since you last stopped reading',
 			'  /api              every call the products made into their own data',
+			'  /diary            the site diary, as the products have left it',
 			'  /summaries        what each assistant wrote, and the range it stands for',
 			'  /abort            cancel every activation in flight',
 			'  /quit             leave, stop the room, and exit',
@@ -194,6 +195,16 @@ async function missed(): Promise<void> {
 	for (const m of await session.messages({ since })) console.log(`  ${line(m)}`);
 }
 
+/** The diary is the one document every product writes to; the host reads it off the disk. */
+function diary(): void {
+	console.log(`  ${dim}the drive is at ${DRIVE_ROOT}${reset}`);
+	for (const file of driveFiles()) {
+		if (!file.path.startsWith('site/diary/')) continue;
+		console.log(`  ${file.path}`);
+		console.log(`    ${file.text.trim().replace(/\n/g, '\n    ')}`);
+	}
+}
+
 function api(): void {
 	for (const call of apiLog)
 		console.log(`  ${call.app}.${call.tool}(${JSON.stringify(call.params)})`);
@@ -232,6 +243,7 @@ const commands = new Map<string, (arg: string) => void | Promise<void>>(
 		'/record': record,
 		'/missed': missed,
 		'/api': api,
+		'/diary': diary,
 		'/summaries': summaries,
 		'/join': join,
 		'/leave': leave,

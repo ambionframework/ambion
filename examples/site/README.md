@@ -6,7 +6,9 @@ room — a project manager in the site office, a foreman on the deck with
 a phone, and a quantity surveyor at a cost desk. Each of them brings an assistant.
 
 Each product holds its own state and its own API and knows nothing of the
-others' internals. It asks them on the record, the way a person does.
+others' internals. It asks them on the record, the way a person does. The
+three products share one workspace: the site drive, a directory of the
+documents the site works to.
 
 ```sh
 cd examples/site
@@ -16,7 +18,9 @@ pnpm demo                           # one scripted run, captured as JSON
 ```
 
 `AMBION_MODEL` picks the model every product and every assistant runs on. It
-defaults to `anthropic/claude-sonnet-5`.
+defaults to `anthropic/claude-sonnet-5`. `SITE_DRIVE` names a directory to
+keep the drive in between runs; without it, each run copies `drive/` into a
+fresh scratch directory.
 
 ## What to look for
 
@@ -48,6 +52,16 @@ their own data. The task list rewrites due dates and the materials tracker
 moves deliveries because the room decided something, not because anyone
 typed an edit.
 
+**The products read the drive before they speak, and write the diary when
+they act.** Each product is connected to the site drive, so it holds `read`,
+`write`, `edit` and `bash` beside its own API. The pour plan says what a
+pour needs, the forecast says which day holds, and building control's rules
+say when an inspection can happen. A product reads the document its claim
+rests on and names the file. When it changes its own state it appends one
+line to today's diary with `bash`, and `/diary` shows what the products have
+left there. Every product has its own home on the drive, and the diary is
+the one file they all write to.
+
 **A question opens an exchange.** `— priya asked; the room is working —`
 marks it, and `— the exchange is over (3–7) —` marks the moment the seats stop.
 That is the exchange, and it is the room's own: it opens the same way whoever
@@ -74,12 +88,14 @@ discussion and the products hold the state.
 
 ## The files
 
-| File      | What                                                                             |
-| --------- | -------------------------------------------------------------------------------- |
-| `room.ts` | The products, their APIs and their state; the people, their assistants, the goal |
-| `main.ts` | The room open in your terminal                                                   |
-| `demo.ts` | One scripted run, written out as JSON for a report                               |
+| File      | What                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------ |
+| `room.ts` | The products, their APIs and their state; the drive they share; the people, their assistants     |
+| `main.ts` | The room open in your terminal                                                                   |
+| `demo.ts` | One scripted run, written out as JSON for a report                                               |
+| `drive/`  | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary |
 
 The contracts are [`docs/agent.md`](../../docs/agent.md),
-[`docs/presence.md`](../../docs/presence.md) and
-[`docs/assistant.md`](../../docs/assistant.md).
+[`docs/presence.md`](../../docs/presence.md),
+[`docs/assistant.md`](../../docs/assistant.md) and
+[`docs/workspace.md`](../../docs/workspace.md).

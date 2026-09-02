@@ -10,6 +10,7 @@
  */
 import { writeFileSync } from 'node:fs';
 import {
+	destroyWorkspace,
 	InMemorySessionRepo,
 	isSpoken,
 	isSummary,
@@ -22,14 +23,18 @@ import {
 import {
 	AGENTS,
 	apiLog,
+	DRIVE_ROOT,
 	dan,
+	driveFiles,
 	GOAL,
 	MODEL,
 	materialsState,
 	priya,
 	ROOM_NAME,
+	SITE_DRIVE,
 	sam,
 	shiftsState,
+	TODAY,
 	tasksState,
 } from './room.ts';
 
@@ -37,6 +42,8 @@ const OUT = process.env.DEMO_OUT ?? 'demo-run.json';
 
 /** The commentary names the products, so it needs to know who is not one. */
 const PEOPLE = new Set([priya.name, sam.name, dan.name]);
+/** The four tools a workspace binds; every other tool is a product's own API. */
+const WORKSPACE_TOOLS = new Set(['read', 'write', 'edit', 'bash']);
 const repo = new InMemorySessionRepo();
 const NAME = ROOM_NAME;
 const timeline: { at: string; event: SessionEvent }[] = [];
@@ -59,6 +66,9 @@ const activations: Activation[] = [];
 const openBySeat = new Map<string, Activation>();
 let lastSeq = 0;
 let lastFrom = '(the room opening)';
+
+/** The drive as every run starts: the seed, before any product touches it. */
+const driveBefore = driveFiles();
 
 const session = startSession({
 	name: NAME,
@@ -100,6 +110,12 @@ function track(event: SessionEvent, at: string): void {
 	}
 }
 
+/** One line per tool call, and the four workspace tools say where they reach. */
+function toolLine(event: { agent: string; toolName: string }): string {
+	const where = WORKSPACE_TOOLS.has(event.toolName) ? ' on the drive' : '';
+	return `  · ${event.agent}.${event.toolName}()${where}\n`;
+}
+
 /** A running commentary, so the run is watchable while it happens. */
 function narrate(event: SessionEvent): void {
 	if (event.type === 'message' && isSummary(event.message)) {
@@ -111,9 +127,7 @@ function narrate(event: SessionEvent): void {
 		const to = event.message.to ? ` → ${event.message.to}` : '';
 		process.stderr.write(`${event.message.from}${to}: ${event.message.text.slice(0, 78)}\n`);
 	}
-	if (event.type === 'tool_execution_start') {
-		process.stderr.write(`  · ${event.agent}.${event.toolName}()\n`);
-	}
+	if (event.type === 'tool_execution_start') process.stderr.write(toolLine(event));
 	if (event.type === 'exchange_closed') {
 		const { owner, from, through } = event.exchange;
 		process.stderr.write(`  — ${owner}'s exchange closed (${from}–${through})\n`);
@@ -231,6 +245,12 @@ for (const metadata of await repo.list()) {
 
 await stopSession(session);
 
+// The drive as the run left it, then the workspace retired: the scratch copy
+// is emptied, and the checked-in seed is untouched.
+const driveAfter = driveFiles();
+await destroyWorkspace(SITE_DRIVE);
+process.stderr.write(`\ndrive at ${DRIVE_ROOT}, destroyed after capture\n`);
+
 writeFileSync(
 	OUT,
 	JSON.stringify(
@@ -248,6 +268,12 @@ writeFileSync(
 			seatSessions,
 			activations,
 			toolCalls: apiLog,
+			drive: {
+				workspace: SITE_DRIVE.name,
+				today: TODAY,
+				before: driveBefore,
+				after: driveAfter,
+			},
 			tasksAfter: tasksState,
 			deliveriesAfter: materialsState.deliveries,
 			overtimeAfter: shiftsState.overtimeRequests,

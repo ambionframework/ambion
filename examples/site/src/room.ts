@@ -8,13 +8,24 @@
  * cost desk, and each one brings an assistant that holds what they act on and
  * writes the one message they read.
  *
+ * The three products share one workspace: the site drive, a directory of
+ * the documents the site works to. Each product reads the documents its
+ * claims rest on, and every product appends to the site diary when it
+ * changes its own state.
+ *
  * `main.ts` opens this interactively. `demo.ts` drives one scripted run of it.
  */
+import { cpSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
 	attentive,
 	defineAgent,
 	defineHuman,
 	defineTool,
+	defineWorkspace,
+	directoryBackend,
 	type HumanDefinition,
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
@@ -26,7 +37,66 @@ export const GOAL = `
 	Deliver Block C at Kestrel Yard on programme and to spec. The Level 3 slab
 	pour is the next milestone and it is currently blocked. Keep the task list,
 	the materials position and the labour plan consistent with what the site
-	actually decides.
+	actually decides. The site drive holds the documents the site works to:
+	the pour plan, the forecast, building control's rules and the site diary.
+`;
+
+// -- the site drive ----------------------------------------------------------
+
+/** The documents checked in beside this file: what every run starts from. */
+const DRIVE_SEED = fileURLToPath(new URL('../drive', import.meta.url));
+
+/** The scenario's date, which is the diary file every product appends to. */
+export const TODAY = '2026-08-25';
+
+/**
+ * Where the drive lives for this process. `SITE_DRIVE` names a directory to
+ * keep between runs; without it, every run copies the seed into a fresh
+ * scratch directory, so the checked-in documents stay as they are.
+ */
+function openDrive(): string {
+	const root = process.env.SITE_DRIVE ?? mkdtempSync(join(tmpdir(), 'kestrel-yard-'));
+	cpSync(DRIVE_SEED, root, { recursive: true, force: false, errorOnExist: false });
+	return root;
+}
+
+export const DRIVE_ROOT = openDrive();
+
+/**
+ * The workspace the products connect to. One directory backs it, every
+ * product gets a home in it, and the four built-in tools reach it.
+ */
+export const SITE_DRIVE = defineWorkspace({
+	name: 'kestrel-yard-drive',
+	backend: directoryBackend(DRIVE_ROOT),
+});
+
+/** Every file on the drive, as a host reads it: relative path and text. */
+export function driveFiles(): { path: string; text: string }[] {
+	return readdirSync(DRIVE_ROOT, { recursive: true, withFileTypes: true })
+		.filter((entry) => entry.isFile())
+		.map((entry) => {
+			const full = join(entry.parentPath, entry.name);
+			return { path: full.slice(DRIVE_ROOT.length + 1), text: readFileSync(full, 'utf8') };
+		})
+		.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * What every product is told about the drive. The documents are named once,
+ * here, and each product adds the one it has to read before it speaks.
+ */
+const DRIVE_BRIEF = `
+	The site drive is your workspace, and /site/README.md indexes it: the pour
+	plan at /site/pour-plan/level-3-slab.md, the week's forecast at
+	/site/weather/week-35.md, building control's booking rules at
+	/site/inspections/building-control.md, and the site diary at
+	/site/diary/<date>.md, one file per day. Read a document before you claim
+	what it says, and name the figure and the file when you do. When you change
+	your own product's state, append one line to today's diary,
+	/site/diary/${TODAY}.md, with bash:
+	echo "- HH:MM <your name> — what changed, and why" >> /site/diary/${TODAY}.md
+	Append, and never rewrite a diary file: a colleague may be writing to it too.
 `;
 
 // -- the products' state -----------------------------------------------------
@@ -101,7 +171,7 @@ export const tasksState: Task[] = [
 		owner: 'priya',
 		due: 'Wed 26 Aug',
 		blockedBy: ['T-126'],
-		note: 'Inspector slot needs 48h notice — not booked',
+		note: 'Inspector slot not booked. How a slot is booked: /site/inspections/building-control.md',
 	},
 	{
 		id: 'T-126',
@@ -426,9 +496,15 @@ const shiftsAgent = defineAgent({
 		needs it; it stays awaiting approval until a human answers, and saying so is
 		your job. Speak when a plan needs people who are not there, needs a ticket
 		nobody on site holds, or crosses the threshold. Otherwise end your turn.
+
+		${DRIVE_BRIEF.trim()}
+		Before you say a crew is enough for a pour, read the pour plan: it says who
+		a pour needs on the deck, how many, and which ticket each of them holds.
+		Before you say a day holds, read the forecast against the plan's limits.
 	`,
 	model: MODEL,
 	tools: [crewHours, certifiedFor, requestOvertime],
+	workspace: SITE_DRIVE,
 });
 
 const tasksAgent = defineAgent({
@@ -448,9 +524,16 @@ const tasksAgent = defineAgent({
 		on the person who just arrived; say something only if the list holds an item
 		that is theirs and that nobody can move without them, and then say only that
 		item. If there is nothing of theirs, end your turn.
+
+		${DRIVE_BRIEF.trim()}
+		Before you give a date for T-121, read building control's rules: they
+		decide which days an inspection can happen, and a pour date is only as
+		good as the inspection before it. The pour plan lists what has to be done
+		before a pour, in order.
 	`,
 	model: MODEL,
 	tools: [taskList, blockingChain, updateTask],
+	workspace: SITE_DRIVE,
 });
 
 const materialsAgent = defineAgent({
@@ -465,9 +548,15 @@ const materialsAgent = defineAgent({
 		delivery with move_delivery when the plan on the record moves, and say what
 		it saved or cost. Speak when a plan needs material that is not on site, when
 		a slot will not support it, or when a change is about to cost money.
+
+		${DRIVE_BRIEF.trim()}
+		Before you move a delivery or name a pour day, read the forecast: it
+		decides whether a slot holds. The pour plan holds the quantity, the pump
+		and when the order locks.
 	`,
 	model: MODEL,
 	tools: [stockCheck, deliveryBoard, supplierTerms, moveDelivery],
+	workspace: SITE_DRIVE,
 });
 
 /**
