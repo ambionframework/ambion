@@ -60,6 +60,7 @@ import {
 	type SpokenMessage,
 	type SummaryMessage,
 } from './types.ts';
+import { builtinTools } from './workspace.ts';
 
 const defaultRepo = new InMemorySessionRepo();
 
@@ -610,10 +611,11 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * What an activation holds. A seat speaks and uses its own tools; an assistant closing
-	 * an exchange holds one hand, and it reaches the record. `defineHuman`
-	 * refuses an assistant that carries tools of its own, so there is nothing else
-	 * to leave out.
+	 * What an activation holds. A seat speaks, reaches its workspace through the
+	 * four built-in tools when it names one, and uses its own tools; an assistant
+	 * closing an exchange holds one hand, and it reaches the record. `defineHuman`
+	 * refuses an assistant that carries tools or a workspace of its own, so there
+	 * is nothing else to leave out.
 	 */
 	private handsFor(seat: SeatRuntime, activation: Activation): AgentTool[] {
 		// An assistant's hands are the runtime's, and it holds them only for the activation
@@ -626,7 +628,11 @@ class SessionImpl implements Session {
 			const closing = this.assistants.draftOf(seat.def.name);
 			return closing ? [this.summarise(seat, activation, owner, closing)] : [];
 		}
-		return [this.sayTool(seat, activation), ...seat.def.tools.map(toPiTool)];
+		return [
+			this.sayTool(seat, activation),
+			...builtinTools(seat.def),
+			...seat.def.tools.map((tool) => toPiTool(tool, seat.def)),
+		];
 	}
 
 	/** The one hand an assistant is given, bound to the range it must stand for. */

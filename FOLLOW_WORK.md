@@ -167,6 +167,35 @@ and scopes it out to this entry; `ToolContext` in
 a credential to reach a tool call now, alongside `defineTool`'s `execute`
 in [`docs/agent.md`](docs/agent.md) §3.
 
+## A backend on a real machine
+
+**What.** A `WorkspaceBackend` whose `connect` creates a real OS user when
+one is absent and returns an `env` whose `exec` runs as that user through a
+real user switch. [`docs/workspace.md`](docs/workspace.md) §10 sketches it
+and commits to nothing.
+
+**Why.** The just-bash backend's boundary is nominal
+([`docs/workspace.md`](docs/workspace.md) §8): one instance, one identity,
+and nothing stops one agent's `bash` call from reading another's home. A
+real user turns that into isolation the operating system enforces, the
+guarantee a multi-user Linux box gives. The shape is already fixed: two
+functions, `connect` and `destroy`, and `connect` takes the tool call's
+abort signal because `useradd` and a process spawn are real waits.
+
+**What it needs deciding.**
+
+- How an OS user is named from an agent's `name`, and what happens when two
+  workspaces on one host provision the same name
+  ([`docs/workspace.md`](docs/workspace.md) §7 accepts the collision and
+  checks nothing).
+- What `destroy` removes: the users, their homes, or both.
+- Whether Pi's `NodeExecutionEnv` is the `env`, with a `sudo -u` prefix on
+  every command, or whether the backend spawns as the user itself.
+
+**Where.** `WorkspaceBackend` in
+[`types.ts`](packages/ambion/src/types.ts); `directoryBackend` in
+[`just-bash.ts`](packages/ambion/src/just-bash.ts) is the shape to copy.
+
 ## Whether Agent or AgentHarness is Ambion's foundation
 
 **What.** Ambion's runtime imports Pi's lower-level `Agent` class

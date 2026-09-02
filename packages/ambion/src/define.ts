@@ -17,10 +17,14 @@ import {
 	HUMAN_BRAND,
 	type HumanDefinition,
 	isAgent,
+	isWorkspace,
 	SEAT_BRAND,
 	type SeatedAgent,
 	TOOL_BRAND,
+	type ToolContext,
+	type WorkspaceHandle,
 } from './types.ts';
+import { BUILTIN_TOOL_NAMES } from './workspace.ts';
 
 export interface DefineAgentOptions {
 	/** Identifies the agent inside a session and on the record. */
@@ -33,18 +37,50 @@ export interface DefineAgentOptions {
 	model: string;
 	/** Extra hands, defined with `defineTool` (or Pi's own — both work unchanged). */
 	tools?: readonly unknown[];
+	/**
+	 * The workspace the agent reaches through its tools, from `defineWorkspace`.
+	 * Naming one binds `read`, `write`, `edit` and `bash` to every activation,
+	 * and hands every tool a `ctx.workspace()` that resolves to it.
+	 */
+	workspace?: WorkspaceHandle;
 }
 
 export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 	assertName(options.name);
+	const tools = options.tools ?? [];
+	if (options.workspace !== undefined) assertWorkspaceTools(options.name, options.workspace, tools);
 	return {
 		[AGENT_BRAND]: true,
 		name: options.name,
 		identity: options.identity,
 		instructions: options.instructions,
 		model: options.model,
-		tools: options.tools ?? [],
+		tools,
+		...(options.workspace === undefined ? {} : { workspace: options.workspace }),
 	};
+}
+
+/**
+ * The four built-in names belong to the workspace. A custom tool under one of
+ * them would fight the built-in for the same name on the model's menu, or
+ * replace it silently, so an agent that names a workspace keeps them free.
+ */
+function assertWorkspaceTools(
+	agent: string,
+	workspace: WorkspaceHandle,
+	tools: readonly unknown[],
+): void {
+	if (!isWorkspace(workspace)) {
+		throw new Error(`The workspace for '${agent}' must come from defineWorkspace.`);
+	}
+	for (const tool of tools) {
+		const name = (tool as { name?: unknown }).name;
+		if (typeof name === 'string' && BUILTIN_TOOL_NAMES.has(name)) {
+			throw new Error(
+				`Agent '${agent}' names a workspace, so '${name}' is a built-in tool: give the custom tool another name.`,
+			);
+		}
+	}
 }
 
 export interface DefineHumanOptions {
@@ -88,6 +124,14 @@ function assertAssistant(assistant: AgentDefinition, person: string): void {
 			`Assistant '${assistant.name}' holds tools: an assistant shapes what a room does and never acts in it.`,
 		);
 	}
+	// A workspace binds tools an assistant never holds: `handsFor` returns
+	// before it reaches them, so the field would be live in the definition and
+	// inert at runtime. Refusing it here catches that where it is written.
+	if (assistant.workspace !== undefined) {
+		throw new Error(
+			`Assistant '${assistant.name}' names a workspace: an assistant shapes what a room does and never acts in it.`,
+		);
+	}
 }
 
 /**
@@ -127,17 +171,22 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 	name: string;
 	description: string;
 	parameters: TParameters;
-	/** Return a string (or Pi's full content shape when needed). Throw on failure. */
+	/**
+	 * Return a string (or Pi's full content shape when needed). Throw on failure.
+	 * `ctx.workspace()` resolves the calling agent's workspace, and `ctx.signal`
+	 * is the abort signal Pi gives the tool call.
+	 */
 	execute: (
 		params: Static<TParameters>,
-		signal?: AbortSignal,
+		ctx: ToolContext,
 	) => Promise<string | AgentToolResult<unknown>> | string | AgentToolResult<unknown>;
 }
 
 /**
  * A facade over Pi's tool shape, not a format of Ambion's own: parsed
- * parameters first, string returns allowed. A tool defined with Pi's
- * `defineTool` works unchanged wherever this one does.
+ * parameters first, a context second, string returns allowed. A tool defined
+ * with Pi's `defineTool` works unchanged wherever this one does, and reaches
+ * no workspace: its signature has no room for the context.
  */
 export function defineTool<TParameters extends TSchema>(
 	options: DefineToolOptions<TParameters>,
