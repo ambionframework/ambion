@@ -14,10 +14,12 @@ Four functions build a room, and one sentence holds the whole of it:
 > work in and people visit — each agent deciding for itself whether to speak,
 > to whom, and which colleague to call in.**
 
-Three documents build on this core and are also shipped:
+Four documents build on this core and are also shipped:
 [`exchange.md`](exchange.md) specifies the exchange, the room's own unit of
-work; [`presence.md`](presence.md) puts people in a running room; and
-[`assistant.md`](assistant.md) adds the assistant every person brings.
+work; [`presence.md`](presence.md) puts people in a running room;
+[`assistant.md`](assistant.md) adds the assistant every person brings; and
+[`workspace.md`](workspace.md) gives an agent's tools a boundary to reach
+into.
 
 ---
 
@@ -73,7 +75,10 @@ room reads, injected into every participant's context as part of the roster.
 `instructions` are private. They are the agent's own voice, appended to the
 runtime's system prompt, and they hold all of the agent's judgment —
 including the judgment to say nothing. The runtime's prompt is always
-present; instructions extend it.
+present; instructions extend it. One more field is optional: `workspace`,
+a handle from `defineWorkspace`, the identity and data boundary the
+agent's tools reach into. [`workspace.md`](workspace.md) is the contract
+for it.
 
 `defineAgent` returns a plain value. Everything that refers to an agent
 refers to this value. Nothing refers to an agent through a bare string.
@@ -96,11 +101,14 @@ const lookup = defineTool({
 
 `defineTool` is a facade over Pi's own tool shape: the same
 name-description-parameters-execute, with one convenience. `execute`
-receives the parsed parameters as its first argument, and it may return a
-plain string or Pi's full content shape. A tool defined with Pi's own
+receives the parsed parameters as its first argument and a `ToolContext`
+as its second: `ctx.workspace()` resolves the agent's workspace, and
+`ctx.signal` is the abort signal Pi gives the call. It may return a plain
+string or Pi's full content shape. A tool defined with Pi's own
 `defineTool` works unchanged (`toPiTool` in `seat.ts` accepts both), so
-learning Pi's format is the same as learning Ambion's. Tools are the
-agent's only hands in this cut.
+learning Pi's format is the same as learning Ambion's. An agent that names
+a workspace also holds four built-in tools, `read`, `write`, `edit` and
+`bash` ([`workspace.md`](workspace.md) §5).
 
 ---
 
@@ -504,7 +512,9 @@ record in [`record.ts`](../packages/ambion/src/record.ts), who is here in
 in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
 [`activation.ts`](../packages/ambion/src/activation.ts), the exchange in
 [`exchange.ts`](../packages/ambion/src/exchange.ts), what a person's assistant
-writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), and what any of them
+writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), what an
+agent's tools reach into in
+[`workspace.ts`](../packages/ambion/src/workspace.ts), and what any of them
 reads in [`render.ts`](../packages/ambion/src/render.ts).
 
 **A seat is seated for the run. An activation lasts seconds.** What an

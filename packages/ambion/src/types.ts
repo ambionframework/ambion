@@ -5,7 +5,7 @@
  * seat in the roster, an event on the stream, a definition it wrote itself.
  * Nothing in this file does anything; the files beside it are what happens.
  */
-import type { AgentToolResult } from '@earendil-works/pi-agent-core';
+import type { AgentToolResult, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import type { Static, TSchema } from 'typebox';
 import type { ClosedExchange, Exchange } from './exchange.ts';
 
@@ -175,6 +175,18 @@ export const TOOL_BRAND = Symbol.for('ambion.tool');
 export const AGENT_BRAND = Symbol.for('ambion.agent');
 export const HUMAN_BRAND = Symbol.for('ambion.human');
 export const SEAT_BRAND = Symbol.for('ambion.seat');
+export const WORKSPACE_BRAND = Symbol.for('ambion.workspace');
+
+/**
+ * What a tool's `execute` is handed beside its parameters: the calling
+ * agent's workspace, resolved fresh on every call, and the abort signal Pi
+ * gives the tool call.
+ */
+export interface ToolContext {
+	/** The calling agent's workspace, or undefined if it has none or it is destroyed. */
+	workspace(): Promise<Workspace | undefined>;
+	readonly signal?: AbortSignal;
+}
 
 /** A tool defined with Ambion's `defineTool` facade. */
 export interface AmbionTool<TParameters extends TSchema = TSchema> {
@@ -184,8 +196,43 @@ export interface AmbionTool<TParameters extends TSchema = TSchema> {
 	readonly parameters: TParameters;
 	readonly execute: (
 		params: Static<TParameters>,
-		signal?: AbortSignal,
+		ctx: ToolContext,
 	) => Promise<string | AgentToolResult<unknown>> | string | AgentToolResult<unknown>;
+}
+
+/**
+ * The identity and data boundary an agent connects to when it is defined.
+ * `name` is the durable identity; the backend and the destroyed mark sit
+ * behind the brand, where `workspace.ts` reads them.
+ */
+export interface WorkspaceHandle {
+	readonly [WORKSPACE_BRAND]: true;
+	readonly name: string;
+}
+
+/**
+ * What a tool receives from `ctx.workspace()`: the workspace's name and the
+ * environment the backend built for the calling agent. `env` is one property
+ * so a later kind of entity gets a property beside it.
+ */
+export interface Workspace {
+	readonly name: string;
+	readonly env: ExecutionEnv;
+}
+
+/**
+ * What backs a workspace: one function that builds an agent's environment,
+ * and one that deletes everything held under the workspace's name.
+ */
+export interface WorkspaceBackend {
+	/**
+	 * Build the environment for one agent, rooted at its own home and carrying
+	 * whatever identity the backend gives an agent. Called on every
+	 * `ctx.workspace()`; it creates what is missing and remembers nothing.
+	 */
+	connect(agent: AgentDefinition, signal?: AbortSignal): Promise<ExecutionEnv>;
+	/** Delete everything the backend holds for this workspace. Called once. */
+	destroy(): Promise<void>;
 }
 
 export interface AgentDefinition {
@@ -195,6 +242,8 @@ export interface AgentDefinition {
 	readonly instructions: string;
 	readonly model: string;
 	readonly tools: readonly unknown[];
+	/** The workspace this agent reaches through its tools, when it has one. */
+	readonly workspace?: WorkspaceHandle;
 }
 
 export interface HumanDefinition {
@@ -232,4 +281,8 @@ export function isSeatedAgent(p: unknown): p is SeatedAgent {
 
 export function isAmbionTool(t: unknown): t is AmbionTool {
 	return typeof t === 'object' && t !== null && TOOL_BRAND in t;
+}
+
+export function isWorkspace(w: unknown): w is WorkspaceHandle {
+	return typeof w === 'object' && w !== null && WORKSPACE_BRAND in w;
 }

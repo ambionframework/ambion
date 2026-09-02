@@ -19,6 +19,7 @@ import type {
 import type { Activation } from './activation.ts';
 import type { AgentDefinition, Attention, Message } from './types.ts';
 import { isAmbionTool, isSpoken } from './types.ts';
+import { toolContext } from './workspace.ts';
 
 export interface SeatRuntime {
 	def: AgentDefinition;
@@ -74,7 +75,13 @@ export function wakes(
 	return reach === 'named' ? seat === target : true;
 }
 
-export function toPiTool(tool: unknown): AgentTool {
+/**
+ * One Pi tool from what a seat declared. A `defineTool` tool is handed a
+ * `ToolContext` built for the seat's agent on every call, which is how it
+ * reaches a workspace; a Pi-native tool passes through as it is, and its
+ * signature has no room for one.
+ */
+export function toPiTool(tool: unknown, agent: AgentDefinition): AgentTool {
 	if (isAmbionTool(tool)) {
 		return {
 			name: tool.name,
@@ -82,7 +89,7 @@ export function toPiTool(tool: unknown): AgentTool {
 			description: tool.description,
 			parameters: tool.parameters,
 			execute: async (_toolCallId, params, signal) => {
-				const result = await tool.execute(params, signal);
+				const result = await tool.execute(params, toolContext(agent, signal));
 				return typeof result === 'string'
 					? { content: [{ type: 'text', text: result }], details: {} }
 					: result;

@@ -5,26 +5,26 @@ Guidance for Claude Code in this repository.
 ## Project
 
 Ambion — a minimalist framework for ambient-aware, always-on agents. Agents wait
-in a session and activate only when a message is delivered to them. Four
-primitives: `defineAgent`, `defineHuman`, `defineTool`, `startSession`. A
-person's assistant writes the one message they read when the room goes
-quiet.
+in a session and activate only when a message is delivered to them. Five
+primitives: `defineAgent`, `defineHuman`, `defineTool`, `defineWorkspace`,
+`startSession`. A person's assistant writes the one message they read when
+the room goes quiet.
 
 pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 
-| Path                | What                                                                             |
-| ------------------- | -------------------------------------------------------------------------------- |
-| `packages/ambion`   | The runtime. One file per concern; `session.ts` is the room that composes them   |
-| `packages/cli`      | The `ambion` binary                                                              |
-| `docs/agent.md`     | Design contract for the core — read before changing the runtime                  |
-| `docs/exchange.md`  | Design contract for the exchange, the room's unit of work — read with `agent.md` |
-| `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                   |
-| `docs/assistant.md` | Design contract for the assistant, a person's counterpart in a room              |
-| `docs/workspace.md` | Design contract for the workspace, ahead of the code — read before it lands      |
-| `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs   |
-| `examples/site`     | Runnable example                                                                 |
-| `demos/`            | One dated report per merged change — regenerate on the branch, then leave it     |
-| `FOLLOW_WORK.md`    | Work a branch decided not to do, and why it is worth doing                       |
+| Path                | What                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| `packages/ambion`   | The runtime. One file per concern; `session.ts` is the room that composes them       |
+| `packages/cli`      | The `ambion` binary                                                                  |
+| `docs/agent.md`     | Design contract for the core — read before changing the runtime                      |
+| `docs/exchange.md`  | Design contract for the exchange, the room's unit of work — read with `agent.md`     |
+| `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                       |
+| `docs/assistant.md` | Design contract for the assistant, a person's counterpart in a room                  |
+| `docs/workspace.md` | Design contract for the workspace an agent's tools reach into — read with `agent.md` |
+| `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs       |
+| `examples/site`     | Runnable example                                                                     |
+| `demos/`            | One dated report per merged change — regenerate on the branch, then leave it         |
+| `FOLLOW_WORK.md`    | Work a branch decided not to do, and why it is worth doing                           |
 
 ## Thesis
 
@@ -47,9 +47,7 @@ one event source; timers, tasks and other systems are event sources of the
 same kind, and every one enters as a message. Keep both framings in
 `README.md` and `docs/`.
 
-`README.md` and `docs/` document what is implemented. `docs/workspace.md` is
-the one exception: it specifies the workspace ahead of the code, because an
-agent already needs the boundary it draws. Do not write about other
+`README.md` and `docs/` document what is implemented. Do not write about
 unbuilt concepts (channels, deployment targets) there; deferred work goes in
 `FOLLOW_WORK.md`.
 
@@ -66,7 +64,8 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
 ## Code rules
 
 - Pi (`@earendil-works/pi-agent-core`) owns the model loop, tools, transcript.
-  Ambion owns only participants-as-values and the session. A third concern is a
+  just-bash owns the virtual filesystem and shell behind a workspace. Ambion
+  owns only participants-as-values and the session. A third concern is a
   design failure: push it into a dependency or drop it. `render.ts` is
   everything a participant reads — prompts, roster, record, the ask at the end
   of a turn — and stays pure and stateless so it does not become one. What the

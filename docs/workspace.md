@@ -1,11 +1,14 @@
 # The workspace
 
-This document specifies the workspace: the identity and data boundary an
-agent connects to when it is defined. No code in
-[`packages/ambion/src`](../packages/ambion/src) implements it yet. This is
-the design, ahead of the code, in the place a reader expects to find it once
-it lands. Read [`agent.md`](agent.md) first: a workspace attaches to the
-agent that document specifies, and changes none of its eight rules.
+This document is the design contract for the workspace: the identity and
+data boundary an agent connects to when it is defined. The workspace is
+shipped. The handle, the resolver and the built-in tools live in
+[`workspace.ts`](../packages/ambion/src/workspace.ts), the adapter around a
+just-bash instance in [`bash-env.ts`](../packages/ambion/src/bash-env.ts),
+the two backends in [`just-bash.ts`](../packages/ambion/src/just-bash.ts),
+and the public shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
+[`agent.md`](agent.md) first: a workspace attaches to the agent that
+document specifies, and changes none of its eight rules.
 
 One sentence:
 
@@ -104,11 +107,10 @@ session's `repo` option takes a `SessionRepo` (`agent.md` §5). §7 specifies
 the two functions it needs, `connect` and `destroy`. Nothing here is a
 class to extend: a `WorkspaceBackend` is a plain object holding those two
 functions, and the natural way to build one is a factory function that
-closes over whatever configuration it needs — a `WorkspaceBackendFn`, the
-shape `directoryBackend` below has. Without the `backend` field, the handle
-holds an in-memory just-bash filesystem of its own (§8). With it, the
-factory decides what `connect` builds. `defineWorkspace`'s own API is the
-same either way.
+closes over whatever configuration it needs, the shape `directoryBackend`
+below has. Without the `backend` field, the handle holds an in-memory
+just-bash filesystem of its own (§8). With it, the factory decides what
+`connect` builds. `defineWorkspace`'s own API is the same either way.
 
 ```ts
 const teamSite = defineWorkspace({
@@ -132,12 +134,16 @@ import { destroyWorkspace } from '@ambionframework/ambion';
 await destroyWorkspace(teamSite);
 ```
 
-It calls `WorkspaceBackend.destroy()` (§7) once. That call performs the
-hard deletion: a directory-backed workspace's files, a real-machine
-backend's provisioned users and their homes, the in-memory default's
-filesystem. `destroyWorkspace` then marks the handle destroyed and frees
-its name. A later `defineWorkspace` call for the same name is accepted and
-starts from nothing.
+It marks the handle destroyed, then calls `WorkspaceBackend.destroy()`
+(§7) once. That call performs the hard deletion: a directory-backed
+workspace's files, a real-machine backend's provisioned users and their
+homes, the in-memory default's filesystem. The mark comes first so a tool
+call that lands while the backend deletes resolves `undefined` (§4), and a
+second `destroyWorkspace` on the same handle does nothing. A backend that
+fails to delete leaves the workspace live, and the caller sees the
+failure. Once the deletion is done, `destroyWorkspace` frees the name. A
+later `defineWorkspace` call for the same name is accepted and starts from
+nothing.
 
 **A connected agent's next `ctx.workspace()` call sees the mark.** Every
 call resolves fresh (§4), so there is no cached value to invalidate. A
@@ -200,10 +206,9 @@ changes there.
 
 ## 4. Reaching a workspace from a tool: ToolContext
 
-`defineTool`'s `execute` function takes its parsed parameters and an
-optional `AbortSignal` today (`define.ts`; `agent.md` §3 omits the signal
-from its description). The second parameter becomes a context object, and
-the signal moves inside it.
+`defineTool`'s `execute` function takes its parsed parameters and a context
+object (`define.ts`; `agent.md` §3). The abort signal Pi gives the tool
+call sits inside the context.
 
 ```ts
 interface ToolContext {
@@ -225,10 +230,9 @@ const readFile = defineTool({
 });
 ```
 
-**This changes `execute`'s signature.** Every tool defined today takes
-`(params, signal?)`; every tool defined after this lands takes
-`(params, ctx)`. A tool that reads the second parameter today reads
-`ctx.signal` afterwards. None of `examples/site`'s ten tools reads it: each
+**`execute` takes `(params, ctx)`.** Before the workspace landed it took
+`(params, signal?)`. A tool that read the second parameter then reads
+`ctx.signal` now. None of `examples/site`'s ten tools reads it: each
 declares `execute` with one parameter or none.
 
 **`ctx.workspace()` resolves fresh on every call, and calls `connect` every
@@ -369,10 +373,10 @@ gave. None of the four factories sets the field itself. A batch that holds
 one built-in call runs every call in that batch one at a time, custom tools
 included. A batch of custom tools alone still runs in parallel.
 
-**The wrapped value takes the one-line cast to `AgentTool` that `toPiTool`
-(`seat.ts`) applies to a Pi-native tool.** Strict mode does not consider
-`Static<typeof readSchema>` assignable to `AgentTool`'s default `params`
-type on its own.
+**The wrapped value takes a one-line cast to `AgentTool`**, the way
+`toPiTool` (`seat.ts`) casts a Pi-native tool. Strict mode does not
+consider `Static<typeof readSchema>` assignable to `AgentTool`'s default
+`params` type on its own.
 
 **A custom tool reaches the same object.** `ctx.workspace()` returns the
 same `Workspace` the four built-ins resolve on every call. An author whose
@@ -535,14 +539,15 @@ plus one `echo`, so one per tool call costs little. Two instances over one
 filesystem share every file. A write from one is visible to the other at
 once, and two writes to one path from two agents end with the last one.
 
-**A directory backend uses `ReadWriteFs`.** `ReadWriteFs` is the one
+**`directoryBackend(root)` uses `ReadWriteFs`.** `ReadWriteFs` is the one
 just-bash filesystem that writes through to a real directory (probed: a
 `writeFile` through it lands on disk). `connect` builds the same `Bash`
-instance over it. `OverlayFs`, just-bash's other disk-backed option, is
-copy-on-write: reads come from disk, writes stay in memory, so it has no
-place in a durable backend. `MountableFs` composes several roots and
-refuses a mount at `/`, so it plays no part in what makes a directory
-backend durable either.
+instance over it. `ReadWriteFs` refuses a root that does not exist, so the
+first `connect` creates the root, and `defineWorkspace` stays synchronous.
+`OverlayFs`, just-bash's other disk-backed option, is copy-on-write: reads
+come from disk, writes stay in memory, so it has no place in a durable
+backend. `MountableFs` composes several roots and refuses a mount at `/`,
+so it plays no part in what makes a directory backend durable either.
 
 **The home is `/home/<name>`, and `connect` creates it.** This is the
 just-bash backend's convention; the runtime imposes no path on any backend.
@@ -552,6 +557,14 @@ given) and writes nothing into a `ReadWriteFs`. `ReadWriteFs.writeFile`
 creates parent directories, but `ls ~` before the first write fails with
 `ENOENT`. `connect`'s `mkdir` (§7) makes the home exist on both. Neither
 filesystem starts with `/tmp` (§9).
+
+**`/dev/null` is a plain file on both filesystems.** just-bash seeds an
+empty `/dev/null` into a fresh `InMemoryFs` and treats it as a file: a
+command that redirects into it appends to it (probed: `echo hi >/dev/null`
+leaves three bytes there). `ReadWriteFs` starts without `/dev`, so the same
+redirect creates `dev/null` under the root, on disk. A directory backend
+therefore holds whatever agents discarded, and [`FOLLOW_WORK.md`](../FOLLOW_WORK.md)
+tracks it.
 
 **`env.cwd` is the agent's home for the life of the `env`, and nothing
 tracks it further.** Pi's `FileSystem` declares `cwd` as a plain property,
@@ -576,6 +589,12 @@ machine, and just-bash's virtual shell is at least a wall between an
 agent's commands and its own mount. `NodeExecutionEnv` cannot serve as the
 in-memory default, because it runs against a real directory.
 
+**The in-memory default holds 128 MB.** `InMemoryFs` takes a byte limit at
+construction, and the default backend sets one (`MEMORY_LIMIT_BYTES` in
+`just-bash.ts`). A write past it throws `ENOSPC`, which reaches the tool as
+a failure that names the limit. A directory backend has no such cap: the
+disk under it is the limit.
+
 **`cleanup()` is a no-op.** `ExecutionEnv` requires the method. just-bash
 exposes no dispose or close on a `Bash` instance or on its filesystems. A
 garbage collector reclaims the memory once `destroyWorkspace` (§2) drops
@@ -583,7 +602,7 @@ the references.
 
 **`destroy()` drops the filesystem, or deletes the directory.** For the
 in-memory default it releases the `InMemoryFs`. For a directory backend it
-removes the directory's contents.
+removes the root's contents and leaves the root.
 
 ---
 
@@ -640,17 +659,20 @@ already exists` on `InMemoryFs`, `file already exists` on `ReadWriteFs`),
 - **Map `ShellExecOptions` onto just-bash's `ExecOptions`, and tell the two
   exit-124 paths apart.** `cwd` maps to `cwd`, resolved against `env.cwd`
   first the way `NodeExecutionEnv` resolves it; `env` maps to `env`;
-  `abortSignal` maps to `signal`; `inheritEnv` has nothing to inherit and
-  maps to the seeded environment. An aborted `exec` returns exit code 124
-  with `bash: execution aborted` on stderr, and the adapter returns
-  `err(ExecutionError('aborted'))` when the caller's signal fired.
-  just-bash's instance-wide execution limit (`maxExecutionTimeMs`: one hour
-  in the `normal` profile, 30 seconds in `hardened`) returns the same code
-  with `exceeded its execution deadline`, and the adapter returns
+  `abortSignal` maps to `signal`; `inheritEnv` has nothing to inherit, and
+  the seeded environment is the whole environment. An aborted `exec`
+  returns exit code 124 with `bash: execution aborted` on stderr, and the
+  adapter returns `err(ExecutionError('aborted'))` when the caller's signal
+  fired. just-bash's instance-wide execution limit (`maxExecutionTimeMs`:
+  one hour in the `normal` profile, 30 seconds in `hardened`) returns the
+  same code with `exceeded its execution deadline`, and the adapter returns
   `err(ExecutionError('timeout'))` when its own timer fired.
   `ShellExecOptions.timeout` is per call and in seconds; just-bash offers no
   per-call limit, so the adapter builds one from an `AbortController` and a
-  timer.
+  timer (`Deadline` in `bash-env.ts`). A call that names no timeout gets 30
+  seconds (`DEFAULT_TIMEOUT_SECONDS`). Pi's `bash` tool passes the model's
+  `timeout` and nothing when the model gives none, so a command that never
+  ends cannot hold an activation open.
 - **Implement `listDir` as one `readdir` plus one `lstat` per entry.** Pi's
   `FileInfo` carries `size` and `mtimeMs`. just-bash's optional
   `readdirWithFileTypes` returns names and kinds only, so the per-entry
@@ -703,14 +725,14 @@ does: through `ToolContext` (§4), as a second property on `Workspace` (§6).
 
 ## 12. What is not decided
 
-- **Whether just-bash becomes a hard dependency of
-  `@ambionframework/ambion`, or ships behind its own backend package.** It
-  pulls in sixteen runtime dependencies of its own (`quickjs-emscripten`,
-  `sql.js`, `undici`, `re2js`, and more) for about 25 MB installed.
-  `connect` returning a plain `ExecutionEnv` (§7) is what makes the split
-  possible: nothing in `Workspace`'s shape (§6) requires a caller to import
-  just-bash, only the `WorkspaceBackend` their factory function builds
-  does. Which of the two this project does is open.
+- **Whether just-bash stays a dependency of `@ambionframework/ambion`, or
+  moves behind its own backend package.** It is a dependency today, so the
+  in-memory default needs no import. It pulls in sixteen runtime
+  dependencies of its own (`quickjs-emscripten`, `sql.js`, `undici`,
+  `re2js`, and more) for about 22 MB installed. `connect` returning a plain
+  `ExecutionEnv` (§7) is what keeps the split possible: nothing in
+  `Workspace`'s shape (§6) requires a caller to import just-bash, only the
+  `WorkspaceBackend` their factory function builds does.
 - **Whether an agent can name a workspace and decline the built-in
   tools.** §5 binds all four to every connected agent, and an agent that
   wants only its own narrower tools has no way to reach `ctx.workspace()`
@@ -718,40 +740,46 @@ does: through `ToolContext` (§4), as a second property on `Workspace` (§6).
 
 ---
 
-## 13. Status
+## 13. What proves it
 
-Nothing here is implemented. No type in
-[`types.ts`](../packages/ambion/src/types.ts) names a workspace, no
-function creates one, `defineAgent` takes no `workspace` argument, and no
-built-in filesystem tool exists. `startSession`'s public signature needs no
-change (§3). `session.ts` internals do: `handsFor()` binds the four
-built-ins through `ctx.workspace()` (§4, §5) beside what `toPiTool`
-(`seat.ts`) already does, and `toPiTool` takes a resolver as a new argument
-to wrap a `defineTool`-built tool's `execute` with `ToolContext` at all. No
+The milestone tests live in
+[`workspace.test.ts`](../packages/ambion/test/workspace.test.ts), one per
+claim this document makes loudly:
+
+- one handle per name until `destroyWorkspace` frees it, and a second
+  destroy does nothing (§2);
+- `defineAgent` refusing a custom tool under one of the four built-in
+  names, and `defineHuman` refusing an assistant that names a workspace
+  (§3);
+- a connected agent's activation holding `read`, `write`, `edit` and
+  `bash` beside `say`, and a plain agent holding `say` alone (§5);
+- two agents on one workspace sharing every file, each rooted at its own
+  home, and a home that does not exist until the agent's first tool asks
+  for it (§7, §8);
+- two edits to one file in one batch both landing (§5);
+- a destroyed workspace failing the next built-in call, resolving
+  `undefined` for a custom tool, and leaving the activation running (§2,
+  §4);
+- `ctx.workspace()` calling `connect` on every call and caching nothing,
+  and a `connect` failure surfacing as the tool call's failure (§4, §7);
+- the adapter: error classification, `~` expansion, output delivered
+  through the callbacks, `cd` lasting one command, abort told apart from
+  timeout, temp files under `/tmp`, `listDir` with sizes (§9);
+- `directoryBackend` writing through to disk, creating its root, and
+  emptying it on destroy (§8).
+
+All in-process, in vitest, on a scripted stream where determinism matters.
+
+**What is built.** `defineWorkspace`, `destroyWorkspace`, `ToolContext`,
+the four built-in tools, the just-bash adapter, the in-memory default and
+`directoryBackend`. `startSession`'s public signature did not change (§3).
+`handsFor()` in `session.ts` binds the four built-ins beside what
+`toPiTool` (`seat.ts`) already did, and `toPiTool` takes the seat's agent
+so it can build a `ToolContext` for a `defineTool`-built tool. No
 `defineAgent` call in [`README.md`](../README.md), [`agent.md`](agent.md)
-or [`examples/site`](../examples/site) needs to change the day this lands:
-none of those agents uses a filesystem tool today. `vercel-labs/just-bash`
-(§8) is no dependency yet: `pnpm-lock.yaml` names nothing under that
-package.
+or [`examples/site`](../examples/site) changed: none of those agents uses a
+filesystem tool.
 
-**One change here breaks the shape tools are written against, and nothing
-existing breaks over it.** `defineTool`'s `execute` takes `(params,
-signal?)` today; §4 changes that to `(params, ctx)`, with the signal moved
-inside. A tool that reads the second parameter today reads `ctx.signal`
-afterwards. None of `examples/site`'s ten tools reads it, so the change
-forces no edit today.
-
-**The in-memory default is specified well enough to build. The adapter, a
-directory backend, and a real-machine backend are not written.** §6 through
-§9 pin the default: `Workspace` holding a `name` and an `env`, one
-filesystem per workspace, one `Bash` instance per `connect`, `env.cwd`
-fixed at the agent's home, `cleanup()` a no-op, `connect` one idempotent
-`mkdir`, the four built-ins bound sequential. §9 names what the adapter has
-to do — error classification, output delivery, temp files, `HOME`, abort
-and timeout, `listDir` — none of it written. A directory backend over
-`ReadWriteFs` is sketched. The real-machine backend stays a candidate, per
-§10.
-
-This document exists so a later change starts from a design already
-written down, on the same footing [`agent.md`](agent.md) §7 gives the
-core's one known gap: written down before it is hit.
+**What is not built.** The real-machine backend (§10) stays a candidate,
+and reminders and tasks (§11) are specified only as far as where they will
+live.

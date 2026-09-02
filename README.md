@@ -66,17 +66,19 @@ mark on the record. The runtime stamps who said what.
 
 ## The model
 
-Four functions build a room, and three verbs run it.
+Five functions build a room, and four verbs run it.
 
-| Function       | What it does                                                                                                                                               |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `defineAgent`  | Makes an agent as a plain value: a name, an identity the room reads, private instructions, a model, tools. It speaks only when spoken to, and can decline. |
-| `defineHuman`  | Names a person: an identity the agents read and address. People visit a running session; an arrival is a message.                                          |
-| `defineTool`   | Declares what an agent can do beyond speaking. Pi's own tool shape, behind one import.                                                                     |
-| `startSession` | Brings up a named room from its agents and a goal.                                                                                                         |
-| `visitSession` | Puts a person in a running room; delivering belongs to the visit.                                                                                          |
-| `readSession`  | Reads the record between runs. Nothing stands up, nothing to bill.                                                                                         |
-| `stopSession`  | Takes the room down.                                                                                                                                       |
+| Function           | What it does                                                                                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `defineAgent`      | Makes an agent as a plain value: a name, an identity the room reads, private instructions, a model, tools. It speaks only when spoken to, and can decline. |
+| `defineHuman`      | Names a person: an identity the agents read and address. People visit a running session; an arrival is a message.                                          |
+| `defineTool`       | Declares what an agent can do beyond speaking. Pi's own tool shape, behind one import.                                                                     |
+| `defineWorkspace`  | Names the identity and data boundary an agent's tools reach into: a shared filesystem and shell, durable by its name.                                      |
+| `startSession`     | Brings up a named room from its agents and a goal.                                                                                                         |
+| `visitSession`     | Puts a person in a running room; delivering belongs to the visit.                                                                                          |
+| `readSession`      | Reads the record between runs. Nothing stands up, nothing to bill.                                                                                         |
+| `stopSession`      | Takes the room down.                                                                                                                                       |
+| `destroyWorkspace` | Retires a workspace for good, files included.                                                                                                              |
 
 **Attention** decides what wakes a seat, chosen when the agent is seated
 (`seated(agent, attention)`; a bare agent takes the default):
@@ -102,10 +104,35 @@ that wide. That comparison is the whole routing rule.
   agents read that summary in place of the messages it stands for.
 - It never speaks for its person and never wakes anybody.
 
+**The workspace** is what an agent connects to when it is defined, as an
+optional field on `defineAgent`:
+
+- It is a container of persistent entities, durable by its own name. Today
+  that is a shared filesystem and shell; every agent that connects gets its
+  own home in it.
+- An agent that names one holds `read`, `write`, `edit` and `bash` on every
+  activation, and every custom tool reaches the same workspace through
+  `ctx.workspace()`.
+- Without a backend it lives in memory. `directoryBackend(path)` writes
+  through to a real directory.
+
+```ts
+const teamSite = defineWorkspace({ name: 'team-site' });
+
+const scribe = defineAgent({
+  name: 'scribe',
+  identity: 'Keeps the site log.',
+  instructions: 'Append each decision to ~/log.md, and say when you have.',
+  model: 'anthropic/claude-sonnet-5',
+  workspace: teamSite,
+});
+```
+
 The contracts: [`docs/agent.md`](docs/agent.md) for the core,
 [`docs/exchange.md`](docs/exchange.md) for the exchange,
 [`docs/presence.md`](docs/presence.md) for people and visits,
-[`docs/assistant.md`](docs/assistant.md) for the assistant.
+[`docs/assistant.md`](docs/assistant.md) for the assistant,
+[`docs/workspace.md`](docs/workspace.md) for the workspace.
 
 ## Example
 
@@ -228,8 +255,8 @@ release setup. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the short version.
 4. Many agents, each expert in one domain; the platform provides the
    shared capabilities.
 5. What a person wants belongs to that person; their assistant holds it.
-6. Minimal surface: four functions, one activation rule, one dependency
-   that does the rest.
+6. Minimal surface: five functions, one activation rule, and every other
+   concern pushed into a dependency.
 
 ## License
 
