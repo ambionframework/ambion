@@ -4,11 +4,11 @@ This document is the design contract for the assistant: the agent every
 person brings into a session, which holds how they read and turns the
 room's work into one message. It is shipped. The code lives with the rest
 of the runtime in [`packages/ambion/src`](../packages/ambion/src) —
-the exchange and the summary in
-[`session.ts`](../packages/ambion/src/session.ts), the fold a seat reads in
-[`render.ts`](../packages/ambion/src/render.ts), the shapes in
-[`types.ts`](../packages/ambion/src/types.ts). Read [`agent.md`](agent.md)
-and [`presence.md`](presence.md) first.
+the summary in [`session.ts`](../packages/ambion/src/session.ts), the fold a
+seat reads in [`render.ts`](../packages/ambion/src/render.ts), the shapes
+in [`types.ts`](../packages/ambion/src/types.ts). Read
+[`agent.md`](agent.md), [`exchange.md`](exchange.md) and
+[`presence.md`](presence.md) first.
 
 One sentence:
 
@@ -88,15 +88,14 @@ answers for anyone.
 ## 3. The exchange
 
 The unit is the **exchange**, and it belongs to the core:
-[`agent.md`](agent.md) specifies it, and
+[`exchange.md`](exchange.md) specifies it, and
 [`exchange.ts`](../packages/ambion/src/exchange.ts) is where it lives. A
 question, and everything the room does until it goes quiet again. A
 person's question opens one; quiescence closes it; what lands in between
 steers the seats already working and changes nothing.
 
 An assistant is the first thing to read a closed exchange, and other readers
-exist beside it: a client folds the working under the question it answered,
-and a host measures an exchange somebody asked for. An exchange opens and
+exist beside it ([`exchange.md`](exchange.md) §7). An exchange opens and
 closes whether or not its assistant ends up writing anything for it — that
 choice is §4's, not the exchange's.
 
@@ -110,12 +109,11 @@ What matters here is what an assistant makes of one:
   never restart on its own, so a summary written at the close is written
   over work that is over.
 
-An exchange covers itself and nothing else. `from` is the question that
-opened it; `through` is the last seq when the summary commits. **A summary
-stands for one exchange, and never for anything before it.** The room holds
-`from` while the exchange is open, the same way it holds the owner, and
-`through` is a live read of the record; the runtime keeps no cursor beside
-it.
+**A summary stands for one exchange, and never for anything before it.**
+`from` is the question that opened it; `through` is the last seq when the
+summary commits. The room holds `from` while the exchange is open, the same
+way it holds the owner, and `through` is a live read of the record; the
+runtime keeps no cursor beside it.
 
 A person who walks back into a room after two days is not summarised for
 the two days. What they missed is presence's business (§15), and their next
@@ -123,8 +121,8 @@ question opens a range of its own.
 
 The close is a race, and §5 settles it with the lock the room already has.
 
-[`agent.md`](agent.md) §7 records the gap underneath this: nothing bounds
-how long an exchange may run.
+[`exchange.md`](exchange.md) §8 records the gap underneath this: nothing
+bounds how long an exchange may run.
 
 ---
 
@@ -252,25 +250,20 @@ every kind of message, says and summaries alike.
 ## 6. Who owns an exchange
 
 A room holds several people, and each brings an assistant. Only one writes
-per exchange:
+per exchange, and the exchange says which
+([`exchange.md`](exchange.md) §4):
 
 > **A person's question opens an exchange and owns it. Messages that land
 > into an open exchange steer the seats already working and change nothing
 > — the owner stays, and so does which assistant writes at the close.**
 
-The room holds one name while an exchange is open and drops it at the
-close. That is run state, like the count of active seats. It does not
-survive a restart, and neither does an exchange.
-
 **An assistant outlives its person's visit by one exchange.** Priya may ask and
 walk out before the room settles. The exchange is still hers, it still
 closes, and her assistant still writes its summary — addressed to her, waiting
-for her. An exchange that opened is finished properly or not at all, and a
-person leaving is no reason to leave the room's work unresolved.
+for her.
 
-Sam may speak into Priya's exchange. His message steers whoever is working,
-as rule 2 says, and it neither opens an exchange nor changes who owns this
-one. **Sam gets no summary for a question he did not ask.** His own next
+**Sam gets no summary for a question he did not ask.** His message into
+Priya's exchange steers whoever is working and owns nothing. His own next
 question opens his own exchange, and his own assistant writes it.
 
 ---
@@ -594,7 +587,7 @@ on how often the tool may be called at all.
 A model that keeps calling a tool that keeps refusing would draft for ever,
 so the tool ends the activation itself. Nothing else here bounds an
 activation — which
-is [`agent.md`](agent.md) §7's gap, closed where it can be closed.
+is [`exchange.md`](exchange.md) §8's gap, closed where it can be closed.
 
 **What the room reads it as.** A seat's context carries one paragraph about
 folds, and only once somebody has visited: `hasAssistants` turns on at the

@@ -14,9 +14,10 @@ Four functions build a room, and one sentence holds the whole of it:
 > work in and people visit — each agent deciding for itself whether to speak,
 > to whom, and which colleague to call in.**
 
-Three documents build on this core and are also shipped:
-[`presence.md`](presence.md) puts people in a running room,
-[`assistant.md`](assistant.md) adds the assistant every person brings, and
+Four documents build on this core and are also shipped:
+[`exchange.md`](exchange.md) specifies the exchange, the room's own unit of
+work; [`presence.md`](presence.md) puts people in a running room;
+[`assistant.md`](assistant.md) adds the assistant every person brings; and
 [`workspace.md`](workspace.md) gives an agent's tools a boundary to reach
 into.
 
@@ -437,9 +438,10 @@ committed.
 provider and the tools it calls. Pi has a _run_: one `prompt()`, and the turns
 inside it. Ambion has an **activation** — the room waking a seat, which is one
 or more runs — and an **exchange**, a person's question and every activation
-until the room goes quiet. The two words this document uses are `activation`
-and `exchange`; `turn` in these pages is Pi's, or plain English in a sentence
-a model reads.
+until the room goes quiet. [`exchange.md`](exchange.md) is the contract for
+the exchange. The two words this document uses are `activation` and
+`exchange`; `turn` in these pages is Pi's, or plain English in a sentence a
+model reads.
 
 Three events are the room's own:
 
@@ -463,63 +465,11 @@ hands as well as hearing voices.
 
 ### The exchange: the room's own unit of work
 
-A room is a sequence of exchanges, and the exchanges have one shape. **A person
-asks something, several agents wake and work it out between them, and the
-room goes quiet again.** That shape is the exchange, and it belongs to the
-room itself, ahead of any one feature
-([`exchange.ts`](../packages/ambion/src/exchange.ts)):
-
-```ts
-interface Exchange {
-  /** The person whose question opened it, and who owns what follows. */
-  owner: string;
-  /** The seq of that question: where the exchange starts. */
-  from: Seq;
-  at: string;
-}
-
-interface ClosedExchange extends Exchange {
-  /** The last seq on the record when the room went quiet. */
-  through: Seq;
-}
-```
-
-Three sentences hold the whole rule.
-
-**A person's question opens one, when no exchange is open.** Nothing else
-does. An agent speaking into a quiet room opens nothing, because a room
-that talks to itself is answering nobody; arriving and leaving open
-nothing, because nobody asked anything by opening a room. The clause
-is written on the exchange itself, for the case where the room is busy and
-has no owner: somebody arrives, the seat that watches the door wakes, and a
-question lands on top of work nobody asked for. That question still owns
-what follows.
-
-**Quiescence closes it.** The room settles when no agent is active, and a
-room that settles has finished: a seat that says something wakes its
-readers inside its own `say`, before its own activation ends, so the room is
-never briefly empty in the middle of a burst. What is running is read off the
-seats — a seat holds the activation it is taking — so there is no count beside
-them to keep in step. `through` is the record as it stood at that moment, so a
-closed exchange names the range it turned out to hold.
-
-**What lands while it is open steers it and changes nothing** — the owner,
-the range, and who the answer belongs to all stay fixed. A second question
-from the same person, or a word from somebody else, reaches the seats
-already working (rule 2) and starts nothing new.
-
-`exchange()` reads the open one, and the stream carries both edges. An
-exchange is run state: a restart begins with none, because the record keeps
-what was said and nobody is mid-question after a restart.
-
-**What reads it.** A person's assistant is a seat that a closed exchange wakes,
-and the one message it writes stands for that exchange ([`assistant.md`](assistant.md)).
-A client folds the working under the question it answered and shows the
-exchange as a thinking state — which it can do from these two events alone,
-whether or not the assistant writes anything for this particular one (it may
-not: [`assistant.md`](assistant.md) §4). A host that measures what a room
-costs measures it per exchange, because that is what somebody asked for. A
-later room-level compactor stands over a stretch of closed exchanges.
+A room is a sequence of exchanges. A person's question opens one, quiescence
+closes it, and what lands in between steers the seats already working and
+changes nothing. The two `exchange_*` events above are its edges, and
+`exchange()` reads the open one. [`exchange.md`](exchange.md) specifies the
+shape, the three rules, who owns one, and what reads one.
 
 Two completion signals, for the two things a host waits on, and two
 controls:
@@ -537,9 +487,8 @@ controls:
   for a host that wants the one message a person reads
   ([`assistant.md`](assistant.md) §14). The two differ because an assistant is a seat
   like any other, and its activation counts. That difference keeps an
-  exchange's end fixed when somebody brings one. The order at the end of an
-  exchange is fixed: `settled()` resolves, then `exchange_closed`, then
-  whatever is written about it, then `quiet`.
+  exchange's end fixed when somebody brings one. [`exchange.md`](exchange.md)
+  §6 fixes the order of the events at the close.
 - **`abort()`** cancels every activation in flight — Pi's own abort, fanned
   out —
   and the room settles. What was said stays, what was mid-flight ends
@@ -602,13 +551,11 @@ one per claim this document makes loudly:
 - events in order, errors as events, abort quieting the room — including
   an abort with a steer still queued.
 
-The exchange is proved beside the assistant that first reads one, in
-[`assistant.test.ts`](../packages/ambion/test/assistant.test.ts): a question opens a
-exchange and quiescence closes it, holding the range it covered; an arrival
-opens none and a second message into an open one changes nothing; and an
-exchange closes before anything is written about it. All in-process, in
-vitest, on a scripted stream where determinism matters. What a person
-entering and leaving adds to these rules is proved beside them, in
+All in-process, in vitest, on a scripted stream where determinism matters.
+What the exchange adds to these rules is proved in
+[`assistant.test.ts`](../packages/ambion/test/assistant.test.ts), listed in
+[`exchange.md`](exchange.md) §9. What a person entering and leaving adds is
+proved beside them, in
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts), and what
 the assistant a person brings adds is proved in
 [`assistant.test.ts`](../packages/ambion/test/assistant.test.ts).
@@ -626,13 +573,9 @@ hold state they change.
 
 **An exchange has no end the room enforces.** Two agents that keep
 answering each other keep waking each other, and nothing stops them. The
-say lock pushes against it — a seat that speaks late is refused and told to
-reconsider, and rule 3 tells it to stand down — but that is pressure
-without a hard bound. No run has hit it. It is written down because a room
-that waits for months will meet it eventually, and because anything built
-on quiescence assumes it does not happen. [`assistant.md`](assistant.md) is built on
-it: an assistant writes when the room goes quiet, so a room that never goes
-quiet never gets its one message.
+say lock (rule 5) and the bar on speaking (rule 3) push against it, and
+that is pressure without a hard bound. [`exchange.md`](exchange.md) §8
+records the gap and what is built on top of it.
 
 ---
 

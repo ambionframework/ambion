@@ -129,6 +129,7 @@ const scribe = defineAgent({
 ```
 
 The contracts: [`docs/agent.md`](docs/agent.md) for the core,
+[`docs/exchange.md`](docs/exchange.md) for the exchange,
 [`docs/presence.md`](docs/presence.md) for people and visits,
 [`docs/assistant.md`](docs/assistant.md) for the assistant,
 [`docs/workspace.md`](docs/workspace.md) for the workspace.

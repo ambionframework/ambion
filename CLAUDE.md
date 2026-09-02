@@ -17,6 +17,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `packages/ambion`   | The runtime. One file per concern; `session.ts` is the room that composes them       |
 | `packages/cli`      | The `ambion` binary                                                                  |
 | `docs/agent.md`     | Design contract for the core — read before changing the runtime                      |
+| `docs/exchange.md`  | Design contract for the exchange, the room's unit of work — read with `agent.md`     |
 | `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                       |
 | `docs/assistant.md` | Design contract for the assistant, a person's counterpart in a room                  |
 | `docs/workspace.md` | Design contract for the workspace an agent's tools reach into — read with `agent.md` |
