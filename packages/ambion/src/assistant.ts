@@ -34,9 +34,6 @@ import { isAgent, isSpoken } from './types.ts';
 /** One draft, and one redraft after a race. Then the room keeps moving without it. */
 const ASSISTANT_DRAFTS = 2;
 
-/** How many colleagues one composing activation may seat. Then the roster stands. */
-const ASSISTANT_SEATINGS = 2;
-
 /**
  * How often the assistant may call its tool in one activation. A model that keeps
  * calling a tool that keeps refusing would run for ever, and nothing else here
@@ -210,6 +207,8 @@ export interface Composing {
 	person: string;
 	/** The seq of that question. */
 	from: Seq;
+	/** How many the reserve held at the open: the most this activation can seat. */
+	limit: number;
 	seated: number;
 	calls: number;
 }
@@ -235,9 +234,9 @@ export interface ComposeRoom {
  * does not change what the question needs. A refused seating would cost a
  * turn to reconsider a decision the answers rarely change, and the newcomer
  * reads those answers when it wakes and declines if the point stands. The tool
- * bounds its activation the way `summarise` bounds one: after a small fixed
- * number of seatings it ends the activation itself, so a model that keeps
- * calling it cannot fill the room.
+ * bounds its activation the way `summarise` bounds one: the reserve is finite,
+ * each name seats once, and a model that keeps calling after the reserve is
+ * empty, or keeps naming what is not there, has the activation ended for it.
  */
 export function seatTool(assistant: string, composing: Composing, room: ComposeRoom): AgentTool {
 	return {
@@ -282,8 +281,9 @@ export function seatTool(assistant: string, composing: Composing, room: ComposeR
 
 function composeStoppingReason(composing: Composing, stopped: boolean): string | undefined {
 	if (stopped) return 'The room is closing.';
-	if (composing.seated >= ASSISTANT_SEATINGS) return 'You have seated enough for one question.';
-	if (composing.calls > ASSISTANT_CALLS) return 'You have tried this enough times.';
+	if (composing.seated >= composing.limit) return 'Everybody who was on call is in the room.';
+	if (composing.calls > composing.limit + ASSISTANT_CALLS)
+		return 'You have tried this enough times.';
 	return undefined;
 }
 
@@ -339,9 +339,9 @@ export class Assistant {
 	 * seat, one activation: a question that lands while the assistant drafts
 	 * gets no composing activation, and the roster stands for that exchange.
 	 */
-	compose(person: string, from: Seq): Composing | undefined {
+	compose(person: string, from: Seq, limit: number): Composing | undefined {
 		if (isActive(this.seat)) return undefined;
-		this.composition = { person, from, seated: 0, calls: 0 };
+		this.composition = { person, from, limit, seated: 0, calls: 0 };
 		return this.composition;
 	}
 

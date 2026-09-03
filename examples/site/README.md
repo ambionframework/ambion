@@ -71,9 +71,11 @@ pour?" and watch `· building-control seated by assistant` land before the
 products answer: the assistant read the question and the reserve, judged
 that the date turns on an inspection slot, and seated the one seat that
 holds them. The newcomer wakes on its seating, reads the room as it stands,
-and answers beside the products. Ask about labour and nobody is seated: a
-question the products cover leaves the roster as it stands. `/seat` and
-`/unseat` do the same by hand, and both land on the record.
+and answers beside the products. The assistant seats eagerly: everyone whose
+identity touches the question, because a seated specialist with nothing to
+add stays quiet for the price of a glance, and one that was never seated
+costs the answer. `/seat` and `/unseat` do the same by hand, and both land
+on the record.
 
 **The assistant seats who the question needs.** `/who` lists two
 specialists on call and not in the room. Ask "can I promise Thursday for the
@@ -81,9 +83,11 @@ pour?" and watch `· building-control seated by assistant` land before the
 products answer: the assistant read the question and the reserve, judged
 that the date turns on an inspection slot, and seated the one seat that
 holds them. The newcomer wakes on its seating, reads the room as it stands,
-and answers beside the products. Ask about labour and nobody is seated: a
-question the products cover leaves the roster as it stands. `/seat` and
-`/unseat` do the same by hand, and both land on the record.
+and answers beside the products. The assistant seats eagerly: everyone whose
+identity touches the question, because a seated specialist with nothing to
+add stays quiet for the price of a glance, and one that was never seated
+costs the answer. `/seat` and `/unseat` do the same by hand, and both land
+on the record.
 
 **A question opens an exchange.** `— priya asked; the room is working —`
 marks it, and `— the exchange is over (3–7) —` marks the moment the seats stop.

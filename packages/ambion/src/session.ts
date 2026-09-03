@@ -530,7 +530,7 @@ class SessionImpl implements Session {
 		if (!opened) return;
 		this.emit({ type: 'exchange_opened', exchange: opened });
 		if (this.reserve.size === 0 || this.stopped) return;
-		const composing = this.assistant.compose(opened.owner, opened.from);
+		const composing = this.assistant.compose(opened.owner, opened.from, this.reserve.size);
 		if (composing) this.activate(this.assistant.seat);
 	}
 

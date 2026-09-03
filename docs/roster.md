@@ -82,7 +82,16 @@ open (§4), so it holds whatever is not seated at that moment.
 The composing activation (§4) renders the reserve the way every activation
 renders the seats: one line per agent, its name and its identity. The
 assistant reads what each agent is for and decides which of them the
-question needs. It reads definitions and nothing else.
+question touches. It reads definitions and nothing else.
+
+**The assistant seats eagerly.** The runtime asks it to seat every agent
+whose identity touches the question, however remotely, and to leave an
+agent in the reserve only when its identity has nothing to do with the
+question at all. The reason is a cost that runs one way. A seated agent
+that reads the question and has nothing to add ends its activation without
+speaking, which is rule 3 of the core, and that costs the room one glance.
+A perspective that was never in the room costs the answer, and nothing
+later in the exchange can put it back. When in doubt, the assistant seats.
 
 **A seat reads the roster and never the reserve.** An agent at work sees
 who is seated, and a colleague it wants that is not seated is a colleague
@@ -208,9 +217,10 @@ deliver.
 name that is not there. It moves the entry from the reserve to the roster,
 at the attention the entry carries, then commits the `seated` message with
 `by` stamped as the assistant. The message routes as §3 says. The tool
-bounds its activation the way `summarise` bounds one: after a small fixed
-number of seatings it ends the activation itself, with Pi's `terminate`, so
-a model that keeps calling it cannot fill the room.
+bounds its activation the way `summarise` bounds one:
+the reserve is finite and each name seats once, so once everybody who was
+on call is in the room, or a model keeps naming what is not there, the tool
+ends the activation itself with Pi's `terminate`.
 
 **A seating commits outside rule 5's lock.** The assistant decides on the
 question, and what the seats said while it decided does not change what
@@ -256,9 +266,12 @@ and the ask at the end names the open exchange and the seq of its
 question, so the seat knows what it was seated for.
 
 **What a seating costs.** One activation of the assistant per exchange
-while the reserve holds anybody, and one activation of each seated agent.
-Both are paid on purpose, the way a directed say is
-([`agent.md`](agent.md) rule 4), and both are on the record.
+while the reserve holds anybody, and one activation of each seated agent,
+then a glance from that agent at every message that follows. Both are paid
+on purpose, the way a directed say is ([`agent.md`](agent.md) rule 4), and
+both are on the record. An eager assistant pays the glances so that no
+perspective is missing; a host that finds the glances dear thins the
+reserve, and the room seats less because there is less to seat.
 
 ---
 

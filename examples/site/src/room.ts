@@ -3,9 +3,9 @@
  * is an agent.
  *
  * Three products hold their own state and their own API and know nothing of
- * each other's internals: they ask on the record, the way a person does. Two
- * specialists are on call in the reserve, and the room's assistant seats one
- * when a question turns on what that specialist alone holds. Three people
+ * each other's internals: they ask on the record, the way a person does. Three
+ * specialists are on call in the reserve, and the room's assistant seats every
+ * one whose identity a question touches. Three people
  * share the room from a site office, a phone on the deck and a cost desk,
  * and the assistant writes each of them the one message they read, the way
  * they read.
@@ -793,8 +793,8 @@ const inspectionsAgent = defineAgent({
 	name: 'building-control',
 	identity:
 		'Building Control Liaison Agent. Which inspection slots the duty inspector can take, the ' +
-		'deadline to book each one, and what the inspector has to see. Worth a seat when a pour ' +
-		'date turns on an inspection being booked.',
+		'deadline to book each one, and what the inspector has to see. Worth a seat whenever a ' +
+		'pour date is in question.',
 	instructions: `
 		You speak for the building control liaison and nothing else. Read
 		inspection_slots before any claim about a slot or a deadline. When the room
@@ -818,8 +818,8 @@ const plantAgent = defineAgent({
 	name: 'plant-hire',
 	identity:
 		'Plant Hire Agent. The pump and any other hired plant: on site when, for which day, ' +
-		'confirmed or not, and what moving a hire costs. Worth a seat when a pour day moves or a ' +
-		'plan needs plant that is not booked.',
+		'confirmed or not, and what moving a hire costs. Worth a seat whenever a pour day, a ' +
+		'move or a cost is in question.',
 	instructions: `
 		You speak for the plant desk and nothing else. Read hire_board and
 		hire_terms before any claim about plant, dates or money. Move a hire with
@@ -841,8 +841,8 @@ const temporaryWorksAgent = defineAgent({
 	name: 'temporary-works',
 	identity:
 		'Temporary Works Coordinator Agent. The formwork and falsework check the pour plan requires ' +
-		'on the morning of a pour, what it needs, and whether it is booked. Worth a seat once a pour ' +
-		'day is fixed and the check has to be booked; not before.',
+		'on the morning of a pour, what it needs, and whether it is booked. Worth a seat whenever a ' +
+		'pour day is in question, so the check is booked with it.',
 	instructions: `
 		You speak for the temporary works coordinator and nothing else. Read
 		check_status before any claim about a check. Book the check with book_check
@@ -933,13 +933,14 @@ export const ASSISTANT = defineAgent({
 		'message a person reads when their exchange closes.',
 	model: MODEL,
 	instructions: `
-		When a question opens, the three products already in the room cover tasks,
-		labour and materials, and they read the drive. Seat a specialist only when
-		the answer turns on something that specialist alone holds: an inspection
-		slot and its deadline, a hire and what moving it costs, a check that has to
-		be booked. A question the products can answer from their own data and the
-		drive needs nobody seated, and leaving the roster as it stands is the usual
-		answer. A specialist already in the room needs no seating.
+		When a question opens, seat every specialist on call whose identity touches
+		it, however remotely: a date touches inspections and the plant desk, a
+		pour day touches the temporary works check, a cost touches whoever holds
+		a term. A specialist that reads the question and has nothing to add stays
+		quiet, and that costs one glance; a specialist that was never in the room
+		costs the answer. Leave one in the reserve only when its identity has
+		nothing to do with the question at all. A specialist already in the room
+		needs no seating.
 
 		When the room is quiet, lead with the decision your person has to make and
 		who holds it. Give them the facts that decision turns on — quantities,

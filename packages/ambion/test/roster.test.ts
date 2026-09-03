@@ -538,9 +538,9 @@ describe('seating', () => {
 		expect(kinds(await session.messages())).toContain('seated');
 	});
 
-	it('refuses a name outside the reserve, and ends the activation after the cap', async () => {
+	it('refuses a name outside the reserve, and ends the activation once the reserve is empty', async () => {
 		const results: string[] = [];
-		const seatings = ['nobody', 'surveyor', 'architect', 'greeter'];
+		const seatings = ['nobody', 'surveyor', 'architect', 'greeter', 'surveyor'];
 		const session = open({
 			script: byName({
 				assistant: (context, _name, call) => {
@@ -562,11 +562,10 @@ describe('seating', () => {
 		expect(results[0]).toContain(
 			"'nobody' is not in the reserve. Seat one of: surveyor, architect, greeter.",
 		);
-		expect(results[1]).toBe('delivered');
-		expect(results[2]).toBe('delivered');
-		// the fourth call met the cap: the tool ended the activation, and the greeter stayed out
-		expect(results).toHaveLength(3);
-		expect(seatNames(session)).toEqual(['assistant', 'surveyor', 'architect']);
+		expect(results.slice(1, 4)).toEqual(['delivered', 'delivered', 'delivered']);
+		// the fifth call found the reserve empty: the tool ended the activation itself
+		expect(results).toHaveLength(4);
+		expect(seatNames(session)).toEqual(['assistant', 'surveyor', 'architect', 'greeter']);
 	});
 });
 
