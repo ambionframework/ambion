@@ -3,8 +3,7 @@
 Work a branch decided not to do, and why it is worth doing. Each item says
 what it is, what it costs, and where the reasoning already lives. The design
 contracts in [`docs/`](../docs) hold the open questions about a design; this
-file holds the work. [`decisions.md`](decisions.md) holds the calls a branch
-already made; [`changelog.md`](changelog.md) holds what shipped.
+file holds the work. [`changelog.md`](changelog.md) holds what shipped.
 
 ## Steering an exchange from what a person holds
 
