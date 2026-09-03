@@ -425,7 +425,8 @@ describe('seating', () => {
 		const session = open({
 			script: byName({
 				assistant: composes(['surveyor'], 'Steel: 11.7 tonnes, enough for the pour.'),
-				product: (_context, _name, call) => (call === 1 ? speak('The pour is Saturday.') : quiet()),
+				// the seating and the newcomer's say may both land under its say, so it speaks again when refused
+				product: (_context, _name, call) => (call <= 3 ? speak('The pour is Saturday.') : quiet()),
 				surveyor: (_context, _name, call) => (call === 1 ? speak('11.7 tonnes on site.') : quiet()),
 			}),
 			agents: [product],
@@ -495,6 +496,46 @@ describe('seating', () => {
 		await visit.deliver({ text: 'Third question?' });
 		await session.quiet();
 		expect(composing).toHaveLength(2);
+	});
+
+	it('is not steered: what the seats say while the assistant decides never reaches it', async () => {
+		const held = deferred();
+		const contexts: string[] = [];
+		const session = open({
+			script: byName({
+				assistant: async (context, _name, call) => {
+					if (!holding(context, 'seat')) return quiet();
+					contexts.push(contextText(context));
+					if (call === 1) {
+						await held.promise;
+						return seat('surveyor');
+					}
+					return quiet();
+				},
+				product: (_context, _name, call) =>
+					call === 1 ? speak('An answer, before the decision.') : quiet(),
+			}),
+			agents: [product],
+			available: [surveyor],
+		});
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'How much steel is on site?' });
+		// the product has answered; the assistant is still deciding
+		await new Promise<void>((resolve) => {
+			const off = session.subscribe((event) => {
+				if (event.type !== 'activation_end' || event.agent !== 'product') return;
+				off();
+				resolve();
+			});
+		});
+		held.resolve();
+		await session.quiet();
+
+		expect(contexts).toHaveLength(2);
+		expect(contexts[1]).not.toContain('[new]');
+		expect(contexts[1]).not.toContain('An answer, before the decision.');
+		expect(kinds(await session.messages())).toContain('seated');
 	});
 
 	it('refuses a name outside the reserve, and ends the activation after the cap', async () => {

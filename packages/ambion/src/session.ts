@@ -643,10 +643,31 @@ class SessionImpl implements Session {
 		const target = this.targetOf(message);
 		const fromAssistant = author !== undefined && this.assistant.is(author);
 		for (const seat of this.agents.values()) {
-			if (seat.def.name === author) continue;
-			if (seat.activation) seat.activation.steer(message, renderLine(message));
-			else if (wakes(seat, target, message, fromAssistant)) this.activate(seat);
+			if (seat.def.name !== author) this.route(seat, message, target, fromAssistant);
 		}
+	}
+
+	/** One seat hears one message: steered in while it works, or woken when it is at rest. */
+	private route(
+		seat: SeatRuntime,
+		message: Message,
+		target: SeatRuntime | undefined,
+		fromAssistant: boolean,
+	): void {
+		if (seat.activation) {
+			if (this.hearsSteers(seat)) seat.activation.steer(message, renderLine(message));
+		} else if (wakes(seat, target, message, fromAssistant)) {
+			this.activate(seat);
+		}
+	}
+
+	/**
+	 * A composing activation decides on the question as it was asked, and what
+	 * the seats say while it decides is theirs to say: steering it in would
+	 * hand the assistant answers to weigh and no hand to weigh them with.
+	 */
+	private hearsSteers(seat: SeatRuntime): boolean {
+		return !(this.assistant.is(seat.def.name) && this.assistant.composing() !== undefined);
 	}
 
 	/** The seat a message names: a directed say names who it addresses, a seating names who it seats. */

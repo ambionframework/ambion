@@ -436,8 +436,8 @@ const COMPOSE_PARAGRAPH = [
 	`stands, and that is the usual answer.`,
 	``,
 	`You never speak, never answer the question, and never direct anyone. What you seat is on`,
-	`the record, stamped as your doing. The tool fails if the room moved while you were`,
-	`deciding: it lists what landed, so decide again against the room as it now stands.`,
+	`the record, stamped as your doing. Nothing the agents say while you decide reaches you:`,
+	`the question is what you decide on. Seat, or end your turn, and do both at once.`,
 ];
 
 /**

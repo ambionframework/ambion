@@ -197,8 +197,12 @@ two things more: the reserve (§2) as a second roster, and the ask at the
 end, which names the person and the seq of their question, and asks the
 assistant to seat who the question needs or to end its turn. The
 activation is one pass, as a summarising activation is: it does not
-rebuild when the room moves, because what it decides is who to seat, and
-the record as it stood at the question is what that turns on.
+rebuild when the room moves, and nothing that lands while it decides is
+steered into it, because what it decides is who to seat, and the record as
+it stood at the question is what that turns on. The first live run showed
+why the steer has to stay out: an assistant handed the products' answers
+mid-decision kept weighing them and drafting a close it had no hand to
+deliver.
 
 **What `seat` does.** It takes a name from the reserve, and it is refused a
 name that is not there. It moves the entry from the reserve to the roster,
@@ -372,3 +376,8 @@ this document makes loudly:
 - the threshold counts an agent that spoke and was unseated (§7).
 
 All in-process, in vitest, on a scripted stream.
+
+The live run is
+[`demos/2026-09-03-who-the-question-needs.html`](../demos/2026-09-03-who-the-question-needs.html):
+the example suite with three specialists on call, where the assistant seats
+who each question needs and leaves the roster alone when nobody is.
