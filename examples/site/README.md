@@ -8,8 +8,8 @@ three, each the way they read.
 
 Each product holds its own state and its own API and knows nothing of the
 others' internals. It asks them on the record, the way a person does. The
-three products share one workspace: the site drive, a directory of the
-documents the site works to.
+three products share one workspace: the site drive, an in-memory filesystem
+holding the documents the site works to.
 
 ```sh
 cd examples/site
@@ -19,9 +19,9 @@ pnpm demo                           # one scripted run, captured as JSON
 ```
 
 `AMBION_MODEL` picks the model every product and the assistant run on. It
-defaults to `anthropic/claude-sonnet-5`. `SITE_DRIVE` names a directory to
-keep the drive in between runs; without it, each run copies `drive/` into a
-fresh scratch directory.
+defaults to `anthropic/claude-sonnet-5`. Each run seeds a fresh in-memory
+drive from `drive/`, so the checked-in documents stay as they are between
+runs and nothing on disk changes.
 
 ## What to look for
 

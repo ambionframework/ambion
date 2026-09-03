@@ -216,6 +216,26 @@ describe('the built-in tools', () => {
 		await destroyWorkspace(site);
 	});
 
+	it("states the workspace's reach in a connected agent's system prompt, and nothing to a plain one", async () => {
+		const site = defineWorkspace({ name: name('briefed') });
+		const prompts: Record<string, string> = {};
+		await run([agent('connected', { workspace: site }), agent('plain')], {
+			connected: (context, who) => {
+				prompts[who] = context.systemPrompt ?? '';
+				return quiet();
+			},
+			plain: (context, who) => {
+				prompts[who] = context.systemPrompt ?? '';
+				return quiet();
+			},
+		});
+		expect(prompts.connected).toContain('Your workspace gives you four tools');
+		expect(prompts.connected).toContain('js-exec');
+		expect(prompts.connected).toContain('no network');
+		expect(prompts.plain).not.toContain('Your workspace gives you four tools');
+		await destroyWorkspace(site);
+	});
+
 	it('write, read and bash reach one filesystem two agents share, rooted at each home', async () => {
 		const site = defineWorkspace({ name: name('shared') });
 		const results: Record<string, { tool: string; text: string; failed: boolean }[]> = {};
@@ -487,6 +507,22 @@ describe('the just-bash adapter', () => {
 		});
 	});
 
+	it('runs js-exec and python3, and has no curl', async () => {
+		const { env: alpha } = await env();
+		expect(await alpha.exec('js-exec -c "console.log(1 + 2)"')).toMatchObject({
+			ok: true,
+			value: { stdout: '3\n', exitCode: 0 },
+		});
+		expect(await alpha.exec('python3 -c "print(1 + 2)"')).toMatchObject({
+			ok: true,
+			value: { stdout: '3\n', exitCode: 0 },
+		});
+		expect(await alpha.exec('curl --version')).toMatchObject({
+			ok: true,
+			value: { exitCode: 127, stderr: 'bash: curl: command not found\n' },
+		});
+	});
+
 	it('holds 128 MB in memory, and refuses the write that goes past it', async () => {
 		expect(MEMORY_LIMIT_BYTES).toBe(128 * 1024 * 1024);
 		const { env: alpha } = await env();
@@ -528,6 +564,76 @@ describe('the just-bash adapter', () => {
 	});
 });
 
+// -- memoryBackend seeding and reading ---------------------------------------
+
+describe('memoryBackend', () => {
+	it('runs a seed function once, lazily, and reads what it wrote back without an agent', async () => {
+		let calls = 0;
+		const backend = memoryBackend({
+			seed: async (write) => {
+				calls++;
+				await write.writeFile('/site/README.md', 'start here\n');
+			},
+		});
+		expect(calls).toBe(0); // nothing runs until something asks for the filesystem
+		expect(await backend.readFiles()).toEqual([{ path: '/site/README.md', text: 'start here\n' }]);
+		const alpha = await backend.connect(agent('alpha'));
+		await alpha.writeFile('/site/notes.md', 'a note\n');
+		expect(calls).toBe(1); // memoised: connect reused the filesystem readFiles already built
+		// The first `connect` also lays just-bash's own binaries into the shared
+		// filesystem (`docs/workspace.md` §8), so this checks the two site files
+		// among everything else rather than the listing on its own.
+		const after = await backend.readFiles();
+		expect(after).toContainEqual({ path: '/site/README.md', text: 'start here\n' });
+		expect(after).toContainEqual({ path: '/site/notes.md', text: 'a note\n' });
+		const paths = after.map((f) => f.path);
+		expect(paths).toEqual([...paths].sort((a, b) => a.localeCompare(b)));
+	});
+
+	it('skips a symlink in readFiles rather than following it', async () => {
+		const backend = memoryBackend({
+			seed: async (write) => write.writeFile('/site/README.md', 'hi\n'),
+		});
+		const alpha = await backend.connect(agent('alpha'));
+		await alpha.exec('ln -s /site ~/sitelink && ln -s /nowhere ~/dangling');
+		const files = await backend.readFiles();
+		expect(files).toContainEqual({ path: '/site/README.md', text: 'hi\n' });
+		expect(files.some((f) => f.path.includes('sitelink') || f.path.includes('dangling'))).toBe(
+			false,
+		);
+	});
+
+	it('retries a seed that failed once, rather than staying poisoned', async () => {
+		let attempt = 0;
+		const backend = memoryBackend({
+			seed: async (write) => {
+				attempt++;
+				if (attempt === 1) throw new Error('transient');
+				await write.writeFile('/site/README.md', 'hi\n');
+			},
+		});
+		await expect(backend.readFiles()).rejects.toThrow('transient');
+		expect(await backend.readFiles()).toEqual([{ path: '/site/README.md', text: 'hi\n' }]);
+		expect(attempt).toBe(2);
+	});
+
+	it('stays destroyed: destroy makes connect and readFiles reject, not resurrect', async () => {
+		let seedCalls = 0;
+		const backend = memoryBackend({
+			seed: async (write) => {
+				seedCalls++;
+				await write.writeFile('/site/README.md', 'hi\n');
+			},
+		});
+		await backend.readFiles();
+		expect(seedCalls).toBe(1);
+		await backend.destroy();
+		await expect(backend.readFiles()).rejects.toThrow(/destroyed/);
+		await expect(backend.connect(agent('alpha'))).rejects.toThrow(/destroyed/);
+		expect(seedCalls).toBe(1); // never re-ran
+	});
+});
+
 // -- the directory backend ---------------------------------------------------
 
 describe('directoryBackend', () => {
@@ -547,5 +653,13 @@ describe('directoryBackend', () => {
 		expect(await readFile(join(root, 'home', 'scribe', 'log.md'), 'utf8')).toBe('# day one\n');
 		await destroyWorkspace(site);
 		expect(await readdir(root)).toEqual([]);
+	});
+
+	it('stays destroyed: connect after destroy rejects rather than recreating the root', async () => {
+		const root = join(await mkdtemp(join(tmpdir(), 'ambion-')), 'site');
+		const backend = directoryBackend(root);
+		await backend.connect(agent('alpha'));
+		await backend.destroy();
+		await expect(backend.connect(agent('beta'))).rejects.toThrow(/destroyed/);
 	});
 });

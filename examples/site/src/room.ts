@@ -8,15 +8,14 @@
  * cost desk, and the room's assistant writes each of them the one message
  * they read, the way they read.
  *
- * The three products share one workspace: the site drive, a directory of
- * the documents the site works to. Each product reads the documents its
- * claims rest on, and every product appends to the site diary when it
- * changes its own state.
+ * The three products share one workspace: the site drive, an in-memory
+ * filesystem holding the documents the site works to. Each product reads the
+ * documents its claims rest on, and every product appends to the site diary
+ * when it changes its own state.
  *
  * `main.ts` opens this interactively. `demo.ts` drives one scripted run of it.
  */
-import { cpSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -25,8 +24,9 @@ import {
 	defineHuman,
 	defineTool,
 	defineWorkspace,
-	directoryBackend,
 	type HumanDefinition,
+	memoryBackend,
+	type SeedWriter,
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 
@@ -52,37 +52,34 @@ const DRIVE_SEED = fileURLToPath(new URL('../drive', import.meta.url));
 /** The scenario's date, which is the diary file every product appends to. */
 export const TODAY = '2026-08-25';
 
-/**
- * Where the drive lives for this process. `SITE_DRIVE` names a directory to
- * keep between runs; without it, every run copies the seed into a fresh
- * scratch directory, so the checked-in documents stay as they are.
- */
-function openDrive(): string {
-	const root = process.env.SITE_DRIVE ?? mkdtempSync(join(tmpdir(), 'kestrel-yard-'));
-	cpSync(DRIVE_SEED, root, { recursive: true, force: false, errorOnExist: false });
-	return root;
+/** Every checked-in document: read one off disk, write it into the drive, move on. */
+async function seedDrive(write: SeedWriter): Promise<void> {
+	const entries = readdirSync(DRIVE_SEED, { recursive: true, withFileTypes: true });
+	for (const entry of entries) {
+		if (!entry.isFile()) continue;
+		const full = join(entry.parentPath, entry.name);
+		await write.writeFile(`/${full.slice(DRIVE_SEED.length + 1)}`, readFileSync(full, 'utf8'));
+	}
 }
 
-export const DRIVE_ROOT = openDrive();
+const driveBackend = memoryBackend({ seed: seedDrive });
 
 /**
- * The workspace the products connect to. One directory backs it, every
- * product gets a home in it, and the four built-in tools reach it.
+ * The workspace the products connect to. An in-memory filesystem backs it,
+ * seeded from `drive/` above; every product gets a home in it, and the four
+ * built-in tools reach it.
  */
 export const SITE_DRIVE = defineWorkspace({
 	name: 'kestrel-yard-drive',
-	backend: directoryBackend(DRIVE_ROOT),
+	backend: driveBackend,
 });
 
-/** Every file on the drive, as a host reads it: relative path and text. */
-export function driveFiles(): { path: string; text: string }[] {
-	return readdirSync(DRIVE_ROOT, { recursive: true, withFileTypes: true })
-		.filter((entry) => entry.isFile())
-		.map((entry) => {
-			const full = join(entry.parentPath, entry.name);
-			return { path: full.slice(DRIVE_ROOT.length + 1), text: readFileSync(full, 'utf8') };
-		})
-		.sort((a, b) => a.path.localeCompare(b.path));
+/** Every document on the drive, as a host reads it: path under `site/`, and text. */
+export async function driveFiles(): Promise<{ path: string; text: string }[]> {
+	const files = await driveBackend.readFiles();
+	return files
+		.filter((file) => file.path.startsWith('/site/'))
+		.map((file) => ({ path: file.path.slice(1), text: file.text }));
 }
 
 /**

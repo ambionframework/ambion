@@ -32,8 +32,16 @@ export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from '
 export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from './define.ts';
 // The room's own exchange: what a question opened, and what quiescence closed.
 export type { ClosedExchange, Exchange } from './exchange.ts';
-// A workspace over a real directory. The in-memory default needs no import.
-export { directoryBackend } from './just-bash.ts';
+export type {
+	MemoryBackendFile,
+	MemoryBackendOptions,
+	MemoryWorkspaceBackend,
+	SeedWriter,
+} from './just-bash.ts';
+// A workspace over a real directory, or the in-memory default with seeding
+// and read-back. Neither import is needed for the in-memory default's own
+// use inside `defineWorkspace` — only a host that wants to seed or read it.
+export { directoryBackend, memoryBackend } from './just-bash.ts';
 export type {
 	ReadSessionOptions,
 	Session,

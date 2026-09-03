@@ -22,17 +22,7 @@ import {
 	type Visit,
 	visitSession,
 } from '@ambionframework/ambion';
-import {
-	AGENTS,
-	ASSISTANT,
-	apiLog,
-	DRIVE_ROOT,
-	driveFiles,
-	GOAL,
-	MODEL,
-	PEOPLE,
-	ROOM_NAME,
-} from './room.ts';
+import { AGENTS, ASSISTANT, apiLog, driveFiles, GOAL, MODEL, PEOPLE, ROOM_NAME } from './room.ts';
 
 const session = startSession({ name: ROOM_NAME, goal: GOAL, assistant: ASSISTANT, agents: AGENTS });
 
@@ -200,10 +190,9 @@ async function missed(): Promise<void> {
 	for (const m of await session.messages({ since })) console.log(`  ${line(m)}`);
 }
 
-/** The diary is the one document every product writes to; the host reads it off the disk. */
-function diary(): void {
-	console.log(`  ${dim}the drive is at ${DRIVE_ROOT}${reset}`);
-	for (const file of driveFiles()) {
+/** The diary is the one document every product writes to; the host reads it off the drive. */
+async function diary(): Promise<void> {
+	for (const file of await driveFiles()) {
 		if (!file.path.startsWith('site/diary/')) continue;
 		console.log(`  ${file.path}`);
 		console.log(`    ${file.text.trim().replace(/\n/g, '\n    ')}`);
