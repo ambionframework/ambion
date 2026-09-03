@@ -155,24 +155,23 @@ same suite and the same three people, and the room now holds three
 specialists on call in a reserve: a building control liaison, the plant
 desk and the temporary works coordinator. `startSession` takes them as
 `available`, and when a question opens an exchange the assistant reads it
-beside the seated products and seats who the question turns on. Priya's
-first question seated building control and the plant desk; Sam's seated
-the temporary works coordinator; the two questions after that found the
-reserve empty and woke no composing activation. Every seating is a
-message on the record, stamped `by: assistant`, and every newcomer's first
-activation was its seating: it read the question and the answers so far,
-and spoke from its own API. Four questions still closed into four
-messages, 99 words on average, and the ranges they cover hold the
-seatings and what the specialists said.
+beside the seated products and seats every specialist whose identity the
+question touches. Priya's first question seated all three, and the three
+questions after it found the reserve empty and woke no composing
+activation. Every seating is a message on the record, stamped
+`by: assistant`, and every newcomer's first activation was its seating: it
+read the question and the answers so far, and spoke from its own API. Four
+questions still closed into four messages, 105 words on average, and the
+ranges they cover hold the seatings and what the specialists said.
 
-What it cost. Two composing activations cost $0.02 of the run's $1.20.
-The three seated specialists then cost what any seat costs, 36 activations
-and 11 messages between them, and the lock refused 45 says against 14 in
-the run before: three more seats answering in parallel is three more seats
-racing. The first seat context was 1,535 characters and the last 5,868,
-with three exchanges folded, and no seat context carried the reserve.
+What it cost. One composing activation cost $0.01 of the run's $1.60. The
+three seated specialists then cost what any seat costs, 40 activations and
+18 messages between them, and the lock refused 63 says against 14 in the
+run before this branch: three more seats answering in parallel is three
+more seats racing. The first seat context was 1,535 characters and the last
+7,893, with three exchanges folded, and no seat context carried the reserve.
 
-Three runs came before it, and the report records what each one changed.
+Four runs came before it, and the report records what each one changed.
 The first put two specialists in reserve, and the assistant seated both on
 the first question, so the temporary works coordinator went into the
 reserve to give the later questions a real choice. The second had seats
@@ -181,4 +180,10 @@ calling a forecast stale, so the goal now says the clock is the room's own.
 The third steered the products' answers into the composing activation,
 where the assistant weighed them and drafted a close it had no hand to
 deliver; the runtime now keeps steers out of a composing activation, and a
-test holds it there.
+test holds it there. The fourth asked the assistant to seat only what a
+question turned on, and it left the temporary works coordinator out of the
+first question, where the check it holds was part of the answer; the
+runtime now asks the assistant to seat everyone a question touches, on the
+argument that a seated specialist with nothing to add costs one glance and
+a missing one costs the answer, and the cap on seatings is the reserve
+itself.
