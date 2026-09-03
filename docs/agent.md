@@ -17,7 +17,7 @@ Four functions build a room, and one sentence holds the whole of it:
 Four documents build on this core and are also shipped:
 [`exchange.md`](exchange.md) specifies the exchange, the room's own unit of
 work; [`presence.md`](presence.md) puts people in a running room;
-[`assistant.md`](assistant.md) adds the assistant every person brings; and
+[`assistant.md`](assistant.md) adds the assistant every room seats; and
 [`workspace.md`](workspace.md) gives an agent's tools a boundary to reach
 into.
 
@@ -120,12 +120,7 @@ import { defineAgent, defineHuman } from '@ambionframework/ambion';
 export const andrei = defineHuman({
   name: 'andrei',
   identity: 'Founder. Owns the weekly. Bring him blockers only.',
-  assistant: defineAgent({
-    name: 'andrei-assistant',
-    identity: 'Holds how andrei reads.',
-    model: 'anthropic/claude-sonnet-5',
-    instructions: 'Lead with blockers. Four sentences at most.',
-  }),
+  preferences: 'Lead with blockers. Four sentences at most.',
 });
 ```
 
@@ -134,11 +129,12 @@ agent. `identity` is how the room knows them. A human has no instructions,
 no tools, and no model, because humans are never run — a `say` directed at
 one wakes nothing.
 
-One required field goes with them: `assistant`, an agent that holds how its
-person reads. It writes the one message they read when an exchange closes.
-It is a seat at the narrow end of attention: nothing said reaches it, no message
-activates it, and nothing it writes wakes anybody. [`assistant.md`](assistant.md) is
-the contract for it.
+One optional field goes with them: `preferences`, how they read. The room's
+assistant reads it when it writes the one message they read at the close of
+their exchange, and no other seat reads it. The assistant is seated by
+`startSession`, at the narrow end of attention: nothing said reaches it, no
+message activates it, and nothing it writes wakes anybody.
+[`assistant.md`](assistant.md) is the contract for it.
 
 A human is outside a room's composition, so `startSession` never takes one.
 The value is what somebody visits as: `visitSession(session, andrei)`
@@ -246,7 +242,7 @@ type Message =
       kind: 'summary';
       seq: number;
       at: string;
-      from: string; // the assistant that wrote it
+      from: string; // the assistant, which wrote it
       to: string; // the person whose question opened the exchange
       text: string;
       covers: { from: number; through: number }; // the range it stands for
@@ -254,7 +250,7 @@ type Message =
 ```
 
 The second kind carries no `text`, because the person said nothing.
-[`presence.md`](presence.md) specifies it. The third is written by an assistant
+[`presence.md`](presence.md) specifies it. The third is written by the assistant
 when an exchange closes, and nobody spoke it; [`assistant.md`](assistant.md)
 specifies it. Every rule below applies to all three kinds unchanged, which
 is why the record holds one union and one sequence.
@@ -344,8 +340,8 @@ who sits out — one widening scale, from the narrowest:
 
 - `none` — nothing said in the room reaches it, and it cannot be addressed:
   the runtime refuses a directed say to it, so no message waits unread. The seat that is
-  present and unreachable, waiting for something other than a message. An
-  assistant sits here ([`assistant.md`](assistant.md)), woken by the close of its person's
+  present and unreachable, waiting for something other than a message. The
+  assistant sits here ([`assistant.md`](assistant.md)), woken by the close of an
   exchange and by nothing else.
 - `named` — hears a message addressed to it, seated as `passive(archivist)`.
   The expert in the corner: hearing nothing, costing nothing, until someone
@@ -359,7 +355,7 @@ who sits out — one widening scale, from the narrowest:
 `seated(agent, attention)` is the general form, and `passive` and
 `attentive` are one line each over it — the two points a room names often
 enough to be worth a word. A bare agent takes the default. `none` is the
-runtime's own point: it is where an assistant sits, and nothing in a room's
+runtime's own point: it is where the assistant sits, and nothing in a room's
 composition asks for it.
 
 The routing is the scale, and reads as one line (`wakes` in `seat.ts`):
@@ -373,7 +369,7 @@ Both are readable from `session.seats()`, so a seat that is `named` and
 running is describable, which one enum could not do. Attention belongs to
 the seating, and `defineAgent` knows nothing about it, so the same agent
 can be the quiet corner in one room and the one who meets people in
-another — and an assistant can be given a wider attention the day it is meant to
+another — and the assistant can be given a wider attention the day it is meant to
 take part in the room, while staying the same kind of thing.
 
 **7. Identity is injected; provenance is stamped.** Every agent's context
@@ -481,13 +477,13 @@ controls:
   seats stop, which is also the moment a host learns that nobody chose to
   speak. It reports that no seat which speaks for itself is taking an
   activation.
-  An assistant writing about an exchange is not the room still working on it, so
-  the room is never held busy while one writes.
+  The assistant writing about an exchange is not the room still working on it, so
+  the room is never held busy while it writes.
 - **`quiet()`** is the second moment — no agent at all is taking an activation —
   for a host that wants the one message a person reads
-  ([`assistant.md`](assistant.md) §14). The two differ because an assistant is a seat
+  ([`assistant.md`](assistant.md) §14). The two differ because the assistant is a seat
   like any other, and its activation counts. That difference keeps an
-  exchange's end fixed when somebody brings one. [`exchange.md`](exchange.md)
+  exchange's end fixed. [`exchange.md`](exchange.md)
   §6 fixes the order of the events at the close.
 - **`abort()`** cancels every activation in flight — Pi's own abort, fanned
   out —
@@ -511,7 +507,7 @@ record in [`record.ts`](../packages/ambion/src/record.ts), who is here in
 [`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes it
 in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
 [`activation.ts`](../packages/ambion/src/activation.ts), the exchange in
-[`exchange.ts`](../packages/ambion/src/exchange.ts), what a person's assistant
+[`exchange.ts`](../packages/ambion/src/exchange.ts), what the assistant
 writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), what an
 agent's tools reach into in
 [`workspace.ts`](../packages/ambion/src/workspace.ts), and what any of them
@@ -557,14 +553,14 @@ What the exchange adds to these rules is proved in
 [`exchange.md`](exchange.md) §9. What a person entering and leaving adds is
 proved beside them, in
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts), and what
-the assistant a person brings adds is proved in
+the assistant a room seats adds is proved in
 [`assistant.test.ts`](../packages/ambion/test/assistant.test.ts).
 
 The runnable proof is [`examples/site`](../examples/site): a construction
 management suite where each product is an agent — a time tracker, a task
 list seated `attentive` so it meets people at the door, and a materials
-tracker — shared by three people who come and go, each bringing an assistant of
-their own. Every rule above is observable by hand there, and the products
+tracker — shared by three people who come and go, and one assistant that
+writes for each of them. Every rule above is observable by hand there, and the products
 hold state they change.
 
 ---

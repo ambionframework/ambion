@@ -213,7 +213,7 @@ interface Presence {
 export type Message = Spoken | Presence | Summary;
 ```
 
-`Summary` is the third kind, and it belongs to [`assistant.md`](assistant.md): an
+`Summary` is the third kind, and it belongs to [`assistant.md`](assistant.md): the
 assistant writes it, nobody speaks it, and it opens and closes no visit.
 
 Every rule of the core applies to a presence message unchanged, and that is
@@ -533,17 +533,14 @@ export type SeatInfo =
       status: SeatStatus;
       attention: Attention;
       sessionId: string;
-      /** The person this seat writes for, when it is their assistant. See assistant.md. */
-      owner?: string;
+      /** Set when this seat is the room's assistant. See assistant.md. */
+      assistant?: true;
     }
   | {
       kind: 'human';
       name: string;
       identity: string;
       presence: PresenceStatus;
-      /** The assistant they brought. Absent while it is still run state from a
-       * restart they have not yet revisited. See assistant.md. */
-      assistant?: string;
     };
 ```
 

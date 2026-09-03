@@ -37,11 +37,6 @@ export interface PersonView {
 	/** Where they stopped reading, and how much has landed since. */
 	since: Seq | undefined;
 	unseen: number;
-	/**
-	 * The name of the assistant they brought. Absent after a restart, before
-	 * they visit again in this run: the assistant is run state, like an exchange.
-	 */
-	assistant?: string;
 }
 
 /** A gap a person can read, not a duration a machine can parse. */
@@ -117,7 +112,7 @@ function rows(record: readonly Message[]): Row[] {
  * room stopped reading. The divider is what lets an agent tell somebody the
  * one thing they missed without re-reading the whole room to them.
  *
- * A range an assistant has summarised renders as its count and the person it was
+ * A range the assistant has summarised renders as its count and the person it was
  * written for, and the summary that stands for it renders below. The record
  * keeps every message; what a seat reads is a rendering of it, built fresh at
  * each activation.
@@ -183,7 +178,7 @@ function seatNotes(seat: AgentSeatInfo): string[] {
 	const parts: string[] = [seat.status];
 	const note = ATTENTION_NOTE[seat.attention];
 	if (note) parts.push(note);
-	if (seat.owner) parts.push(`writes for ${seat.owner}`);
+	if (seat.assistant) parts.push('the assistant');
 	return parts;
 }
 
@@ -199,7 +194,6 @@ function notes(person: PersonView, now: number): string {
 	const parts: string[] = [person.presence];
 	if (person.changedAt) parts.push(`since ${ago(person.changedAt, now)}`);
 	if (person.unseen > 0) parts.push(`has not seen the last ${count(person.unseen, 'message')}`);
-	if (person.assistant) parts.push(`brings ${person.assistant}`);
 	return parts.join(', ');
 }
 
@@ -234,32 +228,39 @@ export interface RoomView {
 	readonly seats: SeatInfo[];
 	readonly people: PersonView[];
 	readonly record: readonly Message[];
-	/** A fold only renders once somebody has visited with their assistant, and so does the paragraph about one. */
-	readonly hasAssistants: boolean;
+}
+
+/** The exchange the assistant is closing: whose it was, how they read, and its range. */
+export interface Closing {
+	/** The person whose question opened it, and who reads the message. */
+	readonly person: string;
+	/** How they read, or nothing when they said nothing about it. */
+	readonly preferences: string | undefined;
+	readonly from: Seq;
+	readonly through: Seq;
 }
 
 /**
  * What the prose is given of the seat taking the activation. Both facts are asked
  * for outright rather than left optional: a room that stops holding one must
- * say so, instead of a missing field quietly turning an assistant into a seat.
+ * say so, instead of a missing field quietly turning the assistant into a seat.
  */
 export interface SeatSpeaking {
 	readonly def: { name: string; identity: string; instructions: string };
-	/** The person this seat writes for, or nothing when it writes for nobody. */
-	readonly owner: string | undefined;
-	/** The range this activation is closing, or nothing when a message woke it. */
-	readonly closing: { from: Seq; through: Seq } | undefined;
+	/** Whether this seat is the room's assistant, which writes for people and never speaks. */
+	readonly assistant: boolean;
+	/** The exchange this activation is closing, or nothing when a message woke it. */
+	readonly closing: Closing | undefined;
 }
 
 export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
-	const lines =
-		seat.owner === undefined
-			? [
-					`You are '${seat.def.name}', an agent seated in the session '${room.name}' — a shared`,
-					`room with a record. Every participant sees what is said; nobody sees your tool use.`,
-					``,
-				]
-			: [...assistantHeader(seat.def.name, seat.owner, room.name), ``];
+	const lines = seat.assistant
+		? [...assistantHeader(seat.def.name, room.name), ``]
+		: [
+				`You are '${seat.def.name}', an agent seated in the session '${room.name}' — a shared`,
+				`room with a record. Every participant sees what is said; nobody sees your tool use.`,
+				``,
+			];
 	if (room.goal) lines.push(`This session exists to: ${room.goal}`, ``);
 	lines.push(...duties(seat, room), ``);
 	lines.push(
@@ -268,12 +269,13 @@ export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
 		`Your instructions:`,
 		seat.def.instructions.trim(),
 	);
+	if (seat.closing) lines.push(``, ...reader(seat.closing));
 	return lines.join('\n');
 }
 
-/** What this seat is for: an assistant writes one message, a seat speaks or does not. */
+/** What this seat is for: the assistant writes one message, a seat speaks or does not. */
 function duties(seat: SeatSpeaking, room: RoomView): string[] {
-	if (seat.owner !== undefined) return ASSISTANT_PARAGRAPH;
+	if (seat.assistant) return ASSISTANT_PARAGRAPH;
 	const lines = [
 		`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 		`your turn without saying anything, and no mark is left. Speak only when your reply`,
@@ -291,9 +293,9 @@ function duties(seat: SeatSpeaking, room: RoomView): string[] {
 		``,
 		...AUDIENCE_PARAGRAPH,
 	];
-	// A fold only renders in a room where somebody brought an assistant, so only
-	// such a room tells its seats how to read one.
-	if (room.hasAssistants) lines.push(``, ...SUMMARY_PARAGRAPH);
+	// A fold renders once the record holds a summary, so only such a record
+	// tells its seats how to read one.
+	if (room.record.some(isSummary)) lines.push(``, ...SUMMARY_PARAGRAPH);
 	return lines;
 }
 
@@ -306,8 +308,8 @@ export function renderTurnContext(seat: SeatSpeaking, room: RoomView): string {
 		`The agents. Each is seated at one point of a scale — the widest kind of message`,
 		`that wakes it. Unmarked: anything said. "named only": a say addressed to it.`,
 		`"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":`,
-		`nothing reaches it and you cannot address it. "writes for <name>" is that`,
-		`person's assistant, which writes the one message they read when their exchange closes.`,
+		`nothing reaches it and you cannot address it. "the assistant" writes the one`,
+		`message a person reads when their exchange closes.`,
 		`(active: taking a turn now; idle: at rest.)`,
 		renderAgents(room.seats),
 		``,
@@ -324,11 +326,11 @@ export function renderTurnContext(seat: SeatSpeaking, room: RoomView): string {
 /** What this activation is for, in the last line the model reads. */
 function askOf(seat: SeatSpeaking): string {
 	const closing = seat.closing;
-	if (seat.owner !== undefined) {
-		// An assistant woken by anything but a close has nothing to do in the
+	if (seat.assistant) {
+		// The assistant woken by anything but a close has nothing to do in the
 		// activation, and no hands to do it with. See `handsFor`.
 		return closing
-			? `${seat.owner}'s exchange is over: messages ${closing.from} to ${closing.through}. ` +
+			? `${closing.person}'s exchange is over: messages ${closing.from} to ${closing.through}. ` +
 					`Write the one message they read for it, or end your turn to leave the range whole.`
 			: `Nothing is asked of you: read the room, and end your turn.`;
 	}
@@ -349,16 +351,27 @@ const AUDIENCE_PARAGRAPH = [
 	`decided and why, and do not wait for an answer that nobody is there to give.`,
 ];
 
-/** How a room opens the prompt it hands an assistant. */
-function assistantHeader(assistant: string, person: string, room: string): string[] {
+/** How a room opens the prompt it hands the assistant. */
+function assistantHeader(assistant: string, room: string): string[] {
 	return [
-		`You are '${assistant}', ${person}'s assistant in the session '${room}' — a shared room with a`,
-		`record. You are seated in it, and nothing said in it wakes you. ${person} asked a`,
-		`question, the agents worked it out between them, and the room is quiet again.`,
+		`You are '${assistant}', the assistant in the session '${room}' — a shared room with a`,
+		`record. You are seated in it, and nothing said in it wakes you. You write for the`,
+		`people in the room: one of them asked a question, the agents worked it out between`,
+		`them, and the room is quiet again.`,
 	];
 }
 
-/** What an assistant is asked for, and the whole of what it may do. */
+/**
+ * Who the assistant is writing for, and how they read. How a person reads is
+ * theirs, so it reaches the assistant here and no other seat reads it.
+ */
+function reader(closing: Closing): string[] {
+	const lines = [`You are writing for ${closing.person}.`];
+	if (closing.preferences) lines.push(`How ${closing.person} reads:`, closing.preferences.trim());
+	return lines;
+}
+
+/** What the assistant is asked for, and the whole of what it may do. */
 const ASSISTANT_PARAGRAPH = [
 	`Writing is the summarise tool. Give it the one message your person reads instead of the`,
 	`working: their question, answered once, for somebody who has not read a line of it.`,
@@ -391,7 +404,7 @@ const ASSISTANT_PARAGRAPH = [
 const SUMMARY_PARAGRAPH = [
 	`Part of the record may read as "── N messages, summarised for <name> below ──". Those`,
 	`messages are still on the record; what stands for them is the summary further down,`,
-	`written by that person's own assistant, and you read it in place of them. The line names who`,
+	`written by the assistant for that person, and you read it in place of them. The line names who`,
 	`it was written for, because two people's summaries may cover the same stretch. Treat a`,
 	`summary as what happened. It asks you for nothing and it addresses one person, not you.`,
 	`If you need a fact it left out, read it again from your own tools rather than asking the`,

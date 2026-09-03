@@ -92,13 +92,13 @@ let unique = 0;
 const name = (prefix: string) => `${prefix}-${++unique}`;
 
 const assistant = defineAgent({
-	name: 'andrei-assistant',
-	identity: "andrei's assistant.",
+	name: 'assistant',
+	identity: 'Writes the one message a person reads.',
 	instructions: 'stay quiet',
 	model: 'scripted/assistant',
 });
 
-const human = defineHuman({ name: 'andrei', identity: 'Founder.', assistant });
+const human = defineHuman({ name: 'andrei', identity: 'Founder.' });
 
 async function enter(session: Session) {
 	const visit = await visitSession(session, human);
@@ -120,6 +120,7 @@ function agent(agentName: string, options: Partial<Parameters<typeof defineAgent
 async function run(agents: AgentDefinition[], seats: Record<string, Script>): Promise<Session> {
 	const session = startSession({
 		name: name('workspace'),
+		assistant,
 		agents,
 		streamFn: scripted(byAgent(seats)),
 	});
@@ -186,10 +187,10 @@ describe('defineWorkspace', () => {
 
 	it('refuses an assistant that names a workspace', async () => {
 		const site = defineWorkspace({ name: name('assistant') });
-		const connected = agent('sam-assistant', { workspace: site });
-		expect(() => defineHuman({ name: 'sam', identity: 'Site.', assistant: connected })).toThrow(
-			/names a workspace/,
-		);
+		const connected = agent('assistant', { workspace: site });
+		expect(() =>
+			startSession({ name: name('workspace'), assistant: connected, agents: [] }),
+		).toThrow(/names a workspace/);
 		await destroyWorkspace(site);
 	});
 });

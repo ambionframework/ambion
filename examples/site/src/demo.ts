@@ -1,10 +1,10 @@
 /**
  * One scripted run of the room, captured as JSON for a demo report.
  *
- * The products, their APIs, the people and their assistants all live in
+ * The products, their APIs, the people and the assistant all live in
  * `room.ts`; this file only decides who arrives, what they ask, and when
  * they leave — then writes out the event timeline, every activation with its
- * outcome, what each assistant wrote, and each seat's own downstream session.
+ * outcome, what the assistant wrote, and each seat's own downstream session.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm demo   (from examples/site)
  */
@@ -22,6 +22,7 @@ import {
 } from '@ambionframework/ambion';
 import {
 	AGENTS,
+	ASSISTANT,
 	apiLog,
 	DRIVE_ROOT,
 	dan,
@@ -73,6 +74,7 @@ const driveBefore = driveFiles();
 const session = startSession({
 	name: NAME,
 	goal: GOAL,
+	assistant: ASSISTANT,
 	agents: AGENTS,
 	repo,
 });
@@ -136,7 +138,7 @@ function narrate(event: SessionEvent): void {
 }
 
 /**
- * `settled()` is the seats alone, and an assistant writes after it: the room is
+ * `settled()` is the seats alone, and the assistant writes after it: the room is
  * never held busy while one works. `quiet()` is the room with the summaries
  * in it, which is what a report wants.
  */
@@ -162,7 +164,7 @@ step('priya opens the room to confirm the pour date for the client');
 const priyaVisit = await visitSession(session, priya);
 await quiescent();
 
-step('priya asks the question she has to answer today; her assistant writes the answer');
+step('priya asks the question she has to answer today; the assistant writes her the answer');
 await priyaVisit.deliver({ text: 'Can I tell the client Thursday for the Level 3 pour, or not?' });
 await quiescent();
 
@@ -170,14 +172,14 @@ step('priya leaves for a site walk without giving a new date');
 await priyaVisit.leave();
 await quiescent();
 
-step('sam opens it from the deck with a forecast; his assistant writes for a man on a deck');
+step('sam opens it from the deck with a forecast; the assistant writes for a man on a deck');
 const samVisit = await visitSession(session, sam);
 await samVisit.deliver({
 	text: 'Rain all Thursday morning. I am not pouring into that. What do you need from me to move it?',
 });
 await quiescent();
 
-step('dan opens it to price the move; his assistant writes the money');
+step('dan opens it to price the move; the assistant writes him the money');
 const danVisit = await visitSession(session, dan);
 await danVisit.deliver({
 	text: 'What does moving cost, and is there anything of mine holding this up?',
@@ -202,14 +204,14 @@ const missed =
 	priyaBack.since === undefined ? [] : await session.messages({ since: priyaBack.since });
 const sinceOnReturn = priyaBack.since;
 const seats = session.seats();
-/** The seats that write for somebody: an assistant is a seat with an owner. */
+/** The seat that writes for people: the roster marks it, and nothing else tells it apart. */
 const assistants = new Set(
-	seats.flatMap((seat) => (seat.kind === 'agent' && seat.owner ? [seat.name] : [])),
+	seats.flatMap((seat) => (seat.kind === 'agent' && seat.assistant ? [seat.name] : [])),
 );
 
 /**
- * Every downstream session the run wrote: `<room>:<agent>` for a seat, and
- * `<room>:<person>` for the assistant that writes for them.
+ * Every downstream session the run wrote: `<room>:<agent>` for a seat, the
+ * assistant's among them.
  */
 const seatSessions: {
 	agent: string;
@@ -235,8 +237,8 @@ for (const metadata of await repo.list()) {
 	const slug = metadata.id.slice(NAME.length + 1);
 	seatSessions.push({
 		agent: slug,
-		// An assistant is a seat like any other; the roster says which seat writes
-		// for a person, and that is the only thing that tells them apart.
+		// The assistant is a seat like any other; the roster says which seat writes
+		// for people, and that is the only thing that tells them apart.
 		kind: assistants.has(slug) ? 'assistant' : 'agent',
 		sessionId: metadata.id,
 		blocks,
@@ -277,14 +279,15 @@ writeFileSync(
 			tasksAfter: tasksState,
 			deliveriesAfter: materialsState.deliveries,
 			overtimeAfter: shiftsState.overtimeRequests,
+			assistant: {
+				name: ASSISTANT.name,
+				identity: ASSISTANT.identity,
+				instructions: ASSISTANT.instructions,
+			},
 			people: [priya, sam, dan].map((p) => ({
 				name: p.name,
 				identity: p.identity,
-				assistant: {
-					name: p.assistant.name,
-					identity: p.assistant.identity,
-					instructions: p.assistant.instructions,
-				},
+				preferences: p.preferences,
 			})),
 		},
 		null,

@@ -10,8 +10,8 @@
  * closes it — the exchange every other feature reads. `stopSession` takes
  * the room down, `readSession` reads a name without starting anything,
  * `visitSession` puts a person in a running room, and `destroyWorkspace`
- * retires a workspace for good. A person's assistant writes the one message
- * they read when an exchange closes. The design contracts live in
+ * retires a workspace for good. The room's assistant writes the one message
+ * a person reads when their exchange closes. The design contracts live in
  * docs/agent.md, docs/presence.md, docs/assistant.md and docs/workspace.md.
  */
 

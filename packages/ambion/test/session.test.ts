@@ -104,15 +104,15 @@ function contextText(context: Context): string {
 let unique = 0;
 const sessionName = (prefix: string) => `${prefix}-${++unique}`;
 
-/** A trivial assistant: every human needs one, and nothing here tests what it writes. */
+/** A trivial assistant: every room seats one, and nothing here tests what it writes. */
 const assistant = defineAgent({
-	name: 'andrei-assistant',
-	identity: "andrei's assistant.",
+	name: 'assistant',
+	identity: 'Writes the one message a person reads.',
 	instructions: 'stay quiet',
 	model: 'scripted/assistant',
 });
 
-const human = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.', assistant });
+const human = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.' });
 
 /**
  * A visitor whose arrival has already been heard. Arriving is a message, so
@@ -162,6 +162,7 @@ describe('startSession', () => {
 		let betaAcked = false;
 		const session = startSession({
 			name: sessionName('parallel'),
+			assistant,
 			agents: [alpha, beta, gamma],
 			streamFn: scripted(
 				byAgent({
@@ -219,6 +220,7 @@ describe('startSession', () => {
 		});
 		const session = startSession({
 			name: sessionName('reset'),
+			assistant,
 			agents: [echo],
 			// a say costs a second call for the tool result, so the two deliveries
 			// speak on 1 and 3; arrivals are quiet and wake nobody.
@@ -253,6 +255,7 @@ describe('startSession', () => {
 		});
 		const session = startSession({
 			name: sessionName('silence'),
+			assistant,
 			agents: [shy],
 			streamFn: scripted(() => quiet('not for me')),
 		});
@@ -281,6 +284,7 @@ describe('startSession', () => {
 		});
 		const session = startSession({
 			name: sessionName('passive'),
+			assistant,
 			agents: [front, passive(archivist)],
 			streamFn: scripted(
 				byAgent({
@@ -330,6 +334,7 @@ describe('startSession', () => {
 		});
 		const session = startSession({
 			name: sessionName('stamp'),
+			assistant,
 			agents: [liar, passive(aside)],
 			streamFn: scripted((context, _agent, call) => {
 				contexts.push(contextText(context));
@@ -347,9 +352,9 @@ describe('startSession', () => {
 		expect(roster).toContain('Founder. Owns the room.');
 
 		// one name is one participant, and one name is one person
-		const asAgent = defineHuman({ name: 'liar', identity: 'not really', assistant });
+		const asAgent = defineHuman({ name: 'liar', identity: 'not really' });
 		await expect(visitSession(session, asAgent)).rejects.toThrow(/is an agent/);
-		const twin = defineHuman({ name: 'andrei', identity: 'a different andrei', assistant });
+		const twin = defineHuman({ name: 'andrei', identity: 'a different andrei' });
 		await expect(visitSession(session, twin)).rejects.toThrow(/different identity/);
 	});
 
@@ -361,17 +366,27 @@ describe('startSession', () => {
 			instructions: 'stay quiet',
 			model: 'scripted/scribe',
 		});
-		const first = startSession({ name, agents: [scribe], streamFn: scripted(() => quiet()) });
+		const first = startSession({
+			name,
+			assistant,
+			agents: [scribe],
+			streamFn: scripted(() => quiet()),
+		});
 		const visit = await enter(first);
 		await visit.deliver({ text: 'for the record' });
 		await visit.deliver({ text: 'and in this order' });
 		await first.settled();
 
 		// one run per name: a second live room over one record would diverge
-		expect(() => startSession({ name, agents: [scribe] })).toThrow(/already running/);
+		expect(() => startSession({ name, assistant, agents: [scribe] })).toThrow(/already running/);
 
 		await stopSession(first);
-		const again = startSession({ name, agents: [scribe], streamFn: scripted(() => quiet()) });
+		const again = startSession({
+			name,
+			assistant,
+			agents: [scribe],
+			streamFn: scripted(() => quiet()),
+		});
 		expect(spoken(await again.messages()).map((m) => m.text)).toEqual([
 			'for the record',
 			'and in this order',
@@ -389,6 +404,7 @@ describe('startSession', () => {
 
 		const fresh = startSession({
 			name: sessionName('identity'),
+			assistant,
 			agents: [scribe],
 			streamFn: scripted(() => quiet()),
 		});
@@ -404,6 +420,7 @@ describe('startSession', () => {
 		});
 		const ordered = startSession({
 			name: sessionName('events'),
+			assistant,
 			agents: [solo],
 			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
 		});
@@ -412,8 +429,8 @@ describe('startSession', () => {
 		await orderedVisit.deliver({ text: 'say hi' });
 		await ordered.settled();
 		// one event per message on the record, whoever wrote it, and the exchange
-		// that message opened around it. A room with no assistant in it goes quiet in
-		// the same tick the exchange closes: nothing is owed.
+		// that message opened around it. One answer needs no summary, so the room
+		// goes quiet in the same tick the exchange closes: nothing is owed.
 		expect(events.map((e) => e.type)).toEqual([
 			'message',
 			'exchange_opened',
@@ -431,6 +448,7 @@ describe('startSession', () => {
 		// an activation that throws is an error event, never a silent decline
 		const faulty = startSession({
 			name: sessionName('error'),
+			assistant,
 			agents: [solo],
 			streamFn: scripted(() => {
 				throw new Error('boom');
@@ -446,6 +464,7 @@ describe('startSession', () => {
 		// abort quiets an active room, keeping what was already said
 		const hung = startSession({
 			name: sessionName('abort'),
+			assistant,
 			agents: [solo],
 			streamFn: scripted(() => new Promise<never>(() => {})),
 		});
@@ -462,6 +481,7 @@ describe('startSession', () => {
 		const racingStarted = deferred();
 		const racing = startSession({
 			name: sessionName('abort-steer'),
+			assistant,
 			agents: [solo],
 			streamFn: scripted(() => {
 				racingCalls += 1;
@@ -499,6 +519,7 @@ describe('startSession', () => {
 		const secondContexts: string[] = [];
 		const session = startSession({
 			name: sessionName('race'),
+			assistant,
 			agents: [first, second],
 			streamFn: scripted(
 				byAgent({
@@ -537,6 +558,7 @@ describe('startSession', () => {
 		const yieldSaid = deferred();
 		const yielding = startSession({
 			name: sessionName('race-yield'),
+			assistant,
 			agents: [first, second],
 			streamFn: scripted(
 				byAgent({
@@ -573,6 +595,7 @@ describe('startSession', () => {
 		const name = sessionName('downstream');
 		const session = startSession({
 			name,
+			assistant,
 			agents: [solo],
 			repo,
 			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
@@ -606,6 +629,7 @@ describe('startSession', () => {
 		expect(() =>
 			startSession({
 				name: sessionName('dupe'),
+				assistant,
 				agents: [twin, twin],
 				streamFn: scripted(() => quiet()),
 			}),

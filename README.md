@@ -26,7 +26,7 @@ in scope discovers this: the problem to solve is agent-to-agent
 collaboration.
 
 Ambion is my take on it. Agents share one record, people work in the
-room beside them, and every person brings an assistant that holds how
+room beside them, and the room's assistant writes each person the way
 they read, so nobody reads a swarm. They read one message.
 
 ## What ships today
@@ -53,12 +53,12 @@ has an attention, and a seat wakes when its attention is at least as
 wide as the reach. A directed message wakes the one participant it names
 and nobody else. An idle room costs nothing.
 
-| Attention   | Shorthand   | Wakes on                                          |
-| ----------- | ----------- | ------------------------------------------------- |
-| `none`      | —           | Nothing said reaches it. Where an assistant sits. |
-| `named`     | `passive`   | A message addressed to it.                        |
-| `broadcast` | _(default)_ | Anything said.                                    |
-| `presence`  | `attentive` | Anything said, and somebody arriving or leaving.  |
+| Attention   | Shorthand   | Wakes on                                           |
+| ----------- | ----------- | -------------------------------------------------- |
+| `none`      | —           | Nothing said reaches it. Where the assistant sits. |
+| `named`     | `passive`   | A message addressed to it.                         |
+| `broadcast` | _(default)_ | Anything said.                                     |
+| `presence`  | `attentive` | Anything said, and somebody arriving or leaving.   |
 
 **Speaking is a tool, and silence is the default.** An activated agent
 holds one built-in tool, `say`. An activation that ends without calling
@@ -79,12 +79,13 @@ exchange until it closes, even after they leave. `deliver` returns when
 the question is on the record, and `settled()` resolves at the close.
 Cost is measured per exchange.
 
-**An assistant writes the one message its person reads.** Every person
-brings one: an agent that holds how they read, and nothing else. When
-their exchange closes with more than one agent message, it writes the
-summary they read. One answer stands as it was given. From the next
-activation the agents read the summary in place of the messages it
-stands for.
+**The assistant writes the one message a person reads.** Every room
+seats one: an agent that writes for whoever asked, and nothing else. A
+person's definition carries how they read, and the assistant reads it at
+the one activation where it writes for them. When their exchange closes
+with more than one agent message, it writes the summary they read. One
+answer stands as it was given. From the next activation the agents read
+the summary in place of the messages it stands for.
 
 **Arriving and leaving are messages.** A seat at `presence` wakes on
 them, and an agent that knows the room's goal tells the person what they
@@ -112,10 +113,10 @@ Five functions build a room, and four verbs run it.
 | Function           | What it does                                                                                                     |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `defineAgent`      | Makes an agent as a plain value: name, identity the room reads, private instructions, model, tools, workspace.   |
-| `defineHuman`      | Names a person: an identity the agents read and address, and the assistant they bring.                           |
+| `defineHuman`      | Names a person: an identity the agents read and address, and how they read, which the assistant reads.           |
 | `defineTool`       | Declares what an agent can do beyond speaking. Pi's own tool shape, behind one import.                           |
 | `defineWorkspace`  | Names a shared filesystem and shell that an agent's tools reach into. Durable by its name; in memory by default. |
-| `startSession`     | Brings up a named room from its agents and a goal.                                                               |
+| `startSession`     | Brings up a named room from its agents, its assistant and a goal.                                                |
 | `visitSession`     | Puts a person in a running room. Delivering belongs to the visit.                                                |
 | `readSession`      | Reads the record between runs. Nothing stands up, nothing to bill.                                               |
 | `stopSession`      | Takes the room down.                                                                                             |
@@ -170,23 +171,26 @@ const materials = defineAgent({
 const priya = defineHuman({
   name: 'priya',
   identity: 'Project manager. Owns the programme.',
-  assistant: defineAgent({
-    name: 'priya-assistant',
-    identity: 'Holds how Priya reads.',
-    model: 'anthropic/claude-sonnet-4-5',
-    instructions: 'Lead with the decision Priya has to make. Four sentences at most.',
-  }),
+  preferences: 'Lead with the decision Priya has to make. Four sentences at most.',
+});
+
+const assistant = defineAgent({
+  name: 'assistant',
+  identity: 'Writes the one message a person reads.',
+  model: 'anthropic/claude-sonnet-4-5',
+  instructions: 'Answer what was asked, once, with the facts the answer turns on.',
 });
 
 const session = startSession({
   name: 'site',
   goal: 'Run the site: schedule, materials, crew hours.',
+  assistant,
   agents: [materials, tasks, timesheet],
 });
 
 const visit = await visitSession(session, priya);
 await visit.deliver({ text: 'Can I tell the client Thursday for the pour?' });
-await session.quiet(); // the room settled, and Priya's assistant wrote her one answer
+await session.quiet(); // the room settled, and the assistant wrote Priya her one answer
 
 await stopSession(session);
 
@@ -197,7 +201,7 @@ for (const message of await readSession('site').messages()) {
 ```
 
 [`examples/site`](examples/site) is the runnable version: three products,
-three people, an assistant for each. [`demos/`](demos) holds one dated
+three people, one assistant. [`demos/`](demos) holds one dated
 report per merged change, each a real run of that room.
 
 ## Install

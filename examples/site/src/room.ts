@@ -5,8 +5,8 @@
  * Three products hold their own state and their own API and know nothing of
  * each other's internals: they ask on the record, the way a person does. Three
  * people share the room from a site office, a phone on the deck and a
- * cost desk, and each one brings an assistant that holds what they act on and
- * writes the one message they read.
+ * cost desk, and the room's assistant writes each of them the one message
+ * they read, the way they read.
  *
  * The three products share one workspace: the site drive, a directory of
  * the documents the site works to. Each product reads the documents its
@@ -571,50 +571,32 @@ const materialsAgent = defineAgent({
  */
 export const AGENTS = [shiftsAgent, attentive(tasksAgent), materialsAgent];
 
-// -- the people, and the assistant each of them brings ----------------------------
+// -- the people, and the assistant that writes for them -----------------------
 
 /**
  * An identity is the public face: what a person owns, and what only they can
- * do. Every product reads it to decide whom to address, and so does the assistant.
+ * do. Every product reads it to decide whom to address, and so does the
+ * assistant.
  *
  * How a person reads is a different fact: what an answer leads with, what to
  * cut, and how much of one they take. That belongs to the person, so it lives
- * in their assistant's instructions and nowhere else. Before assistants, every product
+ * in their `preferences` and nowhere else. The assistant reads it when it
+ * writes for them, and no product reads it. Before that, every product
  * carried a copy of it for every person, and each new person made every
  * product's prompt longer.
- *
- * An assistant reads the identity in its context, so nothing here repeats it.
  */
-const assistant = (person: string, instructions: string) =>
-	defineAgent({
-		name: `${person}-assistant`,
-		identity: `${person}'s assistant. Holds how they read and writes the one message they read.`,
-		model: MODEL,
-		instructions: `
-			Lead with the decision your person has to make and who holds it. Give them
-			the facts that decision turns on — quantities, dates, owners, what is still
-			unknown — and cut every other thing the room said, however true.
-			Say plainly when the room did not answer what they asked.
-
-			${instructions.trim()}
-		`,
-	});
-
 export const priya = defineHuman({
 	name: 'priya',
 	identity:
 		'Project manager, site office. Owns the programme and what the client is promised. ' +
 		'She is the only one who can book building control and commit a date to the client.',
-	assistant: assistant(
-		'priya',
-		`
-			Open with the date: whether it holds, and if not, the earliest one that
-			does. Name only the items she has to clear herself, with their owner and
-			their deadline; what somebody else is already handling is not her message.
-			She reads cost only when it moves a date, so leave out a price that changes
-			nothing. Four sentences at most.
-		`,
-	),
+	preferences: `
+		Open with the date: whether it holds, and if not, the earliest one that
+		does. Name only the items she has to clear herself, with their owner and
+		their deadline; what somebody else is already handling is not her message.
+		She reads cost only when it moves a date, so leave out a price that changes
+		nothing. Four sentences at most.
+	`,
 });
 
 export const sam = defineHuman({
@@ -622,16 +604,13 @@ export const sam = defineHuman({
 	identity:
 		'Site foreman, on the deck with a phone. Owns what the crews actually do tomorrow morning. ' +
 		'He can move labour and plant the same day and nobody else can.',
-	assistant: assistant(
-		'sam',
-		`
-			Sam reads standing up. Open with what changes for his crews and when, and
-			name the trade, the ticket and the hour. Leave out contract terms,
-			cancellation charges and what the client was told: none of it changes what
-			he does at seven. Three sentences at most, and no lists longer than the
-			crews he has.
-		`,
-	),
+	preferences: `
+		Sam reads standing up. Open with what changes for his crews and when, and
+		name the trade, the ticket and the hour. Leave out contract terms,
+		cancellation charges and what the client was told: none of it changes what
+		he does at seven. Three sentences at most, and no lists longer than the
+		crews he has.
+	`,
 });
 
 export const dan = defineHuman({
@@ -639,16 +618,30 @@ export const dan = defineHuman({
 	identity:
 		'Quantity surveyor. Owns cost, variations and what the client is charged. ' +
 		'He owns the hire orders and approves overtime spend.',
-	assistant: assistant(
-		'dan',
-		`
-			Open with the money: what the change costs, what it saves, and which of it
-			he has to approve or recover. Give every figure with the supplier and the
-			term it comes from, and give no figure the answer does not need. He reads
-			sequencing only when it moves money, so state a date only where it changes
-			a number. Four sentences at most.
-		`,
-	),
+	preferences: `
+		Open with the money: what the change costs, what it saves, and which of it
+		he has to approve or recover. Give every figure with the supplier and the
+		term it comes from, and give no figure the answer does not need. He reads
+		sequencing only when it moves money, so state a date only where it changes
+		a number. Four sentences at most.
+	`,
+});
+
+/**
+ * The room's one assistant. It writes for whoever asked, and each activation
+ * hands it that person's preferences beside the record. What is here is the
+ * house style every message follows; what differs by person is on the person.
+ */
+export const ASSISTANT = defineAgent({
+	name: 'assistant',
+	identity: 'Writes the one message a person reads when their exchange closes.',
+	model: MODEL,
+	instructions: `
+		Lead with the decision your person has to make and who holds it. Give them
+		the facts that decision turns on — quantities, dates, owners, what is still
+		unknown — and cut every other thing the room said, however true.
+		Say plainly when the room did not answer what they asked.
+	`,
 });
 
 export const PEOPLE: Record<string, HumanDefinition> = { priya, sam, dan };

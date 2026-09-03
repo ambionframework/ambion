@@ -4,12 +4,12 @@
  *
  * Everything with a life of its own has left. The record is `record.ts`, who
  * is here is `presence.ts`, a seat and what wakes it is `seat.ts`, one
- * activation is `activation.ts`, an exchange is `exchange.ts`, a person's assistant is
+ * activation is `activation.ts`, an exchange is `exchange.ts`, the assistant is
  * `assistant.ts`, and every sentence a participant reads is `render.ts`. What is
  * left is what only a room can do:
  *
- * - **Compose.** Seat the agents, admit the people, bring the assistants they
- *   bring, and take it all down again.
+ * - **Compose.** Seat the agents and the assistant, admit the people, and take
+ *   it all down again.
  * - **Commit.** One lock, one seq at a time, for every author (rule 5), and
  *   one `message` event per message however it was written.
  * - **Route.** Who hears a message, and who wakes for it.
@@ -28,12 +28,13 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { Type } from 'typebox';
 import { Activation } from './activation.ts';
-import { Assistants, type Draft, summariseTool } from './assistant.ts';
+import { Assistant, assertAssistant, type Draft, summariseTool } from './assistant.ts';
 import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
 import { openOrCreate, persistTurns, RecordStore } from './record.ts';
 import {
+	type Closing,
 	type PersonView,
 	type RoomView,
 	refusal,
@@ -83,6 +84,13 @@ export interface StartSessionOptions {
 	/** The session's name: the record belongs to it, across every run. */
 	name: string;
 	agents: readonly AgentSeat[];
+	/**
+	 * The room's assistant: an agent that writes the one message a person reads
+	 * when their exchange closes, shaped to how that person reads. It is seated
+	 * with the agents, at `none`, and it writes for every person who visits.
+	 * It carries no tools and no workspace: the room refuses one that does.
+	 */
+	assistant: AgentDefinition;
 	/** What the room is for. Read by every agent; gates the arrival paragraph. */
 	goal?: string;
 	/**
@@ -208,8 +216,8 @@ class SessionImpl implements Session {
 	private readonly repo: SessionRepo;
 	private readonly store: RecordStore;
 	private readonly agents = new Map<string, SeatRuntime>();
-	/** The assistants in this room: who writes for whom, who is owed, who is drafting. */
-	private readonly assistants = new Assistants();
+	/** The room's assistant: how each person reads, who is owed, what it is drafting. */
+	private readonly assistant: Assistant;
 	private readonly here = new Attendance(() => this.record);
 	private readonly listeners = new Set<(event: SessionEvent) => void>();
 	private readonly settledWaiters: (() => void)[] = [];
@@ -226,6 +234,9 @@ class SessionImpl implements Session {
 		this.repo = options.repo ?? defaultRepo;
 		this.store = new RecordStore(this.repo, this.name);
 		for (const seat of options.agents) this.seat(seat);
+		// Seated at the narrow end: nothing said in the room wakes the assistant;
+		// only the close of an exchange does, and it is here for the whole run.
+		this.assistant = new Assistant(this.seat(seated(assertAssistant(options.assistant), 'none')));
 		this.customStream = options.streamFn !== undefined;
 		this.streamFn = options.streamFn ?? registryStream;
 	}
@@ -286,14 +297,14 @@ class SessionImpl implements Session {
 		return [...this.agents.values()].filter(isActive);
 	}
 
-	/** Nothing at all is taking an activation. An assistant writing is something. */
+	/** Nothing at all is taking an activation. The assistant writing is something. */
 	private idle(): boolean {
 		return this.running().length === 0;
 	}
 
-	/** Something that speaks for itself is taking one. An assistant does not. */
+	/** Something that speaks for itself is taking one. The assistant does not. */
 	private working(): boolean {
-		return this.running().some((seat) => !this.assistants.isAssistant(seat.def.name));
+		return this.running().some((seat) => !this.assistant.is(seat.def.name));
 	}
 
 	quiet(): Promise<void> {
@@ -316,7 +327,6 @@ class SessionImpl implements Session {
 	seats(): SeatInfo[] {
 		const seats: SeatInfo[] = [];
 		for (const seat of this.agents.values()) {
-			const owner = this.assistants.ownerOf(seat.def.name);
 			seats.push({
 				kind: 'agent',
 				name: seat.def.name,
@@ -324,18 +334,11 @@ class SessionImpl implements Session {
 				status: isActive(seat) ? 'active' : 'idle',
 				attention: seat.attention,
 				sessionId: `${this.name}:${seat.def.name}`,
-				...(owner === undefined ? {} : { owner }),
+				...(this.assistant.is(seat.def.name) ? { assistant: true as const } : {}),
 			});
 		}
 		for (const [name, identity] of this.here.known()) {
-			const assistant = this.assistants.forPerson(name)?.def.name;
-			seats.push({
-				kind: 'human',
-				name,
-				identity,
-				presence: this.here.presenceOf(name),
-				...(assistant === undefined ? {} : { assistant }),
-			});
+			seats.push({ kind: 'human', name, identity, presence: this.here.presenceOf(name) });
 		}
 		return seats;
 	}
@@ -350,21 +353,11 @@ class SessionImpl implements Session {
 		// The room changes before the message does: a seat woken by the arrival
 		// must read a roster that already agrees with it.
 		const visit = this.here.enter(human);
-		this.bringAssistant(human);
+		// How they read outlives the visit: an exchange they opened is finished
+		// properly or not at all, and its message is written after they leave.
+		this.assistant.serve(human.name, human.preferences);
 		await this.commitPresence(human.name, 'arrived', human.identity);
 		return this.handle(visit);
-	}
-
-	/**
-	 * An assistant joins the room with its person and stays for the run: it outlives
-	 * their visit by one exchange, because an exchange that opened is finished
-	 * properly or not at all.
-	 */
-	private bringAssistant(human: HumanDefinition): void {
-		if (this.assistants.has(human.name)) return;
-		// Seated at the narrow end: nothing said in the room wakes an assistant;
-		// only the close of its person's exchange does.
-		this.assistants.bring(this.seat(seated(human.assistant, 'none')), human.name);
 	}
 
 	private assertVisitable(human: HumanDefinition): void {
@@ -524,7 +517,7 @@ class SessionImpl implements Session {
 	private dispatch(message: Message): void {
 		const to = isSpoken(message) ? message.to : undefined;
 		const target = to === undefined ? undefined : this.agents.get(to);
-		const fromAssistant = this.assistants.isAssistant(message.from);
+		const fromAssistant = this.assistant.is(message.from);
 		for (const seat of this.agents.values()) {
 			if (seat.def.name === message.from) continue;
 			if (seat.activation) seat.activation.steer(message, renderLine(message));
@@ -544,37 +537,50 @@ class SessionImpl implements Session {
 		this.emit({ type: 'activation_start', agent: seat.def.name });
 		// A summarising activation is one pass: it answers a room that moved with
 		// a redraft inside its own tool rather than a fresh activation.
-		const rebuilds = this.assistants.draftOf(seat.def.name) === undefined;
+		const rebuilds = this.closingOf(seat) === undefined;
 		void activation
 			.run(rebuilds, () => this.store.lastSeq)
-			.finally(() => {
-				seat.activation = undefined;
-				this.assistants.activationEnded(seat, {
-					wrote: activation.spoke,
-					failed: activation.failed,
-				});
-				this.emit({ type: 'activation_end', agent: seat.def.name, spoke: activation.spoke });
-				// An exchange ends when the seats stop. An assistant writing about one
-				// is not the room still working on it, so its own activation ends
-				// none — which also keeps a failing assistant from retrying for ever.
-				if (!this.assistants.isAssistant(seat.def.name) && !this.working()) {
-					for (const resolve of this.settledWaiters.splice(0)) resolve();
-					this.closeExchange();
-				}
-				if (this.idle()) this.markQuiet();
-			});
+			.finally(() => this.ended(seat, activation));
+	}
+
+	/** The seat stopped: what that closes, and what it frees. */
+	private ended(seat: SeatRuntime, activation: Activation): void {
+		seat.activation = undefined;
+		const assistant = this.assistant.is(seat.def.name);
+		if (assistant) {
+			this.assistant.activationEnded({ wrote: activation.spoke, failed: activation.failed });
+		}
+		this.emit({ type: 'activation_end', agent: seat.def.name, spoke: activation.spoke });
+		// An exchange ends when the seats stop. The assistant writing about one
+		// is not the room still working on it, so its own activation ends
+		// none — which also keeps a failing assistant from retrying for ever.
+		// What its end frees is the seat, for whoever was owed while it drafted.
+		if (assistant) this.draftNext(this.assistant.dueAfterDraft(...this.dueArgs()));
+		else if (!this.working()) {
+			for (const resolve of this.settledWaiters.splice(0)) resolve();
+			this.closeExchange();
+		}
+		if (this.idle()) this.markQuiet();
+	}
+
+	/** The range the assistant is closing, when this seat is the assistant and it is closing one. */
+	private closingOf(seat: SeatRuntime): Draft | undefined {
+		return this.assistant.is(seat.def.name) ? this.assistant.closing() : undefined;
 	}
 
 	/**
-	 * What the prose is given of the seat taking this activation. The assistants hold both
-	 * facts; a seat holds neither.
+	 * What the prose is given of the seat taking this activation. The assistant
+	 * holds every fact here; a seat holds none of them.
 	 */
 	private speaking(seat: SeatRuntime): SeatSpeaking {
-		return {
-			def: seat.def,
-			owner: this.assistants.ownerOf(seat.def.name),
-			closing: this.assistants.draftOf(seat.def.name),
+		const draft = this.closingOf(seat);
+		const closing: Closing | undefined = draft && {
+			person: draft.person,
+			preferences: this.assistant.preferencesOf(draft.person),
+			from: draft.from,
+			through: draft.through,
 		};
+		return { def: seat.def, assistant: this.assistant.is(seat.def.name), closing };
 	}
 
 	/** What the prose is given of this room, built fresh for each activation. */
@@ -585,7 +591,6 @@ class SessionImpl implements Session {
 			seats: this.seats(),
 			people: this.peopleViews(),
 			record: this.record,
-			hasAssistants: this.assistants.size > 0,
 		};
 	}
 
@@ -612,21 +617,20 @@ class SessionImpl implements Session {
 
 	/**
 	 * What an activation holds. A seat speaks, reaches its workspace through the
-	 * four built-in tools when it names one, and uses its own tools; an assistant
-	 * closing an exchange holds one hand, and it reaches the record. `defineHuman`
+	 * four built-in tools when it names one, and uses its own tools; the assistant
+	 * closing an exchange holds one hand, and it reaches the record. `startSession`
 	 * refuses an assistant that carries tools or a workspace of its own, so there
 	 * is nothing else to leave out.
 	 */
 	private handsFor(seat: SeatRuntime, activation: Activation): AgentTool[] {
-		// An assistant's hands are the runtime's, and it holds them only for the activation
-		// it was woken for. Nothing wakes an assistant today but the close of its
-		// person's exchange; when something else does — a wider attention, per
+		// The assistant's hands are the runtime's, and it holds them only for the activation
+		// it was woken for. Nothing wakes the assistant today but the close of an
+		// exchange; when something else does — a wider attention, per
 		// FOLLOW_WORK.md — it must arrive with empty hands until somebody adds a
 		// `say` here on purpose. assistant.md §12 makes that a deliberate decision.
-		const owner = this.assistants.ownerOf(seat.def.name);
-		if (owner !== undefined) {
-			const closing = this.assistants.draftOf(seat.def.name);
-			return closing ? [this.summarise(seat, activation, owner, closing)] : [];
+		if (this.assistant.is(seat.def.name)) {
+			const closing = this.assistant.closing();
+			return closing ? [this.summarise(seat, activation, closing)] : [];
 		}
 		return [
 			this.sayTool(seat, activation),
@@ -635,14 +639,9 @@ class SessionImpl implements Session {
 		];
 	}
 
-	/** The one hand an assistant is given, bound to the range it must stand for. */
-	private summarise(
-		seat: SeatRuntime,
-		activation: Activation,
-		person: string,
-		closing: Draft,
-	): AgentTool {
-		return summariseTool(seat.def.name, person, closing, {
+	/** The one hand the assistant is given, bound to the range it must stand for. */
+	private summarise(seat: SeatRuntime, activation: Activation, closing: Draft): AgentTool {
+		return summariseTool(seat.def.name, closing, {
 			stopped: () => this.stopped,
 			lastSeq: () => this.store.lastSeq,
 			claim: (author, draft) => this.claim<SummaryMessage>(author, draft),
@@ -724,7 +723,7 @@ class SessionImpl implements Session {
 	 * Rule 5, in one place: claim the record's next seq for an author that has
 	 * read everything before it. The check and the append share one tick, so
 	 * exactly one of two racing authors wins, and the loser is handed what it
-	 * missed. A seat's say and an assistant's summary are refused the same way, for
+	 * missed. A seat's say and the assistant's summary are refused the same way, for
 	 * the same reason — which is why the event names the author, not the seat.
 	 */
 	private claim<T extends Message>(
@@ -743,7 +742,7 @@ class SessionImpl implements Session {
 
 	/**
 	 * The room went quiet, so the exchange it was working on is over. The host
-	 * hears that before anything is written about it: an assistant is the first
+	 * hears that before anything is written about it: the assistant is the first
 	 * reader of a closed exchange and not the only one.
 	 */
 	private closeExchange(): void {
@@ -753,34 +752,42 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * What an assistant makes of a closed exchange: its owner is owed the one
-	 * message that stands for it, and the room activates every assistant owed one.
-	 * Nothing else in the room wakes for a close — an assistant is seated `none`,
+	 * What the assistant makes of a closed exchange: its owner is owed the one
+	 * message that stands for it, and the room activates the assistant for it.
+	 * Nothing else in the room wakes for a close — the assistant is seated `none`,
 	 * and the close is the one thing that reaches it.
 	 *
 	 * Every quiet room is a chance to write what is owed, whatever made the
-	 * room busy. An assistant's own activation ends no exchange, so a failed draft waits for
-	 * the next time the seats stop rather than retrying on itself.
+	 * room busy. The assistant's own activation ends no exchange, so a failed draft
+	 * waits for the next time the seats stop rather than retrying on itself.
 	 */
 	private summariseClosed(closing: ClosedExchange | undefined): void {
-		if (closing) this.assistants.owe(closing.owner, closing.from);
-		const due = this.assistants.activationsDue(this.record, this.store.lastSeq, (name) =>
-			this.speaksForItself(name),
-		);
-		for (const { seat } of due) this.activate(seat);
+		if (closing) this.assistant.owe(closing.owner, closing.from);
+		this.draftNext(this.assistant.dueAtQuiescence(...this.dueArgs()));
+	}
+
+	/** What the assistant reads to decide whether a range needs a message. */
+	private dueArgs(): [readonly Message[], Seq, (name: string) => boolean] {
+		return [this.record, this.store.lastSeq, (name) => this.speaksForItself(name)];
+	}
+
+	/** The assistant takes the draft it is due, unless the room is closing. */
+	private draftNext(draft: Draft | undefined): void {
+		if (draft === undefined || this.stopped) return;
+		this.activate(this.assistant.seat);
 	}
 
 	/**
-	 * A seat that speaks for itself: an agent in this room, and not somebody's
+	 * A seat that speaks for itself: an agent in this room, and not the
 	 * assistant. It is what the threshold counts — what the room produced, not what
-	 * a person said into it, and not what an assistant wrote about it.
+	 * a person said into it, and not what the assistant wrote about it.
 	 */
 	private speaksForItself(name: string): boolean {
-		return this.agents.has(name) && !this.assistants.isAssistant(name);
+		return this.agents.has(name) && !this.assistant.is(name);
 	}
 
 	/**
-	 * The room is quiet: no seat is taking an activation, and no assistant still owes one.
+	 * The room is quiet: no seat is taking an activation, and the assistant owes nobody.
 	 * A summary that a race refused is not work in flight — it waits for the
 	 * next quiescence, and the room is quiet in the meantime.
 	 *
@@ -801,7 +808,6 @@ class SessionImpl implements Session {
 		const views: PersonView[] = [];
 		for (const [name, identity] of this.here.known()) {
 			const since = this.here.sinceOf(name);
-			const assistant = this.assistants.forPerson(name)?.def.name;
 			views.push({
 				name,
 				identity,
@@ -809,7 +815,6 @@ class SessionImpl implements Session {
 				changedAt: this.here.lastChangeAt(name),
 				since,
 				unseen: since === undefined ? 0 : this.store.since(since).length,
-				...(assistant === undefined ? {} : { assistant }),
 			});
 		}
 		return views;

@@ -3,8 +3,8 @@
  *
  * Three products wait in it. You visit as one of three people, and can open a
  * second and third visit to watch presence work with more than one of you in
- * the room at once. Each person brings an assistant: ask a question, let the room
- * work it out, and read the one message your assistant writes when it goes quiet.
+ * the room at once. The room seats one assistant: ask a question, let the room
+ * work it out, and read the one message the assistant writes you when it goes quiet.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm start   (from examples/site)
  */
@@ -22,9 +22,19 @@ import {
 	type Visit,
 	visitSession,
 } from '@ambionframework/ambion';
-import { AGENTS, apiLog, DRIVE_ROOT, driveFiles, GOAL, MODEL, PEOPLE, ROOM_NAME } from './room.ts';
+import {
+	AGENTS,
+	ASSISTANT,
+	apiLog,
+	DRIVE_ROOT,
+	driveFiles,
+	GOAL,
+	MODEL,
+	PEOPLE,
+	ROOM_NAME,
+} from './room.ts';
 
-const session = startSession({ name: ROOM_NAME, goal: GOAL, agents: AGENTS });
+const session = startSession({ name: ROOM_NAME, goal: GOAL, assistant: ASSISTANT, agents: AGENTS });
 
 /** Who is in the room, by name. A person may be here more than once. */
 const visits = new Map<string, Visit>();
@@ -37,9 +47,7 @@ const colours: Record<string, string> = {
 	priya: '\x1b[36m',
 	sam: '\x1b[35m',
 	dan: '\x1b[31m',
-	'priya-assistant': '\x1b[96m',
-	'sam-assistant': '\x1b[95m',
-	'dan-assistant': '\x1b[91m',
+	assistant: '\x1b[96m',
 };
 const dim = '\x1b[2m';
 const red = '\x1b[31m';
@@ -104,7 +112,7 @@ session.subscribe((event: SessionEvent) => {
 				`${dim}— the exchange is over (${event.exchange.from}–${event.exchange.through}) —${reset}`,
 			);
 			break;
-		// Quiet, not settled: settled is the seats alone, and an assistant writes after it.
+		// Quiet, not settled: settled is the seats alone, and the assistant writes after it.
 		case 'quiet':
 			show(`${dim}— the room is quiet —${reset}`);
 			break;
@@ -127,13 +135,13 @@ function help(): void {
 			'  /missed           what landed since you last stopped reading',
 			'  /api              every call the products made into their own data',
 			'  /diary            the site diary, as the products have left it',
-			'  /summaries        what each assistant wrote, and the range it stands for',
+			'  /summaries        what the assistant wrote, and the range each message stands for',
 			'  /abort            cancel every activation in flight',
 			'  /quit             leave, stop the room, and exit',
 			'',
 			'  The task list watches the door. Try /join dan and see whether it has',
 			'  anything of his; then ask "can I promise Thursday for the pour?"',
-			'  When the room goes quiet, your assistant writes the one message you read.',
+			'  When the room goes quiet, the assistant writes the one message you read.',
 			'',
 		].join('\n'),
 	);
@@ -150,15 +158,12 @@ const WAKES: Record<Attention, string> = {
 function who(): void {
 	for (const seat of session.seats()) {
 		if (seat.kind === 'agent') {
-			const owner = seat.owner ? `, writes for ${seat.owner}` : '';
+			const assistant = seat.assistant ? ', the assistant' : '';
 			console.log(
-				`  ${paint(seat.name, seat.name)} (${seat.status}, wakes ${WAKES[seat.attention]}${owner}): ${seat.identity}`,
+				`  ${paint(seat.name, seat.name)} (${seat.status}, wakes ${WAKES[seat.attention]}${assistant}): ${seat.identity}`,
 			);
 		} else {
-			const assistant = seat.assistant ? `, brings ${seat.assistant}` : '';
-			console.log(
-				`  ${paint(seat.name, seat.name)} (${seat.presence}${assistant}): ${seat.identity}`,
-			);
+			console.log(`  ${paint(seat.name, seat.name)} (${seat.presence}): ${seat.identity}`);
 		}
 	}
 }
@@ -176,10 +181,10 @@ async function record(): Promise<void> {
 	for (const m of await session.messages()) console.log(`  ${line(m)}`);
 }
 
-/** One exchange, one message: what each assistant wrote, and what it stands for. */
+/** One exchange, one message: what the assistant wrote, and what each stands for. */
 async function summaries(): Promise<void> {
 	const written = (await session.messages()).filter(isSummary);
-	if (written.length === 0) return console.log('  (no assistant has written yet)');
+	if (written.length === 0) return console.log('  (the assistant has not written yet)');
 	for (const m of written) {
 		console.log(`  [${m.seq}] ${paint(m.from, m.from)} → ${m.to}, for ${span(m)}:`);
 		console.log(`      ${m.text.replace(/\n/g, '\n      ')}`);

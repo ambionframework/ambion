@@ -1,36 +1,37 @@
 /**
- * The assistant: a person's counterpart in a room. It holds how its person reads,
- * and when an exchange they opened closes, it writes the one message they
- * read.
+ * The assistant: the room's counterpart to the people in it. It reads how each
+ * person reads, and when an exchange closes, it writes the one message the
+ * person who opened it reads.
  *
- * **An assistant is a seat.** It is seated when its person arrives, the room
- * activates it the way it activates every other agent, its turns land in its
- * own downstream
- * session, and the record's lock refuses it exactly as it refuses a say. Two
- * things make it the seat it is, and both are data rather than machinery:
+ * **The assistant is a seat.** `startSession` seats it with the agents, the
+ * room activates it the way it activates every other agent, its turns land in
+ * its own downstream session, and the record's lock refuses it exactly as it
+ * refuses a say. Two things make it the seat it is, and both are data rather
+ * than machinery:
  *
  * - It is seated at the narrow end of attention, `none`, so nothing said in
  *   the room wakes it.
- * - A closed exchange wakes it, and only its owner's. That activation holds one
- *   tool, `summarise`, bound to the range it must stand for.
+ * - A closed exchange wakes it, for the person who owns that exchange. That
+ *   activation holds one tool, `summarise`, bound to the range it must stand
+ *   for.
  *
- * What is left in this file is what an assistant *is*: the range a summary stands
- * for, the tool that commits one, and what a model is told the one message is
- * for. The activation itself is the room's, in `session.ts`, and it is the same one
- * every seat takes.
+ * What is left in this file is what the assistant *is*: what a room refuses
+ * to seat as one, the range a summary stands for, the tool that commits one,
+ * and how each person reads. The activation itself is the room's, in
+ * `session.ts`, and it is the same one every seat takes.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { refusal } from './render.ts';
 import { delivered, isActive, type SeatRuntime } from './seat.ts';
-import type { Message, Seq, SummaryMessage } from './types.ts';
-import { isSpoken } from './types.ts';
+import type { AgentDefinition, Message, Seq, SummaryMessage } from './types.ts';
+import { isAgent, isSpoken } from './types.ts';
 
 /** One draft, and one redraft after a race. Then the room keeps moving without it. */
 const ASSISTANT_DRAFTS = 2;
 
 /**
- * How often an assistant may call its tool in one activation. A model that keeps
+ * How often the assistant may call its tool in one activation. A model that keeps
  * calling a tool that keeps refusing would run for ever, and nothing else here
  * bounds an activation — the same gap `agent.md` §7 records for the room, closed where it
  * can be closed.
@@ -38,11 +39,40 @@ const ASSISTANT_DRAFTS = 2;
 const ASSISTANT_CALLS = 4;
 
 /**
+ * The assistant shapes what a room already does, and never makes anything
+ * happen. It carries no tools of its own, so the rule is a fact about the
+ * definition rather than a promise about behaviour: the one hand the runtime
+ * gives it writes to the record and reaches nothing else. `startSession`
+ * refuses anything else as the room's assistant.
+ */
+export function assertAssistant(assistant: unknown): AgentDefinition {
+	if (!isAgent(assistant)) {
+		throw new Error('The assistant must come from defineAgent.');
+	}
+	if (assistant.tools.length > 0) {
+		throw new Error(
+			`Assistant '${assistant.name}' holds tools: the assistant shapes what a room does and never acts in it.`,
+		);
+	}
+	// A workspace binds tools the assistant never holds: `handsFor` returns
+	// before it reaches them, so the field would be live in the definition and
+	// inert at runtime. Refusing it here catches that where it is written.
+	if (assistant.workspace !== undefined) {
+		throw new Error(
+			`Assistant '${assistant.name}' names a workspace: the assistant shapes what a room does and never acts in it.`,
+		);
+	}
+	return assistant;
+}
+
+/**
  * One summarising activation's own state. The range is read off the record when the
  * activation starts, and it widens when a race refuses the draft, so the retry
  * stands for what won. Nothing here outlives the activation.
  */
 export interface Draft {
+	/** The person whose question opened the exchange, and who reads the message. */
+	person: string;
 	/** The question that opened the exchange. */
 	from: Seq;
 	/** The last seq it stands for. A refusal moves it. */
@@ -62,6 +92,7 @@ export interface Draft {
  */
 function draftOver(
 	record: readonly Message[],
+	person: string,
 	from: Seq,
 	through: Seq,
 	fromSeat: (name: string) => boolean,
@@ -70,7 +101,7 @@ function draftOver(
 		(m) => m.seq >= from && m.seq <= through && isSpoken(m) && fromSeat(m.from),
 	);
 	if (said.length < 2) return undefined;
-	return { from, through, refusals: 0, calls: 0 };
+	return { person, from, through, refusals: 0, calls: 0 };
 }
 
 /** What the summarise tool needs of the room: the record's lock, and little else. */
@@ -85,7 +116,7 @@ export interface SummaryRoom {
 		draft: Omit<SummaryMessage, 'seq'>,
 	): { message: SummaryMessage } | { missed: Message[] };
 	publish(message: Message): Promise<void>;
-	/** The draft reached the record: this seat spoke, in the one way an assistant can. */
+	/** The draft reached the record: this seat spoke, in the one way the assistant can. */
 	written(): void;
 }
 
@@ -96,16 +127,12 @@ export interface SummaryRoom {
  * its own activation, carrying what it missed, so the redraft happens now rather
  * than at the next quiescence.
  *
- * `defineHuman` refuses an assistant that carries tools of its own, so §12's rule —
+ * `startSession` refuses an assistant that carries tools of its own, so §12's rule —
  * never call a tool that changes a product's state — stays a fact about the
  * definition rather than a promise about behaviour.
  */
-export function summariseTool(
-	assistant: string,
-	person: string,
-	draft: Draft,
-	room: SummaryRoom,
-): AgentTool {
+export function summariseTool(assistant: string, draft: Draft, room: SummaryRoom): AgentTool {
+	const person = draft.person;
 	return {
 		name: 'summarise',
 		label: 'summarise',
@@ -132,7 +159,7 @@ export function summariseTool(
 					covers: { from: draft.from, through: draft.through },
 				},
 			);
-			if ('missed' in claimed) throw widen(draft, person, claimed.missed, room.lastSeq());
+			if ('missed' in claimed) throw widen(draft, claimed.missed, room.lastSeq());
 			room.written();
 			await room.publish(claimed.message);
 			return delivered();
@@ -174,71 +201,63 @@ function stoppingReason(draft: Draft, stopped: boolean): string | undefined {
  * are now inside it, so the redraft stands for them too and the summary stays
  * contiguous with what it covers.
  */
-function widen(draft: Draft, person: string, missed: Message[], lastSeq: Seq): Error {
+function widen(draft: Draft, missed: Message[], lastSeq: Seq): Error {
 	draft.through = lastSeq;
 	draft.refusals += 1;
 	return new Error(
 		refusal(
 			'Not written — the room moved while you were drafting. It is now yours to cover too:',
 			missed,
-			`Write ${person}'s message again, over the range as it now stands.`,
+			`Write ${draft.person}'s message again, over the range as it now stands.`,
 		),
 	);
 }
 
 /**
- * The assistants in one room: who each writes for, which of them owes a message,
- * and which is drafting one now.
+ * The assistant in one room: how each person reads, who is owed a message,
+ * and the one it is drafting now.
  *
- * A seat knows nothing about any of this. An assistant is a seat like every other,
- * and what makes it an assistant is held here — so the room asks *the assistants* whether
- * a name writes for somebody, rather than every seat carrying the answer.
+ * A seat knows nothing about any of this. The assistant is a seat like every
+ * other, and what makes it the assistant is held here — so the room asks *the
+ * assistant* whether a name is it, rather than every seat carrying the answer.
  */
-export class Assistants {
-	/** The assistant each person brought, keyed by the person. */
-	private readonly byPerson = new Map<string, SeatRuntime>();
-	/** The person each assistant writes for, keyed by the assistant's own name. */
-	private readonly owners = new Map<string, string>();
+export class Assistant {
+	/** How each person who visited this run reads. Run state: a restart begins empty. */
+	private readonly preferences = new Map<string, string | undefined>();
 	/**
 	 * People owed a message, and the seq their range starts at. A race or a
 	 * failed activation leaves one owed; the next quiet room writes it.
 	 */
 	private readonly owed = new Map<string, Seq>();
-	/** The range each assistant is closing, while its activation runs. */
-	private readonly drafts = new Map<string, Draft>();
+	/**
+	 * People whose draft the last activation could not land. They wait for the
+	 * seats to stop again: a draft that retried on its own end would retry for
+	 * ever against a model that keeps failing.
+	 */
+	private readonly waiting = new Set<string>();
+	/** The range the assistant is closing, while its activation runs. */
+	private draft: Draft | undefined;
 
-	/** Seat an assistant for a person. One assistant, one person, for the life of the run. */
-	bring(seat: SeatRuntime, person: string): void {
-		this.byPerson.set(person, seat);
-		this.owners.set(seat.def.name, person);
+	/** One seat, seated at `none` when the room starts, for the life of the run. */
+	constructor(readonly seat: SeatRuntime) {}
+
+	/** Whether this name is the assistant. It answers about the assistant and nothing else. */
+	is(name: string): boolean {
+		return name === this.seat.def.name;
 	}
 
-	has(person: string): boolean {
-		return this.byPerson.has(person);
+	/** A person is in the room: how they read, as their latest visit says it. */
+	serve(person: string, preferences: string | undefined): void {
+		this.preferences.set(person, preferences);
 	}
 
-	get size(): number {
-		return this.byPerson.size;
+	preferencesOf(person: string): string | undefined {
+		return this.preferences.get(person);
 	}
 
-	/** The person this seat writes for, or nothing when it writes for nobody. */
-	ownerOf(name: string): string | undefined {
-		return this.owners.get(name);
-	}
-
-	/** Whether this name is somebody's assistant. It answers about assistants and nothing else. */
-	isAssistant(name: string): boolean {
-		return this.owners.has(name);
-	}
-
-	/** The assistant a person brought, by that person's name. */
-	forPerson(person: string): SeatRuntime | undefined {
-		return this.byPerson.get(person);
-	}
-
-	/** What this assistant is closing, while it is closing it. */
-	draftOf(name: string): Draft | undefined {
-		return this.drafts.get(name);
+	/** What the assistant is closing, while it is closing it. */
+	closing(): Draft | undefined {
+		return this.draft;
 	}
 
 	/**
@@ -247,32 +266,57 @@ export class Assistants {
 	 * because that is what its person has not read.
 	 */
 	owe(person: string, from: Seq): void {
-		if (!this.byPerson.has(person)) return;
 		const already = this.owed.get(person);
 		this.owed.set(person, already === undefined ? from : Math.min(already, from));
 	}
 
 	/**
-	 * The activations to take now, one per person owed a message: the range
-	 * each assistant would stand for, or nothing where one message already serves.
-	 * An assistant already drafting is left alone, and stays owed.
+	 * The seats stopped, so every owed message is due, including one a failed
+	 * draft left waiting: this quiet room is its next chance.
 	 */
-	activationsDue(
+	dueAtQuiescence(
 		record: readonly Message[],
 		through: Seq,
 		fromSeat: (name: string) => boolean,
-	): { seat: SeatRuntime; draft: Draft }[] {
-		const due: { seat: SeatRuntime; draft: Draft }[] = [];
+	): Draft | undefined {
+		this.waiting.clear();
+		return this.pick(record, through, fromSeat);
+	}
+
+	/**
+	 * A draft is over, and the seat is free. Somebody owed a message while it
+	 * was drafting for somebody else is due now; the person it just failed
+	 * stays waiting for the seats to stop again.
+	 */
+	dueAfterDraft(
+		record: readonly Message[],
+		through: Seq,
+		fromSeat: (name: string) => boolean,
+	): Draft | undefined {
+		return this.pick(record, through, fromSeat);
+	}
+
+	/**
+	 * The next activation to take: the range the assistant would stand for, or
+	 * nothing where one message already serves. A seat holds one activation,
+	 * so a person whose close finds the assistant drafting stays owed until it
+	 * is free.
+	 */
+	private pick(
+		record: readonly Message[],
+		through: Seq,
+		fromSeat: (name: string) => boolean,
+	): Draft | undefined {
+		if (isActive(this.seat)) return undefined;
 		for (const [person, from] of [...this.owed]) {
-			const seat = this.byPerson.get(person);
-			if (!seat || isActive(seat)) continue;
+			if (this.waiting.has(person)) continue;
 			this.owed.delete(person);
-			const draft = draftOver(record, from, through, fromSeat);
+			const draft = draftOver(record, person, from, through, fromSeat);
 			if (!draft) continue;
-			this.drafts.set(seat.def.name, draft);
-			due.push({ seat, draft });
+			this.draft = draft;
+			return draft;
 		}
-		return due;
+		return undefined;
 	}
 
 	/**
@@ -280,18 +324,15 @@ export class Assistants {
 	 * already served; a race or a failure leaves the range owed, and the next
 	 * quiet room is another chance.
 	 */
-	activationEnded(seat: SeatRuntime, outcome: { wrote: boolean; failed: boolean }): void {
-		const person = this.owners.get(seat.def.name);
-		const draft = this.drafts.get(seat.def.name);
-		this.drafts.delete(seat.def.name);
-		if (person === undefined || draft === undefined || outcome.wrote) return;
+	activationEnded(outcome: { wrote: boolean; failed: boolean }): void {
+		const draft = this.draft;
+		this.draft = undefined;
+		if (draft === undefined || outcome.wrote) return;
 		// A race, or an activation that never reached the record, leaves it owed.
 		// An assistant that stood down judged the room, and is owed nothing for it.
-		if (draft.refusals > 0 || outcome.failed) this.owe(person, draft.from);
-	}
-
-	/** A cancelled draft writes nothing, which is the safe direction. */
-	abort(): void {
-		this.drafts.clear();
+		if (draft.refusals > 0 || outcome.failed) {
+			this.owe(draft.person, draft.from);
+			this.waiting.add(draft.person);
+		}
 	}
 }
