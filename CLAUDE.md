@@ -24,7 +24,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs       |
 | `examples/site`     | Runnable example                                                                     |
 | `demos/`            | One dated report per merged change — regenerate on the branch, then leave it         |
-| `FOLLOW_WORK.md`    | Work a branch decided not to do, and why it is worth doing                           |
+| `planning/`         | Forward-looking tracking: `backlog.md`, `changelog.md`                               |
 
 ## Thesis
 
@@ -49,7 +49,7 @@ same kind, and every one enters as a message. Keep both framings in
 
 `README.md` and `docs/` document what is implemented. Do not write about
 unbuilt concepts (channels, deployment targets) there; deferred work goes in
-`FOLLOW_WORK.md`.
+`planning/backlog.md`.
 
 ## Commands
 

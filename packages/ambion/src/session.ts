@@ -626,7 +626,7 @@ class SessionImpl implements Session {
 		// The assistant's hands are the runtime's, and it holds them only for the activation
 		// it was woken for. Nothing wakes the assistant today but the close of an
 		// exchange; when something else does — a wider attention, per
-		// FOLLOW_WORK.md — it must arrive with empty hands until somebody adds a
+		// planning/backlog.md — it must arrive with empty hands until somebody adds a
 		// `say` here on purpose. assistant.md §12 makes that a deliberate decision.
 		if (this.assistant.is(seat.def.name)) {
 			const closing = this.assistant.closing();
