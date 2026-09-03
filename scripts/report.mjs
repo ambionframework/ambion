@@ -52,7 +52,9 @@ const agentSaid = said.filter((m) => !PEOPLE.has(m.from));
 const questions = said.filter((m) => PEOPLE.has(m.from));
 const summaries = run.summaries;
 const seatings = run.seatings;
-const closed = run.timeline.filter((t) => t.event.type === 'exchange_closed').map((t) => t.event.exchange);
+const closed = run.timeline
+	.filter((t) => t.event.type === 'exchange_closed')
+	.map((t) => t.event.exchange);
 const conflicts = run.timeline.filter((t) => t.event.type === 'conflict').length;
 const errors = run.timeline.filter((t) => t.event.type === 'error').length;
 
@@ -88,7 +90,15 @@ for (const s of run.seatSessions) {
 const totalCost = acts.reduce((s, a) => s + (a.cost ?? 0), 0);
 const totalTokens = acts.reduce((s, a) => s + (a.tokens ?? 0), 0);
 const assistantActs = acts.filter((a) => a.agent === ASSISTANT);
-const composing = assistantActs.filter((a) => a.tools.includes('seat') || a.block !== undefined && sessionOf(ASSISTANT).blocks[a.block].turns.some((t) => t.role === 'user' && typeof t.content === 'string' && t.content.includes('The reserve:')));
+const composing = assistantActs.filter(
+	(a) =>
+		a.tools.includes('seat') ||
+		(a.block !== undefined &&
+			sessionOf(ASSISTANT).blocks[a.block].turns.some(
+				(t) =>
+					t.role === 'user' && typeof t.content === 'string' && t.content.includes('The reserve:'),
+			)),
+);
 const drafting = assistantActs.filter((a) => !composing.includes(a));
 const seatActs = acts.filter((a) => a.agent !== ASSISTANT);
 
@@ -102,7 +112,6 @@ const contextOf = (block) => {
 function stat(b, s) {
 	return `<div class="stat"><b>${b}</b><span>${s}</span></div>`;
 }
-
 
 /** Where a seat sits, in the words the roster uses. */
 function seatWhere(seat, isReserve, isAssistant) {
@@ -148,11 +157,11 @@ function personCard(p) {
 	return `<div class="person"><span class="nm">${esc(p.name)}</span><span class="rl2">${esc(role)}</span><p>${esc(p.identity)}</p><div class="aide"><span class="rl">preferences · read by the assistant alone</span><p>${esc(p.preferences ?? '').trim()}</p></div><div class="acts">${written} message${written === 1 ? '' : 's'} written for ${esc(p.name)}</div></div>`;
 }
 
-
 const PRESENCE_VERB = { arrived: 'opened the room', left: 'left', unseated: 'unseated' };
 
 function presenceLine(m) {
-	const verb = m.kind === 'seated' ? `seated by ${m.by ? esc(m.by) : 'the host'}` : PRESENCE_VERB[m.kind];
+	const verb =
+		m.kind === 'seated' ? `seated by ${m.by ? esc(m.by) : 'the host'}` : PRESENCE_VERB[m.kind];
 	const cls = m.kind === 'left' ? 'away' : m.kind;
 	return `<li class="pres p-${cls}"><span class="seq">${m.seq}</span><div class="body"><span class="dot"></span>${esc(m.from)} ${verb}</div></li>`;
 }
@@ -171,12 +180,13 @@ function recordLine(m, cls = '') {
 	return `<li class="msg ${cls}"><span class="seq">${m.seq}</span><div class="body">${whoLine(m)}<div class="text">${esc(m.text)}</div></div></li>`;
 }
 
-
 function exchangeMeta(x, inside, summary) {
 	const agentMsgs = inside.filter((m) => m.kind === 'said' && !PEOPLE.has(m.from)).length;
 	const seated = inside.filter((m) => m.kind === 'seated').map((m) => m.from);
 	const who = seated.length ? `seated ${seated.join(', ')}` : 'nobody seated';
-	const wrote = summary ? `summary [${summary.seq}] covers ${summary.covers.from}–${summary.covers.through}` : 'no summary';
+	const wrote = summary
+		? `summary [${summary.seq}] covers ${summary.covers.from}–${summary.covers.through}`
+		: 'no summary';
 	return `[${x.from}] · ${agentMsgs} agent messages · ${who} · ${wrote}`;
 }
 
@@ -192,12 +202,13 @@ function exchanges() {
 		.map((x) => {
 			const q = record.find((m) => m.seq === x.from);
 			const inside = record.filter((m) => m.seq > x.from && m.seq <= x.through);
-			const summary = summaries.find((s) => s.covers.from <= x.from && s.covers.through >= x.through);
+			const summary = summaries.find(
+				(s) => s.covers.from <= x.from && s.covers.through >= x.through,
+			);
 			return `<div class="exchange"><div class="xh"><span class="nm">${esc(x.owner)} asked</span><span class="sm">${esc(exchangeMeta(x, inside, summary))}</span></div><p class="q">${esc(q?.text ?? '')}</p><details class="working"><summary>the working the room did — ${inside.length} messages</summary><ul class="record">${inside.map((m) => recordLine(m, 'fold')).join('')}</ul></details>${answerHtml(summary)}</div>`;
 		})
 		.join('');
 }
-
 
 /** What one activation did, in a word. */
 function whatDid(agent, a) {
@@ -215,7 +226,9 @@ function laneCell(agent, seq) {
 
 function lanes() {
 	const seqs = record.map((m) => m.seq);
-	const agents = run.seats.filter((s) => s.kind === 'agent' && s.name !== ASSISTANT).map((s) => s.name);
+	const agents = run.seats
+		.filter((s) => s.kind === 'agent' && s.name !== ASSISTANT)
+		.map((s) => s.name);
 	agents.push(ASSISTANT);
 	return agents
 		.map((agent) => {
@@ -225,7 +238,6 @@ function lanes() {
 		.join('');
 }
 
-
 function userTurn(t, tn) {
 	const text = typeof t.content === 'string' ? t.content : JSON.stringify(t.content);
 	const steer = text.startsWith('[new] ');
@@ -234,8 +246,10 @@ function userTurn(t, tn) {
 }
 
 function contentPart(c, tn) {
-	if (c.type === 'thinking') return `<div class="turn think">${tn}<span class="rl">said to itself</span><div>${esc(c.thinking)}</div></div>`;
-	if (c.type === 'text' && c.text.trim()) return `<div class="turn think">${tn}<span class="rl">said to itself</span><div>${esc(c.text)}</div></div>`;
+	if (c.type === 'thinking')
+		return `<div class="turn think">${tn}<span class="rl">said to itself</span><div>${esc(c.thinking)}</div></div>`;
+	if (c.type === 'text' && c.text.trim())
+		return `<div class="turn think">${tn}<span class="rl">said to itself</span><div>${esc(c.text)}</div></div>`;
 	if (c.type !== 'toolCall') return '';
 	const where = WORKSPACE_TOOLS.has(c.name) ? ' <em>on the drive</em>' : '';
 	return `<div class="turn call">${tn}<span class="rl">calls${where}</span><code>${esc(c.name)}</code><pre class="args">${esc(JSON.stringify(c.arguments, null, 2))}</pre></div>`;
@@ -249,7 +263,9 @@ function metaTurn(t, tn) {
 }
 
 function resultTurn(t, tn) {
-	const text = (t.content ?? []).map((c) => (c.type === 'text' ? c.text : `[${c.type}]`)).join('\n');
+	const text = (t.content ?? [])
+		.map((c) => (c.type === 'text' ? c.text : `[${c.type}]`))
+		.join('\n');
 	const bad = t.isError ? ' bad' : '';
 	return `<div class="turn res${bad}">${tn}<span class="rl">${esc(t.toolName)} returned${t.isError ? ' an error' : ''}</span><pre class="mini">${esc(text)}</pre></div>`;
 }
@@ -264,19 +280,23 @@ function turnHtml(t, i) {
 	return '';
 }
 
-
 /** What woke this activation, as the summary line says it. */
 function triggerText(a) {
 	if (!a) return 'activation';
-	const kind = a.trigger === 0 ? 'opened the room' : (record.find((m) => m.seq === a.trigger)?.kind ?? '');
+	const kind =
+		a.trigger === 0 ? 'opened the room' : (record.find((m) => m.seq === a.trigger)?.kind ?? '');
 	return `woke on <b>[${a.trigger}]</b> ${esc(a.triggerFrom)} ${kind}`;
 }
 
 /** The outcome pill: what the seat did, or what the assistant did. */
 function outcomePill(agent, a) {
-	if (agent === ASSISTANT && a?.tools.includes('seat')) return '<span class="pill spoke">seated</span>';
-	if (agent === ASSISTANT && a?.tools.includes('summarise')) return '<span class="pill spoke">wrote</span>';
-	return a?.spoke ? '<span class="pill spoke">spoke</span>' : '<span class="pill idle">stayed quiet</span>';
+	if (agent === ASSISTANT && a?.tools.includes('seat'))
+		return '<span class="pill spoke">seated</span>';
+	if (agent === ASSISTANT && a?.tools.includes('summarise'))
+		return '<span class="pill spoke">wrote</span>';
+	return a?.spoke
+		? '<span class="pill spoke">spoke</span>'
+		: '<span class="pill idle">stayed quiet</span>';
 }
 
 function activationBlock(s, b, i, a) {
@@ -285,7 +305,9 @@ function activationBlock(s, b, i, a) {
 }
 
 function seatSessions() {
-	const order = [...run.seatSessions].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'assistant' ? 1 : -1));
+	const order = [...run.seatSessions].sort((a, b) =>
+		a.kind === b.kind ? 0 : a.kind === 'assistant' ? 1 : -1,
+	);
 	return order
 		.map((s) => {
 			const mine = acts.filter((a) => a.agent === s.agent);
@@ -297,17 +319,33 @@ function seatSessions() {
 }
 
 function writes() {
-	const rows = run.toolCalls.filter((c) => ['update_task', 'move_delivery', 'request_overtime', 'request_inspection', 'move_hire'].includes(c.tool));
+	const rows = run.toolCalls.filter((c) =>
+		[
+			'update_task',
+			'move_delivery',
+			'request_overtime',
+			'request_inspection',
+			'move_hire',
+		].includes(c.tool),
+	);
 	return `<div class="tw"><table><thead><tr><th>Product</th><th>Call</th><th>Arguments</th><th>Result</th></tr></thead><tbody>${rows.map((c) => `<tr><td class="tid ${colour(c.app)}">${esc(c.app)}</td><td class="tid">${esc(c.tool)}</td><td class="api-cell">${esc(JSON.stringify(c.params))}</td><td class="api-cell">${esc(c.result)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function diary() {
-	const after = run.drive.after.filter((f) => f.path.includes('/diary/')).map((f) => `<h3 style="font:600 .95rem/1.4 Spectral,serif;margin:1rem 0 .3rem">${esc(f.path)}</h3><pre class="mini" style="white-space:pre-wrap">${esc(f.text.trim())}</pre>`).join('');
+	const after = run.drive.after
+		.filter((f) => f.path.includes('/diary/'))
+		.map(
+			(f) =>
+				`<h3 style="font:600 .95rem/1.4 Spectral,serif;margin:1rem 0 .3rem">${esc(f.path)}</h3><pre class="mini" style="white-space:pre-wrap">${esc(f.text.trim())}</pre>`,
+		)
+		.join('');
 	return after;
 }
 
 // -- the findings: composed from the numbers, with the prose written for this run ----
-const seatedBy = seatings.map((m) => `${m.from} at [${m.seq}]${m.by ? ` by ${m.by}` : ''}`).join(', ');
+const seatedBy = seatings
+	.map((m) => `${m.from} at [${m.seq}]${m.by ? ` by ${m.by}` : ''}`)
+	.join(', ');
 const composeCosts = composing.map((a) => a.cost ?? 0);
 const composeCost = composeCosts.reduce((a, b) => a + b, 0);
 const newcomerActs = seatActs.filter((a) => seatings.some((m) => m.from === a.agent));
@@ -317,21 +355,42 @@ const firstCtx = (() => {
 	return s ? contextOf(s.blocks[0]).length : 0;
 })();
 const lastSeatAct = seatActs.at(-1);
-const lastCtxLen = lastSeatAct && sessionOf(lastSeatAct.agent) ? contextOf(sessionOf(lastSeatAct.agent).blocks[lastSeatAct.block]).length : 0;
-const avgWords = summaries.length ? Math.round(summaries.reduce((a, s) => a + words(s.text), 0) / summaries.length) : 0;
+const lastCtxLen =
+	lastSeatAct && sessionOf(lastSeatAct.agent)
+		? contextOf(sessionOf(lastSeatAct.agent).blocks[lastSeatAct.block]).length
+		: 0;
+const avgWords = summaries.length
+	? Math.round(summaries.reduce((a, s) => a + words(s.text), 0) / summaries.length)
+	: 0;
 
 const ranAt = new Date(run.ranAt);
-const dateLine = ranAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+const dateLine = ranAt.toLocaleDateString('en-GB', {
+	day: 'numeric',
+	month: 'long',
+	year: 'numeric',
+});
 
 const seatedByAssistant = seatings.filter((m) => m.by === ASSISTANT);
 const leftAlone = composing.filter((a) => !a.tools.includes('seat'));
 const emptied = seatedByAssistant.length === run.reserve.length;
-const byQuestion = closed.map((x) => ({ x, seated: seatedByAssistant.filter((m) => m.seq > x.from && m.seq <= x.through) })).filter((q) => q.seated.length);
-const neverSeated = run.reserve.filter((r) => !seatings.some((m) => m.from === r.name)).map((r) => r.name);
+const byQuestion = closed
+	.map((x) => ({
+		x,
+		seated: seatedByAssistant.filter((m) => m.seq > x.from && m.seq <= x.through),
+	}))
+	.filter((q) => q.seated.length);
+const neverSeated = run.reserve
+	.filter((r) => !seatings.some((m) => m.from === r.name))
+	.map((r) => r.name);
 const composingList = composing
 	.map((a) => {
 		const q = record.find((m) => m.seq === a.trigger);
-		const seatedHere = seatings.filter((m) => m.seq > a.trigger && m.seq <= (closed.find((x) => x.from === a.trigger)?.through ?? Infinity) && m.by === ASSISTANT);
+		const seatedHere = seatings.filter(
+			(m) =>
+				m.seq > a.trigger &&
+				m.seq <= (closed.find((x) => x.from === a.trigger)?.through ?? Infinity) &&
+				m.by === ASSISTANT,
+		);
 		return `<li><b>[${a.trigger}] ${esc(a.triggerFrom)}:</b> “${esc(q?.text ?? '')}” — ${seatedHere.length ? `seated <b>${seatedHere.map((m) => esc(m.from)).join('</b> and <b>')}</b>` : 'left the roster as it stood'} · ${money(a.cost ?? 0)}</li>`;
 	})
 	.join('');
@@ -362,7 +421,12 @@ ul.plain{margin:.4rem 0 0 1.2rem;padding:0;color:var(--dim);max-width:45rem} ul.
 <section>
 <h2>The suite, the specialists on call, and the seat that composes the room</h2>
 <p class="note">Three products seated for the run, each with its own state and its own API, connected to the site drive. ${run.reserve.length} specialists in the reserve, which the assistant reads at the open of an exchange and nobody else reads at all. And the assistant, seated at the narrow end of attention, holding one tool of the runtime&rsquo;s per activation: <code>seat</code> at an open, <code>summarise</code> at a close. Calls marked <b>·drive</b> reach the workspace.</p>
-<div class="apps">${run.seatsAtStart.filter((s) => s.kind === 'agent' && s.name !== ASSISTANT).map(agentCard).join('')}${run.reserve.map((r) => agentCard({ name: r.name, identity: r.identity, kind: 'agent' })).join('')}${agentCard(run.seats.find((s) => s.name === ASSISTANT))}</div>
+<div class="apps">${run.seatsAtStart
+	.filter((s) => s.kind === 'agent' && s.name !== ASSISTANT)
+	.map(agentCard)
+	.join(
+		'',
+	)}${run.reserve.map((r) => agentCard({ name: r.name, identity: r.identity, kind: 'agent' })).join('')}${agentCard(run.seats.find((s) => s.name === ASSISTANT))}</div>
 </section>
 
 <section>

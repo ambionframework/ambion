@@ -687,7 +687,10 @@ describe('a failed draft', () => {
 			script: byName({
 				assistant: (context) => {
 					if (!holding(context, 'summarise')) return quiet();
-					return fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'the model failed' });
+					return fauxAssistantMessage('', {
+						stopReason: 'error',
+						errorMessage: 'the model failed',
+					});
 				},
 				product: (_context, _name, call) => (call <= 4 ? speak(`answer ${call}`) : quiet()),
 			}),
