@@ -30,7 +30,7 @@ showed.
 | 2026-08-31 | [How Each Person Reads](2026-08-31-how-each-person-reads.html)     | sonnet-5   | [artifact](https://claude.ai/code/artifact/203189de-f717-4e0e-9793-b991947349de) |
 | 2026-09-02 | [The Site Drive](2026-09-02-the-site-drive.html)                     | sonnet-5   | [artifact](https://claude.ai/code/artifact/bb026bd2-1ce3-4aeb-b496-68416695bb63) |
 | 2026-09-03 | [One Assistant, Three Readers](2026-09-03-one-assistant-three-readers.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/52643e13-6b26-4311-8ab9-f1e9d9cea242) |
-| 2026-09-03 | [Who the Question Needs](2026-09-03-who-the-question-needs.html)           | sonnet-5   | (below)                                                                          |
+| 2026-09-03 | [Who the Question Needs](2026-09-03-who-the-question-needs.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/8cbbe725-691f-449f-828e-479221fc9bde) |
 
 ## What each run changed
 
