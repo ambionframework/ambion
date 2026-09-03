@@ -29,6 +29,7 @@ showed.
 | 2026-08-31 | [One Exchange, One Message](2026-08-31-one-exchange-one-message.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/f73ba11a-3189-4313-9b97-b61d89bd7089) |
 | 2026-08-31 | [How Each Person Reads](2026-08-31-how-each-person-reads.html)     | sonnet-5   | [artifact](https://claude.ai/code/artifact/203189de-f717-4e0e-9793-b991947349de) |
 | 2026-09-02 | [The Site Drive](2026-09-02-the-site-drive.html)                     | sonnet-5   | [artifact](https://claude.ai/code/artifact/bb026bd2-1ce3-4aeb-b496-68416695bb63) |
+| 2026-09-03 | [One Assistant, Three Readers](2026-09-03-one-assistant-three-readers.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/52643e13-6b26-4311-8ab9-f1e9d9cea242) |
 
 ## What each run changed
 
@@ -126,3 +127,22 @@ runtime stamps the real date into every context and the scenario is set on
 25 August; the goal now names the site's calendar. One artefact remains: a
 `2>/dev/null` created `dev/null` on the drive, because just-bash treats that
 path as a plain file. `FOLLOW_WORK.md` holds it.
+
+**One Assistant, Three Readers.** The run that moved the assistant from the
+person to the room. `startSession` now takes `assistant` as a required
+field, seats it with the agents at the narrow end of attention, and it
+writes for every person who visits. `defineHuman` lost `assistant` and
+gained `preferences`: how that person reads, which the room keeps after they
+leave and hands the assistant at the one activation where it writes for
+them. Four questions closed into four messages, every one from the same
+seat, and each in its reader's shape: Priya's open with the date, Sam's with
+the ticket that is on him in three sentences, Dan's with the money. None of
+the 21 product activations read a line of anybody's preferences.
+
+The roster got shorter. The first product context is 1,468 characters against
+1,545 in the run before, and the assistant is one line of 124 characters
+however many people visit. The fold took 63% off the record the last product
+activation read, 3,949 characters folded against 10,558 unfolded. The
+summaries came out at 112 words on average against 94 and 100 before, and
+that is the number to watch: one seat with one set of instructions may write
+longer than three seats each tuned to a person did.
