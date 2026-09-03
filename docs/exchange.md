@@ -220,9 +220,12 @@ its own.
 answering each other keep waking each other, and nothing stops them. The
 say lock pushes against it: a seat that speaks late is refused and told to
 reconsider, and rule 3 tells it to stand down. That is pressure without a
-hard bound. No run has hit it. It is written down because a room that waits
-for months will meet it eventually, and because anything built on
-quiescence assumes it does not happen. [`assistant.md`](assistant.md) is
+hard bound. No run has hit it, and the pressure is measurable: the roster's
+live run seated three more agents than the run before, and the lock's
+refusals went from 14 to 45, each one a model turn that reached the record
+with nothing. It is written down because a room that waits for months will
+meet it eventually, and because anything built on quiescence assumes it does
+not happen. [`assistant.md`](assistant.md) is
 built on it: the assistant writes when the room goes quiet, so a room that
 never goes quiet never gets its one message.
 

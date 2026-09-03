@@ -306,7 +306,15 @@ finished artifact. On a dry run the attestation step is skipped: an attestation
 is a permanent public claim that these bytes were released, and on a dry run
 they were not.
 
-Both scripts are plain CLIs over `scripts/packages.mjs`, which has no top-level
+`scripts/report.mjs` writes a demo report from the JSON that
+`examples/site`'s `pnpm demo` captured, with `scripts/report.css` as the
+house style every report shares:
+
+```sh
+node scripts/report.mjs demo-run.json demos/YYYY-MM-DD-<slug>.html
+```
+
+Both release scripts are plain CLIs over `scripts/packages.mjs`, which has no top-level
 side effects. That separation prevents a real failure — a module that is
 both a library and a command runs its command when someone imports it, and
 parses the _importer's_ argv while doing so.

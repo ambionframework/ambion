@@ -14,8 +14,10 @@ and nobody edits it again to match later code. An old report that describes an
 API which no longer exists is doing its job: it shows what the design was
 before the change, and why the change happened.
 
-Every report is generated output. A script writes the HTML from the run's
-JSON. Nobody edits the numbers by hand.
+Every report is generated output. `scripts/report.mjs` writes the HTML from
+the run's JSON, over the stylesheet beside it. Nobody edits the numbers by
+hand; the prose around them belongs to the change the run was made for, and
+moves with it.
 
 Name a file `YYYY-MM-DD-<slug>.html`, where the slug names what the run
 showed.

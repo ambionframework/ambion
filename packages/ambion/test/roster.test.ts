@@ -681,6 +681,39 @@ describe('the host', () => {
 	});
 });
 
+describe('a failed draft', () => {
+	it('waits for the seats to stop again, and a question that woke nobody is not that', async () => {
+		const session = open({
+			script: byName({
+				assistant: (context) => {
+					if (!holding(context, 'summarise')) return quiet();
+					return fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'the model failed' });
+				},
+				product: (_context, _name, call) => (call <= 4 ? speak(`answer ${call}`) : quiet()),
+			}),
+			agents: [passive(product)],
+		});
+		const events = collect(session);
+		const assistantActs = () => activated(events).filter((n) => n === 'assistant').length;
+
+		const visit = await visitSession(session, priya);
+		// two answers, a close, and a draft that fails: priya is owed, and waiting
+		await visit.deliver({ to: product, text: 'First?' });
+		await session.quiet();
+		expect(assistantActs()).toBe(1);
+
+		// a question that wakes nobody settles the room, and that is not the seats stopping again
+		await visit.deliver({ text: 'Anyone?' });
+		await session.quiet();
+		expect(assistantActs()).toBe(1);
+
+		// the seats work and stop: now the draft is due again
+		await visit.deliver({ to: product, text: 'Third?' });
+		await session.quiet();
+		expect(assistantActs()).toBe(2);
+	});
+});
+
 describe('the threshold', () => {
 	it('counts an agent that spoke and was unseated before the close', async () => {
 		const held = deferred();

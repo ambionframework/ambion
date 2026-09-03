@@ -46,15 +46,26 @@ nothing, and rung 3 pays for an activation.
 [`seat.ts`](packages/ambion/src/seat.ts), the assistant's paragraphs in
 [`render.ts`](packages/ambion/src/render.ts).
 
-## Letting the assistant unseat
+## Thinning the roster: the assistant unseats, and a seat leaves
 
 **What.** [`docs/roster.md`](docs/roster.md) §5 gives the host `unseat` and
-gives the assistant `seat` alone. An `unseat` in the assistant's hands would
-let it take a colleague out of an exchange the colleague is not helping.
+gives the assistant `seat` alone. Two ways to take a seat back off the roster
+while the room runs, and both return the agent to the reserve:
+
+- An `unseat` in the assistant's hands, at the open of an exchange beside
+  `seat`, to take a colleague out of an exchange the colleague is not helping.
+- A `leave` in the seat's own hands: a seated specialist that judges its part
+  done ends its activation with a tool call that takes it back to the reserve,
+  the way `say` is a tool and silence is a decision.
 
 **Why.** A room that only grows over a day pays for every seat it added at
-every message that follows. The assistant reads the question and the reserve
-at the open; it could read the roster the same way and thin it.
+every message that follows. The live run in
+[`demos/2026-09-03-who-the-question-needs.html`](demos/2026-09-03-who-the-question-needs.html)
+seated all three specialists by the second question and ended with six seats
+answering every message; the lock refused 45 says against 14 in the run
+before, and nothing thinned the roster. The assistant reads the question and
+the reserve at the open; it could read the roster the same way. A seat knows
+better than anybody when its own part is done.
 
 **What it needs deciding.**
 
@@ -67,7 +78,11 @@ at the open; it could read the roster the same way and thin it.
   assistant removed the speaker is an argument to have.
 - **Whether the assistant may unseat what the host seated at start.** The
   starting composition is the host's; an assistant that can undo it is a
-  proxy for the host.
+  proxy for the host. The same question holds for a seat that leaves: an
+  agent seated at start has no reserve to return to.
+- **What a seat's `leave` is on the record.** An `unseated` with the seat
+  itself in `by` fits the shape; whether a seat that leaves mid-exchange
+  still counts at the close follows the threshold, which reads the record.
 
 **Where.** `seat` and `unseat` in
 [`session.ts`](packages/ambion/src/session.ts), the composing activation in

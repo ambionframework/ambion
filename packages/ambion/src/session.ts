@@ -261,6 +261,13 @@ class SessionImpl implements Session {
 	private readonly streamFn: StreamFn;
 	private readonly customStream: boolean;
 	private stopped = false;
+	/**
+	 * Whether a seat has worked since the room last settled. A failed draft
+	 * waits for the seats to stop again, and a second settle at one quiescence
+	 * — an aborted activation ending after an unseat closed the exchange, a
+	 * question that woke nobody — is not the seats stopping again.
+	 */
+	private stirred = false;
 	/** The room's exchanges: what a question opened, and what quiescence closes. */
 	private readonly exchanges = new Exchanges();
 
@@ -686,6 +693,7 @@ class SessionImpl implements Session {
 		// The seat holding it is what makes the room busy: there is no count to
 		// keep in step, and so none to drift.
 		seat.activation = activation;
+		if (this.closingOf(seat) === undefined) this.stirred = true;
 		this.emit({ type: 'activation_start', agent: seat.def.name });
 		// The assistant's activations are one pass: a summary answers a room that
 		// moved with a redraft inside its own tool, and a composition decides on
@@ -719,7 +727,9 @@ class SessionImpl implements Session {
 	/** The seats stopped: whoever waited hears it, and the exchange closes. */
 	private settle(): void {
 		for (const resolve of this.settledWaiters.splice(0)) resolve();
-		this.closeExchange();
+		const worked = this.stirred;
+		this.stirred = false;
+		this.closeExchange(worked);
 	}
 
 	/** The range the assistant is closing, when this seat is the assistant and it is closing one. */
@@ -950,10 +960,10 @@ class SessionImpl implements Session {
 	 * hears that before anything is written about it: the assistant is the first
 	 * reader of a closed exchange and not the only one.
 	 */
-	private closeExchange(): void {
+	private closeExchange(worked: boolean): void {
 		const closing = this.exchanges.close(this.store.lastSeq);
 		if (closing) this.emit({ type: 'exchange_closed', exchange: closing });
-		this.summariseClosed(closing);
+		this.summariseClosed(closing, worked);
 	}
 
 	/**
@@ -964,11 +974,15 @@ class SessionImpl implements Session {
 	 *
 	 * Every quiet room is a chance to write what is owed, whatever made the
 	 * room busy. The assistant's own activation ends no exchange, so a failed draft
-	 * waits for the next time the seats stop rather than retrying on itself.
+	 * waits for the next time the seats stop rather than retrying on itself —
+	 * and a settle that no seat worked before is not the seats stopping again.
 	 */
-	private summariseClosed(closing: ClosedExchange | undefined): void {
+	private summariseClosed(closing: ClosedExchange | undefined, worked: boolean): void {
 		if (closing) this.assistant.owe(closing.owner, closing.from);
-		this.draftNext(this.assistant.dueAtQuiescence(...this.dueArgs()));
+		const due = worked
+			? this.assistant.dueAtQuiescence(...this.dueArgs())
+			: this.assistant.dueAfterDraft(...this.dueArgs());
+		this.draftNext(due);
 	}
 
 	/** What the assistant reads to decide whether a range needs a message. */
