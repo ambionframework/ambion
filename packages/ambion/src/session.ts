@@ -872,38 +872,36 @@ class SessionImpl implements Session {
 				if (text === '') {
 					throw new Error('The message is empty. Say something, or end your turn instead.');
 				}
-				const claimed = this.claim<SpokenMessage>(
-					{ name: seat.def.name, readThrough: activation.readThrough },
-					{
-						kind: 'said',
-						at: new Date().toISOString(),
-						from: seat.def.name,
-						...(to === undefined ? {} : { to }),
-						text,
-					},
-				);
-				if ('missed' in claimed) throw this.refused(activation, claimed.missed);
+				// Nothing has awaited since the check, so the record stands where the
+				// seat read it, and the append is the commit half of rule 5's one tick.
+				const message = this.store.append<SpokenMessage>({
+					kind: 'said',
+					at: new Date().toISOString(),
+					from: seat.def.name,
+					...(to === undefined ? {} : { to }),
+					text,
+				});
 				// The seat has heard its own say before anybody else hears of it.
-				activation.heard(claimed.message.seq);
+				activation.heard(message.seq);
 				activation.spoke = true;
-				await this.publish(claimed.message);
+				await this.publish(message);
 				return delivered();
 			},
 		};
 	}
 
-	/** The record moved past what this activation has read: refused, and told what landed. */
+	/**
+	 * Rule 5 for a say: the record moved past what this activation has read, so
+	 * the say is refused and the seat is told what landed. Now heard, the seat
+	 * decides again against the record as it stands. The check and the append
+	 * in `sayTool` share one tick, as `claim` does for a summary.
+	 */
 	private assertHeard(seat: SeatRuntime, activation: Activation): void {
 		if (this.store.lastSeq <= activation.readThrough) return;
 		const missed = this.store.since(activation.readThrough);
 		this.emit({ type: 'conflict', author: seat.def.name, missed });
-		throw this.refused(activation, missed);
-	}
-
-	/** What a refused seat is told. Now heard: the seat decides again against the record as it stands. */
-	private refused(activation: Activation, missed: Message[]): Error {
 		activation.heard(this.store.lastSeq);
-		return new Error(
+		throw new Error(
 			refusal(
 				'Not delivered — the room moved while you were speaking. New on the record:',
 				missed,
@@ -927,11 +925,11 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * Rule 5, in one place: claim the record's next seq for an author that has
+	 * Rule 5 for a summary: claim the record's next seq for an author that has
 	 * read everything before it. The check and the append share one tick, so
 	 * exactly one of two racing authors wins, and the loser is handed what it
-	 * missed. A seat's say and the assistant's summary are refused the same way, for
-	 * the same reason — which is why the event names the author, not the seat.
+	 * missed. A seat's say is refused the same way in `assertHeard`, for the
+	 * same reason — which is why the event names the author, not the seat.
 	 */
 	private claim<T extends Message>(
 		author: { name: string; readThrough: Seq },

@@ -29,8 +29,9 @@ nothing, and rung 3 pays for an activation.
   argument against is that a preference written for a summary may read
   badly as a filter on what a product says.
 - **Which invariant it touches.** Three hold today: the assistant is seated
-  `none`, `handsFor` gives it empty hands outside a close, and `wakes`
-  refuses to wake anybody for what the assistant writes. A steer that reaches a
+  `none`, `handsFor` gives it empty hands outside an open or a close, and
+  `wakes` refuses to wake anybody for what the assistant writes, with the one
+  exception of a seat it seats. A steer that reaches a
   running seat as a `[new]` line touches the third, because the room would
   carry the assistant's words to a seat that did not ask for them.
 - **What it may steer.** Rule 2 says what arrives mid-activation is steered
@@ -102,7 +103,8 @@ lets the assistant speak_ — rather than a code change in the runtime.
 - **Who may do it.** A host, certainly. An agent, never — a room where an
   agent can widen its own attention is a room that can make itself expensive.
 - **What the assistant holds when something else wakes it.** Nothing, today:
-  `handsFor` gives the assistant the `summarise` tool for the activation a close
+  `handsFor` gives the assistant `seat` for the activation an open wakes it for,
+  `summarise` for the activation a close
   woke it
   for, and empty hands otherwise, so a wider attention alone buys a seat that
   reads the room and ends its activation. Rung 3 is a `say` added there on purpose,
