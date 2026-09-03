@@ -55,31 +55,22 @@ const watcher = defineAgent({
 	model: 'scripted/watcher',
 });
 
-/** A trivial assistant: every human needs one, and nothing here tests what it writes. */
-const assistantFor = (person: string) =>
-	defineAgent({
-		name: `${person}-assistant`,
-		identity: `${person}'s assistant.`,
-		instructions: 'stay quiet',
-		model: 'scripted/assistant',
-	});
+/** A trivial assistant: every room seats one, and nothing here tests what it writes. */
+const assistant = defineAgent({
+	name: 'assistant',
+	identity: 'Writes the one message a person reads.',
+	instructions: 'stay quiet',
+	model: 'scripted/assistant',
+});
 
-const andrei = defineHuman({
-	name: 'andrei',
-	identity: 'Founder. Owns the weekly.',
-	assistant: assistantFor('andrei'),
-});
-const mara = defineHuman({
-	name: 'mara',
-	identity: 'Design lead.',
-	assistant: assistantFor('mara'),
-});
+const andrei = defineHuman({ name: 'andrei', identity: 'Founder. Owns the weekly.' });
+const mara = defineHuman({ name: 'mara', identity: 'Design lead.' });
 
 let unique = 0;
 const roomName = () => `presence-${++unique}`;
 
 const open = (overrides: Partial<Parameters<typeof startSession>[0]> = {}) =>
-	startSession({ name: roomName(), agents: [watcher], streamFn: quiet, ...overrides });
+	startSession({ name: roomName(), assistant, agents: [watcher], streamFn: quiet, ...overrides });
 
 const kinds = async (session: { messages(): Promise<Message[]> }) =>
 	(await session.messages()).map((m) => m.kind);
@@ -231,7 +222,7 @@ describe('presence', () => {
 	it('still addresses somebody who left, and remembers them across a run', async () => {
 		const repo = new InMemorySessionRepo();
 		const name = roomName();
-		const first = startSession({ name, agents: [watcher], streamFn: quiet, repo });
+		const first = startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo });
 		const visit = await visitSession(first, andrei);
 		await visit.deliver({ text: 'noting that I was here' });
 		await first.settled();
@@ -242,7 +233,9 @@ describe('presence', () => {
 		expect(contexts.at(-1)).toContain('andrei');
 		await stopSession(first);
 
-		const again = track(startSession({ name, agents: [watcher], streamFn: quiet, repo }));
+		const again = track(
+			startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo }),
+		);
 		await again.messages(); // startSession is synchronous; the replay is awaited here
 		expect(presenceOf(again, 'andrei')).toBe('absent');
 		expect(again.seats().find((s) => s.name === 'andrei')?.identity).toBe(andrei.identity);
@@ -312,7 +305,7 @@ describe('presence', () => {
 	it('reads a name that is not running, and starts nothing', async () => {
 		const repo = new InMemorySessionRepo();
 		const name = roomName();
-		const session = startSession({ name, agents: [watcher], streamFn: quiet, repo });
+		const session = startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo });
 		const visit = await visitSession(session, andrei);
 		await visit.deliver({ text: 'for later' });
 		await session.settled();
@@ -399,7 +392,13 @@ function brittleRepo(): { repo: SessionRepo; entries: unknown[]; fail: (on: bool
 describe('a repository that fails', () => {
 	it('reports one failed write, then writes again once the repository mends', async () => {
 		const { repo, entries, fail } = brittleRepo();
-		const session = startSession({ name: roomName(), agents: [watcher], streamFn: quiet, repo });
+		const session = startSession({
+			name: roomName(),
+			assistant,
+			agents: [watcher],
+			streamFn: quiet,
+			repo,
+		});
 		const visit = await visitSession(session, andrei);
 		expect(entries).toHaveLength(1);
 
@@ -419,13 +418,15 @@ describe('a repository that fails', () => {
 	it('frees the name when the shutdown itself cannot write', async () => {
 		const { repo, fail } = brittleRepo();
 		const name = roomName();
-		const session = startSession({ name, agents: [watcher], streamFn: quiet, repo });
+		const session = startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo });
 		await visitSession(session, andrei);
 
 		fail(true);
 		await expect(stopSession(session)).rejects.toThrow(/disk is full/);
 		// a room that cannot be started again is worse than one that lost a write
-		const again = track(startSession({ name, agents: [watcher], streamFn: quiet, repo }));
+		const again = track(
+			startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo }),
+		);
 		expect(again.name).toBe(name);
 	});
 
@@ -447,6 +448,7 @@ describe('a repository that fails', () => {
 
 		const session = startSession({
 			name: roomName(),
+			assistant,
 			agents: [watcher],
 			streamFn: quiet,
 			repo: unreachable,

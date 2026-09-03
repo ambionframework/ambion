@@ -5,7 +5,7 @@
  * None of them starts anything or holds any state: a definition is a value,
  * and the same one is the quiet corner in one room and the one who meets
  * people in another. What each refuses is as much of the contract as what it
- * takes — a name the room can address, an assistant with no hands of its own.
+ * takes — a name the room can address, a workspace tool name kept free.
  */
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Static, TSchema } from 'typebox';
@@ -88,50 +88,23 @@ export interface DefineHumanOptions {
 	/** How the room knows them — agents read it and address them accordingly. */
 	identity: string;
 	/**
-	 * The person's assistant: an agent that holds how they read, and writes the
-	 * one message they read when an exchange closes. What they own is
-	 * `identity`, which every seat reads. Every person brings one.
+	 * How they read: what a message to them leads with, what to cut, and how
+	 * much of one they take. The room's assistant reads it when it writes the
+	 * one message they read at the close of their exchange. What they own is
+	 * `identity`, which every seat reads; this reaches the assistant alone.
 	 */
-	assistant: AgentDefinition;
+	preferences?: string;
 }
 
 export function defineHuman(options: DefineHumanOptions): HumanDefinition {
 	assertName(options.name);
-	assertAssistant(options.assistant, options.name);
+	const preferences = options.preferences?.trim() || undefined;
 	return {
 		[HUMAN_BRAND]: true,
 		name: options.name,
 		identity: options.identity,
-		assistant: options.assistant,
+		...(preferences === undefined ? {} : { preferences }),
 	};
-}
-
-/**
- * An assistant shapes what a room already does, and never makes anything happen. It
- * carries no tools of its own, so the rule is a fact about the definition
- * rather than a promise about behaviour: the one hand the runtime gives it
- * writes to the record and reaches nothing else.
- */
-function assertAssistant(assistant: AgentDefinition, person: string): void {
-	if (!isAgent(assistant)) {
-		throw new Error(`The assistant for '${person}' must come from defineAgent.`);
-	}
-	if (assistant.name === person) {
-		throw new Error(`An assistant takes a name of its own: '${person}' is the person it holds.`);
-	}
-	if (assistant.tools.length > 0) {
-		throw new Error(
-			`Assistant '${assistant.name}' holds tools: an assistant shapes what a room does and never acts in it.`,
-		);
-	}
-	// A workspace binds tools an assistant never holds: `handsFor` returns
-	// before it reaches them, so the field would be live in the definition and
-	// inert at runtime. Refusing it here catches that where it is written.
-	if (assistant.workspace !== undefined) {
-		throw new Error(
-			`Assistant '${assistant.name}' names a workspace: an assistant shapes what a room does and never acts in it.`,
-		);
-	}
 }
 
 /**

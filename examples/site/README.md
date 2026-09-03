@@ -3,7 +3,8 @@
 A construction management suite where each product is an agent: a time
 tracker, a task list and a materials tracker. Three people share the
 room — a project manager in the site office, a foreman on the deck with
-a phone, and a quantity surveyor at a cost desk. Each of them brings an assistant.
+a phone, and a quantity surveyor at a cost desk. One assistant writes for all
+three, each the way they read.
 
 Each product holds its own state and its own API and knows nothing of the
 others' internals. It asks them on the record, the way a person does. The
@@ -17,7 +18,7 @@ pnpm start                          # open it in your terminal
 pnpm demo                           # one scripted run, captured as JSON
 ```
 
-`AMBION_MODEL` picks the model every product and every assistant runs on. It
+`AMBION_MODEL` picks the model every product and the assistant run on. It
 defaults to `anthropic/claude-sonnet-5`. `SITE_DRIVE` names a directory to
 keep the drive in between runs; without it, each run copies `drive/` into a
 fresh scratch directory.
@@ -29,8 +30,8 @@ at one point of an attention scale — the widest kind of message that wakes it.
 The task list is `attentive` (`presence`), so it wakes when somebody arrives
 and checks what is blocked on them. The other two sit at the default and do
 not: an arrival asks nothing, and three products guessing at what it wants is
-three briefings nobody requested. The three assistants sit at the narrow end, where
-nothing said reaches them at all. Try `/join dan` and watch which seats read
+three briefings nobody requested. The assistant sits at the narrow end, where
+nothing said reaches it at all. Try `/join dan` and watch which seats read
 it.
 
 **Waking is not answering.** `· time-tracker read it and stayed idle` is a product
@@ -70,16 +71,17 @@ two lines into a thinking state.
 
 **One question, one message back.** Ask "can I promise Thursday for the
 pour?" and watch three products answer it between them. When the exchange closes,
-the assistant of whoever asked writes the one message they read instead of the
+the assistant writes whoever asked the one message they read instead of the
 working, marked `∎` and carrying the span it stands for. `/summaries` lists
 them. A question the room answers once draws no summary at all: one answer is
 left in the voice that gave it.
 
-**Each assistant writes for one person.** Ask the same question as `priya`, then
-as `sam`, then as `dan`, and compare the three. Priya's opens with the date,
-Sam's with what changes for his crews at seven, Dan's with the money. Nothing
-in the products knows any of that — the preferences live in the assistants, in
-`room.ts`, and each person's live in theirs alone.
+**One assistant writes for each person their own way.** Ask the same question
+as `priya`, then as `sam`, then as `dan`, and compare the three. Priya's opens
+with the date, Sam's with what changes for his crews at seven, Dan's with the
+money. Nothing in the products knows any of that — how a person reads is the
+`preferences` on their definition in `room.ts`, and the assistant reads it at
+the one activation where it writes for them.
 
 **A summarised range leaves the products' context.** After a summary lands,
 ask a follow-up whose answer was inside the range it stands for. The products
@@ -90,7 +92,7 @@ discussion and the products hold the state.
 
 | File      | What                                                                                             |
 | --------- | ------------------------------------------------------------------------------------------------ |
-| `room.ts` | The products, their APIs and their state; the drive they share; the people, their assistants     |
+| `room.ts` | The products, their APIs and their state; the drive they share; the people; the assistant        |
 | `main.ts` | The room open in your terminal                                                                   |
 | `demo.ts` | One scripted run, written out as JSON for a report                                               |
 | `drive/`  | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary |

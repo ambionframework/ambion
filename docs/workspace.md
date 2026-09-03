@@ -182,20 +182,20 @@ built-in for the same name on the model's menu, or replace it silently.
 so it makes the check itself. An agent with no workspace keeps all four
 names free.
 
-**`defineHuman` refuses an assistant that names a workspace**, the same way
+**`startSession` refuses an assistant that names a workspace**, the same way
 it refuses one that carries tools (`assistant.md` §12, §17;
-`assertAssistant` in `define.ts` checks `tools.length > 0`). `defineHuman`
-is the one place that knows a given `AgentDefinition` is about to become
-somebody's assistant. `defineAgent` builds a plain value and has no way to
-know that.
+`assertAssistant` in `assistant.ts` checks `tools.length > 0`).
+`startSession` is the one place that knows a given `AgentDefinition` is
+about to become the room's assistant. `defineAgent` builds a plain value and
+has no way to know that.
 
 **The refusal is a fail-fast check on a dead configuration.** `handsFor`
 (`session.ts`) returns before it reaches `seat.def.tools.map(toPiTool)` for
-a seat with an owner: an assistant is handed `[summarise]` or `[]` on every
+the assistant's seat: the assistant is handed `[summarise]` or `[]` on every
 activation. The built-in tools bind in that same skipped branch (§5), so an
 assistant that named a workspace would reach neither them nor any tool of
 its own. The field would be live in the definition and inert at runtime.
-Refusing it at `defineHuman` catches that at the boundary where it is
+Refusing it at `startSession` catches that at the boundary where it is
 written.
 
 **`startSession` sees no workspace.** It takes what `agent.md` §5 lists —
@@ -306,7 +306,7 @@ foundation.
 An agent connected to a workspace does not write its own file and shell
 tools. The runtime binds a small set of built-in tools to every activation
 of such an agent, the way `say` is a built-in every seat holds without
-declaring it (`agent.md` rule 3), and the way an assistant's activation is
+declaring it (`agent.md` rule 3), and the way the assistant's activation is
 handed `summarise` (`assistant.md` §14). None of them appears in
 `defineAgent`'s `tools` array.
 
@@ -749,7 +749,7 @@ claim this document makes loudly:
 - one handle per name until `destroyWorkspace` frees it, and a second
   destroy does nothing (§2);
 - `defineAgent` refusing a custom tool under one of the four built-in
-  names, and `defineHuman` refusing an assistant that names a workspace
+  names, and `startSession` refusing an assistant that names a workspace
   (§3);
 - a connected agent's activation holding `read`, `write`, `edit` and
   `bash` beside `say`, and a plain agent holding `say` alone (§5);

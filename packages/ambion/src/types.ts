@@ -46,8 +46,8 @@ export interface PresenceMessage {
 }
 
 /**
- * What one exchange came to. An assistant writes it. Nobody speaks it, so it is not
- * a `said`: a person did not hear it in a room.
+ * What one exchange came to. The assistant writes it. Nobody speaks it, so it is
+ * not a `said`: a person did not hear it in a room.
  */
 export interface SummaryMessage {
 	kind: 'summary';
@@ -83,9 +83,9 @@ export type SeatStatus = 'active' | 'idle';
  * anything a participant said, and `presence` also hears somebody arriving or
  * leaving.
  *
- * `none` is the seat that is present and unreachable — an assistant, which writes
- * for one person and wakes only when their exchange closes. Widening it is
- * what lets an assistant take part in the room like any other agent.
+ * `none` is the seat that is present and unreachable — the assistant, which
+ * writes for the people in the room and wakes only when an exchange closes.
+ * Widening it is what lets the assistant take part in the room like any other agent.
  */
 export type Attention = 'none' | 'named' | 'broadcast' | 'presence';
 
@@ -100,8 +100,11 @@ export interface AgentSeatInfo {
 	attention: Attention;
 	/** The id of the seat's downstream Pi session, `<room>:<agent>`. */
 	sessionId: string;
-	/** The person this seat writes for, when it is their assistant. */
-	owner?: string;
+	/**
+	 * Set when this seat is the room's assistant: it writes the one message a
+	 * person reads when their exchange closes, and it wakes for nothing said.
+	 */
+	assistant?: true;
 }
 
 export interface HumanSeatInfo {
@@ -109,12 +112,6 @@ export interface HumanSeatInfo {
 	name: string;
 	identity: string;
 	presence: PresenceStatus;
-	/**
-	 * The name of the assistant they brought. Absent when the room is read, not
-	 * run, and after a restart before they visit again: the assistant is seated
-	 * as run state, like an exchange.
-	 */
-	assistant?: string;
 }
 
 export type SeatInfo = AgentSeatInfo | HumanSeatInfo;
@@ -123,7 +120,7 @@ export type SeatInfo = AgentSeatInfo | HumanSeatInfo;
 export type SessionEvent =
 	/**
 	 * A message landed on the record. Exactly one of these per message,
-	 * whoever wrote it: what a person delivered, what an agent said, what an
+	 * whoever wrote it: what a person delivered, what an agent said, what the
 	 * assistant wrote, and a person arriving or leaving all reach a host the same
 	 * way.
 	 */
@@ -136,7 +133,7 @@ export type SessionEvent =
 	| { type: 'activation_start'; agent: string }
 	/**
 	 * The lock refused a message drafted against a record that had moved. It
-	 * names the author rather than the seat: a seat's say and an assistant's summary
+	 * names the author rather than the seat: a seat's say and the assistant's summary
 	 * are refused the same way, for the same reason.
 	 */
 	| { type: 'conflict'; author: string; missed: Message[] }
@@ -148,20 +145,20 @@ export type SessionEvent =
 	/**
 	 * A person's question opened an exchange: the room has an exchange to work on,
 	 * and one person owns it. A client that folds the working under the
-	 * question it answered starts here, whatever the person's assistant makes
-	 * of it later.
+	 * question it answered starts here, whatever the assistant makes of it
+	 * later.
 	 */
 	| { type: 'exchange_opened'; exchange: Exchange }
 	/**
 	 * The room went quiet with an exchange open, so that exchange is over and
 	 * holds the range it turned out to cover. It arrives after `settled` and
-	 * before any summary: an assistant is the first reader of this, not the only
+	 * before any summary: the assistant is the first reader of this, not the only
 	 * one.
 	 */
 	| { type: 'exchange_closed'; exchange: ClosedExchange }
 	/**
-	 * Nothing is running: no seat is taking an activation, and no assistant still owes a
-	 * message. The room's own last word on a stretch of work.
+	 * Nothing is running: no seat is taking an activation, and the assistant owes
+	 * nobody a message. The room's own last word on a stretch of work.
 	 *
 	 * There is no event for the seats stopping. A host that wants the exchange is
 	 * told by `exchange_closed`, which says whose it was and what it covered;
@@ -251,11 +248,11 @@ export interface HumanDefinition {
 	readonly name: string;
 	readonly identity: string;
 	/**
-	 * The person's counterpart in a room: it holds how they read, writes the one
-	 * message they read at the end of an exchange, and never speaks for them.
-	 * Every person brings one.
+	 * How this person reads: what a message to them leads with, what to cut,
+	 * and how much of one they take. The room's assistant reads it when it
+	 * writes for them, and no other seat does.
 	 */
-	readonly assistant: AgentDefinition;
+	readonly preferences?: string;
 }
 
 /** An agent with its attention chosen, from `seated()` or its two shorthands. */

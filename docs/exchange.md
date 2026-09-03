@@ -159,13 +159,13 @@ controls):
 - **`settled()`** resolves when no seat that speaks for itself is taking an
   activation. That is the exchange's end.
 - **`quiet()`** resolves when no agent at all is taking an activation, and
-  no assistant still owes one. That is the moment a host waits for when it
+  the assistant owes nobody one. That is the moment a host waits for when it
   wants the one message a person reads.
 
-The two differ because an assistant is a seat like any other, and its
-activation counts. An assistant writing about an exchange is not the room
-still working on it, so an assistant's own activation closes no exchange,
-and the exchange's end stays fixed when somebody brings one.
+The two differ because the assistant is a seat like any other, and its
+activation counts. The assistant writing about an exchange is not the room
+still working on it, so the assistant's own activation closes no exchange,
+and the exchange's end stays fixed.
 
 **The order at the close is fixed.** `settled()` resolves, then
 `exchange_closed`, then whatever is written about the exchange, then
@@ -185,7 +185,7 @@ never closes: the next run begins with none.
 The exchange belongs to the room itself, ahead of any one feature, because
 several readers take it from the same place:
 
-- **A person's assistant.** A closed exchange wakes the owner's assistant,
+- **The assistant.** A closed exchange wakes the assistant for its owner,
   and the one message it writes stands for that exchange.
   [`assistant.md`](assistant.md) is the contract for it. An exchange opens
   and closes whether or not the assistant writes anything for it.
@@ -215,7 +215,7 @@ reconsider, and rule 3 tells it to stand down. That is pressure without a
 hard bound. No run has hit it. It is written down because a room that waits
 for months will meet it eventually, and because anything built on
 quiescence assumes it does not happen. [`assistant.md`](assistant.md) is
-built on it: an assistant writes when the room goes quiet, so a room that
+built on it: the assistant writes when the room goes quiet, so a room that
 never goes quiet never gets its one message.
 
 ---
