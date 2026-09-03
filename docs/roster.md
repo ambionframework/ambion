@@ -2,12 +2,13 @@
 
 This document is the design contract for the roster while a room runs: the
 agents a session starts with, the agents it holds in reserve, and the
-assistant that seats them. It is not shipped. This branch implements it,
-and the code will live with the rest of the runtime in
-[`packages/ambion/src`](../packages/ambion/src): the seating and the
-reserve in [`session.ts`](../packages/ambion/src/session.ts), the composing
-activation in [`assistant.ts`](../packages/ambion/src/assistant.ts), and
-the shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
+assistant that seats them. It is shipped. The code lives with the rest of
+the runtime in [`packages/ambion/src`](../packages/ambion/src): the seating
+and the reserve in [`session.ts`](../packages/ambion/src/session.ts), the
+composing activation and the `seat` tool in
+[`assistant.ts`](../packages/ambion/src/assistant.ts), the routing in
+[`seat.ts`](../packages/ambion/src/seat.ts), and the shapes in
+[`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md), [`exchange.md`](exchange.md),
 [`presence.md`](presence.md) and [`assistant.md`](assistant.md) first. This
 document changes two rules of the core and says which.
@@ -139,8 +140,10 @@ reason for the shape:
   roster before its `seated` commits, so every seat the message reaches
   reads a roster that agrees with it.
 - **Rule 5.** A say drafted at a colleague who was unseated in the meantime
-  is refused, and the refusal shows the departure. The lock covers roster
-  races with no new code.
+  is refused, and the refusal shows the departure. The `say` tool checks
+  what its seat has read before it checks anything else about the say, so
+  the seat reads the record it missed and never a bare "unknown
+  participant".
 - **Rule 6.** A seating has the reach of a presence message. A bare seat at
   `broadcast` is too narrow, so a colleague joining wakes nobody by
   default, for the reason [`presence.md`](presence.md) §5 gives for an
@@ -154,8 +157,9 @@ reason for the shape:
 before this document, the participant a message is about is the one who
 wrote it, so `dispatch` excludes `message.from` from the routing and that
 is the author. A seating is the first message where the two differ: the
-author is `by`, and the subject is `from`. So the author is what `dispatch`
-excludes, and the subject is who a seating names.
+author is `by`, or nobody when the host did the seating, and the subject
+is `from`. So the author is what `dispatch` excludes, and the subject is
+who a seating names (`authorOf` in `types.ts`).
 
 **A named seat wakes, however narrowly it is seated.** Rule 4 already says
 this for a directed say: the one it names wakes, at any attention. A
@@ -198,11 +202,21 @@ the record as it stood at the question is what that turns on.
 
 **What `seat` does.** It takes a name from the reserve, and it is refused a
 name that is not there. It moves the entry from the reserve to the roster,
-at the attention the entry carries, then commits the `seated` message under
-the same lock a say commits under, with `by` stamped as the assistant. The message routes as
-§3 says. The tool bounds its activation the way `summarise` bounds one:
-after a small fixed number of seatings it ends the activation itself, with
-Pi's `terminate`, so a model that keeps calling it cannot fill the room.
+at the attention the entry carries, then commits the `seated` message with
+`by` stamped as the assistant. The message routes as §3 says. The tool
+bounds its activation the way `summarise` bounds one: after a small fixed
+number of seatings it ends the activation itself, with Pi's `terminate`, so
+a model that keeps calling it cannot fill the room.
+
+**A seating commits outside rule 5's lock.** The assistant decides on the
+question, and what the seats said while it decided does not change what
+the question needs. The seats answer in seconds and so does the assistant,
+so a seating under the lock would be refused in the common case, and the
+assistant would spend a turn to reconsider a decision the answers rarely
+change. The newcomer reads those answers when it wakes, and rule 3 tells it
+to decline when the point already stands. Every say and every summary still
+commits under the lock; a seating is composition, and composition is not a
+claim about what the record holds.
 
 **A composing activation is the room working.** `settled()` reports that
 no seat that speaks for itself is taking an activation, and the assistant
@@ -328,7 +342,7 @@ Each boundary is stated so a later change has to argue with it.
 
 ## 8. What proves it
 
-The milestone tests will live in
+The milestone tests live in
 [`roster.test.ts`](../packages/ambion/test/roster.test.ts), one per claim
 this document makes loudly:
 
@@ -339,8 +353,9 @@ this document makes loudly:
   (§1, §2);
 - the composing activation reads the reserve and holds `seat` alone, and a
   seating lands as a message stamped `by` the assistant (§3, §4);
-- a seating wakes the seat it names and nobody at `broadcast`, and a seat
-  at `presence` wakes too (§3);
+- a seating wakes the seat it names and nobody at `broadcast`, a seat at
+  `presence` wakes too, and a host seating wakes its seat with nobody in
+  `by` (§3, §5);
 - a seat already at work is steered by the seating and can direct a say at
   the newcomer (§3);
 - the exchange stays open through the composing activation, and the

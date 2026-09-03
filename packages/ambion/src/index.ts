@@ -10,9 +10,11 @@
  * closes it — the exchange every other feature reads. `stopSession` takes
  * the room down, `readSession` reads a name without starting anything,
  * `visitSession` puts a person in a running room, and `destroyWorkspace`
- * retires a workspace for good. The room's assistant writes the one message
- * a person reads when their exchange closes. The design contracts live in
- * docs/agent.md, docs/presence.md, docs/assistant.md and docs/workspace.md.
+ * retires a workspace for good. The room's assistant composes the room at
+ * the open of an exchange, from the agents held in reserve, and writes the
+ * one message a person reads when the exchange closes. The design contracts
+ * live in docs/agent.md, docs/exchange.md, docs/presence.md,
+ * docs/assistant.md, docs/workspace.md and docs/roster.md.
  */
 
 export type {
@@ -75,7 +77,7 @@ export type {
 	WorkspaceBackend,
 	WorkspaceHandle,
 } from './types.ts';
-export { isSpoken, isSummary } from './types.ts';
+export { isPresence, isSpoken, isSummary } from './types.ts';
 export type { DefineWorkspaceOptions } from './workspace.ts';
 export { defineWorkspace, destroyWorkspace } from './workspace.ts';
 

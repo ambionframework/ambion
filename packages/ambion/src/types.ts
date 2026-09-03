@@ -25,24 +25,36 @@ export interface SpokenMessage {
 	text: string;
 }
 
-/** The two ways a person's presence changes. */
-export type PresenceChange = 'arrived' | 'left';
+/**
+ * The four ways a participant's presence changes: a person arrives or leaves,
+ * and an agent is seated or unseated while the room runs.
+ */
+export type PresenceChange = 'arrived' | 'left' | 'seated' | 'unseated';
 
 /**
- * What a person did. It carries no text, because they said nothing: writing
- * words under their name is what rule 7 exists to prevent.
+ * What happened to a participant. It carries no text, because they said
+ * nothing: writing words under their name is what rule 7 exists to prevent.
  */
 export interface PresenceMessage {
 	kind: PresenceChange;
 	seq: Seq;
 	at: string;
-	/** The person, stamped from the visit the runtime observed. */
+	/**
+	 * The participant whose presence changed: a person, stamped from the visit
+	 * the runtime observed, or the agent the runtime seated or unseated.
+	 */
 	from: string;
 	/**
-	 * How the room knew them, on `arrived` alone. Replay rebuilds the roster
-	 * from the record, and a name without an identity is not a roster line.
+	 * How the room knew them, on `arrived` and `seated`. Replay rebuilds the
+	 * roster from the record, and a name without an identity is not a roster line.
 	 */
 	identity?: string;
+	/**
+	 * The assistant, when it did the seating. Absent when the host did. It is
+	 * the one message whose author and subject differ: `by` wrote it, `from`
+	 * is the seat it names.
+	 */
+	by?: string;
 }
 
 /**
@@ -71,6 +83,21 @@ export function isSpoken(message: Message): message is SpokenMessage {
 
 export function isSummary(message: Message): message is SummaryMessage {
 	return message.kind === 'summary';
+}
+
+export function isPresence(message: Message): message is PresenceMessage {
+	return !isSpoken(message) && !isSummary(message);
+}
+
+/**
+ * Who wrote a message, or nobody. For a person's message and an agent's say
+ * that is `from`. A seating names its subject in `from` and its author in
+ * `by`: the assistant when it did the seating, and nobody when the host did.
+ */
+export function authorOf(message: Message): string | undefined {
+	if (!isPresence(message)) return message.from;
+	if (message.kind === 'seated' || message.kind === 'unseated') return message.by;
+	return message.from;
 }
 
 /** Whether a seat is taking an activation. Runtime state, not a seating choice. */

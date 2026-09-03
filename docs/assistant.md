@@ -59,8 +59,7 @@ it refuses a say. Two things make it the seat it is, and both are data:
   must stand for.
 - The open of an exchange wakes it too, when the room holds agents in
   reserve, and that activation holds one tool, `seat`, bound to the
-  reserve. [`roster.md`](roster.md) is the contract for it,
-  and it is not yet shipped.
+  reserve. [`roster.md`](roster.md) is the contract for it.
 
 A seat carries none of that. Which seat is the assistant, who is owed a
 message, and whom it is drafting for now are held by the assistant itself

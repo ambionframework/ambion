@@ -20,8 +20,7 @@ work; [`presence.md`](presence.md) puts people in a running room;
 [`assistant.md`](assistant.md) adds the assistant every room seats; and
 [`workspace.md`](workspace.md) gives an agent's tools a boundary to reach
 into. A fifth, [`roster.md`](roster.md), lets the roster change while the
-room runs, and is not yet shipped: it changes two rules below and says
-which.
+room runs: it changes two rules below and says which.
 
 ---
 
@@ -284,9 +283,9 @@ reader and wakes nothing.
 
 The routing excludes a message's author, and for every kind the record
 held until [`roster.md`](roster.md) the author is `from`. A seating is the
-one message whose author and subject differ: `by` wrote it, and `from` is
-the seat it names. The routing excludes the author and wakes the subject
-([`roster.md`](roster.md) §3).
+one message whose author and subject differ: `by` wrote it, or nobody did
+when the host seated by hand, and `from` is the seat it names. The routing
+excludes the author and wakes the subject ([`roster.md`](roster.md) §3).
 
 **2. Whatever arrives mid-activation is steered in, and working views reset at
 idle.** Replies and deliveries alike, directed or undirected: each arrival

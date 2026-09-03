@@ -62,7 +62,7 @@ export function renderLine(message: Message): string {
 	if (isSpoken(message) || isSummary(message)) {
 		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}`;
 	}
-	return `· ${message.from} ${message.kind}`;
+	return `· ${message.from} ${message.kind}${message.by ? ` by ${message.by}` : ''}`;
 }
 
 /** One rendered row: a message on its own, or the run one summary stands for. */
@@ -229,6 +229,8 @@ export interface RoomView {
 	readonly seats: SeatInfo[];
 	readonly people: PersonView[];
 	readonly record: readonly Message[];
+	/** The question the room is working on, so a seat knows what it was woken for. */
+	readonly exchange: { owner: string; from: Seq } | undefined;
 }
 
 /** The exchange the assistant is closing: whose it was, how they read, and its range. */
@@ -241,8 +243,21 @@ export interface Closing {
 	readonly through: Seq;
 }
 
+/** One agent the assistant may seat: a line in the reserve it reads. */
+interface Reserved {
+	readonly name: string;
+	readonly identity: string;
+}
+
+/** The exchange the assistant is composing the room for: whose question, and who is in reserve. */
+export interface ComposingView {
+	readonly person: string;
+	readonly from: Seq;
+	readonly reserve: readonly Reserved[];
+}
+
 /**
- * What the prose is given of the seat taking the activation. Both facts are asked
+ * What the prose is given of the seat taking the activation. Every fact is asked
  * for outright rather than left optional: a room that stops holding one must
  * say so, instead of a missing field quietly turning the assistant into a seat.
  */
@@ -256,8 +271,10 @@ export interface SeatSpeaking {
 	};
 	/** Whether this seat is the room's assistant, which writes for people and never speaks. */
 	readonly assistant: boolean;
-	/** The exchange this activation is closing, or nothing when a message woke it. */
+	/** The exchange this activation is closing, or nothing when something else woke it. */
 	readonly closing: Closing | undefined;
+	/** The exchange this activation composes the room for, or nothing when something else woke it. */
+	readonly composing: ComposingView | undefined;
 }
 
 export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
@@ -280,8 +297,9 @@ export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
 	return lines.join('\n');
 }
 
-/** What this seat is for: the assistant writes one message, a seat speaks or does not. */
+/** What this seat is for: the assistant composes or writes one message, a seat speaks or does not. */
 function duties(seat: SeatSpeaking, room: RoomView): string[] {
+	if (seat.composing) return COMPOSE_PARAGRAPH;
 	if (seat.assistant) return ASSISTANT_PARAGRAPH;
 	const lines = [
 		`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
@@ -323,6 +341,7 @@ export function renderTurnContext(seat: SeatSpeaking, room: RoomView): string {
 		`message a person reads when their exchange closes.`,
 		`(active: taking a turn now; idle: at rest.)`,
 		renderAgents(room.seats),
+		...(seat.composing ? [``, ...renderReserve(seat.composing.reserve)] : []),
 		``,
 		`The people (present: in the room now; absent: not in the room):`,
 		renderPeople(people, now),
@@ -330,22 +349,40 @@ export function renderTurnContext(seat: SeatSpeaking, room: RoomView): string {
 		`The record of '${room.name}' so far:`,
 		renderRecord(room.record, people, now),
 		``,
-		askOf(seat),
+		askOf(seat, room),
 	].join('\n');
 }
 
+/** The agents the assistant may seat. Only a composing activation reads this list. */
+function renderReserve(reserve: readonly Reserved[]): string[] {
+	return [
+		`The reserve: agents not in the room, which you may seat. Nobody else reads this list.`,
+		...reserve.map((agent) => `- ${agent.name}: ${agent.identity}`),
+	];
+}
+
 /** What this activation is for, in the last line the model reads. */
-function askOf(seat: SeatSpeaking): string {
+function askOf(seat: SeatSpeaking, room: RoomView): string {
+	if (seat.composing) {
+		return (
+			`${seat.composing.person} asked at message ${seat.composing.from}. Seat who the question ` +
+			`needs from the reserve, or end your turn to leave the roster as it stands.`
+		);
+	}
 	const closing = seat.closing;
 	if (seat.assistant) {
-		// The assistant woken by anything but a close has nothing to do in the
-		// activation, and no hands to do it with. See `handsFor`.
+		// The assistant woken by anything but an open or a close has nothing to
+		// do in the activation, and no hands to do it with. See `handsFor`.
 		return closing
 			? `${closing.person}'s exchange is over: messages ${closing.from} to ${closing.through}. ` +
 					`Write the one message they read for it, or end your turn to leave the range whole.`
 			: `Nothing is asked of you: read the room, and end your turn.`;
 	}
-	return `Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
+	// A seat seated during an exchange reads which question it was seated for.
+	const open = room.exchange
+		? `${room.exchange.owner}'s question at message ${room.exchange.from} is open. `
+		: '';
+	return `${open}Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
 }
 
 /**
@@ -383,11 +420,25 @@ const AUDIENCE_PARAGRAPH = [
 function assistantHeader(assistant: string, room: string): string[] {
 	return [
 		`You are '${assistant}', the assistant in the session '${room}' — a shared room with a`,
-		`record. You are seated in it, and nothing said in it wakes you. You write for the`,
-		`people in the room: one of them asked a question, the agents worked it out between`,
-		`them, and the room is quiet again.`,
+		`record. You are seated in it, and nothing said in it wakes you. You compose the room`,
+		`for the people in it, and you write for them.`,
 	];
 }
+
+/** What the assistant is asked for at the open of an exchange, and the whole of what it may do. */
+const COMPOSE_PARAGRAPH = [
+	`One of the people in the room has just asked a question, and the agents seated in the`,
+	`room are reading it now. Seating is the seat tool: it takes one name from the reserve`,
+	`listed below the agents, and puts that agent in the room, where it wakes at once and reads`,
+	`the question. Seat an agent only when the question needs what that agent is for and no`,
+	`seated agent holds it. Every seat you add reads every message from here on, so each one`,
+	`costs the room money. Ending your turn without calling seat leaves the roster as it`,
+	`stands, and that is the usual answer.`,
+	``,
+	`You never speak, never answer the question, and never direct anyone. What you seat is on`,
+	`the record, stamped as your doing. The tool fails if the room moved while you were`,
+	`deciding: it lists what landed, so decide again against the room as it now stands.`,
+];
 
 /**
  * Who the assistant is writing for, and how they read. How a person reads is
@@ -401,8 +452,10 @@ function reader(closing: Closing): string[] {
 
 /** What the assistant is asked for, and the whole of what it may do. */
 const ASSISTANT_PARAGRAPH = [
-	`Writing is the summarise tool. Give it the one message your person reads instead of the`,
-	`working: their question, answered once, for somebody who has not read a line of it.`,
+	`One of the people in the room asked a question, the agents worked it out between them,`,
+	`and the room is quiet again. Writing is the summarise tool. Give it the one message your`,
+	`person reads instead of the working: their question, answered once, for somebody who has`,
+	`not read a line of it.`,
 	``,
 	`Answer what they asked, and nothing beside it. Keep a fact only when their answer depends`,
 	`on it — a quantity, a date, an owner, a deadline, or something still unknown that decides`,

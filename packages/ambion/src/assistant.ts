@@ -14,21 +14,28 @@
  * - A closed exchange wakes it, for the person who owns that exchange. That
  *   activation holds one tool, `summarise`, bound to the range it must stand
  *   for.
+ * - An opened exchange wakes it too, when the room holds agents in reserve.
+ *   That activation holds one tool, `seat`, bound to the reserve. The
+ *   assistant bookends the exchange: it composes the room at the open and
+ *   consolidates what the room said at the close.
  *
  * What is left in this file is what the assistant *is*: what a room refuses
- * to seat as one, the range a summary stands for, the tool that commits one,
- * and how each person reads. The activation itself is the room's, in
- * `session.ts`, and it is the same one every seat takes.
+ * to seat as one, the range a summary stands for, the two tools, and how each
+ * person reads. The activation itself is the room's, in `session.ts`, and it
+ * is the same one every seat takes.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { refusal } from './render.ts';
 import { delivered, isActive, type SeatRuntime } from './seat.ts';
-import type { AgentDefinition, Message, Seq, SummaryMessage } from './types.ts';
+import type { AgentDefinition, Message, PresenceMessage, Seq, SummaryMessage } from './types.ts';
 import { isAgent, isSpoken } from './types.ts';
 
 /** One draft, and one redraft after a race. Then the room keeps moving without it. */
 const ASSISTANT_DRAFTS = 2;
+
+/** How many colleagues one composing activation may seat. Then the roster stands. */
+const ASSISTANT_SEATINGS = 2;
 
 /**
  * How often the assistant may call its tool in one activation. A model that keeps
@@ -142,7 +149,7 @@ export function summariseTool(assistant: string, draft: Draft, room: SummaryRoom
 		parameters: Type.Object({ text: Type.String() }),
 		execute: async (_toolCallId, rawParams) => {
 			draft.calls += 1;
-			const stop = standDown(draft, room.stopped());
+			const stop = standDown(stoppingReason(draft, room.stopped()));
 			if (stop) return stop;
 			const text = (rawParams as { text: string }).text.trim();
 			if (text === '') {
@@ -174,11 +181,7 @@ export function summariseTool(assistant: string, draft: Draft, room: SummaryRoom
  * that the loop is over, and the reason still reaches the transcript, where
  * rule 8 keeps it.
  */
-function standDown(
-	draft: Draft,
-	stopped: boolean,
-): AgentToolResult<Record<string, never>> | undefined {
-	const why = stoppingReason(draft, stopped);
+function standDown(why: string | undefined): AgentToolResult<Record<string, never>> | undefined {
 	if (why === undefined) return undefined;
 	return {
 		content: [{ type: 'text', text: `${why} This turn is over.` }],
@@ -193,6 +196,94 @@ function stoppingReason(draft: Draft, stopped: boolean): string | undefined {
 		return 'The room is still moving. The range stays whole, and you write it when the room is quiet again.';
 	}
 	if (draft.calls > ASSISTANT_CALLS) return 'You have tried this enough times.';
+	return undefined;
+}
+
+// -- composing ---------------------------------------------------------------
+
+/**
+ * One composing activation's own state: whose question opened the exchange,
+ * and how many colleagues it has seated. Nothing here outlives the activation.
+ */
+export interface Composing {
+	/** The person whose question opened the exchange. */
+	person: string;
+	/** The seq of that question. */
+	from: Seq;
+	seated: number;
+	calls: number;
+}
+
+/** What the seat tool needs of the room: the reserve, the roster, and the record. */
+export interface ComposeRoom {
+	stopped(): boolean;
+	/** The reserve as it stands: who may be seated, by name and identity. */
+	reserve(): { name: string; identity: string }[];
+	/** Move one name from the reserve to the roster. The roster changes before the message lands. */
+	seat(name: string): void;
+	/** Put the seating on the record. No lock: a seating is decided on the question, whatever landed since. */
+	commit(draft: Omit<PresenceMessage, 'seq'>): PresenceMessage;
+	publish(message: Message): Promise<void>;
+	/** A seating reached the record: this activation left a mark. */
+	written(): void;
+}
+
+/**
+ * The assistant's hand at the open of an exchange, and it reaches the reserve
+ * and the record and nothing else. It commits outside rule 5's lock: the
+ * assistant decides on the question, and what the seats said while it decided
+ * does not change what the question needs. A refused seating would cost a
+ * turn to reconsider a decision the answers rarely change, and the newcomer
+ * reads those answers when it wakes and declines if the point stands. The tool
+ * bounds its activation the way `summarise` bounds one: after a small fixed
+ * number of seatings it ends the activation itself, so a model that keeps
+ * calling it cannot fill the room.
+ */
+export function seatTool(assistant: string, composing: Composing, room: ComposeRoom): AgentTool {
+	return {
+		name: 'seat',
+		label: 'seat',
+		description:
+			'Seat one agent from the reserve. It joins the room at once and reads the question. ' +
+			'Ending your turn without calling it leaves the roster as it stands.',
+		parameters: Type.Object({
+			name: Type.String({ description: 'An agent name from the reserve.' }),
+		}),
+		execute: async (_toolCallId, rawParams) => {
+			composing.calls += 1;
+			const stop = standDown(composeStoppingReason(composing, room.stopped()));
+			if (stop) return stop;
+			const name = (rawParams as { name: string }).name.trim();
+			const entry = room.reserve().find((agent) => agent.name === name);
+			if (!entry) {
+				const names = room.reserve().map((agent) => agent.name);
+				throw new Error(
+					`'${name}' is not in the reserve. ` +
+						(names.length ? `Seat one of: ${names.join(', ')}.` : 'The reserve is empty.'),
+				);
+			}
+			// The roster changes before the message routes: every seat the seating
+			// reaches reads a roster that already agrees with it.
+			room.seat(name);
+			const message = room.commit({
+				kind: 'seated',
+				at: new Date().toISOString(),
+				from: name,
+				identity: entry.identity,
+				by: assistant,
+			});
+			composing.seated += 1;
+			room.written();
+			await room.publish(message);
+			return delivered();
+		},
+	};
+}
+
+function composeStoppingReason(composing: Composing, stopped: boolean): string | undefined {
+	if (stopped) return 'The room is closing.';
+	if (composing.seated >= ASSISTANT_SEATINGS) return 'You have seated enough for one question.';
+	if (composing.calls > ASSISTANT_CALLS) return 'You have tried this enough times.';
 	return undefined;
 }
 
@@ -237,9 +328,27 @@ export class Assistant {
 	private readonly waiting = new Set<string>();
 	/** The range the assistant is closing, while its activation runs. */
 	private draft: Draft | undefined;
+	/** The exchange the assistant is composing the room for, while its activation runs. */
+	private composition: Composing | undefined;
 
 	/** One seat, seated at `none` when the room starts, for the life of the run. */
 	constructor(readonly seat: SeatRuntime) {}
+
+	/**
+	 * A question opened an exchange, and the room holds agents in reserve. One
+	 * seat, one activation: a question that lands while the assistant drafts
+	 * gets no composing activation, and the roster stands for that exchange.
+	 */
+	compose(person: string, from: Seq): Composing | undefined {
+		if (isActive(this.seat)) return undefined;
+		this.composition = { person, from, seated: 0, calls: 0 };
+		return this.composition;
+	}
+
+	/** What the assistant is composing for, while it is composing. */
+	composing(): Composing | undefined {
+		return this.composition;
+	}
 
 	/** Whether this name is the assistant. It answers about the assistant and nothing else. */
 	is(name: string): boolean {
@@ -325,6 +434,9 @@ export class Assistant {
 	 * quiet room is another chance.
 	 */
 	activationEnded(outcome: { wrote: boolean; failed: boolean }): void {
+		// A composing activation owes nothing afterwards: the roster stands as it
+		// decided, and the next question composes again.
+		this.composition = undefined;
 		const draft = this.draft;
 		this.draft = undefined;
 		if (draft === undefined || outcome.wrote) return;
