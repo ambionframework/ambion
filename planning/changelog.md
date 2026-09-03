@@ -1,19 +1,27 @@
 # Changelog
 
-A log of what shipped, one line per merged pull request. Newest first.
-[`demos/`](../demos) holds the run report for a change that warranted one;
-this file lists every merge, with or without a report.
+Changes to Ambion, grouped by release. Newest first. **Unreleased** holds
+every change since the last release; a release renames that section and
+opens a new **Unreleased** above it. [`demos/`](../demos) holds a run
+report for a change that warranted one.
 
-Add a row when a pull request merges into the default branch. Nobody edits a
-row after it lands; a change that undoes an earlier one gets its own new
-row.
+Write an entry as a theme, not a merged pull request. State what changed
+for somebody building on Ambion, not the mechanism behind it. Group entries
+under **Added**, **Changed**, or **Fixed**, and drop a heading with nothing
+under it. An internal change — a CI rule, a refactor, a doc rewrite — gets
+no entry unless it changes what a person building on Ambion sees.
 
-| Date       | Change                                                                | PR                                                       |
-| ---------- | ---------------------------------------------------------------------- | --------------------------------------------------------- |
-| 2026-09-02 | Seat one assistant per room at `startSession`, and read preferences off the person | [#39](https://github.com/ambionframework/ambion/pull/39) |
-| 2026-09-02 | Rewrite the README around agent-to-agent collaboration                 | [#38](https://github.com/ambionframework/ambion/pull/38) |
-| 2026-09-01 | Implement the workspace: the boundary an agent's tools reach into      | [#37](https://github.com/ambionframework/ambion/pull/37) |
-| 2026-08-28 | Add presence: visits, rosters, and multi-person sessions               | [#13](https://github.com/ambionframework/ambion/pull/13) |
-| 2026-08-27 | Add `CLAUDE.md` guidance document for the repository                   | [#12](https://github.com/ambionframework/ambion/pull/12) |
-| 2026-08-26 | Enforce a cognitive complexity budget in CI                            | [#11](https://github.com/ambionframework/ambion/pull/11) |
-| 2026-08-26 | Add the agent core: four primitives on the Pi SDK                      | [#9](https://github.com/ambionframework/ambion/pull/9)   |
+## Unreleased
+
+### Added
+
+- Five primitives: `defineAgent`, `defineHuman`, `defineTool`,
+  `defineWorkspace`, `startSession`. Pi owns the model loop, tools and
+  transcript; just-bash owns the filesystem and shell behind a workspace.
+- Presence. A person can join or leave a room, and every seat's context
+  shows who is in it.
+- A workspace per agent: a shared filesystem and shell, in memory or over a
+  real directory.
+- An assistant, seated automatically at `startSession`. It reads a
+  person's preferences and writes the one message they read when the room
+  goes quiet.
