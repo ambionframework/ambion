@@ -216,6 +216,26 @@ describe('the built-in tools', () => {
 		await destroyWorkspace(site);
 	});
 
+	it("states the workspace's reach in a connected agent's system prompt, and nothing to a plain one", async () => {
+		const site = defineWorkspace({ name: name('briefed') });
+		const prompts: Record<string, string> = {};
+		await run([agent('connected', { workspace: site }), agent('plain')], {
+			connected: (context, who) => {
+				prompts[who] = context.systemPrompt ?? '';
+				return quiet();
+			},
+			plain: (context, who) => {
+				prompts[who] = context.systemPrompt ?? '';
+				return quiet();
+			},
+		});
+		expect(prompts.connected).toContain('Your workspace gives you four tools');
+		expect(prompts.connected).toContain('js-exec');
+		expect(prompts.connected).toContain('no network');
+		expect(prompts.plain).not.toContain('Your workspace gives you four tools');
+		await destroyWorkspace(site);
+	});
+
 	it('write, read and bash reach one filesystem two agents share, rooted at each home', async () => {
 		const site = defineWorkspace({ name: name('shared') });
 		const results: Record<string, { tool: string; text: string; failed: boolean }[]> = {};
@@ -487,6 +507,22 @@ describe('the just-bash adapter', () => {
 		});
 	});
 
+	it('runs js-exec and python3, and has no curl', async () => {
+		const { env: alpha } = await env();
+		expect(await alpha.exec('js-exec -c "console.log(1 + 2)"')).toMatchObject({
+			ok: true,
+			value: { stdout: '3\n', exitCode: 0 },
+		});
+		expect(await alpha.exec('python3 -c "print(1 + 2)"')).toMatchObject({
+			ok: true,
+			value: { stdout: '3\n', exitCode: 0 },
+		});
+		expect(await alpha.exec('curl --version')).toMatchObject({
+			ok: true,
+			value: { exitCode: 127, stderr: 'bash: curl: command not found\n' },
+		});
+	});
+
 	it('holds 128 MB in memory, and refuses the write that goes past it', async () => {
 		expect(MEMORY_LIMIT_BYTES).toBe(128 * 1024 * 1024);
 		const { env: alpha } = await env();
@@ -525,6 +561,25 @@ describe('the just-bash adapter', () => {
 		const again = await backend.connect(agent('alpha'));
 		expect(await again.exists('.')).toEqual({ ok: true, value: true });
 		expect(await again.exec('ls ~')).toMatchObject({ ok: true, value: { stdout: '' } });
+	});
+});
+
+// -- memoryBackend seeding and reading ---------------------------------------
+
+describe('memoryBackend', () => {
+	it('seeds files before any agent connects, and reads current files back without one', async () => {
+		const backend = memoryBackend({ seed: [{ path: '/site/README.md', text: 'start here\n' }] });
+		expect(await backend.readFiles()).toEqual([{ path: '/site/README.md', text: 'start here\n' }]);
+		const alpha = await backend.connect(agent('alpha'));
+		await alpha.writeFile('/site/notes.md', 'a note\n');
+		// The first `connect` also lays just-bash's own binaries into the shared
+		// filesystem (`docs/workspace.md` §8), so this checks the two site files
+		// among everything else rather than the listing on its own.
+		const after = await backend.readFiles();
+		expect(after).toContainEqual({ path: '/site/README.md', text: 'start here\n' });
+		expect(after).toContainEqual({ path: '/site/notes.md', text: 'a note\n' });
+		const paths = after.map((f) => f.path);
+		expect(paths).toEqual([...paths].sort((a, b) => a.localeCompare(b)));
 	});
 });
 

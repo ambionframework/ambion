@@ -399,6 +399,19 @@ every activation. An agent that wants filesystem access only through
 narrower custom tools has no way to name a workspace and decline the four.
 §12 lists this as open.
 
+**A connected agent's system prompt states what the four tools reach, so it
+does not have to find out by calling one.** `render.ts`'s `renderSystemPrompt`
+checks `seat.def.workspace` — the same field `defineAgent` set (§3) — and, when
+it is present, adds `WORKSPACE_PARAGRAPH`: the home path convention (§8), that
+other agents on the same workspace share its files, the command set `bash`
+carries (coreutils, `jq`, `yq`, `xan`, `sqlite3`, `js-exec`, `python3`), and
+that there is no network. The paragraph is static prose, chosen at the point
+`duties()` already assembles a seat's prompt, so it costs nothing beyond what
+every activation already builds. It states the same facts §8 states about the
+`Bash` construction, by hand, in a file that imports nothing from `just-bash.ts`
+— `render.ts` stays pure (`agent.md`'s code rules), so the two are kept in step
+by whoever changes one remembering the other, not by any check.
+
 ---
 
 ## 6. The Workspace value
@@ -539,6 +552,24 @@ plus one `echo`, so one per tool call costs little. Two instances over one
 filesystem share every file. A write from one is visible to the other at
 once, and two writes to one path from two agents end with the last one.
 
+**`memoryBackend(options)` can seed a filesystem before any agent connects,
+and read one back without an agent at all.** `options.seed` is a list of
+`{ path, text }` files, written in with one `mkdir -p` and one write each
+before the first `connect` resolves. `readFiles()` walks the whole
+filesystem back out the same way, sorted by path. Both close over the one
+`InMemoryFs` the backend holds, the same instance every `connect` builds a
+`Bash` over, so a host reaches the workspace's files without a tool call or
+an agent to make one — the one thing `directoryBackend` gets for free by
+sitting on a real directory. `memoryBackend`'s return type,
+`MemoryWorkspaceBackend`, extends `WorkspaceBackend` with these two methods;
+passing it as `defineWorkspace`'s `backend` needs nothing beyond what §7
+already asks for. `readFiles()` walks the whole filesystem, and the first
+`connect` lays just-bash's own coreutils and QuickJS/CPython runtime into it
+as ordinary files under `/bin`, `/usr` and `/proc` — about 190 of them,
+probed. A caller that wants only what it wrote reads `readFiles()` filtered
+to its own path prefix, the way [`examples/site`](../examples/site)'s
+`driveFiles()` keeps to `/site/`.
+
 **`directoryBackend(root)` uses `ReadWriteFs`.** `ReadWriteFs` is the one
 just-bash filesystem that writes through to a real directory (probed: a
 `writeFile` through it lands on disk). `connect` builds the same `Bash`
@@ -588,6 +619,21 @@ sandboxing: a real shell has no wall between an agent's process and the
 machine, and just-bash's virtual shell is at least a wall between an
 agent's commands and its own mount. `NodeExecutionEnv` cannot serve as the
 in-memory default, because it runs against a real directory.
+
+**Every `Bash` instance runs with `javascript: true` and `python: true`, and
+no `network` option.** `connect` (§7) passes both flags on every instance it
+builds, for both backends. `javascript` turns on `js-exec`, which runs a
+script through just-bash's QuickJS sandbox; `python` turns on `python3` and
+`python`, CPython compiled to WASM. Neither needs anything from the host:
+both engines ship inside just-bash itself. Omitting `network` is what keeps
+`curl` and every other network command absent — just-bash makes network
+access opt-in, gated behind an allow-list of origins and methods, and this
+project passes no such list. §1 calls network access a boundary this
+document leaves out; not passing `network` is how that boundary holds today.
+An agent connected to a workspace is told this same set in its system
+prompt, in `render.ts`'s `WORKSPACE_PARAGRAPH` (§5) — the one prose copy of
+what these flags decide, and it has to stay in step with them by hand: the
+two live in different files, and nothing checks them against each other.
 
 **The in-memory default holds 128 MB.** `InMemoryFs` takes a byte limit at
 construction, and the default backend sets one (`MEMORY_LIMIT_BYTES` in
@@ -766,13 +812,23 @@ claim this document makes loudly:
   through the callbacks, `cd` lasting one command, abort told apart from
   timeout, temp files under `/tmp`, `listDir` with sizes (§9);
 - `directoryBackend` writing through to disk, creating its root, and
-  emptying it on destroy (§8).
+  emptying it on destroy (§8);
+- `js-exec` and `python3` running inside `bash`, and `curl` absent (§8);
+- `memoryBackend`'s `seed` landing before the first `connect` resolves, and
+  `readFiles()` reading it and a later write back out, sorted by path (§8);
+- `WORKSPACE_PARAGRAPH` in a connected agent's system prompt, and absent
+  from a plain agent's (§5).
 
 All in-process, in vitest, on a scripted stream where determinism matters.
 
 **What is built.** `defineWorkspace`, `destroyWorkspace`, `ToolContext`,
 the four built-in tools, the just-bash adapter, the in-memory default and
-`directoryBackend`. `startSession`'s public signature did not change (§3).
+`directoryBackend`. Every `Bash` instance runs with `javascript` and
+`python` on and `network` unset (§8). `memoryBackend` takes an optional
+`seed` and exposes `readFiles()`, so a host can write and read an in-memory
+workspace's files without an agent (§8). A workspace-connected agent's
+system prompt states the four tools' reach, `WORKSPACE_PARAGRAPH` in
+`render.ts` (§5). `startSession`'s public signature did not change (§3).
 `handsFor()` in `session.ts` binds the four built-ins beside what
 `toPiTool` (`seat.ts`) already did, and `toPiTool` takes the seat's agent
 so it can build a `ToolContext` for a `defineTool`-built tool. No

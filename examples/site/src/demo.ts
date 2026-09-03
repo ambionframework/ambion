@@ -24,7 +24,6 @@ import {
 	AGENTS,
 	ASSISTANT,
 	apiLog,
-	DRIVE_ROOT,
 	dan,
 	driveFiles,
 	GOAL,
@@ -69,7 +68,7 @@ let lastSeq = 0;
 let lastFrom = '(the room opening)';
 
 /** The drive as every run starts: the seed, before any product touches it. */
-const driveBefore = driveFiles();
+const driveBefore = await driveFiles();
 
 const session = startSession({
 	name: NAME,
@@ -247,11 +246,11 @@ for (const metadata of await repo.list()) {
 
 await stopSession(session);
 
-// The drive as the run left it, then the workspace retired: the scratch copy
-// is emptied, and the checked-in seed is untouched.
-const driveAfter = driveFiles();
+// The drive as the run left it, then the workspace retired: the in-memory
+// filesystem is dropped, and the checked-in seed on disk is untouched.
+const driveAfter = await driveFiles();
 await destroyWorkspace(SITE_DRIVE);
-process.stderr.write(`\ndrive at ${DRIVE_ROOT}, destroyed after capture\n`);
+process.stderr.write(`\ndrive destroyed after capture\n`);
 
 writeFileSync(
 	OUT,
