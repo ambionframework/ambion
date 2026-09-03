@@ -86,31 +86,69 @@ export interface MemoryWorkspaceBackend extends WorkspaceBackend {
 	readFiles(): Promise<MemoryBackendFile[]>;
 }
 
-/** Every file under `dir`, read as text, recursively. */
+/**
+ * Every plain file under `dir`, read as text, recursively. A symlink is
+ * neither a directory nor a plain file, and is skipped rather than followed:
+ * following one risks reading the same content twice under two paths, or
+ * looping forever on a cycle.
+ */
 async function walk(fs: IFileSystem, dir: string): Promise<MemoryBackendFile[]> {
 	const files: MemoryBackendFile[] = [];
 	for (const entry of await fs.readdir(dir)) {
 		const path = posix.join(dir, entry);
-		if ((await fs.lstat(path)).isDirectory) files.push(...(await walk(fs, path)));
-		else files.push({ path, text: await fs.readFile(path) });
+		const stat = await fs.lstat(path);
+		if (stat.isDirectory) files.push(...(await walk(fs, path)));
+		else if (!stat.isSymbolicLink) files.push({ path, text: await fs.readFile(path) });
 	}
 	return files;
 }
 
-/** Every file on `fs`, read as text and sorted by path. */
+/** Every plain file on `fs`, read as text and sorted by path. */
 async function listFiles(fs: IFileSystem): Promise<MemoryBackendFile[]> {
 	return (await walk(fs, '/')).sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * Memoises what `build` returns, retries after a rejection instead of
+ * staying poisoned by it, and turns `mark` into a one-way gate: once called,
+ * every later `get()` rejects rather than silently rebuilding. Both backends
+ * below are one lazily-built resource behind `connect`/`readFiles`, and both
+ * need this same shape to make their own `destroy` actually terminal.
+ */
+function lazyResource<T>(build: () => Promise<T>): {
+	get(): Promise<T>;
+	mark(): void;
+} {
+	let ready: Promise<T> | undefined;
+	let destroyed = false;
+	return {
+		get: () => {
+			if (destroyed) return Promise.reject(new Error('This workspace backend is destroyed.'));
+			if (ready === undefined) {
+				ready = build().catch((error) => {
+					ready = undefined; // let the next call retry rather than staying poisoned
+					throw error;
+				});
+			}
+			return ready;
+		},
+		mark: () => {
+			destroyed = true;
+			ready = undefined;
+		},
+	};
 }
 
 /**
  * The default: an in-memory filesystem that lives as long as the handle.
  * Building it is async when there is a `seed` to run, so `connect` and
  * `readFiles` both await one lazily-built, memoised filesystem rather than
- * the handle building it up front.
+ * the handle building it up front. `destroy` can only ever fail to release
+ * memory, never to delete anything, so it marks the resource destroyed
+ * immediately: no later `connect` or `readFiles` call resurrects it.
  */
 export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspaceBackend {
-	let ready: Promise<InMemoryFs> | undefined;
-	const build = async (): Promise<InMemoryFs> => {
+	const resource = lazyResource(async () => {
 		const fs = inMemory();
 		if (options.seed) {
 			await options.seed({
@@ -121,14 +159,13 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
 			});
 		}
 		return fs;
-	};
-	const filesystem = (): Promise<InMemoryFs> => (ready ??= build());
+	});
 	return {
-		connect: async (agent) => connectOver(await filesystem(), agent),
+		connect: async (agent) => connectOver(await resource.get(), agent),
 		async destroy() {
-			ready = undefined;
+			resource.mark();
 		},
-		readFiles: async () => listFiles(await filesystem()),
+		readFiles: async () => listFiles(await resource.get()),
 	};
 }
 
@@ -136,23 +173,24 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
  * A workspace over a real directory. `ReadWriteFs` writes through to disk
  * and needs its root to exist, so the first `connect` creates the root and
  * builds the filesystem; `destroy` removes the root's contents and leaves the
- * root.
+ * root. The resource is marked destroyed only once that deletion actually
+ * succeeds — a backend that fails to delete leaves the workspace live and
+ * reachable, the same failure `destroyWorkspace` (`workspace.ts` §2) expects
+ * to be able to retry.
  */
 export function directoryBackend(root: string): WorkspaceBackend {
-	let fs: Promise<ReadWriteFs> | undefined;
-	const filesystem = (): Promise<ReadWriteFs> => {
-		if (fs === undefined)
-			fs = mkdir(root, { recursive: true }).then(() => new ReadWriteFs({ root }));
-		return fs;
-	};
+	const resource = lazyResource(async () => {
+		await mkdir(root, { recursive: true });
+		return new ReadWriteFs({ root });
+	});
 	return {
-		connect: async (agent) => connectOver(await filesystem(), agent),
+		connect: async (agent) => connectOver(await resource.get(), agent),
 		async destroy() {
-			fs = undefined;
 			const entries = await readdir(root).catch(() => []);
 			await Promise.all(
 				entries.map((entry) => rm(join(root, entry), { recursive: true, force: true })),
 			);
+			resource.mark();
 		},
 	};
 }

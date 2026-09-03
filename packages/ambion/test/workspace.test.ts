@@ -589,6 +589,49 @@ describe('memoryBackend', () => {
 		const paths = after.map((f) => f.path);
 		expect(paths).toEqual([...paths].sort((a, b) => a.localeCompare(b)));
 	});
+
+	it('skips a symlink in readFiles rather than following it', async () => {
+		const backend = memoryBackend({
+			seed: async (write) => write.writeFile('/site/README.md', 'hi\n'),
+		});
+		const alpha = await backend.connect(agent('alpha'));
+		await alpha.exec('ln -s /site ~/sitelink && ln -s /nowhere ~/dangling');
+		const files = await backend.readFiles();
+		expect(files).toContainEqual({ path: '/site/README.md', text: 'hi\n' });
+		expect(files.some((f) => f.path.includes('sitelink') || f.path.includes('dangling'))).toBe(
+			false,
+		);
+	});
+
+	it('retries a seed that failed once, rather than staying poisoned', async () => {
+		let attempt = 0;
+		const backend = memoryBackend({
+			seed: async (write) => {
+				attempt++;
+				if (attempt === 1) throw new Error('transient');
+				await write.writeFile('/site/README.md', 'hi\n');
+			},
+		});
+		await expect(backend.readFiles()).rejects.toThrow('transient');
+		expect(await backend.readFiles()).toEqual([{ path: '/site/README.md', text: 'hi\n' }]);
+		expect(attempt).toBe(2);
+	});
+
+	it('stays destroyed: destroy makes connect and readFiles reject, not resurrect', async () => {
+		let seedCalls = 0;
+		const backend = memoryBackend({
+			seed: async (write) => {
+				seedCalls++;
+				await write.writeFile('/site/README.md', 'hi\n');
+			},
+		});
+		await backend.readFiles();
+		expect(seedCalls).toBe(1);
+		await backend.destroy();
+		await expect(backend.readFiles()).rejects.toThrow(/destroyed/);
+		await expect(backend.connect(agent('alpha'))).rejects.toThrow(/destroyed/);
+		expect(seedCalls).toBe(1); // never re-ran
+	});
 });
 
 // -- the directory backend ---------------------------------------------------
@@ -610,5 +653,13 @@ describe('directoryBackend', () => {
 		expect(await readFile(join(root, 'home', 'scribe', 'log.md'), 'utf8')).toBe('# day one\n');
 		await destroyWorkspace(site);
 		expect(await readdir(root)).toEqual([]);
+	});
+
+	it('stays destroyed: connect after destroy rejects rather than recreating the root', async () => {
+		const root = join(await mkdtemp(join(tmpdir(), 'ambion-')), 'site');
+		const backend = directoryBackend(root);
+		await backend.connect(agent('alpha'));
+		await backend.destroy();
+		await expect(backend.connect(agent('beta'))).rejects.toThrow(/destroyed/);
 	});
 });
