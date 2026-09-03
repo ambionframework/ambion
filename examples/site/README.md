@@ -112,12 +112,12 @@ discussion and the products hold the state.
 
 ## The files
 
-| File      | What                                                                                             |
-| --------- | ------------------------------------------------------------------------------------------------ |
+| File      | What                                                                                                            |
+| --------- | --------------------------------------------------------------------------------------------------------------- |
 | `room.ts` | The products and the specialists on call, their APIs and state; the drive they share; the people; the assistant |
-| `main.ts` | The room open in your terminal                                                                   |
-| `demo.ts` | One scripted run, written out as JSON for a report                                               |
-| `drive/`  | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary |
+| `main.ts` | The room open in your terminal                                                                                  |
+| `demo.ts` | One scripted run, written out as JSON for a report                                                              |
+| `drive/`  | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary                |
 
 The contracts are [`docs/agent.md`](../../docs/agent.md),
 [`docs/presence.md`](../../docs/presence.md),

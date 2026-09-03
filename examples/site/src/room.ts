@@ -301,7 +301,8 @@ export const temporaryWorksState = {
 			ref: 'TW-31',
 			what: 'Level 3 formwork and falsework, pre-pour check',
 			state: 'not booked — formwork closed to 80%, striking crew on the falsework',
-			needs: 'Formwork closed and propped. Booked the working day before the pour; done 06:30 on the morning of it.',
+			needs:
+				'Formwork closed and propped. Booked the working day before the pour; done 06:30 on the morning of it.',
 		},
 	],
 	bookings: [] as { ref: string; morning: string; requestedBy: string }[],
@@ -590,7 +591,8 @@ const requestInspection = defineTool({
 
 const hireBoard = defineTool({
 	name: 'hire_board',
-	description: 'Plant on hire or booked: what, from whom, on site when, for which day, and whether it is confirmed.',
+	description:
+		'Plant on hire or booked: what, from whom, on site when, for which day, and whether it is confirmed.',
 	parameters: Type.Object({}),
 	execute: () =>
 		log(
@@ -651,7 +653,8 @@ const moveHire = defineTool({
 
 const checkStatus = defineTool({
 	name: 'check_status',
-	description: 'The temporary works checks a pour needs, what each one requires, and whether it is booked.',
+	description:
+		'The temporary works checks a pour needs, what each one requires, and whether it is booked.',
 	parameters: Type.Object({}),
 	execute: () =>
 		log(

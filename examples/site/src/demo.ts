@@ -127,21 +127,26 @@ function toolLine(event: { agent: string; toolName: string }): string {
 	return `  · ${event.agent}.${event.toolName}()${where}\n`;
 }
 
-/** A running commentary, so the run is watchable while it happens. */
-function narrate(event: SessionEvent): void {
-	if (event.type === 'message' && isSummary(event.message)) {
-		const m = event.message;
+/** One message on the record, as the commentary shows it. */
+function narrateMessage(m: Message): void {
+	if (isSummary(m)) {
 		process.stderr.write(`∎ ${m.from} → ${m.to} (${m.covers.from}–${m.covers.through})\n`);
 		process.stderr.write(`  ${m.text.replace(/\n/g, '\n  ')}\n`);
+		return;
 	}
-	if (event.type === 'message' && isPresence(event.message) && event.message.kind === 'seated') {
-		const m = event.message;
+	if (isPresence(m) && m.kind === 'seated') {
 		process.stderr.write(`+ ${m.from} seated${m.by ? ` by ${m.by}` : ''}\n`);
+		return;
 	}
-	if (event.type === 'message' && isSpoken(event.message) && !PEOPLE.has(event.message.from)) {
-		const to = event.message.to ? ` → ${event.message.to}` : '';
-		process.stderr.write(`${event.message.from}${to}: ${event.message.text.slice(0, 78)}\n`);
+	if (isSpoken(m) && !PEOPLE.has(m.from)) {
+		const to = m.to ? ` → ${m.to}` : '';
+		process.stderr.write(`${m.from}${to}: ${m.text.slice(0, 78)}\n`);
 	}
+}
+
+/** A running commentary, so the run is watchable while it happens. */
+function narrate(event: SessionEvent): void {
+	if (event.type === 'message') narrateMessage(event.message);
 	if (event.type === 'tool_execution_start') process.stderr.write(toolLine(event));
 	if (event.type === 'exchange_closed') {
 		const { owner, from, through } = event.exchange;
@@ -208,7 +213,9 @@ await quiescent();
 // The proof the design asks for: a follow-up whose answer sits inside a range
 // that has left every seat's context. The seats answer it from their summary
 // and their own APIs, not from the messages the fold replaced.
-step('priya asks a follow-up about a range the seats now read as one message; the specialists are seated and hear it');
+step(
+	'priya asks a follow-up about a range the seats now read as one message; the specialists are seated and hear it',
+);
 await priyaBack.deliver({
 	text: 'Remind me what Saturday needs from me before I ring the client.',
 });
