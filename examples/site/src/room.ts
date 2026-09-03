@@ -3,15 +3,17 @@
  * is an agent.
  *
  * Three products hold their own state and their own API and know nothing of
- * each other's internals: they ask on the record, the way a person does. Three
- * people share the room from a site office, a phone on the deck and a
- * cost desk, and the room's assistant writes each of them the one message
- * they read, the way they read.
+ * each other's internals: they ask on the record, the way a person does. Two
+ * specialists are on call in the reserve, and the room's assistant seats one
+ * when a question turns on what that specialist alone holds. Three people
+ * share the room from a site office, a phone on the deck and a cost desk,
+ * and the assistant writes each of them the one message they read, the way
+ * they read.
  *
- * The three products share one workspace: the site drive, an in-memory
- * filesystem holding the documents the site works to. Each product reads the
- * documents its claims rest on, and every product appends to the site diary
- * when it changes its own state.
+ * Every product and specialist shares one workspace: the site drive, an
+ * in-memory filesystem holding the documents the site works to. Each reads
+ * the documents its claims rest on, and appends to the site diary when it
+ * changes its own state.
  *
  * `main.ts` opens this interactively. `demo.ts` drives one scripted run of it.
  */
@@ -196,6 +198,7 @@ export const tasksState: Task[] = [
 		owner: 'dan',
 		due: 'Tue 25 Aug',
 		blockedBy: [],
+		note: 'Hire H-207 is provisional on the plant desk; the pour day decides which day to confirm.',
 	},
 	{
 		id: 'T-124',
@@ -254,6 +257,54 @@ export const materialsState = {
 				'Orders lock 24 hours before the slot. Cancelled inside the lock is charged at 60% of the load. Moving outside the window is free.',
 		},
 	],
+};
+
+/** What building control can offer, and what the site has asked of it. */
+export const inspectionsState = {
+	noticeHours: 48,
+	/** Slots the duty inspector can still take, and when each stops being bookable. */
+	slots: [
+		{ slot: 'Thu 27 Aug, 13:00', bookBy: 'Tue 25 Aug, 13:00', state: 'open' },
+		{ slot: 'Fri 28 Aug, 08:00', bookBy: 'Wed 26 Aug, 08:00', state: 'open' },
+		{ slot: 'Fri 28 Aug, 13:00', bookBy: 'Wed 26 Aug, 13:00', state: 'open' },
+		{ slot: 'Mon 31 Aug, 08:00', bookBy: 'Thu 27 Aug, 08:00', state: 'open' },
+	],
+	requests: [] as { slot: string; inspection: string; requestedBy: string; state: string }[],
+};
+
+/** The plant desk's board: what is hired, for when, and on what terms. */
+export const plantState = {
+	hires: [
+		{
+			ref: 'H-207',
+			plant: 'Concrete pump, 36 m boom',
+			supplier: 'Rapid Pumps',
+			onSite: 'Wed 26 Aug, evening',
+			forDay: 'Thu 27 Aug',
+			state: 'provisional — T-130 not confirmed',
+		},
+	],
+	suppliers: [
+		{
+			name: 'Rapid Pumps',
+			terms:
+				'A booked day moves free with 24h notice. Inside 24h a re-mobilisation charge of £350 applies. Saturday delivery carries a £200 weekend uplift. The operator is the site’s own; the hire is the pump alone.',
+		},
+	],
+};
+
+/** The temporary works coordinator's diary: the checks the pour plan requires before concrete goes in. */
+export const temporaryWorksState = {
+	coordinator: 'R. Okafor',
+	checks: [
+		{
+			ref: 'TW-31',
+			what: 'Level 3 formwork and falsework, pre-pour check',
+			state: 'not booked — formwork closed to 80%, striking crew on the falsework',
+			needs: 'Formwork closed and propped. Booked the working day before the pour; done 06:30 on the morning of it.',
+		},
+	],
+	bookings: [] as { ref: string; morning: string; requestedBy: string }[],
 };
 
 /** Every call any product makes, so a host can show its API traffic. */
@@ -483,6 +534,162 @@ const moveDelivery = defineTool({
 	},
 });
 
+// -- the building control liaison's API --------------------------------------
+
+const inspectionSlots = defineTool({
+	name: 'inspection_slots',
+	description:
+		'Which inspection slots building control can still take, and the deadline to book each one.',
+	parameters: Type.Object({}),
+	execute: () =>
+		log(
+			'building-control',
+			'inspection_slots',
+			{},
+			`Notice is ${inspectionsState.noticeHours} working hours; slots are 08:00 and 13:00, Monday to Friday.\n` +
+				inspectionsState.slots
+					.map((s) => `${s.slot} — ${s.state}, book by ${s.bookBy}`)
+					.join('\n') +
+				(inspectionsState.requests.length
+					? `\nRequested: ${inspectionsState.requests.map((r) => `${r.inspection} at ${r.slot} (${r.state})`).join('; ')}`
+					: '\nNothing requested this week.'),
+		),
+});
+
+const requestInspection = defineTool({
+	name: 'request_inspection',
+	description:
+		'Ask for an inspection slot. Only the project manager can confirm a booking with building control; this records the request against the slot.',
+	parameters: Type.Object({
+		slot: Type.String({ description: 'A slot as inspection_slots lists it.' }),
+		inspection: Type.String({ description: 'e.g. Level 3 pre-pour' }),
+		requestedBy: Type.String(),
+	}),
+	execute: ({ slot, inspection, requestedBy }) => {
+		const found = inspectionsState.slots.find((s) => s.slot === slot);
+		if (!found) {
+			return log('building-control', 'request_inspection', { slot }, `No slot '${slot}'.`);
+		}
+		found.state = 'requested';
+		inspectionsState.requests.push({
+			slot,
+			inspection,
+			requestedBy,
+			state: 'awaiting the project manager’s confirmation',
+		});
+		return log(
+			'building-control',
+			'request_inspection',
+			{ slot, inspection, requestedBy },
+			`Requested: ${inspection} at ${slot}, by ${requestedBy}. The project manager confirms it with building control before ${found.bookBy}.`,
+		);
+	},
+});
+
+// -- the plant desk's API ----------------------------------------------------
+
+const hireBoard = defineTool({
+	name: 'hire_board',
+	description: 'Plant on hire or booked: what, from whom, on site when, for which day, and whether it is confirmed.',
+	parameters: Type.Object({}),
+	execute: () =>
+		log(
+			'plant-hire',
+			'hire_board',
+			{},
+			plantState.hires
+				.map(
+					(h) =>
+						`${h.ref} ${h.plant} — ${h.supplier}, on site ${h.onSite}, for ${h.forDay}, ${h.state}`,
+				)
+				.join('\n'),
+		),
+});
+
+const hireTerms = defineTool({
+	name: 'hire_terms',
+	description: 'What moving or cancelling a hire costs, per supplier.',
+	parameters: Type.Object({ supplier: Type.String() }),
+	execute: ({ supplier }) => {
+		const word = supplier.toLowerCase().split(' ')[0] ?? '';
+		const s = plantState.suppliers.find((x) => x.name.toLowerCase().includes(word));
+		return log(
+			'plant-hire',
+			'hire_terms',
+			{ supplier },
+			s ? `${s.name} — ${s.terms}` : `No terms held for '${supplier}'.`,
+		);
+	},
+});
+
+const moveHire = defineTool({
+	name: 'move_hire',
+	description: 'Move a hire to a new day. Use when the pour date on the record moves.',
+	parameters: Type.Object({
+		ref: Type.String(),
+		onSite: Type.String(),
+		forDay: Type.String(),
+		reason: Type.Optional(Type.String()),
+	}),
+	execute: ({ ref, onSite, forDay, reason }) => {
+		const h = plantState.hires.find((x) => x.ref === ref);
+		if (!h) return log('plant-hire', 'move_hire', { ref }, `No hire ${ref}.`);
+		const was = h.forDay;
+		h.onSite = onSite;
+		h.forDay = forDay;
+		h.state = 'provisional — re-booked, T-130 not confirmed';
+		return log(
+			'plant-hire',
+			'move_hire',
+			{ ref, onSite, forDay, reason },
+			`${h.ref} moved from ${was} to ${forDay}, on site ${onSite}${reason ? ` (${reason})` : ''}.`,
+		);
+	},
+});
+
+// -- the temporary works coordinator's API -----------------------------------
+
+const checkStatus = defineTool({
+	name: 'check_status',
+	description: 'The temporary works checks a pour needs, what each one requires, and whether it is booked.',
+	parameters: Type.Object({}),
+	execute: () =>
+		log(
+			'temporary-works',
+			'check_status',
+			{},
+			`Coordinator ${temporaryWorksState.coordinator}.\n` +
+				temporaryWorksState.checks
+					.map((c) => `${c.ref} ${c.what} — ${c.state}. Needs: ${c.needs}`)
+					.join('\n') +
+				(temporaryWorksState.bookings.length
+					? `\nBooked: ${temporaryWorksState.bookings.map((b) => `${b.ref} for ${b.morning} (by ${b.requestedBy})`).join('; ')}`
+					: ''),
+		),
+});
+
+const bookCheck = defineTool({
+	name: 'book_check',
+	description: 'Book the coordinator for a pre-pour check on the morning of a pour day.',
+	parameters: Type.Object({
+		ref: Type.String(),
+		morning: Type.String({ description: 'The pour day, e.g. Fri 28 Aug' }),
+		requestedBy: Type.String(),
+	}),
+	execute: ({ ref, morning, requestedBy }) => {
+		const c = temporaryWorksState.checks.find((x) => x.ref === ref);
+		if (!c) return log('temporary-works', 'book_check', { ref }, `No check ${ref}.`);
+		c.state = `booked for ${morning}, 06:30`;
+		temporaryWorksState.bookings.push({ ref, morning, requestedBy });
+		return log(
+			'temporary-works',
+			'book_check',
+			{ ref, morning, requestedBy },
+			`${ref} booked: ${temporaryWorksState.coordinator} on site ${morning} at 06:30, requested by ${requestedBy}.`,
+		);
+	},
+});
+
 // -- one agent per product ---------------------------------------------------
 
 const shiftsAgent = defineAgent({
@@ -568,6 +775,88 @@ const materialsAgent = defineAgent({
  */
 export const AGENTS = [shiftsAgent, attentive(tasksAgent), materialsAgent];
 
+// -- the specialists on call ---------------------------------------------------
+
+/**
+ * Two seats the site does not run all day. They wait in the reserve, and the
+ * assistant seats one when a question turns on what it alone holds. An
+ * identity here says what the specialist holds and when it is worth a seat,
+ * because the identity is the whole of what the assistant reads to decide.
+ */
+const inspectionsAgent = defineAgent({
+	name: 'building-control',
+	identity:
+		'Building Control Liaison Agent. Which inspection slots the duty inspector can take, the ' +
+		'deadline to book each one, and what the inspector has to see. Worth a seat when a pour ' +
+		'date turns on an inspection being booked.',
+	instructions: `
+		You speak for the building control liaison and nothing else. Read
+		inspection_slots before any claim about a slot or a deadline. When the room
+		settles on a pour day, request the slot that day needs with
+		request_inspection, in the name of whoever decided, and say plainly that
+		only the project manager can confirm it with building control. Speak when a
+		date on the record needs a slot nobody has booked, or names a slot that
+		cannot be booked in time. Otherwise end your turn.
+
+		${DRIVE_BRIEF.trim()}
+		Building control's own rules are at /site/inspections/building-control.md:
+		read them before you say when an inspection can happen, and the pour plan
+		before you say what the inspector needs to see.
+	`,
+	model: MODEL,
+	tools: [inspectionSlots, requestInspection],
+	workspace: SITE_DRIVE,
+});
+
+const plantAgent = defineAgent({
+	name: 'plant-hire',
+	identity:
+		'Plant Hire Agent. The pump and any other hired plant: on site when, for which day, ' +
+		'confirmed or not, and what moving a hire costs. Worth a seat when a pour day moves or a ' +
+		'plan needs plant that is not booked.',
+	instructions: `
+		You speak for the plant desk and nothing else. Read hire_board and
+		hire_terms before any claim about plant, dates or money. Move a hire with
+		move_hire when the pour date on the record moves, and say what it cost or
+		saved and who has to confirm it. Speak when a plan needs plant that is not
+		booked for that day, or when a move is about to cost money. Otherwise end
+		your turn.
+
+		${DRIVE_BRIEF.trim()}
+		The pour plan says which plant a pour needs and when it has to be on site:
+		read it before you say a hire covers a day.
+	`,
+	model: MODEL,
+	tools: [hireBoard, hireTerms, moveHire],
+	workspace: SITE_DRIVE,
+});
+
+const temporaryWorksAgent = defineAgent({
+	name: 'temporary-works',
+	identity:
+		'Temporary Works Coordinator Agent. The formwork and falsework check the pour plan requires ' +
+		'on the morning of a pour, what it needs, and whether it is booked. Worth a seat once a pour ' +
+		'day is fixed and the check has to be booked; not before.',
+	instructions: `
+		You speak for the temporary works coordinator and nothing else. Read
+		check_status before any claim about a check. Book the check with book_check
+		once a pour day stands on the record, in the name of whoever fixed it, and
+		say what the formwork crew must have done by then. Speak when a pour day on
+		the record has no check booked, or when the formwork will not be closed in
+		time. Otherwise end your turn.
+
+		${DRIVE_BRIEF.trim()}
+		The pour plan lists the check among what has to be done before a pour, and
+		the diary says how far the formwork has got: read both before you speak.
+	`,
+	model: MODEL,
+	tools: [checkStatus, bookCheck],
+	workspace: SITE_DRIVE,
+});
+
+/** The reserve. Nothing wakes these seats until the assistant seats one. */
+export const AVAILABLE = [inspectionsAgent, plantAgent, temporaryWorksAgent];
+
 // -- the people, and the assistant that writes for them -----------------------
 
 /**
@@ -625,19 +914,31 @@ export const dan = defineHuman({
 });
 
 /**
- * The room's one assistant. It writes for whoever asked, and each activation
- * hands it that person's preferences beside the record. What is here is the
- * house style every message follows; what differs by person is on the person.
+ * The room's one assistant. It composes the room when a question opens, from
+ * the specialists on call, and it writes for whoever asked when the room goes
+ * quiet, with that person's preferences beside the record. What is here is
+ * the judgment both activations share; what differs by person is on the
+ * person.
  */
 export const ASSISTANT = defineAgent({
 	name: 'assistant',
-	identity: 'Writes the one message a person reads when their exchange closes.',
+	identity:
+		'Seats a specialist from the reserve when a question needs one, and writes the one ' +
+		'message a person reads when their exchange closes.',
 	model: MODEL,
 	instructions: `
-		Lead with the decision your person has to make and who holds it. Give them
-		the facts that decision turns on — quantities, dates, owners, what is still
-		unknown — and cut every other thing the room said, however true.
-		Say plainly when the room did not answer what they asked.
+		When a question opens, the three products already in the room cover tasks,
+		labour and materials, and they read the drive. Seat a specialist only when
+		the answer turns on something that specialist alone holds: an inspection
+		slot and its deadline, a hire and what moving it costs, a check that has to
+		be booked. A question the products can answer from their own data and the
+		drive needs nobody seated, and leaving the roster as it stands is the usual
+		answer. A specialist already in the room needs no seating.
+
+		When the room is quiet, lead with the decision your person has to make and
+		who holds it. Give them the facts that decision turns on — quantities,
+		dates, owners, what is still unknown — and cut every other thing the room
+		said, however true. Say plainly when the room did not answer what they asked.
 	`,
 });
 

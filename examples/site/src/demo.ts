@@ -1,10 +1,11 @@
 /**
  * One scripted run of the room, captured as JSON for a demo report.
  *
- * The products, their APIs, the people and the assistant all live in
- * `room.ts`; this file only decides who arrives, what they ask, and when
- * they leave — then writes out the event timeline, every activation with its
- * outcome, what the assistant wrote, and each seat's own downstream session.
+ * The products, the specialists on call, their APIs, the people and the
+ * assistant all live in `room.ts`; this file only decides who arrives, what
+ * they ask, and when they leave — then writes out the event timeline, every
+ * activation with its outcome, whom the assistant seated and what it wrote,
+ * and each seat's own downstream session.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm demo   (from examples/site)
  */
@@ -12,6 +13,7 @@ import { writeFileSync } from 'node:fs';
 import {
 	destroyWorkspace,
 	InMemorySessionRepo,
+	isPresence,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -23,12 +25,15 @@ import {
 import {
 	AGENTS,
 	ASSISTANT,
+	AVAILABLE,
 	apiLog,
 	dan,
 	driveFiles,
 	GOAL,
+	inspectionsState,
 	MODEL,
 	materialsState,
+	plantState,
 	priya,
 	ROOM_NAME,
 	SITE_DRIVE,
@@ -36,6 +41,7 @@ import {
 	shiftsState,
 	TODAY,
 	tasksState,
+	temporaryWorksState,
 } from './room.ts';
 
 const OUT = process.env.DEMO_OUT ?? 'demo-run.json';
@@ -75,8 +81,12 @@ const session = startSession({
 	goal: GOAL,
 	assistant: ASSISTANT,
 	agents: AGENTS,
+	available: AVAILABLE,
 	repo,
 });
+
+/** The roster as the run starts, before any question composes it. */
+const seatsAtStart = session.seats();
 
 /** Bookkeeping: correlate every activation with the message that caused it. */
 function track(event: SessionEvent, at: string): void {
@@ -124,6 +134,10 @@ function narrate(event: SessionEvent): void {
 		process.stderr.write(`∎ ${m.from} → ${m.to} (${m.covers.from}–${m.covers.through})\n`);
 		process.stderr.write(`  ${m.text.replace(/\n/g, '\n  ')}\n`);
 	}
+	if (event.type === 'message' && isPresence(event.message) && event.message.kind === 'seated') {
+		const m = event.message;
+		process.stderr.write(`+ ${m.from} seated${m.by ? ` by ${m.by}` : ''}\n`);
+	}
 	if (event.type === 'message' && isSpoken(event.message) && !PEOPLE.has(event.message.from)) {
 		const to = event.message.to ? ` → ${event.message.to}` : '';
 		process.stderr.write(`${event.message.from}${to}: ${event.message.text.slice(0, 78)}\n`);
@@ -163,7 +177,9 @@ step('priya opens the room to confirm the pour date for the client');
 const priyaVisit = await visitSession(session, priya);
 await quiescent();
 
-step('priya asks the question she has to answer today; the assistant writes her the answer');
+step(
+	'priya asks the question she has to answer today; the assistant composes the room for it, then writes her the answer',
+);
 await priyaVisit.deliver({ text: 'Can I tell the client Thursday for the Level 3 pour, or not?' });
 await quiescent();
 
@@ -171,14 +187,14 @@ step('priya leaves for a site walk without giving a new date');
 await priyaVisit.leave();
 await quiescent();
 
-step('sam opens it from the deck with a forecast; the assistant writes for a man on a deck');
+step('sam opens it from the deck with a forecast; the products already seated hold what he needs');
 const samVisit = await visitSession(session, sam);
 await samVisit.deliver({
 	text: 'Rain all Thursday morning. I am not pouring into that. What do you need from me to move it?',
 });
 await quiescent();
 
-step('dan opens it to price the move; the assistant writes him the money');
+step('dan opens it to price the move; the plant desk is on call for exactly this');
 const danVisit = await visitSession(session, dan);
 await danVisit.deliver({
 	text: 'What does moving cost, and is there anything of mine holding this up?',
@@ -192,7 +208,7 @@ await quiescent();
 // The proof the design asks for: a follow-up whose answer sits inside a range
 // that has left every seat's context. The seats answer it from their summary
 // and their own APIs, not from the messages the fold replaced.
-step('priya asks a follow-up about a range the seats now read as one message');
+step('priya asks a follow-up about a range the seats now read as one message; the specialists are seated and hear it');
 await priyaBack.deliver({
 	text: 'Remind me what Saturday needs from me before I ring the client.',
 });
@@ -265,7 +281,10 @@ writeFileSync(
 			summaries: finalRecord.filter(isSummary),
 			missedOnReturn: missed,
 			sinceOnReturn,
+			seatsAtStart,
 			seats,
+			reserve: AVAILABLE.map((agent) => ({ name: agent.name, identity: agent.identity })),
+			seatings: finalRecord.filter(isPresence).filter((m) => m.kind === 'seated'),
 			seatSessions,
 			activations,
 			toolCalls: apiLog,
@@ -278,6 +297,9 @@ writeFileSync(
 			tasksAfter: tasksState,
 			deliveriesAfter: materialsState.deliveries,
 			overtimeAfter: shiftsState.overtimeRequests,
+			inspectionsAfter: inspectionsState,
+			hiresAfter: plantState.hires,
+			checksAfter: temporaryWorksState,
 			assistant: {
 				name: ASSISTANT.name,
 				identity: ASSISTANT.identity,
