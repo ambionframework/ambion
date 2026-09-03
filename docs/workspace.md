@@ -553,22 +553,27 @@ filesystem share every file. A write from one is visible to the other at
 once, and two writes to one path from two agents end with the last one.
 
 **`memoryBackend(options)` can seed a filesystem before any agent connects,
-and read one back without an agent at all.** `options.seed` is a list of
-`{ path, text }` files, written in with one `mkdir -p` and one write each
-before the first `connect` resolves. `readFiles()` walks the whole
-filesystem back out the same way, sorted by path. Both close over the one
+and read one back without an agent at all.** `options.seed` is a function,
+`(write: SeedWriter) => Promise<void>`, called once before the first `connect`
+resolves. `SeedWriter` is one method, `writeFile(path, text)`, each call doing
+its own `mkdir -p` first; a seed function reads and writes one file at a
+time — from disk, from a generator, from anywhere — rather than handing
+`memoryBackend` an array it would have to hold in full before it could start.
+`SeedWriter` names none of just-bash's own types, so a seed function commits
+to nothing about what backs the filesystem it is writing into. `readFiles()`
+walks the whole filesystem back out, sorted by path. Both close over the one
 `InMemoryFs` the backend holds, the same instance every `connect` builds a
 `Bash` over, so a host reaches the workspace's files without a tool call or
 an agent to make one — the one thing `directoryBackend` gets for free by
 sitting on a real directory. `memoryBackend`'s return type,
-`MemoryWorkspaceBackend`, extends `WorkspaceBackend` with these two methods;
+`MemoryWorkspaceBackend`, extends `WorkspaceBackend` with `readFiles()`;
 passing it as `defineWorkspace`'s `backend` needs nothing beyond what §7
-already asks for. `readFiles()` walks the whole filesystem, and the first
-`connect` lays just-bash's own coreutils and QuickJS/CPython runtime into it
-as ordinary files under `/bin`, `/usr` and `/proc` — about 190 of them,
-probed. A caller that wants only what it wrote reads `readFiles()` filtered
-to its own path prefix, the way [`examples/site`](../examples/site)'s
-`driveFiles()` keeps to `/site/`.
+already asks for. The first `connect` lays just-bash's own coreutils and
+QuickJS/CPython runtime into the filesystem as ordinary files under `/bin`,
+`/usr` and `/proc` — about 190 of them, probed — so `readFiles()` returns
+those too once any agent has connected. A caller that wants only what it
+wrote reads `readFiles()` filtered to its own path prefix, the way
+[`examples/site`](../examples/site)'s `driveFiles()` keeps to `/site/`.
 
 **`directoryBackend(root)` uses `ReadWriteFs`.** `ReadWriteFs` is the one
 just-bash filesystem that writes through to a real directory (probed: a
@@ -814,8 +819,9 @@ claim this document makes loudly:
 - `directoryBackend` writing through to disk, creating its root, and
   emptying it on destroy (§8);
 - `js-exec` and `python3` running inside `bash`, and `curl` absent (§8);
-- `memoryBackend`'s `seed` landing before the first `connect` resolves, and
-  `readFiles()` reading it and a later write back out, sorted by path (§8);
+- `memoryBackend`'s `seed` function running once, lazily, before the first
+  `connect` or `readFiles()` call, and `readFiles()` reading what it wrote
+  and a later write back out, sorted by path (§8);
 - `WORKSPACE_PARAGRAPH` in a connected agent's system prompt, and absent
   from a plain agent's (§5).
 

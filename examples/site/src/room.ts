@@ -25,8 +25,8 @@ import {
 	defineTool,
 	defineWorkspace,
 	type HumanDefinition,
-	type MemoryBackendFile,
 	memoryBackend,
+	type SeedWriter,
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
 
@@ -52,17 +52,17 @@ const DRIVE_SEED = fileURLToPath(new URL('../drive', import.meta.url));
 /** The scenario's date, which is the diary file every product appends to. */
 export const TODAY = '2026-08-25';
 
-/** The checked-in documents, read off disk once and written into the drive at defineWorkspace. */
-function seedFiles(): MemoryBackendFile[] {
-	return readdirSync(DRIVE_SEED, { recursive: true, withFileTypes: true })
-		.filter((entry) => entry.isFile())
-		.map((entry) => {
-			const full = join(entry.parentPath, entry.name);
-			return { path: `/${full.slice(DRIVE_SEED.length + 1)}`, text: readFileSync(full, 'utf8') };
-		});
+/** Every checked-in document: read one off disk, write it into the drive, move on. */
+async function seedDrive(write: SeedWriter): Promise<void> {
+	const entries = readdirSync(DRIVE_SEED, { recursive: true, withFileTypes: true });
+	for (const entry of entries) {
+		if (!entry.isFile()) continue;
+		const full = join(entry.parentPath, entry.name);
+		await write.writeFile(`/${full.slice(DRIVE_SEED.length + 1)}`, readFileSync(full, 'utf8'));
+	}
 }
 
-const driveBackend = memoryBackend({ seed: seedFiles() });
+const driveBackend = memoryBackend({ seed: seedDrive });
 
 /**
  * The workspace the products connect to. An in-memory filesystem backs it,

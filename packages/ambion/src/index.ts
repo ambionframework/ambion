@@ -36,6 +36,7 @@ export type {
 	MemoryBackendFile,
 	MemoryBackendOptions,
 	MemoryWorkspaceBackend,
+	SeedWriter,
 } from './just-bash.ts';
 // A workspace over a real directory, or the in-memory default with seeding
 // and read-back. Neither import is needed for the in-memory default's own

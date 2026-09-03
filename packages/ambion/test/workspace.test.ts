@@ -567,11 +567,19 @@ describe('the just-bash adapter', () => {
 // -- memoryBackend seeding and reading ---------------------------------------
 
 describe('memoryBackend', () => {
-	it('seeds files before any agent connects, and reads current files back without one', async () => {
-		const backend = memoryBackend({ seed: [{ path: '/site/README.md', text: 'start here\n' }] });
+	it('runs a seed function once, lazily, and reads what it wrote back without an agent', async () => {
+		let calls = 0;
+		const backend = memoryBackend({
+			seed: async (write) => {
+				calls++;
+				await write.writeFile('/site/README.md', 'start here\n');
+			},
+		});
+		expect(calls).toBe(0); // nothing runs until something asks for the filesystem
 		expect(await backend.readFiles()).toEqual([{ path: '/site/README.md', text: 'start here\n' }]);
 		const alpha = await backend.connect(agent('alpha'));
 		await alpha.writeFile('/site/notes.md', 'a note\n');
+		expect(calls).toBe(1); // memoised: connect reused the filesystem readFiles already built
 		// The first `connect` also lays just-bash's own binaries into the shared
 		// filesystem (`docs/workspace.md` §8), so this checks the two site files
 		// among everything else rather than the listing on its own.

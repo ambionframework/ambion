@@ -47,15 +47,31 @@ export const MEMORY_LIMIT_BYTES = 128 * 1024 * 1024;
 
 const inMemory = () => new InMemoryFs(undefined, { maxTotalBytes: MEMORY_LIMIT_BYTES });
 
-/** One file, as a host writes it into a fresh backend or reads it back out. */
+/** One file, as `readFiles` reads it back out. */
 export interface MemoryBackendFile {
 	readonly path: string;
 	readonly text: string;
 }
 
+/**
+ * What a `seed` function writes through. Narrow on purpose: `writeFile` is
+ * the one thing seeding a filesystem needs, and the interface names none of
+ * just-bash's own types, so a caller's seed function commits to nothing about
+ * what backs it.
+ */
+export interface SeedWriter {
+	/** Writes `text` at `path`, creating every missing parent directory first. */
+	writeFile(path: string, text: string): Promise<void>;
+}
+
 export interface MemoryBackendOptions {
-	/** Written into the filesystem, one `mkdir -p` and one write each, before any agent connects. */
-	seed?: readonly MemoryBackendFile[];
+	/**
+	 * Called once, with a `SeedWriter`, before any agent connects. A seed
+	 * function reads and writes one file at a time — from disk, from a
+	 * generator, from wherever — rather than handing over an array this
+	 * backend would otherwise have to hold in full before it can start.
+	 */
+	seed?: (write: SeedWriter) => Promise<void>;
 }
 
 /**
@@ -88,7 +104,7 @@ async function listFiles(fs: IFileSystem): Promise<MemoryBackendFile[]> {
 
 /**
  * The default: an in-memory filesystem that lives as long as the handle.
- * Building it is async when there is a `seed` to write, so `connect` and
+ * Building it is async when there is a `seed` to run, so `connect` and
  * `readFiles` both await one lazily-built, memoised filesystem rather than
  * the handle building it up front.
  */
@@ -96,9 +112,13 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
 	let ready: Promise<InMemoryFs> | undefined;
 	const build = async (): Promise<InMemoryFs> => {
 		const fs = inMemory();
-		for (const file of options.seed ?? []) {
-			await fs.mkdir(posix.dirname(file.path), { recursive: true });
-			await fs.writeFile(file.path, file.text);
+		if (options.seed) {
+			await options.seed({
+				writeFile: async (path, text) => {
+					await fs.mkdir(posix.dirname(path), { recursive: true });
+					await fs.writeFile(path, text);
+				},
+			});
 		}
 		return fs;
 	};
