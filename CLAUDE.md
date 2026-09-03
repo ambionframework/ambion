@@ -26,6 +26,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `examples/site`     | Runnable example                                                                     |
 | `demos/`            | One dated report per merged change — regenerate on the branch, then leave it         |
 | `FOLLOW_WORK.md`    | Work a branch decided not to do, and why it is worth doing                           |
+| `planning/`         | `backlog.md` holds the debt in what is built; `next.md` holds the five to do first   |
 
 ## Thesis
 
