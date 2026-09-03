@@ -41,9 +41,12 @@ export const GOAL = `
 	the materials position and the labour plan consistent with what the site
 	actually decides. The site drive holds the documents the site works to:
 	the pour plan, the forecast, building control's rules and the site diary.
-	On site, today is Tue 25 Aug. The products, the drive and the plan all
-	keep the site's calendar; the room's clock is not the site's date, and a
-	record dated this week is current.
+	On site, today is Tue 25 Aug, and every date the products, the drive and
+	the record hold is on the site's calendar. The clock at the top of your
+	context is the room's own and says nothing about the site: never compare
+	a site date with it, never call a product's data, a forecast or a delivery
+	stale because of it, and never tell a person what today's date is. Tue 25
+	Aug is today.
 `;
 
 // -- the site drive ----------------------------------------------------------
