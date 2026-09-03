@@ -1,10 +1,12 @@
 # Kestrel Yard, Block C
 
 A construction management suite where each product is an agent: a time
-tracker, a task list and a materials tracker. Three people share the
-room — a project manager in the site office, a foreman on the deck with
-a phone, and a quantity surveyor at a cost desk. One assistant writes for all
-three, each the way they read.
+tracker, a task list and a materials tracker. Two specialists are on call in
+the reserve, a building control liaison and the plant desk, and the room's
+assistant seats one when a question turns on what it alone holds. Three
+people share the room — a project manager in the site office, a foreman on
+the deck with a phone, and a quantity surveyor at a cost desk. One assistant
+writes for all three, each the way they read.
 
 Each product holds its own state and its own API and knows nothing of the
 others' internals. It asks them on the record, the way a person does. The
@@ -63,6 +65,30 @@ line to today's diary with `bash`, and `/diary` shows what the products have
 left there. Every product has its own home on the drive, and the diary is
 the one file they all write to.
 
+**The assistant seats who the question needs.** `/who` lists two
+specialists on call and not in the room. Ask "can I promise Thursday for the
+pour?" and watch `· building-control seated by assistant` land before the
+products answer: the assistant read the question and the reserve, judged
+that the date turns on an inspection slot, and seated the one seat that
+holds them. The newcomer wakes on its seating, reads the room as it stands,
+and answers beside the products. The assistant seats eagerly: everyone whose
+identity touches the question, because a seated specialist with nothing to
+add stays quiet for the price of a glance, and one that was never seated
+costs the answer. `/seat` and `/unseat` do the same by hand, and both land
+on the record.
+
+**The assistant seats who the question needs.** `/who` lists two
+specialists on call and not in the room. Ask "can I promise Thursday for the
+pour?" and watch `· building-control seated by assistant` land before the
+products answer: the assistant read the question and the reserve, judged
+that the date turns on an inspection slot, and seated the one seat that
+holds them. The newcomer wakes on its seating, reads the room as it stands,
+and answers beside the products. The assistant seats eagerly: everyone whose
+identity touches the question, because a seated specialist with nothing to
+add stays quiet for the price of a glance, and one that was never seated
+costs the answer. `/seat` and `/unseat` do the same by hand, and both land
+on the record.
+
 **A question opens an exchange.** `— priya asked; the room is working —`
 marks it, and `— the exchange is over (3–7) —` marks the moment the seats stop.
 That is the exchange, and it is the room's own: it opens the same way whoever
@@ -90,14 +116,15 @@ discussion and the products hold the state.
 
 ## The files
 
-| File      | What                                                                                             |
-| --------- | ------------------------------------------------------------------------------------------------ |
-| `room.ts` | The products, their APIs and their state; the drive they share; the people; the assistant        |
-| `main.ts` | The room open in your terminal                                                                   |
-| `demo.ts` | One scripted run, written out as JSON for a report                                               |
-| `drive/`  | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary |
+| File      | What                                                                                                            |
+| --------- | --------------------------------------------------------------------------------------------------------------- |
+| `room.ts` | The products and the specialists on call, their APIs and state; the drive they share; the people; the assistant |
+| `main.ts` | The room open in your terminal                                                                                  |
+| `demo.ts` | One scripted run, written out as JSON for a report                                                              |
+| `drive/`  | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary                |
 
 The contracts are [`docs/agent.md`](../../docs/agent.md),
 [`docs/presence.md`](../../docs/presence.md),
-[`docs/assistant.md`](../../docs/assistant.md) and
-[`docs/workspace.md`](../../docs/workspace.md).
+[`docs/assistant.md`](../../docs/assistant.md),
+[`docs/workspace.md`](../../docs/workspace.md) and
+[`docs/roster.md`](../../docs/roster.md).

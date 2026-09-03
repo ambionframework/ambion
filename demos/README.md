@@ -14,8 +14,10 @@ and nobody edits it again to match later code. An old report that describes an
 API which no longer exists is doing its job: it shows what the design was
 before the change, and why the change happened.
 
-Every report is generated output. A script writes the HTML from the run's
-JSON. Nobody edits the numbers by hand.
+Every report is generated output. `scripts/report.mjs` writes the HTML from
+the run's JSON, over the stylesheet beside it. Nobody edits the numbers by
+hand; the prose around them belongs to the change the run was made for, and
+moves with it.
 
 Name a file `YYYY-MM-DD-<slug>.html`, where the slug names what the run
 showed.
@@ -30,6 +32,7 @@ showed.
 | 2026-08-31 | [How Each Person Reads](2026-08-31-how-each-person-reads.html)     | sonnet-5   | [artifact](https://claude.ai/code/artifact/203189de-f717-4e0e-9793-b991947349de) |
 | 2026-09-02 | [The Site Drive](2026-09-02-the-site-drive.html)                     | sonnet-5   | [artifact](https://claude.ai/code/artifact/bb026bd2-1ce3-4aeb-b496-68416695bb63) |
 | 2026-09-03 | [One Assistant, Three Readers](2026-09-03-one-assistant-three-readers.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/52643e13-6b26-4311-8ab9-f1e9d9cea242) |
+| 2026-09-03 | [Who the Question Needs](2026-09-03-who-the-question-needs.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/8cbbe725-691f-449f-828e-479221fc9bde) |
 
 ## What each run changed
 
@@ -146,3 +149,41 @@ activation read, 3,949 characters folded against 10,558 unfolded. The
 summaries came out at 112 words on average against 94 and 100 before, and
 that is the number to watch: one seat with one set of instructions may write
 longer than three seats each tuned to a person did.
+
+**Who the Question Needs.** The run that the roster was built against. The
+same suite and the same three people, and the room now holds three
+specialists on call in a reserve: a building control liaison, the plant
+desk and the temporary works coordinator. `startSession` takes them as
+`available`, and when a question opens an exchange the assistant reads it
+beside the seated products and seats every specialist whose identity the
+question touches. Priya's first question seated all three, and the three
+questions after it found the reserve empty and woke no composing
+activation. Every seating is a message on the record, stamped
+`by: assistant`, and every newcomer's first activation was its seating: it
+read the question and the answers so far, and spoke from its own API. Four
+questions still closed into four messages, 105 words on average, and the
+ranges they cover hold the seatings and what the specialists said.
+
+What it cost. One composing activation cost $0.01 of the run's $1.60. The
+three seated specialists then cost what any seat costs, 40 activations and
+18 messages between them, and the lock refused 63 says against 14 in the
+run before this branch: three more seats answering in parallel is three
+more seats racing. The first seat context was 1,535 characters and the last
+7,893, with three exchanges folded, and no seat context carried the reserve.
+
+Four runs came before it, and the report records what each one changed.
+The first put two specialists in reserve, and the assistant seated both on
+the first question, so the temporary works coordinator went into the
+reserve to give the later questions a real choice. The second had seats
+comparing site dates with the clock at the top of their context and
+calling a forecast stale, so the goal now says the clock is the room's own.
+The third steered the products' answers into the composing activation,
+where the assistant weighed them and drafted a close it had no hand to
+deliver; the runtime now keeps steers out of a composing activation, and a
+test holds it there. The fourth asked the assistant to seat only what a
+question turned on, and it left the temporary works coordinator out of the
+first question, where the check it holds was part of the answer; the
+runtime now asks the assistant to seat everyone a question touches, on the
+argument that a seated specialist with nothing to add costs one glance and
+a missing one costs the answer, and the cap on seatings is the reserve
+itself.

@@ -21,6 +21,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `docs/presence.md`  | Design contract for presence and visits — read with `agent.md`                       |
 | `docs/assistant.md` | Design contract for the assistant, the room's counterpart to the people in it        |
 | `docs/workspace.md` | Design contract for the workspace an agent's tools reach into — read with `agent.md` |
+| `docs/roster.md`    | Design contract for a roster that changes while the room runs — read with `agent.md` |
 | `docs/toolchain.md` | Build, CI, release — read before changing `.github/`, `scripts/`, root configs       |
 | `examples/site`     | Runnable example                                                                     |
 | `demos/`            | One dated report per merged change — regenerate on the branch, then leave it         |

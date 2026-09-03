@@ -215,6 +215,9 @@ export type Message = Spoken | Presence | Summary;
 
 `Summary` is the third kind, and it belongs to [`assistant.md`](assistant.md): the
 assistant writes it, nobody speaks it, and it opens and closes no visit.
+`Presence` gains two more changes, `seated` and `unseated`, for an agent
+that joins or leaves the roster while the room runs. They route as this
+section says, and [`roster.md`](roster.md) §3 specifies them.
 
 Every rule of the core applies to a presence message unchanged, and that is
 the whole reason for this shape.

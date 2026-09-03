@@ -43,7 +43,6 @@ real machine adds.
 identity comes from the host, which authenticates them and vouches for the
 name it passes (`presence.md` §3). An agent has no visit to hold a
 credential. A workspace provisions one for it, inside `connect` (§7).
-
 **The boundary covers the sandbox and stops there.** A tool call that
 leaves the workspace — an external API, a secret, another service — needs
 a separate mechanism: a credentials provider paired with a sidecar proxy,
@@ -67,7 +66,8 @@ survive past that session.
 
 **A session connects to no workspace of its own.** A workspace is optional
 per agent (§3). One room may seat agents that connect to different
-workspaces beside agents that connect to none.
+workspaces beside agents that connect to none, and hold agents in reserve
+the same way ([`roster.md`](roster.md) §1).
 
 ---
 
@@ -199,8 +199,8 @@ Refusing it at `startSession` catches that at the boundary where it is
 written.
 
 **`startSession` sees no workspace.** It takes what `agent.md` §5 lists —
-a name, its agents, an optional goal, `streamFn` and `repo` — and nothing
-changes there.
+a name, its assistant, its agents, the agents it holds in reserve, an
+optional goal, `streamFn` and `repo` — and nothing changes there.
 
 ---
 

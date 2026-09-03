@@ -116,14 +116,16 @@ Five functions build a room, and four verbs run it.
 | `defineHuman`      | Names a person: an identity the agents read and address, and how they read, which the assistant reads.           |
 | `defineTool`       | Declares what an agent can do beyond speaking. Pi's own tool shape, behind one import.                           |
 | `defineWorkspace`  | Names a shared filesystem and shell that an agent's tools reach into. Durable by its name; in memory by default. |
-| `startSession`     | Brings up a named room from its agents, its assistant and a goal.                                                |
+| `startSession`     | Brings up a named room from its assistant, its agents, the agents it holds in reserve, and a goal.               |
 | `visitSession`     | Puts a person in a running room. Delivering belongs to the visit.                                                |
 | `readSession`      | Reads the record between runs. Nothing stands up, nothing to bill.                                               |
 | `stopSession`      | Takes the room down.                                                                                             |
 | `destroyWorkspace` | Retires a workspace for good, files included.                                                                    |
 
 `seated(agent, attention)` chooses what wakes a seat; `passive` and
-`attentive` name the two points a room asks for most. `settled()` resolves
+`attentive` name the two points a room asks for most. `available` holds
+agents in reserve, and the assistant seats the ones a question needs;
+`session.seat` and `session.unseat` do the same by hand. `settled()` resolves
 when the agents stop and `quiet()` when the assistant has finished too.
 `subscribe` streams every room-level fact to the host: each message, each
 activation, each refused race, each error, and both edges of every
@@ -133,7 +135,9 @@ The contracts: [`docs/agent.md`](docs/agent.md) for the core,
 [`docs/exchange.md`](docs/exchange.md) for the exchange,
 [`docs/presence.md`](docs/presence.md) for people and visits,
 [`docs/assistant.md`](docs/assistant.md) for the assistant,
-[`docs/workspace.md`](docs/workspace.md) for the workspace.
+[`docs/workspace.md`](docs/workspace.md) for the workspace, and
+[`docs/roster.md`](docs/roster.md) for a roster that changes while the room
+runs.
 
 ## Example
 

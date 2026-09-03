@@ -57,6 +57,9 @@ it refuses a say. Two things make it the seat it is, and both are data:
 - The close of an exchange wakes it, for the person who owns that exchange,
   and that activation holds one tool, `summarise`, bound to the range it
   must stand for.
+- The open of an exchange wakes it too, when the room holds agents in
+  reserve, and that activation holds one tool, `seat`, bound to the
+  reserve. [`roster.md`](roster.md) is the contract for it.
 
 A seat carries none of that. Which seat is the assistant, who is owed a
 message, and whom it is drafting for now are held by the assistant itself
@@ -443,6 +446,12 @@ function wakes(seat, target, message, fromAssistant) {
 author covers everything the assistant writes, so one line enforces the whole of
 §12's rule: nothing the assistant writes can start work.
 
+**The guard has one exception, and it is written into the line.** A
+seating the assistant commits wakes the seat it names, and nobody else
+([`roster.md`](roster.md) §3). That is the one activation the assistant
+can cause: a seat from the reserve the host attached, woken to take its
+turn in the exchange it was seated for. A summary still wakes nobody.
+
 Every seat still **reads** everything the assistant writes. Waking and reading
 were always different questions.
 
@@ -453,15 +462,17 @@ were always different questions.
 The assistant is the people's counterpart, and the pull to give it more will
 be constant. One rule decides whether the assistant is still an assistant:
 
-> **The assistant shapes, and never wakes.** It may steer a seat that is already
-> working. It may never activate one, never call a tool that changes a
-> product's state, and never speak under a person's name.
+> **The assistant composes and consolidates, and never speaks in the
+> room.** It seats a colleague from the reserve at the open of an exchange,
+> and writes the one message at the close. It may never say anything, never
+> call a tool that changes a product's state, never unseat a colleague, and
+> never speak under a person's name.
 
-§11 enforces the first half in one line, because the guard is on the
-author, whatever it wrote. The rest is checkable by reading a definition:
-the assistant carries no tools of its own, and `startSession` refuses one that
-does. What it holds is the runtime's, and the runtime hands it nothing
-that reaches a product.
+§11 enforces the waking half in one line, because the guard is on the
+author, whatever it wrote, with the one exception §11 names. The rest is
+checkable by reading a definition: the assistant carries no tools of its
+own, and `startSession` refuses one that does. What it holds is the
+runtime's, and the runtime hands it nothing that reaches a product.
 
 What the rule forbids, permanently:
 
@@ -471,15 +482,22 @@ What the rule forbids, permanently:
   assistant. No message on the record ever bears a person's name because the
   assistant wrote it — the runtime stamps `from`, so machinery enforces this.
   That is rule 7, at the one place it is most tempting to bend.
-- **Causing work.** A room that woke because the assistant wanted
-  something is a room being run by a proxy.
+- **Speaking.** The assistant holds no `say` at any activation. A room
+  where the assistant answers is a room with one more product in it, and
+  one that no team owns.
+- **Running the room.** The assistant seats, and the seated agent decides
+  for itself whether to speak, to whom, and which colleague to call in. The
+  assistant never directs a say, never unseats, and never defines an agent.
+  A room that woke for anything the assistant wrote beyond a seating is a
+  room being run by a proxy.
 
-The runtime implements one function: consolidate. The assistant writes the
-summary of an exchange, and the person's preferences shape that summary to
-how they read. It writes by calling a tool, and the tools it holds
-are the runtime's own: they reach the record and nothing else. A tool into
-a product's state is what this rule forbids, and what `startSession`
-refuses.
+The runtime implements two functions: compose and consolidate. The
+assistant seats who a question needs, from definitions the host holds in
+reserve, and writes the summary of the exchange, shaped by the
+person's preferences to how they read. It acts by calling a tool, and the
+tools it holds are the runtime's own: they reach the record and the roster
+and nothing else. A tool into a product's state is what this rule forbids,
+and what `startSession` refuses.
 
 ---
 
@@ -609,11 +627,15 @@ runtime says what a summary is for. A room that asked for all three in the
 definition would carry a copy of every person in one prompt.
 
 **What the assistant is given.** A model, instructions, and one tool of the
-runtime's: `summarise({ text })`. It writes to the record and nothing
-else — no `to`, because a summary is always addressed to the person whose
-exchange closed. `startSession` refuses an assistant that carries tools of
-its own, so §12's rule — never call a tool that changes a product's state —
-stays a checkable fact about the definition.
+runtime's per activation. At the close it is `summarise({ text })`, which
+writes to the record and nothing else — no `to`, because a summary is
+always addressed to the person whose exchange closed. At the open it is
+`seat({ name })`, which moves one agent from the reserve to the roster and
+commits the seating to the record ([`roster.md`](roster.md) §4). No
+activation holds both, and none holds a `say`. `startSession` refuses an
+assistant that carries tools of its own, so §12's rule — never call a tool
+that changes a product's state — stays a checkable fact about the
+definition.
 
 **Writing is a tool, and silence is a decision.** An activation that ends
 without calling `summarise` leaves the range whole, and every reader
@@ -651,9 +673,13 @@ Each boundary is stated so a later change has to argue with it.
   [`presence.md`](presence.md) §8's business, and its anchor is untouched.
   Arriving opens no exchange, and a summary stands for one exchange (§3),
   so no summary ever reaches back over what somebody missed.
-- **Nothing convenes.** There is no working group and nothing has members.
-- **Activation triggers stay as they were.** No seat wakes because the
-  room went quiet.
+- **The assistant seats from the reserve, and from nowhere else.** The
+  host decides what may ever be in the room by writing `available`. The
+  assistant defines nothing and unseats nobody.
+  [`roster.md`](roster.md) §2, §7.
+- **Activation triggers stay as they were, with one addition.** No seat
+  wakes because the room went quiet. A seat wakes because the assistant
+  seated it, and that is the one activation the assistant causes. §11.
 - **One clean answer passes through untouched.** It reaches the person as
   it was given, and anything outside an exchange stays as it landed.
 - **The record keeps every message.** Only a seat's context changes. §8.

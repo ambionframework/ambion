@@ -29,8 +29,9 @@ nothing, and rung 3 pays for an activation.
   argument against is that a preference written for a summary may read
   badly as a filter on what a product says.
 - **Which invariant it touches.** Three hold today: the assistant is seated
-  `none`, `handsFor` gives it empty hands outside a close, and `wakes`
-  refuses to wake anybody for what the assistant writes. A steer that reaches a
+  `none`, `handsFor` gives it empty hands outside an open or a close, and
+  `wakes` refuses to wake anybody for what the assistant writes, with the one
+  exception of a seat it seats. A steer that reaches a
   running seat as a `[new]` line touches the third, because the room would
   carry the assistant's words to a seat that did not ask for them.
 - **What it may steer.** Rule 2 says what arrives mid-activation is steered
@@ -44,6 +45,48 @@ nothing, and rung 3 pays for an activation.
 [`session.ts`](packages/ambion/src/session.ts), `wakes` in
 [`seat.ts`](packages/ambion/src/seat.ts), the assistant's paragraphs in
 [`render.ts`](packages/ambion/src/render.ts).
+
+## Thinning the roster: the assistant unseats, and a seat leaves
+
+**What.** [`docs/roster.md`](docs/roster.md) §5 gives the host `unseat` and
+gives the assistant `seat` alone. Two ways to take a seat back off the roster
+while the room runs, and both return the agent to the reserve:
+
+- An `unseat` in the assistant's hands, at the open of an exchange beside
+  `seat`, to take a colleague out of an exchange the colleague is not helping.
+- A `leave` in the seat's own hands: a seated specialist that judges its part
+  done ends its activation with a tool call that takes it back to the reserve,
+  the way `say` is a tool and silence is a decision.
+
+**Why.** A room that only grows over a day pays for every seat it added at
+every message that follows. The live run in
+[`demos/2026-09-03-who-the-question-needs.html`](demos/2026-09-03-who-the-question-needs.html)
+seated all three specialists by the second question and ended with six seats
+answering every message; the lock refused 45 says against 14 in the run
+before, and nothing thinned the roster. The assistant reads the question and
+the reserve at the open; it could read the roster the same way. A seat knows
+better than anybody when its own part is done.
+
+**What it needs deciding.**
+
+- **What an unseat does to an activation in flight.** The host's `unseat`
+  aborts it. An assistant that aborts a colleague mid-say is the destructive
+  act `roster.md` §5 keeps out of its hands, so an assistant's unseat would
+  wait for the seat to go idle, which is a second mechanism.
+- **Whether a seat unseated mid-exchange counts at the close.** The
+  threshold reads the record, so it does; whether that is right when the
+  assistant removed the speaker is an argument to have.
+- **Whether the assistant may unseat what the host seated at start.** The
+  starting composition is the host's; an assistant that can undo it is a
+  proxy for the host. The same question holds for a seat that leaves: an
+  agent seated at start has no reserve to return to.
+- **What a seat's `leave` is on the record.** An `unseated` with the seat
+  itself in `by` fits the shape; whether a seat that leaves mid-exchange
+  still counts at the close follows the threshold, which reads the record.
+
+**Where.** `seat` and `unseat` in
+[`session.ts`](packages/ambion/src/session.ts), the composing activation in
+[`assistant.ts`](packages/ambion/src/assistant.ts).
 
 ## Reseating: attention that a running room can change
 
@@ -75,7 +118,8 @@ lets the assistant speak_ — rather than a code change in the runtime.
 - **Who may do it.** A host, certainly. An agent, never — a room where an
   agent can widen its own attention is a room that can make itself expensive.
 - **What the assistant holds when something else wakes it.** Nothing, today:
-  `handsFor` gives the assistant the `summarise` tool for the activation a close
+  `handsFor` gives the assistant `seat` for the activation an open wakes it for,
+  `summarise` for the activation a close
   woke it
   for, and empty hands otherwise, so a wider attention alone buys a seat that
   reads the room and ends its activation. Rung 3 is a `say` added there on purpose,

@@ -1,10 +1,12 @@
 /**
  * The room, open in your terminal.
  *
- * Three products wait in it. You visit as one of three people, and can open a
- * second and third visit to watch presence work with more than one of you in
- * the room at once. The room seats one assistant: ask a question, let the room
- * work it out, and read the one message the assistant writes you when it goes quiet.
+ * Three products wait in it, and two specialists are on call in the reserve.
+ * You visit as one of three people, and can open a second and third visit to
+ * watch presence work with more than one of you in the room at once. The room
+ * seats one assistant: ask a question, watch it seat a specialist when the
+ * question needs one, let the room work it out, and read the one message the
+ * assistant writes you when it goes quiet.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm start   (from examples/site)
  */
@@ -22,9 +24,25 @@ import {
 	type Visit,
 	visitSession,
 } from '@ambionframework/ambion';
-import { AGENTS, ASSISTANT, apiLog, driveFiles, GOAL, MODEL, PEOPLE, ROOM_NAME } from './room.ts';
+import {
+	AGENTS,
+	ASSISTANT,
+	AVAILABLE,
+	apiLog,
+	driveFiles,
+	GOAL,
+	MODEL,
+	PEOPLE,
+	ROOM_NAME,
+} from './room.ts';
 
-const session = startSession({ name: ROOM_NAME, goal: GOAL, assistant: ASSISTANT, agents: AGENTS });
+const session = startSession({
+	name: ROOM_NAME,
+	goal: GOAL,
+	assistant: ASSISTANT,
+	agents: AGENTS,
+	available: AVAILABLE,
+});
 
 /** Who is in the room, by name. A person may be here more than once. */
 const visits = new Map<string, Visit>();
@@ -34,6 +52,9 @@ const colours: Record<string, string> = {
 	'time-tracker': '\x1b[34m',
 	'task-management': '\x1b[32m',
 	'materials-tracker': '\x1b[33m',
+	'building-control': '\x1b[95m',
+	'plant-hire': '\x1b[93m',
+	'temporary-works': '\x1b[37m',
 	priya: '\x1b[36m',
 	sam: '\x1b[35m',
 	dan: '\x1b[31m',
@@ -146,6 +167,11 @@ const WAKES: Record<Attention, string> = {
 };
 
 function who(): void {
+	const seated = new Set(session.seats().map((seat) => seat.name));
+	for (const agent of AVAILABLE) {
+		if (seated.has(agent.name)) continue;
+		console.log(`  ${paint(agent.name, agent.name)} (on call, in the reserve): ${agent.identity}`);
+	}
 	for (const seat of session.seats()) {
 		if (seat.kind === 'agent') {
 			const assistant = seat.assistant ? ', the assistant' : '';
@@ -164,7 +190,7 @@ const span = (m: SummaryMessage) => `${m.covers.from}–${m.covers.through}`;
 function line(m: Message): string {
 	if (isSummary(m)) return `[${m.seq}] ∎ ${m.from} → ${m.to} (${span(m)}): ${m.text}`;
 	if (isSpoken(m)) return `[${m.seq}] ${m.from}${m.to ? ` → ${m.to}` : ''}: ${m.text}`;
-	return `[${m.seq}] · ${m.from} ${m.kind}`;
+	return `[${m.seq}] · ${m.from} ${m.kind}${m.by ? ` by ${m.by}` : ''}`;
 }
 
 async function record(): Promise<void> {
@@ -223,6 +249,20 @@ async function leave(name: string): Promise<void> {
 	rl.setPrompt(`${speaking} › `);
 }
 
+async function seatByHand(name: string): Promise<void> {
+	const agent = AVAILABLE.find((a) => a.name === name);
+	if (!agent) return console.log(`${red}no such specialist on call: ${name}${reset}`);
+	await session.seat(agent);
+}
+
+async function unseat(name: string): Promise<void> {
+	const agent = [...AGENTS, ...AVAILABLE]
+		.map((seat) => ('agent' in seat ? seat.agent : seat))
+		.find((a) => a.name === name);
+	if (!agent) return console.log(`${red}no such agent: ${name}${reset}`);
+	await session.unseat(agent);
+}
+
 async function quit(): Promise<void> {
 	for (const name of [...visits.keys()]) await leave(name);
 	await stopSession(session);
@@ -241,6 +281,8 @@ const commands = new Map<string, (arg: string) => void | Promise<void>>(
 		'/summaries': summaries,
 		'/join': join,
 		'/leave': leave,
+		'/seat': seatByHand,
+		'/unseat': unseat,
 		'/as': (name: string) => {
 			if (!visits.has(name))
 				return console.log(`${red}${name} is not here — /join ${name} first${reset}`);

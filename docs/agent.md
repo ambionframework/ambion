@@ -19,7 +19,8 @@ Four documents build on this core and are also shipped:
 work; [`presence.md`](presence.md) puts people in a running room;
 [`assistant.md`](assistant.md) adds the assistant every room seats; and
 [`workspace.md`](workspace.md) gives an agent's tools a boundary to reach
-into.
+into. A fifth, [`roster.md`](roster.md), lets the roster change while the
+room runs: it changes two rules below and says which.
 
 ---
 
@@ -202,11 +203,14 @@ identity follow.
 whenever `'weekly'` is read, for as long as the storage lives, whether or
 not anything is running.
 
-**The run belongs to `startSession`.** The agents passed are the room's
-composition for this run. A name can be started again with a different
-roster, and the record still shows who said what, stamped at the time it
-landed. A long-lived room is many runs over one record, and `readSession`
-reaches the record between them.
+**The run belongs to `startSession`.** The assistant, the agents passed,
+and the agents held in reserve are the room's composition for this run. A
+name can be started again with a different composition, and the record
+still shows who said what, stamped at the time it landed. A long-lived
+room is many runs over one record, and `readSession` reaches the record
+between them. `agents` may be empty: a room that starts with the assistant
+alone seats what a question needs from its reserve
+([`roster.md`](roster.md) §1).
 
 **One run per name.** `startSession` refuses a name already running in this
 process. Two live rooms over one record would each replay it, each append
@@ -232,11 +236,12 @@ type Message =
       text: string;
     }
   | {
-      kind: 'arrived' | 'left';
+      kind: 'arrived' | 'left' | 'seated' | 'unseated';
       seq: number;
       at: string;
-      from: string; // stamped from the visit the runtime observed
-      identity?: string; // on 'arrived' alone: how the room knew them
+      from: string; // the participant whose presence changed — stamped by the runtime
+      identity?: string; // on 'arrived' and 'seated': how the room knew them
+      by?: string; // on 'seated': the assistant, when it did the seating
     }
   | {
       kind: 'summary';
@@ -249,11 +254,13 @@ type Message =
     };
 ```
 
-The second kind carries no `text`, because the person said nothing.
-[`presence.md`](presence.md) specifies it. The third is written by the assistant
-when an exchange closes, and nobody spoke it; [`assistant.md`](assistant.md)
-specifies it. Every rule below applies to all three kinds unchanged, which
-is why the record holds one union and one sequence.
+The second kind carries no `text`, because the participant said nothing.
+[`presence.md`](presence.md) specifies it for a person, and
+[`roster.md`](roster.md) for an agent seated or unseated while the room
+runs. The third is written by the assistant when an exchange closes, and
+nobody spoke it; [`assistant.md`](assistant.md) specifies it. Every rule
+below applies to all three kinds unchanged, which is why the record holds
+one union and one sequence.
 
 Beyond identity, the mechanics are eight rules. The first six are the
 room's routing and voice; all of the routing is one function, `dispatch` in
@@ -273,6 +280,12 @@ may also be directed: `visit.deliver({ to, text })` and `say({ to })`
 activate exactly the named participant, waking it however narrowly it is
 seated. `to` is a participant handle; directed at a human it addresses the
 reader and wakes nothing.
+
+The routing excludes a message's author, and for every kind the record
+held until [`roster.md`](roster.md) the author is `from`. A seating is the
+one message whose author and subject differ: `by` wrote it, or nobody did
+when the host seated by hand, and `from` is the seat it names. The routing
+excludes the author and wakes the subject ([`roster.md`](roster.md) §3).
 
 **2. Whatever arrives mid-activation is steered in, and working views reset at
 idle.** Replies and deliveries alike, directed or undirected: each arrival
@@ -341,8 +354,8 @@ who sits out — one widening scale, from the narrowest:
 - `none` — nothing said in the room reaches it, and it cannot be addressed:
   the runtime refuses a directed say to it, so no message waits unread. The seat that is
   present and unreachable, waiting for something other than a message. The
-  assistant sits here ([`assistant.md`](assistant.md)), woken by the close of an
-  exchange and by nothing else.
+  assistant sits here ([`assistant.md`](assistant.md)), woken by the open
+  and the close of an exchange and by nothing else.
 - `named` — hears a message addressed to it, seated as `passive(archivist)`.
   The expert in the corner: hearing nothing, costing nothing, until someone
   asks.
@@ -360,10 +373,12 @@ composition asks for it.
 
 The routing is the scale, and reads as one line (`wakes` in `seat.ts`):
 every message has a **reach** — `named` for a directed say, `broadcast` for
-anything else said, `presence` for somebody arriving or leaving — and a
-seat wakes when its attention is at least that wide. A directed message
-additionally wakes the one it names and nobody else, which is what makes it
-a focusing act.
+anything else said, `presence` for somebody arriving or leaving, or a
+colleague seated or unseated — and a seat wakes when its attention is at
+least that wide. A message that names a seat additionally wakes that seat,
+however narrowly it is seated: a directed say names the one it addresses
+and wakes nobody else, which is what makes it a focusing act, and a seating
+names the seat it seats ([`roster.md`](roster.md) §3).
 
 Both are readable from `session.seats()`, so a seat that is `named` and
 running is describable, which one enum could not do. Attention belongs to

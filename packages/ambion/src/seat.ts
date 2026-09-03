@@ -33,6 +33,10 @@ export interface SeatRuntime {
 	activation?: Activation;
 	/** The seat's own downstream Pi session, opened once and kept for the run. */
 	piSeat?: Promise<PiSession>;
+	/** Seated after the room started, so `stop` unseats it and the record says so. */
+	added?: true;
+	/** Seated from the reserve, so an unseat returns it there. */
+	reserved?: true;
 }
 
 /** Whether this seat is taking an activation now. Runtime state, not a seating choice. */
@@ -54,10 +58,12 @@ function reachOf(message: Message): Attention {
 }
 
 /**
- * One rule, read off the scale: a seat wakes when its attention is at least as
- * wide as the message's reach — and a directed message additionally wakes the
- * one it names and nobody else. Rule 1 routes, rule 6 decides who sits out,
- * and a presence message is routed like any other.
+ * One rule, read off the scale, in three lines. A seat the message names wakes,
+ * however narrowly it is seated: a directed say names the one it addresses, and
+ * a seating names the seat it seats. Everybody else wakes when their attention
+ * is at least as wide as the message's reach — and a directed say reaches
+ * nobody else at all. Rule 1 routes, rule 6 decides who sits out, and a
+ * presence message is routed like any other.
  */
 export function wakes(
 	seat: SeatRuntime,
@@ -65,14 +71,16 @@ export function wakes(
 	message: Message,
 	fromAssistant: boolean,
 ): boolean {
-	// Nothing an assistant writes wakes anybody: a room that woke because somebody's
-	// assistant wanted something is a room run by a proxy. The guard is on the
-	// author rather than on what it wrote, so it holds for anything an assistant
-	// ever writes. Every seat still reads it.
-	if (fromAssistant) return false;
+	// Nothing the assistant writes wakes anybody, with one exception written
+	// into the line: a seating it committed wakes the seat it names. That is the
+	// one activation the assistant can cause. The guard is on the author rather
+	// than on what it wrote, so it holds for anything else it ever writes, and
+	// every seat still reads it.
+	if (fromAssistant) return message.kind === 'seated' && seat === target;
+	if (seat === target) return true;
 	const reach = reachOf(message);
 	if (WIDTH[seat.attention] < WIDTH[reach]) return false;
-	return reach === 'named' ? seat === target : true;
+	return reach !== 'named';
 }
 
 /**
