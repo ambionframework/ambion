@@ -84,6 +84,11 @@ the seats, because a seat holds the activation it is taking, so there is no
 count beside them to keep in step. `through` is the record as it stood at
 that moment, so a closed exchange names the range it turned out to hold.
 
+A question that wakes no seat has no seat to stop, so the room runs the
+same check once the question is routed: nothing is working, so the
+exchange closes at once, holding the question alone
+([`roster.md`](roster.md) §6).
+
 **What lands while it is open steers it and changes nothing.** The owner,
 the range, and who the answer belongs to all stay fixed. A second question
 from the same person, or a word from somebody else, reaches the seats
@@ -164,8 +169,11 @@ controls):
 
 The two differ because the assistant is a seat like any other, and its
 activation counts. The assistant writing about an exchange is not the room
-still working on it, so the assistant's own activation closes no exchange,
-and the exchange's end stays fixed.
+still working on it, so a drafting activation closes no exchange, and the
+exchange's end stays fixed. The assistant composing the room for an
+exchange is the room working on it, so `settled()` waits for a composing
+activation ([`roster.md`](roster.md) §4). That is the one distinction the
+room draws about its assistant.
 
 **The order at the close is fixed.** `settled()` resolves, then
 `exchange_closed`, then whatever is written about the exchange, then

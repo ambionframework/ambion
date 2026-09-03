@@ -45,6 +45,33 @@ nothing, and rung 3 pays for an activation.
 [`seat.ts`](packages/ambion/src/seat.ts), the assistant's paragraphs in
 [`render.ts`](packages/ambion/src/render.ts).
 
+## Letting the assistant unseat
+
+**What.** [`docs/roster.md`](docs/roster.md) §5 gives the host `unseat` and
+gives the assistant `seat` alone. An `unseat` in the assistant's hands would
+let it take a colleague out of an exchange the colleague is not helping.
+
+**Why.** A room that only grows over a day pays for every seat it added at
+every message that follows. The assistant reads the question and the reserve
+at the open; it could read the roster the same way and thin it.
+
+**What it needs deciding.**
+
+- **What an unseat does to an activation in flight.** The host's `unseat`
+  aborts it. An assistant that aborts a colleague mid-say is the destructive
+  act `roster.md` §5 keeps out of its hands, so an assistant's unseat would
+  wait for the seat to go idle, which is a second mechanism.
+- **Whether a seat unseated mid-exchange counts at the close.** The
+  threshold reads the record, so it does; whether that is right when the
+  assistant removed the speaker is an argument to have.
+- **Whether the assistant may unseat what the host seated at start.** The
+  starting composition is the host's; an assistant that can undo it is a
+  proxy for the host.
+
+**Where.** `seat` and `unseat` in
+[`session.ts`](packages/ambion/src/session.ts), the composing activation in
+[`assistant.ts`](packages/ambion/src/assistant.ts).
+
 ## Reseating: attention that a running room can change
 
 **What.** A seat's attention is chosen when the agent is seated and never
