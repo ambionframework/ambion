@@ -43,14 +43,6 @@ real machine adds.
 identity comes from the host, which authenticates them and vouches for the
 name it passes (`presence.md` §3). An agent has no visit to hold a
 credential. A workspace provisions one for it, inside `connect` (§7).
-
-**A workspace also knows which agents this process attached to it.** A
-definition that names a workspace is recorded on the handle, behind the
-brand, for the life of the process. A room that names the workspace reads
-those definitions as its reserve, and its assistant seats from them.
-[`roster.md`](roster.md) §2 is the contract for the reserve, and it is not
-yet shipped.
-
 **The boundary covers the sandbox and stops there.** A tool call that
 leaves the workspace — an external API, a secret, another service — needs
 a separate mechanism: a credentials provider paired with a sidecar proxy,
@@ -74,9 +66,8 @@ survive past that session.
 
 **A session connects to no workspace of its own.** A workspace is optional
 per agent (§3). One room may seat agents that connect to different
-workspaces beside agents that connect to none. A room may name one
-workspace to compose from ([`roster.md`](roster.md) §1); it reads the
-agents attached to it and runs no `connect`, so it holds no environment.
+workspaces beside agents that connect to none, and hold agents in reserve
+the same way ([`roster.md`](roster.md) §1).
 
 ---
 
@@ -207,11 +198,9 @@ its own. The field would be live in the definition and inert at runtime.
 Refusing it at `startSession` catches that at the boundary where it is
 written.
 
-**`startSession` connects to no workspace.** It takes what `agent.md` §5
-lists — a name, its agents, its assistant, an optional goal, `streamFn` and
-`repo` — and one optional `workspace`, which names where the room composes
-from ([`roster.md`](roster.md) §1). The room reads that workspace's
-attached definitions and never calls `connect`.
+**`startSession` sees no workspace.** It takes what `agent.md` §5 lists —
+a name, its assistant, its agents, the agents it holds in reserve, an
+optional goal, `streamFn` and `repo` — and nothing changes there.
 
 ---
 

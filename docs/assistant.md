@@ -57,9 +57,9 @@ it refuses a say. Two things make it the seat it is, and both are data:
 - The close of an exchange wakes it, for the person who owns that exchange,
   and that activation holds one tool, `summarise`, bound to the range it
   must stand for.
-- The open of an exchange wakes it too, when the room names a workspace
-  with agents in reserve, and that activation holds one tool, `seat`,
-  bound to the reserve. [`roster.md`](roster.md) is the contract for it,
+- The open of an exchange wakes it too, when the room holds agents in
+  reserve, and that activation holds one tool, `seat`, bound to the
+  reserve. [`roster.md`](roster.md) is the contract for it,
   and it is not yet shipped.
 
 A seat carries none of that. Which seat is the assistant, who is owed a
@@ -493,8 +493,8 @@ What the rule forbids, permanently:
   room being run by a proxy.
 
 The runtime implements two functions: compose and consolidate. The
-assistant seats who a question needs, from definitions the host attached
-to the workspace, and writes the summary of the exchange, shaped by the
+assistant seats who a question needs, from definitions the host holds in
+reserve, and writes the summary of the exchange, shaped by the
 person's preferences to how they read. It acts by calling a tool, and the
 tools it holds are the runtime's own: they reach the record and the roster
 and nothing else. A tool into a product's state is what this rule forbids,
@@ -675,8 +675,8 @@ Each boundary is stated so a later change has to argue with it.
   Arriving opens no exchange, and a summary stands for one exchange (§3),
   so no summary ever reaches back over what somebody missed.
 - **The assistant seats from the reserve, and from nowhere else.** The
-  host decides what may ever be in the room by deciding what names the
-  workspace. The assistant defines nothing and unseats nobody.
+  host decides what may ever be in the room by writing `available`. The
+  assistant defines nothing and unseats nobody.
   [`roster.md`](roster.md) §2, §7.
 - **Activation triggers stay as they were, with one addition.** No seat
   wakes because the room went quiet. A seat wakes because the assistant

@@ -204,14 +204,14 @@ identity follow.
 whenever `'weekly'` is read, for as long as the storage lives, whether or
 not anything is running.
 
-**The run belongs to `startSession`.** The agents passed, the assistant,
-and the workspace the room composes from are the room's composition for
-this run. A name can be started again with a different composition, and
-the record still shows who said what, stamped at the time it landed. A
-long-lived room is many runs over one record, and `readSession` reaches
-the record between them. `agents` may be empty: a room that starts with
-the assistant alone seats what a question needs from the workspace it
-names ([`roster.md`](roster.md) §1).
+**The run belongs to `startSession`.** The assistant, the agents passed,
+and the agents held in reserve are the room's composition for this run. A
+name can be started again with a different composition, and the record
+still shows who said what, stamped at the time it landed. A long-lived
+room is many runs over one record, and `readSession` reaches the record
+between them. `agents` may be empty: a room that starts with the assistant
+alone seats what a question needs from its reserve
+([`roster.md`](roster.md) §1).
 
 **One run per name.** `startSession` refuses a name already running in this
 process. Two live rooms over one record would each replay it, each append

@@ -116,7 +116,7 @@ Five functions build a room, and four verbs run it.
 | `defineHuman`      | Names a person: an identity the agents read and address, and how they read, which the assistant reads.           |
 | `defineTool`       | Declares what an agent can do beyond speaking. Pi's own tool shape, behind one import.                           |
 | `defineWorkspace`  | Names a shared filesystem and shell that an agent's tools reach into. Durable by its name; in memory by default. |
-| `startSession`     | Brings up a named room from its assistant, its agents, a goal, and the workspace it composes from.               |
+| `startSession`     | Brings up a named room from its assistant, its agents, the agents it holds in reserve, and a goal.               |
 | `visitSession`     | Puts a person in a running room. Delivering belongs to the visit.                                                |
 | `readSession`      | Reads the record between runs. Nothing stands up, nothing to bill.                                               |
 | `stopSession`      | Takes the room down.                                                                                             |
