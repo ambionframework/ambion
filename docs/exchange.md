@@ -140,7 +140,7 @@ again, and that question opens a new exchange.
 A closed exchange is an owner and a range, so it is derivable from the
 record. Nothing derives it today; a host that wants a history of exchanges
 records the `exchange_closed` events as they arrive.
-[`FOLLOW_WORK.md`](../FOLLOW_WORK.md) holds the work.
+[`planning/backlog.md`](../planning/backlog.md) holds the work.
 
 ---
 

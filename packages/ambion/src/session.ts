@@ -812,7 +812,7 @@ class SessionImpl implements Session {
 		// The assistant's hands are the runtime's, and it holds one for the
 		// activation it was woken for: `seat` at an open, `summarise` at a close.
 		// Nothing else wakes the assistant today; when something does — a wider
-		// attention, per FOLLOW_WORK.md — it must arrive with empty hands until
+		// attention, per planning/backlog.md — it must arrive with empty hands until
 		// somebody adds a `say` here on purpose. assistant.md §12 makes that a
 		// deliberate decision.
 		if (this.assistant.is(seat.def.name)) {
