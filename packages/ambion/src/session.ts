@@ -493,9 +493,7 @@ class SessionImpl implements Session {
 	}
 
 	private async commitPresence(change: Omit<PresenceMessage, 'seq' | 'at'>): Promise<void> {
-		await this.publish(
-			this.store.append<PresenceMessage>({ ...change, at: new Date().toISOString() }),
-		);
+		await this.publish(this.store.append<PresenceMessage>(change));
 	}
 
 	/**
@@ -598,10 +596,7 @@ class SessionImpl implements Session {
 
 	/** A presence change the closing room commits and routes to nobody: an activation nobody reads. */
 	private commitUnrouted(change: Omit<PresenceMessage, 'seq' | 'at'>): void {
-		this.emit({
-			type: 'message',
-			message: this.store.append<PresenceMessage>({ ...change, at: new Date().toISOString() }),
-		});
+		this.emit({ type: 'message', message: this.store.append<PresenceMessage>(change) });
 	}
 
 	// -- messages ------------------------------------------------------------
@@ -617,7 +612,6 @@ class SessionImpl implements Session {
 		await this.publish(
 			this.store.append<SpokenMessage>({
 				kind: 'said',
-				at: new Date().toISOString(),
 				from,
 				...(to === undefined ? {} : { to }),
 				text: input.text,
@@ -886,7 +880,6 @@ class SessionImpl implements Session {
 				// seat read it, and the append is the commit half of rule 5's one tick.
 				const message = this.store.append<SpokenMessage>({
 					kind: 'said',
-					at: new Date().toISOString(),
 					from: seat.def.name,
 					...(to === undefined ? {} : { to }),
 					text,
@@ -907,8 +900,8 @@ class SessionImpl implements Session {
 	 * in `sayTool` share one tick, as `claim` does for a summary.
 	 */
 	private assertHeard(seat: SeatRuntime, activation: Activation): void {
-		if (this.store.lastSeq <= activation.readThrough) return;
-		const missed = this.store.since(activation.readThrough);
+		const missed = this.store.missed(activation.readThrough);
+		if (missed.length === 0) return;
 		this.emit({ type: 'conflict', author: seat.def.name, missed });
 		activation.heard(this.store.lastSeq);
 		throw new Error(
@@ -935,22 +928,19 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * Rule 5 for a summary: claim the record's next seq for an author that has
-	 * read everything before it. The check and the append share one tick, so
-	 * exactly one of two racing authors wins, and the loser is handed what it
-	 * missed. A seat's say is refused the same way in `assertHeard`, for the
+	 * Rule 5 for a summary: the record's own lock, and the host hears the
+	 * refusal. A seat's say is refused the same way in `assertHeard`, for the
 	 * same reason — which is why the event names the author, not the seat.
 	 */
 	private claim<T extends Message>(
 		author: { name: string; readThrough: Seq },
-		draft: Omit<T, 'seq'>,
+		draft: Omit<T, 'seq' | 'at'>,
 	): { message: T } | { missed: Message[] } {
-		if (this.store.lastSeq > author.readThrough) {
-			const missed = this.store.since(author.readThrough);
-			this.emit({ type: 'conflict', author: author.name, missed });
-			return { missed };
+		const claimed = this.store.claim<T>(author.readThrough, draft);
+		if ('missed' in claimed) {
+			this.emit({ type: 'conflict', author: author.name, missed: claimed.missed });
 		}
-		return { message: this.store.append<T>(draft) };
+		return claimed;
 	}
 
 	// -- the assistant ------------------------------------------------------------

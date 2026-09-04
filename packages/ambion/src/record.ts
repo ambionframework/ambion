@@ -52,10 +52,11 @@ export class RecordStore {
 	/**
 	 * Take the next seq, synchronously — the say tool's conflict check and this
 	 * push must share one tick, or a rival say could slip between them.
+	 * The record stamps `at` here, at the moment the message landed.
 	 * Persistence follows in commit order on a write chain.
 	 */
-	append<T extends Message>(message: Omit<T, 'seq'>): T {
-		const stamped = { ...message, seq: ++this.lastSeq } as T;
+	append<T extends Message>(message: Omit<T, 'seq' | 'at'>): T {
+		const stamped = { ...message, at: new Date().toISOString(), seq: ++this.lastSeq } as T;
 		this.entries.push(stamped);
 		this.tail = this.tail
 			.then(async () => {
@@ -87,6 +88,29 @@ export class RecordStore {
 	since(cursor: Seq | undefined): Message[] {
 		if (cursor === undefined) return [...this.entries];
 		return this.entries.filter((message) => message.seq > cursor);
+	}
+
+	/**
+	 * Rule 5's check: what landed past what an author has read. Empty when the
+	 * author has read everything, so it may commit. Synchronous, so the check
+	 * and the append that follows it share one tick.
+	 */
+	missed(readThrough: Seq): Message[] {
+		return this.lastSeq > readThrough ? this.since(readThrough) : [];
+	}
+
+	/**
+	 * Rule 5's lock: claim the next seq for an author that has read everything
+	 * before it. The check and the append share one tick, so exactly one of two
+	 * racing authors wins, and the loser is handed what it missed.
+	 */
+	claim<T extends Message>(
+		readThrough: Seq,
+		draft: Omit<T, 'seq' | 'at'>,
+	): { message: T } | { missed: Message[] } {
+		const missed = this.missed(readThrough);
+		if (missed.length > 0) return { missed };
+		return { message: this.append<T>(draft) };
 	}
 }
 

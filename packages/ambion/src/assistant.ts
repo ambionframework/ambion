@@ -117,7 +117,7 @@ export interface SummaryRoom {
 	/** Rule 5: the same lock a say commits under. */
 	claim(
 		author: { name: string; readThrough: Seq },
-		draft: Omit<SummaryMessage, 'seq'>,
+		draft: Omit<SummaryMessage, 'seq' | 'at'>,
 	): { message: SummaryMessage } | { missed: Message[] };
 	publish(message: Message): Promise<void>;
 	/** The draft reached the record: this seat spoke, in the one way the assistant can. */
@@ -156,7 +156,6 @@ export function summariseTool(assistant: string, draft: Draft, room: SummaryRoom
 				{ name: assistant, readThrough: draft.through },
 				{
 					kind: 'summary',
-					at: new Date().toISOString(),
 					from: assistant,
 					to: person,
 					text,
@@ -221,7 +220,7 @@ export interface ComposeRoom {
 	/** Move one name from the reserve to the roster. The roster changes before the message lands. */
 	seat(name: string): void;
 	/** Put the seating on the record. No lock: a seating is decided on the question, whatever landed since. */
-	commit(draft: Omit<PresenceMessage, 'seq'>): PresenceMessage;
+	commit(draft: Omit<PresenceMessage, 'seq' | 'at'>): PresenceMessage;
 	publish(message: Message): Promise<void>;
 	/** A seating reached the record: this activation left a mark. */
 	written(): void;
@@ -266,7 +265,6 @@ export function seatTool(assistant: string, composing: Composing, room: ComposeR
 			room.seat(name);
 			const message = room.commit({
 				kind: 'seated',
-				at: new Date().toISOString(),
 				from: name,
 				identity: entry.identity,
 				by: assistant,
