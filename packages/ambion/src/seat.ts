@@ -16,8 +16,10 @@ import type {
 	AgentToolResult,
 	Session as PiSession,
 } from '@earendil-works/pi-agent-core';
+import { Type } from 'typebox';
 import type { Activation } from './activation.ts';
-import type { AgentDefinition, Attention, Message } from './types.ts';
+import { refusal } from './render.ts';
+import type { AgentDefinition, Attention, Message, Seq, SpokenMessage } from './types.ts';
 import { isAmbionTool, isSpoken } from './types.ts';
 import { toolContext } from './workspace.ts';
 
@@ -114,4 +116,90 @@ export function toPiTool(tool: unknown, agent: AgentDefinition): AgentTool {
 /** What a write tool returns when the record took it. */
 export function delivered(): AgentToolResult<Record<string, never>> {
 	return { content: [{ type: 'text', text: 'delivered' }], details: {} };
+}
+
+// -- say ---------------------------------------------------------------------
+
+/** What the say tool needs of the room: the record's lock, the roster, and the record. */
+export interface SayRoom {
+	/** The last seq the record holds. */
+	lastSeq(): Seq;
+	/**
+	 * Rule 5: what landed past `readThrough`. Anything here refuses the say,
+	 * and the room reports the conflict. Synchronous, so `commit` shares its tick.
+	 */
+	missed(readThrough: Seq): Message[];
+	/** Refuses a name the seat cannot address: unknown, itself, or seated at `none`. */
+	addressable(to: string | undefined): void;
+	/** The append half of rule 5's one tick. Nothing awaits between `missed` and this. */
+	commit(draft: Omit<SpokenMessage, 'seq' | 'at'>): SpokenMessage;
+	publish(message: Message): Promise<void>;
+}
+
+/**
+ * The one tool every seat holds (rule 3): speaking is a tool, and silence is
+ * the default. It commits under rule 5's lock, so a say drafted against a
+ * record that has moved is refused, and the refusal carries what the seat
+ * missed. The seat then decides again against the record as it stands.
+ */
+export function sayTool(seat: SeatRuntime, activation: Activation, room: SayRoom): AgentTool {
+	return {
+		name: 'say',
+		label: 'say',
+		description:
+			'Speak on the record. Omit `to` to address the room; set `to` to a participant name ' +
+			'to address them directly — a directed say to an agent also calls them in. ' +
+			'Ending your turn without calling say is declining to speak.',
+		parameters: Type.Object({
+			to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
+			text: Type.String(),
+		}),
+		execute: async (_toolCallId, rawParams) => {
+			const params = rawParams as { to?: string; text: string };
+			const to = params.to?.trim() ? params.to.trim() : undefined;
+			// Rule 5 comes first: a seat that has not read the record is told
+			// what it missed before anything else is checked, so a say at a
+			// colleague who left in the meantime reads the departure.
+			assertHeard(activation, room);
+			room.addressable(to);
+			const text = params.text.trim();
+			// A message with nothing in it still takes a seq, renders in
+			// every context after it, and stands inside whatever range a
+			// summary covers. Saying nothing is ending the activation.
+			if (text === '') {
+				throw new Error('The message is empty. Say something, or end your turn instead.');
+			}
+			// Nothing has awaited since the check, so the record stands where the
+			// seat read it, and the commit is the append half of rule 5's one tick.
+			const message = room.commit({
+				kind: 'said',
+				from: seat.def.name,
+				...(to === undefined ? {} : { to }),
+				text,
+			});
+			// The seat has heard its own say before anybody else hears of it.
+			activation.heard(message.seq);
+			activation.spoke = true;
+			await room.publish(message);
+			return delivered();
+		},
+	};
+}
+
+/**
+ * Rule 5 for a say: the record moved past what this activation has read, so
+ * the say is refused and the seat is told what landed. Now heard, the seat
+ * decides again against the record as it stands.
+ */
+function assertHeard(activation: Activation, room: SayRoom): void {
+	const missed = room.missed(activation.readThrough);
+	if (missed.length === 0) return;
+	activation.heard(room.lastSeq());
+	throw new Error(
+		refusal(
+			'Not delivered — the room moved while you were speaking. New on the record:',
+			missed,
+			'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
+		),
+	);
 }

@@ -26,7 +26,6 @@ import type {
 import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
-import { Type } from 'typebox';
 import { Activation } from './activation.ts';
 import {
 	Assistant,
@@ -45,13 +44,12 @@ import {
 	type ComposingView,
 	type PersonView,
 	type RoomView,
-	refusal,
 	renderLine,
 	renderSystemPrompt,
 	renderTurnContext,
 	type SeatSpeaking,
 } from './render.ts';
-import { delivered, isActive, type SeatRuntime, toPiTool, wakes } from './seat.ts';
+import { isActive, type SayRoom, type SeatRuntime, sayTool, toPiTool, wakes } from './seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
@@ -816,7 +814,7 @@ class SessionImpl implements Session {
 			return closing ? [this.summarise(seat, activation, closing)] : [];
 		}
 		return [
-			this.sayTool(seat, activation),
+			sayTool(seat, activation, this.sayRoom(seat)),
 			...builtinTools(seat.def),
 			...seat.def.tools.map((tool) => toPiTool(tool, seat.def)),
 		];
@@ -849,68 +847,26 @@ class SessionImpl implements Session {
 		});
 	}
 
-	private sayTool(seat: SeatRuntime, activation: Activation): AgentTool {
+	/** What the say tool is given of the room: the lock, the roster, and the record. */
+	private sayRoom(seat: SeatRuntime): SayRoom {
 		return {
-			name: 'say',
-			label: 'say',
-			description:
-				'Speak on the record. Omit `to` to address the room; set `to` to a participant name ' +
-				'to address them directly — a directed say to an agent also calls them in. ' +
-				'Ending your turn without calling say is declining to speak.',
-			parameters: Type.Object({
-				to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
-				text: Type.String(),
-			}),
-			execute: async (_toolCallId, rawParams) => {
-				const params = rawParams as { to?: string; text: string };
-				const to = params.to?.trim() ? params.to.trim() : undefined;
-				// Rule 5 comes first: a seat that has not read the record is told
-				// what it missed before anything else is checked, so a say at a
-				// colleague who left in the meantime reads the departure.
-				this.assertHeard(seat, activation);
-				this.assertAddressable(seat, to);
-				const text = params.text.trim();
-				// A message with nothing in it still takes a seq, renders in
-				// every context after it, and stands inside whatever range a
-				// summary covers. Saying nothing is ending the activation.
-				if (text === '') {
-					throw new Error('The message is empty. Say something, or end your turn instead.');
-				}
-				// Nothing has awaited since the check, so the record stands where the
-				// seat read it, and the append is the commit half of rule 5's one tick.
-				const message = this.store.append<SpokenMessage>({
-					kind: 'said',
-					from: seat.def.name,
-					...(to === undefined ? {} : { to }),
-					text,
-				});
-				// The seat has heard its own say before anybody else hears of it.
-				activation.heard(message.seq);
-				activation.spoke = true;
-				await this.publish(message);
-				return delivered();
-			},
+			lastSeq: () => this.store.lastSeq,
+			missed: (readThrough) => this.refuse(seat.def.name, readThrough),
+			addressable: (to) => this.assertAddressable(seat, to),
+			commit: (draft) => this.store.append<SpokenMessage>(draft),
+			publish: (message) => this.publish(message),
 		};
 	}
 
 	/**
-	 * Rule 5 for a say: the record moved past what this activation has read, so
-	 * the say is refused and the seat is told what landed. Now heard, the seat
-	 * decides again against the record as it stands. The check and the append
-	 * in `sayTool` share one tick, as `claim` does for a summary.
+	 * Rule 5's refusal, as the host hears it: what an author has not read, and
+	 * a `conflict` event when there is anything. A say and a summary are refused
+	 * at the same boundary, which is why the event names the author.
 	 */
-	private assertHeard(seat: SeatRuntime, activation: Activation): void {
-		const missed = this.store.missed(activation.readThrough);
-		if (missed.length === 0) return;
-		this.emit({ type: 'conflict', author: seat.def.name, missed });
-		activation.heard(this.store.lastSeq);
-		throw new Error(
-			refusal(
-				'Not delivered — the room moved while you were speaking. New on the record:',
-				missed,
-				'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
-			),
-		);
+	private refuse(author: string, readThrough: Seq): Message[] {
+		const missed = this.store.missed(readThrough);
+		if (missed.length > 0) this.emit({ type: 'conflict', author, missed });
+		return missed;
 	}
 
 	private assertAddressable(seat: SeatRuntime, to: string | undefined): void {
@@ -929,8 +885,7 @@ class SessionImpl implements Session {
 
 	/**
 	 * Rule 5 for a summary: the record's own lock, and the host hears the
-	 * refusal. A seat's say is refused the same way in `assertHeard`, for the
-	 * same reason — which is why the event names the author, not the seat.
+	 * refusal the way it hears a refused say.
 	 */
 	private claim<T extends Message>(
 		author: { name: string; readThrough: Seq },
