@@ -35,7 +35,6 @@ import {
 	seatTool,
 	summariseTool,
 } from './assistant.ts';
-import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
 import { openOrCreate, persistTurns, RecordStore } from './record.ts';
@@ -49,15 +48,13 @@ import {
 	renderTurnContext,
 	type SeatSpeaking,
 } from './render.ts';
+import { Roster, unwrap } from './roster.ts';
 import { isActive, type SayRoom, type SeatRuntime, sayTool, toPiTool, wakes } from './seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
-	type Attention,
 	authorOf,
 	type HumanDefinition,
-	isAgent,
-	isSeatedAgent,
 	isSpoken,
 	type Message,
 	type Participant,
@@ -74,12 +71,6 @@ const defaultRepo = new InMemorySessionRepo();
 
 /** One run per name: a second live room over one record would diverge from it. */
 const running = new Map<string, SessionImpl>();
-
-/** An agent held in reserve: the definition, and the attention it takes when seated. */
-interface Reserved {
-	def: AgentDefinition;
-	attention: Attention;
-}
 
 /** Pi's model registry, built once on first use. */
 let builtinRegistry: ReturnType<typeof builtinModels> | undefined;
@@ -247,9 +238,8 @@ class SessionImpl implements Session {
 	private readonly goal?: string;
 	private readonly repo: SessionRepo;
 	private readonly store: RecordStore;
-	private readonly agents = new Map<string, SeatRuntime>();
-	/** The reserve: agents the room may seat later, held with the attention they will take. */
-	private readonly reserve = new Map<string, Reserved>();
+	/** Who is seated, and who is held in reserve. */
+	private readonly roster = new Roster((name) => this.here.knows(name));
 	/** The room's assistant: how each person reads, who is owed, what it is drafting or composing. */
 	private readonly assistant: Assistant;
 	private readonly here = new Attendance(() => this.record);
@@ -274,11 +264,13 @@ class SessionImpl implements Session {
 		this.goal = options.goal?.trim() || undefined;
 		this.repo = options.repo ?? defaultRepo;
 		this.store = new RecordStore(this.repo, this.name);
-		for (const seat of options.agents ?? []) this.place(seat);
+		for (const seat of options.agents ?? []) this.roster.place(unwrap(seat));
 		// Seated at the narrow end: nothing said in the room wakes the assistant;
 		// the open and the close of an exchange do, and it is here for the whole run.
-		this.assistant = new Assistant(this.place(seated(assertAssistant(options.assistant), 'none')));
-		for (const seat of options.available ?? []) this.hold(seat);
+		this.assistant = new Assistant(
+			this.roster.place({ def: assertAssistant(options.assistant), attention: 'none' }),
+		);
+		for (const seat of options.available ?? []) this.roster.hold(unwrap(seat));
 		this.customStream = options.streamFn !== undefined;
 		this.streamFn = options.streamFn ?? registryStream;
 	}
@@ -287,53 +279,15 @@ class SessionImpl implements Session {
 		return this.store.entries;
 	}
 
-	/** Seat one agent, refusing a name the room already knows. */
-	private place(seat: AgentSeat): SeatRuntime {
-		const { def, attention } = this.unwrap(seat);
-		this.assertFreeName(def.name);
-		const placed: SeatRuntime = { def, attention };
-		this.agents.set(def.name, placed);
-		return placed;
-	}
-
-	/** Hold one agent in reserve, refusing a name the room already knows. */
-	private hold(seat: AgentSeat): void {
-		const held = this.unwrap(seat);
-		this.assertFreeName(held.def.name);
-		this.reserve.set(held.def.name, held);
-	}
-
-	private unwrap(seat: AgentSeat): Reserved {
-		const def = isSeatedAgent(seat) ? seat.agent : seat;
-		if (!isAgent(def)) {
-			throw new Error('Agents must come from defineAgent or seated().');
-		}
-		return { def, attention: isSeatedAgent(seat) ? seat.attention : 'broadcast' };
-	}
-
-	/** One name names one participant: seated, in reserve, or a person the room knows. */
-	private assertFreeName(name: string): void {
-		if (this.agents.has(name) || this.reserve.has(name) || this.here.knows(name)) {
-			throw new Error(`Duplicate agent name '${name}': one name names one participant.`);
-		}
-	}
-
 	/** The host puts an agent on the roster. From the reserve when it is there; from anywhere else too. */
 	async seat(seat: AgentSeat): Promise<void> {
 		this.assertRunning();
 		await this.store.ready;
-		const given = this.unwrap(seat);
-		const held = this.reserve.get(given.def.name);
-		if (held) this.reserve.delete(given.def.name);
-		// A bare definition takes the attention its reserve entry carried.
-		const attention = isSeatedAgent(seat) ? seat.attention : (held?.attention ?? 'broadcast');
-		const placed = this.place(seated(given.def, attention));
-		placed.added = true;
-		if (held) placed.reserved = true;
+		const placed = this.roster.seat(seat);
 		await this.commitPresence({
 			kind: 'seated',
-			from: given.def.name,
-			identity: given.def.identity,
+			from: placed.def.name,
+			identity: placed.def.identity,
 		});
 	}
 
@@ -341,7 +295,7 @@ class SessionImpl implements Session {
 	async unseat(agent: AgentDefinition): Promise<void> {
 		this.assertRunning();
 		await this.store.ready;
-		const seat = this.agents.get(agent.name);
+		const seat = this.roster.get(agent.name);
 		if (!seat) throw new Error(`'${agent.name}' is not seated in this session.`);
 		if (this.assistant.is(agent.name)) {
 			throw new Error(`'${agent.name}' is the assistant: a room cannot run without one.`);
@@ -353,19 +307,7 @@ class SessionImpl implements Session {
 	/** Off the roster: what was mid-flight ends, and a reserve agent goes back to the reserve. */
 	private retire(seat: SeatRuntime): void {
 		seat.activation?.abort();
-		this.agents.delete(seat.def.name);
-		if (seat.reserved)
-			this.reserve.set(seat.def.name, { def: seat.def, attention: seat.attention });
-	}
-
-	/** The assistant seats one name from the reserve. The roster changes before the message lands. */
-	private admit(name: string): void {
-		const held = this.reserve.get(name);
-		if (!held) throw new Error(`'${name}' is not in the reserve.`);
-		this.reserve.delete(name);
-		const placed = this.place(seated(held.def, held.attention));
-		placed.added = true;
-		placed.reserved = true;
+		this.roster.retire(seat);
 	}
 
 	/**
@@ -400,7 +342,7 @@ class SessionImpl implements Session {
 	 * activation, so nothing counts them alongside and nothing can drift.
 	 */
 	private running(): SeatRuntime[] {
-		return [...this.agents.values()].filter(isActive);
+		return [...this.roster.seated()].filter(isActive);
 	}
 
 	/** Nothing at all is taking an activation. The assistant writing is something. */
@@ -428,7 +370,7 @@ class SessionImpl implements Session {
 	}
 
 	abort(): void {
-		for (const seat of this.agents.values()) seat.activation?.abort();
+		for (const seat of this.roster.seated()) seat.activation?.abort();
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
@@ -438,7 +380,7 @@ class SessionImpl implements Session {
 
 	seats(): SeatInfo[] {
 		const seats: SeatInfo[] = [];
-		for (const seat of this.agents.values()) {
+		for (const seat of this.roster.seated()) {
 			seats.push({
 				kind: 'agent',
 				name: seat.def.name,
@@ -473,7 +415,7 @@ class SessionImpl implements Session {
 	}
 
 	private assertVisitable(human: HumanDefinition): void {
-		if (this.agents.has(human.name) || this.reserve.has(human.name)) {
+		if (this.roster.knows(human.name)) {
 			throw new Error(
 				`'${human.name}' is an agent in this session: one name names one participant.`,
 			);
@@ -525,8 +467,9 @@ class SessionImpl implements Session {
 		const opened = this.exchanges.note(message, this.here.knows(message.from));
 		if (!opened) return;
 		this.emit({ type: 'exchange_opened', exchange: opened });
-		if (this.reserve.size === 0 || this.stopped) return;
-		const composing = this.assistant.compose(opened.owner, opened.from, this.reserve.size);
+		const reserve = this.roster.reserveSize();
+		if (reserve === 0 || this.stopped) return;
+		const composing = this.assistant.compose(opened.owner, opened.from, reserve);
 		if (composing) this.activate(this.assistant.seat);
 	}
 
@@ -577,7 +520,7 @@ class SessionImpl implements Session {
 			}
 			// What the run added leaves with it, the same way: the next run begins
 			// from the composition `startSession` was given.
-			for (const seat of this.agents.values()) {
+			for (const seat of this.roster.seated()) {
 				if (!seat.added) continue;
 				this.retire(seat);
 				this.commitUnrouted({ kind: 'unseated', from: seat.def.name });
@@ -604,7 +547,7 @@ class SessionImpl implements Session {
 		input: { to?: Participant; text: string },
 	): Promise<void> {
 		const to = input.to?.name;
-		if (to !== undefined && !this.here.knows(to) && !this.agents.has(to)) {
+		if (to !== undefined && !this.here.knows(to) && !this.roster.get(to)) {
 			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
 		}
 		await this.publish(
@@ -641,7 +584,7 @@ class SessionImpl implements Session {
 		const author = authorOf(message);
 		const target = this.targetOf(message);
 		const fromAssistant = author !== undefined && this.assistant.is(author);
-		for (const seat of this.agents.values()) {
+		for (const seat of this.roster.seated()) {
 			if (seat.def.name !== author) this.route(seat, message, target, fromAssistant);
 		}
 	}
@@ -672,8 +615,8 @@ class SessionImpl implements Session {
 	/** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
 	private targetOf(message: Message): SeatRuntime | undefined {
 		if (isSpoken(message))
-			return message.to === undefined ? undefined : this.agents.get(message.to);
-		return message.kind === 'seated' ? this.agents.get(message.from) : undefined;
+			return message.to === undefined ? undefined : this.roster.get(message.to);
+		return message.kind === 'seated' ? this.roster.get(message.from) : undefined;
 	}
 
 	private activate(seat: SeatRuntime): void {
@@ -746,17 +689,9 @@ class SessionImpl implements Session {
 		const composing: ComposingView | undefined = composition && {
 			person: composition.person,
 			from: composition.from,
-			reserve: this.reserved(),
+			reserve: this.roster.reserved(),
 		};
 		return { def: seat.def, assistant, closing, composing };
-	}
-
-	/** The reserve as the assistant reads it: a name and an identity per agent. */
-	private reserved(): { name: string; identity: string }[] {
-		return [...this.reserve.values()].map(({ def }) => ({
-			name: def.name,
-			identity: def.identity,
-		}));
 	}
 
 	/** What the prose is given of this room, built fresh for each activation. */
@@ -824,8 +759,8 @@ class SessionImpl implements Session {
 	private seatHand(seat: SeatRuntime, activation: Activation, composing: Composing): AgentTool {
 		return seatTool(seat.def.name, composing, {
 			stopped: () => this.stopped,
-			reserve: () => this.reserved(),
-			seat: (name) => this.admit(name),
+			reserve: () => this.roster.reserved(),
+			seat: (name) => this.roster.admit(name),
 			commit: (draft) => this.store.append<PresenceMessage>(draft),
 			publish: (message) => this.publish(message),
 			written: () => {
@@ -871,7 +806,7 @@ class SessionImpl implements Session {
 
 	private assertAddressable(seat: SeatRuntime, to: string | undefined): void {
 		if (to === undefined) return;
-		const target = this.agents.get(to);
+		const target = this.roster.get(to);
 		if (!this.here.knows(to) && !target) {
 			throw new Error(`Unknown participant '${to}'. Address someone from the roster.`);
 		}
