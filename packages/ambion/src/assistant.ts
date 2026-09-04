@@ -329,8 +329,25 @@ export class Assistant {
 	/** The exchange the assistant is composing the room for, while its activation runs. */
 	private composition: Composing | undefined;
 
-	/** One seat, seated at `none` when the room starts, for the life of the run. */
-	constructor(readonly seat: SeatRuntime) {}
+	/**
+	 * One seat, seated at `none` when the room starts, for the life of the run.
+	 * `isPerson` answers for the people the room knows, read live.
+	 */
+	constructor(
+		readonly seat: SeatRuntime,
+		private readonly isPerson: (name: string) => boolean,
+	) {}
+
+	/**
+	 * A seat that speaks for itself: not a person, and not the assistant. It is
+	 * what the threshold counts — what the room produced, not what a person said
+	 * into it, and not what the assistant wrote about it. It reads the record
+	 * rather than the roster, so an agent that spoke and was unseated before
+	 * the close still counts.
+	 */
+	private speaksForItself(name: string): boolean {
+		return !this.isPerson(name) && !this.is(name);
+	}
 
 	/**
 	 * A question opened an exchange, and the room holds agents in reserve. One
@@ -381,13 +398,9 @@ export class Assistant {
 	 * The seats stopped, so every owed message is due, including one a failed
 	 * draft left waiting: this quiet room is its next chance.
 	 */
-	dueAtQuiescence(
-		record: readonly Message[],
-		through: Seq,
-		fromSeat: (name: string) => boolean,
-	): Draft | undefined {
+	dueAtQuiescence(record: readonly Message[], through: Seq): Draft | undefined {
 		this.waiting.clear();
-		return this.pick(record, through, fromSeat);
+		return this.pick(record, through);
 	}
 
 	/**
@@ -395,12 +408,8 @@ export class Assistant {
 	 * was drafting for somebody else is due now; the person it just failed
 	 * stays waiting for the seats to stop again.
 	 */
-	dueAfterDraft(
-		record: readonly Message[],
-		through: Seq,
-		fromSeat: (name: string) => boolean,
-	): Draft | undefined {
-		return this.pick(record, through, fromSeat);
+	dueAfterDraft(record: readonly Message[], through: Seq): Draft | undefined {
+		return this.pick(record, through);
 	}
 
 	/**
@@ -409,16 +418,12 @@ export class Assistant {
 	 * so a person whose close finds the assistant drafting stays owed until it
 	 * is free.
 	 */
-	private pick(
-		record: readonly Message[],
-		through: Seq,
-		fromSeat: (name: string) => boolean,
-	): Draft | undefined {
+	private pick(record: readonly Message[], through: Seq): Draft | undefined {
 		if (isActive(this.seat)) return undefined;
 		for (const [person, from] of [...this.owed]) {
 			if (this.waiting.has(person)) continue;
 			this.owed.delete(person);
-			const draft = draftOver(record, person, from, through, fromSeat);
+			const draft = draftOver(record, person, from, through, (name) => this.speaksForItself(name));
 			if (!draft) continue;
 			this.draft = draft;
 			return draft;

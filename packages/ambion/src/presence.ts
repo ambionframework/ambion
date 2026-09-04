@@ -5,12 +5,28 @@
  * cannot rebuild — who is here *now* — and reads everything else off the
  * record. A person is in the room or they are not: one name, one visit.
  */
-import type { HumanDefinition, Message, PresenceMessage, PresenceStatus, Seq } from './types.ts';
+import type { PersonView } from './render.ts';
+import type {
+	HumanDefinition,
+	Message,
+	Participant,
+	PresenceMessage,
+	PresenceStatus,
+	Seq,
+	Visit,
+} from './types.ts';
 
 /** One person in the room, for as long as they are in it. */
 export interface VisitRuntime {
 	human: HumanDefinition;
 	gone: boolean;
+}
+
+/** What a visit's handle needs of the room: a delivery routed, and a departure on the record. */
+export interface VisitRoom {
+	deliver(from: string, input: { to?: Participant; text: string }): Promise<void>;
+	/** The person is gone: the room says so on the record. */
+	left(name: string): Promise<void>;
 }
 
 /**
@@ -39,6 +55,45 @@ export class Attendance {
 
 	all(): VisitRuntime[] {
 		return [...this.inRoom.values()];
+	}
+
+	/** The handle a person holds while they are here. It refuses a delivery once they have left. */
+	handle(visit: VisitRuntime, room: VisitRoom): Visit {
+		const name = visit.human.name;
+		const here = this;
+		return {
+			human: visit.human,
+			get since() {
+				return here.sinceOf(name);
+			},
+			async deliver(input) {
+				if (visit.gone) throw new Error(`${name}'s visit has ended.`);
+				await room.deliver(name, input);
+			},
+			async leave() {
+				if (visit.gone) return;
+				visit.gone = true;
+				here.leave(name);
+				await room.left(name);
+			},
+		};
+	}
+
+	/** One entry per person the room knows, with their gap and what they missed. */
+	views(unseen: (since: Seq) => number): PersonView[] {
+		const views: PersonView[] = [];
+		for (const [name, identity] of this.known()) {
+			const since = this.sinceOf(name);
+			views.push({
+				name,
+				identity,
+				presence: this.presenceOf(name),
+				changedAt: this.lastChangeAt(name),
+				since,
+				unseen: since === undefined ? 0 : unseen(since),
+			});
+		}
+		return views;
 	}
 
 	presenceOf(name: string): PresenceStatus {

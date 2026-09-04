@@ -35,12 +35,11 @@ import {
 } from './assistant.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import { registryStream, resolveModel } from './model.ts';
-import { Attendance, type VisitRuntime } from './presence.ts';
+import { Attendance, type VisitRoom } from './presence.ts';
 import { openOrCreate, persistTurns, RecordStore } from './record.ts';
 import {
 	type Closing,
 	type ComposingView,
-	type PersonView,
 	type RoomView,
 	renderLine,
 	renderSystemPrompt,
@@ -180,6 +179,7 @@ class SessionImpl implements Session {
 		// the open and the close of an exchange do, and it is here for the whole run.
 		this.assistant = new Assistant(
 			this.roster.place({ def: assertAssistant(options.assistant), attention: 'none' }),
+			(name) => this.here.knows(name),
 		);
 		for (const seat of options.available ?? []) this.roster.hold(unwrap(seat));
 		this.customStream = options.streamFn !== undefined;
@@ -314,7 +314,7 @@ class SessionImpl implements Session {
 		this.assertVisitable(human);
 		await this.store.ready;
 		const already = this.here.visitOf(human.name);
-		if (already) return this.handle(already);
+		if (already) return this.here.handle(already, this.visitRoom());
 		// The room changes before the message does: a seat woken by the arrival
 		// must read a roster that already agrees with it.
 		const visit = this.here.enter(human);
@@ -322,7 +322,15 @@ class SessionImpl implements Session {
 		// properly or not at all, and its message is written after they leave.
 		this.assistant.serve(human.name, human.preferences);
 		await this.commitPresence({ kind: 'arrived', from: human.name, identity: human.identity });
-		return this.handle(visit);
+		return this.here.handle(visit, this.visitRoom());
+	}
+
+	/** What a visit's handle is given of the room: a delivery, and the departure it commits. */
+	private visitRoom(): VisitRoom {
+		return {
+			deliver: (from, input) => this.deliverFrom(from, input),
+			left: (name) => this.commitPresence({ kind: 'left', from: name }),
+		};
 	}
 
 	private assertVisitable(human: HumanDefinition): void {
@@ -382,34 +390,6 @@ class SessionImpl implements Session {
 		if (reserve === 0 || this.stopped) return;
 		const composing = this.assistant.compose(opened.owner, opened.from, reserve);
 		if (composing) this.activate(this.assistant.seat);
-	}
-
-	private assertLive(visit: VisitRuntime): void {
-		if (visit.gone) throw new Error(`${visit.human.name}'s visit has ended.`);
-	}
-
-	private async endVisit(visit: VisitRuntime): Promise<void> {
-		if (visit.gone) return;
-		visit.gone = true;
-		this.here.leave(visit.human.name);
-		await this.commitPresence({ kind: 'left', from: visit.human.name });
-	}
-
-	private handle(visit: VisitRuntime): Visit {
-		const session = this;
-		return {
-			human: visit.human,
-			get since() {
-				return session.here.sinceOf(visit.human.name);
-			},
-			async deliver(input) {
-				session.assertLive(visit);
-				await session.deliverFrom(visit.human.name, input);
-			},
-			leave() {
-				return session.endVisit(visit);
-			},
-		};
 	}
 
 	/** Closes the run: what is mid-flight ends, what is present is marked gone. */
@@ -564,9 +544,10 @@ class SessionImpl implements Session {
 		// working on it, so a draft's end closes none — which also keeps a failing
 		// assistant from retrying for ever. What a draft's end frees is the seat,
 		// for whoever was owed while it drafted.
-		if (drafted) this.draftNext(this.assistant.dueAfterDraft(...this.dueArgs()));
+		if (drafted) this.draftNext(this.assistant.dueAfterDraft(this.record, this.store.lastSeq));
 		else if (!this.working()) this.settle();
-		else if (assistant) this.draftNext(this.assistant.dueAfterDraft(...this.dueArgs()));
+		else if (assistant)
+			this.draftNext(this.assistant.dueAfterDraft(this.record, this.store.lastSeq));
 		if (this.idle()) this.markQuiet();
 	}
 
@@ -612,7 +593,7 @@ class SessionImpl implements Session {
 			name: this.name,
 			goal: this.goal,
 			seats: this.seats(),
-			people: this.peopleViews(),
+			people: this.here.views((since) => this.store.since(since).length),
 			record: this.record,
 			exchange: open && { owner: open.owner, from: open.from },
 		};
@@ -771,31 +752,15 @@ class SessionImpl implements Session {
 	private summariseClosed(closing: ClosedExchange | undefined, worked: boolean): void {
 		if (closing) this.assistant.owe(closing.owner, closing.from);
 		const due = worked
-			? this.assistant.dueAtQuiescence(...this.dueArgs())
-			: this.assistant.dueAfterDraft(...this.dueArgs());
+			? this.assistant.dueAtQuiescence(this.record, this.store.lastSeq)
+			: this.assistant.dueAfterDraft(this.record, this.store.lastSeq);
 		this.draftNext(due);
-	}
-
-	/** What the assistant reads to decide whether a range needs a message. */
-	private dueArgs(): [readonly Message[], Seq, (name: string) => boolean] {
-		return [this.record, this.store.lastSeq, (name) => this.speaksForItself(name)];
 	}
 
 	/** The assistant takes the draft it is due, unless the room is closing. */
 	private draftNext(draft: Draft | undefined): void {
 		if (draft === undefined || this.stopped) return;
 		this.activate(this.assistant.seat);
-	}
-
-	/**
-	 * A seat that speaks for itself: not a person, and not the assistant. It is
-	 * what the threshold counts — what the room produced, not what a person said
-	 * into it, and not what the assistant wrote about it. It reads the record
-	 * rather than the roster, so an agent that spoke and was unseated before
-	 * the close still counts.
-	 */
-	private speaksForItself(name: string): boolean {
-		return !this.here.knows(name) && !this.assistant.is(name);
 	}
 
 	/**
@@ -811,24 +776,5 @@ class SessionImpl implements Session {
 		if (this.stopped || !this.idle()) return;
 		this.emit({ type: 'quiet' });
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
-	}
-
-	// -- what an agent reads -------------------------------------------------
-
-	/** One entry per person the room knows, with their gap and what they missed. */
-	private peopleViews(): PersonView[] {
-		const views: PersonView[] = [];
-		for (const [name, identity] of this.here.known()) {
-			const since = this.here.sinceOf(name);
-			views.push({
-				name,
-				identity,
-				presence: this.here.presenceOf(name),
-				changedAt: this.here.lastChangeAt(name),
-				since,
-				unseen: since === undefined ? 0 : this.store.since(since).length,
-			});
-		}
-		return views;
 	}
 }
