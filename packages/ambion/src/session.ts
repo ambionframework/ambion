@@ -24,8 +24,6 @@ import type {
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
 import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
-import type { Api, Model } from '@earendil-works/pi-ai';
-import { builtinModels } from '@earendil-works/pi-ai/providers/all';
 import { Activation } from './activation.ts';
 import {
 	Assistant,
@@ -36,6 +34,7 @@ import {
 	summariseTool,
 } from './assistant.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
+import { registryStream, resolveModel } from './model.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
 import { openOrCreate, persistTurns, RecordStore } from './record.ts';
 import {
@@ -59,11 +58,16 @@ import {
 	type Message,
 	type Participant,
 	type PresenceMessage,
+	type ReadSessionOptions,
 	type SeatInfo,
 	type Seq,
+	type Session,
 	type SessionEvent,
+	type SessionView,
 	type SpokenMessage,
+	type StartSessionOptions,
 	type SummaryMessage,
+	type Visit,
 } from './types.ts';
 import { builtinTools } from './workspace.ts';
 
@@ -71,99 +75,6 @@ const defaultRepo = new InMemorySessionRepo();
 
 /** One run per name: a second live room over one record would diverge from it. */
 const running = new Map<string, SessionImpl>();
-
-/** Pi's model registry, built once on first use. */
-let builtinRegistry: ReturnType<typeof builtinModels> | undefined;
-const registry = () => (builtinRegistry ??= builtinModels());
-
-/** The default model call: Pi's builtin registry, keyed from the provider's env var. */
-const registryStream: StreamFn = (model, context, streamOptions) => {
-	const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
-	const resolved =
-		streamOptions?.apiKey || !envKey ? streamOptions : { ...streamOptions, apiKey: envKey };
-	return registry().streamSimple(model, context, resolved);
-};
-
-export interface StartSessionOptions {
-	/** The session's name: the record belongs to it, across every run. */
-	name: string;
-	/** The agents seated when the room starts. May be empty: a room needs its assistant alone. */
-	agents?: readonly AgentSeat[];
-	/**
-	 * The reserve: agents the room does not seat now, and the assistant may
-	 * seat when a question needs them. A reserve entry carries an attention the
-	 * way a seated one does. Empty, or absent, means the assistant is never
-	 * woken at the open of an exchange.
-	 */
-	available?: readonly AgentSeat[];
-	/**
-	 * The room's assistant: an agent that composes the room at the open of an
-	 * exchange, from the reserve, and writes the one message a person reads
-	 * when their exchange closes, shaped to how that person reads. It is seated
-	 * with the agents, at `none`, and it writes for every person who visits.
-	 * It carries no tools and no workspace: the room refuses one that does.
-	 */
-	assistant: AgentDefinition;
-	/** What the room is for. Read by every agent; gates the arrival paragraph. */
-	goal?: string;
-	/**
-	 * Override the model call — Pi's own extension surface, and the only one
-	 * here: a scripted stream makes the room deterministic, a custom stream
-	 * brings custom providers.
-	 */
-	streamFn?: StreamFn;
-	/** Pi's own session repository. Defaults to a process-wide `InMemorySessionRepo`. */
-	repo?: SessionRepo;
-}
-
-export interface ReadSessionOptions {
-	repo?: SessionRepo;
-}
-
-/** Reading a room takes no run: the pull side, and nothing that starts anything. */
-export interface SessionView {
-	readonly name: string;
-	messages(options?: { since?: Seq }): Promise<Message[]>;
-	seats(): SeatInfo[];
-	subscribe(listener: (event: SessionEvent) => void): () => void;
-}
-
-export interface Session extends SessionView {
-	/**
-	 * The question the room is working on, or nothing when nobody has asked.
-	 * Run state: a restart begins with none.
-	 */
-	exchange(): Exchange | undefined;
-	/** Resolves when no agent is active and nothing is queued. */
-	settled(): Promise<void>;
-	/**
-	 * Resolves when the room is quiet and every summary an exchange owed has
-	 * been written, declined or refused. `settled()` reports the seats alone,
-	 * which is what rule 5 needs it to mean; this is what a host waits for when
-	 * it wants the one message a person reads.
-	 */
-	quiet(): Promise<void>;
-	/** Cancel every activation in flight. The room keeps running; `stopSession` ends it. */
-	abort(): void;
-	/**
-	 * Put an agent on the roster while the room runs, from the reserve or from
-	 * anywhere. The seating lands on the record, and it wakes the seat it names.
-	 */
-	seat(seat: AgentSeat): Promise<void>;
-	/**
-	 * Take an agent off the roster. Its activation in flight is aborted, the
-	 * record says it left, and an agent that came from the reserve returns to it.
-	 */
-	unseat(agent: AgentDefinition): Promise<void>;
-}
-
-export interface Visit {
-	readonly human: HumanDefinition;
-	/** The seq of this person's last `left`, or undefined the first time. A live read. */
-	readonly since: Seq | undefined;
-	deliver(input: { to?: Participant; text: string }): Promise<void>;
-	leave(): Promise<void>;
-}
 
 /** Sets up the context where the agents work. */
 export function startSession(options: StartSessionOptions): Session {
@@ -719,7 +630,7 @@ class SessionImpl implements Session {
 			streamFn: this.streamFn,
 			initialState: {
 				systemPrompt: renderSystemPrompt(speaking, view),
-				model: this.resolveModel(seat.def),
+				model: resolveModel(seat.def, this.customStream),
 				thinkingLevel: 'off',
 				tools: this.handsFor(seat, activation),
 				messages: [],
@@ -919,25 +830,5 @@ class SessionImpl implements Session {
 			});
 		}
 		return views;
-	}
-
-	private resolveModel(def: AgentDefinition): Model<Api> {
-		if (this.customStream) {
-			// A custom streamFn never reads the model; a stub keeps Pi's loop satisfied.
-			return {
-				id: def.model,
-				name: def.model,
-				api: 'scripted',
-				provider: 'scripted',
-			} as unknown as Model<Api>;
-		}
-		const slash = def.model.indexOf('/');
-		if (slash > 0) {
-			const model = registry().getModel(def.model.slice(0, slash), def.model.slice(slash + 1));
-			if (model) return model;
-		}
-		throw new Error(
-			`Unknown model '${def.model}' for agent '${def.name}': expected 'provider/model-id'.`,
-		);
 	}
 }

@@ -44,13 +44,6 @@ export type {
 // and read-back. Neither import is needed for the in-memory default's own
 // use inside `defineWorkspace` — only a host that wants to seed or read it.
 export { directoryBackend, memoryBackend } from './just-bash.ts';
-export type {
-	ReadSessionOptions,
-	Session,
-	SessionView,
-	StartSessionOptions,
-	Visit,
-} from './session.ts';
 export { readSession, startSession, stopSession, visitSession } from './session.ts';
 export type {
 	AgentDefinition,
@@ -65,14 +58,19 @@ export type {
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
+	ReadSessionOptions,
 	SeatedAgent,
 	SeatInfo,
 	SeatStatus,
 	Seq,
+	Session,
 	SessionEvent,
+	SessionView,
 	SpokenMessage,
+	StartSessionOptions,
 	SummaryMessage,
 	ToolContext,
+	Visit,
 	Workspace,
 	WorkspaceBackend,
 	WorkspaceHandle,
