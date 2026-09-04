@@ -1,10 +1,5 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
-import {
-	createAssistantMessageEventStream,
-	fauxAssistantMessage,
-	fauxToolCall,
-} from '@earendil-works/pi-ai';
+import type { Context } from '@earendil-works/pi-ai';
+import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	attentive,
@@ -21,70 +16,18 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
-
-// -- scripted model ----------------------------------------------------------
-
-type Script = (
-	context: Context,
-	name: string,
-	call: number,
-) => AssistantMessage | Promise<AssistantMessage>;
-
-/** A deterministic streamFn, routed on the name in the prompt. */
-function scripted(script: Script): StreamFn {
-	const calls = new Map<string, number>();
-	return (_model, context, options) => {
-		const stream = createAssistantMessageEventStream();
-		const name = /You are '([a-z0-9-]+)'/.exec(context.systemPrompt ?? '')?.[1] ?? 'unknown';
-		const call = (calls.get(name) ?? 0) + 1;
-		calls.set(name, call);
-		let finished = false;
-		const finish = (message: AssistantMessage) => {
-			if (finished) return;
-			finished = true;
-			if (message.stopReason === 'error' || message.stopReason === 'aborted') {
-				stream.push({ type: 'error', reason: message.stopReason, error: message });
-				return;
-			}
-			stream.push({ type: 'start', partial: message });
-			stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
-		};
-		const aborted = () =>
-			finish(fauxAssistantMessage('', { stopReason: 'aborted', errorMessage: 'aborted' }));
-		if (options?.signal?.aborted) {
-			queueMicrotask(aborted);
-			return stream;
-		}
-		options?.signal?.addEventListener('abort', aborted, { once: true });
-		void Promise.resolve(script(context, name, call))
-			.catch((error: unknown) =>
-				fauxAssistantMessage('', { stopReason: 'error', errorMessage: String(error) }),
-			)
-			.then(finish);
-		return stream;
-	};
-}
-
-/** One entry per participant with lines. Everybody else reads and stays quiet. */
-const byName = (lines: Record<string, Script>): Script => {
-	const table = new Map(Object.entries(lines));
-	return (context, name, call) => (table.get(name) ?? (() => quiet()))(context, name, call);
-};
-
-const speak = (text: string, to?: string) =>
-	fauxAssistantMessage([fauxToolCall('say', to ? { to, text } : { text })], {
-		stopReason: 'toolUse',
-	});
-
-const quiet = (thought = 'nothing to add') => fauxAssistantMessage(thought, { stopReason: 'stop' });
-
-const seat = (name: string) =>
-	fauxAssistantMessage([fauxToolCall('seat', { name })], { stopReason: 'toolUse' });
-
-const summarise = (text: string) =>
-	fauxAssistantMessage([fauxToolCall('summarise', { text })], { stopReason: 'toolUse' });
-
-const toolNames = (context: Context) => (context.tools ?? []).map((tool) => tool.name);
+import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
+import {
+	byAgent,
+	contextText,
+	quiet,
+	type Script,
+	scripted,
+	seat,
+	speak,
+	summarise,
+	toolNames,
+} from './support/scripted.ts';
 
 /** Which activation the assistant is taking, read off the one hand it holds. */
 const holding = (context: Context, tool: string) => toolNames(context).includes(tool);
@@ -111,26 +54,9 @@ function lastToolResult(context: Context): string[] {
 	return [last.content.map((c) => (c.type === 'text' ? c.text : '')).join('')];
 }
 
-function contextText(context: Context): string {
-	return context.messages
-		.map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
-		.join('\n');
-}
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-	let resolve!: () => void;
-	const promise = new Promise<void>((r) => {
-		resolve = r;
-	});
-	return { promise, resolve };
-}
-
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-
 // -- the room ----------------------------------------------------------------
 
-let unique = 0;
-const roomName = () => `roster-${++unique}`;
+const roomName = () => name('roster');
 
 const product = defineAgent({
 	name: 'product',
@@ -194,12 +120,6 @@ afterEach(async () => {
 	for (const session of started.splice(0)) await stopSession(session);
 });
 
-const collect = (session: Session) => {
-	const seen: SessionEvent[] = [];
-	session.subscribe((event) => seen.push(event));
-	return seen;
-};
-
 const kinds = (record: Message[]) => record.map((m) => m.kind);
 const presence = (record: Message[]) => record.filter(isPresence);
 const activated = (events: SessionEvent[]) =>
@@ -210,22 +130,11 @@ const seatNames = (session: Session) =>
 		.filter((s) => s.kind === 'agent')
 		.map((s) => s.name);
 
-/** The assistant's activation is over, whatever it decided. */
-function assistantEnded(session: Session): Promise<void> {
-	return new Promise((resolve) => {
-		const off = session.subscribe((event) => {
-			if (event.type !== 'activation_end' || event.agent !== 'assistant') return;
-			off();
-			resolve();
-		});
-	});
-}
-
 // -- what proves it ----------------------------------------------------------
 
 describe('a room that starts with the assistant alone', () => {
 	it('opens and closes an exchange for a question that wakes nobody', async () => {
-		const session = open({ script: byName({}) });
+		const session = open({ script: byAgent({}) });
 		const events = collect(session);
 
 		const visit = await visitSession(session, priya);
@@ -242,7 +151,7 @@ describe('a room that starts with the assistant alone', () => {
 	});
 
 	it('closes an exchange nobody woke in a room where every seat is named', async () => {
-		const session = open({ script: byName({}), agents: [passive(product)] });
+		const session = open({ script: byAgent({}), agents: [passive(product)] });
 		const events = collect(session);
 
 		const visit = await visitSession(session, priya);
@@ -262,11 +171,11 @@ describe('the reserve', () => {
 				assistant,
 				agents: [product],
 				available: [product],
-				streamFn: scripted(byName({})),
+				streamFn: scripted(byAgent({})),
 			}),
 		).toThrow(/Duplicate agent name 'product'/);
 
-		const session = open({ script: byName({}), available: [surveyor] });
+		const session = open({ script: byAgent({}), available: [surveyor] });
 		await expect(
 			visitSession(session, defineHuman({ name: 'surveyor', identity: 'A person.' })),
 		).rejects.toThrow(/is an agent in this session/);
@@ -276,7 +185,7 @@ describe('the reserve', () => {
 		const reserves: string[] = [];
 		const hands: string[][] = [];
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: (context) => {
 					if (!holding(context, 'seat')) return quiet();
 					reserves.push(contextText(context));
@@ -305,7 +214,7 @@ describe('the reserve', () => {
 	it('is never read by a seat, and wakes no assistant when empty', async () => {
 		const contexts: string[] = [];
 		const session = open({
-			script: byName({
+			script: byAgent({
 				product: (context) => {
 					contexts.push(contextText(context));
 					return quiet();
@@ -328,7 +237,7 @@ describe('seating', () => {
 	it('lands as a message stamped by the assistant, and wakes the seat it names', async () => {
 		const surveyorContexts: string[] = [];
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: composes(['surveyor']),
 				surveyor: (context, _name, call) => {
 					surveyorContexts.push(contextText(context));
@@ -365,7 +274,7 @@ describe('seating', () => {
 
 	it('wakes nobody at broadcast: a seating has no words in it', async () => {
 		const session = open({
-			script: byName({ assistant: composes(['surveyor']) }),
+			script: byAgent({ assistant: composes(['surveyor']) }),
 			agents: [product],
 			available: [surveyor],
 		});
@@ -384,7 +293,7 @@ describe('seating', () => {
 		const held = deferred();
 		const productContexts: string[] = [];
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: composes(['surveyor']),
 				product: async (context, _name, call) => {
 					productContexts.push(contextText(context));
@@ -423,7 +332,7 @@ describe('seating', () => {
 
 	it('keeps the exchange open through the composing activation, and the summary covers the newcomer', async () => {
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: composes(['surveyor'], 'Steel: 11.7 tonnes, enough for the pour.'),
 				// the seating and the newcomer's say may both land under its say, so it speaks again when refused
 				product: (_context, _name, call) => (call <= 3 ? speak('The pour is Saturday.') : quiet()),
@@ -463,7 +372,7 @@ describe('seating', () => {
 		const held = deferred();
 		const composing: number[] = [];
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: async (context, _name, call) => {
 					if (holding(context, 'seat')) {
 						composing.push(call);
@@ -502,7 +411,7 @@ describe('seating', () => {
 		const held = deferred();
 		const contexts: string[] = [];
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: async (context, _name, call) => {
 					if (!holding(context, 'seat')) return quiet();
 					contexts.push(contextText(context));
@@ -542,7 +451,7 @@ describe('seating', () => {
 		const results: string[] = [];
 		const seatings = ['nobody', 'surveyor', 'architect', 'greeter', 'surveyor'];
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: (context, _name, call) => {
 					if (!holding(context, 'seat')) return quiet();
 					results.push(...lastToolResult(context));
@@ -572,7 +481,7 @@ describe('seating', () => {
 describe('the host', () => {
 	it('seats and unseats by hand, and the record says so', async () => {
 		const session = open({
-			script: byName({
+			script: byAgent({
 				surveyor: (_context, _name, call) => (call === 1 ? speak('11.7 tonnes.') : quiet()),
 			}),
 			agents: [product],
@@ -601,7 +510,7 @@ describe('the host', () => {
 	it('returns an unseated agent to the reserve, where the assistant finds it again', async () => {
 		const reserves: string[] = [];
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: (context) => {
 					if (holding(context, 'seat')) reserves.push(contextText(context));
 					return quiet();
@@ -627,7 +536,7 @@ describe('the host', () => {
 	it('aborts an activation in flight on unseat, and refuses a say directed at the departed', async () => {
 		const held = deferred();
 		const session = open({
-			script: byName({
+			script: byAgent({
 				product: async (_context, _name, call) => {
 					if (call === 1) {
 						await held.promise;
@@ -666,7 +575,7 @@ describe('the host', () => {
 	});
 
 	it('unseats what the run added at stop, and leaves the starting composition alone', async () => {
-		const session = open({ script: byName({}), agents: [product], available: [surveyor] });
+		const session = open({ script: byAgent({}), agents: [product], available: [surveyor] });
 		await session.seat(surveyor);
 		await session.quiet();
 
@@ -683,7 +592,7 @@ describe('the host', () => {
 describe('a failed draft', () => {
 	it('waits for the seats to stop again, and a question that woke nobody is not that', async () => {
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: (context) => {
 					if (!holding(context, 'summarise')) return quiet();
 					return fauxAssistantMessage('', {
@@ -720,7 +629,7 @@ describe('the threshold', () => {
 	it('counts an agent that spoke and was unseated before the close', async () => {
 		const held = deferred();
 		const session = open({
-			script: byName({
+			script: byAgent({
 				assistant: composes([], 'Both answered.'),
 				product: async (_context, _name, call) => {
 					if (call === 1) await held.promise;

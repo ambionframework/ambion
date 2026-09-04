@@ -1,13 +1,9 @@
 import { mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ExecutionEnv, StreamFn } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
-import {
-	createAssistantMessageEventStream,
-	fauxAssistantMessage,
-	fauxToolCall,
-} from '@earendil-works/pi-ai';
+import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
+import type { Context } from '@earendil-works/pi-ai';
+import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Bash, InMemoryFs } from 'just-bash';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
@@ -15,7 +11,6 @@ import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
 import {
 	type AgentDefinition,
 	defineAgent,
-	defineHuman,
 	defineTool,
 	defineWorkspace,
 	destroyWorkspace,
@@ -25,57 +20,19 @@ import {
 	startSession,
 	stopSession,
 	type ToolContext,
-	visitSession,
 	type WorkspaceBackend,
 } from '../src/index.ts';
 import { MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
-
-// -- scripted model ----------------------------------------------------------
-
-type Script = (
-	context: Context,
-	agent: string,
-	call: number,
-) => AssistantMessage | Promise<AssistantMessage>;
-
-/** A deterministic streamFn: routes on the agent's name, counts calls per agent. */
-function scripted(script: Script): StreamFn {
-	const calls = new Map<string, number>();
-	return (_model, context) => {
-		const stream = createAssistantMessageEventStream();
-		const agent = /You are '([a-z0-9-]+)'/.exec(context.systemPrompt ?? '')?.[1] ?? 'unknown';
-		const call = (calls.get(agent) ?? 0) + 1;
-		calls.set(agent, call);
-		const finish = (message: AssistantMessage) => {
-			if (message.stopReason === 'error') {
-				stream.push({ type: 'error', reason: message.stopReason, error: message });
-			} else {
-				stream.push({ type: 'start', partial: message });
-				stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
-			}
-		};
-		void (async () => {
-			try {
-				finish(await script(context, agent, call));
-			} catch (error) {
-				finish(fauxAssistantMessage('', { stopReason: 'error', errorMessage: String(error) }));
-			}
-		})();
-		return stream;
-	};
-}
-
-const byAgent = (seats: Record<string, Script>): Script => {
-	const table = new Map(Object.entries(seats));
-	return (context, agent, call) => (table.get(agent) ?? (() => quiet()))(context, agent, call);
-};
-
-const callTool = (tool: string, args: Record<string, unknown>) =>
-	fauxAssistantMessage([fauxToolCall(tool, args)], { stopReason: 'toolUse' });
-
-const speak = (text: string) => callTool('say', { text });
-
-const quiet = (thought = 'nothing to add') => fauxAssistantMessage(thought, { stopReason: 'stop' });
+import { assistant, enter, roomName as name } from './support/room.ts';
+import {
+	byAgent,
+	callTool,
+	quiet,
+	type Script,
+	scripted,
+	speak,
+	toolNames,
+} from './support/scripted.ts';
 
 /** Every tool result the model has been shown so far, oldest first. */
 function toolResults(context: Context): { tool: string; text: string; failed: boolean }[] {
@@ -84,26 +41,6 @@ function toolResults(context: Context): { tool: string; text: string; failed: bo
 		const text = message.content.map((c) => (c.type === 'text' ? c.text : '')).join('');
 		return [{ tool: message.toolName, text, failed: message.isError }];
 	});
-}
-
-const toolNames = (context: Context) => (context.tools ?? []).map((tool) => tool.name);
-
-let unique = 0;
-const name = (prefix: string) => `${prefix}-${++unique}`;
-
-const assistant = defineAgent({
-	name: 'assistant',
-	identity: 'Writes the one message a person reads.',
-	instructions: 'stay quiet',
-	model: 'scripted/assistant',
-});
-
-const human = defineHuman({ name: 'andrei', identity: 'Founder.' });
-
-async function enter(session: Session) {
-	const visit = await visitSession(session, human);
-	await session.settled();
-	return visit;
 }
 
 function agent(agentName: string, options: Partial<Parameters<typeof defineAgent>[0]> = {}) {
