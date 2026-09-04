@@ -1,11 +1,213 @@
-# Follow-up work
+# Backlog
 
-Work this branch decided not to do, and why it is worth doing. Each item says
-what it is, what it costs, and where the reasoning already lives. The design
-contracts in [`docs/`](docs) hold the open questions about a design; this file
-holds the work.
+Two kinds of work, in one file. The first part holds architectural debt in
+what is built, found in the review of 2026-09-03 on the head that seats
+agents from a reserve. Every item names what it is, what it costs, where it
+lives, and the smallest change that removes it, and the items sit in order
+of cost. The second part holds design work a branch decided not to do, and
+why it is worth doing. The design contracts in [`../docs/`](../docs) hold
+the open questions about a design; this file holds the work.
+[`next.md`](next.md) holds the five to do first.
 
-## Steering an exchange from what a person holds
+## Part one: debt in what is built
+
+## Runtime module boundaries
+
+### 1. The room is a process global
+
+**What.** `session.ts` holds a module-level `running` map, a shared
+`defaultRepo`, a lazily built model registry, and a `registryStream` that
+reads `process.env` for API keys. `workspace.ts` holds a global `taken` set.
+
+**Why.** Two hosts in one process cannot each run a room with the same
+name. Tests keep unique-name counters to stay apart. A room resumed after
+a restart shares one in-memory repo with every other room in the process.
+For hermetic execution and session resumption, the host must own these.
+
+**Where.** `packages/ambion/src/session.ts` lines 75 to 95,
+`packages/ambion/src/workspace.ts` line 50.
+
+**Fix.** A `Runtime` value that holds the registry, the repo and the
+environment source. `startSession`, `readSession` and `defineWorkspace`
+take it as an option. The current globals become the default instance.
+
+### 2. Nothing bounds the record, and the room rescans it per message
+
+**What.** `Attendance.known()` rebuilds a map from the whole record on
+every call. The room calls it on each dispatch, on each `seats()`, and per
+person in `peopleViews()`, which adds two more linear scans per person.
+Every activation renders the whole record into the prompt through
+`renderRecord`.
+
+**Why.** Cost is O(n) per message and O(n²) over a run. Context grows
+without limit. `docs/agent.md` §8 says Ambion owns no context window, and
+`docs/assistant.md` §16 forbids a compactor, so today nothing owns it.
+
+**Where.** `packages/ambion/src/presence.ts`, `known()` and
+`lastChangeAt()`; `packages/ambion/src/session.ts`, nine call sites;
+`packages/ambion/src/render.ts`, `renderRecord`.
+
+**Fix.** Short term: `Attendance` keeps an incremental index that updates
+on append. Long term: a window policy on `RoomView.record`, and a decision
+in the contract about which module owns it.
+
+### 3. `session.ts` holds six jobs in 1063 lines
+
+**What.** `SessionImpl` has 61 methods. Its header lists compose, commit,
+route, hands, and quiescence. The reserve, `seat` and `unseat` joined it in
+the last change. The `say` tool sits inline at line 858, while the
+assistant's `summarise` and `seat` tools live in `assistant.ts` behind
+small room interfaces. The commit path (`claim`, `publish`,
+`commitPresence`, `deliverFrom`) and the assistant scheduling
+(`closeExchange` through `draftNext`) are two more concerns.
+
+**Why.** Every feature lands in one file. `dispatch` sits at the
+complexity cap by design, and the file around it has no cap.
+
+**Where.** `packages/ambion/src/session.ts`.
+
+**Fix.** Move `say` to `seat.ts` beside `toPiTool`, with a `SayRoom`
+interface that mirrors `SummaryRoom`. Move the commit path into
+`record.ts`. Move the reserve into its own module. The room keeps compose
+and route.
+
+### 4. Importing the package loads every provider SDK
+
+**What.** `session.ts` imports `@earendil-works/pi-ai/providers/all` at
+module top. The built dist pulls in the AWS Bedrock client, Google GenAI,
+protobufjs and the Anthropic SDK before a host defines anything.
+
+**Why.** Measured on the built dist:
+
+| Metric                             | Value                     |
+| ---------------------------------- | ------------------------- |
+| `import '@ambionframework/ambion'` | about 600 ms              |
+| RSS added by the import            | 65 MB                     |
+| Provider SDK weight on disk        | 45 MB of 378 MB installed |
+
+The four ignored build-script warnings on every `pnpm install` come from
+this tree, and `docs/toolchain.md` §3 says nothing in the tree needs one.
+
+**Where.** `packages/ambion/src/session.ts` line 28 and `registry()`.
+
+**Fix.** Make `registry()` a dynamic import, or move default provider
+resolution to the host. `streamFn` is already the extension surface.
+
+### 5. `defineAgent` imports the shell runtime
+
+**What.** `define.ts` imports `BUILTIN_TOOL_NAMES` from `workspace.ts`,
+which imports `memoryBackend` from `just-bash.ts`. A value module depends
+on just-bash for a set of four strings.
+
+**Where.** `packages/ambion/src/define.ts` line 27.
+
+**Fix.** Move the constant to `types.ts`.
+
+### 6. Two copies of typebox
+
+**What.** Pi pins `typebox@1.3.7` exactly. The runtime and the example
+declare `^1.3.18`. `defineTool` types parameters against one copy and Pi
+validates with the other.
+
+**Why.** It works today because schemas are plain objects. The split is a
+latent break on the next typebox release that changes a type.
+
+**Where.** `packages/ambion/package.json`, `examples/site/package.json`.
+
+**Fix.** Match Pi's pin, or declare typebox as a peer dependency.
+
+### 7. Test affordances leak into the runtime
+
+**What.** `resolveModel` returns `{ api: 'scripted' } as unknown as
+Model<Api>` when a host passes a custom `streamFn`.
+
+**Where.** `packages/ambion/src/session.ts`, `resolveModel`.
+
+**Fix.** Build a real `Model` value with Pi's own shape.
+
+## Toolchain and project structure
+
+### 8. The local gate and CI disagree
+
+**What.** `pnpm check` omits `check:format`. The CI `check` job runs it.
+`CLAUDE.md` and `CONTRIBUTING.md` both promise "the gate CI runs".
+
+**Why.** A contributor with a green local check can fail CI on formatting.
+
+**Where.** `package.json`, the `check` script.
+
+**Fix.** Add `pnpm run check:format` to `check`.
+
+### 9. The script contract names a task nobody implements
+
+**What.** `turbo.jsonc` declares `dev`, and `docs/toolchain.md` §6 lists it
+among the scripts every package implements. No package has one.
+`check:types` and `test` also depend on the package's own `build`, so the
+runtime bundles itself before it typechecks or tests sources that never
+read the bundle.
+
+**Where.** `turbo.jsonc`, `docs/toolchain.md` §6.
+
+**Fix.** Remove `dev` from both until a package has one. Change
+`check:types` and `test` to depend on `^build` alone.
+
+### 10. The CLI is a published placeholder
+
+**What.** No commands. A Node floor guard that nothing exercises. Help text
+and `packages/cli/README.md` promise `dev`, `deploy` and `init`.
+`packages/ambion/package.json` carries `cloudflare` and `durable-objects`
+keywords for targets that do not exist.
+
+**Why.** `CLAUDE.md` forbids documenting unbuilt features.
+
+**Where.** `packages/cli/src/main.ts`, `packages/cli/README.md`,
+`packages/ambion/package.json`.
+
+**Fix.** Mark the CLI private until it has a command, and remove the
+promises and the keywords.
+
+### 11. Knip config omits the example workspace
+
+**What.** `knip.json` lists `.` and `packages/*`. Plugin detection still
+covers `examples/site`, verified clean with `--workspace examples/site`.
+
+**Where.** `knip.json`.
+
+**Fix.** Add an `examples/*` entry so the coverage is declared.
+
+## Docs, tests, and generated artifacts
+
+### 12. The package README documents the previous API
+
+**What.** `packages/ambion/README.md` shows `defineHuman({ assistant })`
+and `startSession` without `assistant`. Neither typechecks against the
+current `StartSessionOptions`. This is the README the registry shows.
+
+**Where.** `packages/ambion/README.md` lines 12 to 50.
+
+**Fix.** Rewrite the snippet against the current API. Add a test that
+compiles the README snippet, so the next drift fails the gate.
+
+### 13. Test scaffolding is copied five ways
+
+**What.** `scripted()` appears in `session.test.ts`, `assistant.test.ts`,
+`workspace.test.ts` and `roster.test.ts`, with three different abort
+behaviours. `byAgent`, `speak`, `quiet`, `deferred`, `collect`, `enter`,
+the stub assistant and the name counters are copied beside it.
+`presence.test.ts` carries its own `quiet`. About 300 lines in total.
+
+Every copy identifies the agent by matching the system prompt for
+`You are '…'`. A wording change in `render.ts` routes every script to
+`unknown` and the tests fail for a reason nobody reads in the diff. The
+tests already name models `scripted/<agent>`.
+
+**Where.** `packages/ambion/test/*.test.ts`.
+
+**Fix.** One `test/support/` module. Route the script on `model.id`.
+
+## Part two: design work deferred
+
+### 14. Steering an exchange from what a person holds
 
 **What.** A person's preferences shape one message, and they shape it after
 the work is done. The same preferences could aim the room while it works.
@@ -15,7 +217,7 @@ reads what a person holds and what a message is, so the room can run it as
 a check, and it costs no activation.
 
 **Why.** The preferences are in one place already: the `preferences` field on
-`defineHuman` ([`docs/assistant.md`](docs/assistant.md) §2), which today
+`defineHuman` ([`docs/assistant.md`](../docs/assistant.md) §2), which today
 reaches the assistant alone, at the close. A person who has said what they act
 on has said something the room could use while it is still deciding what to
 say. It is also the cheapest of the three rungs in §12: a check costs
@@ -42,13 +244,13 @@ nothing, and rung 3 pays for an activation.
   (`SUMMARY_PARAGRAPH`) is the precedent.
 
 **Where.** `dispatch` and `handsFor` in
-[`session.ts`](packages/ambion/src/session.ts), `wakes` in
-[`seat.ts`](packages/ambion/src/seat.ts), the assistant's paragraphs in
-[`render.ts`](packages/ambion/src/render.ts).
+[`session.ts`](../packages/ambion/src/session.ts), `wakes` in
+[`seat.ts`](../packages/ambion/src/seat.ts), the assistant's paragraphs in
+[`render.ts`](../packages/ambion/src/render.ts).
 
-## Thinning the roster: the assistant unseats, and a seat leaves
+### 15. Thinning the roster: the assistant unseats, and a seat leaves
 
-**What.** [`docs/roster.md`](docs/roster.md) §5 gives the host `unseat` and
+**What.** [`docs/roster.md`](../docs/roster.md) §5 gives the host `unseat` and
 gives the assistant `seat` alone. Two ways to take a seat back off the roster
 while the room runs, and both return the agent to the reserve:
 
@@ -60,7 +262,7 @@ while the room runs, and both return the agent to the reserve:
 
 **Why.** A room that only grows over a day pays for every seat it added at
 every message that follows. The live run in
-[`demos/2026-09-03-who-the-question-needs.html`](demos/2026-09-03-who-the-question-needs.html)
+[`demos/2026-09-03-who-the-question-needs.html`](../demos/2026-09-03-who-the-question-needs.html)
 seated all three specialists by the second question and ended with six seats
 answering every message; the lock refused 45 says against 14 in the run
 before, and nothing thinned the roster. The assistant reads the question and
@@ -85,22 +287,22 @@ better than anybody when its own part is done.
   still counts at the close follows the threshold, which reads the record.
 
 **Where.** `seat` and `unseat` in
-[`session.ts`](packages/ambion/src/session.ts), the composing activation in
-[`assistant.ts`](packages/ambion/src/assistant.ts).
+[`session.ts`](../packages/ambion/src/session.ts), the composing activation in
+[`assistant.ts`](../packages/ambion/src/assistant.ts).
 
-## Reseating: attention that a running room can change
+### 16. Reseating: attention that a running room can change
 
 **What.** A seat's attention is chosen when the agent is seated and never
 moves. `session.reseat(name, attention)` would let a host widen or narrow one
 while the room runs.
 
 **Why.** Attention is now the whole of what a seating decides
-([`docs/agent.md`](docs/agent.md) rule 6): one widening scale, and one
+([`docs/agent.md`](../docs/agent.md) rule 6): one widening scale, and one
 comparison against a message's reach decides who wakes. Everything that reads
 it already reads it per activation, so a seat that changes point costs nothing
 to route.
 
-It is also what [`docs/assistant.md`](docs/assistant.md) §12's rung 3 wants. The assistant is
+It is also what [`docs/assistant.md`](../docs/assistant.md) §12's rung 3 wants. The assistant is
 a seat at `none`; letting it take part in an exchange is a wider attention and
 a `say` in its hands. With reseating that is a host's decision — _this room
 lets the assistant speak_ — rather than a code change in the runtime.
@@ -126,18 +328,18 @@ lets the assistant speak_ — rather than a code change in the runtime.
   with the paragraph that says when waking the assistant is worth the money.
 
 **Where.** `wakes` in
-[`packages/ambion/src/seat.ts`](packages/ambion/src/seat.ts), `Attention` in
-[`types.ts`](packages/ambion/src/types.ts), `seated` in
-[`define.ts`](packages/ambion/src/define.ts).
+[`packages/ambion/src/seat.ts`](../packages/ambion/src/seat.ts), `Attention` in
+[`types.ts`](../packages/ambion/src/types.ts), `seated` in
+[`define.ts`](../packages/ambion/src/define.ts).
 
-## Waking the assistant costs money, and nothing says when it is worth it
+### 17. Waking the assistant costs money, and nothing says when it is worth it
 
 Once the assistant is reachable (above), a product can wake it. The runtime's
 prompt tells a seat that "attention costs money" for a directed say, and says
 nothing about when the assistant is the right participant to ask. Rung 3
 without that paragraph is a room that pays for an assistant it did not need.
 
-## The assistant in every seat's roster
+### 18. The assistant in every seat's roster
 
 The assistant is a seat, so it is in the roster every seat reads. When each
 person brought one, three of them were measured at about 480 characters of a
@@ -146,33 +348,33 @@ that cannot be addressed. One seat per room cuts that to one line, and the
 example's `identity` for it is one sentence. Worth re-measuring once the
 assistant speaks.
 
-## A test for the owed-summary merge
+### 19. A test for the owed-summary merge
 
 `Assistant.owe` merges a person's owed range with `Math.min`, so somebody owed a
 summary from a failed activation who asks again gets one message covering
 both
 exchanges. Nothing pins that behaviour; the tests cover the failure and the
-retry separately. See [`docs/assistant.md`](docs/assistant.md) §5.
+retry separately. See [`docs/assistant.md`](../docs/assistant.md) §5.
 
-## Exchanges are run state
+### 20. Exchanges are run state
 
 `Exchanges` holds the open exchange in memory, so a restart begins with none —
 right for a room mid-question, and a limit for anything that wants to work
 over past exchanges. A closed exchange is an owner and a range, so it is
 derivable from the record; nothing derives it today. See
-[`docs/exchange.md`](docs/exchange.md) §5.
+[`docs/exchange.md`](../docs/exchange.md) §5.
 
-## A second non-seat writer
+### 21. A second non-seat writer
 
 The room owes summaries through a small scheduler: `owe`, `dueAtQuiescence`,
 `dueAfterDraft` and `activationEnded`, held by `Assistant`. If a room-level compactor ever arrives
-([`docs/assistant.md`](docs/assistant.md) §16 forbids it by name today), it wants the
+([`docs/assistant.md`](../docs/assistant.md) §16 forbids it by name today), it wants the
 same scheduler. Two writers is the point at which it should become its own
 thing rather than three fields on the session.
 
-## A credentials boundary for tool calls leaving the workspace
+### 22. A credentials boundary for tool calls leaving the workspace
 
-**What.** [`docs/workspace.md`](docs/workspace.md) §1 draws the workspace's
+**What.** [`docs/workspace.md`](../docs/workspace.md) §1 draws the workspace's
 boundary at the sandbox: what a tool can do inside it, through the runtime's
 own construction of each `Workspace` value. A tool call that reaches
 outside — an external API, a secret, another service — needs a second
@@ -185,14 +387,14 @@ beyond it.
 **Why.** Today a tool's `execute` function reaches whatever a host wires it
 to (`docs/agent.md` §3), with no distinction between a call that stays
 local and one that leaves. A workspace's filesystem boundary
-([`docs/workspace.md`](docs/workspace.md) §1, §8) has no answer for a tool
+([`docs/workspace.md`](../docs/workspace.md) §1, §8) has no answer for a tool
 that calls out to a real API, and a real deployment needs one before it
 hands an agent anything with network access.
 
 **What it needs deciding.**
 
 - Whether this is a workspace concern (a third kind of persistent entity,
-  under [`docs/workspace.md`](docs/workspace.md) §1's model) or a separate
+  under [`docs/workspace.md`](../docs/workspace.md) §1's model) or a separate
   primitive entirely.
 - What a sidecar proxy actually mediates: a network path every outbound
   call is forced through, or a narrower set of tools the workspace marks
@@ -200,22 +402,22 @@ hands an agent anything with network access.
 - Whether a token is minted per call, per activation, or per agent, and
   what a "short-lived" window actually is.
 - How this interacts with `ToolContext`
-  ([`docs/workspace.md`](docs/workspace.md) §4) and `defineTool`'s own
+  ([`docs/workspace.md`](../docs/workspace.md) §4) and `defineTool`'s own
   `execute` shape (`docs/agent.md` §3), neither of which takes any notion
   of a credential today.
 
-**Where.** [`docs/workspace.md`](docs/workspace.md) §1 names the boundary
+**Where.** [`docs/workspace.md`](../docs/workspace.md) §1 names the boundary
 and scopes it out to this entry; `ToolContext` in
-[`docs/workspace.md`](docs/workspace.md) §4 is the most natural place for
+[`docs/workspace.md`](../docs/workspace.md) §4 is the most natural place for
 a credential to reach a tool call now, alongside `defineTool`'s `execute`
-in [`docs/agent.md`](docs/agent.md) §3.
+in [`docs/agent.md`](../docs/agent.md) §3.
 
-## `/dev/null` on the just-bash backends is a file
+### 23. `/dev/null` on the just-bash backends is a file
 
 **What.** just-bash treats `/dev/null` as a plain file. A command that
 redirects into it appends to it, and on `directoryBackend` the redirect
 creates `dev/null` under the root, on disk
-([`docs/workspace.md`](docs/workspace.md) §8). The first live run of the
+([`docs/workspace.md`](../docs/workspace.md) §8). The first live run of the
 example left one there: a product wrote `cat … 2>/dev/null`, and the drive
 gained a file.
 
@@ -231,17 +433,17 @@ the `bash` tool's own description promises a Unix shell.
 - Whether `connect` should seed `/dev` into a `ReadWriteFs` the way just-bash
   seeds it into an `InMemoryFs`, so the two backends at least agree.
 
-**Where.** `connectOver` in [`just-bash.ts`](packages/ambion/src/just-bash.ts).
+**Where.** `connectOver` in [`just-bash.ts`](../packages/ambion/src/just-bash.ts).
 
-## A backend on a real machine
+### 24. A backend on a real machine
 
 **What.** A `WorkspaceBackend` whose `connect` creates a real OS user when
 one is absent and returns an `env` whose `exec` runs as that user through a
-real user switch. [`docs/workspace.md`](docs/workspace.md) §10 sketches it
+real user switch. [`docs/workspace.md`](../docs/workspace.md) §10 sketches it
 and commits to nothing.
 
 **Why.** The just-bash backend's boundary is nominal
-([`docs/workspace.md`](docs/workspace.md) §8): one instance, one identity,
+([`docs/workspace.md`](../docs/workspace.md) §8): one instance, one identity,
 and nothing stops one agent's `bash` call from reading another's home. A
 real user turns that into isolation the operating system enforces, the
 guarantee a multi-user Linux box gives. The shape is already fixed: two
@@ -252,17 +454,17 @@ abort signal because `useradd` and a process spawn are real waits.
 
 - How an OS user is named from an agent's `name`, and what happens when two
   workspaces on one host provision the same name
-  ([`docs/workspace.md`](docs/workspace.md) §7 accepts the collision and
+  ([`docs/workspace.md`](../docs/workspace.md) §7 accepts the collision and
   checks nothing).
 - What `destroy` removes: the users, their homes, or both.
 - Whether Pi's `NodeExecutionEnv` is the `env`, with a `sudo -u` prefix on
   every command, or whether the backend spawns as the user itself.
 
 **Where.** `WorkspaceBackend` in
-[`types.ts`](packages/ambion/src/types.ts); `directoryBackend` in
-[`just-bash.ts`](packages/ambion/src/just-bash.ts) is the shape to copy.
+[`types.ts`](../packages/ambion/src/types.ts); `directoryBackend` in
+[`just-bash.ts`](../packages/ambion/src/just-bash.ts) is the shape to copy.
 
-## Whether Agent or AgentHarness is Ambion's foundation
+### 25. Whether Agent or AgentHarness is Ambion's foundation
 
 **What.** Ambion's runtime imports Pi's lower-level `Agent` class
 (`activation.ts`, `seat.ts`), not `AgentHarness`
@@ -272,7 +474,7 @@ compaction, and tree navigation. Nobody chose `Agent` over `AgentHarness`
 on purpose; it is what the runtime already used before this question was
 ever asked.
 
-**Why.** [`docs/workspace.md`](docs/workspace.md) §6 reuses part of what
+**Why.** [`docs/workspace.md`](../docs/workspace.md) §6 reuses part of what
 the harness package exports — `Workspace` holds a plain `ExecutionEnv`
 as its own `env` property — while keeping `Workspace` itself and
 `ToolContext` (§4) outside anything `AgentHarness` provides. That split
@@ -294,18 +496,18 @@ joins it.
   solves problems this project would otherwise rebuild piece by piece.
 - What adopting `AgentHarness` would cost: its own session model
   (`SessionTree`, lanes), compaction, and tree navigation, none of which
-  [`agent.md`](docs/agent.md) or `session.ts` has a use for today.
+  [`agent.md`](../docs/agent.md) or `session.ts` has a use for today.
 - Whether `ToolContext`'s own resolution (`docs/workspace.md` §4) should
   become Ambion's own provider for `AgentHarnessOptions.toolContext`, if
   `Agent` is ever replaced by `AgentHarness`.
 
 **Where.** `packages/ambion/src/activation.ts` and `seat.ts` hold today's
-`Agent` imports; [`docs/workspace.md`](docs/workspace.md) §4 and §6 are
+`Agent` imports; [`docs/workspace.md`](../docs/workspace.md) §4 and §6 are
 where `ExecutionEnv` was adopted without adopting `AgentHarness`; Pi's
 own `harness/agent-harness.ts` and `harness/types.ts`
 (`@earendil-works/pi-agent-core`) define what `AgentHarness` actually is.
 
-## Roles as collaboration patterns
+### 26. Roles as collaboration patterns
 
 **What.** A seat today has one choice, attention: what wakes it. A role
 would add what it does once awake: leader, reviewer, coordinator,
@@ -326,10 +528,10 @@ collaboration patterns people and agents work in.
   differently in two rooms, and a role is probably the same kind of thing.
 - What a role changes: the seat's instructions, its attention, or the
   order the room wakes seats in. Only the first keeps the routing rule as
-  one comparison ([`docs/agent.md`](docs/agent.md) rule 6).
+  one comparison ([`docs/agent.md`](../docs/agent.md) rule 6).
 - Who assigns roles. The assistant never runs the room
-  ([`docs/assistant.md`](docs/assistant.md) §2), so assigning roles is a
+  ([`docs/assistant.md`](../docs/assistant.md) §2), so assigning roles is a
   different seat's work, or the host's.
 
-**Where.** `seated` in [`define.ts`](packages/ambion/src/define.ts), the
-roster in [`render.ts`](packages/ambion/src/render.ts).
+**Where.** `seated` in [`define.ts`](../packages/ambion/src/define.ts), the
+roster in [`render.ts`](../packages/ambion/src/render.ts).

@@ -129,7 +129,7 @@ is imperative. The second run read every record as a week stale, because the
 runtime stamps the real date into every context and the scenario is set on
 25 August; the goal now names the site's calendar. One artefact remains: a
 `2>/dev/null` created `dev/null` on the drive, because just-bash treats that
-path as a plain file. `FOLLOW_WORK.md` holds it.
+path as a plain file. `planning/backlog.md` holds it.
 
 **One Assistant, Three Readers.** The run that moved the assistant from the
 person to the room. `startSession` now takes `assistant` as a required

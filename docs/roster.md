@@ -296,7 +296,7 @@ way `abort()` does for the whole room. It takes the seat off the roster,
 then commits `unseated`. An agent that came from the reserve returns to it.
 An agent seated at start may be unseated too, and the record says so.
 Unseating is the direction the room cannot take back, so the assistant
-holds no tool for it. [`FOLLOW_WORK.md`](../FOLLOW_WORK.md) holds the
+holds no tool for it. [`planning/backlog.md`](../planning/backlog.md) holds the
 argument for giving it one.
 
 **`stop` unseats what the run added.** `stopSession` commits `left` for

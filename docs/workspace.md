@@ -47,7 +47,7 @@ credential. A workspace provisions one for it, inside `connect` (§7).
 leaves the workspace — an external API, a secret, another service — needs
 a separate mechanism: a credentials provider paired with a sidecar proxy,
 injecting a credential or issuing a short-lived token per call.
-[`FOLLOW_WORK.md`](../FOLLOW_WORK.md) tracks that boundary. This document
+[`planning/backlog.md`](../planning/backlog.md) tracks that boundary. This document
 leaves it out.
 
 **A workspace is a container of persistent entities, each of a different
@@ -296,7 +296,7 @@ engine with its own lanes, compaction, and navigation. Ambion's runtime
 imports Pi's lower-level `Agent` class (`activation.ts`, `session.ts`), and
 `AgentHarness` appears in no file under `packages/ambion/src`. `ToolContext`
 is addressed to `defineTool`'s own shape, at the layer Ambion builds on.
-`FOLLOW_WORK.md` holds the wider question of which class is Ambion's
+`planning/backlog.md` holds the wider question of which class is Ambion's
 foundation.
 
 ---
@@ -620,7 +620,7 @@ empty `/dev/null` into a fresh `InMemoryFs` and treats it as a file: a
 command that redirects into it appends to it (probed: `echo hi >/dev/null`
 leaves three bytes there). `ReadWriteFs` starts without `/dev`, so the same
 redirect creates `dev/null` under the root, on disk. A directory backend
-therefore holds whatever agents discarded, and [`FOLLOW_WORK.md`](../FOLLOW_WORK.md)
+therefore holds whatever agents discarded, and [`planning/backlog.md`](../planning/backlog.md)
 tracks it.
 
 **`env.cwd` is the agent's home for the life of the `env`, and nothing
