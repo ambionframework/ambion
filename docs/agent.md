@@ -520,7 +520,7 @@ reads takes the narrower type and cannot start anything by accident.
 One file per concern, and `session.ts` is the room that composes them: the
 record and its lock in [`record.ts`](../packages/ambion/src/record.ts), who
 is here in [`presence.ts`](../packages/ambion/src/presence.ts), who is seated
-and who is held in reserve in [`roster.ts`](../packages/ambion/src/roster.ts),
+and who is held in reserve in [`composition.ts`](../packages/ambion/src/composition.ts),
 a seat, what wakes it and its `say` in
 [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
 [`activation.ts`](../packages/ambion/src/activation.ts), the exchange in

@@ -130,7 +130,7 @@ export interface SayRoom {
 	 */
 	missed(readThrough: Seq): Message[];
 	/** Refuses a name the seat cannot address: unknown, itself, or seated at `none`. */
-	addressable(to: string | undefined): void;
+	assertAddressable(to: string | undefined): void;
 	/** The append half of rule 5's one tick. Nothing awaits between `missed` and this. */
 	commit(draft: Omit<SpokenMessage, 'seq' | 'at'>): SpokenMessage;
 	publish(message: Message): Promise<void>;
@@ -161,7 +161,7 @@ export function sayTool(seat: SeatRuntime, activation: Activation, room: SayRoom
 			// what it missed before anything else is checked, so a say at a
 			// colleague who left in the meantime reads the departure.
 			assertHeard(activation, room);
-			room.addressable(to);
+			room.assertAddressable(to);
 			const text = params.text.trim();
 			// A message with nothing in it still takes a seq, renders in
 			// every context after it, and stands inside whatever range a

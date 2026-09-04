@@ -4,7 +4,7 @@
  *
  * Everything with a life of its own has left. The record and its lock are
  * `record.ts`, who is here is `presence.ts`, who is seated and who is held in
- * reserve is `roster.ts`, a seat, what wakes it and its `say` are `seat.ts`,
+ * reserve is `composition.ts`, a seat, what wakes it and its `say` are `seat.ts`,
  * one activation is `activation.ts`, an exchange is `exchange.ts`, the
  * assistant is `assistant.ts`, the model a seat runs on is `model.ts`, and
  * every sentence a participant reads is `render.ts`. What is left is what
@@ -34,6 +34,7 @@ import {
 	seatTool,
 	summariseTool,
 } from './assistant.ts';
+import { Composition, seatingOf } from './composition.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
 import { registryStream, resolveModel } from './model.ts';
 import { Attendance, type VisitRoom } from './presence.ts';
@@ -47,7 +48,6 @@ import {
 	renderTurnContext,
 	type SeatSpeaking,
 } from './render.ts';
-import { Roster, unwrap } from './roster.ts';
 import { isActive, type SayRoom, type SeatRuntime, sayTool, toPiTool, wakes } from './seat.ts';
 import {
 	type AgentDefinition,
@@ -150,7 +150,8 @@ class SessionImpl implements Session {
 	private readonly repo: SessionRepo;
 	private readonly store: RecordStore;
 	/** Who is seated, and who is held in reserve. */
-	private readonly roster = new Roster((name) => this.here.knows(name));
+	/** The room's composition for this run: the roster, and the reserve. */
+	private readonly composition = new Composition((name) => this.here.knows(name));
 	/** The room's assistant: how each person reads, who is owed, what it is drafting or composing. */
 	private readonly assistant: Assistant;
 	private readonly here = new Attendance(() => this.record);
@@ -175,14 +176,14 @@ class SessionImpl implements Session {
 		this.goal = options.goal?.trim() || undefined;
 		this.repo = options.repo ?? defaultRepo;
 		this.store = new RecordStore(this.repo, this.name);
-		for (const seat of options.agents ?? []) this.roster.place(unwrap(seat));
+		for (const seat of options.agents ?? []) this.composition.place(seatingOf(seat));
 		// Seated at the narrow end: nothing said in the room wakes the assistant;
 		// the open and the close of an exchange do, and it is here for the whole run.
 		this.assistant = new Assistant(
-			this.roster.place({ def: assertAssistant(options.assistant), attention: 'none' }),
+			this.composition.place({ def: assertAssistant(options.assistant), attention: 'none' }),
 			(name) => this.here.knows(name),
 		);
-		for (const seat of options.available ?? []) this.roster.hold(unwrap(seat));
+		for (const seat of options.available ?? []) this.composition.hold(seatingOf(seat));
 		this.customStream = options.streamFn !== undefined;
 		this.streamFn = options.streamFn ?? registryStream;
 	}
@@ -195,7 +196,7 @@ class SessionImpl implements Session {
 	async seat(seat: AgentSeat): Promise<void> {
 		this.assertRunning();
 		await this.store.ready;
-		const placed = this.roster.seat(seat);
+		const placed = this.composition.seat(seat);
 		await this.commitPresence({
 			kind: 'seated',
 			from: placed.def.name,
@@ -207,19 +208,15 @@ class SessionImpl implements Session {
 	async unseat(agent: AgentDefinition): Promise<void> {
 		this.assertRunning();
 		await this.store.ready;
-		const seat = this.roster.get(agent.name);
+		const seat = this.composition.get(agent.name);
 		if (!seat) throw new Error(`'${agent.name}' is not seated in this session.`);
 		if (this.assistant.is(agent.name)) {
 			throw new Error(`'${agent.name}' is the assistant: a room cannot run without one.`);
 		}
-		this.retire(seat);
-		await this.commitPresence({ kind: 'unseated', from: agent.name });
-	}
-
-	/** Off the roster: what was mid-flight ends, and a reserve agent goes back to the reserve. */
-	private retire(seat: SeatRuntime): void {
+		// What was mid-flight ends, and a reserve agent goes back to the reserve.
 		seat.activation?.abort();
-		this.roster.retire(seat);
+		this.composition.retire(seat);
+		await this.commitPresence({ kind: 'unseated', from: agent.name });
 	}
 
 	/**
@@ -254,7 +251,7 @@ class SessionImpl implements Session {
 	 * activation, so nothing counts them alongside and nothing can drift.
 	 */
 	private running(): SeatRuntime[] {
-		return [...this.roster.seated()].filter(isActive);
+		return [...this.composition.roster()].filter(isActive);
 	}
 
 	/** Nothing at all is taking an activation. The assistant writing is something. */
@@ -282,7 +279,7 @@ class SessionImpl implements Session {
 	}
 
 	abort(): void {
-		for (const seat of this.roster.seated()) seat.activation?.abort();
+		for (const seat of this.composition.roster()) seat.activation?.abort();
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
@@ -292,7 +289,7 @@ class SessionImpl implements Session {
 
 	seats(): SeatInfo[] {
 		const seats: SeatInfo[] = [];
-		for (const seat of this.roster.seated()) {
+		for (const seat of this.composition.roster()) {
 			seats.push({
 				kind: 'agent',
 				name: seat.def.name,
@@ -335,7 +332,7 @@ class SessionImpl implements Session {
 	}
 
 	private assertVisitable(human: HumanDefinition): void {
-		if (this.roster.knows(human.name)) {
+		if (this.composition.knows(human.name)) {
 			throw new Error(
 				`'${human.name}' is an agent in this session: one name names one participant.`,
 			);
@@ -387,7 +384,7 @@ class SessionImpl implements Session {
 		const opened = this.exchanges.note(message, this.here.knows(message.from));
 		if (!opened) return;
 		this.emit({ type: 'exchange_opened', exchange: opened });
-		const reserve = this.roster.reserveSize();
+		const reserve = this.composition.reserveSize();
 		if (reserve === 0 || this.stopped) return;
 		const composing = this.assistant.compose(opened.owner, opened.from, reserve);
 		if (composing) this.activate(this.assistant.seat);
@@ -412,9 +409,10 @@ class SessionImpl implements Session {
 			}
 			// What the run added leaves with it, the same way: the next run begins
 			// from the composition `startSession` was given.
-			for (const seat of this.roster.seated()) {
+			for (const seat of this.composition.roster()) {
 				if (!seat.added) continue;
-				this.retire(seat);
+				seat.activation?.abort();
+				this.composition.retire(seat);
 				this.commitUnrouted({ kind: 'unseated', from: seat.def.name });
 			}
 			await this.store.drained();
@@ -439,7 +437,7 @@ class SessionImpl implements Session {
 		input: { to?: Participant; text: string },
 	): Promise<void> {
 		const to = input.to?.name;
-		if (to !== undefined && !this.here.knows(to) && !this.roster.get(to)) {
+		if (to !== undefined && !this.here.knows(to) && !this.composition.get(to)) {
 			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
 		}
 		await this.publish(
@@ -476,7 +474,7 @@ class SessionImpl implements Session {
 		const author = authorOf(message);
 		const target = this.targetOf(message);
 		const fromAssistant = author !== undefined && this.assistant.is(author);
-		for (const seat of this.roster.seated()) {
+		for (const seat of this.composition.roster()) {
 			if (seat.def.name !== author) this.route(seat, message, target, fromAssistant);
 		}
 	}
@@ -507,8 +505,8 @@ class SessionImpl implements Session {
 	/** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
 	private targetOf(message: Message): SeatRuntime | undefined {
 		if (isSpoken(message))
-			return message.to === undefined ? undefined : this.roster.get(message.to);
-		return message.kind === 'seated' ? this.roster.get(message.from) : undefined;
+			return message.to === undefined ? undefined : this.composition.get(message.to);
+		return message.kind === 'seated' ? this.composition.get(message.from) : undefined;
 	}
 
 	private activate(seat: SeatRuntime): void {
@@ -582,7 +580,7 @@ class SessionImpl implements Session {
 		const composing: ComposingView | undefined = composition && {
 			person: composition.person,
 			from: composition.from,
-			reserve: this.roster.reserved(),
+			reserve: this.composition.reserved(),
 		};
 		return { def: seat.def, assistant, closing, composing };
 	}
@@ -652,8 +650,8 @@ class SessionImpl implements Session {
 	private seatHand(seat: SeatRuntime, activation: Activation, composing: Composing): AgentTool {
 		return seatTool(seat.def.name, composing, {
 			stopped: () => this.stopped,
-			reserve: () => this.roster.reserved(),
-			seat: (name) => this.roster.admit(name),
+			reserve: () => this.composition.reserved(),
+			seat: (name) => this.composition.admit(name),
 			commit: (draft) => this.store.append<PresenceMessage>(draft),
 			publish: (message) => this.publish(message),
 			written: () => {
@@ -679,8 +677,8 @@ class SessionImpl implements Session {
 	private sayRoom(seat: SeatRuntime): SayRoom {
 		return {
 			lastSeq: () => this.store.lastSeq,
-			missed: (readThrough) => this.refuse(seat.def.name, readThrough),
-			addressable: (to) => this.assertAddressable(seat, to),
+			missed: (readThrough) => this.missedBy(seat.def.name, readThrough),
+			assertAddressable: (to) => this.assertAddressable(seat, to),
 			commit: (draft) => this.store.append<SpokenMessage>(draft),
 			publish: (message) => this.publish(message),
 		};
@@ -691,7 +689,7 @@ class SessionImpl implements Session {
 	 * a `conflict` event when there is anything. A say and a summary are refused
 	 * at the same boundary, which is why the event names the author.
 	 */
-	private refuse(author: string, readThrough: Seq): Message[] {
+	private missedBy(author: string, readThrough: Seq): Message[] {
 		const missed = this.store.missed(readThrough);
 		if (missed.length > 0) this.emit({ type: 'conflict', author, missed });
 		return missed;
@@ -699,7 +697,7 @@ class SessionImpl implements Session {
 
 	private assertAddressable(seat: SeatRuntime, to: string | undefined): void {
 		if (to === undefined) return;
-		const target = this.roster.get(to);
+		const target = this.composition.get(to);
 		if (!this.here.knows(to) && !target) {
 			throw new Error(`Unknown participant '${to}'. Address someone from the roster.`);
 		}

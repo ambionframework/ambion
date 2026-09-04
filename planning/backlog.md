@@ -56,7 +56,7 @@ in the contract about which module owns it.
 **Resolved 2026-09-04.** `say` lives in `seat.ts` behind `SayRoom`, the way
 `summarise` and `seat` live in `assistant.ts` behind their room interfaces.
 The lock and the timestamp live in `record.ts`. The roster and the reserve
-live in `roster.ts`. Model resolution lives in `model.ts`, where items 4
+live in `composition.ts`. Model resolution lives in `model.ts`, where items 4
 and 7 now land. The public session shapes live in `types.ts`, and the visit
 handle and the people views in `presence.ts`.
 

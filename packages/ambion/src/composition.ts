@@ -1,11 +1,13 @@
 /**
- * The roster: who is seated in one room, and who is held in reserve.
+ * The composition: who is seated in one room, and who is held in reserve.
+ * The roster is the first list, and a seat reads it; the reserve is the
+ * second, and the assistant reads it.
  *
- * Both lists hold the same kind of entry, an agent and the attention it takes
- * when seated, and an agent moves between them: the assistant seats one from
- * the reserve, the host seats one from the reserve or from anywhere, and an
- * unseat returns a reserve agent to it. One name names one participant across
- * both lists and the people the room knows, and the roster refuses a second.
+ * Both lists hold a seating, an agent and the attention it takes when seated,
+ * and an agent moves between them: the assistant seats one from the reserve,
+ * the host seats one from the reserve or from anywhere, and an unseat returns
+ * a reserve agent to it. One name names one participant across both lists and
+ * the people the room knows, and the composition refuses a second.
  *
  * What is here is the two lists and the moves between them. What a seating
  * does to the record, and what it wakes, is the room's (`session.ts`).
@@ -20,13 +22,13 @@ import {
 } from './types.ts';
 
 /** An agent and the attention it takes when seated: what both lists hold. */
-export interface Reserved {
+export interface Seating {
 	def: AgentDefinition;
 	attention: Attention;
 }
 
 /** The definition and the attention an `AgentSeat` carries. Refuses anything else. */
-export function unwrap(seat: AgentSeat): Reserved {
+export function seatingOf(seat: AgentSeat): Seating {
 	const def = isSeatedAgent(seat) ? seat.agent : seat;
 	if (!isAgent(def)) {
 		throw new Error('Agents must come from defineAgent or seated().');
@@ -34,16 +36,16 @@ export function unwrap(seat: AgentSeat): Reserved {
 	return { def, attention: isSeatedAgent(seat) ? seat.attention : 'broadcast' };
 }
 
-export class Roster {
+export class Composition {
 	private readonly seats = new Map<string, SeatRuntime>();
 	/** The reserve: agents the room may seat later, held with the attention they will take. */
-	private readonly reserve = new Map<string, Reserved>();
+	private readonly reserve = new Map<string, Seating>();
 
 	/** `taken` answers for the people the room knows: one name names one participant. */
 	constructor(private readonly taken: (name: string) => boolean) {}
 
 	/** Seat one agent, refusing a name the room already knows. */
-	place(entry: Reserved): SeatRuntime {
+	place(entry: Seating): SeatRuntime {
 		this.assertFreeName(entry.def.name);
 		const placed: SeatRuntime = { def: entry.def, attention: entry.attention };
 		this.seats.set(entry.def.name, placed);
@@ -51,7 +53,7 @@ export class Roster {
 	}
 
 	/** Hold one agent in reserve, refusing a name the room already knows. */
-	hold(entry: Reserved): void {
+	hold(entry: Seating): void {
 		this.assertFreeName(entry.def.name);
 		this.reserve.set(entry.def.name, entry);
 	}
@@ -65,7 +67,7 @@ export class Roster {
 
 	/** The host seats an agent: from the reserve when it is there, and from anywhere else too. */
 	seat(seat: AgentSeat): SeatRuntime {
-		const given = unwrap(seat);
+		const given = seatingOf(seat);
 		const held = this.reserve.get(given.def.name);
 		if (held) this.reserve.delete(given.def.name);
 		// A bare definition takes the attention its reserve entry carried.
@@ -98,7 +100,8 @@ export class Roster {
 		return this.seats.get(name);
 	}
 
-	seated(): IterableIterator<SeatRuntime> {
+	/** The roster: who is seated now. */
+	roster(): IterableIterator<SeatRuntime> {
 		return this.seats.values();
 	}
 
