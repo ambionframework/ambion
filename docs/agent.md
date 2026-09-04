@@ -298,14 +298,14 @@ temporary by design: when the agent goes idle the view is discarded, and
 the next activation reads the record itself. The record is canonical.
 
 **3. Speaking is a tool; silence is the default.** An activated agent holds
-one built-in tool, `say({ to?, text })` (`sayTool` in `session.ts`). Ending
+one built-in tool, `say({ to?, text })` (`sayTool` in `seat.ts`). Ending
 an activation without calling it is declining. Declining leaves no mark on the
 record — the way a colleague reads the room and keeps working. The tool
 refuses an empty text for the same reason: a message with nothing in it
 still takes a seq, renders in every context after it, and wakes whoever
 hears it.
 
-The runtime's prompt (`systemPrompt` in `session.ts`) sets the
+The runtime's prompt (`renderSystemPrompt` in `render.ts`) sets the
 bar for every seat: a reply must add something the record does not already
 hold — new information, a decision moved forward, or a genuinely different
 perspective — and a point already made, even in other words, is met with
@@ -332,7 +332,7 @@ the room first. A `say` is a message the whole room pays for.
 **5. No one speaks over the room.** A message commits only against a record
 its author has read in full. For a seat that is its `say`, checked against
 the view it was handed plus every steer that has landed in its transcript
-since (`viewSeq` in `seat.ts`). If the record moved past that, the say
+since (`readThrough` in `activation.ts`). If the record moved past that, the say
 fails without landing, and the failure carries the messages the seat
 missed: the same steering contract, enforced at the tool boundary, where
 delivery is guaranteed. The seat then decides again — speak because
@@ -401,8 +401,8 @@ Each agent's tool calls belong to its own working context; other
 participants see its `say`s only, because the record is all any view
 renders. The hands are still auditable: every activation's full turns land
 in the seat's own downstream Pi session — `<room>:<agent>`, parented to the
-room's, named by `seats().sessionId`, listed by the same repo (`persistRun`
-in `session.ts`) — so what an agent actually did can be replayed long after
+room's, named by `seats().sessionId`, listed by the same repo (`persistTurns`
+in `record.ts`) — so what an agent actually did can be replayed long after
 its working view reset. The record is never rewritten for anyone.
 
 ### Observing the room
@@ -518,12 +518,15 @@ sooner.
 reads takes the narrower type and cannot start anything by accident.
 
 One file per concern, and `session.ts` is the room that composes them: the
-record in [`record.ts`](../packages/ambion/src/record.ts), who is here in
-[`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes it
-in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
+record and its lock in [`record.ts`](../packages/ambion/src/record.ts), who
+is here in [`presence.ts`](../packages/ambion/src/presence.ts), who is seated
+and who is held in reserve in [`roster.ts`](../packages/ambion/src/roster.ts),
+a seat, what wakes it and its `say` in
+[`seat.ts`](../packages/ambion/src/seat.ts), one activation in
 [`activation.ts`](../packages/ambion/src/activation.ts), the exchange in
 [`exchange.ts`](../packages/ambion/src/exchange.ts), what the assistant
-writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), what an
+writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), the model a
+seat runs on in [`model.ts`](../packages/ambion/src/model.ts), what an
 agent's tools reach into in
 [`workspace.ts`](../packages/ambion/src/workspace.ts), and what any of them
 reads in [`render.ts`](../packages/ambion/src/render.ts).

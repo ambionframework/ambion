@@ -4,8 +4,9 @@ This document is the design contract for the assistant: the agent every
 session seats, which reads how each person reads and turns the room's work
 into one message for the person who asked. It is shipped. The code lives with the rest
 of the runtime in [`packages/ambion/src`](../packages/ambion/src) —
-the summary in [`session.ts`](../packages/ambion/src/session.ts), the fold a
-seat reads in [`render.ts`](../packages/ambion/src/render.ts), the shapes
+the `summarise` tool in [`assistant.ts`](../packages/ambion/src/assistant.ts),
+the lock it commits under in [`record.ts`](../packages/ambion/src/record.ts),
+the fold a seat reads in [`render.ts`](../packages/ambion/src/render.ts), the shapes
 in [`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md), [`exchange.md`](exchange.md) and
 [`presence.md`](presence.md) first.

@@ -53,23 +53,18 @@ in the contract about which module owns it.
 
 ### 3. `session.ts` holds six jobs in 1063 lines
 
-**What.** `SessionImpl` has 61 methods. Its header lists compose, commit,
-route, hands, and quiescence. The reserve, `seat` and `unseat` joined it in
-the last change. The `say` tool sits inline at line 858, while the
-assistant's `summarise` and `seat` tools live in `assistant.ts` behind
-small room interfaces. The commit path (`claim`, `publish`,
-`commitPresence`, `deliverFrom`) and the assistant scheduling
-(`closeExchange` through `draftNext`) are two more concerns.
+**Resolved 2026-09-04.** `say` lives in `seat.ts` behind `SayRoom`, the way
+`summarise` and `seat` live in `assistant.ts` behind their room interfaces.
+The lock and the timestamp live in `record.ts`. The roster and the reserve
+live in `roster.ts`. Model resolution lives in `model.ts`, where items 4
+and 7 now land. The public session shapes live in `types.ts`, and the visit
+handle and the people views in `presence.ts`.
 
-**Why.** Every feature lands in one file. `dispatch` sits at the
-complexity cap by design, and the file around it has no cap.
-
-**Where.** `packages/ambion/src/session.ts`.
-
-**Fix.** Move `say` to `seat.ts` beside `toPiTool`, with a `SayRoom`
-interface that mirrors `SummaryRoom`. Move the commit path into
-`record.ts`. Move the reserve into its own module. The room keeps compose
-and route.
+**What stays.** `session.ts` measures 781 lines and holds compose, commit and
+route, the hands, and quiescence. The quiescence block, `settle` through
+`markQuiet`, reads the exchanges, the assistant, the waiters and `activate`
+at once; an interface for it is the room. Item 21 names the scheduler it
+becomes when a second writer needs one.
 
 ### 4. Importing the package loads every provider SDK
 

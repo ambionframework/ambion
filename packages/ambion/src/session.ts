@@ -2,19 +2,20 @@
  * The room: the one place where a record, the seats around it, the people
  * visiting it and the exchanges they open become behaviour.
  *
- * Everything with a life of its own has left. The record is `record.ts`, who
- * is here is `presence.ts`, a seat and what wakes it is `seat.ts`, one
- * activation is `activation.ts`, an exchange is `exchange.ts`, the assistant is
- * `assistant.ts`, and every sentence a participant reads is `render.ts`. What is
- * left is what only a room can do:
+ * Everything with a life of its own has left. The record and its lock are
+ * `record.ts`, who is here is `presence.ts`, who is seated and who is held in
+ * reserve is `roster.ts`, a seat, what wakes it and its `say` are `seat.ts`,
+ * one activation is `activation.ts`, an exchange is `exchange.ts`, the
+ * assistant is `assistant.ts`, the model a seat runs on is `model.ts`, and
+ * every sentence a participant reads is `render.ts`. What is left is what
+ * only a room can do:
  *
- * - **Compose.** Seat the agents and the assistant, hold the reserve, admit the
- *   people, seat and unseat while it runs, and take it all down again.
- * - **Commit.** One lock, one seq at a time, for every author (rule 5), and
- *   one `message` event per message however it was written.
- * - **Route.** Who hears a message, and who wakes for it.
- * - **Give an activation what only the room knows.** The model, the prompt, the
- *   hands, and the room as it stands at that moment.
+ * - **Compose.** Seat the agents and the assistant, admit the people, seat
+ *   and unseat while it runs, and take it all down again.
+ * - **Commit and route.** One `message` event per message however it was
+ *   written, then who hears it and who wakes for it.
+ * - **Give an activation what only the room knows.** The model, the prompt,
+ *   the hands, and the room as it stands at that moment.
  * - **Say when it has stopped.** An exchange closed, and nothing running.
  */
 import type {

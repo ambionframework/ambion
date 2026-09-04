@@ -20,9 +20,13 @@ the system prompt. The four abort behaviours agree.
 next two items land in it. Splitting first keeps each of them a local
 diff.
 
-**Done when.** `say` lives in `seat.ts` behind a `SayRoom` interface. The
-commit path lives in `record.ts`. The reserve lives in its own module.
-`session.ts` holds compose and route and stays under 600 lines.
+**Done, 2026-09-04.** `say` lives in `seat.ts` behind a `SayRoom`
+interface. The lock lives in `record.ts`. The roster and the reserve live
+in `roster.ts`, the model in `model.ts`, the visit handle in
+`presence.ts`, and the public shapes in `types.ts`. `session.ts` holds
+compose, commit and route, the hands, and quiescence, at 781 lines. Under
+600 needed the quiescence block out, and that block is the room; backlog
+21 names the scheduler it becomes when a second writer needs it.
 
 ## 3. A `Runtime` value in place of the process globals (backlog 1)
 

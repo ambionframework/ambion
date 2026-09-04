@@ -4,7 +4,9 @@ This document is the design contract for the roster while a room runs: the
 agents a session starts with, the agents it holds in reserve, and the
 assistant that seats them. It is shipped. The code lives with the rest of
 the runtime in [`packages/ambion/src`](../packages/ambion/src): the seating
-and the reserve in [`session.ts`](../packages/ambion/src/session.ts), the
+and the reserve in [`roster.ts`](../packages/ambion/src/roster.ts), what a
+seating puts on the record in
+[`session.ts`](../packages/ambion/src/session.ts), the
 composing activation and the `seat` tool in
 [`assistant.ts`](../packages/ambion/src/assistant.ts), the routing in
 [`seat.ts`](../packages/ambion/src/seat.ts), and the shapes in

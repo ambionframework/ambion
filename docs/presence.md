@@ -3,8 +3,10 @@
 This document is the design contract for presence: who is in a session, how
 the room knows, and what the agents do about it. The code lives with the
 rest of the runtime in [`packages/ambion/src`](../packages/ambion/src) — the
-visit and the roster in [`session.ts`](../packages/ambion/src/session.ts),
-the shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
+visit in [`presence.ts`](../packages/ambion/src/presence.ts), the roster in
+[`roster.ts`](../packages/ambion/src/roster.ts), what both put on the record
+in [`session.ts`](../packages/ambion/src/session.ts), the shapes in
+[`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md) first: this document assumes its eight rules and
 breaks none of them — presence widens rule 6 and leaves rule 1 exact.
 
