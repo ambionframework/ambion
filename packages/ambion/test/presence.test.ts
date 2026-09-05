@@ -1,15 +1,4 @@
-import type { Session as PiSession, SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage } from '@earendil-works/pi-ai';
-import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earendil-works/pi-ai';
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-	let resolve!: () => void;
-	const promise = new Promise<void>((r) => {
-		resolve = r;
-	});
-	return { promise, resolve };
-}
-
+import type { Session as PiSession, SessionRepo } from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	attentive,
@@ -21,32 +10,24 @@ import {
 	passive,
 	readSession,
 	type Session,
-	type SessionEvent,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { andrei, assistant, collect, deferred, roomName as name } from './support/room.ts';
+import { contextText, quiet, scripted } from './support/scripted.ts';
 
 // -- a room that never speaks ------------------------------------------------
 
 const contexts: string[] = [];
 const prompts: string[] = [];
 
-const quiet: StreamFn = (_model, context) => {
+/** Every seat reads and stays quiet, and the test reads what each seat was shown. */
+const recording = scripted((context) => {
 	prompts.push(context.systemPrompt ?? '');
-	contexts.push(
-		context.messages
-			.map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
-			.join('\n'),
-	);
-	const stream = createAssistantMessageEventStream();
-	const message: AssistantMessage = fauxAssistantMessage('nothing to add', { stopReason: 'stop' });
-	queueMicrotask(() => {
-		stream.push({ type: 'start', partial: message });
-		stream.push({ type: 'done', reason: 'stop', message });
-	});
-	return stream;
-};
+	contexts.push(contextText(context));
+	return quiet();
+});
 
 const watcher = defineAgent({
 	name: 'watcher',
@@ -55,31 +36,21 @@ const watcher = defineAgent({
 	model: 'scripted/watcher',
 });
 
-/** A trivial assistant: every room seats one, and nothing here tests what it writes. */
-const assistant = defineAgent({
-	name: 'assistant',
-	identity: 'Writes the one message a person reads.',
-	instructions: 'stay quiet',
-	model: 'scripted/assistant',
-});
-
-const andrei = defineHuman({ name: 'andrei', identity: 'Founder. Owns the weekly.' });
 const mara = defineHuman({ name: 'mara', identity: 'Design lead.' });
 
-let unique = 0;
-const roomName = () => `presence-${++unique}`;
+const roomName = () => name('presence');
 
 const open = (overrides: Partial<Parameters<typeof startSession>[0]> = {}) =>
-	startSession({ name: roomName(), assistant, agents: [watcher], streamFn: quiet, ...overrides });
+	startSession({
+		name: roomName(),
+		assistant,
+		agents: [watcher],
+		streamFn: recording,
+		...overrides,
+	});
 
 const kinds = async (session: { messages(): Promise<Message[]> }) =>
 	(await session.messages()).map((m) => m.kind);
-
-const events = (session: Session) => {
-	const seen: SessionEvent[] = [];
-	session.subscribe((event) => seen.push(event));
-	return seen;
-};
 
 const presenceOf = (session: Session, name: string) => {
 	const seat = session.seats().find((s) => s.name === name);
@@ -113,7 +84,7 @@ describe('presence', () => {
 
 	it('commits an arrival and wakes nobody, because no seat watches for one by default', async () => {
 		const session = track(open());
-		const seen = events(session);
+		const seen = collect(session);
 		await visitSession(session, andrei);
 		await session.settled();
 
@@ -136,7 +107,7 @@ describe('presence', () => {
 			model: 'scripted/aside',
 		});
 		const session = track(open({ agents: [watcher, attentive(greeter), passive(quiet2)] }));
-		const seen = events(session);
+		const seen = collect(session);
 		await visitSession(session, andrei);
 		await session.settled();
 
@@ -150,18 +121,11 @@ describe('presence', () => {
 	it('steers a seat already at work, which is the whole of what presence routing does', async () => {
 		const held = deferred();
 		const seen: string[] = [];
-		const holding: StreamFn = (_model, context) => {
-			seen.push(
-				context.messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n'),
-			);
-			const stream = createAssistantMessageEventStream();
-			const message = fauxAssistantMessage('nothing to add', { stopReason: 'stop' });
-			void held.promise.then(() => {
-				stream.push({ type: 'start', partial: message });
-				stream.push({ type: 'done', reason: 'stop', message });
-			});
-			return stream;
-		};
+		const holding = scripted(async (context) => {
+			seen.push(contextText(context));
+			await held.promise;
+			return quiet();
+		});
 		const session = track(open({ streamFn: holding }));
 		const visit = await visitSession(session, andrei);
 		await visit.deliver({ text: 'start something long' }); // watcher is now mid-activation
@@ -202,7 +166,7 @@ describe('presence', () => {
 
 	it('holds one visit per person: a second visit is the same visit', async () => {
 		const session = track(open());
-		const seen = events(session);
+		const seen = collect(session);
 		const terminal = await visitSession(session, andrei);
 		const browser = await visitSession(session, andrei);
 		await session.settled();
@@ -222,7 +186,7 @@ describe('presence', () => {
 	it('still addresses somebody who left, and remembers them across a run', async () => {
 		const repo = new InMemorySessionRepo();
 		const name = roomName();
-		const first = startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo });
+		const first = startSession({ name, assistant, agents: [watcher], streamFn: recording, repo });
 		const visit = await visitSession(first, andrei);
 		await visit.deliver({ text: 'noting that I was here' });
 		await first.settled();
@@ -234,7 +198,7 @@ describe('presence', () => {
 		await stopSession(first);
 
 		const again = track(
-			startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo }),
+			startSession({ name, assistant, agents: [watcher], streamFn: recording, repo }),
 		);
 		await again.messages(); // startSession is synchronous; the replay is awaited here
 		expect(presenceOf(again, 'andrei')).toBe('absent');
@@ -291,7 +255,7 @@ describe('presence', () => {
 		const session = open();
 		const visit = await visitSession(session, andrei);
 		await session.settled();
-		const seen = events(session);
+		const seen = collect(session);
 
 		await stopSession(session);
 
@@ -305,7 +269,7 @@ describe('presence', () => {
 	it('reads a name that is not running, and starts nothing', async () => {
 		const repo = new InMemorySessionRepo();
 		const name = roomName();
-		const session = startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo });
+		const session = startSession({ name, assistant, agents: [watcher], streamFn: recording, repo });
 		const visit = await visitSession(session, andrei);
 		await visit.deliver({ text: 'for later' });
 		await session.settled();
@@ -396,7 +360,7 @@ describe('a repository that fails', () => {
 			name: roomName(),
 			assistant,
 			agents: [watcher],
-			streamFn: quiet,
+			streamFn: recording,
 			repo,
 		});
 		const visit = await visitSession(session, andrei);
@@ -418,14 +382,14 @@ describe('a repository that fails', () => {
 	it('frees the name when the shutdown itself cannot write', async () => {
 		const { repo, fail } = brittleRepo();
 		const name = roomName();
-		const session = startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo });
+		const session = startSession({ name, assistant, agents: [watcher], streamFn: recording, repo });
 		await visitSession(session, andrei);
 
 		fail(true);
 		await expect(stopSession(session)).rejects.toThrow(/disk is full/);
 		// a room that cannot be started again is worse than one that lost a write
 		const again = track(
-			startSession({ name, assistant, agents: [watcher], streamFn: quiet, repo }),
+			startSession({ name, assistant, agents: [watcher], streamFn: recording, repo }),
 		);
 		expect(again.name).toBe(name);
 	});
@@ -450,7 +414,7 @@ describe('a repository that fails', () => {
 			name: roomName(),
 			assistant,
 			agents: [watcher],
-			streamFn: quiet,
+			streamFn: recording,
 			repo: unreachable,
 		});
 		// the failure waits for the call that needs the store
