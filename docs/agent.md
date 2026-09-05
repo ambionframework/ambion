@@ -48,8 +48,9 @@ a dependency or drop it. The single extension point is Pi's own:
 deterministic — this is how [the tests](../packages/ambion/test/support/scripted.ts)
 run — and a custom stream brings custom providers. Ambion keeps no model
 registry of its own. Without a `streamFn`, models resolve as
-`provider/model-id` from Pi's builtin catalog, and API keys come from
-`<PROVIDER>_API_KEY` in the environment.
+`provider/model-id` in the registry the runtime holds, and API keys come
+through the runtime's environment source as `<PROVIDER>_API_KEY`. The
+default runtime holds Pi's builtin catalog and reads `process.env` (§5).
 
 ---
 
@@ -212,9 +213,9 @@ between them. `agents` may be empty: a room that starts with the assistant
 alone seats what a question needs from its reserve
 ([`roster.md`](roster.md) §1).
 
-**One run per name.** `startSession` refuses a name already running in this
-process. Two live rooms over one record would each replay it, each append
-to it, and diverge. Names are unique inside a roster too: `startSession`
+**One run per name.** `startSession` refuses a name already running in the
+same runtime. Two live rooms over one record would each replay it, each
+append to it, and diverge. Names are unique inside a roster too: `startSession`
 refuses a duplicate, and so does `visitSession`, so `say({ to })` always
 names exactly one participant.
 
@@ -526,7 +527,8 @@ a seat, what wakes it and its `say` in
 [`activation.ts`](../packages/ambion/src/activation.ts), the exchange in
 [`exchange.ts`](../packages/ambion/src/exchange.ts), what the assistant
 writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), the model a
-seat runs on in [`model.ts`](../packages/ambion/src/model.ts), what an
+seat runs on in [`model.ts`](../packages/ambion/src/model.ts), what the
+host owns in [`runtime.ts`](../packages/ambion/src/runtime.ts), what an
 agent's tools reach into in
 [`workspace.ts`](../packages/ambion/src/workspace.ts), and what any of them
 reads in [`render.ts`](../packages/ambion/src/render.ts).
@@ -539,10 +541,22 @@ activation's fact.
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — obtained from Pi's own
 `SessionRepo`, which `startSession` and `readSession` accept and default to
-an in-process `InMemorySessionRepo`. A name that outlives the process is a
-durable `SessionRepo` implementation; the API stays the same.
+the runtime's repo. A name that outlives the process is a durable
+`SessionRepo` implementation; the API stays the same.
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
 surface, and Ambion adds no storage layer of its own.
+
+**A runtime is what a host owns and every room borrows.** `createRuntime`
+builds a value with three fields, and every one is optional: a `repo`, an
+`env` function that reads a provider's API key by name, and a `registry`
+function that returns Pi's `Models`. `startSession`, `readSession` and
+`defineWorkspace` take it as `runtime`. A call without one uses the default
+instance, one per process, which holds an `InMemorySessionRepo`, reads
+`process.env`, and builds Pi's builtin catalog on first use. The runtime
+also holds which names are running and which workspace names are taken, so
+two runtimes in one process run rooms with the same name and never see each
+other. The one-run-per-name guard protects the runtime's own repo: a host
+that gives two runtimes one durable repo owns that overlap.
 
 ---
 

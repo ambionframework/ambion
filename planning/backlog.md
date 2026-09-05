@@ -15,21 +15,20 @@ the open questions about a design; this file holds the work.
 
 ### 1. The room is a process global
 
-**What.** `session.ts` holds a module-level `running` map, a shared
-`defaultRepo`, a lazily built model registry, and a `registryStream` that
-reads `process.env` for API keys. `workspace.ts` holds a global `taken` set.
+**Resolved 2026-09-05.** `runtime.ts` holds a `Runtime` value: the repo, the
+environment source and the model registry as public fields, with the
+`running` map and the `taken` set behind the brand. `createRuntime` builds
+one, and `startSession`, `readSession` and `defineWorkspace` take it as
+`runtime`. The former globals are fields of one default instance, built on
+first use. `model.ts` reads the registry and the environment through the
+runtime it is given. Two runtimes in one process run rooms with the same
+name and never see each other, and `test/runtime.test.ts` proves it.
 
-**Why.** Two hosts in one process cannot each run a room with the same
-name. Tests keep unique-name counters to stay apart. A room resumed after
-a restart shares one in-memory repo with every other room in the process.
-For hermetic execution and session resumption, the host must own these.
-
-**Where.** `packages/ambion/src/session.ts` lines 75 to 95,
-`packages/ambion/src/workspace.ts` line 50.
-
-**Fix.** A `Runtime` value that holds the registry, the repo and the
-environment source. `startSession`, `readSession` and `defineWorkspace`
-take it as an option. The current globals become the default instance.
+**What stays.** The default instance still imports Pi's provider catalog at
+module top; item 4 lands in `runtime.ts`. The one-run-per-name guard now
+protects one runtime's repo: a host that gives two runtimes one durable
+repo owns that overlap. The `roomName` counter in the tests stays until a
+test wants a runtime of its own.
 
 ### 2. Nothing bounds the record, and the room rescans it per message
 
@@ -68,7 +67,7 @@ becomes when a second writer needs one.
 
 ### 4. Importing the package loads every provider SDK
 
-**What.** `session.ts` imports `@earendil-works/pi-ai/providers/all` at
+**What.** `runtime.ts` imports `@earendil-works/pi-ai/providers/all` at
 module top. The built dist pulls in the AWS Bedrock client, Google GenAI,
 protobufjs and the Anthropic SDK before a host defines anything.
 
@@ -83,10 +82,10 @@ protobufjs and the Anthropic SDK before a host defines anything.
 The four ignored build-script warnings on every `pnpm install` come from
 this tree, and `docs/toolchain.md` §3 says nothing in the tree needs one.
 
-**Where.** `packages/ambion/src/session.ts` line 28 and `registry()`.
+**Where.** `packages/ambion/src/runtime.ts`, the default `registry`.
 
-**Fix.** Make `registry()` a dynamic import, or move default provider
-resolution to the host. `streamFn` is already the extension surface.
+**Fix.** Make the default `registry` a dynamic import. A host that passes
+its own `registry` or `streamFn` never loads the catalog.
 
 ### 5. `defineAgent` imports the shell runtime
 
@@ -116,7 +115,7 @@ latent break on the next typebox release that changes a type.
 **What.** `resolveModel` returns `{ api: 'scripted' } as unknown as
 Model<Api>` when a host passes a custom `streamFn`.
 
-**Where.** `packages/ambion/src/session.ts`, `resolveModel`.
+**Where.** `packages/ambion/src/model.ts`, `resolveModel`.
 
 **Fix.** Build a real `Model` value with Pi's own shape.
 

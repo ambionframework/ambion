@@ -24,11 +24,13 @@ compose, commit and route, the hands, and quiescence, at 781 lines. Under
 hermetically and resume them. Everything a long-horizon deployment needs
 starts here.
 
-**Done when.** `startSession`, `readSession` and `defineWorkspace` accept
-a runtime that holds the registry, the repo and the environment source.
-The module-level `running`, `taken`, `defaultRepo` and `builtinRegistry`
-are fields of the default instance. Two hosts in one process run rooms
-with the same name and never see each other.
+**Done, 2026-09-05.** `createRuntime` builds a `Runtime` that holds the
+repo, the environment source and the registry. `startSession`,
+`readSession` and `defineWorkspace` take it as `runtime`. The former
+`running`, `taken`, `defaultRepo` and `builtinRegistry` are fields of one
+default instance in `runtime.ts`, built on first use. Two runtimes in one
+process run rooms with the same name and never see each other, and a test
+proves it.
 
 ## 3. Bound the record, index the presence (backlog 2)
 

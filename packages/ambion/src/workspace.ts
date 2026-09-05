@@ -33,9 +33,11 @@ import {
 	createWriteTool,
 } from '@earendil-works/pi-agent-core';
 import { memoryBackend } from './just-bash.ts';
+import { type RuntimeState, runtimeState } from './runtime.ts';
 import {
 	type AgentDefinition,
 	isWorkspace,
+	type Runtime,
 	type ToolContext,
 	WORKSPACE_BRAND,
 	type Workspace,
@@ -46,12 +48,10 @@ import {
 /** The names a workspace binds to every connected agent. `defineAgent` keeps them free. */
 export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(['read', 'write', 'edit', 'bash']);
 
-/** One handle per name: two handles over one backend would each destroy it. */
-const taken = new Set<string>();
-
-/** What the public handle does not show: its backend, and whether it is gone. */
+/** What the public handle does not show: its backend, its runtime, and whether it is gone. */
 interface WorkspaceState extends WorkspaceHandle {
 	readonly backend: WorkspaceBackend;
+	readonly runtime: RuntimeState;
 	destroyed: boolean;
 }
 
@@ -64,6 +64,8 @@ export interface DefineWorkspaceOptions {
 	 * real directory.
 	 */
 	backend?: WorkspaceBackend;
+	/** The runtime that holds the name. Defaults to the process's default instance. */
+	runtime?: Runtime;
 }
 
 /**
@@ -73,7 +75,8 @@ export interface DefineWorkspaceOptions {
  */
 export function defineWorkspace(options: DefineWorkspaceOptions): WorkspaceHandle {
 	assertWorkspaceName(options.name);
-	if (taken.has(options.name)) {
+	const runtime = runtimeState(options.runtime);
+	if (runtime.taken.has(options.name)) {
 		throw new Error(
 			`Workspace '${options.name}' is already defined: destroy it before defining it again.`,
 		);
@@ -82,9 +85,10 @@ export function defineWorkspace(options: DefineWorkspaceOptions): WorkspaceHandl
 		[WORKSPACE_BRAND]: true,
 		name: options.name,
 		backend: options.backend ?? memoryBackend(),
+		runtime,
 		destroyed: false,
 	};
-	taken.add(options.name);
+	runtime.taken.add(options.name);
 	return state;
 }
 
@@ -105,7 +109,7 @@ export async function destroyWorkspace(workspace: WorkspaceHandle): Promise<void
 		state.destroyed = false;
 		throw error;
 	}
-	taken.delete(state.name);
+	state.runtime.taken.delete(state.name);
 }
 
 function stateOf(workspace: WorkspaceHandle): WorkspaceState {

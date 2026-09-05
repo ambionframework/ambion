@@ -44,6 +44,9 @@ export type {
 // and read-back. Neither import is needed for the in-memory default's own
 // use inside `defineWorkspace` — only a host that wants to seed or read it.
 export { directoryBackend, memoryBackend } from './just-bash.ts';
+// The runtime a host owns: the repo, the environment source and the model
+// registry every room borrows. A call without one uses the default instance.
+export { createRuntime } from './runtime.ts';
 export { readSession, startSession, stopSession, visitSession } from './session.ts';
 export type {
 	AgentDefinition,
@@ -59,6 +62,8 @@ export type {
 	PresenceMessage,
 	PresenceStatus,
 	ReadSessionOptions,
+	Runtime,
+	RuntimeOptions,
 	SeatedAgent,
 	SeatInfo,
 	SeatStatus,

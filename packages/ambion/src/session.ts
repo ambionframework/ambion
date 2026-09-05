@@ -24,7 +24,7 @@ import type {
 	SessionRepo,
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
-import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
+import { Agent } from '@earendil-works/pi-agent-core';
 import { Activation } from './activation.ts';
 import {
 	Assistant,
@@ -48,6 +48,7 @@ import {
 	renderTurnContext,
 	type SeatSpeaking,
 } from './render.ts';
+import { type RuntimeState, runtimeState } from './runtime.ts';
 import { isActive, type SayRoom, type SeatRuntime, sayTool, toPiTool, wakes } from './seat.ts';
 import {
 	type AgentDefinition,
@@ -71,20 +72,16 @@ import {
 } from './types.ts';
 import { builtinTools } from './workspace.ts';
 
-const defaultRepo = new InMemorySessionRepo();
-
-/** One run per name: a second live room over one record would diverge from it. */
-const running = new Map<string, SessionImpl>();
-
 /** Sets up the context where the agents work. */
 export function startSession(options: StartSessionOptions): Session {
-	if (running.has(options.name)) {
+	const runtime = runtimeState(options.runtime);
+	if (runtime.running.has(options.name)) {
 		throw new Error(
 			`Session '${options.name}' is already running: stop it before starting it again.`,
 		);
 	}
-	const session = new SessionImpl(options);
-	running.set(options.name, session);
+	const session = new SessionImpl(options, runtime);
+	runtime.running.set(options.name, session);
 	return session;
 }
 
@@ -104,9 +101,10 @@ export function visitSession(session: Session, human: HumanDefinition): Promise<
 	return session.visit(human);
 }
 
-/** Reads a name and starts nothing. A running name reads through its live room. */
+/** Reads a name and starts nothing. A name running in the runtime reads through its live room. */
 export function readSession(name: string, options: ReadSessionOptions = {}): SessionView {
-	return running.get(name) ?? new ReadOnlySession(name, options.repo ?? defaultRepo);
+	const runtime = runtimeState(options.runtime);
+	return runtime.running.get(name) ?? new ReadOnlySession(name, options.repo ?? runtime.repo);
 }
 
 class ReadOnlySession implements SessionView {
@@ -147,6 +145,8 @@ class ReadOnlySession implements SessionView {
 class SessionImpl implements Session {
 	readonly name: string;
 	private readonly goal?: string;
+	/** The runtime the room runs in: its repo by default, its registry and its environment. */
+	private readonly runtime: RuntimeState;
 	private readonly repo: SessionRepo;
 	private readonly store: RecordStore;
 	/** Who is seated, and who is held in reserve. */
@@ -171,10 +171,11 @@ class SessionImpl implements Session {
 	/** The room's exchanges: what a question opened, and what quiescence closes. */
 	private readonly exchanges = new Exchanges();
 
-	constructor(options: StartSessionOptions) {
+	constructor(options: StartSessionOptions, runtime: RuntimeState) {
 		this.name = options.name;
 		this.goal = options.goal?.trim() || undefined;
-		this.repo = options.repo ?? defaultRepo;
+		this.runtime = runtime;
+		this.repo = options.repo ?? runtime.repo;
 		this.store = new RecordStore(this.repo, this.name);
 		for (const seat of options.agents ?? []) this.composition.place(seatingOf(seat));
 		// Seated at the narrow end: nothing said in the room wakes the assistant;
@@ -185,7 +186,7 @@ class SessionImpl implements Session {
 		);
 		for (const seat of options.available ?? []) this.composition.hold(seatingOf(seat));
 		this.customStream = options.streamFn !== undefined;
-		this.streamFn = options.streamFn ?? registryStream;
+		this.streamFn = options.streamFn ?? registryStream(runtime);
 	}
 
 	private get record(): Message[] {
@@ -419,6 +420,7 @@ class SessionImpl implements Session {
 		} finally {
 			// The name comes free whatever the repo did. A failed write must
 			// not leave a room that can never be started again.
+			const { running } = this.runtime;
 			if (running.get(this.name) === this) running.delete(this.name);
 			// A stopped room never goes quiet on its own, so nobody waits on it.
 			for (const resolve of this.quietWaiters.splice(0)) resolve();
@@ -610,7 +612,7 @@ class SessionImpl implements Session {
 			streamFn: this.streamFn,
 			initialState: {
 				systemPrompt: renderSystemPrompt(speaking, view),
-				model: resolveModel(seat.def, this.customStream),
+				model: resolveModel(this.runtime, seat.def, this.customStream),
 				thinkingLevel: 'off',
 				tools: this.handsFor(seat, activation),
 				messages: [],

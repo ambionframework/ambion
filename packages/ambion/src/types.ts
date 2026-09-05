@@ -11,6 +11,7 @@ import type {
 	SessionRepo,
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
+import type { Models } from '@earendil-works/pi-ai';
 import type { Static, TSchema } from 'typebox';
 import type { ClosedExchange, Exchange } from './exchange.ts';
 
@@ -316,6 +317,39 @@ export function isWorkspace(w: unknown): w is WorkspaceHandle {
 	return typeof w === 'object' && w !== null && WORKSPACE_BRAND in w;
 }
 
+// -- the runtime ---------------------------------------------------------------
+
+export const RUNTIME_BRAND = Symbol.for('ambion.runtime');
+
+/**
+ * What a host owns and every room borrows: the repo a record lives in, the
+ * environment source a provider's key is read through, and the registry a
+ * model is resolved in. `createRuntime` builds one. A call without one uses
+ * the default instance, one per process.
+ */
+export interface Runtime {
+	readonly [RUNTIME_BRAND]: true;
+	/** Pi's session repository: where a record lives, across every run. */
+	readonly repo: SessionRepo;
+	/** The environment source: `<PROVIDER>_API_KEY` is read through it. */
+	readonly env: (name: string) => string | undefined;
+	/** Pi's model registry. A custom `streamFn` never reads it. */
+	readonly registry: () => Models;
+}
+
+export interface RuntimeOptions {
+	/** Defaults to a fresh `InMemorySessionRepo`. */
+	repo?: SessionRepo;
+	/** Defaults to a read of `process.env`. */
+	env?: (name: string) => string | undefined;
+	/** Defaults to Pi's builtin catalog, built on first use. */
+	registry?: () => Models;
+}
+
+export function isRuntime(r: unknown): r is Runtime {
+	return typeof r === 'object' && r !== null && RUNTIME_BRAND in r;
+}
+
 // -- the session ---------------------------------------------------------------
 
 export interface StartSessionOptions {
@@ -346,11 +380,16 @@ export interface StartSessionOptions {
 	 * brings custom providers.
 	 */
 	streamFn?: StreamFn;
-	/** Pi's own session repository. Defaults to a process-wide `InMemorySessionRepo`. */
+	/** The runtime the room runs in. Defaults to the process's default instance. */
+	runtime?: Runtime;
+	/** Pi's own session repository. Defaults to the runtime's repo. */
 	repo?: SessionRepo;
 }
 
 export interface ReadSessionOptions {
+	/** The runtime the name is read in. Defaults to the process's default instance. */
+	runtime?: Runtime;
+	/** Defaults to the runtime's repo. */
 	repo?: SessionRepo;
 }
 

@@ -121,6 +121,7 @@ Five functions build a room, and four verbs run it.
 | `readSession`      | Reads the record between runs. Nothing stands up, nothing to bill.                                               |
 | `stopSession`      | Takes the room down.                                                                                             |
 | `destroyWorkspace` | Retires a workspace for good, files included.                                                                    |
+| `createRuntime`    | Builds what a host owns and every room borrows: the repo, the environment source, the model registry.            |
 
 `seated(agent, attention)` chooses what wakes a seat; `passive` and
 `attentive` name the two points a room asks for most. `available` holds

@@ -93,14 +93,16 @@ does for an agent happens later, inside `connect` (§7).
 public type does not show.** `types.ts` brands `AgentDefinition` with a
 symbol key, `AGENT_BRAND`. A `WorkspaceHandle` takes the same shape, with
 its `WorkspaceBackend` (§7) and a destroyed flag behind the brand. No table
-keyed by name holds either of them. The one thing the runtime remembers
-across calls is which names are taken, the way `session.ts` keeps its
-`running` map of session names.
+keyed by name holds either of them. The one thing a runtime remembers
+across calls is which names are taken, beside its `running` map of session
+names (`agent.md` §5).
 
-**A second `defineWorkspace` call for a name already defined in this
-process is refused**, the same way `startSession` refuses a name already
+**A second `defineWorkspace` call for a name already defined in the same
+runtime is refused**, the same way `startSession` refuses a name already
 running (`agent.md` §5). One name has one handle for the life of the
-process, until `destroyWorkspace` (below) frees it.
+runtime, until `destroyWorkspace` (below) frees it. An optional `runtime`
+field names the runtime that holds the name. Without it, the default
+instance holds it.
 
 **An optional `backend` field takes a `WorkspaceBackend`**, the way a
 session's `repo` option takes a `SessionRepo` (`agent.md` §5). §7 specifies
