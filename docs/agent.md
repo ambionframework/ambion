@@ -45,7 +45,7 @@ it.
 Ambion owns two concerns. A third concern is a design failure: push it into
 a dependency or drop it. The single extension point is Pi's own:
 `startSession` accepts a `streamFn`. A scripted stream makes the room
-deterministic — this is how [the tests](../packages/ambion/test/session.test.ts)
+deterministic — this is how [the tests](../packages/ambion/test/support/scripted.ts)
 run — and a custom stream brings custom providers. Ambion keeps no model
 registry of its own. Without a `streamFn`, models resolve as
 `provider/model-id` from Pi's builtin catalog, and API keys come from

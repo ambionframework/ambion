@@ -1,10 +1,4 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, Context } from '@earendil-works/pi-ai';
-import {
-	createAssistantMessageEventStream,
-	fauxAssistantMessage,
-	fauxToolCall,
-} from '@earendil-works/pi-ai';
+import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import {
 	defineAgent,
@@ -14,125 +8,15 @@ import {
 	type Message,
 	passive,
 	readSession,
-	type Session,
-	type SessionEvent,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
-
-// -- scripted model ----------------------------------------------------------
-
-type Script = (
-	context: Context,
-	agent: string,
-	call: number,
-) => AssistantMessage | Promise<AssistantMessage>;
-
-/** A deterministic streamFn: routes on the agent's name, counts calls per agent. */
-function scripted(script: Script): StreamFn {
-	const calls = new Map<string, number>();
-	return (_model, context, options) => {
-		const stream = createAssistantMessageEventStream();
-		const agent = /You are '([a-z0-9-]+)'/.exec(context.systemPrompt ?? '')?.[1] ?? 'unknown';
-		const call = (calls.get(agent) ?? 0) + 1;
-		calls.set(agent, call);
-		let finished = false;
-		const finish = (message: AssistantMessage) => {
-			if (finished) return;
-			finished = true;
-			if (message.stopReason === 'error' || message.stopReason === 'aborted') {
-				stream.push({ type: 'error', reason: message.stopReason, error: message });
-			} else {
-				stream.push({ type: 'start', partial: message });
-				stream.push({
-					type: 'done',
-					reason: message.stopReason as 'stop' | 'toolUse',
-					message,
-				});
-			}
-		};
-		const aborted = () =>
-			finish(fauxAssistantMessage('', { stopReason: 'aborted', errorMessage: 'aborted' }));
-		if (options?.signal?.aborted) {
-			queueMicrotask(aborted);
-			return stream;
-		}
-		options?.signal?.addEventListener('abort', aborted, { once: true });
-		void (async () => {
-			try {
-				finish(await script(context, agent, call));
-			} catch (error) {
-				finish(fauxAssistantMessage('', { stopReason: 'error', errorMessage: String(error) }));
-			}
-		})();
-		return stream;
-	};
-}
-
-/**
- * Route a script by seat: one entry per agent that has lines, `quiet()` for the
- * rest. Keeping the seats apart is what keeps each one readable — a single
- * callback branching on `agent` buries the scenario in an if-chain.
- */
-const byAgent = (seats: Record<string, Script>): Script => {
-	const table = new Map(Object.entries(seats));
-	return (context, agent, call) => (table.get(agent) ?? (() => quiet()))(context, agent, call);
-};
-
-const speak = (text: string, to?: string) =>
-	fauxAssistantMessage([fauxToolCall('say', to ? { to, text } : { text })], {
-		stopReason: 'toolUse',
-	});
-
-const quiet = (thought = 'nothing to add') => fauxAssistantMessage(thought, { stopReason: 'stop' });
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-	let resolve!: () => void;
-	const promise = new Promise<void>((r) => {
-		resolve = r;
-	});
-	return { promise, resolve };
-}
-
-function contextText(context: Context): string {
-	return context.messages
-		.map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
-		.join('\n');
-}
-
-let unique = 0;
-const sessionName = (prefix: string) => `${prefix}-${++unique}`;
-
-/** A trivial assistant: every room seats one, and nothing here tests what it writes. */
-const assistant = defineAgent({
-	name: 'assistant',
-	identity: 'Writes the one message a person reads.',
-	instructions: 'stay quiet',
-	model: 'scripted/assistant',
-});
-
-const human = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.' });
-
-/**
- * A visitor whose arrival has already been heard. Arriving is a message, so
- * it activates the room; draining it first keeps each test's script counting
- * the activations the test is actually about.
- */
-async function enter(session: Session, who = human) {
-	const visit = await visitSession(session, who);
-	await session.settled();
-	return visit;
-}
+import { andrei, assistant, collect, deferred, enter, roomName } from './support/room.ts';
+import { byAgent, contextText, quiet, scripted, speak } from './support/scripted.ts';
 
 /** The record's spoken half, which is what most of these tests are about. */
 const spoken = (messages: Message[]) => messages.filter(isSpoken);
-
-const collect = (session: { subscribe(l: (e: SessionEvent) => void): () => void }) => {
-	const events: SessionEvent[] = [];
-	session.subscribe((event) => events.push(event));
-	return events;
-};
 
 // -- the milestone tests -----------------------------------------------------
 
@@ -161,7 +45,7 @@ describe('startSession', () => {
 		const betaContexts: string[] = [];
 		let betaAcked = false;
 		const session = startSession({
-			name: sessionName('parallel'),
+			name: roomName('parallel'),
 			assistant,
 			agents: [alpha, beta, gamma],
 			streamFn: scripted(
@@ -219,7 +103,7 @@ describe('startSession', () => {
 			model: 'scripted/echo',
 		});
 		const session = startSession({
-			name: sessionName('reset'),
+			name: roomName('reset'),
 			assistant,
 			agents: [echo],
 			// a say costs a second call for the tool result, so the two deliveries
@@ -254,7 +138,7 @@ describe('startSession', () => {
 			model: 'scripted/shy',
 		});
 		const session = startSession({
-			name: sessionName('silence'),
+			name: roomName('silence'),
 			assistant,
 			agents: [shy],
 			streamFn: scripted(() => quiet('not for me')),
@@ -283,7 +167,7 @@ describe('startSession', () => {
 			model: 'scripted/archivist',
 		});
 		const session = startSession({
-			name: sessionName('passive'),
+			name: roomName('passive'),
 			assistant,
 			agents: [front, passive(archivist)],
 			streamFn: scripted(
@@ -333,7 +217,7 @@ describe('startSession', () => {
 			model: 'scripted/aside',
 		});
 		const session = startSession({
-			name: sessionName('stamp'),
+			name: roomName('stamp'),
 			assistant,
 			agents: [liar, passive(aside)],
 			streamFn: scripted((context, _agent, call) => {
@@ -359,7 +243,7 @@ describe('startSession', () => {
 	});
 
 	it('starts a name back into its record, refuses a second run, and reads without one', async () => {
-		const name = sessionName('identity');
+		const name = roomName('identity');
 		const scribe = defineAgent({
 			name: 'scribe',
 			identity: 'Writes nothing down.',
@@ -403,7 +287,7 @@ describe('startSession', () => {
 		expect(view.seats().every((seat) => seat.kind === 'human')).toBe(true);
 
 		const fresh = startSession({
-			name: sessionName('identity'),
+			name: roomName('identity'),
 			assistant,
 			agents: [scribe],
 			streamFn: scripted(() => quiet()),
@@ -419,7 +303,7 @@ describe('startSession', () => {
 			model: 'scripted/solo',
 		});
 		const ordered = startSession({
-			name: sessionName('events'),
+			name: roomName('events'),
 			assistant,
 			agents: [solo],
 			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
@@ -447,14 +331,14 @@ describe('startSession', () => {
 
 		// an activation that throws is an error event, never a silent decline
 		const faulty = startSession({
-			name: sessionName('error'),
+			name: roomName('error'),
 			assistant,
 			agents: [solo],
 			streamFn: scripted(() => {
 				throw new Error('boom');
 			}),
 		});
-		const faultVisit = await visitSession(faulty, human);
+		const faultVisit = await visitSession(faulty, andrei);
 		const faultEvents = collect(faulty);
 		await faultVisit.deliver({ text: 'trigger' });
 		await faulty.settled();
@@ -463,12 +347,12 @@ describe('startSession', () => {
 
 		// abort quiets an active room, keeping what was already said
 		const hung = startSession({
-			name: sessionName('abort'),
+			name: roomName('abort'),
 			assistant,
 			agents: [solo],
 			streamFn: scripted(() => new Promise<never>(() => {})),
 		});
-		const hungVisit = await visitSession(hung, human);
+		const hungVisit = await visitSession(hung, andrei);
 		const hungEvents = collect(hung);
 		await hungVisit.deliver({ text: 'hang' });
 		hung.abort();
@@ -480,7 +364,7 @@ describe('startSession', () => {
 		let racingCalls = 0;
 		const racingStarted = deferred();
 		const racing = startSession({
-			name: sessionName('abort-steer'),
+			name: roomName('abort-steer'),
 			assistant,
 			agents: [solo],
 			streamFn: scripted(() => {
@@ -489,7 +373,7 @@ describe('startSession', () => {
 				return new Promise<never>(() => {});
 			}),
 		});
-		const racingVisit = await visitSession(racing, human);
+		const racingVisit = await visitSession(racing, andrei);
 		await racingVisit.deliver({ text: 'hang' });
 		await racingStarted.promise;
 		await racingVisit.deliver({ text: 'mid-turn note' }); // queues a steer into the hung run
@@ -518,7 +402,7 @@ describe('startSession', () => {
 		});
 		const secondContexts: string[] = [];
 		const session = startSession({
-			name: sessionName('race'),
+			name: roomName('race'),
 			assistant,
 			agents: [first, second],
 			streamFn: scripted(
@@ -557,7 +441,7 @@ describe('startSession', () => {
 		// standing down after a conflict leaves no mark, like any decline
 		const yieldSaid = deferred();
 		const yielding = startSession({
-			name: sessionName('race-yield'),
+			name: roomName('race-yield'),
 			assistant,
 			agents: [first, second],
 			streamFn: scripted(
@@ -592,7 +476,7 @@ describe('startSession', () => {
 			instructions: 'speak',
 			model: 'scripted/solo',
 		});
-		const name = sessionName('downstream');
+		const name = roomName('downstream');
 		const session = startSession({
 			name,
 			assistant,
@@ -628,7 +512,7 @@ describe('startSession', () => {
 		});
 		expect(() =>
 			startSession({
-				name: sessionName('dupe'),
+				name: roomName('dupe'),
 				assistant,
 				agents: [twin, twin],
 				streamFn: scripted(() => quiet()),

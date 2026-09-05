@@ -183,26 +183,9 @@ current `StartSessionOptions`. This is the README the registry shows.
 **Fix.** Rewrite the snippet against the current API. Add a test that
 compiles the README snippet, so the next drift fails the gate.
 
-### 13. Test scaffolding is copied five ways
-
-**What.** `scripted()` appears in `session.test.ts`, `assistant.test.ts`,
-`workspace.test.ts` and `roster.test.ts`, with three different abort
-behaviours. `byAgent`, `speak`, `quiet`, `deferred`, `collect`, `enter`,
-the stub assistant and the name counters are copied beside it.
-`presence.test.ts` carries its own `quiet`. About 300 lines in total.
-
-Every copy identifies the agent by matching the system prompt for
-`You are '…'`. A wording change in `render.ts` routes every script to
-`unknown` and the tests fail for a reason nobody reads in the diff. The
-tests already name models `scripted/<agent>`.
-
-**Where.** `packages/ambion/test/*.test.ts`.
-
-**Fix.** One `test/support/` module. Route the script on `model.id`.
-
 ## Part two: design work deferred
 
-### 14. Steering an exchange from what a person holds
+### 13. Steering an exchange from what a person holds
 
 **What.** A person's preferences shape one message, and they shape it after
 the work is done. The same preferences could aim the room while it works.
@@ -243,7 +226,7 @@ nothing, and rung 3 pays for an activation.
 [`seat.ts`](../packages/ambion/src/seat.ts), the assistant's paragraphs in
 [`render.ts`](../packages/ambion/src/render.ts).
 
-### 15. Thinning the roster: the assistant unseats, and a seat leaves
+### 14. Thinning the roster: the assistant unseats, and a seat leaves
 
 **What.** [`docs/roster.md`](../docs/roster.md) §5 gives the host `unseat` and
 gives the assistant `seat` alone. Two ways to take a seat back off the roster
@@ -285,7 +268,7 @@ better than anybody when its own part is done.
 [`session.ts`](../packages/ambion/src/session.ts), the composing activation in
 [`assistant.ts`](../packages/ambion/src/assistant.ts).
 
-### 16. Reseating: attention that a running room can change
+### 15. Reseating: attention that a running room can change
 
 **What.** A seat's attention is chosen when the agent is seated and never
 moves. `session.reseat(name, attention)` would let a host widen or narrow one
@@ -327,14 +310,14 @@ lets the assistant speak_ — rather than a code change in the runtime.
 [`types.ts`](../packages/ambion/src/types.ts), `seated` in
 [`define.ts`](../packages/ambion/src/define.ts).
 
-### 17. Waking the assistant costs money, and nothing says when it is worth it
+### 16. Waking the assistant costs money, and nothing says when it is worth it
 
 Once the assistant is reachable (above), a product can wake it. The runtime's
 prompt tells a seat that "attention costs money" for a directed say, and says
 nothing about when the assistant is the right participant to ask. Rung 3
 without that paragraph is a room that pays for an assistant it did not need.
 
-### 18. The assistant in every seat's roster
+### 17. The assistant in every seat's roster
 
 The assistant is a seat, so it is in the roster every seat reads. When each
 person brought one, three of them were measured at about 480 characters of a
@@ -343,7 +326,7 @@ that cannot be addressed. One seat per room cuts that to one line, and the
 example's `identity` for it is one sentence. Worth re-measuring once the
 assistant speaks.
 
-### 19. A test for the owed-summary merge
+### 18. A test for the owed-summary merge
 
 `Assistant.owe` merges a person's owed range with `Math.min`, so somebody owed a
 summary from a failed activation who asks again gets one message covering
@@ -351,7 +334,7 @@ both
 exchanges. Nothing pins that behaviour; the tests cover the failure and the
 retry separately. See [`docs/assistant.md`](../docs/assistant.md) §5.
 
-### 20. Exchanges are run state
+### 19. Exchanges are run state
 
 `Exchanges` holds the open exchange in memory, so a restart begins with none —
 right for a room mid-question, and a limit for anything that wants to work
@@ -359,7 +342,7 @@ over past exchanges. A closed exchange is an owner and a range, so it is
 derivable from the record; nothing derives it today. See
 [`docs/exchange.md`](../docs/exchange.md) §5.
 
-### 21. A second non-seat writer
+### 20. A second non-seat writer
 
 The room owes summaries through a small scheduler: `owe`, `dueAtQuiescence`,
 `dueAfterDraft` and `activationEnded`, held by `Assistant`. If a room-level compactor ever arrives
@@ -367,7 +350,7 @@ The room owes summaries through a small scheduler: `owe`, `dueAtQuiescence`,
 same scheduler. Two writers is the point at which it should become its own
 thing rather than three fields on the session.
 
-### 22. A credentials boundary for tool calls leaving the workspace
+### 21. A credentials boundary for tool calls leaving the workspace
 
 **What.** [`docs/workspace.md`](../docs/workspace.md) §1 draws the workspace's
 boundary at the sandbox: what a tool can do inside it, through the runtime's
@@ -407,7 +390,7 @@ and scopes it out to this entry; `ToolContext` in
 a credential to reach a tool call now, alongside `defineTool`'s `execute`
 in [`docs/agent.md`](../docs/agent.md) §3.
 
-### 23. `/dev/null` on the just-bash backends is a file
+### 22. `/dev/null` on the just-bash backends is a file
 
 **What.** just-bash treats `/dev/null` as a plain file. A command that
 redirects into it appends to it, and on `directoryBackend` the redirect
@@ -430,7 +413,7 @@ the `bash` tool's own description promises a Unix shell.
 
 **Where.** `connectOver` in [`just-bash.ts`](../packages/ambion/src/just-bash.ts).
 
-### 24. A backend on a real machine
+### 23. A backend on a real machine
 
 **What.** A `WorkspaceBackend` whose `connect` creates a real OS user when
 one is absent and returns an `env` whose `exec` runs as that user through a
@@ -459,7 +442,7 @@ abort signal because `useradd` and a process spawn are real waits.
 [`types.ts`](../packages/ambion/src/types.ts); `directoryBackend` in
 [`just-bash.ts`](../packages/ambion/src/just-bash.ts) is the shape to copy.
 
-### 25. Whether Agent or AgentHarness is Ambion's foundation
+### 24. Whether Agent or AgentHarness is Ambion's foundation
 
 **What.** Ambion's runtime imports Pi's lower-level `Agent` class
 (`activation.ts`, `seat.ts`), not `AgentHarness`
@@ -502,7 +485,7 @@ where `ExecutionEnv` was adopted without adopting `AgentHarness`; Pi's
 own `harness/agent-harness.ts` and `harness/types.ts`
 (`@earendil-works/pi-agent-core`) define what `AgentHarness` actually is.
 
-### 26. Roles as collaboration patterns
+### 25. Roles as collaboration patterns
 
 **What.** A seat today has one choice, attention: what wakes it. A role
 would add what it does once awake: leader, reviewer, coordinator,
