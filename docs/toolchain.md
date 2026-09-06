@@ -26,7 +26,7 @@ ambion/
 │   ├── version.mjs        set/verify the single version across them
 │   └── publish.mjs        idempotent publish to GitHub Packages
 ├── docs/toolchain.md      this document
-├── .github/workflows/     ci.yml, release.yml
+├── .github/workflows/     ci.yml, live.yml, release.yml
 ├── turbo.jsonc            task graph
 ├── tsconfig.base.json     the one set of compiler options
 ├── biome.jsonc            lint rules (formatter disabled)
@@ -173,17 +173,18 @@ implements them is picked up by the root commands with no further wiring.
 
 Root commands:
 
-| Command                    | Runs                                           |
-| -------------------------- | ---------------------------------------------- |
-| `pnpm build`               | `turbo build`                                  |
-| `pnpm test`                | `turbo test`                                   |
-| `pnpm check:types`         | `turbo run check:types`                        |
-| `pnpm check:lint`          | `biome lint . --error-on-warnings` then `knip` |
-| `pnpm check:format`        | `prettier . --check`                           |
-| `pnpm check`               | build → types → lint → test, in that order     |
-| `pnpm format`              | `biome check --write` then `prettier --write`  |
-| `pnpm version:set <x.y.z>` | Set one version across publishable packages    |
-| `pnpm publish:packages`    | Publish to GitHub Packages                     |
+| Command                    | Runs                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `pnpm build`               | `turbo build`                                                                |
+| `pnpm test`                | `turbo test`                                                                 |
+| `pnpm test:live`           | The live tier, on a real model ([§8](#the-live-tier-githubworkflowsliveyml)) |
+| `pnpm check:types`         | `turbo run check:types`                                                      |
+| `pnpm check:lint`          | `biome lint . --error-on-warnings` then `knip`                               |
+| `pnpm check:format`        | `prettier . --check`                                                         |
+| `pnpm check`               | build → types → lint → test, in that order                                   |
+| `pnpm format`              | `biome check --write` then `prettier --write`                                |
+| `pnpm version:set <x.y.z>` | Set one version across publishable packages                                  |
+| `pnpm publish:packages`    | Publish to GitHub Packages                                                   |
 
 `pnpm check` is what CI runs and what a contributor runs before pushing. There
 is one gate, so nothing drifts apart.
@@ -263,6 +264,43 @@ bundle, and cross-package resolution.
 
 Concurrency is per-ref with `cancel-in-progress`, so a re-push supersedes the
 run it replaced. Permissions are `contents: read` and nothing else.
+
+### The live tier (`.github/workflows/live.yml`)
+
+The scripted suite proves the room's rules on a scripted stream, with no key
+and no network. The live tier runs the same room on a real model, with a
+real key, and proves what a scripted stream cannot. It lives in
+[`packages/ambion/test/live`](../packages/ambion/test/live), one file per
+claim:
+
+| File                | What it proves                                                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loop.test.ts`      | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error`    |
+| `judgment.test.ts`  | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                                 |
+| `exchange.test.ts`  | Three seats race under the lock, the room goes quiet, the assistant writes in the person's shape, and it seats a specialist from the reserve |
+| `record.test.ts`    | A second run of a name reads the record the first run left, and answers from it                                                              |
+| `workspace.test.ts` | The four built-in tools reach a workspace on a real provider                                                                                 |
+| `control.test.ts`   | `abort()` ends a request in flight without a mark, and the room keeps running                                                                |
+
+Every test holds the record to the same invariants whatever the model said:
+seqs contiguous, one `message` event per message, every author on the
+roster, every summary covering the range before it, no `error` event, and
+every activation ended. Every test ends with one line of what it spent,
+read off the seats' downstream sessions.
+
+`pnpm test:live` runs the tier. Two configurations keep the tiers apart:
+`vitest.config.ts` excludes `test/live` from `pnpm test`, and
+`vitest.live.config.ts` includes nothing else. In the live configuration
+files run one at a time, each test has three minutes, and one retry stands
+for one bad sample. Every test skips when `<PROVIDER>_API_KEY` is not set,
+so the command is safe to run anywhere. `AMBION_MODEL` picks the model,
+`anthropic/claude-sonnet-5` by default, and the example reads the same
+variable.
+
+The workflow runs on Mondays at 06:00 UTC and on demand, with the model as
+an input. It never runs on a pull request: it costs money and it needs the
+`ANTHROPIC_API_KEY` secret. The job fails when the secret is missing, because
+a run where every test skipped would report nothing.
 
 ---
 

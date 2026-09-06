@@ -1,0 +1,56 @@
+name: Live
+
+# The live tier: the room on a real model, with a real key. It costs money
+# and it talks to a provider, so it runs on a schedule and on demand, and
+# never on a pull request. `docs/toolchain.md` §8 is the contract for it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: The model every live seat runs on, as provider/model-id
+        type: string
+        default: anthropic/claude-sonnet-5
+  schedule:
+    # Mondays at 06:00 UTC, before the week's first change lands.
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  live:
+    name: Live tests on ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AMBION_MODEL: ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Without a key every live test skips, and a green run would say
+      # nothing. The job fails instead, so a missing secret is visible.
+      - name: the key is present
+        run: |
+          [ -n "$ANTHROPIC_API_KEY" ] || {
+            echo 'ANTHROPIC_API_KEY is not set: add it to the repository secrets.' >&2
+            exit 1
+          }
+
+      - run: pnpm run test:live

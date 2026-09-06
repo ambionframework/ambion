@@ -58,6 +58,7 @@ unbuilt concepts (channels, deployment targets) there; deferred work goes in
 pnpm install
 pnpm check     # build, typecheck, lint, test — the gate CI runs
 pnpm format    # biome --write, then prettier --write
+pnpm test:live # the room on a real model; needs <PROVIDER>_API_KEY and costs money
 ```
 
 Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.

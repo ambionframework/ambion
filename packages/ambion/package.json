@@ -40,6 +40,7 @@
 		"build": "tsdown",
 		"check:types": "tsc --noEmit",
 		"test": "vitest run",
+		"test:live": "vitest run --config vitest.live.config.ts",
 		"test:watch": "vitest"
 	},
 	"devDependencies": {

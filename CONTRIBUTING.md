@@ -11,6 +11,11 @@ pnpm format     # biome --write, then prettier --write
 Run both before pushing; CI runs the same commands, so a green local check is a
 green build.
 
+`pnpm test:live` runs the room on a real model. It needs the key for the
+provider in `AMBION_MODEL` (`ANTHROPIC_API_KEY` by default), it costs money,
+and `pnpm check` never runs it. CI runs it weekly and on demand
+([`docs/toolchain.md`](docs/toolchain.md) §8).
+
 [`docs/toolchain.md`](docs/toolchain.md) specifies how the repository is built,
 checked and released. Read it before changing anything under `.github/`,
 `scripts/`, or the root configs.
