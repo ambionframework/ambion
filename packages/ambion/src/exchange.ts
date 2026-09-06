@@ -22,6 +22,12 @@
  * - **What lands while it is open steers it and changes nothing.** Not the
  *   owner, not the range, not who the answer belongs to.
  *
+ * This module also holds the two ends the room reports, `settled` and
+ * `quiet`, because they are the two edges of this span. What is running is
+ * a fact about the seats, so the room reads it off them and passes it in.
+ * Every transition here is synchronous and takes no model, so the whole
+ * lifecycle is provable with no room around it.
+ *
  * The design contract is `docs/exchange.md`; `docs/assistant.md` says what an
  * assistant makes of one.
  */
@@ -43,13 +49,38 @@ export interface ClosedExchange extends Exchange {
 	readonly through: Seq;
 }
 
+/** The seats settled: what that closed, and whether a seat worked since they last settled. */
+export interface Settled {
+	/** The exchange the room was working on, or nothing when it worked on its own account. */
+	readonly closed: ClosedExchange | undefined;
+	/**
+	 * Whether an activation that counts as work began since the last settle.
+	 * A second settle at one quiescence — a question that woke nobody, an
+	 * aborted activation ending after the exchange closed — is not the seats
+	 * stopping again, and the assistant reads the difference.
+	 */
+	readonly worked: boolean;
+}
+
 /**
- * The open exchange, if there is one. Run state: an exchange belongs to a
- * running room, and a restart begins with none — the record keeps what was
- * said, and nobody is mid-question after a restart.
+ * The room's exchanges: the open one, and the two ends the room reports.
+ *
+ * Run state: an exchange belongs to a running room, and a restart begins with
+ * none — the record keeps what was said, and nobody is mid-question after a
+ * restart.
+ *
+ * Two facts arrive from the room at every transition, and this holds neither:
+ * whether a seat that speaks for itself is taking an activation (*working*),
+ * and whether nothing at all is (*idle*). The room draws that one distinction
+ * about its assistant, and the seats hold the activations, so there is no
+ * count here to keep in step.
  */
 export class Exchanges {
 	private open: Exchange | undefined;
+	/** Whether an activation that counts as work began since the seats last settled. */
+	private stirred = false;
+	private readonly settledWaiters: (() => void)[] = [];
+	private readonly quietWaiters: (() => void)[] = [];
 
 	/** What the room is working on, or nothing when nobody has asked. */
 	current(): Exchange | undefined {
@@ -72,13 +103,52 @@ export class Exchanges {
 		return this.open;
 	}
 
+	/** An activation that counts as work began: the next settle is the seats stopping. */
+	stir(): void {
+		this.stirred = true;
+	}
+
 	/**
-	 * The room went quiet. Closes whatever was open and returns it with the
-	 * range it held, or nothing when the room was working on its own account.
+	 * Something stopped. While a seat is working nothing settles, and the
+	 * result says so. Otherwise the seats have settled: whoever waited hears
+	 * it first, then the open exchange closes with the range it reached, and
+	 * the result says whether a seat worked since the last settle.
 	 */
-	close(through: Seq): ClosedExchange | undefined {
+	settle(working: boolean, through: Seq): Settled | undefined {
+		if (working) return undefined;
+		for (const resolve of this.settledWaiters.splice(0)) resolve();
+		const worked = this.stirred;
+		this.stirred = false;
 		const open = this.open;
 		this.open = undefined;
-		return open === undefined ? undefined : { ...open, through };
+		return { closed: open === undefined ? undefined : { ...open, through }, worked };
+	}
+
+	/**
+	 * Nothing at all is taking an activation, so the room is quiet: whoever
+	 * waited hears it, and the result says the room should say so. An active
+	 * room is not quiet, and the result says nothing.
+	 */
+	quiesce(idle: boolean): boolean {
+		if (!idle) return false;
+		for (const resolve of this.quietWaiters.splice(0)) resolve();
+		return true;
+	}
+
+	/** Resolves when no seat that speaks for itself is taking an activation. */
+	settled(working: boolean): Promise<void> {
+		if (!working) return Promise.resolve();
+		return new Promise((resolve) => this.settledWaiters.push(resolve));
+	}
+
+	/** Resolves when nothing at all is taking an activation. */
+	quiet(idle: boolean): Promise<void> {
+		if (idle) return Promise.resolve();
+		return new Promise((resolve) => this.quietWaiters.push(resolve));
+	}
+
+	/** A stopped room never goes quiet on its own, so nobody waits on it. */
+	drain(): void {
+		for (const resolve of this.quietWaiters.splice(0)) resolve();
 	}
 }
