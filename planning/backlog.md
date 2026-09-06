@@ -51,15 +51,20 @@ without limit. `docs/agent.md` §8 says Ambion owns no context window, and
 on append. Long term: a window policy on `RoomView.record`, and a decision
 in the contract about which module owns it.
 
-### 3. `session.ts` holds six jobs in 1063 lines
+### 3. `session.ts` holds five jobs in 1042 lines
 
-**What.** `SessionImpl` has 61 methods. Its header lists compose, commit,
-route, hands, and quiescence. The reserve, `seat` and `unseat` joined it in
-the last change. The `say` tool sits inline at line 858, while the
-assistant's `summarise` and `seat` tools live in `assistant.ts` behind
-small room interfaces. The commit path (`claim`, `publish`,
-`commitPresence`, `deliverFrom`) and the assistant scheduling
-(`closeExchange` through `draftNext`) are two more concerns.
+**What.** `SessionImpl` has about 60 methods. Its header lists compose,
+commit, route, and hands. The reserve, `seat` and `unseat` joined it in
+the change that seats agents from a reserve. The `say` tool sits inline,
+while the assistant's `summarise` and `seat` tools live in `assistant.ts`
+behind small room interfaces. The commit path (`claim`, `publish`,
+`commitPresence`, `deliverFrom`) and the assistant scheduling (`closed`
+through `draftNext`) are two more concerns.
+
+Quiescence left the file on 2026-09-06: `Exchanges` owns the open
+exchange, whether a seat worked since the last settle, and the `settled`
+and `quiet` promises, and `exchange.test.ts` proves the lifecycle with no
+room. The room holds one boolean of its own, `stopped`.
 
 **Why.** Every feature lands in one file. `dispatch` sits at the
 complexity cap by design, and the file around it has no cap.

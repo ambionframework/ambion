@@ -137,6 +137,29 @@ mid-question: the record keeps what was said, and nobody is mid-question
 after a restart. A person whose question the room was working on asks
 again, and that question opens a new exchange.
 
+**`Exchanges` owns the whole span.** It holds the open exchange, whether an
+activation that counts as work began since the seats last settled, and the
+two promises of §6. The room holds none of that. What is running is a fact
+about the seats, so the room reads it off them and passes two booleans in
+at every transition: whether a seat that speaks for itself is working, and
+whether nothing at all is. Every transition is synchronous and takes no
+model, so [`exchange.test.ts`](../packages/ambion/test/exchange.test.ts)
+proves the lifecycle with no room around it.
+
+The transitions, in the order the room calls them:
+
+| Call                        | When                                      | What it decides                                                            |
+| --------------------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
+| `note(message, fromPerson)` | A message landed                          | Whether it opened an exchange                                              |
+| `stir()`                    | An activation that counts as work began   | The next settle is the seats stopping                                      |
+| `settle(working, through)`  | An activation ended, or a question routed | Nothing while working; else who waited, what closed, whether a seat worked |
+| `quiesce(idle)`             | After every settle                        | Whether the room went quiet, once                                          |
+| `drain()`                   | The run stops                             | Nobody waits on a room that never goes quiet                               |
+
+The assistant drafting stirs nothing, so a settle at a draft's end reports
+that no seat worked. That is the one fact a failed draft waits on: the next
+settle where a seat did ([`assistant.md`](assistant.md) §5).
+
 A closed exchange is an owner and a range, so it is derivable from the
 record. Nothing derives it today; a host that wants a history of exchanges
 records the `exchange_closed` events as they arrive.
@@ -249,6 +272,12 @@ The exchange is proved beside the assistant that first reads one, in
   settles before it goes quiet (§6).
 
 All in-process, in vitest, on a scripted stream.
+
+The lifecycle alone is proved in
+[`exchange.test.ts`](../packages/ambion/test/exchange.test.ts), with no
+room and no stream: what opens one, what a settle closes and reports, when
+each promise resolves, and what the assistant's scheduler makes of a settle
+where a seat worked and one where none did (§5).
 
 The live run is
 [`demos/2026-08-31-one-exchange-one-message.html`](../demos/2026-08-31-one-exchange-one-message.html):

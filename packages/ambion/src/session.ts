@@ -15,7 +15,9 @@
  * - **Route.** Who hears a message, and who wakes for it.
  * - **Give an activation what only the room knows.** The model, the prompt, the
  *   hands, and the room as it stands at that moment.
- * - **Say when it has stopped.** An exchange closed, and nothing running.
+ *
+ * When the room has stopped is the exchange's own fact, and `exchange.ts`
+ * holds it: the room reads what is running off the seats and hands it over.
  */
 import type {
 	AgentTool,
@@ -37,7 +39,7 @@ import {
 	summariseTool,
 } from './assistant.ts';
 import { seated } from './define.ts';
-import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
+import { type Exchange, Exchanges, type Settled } from './exchange.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
 import { openOrCreate, persistTurns, RecordStore } from './record.ts';
 import {
@@ -256,19 +258,10 @@ class SessionImpl implements Session {
 	private readonly assistant: Assistant;
 	private readonly here = new Attendance(() => this.record);
 	private readonly listeners = new Set<(event: SessionEvent) => void>();
-	private readonly settledWaiters: (() => void)[] = [];
-	private readonly quietWaiters: (() => void)[] = [];
 	private readonly streamFn: StreamFn;
 	private readonly customStream: boolean;
 	private stopped = false;
-	/**
-	 * Whether a seat has worked since the room last settled. A failed draft
-	 * waits for the seats to stop again, and a second settle at one quiescence
-	 * — an aborted activation ending after an unseat closed the exchange, a
-	 * question that woke nobody — is not the seats stopping again.
-	 */
-	private stirred = false;
-	/** The room's exchanges: what a question opened, and what quiescence closes. */
+	/** The room's exchanges: what a question opened, what quiescence closes, and both ends. */
 	private readonly exchanges = new Exchanges();
 
 	constructor(options: StartSessionOptions) {
@@ -393,8 +386,7 @@ class SessionImpl implements Session {
 	}
 
 	settled(): Promise<void> {
-		if (!this.working()) return Promise.resolve();
-		return new Promise((resolve) => this.settledWaiters.push(resolve));
+		return this.exchanges.settled(this.working());
 	}
 
 	/**
@@ -425,8 +417,7 @@ class SessionImpl implements Session {
 		// The same condition the `quiet` event reports. A summary a race left
 		// owed is not work in flight: it waits for the next quiet room, and the
 		// room is quiet in the meantime.
-		if (this.idle()) return Promise.resolve();
-		return new Promise((resolve) => this.quietWaiters.push(resolve));
+		return this.exchanges.quiet(this.idle());
 	}
 
 	abort(): void {
@@ -514,10 +505,7 @@ class SessionImpl implements Session {
 		// A question that wakes no seat has no seat to stop, so the exchange it
 		// opened would never close. The same check an ending activation runs,
 		// and the same last word: the room was quiet, and it says so.
-		if (this.exchanges.current() !== undefined && !this.working()) {
-			this.settle();
-			if (this.idle()) this.markQuiet();
-		}
+		if (this.exchanges.current() !== undefined) this.rest(false);
 	}
 
 	/**
@@ -592,7 +580,7 @@ class SessionImpl implements Session {
 			// not leave a room that can never be started again.
 			if (running.get(this.name) === this) running.delete(this.name);
 			// A stopped room never goes quiet on its own, so nobody waits on it.
-			for (const resolve of this.quietWaiters.splice(0)) resolve();
+			this.exchanges.drain();
 		}
 	}
 
@@ -693,7 +681,7 @@ class SessionImpl implements Session {
 		// The seat holding it is what makes the room busy: there is no count to
 		// keep in step, and so none to drift.
 		seat.activation = activation;
-		if (this.closingOf(seat) === undefined) this.stirred = true;
+		if (this.closingOf(seat) === undefined) this.exchanges.stir();
 		this.emit({ type: 'activation_start', agent: seat.def.name });
 		// The assistant's activations are one pass: a summary answers a room that
 		// moved with a redraft inside its own tool, and a composition decides on
@@ -708,28 +696,26 @@ class SessionImpl implements Session {
 	private ended(seat: SeatRuntime, activation: Activation): void {
 		seat.activation = undefined;
 		const assistant = this.assistant.is(seat.def.name);
-		const drafted = assistant && this.assistant.composing() === undefined;
 		if (assistant) {
 			this.assistant.activationEnded({ wrote: activation.spoke, failed: activation.failed });
 		}
 		this.emit({ type: 'activation_end', agent: seat.def.name, spoke: activation.spoke });
-		// An exchange ends when the seats stop, and a composing assistant is one
-		// of them. The assistant writing about an exchange is not the room still
-		// working on it, so a draft's end closes none — which also keeps a failing
-		// assistant from retrying for ever. What a draft's end frees is the seat,
-		// for whoever was owed while it drafted.
-		if (drafted) this.draftNext(this.assistant.dueAfterDraft(...this.dueArgs()));
-		else if (!this.working()) this.settle();
-		else if (assistant) this.draftNext(this.assistant.dueAfterDraft(...this.dueArgs()));
-		if (this.idle()) this.markQuiet();
+		this.rest(assistant);
 	}
 
-	/** The seats stopped: whoever waited hears it, and the exchange closes. */
-	private settle(): void {
-		for (const resolve of this.settledWaiters.splice(0)) resolve();
-		const worked = this.stirred;
-		this.stirred = false;
-		this.closeExchange(worked);
+	/**
+	 * Something stopped, so the room may have too. The exchange decides: the
+	 * seats settle when none that speaks for itself is working, and the room
+	 * is quiet when nothing at all is. The assistant writing about an exchange
+	 * is not the room still working on it, so a draft's end closes none — which
+	 * also keeps a failing assistant from retrying for ever. What a draft's end
+	 * frees is the seat, for whoever was owed while it drafted.
+	 */
+	private rest(freed: boolean): void {
+		const settled = this.exchanges.settle(this.working(), this.store.lastSeq);
+		if (settled) this.closed(settled);
+		else if (freed) this.draftNext(this.assistant.dueAfterDraft(...this.dueArgs()));
+		this.markQuiet();
 	}
 
 	/** The range the assistant is closing, when this seat is the assistant and it is closing one. */
@@ -956,18 +942,9 @@ class SessionImpl implements Session {
 	// -- the assistant ------------------------------------------------------------
 
 	/**
-	 * The room went quiet, so the exchange it was working on is over. The host
+	 * The seats settled, so the exchange they were working on is over. The host
 	 * hears that before anything is written about it: the assistant is the first
-	 * reader of a closed exchange and not the only one.
-	 */
-	private closeExchange(worked: boolean): void {
-		const closing = this.exchanges.close(this.store.lastSeq);
-		if (closing) this.emit({ type: 'exchange_closed', exchange: closing });
-		this.summariseClosed(closing, worked);
-	}
-
-	/**
-	 * What the assistant makes of a closed exchange: its owner is owed the one
+	 * reader of a closed exchange and not the only one. Its owner is owed the one
 	 * message that stands for it, and the room activates the assistant for it.
 	 * Nothing else in the room wakes for a close — the assistant is seated `none`,
 	 * and the close is the one thing that reaches it.
@@ -977,8 +954,11 @@ class SessionImpl implements Session {
 	 * waits for the next time the seats stop rather than retrying on itself —
 	 * and a settle that no seat worked before is not the seats stopping again.
 	 */
-	private summariseClosed(closing: ClosedExchange | undefined, worked: boolean): void {
-		if (closing) this.assistant.owe(closing.owner, closing.from);
+	private closed({ closed, worked }: Settled): void {
+		if (closed) {
+			this.emit({ type: 'exchange_closed', exchange: closed });
+			this.assistant.owe(closed.owner, closed.from);
+		}
 		const due = worked
 			? this.assistant.dueAtQuiescence(...this.dueArgs())
 			: this.assistant.dueAfterDraft(...this.dueArgs());
@@ -1017,9 +997,8 @@ class SessionImpl implements Session {
 	 * has gone quiet.
 	 */
 	private markQuiet(): void {
-		if (this.stopped || !this.idle()) return;
-		this.emit({ type: 'quiet' });
-		for (const resolve of this.quietWaiters.splice(0)) resolve();
+		if (this.stopped) return;
+		if (this.exchanges.quiesce(this.idle())) this.emit({ type: 'quiet' });
 	}
 
 	// -- what an agent reads -------------------------------------------------
