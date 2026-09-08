@@ -297,10 +297,16 @@ so the command is safe to run anywhere. `AMBION_MODEL` picks the model,
 `anthropic/claude-sonnet-5` by default, and the example reads the same
 variable.
 
-The workflow runs on Mondays at 06:00 UTC and on demand, with the model as
-an input. It never runs on a pull request: it costs money and it needs the
-`ANTHROPIC_API_KEY` secret. The job fails when the secret is missing, because
-a run where every test skipped would report nothing.
+The workflow runs on Mondays at 06:00 UTC, on demand with the model as an
+input, and on a pull request that a repository admin opened from a branch
+in this repository. A first job, `gate`, decides: a schedule or a dispatch
+always runs; a pull request runs when the GitHub API reports `admin` for
+its author and the head branch is in this repository. A pull request from
+a fork never runs, because a fork carries no secrets. Anybody else's pull
+request skips the tier, and the scripted gate in `ci.yml` still runs on it.
+The `live` job needs the `ANTHROPIC_API_KEY` secret and fails when it is
+missing, because a run where every test skipped would report nothing. A
+re-push to a pull request cancels the run it supersedes.
 
 ---
 

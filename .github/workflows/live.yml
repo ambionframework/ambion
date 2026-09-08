@@ -1,10 +1,12 @@
 name: Live
 
 # The live tier: the room on a real model, with a real key. It costs money
-# and it talks to a provider, so it runs on a schedule and on demand, and
-# never on a pull request. `docs/toolchain.md` §8 is the contract for it.
+# and it talks to a provider, so it runs on a schedule, on demand, and on a
+# pull request only when a repository admin opened it from this repository.
+# `docs/toolchain.md` §8 is the contract for it.
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       model:
@@ -15,9 +17,11 @@ on:
     # Mondays at 06:00 UTC, before the week's first change lands.
     - cron: '0 6 * * 1'
 
+# One run per ref. A re-push to a pull request supersedes the run it replaced,
+# because a superseded run still costs money.
 concurrency:
-  group: live
-  cancel-in-progress: false
+  group: live-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -26,8 +30,44 @@ env:
   TURBO_TELEMETRY_DISABLED: 1
 
 jobs:
+  # Who asked. A schedule or a dispatch always runs. A pull request runs when
+  # its author holds admin permission on this repository and the head branch
+  # is in this repository: a fork carries no secrets, so a run from one could
+  # only fail at the key check.
+  gate:
+    name: Who asked
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$EVENT" != 'pull_request' ]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "The pull request comes from $HEAD_REPO, which carries no secrets: not running."
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          permission="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$AUTHOR/permission" --jq .permission)"
+          echo "$AUTHOR holds '$permission' on $GITHUB_REPOSITORY."
+          if [ "$permission" = 'admin' ]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+
   live:
     name: Live tests on ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
