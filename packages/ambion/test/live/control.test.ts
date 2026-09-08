@@ -29,8 +29,8 @@ live('control', () => {
 			identity: 'Writes at length.',
 			instructions: `
 				When asked for an essay, write one of at least 800 words and deliver
-				it with one say. When asked to say one word, say that word alone
-				with one say.
+				it with one say. When told to drop the essay and say one word, say
+				that word alone with one say, and write no essay.
 			`,
 		});
 		const { session, repo, events } = open('abort', { agents: [essayist] });
@@ -51,12 +51,17 @@ live('control', () => {
 		expect(errorsIn(events)).toEqual([]);
 		expect(events).toContainEqual({ type: 'activation_end', agent: 'essayist', spoke: false });
 
-		// The room is still running: the next question is answered.
-		await visit.deliver({ text: 'Say the word "ready" and nothing else.' });
+		// The room is still running: the next question is answered. The aborted
+		// request left no mark, so the record still asks for the essay, and the
+		// follow-up withdraws it in so many words.
+		await visit.deliver({
+			text: 'Drop the essay, do not write it. Say the word "ready" and nothing else.',
+		});
 		await untilQuiet(session);
 		const said = saidBy(await session.messages(), 'essayist');
 		expect(said).toHaveLength(1);
 		expect(said[0]?.text).toMatch(/ready/i);
+		expect(said[0]?.text.length).toBeLessThan(120);
 		await invariants(session, events);
 		report('abort', await spent(repo, session.name));
 		await stopSession(session);
