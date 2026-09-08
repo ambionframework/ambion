@@ -12,6 +12,7 @@
 		"dev": "turbo dev",
 		"build": "turbo build",
 		"test": "turbo test",
+		"test:live": "pnpm --filter @ambionframework/ambion run test:live",
 		"check": "turbo run build check:types && pnpm run check:lint && turbo run test",
 		"check:lint": "biome lint . --error-on-warnings && knip",
 		"check:format": "prettier . --cache --check",

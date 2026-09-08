@@ -563,6 +563,24 @@ one per claim this document makes loudly:
   an abort with a steer still queued.
 
 All in-process, in vitest, on a scripted stream where determinism matters.
+
+A second tier, [`test/live`](../packages/ambion/test/live), runs the same
+room on a real model with a real key. It proves what a script cannot:
+
+- the model resolves from Pi's catalog (§1), and a refused call is an
+  `error` event: silence is a decision, an error is an event;
+- a seat with nothing to add declines, and a directed say wakes a seat at
+  `named` (rules 3, 4, 6);
+- three seats race under the lock, and the room still goes quiet (rule 5,
+  and the gap in §7);
+- the assistant writes in the person's shape and seats from the reserve;
+- a second run of a name reads the first run's record;
+- the built-in tools reach a workspace on a real provider;
+- `abort()` ends a request in flight, and the room keeps running.
+
+`pnpm test:live` runs it, and [`toolchain.md`](toolchain.md) §8 says when
+CI does.
+
 What the exchange adds to these rules is proved in
 [`assistant.test.ts`](../packages/ambion/test/assistant.test.ts), listed in
 [`exchange.md`](exchange.md) §9. What a person entering and leaving adds is
