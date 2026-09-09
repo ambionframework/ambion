@@ -502,23 +502,15 @@ collaboration patterns people and agents work in.
 **Where.** `seated` in [`define.ts`](../packages/ambion/src/define.ts), the
 roster in [`render.ts`](../packages/ambion/src/render.ts).
 
-### 26. Lease rows grow with every activation
+### 26. Lease rows grow with every activation — closed
 
-**What.** Every activation writes two lease rows at least: a claim and an
-end, plus one renewal per half expiry, and one renewal per message steered
-into it, which carries `heard`. A room that runs for a month holds tens of
-thousands of rows beside a few thousand messages, and every fold reads
-them all.
-
-**Why.** The fold is O(rows) per operation. Item 2 records the same cost
-for messages; leases add the larger term.
-
-**Where.** `foldLeases` in `lease.ts`; `RoomLog.replay` in `log.ts`.
-
-**Fix.** A lease that ended and that no owed draft counts (an id older than
-the last close) can leave the fold. A snapshot row that carries the folded
-state up to a seq, written by `reconcile` every N entries, lets the replay
-start from it.
+The room writes an `ambion/checkpoint` row every `runtime.checkpoint.rows`
+rows: the composition, the closes and the leases a later fold still reads,
+behind a floor below which every wake was answered. The fold reads it in
+place of every row before it, and the log drops those rows from memory
+(`checkpointOf` in `fold.ts`, `compact` in `log.ts`). What is left is the
+replay's I/O: Pi's `findEntries` reads every entry, and a storage that can
+seek to the checkpoint would let the replay skip the rows it drops.
 
 ### 27. A person present at a crash stays present until the host returns
 
@@ -535,16 +527,14 @@ a visit, and should not start one.
 
 ### 28. Three attempts, then the wake or the summary is never tried again
 
-**What.** A wake whose activation expired or failed without speaking, and a
-summary a draft could not land, retry after a backoff, three times, on the
-room's alarm, and then the room stops. Nothing reports the wake or the
-range as owed afterwards, and no later event retries it.
+**What was done.** At the cap the room writes the attempt it does not
+make as a lease ended `abandoned`, and emits an `abandoned` event that
+names it (`abandonments` in `reconcile.ts`). The log says what the room
+gave up on, and when.
 
-**Where.** `pendingWakes` in `lease.ts`, `foldOwed` in `fold.ts`;
-[`docs/agent.md`](../docs/agent.md) §5, [`docs/assistant.md`](../docs/assistant.md) §16.
-
-**Fix.** An event when the cap is reached, and a host verb that resets the
-attempts for one message or one close.
+**What is left.** No host verb retries it. A row that resets the attempts
+for one message or one close, written by the host, is the fix; until then
+the host asks again.
 
 ### 29. The random walk has no shrinker
 

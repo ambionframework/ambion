@@ -766,10 +766,10 @@ afterwards.
 the activation. An activation that fails outright, or that runs out of
 drafts, is one attempt, and the room's own alarm wakes the assistant again
 after the backoff, whether or not anybody speaks into the room. After three
-attempts the room stops trying: the range stays whole and every reader
-still sees it, so nothing is lost, but the one message never arrives, and
-nothing reports that it is owed. A run that ends the day at the cap is the
-case to watch.
+attempts the room gives up: it writes the draft it does not make as a
+lease ended `abandoned`, and the host hears an `abandoned` event that
+names it. The range stays whole and every reader still sees it, so nothing
+is lost, and the one message never arrives.
 
 **What a client owes.** §10 asks a client to re-present past messages when
 a new one arrives. That is more than a log does, and no client in this

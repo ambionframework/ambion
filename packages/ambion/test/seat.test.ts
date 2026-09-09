@@ -2,6 +2,8 @@
  * The seat's side of the wire, driven by hand over a room the test plays:
  * one activation at a time, and whatever queued behind it runs next.
  */
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import {
 	type Clock,
@@ -85,9 +87,12 @@ class PlayedRoom implements SeatRoom {
 	}
 }
 
-function play() {
+/** A model call that never answers and never hears an abort. */
+const deaf: StreamFn = () => createAssistantMessageEventStream();
+
+function play(stream: StreamFn = scripted(() => quiet())) {
 	const clock = fakeClock();
-	const runtime = createRuntime({ clock, agents: [product], stream: scripted(() => quiet()) });
+	const runtime = createRuntime({ clock, agents: [product], stream });
 	const room = new PlayedRoom(clock);
 	const actor = new SeatActor(room, {
 		runtime,
@@ -118,6 +123,22 @@ describe('a seat actor', () => {
 		room.letGo.resolve();
 		await until(() => room.releases.length === 2);
 		expect(room.claims).toEqual(['1:product', '2:product']);
+		expect(room.mostHeld).toBe(1);
+	});
+
+	it('cuts an activation whose run ignores the abort, and runs what queued behind it', async () => {
+		const { room, actor } = play(deaf);
+		room.letGo.resolve();
+		const ran = actor.run('1:product');
+		await until(() => room.claims.length === 1);
+		await actor.wake(wakeOf('2:product'));
+		// the room ended the first lease: the actor moves on now, and the deaf run is left behind
+		await actor.cut('1:product');
+		await until(() => room.claims.length === 2);
+		expect(room.releases).toEqual(['1:product']);
+		await actor.cut('2:product');
+		await ran;
+		expect(room.releases).toEqual(['1:product', '2:product']);
 		expect(room.mostHeld).toBe(1);
 	});
 

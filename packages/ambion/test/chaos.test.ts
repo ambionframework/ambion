@@ -32,7 +32,7 @@ import { liveLeases, outcome, World, within } from './support/chaos.ts';
 import { invariants } from './support/invariants.ts';
 import { collect, roomName } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { jsonl, jsonlSessions, memory, type Storage } from './support/storage.ts';
+import { jsonl, jsonlSessions, memory, type Storage, sqlite } from './support/storage.ts';
 
 const full = process.env.AMBION_CHAOS === 'all';
 
@@ -55,30 +55,33 @@ async function countWrites(storage: Storage): Promise<number> {
 const writes = await countWrites(memory);
 const points = Array.from({ length: writes }, (_, i) => i + 1);
 
-describe.each(full ? [memory, jsonl] : [memory])('a crash at every write on $name', (storage) => {
-	describe.each(['before', 'after'] as const)('%s the entry lands', (mode) => {
-		it.each(points)(
-			`at write %i of ${writes}, the room resumes and the scenario ends whole`,
-			async (at) => {
-				const opened = await storage.open();
-				const world = new World(roomName(`chaos-${storage.name}-${mode}`), opened, { at, mode });
-				try {
-					await within(world.run(), 20_000, 'the scenario');
-					expect(world.crashes).toBe(1);
-					await world.check();
-					await stopSession(world.room);
-				} catch (error) {
-					throw new Error(`crash ${mode} write ${at}:\n${await world.describe()}`, {
-						cause: error,
-					});
-				} finally {
-					await opened.dispose();
-				}
-			},
-			30_000,
-		);
-	});
-});
+describe.each(full ? [memory, jsonl, sqlite] : [memory])(
+	'a crash at every write on $name',
+	(storage) => {
+		describe.each(['before', 'after'] as const)('%s the entry lands', (mode) => {
+			it.each(points)(
+				`at write %i of ${writes}, the room resumes and the scenario ends whole`,
+				async (at) => {
+					const opened = await storage.open();
+					const world = new World(roomName(`chaos-${storage.name}-${mode}`), opened, { at, mode });
+					try {
+						await within(world.run(), 20_000, 'the scenario');
+						expect(world.crashes).toBe(1);
+						await world.check();
+						await stopSession(world.room);
+					} catch (error) {
+						throw new Error(`crash ${mode} write ${at}:\n${await world.describe()}`, {
+							cause: error,
+						});
+					} finally {
+						await opened.dispose();
+					}
+				},
+				30_000,
+			);
+		});
+	},
+);
 
 // -- a kill from outside --------------------------------------------------------
 

@@ -73,7 +73,7 @@ function rpcTransport(env: Env): Transport {
 	return {
 		connect(room, seat) {
 			const stub = env.SEAT.get(env.SEAT.idFromName(`${room.name}:${seat}`));
-			return { wake: (wake) => stub.wake(wake) };
+			return { wake: (wake) => stub.wake(wake), cut: (activation) => stub.cut(activation) };
 		},
 	};
 }

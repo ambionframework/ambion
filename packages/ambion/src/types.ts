@@ -187,6 +187,12 @@ export type SessionEvent =
 	| { type: 'activation_end'; agent: string; spoke: boolean }
 	| { type: 'error'; agent: string; error: Error }
 	/**
+	 * The room gave up: every attempt at a wake or a draft came to nothing,
+	 * and the cap is reached. `activation` names the attempt the room did
+	 * not make, and the log holds the row that says so.
+	 */
+	| { type: 'abandoned'; agent: string; activation: string }
+	/**
 	 * A person's question opened an exchange: the room has an exchange to work on,
 	 * and one person owns it. A client that folds the working under the
 	 * question it answered starts here, whatever the assistant makes of it

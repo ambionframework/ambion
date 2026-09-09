@@ -2,7 +2,8 @@
  * A room resumed over its log continues where the last run stopped. What the
  * room held in memory is a fold over the log, so a crash loses nothing but
  * the run: the exchange, the roster, the people, the leases and the summary
- * still owed all fold back, on both storages.
+ * still owed all fold back, on every storage, over a log the room
+ * checkpoints every three rows.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -89,6 +90,7 @@ async function world(storage: (typeof storages)[number]): Promise<World> {
 				sessions: opened.sessions,
 				clock,
 				agents,
+				checkpoint: { rows: 3 },
 				transport: faultyTransport(inProcessTransport(), faults, clock),
 			}),
 	};

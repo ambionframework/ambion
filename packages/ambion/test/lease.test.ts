@@ -12,13 +12,14 @@ import {
 	defineAgent,
 	inProcessTransport,
 	isSpoken,
+	type Runtime,
 	type SeatRoom,
 	type Session,
 	startSession,
 	stopSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { assistant, collect, deferred, enter, roomName, tick } from './support/room.ts';
+import { assistant, collect, deferred, enter, roomName, rowsOf, tick } from './support/room.ts';
 import { contextText, quiet, type Script, scripted, speak } from './support/scripted.ts';
 import { type Fault, faultyTransport } from './support/transport.ts';
 
@@ -34,10 +35,15 @@ afterEach(async () => {
 	for (const session of started.splice(0)) await stopSession(session);
 });
 
-function open(faults: Fault[], script: Script): { session: Session; clock: FakeClock } {
+function open(
+	faults: Fault[],
+	script: Script,
+	wake: Partial<Runtime['wake']> = {},
+): { session: Session; clock: FakeClock } {
 	const clock = fakeClock();
 	const runtime = createRuntime({
 		clock,
+		wake,
 		transport: faultyTransport(inProcessTransport(), faults, clock),
 	});
 	const session = startSession({
@@ -152,6 +158,55 @@ describe('a lease', () => {
 		await session.quiet();
 		expect(starts(events)).toBe(2);
 		expect(session.exchange()).toBeUndefined();
+	});
+
+	it('expires an activation at its deadline, cuts it, and wakes the seat again after the backoff', async () => {
+		const held = deferred();
+		const { session, clock } = open(
+			[],
+			async (_c, _a, call) => {
+				if (call !== 1) return quiet();
+				await held.promise;
+				return quiet();
+			},
+			{ expiry: 60_000, deadline: 120_000 },
+		);
+		const events = collect(session);
+		const visit = await enter(session);
+		await visit.deliver({ text: 'take your time' });
+		await tick();
+		expect(starts(events)).toBe(1);
+
+		// the lease is renewed up to the deadline and no further; at the deadline the room expires it
+		await clock.advance(119_999);
+		expect(events.some((e) => e.type === 'error')).toBe(false);
+		await clock.advance(1);
+		expect(events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message))).toBe(
+			true,
+		);
+		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
+		const runtime = (session as unknown as { runtime: Runtime }).runtime;
+		const rows = (await rowsOf(runtime.sessions, session.name)).filter(
+			(row) => row.type === 'ambion/lease',
+		);
+		const renewals = rows.filter(
+			(row) =>
+				(row.data as { id: string; phase: string }).id === '2:solo' &&
+				(row.data as { phase: string }).phase === 'running',
+		);
+		// a claim and three renewals: the one that reached the deadline moved the expiry nowhere
+		expect(renewals.length).toBeLessThanOrEqual(4);
+		expect(renewals.every((row) => (row.data as { expiry: number }).expiry <= clock.now())).toBe(
+			true,
+		);
+
+		// the activation came to nothing, so the seat is woken again after the backoff
+		expect(session.exchange()).toBeDefined();
+		await clock.advance(30_000);
+		await session.quiet();
+		expect(starts(events)).toBe(2);
+		expect(session.exchange()).toBeUndefined();
+		held.resolve();
 	});
 
 	it('rebuilds the activation when a wake into it was lost, and reads the message off the record', async () => {

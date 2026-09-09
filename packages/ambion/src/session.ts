@@ -24,7 +24,7 @@
 import type { SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
 import { assertAssistant } from './assistant.ts';
 import type { Exchange } from './exchange.ts';
-import { foldRoom, type RoomState } from './fold.ts';
+import { checkpointOf, foldRoom, type RoomState } from './fold.ts';
 import { activationId, draftId, isExpired, isLive, parseId, seatOf } from './lease.ts';
 import { type Committed, type LogEntry, RoomLog } from './log.ts';
 import type { VisitRuntime } from './presence.ts';
@@ -39,7 +39,7 @@ import {
 	sessionsOver,
 	stubModel,
 } from './runtime.ts';
-import { SeatActor, wakes } from './seat.ts';
+import { wakes } from './seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
@@ -969,16 +969,22 @@ class SessionImpl implements Session, RunningRoom {
 	 * ended. A fresh claim is taken only for an activation the fold says is
 	 * due: the next attempt at a pending wake, or at an owed draft. Anything
 	 * else was answered already, and a second run of it would answer twice.
+	 * No lease runs past the deadline: the expiry a claim or a renewal takes
+	 * is capped there, so an activation that runs on expires on the room's
+	 * alarm, and the room counts it as one that came to nothing.
 	 */
 	private async claim(id: string, seat: string, heard: Seq): Promise<LeaseResponse> {
-		const expiry = this.now() + this.runtime.wake.expiry;
+		const now = this.now();
+		let expiry = now + this.runtime.wake.expiry;
 		let fresh = false;
 		const written = await this.log.write('lease', () => {
 			const state = this.state();
 			const known = state.leases.get(id);
 			if (known === undefined && !this.due(state).has(id)) return undefined;
-			if (known !== undefined && !isLive(known, this.now())) return undefined;
+			if (known !== undefined && !isLive(known, now)) return undefined;
 			fresh = known === undefined;
+			const since = known === undefined ? now : Date.parse(known.since);
+			expiry = Math.min(expiry, since + this.runtime.wake.deadline);
 			const taken = Math.max(known?.heard ?? this.log.lastSeq, heard);
 			return { id, phase: 'running', expiry, heard: taken, at: this.iso() };
 		});
@@ -1008,15 +1014,16 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * End one lease, for whatever reason, and say so once. Nothing to end is
-	 * not an error. A revocation may name an activation that never claimed:
-	 * the row ends it before it starts, and the wake it stood for is answered.
+	 * not an error. A revocation or an abandonment may name an activation
+	 * that never claimed: the row ends it before it starts, and the wake or
+	 * the draft it stood for is answered.
 	 */
 	private async end(id: string, seat: string, reason: EndReason, heard = 0): Promise<boolean> {
 		let started = true;
 		const written = await this.log.write('lease', () => {
 			const known = this.state().leases.get(id);
 			if (known?.phase === 'ended') return undefined;
-			if (known === undefined && reason !== 'revoked') return undefined;
+			if (known === undefined && !WRITES_OFF.has(reason)) return undefined;
 			if (known !== undefined && reason !== 'expired' && isExpired(known, this.now()))
 				return undefined;
 			started = known !== undefined;
@@ -1073,10 +1080,26 @@ class SessionImpl implements Session, RunningRoom {
 			// Whoever waits hears it once the room has nothing more to write: a
 			// pass that expired a lease is followed by the pass that closes.
 			if (!changed) {
+				await this.checkpoint();
 				this.settle();
 				this.arm(decision.alarmAt);
 				return;
 			}
+		}
+	}
+
+	/**
+	 * A checkpoint once the log took enough rows since the last one, written
+	 * from the fold where the write happens. It is a cache over the log: a
+	 * write that fails changes nothing, and the room tries again at the next
+	 * pass that writes nothing.
+	 */
+	private async checkpoint(): Promise<void> {
+		if (this.stopped || this.log.rowsSinceCheckpoint < this.runtime.checkpoint.rows) return;
+		try {
+			await this.log.write('checkpoint', () => checkpointOf(this.state(), this.now()));
+		} catch {
+			// A checkpoint the storage refused is one the room does not need.
 		}
 	}
 
@@ -1095,9 +1118,22 @@ class SessionImpl implements Session, RunningRoom {
 			const seat = seatOf(expired.id, this.assistant) ?? '';
 			changed = (await this.end(expired.id, seat, 'expired')) || changed;
 		}
+		changed = (await this.abandon(decision.abandoned)) || changed;
 		if (decision.close) changed = (await this.close(decision.close)) || changed;
 		for (const send of decision.sends) this.send(send.id, send.seat);
 		return changed || decision.sends.length > 0;
+	}
+
+	/** Write off each attempt the room does not make, and say so. True when any row landed. */
+	private async abandon(rows: ReturnType<typeof decide>['abandoned']): Promise<boolean> {
+		let changed = false;
+		for (const row of rows) {
+			const seat = seatOf(row.id, this.assistant) ?? '';
+			if (!(await this.end(row.id, seat, 'abandoned', row.heard))) continue;
+			changed = true;
+			this.emit({ type: 'abandoned', agent: seat, activation: row.id });
+		}
+		return changed;
 	}
 
 	/** The room went quiet with an exchange open: it closes, and the host hears it before anything is written about it. */
@@ -1150,14 +1186,14 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * Cut one seat: the seat side is aborted, every lease it holds ends
-	 * revoked, and every wake pending for it is written off the same way, so
+	 * Cut one seat: every lease it holds ends revoked, every wake pending for
+	 * it is written off the same way, and the seat side is told to stop, so
 	 * nothing the seat was sent runs after the cut.
 	 */
 	private async cut(seat: string, ids: string[]): Promise<void> {
-		const port = this.ports.get(seat);
-		if (port instanceof SeatActor) port.abort();
 		for (const id of ids) await this.end(id, seat, 'revoked');
+		const port = this.ports.get(seat);
+		for (const id of ids) void port?.cut(id).catch(() => {});
 	}
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */
@@ -1212,6 +1248,9 @@ class SessionImpl implements Session, RunningRoom {
 
 /** A seat's intent the room refuses, with the reason the model reads. */
 class RefusedError extends Error {}
+
+/** The reasons that end an activation before it starts. */
+const WRITES_OFF: ReadonlySet<EndReason> = new Set(['revoked', 'abandoned']);
 
 /** A message before the log stamps its seq, its key and its wakes. */
 type Drafted =

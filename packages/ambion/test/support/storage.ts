@@ -2,13 +2,15 @@
  * The storages and the workspace backends every scenario runs on.
  *
  * `memory` is Pi's in-memory repository; `jsonl` is Pi's JSONL repository
- * over a temporary directory, through Pi's own Node filesystem. A room on
- * JSONL writes through to disk, so a second runtime over the same directory
+ * over a temporary directory, through Pi's own Node filesystem; `sqlite` is
+ * the core's SQLite storage over a `node:sqlite` file. A room on disk
+ * writes through, so a second runtime over the same directory or file
  * reads what the first wrote.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
@@ -17,19 +19,22 @@ import {
 	JsonlSessionRepo,
 	memoryBackend,
 	type SessionOpener,
+	type Sql,
+	type SqlValue,
 	sessionsOver,
+	sqliteSessions,
 	type WorkspaceBackend,
 } from '../../src/index.ts';
 
 export interface OpenedStorage {
 	readonly sessions: SessionOpener;
-	/** The directory a JSONL storage writes under; absent for memory. */
+	/** The directory a storage on disk writes under; absent for memory. */
 	readonly dir?: string;
 	dispose(): Promise<void>;
 }
 
 export interface Storage {
-	readonly name: 'memory' | 'jsonl';
+	readonly name: 'memory' | 'jsonl' | 'sqlite';
 	open(): Promise<OpenedStorage>;
 }
 
@@ -69,7 +74,31 @@ export const jsonl: Storage = {
 	},
 };
 
-export const storages: readonly Storage[] = [memory, jsonl];
+/** A `node:sqlite` database as the core reaches it: what a host on Node wraps its driver in. */
+export function nodeSql(db: DatabaseSync): Sql {
+	return {
+		run: (query, ...params) => {
+			db.prepare(query).run(...params);
+		},
+		all: (query, ...params) => db.prepare(query).all(...params) as Record<string, SqlValue>[],
+	};
+}
+
+export const sqlite: Storage = {
+	name: 'sqlite',
+	async open() {
+		const dir = await mkdtemp(join(tmpdir(), 'ambion-sqlite-'));
+		const db = new DatabaseSync(join(dir, 'rooms.sqlite'));
+		return {
+			sessions: sqliteSessions(nodeSql(db)),
+			dir,
+			// The handle stays open: a seat's audit session may still be flushing when the test ends.
+			dispose: () => rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }),
+		};
+	},
+};
+
+export const storages: readonly Storage[] = [memory, jsonl, sqlite];
 
 // -- workspace backends ------------------------------------------------------
 

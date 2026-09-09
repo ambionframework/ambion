@@ -229,9 +229,19 @@ export interface SeatContext {
  * The seat's side of the wire. One actor per seat, for as long as the room
  * runs; one activation at a time, named by the wake that started it.
  */
+/** One activation the actor holds: running, or over and releasing its lease. */
+interface Current {
+	id: string;
+	activation: Activation;
+	over: boolean;
+	/** Resolves when the room ended the lease: the actor moves on, whatever the run still does. */
+	cut: () => void;
+	cutOff: Promise<void>;
+}
+
 export class SeatActor implements SeatPort {
 	/** The activation running, or over and releasing its lease. Held until the release lands. */
-	private current: { id: string; activation: Activation; over: boolean } | undefined;
+	private current: Current | undefined;
 	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
 	private readonly queued: string[] = [];
 	private audit: Promise<PiSession> | undefined;
@@ -279,22 +289,42 @@ export class SeatActor implements SeatPort {
 		if (!this.queued.includes(id)) this.queued.push(id);
 	}
 
-	/** Cut the activation in flight. The room writes what that means. */
+	/**
+	 * The room ended this activation's lease. The activation is aborted, and
+	 * the actor moves on at once: a run that ignores the abort is left to
+	 * finish on its own, and every call it still makes is answered stale.
+	 */
+	async cut(activation: string): Promise<void> {
+		if (this.current?.id === activation) this.cutCurrent();
+	}
+
+	/** Cut the activation in flight, whatever its id. The room writes what that means. */
 	abort(): void {
-		this.current?.activation.abort();
+		this.cutCurrent();
+	}
+
+	private cutCurrent(): void {
+		const current = this.current;
+		if (current === undefined) return;
+		current.activation.abort();
+		current.cut();
 	}
 
 	private async take(id: string): Promise<void> {
 		// Held before the claim, so a steer that lands while the claim is in
 		// flight reaches the activation and not the floor.
 		const activation = new Activation(id, this.context.seat, this.host(id));
-		const current = { id, activation, over: false };
+		let cut = () => {};
+		const cutOff = new Promise<void>((resolve) => {
+			cut = resolve;
+		});
+		const current: Current = { id, activation, over: false, cut, cutOff };
 		this.current = current;
 		const claimed = await this.claim(id);
 		if (claimed !== undefined) {
-			const stopRenewing = this.renewUntil(activation, claimed.expiry);
+			const stopRenewing = this.renewUntil(current, claimed.expiry);
 			try {
-				await activation.run();
+				await Promise.race([activation.run(), cutOff]);
 			} finally {
 				stopRenewing();
 				// Held through the release: a wake that lands now runs next, and
@@ -338,36 +368,46 @@ export class SeatActor implements SeatPort {
 		}
 	}
 
-	/** One renewal, carrying what the activation has taken. A refused renewal ends it. */
-	private async renew(activation: Activation): Promise<number | undefined> {
+	/**
+	 * One renewal, carrying what the activation has taken: the new expiry,
+	 * `stale` when the room refused it, or `lost` when it never reached the
+	 * room.
+	 */
+	private async renew(activation: Activation): Promise<number | 'stale' | 'lost'> {
 		try {
 			const renewed = await this.room.lease({
 				activation: activation.id,
 				phase: 'running',
 				heard: activation.taken,
 			});
-			if ('stale' in renewed) {
-				activation.abort();
-				return undefined;
-			}
-			return renewed.ok.expiry;
+			return 'stale' in renewed ? 'stale' : renewed.ok.expiry;
 		} catch {
-			// The renewal never reached the room: the lease expires there, and
-			// the next call this seat makes is answered stale.
-			return undefined;
+			return 'lost';
 		}
 	}
 
-	/** Renew at half the expiry, for as long as the activation runs. */
-	private renewUntil(activation: Activation, firstExpiry: number): () => void {
+	/**
+	 * Renew at half the expiry, for as long as the activation runs. A refused
+	 * renewal cuts the activation now. A renewal that moves the expiry
+	 * nowhere says the lease reached its deadline, and one that was lost
+	 * leaves the lease to expire where it stands: the actor cuts the
+	 * activation at that expiry, when the room expires the lease.
+	 */
+	private renewUntil(current: Current, firstExpiry: number): () => void {
 		const clock = this.context.runtime.clock;
+		const cut = () => {
+			if (this.current === current) this.cutCurrent();
+		};
 		let cancel = () => {};
 		const schedule = (expiry: number) => {
-			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void again());
+			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void again(expiry));
 		};
-		const again = async () => {
-			const expiry = await this.renew(activation);
-			if (expiry !== undefined) schedule(expiry);
+		const again = async (held: number) => {
+			const renewed = await this.renew(current.activation);
+			if (renewed === 'stale') cut();
+			else if (renewed === 'lost') cancel = clock.alarm(held, cut);
+			else if (renewed <= held) cancel = clock.alarm(renewed, cut);
+			else schedule(renewed);
 		};
 		schedule(firstExpiry);
 		return () => cancel();

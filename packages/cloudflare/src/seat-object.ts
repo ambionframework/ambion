@@ -3,7 +3,8 @@
  * an alarm; the alarm claims the lease, reads the view, runs the activation
  * to its end and releases the lease, all inside one alarm handler. A wake
  * that arrives while an activation runs is handed to the actor, which
- * steers it in. The seat's audit session lives in the object's own SQLite.
+ * steers it in, and a cut is handed to it the same way. The seat's audit
+ * session lives in the object's own SQLite.
  */
 
 import { DurableObject } from 'cloudflare:workers';
@@ -39,6 +40,11 @@ export class SeatObject extends DurableObject<Env> {
 			wakes: wakes + 1,
 		});
 		if (!(await this.ctx.storage.get<boolean>('hold'))) await this.ctx.storage.setAlarm(Date.now());
+	}
+
+	/** The room ended this activation's lease: the actor stops it, when it runs here. */
+	async cut(activation: string): Promise<void> {
+		await this.actor?.cut(activation);
 	}
 
 	/**

@@ -72,6 +72,8 @@ export type {
 	Visit,
 } from './session.ts';
 export { readSession, resumeSession, startSession, stopSession, visitSession } from './session.ts';
+export type { Sql, SqlValue } from './sqlite.ts';
+export { SqliteSessionStorage, sqliteSessions } from './sqlite.ts';
 export type {
 	AgentDefinition,
 	AgentSeat,

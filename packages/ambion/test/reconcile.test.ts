@@ -42,7 +42,7 @@ const close = (row: Omit<CloseRow, 'after' | 'at'>): LogEntry => ({
 	close: { ...row, after: row.through, at },
 });
 
-const fold = (entries: LogEntry[]): RoomState => foldRoom(entries, { attempts: 3, backoff });
+const fold = (entries: LogEntry[]): RoomState => foldRoom(entries, { backoff });
 const options = (over: Partial<DecideOptions> = {}): DecideOptions => ({
 	now: T0,
 	resend: 5_000,
@@ -166,9 +166,29 @@ describe('decide', () => {
 		expect(decide(once, options({ now: T0 + 31_000 })).sends).toEqual([
 			{ id: 'close:4:2', seat: 'assistant' },
 		]);
+		// at the cap the room gives up: the attempt it does not make is written off, and the row answers the close
 		const capped = fold([...owed, failed(2, T0 + 40_000), failed(3, T0 + 100_000)]);
-		expect(capped.owed).toEqual([]);
-		expect(decide(capped, options({ now: T0 + 1_000_000 }))).toMatchObject({
+		expect(capped.owed).toMatchObject([{ attempts: 3 }]);
+		const given = decide(capped, options({ now: T0 + 1_000_000 }));
+		expect(given).toMatchObject({ sends: [], alarmAt: undefined });
+		expect(given.abandoned).toEqual([
+			{
+				id: 'close:4:4',
+				phase: 'ended',
+				reason: 'abandoned',
+				heard: 4,
+				at: new Date(T0 + 1_000_000).toISOString(),
+			},
+		]);
+		const written = fold([
+			...owed,
+			failed(2, T0 + 40_000),
+			failed(3, T0 + 100_000),
+			lease(given.abandoned[0] as Parameters<typeof lease>[0]),
+		]);
+		expect(written.owed).toEqual([]);
+		expect(decide(written, options({ now: T0 + 1_000_000 }))).toMatchObject({
+			abandoned: [],
 			sends: [],
 			alarmAt: undefined,
 		});
@@ -204,15 +224,26 @@ describe('decide', () => {
 			expired('2:product:2', T0 + 150_000),
 		]);
 		expect(spoke.pending).toEqual([]);
-		// at the cap the wake is dropped, and the exchange closes
+		// at the cap the room writes the wake off, and the exchange closes on the fold that holds the row
 		const capped = fold([
 			...opened(),
 			expired('2:product', T0 + 60_000),
 			expired('2:product:2', T0 + 150_000),
 			expired('2:product:3', T0 + 300_000),
 		]);
-		expect(capped.pending).toEqual([]);
-		expect(decide(capped, options({ now: T0 + 300_000 })).close).toMatchObject({ through: 2 });
+		expect(capped.pending).toMatchObject([{ id: '2:product:4', attempts: 3 }]);
+		const given = decide(capped, options({ now: T0 + 300_000 }));
+		expect(given.close).toBeUndefined();
+		expect(given.abandoned).toMatchObject([{ id: '2:product:4', reason: 'abandoned', heard: 2 }]);
+		const written = fold([
+			...opened(),
+			expired('2:product', T0 + 60_000),
+			expired('2:product:2', T0 + 150_000),
+			expired('2:product:3', T0 + 300_000),
+			lease({ id: '2:product:4', phase: 'ended', reason: 'abandoned', at }),
+		]);
+		expect(written.pending).toEqual([]);
+		expect(decide(written, options({ now: T0 + 300_000 })).close).toMatchObject({ through: 2 });
 	});
 
 	it('answers every wake a later activation of the seat heard', () => {
@@ -283,6 +314,7 @@ describe('decide', () => {
 		]);
 		expect(decide(state, options({ stopped: true }))).toEqual({
 			expired: [],
+			abandoned: [],
 			close: undefined,
 			sends: [],
 			alarmAt: undefined,

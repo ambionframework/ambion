@@ -13,11 +13,12 @@
  * ended lease never runs again.
  *
  * A wake is a message and a seat it reaches. It is answered by any lease of
- * that seat that heard the message and ran to a release, a refusal or a
- * revocation, or that spoke while it ran. A lease that expired or failed
- * without speaking answers nothing: the wake stays pending, the failure
- * counts as one attempt, and the room wakes the seat again after the
- * backoff, up to the cap.
+ * that seat that heard the message and ran to a release, a refusal, a
+ * revocation or an abandonment, or that spoke while it ran. A lease that
+ * expired or failed without speaking answers nothing: the wake stays
+ * pending, the failure counts as one attempt, and the room wakes the seat
+ * again after the backoff. The fold reports every wake still pending with
+ * its attempts; the room decides the cap, and writes it.
  */
 
 import type { Message, Seq } from './types.ts';
@@ -59,6 +60,8 @@ export interface LeaseState {
 	reason?: EndReason;
 	/** The seq the activation has taken. Never lower than an earlier row said. */
 	heard: Seq;
+	/** When the first row was written, ISO: when the activation claimed. */
+	since: string;
 	/** When the last row was written, ISO. */
 	at: string;
 }
@@ -70,11 +73,12 @@ export function foldLeases(rows: readonly LeaseRow[]): Map<string, LeaseState> {
 		// Ended is terminal: a renewal that lands after the end changes nothing.
 		if (known?.phase === 'ended') continue;
 		const heard = Math.max(known?.heard ?? 0, row.heard);
+		const since = known?.since ?? row.since ?? row.at;
 		leases.set(
 			row.id,
 			row.phase === 'running'
-				? { id: row.id, phase: 'running', expiry: row.expiry, heard, at: row.at }
-				: { id: row.id, phase: 'ended', reason: row.reason, heard, at: row.at },
+				? { id: row.id, phase: 'running', expiry: row.expiry, heard, since, at: row.at }
+				: { id: row.id, phase: 'ended', reason: row.reason, heard, since, at: row.at },
 		);
 	}
 	return leases;
@@ -102,8 +106,6 @@ export interface PendingWake {
 }
 
 export interface WakeOptions {
-	/** How many attempts the room makes at one wake. */
-	attempts: number;
 	/** How long the room waits before the next attempt, after `attempt` failed ones. */
 	backoff(attempt: number): number;
 }
@@ -112,8 +114,8 @@ const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set(['failed', 'expired']);
 
 /**
  * Every wake a message decided that no lease has answered, for a seat still
- * on the roster and under the cap. A seat that left the roster answers no
- * wake: what it was sent is not pending.
+ * on the roster. A seat that left the roster answers no wake: what it was
+ * sent is not pending.
  */
 export function pendingWakes(
 	messages: readonly Message[],
@@ -149,7 +151,7 @@ function leasesBySeat(
 	return bySeat;
 }
 
-/** The wake as pending, or nothing when a lease answered it or the cap was reached. */
+/** The wake as pending, or nothing when a lease answered it. */
 function statusOf(
 	message: Message,
 	seat: string,
@@ -161,7 +163,6 @@ function statusOf(
 	if (heard.some((lease) => answers(lease, spoke))) return undefined;
 	const failed = heard.filter((lease) => !spoke.has(lease.id) && cameToNothing(lease));
 	const attempts = failed.length;
-	if (attempts >= options.attempts) return undefined;
 	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
 	return {
 		id: activationId(message.seq, seat, attempts + 1),

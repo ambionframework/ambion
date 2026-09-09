@@ -455,6 +455,7 @@ type SessionEvent =
   | { type: 'tool_execution_end'; agent: string; toolName: string }
   | { type: 'activation_end'; agent: string; spoke: boolean }
   | { type: 'error'; agent: string; error: Error }
+  | { type: 'abandoned'; agent: string; activation: string }
   | { type: 'exchange_opened'; exchange: Exchange }
   | { type: 'exchange_closed'; exchange: ClosedExchange }
   | { type: 'quiet' };
@@ -487,12 +488,14 @@ the exchange. The two words this document uses are `activation` and
 `exchange`; `turn` in these pages is Pi's, or plain English in a sentence a
 model reads.
 
-Three events are the room's own:
+Four events are the room's own:
 
 - `message`;
 - `conflict` — rule 5's lock refusing a message that raced past the
   record, so the host sees every race the lock caught;
-- `error`, which distinguishes a failed activation from a quiet one.
+- `error`, which distinguishes a failed activation from a quiet one;
+- `abandoned`, the room giving up on a wake or a draft at the cap, naming
+  the attempt it does not make.
 
 `settled()` is a promise with no event beside it: it resolves at the
 moment no agent is active, and the window between `settled()` and `quiet`
@@ -594,10 +597,18 @@ reserve, the people, the open exchange, the leases, the wakes still
 pending and the summaries still owed. `reconcile()` folds the log, decides,
 writes what it decided, and sends. It runs after every commit, every lease
 change, every alarm and every wake, and running it twice writes nothing.
-Four kinds of entry hold it all, in the room's one Pi session:
-`ambion/message`, `ambion/lease`, `ambion/close` and `ambion/composition`.
-Every entry beside a message carries `after`, the last message seq when it
-was written.
+Five kinds of entry hold it all, in the room's one Pi session:
+`ambion/message`, `ambion/lease`, `ambion/close`, `ambion/composition` and
+`ambion/checkpoint`. Every entry beside a message carries `after`, the last
+message seq when it was written.
+
+**A checkpoint bounds what a fold costs.** Once the log took
+`runtime.checkpoint.rows` rows past the last checkpoint, the room writes
+the next one: the composition, the closes and the leases a later fold
+still reads, behind a floor below which every wake was answered. The fold
+reads a checkpoint in place of every row before it, and the log drops
+those rows from memory. The rows stay on the storage, and a checkpoint the
+room cannot read is ignored: the fold then reads the rows.
 
 **A seat is seated for the run. An activation lasts seconds.** An
 activation's id is derived from the log: the seq of the message that woke
@@ -607,27 +618,33 @@ second attempt), or the close it answers and the attempt number
 retried commit lands once, and every entry an activation writes carries
 its `activationId`. An activation holds a lease: `running`, claimed and
 renewed with an expiry, then `ended`, with a reason — `released`,
-`failed`, `refused`, `revoked` or `expired`. Every lease row carries
-`heard`, the seq the activation has taken: the record as it stood at the
-claim, then every message steered into it. A request from an activation
-whose lease ended is refused as `stale`. A running lease that stops
-renewing expires on the room's alarm: the room reports a failed activation
-as an `error` event, and the seat's next request is refused. What landed
-while an activation worked and whether it left a mark belong to the
-activation and end with it. Rule 5's `readThrough` is an activation's
-fact.
+`failed`, `refused`, `revoked`, `expired` or `abandoned`. Every lease row
+carries `heard`, the seq the activation has taken: the record as it stood
+at the claim, then every message steered into it. A request from an
+activation whose lease ended is refused as `stale`. A running lease that
+stops renewing expires on the room's alarm: the room reports a failed
+activation as an `error` event, and the seat's next request is refused.
+No lease runs past `runtime.wake.deadline` from its claim: the room caps
+every renewal there, the seat side cuts the activation when its lease
+reaches the deadline, and the room counts it as an activation that came
+to nothing. What landed while an activation worked and whether it left a
+mark belong to the activation and end with it. Rule 5's `readThrough` is
+an activation's fact.
 
 **A wake is answered by a lease that heard it, and an activation that came
 to nothing is tried again.** A message and a seat in its `wakes` is one
 wake. Any lease of that seat that heard the message answers it once it ran
-to a release, a refusal or a revocation, or once it spoke. A lease that
-expired or failed without speaking answers nothing: the wake stays
-pending, the failure counts as one attempt, and the room wakes the seat
-again after the backoff (`runtime.retry`, the same policy the summaries
-use, three attempts thirty seconds apart by default). An activation that
-spoke and then died stands: what it said is on the record, and nobody is
-woken to say it again. A seat with a wake pending is live, so the exchange
-stays open through the backoff, and `settled()` waits for the attempt.
+to a release, a refusal, a revocation or an abandonment, or once it spoke.
+A lease that expired or failed without speaking answers nothing: the wake
+stays pending, the failure counts as one attempt, and the room wakes the
+seat again after the backoff (`runtime.retry`, the same policy the
+summaries use, three attempts thirty seconds apart by default). At the cap
+the room gives up: it writes the attempt it does not make as a lease
+ended `abandoned`, which answers the wake, and the host hears an
+`abandoned` event that names it. An activation that spoke and then died
+stands: what it said is on the record, and nobody is woken to say it
+again. A seat with a wake pending is live, so the exchange stays open
+through the backoff, and `settled()` waits for the attempt.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
@@ -637,15 +654,20 @@ the shorthand for one. The default runtime opens sessions in an in-memory
 `InMemorySessionRepo`. A name that outlives the process is a durable
 `SessionRepo` implementation; the API stays the same.
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
-surface, and Ambion adds no storage layer of its own. "Durable" means the
-storage's append resolved: Pi's JSONL repository calls no `fsync`.
+surface, and Ambion adds one storage of its own: `sqliteSessions(sql)`,
+Pi's `SessionStorage` over any SQLite a host reaches through two calls,
+`run` and `all` ([`sqlite.ts`](../packages/ambion/src/sqlite.ts)). A
+process wraps `node:sqlite` in them; a Durable Object wraps its own
+storage. "Durable" means the storage's append resolved: Pi's JSONL
+repository calls no `fsync`.
 
 **What crosses between a seat and its room is JSON.** The room renders the
 system prompt and the context, and sends the two strings with the model
 id and the hand the activation holds. The seat side resolves the definition
 by name through the runtime's catalog, builds the Pi `Agent`, and reaches
 the room through three calls: `view`, `commit` and `lease`. The room
-reaches a seat through one: `wake`. Every request and response
+reaches a seat through two: `wake`, and `cut` for an activation whose
+lease the room ended. Every request and response
 survives a round trip through `JSON.stringify` unchanged
 ([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
 live in two processes.

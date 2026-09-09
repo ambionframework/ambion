@@ -600,7 +600,9 @@ describe('startSession', () => {
 			model: 'scripted/solo',
 		});
 		// no wake reaches a seat: the test plays the seat over the wire by hand
-		const runtime = createRuntime({ transport: { connect: () => ({ wake: async () => {} }) } });
+		const runtime = createRuntime({
+			transport: { connect: () => ({ wake: async () => {}, cut: async () => {} }) },
+		});
 		const session = startSession({
 			name: roomName('stale'),
 			assistant,

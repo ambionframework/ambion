@@ -13,6 +13,7 @@ export interface ConfigureOptions {
 	stream?: CreateRuntimeOptions['stream'];
 	wake?: CreateRuntimeOptions['wake'];
 	retry?: CreateRuntimeOptions['retry'];
+	checkpoint?: CreateRuntimeOptions['checkpoint'];
 }
 
 let settings: ConfigureOptions | undefined;
@@ -33,6 +34,7 @@ export function runtimeFor(
 		...(settings.stream === undefined ? {} : { stream: settings.stream }),
 		...(settings.wake === undefined ? {} : { wake: settings.wake }),
 		...(settings.retry === undefined ? {} : { retry: settings.retry }),
+		...(settings.checkpoint === undefined ? {} : { checkpoint: settings.checkpoint }),
 		...options,
 	});
 }

@@ -301,7 +301,9 @@ what it spent, read off the seats' downstream sessions.
 **One harness, two tiers.** The invariants live in
 [`test/support/invariants.ts`](../packages/ambion/test/support/invariants.ts),
 and the live support re-exports them. The scripted tier runs the same
-scenarios on both storages (`matrix.test.ts`), on a clock it moves by hand,
+scenarios on every storage (`matrix.test.ts`): Pi's in-memory repository,
+Pi's JSONL repository, and the core's SQLite storage over a `node:sqlite`
+file. It runs them on a clock it moves by hand,
 over a transport that serializes every request and response, and under a
 random walk that loses and repeats them (`property.test.ts`, `AMBION_SEEDS`
 widens it). The live tier runs the room on a real model and holds it to the
@@ -330,7 +332,7 @@ harness in
   the wire, fails a write before or after it lands, and crashes the room
   up to three times.
 
-`AMBION_CHAOS=all` widens the sweep to JSONL and the kill to every third
+`AMBION_CHAOS=all` widens the sweep to JSONL and SQLite and the kill to every third
 write; `pnpm chaos` runs both widened, with 200 seeds of the walk.
 
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:

@@ -99,10 +99,17 @@ export interface Runtime {
 	/** The model call every seat in this runtime makes, unless a room overrides it. */
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
-	/** How long a wake stays unanswered before the room sends it again, and how long a lease lasts. */
-	readonly wake: { readonly resend: number; readonly expiry: number };
+	/**
+	 * How long a wake stays unanswered before the room sends it again, how
+	 * long a lease lasts between renewals, and how long an activation may run
+	 * from its claim: the room renews no lease past the deadline, so an
+	 * activation that runs on expires and counts as an attempt.
+	 */
+	readonly wake: { readonly resend: number; readonly expiry: number; readonly deadline: number };
 	/** How many times the room retries a failed summary, and how long it waits before each retry. */
 	readonly retry: { readonly attempts: number; readonly backoff: (attempt: number) => number };
+	/** How many rows the log takes past the last checkpoint before the room writes the next one. */
+	readonly checkpoint: { readonly rows: number };
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
 	evict(name: string): void;
 }
@@ -122,6 +129,7 @@ export interface CreateRuntimeOptions {
 	stream?: StreamFn;
 	wake?: Partial<Runtime['wake']>;
 	retry?: Partial<Runtime['retry']>;
+	checkpoint?: Partial<Runtime['checkpoint']>;
 }
 
 /** What `sessionsOver` needs of a Pi repository: list, open, create. */
@@ -207,8 +215,9 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		transport: options.transport ?? inProcessTransport(),
 		stream: options.stream ?? registryStream,
 		model: options.stream ? stubModel : registryModel,
-		wake: { resend: 5_000, expiry: 60_000, ...options.wake },
+		wake: { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake },
 		retry: { attempts: 3, backoff: (attempt) => attempt * 30_000, ...options.retry },
+		checkpoint: { rows: 256, ...options.checkpoint },
 		evict(name) {
 			const room = running.get(name);
 			running.delete(name);

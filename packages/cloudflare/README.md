@@ -5,11 +5,10 @@ holds each seat, and the log lives in the room object's SQLite storage.
 
 What is built:
 
-- **`SqliteSessionStorage`** implements Pi's `SessionStorage` over
-  `ctx.storage.sql`: one `entries` table, one `lanes` table, one `meta`
-  table. It implements what `Session.appendCustomEntry`, `appendMessage`
-  and `findEntries` reach. Every other method throws `not supported`.
-  `sqlSessions(state)` is a `SessionOpener` over it.
+- **`sqlSessions(state)`** is a `SessionOpener` over the object's SQLite.
+  The core owns the storage (`sqliteSessions` in `@ambionframework/ambion`):
+  this package wraps `ctx.storage.sql` in the two calls it makes, `run` and
+  `all` (`sqlOver`).
 - **`RoomObject`** runs the room. Its constructor resumes the room the
   storage names, over `resumeSession`. It exposes `start`, `visit`,
   `deliver`, `leave`, `seat`, `unseat`, `abort`, `messages`, `seats` and
@@ -19,7 +18,9 @@ What is built:
   an alarm; `alarm()` claims the lease, reads the view, runs the activation
   and whatever queued behind it to their end, and releases the lease. A wake
   that arrives while an activation runs is handed to the actor, which steers
-  the message in. The seat's audit session lives in its own storage.
+  the message in; `cut` is handed to it the same way, and stops the
+  activation the room ended. The seat's audit session lives in its own
+  storage.
 - **`configure`** names the agent definitions the objects resolve by name,
   and the model call they make.
 

@@ -9,9 +9,10 @@
  * The seat reaches the room through three calls: `view` reads what an
  * activation is given, `commit` puts one message on the record, and
  * `lease` claims, renews or releases the activation. The room reaches a
- * seat through one: `wake` names a message the seat has to hear, and the
+ * seat through two: `wake` names a message the seat has to hear, and the
  * seat side decides whether that starts an activation or steers the one
- * that runs.
+ * that runs; `cut` names an activation whose lease the room ended, so the
+ * seat side stops it now.
  */
 import type { Attention, Message, Seq } from './types.ts';
 
@@ -20,18 +21,39 @@ import type { Attention, Message, Seq } from './types.ts';
 /** `Omit` over each member of a union, so a discriminated row keeps its shape. */
 export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
-/** Why a lease ended. */
-export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired';
+/**
+ * Why a lease ended. `abandoned` ends an attempt the room never made: the
+ * wake or the draft reached the cap, and the row says so.
+ */
+export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired' | 'abandoned';
 
 /**
  * One row about an activation: it holds a lease, or its lease ended.
  * `heard` is the seq the activation has taken: what its view held when it
  * claimed, then every message the seat side steered into it. A wake is
- * answered once a lease of the seat has heard it.
+ * answered once a lease of the seat has heard it. `since` is written on a
+ * checkpoint's rows alone: when the lease was first claimed, which the
+ * rows the checkpoint replaced said.
  */
 export type LeaseRow =
-	| { id: string; after: Seq; phase: 'running'; expiry: number; heard: Seq; at: string }
-	| { id: string; after: Seq; phase: 'ended'; reason: EndReason; heard: Seq; at: string };
+	| {
+			id: string;
+			after: Seq;
+			phase: 'running';
+			expiry: number;
+			heard: Seq;
+			since?: string;
+			at: string;
+	  }
+	| {
+			id: string;
+			after: Seq;
+			phase: 'ended';
+			reason: EndReason;
+			heard: Seq;
+			since?: string;
+			at: string;
+	  };
 
 /** The room went quiet with an exchange open, and closed it. */
 export interface CloseRow {
@@ -60,6 +82,40 @@ export interface CompositionRow {
 	at: string;
 }
 
+/**
+ * The rows that still matter, in place of every row before this one. The
+ * fold reads a checkpoint as the composition, the closes and the leases it
+ * carries, and nothing older; a wake on a message below `floor` was
+ * answered when the checkpoint was written. A checkpoint is a cache over
+ * the log: the rows it replaces stay on the storage, and a checkpoint the
+ * room cannot read is ignored.
+ */
+export interface CheckpointRow {
+	/** The shape of this row. A checkpoint of another shape is ignored. */
+	v: 1;
+	/** No wake on a message before this seq is pending. */
+	floor: Seq;
+	composition: CompositionRow;
+	closes: CloseRow[];
+	leases: LeaseRow[];
+	after: Seq;
+	at: string;
+}
+
+/** Whether a row read off the log is a checkpoint this room can fold. */
+export function isCheckpoint(row: unknown): row is CheckpointRow {
+	if (typeof row !== 'object' || row === null) return false;
+	const candidate = row as Partial<CheckpointRow>;
+	return (
+		candidate.v === 1 &&
+		typeof candidate.floor === 'number' &&
+		typeof candidate.composition === 'object' &&
+		candidate.composition !== null &&
+		Array.isArray(candidate.closes) &&
+		Array.isArray(candidate.leases)
+	);
+}
+
 // -- the room reaching a seat -------------------------------------------------
 
 /**
@@ -76,6 +132,8 @@ export interface Wake {
 
 export interface SeatPort {
 	wake(wake: Wake): Promise<void>;
+	/** The room ended this activation's lease: stop it, and run what queued behind it. */
+	cut(activation: string): Promise<void>;
 }
 
 // -- a seat reaching its room -------------------------------------------------
