@@ -60,9 +60,213 @@
 		},
 		{
 			// The library must not write to stdout on its owner's behalf; hosts
-			// pass a logger in instead.
+			// pass a logger in instead. It also runs on any host: nothing in it
+			// reaches a platform's own modules.
 			"includes": ["packages/ambion/src/**"],
-			"linter": { "rules": { "suspicious": { "noConsole": "error" } } }
+			"linter": {
+				"rules": {
+					"suspicious": { "noConsole": "error" },
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["cloudflare:*", "node:sqlite"],
+										"message": "The core runs on any host. A platform's own modules belong to its package."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		// The core is laid out in layers, and an import points down only:
+		//
+		//   types, wire, define, render   the vocabulary: shapes, and what a participant reads
+		//   host/                         what a host owns: the runtime value, a SQLite storage
+		//   log/                          the log: one serial queue over a Pi session
+		//   room/                         every fact and every decision, pure over the log
+		//   tools/                        what an agent's tools reach into
+		//   seat/                         the seat side of the wire: one activation at a time
+		//   session.ts                    the room, which composes them all
+		//
+		// `docs/toolchain.md` §1 names the layers; each override below refuses
+		// the imports its layer may not make.
+		{
+			"includes": [
+				"packages/ambion/src/types.ts",
+				"packages/ambion/src/wire.ts",
+				"packages/ambion/src/define.ts",
+				"packages/ambion/src/render.ts"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"./host/*",
+											"./log/*",
+											"./room/*",
+											"./tools/*",
+											"./seat/*",
+											"./session.ts",
+											"./index.ts"
+										],
+										"message": "The vocabulary imports nothing that does anything."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["packages/ambion/src/host/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"../log/*",
+											"../room/*",
+											"../tools/*",
+											"../seat/*",
+											"../session.ts",
+											"../index.ts"
+										],
+										"message": "A host owns values; it reads no log, folds nothing, and runs no seat."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["packages/ambion/src/log/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"../host/*",
+											"../room/*",
+											"../tools/*",
+											"../seat/*",
+											"../session.ts",
+											"../index.ts"
+										],
+										"message": "The log knows entries and a queue, and nothing that reads them."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["packages/ambion/src/room/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"../host/*",
+											"../tools/*",
+											"../seat/*",
+											"../session.ts",
+											"../index.ts"
+										],
+										"message": "The room's facts and decisions are pure over the log: no host, no tool, no seat."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["packages/ambion/src/tools/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["../log/*", "../room/*", "../seat/*", "../session.ts", "../index.ts"],
+										"message": "A workspace is what a tool reaches into; it knows no room and no seat."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["packages/ambion/src/seat/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["../log/*", "../room/*", "../session.ts", "../index.ts"],
+										"message": "The seat side reaches its room through the wire alone: no log, no fold, no session."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// A host package reaches the core through its published surface.
+			"includes": ["packages/cloudflare/src/**", "packages/cli/src/**", "examples/**/src/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["@ambionframework/ambion/*", "**/packages/ambion/src/*"],
+										"message": "Reach the core through `@ambionframework/ambion`, never a file inside it."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
 		},
 		{
 			// Biome charges a nested function for the nesting it sits in, so

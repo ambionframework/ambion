@@ -29,8 +29,8 @@
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join, posix } from 'node:path';
 import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
+import type { AgentDefinition, WorkspaceBackend } from '../types.ts';
 import { BashEnv } from './bash-env.ts';
-import type { AgentDefinition, WorkspaceBackend } from './types.ts';
 
 /** Build one agent's environment over the workspace's filesystem. */
 async function connectOver(fs: IFileSystem, agent: AgentDefinition): Promise<BashEnv> {

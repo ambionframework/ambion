@@ -14,17 +14,13 @@ diff.
 commit path lives in `record.ts`. The reserve lives in its own module.
 `session.ts` holds compose and route and stays under 600 lines.
 
-## 2. A `Runtime` value in place of the process globals (backlog 1)
+## 2. A `Runtime` value in place of the process globals (backlog 1) — done
 
-**Why now.** This is the change that decides whether a host can run rooms
-hermetically and resume them. Everything a long-horizon deployment needs
-starts here.
-
-**Done when.** `startSession`, `readSession` and `defineWorkspace` accept
-a runtime that holds the registry, the repo and the environment source.
-The module-level `running`, `taken`, `defaultRepo` and `builtinRegistry`
-are fields of the default instance. Two hosts in one process run rooms
-with the same name and never see each other.
+`startSession`, `readSession` and `defineWorkspace` take a runtime that
+holds the clock, the session opener, the model call and the catalog. The
+module-level `running`, `taken`, `defaultRepo` and `builtinRegistry` are
+fields of `defaultRuntime`. Two hosts in one process run rooms with the
+same name and never see each other.
 
 ## 3. Bound the record, index the presence (backlog 2)
 

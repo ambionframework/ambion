@@ -23,9 +23,7 @@ import type {
 	SessionRepo,
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
-import { Agent, InMemorySessionRepo } from '@earendil-works/pi-agent-core';
-import type { Api, Model } from '@earendil-works/pi-ai';
-import { builtinModels } from '@earendil-works/pi-ai/providers/all';
+import { Agent } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { Activation } from './activation.ts';
 import {
@@ -38,8 +36,9 @@ import {
 } from './assistant.ts';
 import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
+import { defaultRuntime, type Runtime, sessionsOver, stubModel } from './host/runtime.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
-import { openOrCreate, persistTurns, RecordStore } from './record.ts';
+import { persistTurns, RecordStore } from './record.ts';
 import {
 	type Closing,
 	type ComposingView,
@@ -52,6 +51,7 @@ import {
 	type SeatSpeaking,
 } from './render.ts';
 import { delivered, isActive, type SeatRuntime, toPiTool, wakes } from './seat.ts';
+import { builtinTools } from './tools/workspace.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
@@ -62,38 +62,22 @@ import {
 	isSeatedAgent,
 	isSpoken,
 	type Message,
+	type ModelResolver,
 	type Participant,
 	type PresenceMessage,
 	type SeatInfo,
 	type Seq,
 	type SessionEvent,
+	type SessionOpener,
 	type SpokenMessage,
 	type SummaryMessage,
 } from './types.ts';
-import { builtinTools } from './workspace.ts';
-
-const defaultRepo = new InMemorySessionRepo();
-
-/** One run per name: a second live room over one record would diverge from it. */
-const running = new Map<string, SessionImpl>();
 
 /** An agent held in reserve: the definition, and the attention it takes when seated. */
 interface Reserved {
 	def: AgentDefinition;
 	attention: Attention;
 }
-
-/** Pi's model registry, built once on first use. */
-let builtinRegistry: ReturnType<typeof builtinModels> | undefined;
-const registry = () => (builtinRegistry ??= builtinModels());
-
-/** The default model call: Pi's builtin registry, keyed from the provider's env var. */
-const registryStream: StreamFn = (model, context, streamOptions) => {
-	const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
-	const resolved =
-		streamOptions?.apiKey || !envKey ? streamOptions : { ...streamOptions, apiKey: envKey };
-	return registry().streamSimple(model, context, resolved);
-};
 
 export interface StartSessionOptions {
 	/** The session's name: the record belongs to it, across every run. */
@@ -120,15 +104,18 @@ export interface StartSessionOptions {
 	/**
 	 * Override the model call — Pi's own extension surface, and the only one
 	 * here: a scripted stream makes the room deterministic, a custom stream
-	 * brings custom providers.
+	 * brings custom providers. Defaults to the runtime's.
 	 */
 	streamFn?: StreamFn;
-	/** Pi's own session repository. Defaults to a process-wide `InMemorySessionRepo`. */
+	/** Pi's own session repository. Defaults to the runtime's opener. */
 	repo?: SessionRepo;
+	/** The runtime this room runs in. Defaults to `defaultRuntime`. */
+	runtime?: Runtime;
 }
 
 export interface ReadSessionOptions {
 	repo?: SessionRepo;
+	runtime?: Runtime;
 }
 
 /** Reading a room takes no run: the pull side, and nothing that starts anything. */
@@ -178,13 +165,14 @@ export interface Visit {
 
 /** Sets up the context where the agents work. */
 export function startSession(options: StartSessionOptions): Session {
-	if (running.has(options.name)) {
+	const runtime = options.runtime ?? defaultRuntime;
+	if (runtime.running.has(options.name)) {
 		throw new Error(
 			`Session '${options.name}' is already running: stop it before starting it again.`,
 		);
 	}
-	const session = new SessionImpl(options);
-	running.set(options.name, session);
+	const session = new SessionImpl(options, runtime);
+	runtime.running.set(options.name, session);
 	return session;
 }
 
@@ -206,7 +194,10 @@ export function visitSession(session: Session, human: HumanDefinition): Promise<
 
 /** Reads a name and starts nothing. A running name reads through its live room. */
 export function readSession(name: string, options: ReadSessionOptions = {}): SessionView {
-	return running.get(name) ?? new ReadOnlySession(name, options.repo ?? defaultRepo);
+	const runtime = options.runtime ?? defaultRuntime;
+	const live = runtime.running.get(name);
+	if (live instanceof SessionImpl) return live;
+	return new ReadOnlySession(name, options.repo ? sessionsOver(options.repo) : runtime.sessions);
 }
 
 class ReadOnlySession implements SessionView {
@@ -215,9 +206,9 @@ class ReadOnlySession implements SessionView {
 
 	constructor(
 		readonly name: string,
-		repo: SessionRepo,
+		sessions: SessionOpener,
 	) {
-		this.store = new RecordStore(repo, name);
+		this.store = new RecordStore(sessions.open(name));
 		this.here = new Attendance(() => this.store.entries);
 	}
 
@@ -247,7 +238,8 @@ class ReadOnlySession implements SessionView {
 class SessionImpl implements Session {
 	readonly name: string;
 	private readonly goal?: string;
-	private readonly repo: SessionRepo;
+	private readonly runtime: Runtime;
+	private readonly sessions: SessionOpener;
 	private readonly store: RecordStore;
 	private readonly agents = new Map<string, SeatRuntime>();
 	/** The reserve: agents the room may seat later, held with the attention they will take. */
@@ -259,7 +251,7 @@ class SessionImpl implements Session {
 	private readonly settledWaiters: (() => void)[] = [];
 	private readonly quietWaiters: (() => void)[] = [];
 	private readonly streamFn: StreamFn;
-	private readonly customStream: boolean;
+	private readonly model: ModelResolver;
 	private stopped = false;
 	/**
 	 * Whether a seat has worked since the room last settled. A failed draft
@@ -271,18 +263,29 @@ class SessionImpl implements Session {
 	/** The room's exchanges: what a question opened, and what quiescence closes. */
 	private readonly exchanges = new Exchanges();
 
-	constructor(options: StartSessionOptions) {
+	constructor(options: StartSessionOptions, runtime: Runtime) {
 		this.name = options.name;
 		this.goal = options.goal?.trim() || undefined;
-		this.repo = options.repo ?? defaultRepo;
-		this.store = new RecordStore(this.repo, this.name);
+		this.runtime = runtime;
+		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
+		this.store = new RecordStore(this.sessions.open(this.name));
 		for (const seat of options.agents ?? []) this.place(seat);
 		// Seated at the narrow end: nothing said in the room wakes the assistant;
 		// the open and the close of an exchange do, and it is here for the whole run.
 		this.assistant = new Assistant(this.place(seated(assertAssistant(options.assistant), 'none')));
 		for (const seat of options.available ?? []) this.hold(seat);
-		this.customStream = options.streamFn !== undefined;
-		this.streamFn = options.streamFn ?? registryStream;
+		this.streamFn = options.streamFn ?? runtime.stream;
+		this.model = options.streamFn ? stubModel : runtime.model;
+		// The seat side resolves a definition by name, so every one this room
+		// was composed with is on the runtime's catalog.
+		for (const { def } of [...this.agents.values(), ...this.reserve.values()]) {
+			runtime.catalog.set(def.name, def);
+		}
+	}
+
+	/** The room's clock, as an ISO stamp for the record. */
+	private now(): string {
+		return new Date(this.runtime.clock.now()).toISOString();
 	}
 
 	private get record(): Message[] {
@@ -378,7 +381,7 @@ class SessionImpl implements Session {
 	private seatSession(seat: SeatRuntime): Promise<PiSession> {
 		seat.piSeat ??= (async () => {
 			await this.store.ready;
-			return openOrCreate(this.repo, `${this.name}:${seat.def.name}`, this.name);
+			return this.sessions.open(`${this.name}:${seat.def.name}`, this.name);
 		})();
 		return seat.piSeat;
 	}
@@ -493,9 +496,7 @@ class SessionImpl implements Session {
 	}
 
 	private async commitPresence(change: Omit<PresenceMessage, 'seq' | 'at'>): Promise<void> {
-		await this.publish(
-			this.store.append<PresenceMessage>({ ...change, at: new Date().toISOString() }),
-		);
+		await this.publish(this.store.append<PresenceMessage>({ ...change, at: this.now() }));
 	}
 
 	/**
@@ -590,7 +591,7 @@ class SessionImpl implements Session {
 		} finally {
 			// The name comes free whatever the repo did. A failed write must
 			// not leave a room that can never be started again.
-			if (running.get(this.name) === this) running.delete(this.name);
+			if (this.runtime.running.get(this.name) === this) this.runtime.running.delete(this.name);
 			// A stopped room never goes quiet on its own, so nobody waits on it.
 			for (const resolve of this.quietWaiters.splice(0)) resolve();
 		}
@@ -600,7 +601,7 @@ class SessionImpl implements Session {
 	private commitUnrouted(change: Omit<PresenceMessage, 'seq' | 'at'>): void {
 		this.emit({
 			type: 'message',
-			message: this.store.append<PresenceMessage>({ ...change, at: new Date().toISOString() }),
+			message: this.store.append<PresenceMessage>({ ...change, at: this.now() }),
 		});
 	}
 
@@ -617,7 +618,7 @@ class SessionImpl implements Session {
 		await this.publish(
 			this.store.append<SpokenMessage>({
 				kind: 'said',
-				at: new Date().toISOString(),
+				at: this.now(),
 				from,
 				...(to === undefined ? {} : { to }),
 				text: input.text,
@@ -687,8 +688,9 @@ class SessionImpl implements Session {
 	private activate(seat: SeatRuntime): void {
 		const activation = new Activation(seat.def.name, this.store.lastSeq, {
 			open: (running) => this.open(seat, running),
-			persist: (agent) => persistTurns(this.seatSession(seat), agent),
+			persist: (agent) => persistTurns(this.seatSession(seat), agent, this.now()),
 			emit: (event) => this.emit(event),
+			now: () => this.runtime.clock.now(),
 		});
 		// The seat holding it is what makes the room busy: there is no count to
 		// keep in step, and so none to drift.
@@ -773,6 +775,7 @@ class SessionImpl implements Session {
 		return {
 			name: this.name,
 			goal: this.goal,
+			now: this.runtime.clock.now(),
 			seats: this.seats(),
 			people: this.peopleViews(),
 			record: this.record,
@@ -792,7 +795,7 @@ class SessionImpl implements Session {
 			streamFn: this.streamFn,
 			initialState: {
 				systemPrompt: renderSystemPrompt(speaking, view),
-				model: this.resolveModel(seat.def),
+				model: this.model(seat.def.model, seat.def.name),
 				thinkingLevel: 'off',
 				tools: this.handsFor(seat, activation),
 				messages: [],
@@ -832,6 +835,7 @@ class SessionImpl implements Session {
 	private seatHand(seat: SeatRuntime, activation: Activation, composing: Composing): AgentTool {
 		return seatTool(seat.def.name, composing, {
 			stopped: () => this.stopped,
+			now: () => this.now(),
 			reserve: () => this.reserved(),
 			seat: (name) => this.admit(name),
 			commit: (draft) => this.store.append<PresenceMessage>(draft),
@@ -846,6 +850,7 @@ class SessionImpl implements Session {
 	private summarise(seat: SeatRuntime, activation: Activation, closing: Draft): AgentTool {
 		return summariseTool(seat.def.name, closing, {
 			stopped: () => this.stopped,
+			now: () => this.now(),
 			lastSeq: () => this.store.lastSeq,
 			claim: (author, draft) => this.claim<SummaryMessage>(author, draft),
 			publish: (message) => this.publish(message),
@@ -886,7 +891,7 @@ class SessionImpl implements Session {
 				// seat read it, and the append is the commit half of rule 5's one tick.
 				const message = this.store.append<SpokenMessage>({
 					kind: 'said',
-					at: new Date().toISOString(),
+					at: this.now(),
 					from: seat.def.name,
 					...(to === undefined ? {} : { to }),
 					text,
@@ -1039,25 +1044,5 @@ class SessionImpl implements Session {
 			});
 		}
 		return views;
-	}
-
-	private resolveModel(def: AgentDefinition): Model<Api> {
-		if (this.customStream) {
-			// A custom streamFn never reads the model; a stub keeps Pi's loop satisfied.
-			return {
-				id: def.model,
-				name: def.model,
-				api: 'scripted',
-				provider: 'scripted',
-			} as unknown as Model<Api>;
-		}
-		const slash = def.model.indexOf('/');
-		if (slash > 0) {
-			const model = registry().getModel(def.model.slice(0, slash), def.model.slice(slash + 1));
-			if (model) return model;
-		}
-		throw new Error(
-			`Unknown model '${def.model}' for agent '${def.name}': expected 'provider/model-id'.`,
-		);
 	}
 }
