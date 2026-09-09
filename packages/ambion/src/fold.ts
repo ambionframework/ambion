@@ -88,7 +88,7 @@ export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): Ro
 		exchange: openExchange(messages, closes, isPerson),
 		closes,
 		leases,
-		pending: pendingWakes(messages, closes, leases, assistant),
+		pending: pendingWakes(messages, closes, leases, assistant, new Set(roster.map((s) => s.name))),
 		owed: foldOwed(closes, messages, leases, { assistant, isPerson, backoff: options.backoff }),
 		messages,
 		lastSeq: messages.at(-1)?.seq ?? 0,

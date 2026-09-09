@@ -4,27 +4,23 @@ The four backlog items to do first, in the order to do them. Each one
 makes the ones after it a smaller diff. Numbers refer to
 [`backlog.md`](backlog.md).
 
-## 1. Split `session.ts` (backlog 3)
+## 1. Split `session.ts` (backlog 3) — done, with a remainder
 
-**Why first.** The file grew from 842 to 1063 lines in one change, and the
-next two items land in it. Splitting first keeps each of them a local
-diff.
+`say` lives in `seat.ts` beside the seat's side of the wire. The commit
+path lives in `log.ts`. Every fact the room held in memory is a fold in
+`fold.ts`, the step it takes is `reconcile.ts`, and what an activation
+reads is `view.ts`. The reserve is a fold, so it has no module of its own.
+`session.ts` holds compose, route, the seat's three calls and the
+reconcile glue. It is over the 600 lines the item asked for;
+[`backlog.md`](backlog.md) 3 holds what is left to move.
 
-**Done when.** `say` lives in `seat.ts` behind a `SayRoom` interface. The
-commit path lives in `record.ts`. The reserve lives in its own module.
-`session.ts` holds compose and route and stays under 600 lines.
+## 2. A `Runtime` value in place of the process globals (backlog 1) — done
 
-## 2. A `Runtime` value in place of the process globals (backlog 1)
-
-**Why now.** This is the change that decides whether a host can run rooms
-hermetically and resume them. Everything a long-horizon deployment needs
-starts here.
-
-**Done when.** `startSession`, `readSession` and `defineWorkspace` accept
-a runtime that holds the registry, the repo and the environment source.
-The module-level `running`, `taken`, `defaultRepo` and `builtinRegistry`
-are fields of the default instance. Two hosts in one process run rooms
-with the same name and never see each other.
+`startSession`, `readSession`, `resumeSession` and `defineWorkspace` take
+a runtime that holds the clock, the session opener, the transport, the
+model call and the catalog. Two hosts in one process run rooms with the
+same name and never see each other, and a second runtime resumes a room
+over the log the first one left.
 
 ## 3. Bound the record, index the presence (backlog 2)
 

@@ -13,23 +13,14 @@ the open questions about a design; this file holds the work.
 
 ## Runtime module boundaries
 
-### 1. The room is a process global
+### 1. The room is a process global — closed
 
-**What.** `session.ts` holds a module-level `running` map, a shared
-`defaultRepo`, a lazily built model registry, and a `registryStream` that
-reads `process.env` for API keys. `workspace.ts` holds a global `taken` set.
-
-**Why.** Two hosts in one process cannot each run a room with the same
-name. Tests keep unique-name counters to stay apart. A room resumed after
-a restart shares one in-memory repo with every other room in the process.
-For hermetic execution and session resumption, the host must own these.
-
-**Where.** `packages/ambion/src/session.ts` lines 75 to 95,
-`packages/ambion/src/workspace.ts` line 50.
-
-**Fix.** A `Runtime` value that holds the registry, the repo and the
-environment source. `startSession`, `readSession` and `defineWorkspace`
-take it as an option. The current globals become the default instance.
+`runtime.ts` holds the clock, the session opener, the transport, the model
+call, the catalog, the rooms that run and the workspace names that are
+taken. `startSession`, `readSession`, `resumeSession` and `defineWorkspace`
+take a `Runtime` and default to `defaultRuntime`, the one process-wide
+value. `process.env` is read in `defaultRuntime` alone.
+`test/runtime.test.ts` proves two runtimes never see each other.
 
 ### 2. Nothing bounds the record, and the room rescans it per message
 
@@ -51,25 +42,18 @@ without limit. `docs/agent.md` §8 says Ambion owns no context window, and
 on append. Long term: a window policy on `RoomView.record`, and a decision
 in the contract about which module owns it.
 
-### 3. `session.ts` holds six jobs in 1063 lines
+### 3. `session.ts` holds four jobs — closed, with a remainder
 
-**What.** `SessionImpl` has 61 methods. Its header lists compose, commit,
-route, hands, and quiescence. The reserve, `seat` and `unseat` joined it in
-the last change. The `say` tool sits inline at line 858, while the
-assistant's `summarise` and `seat` tools live in `assistant.ts` behind
-small room interfaces. The commit path (`claim`, `publish`,
-`commitPresence`, `deliverFrom`) and the assistant scheduling
-(`closeExchange` through `draftNext`) are two more concerns.
+**What was done.** `say` and the seat's side of the wire live in `seat.ts`.
+The commit path lives in `log.ts`. Every fact the room held in memory is a
+fold in `fold.ts`, the decision is `reconcile.ts`, and what an activation
+reads is `view.ts`. The reserve is a fold, so it needs no module.
 
-**Why.** Every feature lands in one file. `dispatch` sits at the
-complexity cap by design, and the file around it has no cap.
-
-**Where.** `packages/ambion/src/session.ts`.
-
-**Fix.** Move `say` to `seat.ts` beside `toPiTool`, with a `SayRoom`
-interface that mirrors `SummaryRoom`. Move the commit path into
-`record.ts`. Move the reserve into its own module. The room keeps compose
-and route.
+**What is left.** `session.ts` holds compose, route, the seat's three calls
+(`view`, `commit`, `lease`) and the reconcile glue, and it is over the 600
+lines `next.md` asked for. The seat's three calls are the next piece to
+move: an `answers.ts` over a narrow interface on the room (the log, the
+fold, the clock, `emit`).
 
 ### 4. Importing the package loads every provider SDK
 
@@ -331,29 +315,28 @@ that cannot be addressed. One seat per room cuts that to one line, and the
 example's `identity` for it is one sentence. Worth re-measuring once the
 assistant speaks.
 
-### 18. A test for the owed-summary merge
+### 18. A test for the owed-summary merge — closed
 
-`Assistant.owe` merges a person's owed range with `Math.min`, so somebody owed a
-summary from a failed activation who asks again gets one message covering
-both
-exchanges. Nothing pins that behaviour; the tests cover the failure and the
-retry separately. See [`docs/assistant.md`](../docs/assistant.md) §5.
+Who is owed is a fold (`foldOwed` in `fold.ts`): a later close by the same
+person joins the draft, and one message reaches back to the earliest
+question still owed. `restart.test.ts` pins it, on both storages, across a
+crash.
 
-### 19. Exchanges are run state
+### 19. Exchanges are run state — closed
 
-`Exchanges` holds the open exchange in memory, so a restart begins with none —
-right for a room mid-question, and a limit for anything that wants to work
-over past exchanges. A closed exchange is an owner and a range, so it is
-derivable from the record; nothing derives it today. See
-[`docs/exchange.md`](../docs/exchange.md) §5.
+The open exchange is a fold over the log: the first question a person
+asked after the last close row. A close is a row on the log, so every
+closed exchange is on the record, and a room resumed mid-exchange
+continues it. See [`docs/exchange.md`](../docs/exchange.md) §5.
 
 ### 20. A second non-seat writer
 
-The room owes summaries through a small scheduler: `owe`, `dueAtQuiescence`,
-`dueAfterDraft` and `activationEnded`, held by `Assistant`. If a room-level compactor ever arrives
-([`docs/assistant.md`](../docs/assistant.md) §16 forbids it by name today), it wants the
-same scheduler. Two writers is the point at which it should become its own
-thing rather than three fields on the session.
+The room owes summaries through one fold (`foldOwed`) and one decision
+(`dueDrafts` in `reconcile.ts`). If a room-level compactor ever arrives
+([`docs/assistant.md`](../docs/assistant.md) §16 forbids it by name today),
+it wants the same fold and the same decision. Two writers is the point at
+which they should become their own module rather than two functions beside
+the assistant's.
 
 ### 21. A credentials boundary for tool calls leaving the workspace
 
@@ -518,3 +501,62 @@ collaboration patterns people and agents work in.
 
 **Where.** `seated` in [`define.ts`](../packages/ambion/src/define.ts), the
 roster in [`render.ts`](../packages/ambion/src/render.ts).
+
+### 26. Lease rows grow with every activation
+
+**What.** Every activation writes two lease rows at least: a claim and an
+end, plus one renewal per half expiry. A room that runs for a month holds
+tens of thousands of rows beside a few thousand messages, and every fold
+reads them all.
+
+**Why.** The fold is O(rows) per operation. Item 2 records the same cost
+for messages; leases add the larger term.
+
+**Where.** `foldLeases` in `lease.ts`; `RoomLog.replay` in `log.ts`.
+
+**Fix.** A lease that ended and that no owed draft counts (an id older than
+the last close) can leave the fold. A snapshot row that carries the folded
+state up to a seq, written by `reconcile` every N entries, lets the replay
+start from it.
+
+### 27. A person present at a crash stays present until the host returns
+
+**What.** A crash writes no `left`, so the fold says the person is present
+until the host calls `leave()` on the resumed room. A host that never
+returns leaves them present for ever: their divider never moves, and a
+returning visit under a new identity is refused.
+
+**Where.** `foldPeople` in `presence.ts`; [`docs/presence.md`](../docs/presence.md) §6.
+
+**Fix.** A host-side policy: the resumed room's host calls `leave()` for
+everyone it does not hold a connection for. The runtime keeps no clock over
+a visit, and should not start one.
+
+### 28. Three attempts, then the summary is never written
+
+**What.** A summary a draft could not land retries after a backoff, three
+times, on the room's alarm, and then the room stops. Nothing reports the
+range as owed afterwards, and no later event retries it.
+
+**Where.** `dueDrafts` in `reconcile.ts`; [`docs/assistant.md`](../docs/assistant.md) §16.
+
+**Fix.** An event when the cap is reached, and a host verb that resets the
+attempts for one close.
+
+### 29. The random walk has no shrinker
+
+**What.** `property.test.ts` runs a seeded walk of twenty steps and prints
+the seed and the steps on failure. It does not shrink a failing walk to its
+shortest form, and it does not generate from a model of the room.
+
+**Fix.** A criterion for adopting `fast-check`: the first failure the walk
+finds that takes more than an hour to reduce by hand.
+
+### 30. `subscribe` over RPC
+
+**What.** The room object in `packages/cloudflare` exposes the pull side
+and the seat's three calls. The event stream stays inside the object: a
+host outside it cannot subscribe.
+
+**Fix.** A WebSocket or a polling `events(since)` over the log's rows, once
+something outside the object needs to watch a room.

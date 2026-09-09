@@ -156,14 +156,16 @@ Notable settings and what they buy:
 ```
 build       dependsOn: ^build            outputs: dist/**
 check:types dependsOn: build, ^build     (needs upstream .d.mts)
-test        dependsOn: build, ^build
+test        dependsOn: build, ^build     inputs: src, test, vitest configs, wrangler.jsonc, tsconfig, package.json
 dev         persistent, never cached
 ```
 
 `check:types` and `test` wait on upstream builds because the CLI type-checks
 against the runtime's _emitted_ declarations. That is the same
 resolution a published consumer gets, so a broken `exports` map fails here,
-before release.
+before release. `test` names its inputs, so a change outside them — a
+document, a demo report — reads the cached result, and a change to a
+package's `wrangler.jsonc` runs the workerd tier again.
 
 ---
 
@@ -288,12 +290,24 @@ claim:
 | `record.test.ts`    | A second run of a name reads the record the first run left, and answers from it                                                              |
 | `workspace.test.ts` | The four built-in tools reach a workspace on a real provider                                                                                 |
 | `control.test.ts`   | `abort()` ends a request in flight without a mark, and the room keeps running                                                                |
+| `resume.test.ts`    | A second runtime resumes a room mid-exchange on a real model, the lease the first run held expires, and the assistant writes the summary     |
 
 Every test holds the record to the same invariants whatever the model said:
 seqs contiguous, one `message` event per message, every author on the
-roster, every summary covering the range before it, no `error` event, and
-every activation ended. Every test ends with one line of what it spent,
-read off the seats' downstream sessions.
+roster, every key unique, every summary covering the range before it, no
+`error` event, and every activation ended. Every test ends with one line of
+what it spent, read off the seats' downstream sessions.
+
+**One harness, two tiers.** The invariants live in
+[`test/support/invariants.ts`](../packages/ambion/test/support/invariants.ts),
+and the live support re-exports them. The scripted tier runs the same
+scenarios on both storages (`matrix.test.ts`), on a clock it moves by hand,
+over a transport that serializes every request and response, and under a
+random walk that loses and repeats them (`property.test.ts`, `AMBION_SEEDS`
+widens it). The live tier runs the room on a real model and holds it to the
+same invariants. The workerd tier, in `packages/cloudflare`, runs the room
+inside Cloudflare's runtime as part of `turbo test`, with no key and no
+network.
 
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:
 `vitest.config.ts` excludes `test/live` from `pnpm test`, and

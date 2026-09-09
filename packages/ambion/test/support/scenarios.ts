@@ -21,6 +21,7 @@ import {
 import { invariants } from './invariants.ts';
 import { collect, deferred } from './room.ts';
 import {
+	answersLastQuestion,
 	byAgent,
 	callTool,
 	contextText,
@@ -95,22 +96,6 @@ function composes(names: string[], summary: string): Script {
 const twoAnswersEach: Script = (_context, _name, call) =>
 	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
 
-/**
- * A seat that answers the last question on the record once. A refused say
- * speaks again; a delivered one ends the pass; a record that already holds
- * the answer stays quiet.
- */
-const answersOnce: Script = (context, name) => {
-	const text = contextText(context);
-	const question = [...text.matchAll(/^\[(?:priya|sam)\] (.+?)(?: {2}\(.*\))?$/gm)].at(-1)?.[1];
-	if (question === undefined) return quiet();
-	const answer = `${name} on ${question}`;
-	if (text.includes(`[${name}] ${answer}`) || toolResultTexts(context).includes('delivered')) {
-		return quiet();
-	}
-	return speak(answer);
-};
-
 async function finish(
 	session: Session,
 	events: ReturnType<typeof collect>,
@@ -154,8 +139,8 @@ export const twoPeopleTwoExchanges: Scenario = {
 			agents: [product, colleague],
 			streamFn: scripted(
 				byAgent({
-					product: answersOnce,
-					colleague: answersOnce,
+					product: answersLastQuestion(['priya', 'sam']),
+					colleague: answersLastQuestion(['priya', 'sam']),
 					assistant: (context) => {
 						const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
 						if (!holding(context, 'summarise') || toolResultTexts(context).includes('delivered')) {

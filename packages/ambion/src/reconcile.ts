@@ -61,11 +61,17 @@ export function liveSeats(
 	}
 	for (const wake of state.pending) add(wake.seat, wake.id);
 	for (const id of sent) {
-		if (!state.leases.has(id) && !state.pending.some((wake) => wake.id === id)) {
-			add(seatOf(id, assistant), id);
-		}
+		if (unanswered(state, id)) add(seatOf(id, assistant), id);
 	}
 	return live;
+}
+
+/** A wake the room sent that no lease answers, for a seat still on the roster, and not pending on the log already. */
+function unanswered(state: RoomState, id: string): boolean {
+	const seat = seatOf(id, state.composition?.assistant ?? '');
+	if (seat === undefined || state.leases.has(id)) return false;
+	if (!state.roster.some((s) => s.name === seat)) return false;
+	return !state.pending.some((wake) => wake.id === id);
 }
 
 /**
@@ -127,7 +133,7 @@ function dueWakes(state: RoomState, close: Decision['close'], options: DecideOpt
 	const assistant = state.composition?.assistant ?? '';
 	const sends = new Map<string, Send>();
 	for (const wake of state.pending) {
-		if (unanswered(wake.id, options)) sends.set(wake.id, { id: wake.id, seat: wake.seat });
+		if (unsent(wake.id, options)) sends.set(wake.id, { id: wake.id, seat: wake.seat });
 	}
 	if (close?.wakes?.length) {
 		const id = draftId(close.through, 1);
@@ -146,11 +152,11 @@ function dueDrafts(state: RoomState, options: DecideOptions): string[] {
 	return state.owed
 		.filter((owed) => due(owed, options))
 		.map((owed) => draftId(owed.through, owed.attempts + 1))
-		.filter((id) => !state.leases.has(id) && unanswered(id, options));
+		.filter((id) => !state.leases.has(id) && unsent(id, options));
 }
 
 /** A wake this room never sent, or sent longer ago than the resend window. */
-function unanswered(id: string, options: DecideOptions): boolean {
+function unsent(id: string, options: DecideOptions): boolean {
 	const sent = options.sentAt(id);
 	return sent === undefined || options.now - sent >= options.resend;
 }

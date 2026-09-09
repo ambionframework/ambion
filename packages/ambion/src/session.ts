@@ -29,14 +29,7 @@ import { activationId, isExpired, isLive, parseId, seatOf } from './lease.ts';
 import { type Committed, RoomLog } from './log.ts';
 import type { VisitRuntime } from './presence.ts';
 import { decide, liveSeats, working } from './reconcile.ts';
-import {
-	type PersonView,
-	type RoomView,
-	renderLine,
-	renderSystemPrompt,
-	renderTurnContext,
-	type SeatSpeaking,
-} from './render.ts';
+import { renderLine } from './render.ts';
 import {
 	defaultRuntime,
 	type ModelResolver,
@@ -65,12 +58,11 @@ import {
 	type SpokenMessage,
 	type SummaryMessage,
 } from './types.ts';
+import { type RoomFacts, seatsOf, viewOf } from './view.ts';
 import type {
-	ActivationView,
 	Commit,
 	CommitResponse,
 	EndReason,
-	Hand,
 	Lease,
 	LeaseResponse,
 	SeatPort,
@@ -272,43 +264,18 @@ class ReadOnlySession implements SessionView {
 	/** The roster the log folds, and everybody the record knows. Nothing stands up. */
 	seats(): SeatInfo[] {
 		const state = foldRoom(this.log.entries, this.runtime.retry);
-		return seatsOf(state, this.name, this.runtime.clock.now(), (name) =>
-			this.runtime.catalog.get(name),
-		);
+		return seatsOf({
+			name: this.name,
+			state,
+			live: liveSeats(state, this.runtime.clock.now()),
+			defOf: (name) => this.runtime.catalog.get(name),
+		});
 	}
 
 	/** Nothing is running, so nothing happens. The listener is never called. */
 	subscribe(): () => void {
 		return () => {};
 	}
-}
-
-/** The roster and the people, as `seats()` reports them, off one folded state. */
-function seatsOf(
-	state: RoomState,
-	room: string,
-	now: number,
-	defOf: (name: string) => AgentDefinition | undefined,
-): SeatInfo[] {
-	const live = liveSeats(state, now);
-	const seats: SeatInfo[] = state.roster.map((seat) => ({
-		kind: 'agent' as const,
-		name: seat.name,
-		identity: defOf(seat.name)?.identity ?? '',
-		status: live.has(seat.name) ? ('active' as const) : ('idle' as const),
-		attention: seat.attention,
-		sessionId: `${room}:${seat.name}`,
-		...(seat.assistant ? { assistant: true as const } : {}),
-	}));
-	for (const person of state.people.values()) {
-		seats.push({
-			kind: 'human',
-			name: person.name,
-			identity: person.identity,
-			presence: person.presence,
-		});
-	}
-	return seats;
 }
 
 /** Thrown inside the queue when the request the seat sent is answered `stale`. */
@@ -502,7 +469,13 @@ class SessionImpl implements Session, RunningRoom {
 
 	seats(): SeatInfo[] {
 		if (!this.replayed) return this.starting;
-		return seatsOf(this.state(), this.name, this.now(), (name) => this.defs.get(name));
+		const state = this.state();
+		return seatsOf({
+			name: this.name,
+			state,
+			live: this.live(state),
+			defOf: (name) => this.defs.get(name),
+		});
 	}
 
 	exchange(): Exchange | undefined {
@@ -811,34 +784,19 @@ class SessionImpl implements Session, RunningRoom {
 		if (seat === undefined) return stale('the lease ended');
 		const def = this.defs.get(seat);
 		if (def === undefined) return stale('the seat left the roster');
-		const { hand, closing, composing } = this.handOf(id, seat, state);
-		const speaking: SeatSpeaking = {
-			def: {
-				name: def.name,
-				identity: def.identity,
-				instructions: def.instructions,
-				connected: def.workspace !== undefined,
-			},
-			assistant: seat === this.assistant,
-			closing: closing && {
-				...closing,
-				preferences: state.people.get(closing.person)?.preferences,
-			},
-			composing: composing && { ...composing, reserve: this.reserved(state) },
-		};
-		const room = this.roomView(state);
+		return { view: viewOf(id, seat, def, this.facts(state)) };
+	}
+
+	/** What a view is built from: the fold, and what the room holds beside it. */
+	private facts(state: RoomState): RoomFacts {
 		return {
-			view: {
-				activation: id,
-				seat,
-				model: def.model,
-				lastSeq: state.lastSeq,
-				systemPrompt: renderSystemPrompt(speaking, room),
-				context: renderTurnContext(speaking, room),
-				hand,
-				...(closing ? { closing } : {}),
-				...(composing ? { composing } : {}),
-			},
+			name: this.name,
+			now: this.now(),
+			assistant: this.assistant,
+			state,
+			live: this.live(state),
+			defOf: (name) => this.defs.get(name),
+			unseen: (since) => this.log.since(since).length,
 		};
 	}
 
@@ -848,69 +806,6 @@ class SessionImpl implements Session, RunningRoom {
 		if (lease === undefined || !isLive(lease, this.now())) return undefined;
 		const seat = seatOf(id, this.assistant);
 		return state.roster.some((s) => s.name === seat) ? seat : undefined;
-	}
-
-	/**
-	 * What an activation is for, read off its id and the fold: a draft closes
-	 * an exchange, the assistant woken by the question that opened one
-	 * composes the room for it, and every other seat speaks.
-	 */
-	private handOf(
-		id: string,
-		seat: string,
-		state: RoomState,
-	): { hand: Hand; closing?: ActivationView['closing']; composing?: ActivationView['composing'] } {
-		const parsed = parseId(id);
-		if (parsed?.kind === 'draft') {
-			const owed = state.owed.find((o) => o.through === parsed.through);
-			if (owed === undefined) return { hand: 'none' };
-			return {
-				hand: 'summarise',
-				closing: { person: owed.person, from: owed.from, through: state.lastSeq },
-			};
-		}
-		if (seat !== this.assistant) return { hand: 'say' };
-		const question = parsed && state.messages.find((m) => m.seq === parsed.seq);
-		const opened =
-			state.exchange?.from === parsed?.seq || state.closes.some((c) => c.from === parsed?.seq);
-		if (question === undefined || !opened) return { hand: 'none' };
-		return {
-			hand: 'seat',
-			composing: { person: question.from, from: question.seq, limit: state.reserve.length },
-		};
-	}
-
-	/** The reserve as the assistant reads it: a name and an identity per agent. */
-	private reserved(state: RoomState): { name: string; identity: string }[] {
-		return state.reserve.map((seat) => ({
-			name: seat.name,
-			identity: this.defs.get(seat.name)?.identity ?? '',
-		}));
-	}
-
-	/** What the prose is given of this room, built fresh for each activation. */
-	private roomView(state: RoomState): RoomView {
-		return {
-			name: this.name,
-			goal: state.composition?.goal,
-			now: this.now(),
-			seats: this.seats(),
-			people: this.peopleViews(state),
-			record: state.messages,
-			exchange: state.exchange && { owner: state.exchange.owner, from: state.exchange.from },
-		};
-	}
-
-	/** One entry per person the room knows, with their gap and what they missed. */
-	private peopleViews(state: RoomState): PersonView[] {
-		return [...state.people.values()].map((person) => ({
-			name: person.name,
-			identity: person.identity,
-			presence: person.presence,
-			changedAt: person.changedAt,
-			since: person.since,
-			unseen: person.since === undefined ? 0 : this.log.since(person.since).length,
-		}));
 	}
 
 	async commit(commit: Commit): Promise<CommitResponse> {
@@ -1056,6 +951,7 @@ class SessionImpl implements Session, RunningRoom {
 	private async reconcileOnce(): Promise<void> {
 		await this.log.ready;
 		for (let pass = 0; pass < 8 && !this.gone(); pass += 1) {
+			this.forget(this.state());
 			const decision = decide(this.state(), {
 				now: this.now(),
 				resend: this.runtime.wake.resend,
@@ -1069,6 +965,15 @@ class SessionImpl implements Session, RunningRoom {
 				this.arm(decision.alarmAt);
 				return;
 			}
+		}
+	}
+
+	/** A wake a lease has answered, or whose seat left the roster, is not one this room waits on. */
+	private forget(state: RoomState): void {
+		const roster = new Set(state.roster.map((seat) => seat.name));
+		for (const id of this.sentAt.keys()) {
+			const seat = seatOf(id, this.assistant);
+			if (state.leases.has(id) || seat === undefined || !roster.has(seat)) this.sentAt.delete(id);
 		}
 	}
 

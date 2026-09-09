@@ -567,7 +567,8 @@ one activation in [`activation.ts`](../packages/ambion/src/activation.ts),
 the exchange in [`exchange.ts`](../packages/ambion/src/exchange.ts), what the
 assistant writes in [`assistant.ts`](../packages/ambion/src/assistant.ts),
 what crosses between a seat and its room in
-[`wire.ts`](../packages/ambion/src/wire.ts), what an agent's tools reach
+[`wire.ts`](../packages/ambion/src/wire.ts), what an activation is given
+in [`view.ts`](../packages/ambion/src/view.ts), what an agent's tools reach
 into in [`workspace.ts`](../packages/ambion/src/workspace.ts), what a host
 owns in [`runtime.ts`](../packages/ambion/src/runtime.ts), and what any of
 them reads in [`render.ts`](../packages/ambion/src/render.ts).

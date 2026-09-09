@@ -77,13 +77,15 @@ export interface PendingWake {
 /**
  * Every wake on the log that no lease row answers: a seat a message names in
  * `wakes`, and the assistant a close names. A wake is pending until the seat
- * claims the lease, whoever sent it and however often.
+ * claims the lease, whoever sent it and however often, for as long as the
+ * seat is on the roster.
  */
 export function pendingWakes(
 	messages: readonly Message[],
 	closes: readonly CloseRow[],
 	leases: ReadonlyMap<string, LeaseState>,
 	assistant: string,
+	roster: ReadonlySet<string>,
 ): PendingWake[] {
 	const decided: PendingWake[] = [];
 	for (const message of messages) {
@@ -95,7 +97,8 @@ export function pendingWakes(
 		if (close.wakes?.length)
 			decided.push({ id: draftId(close.through, 1), seat: assistant, at: close.at });
 	}
-	return decided.filter((wake) => !leases.has(wake.id));
+	// A seat that left the roster answers no wake: what it was sent is not pending.
+	return decided.filter((wake) => !leases.has(wake.id) && roster.has(wake.seat));
 }
 
 /** The seat an id belongs to: the one it names, or the assistant for a draft. */
