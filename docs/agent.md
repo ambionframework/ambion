@@ -534,12 +534,22 @@ belong to the activation and end with it. Rule 5's `readThrough` is an
 activation's fact.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
-entry, replayed in `seq` order on reopen — obtained from Pi's own
-`SessionRepo`, which `startSession` and `readSession` accept and default to
-an in-process `InMemorySessionRepo`. A name that outlives the process is a
-durable `SessionRepo` implementation; the API stays the same.
+entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
+on the room's `Runtime`. `sessionsOver(repo)` makes an opener from Pi's own
+`SessionRepo`; `startSession` and `readSession` still accept a `repo` as
+the shorthand for one. The default runtime opens sessions in an in-memory
+`InMemorySessionRepo`. A name that outlives the process is a durable
+`SessionRepo` implementation; the API stays the same.
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
 surface, and Ambion adds no storage layer of its own.
+
+**A host owns a `Runtime`.** It holds the clock, the session opener, the
+model call, the rooms that are running and the workspace names that are
+taken ([`runtime.ts`](../packages/ambion/src/runtime.ts)). `startSession`,
+`readSession` and `defineWorkspace` take one as an option and default to
+`defaultRuntime`, one value per process. Two runtimes in one process share
+nothing: one name runs in both, and neither reads the other. "One run per
+name" above holds per runtime.
 
 ---
 

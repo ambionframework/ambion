@@ -11,14 +11,13 @@
  */
 import type { SessionRepo } from '@earendil-works/pi-agent-core';
 import type { Usage } from '@earendil-works/pi-ai';
-import { describe, expect } from 'vitest';
+import { describe } from 'vitest';
 import {
 	type DefineAgentOptions,
 	defineAgent,
 	defineHuman,
 	InMemorySessionRepo,
 	isSpoken,
-	isSummary,
 	type Message,
 	type Session,
 	type SessionEvent,
@@ -112,36 +111,7 @@ export const saidByAgents = (messages: Message[], people: string[]) =>
 export const activationsOf = (events: SessionEvent[], name: string) =>
 	events.filter((e) => e.type === 'activation_start' && e.agent === name).length;
 
-export const errorsIn = (events: SessionEvent[]) =>
-	events.flatMap((e) => (e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : []));
-
-/**
- * What holds whatever the model said. A live run can go many ways; the record
- * it leaves has one shape.
- */
-export async function invariants(session: Session, events: SessionEvent[]): Promise<void> {
-	const messages = await session.messages();
-	expect(messages.map((m) => m.seq)).toEqual(messages.map((_, i) => i + 1));
-	// One message, one event, in record order — from the first message this run saw.
-	const emitted = events.flatMap((e) => (e.type === 'message' ? [e.message.seq] : []));
-	const since = emitted[0] ?? Number.POSITIVE_INFINITY;
-	expect(emitted).toEqual(messages.filter((m) => m.seq >= since).map((m) => m.seq));
-	const names = new Set(session.seats().map((seat) => seat.name));
-	for (const message of messages) {
-		expect(names).toContain(message.from);
-		if ('by' in message && message.by !== undefined) expect(names).toContain(message.by);
-	}
-	for (const summary of messages.filter(isSummary)) {
-		expect(summary.covers.through).toBe(summary.seq - 1);
-		expect(summary.covers.from).toBeLessThanOrEqual(summary.covers.through);
-	}
-	expect(errorsIn(events)).toEqual([]);
-	expect(count(events, 'activation_start')).toBe(count(events, 'activation_end'));
-	expect(count(events, 'exchange_opened')).toBe(count(events, 'exchange_closed'));
-}
-
-const count = (events: SessionEvent[], type: SessionEvent['type']) =>
-	events.filter((e) => e.type === type).length;
+export { errorsIn, invariants } from '../support/invariants.ts';
 
 export interface Spent {
 	activations: number;

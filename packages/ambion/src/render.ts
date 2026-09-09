@@ -224,6 +224,8 @@ export function refusal(opening: string, missed: Message[], advice: string): str
  */
 export interface RoomView {
 	readonly name: string;
+	/** The room's clock, in milliseconds since the epoch, when the view was built. */
+	readonly now: number;
 	/** What the room is for, or nothing when it was started without one. */
 	readonly goal: string | undefined;
 	readonly seats: SeatInfo[];
@@ -329,7 +331,7 @@ function duties(seat: SeatSpeaking, room: RoomView): string[] {
 }
 
 export function renderTurnContext(seat: SeatSpeaking, room: RoomView): string {
-	const now = Date.now();
+	const now = room.now;
 	const people = room.people;
 	return [
 		renderClock(now),

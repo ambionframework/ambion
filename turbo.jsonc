@@ -27,6 +27,15 @@
 		},
 		"test": {
 			"dependsOn": ["build", "^build"],
+			"inputs": [
+				"src/**",
+				"test/**",
+				"vitest*.ts",
+				"wrangler.jsonc",
+				"tsconfig.json",
+				"package.json"
+			],
+			"outputs": [],
 			"outputLogs": "new-only"
 		}
 	}

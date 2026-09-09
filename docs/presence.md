@@ -457,7 +457,10 @@ Four things beyond the record, each pulling its weight:
   arrival matter" answerable at all.
 - **The time**, absolute at the top and relative on each line, is what a
   persistent ambient room needs and a bare transcript never gives: without
-  it an agent cannot tell a three-day gap from a three-minute one.
+  it an agent cannot tell a three-day gap from a three-minute one. The room
+  reads it off its runtime's `Clock` (`agent.md` §5): the system clock by
+  default, and a clock a test moves by hand in the scripted suite. Every
+  `at` on the record is stamped from the same clock.
 - **The gap** is derived from the record, because the arrivals are on it;
   the runtime stores no separate timer.
 

@@ -45,6 +45,16 @@ export type {
 // use inside `defineWorkspace` — only a host that wants to seed or read it.
 export { directoryBackend, memoryBackend } from './just-bash.ts';
 export type {
+	Clock,
+	CreateRuntimeOptions,
+	ModelResolver,
+	RunningRoom,
+	Runtime,
+	SessionOpener,
+	SessionRepoLike,
+} from './runtime.ts';
+export { createRuntime, defaultRuntime, sessionsOver, systemClock } from './runtime.ts';
+export type {
 	ReadSessionOptions,
 	Session,
 	SessionView,
