@@ -348,6 +348,46 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		}
 	});
 
+	it('writes off a draft the last run revoked at its stop, and goes quiet with nothing owed', async () => {
+		const { opened, clock, runtime } = await world(storage);
+		try {
+			const drafting = deferred();
+			const hangs: Script = (context) => {
+				if (!toolNames(context).includes('summarise')) return quiet();
+				drafting.resolve();
+				return new Promise<never>(() => {});
+			};
+			const name = roomName(`restart-${storage.name}`);
+			const session = startSession({
+				name,
+				assistant,
+				agents: [alpha],
+				runtime: runtime(),
+				streamFn: scripted(byAgent({ alpha: says(['alpha one', 'alpha two']), assistant: hangs })),
+			});
+			const visit = await visitSession(session, priya);
+			await visit.deliver({ text: 'First?' });
+			await drafting.promise;
+			// the stop revokes the draft in flight: the host wrote the summary off
+			await stopSession(session);
+
+			const resumed = await resumeSession(name, {
+				runtime: runtime(),
+				streamFn: scripted(byAgent({ assistant: writes('Never written.') })),
+			});
+			const events = collect(resumed);
+			await resumed.quiet();
+			await clock.advance(120_000);
+			await resumed.quiet();
+			expect(await summaries(resumed)).toHaveLength(0);
+			expect(events.filter((e) => e.type === 'activation_start')).toEqual([]);
+			expect(resumed.exchange()).toBeUndefined();
+			await stopSession(resumed);
+		} finally {
+			await opened.dispose();
+		}
+	});
+
 	it('refuses to resume a name whose seats the catalog does not hold, and one with no composition', async () => {
 		const { opened, runtime } = await world(storage);
 		try {

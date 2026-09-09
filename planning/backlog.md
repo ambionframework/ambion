@@ -592,3 +592,17 @@ which holds the stream to one event per message within one run.
 
 **Fix.** Leave it: the stream is the push side, and a resume is where the
 pull side is read. Say so in `docs/agent.md` §5 if a host trips on it.
+
+### 33. Opening a name that does not exist creates it
+
+**What.** `sessionsOver(repo).open(id)` creates a Pi session on every miss.
+`resumeSession('typo')` and `readSession('typo')` create an empty session
+before the first fails on the missing composition and the second returns
+an empty record. On a JSONL repository the stray session is a directory on
+disk, and `repo.list()` shows it from then on.
+
+**Where.** `sessionsOver` in `runtime.ts`; `recover` in `session.ts`.
+
+**Fix.** A second call on the opener, `find(id)`, that returns nothing on a
+miss, or an option on `open`. `resumeSession` and `readSession` take the
+one that creates nothing; `startSession` keeps the one that creates.

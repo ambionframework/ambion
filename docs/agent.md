@@ -543,7 +543,9 @@ controls:
   the seat side with Pi's own abort, and settles. What was said stays, what
   was mid-flight ends without speaking, nothing the seats were sent runs
   after the cut, and an aborted activation stays cancelled even if a steer
-  was still queued against it. The room is still running afterwards.
+  was still queued against it. A draft the assistant held is written off
+  with them: the summary is owed no longer. The room is still running
+  afterwards.
 - **`stopSession`** is the one that ends it, and it is `abort()` plus
   everything else a run holds: the visits close with a `left` for everyone
   present, the alarm is cancelled, and the handle is spent. It writes no

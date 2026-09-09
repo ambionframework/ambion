@@ -288,9 +288,11 @@ the assistant again for him at its next reconcile. A person whose draft the
 assistant could not land waits for the backoff instead, so a model that
 keeps failing never retries on its own end (§5). Who is owed is a fold
 over the log: a close that holds two or more agent messages, with no
-summary covering it and no draft that stood down over it. A later close by
-the same person joins the draft, and one message reaches back to the
-earliest question still owed.
+summary covering it and no draft that stood down over it. A draft stands
+down when the assistant ends it without writing, and when the host revokes
+it: `abort()` and `stopSession` write the draft off with every wake still
+pending. A later close by the same person joins the draft, and one message
+reaches back to the earliest question still owed.
 
 ---
 

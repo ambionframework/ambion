@@ -135,13 +135,16 @@ interface OwedContext extends WakeOptions {
 
 const ATTEMPT_REASONS: ReadonlySet<EndReason> = new Set(['failed', 'expired', 'refused']);
 
+/** A draft that ended this way stood down: the assistant judged the room, or the host wrote the draft off. */
+const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked']);
+
 /**
  * The summaries still owed, one per person. A close owes one when it names
  * the assistant, no summary covers it, and no draft over it or over a later
  * close of the same person stood down. Every later close of the same person
- * joins the draft: one message reaches back to the earliest question still
- * owed, and the latest close names the draft. A summary at the cap is owed
- * no longer.
+ * joins the draft: the closes fold in log order, so the latest close names
+ * the draft, and one message reaches back to the earliest question still
+ * owed. A summary at the cap is owed no longer.
  */
 function foldOwed(
 	closes: readonly CloseRow[],
@@ -166,17 +169,9 @@ function foldOwed(
 			notBefore: undefined,
 		});
 	}
-	for (const close of open) joinLater(byPerson.get(close.owner), close);
 	return [...byPerson.values()]
 		.map((owed) => withAttempts(owed, leases, context.backoff))
 		.filter((owed) => owed.attempts < context.attempts);
-}
-
-/** A later close of the same person joins the draft, whatever it held on its own. */
-function joinLater(owed: Owed | undefined, close: CloseRow): void {
-	if (owed === undefined || close.through <= owed.through) return;
-	owed.through = close.through;
-	owed.closes.push(close.through);
 }
 
 const covers = (summary: Message & { kind: 'summary' }, close: CloseRow): boolean =>
@@ -185,9 +180,10 @@ const covers = (summary: Message & { kind: 'summary' }, close: CloseRow): boolea
 	summary.covers.through >= close.through;
 
 /**
- * A draft over this close, or over a later close of the same person, ended
- * released without writing: the assistant judged the room, and the judgment
- * stands for everything it read.
+ * A draft over this close, or over a later close of the same person, stood
+ * down without writing: released, so the assistant judged the room and the
+ * judgment stands for everything it read; or revoked, so the host wrote the
+ * draft off the way `abort()` writes off every wake still pending.
  */
 function judged(
 	leases: ReadonlyMap<string, LeaseState>,
@@ -202,7 +198,9 @@ function judged(
 	for (const lease of leases.values()) {
 		const parsed = parseId(lease.id);
 		if (parsed?.kind !== 'draft' || !later.has(parsed.through)) continue;
-		if (lease.phase === 'ended' && lease.reason === 'released') return true;
+		if (lease.phase === 'ended' && lease.reason !== undefined && STOOD_DOWN.has(lease.reason)) {
+			return true;
+		}
 	}
 	return false;
 }

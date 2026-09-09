@@ -19,6 +19,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { renderRecord } from '../src/render.ts';
+import { within } from './support/chaos.ts';
 import { fakeClock } from './support/clock.ts';
 import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
 import {
@@ -747,6 +748,31 @@ describe('the assistant', () => {
 		// the activation failed, so the summary is owed and the range is still whole
 		expect(summaries(await session.messages())).toHaveLength(0);
 		// and a host asking again is not made to wait for work nobody is doing
+		await expect(session.quiet()).resolves.toBeUndefined();
+	});
+
+	it('writes off a draft the host revoked: abort quiets the room, and nothing is owed', async () => {
+		const drafting = deferred();
+		const hangs: Script = () => {
+			drafting.resolve();
+			return new Promise<never>(() => {});
+		};
+		const session = open({ script: byAgent({ product: twoAnswers, assistant: hangs }) });
+		const events = collect(session);
+		const starts = () =>
+			events.filter((e) => e.type === 'activation_start' && e.agent === 'assistant').length;
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await drafting.promise;
+		session.abort();
+		await within(session.quiet(), 2_000, 'quiet after the abort');
+		expect(summaries(await session.messages())).toHaveLength(0);
+		expect(session.exchange()).toBeUndefined();
+		// the revocation stands: nothing wakes the assistant for the same close again
+		expect(starts()).toBe(1);
+		await clock.advance(200_000);
+		expect(starts()).toBe(1);
 		await expect(session.quiet()).resolves.toBeUndefined();
 	});
 

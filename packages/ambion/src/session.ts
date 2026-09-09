@@ -185,6 +185,9 @@ export function startSession(options: StartSessionOptions): Session {
 	assertFree(runtime, options.name);
 	const session = SessionImpl.start(options, runtime);
 	runtime.running.set(options.name, session);
+	// A composition the record refuses frees the name: the handle answers
+	// with the refusal, and nothing runs under it.
+	session.started().catch(() => free(runtime, session));
 	return session;
 }
 
@@ -206,10 +209,15 @@ export async function resumeSession(
 	try {
 		await session.started();
 	} catch (error) {
-		runtime.running.delete(name);
+		free(runtime, session);
 		throw error;
 	}
 	return session;
+}
+
+/** The name comes free, unless another room took it since. */
+function free(runtime: Runtime, session: SessionImpl): void {
+	if (runtime.running.get(session.name) === session) runtime.running.delete(session.name);
 }
 
 function assertFree(runtime: Runtime, name: string): void {
@@ -599,12 +607,14 @@ class SessionImpl implements Session, RunningRoom {
 	): Promise<void> {
 		const to = input.to?.name;
 		const state = this.state();
-		if (
-			to !== undefined &&
-			!state.people.has(to) &&
-			!state.roster.some((seat) => seat.name === to)
-		) {
+		const target = state.roster.find((seat) => seat.name === to);
+		if (to !== undefined && !state.people.has(to) && target === undefined) {
 			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
+		}
+		// A seat at the narrow end wakes for nothing said: a delivery to it is
+		// a message nobody reads. The assistant sits there.
+		if (target?.attention === 'none') {
+			throw new Error(`Cannot direct a delivery to '${to}': it wakes for nothing said.`);
 		}
 		await this.commitMessage<SpokenMessage>(input.key ?? crypto.randomUUID(), undefined, () => ({
 			kind: 'said',
@@ -713,30 +723,35 @@ class SessionImpl implements Session, RunningRoom {
 						{ name: message.from, attention: message.attention ?? 'broadcast', assistant: false },
 					]
 				: state.roster;
+		const atWork = this.atWork(state, live);
 		const woken = roster
 			.filter((seat) => seat.name !== author)
-			.filter(
-				(seat) => wakes(seat, target, message, fromAssistant) || this.atWork(seat.name, state),
-			)
+			.filter((seat) => wakes(seat, target, message, fromAssistant) || atWork.has(seat.name))
 			.map((seat) => seat.name);
 		if (this.opensExchange(message, state) && state.reserve.length > 0 && !live.has(assistant)) {
 			woken.push(assistant);
 		}
-		return woken;
+		return [...new Set(woken)];
 	}
 
 	/**
-	 * A seat holding a live lease hears every message. The assistant does not:
-	 * a composing activation decides on the question as it was asked, and what
-	 * the seats say while it decides is theirs to say; a drafting activation
-	 * learns what landed from the refusal of its draft, which carries it.
+	 * The seats holding a live lease, which hear every message. The assistant
+	 * does not: a composing activation decides on the question as it was
+	 * asked, and what the seats say while it decides is theirs to say; a
+	 * drafting activation learns what landed from the refusal of its draft,
+	 * which carries it.
 	 */
-	private atWork(seat: string, state: RoomState): boolean {
-		if (seat === this.assistant) return false;
+	private atWork(state: RoomState, live: ReadonlyMap<string, string[]>): Set<string> {
 		const now = this.now();
-		return [...state.leases.values()].some(
-			(lease) => seatOf(lease.id, this.assistant) === seat && isLive(lease, now),
-		);
+		const holds = (id: string) => {
+			const lease = state.leases.get(id);
+			return lease !== undefined && isLive(lease, now);
+		};
+		const atWork = new Set<string>();
+		for (const [seat, ids] of live) {
+			if (seat !== this.assistant && ids.some(holds)) atWork.add(seat);
+		}
+		return atWork;
 	}
 
 	private opensExchange(message: Message, state: RoomState): boolean {
@@ -866,6 +881,11 @@ class SessionImpl implements Session, RunningRoom {
 	async commit(commit: Commit): Promise<CommitResponse> {
 		if (this.gone()) return stale('the room is gone');
 		await this.ready;
+		// A lease that ended is answered first: nothing the activation writes
+		// lands, whatever the record did. The queue checks again where it writes.
+		if (this.liveSeatOf(commit.activation, this.state()) === undefined) {
+			return stale('the lease ended');
+		}
 		const seat = seatOf(commit.activation, this.assistant) ?? '';
 		try {
 			const committed = await this.commitMessage<Message>(

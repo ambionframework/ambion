@@ -230,9 +230,10 @@ export interface SeatContext {
  * runs; one activation at a time, named by the wake that started it.
  */
 export class SeatActor implements SeatPort {
-	private current: { id: string; activation: Activation } | undefined;
-	/** A wake that arrived while an activation ran. It runs next. */
-	private queued: string | undefined;
+	/** The activation running, or over and releasing its lease. Held until the release lands. */
+	private current: { id: string; activation: Activation; over: boolean } | undefined;
+	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
+	private readonly queued: string[] = [];
 	private audit: Promise<PiSession> | undefined;
 
 	constructor(
@@ -243,7 +244,8 @@ export class SeatActor implements SeatPort {
 	/**
 	 * A wake starts an activation when none runs. While one runs, a wake a
 	 * message caused is steered into it (rule 2), and the lease says so; any
-	 * other wake runs next.
+	 * other wake runs next. An activation that is over takes no steer: what
+	 * landed runs as an activation of its own.
 	 */
 	async wake(wake: Wake): Promise<void> {
 		if (this.current === undefined) {
@@ -251,8 +253,8 @@ export class SeatActor implements SeatPort {
 			return;
 		}
 		if (this.current.id === wake.activation) return;
-		if (wake.steer === undefined) {
-			this.queued = wake.activation;
+		if (wake.steer === undefined || this.current.over) {
+			this.enqueue(wake.activation);
 			return;
 		}
 		const activation = this.current.activation;
@@ -261,14 +263,20 @@ export class SeatActor implements SeatPort {
 
 	/**
 	 * One activation to its end: claim, run, release, then whatever queued
-	 * behind it. A host that runs a seat inside one request awaits this.
+	 * behind it, in order. A host that runs a seat inside one request awaits
+	 * this, and it resolves once the seat has nothing left to run.
 	 */
 	async run(id: string): Promise<void> {
 		if (this.current !== undefined) {
-			this.queued = id;
+			this.enqueue(id);
 			return;
 		}
 		await this.take(id);
+	}
+
+	/** A wake sent twice queues once. */
+	private enqueue(id: string): void {
+		if (!this.queued.includes(id)) this.queued.push(id);
 	}
 
 	/** Cut the activation in flight. The room writes what that means. */
@@ -280,21 +288,23 @@ export class SeatActor implements SeatPort {
 		// Held before the claim, so a steer that lands while the claim is in
 		// flight reaches the activation and not the floor.
 		const activation = new Activation(id, this.context.seat, this.host(id));
-		this.current = { id, activation };
+		const current = { id, activation, over: false };
+		this.current = current;
 		const claimed = await this.claim(id);
-		if (claimed === undefined) {
-			this.current = undefined;
-			return this.next();
+		if (claimed !== undefined) {
+			const stopRenewing = this.renewUntil(activation, claimed.expiry);
+			try {
+				await activation.run();
+			} finally {
+				stopRenewing();
+				// Held through the release: a wake that lands now runs next, and
+				// never beside the activation that is releasing.
+				current.over = true;
+				await this.release(id, activation);
+			}
 		}
-		const stopRenewing = this.renewUntil(activation, claimed.expiry);
-		try {
-			await activation.run();
-		} finally {
-			stopRenewing();
-			this.current = undefined;
-			await this.release(id, activation);
-		}
-		this.next();
+		this.current = undefined;
+		await this.next();
 	}
 
 	/** The lease, or nothing: the room refused it, or the claim never came back. The wake is sent again. */
@@ -307,10 +317,10 @@ export class SeatActor implements SeatPort {
 		}
 	}
 
-	private next(): void {
-		const queued = this.queued;
-		this.queued = undefined;
-		if (queued !== undefined) void this.take(queued);
+	/** The next wake that queued, to its end. */
+	private async next(): Promise<void> {
+		const queued = this.queued.shift();
+		if (queued !== undefined) await this.take(queued);
 	}
 
 	/** The lease is released, however the activation went. A room that is gone answers stale, and that is fine. */
