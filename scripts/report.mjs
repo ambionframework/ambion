@@ -348,10 +348,6 @@ function diary() {
 const seatedBy = seatings
 	.map((m) => `${m.from} at [${m.seq}]${m.by ? ` by ${m.by}` : ''}`)
 	.join(', ');
-const composeCosts = composing.map((a) => a.cost ?? 0);
-const composeCost = composeCosts.reduce((a, b) => a + b, 0);
-const newcomerActs = seatActs.filter((a) => seatings.some((m) => m.from === a.agent));
-const newcomerMsgs = agentSaid.filter((m) => seatings.some((s) => s.from === m.from));
 const firstCtx = (() => {
 	const s = sessionOf(seatActs[0]?.agent);
 	return s ? contextOf(s.blocks[0]).length : 0;
@@ -365,6 +361,59 @@ const avgWords = summaries.length
 	? Math.round(summaries.reduce((a, s) => a + words(s.text), 0) / summaries.length)
 	: 0;
 
+// -- the crash: what the dead run held, and what the resumed run did with it ---------
+const crash = run.crash ?? { at: 0, time: run.ranAt, leaseExpiry: 0 };
+const crashTime = Date.parse(crash.time);
+const log = run.log ?? [];
+const leaseRows = log.filter((r) => r.type === 'ambion/lease').map((r) => r.data);
+/** The last row per lease id, with the first row's time beside it. */
+const leases = [...new Map(leaseRows.map((r) => [r.id, r])).values()].map((last) => ({
+	...last,
+	claimedAt: leaseRows.find((r) => r.id === last.id)?.at ?? last.at,
+}));
+const expiredLeases = leases.filter((l) => l.phase === 'ended' && l.reason === 'expired');
+const heldAtCrash = leases.filter(
+	(l) =>
+		Date.parse(l.claimedAt) <= crashTime && (l.phase === 'running' || Date.parse(l.at) > crashTime),
+);
+const expiredAfter = expiredLeases.length
+	? Math.max(...expiredLeases.map((l) => Date.parse(l.at))) - crashTime
+	: 0;
+const resentActs = acts.filter(
+	(a) => a.trigger <= crash.at && a.trigger > 0 && Date.parse(a.startedAt) > crashTime,
+);
+const retried = leases.filter((l) => /^\d+:[a-z0-9-]+:\d+$/.test(l.id));
+const crashMessage = record.find((m) => m.seq === crash.at);
+const crashExchange = closed.find((x) => x.from <= crash.at && x.through >= crash.at);
+const crashSummary = crashExchange
+	? summaries.find(
+			(s) => s.covers.from <= crashExchange.from && s.covers.through >= crashExchange.through,
+		)
+	: undefined;
+const afterCrash = run.timeline.filter((t) => Date.parse(t.at) > crashTime);
+const firstAfter = afterCrash.slice(0, 6).map((t) => {
+	const e = t.event;
+	if (e.type === 'message') return `[${e.message.seq}] ${e.message.from} ${e.message.kind}`;
+	if (e.type === 'activation_start') return `${e.agent} woke`;
+	if (e.type === 'activation_end') return `${e.agent} ended${e.spoke ? ', having spoken' : ''}`;
+	if (e.type === 'error') return `${e.agent}: ${e.error.message}`;
+	return e.type.replace('_', ' ');
+});
+const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
+
+function leaseTable() {
+	const rows = heldAtCrash
+		.map((l) => {
+			const ended =
+				l.phase === 'ended'
+					? `${l.reason} at +${seconds(Date.parse(l.at) - crashTime)}`
+					: 'still running';
+			return `<tr><td class="tid">${esc(l.id)}</td><td>${esc(l.claimedAt.slice(11, 23))}</td><td>${l.heard}</td><td>${esc(ended)}</td></tr>`;
+		})
+		.join('');
+	return `<div class="tw"><table><thead><tr><th>Lease</th><th>Claimed at</th><th>Heard through</th><th>How it ended, after the crash</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
 const ranAt = new Date(run.ranAt);
 const dateLine = ranAt.toLocaleDateString('en-GB', {
 	day: 'numeric',
@@ -373,32 +422,15 @@ const dateLine = ranAt.toLocaleDateString('en-GB', {
 });
 
 const seatedByAssistant = seatings.filter((m) => m.by === ASSISTANT);
-const leftAlone = composing.filter((a) => !a.tools.includes('seat'));
-const emptied = seatedByAssistant.length === run.reserve.length;
 const byQuestion = closed
 	.map((x) => ({
 		x,
 		seated: seatedByAssistant.filter((m) => m.seq > x.from && m.seq <= x.through),
 	}))
 	.filter((q) => q.seated.length);
-const neverSeated = run.reserve
-	.filter((r) => !seatings.some((m) => m.from === r.name))
-	.map((r) => r.name);
-const composingList = composing
-	.map((a) => {
-		const q = record.find((m) => m.seq === a.trigger);
-		const seatedHere = seatings.filter(
-			(m) =>
-				m.seq > a.trigger &&
-				m.seq <= (closed.find((x) => x.from === a.trigger)?.through ?? Infinity) &&
-				m.by === ASSISTANT,
-		);
-		return `<li><b>[${a.trigger}] ${esc(a.triggerFrom)}:</b> “${esc(q?.text ?? '')}” — ${seatedHere.length ? `seated <b>${seatedHere.map((m) => esc(m.from)).join('</b> and <b>')}</b>` : 'left the roster as it stood'} · ${money(a.cost ?? 0)}</li>`;
-	})
-	.join('');
 
 const html = `<meta charset="utf-8">
-<title>Who the Question Needs</title>
+<title>The Room Comes Back</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -414,11 +446,11 @@ ul.plain{margin:.4rem 0 0 1.2rem;padding:0;color:var(--dim);max-width:45rem} ul.
 </style>
 <main>
 <p class="meta">Ambion demo · ${esc(dateLine)} · ${esc(run.model)} · room &lsquo;${esc(run.name)}&rsquo; · workspace &lsquo;${esc(run.drive.workspace)}&rsquo;</p>
-<h1>Who the Question Needs</h1>
-<p class="lede">The same construction suite and the same three people, and the room now holds ${run.reserve.length} specialists on call in a reserve: a building control liaison, the plant desk and the temporary works coordinator. When a question opens an exchange, the assistant reads it beside the seated products and seats every specialist whose identity touches it: a seated specialist with nothing to add stays quiet for the price of a glance, and one that was never seated costs the answer. ${questions.length} questions opened ${closed.length} exchanges. The assistant composed the room ${times(composing.length)} and seated ${plural(seatedByAssistant.length, 'specialist', 'specialists')}${leftAlone.length ? `, leaving the roster alone ${times(leftAlone.length)}` : ''}${emptied ? `; once the reserve was empty, the ${plural(questions.length - composing.length, 'later question', 'later questions')} woke it no more` : ''}. Each newcomer woke on its own seating, read the room as it stood, and answered beside the products.</p>
+<h1>The Room Comes Back</h1>
+<p class="lede">The same construction suite and the same three people, and this time the process dies in the middle of a question. As the first answer to ${esc(crashMessage ? (record.find((m) => m.seq === crashExchange?.from)?.from ?? 'sam') : 'sam')}&rsquo;s question landed, at message [${crash.at}], the runtime that held the room was dropped: ${plural(heldAtCrash.length, 'lease', 'leases')} stayed on the log unreleased, and nothing was written about the crash. A second runtime resumed the name over the same log. It folded the roster, the people, the open exchange and the leases back from the rows; it sent the ${plural(resentActs.length, 'wake', 'wakes')} the dead run left unanswered again; the ${plural(heldAtCrash.length, 'lease', 'leases')} the dead run held expired on its own alarm, ${seconds(expiredAfter)} after the crash; the exchange closed; and the assistant wrote ${crashSummary ? `${esc(crashSummary.to)}` : 'nobody'} the one message${crashSummary ? `, covering [${crashSummary.covers.from}]–[${crashSummary.covers.through}], the crash inside it` : ''}. ${questions.length} questions opened ${closed.length} exchanges, and ${summaries.length} were written for, across two runtimes.</p>
 <div class="stats">${stat(questions.length, 'questions asked')}${stat(agentSaid.length, 'agent messages')}${stat(summaries.length, 'summaries written')}${stat(run.reserve.length, 'specialists on call')}${stat(seatings.filter((m) => m.by === ASSISTANT).length, 'seated by the assistant')}${stat(composing.length, 'composing activations')}</div>
 <div class="stats">${stat(seatActs.length, 'seat activations')}${stat(conflicts, 'says the lock refused')}${stat(errors, 'tool or model failures')}${stat(run.toolCalls.length, 'calls into the products&rsquo; APIs')}${stat(n(totalTokens), 'tokens across every turn')}${stat(money(totalCost), 'total model cost')}</div>
-<p class="note">Every line is verbatim from one live run, the first on this branch. The people were scripted only in when they arrived, what they asked, and when they left. Nobody scripted the seatings: ${esc(seatedBy)}.</p>
+<p class="note">Every line is verbatim from one live run. The people were scripted only in when they arrived, what they asked, and when they left; the crash was scripted to land on the first answer to the second question, and nothing else about it was. Nobody scripted the seatings: ${esc(seatedBy)}.</p>
 
 <section>
 <h2>The suite, the specialists on call, and the seat that composes the room</h2>
@@ -443,6 +475,13 @@ ul.plain{margin:.4rem 0 0 1.2rem;padding:0;color:var(--dim);max-width:45rem} ul.
 </section>
 
 <section>
+<h2>The crash, and what the log held</h2>
+<p class="note">The room holds no fact in memory: the roster, the people, the open exchange, the leases and the wakes still pending are each a fold over the log, and a room that replays the log folds the state the room that wrote it held. The crash landed on <b>[${crash.at}]</b>${crashMessage ? `, ${esc(crashMessage.from)}&rsquo;s answer` : ''}. Every lease the dead run held is below: an activation claims a lease with an expiry of ${seconds(crash.leaseExpiry)} in this run, renews it while it runs, and records <code>heard</code>, the seq it has taken. Nobody released these, so they ran out on the resumed room&rsquo;s alarm, and the room reported each one as an activation that ran past its lease.</p>
+${leaseTable()}
+<p class="note" style="margin-top:1.4rem">What the resumed run did first, in order: ${firstAfter.map((t) => `<b>${esc(t)}</b>`).join(' · ')}.${resentActs.length ? ` The ${plural(resentActs.length, 'activation', 'activations')} it started for a message from before the crash — ${resentActs.map((a) => `<b>${esc(a.agent)}</b> on [${a.trigger}]`).join(', ')} — ${resentActs.length === 1 ? 'is' : 'are'} the wakes the dead run left unanswered, sent again because the log said no lease had heard them.` : ''}${retried.length ? ` ${plural(retried.length, 'activation', 'activations')} ran as a second attempt at a message an earlier activation heard and came to nothing on: ${retried.map((l) => `<code>${esc(l.id)}</code>`).join(', ')}.` : ' No activation needed a second attempt: every lease that expired had spoken already, and what it said stands.'}</p>
+</section>
+
+<section>
 <h2>Every exchange, who was seated for it, and the one message it came to</h2>
 <p class="note">An exchange opens when a person asks something and closes when no agent is active, the composing assistant included. ${questions.length} questions opened ${closed.length} exchanges. Open <em>the working</em> to read what the person did not have to, and to see where a seating landed among the answers.</p>
 <div class="exchanges">${exchanges()}</div>
@@ -450,13 +489,11 @@ ul.plain{margin:.4rem 0 0 1.2rem;padding:0;color:var(--dim);max-width:45rem} ul.
 
 <section>
 <h2>What this change built</h2>
-<p class="note"><b>A reserve on <code>startSession</code>.</b> <code>available</code> holds agents the room does not seat now. Both lists hold the same <code>AgentSeat</code> values, so a reserve entry carries an attention, and the room refuses a name in both. <code>agents</code> is optional, so a room can start with the assistant alone. The reserve is a value the host wrote: nothing discovers agents, and the assistant can never define one.</p>
-<p class="note"><b>The assistant bookends the exchange.</b> The open of an exchange wakes it when the reserve holds anybody, in parallel with the seats, and hands it <code>seat</code> bound to the reserve. The close hands it <code>summarise</code>, as before. In this run it composed ${composing.length} times, for ${money(composeCost)} in total:</p>
-<ul class="plain">${composingList}</ul>
-<p class="note"><b>Seating is a presence message.</b> <code>seated</code> and <code>unseated</code> join <code>arrived</code> and <code>left</code>, with <code>by</code> naming the assistant when it did the seating. Every rule of the core applies unchanged, and two change: the routing excludes a message&rsquo;s author and wakes the seat it names, and a seat the message names wakes at any attention. A seating is the one message whose author and subject differ, and the one activation the assistant can cause.</p>
-<p class="note"><b>A composing activation is the room working.</b> <code>settled()</code> leaves a drafting assistant out, so a close cannot hold open the exchange it is closing, and counts a composing one in, so the exchange stays open until the assistant has decided. ${newcomerMsgs.length ? `The ${newcomerActs.length} newcomer activations in this run all fell inside the exchange that seated them, and the summaries cover what they said.` : ''}</p>
-<p class="note"><b>Nothing said while the assistant decides reaches it.</b> A composing activation is one pass, and the room steers nothing into it. The run before this one showed why: the assistant was handed the products&rsquo; answers as <code>[new]</code> lines mid-decision, weighed them, tried to seat a specialist that was already in the room, and drafted a close it had no hand to deliver. It now reads the question and the reserve, seats or ends its turn, and the seats&rsquo; answers are theirs.</p>
-<p class="note"><b>A seating commits outside the lock.</b> The first draft of this branch committed a seating under rule 5&rsquo;s lock, and the tests showed why that cannot hold: a product that answers before the assistant decides moves the record, the seating is refused, and the assistant spends a turn reconsidering a decision the answer rarely changes. The assistant decides on the question; the newcomer reads the answers when it wakes and declines when the point stands.</p>
+<p class="note"><b>The log is the truth.</b> The room writes four kinds of entry to its own Pi session: <code>ambion/message</code>, <code>ambion/lease</code>, <code>ambion/close</code> and <code>ambion/composition</code>. Every fact the room used to hold in memory is now a fold over them: the roster from the composition and the seatings after it, the people from the arrivals and departures, the open exchange from the questions and the closes, the leases from their rows, and the wakes still pending from the messages and the leases together. <code>reconcile()</code> folds, decides, writes what it decided, and sends; it runs after every commit, every lease change, every alarm and every wake, and running it twice writes nothing.</p>
+<p class="note"><b>Every message names every seat it reaches, and every lease says what it heard.</b> <code>wakes</code> on a message names the idle seats its reach wakes and every seat at work, so a message and its routing are one write. A seat at work is steered inside its running activation, and the lease records <code>heard</code>, the seq the activation has taken. A wake is answered by any lease of the seat that heard it and ran to its end, or that spoke. A lease that expired or failed without speaking answers nothing: the room wakes the seat again after a backoff, up to three attempts, the same policy the summaries had already. An activation that spoke and then died stands, and nobody is woken to say it again.</p>
+<p class="note"><b>Nothing mints an id.</b> An activation is named by the message that woke it and the seat, <code>[${crash.at}]:${esc(crashMessage?.from ?? 'seat')}</code>, or by the close it answers and the attempt, <code>close:${crashExchange?.through ?? 0}:1</code>. A wake is safe to send twice, a retried commit lands once under its key, and a request from an activation whose lease ended is refused because the fold says so.</p>
+<p class="note"><b>A host owns a runtime.</b> The clock, the session opener, the transport, the model call and the catalog of definitions live in a <code>Runtime</code> value; two runtimes in one process share nothing, and that is what let this run drop one and resume in another. What crosses between a seat and its room is JSON: the seat reaches the room through <code>view</code>, <code>commit</code> and <code>lease</code>, and the room reaches the seat through <code>wake</code>, so a seat and its room can live in two processes. A second package runs a room as Cloudflare Durable Objects over those calls, tested inside workerd.</p>
+<p class="note"><b>The evidence is a chaos tier.</b> A scenario runs once to count the writes its log takes, then once per write, crashing the room at that write before the entry lands and again after it landed and before the room heard, and a host resumes it and retries under the same key; the same scenario runs in a child process on a JSONL storage and is killed mid-activation; and a seeded walk loses and repeats requests on the wire, fails writes before and after they land, and crashes the room up to three times. Every run must come to the same record. Three faults this branch fixed were found there and nowhere else: a message a live seat heard only through a steer that a crash lost, a write that landed while its confirmation was lost and stayed invisible until the next write, and a visit the storage refused that left the person able to speak without arriving.</p>
 </section>
 
 <section>
@@ -488,11 +525,10 @@ ${diary()}
 <section>
 <h2>What the run showed</h2>
 <div class="findings">
-<div class="finding"><h3>The assistant seated everyone the question touched${leftAlone.length ? ', and left the roster alone when nobody was' : ', and nothing paid for the reserve once it was empty'}</h3><p>${plural(composing.length, 'question opened', 'questions opened')} with agents in reserve, and the assistant composed the room ${times(composing.length)}: ${plural(seatedByAssistant.length, 'seating', 'seatings')}${leftAlone.length ? ` and ${plural(leftAlone.length, 'decision', 'decisions')} to seat nobody` : ''}. ${byQuestion.map((q) => `${q.seated.map((m) => `<b>${esc(m.from)}</b>`).join(' and ')} for ${esc(q.x.owner)}&rsquo;s question at [${q.x.from}]`).join('; ')}.${emptied ? ` That emptied the reserve, so the ${plural(questions.length - composing.length, 'question', 'questions')} after it woke no composing activation: an empty reserve costs the room nothing.` : ''}${neverSeated.length ? ` ${neverSeated.map(esc).join(', ')} stayed in the reserve for the whole run: no question turned on what it holds, and nothing paid for it.` : ''} Every seating is on the record, stamped <code>by: assistant</code>, and every newcomer&rsquo;s first activation was the seating itself: it read the question and the answers so far, and spoke from its own API.</p></div>
-<div class="finding"><h3>What composition cost</h3><p>${plural(composing.length, 'composing activation', 'composing activations')} cost ${money(composeCost)}, against ${money(totalCost)} for the run. A composing activation reads the same context a seat reads plus the reserve, and ends in one turn when it seats nobody. Each seated specialist then costs what any seat costs for the rest of the run: ${newcomerActs.length} activations and ${newcomerMsgs.length} messages from the ${seatedByAssistant.length} seated here. The lock refused ${conflicts} says, against 14 in the run before this branch: ${seatedByAssistant.length} more seats answering in parallel is ${seatedByAssistant.length} more seats racing, and the lock is what keeps a point from reaching the record twice.</p></div>
-<div class="finding"><h3>One exchange, one message, with the newcomers inside it</h3><p>${summaries.length} summaries were written, ${avgWords} words on average. Because a composing activation counts as the room working, no exchange closed before the assistant had decided, and the ranges the summaries cover hold the seatings and what the seated specialists said.</p></div>
-<div class="finding"><h3>What four runs before this one changed</h3><p>The first run put two specialists in reserve and the assistant seated both on the first question, so no later exchange showed it choosing to seat nobody; a third specialist, the temporary works coordinator, went into the reserve to give the later questions a real choice. The second run had seats comparing site dates with the clock at the top of their context, calling a forecast and two deliveries stale, and one summary opening with the room&rsquo;s date; the goal now says the clock is the room&rsquo;s own and Tue 25 Aug is today. The third run steered the products&rsquo; answers into the composing activation, and the runtime now keeps them out. The fourth run asked the assistant to seat only what a question turned on, and it left a specialist out that had something to add; the runtime now asks it to seat everyone the question touches, and the cap on seatings is the reserve itself. Each of those is a fault the tests could not have found, and a live run did.</p></div>
-<div class="finding"><h3>What a seat read</h3><p>The first seat activation read ${n(firstCtx)} characters; the last read ${n(lastCtxLen)}, with the earlier exchanges folded into their summaries. The reserve appears in none of them: it renders only in the assistant&rsquo;s composing activations.</p></div>
+<div class="finding"><h3>A crash mid-exchange lost nothing but the run</h3><p>The runtime was dropped as [${crash.at}] landed, with ${plural(heldAtCrash.length, 'lease', 'leases')} running and no <code>left</code>, no release and no close written. The second runtime folded the same roster, the same people and the same open exchange from the log, and continued it: ${resentActs.length ? `${plural(resentActs.length, 'wake', 'wakes')} the dead run left unanswered ${resentActs.length === 1 ? 'was' : 'were'} sent again and answered, ` : ''}the ${plural(heldAtCrash.length, 'lease', 'leases')} it held expired ${seconds(expiredAfter)} after the crash on the resumed room&rsquo;s own alarm, and the exchange closed into ${crashSummary ? `one message for ${esc(crashSummary.to)} covering [${crashSummary.covers.from}]–[${crashSummary.covers.through}]` : 'no message'}. The people did nothing: sam&rsquo;s visit was put back with no arrival written, because the log said he was present.</p></div>
+<div class="finding"><h3>What the expiry costs, and what it does not</h3><p>An activation cut by the crash holds its lease until the expiry, ${seconds(crash.leaseExpiry)} here and a minute by default, and the exchange stays open until then: that is the one delay a crash adds. What the cut activations had said before the crash stands on the record, and the log says which of them spoke, so ${retried.length ? `${plural(retried.length, 'seat was', 'seats were')} woken for a second attempt at a message an activation heard and came to nothing on` : 'no seat was woken to say anything again'}. The lock refused ${conflicts} says across both runtimes, and the record kept its shape: seqs contiguous, every key once, every summary covering the range before it.</p></div>
+<div class="finding"><h3>The same room, whichever process holds it</h3><p>${plural(seatActs.length, 'seat activation', 'seat activations')} and ${plural(assistantActs.length, 'assistant activation', 'assistant activations')} ran across the two runtimes, ${money(totalCost)} in all, and each seat&rsquo;s own session holds every one of them, complete, whichever runtime ran it. The room&rsquo;s log holds ${n(log.length)} rows beside ${record.length} messages: ${plural(leaseRows.length, 'lease row', 'lease rows')}, ${plural(log.filter((r) => r.type === 'ambion/close').length, 'close', 'closes')}, and one composition. A reader of the log alone can say which activation said what, which wake each lease answered, and where the crash fell.</p></div>
+<div class="finding"><h3>What the assistant did, unchanged</h3><p>It composed the room ${times(composing.length)} and seated ${plural(seatedByAssistant.length, 'specialist', 'specialists')}: ${byQuestion.map((q) => `${q.seated.map((m) => `<b>${esc(m.from)}</b>`).join(' and ')} for ${esc(q.x.owner)}&rsquo;s question at [${q.x.from}]`).join('; ')}. It wrote ${summaries.length} summaries, ${avgWords} words on average, one of them for the exchange the crash fell inside. The first seat activation read ${n(firstCtx)} characters; the last read ${n(lastCtxLen)}, with the earlier exchanges folded into their summaries.</p></div>
 </div>
 </section>
 </main>
