@@ -96,7 +96,7 @@ const script = byAgent({
 
 const STEPS = ['visit', 'leave', 'deliver', 'seat', 'unseat', 'advance', 'fault', 'crash'] as const;
 type Step = (typeof STEPS)[number];
-const OPERATIONS: Operation[] = ['wake', 'steer', 'view', 'commit', 'lease'];
+const OPERATIONS: Operation[] = ['wake', 'view', 'commit', 'lease'];
 
 /** One walk: the room, the runtime it runs in, and what the walk did so far. */
 class Walk {

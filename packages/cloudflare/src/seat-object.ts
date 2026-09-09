@@ -1,13 +1,13 @@
 /**
  * One seat as one Durable Object. A wake stores the activation id and sets
  * an alarm; the alarm claims the lease, reads the view, runs the activation
- * to its end and releases the lease, all inside one alarm handler. A steer
- * forwards to the activation in flight. The seat's audit session lives in
- * the object's own SQLite.
+ * to its end and releases the lease, all inside one alarm handler. A wake
+ * that arrives while an activation runs is handed to the actor, which
+ * steers it in. The seat's audit session lives in the object's own SQLite.
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import type { SeatRoom, Steer, Wake } from '@ambionframework/ambion';
+import type { SeatRoom, Wake } from '@ambionframework/ambion';
 import { SeatActor, systemClock } from '@ambionframework/ambion';
 import { runtimeFor } from './configure.ts';
 import type { Env } from './room-object.ts';
@@ -17,16 +17,19 @@ type Phase = 'pending' | 'running';
 
 export class SeatObject extends DurableObject<Env> {
 	private actor: SeatActor | undefined;
-	private current: string | undefined;
 
 	/**
 	 * A wake for the activation the object holds, or for a fresh one when it
 	 * holds none, sets the alarm. A wake for a different activation while one
-	 * is pending or running is ignored: the room sends it again.
+	 * runs goes to the actor, which steers a message in; while one is pending
+	 * it is ignored, and the room sends it again.
 	 */
 	async wake(wake: Wake): Promise<void> {
 		const held = await this.ctx.storage.get<string>('activation');
-		if (held !== undefined && held !== wake.activation) return;
+		if (held !== undefined && held !== wake.activation) {
+			if (this.actor !== undefined) await this.actor.wake(wake);
+			return;
+		}
 		const wakes = (await this.ctx.storage.get<number>('wakes')) ?? 0;
 		await this.ctx.storage.put({
 			room: wake.room,
@@ -48,11 +51,6 @@ export class SeatObject extends DurableObject<Env> {
 		if (!on && (await this.ctx.storage.get<string>('activation')) !== undefined) {
 			await this.ctx.storage.setAlarm(Date.now());
 		}
-	}
-
-	async steer(steer: Steer): Promise<void> {
-		if (this.actor !== undefined && this.current === steer.activation)
-			await this.actor.steer(steer);
 	}
 
 	/** How many wakes this seat has taken. The tests read it. */
@@ -87,12 +85,10 @@ export class SeatObject extends DurableObject<Env> {
 			stream: runtime.stream,
 			model: runtime.model,
 		});
-		this.current = activation;
 		try {
 			await this.actor.run(activation);
 		} finally {
 			this.actor = undefined;
-			this.current = undefined;
 			await this.clear();
 		}
 	}

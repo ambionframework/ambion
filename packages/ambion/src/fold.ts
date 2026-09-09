@@ -8,9 +8,15 @@
  * room that wrote it held, which is what lets a room resume where it
  * stopped.
  */
-import { draftOver } from './assistant.ts';
 import { type Exchange, openExchange } from './exchange.ts';
-import { foldLeases, type LeaseState, type PendingWake, parseId, pendingWakes } from './lease.ts';
+import {
+	foldLeases,
+	type LeaseState,
+	type PendingWake,
+	parseId,
+	pendingWakes,
+	type WakeOptions,
+} from './lease.ts';
 import type { LogEntry } from './log.ts';
 import { foldPeople, type PersonState } from './presence.ts';
 import { type Attention, isSummary, type Message, type Seq } from './types.ts';
@@ -52,10 +58,8 @@ export interface RoomState {
 	readonly lastSeq: Seq;
 }
 
-export interface FoldOptions {
-	/** How long the room waits before it drafts again, after `attempt` failed drafts. */
-	backoff(attempt: number): number;
-}
+/** The retry policy, for wakes and drafts alike: how many attempts, and the wait between them. */
+export type FoldOptions = WakeOptions;
 
 /** The entries, sorted by kind. */
 function sorted(entries: readonly LogEntry[]) {
@@ -88,8 +92,8 @@ export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): Ro
 		exchange: openExchange(messages, closes, isPerson),
 		closes,
 		leases,
-		pending: pendingWakes(messages, closes, leases, assistant, new Set(roster.map((s) => s.name))),
-		owed: foldOwed(closes, messages, leases, { assistant, isPerson, backoff: options.backoff }),
+		pending: pendingWakes(messages, leases, new Set(roster.map((s) => s.name)), options),
+		owed: foldOwed(closes, messages, leases, { assistant, ...options }),
 		messages,
 		lastSeq: messages.at(-1)?.seq ?? 0,
 	};
@@ -125,20 +129,19 @@ function reseat(roster: RosterSeat[], message: Message): void {
 	}
 }
 
-interface OwedContext {
+interface OwedContext extends WakeOptions {
 	assistant: string;
-	isPerson: (name: string) => boolean;
-	backoff: (attempt: number) => number;
 }
 
 const ATTEMPT_REASONS: ReadonlySet<EndReason> = new Set(['failed', 'expired', 'refused']);
 
 /**
- * The summaries still owed, one per person. A close owes one when the agents
- * said two or more things inside it, no summary covers it, and no draft stood
- * down over it. Every later close of the same person joins the draft: one
- * message reaches back to the earliest question still owed, and the latest
- * close names the draft.
+ * The summaries still owed, one per person. A close owes one when it names
+ * the assistant, no summary covers it, and no draft over it or over a later
+ * close of the same person stood down. Every later close of the same person
+ * joins the draft: one message reaches back to the earliest question still
+ * owed, and the latest close names the draft. A summary at the cap is owed
+ * no longer.
  */
 function foldOwed(
 	closes: readonly CloseRow[],
@@ -147,13 +150,12 @@ function foldOwed(
 	context: OwedContext,
 ): Owed[] {
 	const summaries = messages.filter(isSummary);
-	const speaksForItself = (name: string) => !context.isPerson(name) && name !== context.assistant;
-	const open = closes.filter(
-		(close) => !summaries.some((s) => covers(s, close)) && !judged(leases, close.through),
+	const owing = closes.filter((close) => close.wakes?.includes(context.assistant));
+	const open = owing.filter(
+		(close) => !summaries.some((s) => covers(s, close)) && !judged(leases, close, owing),
 	);
 	const byPerson = new Map<string, Owed>();
 	for (const close of open) {
-		if (draftOver(messages, close.from, close.through, speaksForItself) === undefined) continue;
 		const known = byPerson.get(close.owner);
 		byPerson.set(close.owner, {
 			person: close.owner,
@@ -165,7 +167,9 @@ function foldOwed(
 		});
 	}
 	for (const close of open) joinLater(byPerson.get(close.owner), close);
-	return [...byPerson.values()].map((owed) => withAttempts(owed, leases, context.backoff));
+	return [...byPerson.values()]
+		.map((owed) => withAttempts(owed, leases, context.backoff))
+		.filter((owed) => owed.attempts < context.attempts);
 }
 
 /** A later close of the same person joins the draft, whatever it held on its own. */
@@ -180,11 +184,24 @@ const covers = (summary: Message & { kind: 'summary' }, close: CloseRow): boolea
 	summary.covers.from <= close.from &&
 	summary.covers.through >= close.through;
 
-/** A draft over this close ended released without writing: the assistant judged the room. */
-function judged(leases: ReadonlyMap<string, LeaseState>, through: Seq): boolean {
+/**
+ * A draft over this close, or over a later close of the same person, ended
+ * released without writing: the assistant judged the room, and the judgment
+ * stands for everything it read.
+ */
+function judged(
+	leases: ReadonlyMap<string, LeaseState>,
+	close: CloseRow,
+	closes: readonly CloseRow[],
+): boolean {
+	const later = new Set(
+		closes
+			.filter((c) => c.owner === close.owner && c.through >= close.through)
+			.map((c) => c.through),
+	);
 	for (const lease of leases.values()) {
 		const parsed = parseId(lease.id);
-		if (parsed?.kind !== 'draft' || parsed.through !== through) continue;
+		if (parsed?.kind !== 'draft' || !later.has(parsed.through)) continue;
 		if (lease.phase === 'ended' && lease.reason === 'released') return true;
 	}
 	return false;

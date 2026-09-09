@@ -15,7 +15,6 @@ import {
 	type LeaseResponse,
 	type LeaseRow,
 	roundTrip,
-	type Steer,
 	type ViewResponse,
 	type Wake,
 } from '../src/index.ts';
@@ -27,8 +26,8 @@ import { jsonl } from './support/storage.ts';
 const at = '2026-01-01T09:00:00.000Z';
 
 const rows: Record<string, LeaseRow | CloseRow | CompositionRow> = {
-	running: { id: '2:product', after: 2, phase: 'running', expiry: 1767258060000, at },
-	ended: { id: '2:product', after: 3, phase: 'ended', reason: 'released', at },
+	running: { id: '2:product', after: 2, phase: 'running', expiry: 1767258060000, heard: 2, at },
+	ended: { id: '2:product', after: 3, phase: 'ended', reason: 'released', heard: 3, at },
 	close: { owner: 'priya', from: 2, through: 4, after: 4, at, wakes: ['assistant'] },
 	composition: {
 		assistant: 'assistant',
@@ -40,12 +39,11 @@ const rows: Record<string, LeaseRow | CloseRow | CompositionRow> = {
 	},
 };
 
-const wake: Wake = { room: 'site', seat: 'product', activation: '2:product' };
-const steer: Steer = {
+const wake: Wake = {
+	room: 'site',
 	seat: 'product',
-	activation: '2:product',
-	message: { kind: 'said', seq: 3, key: 'k', at, from: 'priya', text: 'And the pump?' },
-	line: '[priya] And the pump?',
+	activation: '3:product',
+	steer: { seq: 3, line: '[priya] And the pump?' },
 };
 const view: ActivationView = {
 	activation: 'close:4:1',
@@ -112,7 +110,7 @@ const responses: Record<string, ViewResponse | CommitResponse | LeaseResponse> =
 };
 
 describe('the wire', () => {
-	it.each(Object.entries({ ...rows, wake, steer, ...requests, ...responses }))(
+	it.each(Object.entries({ ...rows, wake, ...requests, ...responses }))(
 		'carries %s unchanged',
 		(_name, value) => {
 			expect(() => assertWire(value)).not.toThrow();

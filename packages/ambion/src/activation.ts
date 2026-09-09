@@ -31,15 +31,15 @@
  */
 import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
 import type { UserMessage } from '@earendil-works/pi-ai';
-import type { Message, Seq, SessionEvent } from './types.ts';
+import type { Seq, SessionEvent } from './types.ts';
 import type { ActivationView, EndReason, LeaseResponse, ViewResponse } from './wire.ts';
 
 /** What only the seat side can give an activation: the room's view, and a model over it. */
 export interface ActivationHost {
 	/** What this activation reads, as the room renders it now. */
 	view(): Promise<ViewResponse>;
-	/** Renew the lease. The answer says how far the record has moved. */
-	renew(): Promise<LeaseResponse>;
+	/** Renew the lease, carrying what the activation has taken. The answer says how far the record has moved. */
+	renew(heard: Seq): Promise<LeaseResponse>;
 	/** Build the model over the view, with the hands the view names. */
 	build(view: ActivationView, activation: Activation): Agent;
 	/** Keep what the model did, in the seat's own downstream session. */
@@ -81,12 +81,24 @@ export class Activation {
 	}
 
 	/**
+	 * The seq this activation has taken: heard, or steered in and waiting in
+	 * the transcript. The lease carries it, so the log says which wakes this
+	 * activation answers.
+	 */
+	get taken(): Seq {
+		return Math.max(this.heardThrough, ...this.pending);
+	}
+
+	/**
 	 * A message landed while this activation was working. It reaches the model as a
 	 * steer (rule 2), and its seq waits until the transcript shows it arrived.
+	 * False when the activation had taken it already: a wake sent twice steers once.
 	 */
-	steer(message: Message, line: string): void {
-		this.pending.push(message.seq);
+	steer(seq: Seq, line: string): boolean {
+		if (seq <= this.taken) return false;
+		this.pending.push(seq);
 		this.agent?.steer(userMessage(`[new] ${line}`, this.host.now()));
+		return true;
 	}
 
 	/** Pi's abort ends the run but not its queues; this stops the rebuild too. */
@@ -132,7 +144,8 @@ export class Activation {
 			// is a single pass whatever landed: a summarising activation answers a room
 			// that moved with a redraft inside its own tool.
 			if (this.cancelled || view.hand !== 'say') return false;
-			return this.moved(agent);
+			// Awaited here, so a renewal that fails is caught below and not returned as a rejection.
+			return await this.moved(agent);
 		} catch (error) {
 			return this.broke(error instanceof Error ? error : new Error(String(error)));
 		}
@@ -144,7 +157,7 @@ export class Activation {
 	 * and the renewal says how far it reaches.
 	 */
 	private async moved(agent: Agent): Promise<boolean> {
-		const renewed = await this.host.renew();
+		const renewed = await this.host.renew(this.taken);
 		if ('stale' in renewed || renewed.ok.lastSeq <= this.heardThrough) return false;
 		agent.clearAllQueues();
 		return true;

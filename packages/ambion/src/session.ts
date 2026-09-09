@@ -25,7 +25,7 @@ import type { SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
 import { assertAssistant } from './assistant.ts';
 import type { Exchange } from './exchange.ts';
 import { foldRoom, type RoomState } from './fold.ts';
-import { activationId, isExpired, isLive, parseId, seatOf } from './lease.ts';
+import { activationId, draftId, isExpired, isLive, parseId, seatOf } from './lease.ts';
 import { type Committed, RoomLog } from './log.ts';
 import type { VisitRuntime } from './presence.ts';
 import { decide, liveSeats, working } from './reconcile.ts';
@@ -510,9 +510,9 @@ class SessionImpl implements Session, RunningRoom {
 		return this.live(this.state()).size === 0;
 	}
 
-	/** The seats live now, counting the wakes this room sent that no lease has answered. */
+	/** The seats live now: a lease held, a wake pending, or a draft due. */
 	private live(state: RoomState): Map<string, string[]> {
-		return liveSeats(state, this.now(), this.sentAt.keys());
+		return liveSeats(state, this.now());
 	}
 
 	// -- people -----------------------------------------------------------------
@@ -681,12 +681,14 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * Who wakes for a message — the room's whole policy in one place, and the
+	 * Who hears a message — the room's whole policy in one place, and the
 	 * same for what a person said, what a person did, and what a colleague
-	 * said. What wakes an idle seat is the attention it was seated at, against
-	 * the reach of the message (rules 1, 4 and 6, in `wakes`); a seat already
-	 * live hears it as a steer instead (rule 2). A person's question that opens
-	 * an exchange also wakes the assistant, when the reserve holds anybody.
+	 * said. An idle seat hears it when the attention it was seated at reaches
+	 * the message (rules 1, 4 and 6, in `wakes`); a seat already at work
+	 * hears everything (rule 2), except the assistant while it composes. A
+	 * person's question that opens an exchange also wakes the assistant, when
+	 * the reserve holds anybody. The seat side decides what hearing means:
+	 * a fresh activation, or a steer into the one that runs.
 	 */
 	private routing(message: Message, state: RoomState): string[] {
 		const author = authorOf(message);
@@ -704,13 +706,29 @@ class SessionImpl implements Session, RunningRoom {
 					]
 				: state.roster;
 		const woken = roster
-			.filter((seat) => seat.name !== author && !live.has(seat.name))
-			.filter((seat) => wakes(seat, target, message, fromAssistant))
+			.filter((seat) => seat.name !== author)
+			.filter(
+				(seat) => wakes(seat, target, message, fromAssistant) || this.atWork(seat.name, state),
+			)
 			.map((seat) => seat.name);
 		if (this.opensExchange(message, state) && state.reserve.length > 0 && !live.has(assistant)) {
 			woken.push(assistant);
 		}
 		return woken;
+	}
+
+	/**
+	 * A seat holding a live lease hears every message. The assistant does not:
+	 * a composing activation decides on the question as it was asked, and what
+	 * the seats say while it decides is theirs to say; a drafting activation
+	 * learns what landed from the refusal of its draft, which carries it.
+	 */
+	private atWork(seat: string, state: RoomState): boolean {
+		if (seat === this.assistant) return false;
+		const now = this.now();
+		return [...state.leases.values()].some(
+			(lease) => seatOf(lease.id, this.assistant) === seat && isLive(lease, now),
+		);
 	}
 
 	private opensExchange(message: Message, state: RoomState): boolean {
@@ -730,38 +748,19 @@ class SessionImpl implements Session, RunningRoom {
 			this.emit({ type: 'exchange_opened', exchange: state.exchange });
 		}
 		for (const seat of message.wakes ?? []) this.send(activationId(message.seq, seat), seat);
-		this.steer(message, state);
 		void this.reconcile();
 	}
 
-	/** Every seat live for another activation hears the message inside it (rule 2). */
-	private steer(message: Message, state: RoomState): void {
-		const author = authorOf(message);
-		const woken = new Set(message.wakes ?? []);
-		const line = renderLine(message);
-		for (const [seat, ids] of this.live(state)) {
-			if (seat === author || woken.has(seat)) continue;
-			for (const id of ids.filter((id) => this.hearsSteers(seat, id))) {
-				void this.port(seat)
-					.steer({ seat, activation: id, message, line })
-					.catch(() => {});
-			}
-		}
-	}
-
-	/**
-	 * A composing activation decides on the question as it was asked, and what
-	 * the seats say while it decides is theirs to say: steering it in would hand
-	 * the assistant answers to weigh and no hand to weigh them with.
-	 */
-	private hearsSteers(seat: string, id: string): boolean {
-		return !(seat === this.assistant && parseId(id)?.kind === 'wake');
-	}
-
+	/** One wake over the wire. A wake a message caused carries the line a running activation is steered with. */
 	private send(id: string, seat: string): void {
 		this.sentAt.set(id, this.now());
+		const parsed = parseId(id);
+		const message =
+			parsed?.kind === 'wake' ? this.log.messages.find((m) => m.seq === parsed.seq) : undefined;
+		const steer =
+			message === undefined ? {} : { steer: { seq: message.seq, line: renderLine(message) } };
 		void this.port(seat)
-			.wake({ room: this.name, seat, activation: id })
+			.wake({ room: this.name, seat, activation: id, ...steer })
 			.catch(() => {});
 	}
 
@@ -885,19 +884,27 @@ class SessionImpl implements Session, RunningRoom {
 			return stale('the seat is not on the roster');
 		}
 		return lease.phase === 'running'
-			? this.claim(lease.activation, seat)
+			? this.claim(lease.activation, seat, lease.heard ?? 0)
 			: this.release(lease, seat);
 	}
 
-	/** A claim, or a renewal: the lease runs until `expiry`, unless it had ended. */
-	private async claim(id: string, seat: string): Promise<LeaseResponse> {
+	/**
+	 * A claim, or a renewal: the lease runs until `expiry`, unless it had
+	 * ended. A fresh claim is taken only for an activation the fold says is
+	 * due: the next attempt at a pending wake, or at an owed draft. Anything
+	 * else was answered already, and a second run of it would answer twice.
+	 */
+	private async claim(id: string, seat: string, heard: Seq): Promise<LeaseResponse> {
 		const expiry = this.now() + this.runtime.wake.expiry;
 		let fresh = false;
 		const written = await this.log.write('lease', () => {
-			const known = this.state().leases.get(id);
+			const state = this.state();
+			const known = state.leases.get(id);
+			if (known === undefined && !this.due(state).has(id)) return undefined;
 			if (known !== undefined && !isLive(known, this.now())) return undefined;
 			fresh = known === undefined;
-			return { id, phase: 'running', expiry, at: this.iso() };
+			const taken = Math.max(known?.heard ?? this.log.lastSeq, heard);
+			return { id, phase: 'running', expiry, heard: taken, at: this.iso() };
 		});
 		if (!written) return stale('the lease ended');
 		if (fresh) {
@@ -908,22 +915,40 @@ class SessionImpl implements Session, RunningRoom {
 		return { ok: { expiry, lastSeq: this.log.lastSeq } };
 	}
 
+	/** The ids the fold says may claim a fresh lease now. */
+	private due(state: RoomState): Set<string> {
+		return new Set([
+			...state.pending.map((wake) => wake.id),
+			...state.owed.map((owed) => draftId(owed.through, owed.attempts + 1)),
+		]);
+	}
+
 	private async release(lease: Lease, seat: string): Promise<LeaseResponse> {
-		const ended = await this.end(lease.activation, seat, lease.reason ?? 'released');
+		const ended = await this.end(lease.activation, seat, lease.reason ?? 'released', lease.heard);
 		if (!ended) return stale('the lease ended');
 		void this.reconcile();
 		return { ok: { expiry: this.now(), lastSeq: this.log.lastSeq } };
 	}
 
-	/** End one lease, for whatever reason, and say so once. Nothing to end is not an error. */
-	private async end(id: string, seat: string, reason: EndReason): Promise<boolean> {
+	/**
+	 * End one lease, for whatever reason, and say so once. Nothing to end is
+	 * not an error. A revocation may name an activation that never claimed:
+	 * the row ends it before it starts, and the wake it stood for is answered.
+	 */
+	private async end(id: string, seat: string, reason: EndReason, heard = 0): Promise<boolean> {
+		let started = true;
 		const written = await this.log.write('lease', () => {
 			const known = this.state().leases.get(id);
-			if (known === undefined || known.phase === 'ended') return undefined;
-			if (reason !== 'expired' && isExpired(known, this.now())) return undefined;
-			return { id, phase: 'ended', reason, at: this.iso() };
+			if (known?.phase === 'ended') return undefined;
+			if (known === undefined && reason !== 'revoked') return undefined;
+			if (known !== undefined && reason !== 'expired' && isExpired(known, this.now()))
+				return undefined;
+			started = known !== undefined;
+			const taken = Math.max(known?.heard ?? this.log.lastSeq, heard);
+			return { id, phase: 'ended', reason, heard: taken, at: this.iso() };
 		});
 		if (!written) return false;
+		if (!started) return true;
 		const spoke = this.state().messages.some((m) => m.activationId === id);
 		this.emit({ type: 'activation_end', agent: seat, spoke });
 		if (reason === 'expired') {
@@ -968,12 +993,11 @@ class SessionImpl implements Session, RunningRoom {
 		}
 	}
 
-	/** A wake a lease has answered, or whose seat left the roster, is not one this room waits on. */
+	/** A wake the fold no longer says is due is not one this room waits on. */
 	private forget(state: RoomState): void {
-		const roster = new Set(state.roster.map((seat) => seat.name));
+		const due = this.due(state);
 		for (const id of this.sentAt.keys()) {
-			const seat = seatOf(id, this.assistant);
-			if (state.leases.has(id) || seat === undefined || !roster.has(seat)) this.sentAt.delete(id);
+			if (!due.has(id)) this.sentAt.delete(id);
 		}
 	}
 
@@ -1038,13 +1062,15 @@ class SessionImpl implements Session, RunningRoom {
 		if (!this.gone()) await this.reconcile();
 	}
 
-	/** Cut one seat: the seat side is aborted, and every lease it holds ends revoked. */
+	/**
+	 * Cut one seat: the seat side is aborted, every lease it holds ends
+	 * revoked, and every wake pending for it is written off the same way, so
+	 * nothing the seat was sent runs after the cut.
+	 */
 	private async cut(seat: string, ids: string[]): Promise<void> {
 		const port = this.ports.get(seat);
 		if (port instanceof SeatActor) port.abort();
-		for (const id of ids) {
-			if (this.state().leases.has(id)) await this.end(id, seat, 'revoked');
-		}
+		for (const id of ids) await this.end(id, seat, 'revoked');
 	}
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */
@@ -1081,9 +1107,14 @@ class SessionImpl implements Session, RunningRoom {
 		}
 	}
 
-	/** Dropped from memory: the alarm is cancelled, and every call a seat makes from now on is stale. */
+	/**
+	 * Dropped from memory: the alarm is cancelled, the log is closed, and
+	 * every call a seat makes from now on is stale. The record keeps what
+	 * landed before, and nothing this run had in flight lands after.
+	 */
 	evict(): void {
 		this.evicted = true;
+		this.log.close();
 		this.cancelAlarm();
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
 		for (const resolve of this.settledWaiters.splice(0)) resolve();

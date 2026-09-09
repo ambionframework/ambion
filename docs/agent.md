@@ -232,7 +232,7 @@ type Message =
       seq: number; // monotonic, assigned at commit, strictly ordered
       key?: string; // the key the commit carried; a repeated key lands once
       activationId?: string; // the activation that wrote it; absent on a delivery
-      wakes?: string[]; // the seats the room decided to wake for it
+      wakes?: string[]; // every seat the message reaches: idle ones its reach wakes, and every seat at work
       at: string; // stamped by the runtime, at the moment it landed
       from: string; // a participant's name — stamped by the runtime, never claimed
       to?: string; // present when the delivery or say was directed
@@ -280,8 +280,10 @@ one union and one sequence.
 
 Beyond identity, the mechanics are eight rules. The first six are the
 room's routing and voice; all of the routing is one function, `routing` in
-`session.ts`, and it is written on the message: `wakes` names the seats the
-room decided to wake, so a message and its routing are one write.
+`session.ts`, and it is written on the message: `wakes` names every seat
+the message reaches, so a message and its routing are one write. The seat
+side decides what reaching it means: a fresh activation for a seat at
+rest, and a steer into the activation of a seat at work.
 
 **1. Every message activates every idle agent, in parallel.** A human's
 delivery, a person arriving, and a colleague's undirected `say` route
@@ -306,18 +308,26 @@ excludes the author and wakes the subject ([`roster.md`](roster.md) §3).
 
 **2. Whatever arrives mid-activation is steered in, and working views reset at
 idle.** Replies and deliveries alike, directed or undirected: each arrival
-is injected into every active agent's running activation at the next safe point,
-so nobody finishes blind and answers stale. "Round" is deliberately a
-soft-edged word: the room has no barrier, only quiet, and quiet is what
+names every seat at work in its `wakes`, whatever the seat's attention,
+and the seat side injects it into the running activation at the next safe
+point, so nobody finishes blind and answers stale. "Round" is deliberately
+a soft-edged word: the room has no barrier, only quiet, and quiet is what
 `settled` reports. Mid-flight, each agent may see the conversation in a
 slightly different order than the record. Its working view is its own,
 temporary by design: when the agent goes idle the view is discarded, and
-the next activation reads the record itself. The record is canonical.
+the next activation reads the record itself. The record is canonical. The
+assistant is the one seat rule 2 leaves out: a composing activation
+decides on the question as it was asked ([`roster.md`](roster.md) §4), and
+a drafting one learns what landed from the refusal of its draft
+([`assistant.md`](assistant.md) §5).
 
-A steer may be lost on the way to a seat. The message is on the record,
-so nothing is lost with it: when a pass ends, the activation renews its
-lease, and the renewal says how far the record reaches. An activation that
-heard less than that reads the room again through a fresh view.
+A steer is a wake into a running activation, and the lease records that
+it landed: the seat side renews with `heard`, the seq the activation has
+taken. A wake lost on the way is sent again after the resend window, and
+the seat side steers a message once however often it arrives. When a pass
+ends, the activation renews its lease, and the renewal says how far the
+record reaches. An activation that heard less than that reads the room
+again through a fresh view.
 
 **3. Speaking is a tool; silence is the default.** An activated agent holds
 one built-in tool, `say({ to?, text })` (`sayTool` in `seat.ts`). Ending
@@ -528,11 +538,12 @@ controls:
   like any other, and its activation counts. That difference keeps an
   exchange's end fixed. [`exchange.md`](exchange.md)
   §6 fixes the order of the events at the close.
-- **`abort()`** revokes every lease in flight: the room writes `ended` with
-  reason `revoked` for each one, cuts the seat side with Pi's own abort, and
-  settles. What was said stays, what was mid-flight ends without speaking,
-  and an aborted activation stays cancelled even if a steer was still queued
-  against it. The room is still running afterwards.
+- **`abort()`** revokes every lease in flight and every wake still
+  pending: the room writes `ended` with reason `revoked` for each one, cuts
+  the seat side with Pi's own abort, and settles. What was said stays, what
+  was mid-flight ends without speaking, nothing the seats were sent runs
+  after the cut, and an aborted activation stays cancelled even if a steer
+  was still queued against it. The room is still running afterwards.
 - **`stopSession`** is the one that ends it, and it is `abort()` plus
   everything else a run holds: the visits close with a `left` for everyone
   present, the alarm is cancelled, and the handle is spent. It writes no
@@ -542,8 +553,10 @@ controls:
   log, with the composition the log holds. Every name on the roster
   resolves through the runtime's catalog. The room reconciles at once: a
   lease the last run left expires, a wake it left pending is sent again,
-  and an exchange it left open closes. `runtime.evict(name)` is the other
-  half: it drops a running room from memory and writes nothing.
+  an activation that expired without speaking is tried again after the
+  backoff, and an exchange it left open closes once nothing is owed on it.
+  `runtime.evict(name)` is the other half: it drops a running room from
+  memory, closes its log, and writes nothing.
 
 `messages()` and `seats()` are the pull side; the stream is the push side.
 A listener learns nothing the pulls cannot tell it — it only learns it
@@ -586,18 +599,33 @@ was written.
 
 **A seat is seated for the run. An activation lasts seconds.** An
 activation's id is derived from the log: the seq of the message that woke
-the seat and the seat's name (`2:product`), or the close it answers and the
-attempt number (`close:9:1`). Nothing mints an id, so a wake is safe to send
-twice, a retried commit lands once, and every entry an activation writes
-carries its `activationId`. An activation holds a lease: `running`, claimed
-and renewed with an expiry, then `ended`, with a reason — `released`,
-`failed`, `refused`, `revoked` or `expired`. A request from an activation
+the seat and the seat's name (`2:product`, and `2:product:2` for the
+second attempt), or the close it answers and the attempt number
+(`close:9:1`). Nothing mints an id, so a wake is safe to send twice, a
+retried commit lands once, and every entry an activation writes carries
+its `activationId`. An activation holds a lease: `running`, claimed and
+renewed with an expiry, then `ended`, with a reason — `released`,
+`failed`, `refused`, `revoked` or `expired`. Every lease row carries
+`heard`, the seq the activation has taken: the record as it stood at the
+claim, then every message steered into it. A request from an activation
 whose lease ended is refused as `stale`. A running lease that stops
 renewing expires on the room's alarm: the room reports a failed activation
-as an `error` event, and the seat's next request is refused. What an
-activation has heard, what landed while it worked, and whether it left a
-mark belong to the activation and end with it. Rule 5's `readThrough` is an
-activation's fact.
+as an `error` event, and the seat's next request is refused. What landed
+while an activation worked and whether it left a mark belong to the
+activation and end with it. Rule 5's `readThrough` is an activation's
+fact.
+
+**A wake is answered by a lease that heard it, and an activation that came
+to nothing is tried again.** A message and a seat in its `wakes` is one
+wake. Any lease of that seat that heard the message answers it once it ran
+to a release, a refusal or a revocation, or once it spoke. A lease that
+expired or failed without speaking answers nothing: the wake stays
+pending, the failure counts as one attempt, and the room wakes the seat
+again after the backoff (`runtime.retry`, the same policy the summaries
+use, three attempts thirty seconds apart by default). An activation that
+spoke and then died stands: what it said is on the record, and nobody is
+woken to say it again. A seat with a wake pending is live, so the exchange
+stays open through the backoff, and `settled()` waits for the attempt.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
@@ -615,7 +643,7 @@ system prompt and the context, and sends the two strings with the model
 id and the hand the activation holds. The seat side resolves the definition
 by name through the runtime's catalog, builds the Pi `Agent`, and reaches
 the room through three calls: `view`, `commit` and `lease`. The room
-reaches a seat through two: `wake` and `steer`. Every request and response
+reaches a seat through one: `wake`. Every request and response
 survives a round trip through `JSON.stringify` unchanged
 ([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
 live in two processes.
@@ -647,7 +675,9 @@ one per claim this document makes loudly:
 - provenance stamped and the roster injected (rule 7);
 - the name opening back into its record;
 - events in order, errors as events, abort quieting the room — including
-  an abort with a steer still queued.
+  an abort with a steer still queued;
+- a seat whose model call throws is woken again after the backoff, and the
+  room gives up at the cap.
 
 All in-process, in vitest, on a scripted stream where determinism matters.
 

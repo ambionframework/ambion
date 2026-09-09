@@ -140,9 +140,12 @@ the messages alone, and their seqs stay `1..n`.
 
 A room resumed over its log continues a mid-exchange room. The question is
 still open, the seats the last run left live hold their leases until they
-expire, and the wakes it left pending are sent again. A room that stops
-mid-exchange revokes its leases and closes nothing: the next run over the
-same log reconciles, finds nothing live, and closes the exchange.
+expire, and the wakes it left pending are sent again. A lease that expires
+without a word leaves its wake pending: the seat is woken again after the
+backoff, and the exchange stays open until it answers or the attempts run
+out ([`agent.md`](agent.md) §5). A room that stops mid-exchange revokes
+its leases and closes nothing: the next run over the same log reconciles,
+finds nothing live, and closes the exchange.
 
 Every closed exchange is on the log, so a host that wants a history of
 exchanges reads the close rows off the room's Pi session.
@@ -186,8 +189,8 @@ room draws about its assistant.
 summary is drafted, and that window is the one place it can.
 
 **An aborted exchange still closes.** `abort()` revokes the leases in
-flight and the room settles, so the exchange closes with the range it
-reached. **A run that stops mid-exchange closes nothing.** `stopSession`
+flight, writes off the wakes still pending, and the room settles, so the
+exchange closes with the range it reached. **A run that stops mid-exchange closes nothing.** `stopSession`
 revokes the leases in flight and takes the room down. The exchange stays
 open on the log, and the next run over it closes it at its first
 reconcile (§5).

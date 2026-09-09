@@ -196,11 +196,15 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await clock.advance(61_000);
 			const resumed = await resumeSession(name, { runtime: runtime(), streamFn: scripted(script) });
 			const events = collect(resumed);
+			// the resume itself reported the expiry; the activation came to nothing,
+			// so the question is still open and alpha is woken again after the backoff
+			expect(resumed.exchange()).toMatchObject({ owner: 'priya' });
+			expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
+			await clock.advance(30_000);
 			await resumed.quiet();
-			// nothing was live, so the resume itself reported the expiry and closed the exchange
+			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
 			expect(resumed.exchange()).toBeUndefined();
 			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'idle' });
-			expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
 			await stopSession(resumed);
 		} finally {
 			await opened.dispose();

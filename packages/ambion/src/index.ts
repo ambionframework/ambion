@@ -114,7 +114,6 @@ export type {
 	SeatRoom,
 	SeatRow,
 	Stale,
-	Steer,
 	ViewResponse,
 	Wake,
 } from './wire.ts';

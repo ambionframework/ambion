@@ -44,15 +44,12 @@ export function serializing(transport: Transport): SerializingTransport {
 				lease: async (lease) => check('lease response', await room.lease(check('lease', lease))),
 			};
 			const port = transport.connect(wrapped, seat, runtime);
-			return {
-				wake: (wake) => port.wake(check('wake', wake)),
-				steer: (steer) => port.steer(check('steer', steer)),
-			};
+			return { wake: (wake) => port.wake(check('wake', wake)) };
 		},
 	};
 }
 
-export type Operation = 'wake' | 'steer' | 'view' | 'commit' | 'lease';
+export type Operation = 'wake' | 'view' | 'commit' | 'lease';
 
 export interface Fault {
 	on: Operation;
@@ -67,8 +64,8 @@ export interface Fault {
 
 /**
  * A transport that fails the way a network does. Each fault is taken by the
- * first request it matches, in order. A dropped wake or steer is lost; a
- * dropped room call rejects, so the seat never learns the outcome. A
+ * first request it matches, in order. A dropped wake is lost; a dropped
+ * room call rejects, so the seat never learns the outcome. A
  * duplicated request is sent twice. A delayed one waits on the clock.
  */
 export function faultyTransport(transport: Transport, faults: Fault[], clock: Clock): Transport {
@@ -109,10 +106,7 @@ export function faultyTransport(transport: Transport, faults: Fault[], clock: Cl
 				lease: (lease) => through('lease', lease, () => room.lease(lease)),
 			};
 			const port: SeatPort = transport.connect(wrapped, seat, runtime);
-			return {
-				wake: (wake) => through('wake', wake, () => port.wake(wake)).catch(() => {}),
-				steer: (steer) => through('steer', steer, () => port.steer(steer)).catch(() => {}),
-			};
+			return { wake: (wake) => through('wake', wake, () => port.wake(wake)).catch(() => {}) };
 		},
 	};
 }

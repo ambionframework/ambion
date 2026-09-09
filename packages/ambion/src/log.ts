@@ -80,6 +80,7 @@ export class RoomLog {
 	private readonly byKey = new Map<string, Message>();
 	/** The serial queue. One commit at a time, in the order they were asked for. */
 	private tail: Promise<unknown> = Promise.resolve();
+	private closed = false;
 
 	constructor(open: Promise<PiSession>) {
 		this.ready = this.replay(open);
@@ -124,7 +125,7 @@ export class RoomLog {
 		row: RowData<K> | (() => RowData<K> | undefined),
 	): Promise<boolean> {
 		const link = this.tail.then(async () => {
-			const piSession = await this.ready;
+			const piSession = await this.open();
 			const data = typeof row === 'function' ? row() : row;
 			if (data === undefined) return false;
 			const stamped = { ...data, after: this.lastSeq };
@@ -153,11 +154,26 @@ export class RoomLog {
 		return link;
 	}
 
+	/**
+	 * Closed: every write from here on fails, and nothing is cached. A room
+	 * dropped from memory closes its log, so a write it still had in flight
+	 * fails the way a process that died would have failed to make it.
+	 */
+	close(): void {
+		this.closed = true;
+	}
+
+	/** The session to write to, or the failure a closed log answers every write with. */
+	private async open(): Promise<PiSession> {
+		if (this.closed) throw new Error('The log is closed.');
+		return this.ready;
+	}
+
 	private async land<T extends Message>(
 		intent: CommitIntent<T>,
 		landed: ((message: T) => void) | undefined,
 	): Promise<Committed<T>> {
-		const piSession = await this.ready;
+		const piSession = await this.open();
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
 		if (seen !== undefined) return { message: seen as T, repeated: true };
 		if (intent.readThrough !== undefined && this.lastSeq > intent.readThrough) {

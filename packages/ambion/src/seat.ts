@@ -30,9 +30,9 @@ import { type Composing, type Draft, seatTool, standDown, summariseTool } from '
 import { persistTurns } from './log.ts';
 import { refusal } from './render.ts';
 import type { ModelResolver, Runtime, SessionOpener } from './runtime.ts';
-import type { AgentDefinition, Attention, Message, SessionEvent } from './types.ts';
+import type { AgentDefinition, Attention, Message, Seq, SessionEvent } from './types.ts';
 import { isAmbionTool, isSpoken } from './types.ts';
-import type { ActivationView, CommitResponse, SeatPort, SeatRoom, Steer, Wake } from './wire.ts';
+import type { ActivationView, CommitResponse, SeatPort, SeatRoom, Wake } from './wire.ts';
 import { builtinTools, toolContext } from './workspace.ts';
 
 // -- routing -----------------------------------------------------------------
@@ -240,12 +240,23 @@ export class SeatActor implements SeatPort {
 		private readonly context: SeatContext,
 	) {}
 
+	/**
+	 * A wake starts an activation when none runs. While one runs, a wake a
+	 * message caused is steered into it (rule 2), and the lease says so; any
+	 * other wake runs next.
+	 */
 	async wake(wake: Wake): Promise<void> {
-		if (this.current !== undefined) {
-			if (this.current.id !== wake.activation) this.queued = wake.activation;
+		if (this.current === undefined) {
+			void this.run(wake.activation);
 			return;
 		}
-		void this.run(wake.activation);
+		if (this.current.id === wake.activation) return;
+		if (wake.steer === undefined) {
+			this.queued = wake.activation;
+			return;
+		}
+		const activation = this.current.activation;
+		if (activation.steer(wake.steer.seq, wake.steer.line)) await this.renew(activation);
 	}
 
 	/**
@@ -258,12 +269,6 @@ export class SeatActor implements SeatPort {
 			return;
 		}
 		await this.take(id);
-	}
-
-	async steer(steer: Steer): Promise<void> {
-		if (this.current?.id === steer.activation) {
-			this.current.activation.steer(steer.message, steer.line);
-		}
 	}
 
 	/** Cut the activation in flight. The room writes what that means. */
@@ -311,29 +316,48 @@ export class SeatActor implements SeatPort {
 	/** The lease is released, however the activation went. A room that is gone answers stale, and that is fine. */
 	private async release(id: string, activation: Activation): Promise<void> {
 		try {
-			await this.room.lease({ activation: id, phase: 'ended', reason: activation.reason });
+			await this.room.lease({
+				activation: id,
+				phase: 'ended',
+				reason: activation.reason,
+				heard: activation.taken,
+			});
 		} catch {
 			// The release never reached the room: the lease expires there, which
 			// the room reports as a failed activation.
 		}
 	}
 
-	/** Renew at half the expiry, for as long as the activation runs. A refused renewal ends it. */
+	/** One renewal, carrying what the activation has taken. A refused renewal ends it. */
+	private async renew(activation: Activation): Promise<number | undefined> {
+		try {
+			const renewed = await this.room.lease({
+				activation: activation.id,
+				phase: 'running',
+				heard: activation.taken,
+			});
+			if ('stale' in renewed) {
+				activation.abort();
+				return undefined;
+			}
+			return renewed.ok.expiry;
+		} catch {
+			// The renewal never reached the room: the lease expires there, and
+			// the next call this seat makes is answered stale.
+			return undefined;
+		}
+	}
+
+	/** Renew at half the expiry, for as long as the activation runs. */
 	private renewUntil(activation: Activation, firstExpiry: number): () => void {
 		const clock = this.context.runtime.clock;
 		let cancel = () => {};
 		const schedule = (expiry: number) => {
-			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void renew());
+			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void again());
 		};
-		const renew = async () => {
-			try {
-				const renewed = await this.room.lease({ activation: activation.id, phase: 'running' });
-				if ('stale' in renewed) activation.abort();
-				else schedule(renewed.ok.expiry);
-			} catch {
-				// The renewal never reached the room: the lease expires there, and
-				// the next call this seat makes is answered stale.
-			}
+		const again = async () => {
+			const expiry = await this.renew(activation);
+			if (expiry !== undefined) schedule(expiry);
 		};
 		schedule(firstExpiry);
 		return () => cancel();
@@ -343,7 +367,7 @@ export class SeatActor implements SeatPort {
 		const { runtime, room, seat, sessions } = this.context;
 		return {
 			view: () => this.room.view(id),
-			renew: () => this.room.lease({ activation: id, phase: 'running' }),
+			renew: (heard: Seq) => this.room.lease({ activation: id, phase: 'running', heard }),
 			build: (view: ActivationView, activation: Activation) => this.build(view, activation),
 			persist: (agent: PiAgent) => {
 				this.audit ??= sessions.open(`${room}:${seat}`, room);

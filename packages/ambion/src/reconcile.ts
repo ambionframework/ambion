@@ -10,7 +10,7 @@
  */
 import { draftOver } from './assistant.ts';
 import type { Owed, RoomState } from './fold.ts';
-import { draftId, isExpired, isLive, parseId, seatOf } from './lease.ts';
+import { draftId, isExpired, isLive, type PendingWake, parseId, seatOf } from './lease.ts';
 import type { CloseRow, LeaseRow, Without } from './wire.ts';
 
 export interface DecideOptions {
@@ -41,15 +41,10 @@ export interface Decision {
 }
 
 /**
- * The seats holding a live lease or a pending wake, by name. `sent` names
- * the wakes this room sent that the log does not carry — a retry of a draft
- * — and one of those is live until a lease answers it.
+ * The seats holding a live lease, a pending wake, or a draft that is due,
+ * by name, with the ids that make them live.
  */
-export function liveSeats(
-	state: RoomState,
-	now: number,
-	sent: Iterable<string> = [],
-): Map<string, string[]> {
+export function liveSeats(state: RoomState, now: number): Map<string, string[]> {
 	const assistant = state.composition?.assistant ?? '';
 	const live = new Map<string, string[]>();
 	const add = (seat: string | undefined, id: string) => {
@@ -60,18 +55,10 @@ export function liveSeats(
 		if (isLive(lease, now)) add(seatOf(lease.id, assistant), lease.id);
 	}
 	for (const wake of state.pending) add(wake.seat, wake.id);
-	for (const id of sent) {
-		if (unanswered(state, id)) add(seatOf(id, assistant), id);
+	for (const owed of state.owed) {
+		if (due(owed, now)) add(assistant, draftId(owed.through, owed.attempts + 1));
 	}
 	return live;
-}
-
-/** A wake the room sent that no lease answers, for a seat still on the roster, and not pending on the log already. */
-function unanswered(state: RoomState, id: string): boolean {
-	const seat = seatOf(id, state.composition?.assistant ?? '');
-	if (seat === undefined || state.leases.has(id)) return false;
-	if (!state.roster.some((s) => s.name === seat)) return false;
-	return !state.pending.some((wake) => wake.id === id);
 }
 
 /**
@@ -90,8 +77,9 @@ export function working(state: RoomState, now: number): boolean {
 
 export function decide(state: RoomState, options: DecideOptions): Decision {
 	const expired = expiries(state, options.now);
-	const close = options.stopped ? undefined : closing(state, options.now);
-	const sends = options.stopped ? [] : dueWakes(state, close, options);
+	// An expiry changes what is pending: the close waits for the fold that holds it.
+	const close = options.stopped || expired.length > 0 ? undefined : closing(state, options.now);
+	const sends = options.stopped ? [] : dueWakes(state, options);
 	return {
 		expired,
 		close,
@@ -104,7 +92,13 @@ function expiries(state: RoomState, now: number): Decision['expired'] {
 	const at = new Date(now).toISOString();
 	return [...state.leases.values()]
 		.filter((lease) => isExpired(lease, now))
-		.map((lease) => ({ id: lease.id, phase: 'ended' as const, reason: 'expired' as const, at }));
+		.map((lease) => ({
+			id: lease.id,
+			phase: 'ended' as const,
+			reason: 'expired' as const,
+			heard: lease.heard,
+			at,
+		}));
 }
 
 /** The exchange closes when nothing works on it. It names the assistant when it owes a summary. */
@@ -125,34 +119,23 @@ function closing(state: RoomState, now: number): Decision['close'] {
 }
 
 /**
- * Every wake the room sends now: a pending wake never sent, or sent longer
- * ago than the resend window; the wake a close decided here; and an owed
- * draft whose backoff has passed while the assistant is idle.
+ * Every wake the room sends now: a pending wake whose backoff has passed,
+ * and an owed draft whose backoff has passed, each one never sent by this
+ * room or sent longer ago than the resend window.
  */
-function dueWakes(state: RoomState, close: Decision['close'], options: DecideOptions): Send[] {
+function dueWakes(state: RoomState, options: DecideOptions): Send[] {
 	const assistant = state.composition?.assistant ?? '';
-	const sends = new Map<string, Send>();
+	const sends: Send[] = [];
 	for (const wake of state.pending) {
-		if (unsent(wake.id, options)) sends.set(wake.id, { id: wake.id, seat: wake.seat });
+		if (ready(wake, options.now) && unsent(wake.id, options)) {
+			sends.push({ id: wake.id, seat: wake.seat });
+		}
 	}
-	if (close?.wakes?.length) {
-		const id = draftId(close.through, 1);
-		sends.set(id, { id, seat: assistant });
+	for (const owed of state.owed) {
+		const id = draftId(owed.through, owed.attempts + 1);
+		if (due(owed, options.now) && unsent(id, options)) sends.push({ id, seat: assistant });
 	}
-	if (close === undefined) {
-		for (const id of dueDrafts(state, options)) sends.set(id, { id, seat: assistant });
-	}
-	return [...sends.values()];
-}
-
-/** The draft of every owed summary whose backoff has passed, while the assistant is idle. */
-function dueDrafts(state: RoomState, options: DecideOptions): string[] {
-	const assistant = state.composition?.assistant ?? '';
-	if (liveSeats(state, options.now).has(assistant)) return [];
-	return state.owed
-		.filter((owed) => due(owed, options))
-		.map((owed) => draftId(owed.through, owed.attempts + 1))
-		.filter((id) => !state.leases.has(id) && unsent(id, options));
+	return sends;
 }
 
 /** A wake this room never sent, or sent longer ago than the resend window. */
@@ -161,21 +144,25 @@ function unsent(id: string, options: DecideOptions): boolean {
 	return sent === undefined || options.now - sent >= options.resend;
 }
 
-/** An owed draft under the cap whose backoff has passed. */
-function due(owed: Owed, options: DecideOptions): boolean {
-	if (owed.attempts >= options.attempts) return false;
-	return owed.notBefore === undefined || owed.notBefore <= options.now;
-}
+/** A pending wake whose backoff has passed. */
+const ready = (wake: PendingWake, now: number): boolean =>
+	wake.notBefore === undefined || wake.notBefore <= now;
+
+/** An owed draft whose backoff has passed. The fold holds the cap. */
+const due = (owed: Owed, now: number): boolean =>
+	owed.notBefore === undefined || owed.notBefore <= now;
 
 function nextAlarm(state: RoomState, options: DecideOptions): number | undefined {
+	const again = (id: string, notBefore: number | undefined) =>
+		notBefore !== undefined && notBefore > options.now
+			? notBefore
+			: (options.sentAt(id) ?? options.now) + options.resend;
 	const times = [
 		...[...state.leases.values()]
 			.filter((lease) => isLive(lease, options.now))
 			.map((lease) => lease.expiry ?? 0),
-		...state.pending.map((wake) => (options.sentAt(wake.id) ?? options.now) + options.resend),
-		...state.owed
-			.filter((owed) => owed.attempts < options.attempts)
-			.map((owed) => owed.notBefore ?? 0),
+		...state.pending.map((wake) => again(wake.id, wake.notBefore)),
+		...state.owed.map((owed) => again(draftId(owed.through, owed.attempts + 1), owed.notBefore)),
 	];
 	const future = times.filter((at) => at > options.now);
 	return future.length === 0 ? undefined : Math.min(...future);

@@ -9,8 +9,9 @@
  * The seat reaches the room through three calls: `view` reads what an
  * activation is given, `commit` puts one message on the record, and
  * `lease` claims, renews or releases the activation. The room reaches a
- * seat through two: `wake` starts an activation, and `steer` hands a
- * running one a message that landed.
+ * seat through one: `wake` names a message the seat has to hear, and the
+ * seat side decides whether that starts an activation or steers the one
+ * that runs.
  */
 import type { Attention, Message, Seq } from './types.ts';
 
@@ -22,10 +23,15 @@ export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> :
 /** Why a lease ended. */
 export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired';
 
-/** One row about an activation: it holds a lease, or its lease ended. */
+/**
+ * One row about an activation: it holds a lease, or its lease ended.
+ * `heard` is the seq the activation has taken: what its view held when it
+ * claimed, then every message the seat side steered into it. A wake is
+ * answered once a lease of the seat has heard it.
+ */
 export type LeaseRow =
-	| { id: string; after: Seq; phase: 'running'; expiry: number; at: string }
-	| { id: string; after: Seq; phase: 'ended'; reason: EndReason; at: string };
+	| { id: string; after: Seq; phase: 'running'; expiry: number; heard: Seq; at: string }
+	| { id: string; after: Seq; phase: 'ended'; reason: EndReason; heard: Seq; at: string };
 
 /** The room went quiet with an exchange open, and closed it. */
 export interface CloseRow {
@@ -56,22 +62,20 @@ export interface CompositionRow {
 
 // -- the room reaching a seat -------------------------------------------------
 
+/**
+ * A wake names the activation the seat runs for it. When a message caused
+ * it, `steer` carries the line a running activation is handed instead of a
+ * fresh start: the seat side reads it only while an activation runs.
+ */
 export interface Wake {
 	room: string;
 	seat: string;
 	activation: string;
-}
-
-export interface Steer {
-	seat: string;
-	activation: string;
-	message: Message;
-	line: string;
+	steer?: { seq: Seq; line: string };
 }
 
 export interface SeatPort {
 	wake(wake: Wake): Promise<void>;
-	steer(steer: Steer): Promise<void>;
 }
 
 // -- a seat reaching its room -------------------------------------------------
@@ -121,6 +125,8 @@ export interface Lease {
 	activation: string;
 	phase: 'running' | 'ended';
 	reason?: EndReason;
+	/** The seq the activation has taken. The room keeps the higher of this and what it holds. */
+	heard?: Seq;
 }
 
 export type LeaseResponse = { ok: { expiry: number; lastSeq: Seq } } | Stale;

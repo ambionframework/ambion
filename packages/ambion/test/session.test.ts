@@ -1,6 +1,7 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import {
+	createRuntime,
 	defineAgent,
 	defineHuman,
 	InMemorySessionRepo,
@@ -12,7 +13,8 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
-import { andrei, assistant, collect, deferred, enter, roomName } from './support/room.ts';
+import { fakeClock } from './support/clock.ts';
+import { andrei, assistant, collect, deferred, enter, roomName, tick } from './support/room.ts';
 import { byAgent, contextText, quiet, scripted, speak } from './support/scripted.ts';
 
 /** The record's spoken half, which is what most of these tests are about. */
@@ -332,11 +334,14 @@ describe('startSession', () => {
 			'solo',
 		]);
 
-		// an activation that throws is an error event, never a silent decline
+		// an activation that throws is an error event, never a silent decline.
+		// The room wakes the seat again after the backoff, and gives up at the cap.
+		const clock = fakeClock();
 		const faulty = startSession({
 			name: roomName('error'),
 			assistant,
 			agents: [solo],
+			runtime: createRuntime({ clock }),
 			streamFn: scripted(() => {
 				throw new Error('boom');
 			}),
@@ -344,9 +349,18 @@ describe('startSession', () => {
 		const faultVisit = await visitSession(faulty, andrei);
 		const faultEvents = collect(faulty);
 		await faultVisit.deliver({ text: 'trigger' });
+		await tick();
+		await tick();
+		const errors = () => faultEvents.filter((e) => e.type === 'error' && e.agent === 'solo');
+		expect(errors()).toHaveLength(1);
+		expect(faulty.exchange()).toBeDefined();
+		await clock.advance(30_000);
+		await clock.advance(60_000);
 		await faulty.settled();
-		expect(faultEvents.some((e) => e.type === 'error' && e.agent === 'solo')).toBe(true);
+		expect(errors()).toHaveLength(3);
+		expect(faulty.exchange()).toBeUndefined();
 		expect(spoken(await faulty.messages())).toHaveLength(1);
+		await stopSession(faulty);
 
 		// abort quiets an active room, keeping what was already said
 		const hung = startSession({

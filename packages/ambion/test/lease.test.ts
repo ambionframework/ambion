@@ -1,6 +1,7 @@
 /**
  * A wake is safe to send twice, a lost one is sent again, a lost release
- * expires, and a lost steer is read off the record. Rule 4 of the design:
+ * expires, and a lost wake into a running activation is read off the
+ * record. Rule 4 of the design:
  * every activation's id is derived from the log, so nothing that crosses
  * the wire has to arrive exactly once.
  */
@@ -120,13 +121,9 @@ describe('a lease', () => {
 
 	it('refuses a commit from an activation whose renewals were lost past the expiry', async () => {
 		const held = deferred();
-		// the claim goes through; every renewal after it is lost
+		// the claim goes through; the one renewal before the expiry is lost
 		const renewals = (l: unknown) => (l as { phase: string }).phase === 'running';
-		const faults: Fault[] = [
-			{ on: 'lease', kind: 'drop', match: renewals, skip: 1 },
-			{ on: 'lease', kind: 'drop', match: renewals },
-			{ on: 'lease', kind: 'drop', match: renewals },
-		];
+		const faults: Fault[] = [{ on: 'lease', kind: 'drop', match: renewals, skip: 1 }];
 		const { session, clock } = open(faults, async (_c, _a, call) => {
 			if (call !== 1) return quiet();
 			await held.promise;
@@ -144,16 +141,24 @@ describe('a lease', () => {
 			true,
 		);
 		held.resolve();
-		await session.quiet();
+		await tick();
+		await tick();
 		// the say arrived under a lease that ended, so nothing landed
 		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual(['andrei']);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
+		// the activation came to nothing, so the room wakes the seat again after the backoff
+		expect(session.exchange()).toBeDefined();
+		await clock.advance(30_000);
+		await session.quiet();
+		expect(starts(events)).toBe(2);
+		expect(session.exchange()).toBeUndefined();
 	});
 
-	it('rebuilds the activation when a steer was lost, and reads the message off the record', async () => {
+	it('rebuilds the activation when a wake into it was lost, and reads the message off the record', async () => {
 		const held = deferred();
 		const contexts: string[] = [];
-		const { session } = open([{ on: 'steer', kind: 'drop' }], async (context, _a, call) => {
+		// the first wake starts the activation; the second, the steer into it, is lost
+		const { session } = open([{ on: 'wake', kind: 'drop', skip: 1 }], async (context, _a, call) => {
 			contexts.push(contextText(context as Context));
 			if (call === 1) await held.promise;
 			return quiet();
