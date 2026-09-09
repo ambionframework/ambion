@@ -8,32 +8,36 @@
  * definition is the quiet corner in one room and the one who meets people in
  * another.
  *
- * Two things live here. The routing rule, because it is a fact about a seat
- * rather than about the room: every message has a reach, and a seat wakes
- * when its attention is at least that wide. And the seat's own actor: it
+ * Three things live here. The routing rule, because it is a fact about a
+ * seat rather than about the room: every message has a reach, and a seat
+ * wakes when its attention is at least that wide. The seat's own actor: it
  * takes a wake, claims the lease, reads the room's view, builds the Pi
- * `Agent` over it with the hand the view names, runs it, renews the lease
- * while it runs, and releases the lease when it stops. Everything it knows
- * of the room, it learns through three calls (`wire.ts`).
+ * `Agent` over it with the hands the view names (`hands.ts`), runs it,
+ * renews the lease while it runs, and releases the lease when it stops.
+ * And the transport that puts every seat in the room's own process. What
+ * the actor knows of the room, it learns through three calls (`wire.ts`).
  */
 import type {
-	AgentTool,
-	AgentToolResult,
 	Agent as PiAgent,
 	Session as PiSession,
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
-import { Type } from 'typebox';
-import { Activation } from './activation.ts';
-import { type Composing, type Draft, seatTool, standDown, summariseTool } from './assistant.ts';
-import { persistTurns } from './log.ts';
-import { refusal } from './render.ts';
-import type { ModelResolver, Runtime, SessionOpener } from './runtime.ts';
-import type { AgentDefinition, Attention, Message, Seq, SessionEvent } from './types.ts';
-import { isAmbionTool, isSpoken } from './types.ts';
-import type { ActivationView, CommitResponse, SeatPort, SeatRoom, Wake } from './wire.ts';
-import { builtinTools, toolContext } from './workspace.ts';
+import type { RunningRoom, Transport } from '../host/runtime.ts';
+import type {
+	AgentDefinition,
+	Attention,
+	Clock,
+	Message,
+	ModelResolver,
+	Seq,
+	SessionEvent,
+	SessionOpener,
+} from '../types.ts';
+import { isSpoken } from '../types.ts';
+import type { ActivationView, SeatPort, SeatRoom, Wake } from '../wire.ts';
+import { Activation, persistTurns } from './activation.ts';
+import { hands, handsFor } from './hands.ts';
 
 // -- routing -----------------------------------------------------------------
 
@@ -76,145 +80,13 @@ export function wakes(
 	return reach !== 'named';
 }
 
-// -- tools --------------------------------------------------------------------
-
-/**
- * One Pi tool from what a seat declared. A `defineTool` tool is handed a
- * `ToolContext` built for the seat's agent on every call, which is how it
- * reaches a workspace; a Pi-native tool passes through as it is, and its
- * signature has no room for one.
- */
-function toPiTool(tool: unknown, agent: AgentDefinition): AgentTool {
-	if (isAmbionTool(tool)) {
-		return {
-			name: tool.name,
-			label: tool.name,
-			description: tool.description,
-			parameters: tool.parameters,
-			execute: async (_toolCallId, params, signal) => {
-				const result = await tool.execute(params, toolContext(agent, signal));
-				return typeof result === 'string'
-					? { content: [{ type: 'text', text: result }], details: {} }
-					: result;
-			},
-		};
-	}
-	const raw = tool as AgentTool & { label?: string };
-	if (typeof raw?.name !== 'string' || typeof raw?.execute !== 'function') {
-		throw new Error('Tools must come from defineTool (Ambion or Pi).');
-	}
-	return raw.label ? raw : { ...raw, label: raw.name };
-}
-
-/** What a write tool returns when the record took it. */
-function delivered(): AgentToolResult<Record<string, never>> {
-	return { content: [{ type: 'text', text: 'delivered' }], details: {} };
-}
-
-/** What every hand a seat holds reaches: the activation it belongs to, and the room. */
-export interface Hands {
-	readonly activation: Activation;
-	readonly room: SeatRoom;
-	/** What a hand makes of the room's answer: a mark on the record, a refusal, or a lease that ended. */
-	landed(response: CommitResponse): AgentToolResult<Record<string, never>>;
-}
-
-function hands(activation: Activation, room: SeatRoom): Hands {
-	return {
-		activation,
-		room,
-		landed(response) {
-			if ('committed' in response) {
-				activation.heard(response.committed.seq);
-				activation.spoke = true;
-				return delivered();
-			}
-			if ('refused' in response) throw new Error(response.refused);
-			if ('missed' in response) {
-				throw new Error('The room moved. Read what landed, then decide again.');
-			}
-			// The lease ended under this hand: the room is closing, or the seat
-			// ran past its lease. Nothing it writes now lands, so the turn is over.
-			activation.abort();
-			return standDown(`Your turn ended: ${response.stale}.`) as AgentToolResult<
-				Record<string, never>
-			>;
-		},
-	};
-}
-
-/** The one hand every seat that speaks for itself holds. */
-function sayTool(hands: Hands): AgentTool {
-	return {
-		name: 'say',
-		label: 'say',
-		description:
-			'Speak on the record. Omit `to` to address the room; set `to` to a participant name ' +
-			'to address them directly — a directed say to an agent also calls them in. ' +
-			'Ending your turn without calling say is declining to speak.',
-		parameters: Type.Object({
-			to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
-			text: Type.String(),
-		}),
-		execute: async (toolCallId, rawParams) => {
-			const params = rawParams as { to?: string; text: string };
-			const to = params.to?.trim() ? params.to.trim() : undefined;
-			const text = params.text.trim();
-			// A message with nothing in it still takes a seq, renders in
-			// every context after it, and stands inside whatever range a
-			// summary covers. Saying nothing is ending the activation.
-			if (text === '') {
-				throw new Error('The message is empty. Say something, or end your turn instead.');
-			}
-			const response = await hands.room.commit({
-				activation: hands.activation.id,
-				key: toolCallId,
-				readThrough: hands.activation.readThrough,
-				intent: { kind: 'said', ...(to === undefined ? {} : { to }), text },
-			});
-			if ('missed' in response) {
-				// Now heard, the seat decides again against the record as it stands.
-				hands.activation.heard(response.missed.at(-1)?.seq ?? 0);
-				throw new Error(
-					refusal(
-						'Not delivered — the room moved while you were speaking. New on the record:',
-						response.missed,
-						'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
-					),
-				);
-			}
-			return hands.landed(response);
-		},
-	};
-}
-
-/**
- * What an activation holds. A seat speaks, reaches its workspace through the
- * four built-in tools when it names one, and uses its own tools; the assistant
- * holds the one hand its view names, and it reaches the record. `startSession`
- * refuses an assistant that carries tools or a workspace of its own, so there
- * is nothing else to leave out.
- */
-function handsFor(view: ActivationView, def: AgentDefinition, held: Hands): AgentTool[] {
-	if (view.hand === 'say') {
-		return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
-	}
-	if (view.hand === 'summarise' && view.closing) {
-		const draft: Draft = { ...view.closing, refusals: 0, calls: 0 };
-		return [summariseTool(held, draft)];
-	}
-	if (view.hand === 'seat' && view.composing) {
-		const composing: Composing = { ...view.composing, seated: 0, calls: 0 };
-		return [seatTool(held, composing)];
-	}
-	return [];
-}
-
 // -- the actor ----------------------------------------------------------------
 
-/** What a seat actor needs beside the room: the runtime, and the model call the room chose. */
+/** What a seat actor needs beside the room: the clock, the catalog, and the model call the room chose. */
 export interface SeatContext {
-	readonly runtime: Runtime;
+	readonly clock: Clock;
+	/** Every definition the seat side resolves by name. */
+	readonly catalog: ReadonlyMap<string, AgentDefinition>;
 	readonly room: string;
 	readonly seat: string;
 	/** Where the seat's audit session opens, `<room>:<seat>`, beside the room's. */
@@ -394,7 +266,7 @@ export class SeatActor implements SeatPort {
 	 * activation at that expiry, when the room expires the lease.
 	 */
 	private renewUntil(current: Current, firstExpiry: number): () => void {
-		const clock = this.context.runtime.clock;
+		const clock = this.context.clock;
 		const cut = () => {
 			if (this.current === current) this.cutCurrent();
 		};
@@ -414,23 +286,23 @@ export class SeatActor implements SeatPort {
 	}
 
 	private host(id: string) {
-		const { runtime, room, seat, sessions } = this.context;
+		const { clock, room, seat, sessions } = this.context;
 		return {
 			view: () => this.room.view(id),
 			renew: (heard: Seq) => this.room.lease({ activation: id, phase: 'running', heard }),
 			build: (view: ActivationView, activation: Activation) => this.build(view, activation),
 			persist: (agent: PiAgent) => {
 				this.audit ??= sessions.open(`${room}:${seat}`, room);
-				return persistTurns(this.audit, agent, new Date(runtime.clock.now()).toISOString());
+				return persistTurns(this.audit, agent, new Date(clock.now()).toISOString());
 			},
 			emit: (event: SessionEvent) => this.context.emit?.(event),
-			now: () => runtime.clock.now(),
+			now: () => clock.now(),
 		};
 	}
 
 	/** The model over the view: the prompt the room rendered, the model the definition names, the hands. */
 	private build(view: ActivationView, activation: Activation): PiAgent {
-		const def = this.context.runtime.catalog.get(view.seat);
+		const def = this.context.catalog.get(view.seat);
 		if (def === undefined) throw new Error(`'${view.seat}' is not in the runtime's catalog.`);
 		return new Agent({
 			streamFn: this.context.stream,
@@ -443,4 +315,24 @@ export class SeatActor implements SeatPort {
 			},
 		});
 	}
+}
+
+// -- the transport ------------------------------------------------------------
+
+/** Every seat is an actor in this process, holding the room directly. */
+export function inProcessTransport(): Transport {
+	return {
+		connect(room: RunningRoom, seat, runtime) {
+			return new SeatActor(room, {
+				clock: runtime.clock,
+				catalog: runtime.catalog,
+				room: room.name,
+				seat,
+				sessions: room.sessions,
+				stream: room.stream,
+				model: room.model,
+				emit: (event) => room.emit(event),
+			});
+		},
+	};
 }

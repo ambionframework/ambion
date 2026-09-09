@@ -8,10 +8,11 @@
  * alarm and every wake, and after a resume that does not know what the last
  * run got to.
  */
+
+import type { CloseRow, LeaseRow, Without } from '../wire.ts';
 import { draftOver } from './assistant.ts';
 import type { Owed, RoomState } from './fold.ts';
 import { draftId, isExpired, isLive, type PendingWake, parseId, seatOf } from './lease.ts';
-import type { CloseRow, LeaseRow, Without } from './wire.ts';
 
 export interface DecideOptions {
 	now: number;

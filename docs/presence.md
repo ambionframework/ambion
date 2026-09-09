@@ -330,7 +330,7 @@ lands the message. So does an agent in a session reopened next week,
 because replaying the record replays the arrivals.
 
 Presence is a fold over the record (`foldPeople` in
-[`presence.ts`](../packages/ambion/src/presence.ts)): a person is present
+[`presence.ts`](../packages/ambion/src/room/presence.ts)): a person is present
 from their last `arrived` until their next `left`. The record rebuilds
 everything — who has ever been here, who is here now, when, and where each
 of them stopped reading. Presence is kept in one place, and the place is

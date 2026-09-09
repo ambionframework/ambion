@@ -26,24 +26,8 @@
  * The design contract is `docs/exchange.md`; `docs/assistant.md` says what an
  * assistant makes of one.
  */
-import { isSpoken, type Message, type Seq } from './types.ts';
-import type { CloseRow } from './wire.ts';
-
-/** A question the room is working on. */
-export interface Exchange {
-	/** The person whose question opened it, and who owns what follows. */
-	readonly owner: string;
-	/** The seq of that question: where the exchange starts. */
-	readonly from: Seq;
-	/** When it opened, ISO. */
-	readonly at: string;
-}
-
-/** An exchange the room has finished, and the range it turned out to hold. */
-export interface ClosedExchange extends Exchange {
-	/** The last seq on the record when the room went quiet. */
-	readonly through: Seq;
-}
+import { type Exchange, isSpoken, type Message } from '../types.ts';
+import type { CloseRow } from '../wire.ts';
 
 /**
  * The open exchange, or nothing when nobody has asked since the last close:

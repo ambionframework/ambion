@@ -1,35 +1,18 @@
 /**
- * The assistant: the room's counterpart to the people in it. It reads how each
- * person reads, and when an exchange closes, it writes the one message the
- * person who opened it reads.
- *
- * **The assistant is a seat.** `startSession` seats it with the agents, the
- * room activates it the way it activates every other agent, its turns land in
- * its own downstream session, and the record's queue refuses it exactly as it
- * refuses a say. Two things make it the seat it is, and both are data rather
- * than machinery:
- *
- * - It is seated at the narrow end of attention, `none`, so nothing said in
- *   the room wakes it.
- * - A close wakes it, for the person who owns the closed exchange. That
- *   activation holds one tool, `summarise`, bound to the range it must stand
- *   for.
- * - An opened exchange wakes it too, when the room holds agents in reserve.
- *   That activation holds one tool, `seat`, bound to the reserve. The
- *   assistant bookends the exchange: it composes the room at the open and
- *   consolidates what the room said at the close.
- *
- * What is left in this file is what the assistant *is*: what a room refuses
- * to seat as one, the threshold a summary is written above, and the two
- * tools. Who is owed and when the next draft starts are folds over the log
- * (`fold.ts`), and the room's `reconcile` sends the wake.
+ * The hands a seat holds: the tools the room gives an activation, bound to
+ * it and to the room. A seat that speaks for itself holds `say`, the four
+ * built-in tools when its agent names a workspace, and the agent's own
+ * tools. The assistant holds one hand: `summarise` at a close, `seat` at
+ * the open of an exchange. Every hand commits through the room's `commit`
+ * call and reads the room's answer through `landed`.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
-import { refusal } from './render.ts';
-import type { Hands } from './seat.ts';
-import type { AgentDefinition, Message, Seq } from './types.ts';
-import { isAgent, isSpoken } from './types.ts';
+import { refusal } from '../render.ts';
+import { builtinTools, toolContext } from '../tools/workspace.ts';
+import { type AgentDefinition, isAmbionTool, type Message, type Seq } from '../types.ts';
+import type { ActivationView, CommitResponse, SeatRoom } from '../wire.ts';
+import type { Activation } from './activation.ts';
 
 /** One draft, and one redraft after a race. Then the room keeps moving without it. */
 const ASSISTANT_DRAFTS = 2;
@@ -43,59 +26,145 @@ const ASSISTANT_DRAFTS = 2;
 const ASSISTANT_CALLS = 4;
 
 /**
- * The assistant shapes what a room already does, and never makes anything
- * happen. It carries no tools of its own, so the rule is a fact about the
- * definition rather than a promise about behaviour: the one hand the runtime
- * gives it writes to the record and reaches nothing else. `startSession`
- * refuses anything else as the room's assistant.
+ * One Pi tool from what a seat declared. A `defineTool` tool is handed a
+ * `ToolContext` built for the seat's agent on every call, which is how it
+ * reaches a workspace; a Pi-native tool passes through as it is, and its
+ * signature has no room for one.
  */
-export function assertAssistant(assistant: unknown): AgentDefinition {
-	if (!isAgent(assistant)) {
-		throw new Error('The assistant must come from defineAgent.');
+function toPiTool(tool: unknown, agent: AgentDefinition): AgentTool {
+	if (isAmbionTool(tool)) {
+		return {
+			name: tool.name,
+			label: tool.name,
+			description: tool.description,
+			parameters: tool.parameters,
+			execute: async (_toolCallId, params, signal) => {
+				const result = await tool.execute(params, toolContext(agent, signal));
+				return typeof result === 'string'
+					? { content: [{ type: 'text', text: result }], details: {} }
+					: result;
+			},
+		};
 	}
-	if (assistant.tools.length > 0) {
-		throw new Error(
-			`Assistant '${assistant.name}' holds tools: the assistant shapes what a room does and never acts in it.`,
-		);
+	const raw = tool as AgentTool & { label?: string };
+	if (typeof raw?.name !== 'string' || typeof raw?.execute !== 'function') {
+		throw new Error('Tools must come from defineTool (Ambion or Pi).');
 	}
-	// A workspace binds tools the assistant never holds: the hands it is given
-	// never reach them, so the field would be live in the definition and
-	// inert at runtime. Refusing it here catches that where it is written.
-	if (assistant.workspace !== undefined) {
-		throw new Error(
-			`Assistant '${assistant.name}' names a workspace: the assistant shapes what a room does and never acts in it.`,
-		);
-	}
-	return assistant;
+	return raw.label ? raw : { ...raw, label: raw.name };
+}
+
+/** What a write tool returns when the record took it. */
+function delivered(): AgentToolResult<Record<string, never>> {
+	return { content: [{ type: 'text', text: 'delivered' }], details: {} };
+}
+
+/** What every hand a seat holds reaches: the activation it belongs to, and the room. */
+export interface Hands {
+	readonly activation: Activation;
+	readonly room: SeatRoom;
+	/** What a hand makes of the room's answer: a mark on the record, a refusal, or a lease that ended. */
+	landed(response: CommitResponse): AgentToolResult<Record<string, never>>;
+}
+
+export function hands(activation: Activation, room: SeatRoom): Hands {
+	return {
+		activation,
+		room,
+		landed(response) {
+			if ('committed' in response) {
+				activation.heard(response.committed.seq);
+				activation.spoke = true;
+				return delivered();
+			}
+			if ('refused' in response) throw new Error(response.refused);
+			if ('missed' in response) {
+				throw new Error('The room moved. Read what landed, then decide again.');
+			}
+			// The lease ended under this hand: the room is closing, or the seat
+			// ran past its lease. Nothing it writes now lands, so the turn is over.
+			activation.abort();
+			return standDown(`Your turn ended: ${response.stale}.`) as AgentToolResult<
+				Record<string, never>
+			>;
+		},
+	};
+}
+
+/** The one hand every seat that speaks for itself holds. */
+function sayTool(hands: Hands): AgentTool {
+	return {
+		name: 'say',
+		label: 'say',
+		description:
+			'Speak on the record. Omit `to` to address the room; set `to` to a participant name ' +
+			'to address them directly — a directed say to an agent also calls them in. ' +
+			'Ending your turn without calling say is declining to speak.',
+		parameters: Type.Object({
+			to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
+			text: Type.String(),
+		}),
+		execute: async (toolCallId, rawParams) => {
+			const params = rawParams as { to?: string; text: string };
+			const to = params.to?.trim() ? params.to.trim() : undefined;
+			const text = params.text.trim();
+			// A message with nothing in it still takes a seq, renders in
+			// every context after it, and stands inside whatever range a
+			// summary covers. Saying nothing is ending the activation.
+			if (text === '') {
+				throw new Error('The message is empty. Say something, or end your turn instead.');
+			}
+			const response = await hands.room.commit({
+				activation: hands.activation.id,
+				key: toolCallId,
+				readThrough: hands.activation.readThrough,
+				intent: { kind: 'said', ...(to === undefined ? {} : { to }), text },
+			});
+			if ('missed' in response) {
+				// Now heard, the seat decides again against the record as it stands.
+				hands.activation.heard(response.missed.at(-1)?.seq ?? 0);
+				throw new Error(
+					refusal(
+						'Not delivered — the room moved while you were speaking. New on the record:',
+						response.missed,
+						'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
+					),
+				);
+			}
+			return hands.landed(response);
+		},
+	};
 }
 
 /**
- * What a summary would stand for, or nothing when one message already serves:
- * one answer is left as it was given, in the voice that gave it, and an
- * exchange the agents said nothing into writes nothing at all.
- *
- * It counts what the room produced, not what people said into it, and it
- * counts messages rather than speakers — one product saying four things needs
- * consolidating as much as three products saying one each.
+ * What an activation holds. A seat speaks, reaches its workspace through the
+ * four built-in tools when it names one, and uses its own tools; the assistant
+ * holds the one hand its view names, and it reaches the record. `startSession`
+ * refuses an assistant that carries tools or a workspace of its own, so there
+ * is nothing else to leave out.
  */
-export function draftOver(
-	record: readonly Message[],
-	from: Seq,
-	through: Seq,
-	fromSeat: (name: string) => boolean,
-): { from: Seq; through: Seq } | undefined {
-	const said = record.filter(
-		(m) => m.seq >= from && m.seq <= through && isSpoken(m) && fromSeat(m.from),
-	);
-	return said.length < 2 ? undefined : { from, through };
+export function handsFor(view: ActivationView, def: AgentDefinition, held: Hands): AgentTool[] {
+	if (view.hand === 'say') {
+		return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
+	}
+	if (view.hand === 'summarise' && view.closing) {
+		const draft: Draft = { ...view.closing, refusals: 0, calls: 0 };
+		return [summariseTool(held, draft)];
+	}
+	if (view.hand === 'seat' && view.composing) {
+		const composing: Composing = { ...view.composing, seated: 0, calls: 0 };
+		return [seatTool(held, composing)];
+	}
+	return [];
 }
+
+// -- the assistant's hands ----------------------------------------------------
 
 /**
  * One summarising activation's own state. The range is read off the view when the
  * activation starts, and it widens when a race refuses the draft, so the retry
  * stands for what won. Nothing here outlives the activation.
  */
-export interface Draft {
+interface Draft {
 	/** The person whose question opened the exchange, and who reads the message. */
 	person: string;
 	/** The question that opened the exchange. */
@@ -116,7 +185,7 @@ export interface Draft {
  * carrying what it missed, so the redraft happens now rather than at the next
  * quiescence.
  */
-export function summariseTool(hands: Hands, closing: Draft): AgentTool {
+function summariseTool(hands: Hands, closing: Draft): AgentTool {
 	const person = closing.person;
 	return {
 		name: 'summarise',
@@ -158,9 +227,7 @@ export function summariseTool(hands: Hands, closing: Draft): AgentTool {
  * that the loop is over, and the reason still reaches the transcript, where
  * rule 8 keeps it.
  */
-export function standDown(
-	why: string | undefined,
-): AgentToolResult<Record<string, never>> | undefined {
+function standDown(why: string | undefined): AgentToolResult<Record<string, never>> | undefined {
 	if (why === undefined) return undefined;
 	return {
 		content: [{ type: 'text', text: `${why} This turn is over.` }],
@@ -204,7 +271,7 @@ function widen(hands: Hands, draft: Draft, missed: Message[]): Error {
  * One composing activation's own state: whose question opened the exchange,
  * and how many colleagues it has seated. Nothing here outlives the activation.
  */
-export interface Composing {
+interface Composing {
 	/** The person whose question opened the exchange. */
 	person: string;
 	/** The seq of that question. */
@@ -225,7 +292,7 @@ export interface Composing {
  * and a model that keeps calling after the reserve is empty, or keeps naming
  * what is not there, has the activation ended for it.
  */
-export function seatTool(hands: Hands, composing: Composing): AgentTool {
+function seatTool(hands: Hands, composing: Composing): AgentTool {
 	return {
 		name: 'seat',
 		label: 'seat',

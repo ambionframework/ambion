@@ -29,10 +29,10 @@
  * has called it that all along: every one lands in the seat's downstream
  * session as an `ambion/activation` entry.
  */
-import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
+import type { Agent, AgentEvent, Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { UserMessage } from '@earendil-works/pi-ai';
-import type { Seq, SessionEvent } from './types.ts';
-import type { ActivationView, EndReason, LeaseResponse, ViewResponse } from './wire.ts';
+import type { Seq, SessionEvent } from '../types.ts';
+import type { ActivationView, EndReason, LeaseResponse, ViewResponse } from '../wire.ts';
 
 /** What only the seat side can give an activation: the room's view, and a model over it. */
 export interface ActivationHost {
@@ -201,4 +201,19 @@ function failureOf(agent: Agent): Error | undefined {
 		return new Error(('errorMessage' in last && last.errorMessage) || 'The activation failed.');
 	}
 	return undefined;
+}
+
+/** Every turn a model took, in the downstream session that owns it. */
+export async function persistTurns(
+	open: Promise<PiSession>,
+	agent: Agent,
+	at: string,
+): Promise<void> {
+	const piSeat = await open;
+	await piSeat.appendCustomEntry('ambion/activation', { at });
+	for (const message of agent.state.messages) {
+		// Provider messages may carry undefined-valued fields, which Pi's
+		// durability check rejects; a JSON round-trip drops them.
+		await piSeat.appendMessage(JSON.parse(JSON.stringify(message)));
+	}
 }

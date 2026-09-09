@@ -21,8 +21,8 @@
  * its attempts; the room decides the cap, and writes it.
  */
 
-import type { Message, Seq } from './types.ts';
-import type { EndReason, LeaseRow } from './wire.ts';
+import type { Message, Seq } from '../types.ts';
+import type { EndReason, LeaseRow } from '../wire.ts';
 
 /** The id of the activation a message wakes on a seat: the first attempt bare, later ones numbered. */
 export const activationId = (seq: Seq, seat: string, attempt = 1): string =>

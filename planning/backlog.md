@@ -34,7 +34,7 @@ Every activation renders the whole record into the prompt through
 without limit. `docs/agent.md` §8 says Ambion owns no context window, and
 `docs/assistant.md` §16 forbids a compactor, so today nothing owns it.
 
-**Where.** `packages/ambion/src/presence.ts`, `known()` and
+**Where.** `packages/ambion/src/room/presence.ts`, `known()` and
 `lastChangeAt()`; `packages/ambion/src/session.ts`, nine call sites;
 `packages/ambion/src/render.ts`, `renderRecord`.
 
@@ -77,15 +77,11 @@ this tree, and `docs/toolchain.md` §3 says nothing in the tree needs one.
 **Fix.** Make `registry()` a dynamic import, or move default provider
 resolution to the host. `streamFn` is already the extension surface.
 
-### 5. `defineAgent` imports the shell runtime
+### 5. `defineAgent` imports the shell runtime — closed
 
-**What.** `define.ts` imports `BUILTIN_TOOL_NAMES` from `workspace.ts`,
-which imports `memoryBackend` from `just-bash.ts`. A value module depends
-on just-bash for a set of four strings.
-
-**Where.** `packages/ambion/src/define.ts` line 27.
-
-**Fix.** Move the constant to `types.ts`.
+`BUILTIN_TOOL_NAMES` lives in `types.ts`, and the vocabulary imports
+nothing that does anything: Biome refuses it
+([`docs/toolchain.md`](../docs/toolchain.md) §1).
 
 ### 6. Two copies of typebox
 
@@ -212,7 +208,7 @@ nothing, and rung 3 pays for an activation.
 
 **Where.** `dispatch` and `handsFor` in
 [`session.ts`](../packages/ambion/src/session.ts), `wakes` in
-[`seat.ts`](../packages/ambion/src/seat.ts), the assistant's paragraphs in
+[`seat.ts`](../packages/ambion/src/seat/seat.ts), the assistant's paragraphs in
 [`render.ts`](../packages/ambion/src/render.ts).
 
 ### 14. Thinning the roster: the assistant unseats, and a seat leaves
@@ -255,7 +251,7 @@ better than anybody when its own part is done.
 
 **Where.** `seat` and `unseat` in
 [`session.ts`](../packages/ambion/src/session.ts), the composing activation in
-[`assistant.ts`](../packages/ambion/src/assistant.ts).
+[`assistant.ts`](../packages/ambion/src/room/assistant.ts).
 
 ### 15. Reseating: attention that a running room can change
 
@@ -295,7 +291,7 @@ lets the assistant speak_ — rather than a code change in the runtime.
   with the paragraph that says when waking the assistant is worth the money.
 
 **Where.** `wakes` in
-[`packages/ambion/src/seat.ts`](../packages/ambion/src/seat.ts), `Attention` in
+[`packages/ambion/src/seat/seat.ts`](../packages/ambion/src/seat/seat.ts), `Attention` in
 [`types.ts`](../packages/ambion/src/types.ts), `seated` in
 [`define.ts`](../packages/ambion/src/define.ts).
 
@@ -399,7 +395,7 @@ the `bash` tool's own description promises a Unix shell.
 - Whether `connect` should seed `/dev` into a `ReadWriteFs` the way just-bash
   seeds it into an `InMemoryFs`, so the two backends at least agree.
 
-**Where.** `connectOver` in [`just-bash.ts`](../packages/ambion/src/just-bash.ts).
+**Where.** `connectOver` in [`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts).
 
 ### 23. A backend on a real machine
 
@@ -428,7 +424,7 @@ abort signal because `useradd` and a process spawn are real waits.
 
 **Where.** `WorkspaceBackend` in
 [`types.ts`](../packages/ambion/src/types.ts); `directoryBackend` in
-[`just-bash.ts`](../packages/ambion/src/just-bash.ts) is the shape to copy.
+[`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts) is the shape to copy.
 
 ### 24. Whether Agent or AgentHarness is Ambion's foundation
 
@@ -467,7 +463,7 @@ joins it.
   become Ambion's own provider for `AgentHarnessOptions.toolContext`, if
   `Agent` is ever replaced by `AgentHarness`.
 
-**Where.** `packages/ambion/src/activation.ts` and `seat.ts` hold today's
+**Where.** `packages/ambion/src/seat/activation.ts` and `seat.ts` hold today's
 `Agent` imports; [`docs/workspace.md`](../docs/workspace.md) §4 and §6 are
 where `ExecutionEnv` was adopted without adopting `AgentHarness`; Pi's
 own `harness/agent-harness.ts` and `harness/types.ts`

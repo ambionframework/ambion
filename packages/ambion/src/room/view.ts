@@ -4,18 +4,18 @@
  * it for. Every function is pure over the folded state, so the view a seat
  * reads in one process is the view it reads in another.
  */
-import type { Exchange } from './exchange.ts';
-import type { RoomState } from './fold.ts';
-import { parseId } from './lease.ts';
+
 import {
 	type PersonView,
 	type RoomView,
 	renderSystemPrompt,
 	renderTurnContext,
 	type SeatSpeaking,
-} from './render.ts';
-import type { AgentDefinition, SeatInfo, Seq } from './types.ts';
-import type { ActivationView, Hand } from './wire.ts';
+} from '../render.ts';
+import type { AgentDefinition, Exchange, SeatInfo, Seq } from '../types.ts';
+import type { ActivationView, Hand } from '../wire.ts';
+import type { RoomState } from './fold.ts';
+import { parseId } from './lease.ts';
 
 /** What the view is built from: the fold, and what the room holds beside it. */
 export interface RoomFacts {

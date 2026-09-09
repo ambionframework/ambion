@@ -3,9 +3,9 @@
 This document is the design contract for the workspace: the identity and
 data boundary an agent connects to when it is defined. The workspace is
 shipped. The handle, the resolver and the built-in tools live in
-[`workspace.ts`](../packages/ambion/src/workspace.ts), the adapter around a
-just-bash instance in [`bash-env.ts`](../packages/ambion/src/bash-env.ts),
-the two backends in [`just-bash.ts`](../packages/ambion/src/just-bash.ts),
+[`workspace.ts`](../packages/ambion/src/tools/workspace.ts), the adapter around a
+just-bash instance in [`bash-env.ts`](../packages/ambion/src/tools/bash-env.ts),
+the two backends in [`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts),
 and the public shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md) first: a workspace attaches to the agent that
 document specifies, and changes none of its eight rules.
@@ -187,7 +187,7 @@ names free.
 
 **`startSession` refuses an assistant that names a workspace**, the same way
 it refuses one that carries tools (`assistant.md` §12, §17;
-`assertAssistant` in `assistant.ts` checks `tools.length > 0`).
+`assertAssistant` in `room/assistant.ts` checks `tools.length > 0`).
 `startSession` is the one place that knows a given `AgentDefinition` is
 about to become the room's assistant. `defineAgent` builds a plain value and
 has no way to know that.
@@ -377,7 +377,7 @@ one built-in call runs every call in that batch one at a time, custom tools
 included. A batch of custom tools alone still runs in parallel.
 
 **The wrapped value takes a one-line cast to `AgentTool`**, the way
-`toPiTool` (`seat.ts`) casts a Pi-native tool. Strict mode does not
+`toPiTool` (`seat/hands.ts`) casts a Pi-native tool. Strict mode does not
 consider `Static<typeof readSchema>` assignable to `AgentTool`'s default
 `params` type on its own.
 
@@ -869,7 +869,7 @@ workspace's files without an agent (§8). A workspace-connected agent's
 system prompt states the four tools' reach, `WORKSPACE_PARAGRAPH` in
 `render.ts` (§5). `startSession`'s public signature did not change (§3).
 `handsFor()` in `session.ts` binds the four built-ins beside what
-`toPiTool` (`seat.ts`) already did, and `toPiTool` takes the seat's agent
+`toPiTool` (`seat/hands.ts`) already did, and `toPiTool` takes the seat's agent
 so it can build a `ToolContext` for a `defineTool`-built tool. No
 `defineAgent` call in [`README.md`](../README.md), [`agent.md`](agent.md)
 or [`examples/site`](../examples/site) changed: none of those agents uses a

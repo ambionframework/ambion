@@ -20,7 +20,7 @@ import type {
 	SessionStorage,
 } from '@earendil-works/pi-agent-core';
 import { Session, SessionError } from '@earendil-works/pi-agent-core';
-import type { SessionOpener } from './runtime.ts';
+import type { SessionOpener } from '../types.ts';
 
 /** What a bound parameter and a column hold. */
 export type SqlValue = string | number | null;

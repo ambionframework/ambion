@@ -84,7 +84,8 @@ export class SeatObject extends DurableObject<Env> {
 		await this.ctx.storage.put('phase', 'running');
 		const runtime = runtimeFor({ sessions: sqlSessions(this.ctx), clock: systemClock() });
 		this.actor = new SeatActor(seatRoom, {
-			runtime,
+			clock: runtime.clock,
+			catalog: runtime.catalog,
 			room,
 			seat,
 			sessions: runtime.sessions,

@@ -4,7 +4,6 @@
  * checkpoint the room cannot read changes nothing.
  */
 import { describe, expect, it } from 'vitest';
-import { foldRoom, type RoomState } from '../src/fold.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -15,8 +14,9 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
-import { isLive } from '../src/lease.ts';
-import { type LogEntry, RoomLog } from '../src/log.ts';
+import { type LogEntry, RoomLog } from '../src/log/log.ts';
+import { foldRoom, type RoomState } from '../src/room/fold.ts';
+import { isLive } from '../src/room/lease.ts';
 import { fakeClock } from './support/clock.ts';
 import { roomName, rowsOf } from './support/room.ts';
 import { byAgent, quiet, scripted, speak, summarise, toolNames } from './support/scripted.ts';

@@ -23,25 +23,14 @@ import type {
 import { InMemorySessionRepo } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
-import { SeatActor, type SeatContext } from './seat.ts';
-import type { AgentDefinition, SessionEvent } from './types.ts';
-import type { SeatPort, SeatRoom } from './wire.ts';
-
-/** The one clock a room reads, and the one alarm it sets. */
-export interface Clock {
-	/** Milliseconds since the epoch. */
-	now(): number;
-	/** Arrange one call of `fire` at `at`. Returns the cancel. */
-	alarm(at: number, fire: () => void): () => void;
-}
-
-/** Opens one Pi session by id, and creates it on the first open. */
-export interface SessionOpener {
-	open(id: string, parentId?: string): Promise<PiSession>;
-}
-
-/** Resolves an agent's `provider/model-id` to the model Pi's loop runs. */
-export type ModelResolver = (id: string, agent: string) => Model<Api>;
+import type {
+	AgentDefinition,
+	Clock,
+	ModelResolver,
+	SessionEvent,
+	SessionOpener,
+} from '../types.ts';
+import type { SeatPort, SeatRoom } from '../wire.ts';
 
 /**
  * A room the runtime holds while it runs, as the transport sees it: the
@@ -61,29 +50,12 @@ export interface RunningRoom extends SeatRoom {
 
 /**
  * How a room reaches a seat. In process, a port is the seat's own actor over
- * a direct handle on the room; across a boundary, a port carries the wake
- * and the steer over, and the seat reaches back through the same boundary.
+ * a direct handle on the room (`inProcessTransport` in `seat/seat.ts`);
+ * across a boundary, a port carries the wake and the cut over, and the
+ * seat reaches back through the same boundary.
  */
 export interface Transport {
 	connect(room: RunningRoom, seat: string, runtime: Runtime): SeatPort;
-}
-
-/** Every seat is an actor in this process, holding the room directly. */
-export function inProcessTransport(): Transport {
-	return {
-		connect(room, seat, runtime) {
-			const context: SeatContext = {
-				runtime,
-				room: room.name,
-				seat,
-				sessions: room.sessions,
-				stream: room.stream,
-				model: room.model,
-				emit: (event) => room.emit(event),
-			};
-			return new SeatActor(room, context);
-		},
-	};
 }
 
 export interface Runtime {
@@ -95,7 +67,8 @@ export interface Runtime {
 	readonly catalog: Map<string, AgentDefinition>;
 	readonly clock: Clock;
 	readonly sessions: SessionOpener;
-	readonly transport: Transport;
+	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
+	readonly transport?: Transport;
 	/** The model call every seat in this runtime makes, unless a room overrides it. */
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
@@ -212,7 +185,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		catalog: new Map((options.agents ?? []).map((def) => [def.name, def])),
 		clock: options.clock ?? systemClock(),
 		sessions,
-		transport: options.transport ?? inProcessTransport(),
+		...(options.transport === undefined ? {} : { transport: options.transport }),
 		stream: options.stream ?? registryStream,
 		model: options.stream ? stubModel : registryModel,
 		wake: { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake },

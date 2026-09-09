@@ -106,7 +106,7 @@ receives the parsed parameters as its first argument and a `ToolContext`
 as its second: `ctx.workspace()` resolves the agent's workspace, and
 `ctx.signal` is the abort signal Pi gives the call. It may return a plain
 string or Pi's full content shape. A tool defined with Pi's own
-`defineTool` works unchanged (`toPiTool` in `seat.ts` accepts both), so
+`defineTool` works unchanged (`toPiTool` in `seat/hands.ts` accepts both), so
 learning Pi's format is the same as learning Ambion's. An agent that names
 a workspace also holds four built-in tools, `read`, `write`, `edit` and
 `bash` ([`workspace.md`](workspace.md) §5).
@@ -330,7 +330,7 @@ record reaches. An activation that heard less than that reads the room
 again through a fresh view.
 
 **3. Speaking is a tool; silence is the default.** An activated agent holds
-one built-in tool, `say({ to?, text })` (`sayTool` in `seat.ts`). Ending
+one built-in tool, `say({ to?, text })` (`sayTool` in `seat/hands.ts`). Ending
 an activation without calling it is declining. Declining leaves no mark on the
 record — the way a colleague reads the room and keeps working. The tool
 refuses an empty text for the same reason: a message with nothing in it
@@ -374,7 +374,7 @@ rule 3's bar, now with the hearing enforced.
 First to commit wins, and ties are impossible: a commit is one operation
 on the room's commit queue, the check and the write run inside that one
 operation, and nothing observes a message before its write is confirmed
-(`RoomLog.commit` in `log.ts`). A room with no races pays nothing. The refusal shows on the stream as `conflict`, which
+(`RoomLog.commit` in `log/log.ts`). A room with no races pays nothing. The refusal shows on the stream as `conflict`, which
 names the author: an assistant's summary is refused at the same boundary, for
 the same reason. The guarantee is the point: every message on the record
 was written by somebody who had read everything before it.
@@ -404,7 +404,7 @@ enough to be worth a word. A bare agent takes the default. `none` is the
 runtime's own point: it is where the assistant sits, and nothing in a room's
 composition asks for it.
 
-The routing is the scale, and reads as one line (`wakes` in `seat.ts`):
+The routing is the scale, and reads as one line (`wakes` in `seat/seat.ts`):
 every message has a **reach** — `named` for a directed say, `broadcast` for
 anything else said, `presence` for somebody arriving or leaving, or a
 colleague seated or unseated — and a seat wakes when its attention is at
@@ -435,7 +435,7 @@ participants see its `say`s only, because the record is all any view
 renders. The hands are still auditable: every activation's full turns land
 in the seat's own downstream Pi session — `<room>:<agent>`, parented to the
 room's, named by `seats().sessionId`, opened by the same opener
-(`persistTurns` in `log.ts`) — so what an agent actually did can be replayed long after
+(`persistTurns` in `seat/activation.ts`) — so what an agent actually did can be replayed long after
 its working view reset. The record is never rewritten for anyone.
 
 ### Observing the room
@@ -574,22 +574,26 @@ reads takes the narrower type and cannot start anything by accident. Its
 room says who was in it: the roster, every seat idle, and every person the
 record knows.
 
-One file per concern, and `session.ts` is the room that composes them: the
-log in [`log.ts`](../packages/ambion/src/log.ts), every fact folded over it
-in [`fold.ts`](../packages/ambion/src/fold.ts), the step the room takes in
-[`reconcile.ts`](../packages/ambion/src/reconcile.ts), who is here in
-[`presence.ts`](../packages/ambion/src/presence.ts), a seat, what wakes it
-and the seat's side of the wire in [`seat.ts`](../packages/ambion/src/seat.ts),
-an activation's id and lease in [`lease.ts`](../packages/ambion/src/lease.ts),
-one activation in [`activation.ts`](../packages/ambion/src/activation.ts),
-the exchange in [`exchange.ts`](../packages/ambion/src/exchange.ts), what the
-assistant writes in [`assistant.ts`](../packages/ambion/src/assistant.ts),
+One file per concern, in layers an import points down through, and
+`session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
+§1 names the layers, and Biome holds them): the
+log in [`log.ts`](../packages/ambion/src/log/log.ts), every fact folded over it
+in [`fold.ts`](../packages/ambion/src/room/fold.ts), the step the room takes in
+[`reconcile.ts`](../packages/ambion/src/room/reconcile.ts), who is here in
+[`presence.ts`](../packages/ambion/src/room/presence.ts), a seat, what wakes it
+and the seat's side of the wire in [`seat.ts`](../packages/ambion/src/seat/seat.ts),
+an activation's id and lease in [`lease.ts`](../packages/ambion/src/room/lease.ts),
+one activation in [`activation.ts`](../packages/ambion/src/seat/activation.ts),
+the hands it holds in [`hands.ts`](../packages/ambion/src/seat/hands.ts),
+the exchange in [`exchange.ts`](../packages/ambion/src/room/exchange.ts), what the
+assistant writes in [`assistant.ts`](../packages/ambion/src/room/assistant.ts),
 what crosses between a seat and its room in
 [`wire.ts`](../packages/ambion/src/wire.ts), what an activation is given
-in [`view.ts`](../packages/ambion/src/view.ts), what an agent's tools reach
-into in [`workspace.ts`](../packages/ambion/src/workspace.ts), what a host
-owns in [`runtime.ts`](../packages/ambion/src/runtime.ts), and what any of
-them reads in [`render.ts`](../packages/ambion/src/render.ts).
+in [`view.ts`](../packages/ambion/src/room/view.ts), what an agent's tools reach
+into in [`workspace.ts`](../packages/ambion/src/tools/workspace.ts), what a host
+owns in [`runtime.ts`](../packages/ambion/src/host/runtime.ts), a storage
+over any SQLite in [`sqlite.ts`](../packages/ambion/src/host/sqlite.ts), and
+what any of them reads in [`render.ts`](../packages/ambion/src/render.ts).
 
 **The log is the truth, and the room moves by reconciling.** Every fact
 about the room is a fold over the log and the clock: the roster, the
@@ -656,7 +660,7 @@ the shorthand for one. The default runtime opens sessions in an in-memory
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
 surface, and Ambion adds one storage of its own: `sqliteSessions(sql)`,
 Pi's `SessionStorage` over any SQLite a host reaches through two calls,
-`run` and `all` ([`sqlite.ts`](../packages/ambion/src/sqlite.ts)). A
+`run` and `all` ([`sqlite.ts`](../packages/ambion/src/host/sqlite.ts)). A
 process wraps `node:sqlite` in them; a Durable Object wraps its own
 storage. "Durable" means the storage's append resolved: Pi's JSONL
 repository calls no `fsync`.
@@ -674,7 +678,7 @@ live in two processes.
 
 **A host owns a `Runtime`.** It holds the clock, the session opener, the
 model call, the rooms that are running and the workspace names that are
-taken ([`runtime.ts`](../packages/ambion/src/runtime.ts)). `startSession`,
+taken ([`runtime.ts`](../packages/ambion/src/host/runtime.ts)). `startSession`,
 `readSession` and `defineWorkspace` take one as an option and default to
 `defaultRuntime`, one value per process. Two runtimes in one process share
 nothing: one name runs in both, and neither reads the other. "One run per

@@ -64,6 +64,27 @@ version and nothing else. `@ambionframework/cloudflare` runs a room as
 Cloudflare Durable Objects, one object per room and one per seat, over
 the runtime's public exports alone; its README says what is built.
 
+### The core's layers
+
+`packages/ambion/src` is laid out in layers, and an import points down
+only. Biome refuses every other import (`noRestrictedImports`, one
+override per layer in `biome.jsonc`), so the layout is a fact the gate
+holds, and a reviewer reads a file knowing what it cannot reach.
+
+| Layer                               | What it holds                                                                                                                  | May import                            |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the rows and the wire, and what a participant reads                                         | Nothing that does anything            |
+| `host/`                             | What a host owns: the runtime value, a clock, an opener, a SQLite storage                                                      | The vocabulary                        |
+| `log/`                              | The log: one serial queue over a Pi session                                                                                    | The vocabulary                        |
+| `room/`                             | Every fact and every decision, pure over the log: the fold, the lease, the exchange, the assistant's rules, the view, `decide` | The vocabulary, the log's entry types |
+| `tools/`                            | What an agent's tools reach into: the workspace and its backends                                                               | The vocabulary, `host/`               |
+| `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport                             | The vocabulary, `host/`, `tools/`     |
+| `session.ts`                        | The room, which composes them all                                                                                              | Everything                            |
+
+Two rules hold across packages: the core imports no platform module
+(`cloudflare:*`, `node:sqlite`), and every other package reaches the core
+through `@ambionframework/ambion`, never a file inside it.
+
 ---
 
 ## 2. Toolchain choices

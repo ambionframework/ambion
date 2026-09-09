@@ -29,7 +29,7 @@ import {
 	startSession,
 	visitSession,
 } from '../../src/index.ts';
-import { foldLeases, isLive } from '../../src/lease.ts';
+import { foldLeases, isLive } from '../../src/room/lease.ts';
 import type { LeaseRow } from '../../src/wire.ts';
 import {
 	agents,

@@ -22,43 +22,44 @@
  * - **Say when it has stopped.** An exchange closed, and nothing live.
  */
 import type { SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
-import { assertAssistant } from './assistant.ts';
-import type { Exchange } from './exchange.ts';
-import { checkpointOf, foldRoom, type RoomState } from './fold.ts';
-import { activationId, draftId, isExpired, isLive, parseId, seatOf } from './lease.ts';
-import { type Committed, type LogEntry, RoomLog } from './log.ts';
-import type { VisitRuntime } from './presence.ts';
-import { decide, liveSeats, working } from './reconcile.ts';
-import { renderLine } from './render.ts';
 import {
 	defaultRuntime,
-	type ModelResolver,
 	type RunningRoom,
 	type Runtime,
-	type SessionOpener,
 	sessionsOver,
 	stubModel,
-} from './runtime.ts';
-import { wakes } from './seat.ts';
+	type Transport,
+} from './host/runtime.ts';
+import { type Committed, type LogEntry, RoomLog } from './log/log.ts';
+import { renderLine } from './render.ts';
+import { assertAssistant } from './room/assistant.ts';
+import { checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
+import { activationId, draftId, isExpired, isLive, parseId, seatOf } from './room/lease.ts';
+import type { VisitRuntime } from './room/presence.ts';
+import { decide, liveSeats, working } from './room/reconcile.ts';
+import { type RoomFacts, seatsOf, viewOf } from './room/view.ts';
+import { inProcessTransport, wakes } from './seat/seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
 	type Attention,
 	authorOf,
+	type Exchange,
 	type HumanDefinition,
 	isAgent,
 	isSeatedAgent,
 	isSpoken,
 	type Message,
+	type ModelResolver,
 	type Participant,
 	type PresenceMessage,
 	type SeatInfo,
 	type Seq,
 	type SessionEvent,
+	type SessionOpener,
 	type SpokenMessage,
 	type SummaryMessage,
 } from './types.ts';
-import { type RoomFacts, seatsOf, viewOf } from './view.ts';
 import type {
 	Commit,
 	CommitResponse,
@@ -300,6 +301,8 @@ class SessionImpl implements Session, RunningRoom {
 	readonly model: ModelResolver;
 	readonly sessions: SessionOpener;
 	private readonly runtime: Runtime;
+	/** How this room reaches a seat: what the runtime holds, or every seat as an actor in this process. */
+	private readonly transport: Transport;
 	private readonly log: RoomLog;
 	/** The replay, the composition on the log, and the first reconcile. Every operation waits here. */
 	private readonly ready: Promise<void>;
@@ -341,6 +344,7 @@ class SessionImpl implements Session, RunningRoom {
 	) {
 		this.name = name;
 		this.runtime = runtime;
+		this.transport = runtime.transport ?? inProcessTransport();
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
 		this.log = new RoomLog(this.sessions.open(name), (entry, fresh) => this.heard(entry, fresh));
 		this.stream = options.streamFn ?? runtime.stream;
@@ -838,7 +842,7 @@ class SessionImpl implements Session, RunningRoom {
 	private port(seat: string): SeatPort {
 		let port = this.ports.get(seat);
 		if (port === undefined) {
-			port = this.runtime.transport.connect(this, seat, this.runtime);
+			port = this.transport.connect(this, seat, this.runtime);
 			this.ports.set(seat, port);
 		}
 		return port;

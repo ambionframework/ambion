@@ -5,12 +5,53 @@
  * seat in the roster, an event on the stream, a definition it wrote itself.
  * Nothing in this file does anything; the files beside it are what happens.
  */
-import type { AgentToolResult, ExecutionEnv } from '@earendil-works/pi-agent-core';
+import type {
+	AgentToolResult,
+	ExecutionEnv,
+	Session as PiSession,
+} from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
 import type { Static, TSchema } from 'typebox';
-import type { ClosedExchange, Exchange } from './exchange.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = number;
+
+/** A question the room is working on. */
+export interface Exchange {
+	/** The person whose question opened it, and who owns what follows. */
+	readonly owner: string;
+	/** The seq of that question: where the exchange starts. */
+	readonly from: Seq;
+	/** When it opened, ISO. */
+	readonly at: string;
+}
+
+/** An exchange the room has finished, and the range it turned out to hold. */
+export interface ClosedExchange extends Exchange {
+	/** The last seq on the record when the room went quiet. */
+	readonly through: Seq;
+}
+
+// -- what a host provides -----------------------------------------------------
+
+/** The one clock a room reads, and the one alarm it sets. */
+export interface Clock {
+	/** Milliseconds since the epoch. */
+	now(): number;
+	/** Arrange one call of `fire` at `at`. Returns the cancel. */
+	alarm(at: number, fire: () => void): () => void;
+}
+
+/** Opens one Pi session by id, and creates it on the first open. */
+export interface SessionOpener {
+	open(id: string, parentId?: string): Promise<PiSession>;
+}
+
+/** Resolves an agent's `provider/model-id` to the model Pi's loop runs. */
+export type ModelResolver = (id: string, agent: string) => Model<Api>;
+
+/** The names a workspace binds to every connected agent. `defineAgent` keeps them free. */
+export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(['read', 'write', 'edit', 'bash']);
 
 /** What a participant said. */
 export interface SpokenMessage {

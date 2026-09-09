@@ -2,7 +2,7 @@
 
 This document is the design contract for the exchange: the room's own unit
 of work. It is shipped. The code lives in
-[`exchange.ts`](../packages/ambion/src/exchange.ts), and
+[`exchange.ts`](../packages/ambion/src/room/exchange.ts), and
 [`session.ts`](../packages/ambion/src/session.ts) opens and closes one as
 the room runs. Read [`agent.md`](agent.md) first: an exchange is made of
 the activations that document specifies, and it changes none of the eight
@@ -40,7 +40,7 @@ in a sentence a model reads.
 ## 2. The shape
 
 A room is a sequence of exchanges, and the exchanges have one shape
-([`exchange.ts`](../packages/ambion/src/exchange.ts)):
+([`exchange.ts`](../packages/ambion/src/room/exchange.ts)):
 
 ```ts
 interface Exchange {
@@ -133,7 +133,7 @@ into a quiet room, opens his own exchange.
 
 An exchange is a fold over the log. The open exchange is the first
 question a person asked after the last close row's `through`
-(`openExchange` in [`exchange.ts`](../packages/ambion/src/exchange.ts)). A
+(`openExchange` in [`exchange.ts`](../packages/ambion/src/room/exchange.ts)). A
 close is a row on the log beside the messages: `{ owner, from, through,
 at, wakes? }`. It takes no seq; `through` orders it. `messages()` returns
 the messages alone, and their seqs stay `1..n`.

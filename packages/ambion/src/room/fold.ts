@@ -8,7 +8,19 @@
  * room that wrote it held, which is what lets a room resume where it
  * stopped.
  */
-import { type Exchange, openExchange } from './exchange.ts';
+
+import type { LogEntry } from '../log/log.ts';
+import { type Attention, type Exchange, isSummary, type Message, type Seq } from '../types.ts';
+import type {
+	CheckpointRow,
+	CloseRow,
+	CompositionRow,
+	EndReason,
+	LeaseRow,
+	SeatRow,
+	Without,
+} from '../wire.ts';
+import { openExchange } from './exchange.ts';
 import {
 	foldLeases,
 	isLive,
@@ -18,18 +30,7 @@ import {
 	pendingWakes,
 	type WakeOptions,
 } from './lease.ts';
-import type { LogEntry } from './log.ts';
 import { foldPeople, type PersonState } from './presence.ts';
-import { type Attention, isSummary, type Message, type Seq } from './types.ts';
-import type {
-	CheckpointRow,
-	CloseRow,
-	CompositionRow,
-	EndReason,
-	LeaseRow,
-	SeatRow,
-	Without,
-} from './wire.ts';
 
 /** One agent on the roster: its name, what wakes it, and whether it is the assistant. */
 interface RosterSeat {

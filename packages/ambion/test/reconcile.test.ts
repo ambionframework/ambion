@@ -3,9 +3,9 @@
  * write and send. A decision applied and decided again writes nothing.
  */
 import { describe, expect, it } from 'vitest';
-import { foldRoom, type RoomState } from '../src/fold.ts';
-import type { LogEntry } from '../src/log.ts';
-import { type DecideOptions, decide, working } from '../src/reconcile.ts';
+import type { LogEntry } from '../src/log/log.ts';
+import { foldRoom, type RoomState } from '../src/room/fold.ts';
+import { type DecideOptions, decide, working } from '../src/room/reconcile.ts';
 import type { Message } from '../src/types.ts';
 import type { CloseRow, LeaseRow, Without } from '../src/wire.ts';
 

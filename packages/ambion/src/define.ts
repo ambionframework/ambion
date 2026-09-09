@@ -14,6 +14,7 @@ import {
 	type AgentDefinition,
 	type AmbionTool,
 	type Attention,
+	BUILTIN_TOOL_NAMES,
 	HUMAN_BRAND,
 	type HumanDefinition,
 	isAgent,
@@ -24,7 +25,6 @@ import {
 	type ToolContext,
 	type WorkspaceHandle,
 } from './types.ts';
-import { BUILTIN_TOOL_NAMES } from './workspace.ts';
 
 export interface DefineAgentOptions {
 	/** Identifies the agent inside a session and on the record. */

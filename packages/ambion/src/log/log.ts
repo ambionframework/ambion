@@ -28,8 +28,8 @@
  * then bounded by the rows since the last checkpoint, whatever the log's
  * age.
  */
-import type { Agent, Session as PiSession } from '@earendil-works/pi-agent-core';
-import type { Message, Seq } from './types.ts';
+import type { Session as PiSession } from '@earendil-works/pi-agent-core';
+import type { Message, Seq } from '../types.ts';
 import {
 	type CheckpointRow,
 	type CloseRow,
@@ -37,7 +37,7 @@ import {
 	isCheckpoint,
 	type LeaseRow,
 	type Without,
-} from './wire.ts';
+} from '../wire.ts';
 
 /** The five kinds of custom entry the room writes to its Pi session. */
 const ENTRY_TYPES = {
@@ -305,20 +305,5 @@ export class RoomLog {
 	since(cursor: Seq | undefined): Message[] {
 		if (cursor === undefined) return [...this.messages];
 		return this.messages.filter((message) => message.seq > cursor);
-	}
-}
-
-/** Every turn a model took, in the downstream session that owns it. */
-export async function persistTurns(
-	open: Promise<PiSession>,
-	agent: Agent,
-	at: string,
-): Promise<void> {
-	const piSeat = await open;
-	await piSeat.appendCustomEntry('ambion/activation', { at });
-	for (const message of agent.state.messages) {
-		// Provider messages may carry undefined-valued fields, which Pi's
-		// durability check rejects; a JSON round-trip drops them.
-		await piSeat.appendMessage(JSON.parse(JSON.stringify(message)));
 	}
 }

@@ -95,7 +95,8 @@ function play(stream: StreamFn = scripted(() => quiet())) {
 	const runtime = createRuntime({ clock, agents: [product], stream });
 	const room = new PlayedRoom(clock);
 	const actor = new SeatActor(room, {
-		runtime,
+		clock,
+		catalog: runtime.catalog,
 		room: 'played',
 		seat: 'product',
 		sessions: runtime.sessions,

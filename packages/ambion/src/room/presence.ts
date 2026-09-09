@@ -7,7 +7,7 @@
  * does not hold is the handle a host delivers through, and that stays in
  * the running room.
  */
-import type { HumanDefinition, Message, PresenceStatus, Seq } from './types.ts';
+import type { HumanDefinition, Message, PresenceStatus, Seq } from '../types.ts';
 
 /** One person in the room, for as long as they are in it. */
 export interface VisitRuntime {

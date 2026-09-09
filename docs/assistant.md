@@ -99,7 +99,7 @@ answers for anyone.
 
 The unit is the **exchange**, and it belongs to the core:
 [`exchange.md`](exchange.md) specifies it, and
-[`exchange.ts`](../packages/ambion/src/exchange.ts) is where it lives. A
+[`exchange.ts`](../packages/ambion/src/room/exchange.ts) is where it lives. A
 question, and everything the room does until it goes quiet again. A
 person's question opens one; quiescence closes it; what lands in between
 steers the seats already working and changes nothing.

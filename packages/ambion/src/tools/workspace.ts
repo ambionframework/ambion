@@ -32,8 +32,7 @@ import {
 	createReadTool,
 	createWriteTool,
 } from '@earendil-works/pi-agent-core';
-import { memoryBackend } from './just-bash.ts';
-import { defaultRuntime, type Runtime } from './runtime.ts';
+import { defaultRuntime, type Runtime } from '../host/runtime.ts';
 import {
 	type AgentDefinition,
 	isWorkspace,
@@ -42,10 +41,8 @@ import {
 	type Workspace,
 	type WorkspaceBackend,
 	type WorkspaceHandle,
-} from './types.ts';
-
-/** The names a workspace binds to every connected agent. `defineAgent` keeps them free. */
-export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(['read', 'write', 'edit', 'bash']);
+} from '../types.ts';
+import { memoryBackend } from './just-bash.ts';
 
 /** What the public handle does not show: its backend, its runtime, and whether it is gone. */
 interface WorkspaceState extends WorkspaceHandle {

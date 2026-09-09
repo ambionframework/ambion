@@ -32,37 +32,18 @@ export {
 } from '@earendil-works/pi-agent-core';
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
 export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from './define.ts';
-// The room's own exchange: what a question opened, and what quiescence closed.
-export type { ClosedExchange, Exchange } from './exchange.ts';
 export type {
-	MemoryBackendFile,
-	MemoryBackendOptions,
-	MemoryWorkspaceBackend,
-	SeedWriter,
-} from './just-bash.ts';
-// A workspace over a real directory, or the in-memory default with seeding
-// and read-back. Neither import is needed for the in-memory default's own
-// use inside `defineWorkspace` — only a host that wants to seed or read it.
-export { directoryBackend, memoryBackend } from './just-bash.ts';
-export type {
-	Clock,
 	CreateRuntimeOptions,
-	ModelResolver,
 	RunningRoom,
 	Runtime,
-	SessionOpener,
 	SessionRepoLike,
 	Transport,
-} from './runtime.ts';
-export {
-	createRuntime,
-	defaultRuntime,
-	inProcessTransport,
-	sessionsOver,
-	systemClock,
-} from './runtime.ts';
-export type { SeatContext } from './seat.ts';
-export { SeatActor } from './seat.ts';
+} from './host/runtime.ts';
+export { createRuntime, defaultRuntime, sessionsOver, systemClock } from './host/runtime.ts';
+export type { Sql, SqlValue } from './host/sqlite.ts';
+export { SqliteSessionStorage, sqliteSessions } from './host/sqlite.ts';
+export type { SeatContext } from './seat/seat.ts';
+export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {
 	ReadSessionOptions,
 	ResumeSessionOptions,
@@ -72,17 +53,31 @@ export type {
 	Visit,
 } from './session.ts';
 export { readSession, resumeSession, startSession, stopSession, visitSession } from './session.ts';
-export type { Sql, SqlValue } from './sqlite.ts';
-export { SqliteSessionStorage, sqliteSessions } from './sqlite.ts';
+export type {
+	MemoryBackendFile,
+	MemoryBackendOptions,
+	MemoryWorkspaceBackend,
+	SeedWriter,
+} from './tools/just-bash.ts';
+// A workspace over a real directory, or the in-memory default with seeding
+// and read-back. Neither import is needed for the in-memory default's own
+// use inside `defineWorkspace` — only a host that wants to seed or read it.
+export { directoryBackend, memoryBackend } from './tools/just-bash.ts';
+export type { DefineWorkspaceOptions } from './tools/workspace.ts';
+export { defineWorkspace, destroyWorkspace } from './tools/workspace.ts';
 export type {
 	AgentDefinition,
 	AgentSeat,
 	AgentSeatInfo,
 	AmbionTool,
 	Attention,
+	Clock,
+	ClosedExchange,
+	Exchange,
 	HumanDefinition,
 	HumanSeatInfo,
 	Message,
+	ModelResolver,
 	Participant,
 	PresenceChange,
 	PresenceMessage,
@@ -92,6 +87,7 @@ export type {
 	SeatStatus,
 	Seq,
 	SessionEvent,
+	SessionOpener,
 	SpokenMessage,
 	SummaryMessage,
 	ToolContext,
@@ -120,8 +116,6 @@ export type {
 	Wake,
 } from './wire.ts';
 export { assertWire, roundTrip } from './wire.ts';
-export type { DefineWorkspaceOptions } from './workspace.ts';
-export { defineWorkspace, destroyWorkspace } from './workspace.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';
