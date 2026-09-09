@@ -1,7 +1,7 @@
-import type { Session as PiSession, SessionRepo } from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	attentive,
+	createRuntime,
 	defineAgent,
 	defineHuman,
 	InMemorySessionRepo,
@@ -10,12 +10,14 @@ import {
 	passive,
 	readSession,
 	type Session,
+	type SessionOpener,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
 import { andrei, assistant, collect, deferred, roomName as name } from './support/room.ts';
 import { contextText, quiet, scripted } from './support/scripted.ts';
+import { faultyOpener, memory } from './support/storage.ts';
 
 // -- a room that never speaks ------------------------------------------------
 
@@ -330,82 +332,69 @@ describe('presence', () => {
 	});
 });
 
-// -- a repository that fails ------------------------------------------------
+// -- a storage that fails ----------------------------------------------------
 
-/** A Pi repository the test can break and mend, to see what the room does. */
-function brittleRepo(): { repo: SessionRepo; entries: unknown[]; fail: (on: boolean) => void } {
-	let failing = false;
-	const entries: unknown[] = [];
-	const piSession = {
-		id: 'brittle',
-		findEntries: async () => [],
-		appendCustomEntry: async (_type: string, data: unknown) => {
-			if (failing) throw new Error('the disk is full');
-			entries.push(data);
-		},
-		appendMessage: async () => {},
-	} as unknown as PiSession;
-	const repo = {
-		list: async () => [],
-		create: async () => piSession,
-		open: async () => piSession,
-	} as unknown as SessionRepo;
-	return { repo, entries, fail: (on: boolean) => (failing = on) };
+/** A room over a storage the test can break and mend. */
+async function brittle(): Promise<{ session: Session; fail: (on: boolean) => void }> {
+	const faulty = faultyOpener((await memory.open()).sessions);
+	const runtime = createRuntime({ sessions: faulty.sessions });
+	const session = startSession({
+		name: roomName(),
+		assistant,
+		agents: [watcher],
+		streamFn: recording,
+		runtime,
+	});
+	return { session, fail: faulty.fail };
 }
 
-describe('a repository that fails', () => {
-	it('reports one failed write, then writes again once the repository mends', async () => {
-		const { repo, entries, fail } = brittleRepo();
-		const session = startSession({
-			name: roomName(),
-			assistant,
-			agents: [watcher],
-			streamFn: recording,
-			repo,
-		});
+describe('a storage that fails', () => {
+	it('drops the delivery whose write failed, and the next one takes its seq', async () => {
+		const { session, fail } = await brittle();
+		const seen = collect(session);
 		const visit = await visitSession(session, andrei);
-		expect(entries).toHaveLength(1);
 
 		fail(true);
 		await expect(visit.deliver({ text: 'lost' })).rejects.toThrow(/disk is full/);
+		// the failed delivery is nowhere: not on the record, not on the stream, and nobody woke
+		expect(await session.messages()).toHaveLength(1);
+		expect(seen.filter((e) => e.type === 'message')).toHaveLength(1);
+		expect(seen.some((e) => e.type === 'activation_start')).toBe(false);
 
-		// the chain carries on: a mended repository writes the next message
+		// the queue carries on: a mended storage writes the next message, at the next seq
 		fail(false);
 		await expect(visit.deliver({ text: 'kept' })).resolves.toBeUndefined();
-		// the message that failed is gone from the repository, and only it
-		expect(entries).toHaveLength(2);
-		// the running room never lost it, so it still reads all three
-		expect(await session.messages()).toHaveLength(3);
+		const record = await session.messages();
+		expect(record.map((m) => m.seq)).toEqual([1, 2]);
+		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said']);
 		await stopSession(session);
 	});
 
 	it('frees the name when the shutdown itself cannot write', async () => {
-		const { repo, fail } = brittleRepo();
-		const name = roomName();
-		const session = startSession({ name, assistant, agents: [watcher], streamFn: recording, repo });
+		const { session, fail } = await brittle();
 		await visitSession(session, andrei);
 
 		fail(true);
 		await expect(stopSession(session)).rejects.toThrow(/disk is full/);
 		// a room that cannot be started again is worse than one that lost a write
 		const again = track(
-			startSession({ name, assistant, agents: [watcher], streamFn: recording, repo }),
+			startSession({
+				name: session.name,
+				assistant,
+				agents: [watcher],
+				streamFn: recording,
+				runtime: createRuntime(),
+			}),
 		);
-		expect(again.name).toBe(name);
+		expect(again.name).toBe(session.name);
 	});
 
-	it('surfaces a repository it cannot open, and never as an unhandled rejection', async () => {
-		const unreachable = {
-			list: async () => {
-				throw new Error('the repository is unreachable');
-			},
-			create: async () => {
-				throw new Error('the repository is unreachable');
-			},
+	it('surfaces a storage it cannot open, and never as an unhandled rejection', async () => {
+		const unreachable: SessionOpener = {
 			open: async () => {
-				throw new Error('the repository is unreachable');
+				throw new Error('the storage is unreachable');
 			},
-		} as unknown as SessionRepo;
+		};
 		const loose: unknown[] = [];
 		const note = (reason: unknown) => loose.push(reason);
 		process.on('unhandledRejection', note);
@@ -415,9 +404,9 @@ describe('a repository that fails', () => {
 			assistant,
 			agents: [watcher],
 			streamFn: recording,
-			repo: unreachable,
+			runtime: createRuntime({ sessions: unreachable }),
 		});
-		// the failure waits for the call that needs the store
+		// the failure waits for the call that needs the log
 		await expect(session.messages()).rejects.toThrow(/unreachable/);
 		await expect(visitSession(session, andrei)).rejects.toThrow(/unreachable/);
 		await expect(stopSession(session)).rejects.toThrow(/unreachable/);

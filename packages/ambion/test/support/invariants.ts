@@ -37,6 +37,9 @@ export async function invariants(
 		expect(names).toContain(message.from);
 		if ('by' in message && message.by !== undefined) expect(names).toContain(message.by);
 	}
+	// Every key names one message.
+	const keys = messages.flatMap((m) => (m.key === undefined ? [] : [m.key]));
+	expect(new Set(keys).size).toBe(keys.length);
 	for (const summary of messages.filter(isSummary)) {
 		expect(summary.covers.through).toBe(summary.seq - 1);
 		expect(summary.covers.from).toBeLessThanOrEqual(summary.covers.through);

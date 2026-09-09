@@ -42,6 +42,8 @@ export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(['read', 'write',
 export interface SpokenMessage {
 	kind: 'said';
 	seq: Seq;
+	/** The key the commit carried. A repeated key lands once. */
+	key?: string;
 	/** ISO timestamp, stamped by the runtime at the moment it landed. */
 	at: string;
 	/** A participant's name — stamped by the runtime, never claimed. */
@@ -64,6 +66,7 @@ export type PresenceChange = 'arrived' | 'left' | 'seated' | 'unseated';
 export interface PresenceMessage {
 	kind: PresenceChange;
 	seq: Seq;
+	key?: string;
 	at: string;
 	/**
 	 * The participant whose presence changed: a person, stamped from the visit
@@ -90,6 +93,7 @@ export interface PresenceMessage {
 export interface SummaryMessage {
 	kind: 'summary';
 	seq: Seq;
+	key?: string;
 	at: string;
 	/** The assistant that wrote it. */
 	from: string;

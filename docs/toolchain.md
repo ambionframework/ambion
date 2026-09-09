@@ -70,12 +70,13 @@ holds, and a reviewer reads a file knowing what it cannot reach.
 | --------------------------- | ---------------------------------------------------------------- | -------------------------- |
 | `types`, `define`, `render` | The vocabulary: the public shapes, and what a participant reads  | Nothing that does anything |
 | `host/`                     | What a host owns: the runtime value, a clock, an opener          | The vocabulary             |
+| `log/`                      | The log: one serial queue over a Pi session                      | The vocabulary             |
 | `tools/`                    | What an agent's tools reach into: the workspace and its backends | The vocabulary, `host/`    |
 | `session.ts`                | The room, which composes them all                                | Everything                 |
 
 The files beside `session.ts` at the root of `src` (the activation, the
-assistant, the exchange, presence, the record, the seat) are in no layer
-yet, and no override constrains them.
+assistant, the exchange, presence, the seat) are in no layer yet, and no
+override constrains them.
 
 Two rules hold across packages: the core imports no platform module
 (`node:sqlite`, `cloudflare:*`), and every other package reaches the core
