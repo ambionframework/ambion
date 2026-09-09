@@ -116,12 +116,12 @@ export interface SummaryRoom {
 	now(): string;
 	/** The last seq the record holds. */
 	lastSeq(): Seq;
-	/** Rule 5: the same lock a say commits under. */
-	claim(
+	/** Rule 5: the same queue a say commits on, under the same `readThrough`. */
+	commit(
+		key: string,
 		author: { name: string; readThrough: Seq },
-		draft: Omit<SummaryMessage, 'seq'>,
-	): { message: SummaryMessage } | { missed: Message[] };
-	publish(message: Message): Promise<void>;
+		draft: Omit<SummaryMessage, 'seq' | 'key'>,
+	): Promise<{ message: SummaryMessage } | { missed: Message[] }>;
 	/** The draft reached the record: this seat spoke, in the one way the assistant can. */
 	written(): void;
 }
@@ -146,7 +146,7 @@ export function summariseTool(assistant: string, draft: Draft, room: SummaryRoom
 			`Write the one message ${person} reads for this exchange. Call it once. ` +
 			'Ending your turn without calling it leaves the range whole, for whoever reads it.',
 		parameters: Type.Object({ text: Type.String() }),
-		execute: async (_toolCallId, rawParams) => {
+		execute: async (toolCallId, rawParams) => {
 			draft.calls += 1;
 			const stop = standDown(stoppingReason(draft, room.stopped()));
 			if (stop) return stop;
@@ -154,7 +154,8 @@ export function summariseTool(assistant: string, draft: Draft, room: SummaryRoom
 			if (text === '') {
 				throw new Error(`The message is empty. Write what ${person} reads, or end your turn.`);
 			}
-			const claimed = room.claim(
+			const claimed = await room.commit(
+				toolCallId,
 				{ name: assistant, readThrough: draft.through },
 				{
 					kind: 'summary',
@@ -167,7 +168,6 @@ export function summariseTool(assistant: string, draft: Draft, room: SummaryRoom
 			);
 			if ('missed' in claimed) throw widen(draft, claimed.missed, room.lastSeq());
 			room.written();
-			await room.publish(claimed.message);
 			return delivered();
 		},
 	};
@@ -224,8 +224,7 @@ export interface ComposeRoom {
 	/** Move one name from the reserve to the roster. The roster changes before the message lands. */
 	seat(name: string): void;
 	/** Put the seating on the record. No lock: a seating is decided on the question, whatever landed since. */
-	commit(draft: Omit<PresenceMessage, 'seq'>): PresenceMessage;
-	publish(message: Message): Promise<void>;
+	commit(key: string, draft: Omit<PresenceMessage, 'seq' | 'key'>): Promise<PresenceMessage>;
 	/** A seating reached the record: this activation left a mark. */
 	written(): void;
 }
@@ -251,7 +250,7 @@ export function seatTool(assistant: string, composing: Composing, room: ComposeR
 		parameters: Type.Object({
 			name: Type.String({ description: 'An agent name from the reserve.' }),
 		}),
-		execute: async (_toolCallId, rawParams) => {
+		execute: async (toolCallId, rawParams) => {
 			composing.calls += 1;
 			const stop = standDown(composeStoppingReason(composing, room.stopped()));
 			if (stop) return stop;
@@ -267,7 +266,7 @@ export function seatTool(assistant: string, composing: Composing, room: ComposeR
 			// The roster changes before the message routes: every seat the seating
 			// reaches reads a roster that already agrees with it.
 			room.seat(name);
-			const message = room.commit({
+			await room.commit(toolCallId, {
 				kind: 'seated',
 				at: room.now(),
 				from: name,
@@ -276,7 +275,6 @@ export function seatTool(assistant: string, composing: Composing, room: ComposeR
 			});
 			composing.seated += 1;
 			room.written();
-			await room.publish(message);
 			return delivered();
 		},
 	};

@@ -58,9 +58,9 @@ complexity cap by design, and the file around it has no cap.
 **Where.** `packages/ambion/src/session.ts`.
 
 **Fix.** Move `say` to `seat.ts` beside `toPiTool`, with a `SayRoom`
-interface that mirrors `SummaryRoom`. Move the commit path into
-`record.ts`. Move the reserve into its own module. The room keeps compose
-and route.
+interface that mirrors `SummaryRoom`. The commit path lives in
+`log/log.ts` now. Move the reserve into its own module. The room keeps
+compose and route.
 
 ### 4. Importing the package loads every provider SDK
 

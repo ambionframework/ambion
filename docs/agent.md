@@ -230,6 +230,7 @@ type Message =
   | {
       kind: 'said';
       seq: number; // monotonic, assigned at commit, strictly ordered
+      key?: string; // the key the commit carried; a repeated key lands once
       at: string; // stamped by the runtime, at the moment it landed
       from: string; // a participant's name — stamped by the runtime, never claimed
       to?: string; // present when the delivery or say was directed
@@ -238,6 +239,7 @@ type Message =
   | {
       kind: 'arrived' | 'left' | 'seated' | 'unseated';
       seq: number;
+      key?: string;
       at: string;
       from: string; // the participant whose presence changed — stamped by the runtime
       identity?: string; // on 'arrived' and 'seated': how the room knew them
@@ -246,6 +248,7 @@ type Message =
   | {
       kind: 'summary';
       seq: number;
+      key?: string;
       at: string;
       from: string; // the assistant, which wrote it
       to: string; // the person whose question opened the exchange
@@ -253,6 +256,11 @@ type Message =
       covers: { from: number; through: number }; // the range it stands for
     };
 ```
+
+Every kind carries `key`: the name of the commit that landed it. A seat's
+say and the assistant's two tools take Pi's tool call id as the key; a
+host's delivery takes the key it passes, or a fresh one. The record refuses
+a second commit under a key it holds, and hands back the first.
 
 The second kind carries no `text`, because the participant said nothing.
 [`presence.md`](presence.md) specifies it for a person, and
@@ -332,16 +340,17 @@ the room first. A `say` is a message the whole room pays for.
 **5. No one speaks over the room.** A message commits only against a record
 its author has read in full. For a seat that is its `say`, checked against
 the view it was handed plus every steer that has landed in its transcript
-since (`viewSeq` in `seat.ts`). If the record moved past that, the say
+since (`readThrough` in `activation.ts`). If the record moved past that, the say
 fails without landing, and the failure carries the messages the seat
 missed: the same steering contract, enforced at the tool boundary, where
 delivery is guaranteed. The seat then decides again — speak because
 something is still worth adding, or go quiet because the point stands;
 rule 3's bar, now with the hearing enforced.
 
-First to commit wins, ties are
-impossible (the check and the commit share one tick), and a room with no
-races pays nothing. The refusal shows on the stream as `conflict`, which
+First to commit wins, and ties are impossible: a commit is one operation
+on the room's commit queue, the check and the write run inside that one
+operation, and nothing observes a message before its write is confirmed
+(`RoomLog.commit` in `log/log.ts`). A room with no races pays nothing. The refusal shows on the stream as `conflict`, which
 names the author: an assistant's summary is refused at the same boundary, for
 the same reason. The guarantee is the point: every message on the record
 was written by somebody who had read everything before it.
@@ -485,9 +494,14 @@ shape, the three rules, who owns one, and what reads one.
 Two completion signals, for the two things a host waits on, and two
 controls:
 
-- **`deliver()`** resolves on acceptance — the message is on the record
-  and activations are dispatched. It never waits for completion, because activations run in
-  parallel and have no single caller to return to.
+- **`deliver()`** resolves when the message is durable — its write is
+  confirmed, it is on the record, and activations are dispatched. A write
+  that fails rejects `deliver()`, and the message is nowhere: not on the
+  record, not on the stream, and nobody woke for it. It never waits for
+  completion, because activations run in parallel and have no single caller
+  to return to. `deliver({ key })` names the delivery: a repeated key lands
+  once, so a host that never learned whether a delivery landed delivers it
+  again under the same key.
 - **`settled()`** is the exchange's end: a promise that resolves when the
   seats stop, which is also the moment a host learns that nobody chose to
   speak. It reports that no seat which speaks for itself is taking an
@@ -520,7 +534,7 @@ reads takes the narrower type and cannot start anything by accident.
 One file per concern, in layers an import points down through, and
 `session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
 §1 names the layers, and Biome holds them): the
-record in [`record.ts`](../packages/ambion/src/record.ts), who is here in
+log in [`log.ts`](../packages/ambion/src/log/log.ts), who is here in
 [`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes it
 in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
 [`activation.ts`](../packages/ambion/src/activation.ts), the exchange in

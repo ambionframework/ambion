@@ -9,6 +9,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
 	directoryBackend,
@@ -94,3 +95,41 @@ export const backends: readonly Backend[] = [
 		},
 	},
 ];
+
+// -- a storage that fails ----------------------------------------------------
+
+export interface FaultyOpener {
+	readonly sessions: SessionOpener;
+	/** Every write fails while `on` is true. Reads and opens keep working. */
+	fail(on: boolean): void;
+}
+
+/** An opener whose sessions refuse to write while the test says so. */
+export function faultyOpener(sessions: SessionOpener): FaultyOpener {
+	let failing = false;
+	const refuse = () => {
+		if (failing) throw new Error('the disk is full');
+	};
+	const brittle = (piSession: PiSession): PiSession =>
+		new Proxy(piSession, {
+			get(target, property, receiver) {
+				if (property === 'appendCustomEntry' || property === 'appendMessage') {
+					return async (...args: unknown[]) => {
+						refuse();
+						return (Reflect.get(target, property, receiver) as (...a: unknown[]) => unknown).apply(
+							target,
+							args,
+						);
+					};
+				}
+				const value = Reflect.get(target, property, receiver);
+				return typeof value === 'function' ? value.bind(target) : value;
+			},
+		});
+	return {
+		sessions: { open: async (id, parentId) => brittle(await sessions.open(id, parentId)) },
+		fail: (on) => {
+			failing = on;
+		},
+	};
+}

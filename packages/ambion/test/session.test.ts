@@ -503,6 +503,61 @@ describe('startSession', () => {
 		expect(JSON.stringify(turns)).toContain('"say"');
 	});
 
+	it('lands a repeated delivery key once', async () => {
+		const echo = defineAgent({
+			name: 'echo',
+			identity: 'Echoes.',
+			instructions: 'echo',
+			model: 'scripted/echo',
+		});
+		const session = startSession({
+			name: roomName('keys'),
+			assistant,
+			agents: [echo],
+			streamFn: scripted(() => quiet()),
+		});
+		const events = collect(session);
+		const visit = await enter(session);
+		await visit.deliver({ text: 'once', key: 'delivery-1' });
+		await visit.deliver({ text: 'once, retried', key: 'delivery-1' });
+		await session.settled();
+
+		const said = spoken(await session.messages());
+		expect(said.map((m) => [m.seq, m.text, m.key])).toEqual([[2, 'once', 'delivery-1']]);
+		// one message, one event, one activation
+		expect(events.filter((e) => e.type === 'message' && e.message.kind === 'said')).toHaveLength(1);
+		expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
+		// a seat's say carries Pi's tool call id, and a person's delivery its key
+		expect(said[0]?.key).toBe('delivery-1');
+		await stopSession(session);
+	});
+
+	it('refuses a composition that seats a name the record knows as a person', async () => {
+		const repo = new InMemorySessionRepo();
+		const name = roomName('clash');
+		const first = startSession({ name, assistant, repo, streamFn: scripted(() => quiet()) });
+		await visitSession(first, andrei);
+		await stopSession(first);
+
+		const impostor = defineAgent({
+			name: 'andrei',
+			identity: "An agent wearing a person's name.",
+			instructions: 'confuse',
+			model: 'scripted/impostor',
+		});
+		const again = startSession({
+			name,
+			assistant,
+			agents: [impostor],
+			repo,
+			streamFn: scripted(() => quiet()),
+		});
+		// the record is replayed by the first call, and that call is refused
+		await expect(again.messages()).rejects.toThrow(/one name names one participant/);
+		await expect(visitSession(again, andrei)).rejects.toThrow(/one name names one participant/);
+		await expect(stopSession(again)).rejects.toThrow(/one name names one participant/);
+	});
+
 	it('refuses a duplicate agent name', () => {
 		const twin = defineAgent({
 			name: 'solo',
