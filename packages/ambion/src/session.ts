@@ -2,7 +2,7 @@
  * The room: the one place where a record, the seats around it, the people
  * visiting it and the exchanges they open become behaviour.
  *
- * Everything with a life of its own has left. The record is `record.ts`, who
+ * Everything with a life of its own has left. The log is `log.ts`, who
  * is here is `presence.ts`, a seat and what wakes it is `seat.ts`, one
  * activation is `activation.ts`, an exchange is `exchange.ts`, the assistant is
  * `assistant.ts`, and every sentence a participant reads is `render.ts`. What is
@@ -10,7 +10,7 @@
  *
  * - **Compose.** Seat the agents and the assistant, hold the reserve, admit the
  *   people, seat and unseat while it runs, and take it all down again.
- * - **Commit.** One lock, one seq at a time, for every author (rule 5), and
+ * - **Commit.** One queue, one seq at a time, for every author (rule 5), and
  *   one `message` event per message however it was written.
  * - **Route.** Who hears a message, and who wakes for it.
  * - **Give an activation what only the room knows.** The model, the prompt, the
@@ -36,8 +36,8 @@ import {
 } from './assistant.ts';
 import { seated } from './define.ts';
 import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
+import { type Committed, persistTurns, RoomLog } from './log.ts';
 import { Attendance, type VisitRuntime } from './presence.ts';
-import { persistTurns, RecordStore } from './record.ts';
 import {
 	type Closing,
 	type ComposingView,
@@ -164,7 +164,12 @@ export interface Visit {
 	readonly human: HumanDefinition;
 	/** The seq of this person's last `left`, or undefined the first time. A live read. */
 	readonly since: Seq | undefined;
-	deliver(input: { to?: Participant; text: string }): Promise<void>;
+	/**
+	 * Put a message on the record. `key` names the delivery: a repeated key
+	 * lands once, so a host that never learned whether a delivery landed
+	 * delivers it again under the same key.
+	 */
+	deliver(input: { to?: Participant; text: string; key?: string }): Promise<void>;
 	leave(): Promise<void>;
 }
 
@@ -181,7 +186,7 @@ export function startSession(options: StartSessionOptions): Session {
 	return session;
 }
 
-/** Takes the room down: activations aborted, visits closed, timers cleared, writes drained. */
+/** Takes the room down: activations aborted, visits closed, every departure committed. */
 export function stopSession(session: Session): Promise<void> {
 	if (!(session instanceof SessionImpl)) {
 		throw new Error('stopSession takes a session from startSession.');
@@ -206,20 +211,20 @@ export function readSession(name: string, options: ReadSessionOptions = {}): Ses
 }
 
 class ReadOnlySession implements SessionView {
-	private readonly store: RecordStore;
+	private readonly log: RoomLog;
 	private readonly here: Attendance;
 
 	constructor(
 		readonly name: string,
 		sessions: SessionOpener,
 	) {
-		this.store = new RecordStore(sessions.open(name));
-		this.here = new Attendance(() => this.store.entries);
+		this.log = new RoomLog(sessions.open(name));
+		this.here = new Attendance(() => this.log.messages);
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
-		await this.store.ready;
-		return this.store.since(options.since);
+		await this.log.ready;
+		return this.log.since(options.since);
 	}
 
 	/** A room that is not running has no agents standing up, and nobody in it. */
@@ -245,7 +250,12 @@ class SessionImpl implements Session {
 	private readonly goal?: string;
 	private readonly runtime: Runtime;
 	private readonly sessions: SessionOpener;
-	private readonly store: RecordStore;
+	private readonly log: RoomLog;
+	/**
+	 * The record replayed, and the composition checked against it: a name the
+	 * record knows as a person cannot be seated. Every operation waits here.
+	 */
+	private readonly ready: Promise<void>;
 	private readonly agents = new Map<string, SeatRuntime>();
 	/** The reserve: agents the room may seat later, held with the attention they will take. */
 	private readonly reserve = new Map<string, Reserved>();
@@ -273,7 +283,7 @@ class SessionImpl implements Session {
 		this.goal = options.goal?.trim() || undefined;
 		this.runtime = runtime;
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
-		this.store = new RecordStore(this.sessions.open(this.name));
+		this.log = new RoomLog(this.sessions.open(this.name));
 		for (const seat of options.agents ?? []) this.place(seat);
 		// Seated at the narrow end: nothing said in the room wakes the assistant;
 		// the open and the close of an exchange do, and it is here for the whole run.
@@ -286,6 +296,22 @@ class SessionImpl implements Session {
 		for (const { def } of [...this.agents.values(), ...this.reserve.values()]) {
 			runtime.catalog.set(def.name, def);
 		}
+		this.ready = this.compose();
+		void this.ready.catch(() => {});
+	}
+
+	/**
+	 * The composition against the record: `assertFreeName` reads the record,
+	 * so the check the constructor ran saw an empty one. This is the check
+	 * that counts, and the first call that needs the room sees its refusal.
+	 */
+	private async compose(): Promise<void> {
+		await this.log.ready;
+		for (const name of [...this.agents.keys(), ...this.reserve.keys()]) {
+			if (this.here.knows(name)) {
+				throw new Error(`Duplicate agent name '${name}': one name names one participant.`);
+			}
+		}
 	}
 
 	/** The room's clock, as an ISO stamp for the record. */
@@ -294,7 +320,7 @@ class SessionImpl implements Session {
 	}
 
 	private get record(): Message[] {
-		return this.store.entries;
+		return this.log.messages;
 	}
 
 	/** Seat one agent, refusing a name the room already knows. */
@@ -331,7 +357,7 @@ class SessionImpl implements Session {
 	/** The host puts an agent on the roster. From the reserve when it is there; from anywhere else too. */
 	async seat(seat: AgentSeat): Promise<void> {
 		this.assertRunning();
-		await this.store.ready;
+		await this.ready;
 		const given = this.unwrap(seat);
 		const held = this.reserve.get(given.def.name);
 		if (held) this.reserve.delete(given.def.name);
@@ -350,7 +376,7 @@ class SessionImpl implements Session {
 	/** The host takes an agent off the roster. Never the assistant. */
 	async unseat(agent: AgentDefinition): Promise<void> {
 		this.assertRunning();
-		await this.store.ready;
+		await this.ready;
 		const seat = this.agents.get(agent.name);
 		if (!seat) throw new Error(`'${agent.name}' is not seated in this session.`);
 		if (this.assistant.is(agent.name)) {
@@ -385,7 +411,7 @@ class SessionImpl implements Session {
 	 */
 	private seatSession(seat: SeatRuntime): Promise<PiSession> {
 		seat.piSeat ??= (async () => {
-			await this.store.ready;
+			await this.ready;
 			return this.sessions.open(`${this.name}:${seat.def.name}`, this.name);
 		})();
 		return seat.piSeat;
@@ -442,8 +468,8 @@ class SessionImpl implements Session {
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
-		await this.store.ready;
-		return this.store.since(options.since);
+		await this.ready;
+		return this.log.since(options.since);
 	}
 
 	seats(): SeatInfo[] {
@@ -468,8 +494,9 @@ class SessionImpl implements Session {
 	/** Puts a person in the room. A second visit while they are here is the same visit. */
 	async visit(human: HumanDefinition): Promise<Visit> {
 		this.assertRunning();
+		await this.ready;
+		// Checked after the replay: a name the record knows is only known then.
 		this.assertVisitable(human);
-		await this.store.ready;
 		const already = this.here.visitOf(human.name);
 		if (already) return this.handle(already);
 		// The room changes before the message does: a seat woken by the arrival
@@ -500,17 +527,34 @@ class SessionImpl implements Session {
 		if (this.stopped) throw new Error(`Session '${this.name}' is stopped.`);
 	}
 
-	private async commitPresence(change: Omit<PresenceMessage, 'seq' | 'at'>): Promise<void> {
-		await this.publish(this.store.append<PresenceMessage>({ ...change, at: this.now() }));
+	/** A presence change the room commits under a fresh key, and routes. */
+	private async commitPresence(change: Omit<PresenceMessage, 'seq' | 'at' | 'key'>): Promise<void> {
+		await this.commit<PresenceMessage>({
+			key: crypto.randomUUID(),
+			draft: { ...change, at: this.now() },
+		});
 	}
 
 	/**
-	 * What happens to every message once it holds a seq: it persists, the host
+	 * One operation on the room's commit queue: the write, and then what the
+	 * room does with a fresh message, inside the same link of the queue. A
+	 * repeated key lands nothing, so the room does nothing with it either.
+	 */
+	private commit<T extends Message>(
+		intent: Parameters<RoomLog['commit']>[0] & { draft: Omit<T, 'seq' | 'key'> },
+		route = true,
+	): Promise<Committed<T>> {
+		return this.log.commit<T>(intent, (message) =>
+			route ? this.committed(message) : this.emit({ type: 'message', message }),
+		);
+	}
+
+	/**
+	 * What happens to every message once its write is confirmed: the host
 	 * hears about it, and the room routes it. One message, one event, one
 	 * order — stated here rather than at each of the commit sites.
 	 */
-	private async publish(message: Message): Promise<void> {
-		await this.store.drained();
+	private committed(message: Message): void {
 		// The message lands, then what it opened: an exchange is a fact about a
 		// message the host has already seen. Both come before the routing, so
 		// nothing wakes on a message the host has not heard about.
@@ -576,23 +620,22 @@ class SessionImpl implements Session {
 		this.stopped = true;
 		try {
 			this.abort();
-			await this.store.ready;
+			await this.ready;
 			// A deliberate shutdown observed everybody leaving, so the record
 			// says so, and the host hears it. It wakes nobody: an activation
 			// started to hear that the room is closing is an activation nobody reads.
 			for (const visit of this.here.all()) {
 				visit.gone = true;
 				this.here.leave(visit.human.name);
-				this.commitUnrouted({ kind: 'left', from: visit.human.name });
+				await this.commitUnrouted({ kind: 'left', from: visit.human.name });
 			}
 			// What the run added leaves with it, the same way: the next run begins
 			// from the composition `startSession` was given.
 			for (const seat of this.agents.values()) {
 				if (!seat.added) continue;
 				this.retire(seat);
-				this.commitUnrouted({ kind: 'unseated', from: seat.def.name });
+				await this.commitUnrouted({ kind: 'unseated', from: seat.def.name });
 			}
-			await this.store.drained();
 		} finally {
 			// The name comes free whatever the repo did. A failed write must
 			// not leave a room that can never be started again.
@@ -603,32 +646,33 @@ class SessionImpl implements Session {
 	}
 
 	/** A presence change the closing room commits and routes to nobody: an activation nobody reads. */
-	private commitUnrouted(change: Omit<PresenceMessage, 'seq' | 'at'>): void {
-		this.emit({
-			type: 'message',
-			message: this.store.append<PresenceMessage>({ ...change, at: this.now() }),
-		});
+	private async commitUnrouted(change: Omit<PresenceMessage, 'seq' | 'at' | 'key'>): Promise<void> {
+		await this.commit<PresenceMessage>(
+			{ key: crypto.randomUUID(), draft: { ...change, at: this.now() } },
+			false,
+		);
 	}
 
 	// -- messages ------------------------------------------------------------
 
 	private async deliverFrom(
 		from: string,
-		input: { to?: Participant; text: string },
+		input: { to?: Participant; text: string; key?: string },
 	): Promise<void> {
 		const to = input.to?.name;
 		if (to !== undefined && !this.here.knows(to) && !this.agents.has(to)) {
 			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
 		}
-		await this.publish(
-			this.store.append<SpokenMessage>({
+		await this.commit<SpokenMessage>({
+			key: input.key ?? crypto.randomUUID(),
+			draft: {
 				kind: 'said',
 				at: this.now(),
 				from,
 				...(to === undefined ? {} : { to }),
 				text: input.text,
-			}),
-		);
+			},
+		});
 	}
 
 	private emit(event: SessionEvent): void {
@@ -691,7 +735,7 @@ class SessionImpl implements Session {
 	}
 
 	private activate(seat: SeatRuntime): void {
-		const activation = new Activation(seat.def.name, this.store.lastSeq, {
+		const activation = new Activation(seat.def.name, this.log.lastSeq, {
 			open: (running) => this.open(seat, running),
 			persist: (agent) => persistTurns(this.seatSession(seat), agent, this.now()),
 			emit: (event) => this.emit(event),
@@ -707,7 +751,7 @@ class SessionImpl implements Session {
 		// the question as it was asked.
 		const rebuilds = !this.assistant.is(seat.def.name);
 		void activation
-			.run(rebuilds, () => this.store.lastSeq)
+			.run(rebuilds, () => this.log.lastSeq)
 			.finally(() => this.ended(seat, activation));
 	}
 
@@ -843,8 +887,11 @@ class SessionImpl implements Session {
 			now: () => this.now(),
 			reserve: () => this.reserved(),
 			seat: (name) => this.admit(name),
-			commit: (draft) => this.store.append<PresenceMessage>(draft),
-			publish: (message) => this.publish(message),
+			commit: async (key, draft) => {
+				const committed = await this.commit<PresenceMessage>({ key, draft });
+				if ('missed' in committed) throw new Error('A seating commits under no lock.');
+				return committed.message;
+			},
 			written: () => {
 				activation.spoke = true;
 			},
@@ -856,9 +903,8 @@ class SessionImpl implements Session {
 		return summariseTool(seat.def.name, closing, {
 			stopped: () => this.stopped,
 			now: () => this.now(),
-			lastSeq: () => this.store.lastSeq,
-			claim: (author, draft) => this.claim<SummaryMessage>(author, draft),
-			publish: (message) => this.publish(message),
+			lastSeq: () => this.log.lastSeq,
+			commit: (key, author, draft) => this.claim<SummaryMessage>(key, author, draft),
 			written: () => {
 				activation.spoke = true;
 			},
@@ -877,7 +923,7 @@ class SessionImpl implements Session {
 				to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 				text: Type.String(),
 			}),
-			execute: async (_toolCallId, rawParams) => {
+			execute: async (toolCallId, rawParams) => {
 				const params = rawParams as { to?: string; text: string };
 				const to = params.to?.trim() ? params.to.trim() : undefined;
 				// Rule 5 comes first: a seat that has not read the record is told
@@ -892,36 +938,44 @@ class SessionImpl implements Session {
 				if (text === '') {
 					throw new Error('The message is empty. Say something, or end your turn instead.');
 				}
-				// Nothing has awaited since the check, so the record stands where the
-				// seat read it, and the append is the commit half of rule 5's one tick.
-				const message = this.store.append<SpokenMessage>({
-					kind: 'said',
-					at: this.now(),
-					from: seat.def.name,
-					...(to === undefined ? {} : { to }),
-					text,
-				});
-				// The seat has heard its own say before anybody else hears of it.
-				activation.heard(message.seq);
+				// The queue runs the same check again where the write happens: a
+				// message that lands between here and there refuses this one.
+				const committed = await this.claim<SpokenMessage>(
+					toolCallId,
+					{ name: seat.def.name, readThrough: activation.readThrough },
+					{
+						kind: 'said',
+						at: this.now(),
+						from: seat.def.name,
+						...(to === undefined ? {} : { to }),
+						text,
+					},
+					// The seat has heard its own say before anybody else hears of it.
+					(message) => activation.heard(message.seq),
+				);
+				if ('missed' in committed) throw this.refused(activation, committed.missed);
 				activation.spoke = true;
-				await this.publish(message);
 				return delivered();
 			},
 		};
 	}
 
 	/**
-	 * Rule 5 for a say: the record moved past what this activation has read, so
-	 * the say is refused and the seat is told what landed. Now heard, the seat
-	 * decides again against the record as it stands. The check and the append
-	 * in `sayTool` share one tick, as `claim` does for a summary.
+	 * Rule 5 for a say, checked before the say is examined: the record moved
+	 * past what this activation has read, so the say is refused and the seat
+	 * is told what landed. The queue runs the check that counts.
 	 */
 	private assertHeard(seat: SeatRuntime, activation: Activation): void {
-		if (this.store.lastSeq <= activation.readThrough) return;
-		const missed = this.store.since(activation.readThrough);
+		if (this.log.lastSeq <= activation.readThrough) return;
+		const missed = this.log.since(activation.readThrough);
 		this.emit({ type: 'conflict', author: seat.def.name, missed });
-		activation.heard(this.store.lastSeq);
-		throw new Error(
+		throw this.refused(activation, missed);
+	}
+
+	/** What a refused seat is told. Now heard, it decides again against the record as it stands. */
+	private refused(activation: Activation, missed: Message[]): Error {
+		activation.heard(this.log.lastSeq);
+		return new Error(
 			refusal(
 				'Not delivered — the room moved while you were speaking. New on the record:',
 				missed,
@@ -945,22 +999,28 @@ class SessionImpl implements Session {
 	}
 
 	/**
-	 * Rule 5 for a summary: claim the record's next seq for an author that has
-	 * read everything before it. The check and the append share one tick, so
-	 * exactly one of two racing authors wins, and the loser is handed what it
-	 * missed. A seat's say is refused the same way in `assertHeard`, for the
-	 * same reason — which is why the event names the author, not the seat.
+	 * Rule 5 for a say and for a summary: commit under `readThrough`, the seq
+	 * the author has read. The queue refuses a commit the record moved past,
+	 * and the loser is handed what it missed. The event names the author, not
+	 * the seat: a say and a summary are refused the same way.
 	 */
-	private claim<T extends Message>(
+	private async claim<T extends Message>(
+		key: string,
 		author: { name: string; readThrough: Seq },
-		draft: Omit<T, 'seq'>,
-	): { message: T } | { missed: Message[] } {
-		if (this.store.lastSeq > author.readThrough) {
-			const missed = this.store.since(author.readThrough);
-			this.emit({ type: 'conflict', author: author.name, missed });
-			return { missed };
+		draft: Omit<T, 'seq' | 'key'>,
+		heard?: (message: T) => void,
+	): Promise<Committed<T>> {
+		const committed = await this.log.commit<T>(
+			{ key, readThrough: author.readThrough, draft },
+			(message) => {
+				heard?.(message);
+				this.committed(message);
+			},
+		);
+		if ('missed' in committed) {
+			this.emit({ type: 'conflict', author: author.name, missed: committed.missed });
 		}
-		return { message: this.store.append<T>(draft) };
+		return committed;
 	}
 
 	// -- the assistant ------------------------------------------------------------
@@ -971,7 +1031,7 @@ class SessionImpl implements Session {
 	 * reader of a closed exchange and not the only one.
 	 */
 	private closeExchange(worked: boolean): void {
-		const closing = this.exchanges.close(this.store.lastSeq);
+		const closing = this.exchanges.close(this.log.lastSeq);
 		if (closing) this.emit({ type: 'exchange_closed', exchange: closing });
 		this.summariseClosed(closing, worked);
 	}
@@ -997,7 +1057,7 @@ class SessionImpl implements Session {
 
 	/** What the assistant reads to decide whether a range needs a message. */
 	private dueArgs(): [readonly Message[], Seq, (name: string) => boolean] {
-		return [this.record, this.store.lastSeq, (name) => this.speaksForItself(name)];
+		return [this.record, this.log.lastSeq, (name) => this.speaksForItself(name)];
 	}
 
 	/** The assistant takes the draft it is due, unless the room is closing. */
@@ -1045,7 +1105,7 @@ class SessionImpl implements Session {
 				presence: this.here.presenceOf(name),
 				changedAt: this.here.lastChangeAt(name),
 				since,
-				unseen: since === undefined ? 0 : this.store.since(since).length,
+				unseen: since === undefined ? 0 : this.log.since(since).length,
 			});
 		}
 		return views;

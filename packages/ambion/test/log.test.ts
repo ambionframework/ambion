@@ -1,0 +1,93 @@
+/**
+ * The log commits one entry at a time. A key lands once, a commit the record
+ * moved past is refused, and nothing observes a message before its write
+ * is confirmed.
+ */
+
+import { describe, expect, it } from 'vitest';
+import { InMemorySessionRepo, type SpokenMessage } from '../src/index.ts';
+import { RoomLog } from '../src/log.ts';
+import { sessionsOver } from '../src/runtime.ts';
+import { deferred, roomName } from './support/room.ts';
+import { faultyOpener, memory } from './support/storage.ts';
+
+const say = (text: string): Omit<SpokenMessage, 'seq' | 'key'> => ({
+	kind: 'said',
+	at: '2026-01-01T09:00:00.000Z',
+	from: 'andrei',
+	text,
+});
+
+const open = async () => new RoomLog((await memory.open()).sessions.open(roomName('log')));
+
+describe('RoomLog', () => {
+	it('lands a repeated key once, and hands back the first message', async () => {
+		const log = await open();
+		const first = await log.commit({ key: 'k1', draft: say('one') });
+		const again = await log.commit({ key: 'k1', draft: say('one, again') });
+		expect(first).toEqual({ message: { ...say('one'), seq: 1, key: 'k1' } });
+		expect(again).toEqual({ message: { ...say('one'), seq: 1, key: 'k1' }, repeated: true });
+		expect(log.lastSeq).toBe(1);
+		expect(log.messages).toHaveLength(1);
+		// the next key takes the next seq
+		const next = await log.commit({ key: 'k2', draft: say('two') });
+		expect('message' in next && next.message.seq).toBe(2);
+	});
+
+	it('lets one of two commits under one readThrough land, and refuses the other with what it missed', async () => {
+		const log = await open();
+		await log.commit({ key: 'q', draft: say('the question') });
+		const [first, second] = await Promise.all([
+			log.commit({ key: 'a', readThrough: 1, draft: { ...say('first answer'), from: 'alpha' } }),
+			log.commit({ key: 'b', readThrough: 1, draft: { ...say('second answer'), from: 'beta' } }),
+		]);
+		expect('message' in first && first.message.seq).toBe(2);
+		expect('missed' in second && second.missed.map((m) => m.seq)).toEqual([2]);
+		// the refused commit consumed no seq
+		expect(log.lastSeq).toBe(2);
+		const third = await log.commit({ key: 'c', readThrough: 2, draft: say('third') });
+		expect('message' in third && third.message.seq).toBe(3);
+	});
+
+	it('shows a message only once its write resolves', async () => {
+		const opened = await memory.open();
+		const slow = deferred();
+		const sessions = {
+			open: async (id: string) => {
+				const piSession = await opened.sessions.open(id);
+				const append = piSession.appendCustomEntry.bind(piSession);
+				piSession.appendCustomEntry = async (type, data) => {
+					await slow.promise;
+					return append(type, data);
+				};
+				return piSession;
+			},
+		};
+		const log = new RoomLog(sessions.open(roomName('slow')));
+		const landed: number[] = [];
+		const commit = log.commit({ key: 'k', draft: say('slow') }, (m) => landed.push(m.seq));
+		await new Promise((resolve) => setImmediate(resolve));
+		expect(log.messages).toHaveLength(0);
+		expect(log.lastSeq).toBe(0);
+		expect(landed).toEqual([]);
+		slow.resolve();
+		await commit;
+		expect(log.messages).toHaveLength(1);
+		expect(landed).toEqual([1]);
+	});
+
+	it('drops a commit whose write fails, and the next one takes its seq', async () => {
+		const faulty = faultyOpener(sessionsOver(new InMemorySessionRepo()));
+		const log = new RoomLog(faulty.sessions.open(roomName('faulty')));
+		await log.commit({ key: 'a', draft: say('kept') });
+		faulty.fail(true);
+		await expect(log.commit({ key: 'b', draft: say('lost') })).rejects.toThrow(/disk is full/);
+		faulty.fail(false);
+		const next = await log.commit({ key: 'c', draft: say('kept too') });
+		expect('message' in next && next.message.seq).toBe(2);
+		expect(log.messages.map((m) => m.kind === 'said' && m.text)).toEqual(['kept', 'kept too']);
+		// the same key lands now: the first attempt left nothing behind
+		const retried = await log.commit({ key: 'b', draft: say('lost, retried') });
+		expect('message' in retried && retried.message.seq).toBe(3);
+	});
+});

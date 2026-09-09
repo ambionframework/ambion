@@ -195,6 +195,7 @@ export type Seq = number;
 interface Spoken {
   kind: 'said';
   seq: Seq;
+  key?: string; // the key the commit carried; a repeated key lands once
   at: string; // ISO, stamped by the runtime at the moment it landed
   from: string; // a participant's name — stamped by the runtime, never claimed
   to?: string; // present when the delivery or say was directed
@@ -204,6 +205,7 @@ interface Spoken {
 interface Presence {
   kind: 'arrived' | 'left';
   seq: Seq;
+  key?: string;
   at: string;
   from: string;
   /** How the room knew them, on `arrived` alone. */
@@ -264,7 +266,8 @@ composing a reply when Andrei walks in has its say refused and is told what
 it missed, which is correct: it reconsiders now that he is here. This is
 also what keeps five agents from all greeting the same arrival. The first
 commits and the rest are told the room moved, which is when rule 3 tells
-them to stand down.
+them to stand down. An arrival commits on the same queue as a say, under a
+key of its own, and `visitSession` resolves when its write is confirmed.
 
 An `arrived` carries the identity the room knew them by, and it is the only
 thing a presence message adds to a name. A run does not inherit its people
@@ -289,7 +292,7 @@ and `left` follows `leave()`. Nothing on the record comes from a clock.
 The seq counts from 1, is monotonic, is assigned when the message commits,
 and is strictly ordered. A cursor is exclusive: `since` names a message the
 reader has, and the read starts after it. It is separate from Pi's storage
-seq — that stays Pi's, and `openStore` sorts replayed entries by it.
+seq — that stays Pi's, and `RoomLog` sorts replayed entries by it.
 
 ---
 
@@ -383,7 +386,7 @@ of thing in one sequence on one commit path. No message lands between a
 person leaving and a mark being written, because there is no second write.
 
 **Durability is free.** The record persists through Pi's `SessionRepo` and
-`openStore` replays it. Nothing extra is stored, so nothing extra is lost,
+`RoomLog` replays it. Nothing extra is stored, so nothing extra is lost,
 and a durable `SessionRepo` — Pi's `JsonlSessionRepo`, or another — carries
 presence with it.
 
