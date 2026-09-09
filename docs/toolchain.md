@@ -59,6 +59,28 @@ if the workspace protocol does not resolve.
 `@ambionframework/cli` is the `ambion` binary; it currently reports its
 version and nothing else.
 
+### The core's layers
+
+`packages/ambion/src` is laid out in layers, and an import points down
+only. Biome refuses every other import (`noRestrictedImports`, one
+override per layer in `biome.jsonc`), so the layout is a fact the gate
+holds, and a reviewer reads a file knowing what it cannot reach.
+
+| Layer                       | What it holds                                                    | May import                 |
+| --------------------------- | ---------------------------------------------------------------- | -------------------------- |
+| `types`, `define`, `render` | The vocabulary: the public shapes, and what a participant reads  | Nothing that does anything |
+| `host/`                     | What a host owns: the runtime value, a clock, an opener          | The vocabulary             |
+| `tools/`                    | What an agent's tools reach into: the workspace and its backends | The vocabulary, `host/`    |
+| `session.ts`                | The room, which composes them all                                | Everything                 |
+
+The files beside `session.ts` at the root of `src` (the activation, the
+assistant, the exchange, presence, the record, the seat) are in no layer
+yet, and no override constrains them.
+
+Two rules hold across packages: the core imports no platform module
+(`node:sqlite`, `cloudflare:*`), and every other package reaches the core
+through `@ambionframework/ambion`, its published surface.
+
 ---
 
 ## 2. Toolchain choices
@@ -148,14 +170,15 @@ Notable settings and what they buy:
 ```
 build       dependsOn: ^build            outputs: dist/**
 check:types dependsOn: build, ^build     (needs upstream .d.mts)
-test        dependsOn: build, ^build
+test        dependsOn: build, ^build     inputs: src, test, vitest configs, tsconfig, package.json
 dev         persistent, never cached
 ```
 
 `check:types` and `test` wait on upstream builds because the CLI type-checks
 against the runtime's _emitted_ declarations. That is the same
 resolution a published consumer gets, so a broken `exports` map fails here,
-before release.
+before release. `test` names its inputs, so a change outside them, a
+document or a demo report, reads the cached result.
 
 ---
 
@@ -287,6 +310,15 @@ seqs contiguous, one `message` event per message, every author on the
 roster, every summary covering the range before it, no `error` event, and
 every activation ended. Every test ends with one line of what it spent,
 read off the seats' downstream sessions.
+
+**One harness, two tiers.** The invariants live in
+[`test/support/invariants.ts`](../packages/ambion/test/support/invariants.ts),
+and the live support re-exports them. The scripted tier runs the same
+scenarios on every storage (`matrix.test.ts`): Pi's in-memory repository,
+and Pi's JSONL repository over a temporary directory. It runs them on a
+clock it moves by hand (`test/support/clock.ts`), so a test never waits
+on real time. The live tier runs the room on a real model and holds it to
+the same invariants.
 
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:
 `vitest.config.ts` excludes `test/live` from `pnpm test`, and

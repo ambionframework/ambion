@@ -17,9 +17,9 @@ import type {
 	Session as PiSession,
 } from '@earendil-works/pi-agent-core';
 import type { Activation } from './activation.ts';
+import { toolContext } from './tools/workspace.ts';
 import type { AgentDefinition, Attention, Message } from './types.ts';
 import { isAmbionTool, isSpoken } from './types.ts';
-import { toolContext } from './workspace.ts';
 
 export interface SeatRuntime {
 	def: AgentDefinition;

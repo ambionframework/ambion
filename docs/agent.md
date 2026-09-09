@@ -517,7 +517,9 @@ sooner.
 `seats()`, `subscribe()` — and `Session` extends it, so code that only
 reads takes the narrower type and cannot start anything by accident.
 
-One file per concern, and `session.ts` is the room that composes them: the
+One file per concern, in layers an import points down through, and
+`session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
+§1 names the layers, and Biome holds them): the
 record in [`record.ts`](../packages/ambion/src/record.ts), who is here in
 [`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes it
 in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
@@ -525,8 +527,9 @@ in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
 [`exchange.ts`](../packages/ambion/src/exchange.ts), what the assistant
 writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), what an
 agent's tools reach into in
-[`workspace.ts`](../packages/ambion/src/workspace.ts), and what any of them
-reads in [`render.ts`](../packages/ambion/src/render.ts).
+[`workspace.ts`](../packages/ambion/src/tools/workspace.ts), what a host
+owns in [`runtime.ts`](../packages/ambion/src/host/runtime.ts), and what
+any of them reads in [`render.ts`](../packages/ambion/src/render.ts).
 
 **A seat is seated for the run. An activation lasts seconds.** What an
 activation has heard, what landed while it worked, and whether it left a mark
@@ -534,12 +537,22 @@ belong to the activation and end with it. Rule 5's `readThrough` is an
 activation's fact.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
-entry, replayed in `seq` order on reopen — obtained from Pi's own
-`SessionRepo`, which `startSession` and `readSession` accept and default to
-an in-process `InMemorySessionRepo`. A name that outlives the process is a
-durable `SessionRepo` implementation; the API stays the same.
+entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
+on the room's `Runtime`. `sessionsOver(repo)` makes an opener from Pi's own
+`SessionRepo`; `startSession` and `readSession` still accept a `repo` as
+the shorthand for one. The default runtime opens sessions in an in-memory
+`InMemorySessionRepo`. A name that outlives the process is a durable
+`SessionRepo` implementation; the API stays the same.
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
 surface, and Ambion adds no storage layer of its own.
+
+**A host owns a `Runtime`.** It holds the clock, the session opener, the
+model call, the rooms that are running and the workspace names that are
+taken ([`runtime.ts`](../packages/ambion/src/host/runtime.ts)). `startSession`,
+`readSession` and `defineWorkspace` take one as an option and default to
+`defaultRuntime`, one value per process. Two runtimes in one process share
+nothing: one name runs in both, and neither reads the other. "One run per
+name" above holds per runtime.
 
 ---
 

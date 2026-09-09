@@ -6,7 +6,7 @@
  * seqs one at a time, and persists on a chain that keeps commit order. What a
  * seat reads is a rendering of this (`render.ts`), never this itself.
  */
-import type { Agent, Session as PiSession, SessionRepo } from '@earendil-works/pi-agent-core';
+import type { Agent, Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from './types.ts';
 
 /** The record lives as custom entries of this type in a Pi session. */
@@ -24,11 +24,8 @@ export class RecordStore {
 	/** The first write that failed since the last report. See `drained`. */
 	private failure: Error | undefined;
 
-	constructor(
-		private readonly repo: SessionRepo,
-		private readonly name: string,
-	) {
-		this.ready = this.open();
+	constructor(open: Promise<PiSession>) {
+		this.ready = this.replay(open);
 		// A host can hold a session and read nothing from it for hours, so
 		// nothing may await `ready` for a long time. Mark the rejection handled
 		// here: a repo that cannot open must surface at the call that needs the
@@ -36,8 +33,8 @@ export class RecordStore {
 		void this.ready.catch(() => {});
 	}
 
-	private async open(): Promise<PiSession> {
-		const piSession = await openOrCreate(this.repo, this.name);
+	private async replay(open: Promise<PiSession>): Promise<PiSession> {
+		const piSession = await open;
 		const found = await piSession.findEntries();
 		// findEntries does not promise append order; seq does.
 		found.sort((a, b) => a.seq - b.seq);
@@ -90,21 +87,14 @@ export class RecordStore {
 	}
 }
 
-/** Open an id into its Pi session, creating it on first open. */
-export async function openOrCreate(
-	repo: SessionRepo,
-	id: string,
-	parentSessionId?: string,
-): Promise<PiSession> {
-	const known = (await repo.list()).find((metadata) => metadata.id === id);
-	if (known) return repo.open(known);
-	return repo.create(parentSessionId ? { id, parentSessionId } : { id });
-}
-
 /** Every turn a model took, in the downstream session that owns it. */
-export async function persistTurns(open: Promise<PiSession>, agent: Agent): Promise<void> {
+export async function persistTurns(
+	open: Promise<PiSession>,
+	agent: Agent,
+	at: string,
+): Promise<void> {
 	const piSeat = await open;
-	await piSeat.appendCustomEntry('ambion/activation', { at: new Date().toISOString() });
+	await piSeat.appendCustomEntry('ambion/activation', { at });
 	for (const message of agent.state.messages) {
 		// Provider messages may carry undefined-valued fields, which Pi's
 		// durability check rejects; a JSON round-trip drops them.

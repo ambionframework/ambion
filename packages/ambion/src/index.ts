@@ -35,15 +35,12 @@ export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from
 // The room's own exchange: what a question opened, and what quiescence closed.
 export type { ClosedExchange, Exchange } from './exchange.ts';
 export type {
-	MemoryBackendFile,
-	MemoryBackendOptions,
-	MemoryWorkspaceBackend,
-	SeedWriter,
-} from './just-bash.ts';
-// A workspace over a real directory, or the in-memory default with seeding
-// and read-back. Neither import is needed for the in-memory default's own
-// use inside `defineWorkspace` — only a host that wants to seed or read it.
-export { directoryBackend, memoryBackend } from './just-bash.ts';
+	CreateRuntimeOptions,
+	RunningRoom,
+	Runtime,
+	SessionRepoLike,
+} from './host/runtime.ts';
+export { createRuntime, defaultRuntime, sessionsOver, systemClock } from './host/runtime.ts';
 export type {
 	ReadSessionOptions,
 	Session,
@@ -53,14 +50,28 @@ export type {
 } from './session.ts';
 export { readSession, startSession, stopSession, visitSession } from './session.ts';
 export type {
+	MemoryBackendFile,
+	MemoryBackendOptions,
+	MemoryWorkspaceBackend,
+	SeedWriter,
+} from './tools/just-bash.ts';
+// A workspace over a real directory, or the in-memory default with seeding
+// and read-back. Neither import is needed for the in-memory default's own
+// use inside `defineWorkspace` — only a host that wants to seed or read it.
+export { directoryBackend, memoryBackend } from './tools/just-bash.ts';
+export type { DefineWorkspaceOptions } from './tools/workspace.ts';
+export { defineWorkspace, destroyWorkspace } from './tools/workspace.ts';
+export type {
 	AgentDefinition,
 	AgentSeat,
 	AgentSeatInfo,
 	AmbionTool,
 	Attention,
+	Clock,
 	HumanDefinition,
 	HumanSeatInfo,
 	Message,
+	ModelResolver,
 	Participant,
 	PresenceChange,
 	PresenceMessage,
@@ -70,6 +81,7 @@ export type {
 	SeatStatus,
 	Seq,
 	SessionEvent,
+	SessionOpener,
 	SpokenMessage,
 	SummaryMessage,
 	ToolContext,
@@ -78,8 +90,6 @@ export type {
 	WorkspaceHandle,
 } from './types.ts';
 export { isPresence, isSpoken, isSummary } from './types.ts';
-export type { DefineWorkspaceOptions } from './workspace.ts';
-export { defineWorkspace, destroyWorkspace } from './workspace.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

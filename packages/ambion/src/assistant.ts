@@ -112,6 +112,8 @@ function draftOver(
 export interface SummaryRoom {
 	/** Whether the room is closing: a draft that finishes after it commits nothing. */
 	stopped(): boolean;
+	/** The room's clock, as an ISO stamp for the record. */
+	now(): string;
 	/** The last seq the record holds. */
 	lastSeq(): Seq;
 	/** Rule 5: the same lock a say commits under. */
@@ -156,7 +158,7 @@ export function summariseTool(assistant: string, draft: Draft, room: SummaryRoom
 				{ name: assistant, readThrough: draft.through },
 				{
 					kind: 'summary',
-					at: new Date().toISOString(),
+					at: room.now(),
 					from: assistant,
 					to: person,
 					text,
@@ -216,6 +218,7 @@ export interface Composing {
 /** What the seat tool needs of the room: the reserve, the roster, and the record. */
 export interface ComposeRoom {
 	stopped(): boolean;
+	now(): string;
 	/** The reserve as it stands: who may be seated, by name and identity. */
 	reserve(): { name: string; identity: string }[];
 	/** Move one name from the reserve to the roster. The roster changes before the message lands. */
@@ -266,7 +269,7 @@ export function seatTool(assistant: string, composing: Composing, room: ComposeR
 			room.seat(name);
 			const message = room.commit({
 				kind: 'seated',
-				at: new Date().toISOString(),
+				at: room.now(),
 				from: name,
 				identity: entry.identity,
 				by: assistant,

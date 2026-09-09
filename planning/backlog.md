@@ -13,23 +13,14 @@ the open questions about a design; this file holds the work.
 
 ## Runtime module boundaries
 
-### 1. The room is a process global
+### 1. The room is a process global — closed
 
-**What.** `session.ts` holds a module-level `running` map, a shared
-`defaultRepo`, a lazily built model registry, and a `registryStream` that
-reads `process.env` for API keys. `workspace.ts` holds a global `taken` set.
-
-**Why.** Two hosts in one process cannot each run a room with the same
-name. Tests keep unique-name counters to stay apart. A room resumed after
-a restart shares one in-memory repo with every other room in the process.
-For hermetic execution and session resumption, the host must own these.
-
-**Where.** `packages/ambion/src/session.ts` lines 75 to 95,
-`packages/ambion/src/workspace.ts` line 50.
-
-**Fix.** A `Runtime` value that holds the registry, the repo and the
-environment source. `startSession`, `readSession` and `defineWorkspace`
-take it as an option. The current globals become the default instance.
+`host/runtime.ts` holds the clock, the session opener, the model call,
+the catalog, the rooms that run and the workspace names that are taken.
+`startSession`, `readSession` and `defineWorkspace` take a `Runtime` and
+default to `defaultRuntime`, the one process-wide value. The default model
+call alone reads `process.env`; a runtime with its own `stream` reads
+nothing. `test/runtime.test.ts` proves two runtimes never see each other.
 
 ### 2. Nothing bounds the record, and the room rescans it per message
 
@@ -88,20 +79,16 @@ protobufjs and the Anthropic SDK before a host defines anything.
 The four ignored build-script warnings on every `pnpm install` come from
 this tree, and `docs/toolchain.md` §3 says nothing in the tree needs one.
 
-**Where.** `packages/ambion/src/session.ts` line 28 and `registry()`.
+**Where.** `packages/ambion/src/host/runtime.ts`, `registry()`.
 
 **Fix.** Make `registry()` a dynamic import, or move default provider
 resolution to the host. `streamFn` is already the extension surface.
 
-### 5. `defineAgent` imports the shell runtime
+### 5. `defineAgent` imports the shell runtime — closed
 
-**What.** `define.ts` imports `BUILTIN_TOOL_NAMES` from `workspace.ts`,
-which imports `memoryBackend` from `just-bash.ts`. A value module depends
-on just-bash for a set of four strings.
-
-**Where.** `packages/ambion/src/define.ts` line 27.
-
-**Fix.** Move the constant to `types.ts`.
+`BUILTIN_TOOL_NAMES` lives in `types.ts`, and the vocabulary imports
+nothing that does anything: Biome refuses it
+([`docs/toolchain.md`](../docs/toolchain.md) §1).
 
 ### 6. Two copies of typebox
 
@@ -118,10 +105,10 @@ latent break on the next typebox release that changes a type.
 
 ### 7. Test affordances leak into the runtime
 
-**What.** `resolveModel` returns `{ api: 'scripted' } as unknown as
+**What.** `stubModel` returns `{ api: 'scripted' } as unknown as
 Model<Api>` when a host passes a custom `streamFn`.
 
-**Where.** `packages/ambion/src/session.ts`, `resolveModel`.
+**Where.** `packages/ambion/src/host/runtime.ts`, `stubModel`.
 
 **Fix.** Build a real `Model` value with Pi's own shape.
 
@@ -416,7 +403,7 @@ the `bash` tool's own description promises a Unix shell.
 - Whether `connect` should seed `/dev` into a `ReadWriteFs` the way just-bash
   seeds it into an `InMemoryFs`, so the two backends at least agree.
 
-**Where.** `connectOver` in [`just-bash.ts`](../packages/ambion/src/just-bash.ts).
+**Where.** `connectOver` in [`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts).
 
 ### 23. A backend on a real machine
 
@@ -445,7 +432,7 @@ abort signal because `useradd` and a process spawn are real waits.
 
 **Where.** `WorkspaceBackend` in
 [`types.ts`](../packages/ambion/src/types.ts); `directoryBackend` in
-[`just-bash.ts`](../packages/ambion/src/just-bash.ts) is the shape to copy.
+[`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts) is the shape to copy.
 
 ### 24. Whether Agent or AgentHarness is Ambion's foundation
 

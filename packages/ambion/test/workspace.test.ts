@@ -7,7 +7,6 @@ import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Bash, InMemoryFs } from 'just-bash';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
 import {
 	type AgentDefinition,
 	defineAgent,
@@ -22,7 +21,8 @@ import {
 	type ToolContext,
 	type WorkspaceBackend,
 } from '../src/index.ts';
-import { MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
+import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/tools/bash-env.ts';
+import { MEMORY_LIMIT_BYTES, memoryBackend } from '../src/tools/just-bash.ts';
 import { assistant, enter, roomName as name } from './support/room.ts';
 import {
 	byAgent,

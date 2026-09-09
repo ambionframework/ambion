@@ -14,7 +14,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 
 | Path                | What                                                                                   |
 | ------------------- | -------------------------------------------------------------------------------------- |
-| `packages/ambion`   | The runtime. One file per concern; `session.ts` is the room that composes them         |
+| `packages/ambion`   | The runtime. One file per concern, in layers Biome holds; `session.ts` composes them   |
 | `packages/cli`      | The `ambion` binary                                                                    |
 | `docs/agent.md`     | Design contract for the core — read before changing the runtime                        |
 | `docs/exchange.md`  | Design contract for the exchange, the room's unit of work — read with `agent.md`       |
@@ -72,6 +72,9 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   everything a participant reads — prompts, roster, record, the ask at the end
   of a turn — and stays pure and stateless so it does not become one. What the
   room says to a developer stays with the mechanism that says it.
+- The core is laid out in layers (`docs/toolchain.md` §1), and an import
+  points down only. Biome refuses the rest; a new file goes in the layer
+  that may reach what it needs, and never above `session.ts`.
 - No `any`, no non-null assertions, no unused imports or variables.
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
 - Cognitive complexity: max 10 in source, 15 in tests.

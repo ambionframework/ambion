@@ -43,6 +43,8 @@ export interface ActivationRoom {
 	/** Keep what the model did, in the seat's own downstream session. */
 	persist(agent: Agent): Promise<void>;
 	emit(event: SessionEvent): void;
+	/** The room's clock: Pi stamps every message it is handed. */
+	now(): number;
 }
 
 /** One activation, from the moment the room wakes a seat until it stops. */
@@ -82,7 +84,7 @@ export class Activation {
 	 */
 	steer(message: Message, line: string): void {
 		this.pending.push(message.seq);
-		this.agent?.steer(userMessage(`[new] ${line}`));
+		this.agent?.steer(userMessage(`[new] ${line}`, this.room.now()));
 	}
 
 	/** Pi's abort ends the run but not its queues; this stops the rebuild too. */
@@ -111,7 +113,7 @@ export class Activation {
 			const { agent, context } = this.room.open(this);
 			this.agent = agent;
 			agent.subscribe((event) => this.note(event));
-			await agent.prompt(userMessage(context));
+			await agent.prompt(userMessage(context, this.room.now()));
 			await this.room.persist(agent);
 			const failure = failureOf(agent);
 			if (failure) return this.broke(failure);
@@ -157,8 +159,8 @@ export class Activation {
 	}
 }
 
-function userMessage(text: string): UserMessage {
-	return { role: 'user', content: text, timestamp: Date.now() };
+function userMessage(text: string, timestamp: number): UserMessage {
+	return { role: 'user', content: text, timestamp };
 }
 
 function failureOf(agent: Agent): Error | undefined {
