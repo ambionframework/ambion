@@ -224,11 +224,10 @@ budget a test would hit the wall three times sooner than the code it exercises.
 The wider budget measures a test body from where it actually starts. A test
 that has become a program still fails — the tree's worst test scores 8.
 
-The runtime's densest method, `SessionImpl.dispatch`, sits at exactly 10.
-Routing is the room's whole policy and is meant to stay one readable piece, so
-it has no headroom on purpose: the next branch added to it forces a
-deliberate decision. Everything else
-in the tree scores 9 or below.
+The runtime's routing, `SessionImpl.routing`, and its step,
+`reconcileOnce`, are glue over pure functions in `fold.ts` and
+`reconcile.ts`, one function per fact, and each stays under the budget.
+Everything in the tree scores 10 or below.
 
 The budget is a lint rule, so it runs wherever `check:lint` runs — the `check` job on a pull request, and the gate the release
 re-runs before it publishes. There was nothing to add to `ci.yml`.

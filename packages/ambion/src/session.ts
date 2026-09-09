@@ -1,49 +1,37 @@
 /**
- * The room: the one place where a record, the seats around it, the people
+ * The room: the one place where a log, the seats around it, the people
  * visiting it and the exchanges they open become behaviour.
  *
- * Everything with a life of its own has left. The log is `log.ts`, who
- * is here is `presence.ts`, a seat and what wakes it is `seat.ts`, one
- * activation is `activation.ts`, an exchange is `exchange.ts`, the assistant is
- * `assistant.ts`, and every sentence a participant reads is `render.ts`. What is
- * left is what only a room can do:
+ * The room is one operation and one step. `commit` appends one entry to the
+ * log under a serial queue, then emits and sends. `reconcile` folds the log,
+ * decides, writes what it decided, and sends; it runs after every commit,
+ * every lease change, every alarm and every wake, and running it twice
+ * writes nothing. Every fact about the room is a fold over the log
+ * (`fold.ts`), so a room that resumes over the log continues where the last
+ * run stopped.
  *
- * - **Compose.** Seat the agents and the assistant, hold the reserve, admit the
- *   people, seat and unseat while it runs, and take it all down again.
+ * What is left here is what only a room can do:
+ *
+ * - **Compose.** Write the composition, admit the people, seat and unseat
+ *   while it runs, and take it all down again.
  * - **Commit.** One queue, one seq at a time, for every author (rule 5), and
  *   one `message` event per message however it was written.
- * - **Route.** Who hears a message, and who wakes for it.
- * - **Give an activation what only the room knows.** The model, the prompt, the
- *   hands, and the room as it stands at that moment.
- * - **Say when it has stopped.** An exchange closed, and nothing running.
+ * - **Route.** Who hears a message, and who wakes for it, written with it.
+ * - **Answer a seat.** The view an activation reads, the commit it asks for,
+ *   and the lease it holds — the three calls in `wire.ts`.
+ * - **Say when it has stopped.** An exchange closed, and nothing live.
  */
-import type {
-	AgentTool,
-	Session as PiSession,
-	SessionRepo,
-	StreamFn,
-} from '@earendil-works/pi-agent-core';
-import { Agent } from '@earendil-works/pi-agent-core';
-import { Type } from 'typebox';
-import { Activation } from './activation.ts';
+import type { SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
+import { assertAssistant } from './assistant.ts';
+import type { Exchange } from './exchange.ts';
+import { foldRoom, type RoomState } from './fold.ts';
+import { activationId, isExpired, isLive, parseId, seatOf } from './lease.ts';
+import { type Committed, RoomLog } from './log.ts';
+import type { VisitRuntime } from './presence.ts';
+import { decide, liveSeats, working } from './reconcile.ts';
 import {
-	Assistant,
-	assertAssistant,
-	type Composing,
-	type Draft,
-	seatTool,
-	summariseTool,
-} from './assistant.ts';
-import { seated } from './define.ts';
-import { type ClosedExchange, type Exchange, Exchanges } from './exchange.ts';
-import { type Committed, persistTurns, RoomLog } from './log.ts';
-import { Attendance, type VisitRuntime } from './presence.ts';
-import {
-	type Closing,
-	type ComposingView,
 	type PersonView,
 	type RoomView,
-	refusal,
 	renderLine,
 	renderSystemPrompt,
 	renderTurnContext,
@@ -52,12 +40,13 @@ import {
 import {
 	defaultRuntime,
 	type ModelResolver,
+	type RunningRoom,
 	type Runtime,
 	type SessionOpener,
 	sessionsOver,
 	stubModel,
 } from './runtime.ts';
-import { delivered, isActive, type SeatRuntime, toPiTool, wakes } from './seat.ts';
+import { SeatActor, wakes } from './seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
@@ -76,12 +65,31 @@ import {
 	type SpokenMessage,
 	type SummaryMessage,
 } from './types.ts';
-import { builtinTools } from './workspace.ts';
+import type {
+	ActivationView,
+	Commit,
+	CommitResponse,
+	EndReason,
+	Hand,
+	Lease,
+	LeaseResponse,
+	SeatPort,
+	SeatRow,
+	ViewResponse,
+} from './wire.ts';
 
-/** An agent held in reserve: the definition, and the attention it takes when seated. */
-interface Reserved {
+/** An agent with the attention it takes when seated. */
+interface Placed {
 	def: AgentDefinition;
 	attention: Attention;
+}
+
+/** What a run starts with, as values. The row on the log is the same, by name. */
+interface Composition {
+	assistant: AgentDefinition;
+	goal: string | undefined;
+	agents: Placed[];
+	available: Placed[];
 }
 
 export interface StartSessionOptions {
@@ -123,6 +131,12 @@ export interface ReadSessionOptions {
 	runtime?: Runtime;
 }
 
+export interface ResumeSessionOptions {
+	runtime?: Runtime;
+	/** Override the model call, as `startSession` does. */
+	streamFn?: StreamFn;
+}
+
 /** Reading a room takes no run: the pull side, and nothing that starts anything. */
 export interface SessionView {
 	readonly name: string;
@@ -132,21 +146,18 @@ export interface SessionView {
 }
 
 export interface Session extends SessionView {
-	/**
-	 * The question the room is working on, or nothing when nobody has asked.
-	 * Run state: a restart begins with none.
-	 */
+	/** The question the room is working on, or nothing when nobody has asked. A fold over the log. */
 	exchange(): Exchange | undefined;
-	/** Resolves when no agent is active and nothing is queued. */
+	/** Resolves when no seat that speaks for itself is live and the assistant is not composing. */
 	settled(): Promise<void>;
 	/**
-	 * Resolves when the room is quiet and every summary an exchange owed has
-	 * been written, declined or refused. `settled()` reports the seats alone,
-	 * which is what rule 5 needs it to mean; this is what a host waits for when
-	 * it wants the one message a person reads.
+	 * Resolves when nothing at all is live: no lease held, no wake pending.
+	 * `settled()` reports the seats alone, which is what rule 5 needs it to
+	 * mean; this is what a host waits for when it wants the one message a
+	 * person reads.
 	 */
 	quiet(): Promise<void>;
-	/** Cancel every activation in flight. The room keeps running; `stopSession` ends it. */
+	/** Revoke every lease in flight. The room keeps running; `stopSession` ends it. */
 	abort(): void;
 	/**
 	 * Put an agent on the roster while the room runs, from the reserve or from
@@ -154,10 +165,12 @@ export interface Session extends SessionView {
 	 */
 	seat(seat: AgentSeat): Promise<void>;
 	/**
-	 * Take an agent off the roster. Its activation in flight is aborted, the
+	 * Take an agent off the roster. Its lease in flight is revoked, the
 	 * record says it left, and an agent that came from the reserve returns to it.
 	 */
 	unseat(agent: AgentDefinition): Promise<void>;
+	/** Fold, decide, write, send. The room runs it on its own; a host on a platform with its own alarms calls it. */
+	reconcile(): Promise<void>;
 }
 
 export interface Visit {
@@ -176,17 +189,43 @@ export interface Visit {
 /** Sets up the context where the agents work. */
 export function startSession(options: StartSessionOptions): Session {
 	const runtime = options.runtime ?? defaultRuntime;
-	if (runtime.running.has(options.name)) {
-		throw new Error(
-			`Session '${options.name}' is already running: stop it before starting it again.`,
-		);
-	}
-	const session = new SessionImpl(options, runtime);
+	assertFree(runtime, options.name);
+	const session = SessionImpl.start(options, runtime);
 	runtime.running.set(options.name, session);
 	return session;
 }
 
-/** Takes the room down: activations aborted, visits closed, every departure committed. */
+/**
+ * Brings a name back up over its log, with the composition the log holds.
+ * Every name on the roster resolves through the runtime's catalog, and the
+ * first one missing is the error. The room reconciles at once: a lease the
+ * last run left expires, a wake it left pending is sent again, and an
+ * exchange it left open closes.
+ */
+export async function resumeSession(
+	name: string,
+	options: ResumeSessionOptions = {},
+): Promise<Session> {
+	const runtime = options.runtime ?? defaultRuntime;
+	assertFree(runtime, name);
+	const session = SessionImpl.resume(name, runtime, options.streamFn);
+	runtime.running.set(name, session);
+	try {
+		await session.started();
+	} catch (error) {
+		runtime.running.delete(name);
+		throw error;
+	}
+	return session;
+}
+
+function assertFree(runtime: Runtime, name: string): void {
+	if (runtime.running.has(name)) {
+		throw new Error(`Session '${name}' is already running: stop it before starting it again.`);
+	}
+}
+
+/** Takes the room down: leases revoked, visits closed, and the handle spent. */
 export function stopSession(session: Session): Promise<void> {
 	if (!(session instanceof SessionImpl)) {
 		throw new Error('stopSession takes a session from startSession.');
@@ -207,19 +246,22 @@ export function readSession(name: string, options: ReadSessionOptions = {}): Ses
 	const runtime = options.runtime ?? defaultRuntime;
 	const live = runtime.running.get(name);
 	if (live instanceof SessionImpl) return live;
-	return new ReadOnlySession(name, options.repo ? sessionsOver(options.repo) : runtime.sessions);
+	return new ReadOnlySession(
+		name,
+		options.repo ? sessionsOver(options.repo) : runtime.sessions,
+		runtime,
+	);
 }
 
 class ReadOnlySession implements SessionView {
 	private readonly log: RoomLog;
-	private readonly here: Attendance;
 
 	constructor(
 		readonly name: string,
 		sessions: SessionOpener,
+		private readonly runtime: Runtime,
 	) {
 		this.log = new RoomLog(sessions.open(name));
-		this.here = new Attendance(() => this.log.messages);
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
@@ -227,14 +269,12 @@ class ReadOnlySession implements SessionView {
 		return this.log.since(options.since);
 	}
 
-	/** A room that is not running has no agents standing up, and nobody in it. */
+	/** The roster the log folds, and everybody the record knows. Nothing stands up. */
 	seats(): SeatInfo[] {
-		return [...this.here.known()].map(([name, identity]) => ({
-			kind: 'human' as const,
-			name,
-			identity,
-			presence: this.here.presenceOf(name),
-		}));
+		const state = foldRoom(this.log.entries, this.runtime.retry);
+		return seatsOf(state, this.name, this.runtime.clock.now(), (name) =>
+			this.runtime.catalog.get(name),
+		);
 	}
 
 	/** Nothing is running, so nothing happens. The listener is never called. */
@@ -243,178 +283,201 @@ class ReadOnlySession implements SessionView {
 	}
 }
 
+/** The roster and the people, as `seats()` reports them, off one folded state. */
+function seatsOf(
+	state: RoomState,
+	room: string,
+	now: number,
+	defOf: (name: string) => AgentDefinition | undefined,
+): SeatInfo[] {
+	const live = liveSeats(state, now);
+	const seats: SeatInfo[] = state.roster.map((seat) => ({
+		kind: 'agent' as const,
+		name: seat.name,
+		identity: defOf(seat.name)?.identity ?? '',
+		status: live.has(seat.name) ? ('active' as const) : ('idle' as const),
+		attention: seat.attention,
+		sessionId: `${room}:${seat.name}`,
+		...(seat.assistant ? { assistant: true as const } : {}),
+	}));
+	for (const person of state.people.values()) {
+		seats.push({
+			kind: 'human',
+			name: person.name,
+			identity: person.identity,
+			presence: person.presence,
+		});
+	}
+	return seats;
+}
+
+/** Thrown inside the queue when the request the seat sent is answered `stale`. */
+class StaleError extends Error {}
+
+const stale = (why: string) => ({ stale: why });
+
 // -- the room ----------------------------------------------------------------
 
-class SessionImpl implements Session {
+class SessionImpl implements Session, RunningRoom {
 	readonly name: string;
-	private readonly goal?: string;
+	readonly stream: StreamFn;
+	readonly model: ModelResolver;
+	readonly sessions: SessionOpener;
 	private readonly runtime: Runtime;
-	private readonly sessions: SessionOpener;
 	private readonly log: RoomLog;
-	/**
-	 * The record replayed, and the composition checked against it: a name the
-	 * record knows as a person cannot be seated. Every operation waits here.
-	 */
+	/** The replay, the composition on the log, and the first reconcile. Every operation waits here. */
 	private readonly ready: Promise<void>;
-	private readonly agents = new Map<string, SeatRuntime>();
-	/** The reserve: agents the room may seat later, held with the attention they will take. */
-	private readonly reserve = new Map<string, Reserved>();
-	/** The room's assistant: how each person reads, who is owed, what it is drafting or composing. */
-	private readonly assistant: Assistant;
-	private readonly here = new Attendance(() => this.record);
+	/** Every definition this room can seat, by name. */
+	private readonly defs = new Map<string, AgentDefinition>();
+	/** What `seats()` reports before the replay: the composition the room was started with. */
+	private readonly starting: SeatInfo[];
+	/** The handles the host delivers through. Presence itself is a fold over the log. */
+	private readonly visits = new Map<string, VisitRuntime>();
+	private readonly ports = new Map<string, SeatPort>();
 	private readonly listeners = new Set<(event: SessionEvent) => void>();
 	private readonly settledWaiters: (() => void)[] = [];
 	private readonly quietWaiters: (() => void)[] = [];
-	private readonly streamFn: StreamFn;
-	private readonly model: ModelResolver;
+	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
+	private readonly sentAt = new Map<string, number>();
+	private cancelAlarm: () => void = () => {};
+	private reconciling: Promise<void> = Promise.resolve();
+	private fold: { length: number; state: RoomState } | undefined;
+	private replayed = false;
 	private stopped = false;
-	/**
-	 * Whether a seat has worked since the room last settled. A failed draft
-	 * waits for the seats to stop again, and a second settle at one quiescence
-	 * — an aborted activation ending after an unseat closed the exchange, a
-	 * question that woke nobody — is not the seats stopping again.
-	 */
-	private stirred = false;
-	/** The room's exchanges: what a question opened, and what quiescence closes. */
-	private readonly exchanges = new Exchanges();
+	private evicted = false;
+	/** Whether the room has reported quiet since it was last busy. */
+	private idleReported = true;
 
-	constructor(options: StartSessionOptions, runtime: Runtime) {
-		this.name = options.name;
-		this.goal = options.goal?.trim() || undefined;
+	static start(options: StartSessionOptions, runtime: Runtime): SessionImpl {
+		const composition = composeFrom(options);
+		return new SessionImpl(options.name, runtime, options, composition);
+	}
+
+	static resume(name: string, runtime: Runtime, streamFn: StreamFn | undefined): SessionImpl {
+		return new SessionImpl(name, runtime, { streamFn }, undefined);
+	}
+
+	private constructor(
+		name: string,
+		runtime: Runtime,
+		options: { repo?: SessionRepo; streamFn?: StreamFn },
+		composition: Composition | undefined,
+	) {
+		this.name = name;
 		this.runtime = runtime;
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
-		this.log = new RoomLog(this.sessions.open(this.name));
-		for (const seat of options.agents ?? []) this.place(seat);
-		// Seated at the narrow end: nothing said in the room wakes the assistant;
-		// the open and the close of an exchange do, and it is here for the whole run.
-		this.assistant = new Assistant(this.place(seated(assertAssistant(options.assistant), 'none')));
-		for (const seat of options.available ?? []) this.hold(seat);
-		this.streamFn = options.streamFn ?? runtime.stream;
+		this.log = new RoomLog(this.sessions.open(name));
+		this.stream = options.streamFn ?? runtime.stream;
 		this.model = options.streamFn ? stubModel : runtime.model;
-		// The seat side resolves a definition by name, so every one this room
-		// was composed with is on the runtime's catalog.
-		for (const { def } of [...this.agents.values(), ...this.reserve.values()]) {
-			runtime.catalog.set(def.name, def);
-		}
-		this.ready = this.compose();
+		this.starting = composition ? startingSeats(composition, name) : [];
+		if (composition)
+			this.know(...composition.agents, ...composition.available, {
+				def: composition.assistant,
+				attention: 'none',
+			});
+		this.ready = composition ? this.compose(composition) : this.recover();
 		void this.ready.catch(() => {});
 	}
 
+	/** Resolves once the room is up. `resumeSession` waits for it; every operation does. */
+	started(): Promise<void> {
+		return this.ready;
+	}
+
+	/** A definition the seat side resolves by name: on this room, and on the runtime's catalog. */
+	private know(...placed: Placed[]): void {
+		for (const { def } of placed) {
+			this.defs.set(def.name, def);
+			this.runtime.catalog.set(def.name, def);
+		}
+	}
+
 	/**
-	 * The composition against the record: `assertFreeName` reads the record,
-	 * so the check the constructor ran saw an empty one. This is the check
-	 * that counts, and the first call that needs the room sees its refusal.
+	 * The composition against the record, then on it. A name the record knows
+	 * as a person cannot be seated, and the first call that needs the room sees
+	 * the refusal. The row is what the roster folds from.
 	 */
-	private async compose(): Promise<void> {
+	private async compose(composition: Composition): Promise<void> {
 		await this.log.ready;
-		for (const name of [...this.agents.keys(), ...this.reserve.keys()]) {
-			if (this.here.knows(name)) {
+		this.replayed = true;
+		const people = this.state().people;
+		for (const name of this.defs.keys()) {
+			if (people.has(name)) {
 				throw new Error(`Duplicate agent name '${name}': one name names one participant.`);
 			}
 		}
-	}
-
-	/** The room's clock, as an ISO stamp for the record. */
-	private now(): string {
-		return new Date(this.runtime.clock.now()).toISOString();
-	}
-
-	private get record(): Message[] {
-		return this.log.messages;
-	}
-
-	/** Seat one agent, refusing a name the room already knows. */
-	private place(seat: AgentSeat): SeatRuntime {
-		const { def, attention } = this.unwrap(seat);
-		this.assertFreeName(def.name);
-		const placed: SeatRuntime = { def, attention };
-		this.agents.set(def.name, placed);
-		return placed;
-	}
-
-	/** Hold one agent in reserve, refusing a name the room already knows. */
-	private hold(seat: AgentSeat): void {
-		const held = this.unwrap(seat);
-		this.assertFreeName(held.def.name);
-		this.reserve.set(held.def.name, held);
-	}
-
-	private unwrap(seat: AgentSeat): Reserved {
-		const def = isSeatedAgent(seat) ? seat.agent : seat;
-		if (!isAgent(def)) {
-			throw new Error('Agents must come from defineAgent or seated().');
-		}
-		return { def, attention: isSeatedAgent(seat) ? seat.attention : 'broadcast' };
-	}
-
-	/** One name names one participant: seated, in reserve, or a person the room knows. */
-	private assertFreeName(name: string): void {
-		if (this.agents.has(name) || this.reserve.has(name) || this.here.knows(name)) {
-			throw new Error(`Duplicate agent name '${name}': one name names one participant.`);
-		}
-	}
-
-	/** The host puts an agent on the roster. From the reserve when it is there; from anywhere else too. */
-	async seat(seat: AgentSeat): Promise<void> {
-		this.assertRunning();
-		await this.ready;
-		const given = this.unwrap(seat);
-		const held = this.reserve.get(given.def.name);
-		if (held) this.reserve.delete(given.def.name);
-		// A bare definition takes the attention its reserve entry carried.
-		const attention = isSeatedAgent(seat) ? seat.attention : (held?.attention ?? 'broadcast');
-		const placed = this.place(seated(given.def, attention));
-		placed.added = true;
-		if (held) placed.reserved = true;
-		await this.commitPresence({
-			kind: 'seated',
-			from: given.def.name,
-			identity: given.def.identity,
+		await this.log.write('composition', {
+			assistant: composition.assistant.name,
+			...(composition.goal === undefined ? {} : { goal: composition.goal }),
+			agents: composition.agents.map(seatRow),
+			available: composition.available.map(seatRow),
+			at: this.iso(),
 		});
+		this.wake();
+		await this.reconcile();
 	}
 
-	/** The host takes an agent off the roster. Never the assistant. */
-	async unseat(agent: AgentDefinition): Promise<void> {
-		this.assertRunning();
-		await this.ready;
-		const seat = this.agents.get(agent.name);
-		if (!seat) throw new Error(`'${agent.name}' is not seated in this session.`);
-		if (this.assistant.is(agent.name)) {
-			throw new Error(`'${agent.name}' is the assistant: a room cannot run without one.`);
+	/** The composition off the log, and every name on it through the catalog. */
+	private async recover(): Promise<void> {
+		await this.log.ready;
+		this.replayed = true;
+		const state = this.state();
+		if (state.composition === undefined) {
+			throw new Error(`Session '${this.name}' has no composition on its record: start it instead.`);
 		}
-		this.retire(seat);
-		await this.commitPresence({ kind: 'unseated', from: agent.name });
+		const names = [
+			state.composition.assistant,
+			...state.roster.map((seat) => seat.name),
+			...state.composition.available.map((seat) => seat.name),
+		];
+		for (const name of names) {
+			const def = this.runtime.catalog.get(name);
+			if (def === undefined) throw new Error(`'${name}' is not in the runtime's catalog.`);
+			this.defs.set(name, def);
+		}
+		this.wake();
+		await this.reconcile();
 	}
 
-	/** Off the roster: what was mid-flight ends, and a reserve agent goes back to the reserve. */
-	private retire(seat: SeatRuntime): void {
-		seat.activation?.abort();
-		this.agents.delete(seat.def.name);
-		if (seat.reserved)
-			this.reserve.set(seat.def.name, { def: seat.def, attention: seat.attention });
+	/** A room with an exchange open or a lease live is busy, and says so when it goes quiet. */
+	private wake(): void {
+		const state = this.state();
+		if (state.exchange !== undefined || this.live(state).size > 0) this.idleReported = false;
 	}
 
-	/** The assistant seats one name from the reserve. The roster changes before the message lands. */
-	private admit(name: string): void {
-		const held = this.reserve.get(name);
-		if (!held) throw new Error(`'${name}' is not in the reserve.`);
-		this.reserve.delete(name);
-		const placed = this.place(seated(held.def, held.attention));
-		placed.added = true;
-		placed.reserved = true;
+	// -- what the room holds --------------------------------------------------
+
+	private now(): number {
+		return this.runtime.clock.now();
 	}
 
-	/**
-	 * The seat's downstream Pi session, `<room>:<agent>`, parented to the
-	 * room's — where every activation's full turns land, so hands stay
-	 * auditable after the fact even though working views reset at idle.
-	 */
-	private seatSession(seat: SeatRuntime): Promise<PiSession> {
-		seat.piSeat ??= (async () => {
-			await this.ready;
-			return this.sessions.open(`${this.name}:${seat.def.name}`, this.name);
-		})();
-		return seat.piSeat;
+	private iso(): string {
+		return new Date(this.now()).toISOString();
+	}
+
+	/** Every fact about the room, folded over the log as it stands. */
+	private state(): RoomState {
+		const length = this.log.entries.length;
+		if (this.fold?.length !== length) {
+			this.fold = { length, state: foldRoom(this.log.entries, this.runtime.retry) };
+		}
+		return this.fold.state;
+	}
+
+	private get assistant(): string {
+		return (
+			this.state().composition?.assistant ??
+			this.starting.find((s) => s.kind === 'agent' && s.assistant)?.name ??
+			''
+		);
+	}
+
+	private gone(): boolean {
+		return this.stopped || this.evicted;
+	}
+
+	private assertRunning(): void {
+		if (this.gone()) throw new Error(`Session '${this.name}' is stopped.`);
 	}
 
 	subscribe(listener: (event: SessionEvent) => void): () => void {
@@ -422,260 +485,7 @@ class SessionImpl implements Session {
 		return () => this.listeners.delete(listener);
 	}
 
-	exchange(): Exchange | undefined {
-		return this.exchanges.current();
-	}
-
-	settled(): Promise<void> {
-		if (!this.working()) return Promise.resolve();
-		return new Promise((resolve) => this.settledWaiters.push(resolve));
-	}
-
-	/**
-	 * What is running. One fact, kept in one place: a seat holds its own
-	 * activation, so nothing counts them alongside and nothing can drift.
-	 */
-	private running(): SeatRuntime[] {
-		return [...this.agents.values()].filter(isActive);
-	}
-
-	/** Nothing at all is taking an activation. The assistant writing is something. */
-	private idle(): boolean {
-		return this.running().length === 0;
-	}
-
-	/**
-	 * Something that speaks for itself is taking one. The assistant drafting a
-	 * summary does not count: a close must not hold open the exchange it is
-	 * closing. The assistant composing the room does count: that is the
-	 * exchange's own work, and the exchange stays open until it has decided.
-	 */
-	private working(): boolean {
-		const composing = this.assistant.composing() !== undefined;
-		return this.running().some((seat) => composing || !this.assistant.is(seat.def.name));
-	}
-
-	quiet(): Promise<void> {
-		// The same condition the `quiet` event reports. A summary a race left
-		// owed is not work in flight: it waits for the next quiet room, and the
-		// room is quiet in the meantime.
-		if (this.idle()) return Promise.resolve();
-		return new Promise((resolve) => this.quietWaiters.push(resolve));
-	}
-
-	abort(): void {
-		for (const seat of this.agents.values()) seat.activation?.abort();
-	}
-
-	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
-		await this.ready;
-		return this.log.since(options.since);
-	}
-
-	seats(): SeatInfo[] {
-		const seats: SeatInfo[] = [];
-		for (const seat of this.agents.values()) {
-			seats.push({
-				kind: 'agent',
-				name: seat.def.name,
-				identity: seat.def.identity,
-				status: isActive(seat) ? 'active' : 'idle',
-				attention: seat.attention,
-				sessionId: `${this.name}:${seat.def.name}`,
-				...(this.assistant.is(seat.def.name) ? { assistant: true as const } : {}),
-			});
-		}
-		for (const [name, identity] of this.here.known()) {
-			seats.push({ kind: 'human', name, identity, presence: this.here.presenceOf(name) });
-		}
-		return seats;
-	}
-
-	/** Puts a person in the room. A second visit while they are here is the same visit. */
-	async visit(human: HumanDefinition): Promise<Visit> {
-		this.assertRunning();
-		await this.ready;
-		// Checked after the replay: a name the record knows is only known then.
-		this.assertVisitable(human);
-		const already = this.here.visitOf(human.name);
-		if (already) return this.handle(already);
-		// The room changes before the message does: a seat woken by the arrival
-		// must read a roster that already agrees with it.
-		const visit = this.here.enter(human);
-		// How they read outlives the visit: an exchange they opened is finished
-		// properly or not at all, and its message is written after they leave.
-		this.assistant.serve(human.name, human.preferences);
-		await this.commitPresence({ kind: 'arrived', from: human.name, identity: human.identity });
-		return this.handle(visit);
-	}
-
-	private assertVisitable(human: HumanDefinition): void {
-		if (this.agents.has(human.name) || this.reserve.has(human.name)) {
-			throw new Error(
-				`'${human.name}' is an agent in this session: one name names one participant.`,
-			);
-		}
-		const known = this.here.known().get(human.name);
-		if (known !== undefined && known !== human.identity) {
-			throw new Error(
-				`'${human.name}' is already in this session under a different identity: one name is one person.`,
-			);
-		}
-	}
-
-	private assertRunning(): void {
-		if (this.stopped) throw new Error(`Session '${this.name}' is stopped.`);
-	}
-
-	/** A presence change the room commits under a fresh key, and routes. */
-	private async commitPresence(change: Omit<PresenceMessage, 'seq' | 'at' | 'key'>): Promise<void> {
-		await this.commit<PresenceMessage>({
-			key: crypto.randomUUID(),
-			draft: { ...change, at: this.now() },
-		});
-	}
-
-	/**
-	 * One operation on the room's commit queue: the write, and then what the
-	 * room does with a fresh message, inside the same link of the queue. A
-	 * repeated key lands nothing, so the room does nothing with it either.
-	 */
-	private commit<T extends Message>(
-		intent: Parameters<RoomLog['commit']>[0] & { draft: Omit<T, 'seq' | 'key'> },
-		route = true,
-	): Promise<Committed<T>> {
-		return this.log.commit<T>(intent, (message) =>
-			route ? this.committed(message) : this.emit({ type: 'message', message }),
-		);
-	}
-
-	/**
-	 * What happens to every message once its write is confirmed: the host
-	 * hears about it, and the room routes it. One message, one event, one
-	 * order — stated here rather than at each of the commit sites.
-	 */
-	private committed(message: Message): void {
-		// The message lands, then what it opened: an exchange is a fact about a
-		// message the host has already seen. Both come before the routing, so
-		// nothing wakes on a message the host has not heard about.
-		this.emit({ type: 'message', message });
-		this.noteExchange(message);
-		this.dispatch(message);
-		// A question that wakes no seat has no seat to stop, so the exchange it
-		// opened would never close. The same check an ending activation runs,
-		// and the same last word: the room was quiet, and it says so.
-		if (this.exchanges.current() !== undefined && !this.working()) {
-			this.settle();
-			if (this.idle()) this.markQuiet();
-		}
-	}
-
-	/**
-	 * A person's question opens an exchange, and the room says so. When the
-	 * room holds agents in reserve, the assistant composes the room for it: it
-	 * reads the question while the seats do, and seats who the question needs.
-	 */
-	private noteExchange(message: Message): void {
-		const opened = this.exchanges.note(message, this.here.knows(message.from));
-		if (!opened) return;
-		this.emit({ type: 'exchange_opened', exchange: opened });
-		if (this.reserve.size === 0 || this.stopped) return;
-		const composing = this.assistant.compose(opened.owner, opened.from, this.reserve.size);
-		if (composing) this.activate(this.assistant.seat);
-	}
-
-	private assertLive(visit: VisitRuntime): void {
-		if (visit.gone) throw new Error(`${visit.human.name}'s visit has ended.`);
-	}
-
-	private async endVisit(visit: VisitRuntime): Promise<void> {
-		if (visit.gone) return;
-		visit.gone = true;
-		this.here.leave(visit.human.name);
-		await this.commitPresence({ kind: 'left', from: visit.human.name });
-	}
-
-	private handle(visit: VisitRuntime): Visit {
-		const session = this;
-		return {
-			human: visit.human,
-			get since() {
-				return session.here.sinceOf(visit.human.name);
-			},
-			async deliver(input) {
-				session.assertLive(visit);
-				await session.deliverFrom(visit.human.name, input);
-			},
-			leave() {
-				return session.endVisit(visit);
-			},
-		};
-	}
-
-	/** Closes the run: what is mid-flight ends, what is present is marked gone. */
-	async stop(): Promise<void> {
-		if (this.stopped) return;
-		// Stopped from here on: a visit that arrives during the shutdown is
-		// refused rather than seated into a room that is going away.
-		this.stopped = true;
-		try {
-			this.abort();
-			await this.ready;
-			// A deliberate shutdown observed everybody leaving, so the record
-			// says so, and the host hears it. It wakes nobody: an activation
-			// started to hear that the room is closing is an activation nobody reads.
-			for (const visit of this.here.all()) {
-				visit.gone = true;
-				this.here.leave(visit.human.name);
-				await this.commitUnrouted({ kind: 'left', from: visit.human.name });
-			}
-			// What the run added leaves with it, the same way: the next run begins
-			// from the composition `startSession` was given.
-			for (const seat of this.agents.values()) {
-				if (!seat.added) continue;
-				this.retire(seat);
-				await this.commitUnrouted({ kind: 'unseated', from: seat.def.name });
-			}
-		} finally {
-			// The name comes free whatever the repo did. A failed write must
-			// not leave a room that can never be started again.
-			if (this.runtime.running.get(this.name) === this) this.runtime.running.delete(this.name);
-			// A stopped room never goes quiet on its own, so nobody waits on it.
-			for (const resolve of this.quietWaiters.splice(0)) resolve();
-		}
-	}
-
-	/** A presence change the closing room commits and routes to nobody: an activation nobody reads. */
-	private async commitUnrouted(change: Omit<PresenceMessage, 'seq' | 'at' | 'key'>): Promise<void> {
-		await this.commit<PresenceMessage>(
-			{ key: crypto.randomUUID(), draft: { ...change, at: this.now() } },
-			false,
-		);
-	}
-
-	// -- messages ------------------------------------------------------------
-
-	private async deliverFrom(
-		from: string,
-		input: { to?: Participant; text: string; key?: string },
-	): Promise<void> {
-		const to = input.to?.name;
-		if (to !== undefined && !this.here.knows(to) && !this.agents.has(to)) {
-			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
-		}
-		await this.commit<SpokenMessage>({
-			key: input.key ?? crypto.randomUUID(),
-			draft: {
-				kind: 'said',
-				at: this.now(),
-				from,
-				...(to === undefined ? {} : { to }),
-				text: input.text,
-			},
-		});
-	}
-
-	private emit(event: SessionEvent): void {
+	emit(event: SessionEvent): void {
 		for (const listener of this.listeners) {
 			try {
 				listener(event);
@@ -685,429 +495,773 @@ class SessionImpl implements Session {
 		}
 	}
 
-	/**
-	 * Route a committed message — the room's whole policy in one place, and
-	 * the same for what a person said, what a person did, and what a colleague
-	 * said. Every colleague still at work hears it as a steer (rule 2). What
-	 * wakes an idle seat is the attention it was seated at, against the reach
-	 * of the message (rules 1, 4 and 6, in `wakes` below).
-	 */
-	private dispatch(message: Message): void {
-		// The author is excluded, and the seat a message names is its target. For
-		// every kind but a seating the two are `from`; a seating is written by
-		// `by`, or by nobody when the host did it, and names the seat in `from`.
-		const author = authorOf(message);
-		const target = this.targetOf(message);
-		const fromAssistant = author !== undefined && this.assistant.is(author);
-		for (const seat of this.agents.values()) {
-			if (seat.def.name !== author) this.route(seat, message, target, fromAssistant);
+	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
+		await this.ready;
+		return this.log.since(options.since);
+	}
+
+	seats(): SeatInfo[] {
+		if (!this.replayed) return this.starting;
+		return seatsOf(this.state(), this.name, this.now(), (name) => this.defs.get(name));
+	}
+
+	exchange(): Exchange | undefined {
+		return this.state().exchange;
+	}
+
+	/** A reconcile in flight may close the exchange or wake a seat: the answer waits for it. */
+	settled(): Promise<void> {
+		return this.settledAfter(this.reconciling);
+	}
+
+	private async settledAfter(reconciled: Promise<void>): Promise<void> {
+		await this.ready;
+		await reconciled;
+		if (!working(this.state(), this.now())) return;
+		return new Promise((resolve) => this.settledWaiters.push(resolve));
+	}
+
+	quiet(): Promise<void> {
+		return this.quietAfter(this.reconciling);
+	}
+
+	private async quietAfter(reconciled: Promise<void>): Promise<void> {
+		await this.ready;
+		await reconciled;
+		if (this.idle()) return;
+		return new Promise((resolve) => this.quietWaiters.push(resolve));
+	}
+
+	/** Nothing at all is live: no lease held, no wake pending, no wake sent and unanswered. */
+	private idle(): boolean {
+		return this.live(this.state()).size === 0;
+	}
+
+	/** The seats live now, counting the wakes this room sent that no lease has answered. */
+	private live(state: RoomState): Map<string, string[]> {
+		return liveSeats(state, this.now(), this.sentAt.keys());
+	}
+
+	// -- people -----------------------------------------------------------------
+
+	/** Puts a person in the room. A second visit while they are here is the same visit. */
+	async visit(human: HumanDefinition): Promise<Visit> {
+		this.assertRunning();
+		await this.ready;
+		this.assertVisitable(human);
+		const known = this.visits.get(human.name);
+		if (known) return this.handle(known);
+		const visit: VisitRuntime = { human, gone: false };
+		this.visits.set(human.name, visit);
+		// A person the log holds as present is here already: a crash wrote no
+		// `left`, and the host's word is what says otherwise. Nothing commits.
+		if (this.state().people.get(human.name)?.presence !== 'present') {
+			await this.commitMessage<PresenceMessage>(crypto.randomUUID(), undefined, () => ({
+				kind: 'arrived',
+				at: this.iso(),
+				from: human.name,
+				identity: human.identity,
+				...(human.preferences === undefined ? {} : { preferences: human.preferences }),
+			}));
+		}
+		return this.handle(visit);
+	}
+
+	/** One name names one participant, and a present person keeps one identity. */
+	private assertVisitable(human: HumanDefinition): void {
+		const state = this.state();
+		if (this.defs.has(human.name) || state.roster.some((seat) => seat.name === human.name)) {
+			throw new Error(
+				`'${human.name}' is an agent in this session: one name names one participant.`,
+			);
+		}
+		const known = state.people.get(human.name);
+		if (known?.presence === 'present' && known.identity !== human.identity) {
+			throw new Error(
+				`'${human.name}' is already in this session under a different identity: one name is one person.`,
+			);
 		}
 	}
 
-	/** One seat hears one message: steered in while it works, or woken when it is at rest. */
-	private route(
-		seat: SeatRuntime,
-		message: Message,
-		target: SeatRuntime | undefined,
-		fromAssistant: boolean,
-	): void {
-		if (seat.activation) {
-			if (this.hearsSteers(seat)) seat.activation.steer(message, renderLine(message));
-		} else if (wakes(seat, target, message, fromAssistant)) {
-			this.activate(seat);
+	private handle(visit: VisitRuntime): Visit {
+		const session = this;
+		return {
+			human: visit.human,
+			get since() {
+				return session.state().people.get(visit.human.name)?.since;
+			},
+			async deliver(input) {
+				if (visit.gone) throw new Error(`${visit.human.name}'s visit has ended.`);
+				session.assertRunning();
+				await session.deliverFrom(visit.human.name, input);
+			},
+			leave() {
+				return session.endVisit(visit);
+			},
+		};
+	}
+
+	private async endVisit(visit: VisitRuntime): Promise<void> {
+		if (visit.gone) return;
+		visit.gone = true;
+		this.visits.delete(visit.human.name);
+		await this.commitMessage<PresenceMessage>(crypto.randomUUID(), undefined, () => ({
+			kind: 'left',
+			at: this.iso(),
+			from: visit.human.name,
+		}));
+	}
+
+	private async deliverFrom(
+		from: string,
+		input: { to?: Participant; text: string; key?: string },
+	): Promise<void> {
+		const to = input.to?.name;
+		const state = this.state();
+		if (
+			to !== undefined &&
+			!state.people.has(to) &&
+			!state.roster.some((seat) => seat.name === to)
+		) {
+			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
+		}
+		await this.commitMessage<SpokenMessage>(input.key ?? crypto.randomUUID(), undefined, () => ({
+			kind: 'said',
+			at: this.iso(),
+			from,
+			...(to === undefined ? {} : { to }),
+			text: input.text,
+		}));
+	}
+
+	// -- the roster -------------------------------------------------------------
+
+	/** The host puts an agent on the roster. From the reserve when it is there; from anywhere else too. */
+	async seat(seat: AgentSeat): Promise<void> {
+		this.assertRunning();
+		await this.ready;
+		const given = unwrap(seat);
+		const state = this.state();
+		if (state.roster.some((s) => s.name === given.def.name) || state.people.has(given.def.name)) {
+			throw new Error(`Duplicate agent name '${given.def.name}': one name names one participant.`);
+		}
+		// A bare definition takes the attention its reserve entry carried.
+		const held = state.reserve.find((s) => s.name === given.def.name);
+		const attention = isSeatedAgent(seat) ? seat.attention : (held?.attention ?? 'broadcast');
+		this.know({ def: given.def, attention });
+		await this.commitMessage<PresenceMessage>(crypto.randomUUID(), undefined, () => ({
+			kind: 'seated',
+			at: this.iso(),
+			from: given.def.name,
+			identity: given.def.identity,
+			attention,
+		}));
+	}
+
+	/** The host takes an agent off the roster. Never the assistant. */
+	async unseat(agent: AgentDefinition): Promise<void> {
+		this.assertRunning();
+		await this.ready;
+		if (!this.state().roster.some((seat) => seat.name === agent.name)) {
+			throw new Error(`'${agent.name}' is not seated in this session.`);
+		}
+		if (agent.name === this.assistant) {
+			throw new Error(`'${agent.name}' is the assistant: a room cannot run without one.`);
+		}
+		await this.revoke((seat) => seat === agent.name);
+		await this.commitMessage<PresenceMessage>(crypto.randomUUID(), undefined, () => ({
+			kind: 'unseated',
+			at: this.iso(),
+			from: agent.name,
+		}));
+	}
+
+	// -- commits ----------------------------------------------------------------
+
+	/**
+	 * One operation on the room's commit queue: the draft is built where the
+	 * write happens, with the wakes the room decides for it, and what the room
+	 * does with a fresh message runs inside the same link of the queue.
+	 */
+	private commitMessage<T extends Message>(
+		key: string,
+		readThrough: Seq | undefined,
+		draft: (state: RoomState) => Omit<T, 'seq' | 'key' | 'wakes'>,
+		route = true,
+	): Promise<Committed<T>> {
+		return this.log.commit<T>(
+			{
+				key,
+				...(readThrough === undefined ? {} : { readThrough }),
+				draft: () => {
+					const state = this.state();
+					const message = draft(state);
+					const woken = route ? this.routing(message as unknown as Message, state) : [];
+					return { ...message, ...(woken.length === 0 ? {} : { wakes: woken }) } as Omit<
+						T,
+						'seq' | 'key'
+					>;
+				},
+			},
+			(message) => this.committed(message),
+		);
+	}
+
+	/**
+	 * Who wakes for a message — the room's whole policy in one place, and the
+	 * same for what a person said, what a person did, and what a colleague
+	 * said. What wakes an idle seat is the attention it was seated at, against
+	 * the reach of the message (rules 1, 4 and 6, in `wakes`); a seat already
+	 * live hears it as a steer instead (rule 2). A person's question that opens
+	 * an exchange also wakes the assistant, when the reserve holds anybody.
+	 */
+	private routing(message: Message, state: RoomState): string[] {
+		const author = authorOf(message);
+		const target = targetOf(message);
+		const assistant = this.assistant;
+		const fromAssistant = author === assistant;
+		const live = this.live(state);
+		// The room changes before the message does: a seating's newcomer is on
+		// the roster the routing reads, so the seating wakes it.
+		const roster =
+			message.kind === 'seated'
+				? [
+						...state.roster,
+						{ name: message.from, attention: message.attention ?? 'broadcast', assistant: false },
+					]
+				: state.roster;
+		const woken = roster
+			.filter((seat) => seat.name !== author && !live.has(seat.name))
+			.filter((seat) => wakes(seat, target, message, fromAssistant))
+			.map((seat) => seat.name);
+		if (this.opensExchange(message, state) && state.reserve.length > 0 && !live.has(assistant)) {
+			woken.push(assistant);
+		}
+		return woken;
+	}
+
+	private opensExchange(message: Message, state: RoomState): boolean {
+		return state.exchange === undefined && isSpoken(message) && state.people.has(message.from);
+	}
+
+	/**
+	 * What happens to every message once its write is confirmed: the host
+	 * hears about it, then what it opened, then the room sends. One message,
+	 * one event, one order — stated here rather than at each of the commit sites.
+	 */
+	private committed(message: Message): void {
+		this.emit({ type: 'message', message });
+		const state = this.state();
+		if (state.exchange?.from === message.seq) {
+			this.idleReported = false;
+			this.emit({ type: 'exchange_opened', exchange: state.exchange });
+		}
+		for (const seat of message.wakes ?? []) this.send(activationId(message.seq, seat), seat);
+		this.steer(message, state);
+		void this.reconcile();
+	}
+
+	/** Every seat live for another activation hears the message inside it (rule 2). */
+	private steer(message: Message, state: RoomState): void {
+		const author = authorOf(message);
+		const woken = new Set(message.wakes ?? []);
+		const line = renderLine(message);
+		for (const [seat, ids] of this.live(state)) {
+			if (seat === author || woken.has(seat)) continue;
+			for (const id of ids.filter((id) => this.hearsSteers(seat, id))) {
+				void this.port(seat)
+					.steer({ seat, activation: id, message, line })
+					.catch(() => {});
+			}
 		}
 	}
 
 	/**
 	 * A composing activation decides on the question as it was asked, and what
-	 * the seats say while it decides is theirs to say: steering it in would
-	 * hand the assistant answers to weigh and no hand to weigh them with.
+	 * the seats say while it decides is theirs to say: steering it in would hand
+	 * the assistant answers to weigh and no hand to weigh them with.
 	 */
-	private hearsSteers(seat: SeatRuntime): boolean {
-		return !(this.assistant.is(seat.def.name) && this.assistant.composing() !== undefined);
+	private hearsSteers(seat: string, id: string): boolean {
+		return !(seat === this.assistant && parseId(id)?.kind === 'wake');
 	}
 
-	/** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
-	private targetOf(message: Message): SeatRuntime | undefined {
-		if (isSpoken(message))
-			return message.to === undefined ? undefined : this.agents.get(message.to);
-		return message.kind === 'seated' ? this.agents.get(message.from) : undefined;
+	private send(id: string, seat: string): void {
+		this.sentAt.set(id, this.now());
+		void this.port(seat)
+			.wake({ room: this.name, seat, activation: id })
+			.catch(() => {});
 	}
 
-	private activate(seat: SeatRuntime): void {
-		const activation = new Activation(seat.def.name, this.log.lastSeq, {
-			open: (running) => this.open(seat, running),
-			persist: (agent) => persistTurns(this.seatSession(seat), agent, this.now()),
-			emit: (event) => this.emit(event),
-			now: () => this.runtime.clock.now(),
-		});
-		// The seat holding it is what makes the room busy: there is no count to
-		// keep in step, and so none to drift.
-		seat.activation = activation;
-		if (this.closingOf(seat) === undefined) this.stirred = true;
-		this.emit({ type: 'activation_start', agent: seat.def.name });
-		// The assistant's activations are one pass: a summary answers a room that
-		// moved with a redraft inside its own tool, and a composition decides on
-		// the question as it was asked.
-		const rebuilds = !this.assistant.is(seat.def.name);
-		void activation
-			.run(rebuilds, () => this.log.lastSeq)
-			.finally(() => this.ended(seat, activation));
-	}
-
-	/** The seat stopped: what that closes, and what it frees. */
-	private ended(seat: SeatRuntime, activation: Activation): void {
-		seat.activation = undefined;
-		const assistant = this.assistant.is(seat.def.name);
-		const drafted = assistant && this.assistant.composing() === undefined;
-		if (assistant) {
-			this.assistant.activationEnded({ wrote: activation.spoke, failed: activation.failed });
+	private port(seat: string): SeatPort {
+		let port = this.ports.get(seat);
+		if (port === undefined) {
+			port = this.runtime.transport.connect(this, seat, this.runtime);
+			this.ports.set(seat, port);
 		}
-		this.emit({ type: 'activation_end', agent: seat.def.name, spoke: activation.spoke });
-		// An exchange ends when the seats stop, and a composing assistant is one
-		// of them. The assistant writing about an exchange is not the room still
-		// working on it, so a draft's end closes none — which also keeps a failing
-		// assistant from retrying for ever. What a draft's end frees is the seat,
-		// for whoever was owed while it drafted.
-		if (drafted) this.draftNext(this.assistant.dueAfterDraft(...this.dueArgs()));
-		else if (!this.working()) this.settle();
-		else if (assistant) this.draftNext(this.assistant.dueAfterDraft(...this.dueArgs()));
-		if (this.idle()) this.markQuiet();
+		return port;
 	}
 
-	/** The seats stopped: whoever waited hears it, and the exchange closes. */
-	private settle(): void {
-		for (const resolve of this.settledWaiters.splice(0)) resolve();
-		const worked = this.stirred;
-		this.stirred = false;
-		this.closeExchange(worked);
+	// -- what a seat asks -------------------------------------------------------
+
+	async view(id: string): Promise<ViewResponse> {
+		if (this.gone()) return stale('the room is gone');
+		await this.ready;
+		const state = this.state();
+		const seat = this.liveSeatOf(id, state);
+		if (seat === undefined) return stale('the lease ended');
+		const def = this.defs.get(seat);
+		if (def === undefined) return stale('the seat left the roster');
+		const { hand, closing, composing } = this.handOf(id, seat, state);
+		const speaking: SeatSpeaking = {
+			def: {
+				name: def.name,
+				identity: def.identity,
+				instructions: def.instructions,
+				connected: def.workspace !== undefined,
+			},
+			assistant: seat === this.assistant,
+			closing: closing && {
+				...closing,
+				preferences: state.people.get(closing.person)?.preferences,
+			},
+			composing: composing && { ...composing, reserve: this.reserved(state) },
+		};
+		const room = this.roomView(state);
+		return {
+			view: {
+				activation: id,
+				seat,
+				model: def.model,
+				lastSeq: state.lastSeq,
+				systemPrompt: renderSystemPrompt(speaking, room),
+				context: renderTurnContext(speaking, room),
+				hand,
+				...(closing ? { closing } : {}),
+				...(composing ? { composing } : {}),
+			},
+		};
 	}
 
-	/** The range the assistant is closing, when this seat is the assistant and it is closing one. */
-	private closingOf(seat: SeatRuntime): Draft | undefined {
-		return this.assistant.is(seat.def.name) ? this.assistant.closing() : undefined;
+	/** The seat holding a live lease under this id, or nothing. */
+	private liveSeatOf(id: string, state: RoomState): string | undefined {
+		const lease = state.leases.get(id);
+		if (lease === undefined || !isLive(lease, this.now())) return undefined;
+		const seat = seatOf(id, this.assistant);
+		return state.roster.some((s) => s.name === seat) ? seat : undefined;
 	}
 
 	/**
-	 * What the prose is given of the seat taking this activation. The assistant
-	 * holds every fact here; a seat holds none of them.
+	 * What an activation is for, read off its id and the fold: a draft closes
+	 * an exchange, the assistant woken by the question that opened one
+	 * composes the room for it, and every other seat speaks.
 	 */
-	private speaking(seat: SeatRuntime): SeatSpeaking {
-		const assistant = this.assistant.is(seat.def.name);
-		const draft = this.closingOf(seat);
-		const closing: Closing | undefined = draft && {
-			person: draft.person,
-			preferences: this.assistant.preferencesOf(draft.person),
-			from: draft.from,
-			through: draft.through,
+	private handOf(
+		id: string,
+		seat: string,
+		state: RoomState,
+	): { hand: Hand; closing?: ActivationView['closing']; composing?: ActivationView['composing'] } {
+		const parsed = parseId(id);
+		if (parsed?.kind === 'draft') {
+			const owed = state.owed.find((o) => o.through === parsed.through);
+			if (owed === undefined) return { hand: 'none' };
+			return {
+				hand: 'summarise',
+				closing: { person: owed.person, from: owed.from, through: state.lastSeq },
+			};
+		}
+		if (seat !== this.assistant) return { hand: 'say' };
+		const question = parsed && state.messages.find((m) => m.seq === parsed.seq);
+		const opened =
+			state.exchange?.from === parsed?.seq || state.closes.some((c) => c.from === parsed?.seq);
+		if (question === undefined || !opened) return { hand: 'none' };
+		return {
+			hand: 'seat',
+			composing: { person: question.from, from: question.seq, limit: state.reserve.length },
 		};
-		const composition = assistant ? this.assistant.composing() : undefined;
-		const composing: ComposingView | undefined = composition && {
-			person: composition.person,
-			from: composition.from,
-			reserve: this.reserved(),
-		};
-		return { def: seat.def, assistant, closing, composing };
 	}
 
 	/** The reserve as the assistant reads it: a name and an identity per agent. */
-	private reserved(): { name: string; identity: string }[] {
-		return [...this.reserve.values()].map(({ def }) => ({
-			name: def.name,
-			identity: def.identity,
+	private reserved(state: RoomState): { name: string; identity: string }[] {
+		return state.reserve.map((seat) => ({
+			name: seat.name,
+			identity: this.defs.get(seat.name)?.identity ?? '',
 		}));
 	}
 
 	/** What the prose is given of this room, built fresh for each activation. */
-	private view(): RoomView {
-		const open = this.exchanges.current();
+	private roomView(state: RoomState): RoomView {
 		return {
 			name: this.name,
-			goal: this.goal,
-			now: this.runtime.clock.now(),
+			goal: state.composition?.goal,
+			now: this.now(),
 			seats: this.seats(),
-			people: this.peopleViews(),
-			record: this.record,
-			exchange: open && { owner: open.owner, from: open.from },
+			people: this.peopleViews(state),
+			record: state.messages,
+			exchange: state.exchange && { owner: state.exchange.owner, from: state.exchange.from },
 		};
 	}
 
-	/**
-	 * What an activation is given: the model it runs on, the prompt it is addressed
-	 * by, the hands it holds, and the room as it stands right now. Only the
-	 * room knows any of that, and it builds them fresh for every pass.
-	 */
-	private open(seat: SeatRuntime, activation: Activation): { agent: Agent; context: string } {
-		const speaking = this.speaking(seat);
-		const view = this.view();
-		const agent = new Agent({
-			streamFn: this.streamFn,
-			initialState: {
-				systemPrompt: renderSystemPrompt(speaking, view),
-				model: this.model(seat.def.model, seat.def.name),
-				thinkingLevel: 'off',
-				tools: this.handsFor(seat, activation),
-				messages: [],
-			},
-		});
-		return { agent, context: renderTurnContext(speaking, view) };
+	/** One entry per person the room knows, with their gap and what they missed. */
+	private peopleViews(state: RoomState): PersonView[] {
+		return [...state.people.values()].map((person) => ({
+			name: person.name,
+			identity: person.identity,
+			presence: person.presence,
+			changedAt: person.changedAt,
+			since: person.since,
+			unseen: person.since === undefined ? 0 : this.log.since(person.since).length,
+		}));
 	}
 
-	/**
-	 * What an activation holds. A seat speaks, reaches its workspace through the
-	 * four built-in tools when it names one, and uses its own tools; the assistant
-	 * closing an exchange holds one hand, and it reaches the record. `startSession`
-	 * refuses an assistant that carries tools or a workspace of its own, so there
-	 * is nothing else to leave out.
-	 */
-	private handsFor(seat: SeatRuntime, activation: Activation): AgentTool[] {
-		// The assistant's hands are the runtime's, and it holds one for the
-		// activation it was woken for: `seat` at an open, `summarise` at a close.
-		// Nothing else wakes the assistant today; when something does — a wider
-		// attention, per planning/backlog.md — it must arrive with empty hands until
-		// somebody adds a `say` here on purpose. assistant.md §12 makes that a
-		// deliberate decision.
-		if (this.assistant.is(seat.def.name)) {
-			const composing = this.assistant.composing();
-			if (composing) return [this.seatHand(seat, activation, composing)];
-			const closing = this.assistant.closing();
-			return closing ? [this.summarise(seat, activation, closing)] : [];
+	async commit(commit: Commit): Promise<CommitResponse> {
+		if (this.gone()) return stale('the room is gone');
+		await this.ready;
+		const seat = seatOf(commit.activation, this.assistant) ?? '';
+		try {
+			const committed = await this.commitMessage<Message>(
+				commit.key,
+				commit.readThrough,
+				(state) => {
+					if (this.liveSeatOf(commit.activation, state) === undefined)
+						throw new StaleError('the lease ended');
+					return this.draft(commit, seat, state);
+				},
+			);
+			if ('missed' in committed) {
+				this.emit({ type: 'conflict', author: seat, missed: committed.missed });
+				return { missed: committed.missed };
+			}
+			return { committed: committed.message };
+		} catch (error) {
+			if (error instanceof StaleError) return stale(error.message);
+			if (error instanceof RefusedError) return { refused: error.message };
+			throw error;
 		}
-		return [
-			this.sayTool(seat, activation),
-			...builtinTools(seat.def),
-			...seat.def.tools.map((tool) => toPiTool(tool, seat.def)),
-		];
 	}
 
-	/** The one hand the assistant is given at an open, bound to the reserve. */
-	private seatHand(seat: SeatRuntime, activation: Activation, composing: Composing): AgentTool {
-		return seatTool(seat.def.name, composing, {
-			stopped: () => this.stopped,
-			now: () => this.now(),
-			reserve: () => this.reserved(),
-			seat: (name) => this.admit(name),
-			commit: async (key, draft) => {
-				const committed = await this.commit<PresenceMessage>({ key, draft });
-				if ('missed' in committed) throw new Error('A seating commits under no lock.');
-				return committed.message;
-			},
-			written: () => {
-				activation.spoke = true;
-			},
-		});
-	}
-
-	/** The one hand the assistant is given, bound to the range it must stand for. */
-	private summarise(seat: SeatRuntime, activation: Activation, closing: Draft): AgentTool {
-		return summariseTool(seat.def.name, closing, {
-			stopped: () => this.stopped,
-			now: () => this.now(),
-			lastSeq: () => this.log.lastSeq,
-			commit: (key, author, draft) => this.claim<SummaryMessage>(key, author, draft),
-			written: () => {
-				activation.spoke = true;
-			},
-		});
-	}
-
-	private sayTool(seat: SeatRuntime, activation: Activation): AgentTool {
+	/** The message a seat's intent becomes, with everything the room stamps. */
+	private draft(commit: Commit, seat: string, state: RoomState): Drafted {
+		const intent = commit.intent;
+		const stamp = { at: this.iso(), activationId: commit.activation };
+		if (intent.kind === 'said') {
+			assertAddressable(seat, intent.to, state);
+			return {
+				kind: 'said',
+				...stamp,
+				from: seat,
+				...(intent.to === undefined ? {} : { to: intent.to }),
+				text: intent.text,
+			};
+		}
+		if (intent.kind === 'summary') {
+			return {
+				kind: 'summary',
+				...stamp,
+				from: seat,
+				to: intent.to,
+				text: intent.text,
+				covers: intent.covers,
+			};
+		}
+		const held = state.reserve.find((s) => s.name === intent.name);
+		if (held === undefined) {
+			const names = state.reserve.map((s) => s.name);
+			throw new RefusedError(
+				`'${intent.name}' is not in the reserve. ` +
+					(names.length ? `Seat one of: ${names.join(', ')}.` : 'The reserve is empty.'),
+			);
+		}
+		const identity = this.defs.get(held.name)?.identity ?? '';
 		return {
-			name: 'say',
-			label: 'say',
-			description:
-				'Speak on the record. Omit `to` to address the room; set `to` to a participant name ' +
-				'to address them directly — a directed say to an agent also calls them in. ' +
-				'Ending your turn without calling say is declining to speak.',
-			parameters: Type.Object({
-				to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
-				text: Type.String(),
-			}),
-			execute: async (toolCallId, rawParams) => {
-				const params = rawParams as { to?: string; text: string };
-				const to = params.to?.trim() ? params.to.trim() : undefined;
-				// Rule 5 comes first: a seat that has not read the record is told
-				// what it missed before anything else is checked, so a say at a
-				// colleague who left in the meantime reads the departure.
-				this.assertHeard(seat, activation);
-				this.assertAddressable(seat, to);
-				const text = params.text.trim();
-				// A message with nothing in it still takes a seq, renders in
-				// every context after it, and stands inside whatever range a
-				// summary covers. Saying nothing is ending the activation.
-				if (text === '') {
-					throw new Error('The message is empty. Say something, or end your turn instead.');
-				}
-				// The queue runs the same check again where the write happens: a
-				// message that lands between here and there refuses this one.
-				const committed = await this.claim<SpokenMessage>(
-					toolCallId,
-					{ name: seat.def.name, readThrough: activation.readThrough },
-					{
-						kind: 'said',
-						at: this.now(),
-						from: seat.def.name,
-						...(to === undefined ? {} : { to }),
-						text,
-					},
-					// The seat has heard its own say before anybody else hears of it.
-					(message) => activation.heard(message.seq),
-				);
-				if ('missed' in committed) throw this.refused(activation, committed.missed);
-				activation.spoke = true;
-				return delivered();
-			},
+			kind: 'seated',
+			...stamp,
+			from: held.name,
+			identity,
+			by: seat,
+			attention: held.attention,
 		};
 	}
 
-	/**
-	 * Rule 5 for a say, checked before the say is examined: the record moved
-	 * past what this activation has read, so the say is refused and the seat
-	 * is told what landed. The queue runs the check that counts.
-	 */
-	private assertHeard(seat: SeatRuntime, activation: Activation): void {
-		if (this.log.lastSeq <= activation.readThrough) return;
-		const missed = this.log.since(activation.readThrough);
-		this.emit({ type: 'conflict', author: seat.def.name, missed });
-		throw this.refused(activation, missed);
-	}
-
-	/** What a refused seat is told. Now heard, it decides again against the record as it stands. */
-	private refused(activation: Activation, missed: Message[]): Error {
-		activation.heard(this.log.lastSeq);
-		return new Error(
-			refusal(
-				'Not delivered — the room moved while you were speaking. New on the record:',
-				missed,
-				'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
-			),
-		);
-	}
-
-	private assertAddressable(seat: SeatRuntime, to: string | undefined): void {
-		if (to === undefined) return;
-		const target = this.agents.get(to);
-		if (!this.here.knows(to) && !target) {
-			throw new Error(`Unknown participant '${to}'. Address someone from the roster.`);
+	async lease(lease: Lease): Promise<LeaseResponse> {
+		if (this.gone()) return stale('the room is gone');
+		await this.ready;
+		const seat = seatOf(lease.activation, this.assistant);
+		if (seat === undefined || !this.state().roster.some((s) => s.name === seat)) {
+			return stale('the seat is not on the roster');
 		}
-		if (to === seat.def.name) throw new Error('You cannot address yourself.');
-		// A seat at the narrow end wakes for nothing said, so addressing it
-		// would leave a message nobody reads. Say it to the room instead.
-		if (target?.attention === 'none') {
-			throw new Error(`'${to}' wakes for nothing said. Say it to the room, or to somebody else.`);
+		return lease.phase === 'running'
+			? this.claim(lease.activation, seat)
+			: this.release(lease, seat);
+	}
+
+	/** A claim, or a renewal: the lease runs until `expiry`, unless it had ended. */
+	private async claim(id: string, seat: string): Promise<LeaseResponse> {
+		const expiry = this.now() + this.runtime.wake.expiry;
+		let fresh = false;
+		const written = await this.log.write('lease', () => {
+			const known = this.state().leases.get(id);
+			if (known !== undefined && !isLive(known, this.now())) return undefined;
+			fresh = known === undefined;
+			return { id, phase: 'running', expiry, at: this.iso() };
+		});
+		if (!written) return stale('the lease ended');
+		if (fresh) {
+			this.idleReported = false;
+			this.emit({ type: 'activation_start', agent: seat });
+		}
+		void this.reconcile();
+		return { ok: { expiry, lastSeq: this.log.lastSeq } };
+	}
+
+	private async release(lease: Lease, seat: string): Promise<LeaseResponse> {
+		const ended = await this.end(lease.activation, seat, lease.reason ?? 'released');
+		if (!ended) return stale('the lease ended');
+		void this.reconcile();
+		return { ok: { expiry: this.now(), lastSeq: this.log.lastSeq } };
+	}
+
+	/** End one lease, for whatever reason, and say so once. Nothing to end is not an error. */
+	private async end(id: string, seat: string, reason: EndReason): Promise<boolean> {
+		const written = await this.log.write('lease', () => {
+			const known = this.state().leases.get(id);
+			if (known === undefined || known.phase === 'ended') return undefined;
+			if (reason !== 'expired' && isExpired(known, this.now())) return undefined;
+			return { id, phase: 'ended', reason, at: this.iso() };
+		});
+		if (!written) return false;
+		const spoke = this.state().messages.some((m) => m.activationId === id);
+		this.emit({ type: 'activation_end', agent: seat, spoke });
+		if (reason === 'expired') {
+			this.emit({
+				type: 'error',
+				agent: seat,
+				error: new Error('The activation ran past its lease.'),
+			});
+		}
+		return true;
+	}
+
+	// -- reconcile ----------------------------------------------------------------
+
+	reconcile(): Promise<void> {
+		this.reconciling = this.reconciling.then(() => this.reconcileOnce()).catch(() => {});
+		return this.reconciling;
+	}
+
+	/**
+	 * Fold, decide, write, send, until a decision writes nothing. Every write
+	 * checks the fold again where it lands, so a lease that arrives between
+	 * the decision and the write turns the write into nothing.
+	 */
+	private async reconcileOnce(): Promise<void> {
+		await this.log.ready;
+		for (let pass = 0; pass < 8 && !this.gone(); pass += 1) {
+			const decision = decide(this.state(), {
+				now: this.now(),
+				resend: this.runtime.wake.resend,
+				attempts: this.runtime.retry.attempts,
+				sentAt: (id) => this.sentAt.get(id),
+				stopped: this.stopped,
+			});
+			const changed = await this.apply(decision);
+			this.settle();
+			if (!changed) {
+				this.arm(decision.alarmAt);
+				return;
+			}
 		}
 	}
 
-	/**
-	 * Rule 5 for a say and for a summary: commit under `readThrough`, the seq
-	 * the author has read. The queue refuses a commit the record moved past,
-	 * and the loser is handed what it missed. The event names the author, not
-	 * the seat: a say and a summary are refused the same way.
-	 */
-	private async claim<T extends Message>(
-		key: string,
-		author: { name: string; readThrough: Seq },
-		draft: Omit<T, 'seq' | 'key'>,
-		heard?: (message: T) => void,
-	): Promise<Committed<T>> {
-		const committed = await this.log.commit<T>(
-			{ key, readThrough: author.readThrough, draft },
-			(message) => {
-				heard?.(message);
-				this.committed(message);
-			},
-		);
-		if ('missed' in committed) {
-			this.emit({ type: 'conflict', author: author.name, missed: committed.missed });
+	/** Write what the decision wrote, send what it sent. True when anything changed. */
+	private async apply(decision: ReturnType<typeof decide>): Promise<boolean> {
+		let changed = false;
+		for (const expired of decision.expired) {
+			const seat = seatOf(expired.id, this.assistant) ?? '';
+			changed = (await this.end(expired.id, seat, 'expired')) || changed;
 		}
-		return committed;
+		if (decision.close) changed = (await this.close(decision.close)) || changed;
+		for (const send of decision.sends) this.send(send.id, send.seat);
+		return changed || decision.sends.length > 0;
 	}
 
-	// -- the assistant ------------------------------------------------------------
-
-	/**
-	 * The room went quiet, so the exchange it was working on is over. The host
-	 * hears that before anything is written about it: the assistant is the first
-	 * reader of a closed exchange and not the only one.
-	 */
-	private closeExchange(worked: boolean): void {
-		const closing = this.exchanges.close(this.log.lastSeq);
-		if (closing) this.emit({ type: 'exchange_closed', exchange: closing });
-		this.summariseClosed(closing, worked);
+	/** The room went quiet with an exchange open: it closes, and the host hears it before anything is written about it. */
+	private async close(close: NonNullable<ReturnType<typeof decide>['close']>): Promise<boolean> {
+		let exchange: Exchange | undefined;
+		const written = await this.log.write('close', () => {
+			const state = this.state();
+			exchange = state.exchange;
+			if (exchange?.from !== close.from || working(state, this.now())) return undefined;
+			return close;
+		});
+		if (!written || exchange === undefined) return false;
+		this.emit({ type: 'exchange_closed', exchange: { ...exchange, through: close.through } });
+		return true;
 	}
 
-	/**
-	 * What the assistant makes of a closed exchange: its owner is owed the one
-	 * message that stands for it, and the room activates the assistant for it.
-	 * Nothing else in the room wakes for a close — the assistant is seated `none`,
-	 * and the close is the one thing that reaches it.
-	 *
-	 * Every quiet room is a chance to write what is owed, whatever made the
-	 * room busy. The assistant's own activation ends no exchange, so a failed draft
-	 * waits for the next time the seats stop rather than retrying on itself —
-	 * and a settle that no seat worked before is not the seats stopping again.
-	 */
-	private summariseClosed(closing: ClosedExchange | undefined, worked: boolean): void {
-		if (closing) this.assistant.owe(closing.owner, closing.from);
-		const due = worked
-			? this.assistant.dueAtQuiescence(...this.dueArgs())
-			: this.assistant.dueAfterDraft(...this.dueArgs());
-		this.draftNext(due);
-	}
-
-	/** What the assistant reads to decide whether a range needs a message. */
-	private dueArgs(): [readonly Message[], Seq, (name: string) => boolean] {
-		return [this.record, this.log.lastSeq, (name) => this.speaksForItself(name)];
-	}
-
-	/** The assistant takes the draft it is due, unless the room is closing. */
-	private draftNext(draft: Draft | undefined): void {
-		if (draft === undefined || this.stopped) return;
-		this.activate(this.assistant.seat);
-	}
-
-	/**
-	 * A seat that speaks for itself: not a person, and not the assistant. It is
-	 * what the threshold counts — what the room produced, not what a person said
-	 * into it, and not what the assistant wrote about it. It reads the record
-	 * rather than the roster, so an agent that spoke and was unseated before
-	 * the close still counts.
-	 */
-	private speaksForItself(name: string): boolean {
-		return !this.here.knows(name) && !this.assistant.is(name);
-	}
-
-	/**
-	 * The room is quiet: no seat is taking an activation, and the assistant owes nobody.
-	 * A summary that a race refused is not work in flight — it waits for the
-	 * next quiescence, and the room is quiet in the meantime.
-	 *
-	 * A stopped room never reports this. Shutdown aborts the activations in flight
-	 * and drains whoever waited, and a room that is closing is not a room that
-	 * has gone quiet.
-	 */
-	private markQuiet(): void {
-		if (this.stopped || !this.idle()) return;
-		this.emit({ type: 'quiet' });
+	/** Whoever waited on the seats stopping, or on the room going quiet, hears it. */
+	private settle(): void {
+		const state = this.state();
+		if (!working(state, this.now())) {
+			for (const resolve of this.settledWaiters.splice(0)) resolve();
+		}
+		if (!this.idle()) return;
+		if (!this.idleReported && !this.gone()) {
+			this.idleReported = true;
+			this.emit({ type: 'quiet' });
+		}
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
 	}
 
-	// -- what an agent reads -------------------------------------------------
+	private arm(at: number | undefined): void {
+		this.cancelAlarm();
+		this.cancelAlarm =
+			at === undefined ? () => {} : this.runtime.clock.alarm(at, () => void this.reconcile());
+	}
 
-	/** One entry per person the room knows, with their gap and what they missed. */
-	private peopleViews(): PersonView[] {
-		const views: PersonView[] = [];
-		for (const [name, identity] of this.here.known()) {
-			const since = this.here.sinceOf(name);
-			views.push({
-				name,
-				identity,
-				presence: this.here.presenceOf(name),
-				changedAt: this.here.lastChangeAt(name),
-				since,
-				unseen: since === undefined ? 0 : this.log.since(since).length,
-			});
+	// -- control ----------------------------------------------------------------
+
+	abort(): void {
+		void this.revoke(() => true);
+	}
+
+	/** Revoke every live lease on the seats `which` picks: the room writes the end, and the seat side is cut. */
+	private async revoke(which: (seat: string) => boolean): Promise<void> {
+		await this.ready.catch(() => {});
+		for (const [seat, ids] of this.live(this.state())) {
+			if (which(seat)) await this.cut(seat, ids);
 		}
-		return views;
+		if (!this.gone()) await this.reconcile();
+	}
+
+	/** Cut one seat: the seat side is aborted, and every lease it holds ends revoked. */
+	private async cut(seat: string, ids: string[]): Promise<void> {
+		const port = this.ports.get(seat);
+		if (port instanceof SeatActor) port.abort();
+		for (const id of ids) {
+			if (this.state().leases.has(id)) await this.end(id, seat, 'revoked');
+		}
+	}
+
+	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */
+	async stop(): Promise<void> {
+		if (this.stopped) return;
+		// Stopped from here on: a visit that arrives during the shutdown is
+		// refused rather than seated into a room that is going away.
+		this.stopped = true;
+		this.cancelAlarm();
+		try {
+			await this.ready;
+			await this.revoke(() => true);
+			// A deliberate shutdown observed everybody leaving, so the record
+			// says so, and the host hears it. It wakes nobody: an activation
+			// started to hear that the room is closing is an activation nobody reads.
+			for (const person of this.state().people.values()) {
+				if (person.presence !== 'present') continue;
+				const visit = this.visits.get(person.name);
+				if (visit) visit.gone = true;
+				await this.commitMessage<PresenceMessage>(
+					crypto.randomUUID(),
+					undefined,
+					() => ({ kind: 'left', at: this.iso(), from: person.name }),
+					false,
+				);
+			}
+		} finally {
+			// The name comes free whatever the storage did. A failed write must
+			// not leave a room that can never be started again.
+			if (this.runtime.running.get(this.name) === this) this.runtime.running.delete(this.name);
+			// A stopped room never goes quiet on its own, so nobody waits on it.
+			for (const resolve of this.quietWaiters.splice(0)) resolve();
+			for (const resolve of this.settledWaiters.splice(0)) resolve();
+		}
+	}
+
+	/** Dropped from memory: the alarm is cancelled, and every call a seat makes from now on is stale. */
+	evict(): void {
+		this.evicted = true;
+		this.cancelAlarm();
+		for (const resolve of this.quietWaiters.splice(0)) resolve();
+		for (const resolve of this.settledWaiters.splice(0)) resolve();
+	}
+}
+
+/** A seat's intent the room refuses, with the reason the model reads. */
+class RefusedError extends Error {}
+
+/** A message before the log stamps its seq, its key and its wakes. */
+type Drafted =
+	| Omit<SpokenMessage, 'seq' | 'key' | 'wakes'>
+	| Omit<SummaryMessage, 'seq' | 'key' | 'wakes'>
+	| Omit<PresenceMessage, 'seq' | 'key' | 'wakes'>;
+
+/** The composition `startSession` was given, checked for duplicates the way the room refuses them. */
+function composeFrom(options: StartSessionOptions): Composition {
+	const assistant = assertAssistant(options.assistant);
+	const names = new Set<string>();
+	const take = (placed: Placed): Placed => {
+		if (names.has(placed.def.name)) {
+			throw new Error(`Duplicate agent name '${placed.def.name}': one name names one participant.`);
+		}
+		names.add(placed.def.name);
+		return placed;
+	};
+	const agents = (options.agents ?? []).map((seat) => take(unwrap(seat)));
+	take({ def: assistant, attention: 'none' });
+	const available = (options.available ?? []).map((seat) => take(unwrap(seat)));
+	return { assistant, goal: options.goal?.trim() || undefined, agents, available };
+}
+
+function unwrap(seat: AgentSeat): Placed {
+	const def = isSeatedAgent(seat) ? seat.agent : seat;
+	if (!isAgent(def)) throw new Error('Agents must come from defineAgent or seated().');
+	return { def, attention: isSeatedAgent(seat) ? seat.attention : 'broadcast' };
+}
+
+const seatRow = (placed: Placed): SeatRow => ({
+	name: placed.def.name,
+	attention: placed.attention,
+});
+
+/** The roster before the replay: the composition, every seat idle, and nobody in the room. */
+function startingSeats(composition: Composition, room: string): SeatInfo[] {
+	const seats: SeatInfo[] = composition.agents.map(({ def, attention }) => ({
+		kind: 'agent',
+		name: def.name,
+		identity: def.identity,
+		status: 'idle',
+		attention,
+		sessionId: `${room}:${def.name}`,
+	}));
+	seats.push({
+		kind: 'agent',
+		name: composition.assistant.name,
+		identity: composition.assistant.identity,
+		status: 'idle',
+		attention: 'none',
+		sessionId: `${room}:${composition.assistant.name}`,
+		assistant: true,
+	});
+	return seats;
+}
+
+/** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
+function targetOf(message: Message): string | undefined {
+	if (isSpoken(message)) return message.to;
+	return message.kind === 'seated' ? message.from : undefined;
+}
+
+function assertAddressable(seat: string, to: string | undefined, state: RoomState): void {
+	if (to === undefined) return;
+	const target = state.roster.find((s) => s.name === to);
+	if (!state.people.has(to) && target === undefined) {
+		throw new RefusedError(`Unknown participant '${to}'. Address someone from the roster.`);
+	}
+	if (to === seat) throw new RefusedError('You cannot address yourself.');
+	// A seat at the narrow end wakes for nothing said, so addressing it
+	// would leave a message nobody reads. Say it to the room instead.
+	if (target?.attention === 'none') {
+		throw new RefusedError(
+			`'${to}' wakes for nothing said. Say it to the room, or to somebody else.`,
+		);
 	}
 }

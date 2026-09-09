@@ -15,17 +15,19 @@
  * - **A person's question opens one**, when no exchange is open. Nothing else
  *   does: an agent speaking into a quiet room opens nothing, and arriving or
  *   leaving asks nobody anything.
- * - **Quiescence closes it.** The room settles when no agent is active, and a
- *   room that settles has finished — a seat that says something wakes its
- *   readers inside its own `say`, so the active count never dips to zero in
- *   the middle of a burst.
+ * - **Quiescence closes it.** The room reconciles when nothing is live, and
+ *   writes a close row that names the range the exchange turned out to hold.
  * - **What lands while it is open steers it and changes nothing.** Not the
  *   owner, not the range, not who the answer belongs to.
+ *
+ * An exchange is a fold over the log: the first person's question after the
+ * last close is the open one. A room resumed mid-exchange continues it.
  *
  * The design contract is `docs/exchange.md`; `docs/assistant.md` says what an
  * assistant makes of one.
  */
 import { isSpoken, type Message, type Seq } from './types.ts';
+import type { CloseRow } from './wire.ts';
 
 /** A question the room is working on. */
 export interface Exchange {
@@ -44,41 +46,17 @@ export interface ClosedExchange extends Exchange {
 }
 
 /**
- * The open exchange, if there is one. Run state: an exchange belongs to a
- * running room, and a restart begins with none — the record keeps what was
- * said, and nobody is mid-question after a restart.
+ * The open exchange, or nothing when nobody has asked since the last close:
+ * the first question a person asked after the last close's `through`.
  */
-export class Exchanges {
-	private open: Exchange | undefined;
-
-	/** What the room is working on, or nothing when nobody has asked. */
-	current(): Exchange | undefined {
-		return this.open;
-	}
-
-	/**
-	 * A message landed. It opens an exchange when a person asked something into
-	 * a room that has none open, and returns the one it opened.
-	 *
-	 * The clause is written on the exchange rather than on the room's status,
-	 * for the case that is busy and has no owner: somebody arrives, the seat
-	 * that watches the door wakes, and a question lands on top of work nobody
-	 * asked for. That question still owns what follows.
-	 */
-	note(message: Message, fromPerson: boolean): Exchange | undefined {
-		if (this.open !== undefined) return undefined;
-		if (!fromPerson || !isSpoken(message)) return undefined;
-		this.open = { owner: message.from, from: message.seq, at: message.at };
-		return this.open;
-	}
-
-	/**
-	 * The room went quiet. Closes whatever was open and returns it with the
-	 * range it held, or nothing when the room was working on its own account.
-	 */
-	close(through: Seq): ClosedExchange | undefined {
-		const open = this.open;
-		this.open = undefined;
-		return open === undefined ? undefined : { ...open, through };
-	}
+export function openExchange(
+	messages: readonly Message[],
+	closes: readonly CloseRow[],
+	isPerson: (name: string) => boolean,
+): Exchange | undefined {
+	const closedThrough = closes.at(-1)?.through ?? 0;
+	const question = messages.find(
+		(message) => message.seq > closedThrough && isSpoken(message) && isPerson(message.from),
+	);
+	return question && { owner: question.from, from: question.seq, at: question.at };
 }

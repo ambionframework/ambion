@@ -76,18 +76,18 @@ the exchange itself, for the case where the room is busy and has no owner:
 somebody arrives, the seat that watches the door wakes, and a question lands
 on top of work nobody asked for. That question still owns what follows.
 
-**Quiescence closes it.** The room settles when no agent is active, and a
+**Quiescence closes it.** The room settles when nothing is live, and a
 room that settles has finished. A seat that says something wakes its
-readers inside its own `say`, before its own activation ends, so the room is
-never briefly empty in the middle of a burst. What is running is read off
-the seats, because a seat holds the activation it is taking, so there is no
-count beside them to keep in step. `through` is the record as it stood at
-that moment, so a closed exchange names the range it turned out to hold.
+readers inside its own `say`, before its own lease ends, so the room is
+never briefly empty in the middle of a burst. What is live is read off the
+leases and the wakes still pending, folded over the log, so there is no
+count beside them to keep in step. The room writes a close row, and
+`through` is the record as it stood at that moment, so a closed exchange
+names the range it turned out to hold.
 
-A question that wakes no seat has no seat to stop, so the room runs the
-same check once the question is routed: nothing is working, so the
-exchange closes at once, holding the question alone
-([`roster.md`](roster.md) §6).
+A question that wakes no seat has no seat to stop, so the room reconciles
+once the question is committed: nothing is live, so the exchange closes at
+once, holding the question alone ([`roster.md`](roster.md) §6).
 
 **What lands while it is open steers it and changes nothing.** The owner,
 the range, and who the answer belongs to all stay fixed. A second question
@@ -129,18 +129,23 @@ into a quiet room, opens his own exchange.
 
 ---
 
-## 5. Run state
+## 5. A fold over the log
 
-An exchange belongs to a running room. `Exchanges` holds the open one in
-memory, and a restart begins with none. That is right for a room
-mid-question: the record keeps what was said, and nobody is mid-question
-after a restart. A person whose question the room was working on asks
-again, and that question opens a new exchange.
+An exchange is a fold over the log. The open exchange is the first
+question a person asked after the last close row's `through`
+(`openExchange` in [`exchange.ts`](../packages/ambion/src/exchange.ts)). A
+close is a row on the log beside the messages: `{ owner, from, through,
+at, wakes? }`. It takes no seq; `through` orders it. `messages()` returns
+the messages alone, and their seqs stay `1..n`.
 
-A closed exchange is an owner and a range, so it is derivable from the
-record. Nothing derives it today; a host that wants a history of exchanges
-records the `exchange_closed` events as they arrive.
-[`planning/backlog.md`](../planning/backlog.md) holds the work.
+A room resumed over its log continues a mid-exchange room. The question is
+still open, the seats the last run left live hold their leases until they
+expire, and the wakes it left pending are sent again. A room that stops
+mid-exchange revokes its leases and closes nothing: the next run over the
+same log reconciles, finds nothing live, and closes the exchange.
+
+Every closed exchange is on the log, so a host that wants a history of
+exchanges reads the close rows off the room's Pi session.
 
 ---
 
@@ -180,11 +185,12 @@ room draws about its assistant.
 `quiet`. A host that acts between `settled()` and `quiet` acts while a
 summary is drafted, and that window is the one place it can.
 
-**An aborted exchange still closes.** `abort()` cancels the activations in
+**An aborted exchange still closes.** `abort()` revokes the leases in
 flight and the room settles, so the exchange closes with the range it
 reached. **A run that stops mid-exchange closes nothing.** `stopSession`
-aborts the activations in flight and takes the room down, and the exchange
-never closes: the next run begins with none.
+revokes the leases in flight and takes the room down. The exchange stays
+open on the log, and the next run over it closes it at its first
+reconcile (§5).
 
 ---
 

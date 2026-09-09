@@ -18,6 +18,10 @@ export interface SpokenMessage {
 	seq: Seq;
 	/** The key the commit carried. A repeated key lands once. */
 	key?: string;
+	/** The activation that wrote it. Absent on a person's delivery. */
+	activationId?: string;
+	/** The seats the room decided to wake for it, written with the message. */
+	wakes?: string[];
 	/** ISO timestamp, stamped by the runtime at the moment it landed. */
 	at: string;
 	/** A participant's name — stamped by the runtime, never claimed. */
@@ -41,6 +45,9 @@ export interface PresenceMessage {
 	kind: PresenceChange;
 	seq: Seq;
 	key?: string;
+	/** The assistant's activation, on a `seated` it wrote. */
+	activationId?: string;
+	wakes?: string[];
 	at: string;
 	/**
 	 * The participant whose presence changed: a person, stamped from the visit
@@ -58,6 +65,10 @@ export interface PresenceMessage {
 	 * is the seat it names.
 	 */
 	by?: string;
+	/** What wakes the seat, on `seated`. Absent means `broadcast`. */
+	attention?: Attention;
+	/** How the person reads, on `arrived`, when they said so. */
+	preferences?: string;
 }
 
 /**
@@ -68,6 +79,8 @@ export interface SummaryMessage {
 	kind: 'summary';
 	seq: Seq;
 	key?: string;
+	activationId?: string;
+	wakes?: string[];
 	at: string;
 	/** The assistant that wrote it. */
 	from: string;

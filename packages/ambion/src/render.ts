@@ -21,7 +21,6 @@ import {
 	type SeatInfo,
 	type Seq,
 	type SummaryMessage,
-	type WorkspaceHandle,
 } from './types.ts';
 
 const MINUTE = 60_000;
@@ -236,7 +235,7 @@ export interface RoomView {
 }
 
 /** The exchange the assistant is closing: whose it was, how they read, and its range. */
-export interface Closing {
+interface Closing {
 	/** The person whose question opened it, and who reads the message. */
 	readonly person: string;
 	/** How they read, or nothing when they said nothing about it. */
@@ -252,7 +251,7 @@ interface Reserved {
 }
 
 /** The exchange the assistant is composing the room for: whose question, and who is in reserve. */
-export interface ComposingView {
+interface ComposingView {
 	readonly person: string;
 	readonly from: Seq;
 	readonly reserve: readonly Reserved[];
@@ -268,8 +267,8 @@ export interface SeatSpeaking {
 		name: string;
 		identity: string;
 		instructions: string;
-		/** Set for an agent connected to a workspace: gates WORKSPACE_PARAGRAPH. */
-		workspace?: WorkspaceHandle;
+		/** Whether the agent is connected to a workspace: gates WORKSPACE_PARAGRAPH. */
+		connected: boolean;
 	};
 	/** Whether this seat is the room's assistant, which writes for people and never speaks. */
 	readonly assistant: boolean;
@@ -323,7 +322,7 @@ function duties(seat: SeatSpeaking, room: RoomView): string[] {
 	// A workspace binds four tools to every activation of an agent that names
 	// one (docs/workspace.md §5); the paragraph states what they reach so the
 	// agent does not have to probe for it with a call.
-	if (seat.def.workspace) lines.push(``, ...WORKSPACE_PARAGRAPH);
+	if (seat.def.connected) lines.push(``, ...WORKSPACE_PARAGRAPH);
 	// A fold renders once the record holds a summary, so only such a record
 	// tells its seats how to read one.
 	if (room.record.some(isSummary)) lines.push(``, ...SUMMARY_PARAGRAPH);

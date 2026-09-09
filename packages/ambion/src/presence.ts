@@ -1,11 +1,13 @@
 /**
  * Who is in the room, and where each of them stopped reading.
  *
- * The record says who arrived and who left; this holds the one fact a replay
- * cannot rebuild — who is here *now* — and reads everything else off the
- * record. A person is in the room or they are not: one name, one visit.
+ * Presence is a fold over the record: a person is present from their last
+ * `arrived` until their next `left`. A crash writes no `left`, so the person
+ * stays present until the host says they left. The one thing the record
+ * does not hold is the handle a host delivers through, and that stays in
+ * the running room.
  */
-import type { HumanDefinition, Message, PresenceMessage, PresenceStatus, Seq } from './types.ts';
+import type { HumanDefinition, Message, PresenceStatus, Seq } from './types.ts';
 
 /** One person in the room, for as long as they are in it. */
 export interface VisitRuntime {
@@ -13,74 +15,44 @@ export interface VisitRuntime {
 	gone: boolean;
 }
 
-/**
- * Who is in the room, and where each of them stopped reading. The record is
- * the store. This holds the one fact a replay cannot rebuild: who is here
- * now. Everything else it answers, it reads off the record.
- */
-export class Attendance {
-	private readonly inRoom = new Map<string, VisitRuntime>();
+/** One person the record knows, as the record last saw them. */
+export interface PersonState {
+	name: string;
+	identity: string;
+	presence: PresenceStatus;
+	/** The seq of their last `left`, or undefined before their first. */
+	since: Seq | undefined;
+	/** When their presence last changed, ISO. */
+	changedAt: string | undefined;
+	/** How they read, as their latest arrival said it. */
+	preferences: string | undefined;
+}
 
-	constructor(private readonly record: () => readonly Message[]) {}
-
-	enter(human: HumanDefinition): VisitRuntime {
-		const visit: VisitRuntime = { human, gone: false };
-		this.inRoom.set(human.name, visit);
-		return visit;
-	}
-
-	leave(name: string): void {
-		this.inRoom.delete(name);
-	}
-
-	visitOf(name: string): VisitRuntime | undefined {
-		return this.inRoom.get(name);
-	}
-
-	all(): VisitRuntime[] {
-		return [...this.inRoom.values()];
-	}
-
-	presenceOf(name: string): PresenceStatus {
-		return this.inRoom.has(name) ? 'present' : 'absent';
-	}
-
-	/** Every person the room knows: the arrivals on the record, and who is here. */
-	known(): Map<string, string> {
-		const known = new Map<string, string>();
-		for (const message of this.record()) {
-			if (message.kind !== 'arrived') continue;
-			known.set(message.from, message.identity ?? '');
+/** Every person the record knows, in the order the record met them. */
+export function foldPeople(messages: readonly Message[]): Map<string, PersonState> {
+	const people = new Map<string, PersonState>();
+	for (const message of messages) {
+		if (message.kind === 'arrived') {
+			const known = people.get(message.from);
+			people.set(message.from, {
+				name: message.from,
+				identity: message.identity ?? known?.identity ?? '',
+				presence: 'present',
+				since: known?.since,
+				changedAt: message.at,
+				preferences: message.preferences ?? known?.preferences,
+			});
+		} else if (message.kind === 'left') {
+			const known = people.get(message.from);
+			if (known) {
+				people.set(message.from, {
+					...known,
+					presence: 'absent',
+					since: message.seq,
+					changedAt: message.at,
+				});
+			}
 		}
-		for (const visit of this.inRoom.values()) known.set(visit.human.name, visit.human.identity);
-		return known;
 	}
-
-	knows(name: string): boolean {
-		return this.known().has(name);
-	}
-
-	/** The seq of this person's last `left`, or undefined before their first. */
-	sinceOf(name: string): Seq | undefined {
-		return this.lastPresence(name)?.seq;
-	}
-
-	/** When this person's presence last changed, ISO. */
-	lastChangeAt(name: string): string | undefined {
-		const record = this.record();
-		for (let i = record.length - 1; i >= 0; i -= 1) {
-			const message = record[i];
-			if (message && message.kind !== 'said' && message.from === name) return message.at;
-		}
-		return undefined;
-	}
-
-	private lastPresence(name: string): PresenceMessage | undefined {
-		const record = this.record();
-		for (let i = record.length - 1; i >= 0; i -= 1) {
-			const message = record[i];
-			if (message?.kind === 'left' && message.from === name) return message;
-		}
-		return undefined;
-	}
+	return people;
 }

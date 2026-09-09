@@ -291,7 +291,9 @@ writeFileSync(
 			seatsAtStart,
 			seats,
 			reserve: AVAILABLE.map((agent) => ({ name: agent.name, identity: agent.identity })),
-			seatings: finalRecord.filter(isPresence).filter((m) => m.kind === 'seated'),
+			seatings: finalRecord
+				.filter(isPresence)
+				.filter((m) => m.kind === 'seated' && m.by !== undefined),
 			seatSessions,
 			activations,
 			toolCalls: apiLog,

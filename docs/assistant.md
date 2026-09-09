@@ -61,10 +61,11 @@ it refuses a say. Two things make it the seat it is, and both are data:
   reserve, and that activation holds one tool, `seat`, bound to the
   reserve. [`roster.md`](roster.md) is the contract for it.
 
-A seat carries none of that. Which seat is the assistant, who is owed a
-message, and whom it is drafting for now are held by the assistant itself
-(`Assistant` in [`assistant.ts`](../packages/ambion/src/assistant.ts)); the
-room asks it, and no seat carries a field for it.
+A seat carries none of that. Which seat is the assistant is on the
+composition row; who is owed a message is a fold over the close rows and
+the summaries (`fold.ts`); what it is drafting for now is on the id of the
+activation it holds (`close:<through>:<attempt>`). No seat carries a field
+for any of it.
 
 The assistant holds one thing nothing else in the room holds: **what a
 message to a person is for**, as its instructions say it. What differs by
@@ -204,12 +205,16 @@ messages, and the assistant drafts again over it immediately. It gets two
 drafts. After the second refusal the room is moving faster than the assistant
 writes, and the activation ends.
 
-**A summary the activation could not land drafts again at the next
-quiescence.**
-Its range is a live read, so the retry covers what it covered before plus
-whatever won the race. The two halves of the rule divide the work: the assistant
-redrafts inside its activation while that is still useful, and the next quiet
-room catches an activation that ran out of drafts or failed outright.
+**A summary the activation could not land drafts again after a delay.**
+An activation that ran out of drafts ends its lease `refused`; one that
+failed outright ends it `failed`; one that stopped renewing ends it
+`expired`. Each is one attempt. The room waits thirty seconds times the
+attempts made, on its own alarm, then wakes the assistant again, up to
+three attempts. The range is a live read, so the retry covers what it
+covered before plus whatever won the race. The two halves of the rule
+divide the work: the assistant redrafts inside its activation while that
+is still useful, and the room's alarm catches an activation that ran out
+of drafts or failed outright.
 
 Two questions asked in quick succession become one summary, which is right:
 they were one conversation. If somebody else's exchange won the race, it
@@ -278,10 +283,14 @@ question opens his own exchange, and the assistant writes it for him.
 
 **Two people owed at once are written for one after the other.** The
 assistant is one seat and holds one activation. If Sam's exchange closes
-while the assistant drafts for Priya, Sam stays owed, and the room activates
-the assistant again for him the moment it is free. A person whose draft the
-assistant could not land waits for the seats to stop again instead, so a
-model that keeps failing never retries on its own end (§5).
+while the assistant drafts for Priya, Sam stays owed, and the room wakes
+the assistant again for him at its next reconcile. A person whose draft the
+assistant could not land waits for the backoff instead, so a model that
+keeps failing never retries on its own end (§5). Who is owed is a fold
+over the log: a close that holds two or more agent messages, with no
+summary covering it and no draft that stood down over it. A later close by
+the same person joins the draft, and one message reaches back to the
+earliest question still owed.
 
 ---
 
@@ -526,11 +535,10 @@ assistant does not mean it always writes — it means somebody is always
 there to judge whether writing would help.
 
 **A restarted room seats it again with the agents.** The assistant is
-composition, like an agent. How each person reads is run state, like an
-exchange (§6): a person known from a replayed record has no preferences on
-file until they visit in the new run. No question can be asked without a
-visit, so the assistant never writes for somebody whose preferences the room
-has not seen.
+composition, like an agent. How each person reads is on the record: their
+`arrived` carries `preferences` when they said so, and the assistant reads
+the latest arrival's. A room resumed over its log writes for a person the
+last run owed, the way they read.
 
 **An agent-only room pays for one idle seat.** A room nobody visits seats
 the assistant, lists it in every roster, and never activates it. That is one
@@ -752,12 +760,14 @@ closing is
 neither, so shutdown drains whoever waited on `quiet()` and emits nothing
 afterwards.
 
-**A summary can be owed for ever.** A race is handled inside the activation,
-but an activation that fails outright, or that runs out of drafts, waits for the next
-quiescence — and a room that is never woken again never has one. The range
-stays whole and every reader still sees it, so nothing is lost; but the one
-message never arrives, and nothing reports that it is owed. A run that ends
-the day with an owed summary is the case to watch.
+**A summary is owed until the third attempt.** A race is handled inside
+the activation. An activation that fails outright, or that runs out of
+drafts, is one attempt, and the room's own alarm wakes the assistant again
+after the backoff, whether or not anybody speaks into the room. After three
+attempts the room stops trying: the range stays whole and every reader
+still sees it, so nothing is lost, but the one message never arrives, and
+nothing reports that it is owed. A run that ends the day at the cap is the
+case to watch.
 
 **What a client owes.** §10 asks a client to re-present past messages when
 a new one arrives. That is more than a log does, and no client in this

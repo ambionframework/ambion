@@ -63,7 +63,8 @@ export const jsonl: Storage = {
 		return {
 			sessions: jsonlSessions(dir),
 			dir,
-			dispose: () => rm(dir, { recursive: true, force: true }),
+			// A seat's audit session may still be flushing when the test ends.
+			dispose: () => rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }),
 		};
 	},
 };

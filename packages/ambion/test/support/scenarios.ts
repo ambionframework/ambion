@@ -24,6 +24,7 @@ import {
 	byAgent,
 	callTool,
 	contextText,
+	insists,
 	quiet,
 	type Script,
 	scripted,
@@ -31,6 +32,7 @@ import {
 	speak,
 	summarise,
 	toolNames,
+	toolResultTexts,
 } from './scripted.ts';
 import { backends } from './storage.ts';
 
@@ -89,15 +91,6 @@ function composes(names: string[], summary: string): Script {
 	};
 }
 
-/** Every tool result the model has been shown so far, oldest first. */
-function toolResults(context: Context): string[] {
-	return context.messages.flatMap((message) =>
-		message.role === 'toolResult'
-			? [message.content.map((c) => (c.type === 'text' ? c.text : '')).join('')]
-			: [],
-	);
-}
-
 /** Two answers to every question, then silence until the next. */
 const twoAnswersEach: Script = (_context, _name, call) =>
 	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
@@ -112,14 +105,18 @@ const answersOnce: Script = (context, name) => {
 	const question = [...text.matchAll(/^\[(?:priya|sam)\] (.+?)(?: {2}\(.*\))?$/gm)].at(-1)?.[1];
 	if (question === undefined) return quiet();
 	const answer = `${name} on ${question}`;
-	if (text.includes(`[${name}] ${answer}`) || toolResults(context).includes('delivered')) {
+	if (text.includes(`[${name}] ${answer}`) || toolResultTexts(context).includes('delivered')) {
 		return quiet();
 	}
 	return speak(answer);
 };
 
-async function finish(session: Session, events: ReturnType<typeof collect>): Promise<void> {
-	await invariants(session, events);
+async function finish(
+	session: Session,
+	events: ReturnType<typeof collect>,
+	runtime: Runtime,
+): Promise<void> {
+	await invariants(session, events, { sessions: runtime.sessions });
 	await stopSession(session);
 }
 
@@ -143,7 +140,7 @@ export const oneExchange: Scenario = {
 		expect(record.filter(isSpoken).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
 		const summary = record.find(isSummary);
 		expect(summary).toMatchObject({ to: 'priya', text: 'The one message.' });
-		await finish(session, events);
+		await finish(session, events, runtime);
 	},
 };
 
@@ -161,7 +158,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 					colleague: answersOnce,
 					assistant: (context) => {
 						const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
-						if (!holding(context, 'summarise') || toolResults(context).includes('delivered')) {
+						if (!holding(context, 'summarise') || toolResultTexts(context).includes('delivered')) {
 							return quiet();
 						}
 						return summarise(`for ${person}`);
@@ -183,7 +180,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 			['sam', 'for sam'],
 		]);
 		expect(session.seats().find((s) => s.name === 'priya')).toMatchObject({ presence: 'absent' });
-		await finish(session, events);
+		await finish(session, events, runtime);
 	},
 };
 
@@ -201,8 +198,7 @@ export const seatFromReserve: Scenario = {
 					assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
 					product: (_context, _name, call) =>
 						call <= 3 ? speak('The pour is Saturday.') : quiet(),
-					surveyor: (_context, _name, call) =>
-						call === 1 ? speak('11.7 tonnes on site.') : quiet(),
+					surveyor: insists('11.7 tonnes on site.'),
 				}),
 			),
 		});
@@ -218,7 +214,7 @@ export const seatFromReserve: Scenario = {
 		expect(record.filter(isSpoken).map((m) => m.from)).toContain('surveyor');
 		expect(record.find(isSummary)).toBeDefined();
 		expect(session.seats().map((s) => s.name)).toContain('surveyor');
-		await finish(session, events);
+		await finish(session, events, runtime);
 	},
 };
 
@@ -251,7 +247,7 @@ export const twoWorkspaces: Scenario = {
 			streamFn: scripted(
 				byAgent({
 					alpha: async (context, _name, call) => {
-						alphaResults.push(...toolResults(context).slice(alphaResults.length));
+						alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));
 						if (call === 1)
 							return callTool('write', { path: '/home/alpha/note.txt', content: 'one' });
 						if (call === 2) {
@@ -261,7 +257,7 @@ export const twoWorkspaces: Scenario = {
 						return call === 3 ? speak('alpha done') : quiet();
 					},
 					beta: (context, _name, call) => {
-						betaResults.push(...toolResults(context).slice(betaResults.length));
+						betaResults.push(...toolResultTexts(context).slice(betaResults.length));
 						if (call === 1) return callTool('bash', { command: 'echo two > /home/beta/note.txt' });
 						if (call === 2) return callTool('read', { path: '/home/beta/note.txt' });
 						return call === 3 ? speak('beta done') : quiet();
@@ -293,7 +289,7 @@ export const twoWorkspaces: Scenario = {
 		const said = (await session.messages()).filter(isSpoken).map((m) => m.text);
 		expect(said).toContain('alpha done');
 		expect(said).toContain('beta done');
-		await finish(session, events);
+		await finish(session, events, runtime);
 		await destroyWorkspace(directoryDrive);
 		await Promise.all([memoryBackend.dispose(), directoryBackend.dispose()]);
 	},

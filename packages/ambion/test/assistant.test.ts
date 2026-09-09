@@ -4,6 +4,7 @@ import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	attentive,
+	createRuntime,
 	defineAgent,
 	defineHuman,
 	defineTool,
@@ -18,12 +19,14 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { renderRecord } from '../src/render.ts';
+import { fakeClock } from './support/clock.ts';
 import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
 import {
 	byAgent,
 	contextText,
 	quiet,
 	type Script,
+	says,
 	scripted,
 	speak,
 	summarise,
@@ -90,6 +93,10 @@ const dan = defineHuman({ name: 'dan', identity: 'Quantity surveyor.' });
 
 const started: Session[] = [];
 
+/** One clock the tests move by hand, and one runtime over it. */
+const clock = fakeClock();
+const runtime = createRuntime({ clock });
+
 function open(options: {
 	script: Script;
 	agents?: Parameters<typeof startSession>[0]['agents'];
@@ -101,6 +108,7 @@ function open(options: {
 		goal: 'Decide the pour date and keep the plan honest.',
 		assistant: options.assistant ?? assistant,
 		agents: options.agents ?? [product],
+		runtime,
 		streamFn: scripted(options.script),
 		...(options.repo ? { repo: options.repo } : {}),
 	});
@@ -162,16 +170,12 @@ const writesEach =
 	(_context, _name, call) =>
 		call % 2 === 1 ? summarise(`${text} ${call}`) : quiet();
 
-/** A product that is still reading when the room changes under it. */
+/** A product that is still reading when the room changes under it, then answers twice. */
 function heldUntil(held: Promise<void>): Script {
-	return async (_context, _name, call) => {
-		if (call === 1) {
-			await held;
-			return quiet('still reading');
-		}
-		if (call === 2) return speak('answer 1');
-		if (call === 3) return speak('answer 2');
-		return quiet();
+	const answers = says(['answer 1', 'answer 2']);
+	return async (context, name, call) => {
+		if (call === 1) await held;
+		return answers(context, name, call);
 	};
 }
 
@@ -395,9 +399,12 @@ describe('the assistant', () => {
 		// the activation ended after the second refusal, and did not draft for ever
 		expect(drafts).toHaveLength(3);
 
-		// the range is still owed, and the next quiescence writes it
+		// the range is still owed: the next question joins it, and the draft is due after the backoff
 		const written = nextSummary(session);
 		await visit.deliver({ text: 'And the pump?' });
+		await quiescent(session);
+		expect(summaries(await session.messages())).toHaveLength(0);
+		await clock.advance(30_000);
 		const summary = await written;
 
 		expect(summary.text).toBe('draft 4');
@@ -435,7 +442,7 @@ describe('the assistant', () => {
 		).toMatchObject([{ spoke: false }]);
 	});
 
-	it('drafts again at the next quiescence when its activation fails outright', async () => {
+	it('drafts again after the backoff when its activation fails outright', async () => {
 		const session = open({
 			agents: [product, attentive(greeter)],
 			script: byAgent({
@@ -454,9 +461,13 @@ describe('the assistant', () => {
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
 		expect(summaries(await session.messages())).toHaveLength(0);
 
-		// a failed activation leaves the summary owed, and the next quiet room writes it
+		// a failed activation leaves the summary owed; an arrival is not the backoff passing
 		const written = nextSummary(session);
 		await visitSession(session, sam);
+		await quiescent(session);
+		expect(summaries(await session.messages())).toHaveLength(0);
+		// the room's own alarm writes it, once the backoff has passed
+		await clock.advance(30_000);
 		const summary = await written;
 
 		expect(summary.text).toBe('written the second time');

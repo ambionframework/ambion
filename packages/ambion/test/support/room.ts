@@ -1,8 +1,11 @@
+import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import {
 	defineAgent,
 	defineHuman,
+	type Runtime,
 	type Session,
 	type SessionEvent,
+	type SessionOpener,
 	visitSession,
 } from '../../src/index.ts';
 
@@ -47,6 +50,28 @@ export function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 export const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/**
+ * The room dies without a word: no lease is released, no `left` is written,
+ * and the alarm never fires. The record keeps everything, and a resume
+ * over it is the test of the design.
+ */
+export function crash(runtime: Runtime, session: Session): void {
+	runtime.evict(session.name);
+}
+
+/** Every row the room wrote beside its messages, read off Pi's session directly. */
+export async function rowsOf(
+	sessions: SessionOpener,
+	name: string,
+): Promise<{ type: string; data: unknown }[]> {
+	const piSession: PiSession = await sessions.open(name);
+	const entries = await piSession.findEntries();
+	entries.sort((a, b) => a.seq - b.seq);
+	return entries.flatMap((entry) =>
+		entry.type === 'custom' ? [{ type: entry.customType, data: entry.data }] : [],
+	);
+}
 
 /**
  * The assistant's activation is over, whatever it decided. A summary commits

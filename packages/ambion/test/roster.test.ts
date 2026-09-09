@@ -3,6 +3,7 @@ import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	attentive,
+	createRuntime,
 	defineAgent,
 	defineHuman,
 	isPresence,
@@ -16,10 +17,12 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { fakeClock } from './support/clock.ts';
 import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
 import {
 	byAgent,
 	contextText,
+	insists,
 	quiet,
 	type Script,
 	scripted,
@@ -97,6 +100,10 @@ const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
 const started: Session[] = [];
 
+/** One clock the tests move by hand, and one runtime over it. */
+const clock = fakeClock();
+const runtime = createRuntime({ clock });
+
 type Options = Parameters<typeof startSession>[0];
 
 function open(options: {
@@ -108,6 +115,7 @@ function open(options: {
 		name: roomName(),
 		goal: 'Decide the pour date.',
 		assistant,
+		runtime,
 		streamFn: scripted(options.script),
 		...(options.agents ? { agents: options.agents } : {}),
 		...(options.available ? { available: options.available } : {}),
@@ -335,8 +343,8 @@ describe('seating', () => {
 			script: byAgent({
 				assistant: composes(['surveyor'], 'Steel: 11.7 tonnes, enough for the pour.'),
 				// the seating and the newcomer's say may both land under its say, so it speaks again when refused
-				product: (_context, _name, call) => (call <= 3 ? speak('The pour is Saturday.') : quiet()),
-				surveyor: (_context, _name, call) => (call === 1 ? speak('11.7 tonnes on site.') : quiet()),
+				product: insists('The pour is Saturday.'),
+				surveyor: insists('11.7 tonnes on site.'),
 			}),
 			agents: [product],
 			available: [surveyor],
@@ -574,7 +582,7 @@ describe('the host', () => {
 		);
 	});
 
-	it('unseats what the run added at stop, and leaves the starting composition alone', async () => {
+	it('leaves the roster to the next composition at stop, and the next run starts from its own', async () => {
 		const session = open({ script: byAgent({}), agents: [product], available: [surveyor] });
 		await session.seat(surveyor);
 		await session.quiet();
@@ -582,15 +590,29 @@ describe('the host', () => {
 		await stopSession(session);
 		started.pop();
 
+		// the record says who was seated, and a read of the stopped room folds it
 		const { readSession } = await import('../src/index.ts');
-		const record = await readSession(session.name).messages();
-		expect(kinds(record)).toEqual(['seated', 'unseated']);
-		expect(record.at(-1)).toMatchObject({ kind: 'unseated', from: 'surveyor' });
+		const stopped = readSession(session.name, { runtime });
+		expect(kinds(await stopped.messages())).toEqual(['seated']);
+		expect(seatNames(stopped as Session)).toEqual(['product', 'assistant', 'surveyor']);
+
+		// the next run writes its own composition, and the roster folds from that
+		const again = startSession({
+			name: session.name,
+			assistant,
+			agents: [product],
+			available: [surveyor],
+			runtime,
+			streamFn: scripted(byAgent({})),
+		});
+		started.push(again);
+		await again.messages();
+		expect(seatNames(again)).toEqual(['product', 'assistant']);
 	});
 });
 
 describe('a failed draft', () => {
-	it('waits for the seats to stop again, and a question that woke nobody is not that', async () => {
+	it('drafts again after the backoff, and a fourth failure stops', async () => {
 		const session = open({
 			script: byAgent({
 				assistant: (context) => {
@@ -608,20 +630,32 @@ describe('a failed draft', () => {
 		const assistantActs = () => activated(events).filter((n) => n === 'assistant').length;
 
 		const visit = await visitSession(session, priya);
-		// two answers, a close, and a draft that fails: priya is owed, and waiting
+		// two answers, a close, and a draft that fails: priya is owed, and the room waits
 		await visit.deliver({ to: product, text: 'First?' });
 		await session.quiet();
 		expect(assistantActs()).toBe(1);
 
-		// a question that wakes nobody settles the room, and that is not the seats stopping again
+		// a question that wakes nobody is not the backoff passing
 		await visit.deliver({ text: 'Anyone?' });
 		await session.quiet();
 		expect(assistantActs()).toBe(1);
+		await clock.advance(29_999);
+		expect(assistantActs()).toBe(1);
 
-		// the seats work and stop: now the draft is due again
-		await visit.deliver({ to: product, text: 'Third?' });
+		// the backoff passes on the room's own alarm: the draft is due again, and fails again
+		await clock.advance(1);
 		await session.quiet();
 		expect(assistantActs()).toBe(2);
+		await clock.advance(60_000);
+		await session.quiet();
+		expect(assistantActs()).toBe(3);
+
+		// three attempts are the cap: the range stays whole, and the room stops trying
+		await clock.advance(600_000);
+		await session.quiet();
+		expect(assistantActs()).toBe(3);
+		expect(events.filter((e) => e.type === 'error')).toHaveLength(3);
+		expect((await session.messages()).some((m) => m.kind === 'summary')).toBe(false);
 	});
 });
 

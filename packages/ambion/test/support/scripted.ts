@@ -87,3 +87,35 @@ export function contextText(context: Context): string {
 }
 
 export const toolNames = (context: Context) => (context.tools ?? []).map((tool) => tool.name);
+
+/** Every tool result the model has been shown so far, as text, oldest first. */
+export function toolResultTexts(context: Context): string[] {
+	return context.messages.flatMap((message) =>
+		message.role === 'toolResult'
+			? [message.content.map((c) => (c.type === 'text' ? c.text : '')).join('')]
+			: [],
+	);
+}
+
+/**
+ * A seat that says one thing and means it: a refused say is said again, and
+ * a delivered one ends the pass. What lands beside it never changes its mind.
+ */
+export const insists = (text: string, to?: string): Script => says([text], to);
+
+/**
+ * A seat that says these things, in this order, once each, however the room
+ * moves under it: a refused say is said again, a delivered one moves on, and
+ * a say the record already holds is not said twice.
+ */
+export const says =
+	(texts: string[], to?: string): Script =>
+	(context, name) => {
+		const record = contextText(context);
+		const pending = texts.filter(
+			(text) => !record.includes(`[${name}${to ? ` → ${to}` : ''}] ${text}`),
+		);
+		const delivered = toolResultTexts(context).filter((text) => text === 'delivered').length;
+		const next = pending[delivered];
+		return next === undefined ? quiet() : speak(next, to);
+	};

@@ -279,9 +279,11 @@ describe('presence', () => {
 
 		const view = readSession(name, { repo });
 		expect((await view.messages()).filter(isSpoken).map((m) => m.text)).toEqual(['for later']);
-		// no agents stand up, and everybody the record knows is absent
-		expect(view.seats()).toEqual([
-			{ kind: 'human', name: 'andrei', identity: andrei.identity, presence: 'absent' },
+		// the roster folds from the record, nothing stands up, and everybody the record knows is absent
+		expect(view.seats().map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence])).toEqual([
+			['watcher', 'idle'],
+			['assistant', 'idle'],
+			['andrei', 'absent'],
 		]);
 	});
 

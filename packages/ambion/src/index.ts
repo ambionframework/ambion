@@ -52,16 +52,24 @@ export type {
 	Runtime,
 	SessionOpener,
 	SessionRepoLike,
+	Transport,
 } from './runtime.ts';
-export { createRuntime, defaultRuntime, sessionsOver, systemClock } from './runtime.ts';
+export {
+	createRuntime,
+	defaultRuntime,
+	inProcessTransport,
+	sessionsOver,
+	systemClock,
+} from './runtime.ts';
 export type {
 	ReadSessionOptions,
+	ResumeSessionOptions,
 	Session,
 	SessionView,
 	StartSessionOptions,
 	Visit,
 } from './session.ts';
-export { readSession, startSession, stopSession, visitSession } from './session.ts';
+export { readSession, resumeSession, startSession, stopSession, visitSession } from './session.ts';
 export type {
 	AgentDefinition,
 	AgentSeat,
@@ -88,6 +96,27 @@ export type {
 	WorkspaceHandle,
 } from './types.ts';
 export { isPresence, isSpoken, isSummary } from './types.ts';
+export type {
+	ActivationView,
+	CloseRow,
+	Commit,
+	CommitResponse,
+	CompositionRow,
+	EndReason,
+	Hand,
+	Intent,
+	Lease,
+	LeaseResponse,
+	LeaseRow,
+	SeatPort,
+	SeatRoom,
+	SeatRow,
+	Stale,
+	Steer,
+	ViewResponse,
+	Wake,
+} from './wire.ts';
+export { assertWire, roundTrip } from './wire.ts';
 export type { DefineWorkspaceOptions } from './workspace.ts';
 export { defineWorkspace, destroyWorkspace } from './workspace.ts';
 

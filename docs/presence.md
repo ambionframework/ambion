@@ -166,8 +166,10 @@ opened one, and two tabs of one person do not make two people. The host
 decides when that person is gone; the room takes its word for it.
 
 A second `visitSession` with the same name and a different identity is
-refused: one name is one identity for the life of the opening. The
-alternative is a roster that changes under the agents reading it.
+refused while the person is present: one name is one identity for as long
+as they are in the room. The alternative is a roster that changes under
+the agents reading it. An absent person may return under a new identity,
+and their next `arrived` carries it.
 
 `deliver` on a visit that left throws, and so does it on a visit whose run
 was stopped. A handle to a finished visit is a stale handle, and the
@@ -210,6 +212,8 @@ interface Presence {
   from: string;
   /** How the room knew them, on `arrived` alone. */
   identity?: string;
+  /** How they read, on `arrived`, when they said so. */
+  preferences?: string;
 }
 
 export type Message = Spoken | Presence | Summary;
@@ -325,11 +329,14 @@ forget.** An agent that reads `andrei (present)` and calls
 lands the message. So does an agent in a session reopened next week,
 because replaying the record replays the arrivals.
 
-Presence itself is live: it is a fact about a running room, and it dies
-with the process. What survives is the record of how it changed, and that
-rebuilds everything — who has ever been here, who was here last, when, and
-where each of them stopped reading. Presence is kept in one place, and the
-place is the record.
+Presence is a fold over the record (`foldPeople` in
+[`presence.ts`](../packages/ambion/src/presence.ts)): a person is present
+from their last `arrived` until their next `left`. The record rebuilds
+everything — who has ever been here, who is here now, when, and where each
+of them stopped reading. Presence is kept in one place, and the place is
+the record. A crash writes no `left`, so a person stays present until the
+host says they left: a visit on the resumed room hands back a handle and
+commits nothing, and `leave()` on it writes the `left`.
 
 ---
 

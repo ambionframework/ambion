@@ -3,11 +3,20 @@
  * leaves has one shape, and every scenario ends by checking it.
  */
 import { expect } from 'vitest';
-import { isSummary, type SessionEvent, type SessionView } from '../../src/index.ts';
+import {
+	isSummary,
+	type LeaseRow,
+	type SessionEvent,
+	type SessionOpener,
+	type SessionView,
+} from '../../src/index.ts';
+import { rowsOf } from './room.ts';
 
 export interface InvariantOptions {
 	/** How many `error` events the run may hold. A live model may refuse one call. */
 	allowErrors?: number;
+	/** Where the room's log opens: with it, every seat's message is checked against its lease. */
+	sessions?: SessionOpener;
 }
 
 export const errorsIn = (events: SessionEvent[]) =>
@@ -47,4 +56,24 @@ export async function invariants(
 	expect(errorsIn(events).length).toBeLessThanOrEqual(options.allowErrors ?? 0);
 	expect(count(events, 'activation_start')).toBe(count(events, 'activation_end'));
 	expect(count(events, 'exchange_opened')).toBe(count(events, 'exchange_closed'));
+	if (options.sessions) await leased(session, options.sessions);
+}
+
+/** Every message a seat wrote carries an activation id whose lease was running when it landed. */
+async function leased(session: SessionView, sessions: SessionOpener): Promise<void> {
+	const rows = await rowsOf(sessions, session.name);
+	const running = new Set<string>();
+	for (const row of rows) {
+		if (row.type === 'ambion/lease') {
+			const lease = row.data as LeaseRow;
+			if (lease.phase === 'running') running.add(lease.id);
+			else running.delete(lease.id);
+		}
+		if (row.type !== 'ambion/message') continue;
+		const message = row.data as { activationId?: string; from: string };
+		if (message.activationId === undefined) continue;
+		expect(running, `${message.from}'s message under ${message.activationId}`).toContain(
+			message.activationId,
+		);
+	}
 }

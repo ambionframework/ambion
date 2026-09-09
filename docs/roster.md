@@ -196,10 +196,11 @@ open wakes it the same way, and the runtime hands it one tool, `seat`,
 bound to the reserve. The assistant bookends the exchange: it composes the
 room at the open and consolidates what the room said at the close.
 
-The order inside `publish` is what makes it parallel. A question lands, the
-room opens the exchange and activates the assistant, then it routes the
-question and activates the seats. The assistant reads the question while
-the seats do.
+The routing on the question is what makes it parallel. A question that
+opens an exchange names the assistant in its `wakes` beside the seats it
+wakes, when the reserve holds anybody. The room sends every wake once the
+write is confirmed, and the assistant reads the question while the seats
+do.
 
 **What the assistant is handed.** The same context every seat reads, and
 two things more: the reserve (§2) as a second roster, and the ask at the
@@ -245,16 +246,15 @@ what the newcomer said.
 
 So the room draws one distinction about its assistant: a drafting
 activation is outside `working()`, a composing activation is inside it. The
-end of any activation then runs one check: if nothing is working, the room
-settles and the exchange closes. If the assistant stopped and something is
-still working, the room checks whether it owes a draft, as it does today.
+room reconciles once after every commit, every lease change, every alarm
+and every wake: if nothing is working, the exchange closes, and if a
+summary is owed and the assistant is idle, the room wakes it.
 
 **A question that lands while the assistant drafts a summary gets no
-composing activation.** The seat is taken, and the compose is skipped
-rather than queued. A queued compose would land into a room that may have
-settled. The roster stands as it is for that exchange, and the next
-question composes again. This is the same guard `Assistant.pick` applies
-to a draft: one seat, one activation.
+composing activation.** The seat is live, so the routing leaves the
+assistant out of the question's `wakes`. A queued compose would land into a
+room that may have settled. The roster stands as it is for that exchange,
+and the next question composes again: one seat, one activation.
 
 **What the newcomer reads.** Every activation rebuilds the seat's context
 from the record as it stands ([`agent.md`](agent.md) rule 2), so a
@@ -299,11 +299,13 @@ Unseating is the direction the room cannot take back, so the assistant
 holds no tool for it. [`planning/backlog.md`](../planning/backlog.md) holds the
 argument for giving it one.
 
-**`stop` unseats what the run added.** `stopSession` commits `left` for
-every person present ([`presence.md`](presence.md) §8). It commits
-`unseated`, in the same way and without routing, for every seat the run
-added after it started. The next run begins from the composition
-`startSession` was given, and the record says who was seated in between.
+**`stop` leaves the roster to the next composition.** `stopSession`
+revokes every lease in flight and commits `left` for every person present
+([`presence.md`](presence.md) §8). It writes no `unseated`. The next
+`startSession` writes its own composition row, the roster folds from that
+row and the seatings after it, and the record says who was seated in
+between. A read of the stopped room (`readSession`) folds the roster the
+run left.
 
 **A seat that leaves keeps its downstream session.** Rule 8 puts every
 activation's turns in `<room>:<agent>`. An agent seated, unseated and
@@ -321,9 +323,9 @@ until something unrelated activated and ended.
 
 This case exists today, in a room where every seat is `named` and a
 question is undirected. It is common once a room may start with the
-assistant alone and an empty reserve. So `publish` runs the same check the end
-of an activation runs: after routing, if nothing is working, the room
-settles and the exchange closes. The exchange holds one message, the
+assistant alone and an empty reserve. So the room reconciles once the
+question is committed, as it does after every lease change: nothing is
+working, so the exchange closes. The exchange holds one message, the
 question, and the assistant writes nothing for it, because an exchange the
 agents said nothing into writes nothing ([`assistant.md`](assistant.md)
 §4). The host hears `exchange_opened`, `exchange_closed` and `quiet`, in
@@ -343,10 +345,12 @@ Each boundary is stated so a later change has to argue with it.
 - **The assistant never defines an agent.** It seats from the reserve, and
   the host decides what is in it by writing `available`. §2.
 - **A seat never reads the reserve.** §2.
-- **A seating is on the record, and the starting composition is not.** The
-  record holds what happened in the run. What the run started with is the
-  run's, as `agent.md` §5 says of the roster and `presence.md` says of the
-  people.
+- **A seating is on the record, and so is the composition.** Every
+  `startSession` writes a composition row beside the messages: the
+  assistant, the goal, the agents seated and the agents in reserve, each
+  with its attention. The roster folds from the latest row and the
+  seatings and unseatings after it, so a stopped room reads back, and a
+  resumed room starts from what its last run held.
 - **The threshold reads the record.** The rule that a summary is written
   when the agents said more than one thing counts messages from any name
   that is not a person and not the assistant, so an agent that spoke and
@@ -384,8 +388,8 @@ this document makes loudly:
 - the host seats and unseats by hand, an unseat aborts the activation in
   flight, and a say directed at the unseated colleague is refused with the
   departure (§5);
-- `stop` unseats what the run added and leaves the starting composition
-  alone (§5);
+- `stop` leaves the roster to the next composition row, and the next run
+  starts from its own (§5);
 - the threshold counts an agent that spoke and was unseated (§7).
 
 All in-process, in vitest, on a scripted stream.

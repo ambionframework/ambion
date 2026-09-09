@@ -231,6 +231,8 @@ type Message =
       kind: 'said';
       seq: number; // monotonic, assigned at commit, strictly ordered
       key?: string; // the key the commit carried; a repeated key lands once
+      activationId?: string; // the activation that wrote it; absent on a delivery
+      wakes?: string[]; // the seats the room decided to wake for it
       at: string; // stamped by the runtime, at the moment it landed
       from: string; // a participant's name — stamped by the runtime, never claimed
       to?: string; // present when the delivery or say was directed
@@ -240,15 +242,21 @@ type Message =
       kind: 'arrived' | 'left' | 'seated' | 'unseated';
       seq: number;
       key?: string;
+      activationId?: string; // on a 'seated' the assistant wrote
+      wakes?: string[];
       at: string;
       from: string; // the participant whose presence changed — stamped by the runtime
       identity?: string; // on 'arrived' and 'seated': how the room knew them
       by?: string; // on 'seated': the assistant, when it did the seating
+      attention?: Attention; // on 'seated': what wakes the seat; absent means 'broadcast'
+      preferences?: string; // on 'arrived': how the person reads, when they said so
     }
   | {
       kind: 'summary';
       seq: number;
       key?: string;
+      activationId?: string;
+      wakes?: string[];
       at: string;
       from: string; // the assistant, which wrote it
       to: string; // the person whose question opened the exchange
@@ -271,8 +279,9 @@ below applies to all three kinds unchanged, which is why the record holds
 one union and one sequence.
 
 Beyond identity, the mechanics are eight rules. The first six are the
-room's routing and voice; all of the routing is one function, `dispatch` in
-`session.ts`.
+room's routing and voice; all of the routing is one function, `routing` in
+`session.ts`, and it is written on the message: `wakes` names the seats the
+room decided to wake, so a message and its routing are one write.
 
 **1. Every message activates every idle agent, in parallel.** A human's
 delivery, a person arriving, and a colleague's undirected `say` route
@@ -305,8 +314,13 @@ slightly different order than the record. Its working view is its own,
 temporary by design: when the agent goes idle the view is discarded, and
 the next activation reads the record itself. The record is canonical.
 
+A steer may be lost on the way to a seat. The message is on the record,
+so nothing is lost with it: when a pass ends, the activation renews its
+lease, and the renewal says how far the record reaches. An activation that
+heard less than that reads the room again through a fresh view.
+
 **3. Speaking is a tool; silence is the default.** An activated agent holds
-one built-in tool, `say({ to?, text })` (`sayTool` in `session.ts`). Ending
+one built-in tool, `say({ to?, text })` (`sayTool` in `seat.ts`). Ending
 an activation without calling it is declining. Declining leaves no mark on the
 record — the way a colleague reads the room and keeps working. The tool
 refuses an empty text for the same reason: a message with nothing in it
@@ -410,8 +424,8 @@ Each agent's tool calls belong to its own working context; other
 participants see its `say`s only, because the record is all any view
 renders. The hands are still auditable: every activation's full turns land
 in the seat's own downstream Pi session — `<room>:<agent>`, parented to the
-room's, named by `seats().sessionId`, listed by the same repo (`persistRun`
-in `session.ts`) — so what an agent actually did can be replayed long after
+room's, named by `seats().sessionId`, opened by the same opener
+(`persistTurns` in `log.ts`) — so what an agent actually did can be replayed long after
 its working view reset. The record is never rewritten for anyone.
 
 ### Observing the room
@@ -514,14 +528,22 @@ controls:
   like any other, and its activation counts. That difference keeps an
   exchange's end fixed. [`exchange.md`](exchange.md)
   §6 fixes the order of the events at the close.
-- **`abort()`** cancels every activation in flight — Pi's own abort, fanned
-  out —
-  and the room settles. What was said stays, what was mid-flight ends
-  without speaking, and an aborted activation stays cancelled even if a steer
-  was still queued against it. The room is still running afterwards.
+- **`abort()`** revokes every lease in flight: the room writes `ended` with
+  reason `revoked` for each one, cuts the seat side with Pi's own abort, and
+  settles. What was said stays, what was mid-flight ends without speaking,
+  and an aborted activation stays cancelled even if a steer was still queued
+  against it. The room is still running afterwards.
 - **`stopSession`** is the one that ends it, and it is `abort()` plus
-  everything else a run holds: the visits close, the writes drain, and the
-  handle is spent.
+  everything else a run holds: the visits close with a `left` for everyone
+  present, the alarm is cancelled, and the handle is spent. It writes no
+  `unseated`: the next run writes its own composition, and the roster folds
+  from that ([`roster.md`](roster.md) §5).
+- **`resumeSession(name, { runtime })`** brings a name back up over its
+  log, with the composition the log holds. Every name on the roster
+  resolves through the runtime's catalog. The room reconciles at once: a
+  lease the last run left expires, a wake it left pending is sent again,
+  and an exchange it left open closes. `runtime.evict(name)` is the other
+  half: it drops a running room from memory and writes nothing.
 
 `messages()` and `seats()` are the pull side; the stream is the push side.
 A listener learns nothing the pulls cannot tell it — it only learns it
@@ -529,22 +551,51 @@ sooner.
 
 `readSession(name, { repo })` returns the pull side alone — `messages()`,
 `seats()`, `subscribe()` — and `Session` extends it, so code that only
-reads takes the narrower type and cannot start anything by accident.
+reads takes the narrower type and cannot start anything by accident. Its
+`seats()` folds the same composition row a running room folds, so a stopped
+room says who was in it: the roster, every seat idle, and every person the
+record knows.
 
 One file per concern, and `session.ts` is the room that composes them: the
-log in [`log.ts`](../packages/ambion/src/log.ts), who is here in
-[`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes it
-in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
-[`activation.ts`](../packages/ambion/src/activation.ts), the exchange in
-[`exchange.ts`](../packages/ambion/src/exchange.ts), what the assistant
-writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), what an
-agent's tools reach into in
-[`workspace.ts`](../packages/ambion/src/workspace.ts), and what any of them
-reads in [`render.ts`](../packages/ambion/src/render.ts).
+log in [`log.ts`](../packages/ambion/src/log.ts), every fact folded over it
+in [`fold.ts`](../packages/ambion/src/fold.ts), the step the room takes in
+[`reconcile.ts`](../packages/ambion/src/reconcile.ts), who is here in
+[`presence.ts`](../packages/ambion/src/presence.ts), a seat, what wakes it
+and the seat's side of the wire in [`seat.ts`](../packages/ambion/src/seat.ts),
+an activation's id and lease in [`lease.ts`](../packages/ambion/src/lease.ts),
+one activation in [`activation.ts`](../packages/ambion/src/activation.ts),
+the exchange in [`exchange.ts`](../packages/ambion/src/exchange.ts), what the
+assistant writes in [`assistant.ts`](../packages/ambion/src/assistant.ts),
+what crosses between a seat and its room in
+[`wire.ts`](../packages/ambion/src/wire.ts), what an agent's tools reach
+into in [`workspace.ts`](../packages/ambion/src/workspace.ts), what a host
+owns in [`runtime.ts`](../packages/ambion/src/runtime.ts), and what any of
+them reads in [`render.ts`](../packages/ambion/src/render.ts).
 
-**A seat is seated for the run. An activation lasts seconds.** What an
-activation has heard, what landed while it worked, and whether it left a mark
-belong to the activation and end with it. Rule 5's `readThrough` is an
+**The log is the truth, and the room moves by reconciling.** Every fact
+about the room is a fold over the log and the clock: the roster, the
+reserve, the people, the open exchange, the leases, the wakes still
+pending and the summaries still owed. `reconcile()` folds the log, decides,
+writes what it decided, and sends. It runs after every commit, every lease
+change, every alarm and every wake, and running it twice writes nothing.
+Four kinds of entry hold it all, in the room's one Pi session:
+`ambion/message`, `ambion/lease`, `ambion/close` and `ambion/composition`.
+Every entry beside a message carries `after`, the last message seq when it
+was written.
+
+**A seat is seated for the run. An activation lasts seconds.** An
+activation's id is derived from the log: the seq of the message that woke
+the seat and the seat's name (`2:product`), or the close it answers and the
+attempt number (`close:9:1`). Nothing mints an id, so a wake is safe to send
+twice, a retried commit lands once, and every entry an activation writes
+carries its `activationId`. An activation holds a lease: `running`, claimed
+and renewed with an expiry, then `ended`, with a reason — `released`,
+`failed`, `refused`, `revoked` or `expired`. A request from an activation
+whose lease ended is refused as `stale`. A running lease that stops
+renewing expires on the room's alarm: the room reports a failed activation
+as an `error` event, and the seat's next request is refused. What an
+activation has heard, what landed while it worked, and whether it left a
+mark belong to the activation and end with it. Rule 5's `readThrough` is an
 activation's fact.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
@@ -555,7 +606,18 @@ the shorthand for one. The default runtime opens sessions in an in-memory
 `InMemorySessionRepo`. A name that outlives the process is a durable
 `SessionRepo` implementation; the API stays the same.
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
-surface, and Ambion adds no storage layer of its own.
+surface, and Ambion adds no storage layer of its own. "Durable" means the
+storage's append resolved: Pi's JSONL repository calls no `fsync`.
+
+**What crosses between a seat and its room is JSON.** The room renders the
+system prompt and the context, and sends the two strings with the model
+id and the hand the activation holds. The seat side resolves the definition
+by name through the runtime's catalog, builds the Pi `Agent`, and reaches
+the room through three calls: `view`, `commit` and `lease`. The room
+reaches a seat through two: `wake` and `steer`. Every request and response
+survives a round trip through `JSON.stringify` unchanged
+([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
+live in two processes.
 
 **A host owns a `Runtime`.** It holds the clock, the session opener, the
 model call, the rooms that are running and the workspace names that are
