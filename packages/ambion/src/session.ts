@@ -1175,14 +1175,16 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * Dropped from memory: the alarm is cancelled, the log is closed, and
-	 * every call a seat makes from now on is stale. The record keeps what
-	 * landed before, and nothing this run had in flight lands after.
+	 * Dropped from memory: the alarm is cancelled, the log is closed, every
+	 * call a seat makes from now on is stale, and nothing reaches a listener
+	 * again. The record keeps what landed before, and nothing this run had
+	 * in flight lands after.
 	 */
 	evict(): void {
 		this.evicted = true;
 		this.log.close();
 		this.cancelAlarm();
+		this.listeners.clear();
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
 		for (const resolve of this.settledWaiters.splice(0)) resolve();
 	}
