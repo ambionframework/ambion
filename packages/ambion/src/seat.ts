@@ -245,7 +245,19 @@ export class SeatActor implements SeatPort {
 			if (this.current.id !== wake.activation) this.queued = wake.activation;
 			return;
 		}
-		void this.take(wake.activation);
+		void this.run(wake.activation);
+	}
+
+	/**
+	 * One activation to its end: claim, run, release, then whatever queued
+	 * behind it. A host that runs a seat inside one request awaits this.
+	 */
+	async run(id: string): Promise<void> {
+		if (this.current !== undefined) {
+			this.queued = id;
+			return;
+		}
+		await this.take(id);
 	}
 
 	async steer(steer: Steer): Promise<void> {
@@ -259,7 +271,6 @@ export class SeatActor implements SeatPort {
 		this.current?.activation.abort();
 	}
 
-	/** One activation: claim, run, release, then whatever queued behind it. */
 	private async take(id: string): Promise<void> {
 		// Held before the claim, so a steer that lands while the claim is in
 		// flight reaches the activation and not the floor.

@@ -17,8 +17,9 @@ deliberate departures noted in [§10](#10-departures-from-flue).
 ```
 ambion/
 ├── packages/
-│   ├── ambion/            @ambionframework/ambion   — the runtime library
-│   └── cli/               @ambionframework/cli      — the `ambion` binary
+│   ├── ambion/            @ambionframework/ambion      — the runtime library
+│   ├── cli/               @ambionframework/cli         — the `ambion` binary
+│   └── cloudflare/        @ambionframework/cloudflare  — the room as Durable Objects (private)
 ├── examples/
 │   └── site/              the runnable example: a multi-agent room
 ├── scripts/
@@ -35,14 +36,16 @@ ambion/
 └── pnpm-workspace.yaml    packages/*, examples/*
 ```
 
-**Rule.** `packages/*` is publishable. `examples/*` is private and exists to
-be run. `examples/site` is the runnable example; the gate type-checks it with
-everything else, so an example that breaks fails the build.
+**Rule.** `packages/*` is publishable, with one exception: `packages/cloudflare`
+is private, because nothing deploys it yet. `examples/*` is private and exists
+to be run. `examples/site` is the runnable example; the gate type-checks it
+with everything else, so an example that breaks fails the build.
 
 ### Package graph
 
 ```
-@ambionframework/cli  ──depends on──▶  @ambionframework/ambion
+@ambionframework/cli         ──depends on──▶  @ambionframework/ambion
+@ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion
 ```
 
 Internal dependencies use `workspace:*` and are rewritten to the published
@@ -57,7 +60,9 @@ if the workspace protocol does not resolve.
 [`presence.md`](presence.md), [`assistant.md`](assistant.md) and
 [`workspace.md`](workspace.md) are its contracts.
 `@ambionframework/cli` is the `ambion` binary; it currently reports its
-version and nothing else.
+version and nothing else. `@ambionframework/cloudflare` runs a room as
+Cloudflare Durable Objects, one object per room and one per seat, over
+the runtime's public exports alone; its README says what is built.
 
 ---
 
@@ -102,8 +107,11 @@ is `^26.2.0` and not `^26.3.0`); adding the package to
 **Block install scripts.** pnpm 10 refuses to run `preinstall`/`install`/
 `postinstall` unless a package is allowlisted. `onlyBuiltDependencies` is the
 deliberate exception set and is currently **empty** — nothing in the tree needs
-one. Adding an entry means accepting that package's arbitrary code execution at
-install time, so it should be a reviewed change.
+one. `workerd`, which the Cloudflare package's test pool pulls in, declares a
+`postinstall` and runs without it: its binary arrives as a platform package
+(`@cloudflare/workerd-linux-64` and its siblings), and the ignored script
+only checks for it. Adding an entry means accepting that package's arbitrary
+code execution at install time, so it should be a reviewed change.
 
 **Do not leave credentials lying around.** Every `actions/checkout` step sets
 `persist-credentials: false`, so the job token is not written into `.git/config`
@@ -241,7 +249,7 @@ Three jobs, on push to `main`, on every pull request, and on demand.
 | Job       | What it proves                                                      |
 | --------- | ------------------------------------------------------------------- |
 | **check** | Formatting, types, lint, the complexity budget, and Knip on Node 22 |
-| **test**  | The suite passes on Node 22 **and** 24                              |
+| **test**  | The suite passes on Node 22 **and** 24, the workerd tier inside it  |
 | **cli**   | The published artifact actually works                               |
 
 The `cli` job is the one that matters most and the one a unit test cannot

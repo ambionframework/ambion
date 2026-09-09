@@ -61,6 +61,8 @@ export {
 	sessionsOver,
 	systemClock,
 } from './runtime.ts';
+export type { SeatContext } from './seat.ts';
+export { SeatActor } from './seat.ts';
 export type {
 	ReadSessionOptions,
 	ResumeSessionOptions,
