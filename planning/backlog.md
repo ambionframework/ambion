@@ -15,7 +15,7 @@ the open questions about a design; this file holds the work.
 
 ### 1. The room is a process global — closed
 
-`runtime.ts` holds the clock, the session opener, the transport, the model
+`host/runtime.ts` holds the clock, the session opener, the transport, the model
 call, the catalog, the rooms that run and the workspace names that are
 taken. `startSession`, `readSession`, `resumeSession` and `defineWorkspace`
 take a `Runtime` and default to `defaultRuntime`, the one process-wide
@@ -72,7 +72,7 @@ protobufjs and the Anthropic SDK before a host defines anything.
 The four ignored build-script warnings on every `pnpm install` come from
 this tree, and `docs/toolchain.md` §3 says nothing in the tree needs one.
 
-**Where.** `packages/ambion/src/session.ts` line 28 and `registry()`.
+**Where.** `packages/ambion/src/host/runtime.ts`, `registry()`.
 
 **Fix.** Make `registry()` a dynamic import, or move default provider
 resolution to the host. `streamFn` is already the extension surface.
@@ -98,10 +98,10 @@ latent break on the next typebox release that changes a type.
 
 ### 7. Test affordances leak into the runtime
 
-**What.** `resolveModel` returns `{ api: 'scripted' } as unknown as
+**What.** `stubModel` returns `{ api: 'scripted' } as unknown as
 Model<Api>` when a host passes a custom `streamFn`.
 
-**Where.** `packages/ambion/src/session.ts`, `resolveModel`.
+**Where.** `packages/ambion/src/host/runtime.ts`, `stubModel`.
 
 **Fix.** Build a real `Model` value with Pi's own shape.
 

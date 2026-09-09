@@ -92,7 +92,7 @@
 		//   seat/                         the seat side of the wire: one activation at a time
 		//   session.ts                    the room, which composes them all
 		//
-		// `docs/toolchain.md` §2 names the layers; each override below refuses
+		// `docs/toolchain.md` §1 names the layers; each override below refuses
 		// the imports its layer may not make.
 		{
 			"includes": [
