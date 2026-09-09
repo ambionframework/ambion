@@ -5,7 +5,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineTool, stopSession } from '../../src/index.ts';
+import { createRuntime, defineTool, stopSession } from '../../src/index.ts';
 import { enter } from '../support/room.ts';
 import {
 	agent,
@@ -68,20 +68,25 @@ live('the model and the loop', () => {
 		await stopSession(session);
 	});
 
-	it('a refused model call reaches the host as an error and leaves no mark', async () => {
+	it('a refused model call reaches the host as an error, is tried again to the cap, and leaves no mark', async () => {
 		const key = process.env[KEY_VAR];
 		process.env[KEY_VAR] = 'not-a-key';
 		try {
-			const { session, events } = open('refused', { agents: [clerk()] });
+			// No wait between attempts: the provider refuses each one at once.
+			const runtime = createRuntime({ retry: { attempts: 3, backoff: () => 0 } });
+			const { session, events } = open('refused', { agents: [clerk()], runtime });
 			const visit = await enter(session, person);
 			await visit.deliver({ text: 'What is the status of order 7781?' });
 			await within(session.settled(), 60_000, 'the room settling');
 
+			// one error per attempt, and the room gave up at the cap
 			const errors = errorsIn(events);
-			expect(errors).toHaveLength(1);
-			expect(errors[0]).toMatch(/^clerk: /);
+			expect(errors).toHaveLength(3);
+			for (const error of errors) expect(error).toMatch(/^clerk: /);
 			expect(saidBy(await session.messages(), 'clerk')).toEqual([]);
-			expect(events).toContainEqual({ type: 'activation_end', agent: 'clerk', spoke: false });
+			const ends = events.filter((e) => e.type === 'activation_end' && e.agent === 'clerk');
+			expect(ends).toEqual(Array(3).fill({ type: 'activation_end', agent: 'clerk', spoke: false }));
+			expect(session.exchange()).toBeUndefined();
 			await stopSession(session);
 		} finally {
 			process.env[KEY_VAR] = key;

@@ -282,15 +282,15 @@ real key, and proves what a scripted stream cannot. It lives in
 [`packages/ambion/test/live`](../packages/ambion/test/live), one file per
 claim:
 
-| File                | What it proves                                                                                                                               |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loop.test.ts`      | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error`    |
-| `judgment.test.ts`  | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                                 |
-| `exchange.test.ts`  | Three seats race under the lock, the room goes quiet, the assistant writes in the person's shape, and it seats a specialist from the reserve |
-| `record.test.ts`    | A second run of a name reads the record the first run left, and answers from it                                                              |
-| `workspace.test.ts` | The four built-in tools reach a workspace on a real provider                                                                                 |
-| `control.test.ts`   | `abort()` ends a request in flight without a mark, and the room keeps running                                                                |
-| `resume.test.ts`    | A second runtime resumes a room mid-exchange on a real model, the lease the first run held expires, and the assistant writes the summary     |
+| File                | What it proves                                                                                                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loop.test.ts`      | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error` and is tried again to the cap |
+| `judgment.test.ts`  | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                                                            |
+| `exchange.test.ts`  | Three seats race under the lock, the room goes quiet, the assistant writes in the person's shape, and it seats a specialist from the reserve                            |
+| `record.test.ts`    | A second run of a name reads the record the first run left, and answers from it                                                                                         |
+| `workspace.test.ts` | The four built-in tools reach a workspace on a real provider                                                                                                            |
+| `control.test.ts`   | `abort()` ends a request in flight without a mark, and the room keeps running                                                                                           |
+| `resume.test.ts`    | A second runtime resumes a room mid-exchange on a real model, the lease the first run held expires, and the assistant writes the summary                                |
 
 Every test holds the record to the same invariants whatever the model said:
 seqs contiguous, one `message` event per message, every author on the
