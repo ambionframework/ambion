@@ -33,6 +33,7 @@ showed.
 | 2026-09-02 | [The Site Drive](2026-09-02-the-site-drive.html)                     | sonnet-5   | [artifact](https://claude.ai/code/artifact/bb026bd2-1ce3-4aeb-b496-68416695bb63) |
 | 2026-09-03 | [One Assistant, Three Readers](2026-09-03-one-assistant-three-readers.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/52643e13-6b26-4311-8ab9-f1e9d9cea242) |
 | 2026-09-03 | [Who the Question Needs](2026-09-03-who-the-question-needs.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/8cbbe725-691f-449f-828e-479221fc9bde) |
+| 2026-09-09 | [The Room Comes Back](2026-09-09-the-room-comes-back.html)                 | sonnet-5   | [artifact](https://claude.ai/code/artifact/19f03f78-029e-44c9-a061-8d451fb88877) |
 
 ## What each run changed
 
@@ -187,3 +188,30 @@ runtime now asks the assistant to seat everyone a question touches, on the
 argument that a seated specialist with nothing to add costs one glance and
 a missing one costs the answer, and the cap on seatings is the reserve
 itself.
+
+**The Room Comes Back.** The run that durable state was built against. The
+same suite and the same three people, and the process dies as the first
+answer to Sam's question lands: the runtime that holds the room is dropped
+with six leases running, and nothing is written about the crash. A second
+runtime resumes the name over the same log. It folds the roster, the
+people, the open exchange and the leases back from the rows, sends the five
+wakes the dead run left unanswered again, expires the six leases on its own
+alarm about nine seconds later, closes the exchange, and writes Sam the one
+message, with the crash inside the range it covers. Four questions open four
+exchanges across the two runtimes, and each one is written for. The report
+shows every lease the dead run held, what it had heard, and how it ended,
+and lists what the resumed run did first.
+
+The change under it makes the log the truth. The room holds no fact in
+memory: every fact is a fold over four kinds of entry in the room's own Pi
+session, and the room moves by reconciling, which is safe to run twice.
+Every message names every seat it reaches, every lease records what its
+activation heard, and a wake is answered by a lease that heard it and ran
+to its end, or that spoke. An activation that expired or failed without a
+word is tried again after a backoff, up to three attempts, the same policy
+the summaries already had. What crosses between a seat and its room is
+JSON, and a second package runs a room as Cloudflare Durable Objects over
+the same calls. The evidence is a chaos tier: the room crashes at every
+write its log takes, before and after the entry lands, is killed from
+outside on a JSONL storage, and walks under a seeded sequence of faults,
+and a host that resumes it reaches the same record every time.

@@ -397,7 +397,7 @@ const firstAfter = afterCrash.slice(0, 6).map((t) => {
 	if (e.type === 'activation_start') return `${e.agent} woke`;
 	if (e.type === 'activation_end') return `${e.agent} ended${e.spoke ? ', having spoken' : ''}`;
 	if (e.type === 'error') return `${e.agent}: ${e.error.message}`;
-	return e.type.replace('_', ' ');
+	return e.type.replaceAll('_', ' ');
 });
 const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
 
@@ -449,7 +449,7 @@ ul.plain{margin:.4rem 0 0 1.2rem;padding:0;color:var(--dim);max-width:45rem} ul.
 <h1>The Room Comes Back</h1>
 <p class="lede">The same construction suite and the same three people, and this time the process dies in the middle of a question. As the first answer to ${esc(crashMessage ? (record.find((m) => m.seq === crashExchange?.from)?.from ?? 'sam') : 'sam')}&rsquo;s question landed, at message [${crash.at}], the runtime that held the room was dropped: ${plural(heldAtCrash.length, 'lease', 'leases')} stayed on the log unreleased, and nothing was written about the crash. A second runtime resumed the name over the same log. It folded the roster, the people, the open exchange and the leases back from the rows; it sent the ${plural(resentActs.length, 'wake', 'wakes')} the dead run left unanswered again; the ${plural(heldAtCrash.length, 'lease', 'leases')} the dead run held expired on its own alarm, ${seconds(expiredAfter)} after the crash; the exchange closed; and the assistant wrote ${crashSummary ? `${esc(crashSummary.to)}` : 'nobody'} the one message${crashSummary ? `, covering [${crashSummary.covers.from}]–[${crashSummary.covers.through}], the crash inside it` : ''}. ${questions.length} questions opened ${closed.length} exchanges, and ${summaries.length} were written for, across two runtimes.</p>
 <div class="stats">${stat(questions.length, 'questions asked')}${stat(agentSaid.length, 'agent messages')}${stat(summaries.length, 'summaries written')}${stat(run.reserve.length, 'specialists on call')}${stat(seatings.filter((m) => m.by === ASSISTANT).length, 'seated by the assistant')}${stat(composing.length, 'composing activations')}</div>
-<div class="stats">${stat(seatActs.length, 'seat activations')}${stat(conflicts, 'says the lock refused')}${stat(errors, 'tool or model failures')}${stat(run.toolCalls.length, 'calls into the products&rsquo; APIs')}${stat(n(totalTokens), 'tokens across every turn')}${stat(money(totalCost), 'total model cost')}</div>
+<div class="stats">${stat(seatActs.length, 'seat activations')}${stat(conflicts, 'says the lock refused')}${stat(errors, 'errors the room reported')}${stat(run.toolCalls.length, 'calls into the products&rsquo; APIs')}${stat(n(totalTokens), 'tokens across every turn')}${stat(money(totalCost), 'total model cost')}</div>
 <p class="note">Every line is verbatim from one live run. The people were scripted only in when they arrived, what they asked, and when they left; the crash was scripted to land on the first answer to the second question, and nothing else about it was. Nobody scripted the seatings: ${esc(seatedBy)}.</p>
 
 <section>
