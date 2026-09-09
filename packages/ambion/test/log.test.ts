@@ -115,4 +115,36 @@ describe('RoomLog in doubt', () => {
 		const retried = await log.commit({ key: 'b', draft: say('two, again') });
 		expect(retried).toMatchObject({ message: { seq: 2, text: 'two' }, repeated: true });
 	});
+
+	it('reads past the last entry it saw, so a second doubt costs the entries since the first', async () => {
+		const reads: number[] = [];
+		const faulty = faultyOpener(sessionsOver(new InMemorySessionRepo()));
+		const sessions = {
+			open: async (id: string, parentId?: string) => {
+				const piSession = await faulty.sessions.open(id, parentId);
+				const find = piSession.findEntries.bind(piSession);
+				piSession.findEntries = async (query) => {
+					const found = await find(query);
+					reads.push(found.length);
+					return found;
+				};
+				return piSession;
+			},
+		};
+		const log = new RoomLog(sessions.open(roomName('cursor')));
+		for (const text of ['one', 'two', 'three', 'four']) await log.commit({ draft: say(text) });
+		faulty.fail('after');
+		await expect(log.commit({ draft: say('five') })).rejects.toThrow(/disk is full/);
+		faulty.fail(false);
+		await log.settled();
+		await log.commit({ draft: say('six') });
+		faulty.fail('after');
+		await expect(log.commit({ draft: say('seven') })).rejects.toThrow(/disk is full/);
+		faulty.fail(false);
+		await log.settled();
+		expect(log.messages.map((m) => m.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+		// the replay read nothing; the first doubt read what four commits and the lost one appended;
+		// the second read only what landed since: the lost one, and the two after it
+		expect(reads).toEqual([0, 5, 2]);
+	});
 });

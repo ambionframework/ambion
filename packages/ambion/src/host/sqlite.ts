@@ -186,11 +186,12 @@ export class SqliteSessionStorage implements SessionStorage {
 			where.push('custom_type = ?');
 			args.push(query.customType);
 		}
+		const order = query.order === 'newestFirst' ? 'DESC' : 'ASC';
+		// A cursor reads against the order, the way Pi's own storages do: past it oldest first, before it newest first.
 		if (query.cursor !== undefined) {
-			where.push('seq > ?');
+			where.push(order === 'ASC' ? 'seq > ?' : 'seq < ?');
 			args.push(query.cursor.afterSeq);
 		}
-		const order = query.order === 'newestFirst' ? 'DESC' : 'ASC';
 		const limit = query.limit === undefined ? '' : ` LIMIT ${Math.floor(query.limit)}`;
 		return this.sql
 			.all(

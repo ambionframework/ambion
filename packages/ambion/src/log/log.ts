@@ -17,10 +17,12 @@
  *
  * An append that fails leaves the log in doubt: the storage may hold the
  * entry, and the cache does not. The log reads what the storage holds past
- * what it cached at once, on the queue behind the failed write, and again
+ * its cursor at once, on the queue behind the failed write, and again
  * before the next write when that read failed too. A write whose
  * confirmation was lost is on the record before anything lands on top of
- * it, and a read of the record waits for the queue.
+ * it, and a read of the record waits for the queue. The cursor moves to
+ * the last entry every read saw, so a read costs the entries since the
+ * one before it, whatever the log's age.
  *
  * A checkpoint replaces every row before it: the fold reads the rows it
  * carries and nothing older, so the log drops those rows from its cache
@@ -107,10 +109,10 @@ export class RoomLog {
 	/** The serial queue. One commit at a time, in the order they were asked for. */
 	private tail: Promise<unknown> = Promise.resolve();
 	private closed = false;
-	/** Pi's id of every entry the cache holds. */
+	/** Pi's id of every entry the cache holds past the cursor: what a read in doubt finds again. */
 	private readonly known = new Set<string>();
-	/** Pi's seq of the last replayed entry: a read past it finds what appends added. */
-	private replayedThrough = 0;
+	/** Pi's seq of the last entry a read saw: the next read starts past it. */
+	private cursor = 0;
 	/** An append failed, and the storage may hold what the cache does not. */
 	private doubt = false;
 	/** The replay is over: what a read finds from now on is news, and `found` hears it. */
@@ -137,7 +139,7 @@ export class RoomLog {
 
 	private async replay(open: Promise<PiSession>): Promise<PiSession> {
 		const piSession = await open;
-		this.replayedThrough = await this.read(piSession, 0);
+		await this.read(piSession);
 		this.replayed = true;
 		this.compact();
 		return piSession;
@@ -159,17 +161,21 @@ export class RoomLog {
 	}
 
 	/**
-	 * Cache every entry the storage holds past `afterSeq` that the cache
-	 * lacks, and tell `found` about each one after the replay. Returns the
-	 * last seq read.
+	 * Cache every entry the storage holds past the cursor that the cache
+	 * lacks, tell `found` about each one after the replay, and move the
+	 * cursor to the last entry seen. Nothing at or before the cursor is
+	 * read again, so the ids kept to tell a found entry from a cached one
+	 * are only those appended since.
 	 */
-	private async read(piSession: PiSession, afterSeq: number): Promise<number> {
-		const found = (await piSession.findEntries()).filter((entry) => entry.seq > afterSeq);
+	private async read(piSession: PiSession): Promise<void> {
+		const afterSeq = this.cursor;
+		// Pi reads a cursor against the order: oldest first, past `afterSeq`.
+		const query = afterSeq === 0 ? {} : { order: 'oldestFirst' as const, cursor: { afterSeq } };
+		const found = (await piSession.findEntries(query)).filter((entry) => entry.seq > afterSeq);
 		// findEntries does not promise append order; Pi's seq does.
 		found.sort((a, b) => a.seq - b.seq);
-		let last = afterSeq;
 		for (const entry of found) {
-			last = Math.max(last, entry.seq);
+			this.cursor = Math.max(this.cursor, entry.seq);
 			if (entry.type !== 'custom' || this.known.has(entry.id)) continue;
 			const known = toEntry(entry.customType, entry.data);
 			if (known === undefined) continue;
@@ -177,7 +183,7 @@ export class RoomLog {
 			this.cache(known, entry.id);
 			if (this.replayed) this.found?.(known, fresh);
 		}
-		return last;
+		this.known.clear();
 	}
 
 	/** Whether the cache holds a row for this lease id already. */
@@ -255,7 +261,7 @@ export class RoomLog {
 		if (this.closed) throw new Error('The log is closed.');
 		const piSession = await this.ready;
 		if (this.doubt) {
-			await this.read(piSession, this.replayedThrough);
+			await this.read(piSession);
 			this.doubt = false;
 		}
 		return piSession;
