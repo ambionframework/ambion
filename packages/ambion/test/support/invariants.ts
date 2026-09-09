@@ -17,6 +17,10 @@ export interface InvariantOptions {
 	allowErrors?: number;
 	/** Where the room's log opens: with it, every seat's message is checked against its lease. */
 	sessions?: SessionOpener;
+	/** How many activations a resumed room inherited live: their ends land in this run, their starts did not. */
+	inherited?: number;
+	/** Whether a resumed room inherited an open exchange: its close lands in this run, its open did not. */
+	inheritedExchange?: boolean;
 }
 
 export const errorsIn = (events: SessionEvent[]) =>
@@ -54,8 +58,12 @@ export async function invariants(
 		expect(summary.covers.from).toBeLessThanOrEqual(summary.covers.through);
 	}
 	expect(errorsIn(events).length).toBeLessThanOrEqual(options.allowErrors ?? 0);
-	expect(count(events, 'activation_start')).toBe(count(events, 'activation_end'));
-	expect(count(events, 'exchange_opened')).toBe(count(events, 'exchange_closed'));
+	expect(count(events, 'activation_start') + (options.inherited ?? 0)).toBe(
+		count(events, 'activation_end'),
+	);
+	expect(count(events, 'exchange_opened') + (options.inheritedExchange ? 1 : 0)).toBe(
+		count(events, 'exchange_closed'),
+	);
 	if (options.sessions) await leased(session, options.sessions);
 }
 

@@ -309,6 +309,30 @@ same invariants. The workerd tier, in `packages/cloudflare`, runs the room
 inside Cloudflare's runtime as part of `turbo test`, with no key and no
 network.
 
+**The chaos tests are the evidence that the log is the truth.** They live in
+[`test/chaos.test.ts`](../packages/ambion/test/chaos.test.ts) over the
+harness in
+[`test/support/chaos.ts`](../packages/ambion/test/support/chaos.ts), and
+`pnpm test` runs them:
+
+- **A crash at every write.** One scenario runs once to count the appends
+  its log takes, then once per append, crashing the room at that append:
+  before the entry lands, and again after it landed and before the room
+  heard. The world resumes the name in a fresh runtime, puts back the
+  people who were present, and retries the host action that failed under
+  the same key. Every run must come to the same record: every delivery on
+  it once, every answer once, every summary owed written once.
+- **A kill from outside.** The same scenario runs in a child process on a
+  JSONL storage, on the system clock, with short leases. The test sends
+  `SIGKILL` at a write, resumes over the directory, finishes the scenario,
+  and checks the same record.
+- **The random walk** (`property.test.ts`) loses and repeats requests on
+  the wire, fails a write before or after it lands, and crashes the room
+  up to three times.
+
+`AMBION_CHAOS=all` widens the sweep to JSONL and the kill to every third
+write; `pnpm chaos` runs both widened, with 200 seeds of the walk.
+
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:
 `vitest.config.ts` excludes `test/live` from `pnpm test`, and
 `vitest.live.config.ts` includes nothing else. In the live configuration

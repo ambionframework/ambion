@@ -26,7 +26,7 @@ import { assertAssistant } from './assistant.ts';
 import type { Exchange } from './exchange.ts';
 import { foldRoom, type RoomState } from './fold.ts';
 import { activationId, draftId, isExpired, isLive, parseId, seatOf } from './lease.ts';
-import { type Committed, RoomLog } from './log.ts';
+import { type Committed, type LogEntry, RoomLog } from './log.ts';
 import type { VisitRuntime } from './presence.ts';
 import { decide, liveSeats, working } from './reconcile.ts';
 import { renderLine } from './render.ts';
@@ -65,6 +65,7 @@ import type {
 	EndReason,
 	Lease,
 	LeaseResponse,
+	LeaseRow,
 	SeatPort,
 	SeatRow,
 	ViewResponse,
@@ -333,7 +334,7 @@ class SessionImpl implements Session, RunningRoom {
 		this.name = name;
 		this.runtime = runtime;
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
-		this.log = new RoomLog(this.sessions.open(name));
+		this.log = new RoomLog(this.sessions.open(name), (entry, fresh) => this.heard(entry, fresh));
 		this.stream = options.streamFn ?? runtime.stream;
 		this.model = options.streamFn ? stubModel : runtime.model;
 		this.starting = composition ? startingSeats(composition, name) : [];
@@ -464,6 +465,7 @@ class SessionImpl implements Session, RunningRoom {
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
 		await this.ready;
+		await this.log.settled();
 		return this.log.since(options.since);
 	}
 
@@ -529,13 +531,19 @@ class SessionImpl implements Session, RunningRoom {
 		// A person the log holds as present is here already: a crash wrote no
 		// `left`, and the host's word is what says otherwise. Nothing commits.
 		if (this.state().people.get(human.name)?.presence !== 'present') {
-			await this.commitMessage<PresenceMessage>(crypto.randomUUID(), undefined, () => ({
-				kind: 'arrived',
-				at: this.iso(),
-				from: human.name,
-				identity: human.identity,
-				...(human.preferences === undefined ? {} : { preferences: human.preferences }),
-			}));
+			try {
+				await this.commitMessage<PresenceMessage>(crypto.randomUUID(), undefined, () => ({
+					kind: 'arrived',
+					at: this.iso(),
+					from: human.name,
+					identity: human.identity,
+					...(human.preferences === undefined ? {} : { preferences: human.preferences }),
+				}));
+			} catch (error) {
+				// An arrival the storage refused is no visit: the next visit writes it again.
+				this.visits.delete(human.name);
+				throw error;
+			}
 		}
 		return this.handle(visit);
 	}
@@ -749,6 +757,54 @@ class SessionImpl implements Session, RunningRoom {
 		}
 		for (const seat of message.wakes ?? []) this.send(activationId(message.seq, seat), seat);
 		void this.reconcile();
+	}
+
+	/**
+	 * An entry the log found on a read in doubt: it landed, and this room
+	 * never heard. The room acts on it as on a write it confirmed: the host
+	 * hears the event, and a message is routed.
+	 */
+	private heard(entry: LogEntry, fresh: boolean): void {
+		if (entry.type === 'message') {
+			this.committed(entry.message);
+			return;
+		}
+		if (entry.type === 'close') {
+			const question = this.log.messages.find((m) => m.seq === entry.close.from);
+			this.emit({
+				type: 'exchange_closed',
+				exchange: {
+					owner: entry.close.owner,
+					from: entry.close.from,
+					at: question?.at ?? entry.close.at,
+					through: entry.close.through,
+				},
+			});
+			return;
+		}
+		if (entry.type === 'lease') this.heardLease(entry.lease, fresh);
+	}
+
+	/** A lease row found: a fresh claim starts an activation, an end ends one, and an end with no claim before it is a wake written off. */
+	private heardLease(lease: LeaseRow, fresh: boolean): void {
+		const seat = seatOf(lease.id, this.assistant) ?? '';
+		if (lease.phase === 'running') {
+			if (fresh) {
+				this.idleReported = false;
+				this.emit({ type: 'activation_start', agent: seat });
+			}
+			return;
+		}
+		if (fresh) return;
+		const spoke = this.log.messages.some((m) => m.activationId === lease.id);
+		this.emit({ type: 'activation_end', agent: seat, spoke });
+		if (lease.reason === 'expired') {
+			this.emit({
+				type: 'error',
+				agent: seat,
+				error: new Error('The activation ran past its lease.'),
+			});
+		}
 	}
 
 	/** One wake over the wire. A wake a message caused carries the line a running activation is steered with. */
@@ -971,7 +1027,10 @@ class SessionImpl implements Session, RunningRoom {
 	/**
 	 * Fold, decide, write, send, until a decision writes nothing. Every write
 	 * checks the fold again where it lands, so a lease that arrives between
-	 * the decision and the write turns the write into nothing.
+	 * the decision and the write turns the write into nothing. A write the
+	 * storage refuses ends the pass, and the room looks again after the
+	 * resend window: what it decided is still on the fold, and the storage
+	 * may be back.
 	 */
 	private async reconcileOnce(): Promise<void> {
 		await this.log.ready;
@@ -984,9 +1043,17 @@ class SessionImpl implements Session, RunningRoom {
 				sentAt: (id) => this.sentAt.get(id),
 				stopped: this.stopped,
 			});
-			const changed = await this.apply(decision);
-			this.settle();
+			let changed: boolean;
+			try {
+				changed = await this.apply(decision);
+			} catch {
+				this.arm(this.now() + this.runtime.wake.resend);
+				return;
+			}
+			// Whoever waits hears it once the room has nothing more to write: a
+			// pass that expired a lease is followed by the pass that closes.
 			if (!changed) {
+				this.settle();
 				this.arm(decision.alarmAt);
 				return;
 			}

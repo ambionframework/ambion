@@ -99,38 +99,58 @@ export const backends: readonly Backend[] = [
 
 // -- a storage that fails ----------------------------------------------------
 
-export interface FaultyOpener {
-	readonly sessions: SessionOpener;
-	/** Every write fails while `on` is true. Reads and opens keep working. */
-	fail(on: boolean): void;
-}
+/**
+ * Called around every append a session takes: once before it lands and
+ * once after. `n` counts the appends to this session id. A hook that throws
+ * fails the append: before it lands, the entry is nowhere; after, the
+ * entry is on the storage and the writer never learns it.
+ */
+export type AppendHook = (id: string, n: number, phase: 'before' | 'after') => void;
 
-/** An opener whose sessions refuse to write while the test says so. */
-export function faultyOpener(sessions: SessionOpener): FaultyOpener {
-	let failing = false;
-	const refuse = () => {
-		if (failing) throw new Error('the disk is full');
-	};
-	const brittle = (piSession: PiSession): PiSession =>
+/** An opener whose every append reports itself to the hook, and fails when the hook throws. */
+export function tappedOpener(sessions: SessionOpener, hook: AppendHook): SessionOpener {
+	const counts = new Map<string, number>();
+	const tapped = (id: string, piSession: PiSession): PiSession =>
 		new Proxy(piSession, {
 			get(target, property, receiver) {
 				if (property === 'appendCustomEntry' || property === 'appendMessage') {
 					return async (...args: unknown[]) => {
-						refuse();
-						return (Reflect.get(target, property, receiver) as (...a: unknown[]) => unknown).apply(
-							target,
-							args,
-						);
+						const n = (counts.get(id) ?? 0) + 1;
+						counts.set(id, n);
+						hook(id, n, 'before');
+						const append = Reflect.get(target, property, receiver) as (
+							...a: unknown[]
+						) => Promise<unknown>;
+						const result = await append.apply(target, args);
+						hook(id, n, 'after');
+						return result;
 					};
 				}
 				const value = Reflect.get(target, property, receiver);
 				return typeof value === 'function' ? value.bind(target) : value;
 			},
 		});
+	return { open: async (id, parentId) => tapped(id, await sessions.open(id, parentId)) };
+}
+
+/** When a write fails: before it lands, or after it landed and before the writer hears. */
+export type FailMode = false | 'before' | 'after';
+
+export interface FaultyOpener {
+	readonly sessions: SessionOpener;
+	/** Every write fails while `on` is set: `true` and `'before'` lose it, `'after'` lands it and loses the confirmation. */
+	fail(on: boolean | FailMode): void;
+}
+
+/** An opener whose sessions refuse to write while the test says so. */
+export function faultyOpener(sessions: SessionOpener): FaultyOpener {
+	let failing: FailMode = false;
 	return {
-		sessions: { open: async (id, parentId) => brittle(await sessions.open(id, parentId)) },
+		sessions: tappedOpener(sessions, (_id, _n, phase) => {
+			if (failing === phase) throw new Error('the disk is full');
+		}),
 		fail: (on) => {
-			failing = on;
+			failing = on === true ? 'before' : on;
 		},
 	};
 }

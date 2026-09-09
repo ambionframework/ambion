@@ -98,17 +98,22 @@ export function toolResultTexts(context: Context): string[] {
 }
 
 /**
- * A seat that answers the last question a person asked, once. A refused say
- * is said again; a delivered one ends the pass; a record that already holds
+ * A seat that answers the last question a person asked, once. A question
+ * directed at a colleague is the colleague's to answer. A refused say is
+ * said again; a delivered one ends the pass; a record that already holds
  * the answer stays quiet.
  */
 export const answersLastQuestion =
 	(people: string[]): Script =>
 	(context, name) => {
 		const text = contextText(context);
-		const asked = new RegExp(`^\\[(?:${people.join('|')})\\] (.+?)(?: {2}\\(.*\\))?$`, 'gm');
-		const question = [...text.matchAll(asked)].at(-1)?.[1];
-		if (question === undefined) return quiet();
+		const asked = new RegExp(
+			`^\\[(?:${people.join('|')})(?: → ([a-z0-9-]+))?\\] (.+?)(?: {2}\\(.*\\))?$`,
+			'gm',
+		);
+		const last = [...text.matchAll(asked)].at(-1);
+		const question = last?.[2];
+		if (question === undefined || (last?.[1] !== undefined && last[1] !== name)) return quiet();
 		const answer = `${name} on ${question}`;
 		if (text.includes(`[${name}] ${answer}`) || toolResultTexts(context).includes('delivered')) {
 			return quiet();

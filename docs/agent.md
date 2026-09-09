@@ -679,6 +679,14 @@ one per claim this document makes loudly:
 - a seat whose model call throws is woken again after the backoff, and the
   room gives up at the cap.
 
+What a crash leaves is proved in
+[`chaos.test.ts`](../packages/ambion/test/chaos.test.ts): the room crashes
+at every write its log takes, before and after the entry lands, and is
+killed from outside mid-activation, and a host that resumes it and retries
+under the same key reaches the same record every time.
+[`toolchain.md`](toolchain.md) §8 says how the sweep runs and how to widen
+it.
+
 All in-process, in vitest, on a scripted stream where determinism matters.
 
 A second tier, [`test/live`](../packages/ambion/test/live), runs the same

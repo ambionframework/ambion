@@ -1,8 +1,9 @@
 /**
  * The room under a random walk: people come and go, questions land under
  * repeated keys, the host seats and unseats, time moves, the wire loses and
- * repeats requests, and the room crashes once and resumes. Whatever the
- * walk, the record keeps its shape.
+ * repeats requests, the storage loses a write or its confirmation, and the
+ * room crashes and resumes, up to three times. Whatever the walk, the
+ * record keeps its shape.
  *
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
@@ -23,9 +24,10 @@ import {
 	type Visit,
 	visitSession,
 } from '../src/index.ts';
+import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
-import { roomName } from './support/room.ts';
+import { roomName, rowsOf } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -35,7 +37,7 @@ import {
 	toolNames,
 	toolResultTexts,
 } from './support/scripted.ts';
-import { memory } from './support/storage.ts';
+import { type FailMode, memory, tappedOpener } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
 /** A small, fast, seedable generator: the walk is the same for the same seed. */
@@ -94,28 +96,50 @@ const script = byAgent({
 			: quiet(),
 });
 
-const STEPS = ['visit', 'leave', 'deliver', 'seat', 'unseat', 'advance', 'fault', 'crash'] as const;
+const STEPS = [
+	'visit',
+	'leave',
+	'deliver',
+	'seat',
+	'unseat',
+	'advance',
+	'fault',
+	'disk',
+	'crash',
+] as const;
 type Step = (typeof STEPS)[number];
 const OPERATIONS: Operation[] = ['wake', 'view', 'commit', 'lease'];
 
 /** One walk: the room, the runtime it runs in, and what the walk did so far. */
 class Walk {
-	readonly events: SessionEvent[] = [];
+	/** The events of the run that holds the room now. A crashed run's events are its own. */
+	events: SessionEvent[] = [];
+	/** What the run that holds the room now inherited: leases live at its resume, and an open exchange. */
+	inherited = { activations: 0, exchange: false };
 	readonly log: string[] = [];
 	readonly faults: Fault[] = [];
 	readonly clock: FakeClock = fakeClock();
 	readonly visits = new Map<string, Visit>();
 	session!: Session;
 	runtime!: Runtime;
-	crashed = false;
+	crashes = 0;
+	/** The one write the storage fails next, and how. */
+	private disk: FailMode = false;
+	private readonly sessions: Awaited<ReturnType<typeof memory.open>>['sessions'];
 	private lastKey: string | undefined;
 	private deliveries = 0;
 
 	constructor(
 		readonly name: string,
 		private readonly random: () => number,
-		private readonly sessions: Awaited<ReturnType<typeof memory.open>>['sessions'],
-	) {}
+		sessions: Awaited<ReturnType<typeof memory.open>>['sessions'],
+	) {
+		this.sessions = tappedOpener(sessions, (id, _n, phase) => {
+			if (id !== name || this.disk !== phase) return;
+			this.disk = false;
+			throw new Error('the disk is full');
+		});
+	}
 
 	pick<T>(items: readonly T[]): T {
 		return items[Math.floor(this.random() * items.length)] as T;
@@ -145,6 +169,7 @@ class Walk {
 	}
 
 	private watch(): void {
+		this.events = [];
 		this.session.subscribe((event) => this.events.push(event));
 	}
 
@@ -162,13 +187,22 @@ class Walk {
 		if (step === 'unseat') return this.session.unseat(gamma).catch(() => {});
 		if (step === 'advance') return this.clock.advance(Math.floor(this.random() * 70_000));
 		if (step === 'fault') return this.fault();
+		if (step === 'disk') return this.fail();
 		return this.crash();
 	}
 
+	/** The storage fails the next write: it never lands, or it lands and the confirmation is lost. */
+	private fail(): void {
+		this.disk = this.pick(['before', 'after'] as const);
+		this.log.push(`  disk fails the next write ${this.disk}`);
+	}
+
+	/** A visit the storage refused is no visit: the host tries again another time. */
 	private async visit(): Promise<void> {
 		const person = this.pick(people);
 		if (this.visits.has(person.name)) return;
-		this.visits.set(person.name, await visitSession(this.session, person));
+		const visit = await visitSession(this.session, person).catch(() => undefined);
+		if (visit !== undefined) this.visits.set(person.name, visit);
 	}
 
 	private async leave(): Promise<void> {
@@ -176,7 +210,7 @@ class Walk {
 		const visit = this.visits.get(person);
 		if (visit === undefined) return;
 		this.visits.delete(person);
-		await visit.leave();
+		await visit.leave().catch(() => {});
 	}
 
 	private async deliver(): Promise<void> {
@@ -201,23 +235,26 @@ class Walk {
 		this.faults.push(fault);
 	}
 
-	/** Once: the room is dropped from memory and resumed by a new host over the same log. */
+	/** Up to three times: the room is dropped from memory and resumed by a new host over the same log. */
 	private async crash(): Promise<void> {
-		if (this.crashed) return;
-		this.crashed = true;
+		if (this.crashes >= 3) return;
+		this.crashes += 1;
 		this.runtime.evict(this.name);
 		this.visits.clear();
+		const activations = await liveLeases(this.sessions, this.name, this.clock.now());
 		this.runtime = this.host();
 		this.session = await resumeSession(this.name, {
 			runtime: this.runtime,
 			streamFn: scripted(script),
 		});
+		this.inherited = { activations, exchange: this.session.exchange() !== undefined };
 		this.watch();
 	}
 
 	/** Time moves until nothing is live: every lease expires, every wake is sent again, every draft is due. */
 	async drain(): Promise<void> {
 		this.faults.length = 0;
+		this.disk = false;
 		for (let i = 0; i < 6; i += 1) await this.clock.advance(61_000);
 		await within(this.session.quiet(), 10_000, 'quiet after the drain');
 	}
@@ -234,6 +271,15 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 
 const seeds = Number(process.env.AMBION_SEEDS ?? 25);
 
+/** One event in a few characters, for the failure message. */
+function brief(event: SessionEvent): string {
+	if (event.type === 'message') return `m${event.message.seq}:${event.message.kind}`;
+	if (event.type === 'activation_start') return `+${event.agent}`;
+	if (event.type === 'activation_end') return `-${event.agent}`;
+	if (event.type === 'error') return `!${event.agent}`;
+	return event.type;
+}
+
 describe('the room under a random walk', () => {
 	it.each(Array.from({ length: seeds }, (_, i) => i + 1))(
 		'keeps its shape on seed %i',
@@ -247,6 +293,8 @@ describe('the room under a random walk', () => {
 				await invariants(walk.session, walk.events, {
 					allowErrors: 100,
 					sessions: opened.sessions,
+					inherited: walk.inherited.activations,
+					inheritedExchange: walk.inherited.exchange,
 				});
 				// every summary stands for a range that ends right before it, whatever the walk did
 				for (const summary of (await walk.session.messages()).filter(isSummary)) {
@@ -259,6 +307,11 @@ describe('the room under a random walk', () => {
 					.seats()
 					.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence]);
 				walk.log.push(`seats: ${JSON.stringify(seats)}`);
+				walk.log.push(`events: ${walk.events.map(brief).join(' ')}`);
+				const rows = await rowsOf(opened.sessions, walk.name);
+				walk.log.push(
+					`rows:\n  ${rows.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
+				);
 				throw new Error(`seed ${seed} failed after:\n${walk.log.join('\n')}\n\n${detail}`, {
 					cause: error,
 				});

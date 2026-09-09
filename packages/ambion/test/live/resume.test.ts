@@ -90,6 +90,11 @@ live('resume', () => {
 		const resumed = await resumeSession(name, { runtime: second });
 		const events = collect(resumed);
 		expect(resumed.exchange()).toMatchObject({ owner: person.name });
+		// the leases the first run held: the speaker's, and the other seat's if it was mid-request
+		const inherited = resumed
+			.seats()
+			.filter((s) => s.kind === 'agent' && s.status === 'active').length;
+		expect(inherited).toBeGreaterThanOrEqual(1);
 		await untilQuiet(resumed);
 
 		const messages = await resumed.messages();
@@ -105,8 +110,12 @@ live('resume', () => {
 		expect(events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message))).toBe(
 			true,
 		);
-		// the speaker's lease, and the other seat's if it was mid-request at the cut
-		await invariants(resumed, events, { allowErrors: 2 });
+		// the inherited leases expired: one error each, and one end without a start
+		await invariants(resumed, events, {
+			allowErrors: inherited,
+			inherited,
+			inheritedExchange: true,
+		});
 		report('resume', await spent(repo, name));
 		await stopSession(resumed);
 	});

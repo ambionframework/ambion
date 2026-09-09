@@ -505,9 +505,10 @@ roster in [`render.ts`](../packages/ambion/src/render.ts).
 ### 26. Lease rows grow with every activation
 
 **What.** Every activation writes two lease rows at least: a claim and an
-end, plus one renewal per half expiry. A room that runs for a month holds
-tens of thousands of rows beside a few thousand messages, and every fold
-reads them all.
+end, plus one renewal per half expiry, and one renewal per message steered
+into it, which carries `heard`. A room that runs for a month holds tens of
+thousands of rows beside a few thousand messages, and every fold reads
+them all.
 
 **Why.** The fold is O(rows) per operation. Item 2 records the same cost
 for messages; leases add the larger term.
@@ -532,16 +533,18 @@ returning visit under a new identity is refused.
 everyone it does not hold a connection for. The runtime keeps no clock over
 a visit, and should not start one.
 
-### 28. Three attempts, then the summary is never written
+### 28. Three attempts, then the wake or the summary is never tried again
 
-**What.** A summary a draft could not land retries after a backoff, three
-times, on the room's alarm, and then the room stops. Nothing reports the
+**What.** A wake whose activation expired or failed without speaking, and a
+summary a draft could not land, retry after a backoff, three times, on the
+room's alarm, and then the room stops. Nothing reports the wake or the
 range as owed afterwards, and no later event retries it.
 
-**Where.** `dueDrafts` in `reconcile.ts`; [`docs/assistant.md`](../docs/assistant.md) §16.
+**Where.** `pendingWakes` in `lease.ts`, `foldOwed` in `fold.ts`;
+[`docs/agent.md`](../docs/agent.md) §5, [`docs/assistant.md`](../docs/assistant.md) §16.
 
 **Fix.** An event when the cap is reached, and a host verb that resets the
-attempts for one close.
+attempts for one message or one close.
 
 ### 29. The random walk has no shrinker
 
@@ -560,3 +563,32 @@ host outside it cannot subscribe.
 
 **Fix.** A WebSocket or a polling `events(since)` over the log's rows, once
 something outside the object needs to watch a room.
+
+### 31. A lease the dead run held holds the exchange open until it expires
+
+**What.** A resumed room cannot tell a lease a dead process held from one a
+seat in another process still runs, so it waits for the expiry, sixty
+seconds by default. The seats answer in the meantime; the close, and the
+summary after it, wait for the expiry. `chaos.test.ts` moves the clock
+past it; a host on the system clock waits it out.
+
+**Where.** `resumeSession` in `session.ts`; `expiries` in `reconcile.ts`.
+
+**Fix.** A host that knows the whole run died passes that knowledge in:
+`resumeSession(name, { revoke: true })` ends every running lease as
+`revoked` at the first reconcile. A host that does not know keeps the
+expiry.
+
+### 32. A message that landed while its confirmation was lost has no event
+
+**What.** A write that lands and fails to confirm is on the record, and the
+resumed room's `read` finds it. No run emits a `message` event for it: the
+run that wrote it died before it could, and the run that found it emits
+nothing for what it replays. A host that follows the stream alone misses
+it; a host that reads `messages()` after a resume does not.
+
+**Where.** `RoomLog.read` in `log.ts`; `invariants` in the test support,
+which holds the stream to one event per message within one run.
+
+**Fix.** Leave it: the stream is the push side, and a resume is where the
+pull side is read. Say so in `docs/agent.md` §5 if a host trips on it.
