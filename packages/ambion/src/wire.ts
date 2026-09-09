@@ -13,8 +13,8 @@
  */
 import type { Message, Seq } from './types.ts';
 
-/** Why a lease ended: the activation ran to its end, it never reached the record, the record kept moving past its drafts, or the room ended it. */
-export type EndReason = 'released' | 'failed' | 'refused' | 'revoked';
+/** Why a lease ended: the activation ran to its end, it never reached the record, or the record kept moving past its drafts. */
+export type EndReason = 'released' | 'failed' | 'refused';
 
 // -- the room reaching a seat -------------------------------------------------
 

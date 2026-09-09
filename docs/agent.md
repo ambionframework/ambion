@@ -575,8 +575,8 @@ activation is steered with when a message caused it. Every request and
 response survives a round trip through `JSON.stringify` unchanged
 ([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
 live in two processes. The room answers the three calls from a lease table
-it keeps in memory: a lease ends when the seat releases it or the room
-revokes it.
+it keeps in memory. A lease ends when the seat side releases it; the room
+cuts an activation it ends, and the seat side releases the lease then.
 
 **A host owns a `Runtime`.** It holds the clock, the session opener, the
 model call, the rooms that are running and the workspace names that are

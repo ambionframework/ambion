@@ -208,19 +208,27 @@ export class SeatActor implements SeatPort {
 		}
 	}
 
-	/** Renew at half the expiry, for as long as the activation runs and the room renews it. */
+	/**
+	 * Renew at half the expiry, for as long as the activation runs and the
+	 * room renews it. The cancel stops the loop for good: a renewal in flight
+	 * when the activation ends arms nothing when it comes back.
+	 */
 	private renewUntil(activation: Activation, firstExpiry: number): () => void {
 		const clock = this.context.clock;
+		let stopped = false;
 		let cancel = () => {};
 		const schedule = (expiry: number) => {
 			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void again());
 		};
 		const again = async () => {
 			const renewed = await this.renew(activation);
-			if (renewed !== undefined) schedule(renewed);
+			if (!stopped && renewed !== undefined) schedule(renewed);
 		};
 		schedule(firstExpiry);
-		return () => cancel();
+		return () => {
+			stopped = true;
+			cancel();
+		};
 	}
 
 	private host(id: string) {

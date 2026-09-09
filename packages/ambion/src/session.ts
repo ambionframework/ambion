@@ -16,9 +16,10 @@
  * - **Route.** Who hears a message, and who wakes for it.
  * - **Answer a seat.** The view an activation reads, the commit it asks for,
  *   and the lease it holds — the three calls in `wire.ts`. The room answers
- *   them from a lease table it keeps in memory: a lease ends when the seat
- *   releases it or the room revokes it, and the expiry the room hands out is
- *   what the seat side renews against.
+ *   them from a lease table it keeps in memory. A lease ends when the seat
+ *   side releases it; the room cuts an activation it ends, and the seat side
+ *   releases the lease then. The expiry the room hands out is what the seat
+ *   side renews against.
  * - **Say when it has stopped.** An exchange closed, and nothing live.
  */
 import type { SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
@@ -92,11 +93,9 @@ interface Placed {
 	reserved?: true;
 }
 
-/** One lease the room holds: whose it is, what the activation is for, and whether it left a mark. */
+/** One lease the room holds: whose it is, and whether the activation left a mark. */
 interface Held {
 	seat: string;
-	/** The assistant's attempt at a summary. Every other activation stirs the room. */
-	draft: boolean;
 	spoke: boolean;
 }
 
@@ -451,15 +450,14 @@ class SessionImpl implements Session, RunningRoom {
 		if (seat.reserved) this.reserve.set(name, { def: seat.def, attention: seat.attention });
 	}
 
-	/** The assistant seats one name from the reserve. The roster changes before the message lands. */
-	private admit(name: string): Placed {
+	/** The assistant seats one name from the reserve, where its seating lands. */
+	private admit(name: string): void {
 		const held = this.reserve.get(name);
 		if (!held) throw new Error(`'${name}' is not in the reserve.`);
 		this.reserve.delete(name);
 		const placed = this.place(seated(held.def, held.attention));
 		placed.added = true;
 		placed.reserved = true;
-		return placed;
 	}
 
 	// -- what the host reads -----------------------------------------------------
@@ -689,24 +687,29 @@ class SessionImpl implements Session, RunningRoom {
 			crypto.randomUUID(),
 			undefined,
 			{ ...change, at: this.now() },
-			false,
+			{ route: false },
 		);
 	}
 
 	/**
-	 * One operation on the room's commit queue: the write, and then what the
-	 * room does with a fresh message, inside the same link of the queue. A
-	 * repeated key lands nothing, so the room does nothing with it either.
+	 * One operation on the room's commit queue: the write, then what the room
+	 * changes for a fresh message, then what it does with it, inside the same
+	 * link of the queue. A repeated key lands nothing, so the room does
+	 * nothing with it either.
 	 */
 	private commitMessage<T extends Message>(
 		key: string,
 		readThrough: Seq | undefined,
 		draft: Omit<T, 'seq' | 'key'>,
-		route = true,
+		options: { route?: boolean; landed?: () => void } = {},
 	) {
 		return this.log.commit<T>(
 			{ key, ...(readThrough === undefined ? {} : { readThrough }), draft },
-			(message) => (route ? this.committed(message) : this.emit({ type: 'message', message })),
+			(message) => {
+				options.landed?.();
+				if (options.route ?? true) this.committed(message);
+				else this.emit({ type: 'message', message });
+			},
 		);
 	}
 
@@ -965,7 +968,13 @@ class SessionImpl implements Session, RunningRoom {
 			if (error instanceof RefusedError) return { refused: error.message };
 			throw error;
 		}
-		const committed = await this.commitMessage<Message>(commit.key, commit.readThrough, drafted);
+		// A seating changes the roster where the message lands, before it
+		// routes: every seat the seating reaches reads a roster that already
+		// agrees with it, and a repeated key changes nothing twice.
+		const landed = drafted.kind === 'seated' ? () => this.admit(drafted.from) : undefined;
+		const committed = await this.commitMessage<Message>(commit.key, commit.readThrough, drafted, {
+			landed,
+		});
 		if ('missed' in committed) {
 			this.emit({ type: 'conflict', author: held.seat, missed: committed.missed });
 			return { missed: committed.missed };
@@ -1012,10 +1021,7 @@ class SessionImpl implements Session, RunningRoom {
 					(names.length ? `Seat one of: ${names.join(', ')}.` : 'The reserve is empty.'),
 			);
 		}
-		// The roster changes before the message routes: every seat the seating
-		// reaches reads a roster that already agrees with it.
-		const placed = this.admit(intent.name);
-		return { kind: 'seated', at, from: placed.def.name, identity: placed.def.identity, by: seat };
+		return { kind: 'seated', at, from: held.def.name, identity: held.def.identity, by: seat };
 	}
 
 	private assertAddressable(seat: string, to: string | undefined): void {
@@ -1060,9 +1066,8 @@ class SessionImpl implements Session, RunningRoom {
 		if (this.leases.has(id)) return ok;
 		if (this.spent.has(id)) return stale('the lease ended');
 		this.pending.delete(id);
-		const draft = parseId(id)?.kind === 'draft';
-		this.leases.set(id, { seat, draft, spoke: false });
-		if (!draft) this.stirred = true;
+		this.leases.set(id, { seat, spoke: false });
+		if (parseId(id)?.kind !== 'draft') this.stirred = true;
 		this.emit({ type: 'activation_start', agent: seat });
 		return ok;
 	}

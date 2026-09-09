@@ -161,13 +161,17 @@ export class Activation {
 	}
 
 	/**
-	 * Whether the record moved past what this activation heard: a steer that
-	 * was dropped on the way is not lost, because the message is on the record
-	 * and the renewal says how far it reaches.
+	 * Whether the record moved past what this activation heard. A steer still
+	 * queued on the agent says so: it landed after the run drained its queue.
+	 * So does a renewal whose `lastSeq` is past what was heard: a steer that
+	 * was dropped on the way is not lost, because the message is on the
+	 * record. Nothing awaits between this check and the release, so a steer
+	 * that lands after it wakes the seat afresh.
 	 */
 	private async moved(agent: Agent): Promise<boolean> {
 		const renewed = await this.host.renew();
-		if ('stale' in renewed || renewed.ok.lastSeq <= this.heardThrough) return false;
+		if ('stale' in renewed) return false;
+		if (!agent.hasQueuedMessages() && renewed.ok.lastSeq <= this.heardThrough) return false;
 		agent.clearAllQueues();
 		return true;
 	}
