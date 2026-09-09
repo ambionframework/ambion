@@ -23,11 +23,37 @@ import type {
 import { InMemorySessionRepo } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
-import type { AgentDefinition, Clock, ModelResolver, SessionOpener } from '../types.ts';
+import type {
+	AgentDefinition,
+	Clock,
+	ModelResolver,
+	SessionEvent,
+	SessionOpener,
+} from '../types.ts';
+import type { SeatPort, SeatRoom } from '../wire.ts';
 
-/** A room the runtime holds while it runs. `session.ts` implements it. */
-export interface RunningRoom {
+/**
+ * A room the runtime holds while it runs, as the transport sees it: the
+ * seat's three calls, plus what an in-process seat is handed beside them.
+ * `session.ts` implements it.
+ */
+export interface RunningRoom extends SeatRoom {
 	readonly name: string;
+	readonly stream: StreamFn;
+	readonly model: ModelResolver;
+	/** Where the room's sessions open: a seat's audit session opens beside them. */
+	readonly sessions: SessionOpener;
+	emit(event: SessionEvent): void;
+}
+
+/**
+ * How a room reaches a seat. In process, a port is the seat's own actor over
+ * a direct handle on the room (`inProcessTransport` in `seat/seat.ts`);
+ * across a boundary, a port carries the wake over, and the seat reaches
+ * back through the same boundary.
+ */
+export interface Transport {
+	connect(room: RunningRoom, seat: string, runtime: Runtime): SeatPort;
 }
 
 export interface Runtime {
@@ -39,6 +65,8 @@ export interface Runtime {
 	readonly catalog: Map<string, AgentDefinition>;
 	readonly clock: Clock;
 	readonly sessions: SessionOpener;
+	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
+	readonly transport?: Transport;
 	/** The model call every seat in this runtime makes, unless a room overrides it. */
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
@@ -46,6 +74,7 @@ export interface Runtime {
 
 export interface CreateRuntimeOptions {
 	clock?: Clock;
+	transport?: Transport;
 	/** Where the rooms' Pi sessions open. `repo` is the shorthand for `sessionsOver(repo)`. */
 	sessions?: SessionOpener;
 	repo?: SessionRepoLike<SessionMetadata, SessionCreateOptions>;
@@ -135,6 +164,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		catalog: new Map(),
 		clock: options.clock ?? systemClock(),
 		sessions,
+		...(options.transport === undefined ? {} : { transport: options.transport }),
 		stream: options.stream ?? registryStream,
 		model: options.stream ? stubModel : registryModel,
 	};

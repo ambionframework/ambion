@@ -66,17 +66,18 @@ only. Biome refuses every other import (`noRestrictedImports`, one
 override per layer in `biome.jsonc`), so the layout is a fact the gate
 holds, and a reviewer reads a file knowing what it cannot reach.
 
-| Layer                       | What it holds                                                    | May import                 |
-| --------------------------- | ---------------------------------------------------------------- | -------------------------- |
-| `types`, `define`, `render` | The vocabulary: the public shapes, and what a participant reads  | Nothing that does anything |
-| `host/`                     | What a host owns: the runtime value, a clock, an opener          | The vocabulary             |
-| `log/`                      | The log: one serial queue over a Pi session                      | The vocabulary             |
-| `tools/`                    | What an agent's tools reach into: the workspace and its backends | The vocabulary, `host/`    |
-| `session.ts`                | The room, which composes them all                                | Everything                 |
+| Layer                               | What it holds                                                                                      | May import                        |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                          | Nothing that does anything        |
+| `host/`                             | What a host owns: the runtime value, a clock, an opener                                            | The vocabulary                    |
+| `log/`                              | The log: one serial queue over a Pi session                                                        | The vocabulary                    |
+| `room/`                             | What the room holds beside the log: an activation's id, the assistant's rules                      | The vocabulary                    |
+| `tools/`                            | What an agent's tools reach into: the workspace and its backends                                   | The vocabulary, `host/`           |
+| `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport | The vocabulary, `host/`, `tools/` |
+| `session.ts`                        | The room, which composes them all                                                                  | Everything                        |
 
-The files beside `session.ts` at the root of `src` (the activation, the
-assistant, the exchange, presence, the seat) are in no layer yet, and no
-override constrains them.
+The two files beside `session.ts` at the root of `src`, the exchange and
+presence, are in no layer yet, and no override constrains them.
 
 Two rules hold across packages: the core imports no platform module
 (`node:sqlite`, `cloudflare:*`), and every other package reaches the core
@@ -318,8 +319,10 @@ and the live support re-exports them. The scripted tier runs the same
 scenarios on every storage (`matrix.test.ts`): Pi's in-memory repository,
 and Pi's JSONL repository over a temporary directory. It runs them on a
 clock it moves by hand (`test/support/clock.ts`), so a test never waits
-on real time. The live tier runs the room on a real model and holds it to
-the same invariants.
+on real time, and over a transport that serializes every request and
+response between a seat and the room (`test/support/transport.ts`), so a
+value that would not survive the wire fails the scenario. The live tier
+runs the room on a real model and holds it to the same invariants.
 
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:
 `vitest.config.ts` excludes `test/live` from `pnpm test`, and

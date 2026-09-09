@@ -42,25 +42,19 @@ without limit. `docs/agent.md` §8 says Ambion owns no context window, and
 on append. Long term: a window policy on `RoomView.record`, and a decision
 in the contract about which module owns it.
 
-### 3. `session.ts` holds six jobs in 1063 lines
+### 3. `session.ts` holds four jobs
 
-**What.** `SessionImpl` has 61 methods. Its header lists compose, commit,
-route, hands, and quiescence. The reserve, `seat` and `unseat` joined it in
-the last change. The `say` tool sits inline at line 858, while the
-assistant's `summarise` and `seat` tools live in `assistant.ts` behind
-small room interfaces. The commit path (`claim`, `publish`,
-`commitPresence`, `deliverFrom`) and the assistant scheduling
-(`closeExchange` through `draftNext`) are two more concerns.
+**What was done.** The commit path lives in `log/log.ts`. The three tools,
+`say`, `summarise` and `seat`, live in `seat/hands.ts`, and the seat side
+of the wire runs an activation in `seat/seat.ts`. The room answers a seat
+through three calls, `view`, `commit` and `lease`.
 
-**Why.** Every feature lands in one file. `dispatch` sits at the
-complexity cap by design, and the file around it has no cap.
+**What is left.** `session.ts` holds compose, route, the seat's three
+calls and the assistant's scheduling (`closeExchange` through
+`draftNext`), with the leases, the reserve and who is owed in memory.
+Every fact the room holds in memory is the next thing to move.
 
 **Where.** `packages/ambion/src/session.ts`.
-
-**Fix.** Move `say` to `seat.ts` beside `toPiTool`, with a `SayRoom`
-interface that mirrors `SummaryRoom`. The commit path lives in
-`log/log.ts` now. Move the reserve into its own module. The room keeps
-compose and route.
 
 ### 4. Importing the package loads every provider SDK
 
@@ -213,9 +207,10 @@ nothing, and rung 3 pays for an activation.
   argue with the room. The paragraph that explains a fold
   (`SUMMARY_PARAGRAPH`) is the precedent.
 
-**Where.** `dispatch` and `handsFor` in
-[`session.ts`](../packages/ambion/src/session.ts), `wakes` in
-[`seat.ts`](../packages/ambion/src/seat.ts), the assistant's paragraphs in
+**Where.** `dispatch` in
+[`session.ts`](../packages/ambion/src/session.ts), `handsFor` in
+[`hands.ts`](../packages/ambion/src/seat/hands.ts), `wakes` in
+[`seat.ts`](../packages/ambion/src/seat/seat.ts), the assistant's paragraphs in
 [`render.ts`](../packages/ambion/src/render.ts).
 
 ### 14. Thinning the roster: the assistant unseats, and a seat leaves
@@ -258,7 +253,7 @@ better than anybody when its own part is done.
 
 **Where.** `seat` and `unseat` in
 [`session.ts`](../packages/ambion/src/session.ts), the composing activation in
-[`assistant.ts`](../packages/ambion/src/assistant.ts).
+[`assistant.ts`](../packages/ambion/src/room/assistant.ts).
 
 ### 15. Reseating: attention that a running room can change
 
@@ -298,7 +293,7 @@ lets the assistant speak_ — rather than a code change in the runtime.
   with the paragraph that says when waking the assistant is worth the money.
 
 **Where.** `wakes` in
-[`packages/ambion/src/seat.ts`](../packages/ambion/src/seat.ts), `Attention` in
+[`packages/ambion/src/seat/seat.ts`](../packages/ambion/src/seat/seat.ts), `Attention` in
 [`types.ts`](../packages/ambion/src/types.ts), `seated` in
 [`define.ts`](../packages/ambion/src/define.ts).
 
@@ -437,7 +432,7 @@ abort signal because `useradd` and a process spawn are real waits.
 ### 24. Whether Agent or AgentHarness is Ambion's foundation
 
 **What.** Ambion's runtime imports Pi's lower-level `Agent` class
-(`activation.ts`, `seat.ts`), not `AgentHarness`
+(`seat/activation.ts`, `seat/seat.ts`), not `AgentHarness`
 (`@earendil-works/pi-agent-core`'s `harness/agent-harness.ts`) — a
 heavier engine Pi ships beside it, with its own session tree, lanes,
 compaction, and tree navigation. Nobody chose `Agent` over `AgentHarness`
@@ -471,7 +466,7 @@ joins it.
   become Ambion's own provider for `AgentHarnessOptions.toolContext`, if
   `Agent` is ever replaced by `AgentHarness`.
 
-**Where.** `packages/ambion/src/activation.ts` and `seat.ts` hold today's
+**Where.** `packages/ambion/src/seat/activation.ts` and `seat/seat.ts` hold today's
 `Agent` imports; [`docs/workspace.md`](../docs/workspace.md) §4 and §6 are
 where `ExecutionEnv` was adopted without adopting `AgentHarness`; Pi's
 own `harness/agent-harness.ts` and `harness/types.ts`

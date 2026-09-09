@@ -106,7 +106,7 @@ receives the parsed parameters as its first argument and a `ToolContext`
 as its second: `ctx.workspace()` resolves the agent's workspace, and
 `ctx.signal` is the abort signal Pi gives the call. It may return a plain
 string or Pi's full content shape. A tool defined with Pi's own
-`defineTool` works unchanged (`toPiTool` in `seat.ts` accepts both), so
+`defineTool` works unchanged (`toPiTool` in `seat/hands.ts` accepts both), so
 learning Pi's format is the same as learning Ambion's. An agent that names
 a workspace also holds four built-in tools, `read`, `write`, `edit` and
 `bash` ([`workspace.md`](workspace.md) §5).
@@ -306,7 +306,7 @@ temporary by design: when the agent goes idle the view is discarded, and
 the next activation reads the record itself. The record is canonical.
 
 **3. Speaking is a tool; silence is the default.** An activated agent holds
-one built-in tool, `say({ to?, text })` (`sayTool` in `session.ts`). Ending
+one built-in tool, `say({ to?, text })` (`sayTool` in `seat/hands.ts`). Ending
 an activation without calling it is declining. Declining leaves no mark on the
 record — the way a colleague reads the room and keeps working. The tool
 refuses an empty text for the same reason: a message with nothing in it
@@ -340,7 +340,7 @@ the room first. A `say` is a message the whole room pays for.
 **5. No one speaks over the room.** A message commits only against a record
 its author has read in full. For a seat that is its `say`, checked against
 the view it was handed plus every steer that has landed in its transcript
-since (`readThrough` in `activation.ts`). If the record moved past that, the say
+since (`readThrough` in `seat/activation.ts`). If the record moved past that, the say
 fails without landing, and the failure carries the messages the seat
 missed: the same steering contract, enforced at the tool boundary, where
 delivery is guaranteed. The seat then decides again — speak because
@@ -380,7 +380,7 @@ enough to be worth a word. A bare agent takes the default. `none` is the
 runtime's own point: it is where the assistant sits, and nothing in a room's
 composition asks for it.
 
-The routing is the scale, and reads as one line (`wakes` in `seat.ts`):
+The routing is the scale, and reads as one line (`wakes` in `seat/seat.ts`):
 every message has a **reach** — `named` for a directed say, `broadcast` for
 anything else said, `presence` for somebody arriving or leaving, or a
 colleague seated or unseated — and a seat wakes when its attention is at
@@ -410,8 +410,8 @@ Each agent's tool calls belong to its own working context; other
 participants see its `say`s only, because the record is all any view
 renders. The hands are still auditable: every activation's full turns land
 in the seat's own downstream Pi session — `<room>:<agent>`, parented to the
-room's, named by `seats().sessionId`, listed by the same repo (`persistRun`
-in `session.ts`) — so what an agent actually did can be replayed long after
+room's, named by `seats().sessionId`, opened by the same opener
+(`persistTurns` in `seat/activation.ts`) — so what an agent actually did can be replayed long after
 its working view reset. The record is never rewritten for anyone.
 
 ### Observing the room
@@ -535,11 +535,16 @@ One file per concern, in layers an import points down through, and
 `session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
 §1 names the layers, and Biome holds them): the
 log in [`log.ts`](../packages/ambion/src/log/log.ts), who is here in
-[`presence.ts`](../packages/ambion/src/presence.ts), a seat and what wakes it
-in [`seat.ts`](../packages/ambion/src/seat.ts), one activation in
-[`activation.ts`](../packages/ambion/src/activation.ts), the exchange in
+[`presence.ts`](../packages/ambion/src/presence.ts), a seat, what wakes it
+and the seat's side of the wire in
+[`seat.ts`](../packages/ambion/src/seat/seat.ts), one activation in
+[`activation.ts`](../packages/ambion/src/seat/activation.ts), the hands it
+holds in [`hands.ts`](../packages/ambion/src/seat/hands.ts), an activation's
+id in [`lease.ts`](../packages/ambion/src/room/lease.ts), the exchange in
 [`exchange.ts`](../packages/ambion/src/exchange.ts), what the assistant
-writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), what an
+writes in [`assistant.ts`](../packages/ambion/src/room/assistant.ts), what
+crosses between a seat and its room in
+[`wire.ts`](../packages/ambion/src/wire.ts), what an
 agent's tools reach into in
 [`workspace.ts`](../packages/ambion/src/tools/workspace.ts), what a host
 owns in [`runtime.ts`](../packages/ambion/src/host/runtime.ts), and what
@@ -559,6 +564,19 @@ the shorthand for one. The default runtime opens sessions in an in-memory
 `SessionRepo` implementation; the API stays the same.
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
 surface, and Ambion adds no storage layer of its own.
+
+**What crosses between a seat and its room is JSON.** The room renders the
+system prompt and the context, and sends the two strings with the model
+id and the hand the activation holds. The seat side resolves the definition
+by name through the runtime's catalog, builds the Pi `Agent`, and reaches
+the room through three calls: `view`, `commit` and `lease`. The room
+reaches a seat through one, `wake`, which carries the line a running
+activation is steered with when a message caused it. Every request and
+response survives a round trip through `JSON.stringify` unchanged
+([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
+live in two processes. The room answers the three calls from a lease table
+it keeps in memory: a lease ends when the seat releases it or the room
+revokes it.
 
 **A host owns a `Runtime`.** It holds the clock, the session opener, the
 model call, the rooms that are running and the workspace names that are
