@@ -30,6 +30,13 @@
 
 import type { Message, Seq } from '../types.ts';
 import type { EndReason, LeaseRow } from '../wire.ts';
+import {
+	atWork as atWorkRule,
+	expired,
+	givesUp,
+	heard as heardRule,
+	nextAttempt,
+} from './rules.verified.ts';
 
 /** The id of the activation a message wakes on a seat: the first attempt bare, later ones numbered. */
 export const activationId = (seq: Seq, seat: string, attempt = 1): string =>
@@ -102,7 +109,7 @@ export function foldLeases(rows: readonly LeaseRow[]): Map<string, LeaseState> {
 }
 
 export const isExpired = (lease: LeaseState, now: number): boolean =>
-	lease.phase === 'running' && (lease.expiry ?? 0) <= now;
+	lease.phase === 'running' && expired(lease.expiry ?? 0, now);
 
 /** A lease that holds: running, and not past its expiry. */
 export const isLive = (lease: LeaseState, now: number): boolean =>
@@ -191,7 +198,7 @@ function reached(
 
 /** The lease held a row before the message and ended, if it ended, after it. */
 const atWork = (lease: LeaseState, seq: Seq): boolean =>
-	lease.since < seq && (lease.until === undefined || lease.until >= seq);
+	atWorkRule(lease.since, lease.until !== undefined, lease.until ?? 0, seq);
 
 /**
  * The lease heard the message. A lease that runs or came to nothing heard
@@ -200,9 +207,14 @@ const atWork = (lease: LeaseState, seq: Seq): boolean =>
  * landed between that renewal and the release reached no activation.
  */
 const heard = (lease: LeaseState, seq: Seq): boolean =>
-	lease.phase === 'running' || cameToNothing(lease)
-		? atWork(lease, seq) || lease.since >= seq
-		: seq <= lease.heardThrough;
+	heardRule(
+		lease.phase === 'running' || cameToNothing(lease),
+		lease.since,
+		lease.until !== undefined,
+		lease.until ?? 0,
+		lease.heardThrough,
+		seq,
+	);
 
 /** The wake as pending, or nothing when a lease answered it or the room gave up. */
 function statusOf(
@@ -214,10 +226,10 @@ function statusOf(
 	if (taken.some((lease) => !cameToNothing(lease))) return undefined;
 	const failed = taken.filter((lease) => cameToNothing(lease));
 	const attempts = failed.length;
-	if (attempts >= options.attempts) return undefined;
+	if (givesUp(attempts, options.attempts)) return undefined;
 	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
 	return {
-		id: activationId(message.seq, seat, attempts + 1),
+		id: activationId(message.seq, seat, nextAttempt(attempts)),
 		seat,
 		seq: message.seq,
 		at: message.at,

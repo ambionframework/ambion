@@ -21,25 +21,33 @@
  * when it landed. It joins the same queue, so a row and the messages
  * around it land in the order they were asked for.
  *
- * An append that fails leaves the log in doubt: the storage may hold the
- * entry, and the cache does not. The log reads what the storage holds past
- * its cursor at once, on the queue behind the failed write, and again
- * before the next write when that read failed too. A write whose
+ * The log reads what the storage holds past its cursor before every
+ * write, and again on the queue behind a write that failed. A write whose
  * confirmation was lost is on the record before anything lands on top of
  * it, and a read of the record waits for the queue. The cursor moves to
  * the last entry every read saw, so a read costs the entries since the
  * one before it, whatever the log's age.
+ *
+ * A run is fenced by its run row. Every entry a run writes carries its
+ * run id. The fence is positional: as a read passes the storage in order,
+ * a run row moves the fence to that run, and an entry of another run past
+ * it is void, so the log skips it. A log that passes its own row and then
+ * a row of another run is superseded: it tells the room, and every write
+ * from then on fails. A log with no run of its own writes nothing about
+ * runs, and reads the fence like any other reader.
  */
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from '../types.ts';
-import type { CloseRow, CompositionRow, LeaseRow, Without } from '../wire.ts';
+import type { CloseRow, CompositionRow, LeaseRow, RunRow, Without } from '../wire.ts';
+import { nextSeq, refused, supersedes, voided } from './rules.verified.ts';
 
-/** The four kinds of custom entry the room writes to its Pi session. */
+/** The five kinds of custom entry the room writes to its Pi session. */
 const ENTRY_TYPES = {
 	message: 'ambion/message',
 	lease: 'ambion/lease',
 	close: 'ambion/close',
 	composition: 'ambion/composition',
+	run: 'ambion/run',
 } as const;
 
 /** One entry on the log: a message with a seq, or a row about the room around the messages. */
@@ -47,7 +55,8 @@ export type LogEntry =
 	| { type: 'message'; message: Message }
 	| { type: 'lease'; lease: LeaseRow }
 	| { type: 'close'; close: CloseRow }
-	| { type: 'composition'; composition: CompositionRow };
+	| { type: 'composition'; composition: CompositionRow }
+	| { type: 'run'; run: RunRow };
 
 /** A row that is not a message: it takes no seq, and carries `after`, the last seq when it was written. */
 export type Row = Exclude<LogEntry, { type: 'message' }>;
@@ -57,6 +66,7 @@ export type RowData<K extends Row['type']> = {
 	lease: Without<LeaseRow, 'after'>;
 	close: Without<CloseRow, 'after'>;
 	composition: Without<CompositionRow, 'after'>;
+	run: Without<RunRow, 'after'>;
 }[K];
 
 const BY_TYPE: Record<string, LogEntry['type']> = {
@@ -64,14 +74,25 @@ const BY_TYPE: Record<string, LogEntry['type']> = {
 	[ENTRY_TYPES.lease]: 'lease',
 	[ENTRY_TYPES.close]: 'close',
 	[ENTRY_TYPES.composition]: 'composition',
+	[ENTRY_TYPES.run]: 'run',
 };
+
+/** What the storage holds for one entry: the entry's data, and the run that wrote it. */
+interface Stored {
+	written?: string;
+	[field: string]: unknown;
+}
 
 /** The entry a custom row folds as, or nothing for a row the room does not read. */
 function toEntry(customType: string, data: unknown): LogEntry | undefined {
 	const type = BY_TYPE[customType];
 	if (type === undefined) return undefined;
-	return { type, [type]: data } as LogEntry;
+	const { written: _written, ...entry } = data as Stored;
+	return { type, [type]: entry } as LogEntry;
 }
+
+/** The run that wrote a stored entry, or nothing for an entry written before runs were fenced. */
+const writerOf = (data: unknown): string | undefined => (data as Stored).written;
 
 /** What a caller commits: the message minus its seq, and the two checks the queue runs. */
 export interface CommitIntent<T extends Message> {
@@ -101,19 +122,27 @@ export class RoomLog {
 	private readonly known = new Set<string>();
 	/** Pi's seq of the last entry a read saw: the next read starts past it. */
 	private cursor = 0;
-	/** An append failed, and the storage may hold what the cache does not. */
-	private doubt = false;
 	/** The replay is over: what a read finds from now on is news, and `found` hears it. */
 	private replayed = false;
+	/** The run whose row landed last: entries of any other run after it are void. */
+	private fence: string | undefined;
+	/** This run's row is on the log: a row of another run found from now on is a later run's. */
+	private fenced = false;
+	/** A later run's row was found: this run's writes are over. */
+	private superseded = false;
 
 	/**
-	 * `found` hears every entry the log finds on a read in doubt: it landed,
-	 * and the writer never heard. The room acts on it the way it acts on a
-	 * write it confirmed.
+	 * `found` hears every entry the log finds on a read: it landed, and the
+	 * writer never heard, or another run wrote it. The room acts on it the
+	 * way it acts on a write it confirmed. `run` names the run this log
+	 * writes for, or nothing for a log that only reads. `lost` hears that a
+	 * later run took the name.
 	 */
 	constructor(
 		open: Promise<PiSession>,
 		private readonly found?: (entry: LogEntry, fresh: boolean) => void,
+		private readonly run?: string,
+		private readonly lost?: () => void,
 	) {
 		this.ready = this.replay(open);
 		// A host can hold a session and read nothing from it for hours, so
@@ -146,14 +175,45 @@ export class RoomLog {
 		found.sort((a, b) => a.seq - b.seq);
 		for (const entry of found) {
 			this.cursor = Math.max(this.cursor, entry.seq);
-			if (entry.type !== 'custom' || this.known.has(entry.id)) continue;
-			const known = toEntry(entry.customType, entry.data);
-			if (known === undefined) continue;
-			const fresh = known.type !== 'lease' || !this.holds(known.lease.id);
-			this.cache(known, entry.id);
-			if (this.replayed) this.found?.(known, fresh);
+			if (entry.type !== 'custom') continue;
+			// The fence is positional: a run row moves it where the row sits, cached or not.
+			if (entry.customType === ENTRY_TYPES.run) this.pass(writerOf(entry.data));
+			if (!this.known.has(entry.id)) this.take(entry);
 		}
 		this.known.clear();
+	}
+
+	/**
+	 * The read passed a run row. The fence moves to that run. This log's
+	 * own row marks it fenced: a row of another run past it is a later
+	 * run's, and supersedes this log.
+	 */
+	private pass(run: string | undefined): void {
+		this.fence = run;
+		if (run === this.run) this.fenced = true;
+		else if (supersedes(this.fenced, false) && !this.superseded) {
+			this.superseded = true;
+			this.lost?.();
+		}
+	}
+
+	/** One entry a read found that the cache lacks: cached unless void, and reported after the replay. */
+	private take(entry: { id: string; customType: string; data?: unknown }): void {
+		const known = toEntry(entry.customType, entry.data);
+		if (known === undefined || this.voided(known, writerOf(entry.data))) return;
+		const fresh = known.type !== 'lease' || !this.holds(known.lease.id);
+		this.cache(known, entry.id);
+		if (this.replayed) this.found?.(known, fresh);
+	}
+
+	/**
+	 * Whether a stored entry is void: written by a run other than the one
+	 * whose row the read passed last. An entry written before runs were
+	 * fenced belongs to whatever run stood.
+	 */
+	private voided(entry: LogEntry, written: string | undefined): boolean {
+		if (entry.type === 'run') return false;
+		return voided(this.fence !== undefined, written !== undefined, written === this.fence);
 	}
 
 	/** Whether the cache holds a row for this lease id already. */
@@ -224,30 +284,35 @@ export class RoomLog {
 	}
 
 	/**
-	 * The session to write to, or the failure a closed log answers every
-	 * write with. A log in doubt reads the storage first.
+	 * The session to write to, or the failure a closed or superseded log
+	 * answers every write with. The log reads the storage first: what
+	 * another run wrote, and what a write in doubt left.
 	 */
 	private async open(): Promise<PiSession> {
-		if (this.closed) throw new Error('The log is closed.');
+		this.refuse();
 		const piSession = await this.ready;
-		if (this.doubt) {
-			await this.read(piSession);
-			this.doubt = false;
-		}
-		// A log closed while the read ran writes nothing more.
-		if (this.closed) throw new Error('The log is closed.');
+		await this.read(piSession);
+		// A log closed or superseded while the read ran writes nothing more.
+		this.refuse();
 		return piSession;
 	}
 
+	private refuse(): void {
+		if (this.superseded) throw new Error('The run is superseded: another run holds the name.');
+		if (this.closed) throw new Error('The log is closed.');
+	}
+
 	/**
-	 * One append. A failure puts the log in doubt, whatever the storage did
-	 * with the entry, and queues the read that settles it.
+	 * One append, stamped with the run that writes it. A failure puts the
+	 * log in doubt, whatever the storage did with the entry, and queues the
+	 * read that settles it.
 	 */
 	private async append(piSession: PiSession, type: string, data: unknown): Promise<string> {
+		const stored = this.run === undefined ? data : { ...(data as object), written: this.run };
 		try {
-			return await piSession.appendCustomEntry(type, data);
+			return await piSession.appendCustomEntry(type, stored);
 		} catch (error) {
-			this.doubt = true;
+			// The storage may hold what the cache does not: the read that settles it is queued.
 			this.tail = this.tail.then(() => this.open()).catch(() => {});
 			throw error;
 		}
@@ -274,13 +339,13 @@ export class RoomLog {
 		const piSession = await this.open();
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
 		if (seen !== undefined) return { message: seen as T, repeated: true };
-		if (intent.readThrough !== undefined && this.lastSeq > intent.readThrough) {
+		if (intent.readThrough !== undefined && refused(this.lastSeq, intent.readThrough)) {
 			return { missed: this.since(intent.readThrough) };
 		}
 		const draft = typeof intent.draft === 'function' ? intent.draft(this.lastSeq) : intent.draft;
 		const stamped = {
 			...draft,
-			seq: this.lastSeq + 1,
+			seq: nextSeq(this.lastSeq),
 			...(intent.key === undefined ? {} : { key: intent.key }),
 		} as T;
 		const id = await this.append(piSession, ENTRY_TYPES.message, stamped);

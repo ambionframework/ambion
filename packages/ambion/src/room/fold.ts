@@ -69,7 +69,7 @@ function sorted(entries: readonly LogEntry[]) {
 		if (entry.type === 'message') messages.push(entry.message);
 		else if (entry.type === 'close') closes.push(entry.close);
 		else if (entry.type === 'lease') leaseRows.push(entry.lease);
-		else composition = entry.composition;
+		else if (entry.type === 'composition') composition = entry.composition;
 	}
 	return { messages, closes, leaseRows, composition };
 }

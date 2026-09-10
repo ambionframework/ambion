@@ -2,11 +2,12 @@
  * The split the design forbids, as a history: two live hosts over one
  * log. The first host is paused, in this process by holding its writes
  * and in a process of its own with SIGSTOP, a second host resumes the
- * name, and the first comes back and keeps writing. Nothing fences the
- * first host out yet, and these tests pin what the storage ends up with:
- * in memory, a seq on the storage twice and a delivery the first host
- * acknowledged that the record lacks; on JSONL, a file Pi refuses to
- * load, so no run can open the name again. They turn when a fence lands.
+ * name, and the first comes back and keeps writing. In memory, the fence
+ * holds: the first host's write past the fence is void, it acknowledges
+ * that one write and no other, and it is superseded at its next write.
+ * On JSONL, Pi refuses to load the file afterwards, so no run can open
+ * the name again: the fence needs a storage whose reads see another
+ * run's writes, and Pi's JSONL storage reads its own memory.
  */
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -38,17 +39,17 @@ import {
 } from './support/cast.ts';
 import { idle } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { History, violations } from './support/history.ts';
-import { roomName, rowsOf } from './support/room.ts';
+import { History, standing, violations } from './support/history.ts';
+import { collect, roomName, rowsOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { gatedOpener, jsonlSessions, memory } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
-/** The rows as the fold reads them. */
+/** The rows as the fold reads them: the ones that stand past every fence. */
 function entriesOf(rows: { type: string; data: unknown }[]): LogEntry[] {
-	return rows.flatMap((row) => {
+	return standing(rows).flatMap((row) => {
 		const type = row.type.slice('ambion/'.length);
 		if (type === 'message') return [{ type, message: row.data } as LogEntry];
 		if (type === 'lease') return [{ type, lease: row.data } as LogEntry];
@@ -59,7 +60,7 @@ function entriesOf(rows: { type: string; data: unknown }[]): LogEntry[] {
 }
 
 describe('a split: two live hosts over one log', () => {
-	it('a paused host that comes back writes a seq twice, and its delivery is off the record', async () => {
+	it('a paused host that comes back is fenced out, and loses only the write it held', async () => {
 		const opened = await memory.open();
 		const clock = fakeClock();
 		const history = new History(clock);
@@ -86,6 +87,7 @@ describe('a split: two live hosts over one log', () => {
 			agents: [product, colleague],
 			streamFn: scripted(script),
 		});
+		const events = collect(room);
 		const hers = await visitSession(room, priya);
 		await history.run('priya', 'deliver', 'q1', () => hers.deliver({ text: 'First?', key: 'q1' }));
 		await room.quiet();
@@ -101,9 +103,11 @@ describe('a split: two live hosts over one log', () => {
 		const his = await visitSession(taken, sam);
 		await history.run('sam', 'deliver', 'q3', () => his.deliver({ text: 'Third?', key: 'q3' }));
 		await taken.quiet();
-		// the first host comes back: its held write lands
+		// the first host comes back: its held write lands past the fence, void, and it
+		// acknowledges it; its next write finds the fence and it is superseded
 		release();
 		await held;
+		await history.run('priya', 'deliver', 'q4', () => hers.deliver({ text: 'Fourth?', key: 'q4' }));
 		await room.quiet();
 		await history.run(
 			'sam',
@@ -119,10 +123,19 @@ describe('a split: two live hosts over one log', () => {
 				rows,
 				state: foldRoom(entriesOf(rows), RETRY),
 			});
-			expect(found).toContainEqual(expect.stringMatching(/^seq \d+ is on the storage 2 times$/));
-			expect(found).toContainEqual('delivery q2 acknowledged, on the record 0 times');
+			// the one loss the fence allows: the write the first host acknowledged past the
+			// fence is off the record, and off every read after it
+			expect(found).toEqual([
+				'delivery q2 acknowledged, on the record 0 times',
+				'read #9 by sam lacks delivery q2, acknowledged before it was asked',
+			]);
+			expect(events.some((e) => e.type === 'superseded')).toBe(true);
+			expect(history.entries.find((e) => e.key === 'q4' && e.phase !== 'invoke')).toMatchObject({
+				phase: 'fail',
+				error: expect.stringMatching(/superseded/),
+			});
+			expect(first.running.has(name)).toBe(false);
 		} finally {
-			await stopSession(room);
 			await stopSession(taken);
 			await opened.dispose();
 		}

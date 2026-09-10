@@ -116,7 +116,7 @@ describe('RoomLog in doubt', () => {
 		expect(retried).toMatchObject({ message: { seq: 2, text: 'two' }, repeated: true });
 	});
 
-	it('reads past the last entry it saw, so a second doubt costs the entries since the first', async () => {
+	it('reads past the last entry it saw, so every read costs the entries since the one before', async () => {
 		const reads: number[] = [];
 		const faulty = faultyOpener(sessionsOver(new InMemorySessionRepo()));
 		const sessions = {
@@ -143,8 +143,9 @@ describe('RoomLog in doubt', () => {
 		faulty.fail(false);
 		await log.settled();
 		expect(log.messages.map((m) => m.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
-		// the replay read nothing; the first doubt read what four commits and the lost one appended;
-		// the second read only what landed since: the lost one, and the two after it
-		expect(reads).toEqual([0, 5, 2]);
+		// the log reads before every write, and every read returns only what landed since the
+		// one before: the replay, then the entry the last commit appended, then the lost one
+		// found by the read in doubt, then nothing before the next commit, and so on
+		expect(reads).toEqual([0, 0, 1, 1, 1, 1, 1, 0, 1, 1]);
 	});
 });

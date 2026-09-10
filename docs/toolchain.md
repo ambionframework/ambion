@@ -89,6 +89,7 @@ through `@ambionframework/ambion`, its published surface.
 | Package manager | **pnpm 10**           | Workspace protocol, strict `node_modules`, `--frozen-lockfile` in CI |
 | Task runner     | **Turborepo 2**       | Declares the build→typecheck→test order once; content-hash caching   |
 | Language        | **TypeScript 7**      | `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`         |
+| Contracts       | **LemmaScript 0.6**   | Checks pure coordinator rules with Dafny                             |
 | Bundler         | **tsdown** (rolldown) | ESM-only output plus `.d.mts`, one config per package                |
 | Tests           | **Vitest 4**          | Runs TypeScript sources directly; no build step for the inner loop   |
 | Lint            | **Biome 2**           | Fast; formatter switched off so it never fights Prettier             |
@@ -203,13 +204,29 @@ Root commands:
 | `pnpm check:types`         | `turbo run check:types`                                                      |
 | `pnpm check:lint`          | `biome lint . --error-on-warnings` then `knip`                               |
 | `pnpm check:format`        | `prettier . --check`                                                         |
+| `pnpm check:lemmascript`   | Verify the files in `LemmaScript-files.txt` with Dafny; needs Dafny on PATH  |
 | `pnpm check`               | build → types → lint → test, in that order                                   |
 | `pnpm format`              | `biome check --write` then `prettier --write`                                |
 | `pnpm version:set <x.y.z>` | Set one version across publishable packages                                  |
 | `pnpm publish:packages`    | Publish to GitHub Packages                                                   |
 
 `pnpm check` is what CI runs and what a contributor runs before pushing. There
-is one gate, so nothing drifts apart.
+is one gate, so nothing drifts apart. The contracts are the one step beside
+it: CI runs them in their own job, and a contributor with Dafny runs
+`pnpm check:lemmascript`.
+
+LemmaScript contracts stay in their TypeScript source, in the
+`rules.verified.ts` file of each layer that has pure rules. The generated
+`.dfy.gen` file records the translation. The `.dfy` file holds the proof
+source. Commit all three files, and regenerate them with
+`npx lsc gen --backend=dafny <file>` after every edit to the source. The
+reusable CI workflow regenerates the artifacts before it runs Dafny, so a
+stale generated file fails the gate. `LemmaScript-files.txt` at the root
+lists the files CI verifies.
+
+Local verification needs Dafny 4.11 or later on `PATH`. The repository installs
+the `lsc` command from its pinned `lemmascript` development dependency. CI pins
+the reusable LemmaScript workflow to a commit and installs Dafny in that job.
 
 ---
 
