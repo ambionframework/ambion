@@ -29,8 +29,8 @@ import {
 	startSession,
 	visitSession,
 } from '../../src/index.ts';
-import { activationId, foldLeases, isLive } from '../../src/room/lease.ts';
-import type { CloseRow, LeaseRow } from '../../src/wire.ts';
+import { foldLeases, isLive } from '../../src/room/lease.ts';
+import type { LeaseRow } from '../../src/wire.ts';
 import {
 	agents,
 	assistant,
@@ -51,50 +51,30 @@ import { serializing } from './transport.ts';
 
 /**
  * The record the scenario must come to, whatever happened on the way:
- * every delivery on it once, every answer at most once, and every
- * summary owed written once. A seat whose lease the dead run held answers
- * once at most: the lease expires, and the room does not send the wake
- * again (backlog item 34), so that answer is the one the record may lack.
+ * every delivery on it once, every answer once, and every summary owed
+ * written once. A seat whose lease the dead run held is woken again after
+ * the backoff, so its answer is on the record like every other.
  */
 export async function outcome(session: Session, sessions: SessionOpener): Promise<void> {
 	const record = await session.messages();
-	const rows = await rowsOf(sessions, session.name);
-	const expired = new Set(
-		rows.flatMap((r) => {
-			const lease = r.type === 'ambion/lease' ? (r.data as LeaseRow) : undefined;
-			return lease?.phase === 'ended' && lease.reason === 'expired' ? [lease.id] : [];
-		}),
-	);
 	for (const question of questions) {
 		const landed = record.filter((m) => m.key === question.key);
 		expect(landed, `delivery ${question.key}`).toHaveLength(1);
-		const asked = landed[0] as Message;
-		expect(asked).toMatchObject({ kind: 'said', from: question.person.name });
+		expect(landed[0]).toMatchObject({ kind: 'said', from: question.person.name });
 		for (const seat of question.answered) {
 			const answers = record
 				.filter(isSpoken)
 				.filter((m) => m.from === seat && m.text === `${seat} on ${question.text}`);
-			expect(answers.length, `${seat} on ${question.key}`).toBeLessThanOrEqual(1);
-			if (!expired.has(activationId(asked.seq, seat))) {
-				expect(answers, `${seat} on ${question.key}`).toHaveLength(1);
-			}
+			expect(answers, `${seat} on ${question.key}`).toHaveLength(1);
 		}
 	}
-	// every close that woke the assistant is one summary to the person whose exchange it was
-	const closes = rows.flatMap((r) => (r.type === 'ambion/close' ? [r.data as CloseRow] : []));
+	// two answers to the first two questions owe a summary each; one answer to the third owes none
+	expect(record.filter(isSummary).map((m) => m.to)).toEqual([priya.name, sam.name]);
+	const closes = (await rowsOf(sessions, session.name)).filter((r) => r.type === 'ambion/close');
 	expect(closes).toHaveLength(3);
-	const owed = closes.filter((c) => c.wakes?.includes(assistant.name)).map((c) => c.owner);
-	expect(record.filter(isSummary).map((m) => m.to)).toEqual(owed);
 	expect(session.exchange()).toBeUndefined();
 	expect(session.seats().find((s) => s.name === priya.name)).toMatchObject({ presence: 'absent' });
 	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
-}
-
-/** The record an untroubled run comes to: two answers to the first two questions owe a summary each. */
-export async function wholeOutcome(session: Session, sessions: SessionOpener): Promise<void> {
-	await outcome(session, sessions);
-	const record = await session.messages();
-	expect(record.filter(isSummary).map((m) => m.to)).toEqual([priya.name, sam.name]);
 }
 
 /** The leases running and not expired on the log at `now`: what a resumed room inherits. */

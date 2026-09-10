@@ -621,17 +621,18 @@ refused. What landed while an activation worked and whether it left a
 mark belong to the activation and end with it. Rule 5's `readThrough` is
 an activation's fact.
 
-**A wake is answered by a lease of its id.** A message and a seat in its
-`wakes` is one wake. The seat claims the lease the wake names, and from
-then on the wake is answered, whatever the activation comes to: a lease
-that expired or failed answers it too, and the room wakes the seat again
-for nothing. The message stays on the record, and the seat reads it at its
-next activation. A wake no lease answers is pending: the room sends it
-again after the resend window, and a seat with a wake pending is live, so
-the exchange stays open and `settled()` waits for the claim. A summary the
-assistant could not write is the one attempt the room repeats: it wakes
-the assistant again after the backoff (`runtime.retry`, three attempts
-thirty seconds apart by default), and at the cap the range stays whole.
+**A wake is answered by a lease that took it.** A message and a seat in
+its `wakes` is one wake. The seat claims the lease the wake names, and the
+wake is answered while the lease runs, once it ended released, refused or
+revoked, and once the activation spoke. A lease that expired or failed
+without a word answers nothing: it counts as one attempt, and the room
+wakes the seat again after the backoff, under the next attempt's id. A
+wake no lease answers is pending: the room sends it again after the resend
+window, and a seat with a wake pending is live, so the exchange stays open
+and `settled()` waits for the claim. `runtime.retry` holds the policy for
+wakes and summaries alike: three attempts thirty seconds apart by default,
+and at the cap the room stops. A summary the assistant could not write is
+retried the same way, and at the cap the range stays whole.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
@@ -699,8 +700,7 @@ What a crash leaves is proved in
 [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts): the room crashes
 at every write its log takes, before and after the entry lands, and is
 killed from outside mid-activation, and a host that resumes it and retries
-under the same key reaches the same record every time, less the answer of
-a seat whose lease the dead run held.
+under the same key reaches the same record every time.
 [`toolchain.md`](toolchain.md) §8 says how the sweep runs and how to widen
 it.
 

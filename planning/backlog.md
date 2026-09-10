@@ -553,14 +553,16 @@ returning visit under a new identity is refused.
 everyone it does not hold a connection for. The runtime keeps no clock over
 a visit, and should not start one.
 
-### 29. Three attempts, then the summary is never written
+### 29. Three attempts, then the summary or the wake is never tried again
 
 **What.** A summary a draft could not land retries after a backoff, three
-times, on the room's alarm, and then the room stops. Nothing reports the
-range as owed afterwards, and no later event retries it.
+times, on the room's alarm, and then the room stops. A wake whose
+activations failed or expired three times is dropped the same way.
+Nothing reports the range as owed or the wake as lost afterwards, and no
+later event retries either.
 
-**Where.** `foldOwed` in `room/fold.ts`;
-[`docs/assistant.md`](../docs/assistant.md) §16.
+**Where.** `foldOwed` in `room/fold.ts`; `pendingWakes` in
+`room/lease.ts`; [`docs/assistant.md`](../docs/assistant.md) §16.
 
 **Fix.** A row at the cap that says the room gave up, an event when it is
 written, and a host verb that resets the attempts for one close.
@@ -619,18 +621,12 @@ shortest form, and it does not generate from a model of the room.
 **Fix.** A criterion for adopting `fast-check`: the first failure the walk
 finds that takes more than an hour to reduce by hand.
 
-### 34. A wake whose lease expired is never sent again
+### 34. A wake whose lease expired is never sent again — closed
 
-**What.** A wake is answered by any lease of its id, so a seat that
-claimed and then died holds its wake answered. The lease expires, the
-exchange closes without that seat's answer, and the room sends the wake
-to nobody. The chaos sweep pins the loss: a seat whose lease the dead run
-held answers nothing, and the record lacks that one answer.
-
-**Where.** `pendingWakes` in `room/lease.ts`; `outcome` in
-`test/support/chaos.ts`.
-
-**Fix.** A lease row carries `heard`, the seq the activation has taken. A
-lease that expired or failed without speaking answers nothing: the wake
-stays pending, the failure counts as one attempt, and the room wakes the
-seat again after the backoff, with the cap the summaries use.
+A lease that expired or failed without a word answers nothing
+(`pendingWakes` in `room/lease.ts`): the wake is pending again under the
+next attempt's id, after the backoff, with the cap the summaries use. The
+chaos sweep holds every answer to exactly once again, and
+`restart.test.ts` pins the seat woken again on the next run. Item 29
+stands for the cap: at three attempts the wake is dropped, and nothing
+says so.

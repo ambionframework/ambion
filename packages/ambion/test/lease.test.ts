@@ -161,9 +161,13 @@ describe('a lease', () => {
 		// the say arrived under a lease that ended, so nothing landed
 		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual(['andrei']);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
-		// the expired lease answers the wake: the exchange closed, and the seat is not woken again
-		await session.quiet();
+		// a lease that expired without a word answers nothing: the exchange stays
+		// open, and the seat is woken again after the backoff
+		expect(session.exchange()).toMatchObject({ owner: 'andrei' });
 		expect(starts(events)).toBe(1);
+		await clock.advance(30_000);
+		await session.quiet();
+		expect(starts(events)).toBe(2);
 		expect(session.exchange()).toBeUndefined();
 	});
 

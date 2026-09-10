@@ -171,16 +171,46 @@ describe('decide', () => {
 		});
 	});
 
-	it('answers a wake with any lease of its id, and leaves a seat that left the roster no wake', () => {
-		// the seat claimed, and its lease expired without a word: the wake is answered, not retried
+	it('wakes the seat again after a lease that came to nothing, and stops at the cap', () => {
+		const ended = (id: string, reason: 'expired' | 'failed', when: number) =>
+			lease({ id, phase: 'ended', reason, at: new Date(when).toISOString() });
+		// the seat claimed, and its lease expired without a word: the wake is
+		// pending again under the next attempt's id, after the backoff
 		const expired = fold([
 			...opened(),
 			lease({ id: '2:product', phase: 'running', expiry: T0 + 60_000, at }),
-			lease({ id: '2:product', phase: 'ended', reason: 'expired', at }),
+			ended('2:product', 'expired', T0 + 60_000),
 		]);
-		expect(expired.pending).toEqual([]);
-		expect(working(expired, T0 + 60_000)).toBe(false);
-		expect(decide(expired, options({ now: T0 + 60_000 })).close).toMatchObject({ through: 2 });
+		expect(expired.pending).toMatchObject([
+			{ id: '2:product:2', seat: 'product', seq: 2, attempts: 1, notBefore: T0 + 90_000 },
+		]);
+		expect(working(expired, T0 + 60_000)).toBe(true);
+		expect(decide(expired, options({ now: T0 + 60_000 }))).toMatchObject({
+			close: undefined,
+			sends: [],
+			alarmAt: T0 + 90_000,
+		});
+		expect(decide(expired, options({ now: T0 + 90_000 })).sends).toEqual([
+			{ id: '2:product:2', seat: 'product' },
+		]);
+		// a lease that spoke before it expired answered the wake
+		const spoke = fold([
+			...opened(),
+			lease({ id: '2:product', phase: 'running', expiry: T0 + 60_000, at }),
+			said(3, 'product', { activationId: '2:product' }),
+			ended('2:product', 'expired', T0 + 60_000),
+		]);
+		expect(spoke.pending).toEqual([]);
+		// at the cap the wake is pending no longer: the exchange closes
+		const capped = fold([
+			...opened(),
+			ended('2:product', 'failed', T0 + 1_000),
+			ended('2:product:2', 'failed', T0 + 40_000),
+			ended('2:product:3', 'expired', T0 + 100_000),
+		]);
+		expect(capped.pending).toEqual([]);
+		expect(working(capped, T0 + 100_000)).toBe(false);
+		expect(decide(capped, options({ now: T0 + 100_000 })).close).toMatchObject({ through: 2 });
 		// a seat the host unseated answers nothing: what it was sent is not pending
 		const unseated = fold([
 			...opened(),

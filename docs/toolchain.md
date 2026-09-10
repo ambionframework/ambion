@@ -334,10 +334,9 @@ harness in
   heard. The world resumes the name in a fresh runtime, puts back the
   people who were present, and retries the host action that failed under
   the same key. Every run must come to the same record: every delivery on
-  it once, every answer at most once, every summary owed written once. A
-  seat whose lease the dead run held answers nothing: the lease expires
-  and the room does not send that wake again (`planning/backlog.md` item
-  34), so that answer is the one the record may lack.
+  it once, every answer once, every summary owed written once. A seat
+  whose lease the dead run held is woken again after the backoff, and
+  answers then.
 - **A kill from outside.** The same scenario runs in a child process on a
   JSONL storage, on the system clock, with short leases. The test sends
   `SIGKILL` at a write, resumes over the directory, finishes the scenario,
