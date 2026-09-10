@@ -553,7 +553,9 @@ controls:
   fills. The room reconciles at once: a lease the last run left expires, a
   wake it left pending is sent again, and an exchange it left open closes
   once nothing works on it. `runtime.evict(name)` is the other half: it
-  drops a running room from memory and writes nothing.
+  drops a running room from memory and writes nothing. The dropped handle
+  writes nothing either: a stop, an abort or a departure on it is a no-op,
+  and whoever waits on `quiet()` or `settled()` is released.
 
 `messages()` and `seats()` are the pull side; the stream is the push side.
 A listener learns nothing the pulls cannot tell it — it only learns it

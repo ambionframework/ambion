@@ -515,7 +515,8 @@ class SessionImpl implements Session, RunningRoom {
 		if (this.gone()) return;
 		await this.ready;
 		await this.stilled();
-		if (!working(this.state(), this.now())) return;
+		// A room that went away while this waited never settles on its own, so nobody waits on it.
+		if (this.gone() || !working(this.state(), this.now())) return;
 		return new Promise((resolve) => this.settledWaiters.push(resolve));
 	}
 
@@ -524,7 +525,7 @@ class SessionImpl implements Session, RunningRoom {
 		if (this.gone()) return;
 		await this.ready;
 		await this.stilled();
-		if (this.idle()) return;
+		if (this.gone() || this.idle()) return;
 		return new Promise((resolve) => this.quietWaiters.push(resolve));
 	}
 
@@ -971,7 +972,7 @@ class SessionImpl implements Session, RunningRoom {
 			const state = this.state();
 			const known = state.leases.get(id);
 			const now = this.now();
-			if (known === undefined && !this.due(state).has(id)) return undefined;
+			if (known === undefined && (this.stopped || !this.due(state).has(id))) return undefined;
 			if (known !== undefined && !isLive(known, now)) return undefined;
 			fresh = known === undefined;
 			expiry = now + this.runtime.wake.expiry;
@@ -1091,10 +1092,12 @@ class SessionImpl implements Session, RunningRoom {
 	private async apply(decision: Decision): Promise<boolean> {
 		let changed = false;
 		for (const expired of decision.expired) {
+			// A room that went away mid-pass writes nothing more of what it decided.
+			if (this.gone()) return changed;
 			const seat = seatOf(expired.id, this.assistant) ?? '';
 			changed = (await this.end(expired.id, seat, 'expired')) || changed;
 		}
-		if (decision.close) changed = (await this.close(decision.close)) || changed;
+		if (decision.close && !this.gone()) changed = (await this.close(decision.close)) || changed;
 		for (const send of decision.sends) this.send(send.id, send.seat);
 		return changed || decision.sends.length > 0;
 	}
@@ -1149,15 +1152,24 @@ class SessionImpl implements Session, RunningRoom {
 	// -- control ----------------------------------------------------------------
 
 	abort(): void {
+		// A room that is gone writes nothing more: the stop revoked what was live, or the next run does.
+		if (this.gone()) return;
 		void this.revoke(() => true);
 	}
 
-	/** Revoke every live lease on the seats `which` picks: the room writes the end, and the seat side is cut. */
+	/**
+	 * Revoke every live lease on the seats `which` picks: the room writes the
+	 * end, and the seat side is cut. A write that was queued ahead of the
+	 * revoke lands first and can leave a lease live or a wake pending, so
+	 * the room looks again until nothing it picks is live.
+	 */
 	private async revoke(which: (seat: string) => boolean): Promise<void> {
 		if (this.evicted) return;
 		await this.ready.catch(() => {});
-		for (const [seat, ids] of this.live(this.state())) {
-			if (which(seat)) await this.cut(seat, ids);
+		for (let pass = 0; pass < PASSES; pass += 1) {
+			const picked = [...this.live(this.state())].filter(([seat]) => which(seat));
+			if (picked.length === 0) break;
+			for (const [seat, ids] of picked) await this.cut(seat, ids);
 		}
 		if (!this.gone()) await this.reconcile();
 	}
@@ -1181,17 +1193,11 @@ class SessionImpl implements Session, RunningRoom {
 		this.stopped = true;
 		this.cancelAlarm();
 		try {
+			// A room dropped from memory writes nothing: the next run over the log takes it up.
+			if (this.evicted) return;
 			await this.ready;
 			await this.revoke(() => true);
-			// A deliberate shutdown observed everybody leaving, so the record
-			// says so, and the host hears it. It wakes nobody: an activation
-			// started to hear that the room is closing is an activation nobody reads.
-			for (const person of this.state().people.values()) {
-				if (person.presence !== 'present') continue;
-				const visit = this.visits.get(person.name);
-				if (visit) visit.gone = true;
-				await this.commitPresence({ kind: 'left', from: person.name }, false);
-			}
+			await this.leaveEverybody();
 		} finally {
 			// The name comes free whatever the storage did. A failed write must
 			// not leave a room that can never be started again.
@@ -1199,6 +1205,20 @@ class SessionImpl implements Session, RunningRoom {
 			// A stopped room never goes quiet on its own, so nobody waits on it.
 			for (const resolve of this.quietWaiters.splice(0)) resolve();
 			for (const resolve of this.settledWaiters.splice(0)) resolve();
+		}
+	}
+
+	/**
+	 * A deliberate shutdown observed everybody leaving, so the record says
+	 * so, and the host hears it. It wakes nobody: an activation started to
+	 * hear that the room is closing is an activation nobody reads.
+	 */
+	private async leaveEverybody(): Promise<void> {
+		for (const person of this.state().people.values()) {
+			if (person.presence !== 'present') continue;
+			const visit = this.visits.get(person.name);
+			if (visit) visit.gone = true;
+			await this.commitPresence({ kind: 'left', from: person.name }, false);
 		}
 	}
 

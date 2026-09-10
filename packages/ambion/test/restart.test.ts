@@ -549,4 +549,42 @@ describe('a room dropped from memory', () => {
 		await expect(visit.deliver({ text: 'still there?' })).rejects.toThrow();
 		held.resolve();
 	});
+
+	it('releases whoever was already waiting on quiet() or settled()', async () => {
+		const opened = await memory.open();
+		const runtime = createRuntime({ clock: fakeClock(), sessions: opened.sessions });
+		const held = deferred();
+		const session = startSession({
+			name: roomName('evicted-waiting'),
+			assistant,
+			agents: [alpha],
+			runtime,
+			streamFn: scripted(
+				byAgent({
+					alpha: async (_c, _n, call) => {
+						if (call !== 1) return quiet();
+						await held.promise;
+						return quiet();
+					},
+				}),
+			),
+		});
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'go' });
+		// both wait while the room is up, and the eviction lands before either has parked
+		const waiting = Promise.all([session.quiet(), session.settled()]);
+		runtime.evict(session.name);
+		await expect(waiting).resolves.toEqual([undefined, undefined]);
+		held.resolve();
+	});
+
+	it('writes nothing for a stop on the dropped handle', async () => {
+		const { session, opened, held } = await dropped();
+		await tick();
+		const before = (await rowsOf(opened.sessions, session.name)).length;
+		await stopSession(session);
+		await tick();
+		expect((await rowsOf(opened.sessions, session.name)).length).toBe(before);
+		held.resolve();
+	});
 });
