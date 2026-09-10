@@ -512,6 +512,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * the next, so the answer waits for that one too.
 	 */
 	async settled(): Promise<void> {
+		if (this.gone()) return;
 		await this.ready;
 		await this.stilled();
 		if (!working(this.state(), this.now())) return;
@@ -519,6 +520,8 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	async quiet(): Promise<void> {
+		// A room that is gone never goes quiet on its own, so nobody waits on it.
+		if (this.gone()) return;
 		await this.ready;
 		await this.stilled();
 		if (this.idle()) return;
@@ -958,17 +961,20 @@ class SessionImpl implements Session, RunningRoom {
 	 * ended. A fresh claim is taken only for an activation the fold says is
 	 * due: the next attempt at a pending wake, or at an owed draft. Anything
 	 * else was answered already, and a second run of it would answer twice.
+	 * The clock is read where the row is written: a renewal that waited on
+	 * the queue is judged against the lease as it stands then.
 	 */
 	private async claim(id: string, seat: string): Promise<LeaseResponse> {
-		const now = this.now();
-		const expiry = now + this.runtime.wake.expiry;
+		let expiry = 0;
 		let fresh = false;
 		const written = await this.log.write('lease', () => {
 			const state = this.state();
 			const known = state.leases.get(id);
+			const now = this.now();
 			if (known === undefined && !this.due(state).has(id)) return undefined;
 			if (known !== undefined && !isLive(known, now)) return undefined;
 			fresh = known === undefined;
+			expiry = now + this.runtime.wake.expiry;
 			return { id, phase: 'running', expiry, at: this.iso() };
 		});
 		if (!written) return stale('the lease ended');
@@ -999,7 +1005,9 @@ class SessionImpl implements Session, RunningRoom {
 	 * End one lease, for whatever reason, and say so once. Nothing to end is
 	 * not an error. A revocation may name an activation that never claimed:
 	 * the row ends it before it starts, and the wake or the draft it stood
-	 * for is answered.
+	 * for is answered. An expiry is judged where the row is written: a
+	 * renewal that landed ahead of it keeps the lease, and the row is not
+	 * written.
 	 */
 	private async end(id: string, seat: string, reason: EndReason): Promise<boolean> {
 		let started = true;
@@ -1007,9 +1015,8 @@ class SessionImpl implements Session, RunningRoom {
 			const known = this.state().leases.get(id);
 			if (known?.phase === 'ended') return undefined;
 			if (known === undefined && !WRITES_OFF.has(reason)) return undefined;
-			if (known !== undefined && reason !== 'expired' && isExpired(known, this.now())) {
-				return undefined;
-			}
+			const expired = known !== undefined && isExpired(known, this.now());
+			if (known !== undefined && expired !== (reason === 'expired')) return undefined;
 			started = known !== undefined;
 			return { id, phase: 'ended', reason, at: this.iso() };
 		});
@@ -1147,6 +1154,7 @@ class SessionImpl implements Session, RunningRoom {
 
 	/** Revoke every live lease on the seats `which` picks: the room writes the end, and the seat side is cut. */
 	private async revoke(which: (seat: string) => boolean): Promise<void> {
+		if (this.evicted) return;
 		await this.ready.catch(() => {});
 		for (const [seat, ids] of this.live(this.state())) {
 			if (which(seat)) await this.cut(seat, ids);
@@ -1196,12 +1204,14 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * Dropped from memory: the alarm is cancelled, every call a seat makes
-	 * from now on is stale, and nobody waits on the room. The record keeps
-	 * what landed before, and the next run over it continues from there.
+	 * from now on is stale, every visit is over, nothing the host does with
+	 * the handle writes, and nobody waits on the room. The record keeps what
+	 * landed before, and the next run over it continues from there.
 	 */
 	evict(): void {
 		this.evicted = true;
 		this.cancelAlarm();
+		for (const visit of this.visits.values()) visit.gone = true;
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
 		for (const resolve of this.settledWaiters.splice(0)) resolve();
 	}

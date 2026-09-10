@@ -89,13 +89,15 @@ type Hands = {
 /**
  * What an activation is for, read off its id and the fold: a draft closes
  * an exchange still owed, the assistant woken by the question that opened
- * one composes the room for it, and every other seat speaks.
+ * one composes the room for it, and every other seat speaks. A draft id
+ * names one close; the hand it holds covers every close its person is
+ * owed, so a close that joined the draft after the claim is read too.
  */
 function handOf(id: string, seat: string, facts: RoomFacts): Hands {
 	const state = facts.state;
 	const parsed = parseId(id);
 	if (parsed?.kind === 'draft') {
-		const owed = state.owed.find((o) => o.through === parsed.through);
+		const owed = state.owed.find((o) => o.closes.includes(parsed.through));
 		if (owed === undefined) return { hand: 'none' };
 		return {
 			hand: 'summarise',

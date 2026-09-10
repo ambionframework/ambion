@@ -21,7 +21,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { collect, crash, deferred, roomName, rowsOf } from './support/room.ts';
+import { collect, crash, deferred, roomName, rowsOf, tick } from './support/room.ts';
 import {
 	byAgent,
 	quiet,
@@ -31,7 +31,7 @@ import {
 	summarise,
 	toolNames,
 } from './support/scripted.ts';
-import { type OpenedStorage, storages } from './support/storage.ts';
+import { memory, type OpenedStorage, storages } from './support/storage.ts';
 import { faultyTransport } from './support/transport.ts';
 
 const assistant = defineAgent({
@@ -498,5 +498,55 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		} finally {
 			await opened.dispose();
 		}
+	});
+});
+
+describe('a room dropped from memory', () => {
+	/** A room with one activation held open, over a storage the test can read. */
+	async function dropped() {
+		const opened = await memory.open();
+		const runtime = createRuntime({ clock: fakeClock(), sessions: opened.sessions });
+		const held = deferred();
+		const session = startSession({
+			name: roomName('evicted'),
+			assistant,
+			agents: [alpha],
+			runtime,
+			streamFn: scripted(
+				byAgent({
+					alpha: async (_c, _n, call) => {
+						if (call !== 1) return quiet();
+						await held.promise;
+						return quiet();
+					},
+				}),
+			),
+		});
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'go' });
+		await tick();
+		runtime.evict(session.name);
+		return { session, visit, opened, held };
+	}
+
+	it('answers quiet() and settled() at once', async () => {
+		const { session, held } = await dropped();
+		await expect(session.quiet()).resolves.toBeUndefined();
+		await expect(session.settled()).resolves.toBeUndefined();
+		held.resolve();
+	});
+
+	it('writes nothing for an abort or a departure on the dropped handle', async () => {
+		const { session, visit, opened, held } = await dropped();
+		await tick();
+		const before = (await rowsOf(opened.sessions, session.name)).length;
+		session.abort();
+		await tick();
+		await tick();
+		await visit.leave();
+		await tick();
+		expect((await rowsOf(opened.sessions, session.name)).length).toBe(before);
+		await expect(visit.deliver({ text: 'still there?' })).rejects.toThrow();
+		held.resolve();
 	});
 });
