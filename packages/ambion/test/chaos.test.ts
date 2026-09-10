@@ -28,7 +28,8 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
-import { liveLeases, outcome, World, wholeOutcome, within } from './support/chaos.ts';
+import { idle, liveLeases, outcome, World, wholeOutcome, within } from './support/chaos.ts';
+import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
 import { collect, roomName } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
@@ -110,10 +111,25 @@ function killAt(dir: string, name: string, at: number): Promise<number> {
 	});
 }
 
-const quietNow = (session: Session) => within(session.quiet(), 30_000, 'quiet');
+/**
+ * Time moves until the room is quiet with nothing owed: the lease the
+ * killed process held expires, and every retry's backoff passes. The
+ * clock is the room's own, so the wait is the test's to move.
+ */
+async function quietNow(session: Session, clock: FakeClock): Promise<void> {
+	for (let round = 0; round < 12; round += 1) {
+		const settled = await Promise.race([
+			session.quiet().then(() => true),
+			new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
+		]);
+		if (settled && idle(session)) return;
+		await clock.advance(2_000);
+	}
+	throw new Error('the room never went quiet');
+}
 
 /** The scenario from wherever the child got to, each step a no-op where the log holds it already. */
-async function finish(session: Session): Promise<void> {
+async function finish(session: Session, clock: FakeClock): Promise<void> {
 	const [first, second, third] = questions as [Question, Question, Question];
 	const deliver = async (question: Question) => {
 		const visit = await visitSession(session, question.person);
@@ -124,7 +140,7 @@ async function finish(session: Session): Promise<void> {
 		});
 	};
 	await deliver(first);
-	await quietNow(session);
+	await quietNow(session, clock);
 	const record = await session.messages();
 	const hers = record
 		.filter(isPresence)
@@ -132,9 +148,9 @@ async function finish(session: Session): Promise<void> {
 		.at(-1);
 	if (hers?.kind !== 'left') await (await visitSession(session, priya)).leave();
 	await deliver(second);
-	await quietNow(session);
+	await quietNow(session, clock);
 	await deliver(third);
-	await quietNow(session);
+	await quietNow(session, clock);
 	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
 }
 
@@ -149,12 +165,15 @@ describe('a room killed from outside', () => {
 				const reached = await killAt(dir, name, at);
 				expect(reached).toBeGreaterThanOrEqual(Math.min(at, 1));
 				const sessions = jsonlSessions(dir);
-				const runtime = createRuntime({ sessions, agents, ...TIMING });
-				const inherited = await liveLeases(sessions, name, Date.now());
+				// The room resumes on a clock that stands where the child's ran, and the test moves it:
+				// a lease the child held is live at the resume and expires when the test says so.
+				const clock = fakeClock(Date.now());
+				const runtime = createRuntime({ sessions, agents, clock, ...TIMING });
+				const inherited = await liveLeases(sessions, name, clock.now());
 				const session = await resumeSession(name, { runtime, streamFn: scripted(script) });
 				const events = collect(session);
 				const inheritedExchange = session.exchange() !== undefined;
-				await finish(session);
+				await finish(session, clock);
 				const errors = events.flatMap((e) => (e.type === 'error' ? [e.error.message] : []));
 				expect(errors.filter((m) => !/past its lease/.test(m))).toEqual([]);
 				await invariants(session, events, {

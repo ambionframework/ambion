@@ -110,6 +110,19 @@ const STEPS = [
 type Step = (typeof STEPS)[number];
 const OPERATIONS: Operation[] = ['wake', 'view', 'commit', 'lease'];
 
+/**
+ * What a step may hear back: the storage refused the write, the visit is
+ * over, or the roster already says so. Anything else is a defect the walk
+ * found, and the test fails on it.
+ */
+const EXPECTED =
+	/the disk is full|visit has ended|one name names one participant|is not seated in this session/;
+
+const expected = (error: unknown): undefined => {
+	if (EXPECTED.test(String(error))) return undefined;
+	throw error;
+};
+
 /** One walk: the room, the runtime it runs in, and what the walk did so far. */
 class Walk {
 	/** The events of the run that holds the room now. A crashed run's events are its own. */
@@ -183,8 +196,8 @@ class Walk {
 		if (step === 'visit') return this.visit();
 		if (step === 'leave') return this.leave();
 		if (step === 'deliver') return this.deliver();
-		if (step === 'seat') return this.session.seat(gamma).catch(() => {});
-		if (step === 'unseat') return this.session.unseat(gamma).catch(() => {});
+		if (step === 'seat') return this.session.seat(gamma).catch(expected);
+		if (step === 'unseat') return this.session.unseat(gamma).catch(expected);
 		if (step === 'advance') return this.clock.advance(Math.floor(this.random() * 70_000));
 		if (step === 'fault') return this.fault();
 		if (step === 'disk') return this.fail();
@@ -201,7 +214,7 @@ class Walk {
 	private async visit(): Promise<void> {
 		const person = this.pick(people);
 		if (this.visits.has(person.name)) return;
-		const visit = await visitSession(this.session, person).catch(() => undefined);
+		const visit = await visitSession(this.session, person).catch(expected);
 		if (visit !== undefined) this.visits.set(person.name, visit);
 	}
 
@@ -210,7 +223,7 @@ class Walk {
 		const visit = this.visits.get(person);
 		if (visit === undefined) return;
 		this.visits.delete(person);
-		await visit.leave().catch(() => {});
+		await visit.leave().catch(expected);
 	}
 
 	private async deliver(): Promise<void> {
@@ -221,7 +234,7 @@ class Walk {
 		const key = repeated ? this.lastKey : `d${++this.deliveries}`;
 		this.lastKey = key;
 		this.log.push(`  ${visit.human.name} ${repeated ? 'repeats' : 'delivers'} ${key}`);
-		await visit.deliver({ text: `Question ${key}?`, key: key as string }).catch(() => {});
+		await visit.deliver({ text: `Question ${key}?`, key: key as string }).catch(expected);
 	}
 
 	private fault(): void {

@@ -610,21 +610,7 @@ disk, and `repo.list()` shows it from then on.
 miss, or an option on `open`. `resumeSession` and `readSession` take the
 one that creates nothing; `startSession` keeps the one that creates.
 
-### 33. A message that landed while its confirmation was lost has no event
-
-**What.** A write that lands and fails to confirm is on the record, and the
-room's `read` finds it before the next write. No run emits a `message` event
-for it: the run that wrote it hears a failure, and what it then reads back
-from the storage it replays without an event. A host that follows the stream
-alone misses it; a host that reads `messages()` after the failure does not.
-
-**Where.** `RoomLog.read` in `log.ts`; `invariants` in the test support,
-which holds the stream to one event per message within one run.
-
-**Fix.** Leave it: the stream is the push side, and `messages()` is where the
-pull side is read. Say so in `docs/agent.md` §5 if a host trips on it.
-
-### 34. The random walk has no shrinker
+### 33. The random walk has no shrinker
 
 **What.** `property.test.ts` runs a seeded walk of twenty steps and prints
 the seed and the steps on failure. It does not shrink a failing walk to its
@@ -633,7 +619,7 @@ shortest form, and it does not generate from a model of the room.
 **Fix.** A criterion for adopting `fast-check`: the first failure the walk
 finds that takes more than an hour to reduce by hand.
 
-### 35. A wake whose lease expired is never sent again
+### 34. A wake whose lease expired is never sent again
 
 **What.** A wake is answered by any lease of its id, so a seat that
 claimed and then died holds its wake answered. The lease expires, the

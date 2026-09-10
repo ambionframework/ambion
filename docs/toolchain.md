@@ -337,7 +337,7 @@ harness in
   it once, every answer at most once, every summary owed written once. A
   seat whose lease the dead run held answers nothing: the lease expires
   and the room does not send that wake again (`planning/backlog.md` item
-  35), so that answer is the one the record may lack.
+  34), so that answer is the one the record may lack.
 - **A kill from outside.** The same scenario runs in a child process on a
   JSONL storage, on the system clock, with short leases. The test sends
   `SIGKILL` at a write, resumes over the directory, finishes the scenario,

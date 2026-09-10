@@ -233,6 +233,8 @@ export class RoomLog {
 			await this.read(piSession);
 			this.doubt = false;
 		}
+		// A log closed while the read ran writes nothing more.
+		if (this.closed) throw new Error('The log is closed.');
 		return piSession;
 	}
 
@@ -250,9 +252,18 @@ export class RoomLog {
 		}
 	}
 
-	/** Resolves once every write asked for so far has landed or failed, and every doubt is settled. */
-	settled(): Promise<void> {
-		return this.tail.then(() => {});
+	/**
+	 * Resolves once every write asked for so far has landed or failed, and
+	 * every doubt is settled: a failure queues the read behind itself, so
+	 * the wait runs until nothing was queued while it waited. A read that
+	 * failed leaves the doubt standing, and the next write reads again.
+	 */
+	async settled(): Promise<void> {
+		let awaited: Promise<unknown>;
+		do {
+			awaited = this.tail;
+			await awaited;
+		} while (awaited !== this.tail);
 	}
 
 	private async land<T extends Message>(

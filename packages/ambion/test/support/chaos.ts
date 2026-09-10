@@ -54,7 +54,7 @@ import { serializing } from './transport.ts';
  * every delivery on it once, every answer at most once, and every
  * summary owed written once. A seat whose lease the dead run held answers
  * once at most: the lease expires, and the room does not send the wake
- * again (backlog item 35), so that answer is the one the record may lack.
+ * again (backlog item 34), so that answer is the one the record may lack.
  */
 export async function outcome(session: Session, sessions: SessionOpener): Promise<void> {
 	const record = await session.messages();
@@ -290,19 +290,10 @@ export class World {
 				new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
 			]);
 			if (this.dead) continue;
-			if (settled && this.idle()) return;
+			if (settled && idle(this.session)) return;
 			await this.clock.advance(31_000);
 		}
 		throw new Error('the room never went quiet');
-	}
-
-	/** Nothing live and nothing open, on the fold the room holds now. */
-	private idle(): boolean {
-		const seats = this.session.seats();
-		return (
-			this.session.exchange() === undefined &&
-			seats.every((s) => s.kind !== 'agent' || s.status === 'idle')
-		);
 	}
 
 	/** The scenario, start to end. */
@@ -345,6 +336,15 @@ export class World {
 			`rows: ${rows.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
 		].join('\n');
 	}
+}
+
+/** Nothing live and nothing open, on the fold the room holds now. */
+export function idle(session: Session): boolean {
+	const seats = session.seats();
+	return (
+		session.exchange() === undefined &&
+		seats.every((s) => s.kind !== 'agent' || s.status === 'idle')
+	);
 }
 
 /** The promise, or an error naming what did not happen within `ms`. */

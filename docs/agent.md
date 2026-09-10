@@ -519,8 +519,8 @@ controls:
   that fails rejects `deliver()`, and the message is nowhere: not on the
   record, not on the stream, and nobody woke for it. A write that landed
   and lost its confirmation rejects too, and the room is in doubt: it reads
-  the storage before its next write, so the message is on the record, with
-  no event for it (`planning/backlog.md` item 33). It never waits for
+  the storage at once, and the message it finds is on the record, on the
+  stream, and the seats it reaches wake for it. It never waits for
   completion, because activations run in parallel and have no single caller
   to return to. `deliver({ key })` names the delivery: a repeated key lands
   once, so a host that never learned whether a delivery landed delivers it

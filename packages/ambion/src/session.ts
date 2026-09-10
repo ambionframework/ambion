@@ -564,6 +564,8 @@ class SessionImpl implements Session, RunningRoom {
 		this.visits.set(human.name, visit);
 		// A person the log holds as present is here already: the last run wrote
 		// no `left`, and the host's word is what says otherwise. Nothing commits.
+		// An arrival whose confirmation was lost is read back first.
+		await this.log.settled();
 		if (this.state().people.get(human.name)?.presence !== 'present') {
 			try {
 				await this.commitPresence({
@@ -789,6 +791,9 @@ class SessionImpl implements Session, RunningRoom {
 					through: entry.close.through,
 				},
 			});
+			// A question that landed ahead of the close opens the next exchange, as it does at `close`.
+			const next = this.state().exchange;
+			if (next !== undefined) this.noteExchange(next.from);
 			return;
 		}
 		if (entry.type === 'lease') this.heardLease(entry.lease, fresh);
@@ -802,6 +807,8 @@ class SessionImpl implements Session, RunningRoom {
 				this.idleReported = false;
 				this.emit({ type: 'activation_start', agent: seat });
 			}
+			// The claim that lost its confirmation never armed the expiry: this pass does.
+			void this.reconcile();
 			return;
 		}
 		if (fresh) return;
