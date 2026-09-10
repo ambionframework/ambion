@@ -23,10 +23,8 @@ export interface RoomFacts {
 	readonly now: number;
 	readonly assistant: string;
 	readonly state: RoomState;
-	/** The seats live now, by name. */
-	readonly live: ReadonlySet<string>;
-	/** The range the assistant is closing now, when it is closing one. */
-	readonly drafting: { person: string; from: Seq; through: Seq } | undefined;
+	/** The seats live now, by name, with the ids that make them live. */
+	readonly live: ReadonlyMap<string, string[]>;
 	/** How many messages landed after this seq. */
 	unseen(since: Seq): number;
 }
@@ -89,17 +87,20 @@ type Hands = {
 };
 
 /**
- * What an activation is for, read off its id: a draft closes the exchange
- * the room is closing, the assistant woken by the question that opened an
- * exchange composes the room for it, and every other seat speaks.
+ * What an activation is for, read off its id and the fold: a draft closes
+ * an exchange still owed, the assistant woken by the question that opened
+ * one composes the room for it, and every other seat speaks.
  */
 function handOf(id: string, seat: string, facts: RoomFacts): Hands {
 	const state = facts.state;
 	const parsed = parseId(id);
 	if (parsed?.kind === 'draft') {
-		const drafting = facts.drafting;
-		if (drafting === undefined || drafting.through !== parsed.through) return { hand: 'none' };
-		return { hand: 'summarise', closing: { ...drafting } };
+		const owed = state.owed.find((o) => o.through === parsed.through);
+		if (owed === undefined) return { hand: 'none' };
+		return {
+			hand: 'summarise',
+			closing: { person: owed.person, from: owed.from, through: state.lastSeq },
+		};
 	}
 	if (seat !== facts.assistant) return { hand: 'say' };
 	const question = parsed && state.messages.find((m) => m.seq === parsed.seq);

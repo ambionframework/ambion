@@ -2,6 +2,7 @@ import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import {
 	defineAgent,
 	defineHuman,
+	type Runtime,
 	type Session,
 	type SessionEvent,
 	type SessionOpener,
@@ -49,6 +50,15 @@ export function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 export const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/**
+ * The room dies without a word: no lease is released, no `left` is written,
+ * and the alarm never fires. The record keeps everything, and a resume
+ * over it is the test of the design.
+ */
+export function crash(runtime: Runtime, session: Session): void {
+	runtime.evict(session.name);
+}
 
 /** Every row the room wrote beside its messages, read off Pi's session directly. */
 export async function rowsOf(

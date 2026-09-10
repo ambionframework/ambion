@@ -253,9 +253,9 @@ function stoppingReason(draft: Draft): string | undefined {
 function widen(hands: Hands, draft: Draft, missed: Message[]): Error {
 	draft.through = missed.at(-1)?.seq ?? draft.through;
 	draft.refusals += 1;
-	// The room moved past a draft: unless a redraft lands, the range stays
-	// owed, and the lease says why the activation ended.
-	hands.activation.refused = true;
+	// The room kept moving past every draft: the range stays owed, and the
+	// lease says why the activation ended.
+	if (draft.refusals >= ASSISTANT_DRAFTS) hands.activation.refused = true;
 	return new Error(
 		refusal(
 			'Not written — the room moved while you were drafting. It is now yours to cover too:',

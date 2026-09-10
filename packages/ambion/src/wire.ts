@@ -19,6 +19,21 @@ import type { Attention, Message, Seq } from './types.ts';
 /** `Omit` over each member of a union, so a discriminated row keeps its shape. */
 export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
+/**
+ * Why a lease ended: the activation ran to its end, it never reached the
+ * record, the record kept moving past its drafts, the room wrote it off,
+ * or it stopped renewing.
+ */
+export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired';
+
+/**
+ * One row about an activation: it holds a lease, or its lease ended. The
+ * last row for an id wins, and an ended lease never runs again.
+ */
+export type LeaseRow =
+	| { id: string; after: Seq; phase: 'running'; expiry: number; at: string }
+	| { id: string; after: Seq; phase: 'ended'; reason: EndReason; at: string };
+
 /** The room went quiet with an exchange open, and closed it. */
 export interface CloseRow {
 	owner: string;
@@ -26,6 +41,8 @@ export interface CloseRow {
 	through: Seq;
 	after: Seq;
 	at: string;
+	/** The assistant, when the exchange owes a summary. */
+	wakes?: string[];
 }
 
 /** One seat in a composition: its name, how the room knows it, and what wakes it. */
@@ -48,9 +65,6 @@ export interface CompositionRow {
 	after: Seq;
 	at: string;
 }
-
-/** Why a lease ended: the activation ran to its end, it never reached the record, or the record kept moving past its drafts. */
-export type EndReason = 'released' | 'failed' | 'refused';
 
 // -- the room reaching a seat -------------------------------------------------
 

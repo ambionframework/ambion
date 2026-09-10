@@ -23,11 +23,12 @@
  */
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from '../types.ts';
-import type { CloseRow, CompositionRow, Without } from '../wire.ts';
+import type { CloseRow, CompositionRow, LeaseRow, Without } from '../wire.ts';
 
-/** The three kinds of custom entry the room writes to its Pi session. */
+/** The four kinds of custom entry the room writes to its Pi session. */
 const ENTRY_TYPES = {
 	message: 'ambion/message',
+	lease: 'ambion/lease',
 	close: 'ambion/close',
 	composition: 'ambion/composition',
 } as const;
@@ -35,6 +36,7 @@ const ENTRY_TYPES = {
 /** One entry on the log: a message with a seq, or a row about the room around the messages. */
 export type LogEntry =
 	| { type: 'message'; message: Message }
+	| { type: 'lease'; lease: LeaseRow }
 	| { type: 'close'; close: CloseRow }
 	| { type: 'composition'; composition: CompositionRow };
 
@@ -43,12 +45,14 @@ export type Row = Exclude<LogEntry, { type: 'message' }>;
 
 /** What a caller passes to `write`: the row without `after`, which the log stamps. */
 export type RowData<K extends Row['type']> = {
+	lease: Without<LeaseRow, 'after'>;
 	close: Without<CloseRow, 'after'>;
 	composition: Without<CompositionRow, 'after'>;
 }[K];
 
 const BY_TYPE: Record<string, LogEntry['type']> = {
 	[ENTRY_TYPES.message]: 'message',
+	[ENTRY_TYPES.lease]: 'lease',
 	[ENTRY_TYPES.close]: 'close',
 	[ENTRY_TYPES.composition]: 'composition',
 };
@@ -66,7 +70,8 @@ export interface CommitIntent<T extends Message> {
 	key?: string;
 	/** The seq the author has read. The queue refuses the commit when the record moved past it. */
 	readThrough?: Seq;
-	draft: Omit<T, 'seq' | 'key'>;
+	/** The message, or a function of the record as it stands when the commit runs. */
+	draft: Omit<T, 'seq' | 'key'> | ((lastSeq: Seq) => Omit<T, 'seq' | 'key'>);
 }
 
 /** The commit landed, or the key had landed before, or the record had moved. */
@@ -171,8 +176,9 @@ export class RoomLog {
 		if (intent.readThrough !== undefined && this.lastSeq > intent.readThrough) {
 			return { missed: this.since(intent.readThrough) };
 		}
+		const draft = typeof intent.draft === 'function' ? intent.draft(this.lastSeq) : intent.draft;
 		const stamped = {
-			...intent.draft,
+			...draft,
 			seq: this.lastSeq + 1,
 			...(intent.key === undefined ? {} : { key: intent.key }),
 		} as T;

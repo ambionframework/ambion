@@ -41,17 +41,20 @@ without limit. `docs/agent.md` §8 says Ambion owns no context window, and
 term: a window policy on `RoomView.record`, and a decision in the
 contract about which module owns it.
 
-### 3. `session.ts` holds four jobs
+### 3. `session.ts` holds four jobs — closed, with a remainder
 
 **What was done.** The commit path lives in `log/log.ts`. The three tools,
 `say`, `summarise` and `seat`, live in `seat/hands.ts`, and the seat side
-of the wire runs an activation in `seat/seat.ts`. The room answers a seat
-through three calls, `view`, `commit` and `lease`.
+of the wire runs an activation in `seat/seat.ts`. Every fact the room held
+in memory is a fold in `room/fold.ts`, the decision is
+`room/reconcile.ts`, and what an activation reads is `room/view.ts`. The
+reserve is a fold, so it needs no module.
 
 **What is left.** `session.ts` holds compose, route, the seat's three
-calls and the assistant's scheduling (`closeExchange` through
-`draftNext`), with the leases, the reserve and who is owed in memory.
-Every fact the room holds in memory is the next thing to move.
+calls (`view`, `commit`, `lease`) and the reconcile glue, and it is over
+the 600 lines `next.md` asked for. The seat's three calls are the next
+piece to move: an `answers.ts` over a narrow interface on the room (the
+log, the fold, the clock, `emit`).
 
 **Where.** `packages/ambion/src/session.ts`.
 
@@ -312,13 +315,12 @@ that cannot be addressed. One seat per room cuts that to one line, and the
 example's `identity` for it is one sentence. Worth re-measuring once the
 assistant speaks.
 
-### 18. A test for the owed-summary merge
+### 18. A test for the owed-summary merge — closed
 
-`Assistant.owe` merges a person's owed range with `Math.min`, so somebody owed a
-summary from a failed activation who asks again gets one message covering
-both
-exchanges. Nothing pins that behaviour; the tests cover the failure and the
-retry separately. See [`docs/assistant.md`](../docs/assistant.md) §5.
+Who is owed is a fold (`foldOwed` in `room/fold.ts`): a later close by the
+same person joins the draft, and one message reaches back to the earliest
+question still owed. `restart.test.ts` pins it, on both storages, across a
+crash.
 
 ### 19. Exchanges are run state — closed
 
@@ -328,11 +330,12 @@ See [`docs/exchange.md`](../docs/exchange.md) §5.
 
 ### 20. A second non-seat writer
 
-The room owes summaries through a small scheduler: `owe`, `dueAtQuiescence`,
-`dueAfterDraft` and `activationEnded`, held by `Assistant`. If a room-level compactor ever arrives
-([`docs/assistant.md`](../docs/assistant.md) §16 forbids it by name today), it wants the
-same scheduler. Two writers is the point at which it should become its own
-thing rather than three fields on the session.
+The room owes summaries through one fold (`foldOwed` in `room/fold.ts`)
+and one decision (`dueWakes` in `room/reconcile.ts`). If a room-level
+compactor ever arrives ([`docs/assistant.md`](../docs/assistant.md) §16
+forbids it by name today), it wants the same fold and the same decision.
+Two writers is the point at which they should become their own module
+rather than two functions beside the assistant's.
 
 ### 21. A credentials boundary for tool calls leaving the workspace
 
@@ -510,10 +513,99 @@ carry the identity, so a read reports what the run held.
 **Why deferred.** The room already refuses a duplicate name inside one
 roster. Two rooms in one runtime with one name and two definitions is a
 host that wants two runtimes. The catalog exists so that a transport can
-hand a seat in another process the definition it needs by name.
+hand a seat in another process the definition it needs by name, and so
+that `resumeSession` can resolve a roster it reads off the log.
 
 **Options.** The runtime refuses a second, different definition under a
 name it holds. Or the in-process transport hands the actor the room's own
 definitions, and the catalog serves the out-of-process case alone. Either
 way, a definition digest on the composition row and the claim lets a seat
 tell that it runs the definition the room seated.
+
+### 27. Lease rows grow with every activation
+
+**What.** Every activation writes two lease rows at least: a claim and an
+end, plus one renewal per half expiry. A room that runs for a month holds
+tens of thousands of rows beside a few thousand messages, and every fold
+reads them all.
+
+**Why.** The fold is O(rows) per operation. Item 2 records the same cost
+for messages; leases add the larger term.
+
+**Where.** `foldLeases` in `room/lease.ts`; `RoomLog.replay` in `log/log.ts`.
+
+**Fix.** A lease that ended and that no owed draft counts (an id older than
+the last close) can leave the fold. A checkpoint row that carries the
+folded state up to a seq, written by `reconcile` every N rows, lets the
+replay start from it.
+
+### 28. A person present at a crash stays present until the host returns
+
+**What.** A crash writes no `left`, so the fold says the person is present
+until the host calls `leave()` on the resumed room. A host that never
+returns leaves them present for ever: their divider never moves, and a
+returning visit under a new identity is refused.
+
+**Where.** `foldPeople` in `room/presence.ts`;
+[`docs/presence.md`](../docs/presence.md) §6.
+
+**Fix.** A host-side policy: the resumed room's host calls `leave()` for
+everyone it does not hold a connection for. The runtime keeps no clock over
+a visit, and should not start one.
+
+### 29. Three attempts, then the summary is never written
+
+**What.** A summary a draft could not land retries after a backoff, three
+times, on the room's alarm, and then the room stops. Nothing reports the
+range as owed afterwards, and no later event retries it.
+
+**Where.** `foldOwed` in `room/fold.ts`;
+[`docs/assistant.md`](../docs/assistant.md) §16.
+
+**Fix.** A row at the cap that says the room gave up, an event when it is
+written, and a host verb that resets the attempts for one close.
+
+### 30. A lease the dead run held holds the exchange open until it expires
+
+**What.** A resumed room cannot tell a lease a dead process held from one a
+seat in another process still runs, so it waits for the expiry, sixty
+seconds by default. The seats answer in the meantime; the close, and the
+summary after it, wait for the expiry. `restart.test.ts` moves the clock
+past it; a host on the system clock waits it out.
+
+**Where.** `resumeSession` in `session.ts`; `expiries` in `room/reconcile.ts`.
+
+**Fix.** A host that knows the whole run died passes that knowledge in:
+`resumeSession(name, { revoke: true })` ends every running lease as
+`revoked` at the first reconcile. A host that does not know keeps the
+expiry.
+
+### 31. A wake a seat at work heard through a steer alone is lost with a crash
+
+**What.** A message names the seats at rest it wakes in `wakes`, and the
+room steers every seat at work in memory. A run that dies while a seat
+works loses that steer with the run: the message is on the record, the
+seat's lease expires, and nothing wakes the seat for it again.
+
+**Where.** `steer` in `session.ts`; [`docs/agent.md`](../docs/agent.md)
+rule 2.
+
+**Fix.** `wakes` names every seat the message reaches, at rest and at
+work, and every lease row carries `heard`, the seq the activation has
+taken, so the fold says which wakes an activation answered. The seat side
+then decides between a fresh activation and a steer into the one that
+runs.
+
+### 32. Opening a name that does not exist creates it
+
+**What.** `sessionsOver(repo).open(id)` creates a Pi session on every miss.
+`resumeSession('typo')` and `readSession('typo')` create an empty session
+before the first fails on the missing composition and the second returns
+an empty record. On a JSONL repository the stray session is a directory on
+disk, and `repo.list()` shows it from then on.
+
+**Where.** `sessionsOver` in `host/runtime.ts`; `recover` in `session.ts`.
+
+**Fix.** A second call on the opener, `find(id)`, that returns nothing on a
+miss, or an option on `open`. `resumeSession` and `readSession` take the
+one that creates nothing; `startSession` keeps the one that creates.

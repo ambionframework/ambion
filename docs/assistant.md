@@ -61,10 +61,12 @@ it refuses a say. Two things make it the seat it is, and both are data:
   reserve, and that activation holds one tool, `seat`, bound to the
   reserve. [`roster.md`](roster.md) is the contract for it.
 
-A seat carries none of that. Which seat is the assistant, who is owed a
-message, and whom it is drafting for now are held by the assistant itself
-(`Assistant` in [`assistant.ts`](../packages/ambion/src/room/assistant.ts)); the
-room asks it, and no seat carries a field for it.
+A seat carries none of that. Which seat is the assistant is on the
+composition row; who is owed a message is a fold over the close rows, the
+summaries and the leases (`foldOwed` in
+[`fold.ts`](../packages/ambion/src/room/fold.ts)); what it is drafting for
+now is on the id of the activation it holds (`close:<through>:<attempt>`).
+No seat carries a field for any of it.
 
 The assistant holds one thing nothing else in the room holds: **what a
 message to a person is for**, as its instructions say it. What differs by
@@ -204,12 +206,16 @@ messages, and the assistant drafts again over it immediately. It gets two
 drafts. After the second refusal the room is moving faster than the assistant
 writes, and the activation ends.
 
-**A summary the activation could not land drafts again at the next
-quiescence.**
-Its range is a live read, so the retry covers what it covered before plus
-whatever won the race. The two halves of the rule divide the work: the assistant
-redrafts inside its activation while that is still useful, and the next quiet
-room catches an activation that ran out of drafts or failed outright.
+**A summary the activation could not land drafts again after a delay.**
+An activation that ran out of drafts ends its lease `refused`; one that
+failed outright ends it `failed`; one that stopped renewing ends it
+`expired`. Each is one attempt. The room waits thirty seconds times the
+attempts made, on its own alarm, then wakes the assistant again, up to
+three attempts. The range is a live read, so the retry covers what it
+covered before plus whatever won the race. The two halves of the rule
+divide the work: the assistant redrafts inside its activation while that
+is still useful, and the room's alarm catches an activation that ran out
+of drafts or failed outright.
 
 Two questions asked in quick succession become one summary, which is right:
 they were one conversation. If somebody else's exchange won the race, it
@@ -246,9 +252,8 @@ Quiescence is still simply "no agent is active".
 
 **A failed model call is a refused commit with extra steps.** If the assistant's
 activation errors, no summary is written, the range stays uncompacted and
-fully
-visible, and the next quiescence is another chance. The safe direction is
-the default, and it takes no special case.
+fully visible, and the room's alarm is another chance after the backoff.
+The safe direction is the default, and it takes no special case.
 
 The event the room emits on a refusal is `conflict`, and it carries the
 author and what they missed. It names the author because the lock covers
@@ -278,10 +283,16 @@ question opens his own exchange, and the assistant writes it for him.
 
 **Two people owed at once are written for one after the other.** The
 assistant is one seat and holds one activation. If Sam's exchange closes
-while the assistant drafts for Priya, Sam stays owed, and the room activates
-the assistant again for him the moment it is free. A person whose draft the
-assistant could not land waits for the seats to stop again instead, so a
-model that keeps failing never retries on its own end (§5).
+while the assistant drafts for Priya, Sam stays owed, and the room wakes
+the assistant again for him at its next reconcile. A person whose draft the
+assistant could not land waits for the backoff instead, so a model that
+keeps failing never retries on its own end (§5). Who is owed is a fold
+over the log: a close that names the assistant, with no summary covering
+it and no draft that stood down over it. A draft stands down when the
+assistant ends it without writing, and when the host revokes it: `abort()`
+and `stopSession` write the draft off with every wake still pending. A
+later close by the same person joins the draft, and one message reaches
+back to the earliest question still owed.
 
 ---
 
@@ -528,7 +539,8 @@ there to judge whether writing would help.
 **A restarted room seats it again with the agents.** The assistant is
 composition, like an agent. How each person reads is on the record, with
 their latest arrival, so a person known from a replayed record reads the
-way they last said they do.
+way they last said they do, and a room resumed over its log writes for a
+person the last run owed, the way they read.
 
 **An agent-only room pays for one idle seat.** A room nobody visits seats
 the assistant, lists it in every roster, and never activates it. That is one
@@ -725,19 +737,20 @@ settles, so rule 1 keeps its letter. But the room makes a model call that
 no message asked for, and that is a second kind of trigger. §15 bounds it:
 the close of an exchange, one assistant, one message.
 
-**An aborted exchange still closes.** `abort()` cancels the activations in
-flight and the room settles, so the exchange it was working on closes and
-the assistant writes for its owner. That is right — the exchange ended, and its
-person still gets what the room reached before it was cut off — but the
-message stands for work somebody stopped. `stopSession` is the other case,
-below.
+**An aborted exchange still closes.** `abort()` revokes the leases in
+flight and the room reconciles, so the exchange it was working on closes
+and the assistant writes for its owner. That is right — the exchange ended,
+and its person still gets what the room reached before it was cut off —
+but the message stands for work somebody stopped. A draft the assistant
+held at the abort is written off with the rest: the summary it stood for
+is owed no longer. `stopSession` is the other case, below.
 
-**A run that stops mid-exchange writes no summary.** `stopSession` aborts
-the activations in flight and writes no close, so the exchange stays open
-on the log. It aborts a draft in flight for the same reason, and a draft
-that does finish after the stop commits nothing. The next run over the same
-log closes the exchange at its start ([`exchange.md`](exchange.md) §5) and
-writes what it owes then. Accepted.
+**A run that stops mid-exchange writes no summary.** `stopSession` revokes
+the leases in flight and writes no close, so the exchange stays open on
+the log. It revokes a draft in flight for the same reason, and a draft
+that does finish after the stop commits nothing. The next run over the
+same log closes the exchange at its first reconcile
+([`exchange.md`](exchange.md) §5) and writes what it owes then. Accepted.
 
 **A widened range is bounded by a race, and nothing else.** A summary
 covers one exchange, so the only thing that can make a range large is what
@@ -751,12 +764,14 @@ closing is
 neither, so shutdown drains whoever waited on `quiet()` and emits nothing
 afterwards.
 
-**A summary can be owed for ever.** A race is handled inside the activation,
-but an activation that fails outright, or that runs out of drafts, waits for the next
-quiescence — and a room that is never woken again never has one. The range
-stays whole and every reader still sees it, so nothing is lost; but the one
-message never arrives, and nothing reports that it is owed. A run that ends
-the day with an owed summary is the case to watch.
+**A summary is owed until the third attempt.** A race is handled inside
+the activation. An activation that fails outright, or that runs out of
+drafts, is one attempt, and the room's own alarm wakes the assistant again
+after the backoff, whether or not anybody speaks into the room. After
+three attempts the room stops trying. The range stays whole and every
+reader still sees it, so nothing is lost; but the one message never
+arrives, and nothing reports that the room gave up
+([`planning/backlog.md`](../planning/backlog.md) item 29).
 
 **What a client owes.** §10 asks a client to re-present past messages when
 a new one arrives. That is more than a log does, and no client in this
