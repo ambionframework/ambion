@@ -556,7 +556,10 @@ controls:
   roster folds from that ([`roster.md`](roster.md) §5), and an exchange
   left open closes at the next run's first reconcile.
 - **`resumeSession(name, { runtime })`** brings a name back up over its
-  log, with the composition the log holds. Every name on the roster
+  log, with the composition the log holds. The first row every run
+  writes is its run row, and it fences every earlier run: a run that
+  finds a later run's row emits `superseded`, drops itself from memory,
+  and writes nothing more ([`durability.md`](durability.md) §1). Every name on the roster
   resolves through the runtime's catalog, which `createRuntime({ agents })`
   fills. The room reconciles at once: a lease the last run left expires, a
   wake it left pending is sent again, and an exchange it left open closes
@@ -578,7 +581,9 @@ who was in it and which seat still holds a lease.
 One file per concern, in layers an import points down through, and
 `session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
 §1 names the layers, and Biome holds them): the
-log in [`log.ts`](../packages/ambion/src/log/log.ts), every fact folded
+log in [`log.ts`](../packages/ambion/src/log/log.ts), the rules it writes
+by in [`rules.verified.ts`](../packages/ambion/src/log/rules.verified.ts),
+every fact folded
 over it in [`fold.ts`](../packages/ambion/src/room/fold.ts), the step the
 room takes in [`reconcile.ts`](../packages/ambion/src/room/reconcile.ts),
 who is here in [`presence.ts`](../packages/ambion/src/room/presence.ts), a
@@ -586,7 +591,9 @@ seat, what wakes it and the seat's side of the wire in
 [`seat.ts`](../packages/ambion/src/seat/seat.ts), one activation in
 [`activation.ts`](../packages/ambion/src/seat/activation.ts), the hands it
 holds in [`hands.ts`](../packages/ambion/src/seat/hands.ts), an activation's
-id and lease in [`lease.ts`](../packages/ambion/src/room/lease.ts), the exchange in
+id and lease in [`lease.ts`](../packages/ambion/src/room/lease.ts), the rules
+the fold decides by in
+[`rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts), the exchange in
 [`exchange.ts`](../packages/ambion/src/room/exchange.ts), what the assistant
 writes in [`assistant.ts`](../packages/ambion/src/room/assistant.ts), what
 crosses between a seat and its room in

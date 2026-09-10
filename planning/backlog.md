@@ -625,27 +625,23 @@ chaos sweep holds every answer to exactly once again, and
 stands for the cap: at three attempts the wake is dropped, and nothing
 says so.
 
-### 35. Two live hosts over one log corrupt it
+### 35. Two live hosts over one log corrupt it — closed, with a remainder
 
-**What.** A host that is paused past its leases, and a second host that
-resumes the name while it is paused, both write from their own last seq
-once the first comes back. In memory, a seq is on the storage twice and
-a delivery the first host acknowledged is off the record the second host
-reads. On JSONL, Pi's storage refuses to load the file, and no run can
-open the name again. `split.test.ts` pins both;
-[`docs/durability.md`](../docs/durability.md) §5 states it.
+The run row is the fence (`RoomLog` in `log/log.ts`): every run writes
+it first, every entry carries its writer, an entry of an earlier run past
+a later run's row is void, and a run reads before every write, so it
+learns it lost the name and drops itself with `superseded`.
+`split.test.ts` and `hosts.test.ts` pin it, and `consistency.test.ts`
+cuts a run with an append in flight.
 
-**Where.** `RoomLog` in `log/log.ts` assigns seqs from its own cache;
-nothing on the storage refuses a second writer.
-
-**Fix.** A run epoch. Every run writes its composition row first, and the
-row is the fence: the fold voids every later entry from an earlier run,
-and a run that reads past its cursor and finds a later composition
-evicts itself. A superseded host loses the writes it acknowledged after
-the fence; a storage with a conditional append (SQLite, a Durable
-Object) refuses them instead, and loses nothing. Pi's JSONL storage
-needs the Pi seq to stay consecutive, so the fence there is the
-conditional append or nothing.
+**The remainder.** A superseded run acknowledges the one write it held
+past the fence, and that write is lost. A storage with a conditional
+append refuses it before it is acknowledged. The `SessionOpener`
+contract gains that append when the SQLite storage lands, and the
+Durable Object storage offers it too. Pi's JSONL storage reads its own
+memory, so the fence does not reach it: JSONL is a storage for one host.
+A read before every write costs a scan of the entries since the last
+read, on every storage.
 
 ### 36. Every host in the tests shares one clock
 
@@ -660,3 +656,74 @@ loses an `fsync`.
 **Fix.** A clock per host in the history harness, with a drift the
 nemesis picks, and a storage fault that truncates the last line of the
 file before a resume.
+
+### 37. A lease fences messages, and it does not fence tool effects
+
+**What.** A stale activation cannot commit a say, a summary or a seat.
+The model runs custom tools and workspace tools before that commit. A
+process partitioned from the room keeps running after its lease expired,
+and the next attempt starts while the first still changes files or calls
+an external API. Both attempts can complete the same effect.
+[`planning/findings-distributed.md`](findings-distributed.md) F2.
+
+**Where.** `seat/activation.ts`; `tools/workspace.ts`.
+
+**Fix.** Pass the activation id, the attempt and the run id into every
+tool context. A mutating tool takes an idempotency key. A workspace
+service rejects an old run. Where a resource offers neither, the docs
+state at-least-once effects.
+
+### 38. The wire carries requests, and no configuration
+
+**What.** `Transport.connect` receives a `RunningRoom` and a `Runtime`
+that hold functions, catalogs and openers. A seat in another process
+cannot be built from the wire alone, and an agent definition holds tool
+functions that cannot cross JSON.
+[`planning/findings-distributed.md`](findings-distributed.md) F3.
+
+**Where.** `host/runtime.ts`; `seat/seat.ts`.
+
+**Fix.** A seat service resolves a versioned agent definition by name,
+with its tools, credentials, model and workspace client deployed beside
+it. The wire carries identifiers and capability tokens.
+
+### 39. A seat actor holds its state in memory
+
+**What.** `SeatActor` holds the current activation, one queued wake,
+the steer queue, the Pi agent and the renewal loop in memory, and the
+room caches one port per seat. Two processes that answer for one seat
+can both start work. [`planning/findings-distributed.md`](findings-distributed.md)
+F4 and F5: the audit log of a seat has no activation id on its rows and
+no exclusive writer either.
+
+**Where.** `seat/seat.ts`; the audit session in `seat/activation.ts`.
+
+**Fix.** One durable actor per room and seat, keyed by the run. One
+audit stream per activation id, or an activation id and a stable index
+on every audit row.
+
+### 40. A workspace is unique in one runtime
+
+**What.** The `taken` set and a handle's `destroyed` flag are process
+memory. Two hosts can define the same name, and one can destroy a
+directory another activation uses. The directory backend shares files
+and fences nothing. [`planning/findings-distributed.md`](findings-distributed.md)
+F6.
+
+**Where.** `tools/workspace.ts`; `host/runtime.ts`.
+
+**Fix.** A workspace service keyed by name, with a lifecycle generation
+that connect and every mutation present.
+
+### 41. Events and completion belong to one run
+
+**What.** Listeners, waiters and the wake timestamps are memory. A
+restart loses subscribers, and a client can miss `message`,
+`exchange_closed`, `error` or `quiet` while it reconnects. `settled()`
+and `quiet()` resolve early on a run that is gone.
+[`planning/findings-distributed.md`](findings-distributed.md) F7.
+
+**Where.** `session.ts`.
+
+**Fix.** Status reads off the record with a durable cursor, so a client
+that reconnects reads what it missed.

@@ -255,11 +255,20 @@ class Walk {
 		this.runtime.evict(this.name);
 		this.visits.clear();
 		const activations = await liveLeases(this.sessions, this.name, this.clock.now());
-		this.runtime = this.host();
-		this.session = await resumeSession(this.name, {
-			runtime: this.runtime,
-			streamFn: scripted(script),
-		});
+		// A resume writes the run row first, and a host tries again when the storage fails it.
+		for (let attempt = 0; ; attempt += 1) {
+			this.runtime = this.host();
+			try {
+				this.session = await resumeSession(this.name, {
+					runtime: this.runtime,
+					streamFn: scripted(script),
+				});
+				break;
+			} catch (error) {
+				if (attempt === 2) throw error;
+				expected(error);
+			}
+		}
 		this.inherited = { activations, exchange: this.session.exchange() !== undefined };
 		this.watch();
 	}

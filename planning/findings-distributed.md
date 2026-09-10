@@ -1,5 +1,12 @@
 # Correctness findings for a distributed host
 
+> A review report, kept as written. The backlog tracks each finding:
+> F1 is item 35, closed with a remainder; F2 to F7 are items 37 to 41;
+> F8 is item 36; F9 is item 28; F10 is item 32. The LemmaScript contracts
+> the report added now live beside the code they check, in
+> `packages/ambion/src/log/rules.verified.ts` and
+> `packages/ambion/src/room/rules.verified.ts`.
+
 ## Scope and evidence
 
 This review treats each room, seat, activation, or exchange as a possible

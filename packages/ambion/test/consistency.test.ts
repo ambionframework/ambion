@@ -25,11 +25,11 @@ import { foldRoom } from '../src/room/fold.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { History, violations } from './support/history.ts';
+import { type Entry, History, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
 import { roomName, rowsOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { type FailMode, memory, tappedOpener } from './support/storage.ts';
+import { type FailMode, gatedOpener, memory, tappedOpener } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
 function mulberry32(seed: number): () => number {
@@ -84,13 +84,54 @@ class Cluster {
 		return items[Math.floor(this.random() * items.length)] as T;
 	}
 
+	/**
+	 * One host action, recorded. An answer from a run that lost the name
+	 * while the action ran is no answer: the run is gone, and what it held
+	 * is not the record.
+	 */
+	act<T>(
+		client: string,
+		op: string,
+		key: string | undefined,
+		action: () => Promise<T>,
+		seen?: (value: T) => Entry['seen'],
+	): Promise<T | undefined> {
+		const epoch = this.epoch;
+		return this.history.run(client, op, key, action, seen, () => this.epoch !== epoch);
+	}
+
+	/** The run that holds the room now, and the gate that holds its next append when the nemesis says so. */
+	private current = { gate: undefined as Promise<void> | undefined, release: () => {}, held: 0 };
+
 	private host(): Runtime {
+		const current = { gate: undefined as Promise<void> | undefined, release: () => {}, held: 0 };
+		this.current = current;
+		// every run's appends go through its own gate, so a cut holds the old run's write alone
+		const sessions = gatedOpener(this.sessions, () => {
+			if (current.gate !== undefined) current.held += 1;
+			return current.gate;
+		});
 		return createRuntime({
-			sessions: this.sessions,
+			sessions,
 			clock: this.clock,
 			agents,
 			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
 		});
+	}
+
+	/**
+	 * The run dies with a write in flight: the next append is held, the run
+	 * is evicted and the name resumed while it is held, and then the write
+	 * lands, past the fence. The fence makes it void.
+	 */
+	async cut(): Promise<void> {
+		const run = this.current;
+		run.gate = new Promise<void>((resolve) => {
+			run.release = resolve;
+		});
+		for (let i = 0; i < 40 && run.held === 0; i += 1) await yields();
+		await this.crash();
+		run.release();
 	}
 
 	async start(): Promise<void> {
@@ -140,11 +181,19 @@ class Cluster {
 		this.runtime.evict(this.name);
 		this.epoch += 1;
 		const activations = await liveLeases(this.opened.sessions, this.name, this.clock.now());
-		this.runtime = this.host();
-		this.session = await resumeSession(this.name, {
-			runtime: this.runtime,
-			streamFn: scripted(this.cast.script),
-		});
+		// A resume writes the run row first, and a host tries again when the storage fails it.
+		for (let attempt = 0; ; attempt += 1) {
+			this.runtime = this.host();
+			try {
+				this.session = await resumeSession(this.name, {
+					runtime: this.runtime,
+					streamFn: scripted(this.cast.script),
+				});
+				break;
+			} catch (error) {
+				if (attempt === 2 || !/disk is full/.test(String(error))) throw error;
+			}
+		}
 		this.inherited = { activations, exchange: this.session.exchange() !== undefined };
 		this.watch();
 	}
@@ -249,7 +298,7 @@ class Person {
 		if (this.current() !== undefined) return;
 		const { cluster } = this;
 		const epoch = cluster.epoch;
-		const handle = await cluster.history.run(this.name, 'visit', undefined, () =>
+		const handle = await cluster.act(this.name, 'visit', undefined, () =>
 			visitSession(cluster.session, this.definition),
 		);
 		if (handle !== undefined) this.visit = { handle, epoch };
@@ -259,8 +308,8 @@ class Person {
 		const visit = this.current();
 		if (visit === undefined) return this.arrive();
 		const key = `${this.name}-${++this.deliveries}`;
-		const { history } = this.cluster;
-		const landed = await history.run(this.name, 'deliver', key, () =>
+		const { cluster } = this;
+		const landed = await cluster.act(this.name, 'deliver', key, () =>
 			visit.deliver({ text: `${key}?`, key }).then(() => true),
 		);
 		// A delivery the person never heard back on is delivered again under the same key.
@@ -268,7 +317,7 @@ class Person {
 			await this.arrive();
 			const again = this.current();
 			if (again === undefined) return;
-			await history.run(this.name, 'deliver', key, () =>
+			await cluster.act(this.name, 'deliver', key, () =>
 				again.deliver({ text: `${key}?`, key }).then(() => true),
 			);
 		}
@@ -276,7 +325,7 @@ class Person {
 
 	private async read(): Promise<void> {
 		const { cluster } = this;
-		await cluster.history.run(
+		await cluster.act(
 			this.name,
 			'read',
 			undefined,
@@ -289,7 +338,7 @@ class Person {
 		const visit = this.current();
 		if (visit === undefined) return;
 		this.visit = undefined;
-		await this.cluster.history.run(this.name, 'leave', undefined, () => visit.leave());
+		await this.cluster.act(this.name, 'leave', undefined, () => visit.leave());
 	}
 }
 
@@ -308,15 +357,14 @@ class Host {
 			'wire',
 			'disk',
 			'crash',
+			'cut',
 		] as const);
 		if (op === 'seat') {
-			await cluster.history.run('host', 'seat', undefined, () => cluster.session.seat(colleague));
+			await cluster.act('host', 'seat', undefined, () => cluster.session.seat(colleague));
 		} else if (op === 'unseat') {
-			await cluster.history.run('host', 'unseat', undefined, () =>
-				cluster.session.unseat(colleague),
-			);
+			await cluster.act('host', 'unseat', undefined, () => cluster.session.unseat(colleague));
 		} else if (op === 'read') {
-			await cluster.history.run(
+			await cluster.act(
 				'host',
 				'read',
 				undefined,
@@ -330,6 +378,8 @@ class Host {
 			await cluster.history.run('host', 'wire', undefined, async () => cluster.failWire());
 		} else if (op === 'disk') {
 			await cluster.history.run('host', 'disk', undefined, async () => cluster.failDisk());
+		} else if (op === 'cut') {
+			await cluster.history.run('host', 'cut', undefined, () => cluster.cut());
 		} else {
 			await cluster.history.run('host', 'crash', undefined, () => cluster.crash());
 		}
@@ -369,8 +419,15 @@ describe('the room under concurrent clients and a nemesis', () => {
 				const errors = cluster.events.flatMap((e) =>
 					e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
 				);
+				const brief = cluster.events
+					.map((e) => {
+						if (e.type === 'message') return `m${e.message.seq}:${e.message.kind}`;
+						if ('agent' in e) return `${e.type}:${e.agent}`;
+						return e.type;
+					})
+					.join(' ');
 				throw new Error(
-					`seed ${seed} failed:\n${cluster.history.describe()}\nerrors on the last run: ${errors.join('; ')} (inherited ${cluster.inherited.activations})\nrows:\n  ${rows
+					`seed ${seed} failed:\n${cluster.history.describe()}\nerrors on the last run: ${errors.join('; ')} (inherited ${cluster.inherited.activations})\nevents on the last run: ${brief}\nrows:\n  ${rows
 						.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`)
 						.join('\n  ')}\n\n${detail}`,
 					{ cause: error },

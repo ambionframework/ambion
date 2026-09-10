@@ -228,6 +228,13 @@ export type SessionEvent =
 	| { type: 'activation_end'; agent: string; spoke: boolean }
 	| { type: 'error'; agent: string; error: Error }
 	/**
+	 * Another run took the name: its run row is on the log past this run's.
+	 * This run is superseded, and drops itself from memory the way
+	 * `runtime.evict` does. Nothing it wrote after the other run's row is on
+	 * the record, and nothing it does from here on writes.
+	 */
+	| { type: 'superseded' }
+	/**
 	 * A person's question opened an exchange: the room has an exchange to work on,
 	 * and one person owns it. A client that folds the working under the
 	 * question it answered starts here, whatever the assistant makes of it

@@ -334,6 +334,8 @@ class SessionImpl implements Session, RunningRoom {
 	private replayed = false;
 	private stopped = false;
 	private evicted = false;
+	/** This run's id: the first row it writes, and the stamp on every entry it writes. */
+	private readonly run = crypto.randomUUID();
 	/** Whether the room has reported quiet since it was last busy. */
 	private idleReported = true;
 
@@ -355,7 +357,12 @@ class SessionImpl implements Session, RunningRoom {
 		this.runtime = runtime;
 		this.transport = runtime.transport ?? inProcessTransport();
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
-		this.log = new RoomLog(this.sessions.open(name), (entry, fresh) => this.heard(entry, fresh));
+		this.log = new RoomLog(
+			this.sessions.open(name),
+			(entry, fresh) => this.heard(entry, fresh),
+			this.run,
+			() => this.superseded(),
+		);
 		this.stream = options.streamFn ?? runtime.stream;
 		this.model = options.streamFn ? stubModel : runtime.model;
 		this.starting = composition && compositionRow(composition, this.iso());
@@ -397,6 +404,7 @@ class SessionImpl implements Session, RunningRoom {
 				throw new Error(`Duplicate agent name '${name}': one name names one participant.`);
 			}
 		}
+		await this.log.write('run', { run: this.run, at: this.iso() });
 		await this.log.write('composition', row);
 		this.wake();
 		await this.reconcile();
@@ -420,8 +428,21 @@ class SessionImpl implements Session, RunningRoom {
 			if (def === undefined) throw new Error(`'${name}' is not in the runtime's catalog.`);
 			this.defs.set(name, def);
 		}
+		// The run row is the fence: from here on, every earlier run's later writes are void.
+		await this.log.write('run', { run: this.run, at: this.iso() });
 		this.wake();
 		await this.reconcile();
+	}
+
+	/**
+	 * Another run took the name. This run says so once, then drops itself
+	 * from memory: nothing it does from here on writes, and every seat it
+	 * runs hears stale. The record is the other run's from its row on.
+	 */
+	private superseded(): void {
+		if (this.evicted) return;
+		this.emit({ type: 'superseded' });
+		this.runtime.evict(this.name);
 	}
 
 	/** A room with an exchange open or a lease live is busy, and says so when it goes quiet. */

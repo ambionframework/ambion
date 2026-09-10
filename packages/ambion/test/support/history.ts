@@ -36,7 +36,7 @@ export interface Entry {
 
 /** The room said no, and nothing landed. Anything else is an outcome the client cannot tell. */
 const DEFINITIVE =
-	/visit has ended|is stopped|not in this session|one name names one participant|is not seated|already running|has no composition|not in the runtime's catalog|already in this session/;
+	/visit has ended|is stopped|not in this session|one name names one participant|is not seated|already running|has no composition|not in the runtime's catalog|already in this session|superseded/;
 
 export class History {
 	readonly entries: Entry[] = [];
@@ -50,6 +50,7 @@ export class History {
 		key: string | undefined,
 		action: () => Promise<T>,
 		seen?: (value: T) => Entry['seen'],
+		stale?: () => boolean,
 	): Promise<T | undefined> {
 		const invoke = this.push({
 			client,
@@ -59,6 +60,19 @@ export class History {
 		});
 		try {
 			const value = await action();
+			// An answer from a run that lost the name while the action ran is no answer:
+			// the host knows the run is gone, and the client cannot tell what landed.
+			if (stale?.()) {
+				this.push({
+					client,
+					op,
+					phase: 'info',
+					of: invoke.index,
+					...(key === undefined ? {} : { key }),
+					error: 'answered by a run that lost the name',
+				});
+				return undefined;
+			}
 			this.push({
 				client,
 				op,
@@ -197,13 +211,23 @@ function prefixBreak(
 	return undefined;
 }
 
-/** Every seq on the storage names one message. */
+/**
+ * Every seq on the storage names one message, among the entries that
+ * stand: a run row is the fence, and an entry another run wrote after it
+ * is void, the way the log reads it.
+ */
 function seqs(rows: Checked['rows']): string[] {
 	const seen = new Map<number, number>();
+	let fence: string | undefined;
 	for (const row of rows) {
-		if (row.type !== 'ambion/message') continue;
-		const seq = (row.data as { seq: number }).seq;
-		seen.set(seq, (seen.get(seq) ?? 0) + 1);
+		const data = row.data as { seq?: number; run?: string; written?: string };
+		if (row.type === 'ambion/run') {
+			fence = data.run;
+			continue;
+		}
+		if (row.type !== 'ambion/message' || data.seq === undefined) continue;
+		if (fence !== undefined && data.written !== undefined && data.written !== fence) continue;
+		seen.set(data.seq, (seen.get(data.seq) ?? 0) + 1);
 	}
 	return [...seen]
 		.filter(([, n]) => n > 1)

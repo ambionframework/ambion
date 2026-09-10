@@ -1,1 +1,2 @@
-packages/ambion/verification/distributed.verified.ts
+packages/ambion/src/log/rules.verified.ts
+packages/ambion/src/room/rules.verified.ts

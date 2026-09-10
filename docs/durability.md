@@ -21,10 +21,16 @@ holds the record for the life of the process. Pi's JSONL repository
 writes every entry to a file and calls no `fsync`. A storage that lies
 about an append breaks every promise below.
 
-**One run per name, per runtime.** `startSession` and `resumeSession`
-refuse a name the runtime already runs. Nothing refuses a second runtime,
-in this process or another. A second live run over the same log is the
-one fault the room does not survive yet: §5 says what happens.
+**One run per name, fenced by its row.** `startSession` and
+`resumeSession` refuse a name the runtime already runs. Across runtimes,
+the log fences: the first row every run writes is its run row, with a
+fresh run id, and every entry the run writes carries that id. A run row
+of a later run is the fence. An entry of an earlier run that lands past
+it is void, and every reader skips it. A run reads the storage before
+every write, so a run that finds a later run's row learns it lost the
+name: it emits `superseded`, drops itself from memory, and writes
+nothing more. §5 says what a superseded run loses, and where the fence
+does not reach.
 
 ## 2. What a delivery promises
 
@@ -37,6 +43,11 @@ the life of the log.
 before anything lands. The visit is over, the room is stopped, or the
 recipient is not in the room. Nothing is on the record, nothing is on
 the stream, and nobody woke.
+
+**Superseded: void.** A write the run held while another run took the
+name lands past the fence. The run acknowledges it, and no reader holds
+it. A host that evicted the run, or heard `superseded`, treats every
+answer from that run as no answer.
 
 **In doubt: at most once.** A write the storage failed, or a process that
 died with the write in flight, leaves the host without an answer. The
@@ -90,13 +101,20 @@ leaves the room to expire the lease on its side.
 
 ## 5. What the room does not promise
 
-**Two live hosts over one log.** A host is paused, and a second host
-resumes the name while it is paused. Once the first comes back, both
-write from their own last seq. In memory, a seq is on the storage twice,
-and a delivery the first host acknowledged is off the record the second
-host reads. On JSONL, Pi refuses to load the file, and no run can open
-the name again. `split.test.ts` pins both. A fence is deferred:
+**The writes a superseded run acknowledged past the fence.** A host is
+paused with a write in flight, and a second host resumes the name. The
+write lands past the fence, void, and the first host acknowledges it.
+The first host learns at its next write. Every write it held between
+the fence and that write is lost, and `split.test.ts` pins that it is
+that one write and no other. A storage with a conditional append refuses
+such a write before it is acknowledged, and loses nothing:
 `planning/backlog.md` item 35 says what it takes.
+
+**Two live hosts over a JSONL file.** Pi's JSONL storage reads its own
+memory and appends to the file, so a run over it never sees another
+run's rows, and the fence does not reach it. Once a paused run comes
+back, Pi refuses to load the file, and no run can open the name again.
+`split.test.ts` pins it. JSONL is a storage for one host.
 
 **A storage that tears.** A partial line at the end of a JSONL file, a
 lost `fsync`, or entries the storage reorders are not exercised. The
@@ -119,8 +137,10 @@ by its instructions.
   `resumeSession(name, { runtime })`. The first reconcile expires what
   the dead run held.
 - Run one host per name. Evict a room with `runtime.evict(name)` before
-  another host takes it, and never continue a host that was paused past
-  its leases.
+  another host takes it. Treat `superseded` the way it treats its own
+  eviction: nothing that run answers from then on is an answer.
+- Retry a resume the storage failed: the run row is the first write a
+  resumed run makes.
 - Read `messages()` after a resume for what the stream did not carry.
 
 ## 7. How it is proved
@@ -130,14 +150,15 @@ deterministic and a sweep is exhaustive. Two proofs leave the process:
 the kill from outside and the `SIGSTOP` half of the split run a child on
 the system clock.
 
-| Proof                  | Test                  | What it holds                                                                                                                                      |
-| ---------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A crash at every write | `chaos.test.ts`       | One scenario, crashed before and after every append it takes, resumed and retried under the same key, ends with the same record every time         |
-| A handover under load  | `hosts.test.ts`       | The same sweep with a model that fails and a seat whose say wakes a peer: the second host wakes the failed seat again, and every answer lands once |
-| A kill from outside    | `chaos.test.ts`       | The scenario in a child process on JSONL, killed with `SIGKILL` at a write, resumed over the directory                                             |
-| The random walk        | `property.test.ts`    | Twenty seeded steps of visits, deliveries, seat changes, clock jumps, wire faults, disk faults and crashes; the invariants hold                    |
-| The history            | `consistency.test.ts` | Two people and the host take turns under a nemesis; every action is an invocation and an outcome; §2 to §4 are checked against the record          |
-| The split              | `split.test.ts`       | A paused host comes back after a takeover, in process and as a process under `SIGSTOP`; what §5 says happens, happens                              |
+| Proof                  | Test                  | What it holds                                                                                                                                            |
+| ---------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A crash at every write | `chaos.test.ts`       | One scenario, crashed before and after every append it takes, resumed and retried under the same key, ends with the same record every time               |
+| A handover under load  | `hosts.test.ts`       | The same sweep with a model that fails and a seat whose say wakes a peer: the second host wakes the failed seat again, and every answer lands once       |
+| A kill from outside    | `chaos.test.ts`       | The scenario in a child process on JSONL, killed with `SIGKILL` at a write, resumed over the directory                                                   |
+| The random walk        | `property.test.ts`    | Twenty seeded steps of visits, deliveries, seat changes, clock jumps, wire faults, disk faults and crashes; the invariants hold                          |
+| The history            | `consistency.test.ts` | Two people and the host take turns under a nemesis; every action is an invocation and an outcome; §2 to §4 are checked against the record                |
+| The split              | `split.test.ts`       | A paused host comes back after a takeover: in process, the fence holds and it loses the one write it held; under `SIGSTOP` on JSONL, Pi refuses the file |
+| The rules              | `rules.verified.ts`   | The pure rules the log and the fold decide by carry contracts, and Dafny proves them: the next seq, rule 5, the fence, who heard a message, the cap      |
 
 **The history checker** lives in
 [`test/support/history.ts`](../packages/ambion/test/support/history.ts).
@@ -157,18 +178,31 @@ the storage together and reports every guarantee that broke:
   owed.
 
 **The clients take turns.** The people and the host interleave at every
-await, and the nemesis acts between two actions. A crash does not cut an
-action in flight yet, so a delivery in doubt comes from the storage
-alone in this tier. The sweeps in `chaos.test.ts` and `hosts.test.ts`
-are where a crash lands inside an append.
+await, and the nemesis acts between two actions, with one exception: a
+cut holds a client's append, crashes the run and resumes the name while
+the append is held, and then lets it land past the fence. An answer from
+a run that lost the name while the action ran is recorded as `info`.
 
-**The nemesis** crashes the run and resumes it in a fresh runtime. It
-fails the next write before or after it lands. It drops, repeats and
-delays requests on the wire. It jumps the clock the way a paused process
-sees it. Every run is held to a bound on the errors it reports, checked
-when the run dies and at the end. The bound is the leases the run
-inherited, the failures the cast injects, the room calls the nemesis
-dropped, and the leases live across a jump past the expiry.
+**The nemesis** crashes the run and resumes it in a fresh runtime, and
+cuts it with an append in flight. It fails the next write before or
+after it lands. It drops, repeats and delays requests on the wire. It
+jumps the clock the way a paused process sees it. Every run is held to a
+bound on the errors it reports, checked when the run dies and at the
+end. The bound is the leases the run inherited, the failures the cast
+injects, the room calls the nemesis dropped, and the leases live across
+a jump past the expiry.
+
+**The rules are proved.** The pure rules in
+[`log/rules.verified.ts`](../packages/ambion/src/log/rules.verified.ts)
+and
+[`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)
+carry `//@ requires` and `//@ ensures` contracts. LemmaScript turns them
+into Dafny obligations, and CI proves them on every push. The log and
+the fold run these bodies, so the proof is about the code that runs: the
+next seq, the refusal of a commit that read too little, the fence, what
+supersedes a run, when a lease is expired, who was at work when a message
+landed, who heard it, and the cap on attempts. The proof says what each
+rule decides. The tests say what the room does with the decision.
 
 `pnpm test` runs 25 seeds of the history and the walk. `pnpm chaos` runs
 200 of each, the sweep on JSONL too, the handover at every write, and

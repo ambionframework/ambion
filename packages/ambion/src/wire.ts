@@ -34,6 +34,17 @@ export type LeaseRow =
 	| { id: string; after: Seq; phase: 'running'; expiry: number; at: string }
 	| { id: string; after: Seq; phase: 'ended'; reason: EndReason; at: string };
 
+/**
+ * A run took the name: the first row every run writes. The row is the
+ * fence between runs. Every entry a run writes carries its `run`, and an
+ * entry of an earlier run that lands after a later run's row is void.
+ */
+export interface RunRow {
+	run: string;
+	after: Seq;
+	at: string;
+}
+
 /** The room went quiet with an exchange open, and closed it. */
 export interface CloseRow {
 	owner: string;

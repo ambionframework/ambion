@@ -28,7 +28,7 @@ import {
 } from './support/cast.ts';
 import { World, within } from './support/chaos.ts';
 import { fakeClock } from './support/clock.ts';
-import { roomName, rowsOf } from './support/room.ts';
+import { collect, roomName } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { memory } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
@@ -80,10 +80,10 @@ describe('a handover under load', () => {
 });
 
 describe('a split: two live hosts over one log', () => {
-	// The design forbids it: two live rooms over one record each append to it and
-	// diverge. Nothing fences the first host out yet, and this test pins what the
-	// storage ends up with: both hosts assign the same seqs. It turns when a fence lands.
-	it('both hosts write the same seqs, and nothing fences the first out yet', async () => {
+	// The design forbids it, and the fence holds it: the second host's run row fences
+	// the first out. The first host writes nothing more, says so once, and the record
+	// the second host serves holds every seq once.
+	it('the second host fences the first out, and the record holds every seq once', async () => {
 		const opened = await memory.open();
 		const clock = fakeClock();
 		const host = () =>
@@ -102,6 +102,7 @@ describe('a split: two live hosts over one log', () => {
 			agents: [product, colleague],
 			streamFn: scripted(script),
 		});
+		const events = collect(room);
 		const hers = await visitSession(room, priya);
 		await hers.deliver({ text: 'First?', key: 'q1' });
 		await room.quiet();
@@ -111,18 +112,24 @@ describe('a split: two live hosts over one log', () => {
 		const his = await visitSession(taken, sam);
 		await his.deliver({ text: 'Second?', key: 'q2' });
 		await taken.quiet();
-		await hers.deliver({ text: 'Third?', key: 'q3' });
+		// the first host's next write finds the fence: it is superseded, and writes nothing
+		await expect(hers.deliver({ text: 'Third?', key: 'q3' })).rejects.toThrow(/superseded/);
 		await room.quiet();
-		const seqs = (await rowsOf(opened.sessions, name)).flatMap((r) =>
-			r.type === 'ambion/message' ? [(r.data as { seq: number }).seq] : [],
-		);
 		try {
-			expect(new Set(seqs).size, `seqs on the storage: ${seqs.join(' ')}`).toBeLessThan(
-				seqs.length,
-			);
+			expect(events.some((e) => e.type === 'superseded')).toBe(true);
+			expect(first.running.has(name)).toBe(false);
+			const record = await taken.messages();
+			expect(record.map((m) => m.key)).toContain('q2');
+			expect(record.map((m) => m.key)).not.toContain('q3');
+			expect(new Set(record.map((m) => m.seq)).size).toBe(record.length);
+			// and a third host reads the same record off the storage, and fences the second out
+			const third = await resumeSession(name, { runtime: host(), streamFn: scripted(script) });
+			expect((await third.messages()).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
+			await stopSession(third);
+			// the second host learns at its next write: its stop finds the fence
+			await expect(stopSession(taken)).rejects.toThrow(/superseded/);
+			expect(second.running.has(name)).toBe(false);
 		} finally {
-			await stopSession(room);
-			await stopSession(taken);
 			await opened.dispose();
 		}
 	});
