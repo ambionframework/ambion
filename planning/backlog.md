@@ -206,8 +206,9 @@ nothing, and rung 3 pays for an activation.
   argue with the room. The paragraph that explains a fold
   (`SUMMARY_PARAGRAPH`) is the precedent.
 
-**Where.** `dispatch` and `handsFor` in
-[`session.ts`](../packages/ambion/src/session.ts), `wakes` in
+**Where.** `routing` in
+[`session.ts`](../packages/ambion/src/session.ts), `handsFor` in
+[`hands.ts`](../packages/ambion/src/seat/hands.ts), `wakes` in
 [`seat.ts`](../packages/ambion/src/seat/seat.ts), the assistant's paragraphs in
 [`render.ts`](../packages/ambion/src/render.ts).
 
