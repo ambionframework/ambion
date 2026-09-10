@@ -1009,6 +1009,49 @@ describe('an exchange', () => {
 		expect(session.exchange()).toBeUndefined();
 	});
 
+	it('composes nothing for a question the assistant already woke on, and closes it at once', async () => {
+		const gate = deferred();
+		const working = deferred();
+		const session = open({
+			runtime: await gated((_type, data) => (data.text === 'hey' ? gate.promise : undefined)),
+			agents: [passive(product)],
+			available: [surveyor],
+			script: byAgent({
+				product: async () => {
+					await working.promise;
+					return quiet();
+				},
+			}),
+		});
+		const events = collect(session);
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ to: product, text: 'first?' });
+		await activationEnded(session, 'assistant');
+		// a word into the room is asked the moment the product stops, and lands before the
+		// close; the product is passive, so it wakes for nothing, and only the assistant could
+		const asked = askedAsStops(session, 'product', () => visit.deliver({ text: 'hey' }));
+		working.resolve();
+		const { landed: said } = await asked;
+		await tick();
+		await tick();
+		gate.resolve();
+		await said;
+		await quiescent(session);
+
+		const record = await session.messages();
+		const [first, next] = record.filter(isSpoken);
+		// the word opened its own exchange; the assistant had its one activation for it, so the
+		// roster stood, nobody worked, and the exchange closed holding the word alone
+		expect(openings(events)).toEqual([first?.seq, next?.seq]);
+		expect(ranges(events)).toEqual([
+			[first?.seq, first?.seq],
+			[next?.seq, next?.seq],
+		]);
+		expect(record.some((m) => m.kind === 'seated')).toBe(false);
+		expect(session.seats().find((s) => s.name === 'assistant')).toMatchObject({ status: 'idle' });
+		expect(session.exchange()).toBeUndefined();
+	});
+
 	it('closes before the summary that stands for it', async () => {
 		const session = open({
 			script: byAgent({ product: twoAnswers, assistant: writes('Thursday is out.') }),

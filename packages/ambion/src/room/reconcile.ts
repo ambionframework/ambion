@@ -13,6 +13,7 @@ import type { CloseRow, LeaseRow, Without } from '../wire.ts';
 import { draftOver } from './assistant.ts';
 import type { Owed, RoomState } from './fold.ts';
 import { draftId, isExpired, isLive, type PendingWake, parseId, seatOf } from './lease.ts';
+import { givesUp } from './rules.verified.ts';
 
 export interface DecideOptions {
 	now: number;
@@ -97,25 +98,20 @@ export function decide(state: RoomState, options: DecideOptions): Decision {
 }
 
 /** A wake or a draft whose attempts reached the cap. */
-const capped = (attempts: number, options: DecideOptions): boolean => attempts >= options.attempts;
+const capped = (attempts: number, options: DecideOptions): boolean =>
+	givesUp(attempts, options.attempts);
 
 /** The attempt at each wake and each draft at the cap, ended before it starts. */
 function abandonments(state: RoomState, options: DecideOptions): Ended[] {
 	const at = new Date(options.now).toISOString();
-	const abandon = (id: string, heard: number): Ended => ({
-		id,
-		phase: 'ended',
-		reason: 'abandoned',
-		heard,
-		at,
-	});
+	const abandon = (id: string): Ended => ({ id, phase: 'ended', reason: 'abandoned', at });
 	return [
 		...state.pending
 			.filter((wake) => capped(wake.attempts, options))
-			.map((wake) => abandon(wake.id, wake.seq)),
+			.map((wake) => abandon(wake.id)),
 		...state.owed
 			.filter((owed) => capped(owed.attempts, options))
-			.map((owed) => abandon(draftId(owed.through, owed.attempts + 1), owed.through)),
+			.map((owed) => abandon(draftId(owed.through, owed.attempts + 1))),
 	];
 }
 
@@ -127,7 +123,6 @@ function expiries(state: RoomState, now: number): Decision['expired'] {
 			id: lease.id,
 			phase: 'ended' as const,
 			reason: 'expired' as const,
-			heard: lease.heard,
 			at,
 		}));
 }

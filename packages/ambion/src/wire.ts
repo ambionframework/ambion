@@ -28,32 +28,47 @@ export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> :
 export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired' | 'abandoned';
 
 /**
- * One row about an activation: it holds a lease, or its lease ended.
- * `heard` is the seq the activation has taken: what its view held when it
- * claimed, then every message the seat side steered into it. A wake is
- * answered once a lease of the seat has heard it. `since` is written on a
- * checkpoint's rows alone: when the lease was first claimed, which the
- * rows the checkpoint replaced said.
+ * One row about an activation: it holds a lease, or its lease ended. Where
+ * the row sits on the log says what the activation heard: `after` is the
+ * last seq when the row landed.
  */
 export type LeaseRow =
-	| {
-			id: string;
-			after: Seq;
-			phase: 'running';
-			expiry: number;
-			heard: Seq;
-			since?: string;
-			at: string;
-	  }
-	| {
-			id: string;
-			after: Seq;
-			phase: 'ended';
-			reason: EndReason;
-			heard: Seq;
-			since?: string;
-			at: string;
-	  };
+	| { id: string; after: Seq; phase: 'running'; expiry: number; at: string }
+	| { id: string; after: Seq; phase: 'ended'; reason: EndReason; at: string };
+
+/**
+ * A lease as the fold holds it, and what a checkpoint carries in place of
+ * the lease's rows: the rows' positions are lost with the rows, so the
+ * checkpoint keeps what they said.
+ */
+export interface LeaseSnapshot {
+	id: string;
+	phase: 'running' | 'ended';
+	/** When a running lease expires, in milliseconds since the epoch. */
+	expiry?: number;
+	reason?: EndReason;
+	/** When the last row was written, ISO. */
+	at: string;
+	/** When the first row was written, ISO: when the activation claimed. The deadline counts from here. */
+	claimedAt: string;
+	/** The last seq when the first row landed: the activation's view held the record through here. */
+	since: Seq;
+	/** The last seq when the ended row landed, for an ended lease. */
+	until?: Seq;
+	/** The last seq when the last running row landed: the activation confirmed it heard through here. */
+	heardThrough: Seq;
+}
+
+/**
+ * A run took the name: the first row every run writes. The row is the
+ * fence between runs. Every entry a run writes carries its `run`, and an
+ * entry of an earlier run that lands after a later run's row is void.
+ */
+export interface RunRow {
+	run: string;
+	after: Seq;
+	at: string;
+}
 
 /** The room went quiet with an exchange open, and closed it. */
 export interface CloseRow {
@@ -102,7 +117,7 @@ export interface CheckpointRow {
 	floor: Seq;
 	composition: CompositionRow;
 	closes: CloseRow[];
-	leases: LeaseRow[];
+	leases: LeaseSnapshot[];
 	after: Seq;
 	at: string;
 }
@@ -188,8 +203,6 @@ export interface Lease {
 	activation: string;
 	phase: 'running' | 'ended';
 	reason?: EndReason;
-	/** The seq the activation has taken. The room keeps the higher of this and what it holds. */
-	heard?: Seq;
 }
 
 export type LeaseResponse = { ok: { expiry: number; lastSeq: Seq } } | Stale;

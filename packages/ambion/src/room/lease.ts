@@ -1,5 +1,5 @@
 /**
- * Activations, named by what caused them.
+ * Activations, named by what caused them, and the leases they hold.
  *
  * An activation's id is derived from the log: the seq of the message that
  * woke the seat and the seat's name, or the close it answers, and the
@@ -8,28 +8,34 @@
  * whose lease ended is refused because the fold says so.
  *
  * A lease has two phases. `running` is a claim or a renewal, with an
- * expiry; `ended` is terminal, with a reason. Every row carries `heard`,
- * the seq the activation has taken. The last row for an id wins, and an
- * ended lease never runs again.
+ * expiry; `ended` is terminal, with a reason. The last row for an id wins,
+ * and an ended lease never runs again.
  *
  * A message reaches a seat two ways: the room names the seats at rest it
  * wakes in `wakes`, and every seat at work hears it as a steer. The log
- * names both: `wakes` holds every seat the message reached, and every lease
- * row carries `heard`, the seq the activation had taken when the row was
- * written. A lease answers a message it heard while it runs, and once it
- * ended released, refused, revoked or abandoned. A lease that stood down
- * answers through the seq its release said, so a message that landed after
- * the activation last took the record is pending for the seat, as a first
- * attempt. A lease that expired or failed answers nothing it heard,
- * whatever it said: its words stay on the record, and the seat reads them
- * at the next attempt. The failure counts as one attempt, and the message
- * is pending again for that seat after the backoff, under the next
- * attempt's id. The fold reports every wake still pending with its
- * attempts; the room decides the cap, and writes it.
+ * says which: a lease at work when the message landed holds a row before
+ * it and ends, if it ends, after it. A lease answers a message it heard,
+ * or that its view held because it was claimed after the message, while
+ * it runs and once it ended released, refused, revoked or abandoned. A
+ * lease that stood down answers through the seq its last renewal
+ * confirmed, so a message that landed between that renewal and the
+ * release is pending for the seat, as a first attempt. A lease that
+ * expired or failed answers nothing it heard, whatever it said: its words
+ * stay on the record, and the seat reads them at the next attempt. The
+ * failure counts as one attempt, and the message is pending again for
+ * that seat after the backoff, under the next attempt's id. The fold
+ * reports every wake still pending with its attempts; the room decides
+ * the cap, and writes it.
  */
 
 import type { Message, Seq } from '../types.ts';
-import type { EndReason, LeaseRow } from '../wire.ts';
+import type { EndReason, LeaseRow, LeaseSnapshot } from '../wire.ts';
+import {
+	atWork as atWorkRule,
+	expired,
+	heard as heardRule,
+	nextAttempt,
+} from './rules.verified.ts';
 
 /** The id of the activation a message wakes on a seat: the first attempt bare, later ones numbered. */
 export const activationId = (seq: Seq, seat: string, attempt = 1): string =>
@@ -58,41 +64,38 @@ export function parseId(id: string): ParsedId | undefined {
 	return undefined;
 }
 
-/** The last row for one id: whether it runs, until when, or why it ended, and how far it heard. */
-export interface LeaseState {
-	id: string;
-	phase: 'running' | 'ended';
-	/** When a running lease expires, in milliseconds since the epoch. */
-	expiry?: number;
-	reason?: EndReason;
-	/** The seq the activation has taken. Never lower than an earlier row said. */
-	heard: Seq;
-	/** When the first row was written, ISO: when the activation claimed. */
-	since: string;
-	/** When the last row was written, ISO. */
-	at: string;
-}
+/** A lease as the fold holds it: whether it runs, until when, or why it ended, and where on the log. */
+export type LeaseState = LeaseSnapshot;
 
-export function foldLeases(rows: readonly LeaseRow[]): Map<string, LeaseState> {
-	const leases = new Map<string, LeaseState>();
+/**
+ * The leases, folded over their rows. A checkpoint hands in the states its
+ * rows folded to before it replaced them; the rows since fold on top.
+ */
+export function foldLeases(
+	rows: readonly LeaseRow[],
+	snapshots: readonly LeaseSnapshot[] = [],
+): Map<string, LeaseState> {
+	const leases = new Map<string, LeaseState>(snapshots.map((lease) => [lease.id, lease]));
 	for (const row of rows) {
 		const known = leases.get(row.id);
 		// Ended is terminal: a renewal that lands after the end changes nothing.
 		if (known?.phase === 'ended') continue;
-		const heard = Math.max(known?.heard ?? 0, row.heard);
-		const since = known?.since ?? row.since ?? row.at;
+		const claimedAt = known?.claimedAt ?? row.at;
+		const since = known?.since ?? row.after;
+		const heardThrough = row.phase === 'running' ? row.after : (known?.heardThrough ?? row.after);
+		const shared = { id: row.id, at: row.at, claimedAt, since, heardThrough };
 		leases.set(
 			row.id,
 			row.phase === 'running'
-				? { id: row.id, phase: 'running', expiry: row.expiry, heard, since, at: row.at }
-				: { id: row.id, phase: 'ended', reason: row.reason, heard, since, at: row.at },
+				? { ...shared, phase: 'running', expiry: row.expiry }
+				: { ...shared, phase: 'ended', reason: row.reason, until: row.after },
 		);
 	}
 	return leases;
 }
 
 export const isExpired = (lease: LeaseState, now: number): boolean =>
-	lease.phase === 'running' && (lease.expiry ?? 0) <= now;
+	lease.phase === 'running' && expired(lease.expiry ?? 0, now);
 
 /** A lease that holds: running, and not past its expiry. */
 export const isLive = (lease: LeaseState, now: number): boolean =>
@@ -130,20 +133,21 @@ export function pendingWakes(
 	leases: ReadonlyMap<string, LeaseState>,
 	roster: ReadonlySet<string>,
 	options: WakeOptions,
+	assistant: string,
 ): PendingWake[] {
 	const bySeat = leasesBySeat(leases, roster);
 	const pending: PendingWake[] = [];
 	for (const message of messages) {
-		for (const seat of (message.wakes ?? []).filter((name) => roster.has(name))) {
-			const heard = (bySeat.get(seat) ?? []).filter((lease) => lease.heard >= message.seq);
-			const wake = statusOf(message, seat, heard, options);
+		for (const seat of reached(message, bySeat, roster, assistant)) {
+			const taken = (bySeat.get(seat) ?? []).filter((lease) => heard(lease, message.seq));
+			const wake = statusOf(message, seat, taken, options);
 			if (wake !== undefined) pending.push(wake);
 		}
 	}
 	return pending;
 }
 
-/** The leases a message wake claimed, by the seat they belong to, for seats on the roster. */
+/** Every lease a wake claimed, by seat, for the seats on the roster. */
 function leasesBySeat(
 	leases: ReadonlyMap<string, LeaseState>,
 	roster: ReadonlySet<string>,
@@ -157,18 +161,57 @@ function leasesBySeat(
 	return bySeat;
 }
 
+/**
+ * The seats a message reached: the ones it names, and every seat at work
+ * when it landed. The assistant composing hears no steer, so a message
+ * reaches it by name alone.
+ */
+function reached(
+	message: Message,
+	bySeat: ReadonlyMap<string, LeaseState[]>,
+	roster: ReadonlySet<string>,
+	assistant: string,
+): Set<string> {
+	const seats = new Set((message.wakes ?? []).filter((seat) => roster.has(seat)));
+	for (const [seat, held] of bySeat) {
+		if (seat === message.from || seat === assistant) continue;
+		if (held.some((lease) => atWork(lease, message.seq))) seats.add(seat);
+	}
+	return seats;
+}
+
+/** The lease held a row before the message and ended, if it ended, after it. */
+const atWork = (lease: LeaseState, seq: Seq): boolean =>
+	atWorkRule(lease.since, lease.until !== undefined, lease.until ?? 0, seq);
+
+/**
+ * The lease heard the message. A lease that runs or came to nothing heard
+ * every message it was at work for, and every one its view held. A lease
+ * that stood down heard what its last renewal confirmed: a message that
+ * landed between that renewal and the release reached no activation.
+ */
+const heard = (lease: LeaseState, seq: Seq): boolean =>
+	heardRule(
+		lease.phase === 'running' || cameToNothing(lease),
+		lease.since,
+		lease.until !== undefined,
+		lease.until ?? 0,
+		lease.heardThrough,
+		seq,
+	);
+
 /** The wake as pending, or nothing when a lease that heard the message answered it. */
 function statusOf(
 	message: Message,
 	seat: string,
-	heard: readonly LeaseState[],
+	taken: readonly LeaseState[],
 	options: WakeOptions,
 ): PendingWake | undefined {
-	if (heard.some((lease) => !cameToNothing(lease))) return undefined;
-	const attempts = heard.length;
-	const last = Math.max(0, ...heard.map((lease) => Date.parse(lease.at)));
+	if (taken.some((lease) => !cameToNothing(lease))) return undefined;
+	const attempts = taken.length;
+	const last = Math.max(0, ...taken.map((lease) => Date.parse(lease.at)));
 	return {
-		id: activationId(message.seq, seat, attempts + 1),
+		id: activationId(message.seq, seat, nextAttempt(attempts)),
 		seat,
 		seq: message.seq,
 		at: message.at,

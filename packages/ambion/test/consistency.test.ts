@@ -25,11 +25,11 @@ import { foldRoom } from '../src/room/fold.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { History, violations } from './support/history.ts';
+import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
 import { roomName, rowsOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { type FailMode, memory, tappedOpener } from './support/storage.ts';
+import { type FailMode, gatedOpener, memory, tappedOpener } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
 function mulberry32(seed: number): () => number {
@@ -84,13 +84,62 @@ class Cluster {
 		return items[Math.floor(this.random() * items.length)] as T;
 	}
 
+	/**
+	 * One host action, recorded. An answer from a run that lost the name
+	 * while the action ran is no answer: the run is gone, and what it held
+	 * is not the record.
+	 */
+	act<T>(
+		client: string,
+		op: string,
+		key: string | undefined,
+		action: () => Promise<T>,
+		seen?: (value: T) => Entry['seen'],
+	): Promise<T | undefined> {
+		const epoch = this.epoch;
+		return this.history.run(client, op, key, action, seen, () => this.epoch !== epoch);
+	}
+
+	/** The run that holds the room now, and the gate that holds its next append when the nemesis says so. */
+	private current = { gate: undefined as Promise<void> | undefined, release: () => {}, held: 0 };
+
 	private host(): Runtime {
+		const current = { gate: undefined as Promise<void> | undefined, release: () => {}, held: 0 };
+		this.current = current;
+		// every run's appends go through its own gate, so a cut holds the old run's write alone;
+		// an armed cut takes the next append: it holds the write, crashes the run and resumes
+		// the name while the write is held, and then lets the write land past the fence
+		const sessions = gatedOpener(this.sessions, () => {
+			// a takeover's own writes are never cut: the cut would wait for the takeover it stops
+			if (this.cutArmed && !this.takingOver && current === this.current) {
+				this.cutArmed = false;
+				current.held += 1;
+				current.gate = new Promise<void>((resolve) => {
+					current.release = resolve;
+				});
+				void this.crash().finally(() => current.release());
+			}
+			return current.gate;
+		});
 		return createRuntime({
-			sessions: this.sessions,
+			sessions,
 			clock: this.clock,
 			agents,
 			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
 		});
+	}
+
+	/** Whether the next append the run makes is the one the nemesis cuts. */
+	private cutArmed = false;
+
+	/**
+	 * The run will die with a write in flight: the next append is held, the
+	 * run is evicted and the name resumed while it is held, and then the
+	 * write lands, past the fence. The fence makes it void. A cut still
+	 * armed at the drain is dropped.
+	 */
+	cut(): void {
+		this.cutArmed = true;
 	}
 
 	async start(): Promise<void> {
@@ -111,8 +160,19 @@ class Cluster {
 		this.failedBefore = this.cast.failures();
 		this.droppedBefore = this.dropped;
 		this.jumpedBefore = this.jumped;
-		this.session.subscribe((event) => this.events.push(event));
+		const session = this.session;
+		session.subscribe((event) => {
+			this.events.push(event);
+			// the host's duty on `superseded`: the run is gone, and the name is resumed again
+			if (event.type === 'superseded' && this.session === session) {
+				this.bounded();
+				void this.takeover();
+			}
+		});
 	}
+
+	/** The takeovers asked for so far, one after the other; the drain waits for the last. */
+	private resuming: Promise<void> = Promise.resolve();
 
 	/** The errors a run may carry: what it inherited, the cast's failures, the drops and the jumps it saw. */
 	private allowance(): number {
@@ -138,13 +198,49 @@ class Cluster {
 	async crash(): Promise<void> {
 		this.bounded();
 		this.runtime.evict(this.name);
+		await this.takeover();
+	}
+
+	/**
+	 * A fresh host takes the name: after a crash, and after a run heard it
+	 * was superseded. A run row that lands late fences the runs whose rows
+	 * came before it, even when its own run is gone, so a live run can lose
+	 * the name to a dead one, and the host resumes again. One takeover at a
+	 * time: a host resumes a name once, whatever asked for it.
+	 */
+	private takeover(): Promise<void> {
+		this.resuming = this.resuming.then(() => this.resumeAgain());
+		return this.resuming;
+	}
+
+	/** A takeover is resuming the name: its own writes are never cut. */
+	private takingOver = false;
+
+	private async resumeAgain(): Promise<void> {
+		this.takingOver = true;
+		try {
+			await this.resumed();
+		} finally {
+			this.takingOver = false;
+		}
+	}
+
+	private async resumed(): Promise<void> {
 		this.epoch += 1;
 		const activations = await liveLeases(this.opened.sessions, this.name, this.clock.now());
-		this.runtime = this.host();
-		this.session = await resumeSession(this.name, {
-			runtime: this.runtime,
-			streamFn: scripted(this.cast.script),
-		});
+		// A resume writes the run row first, and a host tries again when the storage fails it.
+		for (let attempt = 0; ; attempt += 1) {
+			this.runtime = this.host();
+			try {
+				this.session = await resumeSession(this.name, {
+					runtime: this.runtime,
+					streamFn: scripted(this.cast.script),
+				});
+				break;
+			} catch (error) {
+				if (attempt === 2 || !/disk is full/.test(String(error))) throw error;
+			}
+		}
 		this.inherited = { activations, exchange: this.session.exchange() !== undefined };
 		this.watch();
 	}
@@ -178,6 +274,8 @@ class Cluster {
 	async drain(): Promise<void> {
 		this.faults.length = 0;
 		this.disk = false;
+		this.cutArmed = false;
+		await this.resuming;
 		// in steps under the expiry, so an activation in flight renews across them
 		for (let i = 0; i < 14; i += 1) await this.advance(31_000);
 		await within(this.session.quiet(), 10_000, 'quiet after the drain');
@@ -191,7 +289,7 @@ class Cluster {
 			inheritedExchange: this.inherited.exchange,
 		});
 		const rows = await rowsOf(this.opened.sessions, this.name);
-		const entries = rows.flatMap((row) => {
+		const entries = standing(rows).flatMap((row) => {
 			const type = row.type.slice('ambion/'.length);
 			if (type === 'message') return [{ type, message: row.data } as never];
 			if (type === 'lease') return [{ type, lease: row.data } as never];
@@ -249,7 +347,7 @@ class Person {
 		if (this.current() !== undefined) return;
 		const { cluster } = this;
 		const epoch = cluster.epoch;
-		const handle = await cluster.history.run(this.name, 'visit', undefined, () =>
+		const handle = await cluster.act(this.name, 'visit', undefined, () =>
 			visitSession(cluster.session, this.definition),
 		);
 		if (handle !== undefined) this.visit = { handle, epoch };
@@ -259,8 +357,8 @@ class Person {
 		const visit = this.current();
 		if (visit === undefined) return this.arrive();
 		const key = `${this.name}-${++this.deliveries}`;
-		const { history } = this.cluster;
-		const landed = await history.run(this.name, 'deliver', key, () =>
+		const { cluster } = this;
+		const landed = await cluster.act(this.name, 'deliver', key, () =>
 			visit.deliver({ text: `${key}?`, key }).then(() => true),
 		);
 		// A delivery the person never heard back on is delivered again under the same key.
@@ -268,7 +366,7 @@ class Person {
 			await this.arrive();
 			const again = this.current();
 			if (again === undefined) return;
-			await history.run(this.name, 'deliver', key, () =>
+			await cluster.act(this.name, 'deliver', key, () =>
 				again.deliver({ text: `${key}?`, key }).then(() => true),
 			);
 		}
@@ -276,7 +374,7 @@ class Person {
 
 	private async read(): Promise<void> {
 		const { cluster } = this;
-		await cluster.history.run(
+		await cluster.act(
 			this.name,
 			'read',
 			undefined,
@@ -289,7 +387,7 @@ class Person {
 		const visit = this.current();
 		if (visit === undefined) return;
 		this.visit = undefined;
-		await this.cluster.history.run(this.name, 'leave', undefined, () => visit.leave());
+		await this.cluster.act(this.name, 'leave', undefined, () => visit.leave());
 	}
 }
 
@@ -308,15 +406,14 @@ class Host {
 			'wire',
 			'disk',
 			'crash',
+			'cut',
 		] as const);
 		if (op === 'seat') {
-			await cluster.history.run('host', 'seat', undefined, () => cluster.session.seat(colleague));
+			await cluster.act('host', 'seat', undefined, () => cluster.session.seat(colleague));
 		} else if (op === 'unseat') {
-			await cluster.history.run('host', 'unseat', undefined, () =>
-				cluster.session.unseat(colleague),
-			);
+			await cluster.act('host', 'unseat', undefined, () => cluster.session.unseat(colleague));
 		} else if (op === 'read') {
-			await cluster.history.run(
+			await cluster.act(
 				'host',
 				'read',
 				undefined,
@@ -330,6 +427,8 @@ class Host {
 			await cluster.history.run('host', 'wire', undefined, async () => cluster.failWire());
 		} else if (op === 'disk') {
 			await cluster.history.run('host', 'disk', undefined, async () => cluster.failDisk());
+		} else if (op === 'cut') {
+			await cluster.history.run('host', 'cut', undefined, async () => cluster.cut());
 		} else {
 			await cluster.history.run('host', 'crash', undefined, () => cluster.crash());
 		}
@@ -369,8 +468,15 @@ describe('the room under concurrent clients and a nemesis', () => {
 				const errors = cluster.events.flatMap((e) =>
 					e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
 				);
+				const brief = cluster.events
+					.map((e) => {
+						if (e.type === 'message') return `m${e.message.seq}:${e.message.kind}`;
+						if ('agent' in e) return `${e.type}:${e.agent}`;
+						return e.type;
+					})
+					.join(' ');
 				throw new Error(
-					`seed ${seed} failed:\n${cluster.history.describe()}\nerrors on the last run: ${errors.join('; ')} (inherited ${cluster.inherited.activations})\nrows:\n  ${rows
+					`seed ${seed} failed:\n${cluster.history.describe()}\nerrors on the last run: ${errors.join('; ')} (inherited ${cluster.inherited.activations})\nevents on the last run: ${brief}\nrows:\n  ${rows
 						.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`)
 						.join('\n  ')}\n\n${detail}`,
 					{ cause: error },

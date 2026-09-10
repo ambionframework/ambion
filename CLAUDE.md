@@ -62,6 +62,7 @@ pnpm check     # build, typecheck, lint, test — the gate CI runs
 pnpm format    # biome --write, then prettier --write
 pnpm test:live # the room on a real model; needs <PROVIDER>_API_KEY and costs money
 pnpm chaos     # the sweeps on both storages, the handover at every write, the kill at every third write, 200 seeds of the walk and the history
+pnpm check:lemmascript # prove the contracts in rules.verified.ts with Dafny; CI runs it, a contributor needs Dafny on PATH
 ```
 
 Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
@@ -80,6 +81,10 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   that may reach what it needs, and never above `session.ts`.
 - No `any`, no non-null assertions, no unused imports or variables.
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
+- A pure rule the log or the fold decides by lives in the layer's
+  `rules.verified.ts`, with `//@ requires` and `//@ ensures` contracts.
+  Regenerate its `.dfy` and `.dfy.gen` with `npx lsc gen --backend=dafny`
+  after every edit.
 - Cognitive complexity: max 10 in source, 15 in tests.
 - Prettier formats (tabs, single quotes, width 100, semicolons); Biome lints.
 - Tests are vitest. A scripted `streamFn` makes a session deterministic.

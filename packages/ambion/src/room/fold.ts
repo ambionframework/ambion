@@ -17,6 +17,7 @@ import type {
 	CompositionRow,
 	EndReason,
 	LeaseRow,
+	LeaseSnapshot,
 	SeatRow,
 	Without,
 } from '../wire.ts';
@@ -79,32 +80,63 @@ export type FoldOptions = WakeOptions;
  * closes and the leases in place of every row before it, and the floor
  * below which no wake is pending; the messages are kept whatever it says.
  */
-function sorted(entries: readonly LogEntry[]) {
-	const messages: Message[] = [];
-	let closes: CloseRow[] = [];
-	let leaseRows: LeaseRow[] = [];
-	let composition: CompositionRow | undefined;
-	let floor: Seq = 0;
+interface Sorted {
+	messages: Message[];
+	closes: CloseRow[];
+	leaseRows: LeaseRow[];
+	snapshots: LeaseSnapshot[];
+	composition: CompositionRow | undefined;
+	floor: Seq;
+}
+
+function sorted(entries: readonly LogEntry[]): Sorted {
+	const acc: Sorted = {
+		messages: [],
+		closes: [],
+		leaseRows: [],
+		snapshots: [],
+		composition: undefined,
+		floor: 0,
+	};
 	for (const entry of entries) {
-		if (entry.type === 'message') messages.push(entry.message);
-		else if (entry.type === 'close') closes.push(entry.close);
-		else if (entry.type === 'lease') leaseRows.push(entry.lease);
-		else if (entry.type === 'composition') composition = entry.composition;
-		else {
-			closes = [...entry.checkpoint.closes];
-			leaseRows = [...entry.checkpoint.leases];
-			composition = entry.checkpoint.composition;
-			floor = entry.checkpoint.floor;
+		switch (entry.type) {
+			case 'message':
+				acc.messages.push(entry.message);
+				break;
+			case 'close':
+				acc.closes.push(entry.close);
+				break;
+			case 'lease':
+				acc.leaseRows.push(entry.lease);
+				break;
+			case 'composition':
+				acc.composition = entry.composition;
+				break;
+			case 'checkpoint':
+				replace(acc, entry.checkpoint);
+				break;
+			default:
+				// A run row is the log's fence, and the fold reads nothing from it.
+				break;
 		}
 	}
-	return { messages, closes, leaseRows, composition, floor };
+	return acc;
+}
+
+/** A checkpoint stands in place of every row before it: the sort starts over from what it carries. */
+function replace(acc: Sorted, checkpoint: CheckpointRow): void {
+	acc.closes = [...checkpoint.closes];
+	acc.snapshots = [...checkpoint.leases];
+	acc.leaseRows = [];
+	acc.composition = checkpoint.composition;
+	acc.floor = checkpoint.floor;
 }
 
 export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): RoomState {
-	const { messages, closes, leaseRows, composition, floor } = sorted(entries);
+	const { messages, closes, leaseRows, snapshots, composition, floor } = sorted(entries);
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
-	const leases = foldLeases(leaseRows);
+	const leases = foldLeases(leaseRows, snapshots);
 	const assistant = composition?.assistant.name ?? '';
 	const isPerson = (name: string) => people.has(name);
 	const above = messages.filter((message) => message.seq >= floor);
@@ -117,7 +149,7 @@ export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): Ro
 		exchange: openExchange(messages, closes, isPerson),
 		closes,
 		leases,
-		pending: pendingWakes(above, leases, new Set(roster.map((s) => s.name)), options),
+		pending: pendingWakes(above, leases, new Set(roster.map((s) => s.name)), options, assistant),
 		owed: foldOwed(closes, messages, leases, { assistant, ...options }),
 		messages,
 		lastSeq: messages.at(-1)?.seq ?? 0,
@@ -146,9 +178,7 @@ export function checkpointOf(
 		floor,
 		composition: state.composition,
 		closes: state.closes.filter((close) => close.through >= floor || close === last),
-		leases: [...state.leases.values()]
-			.filter((lease) => reads(lease, floor, now))
-			.map((lease) => leaseRow(lease, state.lastSeq)),
+		leases: [...state.leases.values()].filter((lease) => reads(lease, floor, now)),
 		at: new Date(now).toISOString(),
 	};
 }
@@ -169,22 +199,18 @@ function floorOf(state: RoomState, now: number): Seq {
 
 /** A lease a fold above the floor still reads: live, or about a message or a close at the floor or past it. */
 function reads(lease: LeaseState, floor: Seq, now: number): boolean {
-	return isLive(lease, now) || lease.heard >= floor || named(lease.id) >= floor;
+	return isLive(lease, now) || reach(lease) >= floor || named(lease.id) >= floor;
 }
+
+/** The last seq a lease's rows say it was at work for, or heard. */
+const reach = (lease: LeaseState): Seq =>
+	Math.max(lease.since, lease.until ?? 0, lease.heardThrough);
 
 /** The seq a lease's id names: the message that woke it, or the close it drafts over. */
 function named(id: string): Seq {
 	const parsed = parseId(id);
 	if (parsed === undefined) return 0;
 	return parsed.kind === 'wake' ? parsed.seq : parsed.through;
-}
-
-/** The folded lease as one row, carrying when it was first claimed. */
-function leaseRow(lease: LeaseState, after: Seq): LeaseRow {
-	const shared = { id: lease.id, after, heard: lease.heard, since: lease.since, at: lease.at };
-	return lease.phase === 'running'
-		? { ...shared, phase: 'running', expiry: lease.expiry ?? 0 }
-		: { ...shared, phase: 'ended', reason: lease.reason ?? 'released' };
 }
 
 /** The latest composition, then every seating and unseating after it, in order. */

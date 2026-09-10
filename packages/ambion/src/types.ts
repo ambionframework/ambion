@@ -257,7 +257,14 @@ export type SessionEvent =
 	 * `settled()`, because that is a caller's concern rather than something
 	 * that happened to the room.
 	 */
-	| { type: 'quiet' };
+	| { type: 'quiet' }
+	/**
+	 * Another run took the name: its run row is on the log past this run's.
+	 * This run is superseded, and drops itself from memory the way
+	 * `runtime.evict` does. Nothing it wrote after the other run's row is on
+	 * the record, and nothing it does from here on writes.
+	 */
+	| { type: 'superseded' };
 
 export const TOOL_BRAND = Symbol.for('ambion.tool');
 export const AGENT_BRAND = Symbol.for('ambion.agent');

@@ -26,8 +26,8 @@ import { jsonl } from './support/storage.ts';
 const at = '2026-01-01T09:00:00.000Z';
 
 const rows: Record<string, LeaseRow | CloseRow | CompositionRow> = {
-	running: { id: '2:product', after: 2, phase: 'running', expiry: 1767258060000, heard: 2, at },
-	ended: { id: '2:product', after: 3, phase: 'ended', reason: 'released', heard: 3, at },
+	running: { id: '2:product', after: 2, phase: 'running', expiry: 1767258060000, at },
+	ended: { id: '2:product', after: 3, phase: 'ended', reason: 'released', at },
 	close: { owner: 'priya', from: 2, through: 4, after: 4, at, wakes: ['assistant'] },
 	composition: {
 		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },

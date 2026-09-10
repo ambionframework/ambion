@@ -37,7 +37,7 @@ class PlayedRoom implements SeatRoom {
 	readonly claims: string[] = [];
 	readonly releases: string[] = [];
 	/** How many activations hold a lease now, and the most that ever did at once. */
-	private holding = 0;
+	private readonly holding = new Set<string>();
 	mostHeld = 0;
 	/** Resolves when the first release starts. */
 	readonly releasing = deferred();
@@ -67,23 +67,23 @@ class PlayedRoom implements SeatRoom {
 	async lease(lease: Lease): Promise<LeaseResponse> {
 		const ok = { ok: { expiry: this.clock.now() + 60_000, lastSeq: 1 } };
 		if (lease.phase === 'running') {
-			// A claim carries no `heard`; a renewal does.
-			if (lease.heard === undefined) this.claimed(lease.activation);
+			// A lease not yet held is a claim; one held is a renewal.
+			if (!this.holding.has(lease.activation)) this.claimed(lease.activation);
 			return ok;
 		}
 		if (this.releases.length === 0) {
 			this.releasing.resolve();
 			await this.letGo.promise;
 		}
-		this.holding -= 1;
+		this.holding.delete(lease.activation);
 		this.releases.push(lease.activation);
 		return ok;
 	}
 
 	private claimed(id: string): void {
 		this.claims.push(id);
-		this.holding += 1;
-		this.mostHeld = Math.max(this.mostHeld, this.holding);
+		this.holding.add(id);
+		this.mostHeld = Math.max(this.mostHeld, this.holding.size);
 	}
 }
 

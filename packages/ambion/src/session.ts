@@ -323,6 +323,8 @@ class SessionImpl implements Session, RunningRoom {
 	private replayed = false;
 	private stopped = false;
 	private evicted = false;
+	/** This run's id: the first row it writes, and the stamp on every entry it writes. */
+	private readonly run = crypto.randomUUID();
 	/** Whether the room has reported quiet since it was last busy. */
 	private idleReported = true;
 
@@ -345,7 +347,12 @@ class SessionImpl implements Session, RunningRoom {
 		this.runtime = runtime;
 		this.transport = runtime.transport ?? inProcessTransport();
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
-		this.log = new RoomLog(this.sessions.open(name), (entry, fresh) => this.heard(entry, fresh));
+		this.log = new RoomLog(
+			this.sessions.open(name),
+			(entry, fresh) => this.heard(entry, fresh),
+			this.run,
+			() => this.superseded(),
+		);
 		this.stream = options.streamFn ?? runtime.stream;
 		this.model = options.streamFn ? stubModel : runtime.model;
 		this.starting = composition ? startingSeats(composition, name) : [];
@@ -385,6 +392,7 @@ class SessionImpl implements Session, RunningRoom {
 				throw new Error(`Duplicate agent name '${name}': one name names one participant.`);
 			}
 		}
+		await this.log.write('run', { run: this.run, at: this.iso() });
 		await this.log.write('composition', {
 			assistant: seatRow({ def: composition.assistant, attention: 'none' }),
 			...(composition.goal === undefined ? {} : { goal: composition.goal }),
@@ -414,8 +422,23 @@ class SessionImpl implements Session, RunningRoom {
 			if (def === undefined) throw new Error(`'${name}' is not in the runtime's catalog.`);
 			this.defs.set(name, def);
 		}
+		// The run row is the fence: from here on, every earlier run's later writes are void.
+		await this.log.write('run', { run: this.run, at: this.iso() });
 		this.wake();
 		await this.reconcile();
+	}
+
+	/**
+	 * Another run took the name. This run says so once, then drops itself
+	 * from memory: nothing it does from here on writes, and every seat it
+	 * runs hears stale. The record is the other run's from its row on.
+	 */
+	private superseded(): void {
+		if (this.evicted) return;
+		this.emit({ type: 'superseded' });
+		// This run alone: the runtime may hold a newer room under the name by now.
+		if (this.runtime.running.get(this.name) === this) this.runtime.running.delete(this.name);
+		this.evict();
 	}
 
 	/** A room with an exchange open or a lease live is busy, and says so when it goes quiet. */
@@ -710,7 +733,7 @@ class SessionImpl implements Session, RunningRoom {
 					>;
 				},
 			},
-			(message) => this.committed(message),
+			(message) => this.committed(message, route),
 		);
 	}
 
@@ -744,35 +767,14 @@ class SessionImpl implements Session, RunningRoom {
 						},
 					]
 				: state.roster;
-		const atWork = this.atWork(state, live);
 		const woken = roster
-			.filter((seat) => seat.name !== author)
-			.filter((seat) => wakes(seat, target, message, fromAssistant) || atWork.has(seat.name))
+			.filter((seat) => seat.name !== author && !live.has(seat.name))
+			.filter((seat) => wakes(seat, target, message, fromAssistant))
 			.map((seat) => seat.name);
 		if (this.opensExchange(message, state) && state.reserve.length > 0 && !live.has(assistant)) {
 			woken.push(assistant);
 		}
 		return [...new Set(woken)];
-	}
-
-	/**
-	 * The seats holding a live lease, which hear every message. The assistant
-	 * does not: a composing activation decides on the question as it was
-	 * asked, and what the seats say while it decides is theirs to say; a
-	 * drafting activation learns what landed from the refusal of its draft,
-	 * which carries it.
-	 */
-	private atWork(state: RoomState, live: ReadonlyMap<string, string[]>): Set<string> {
-		const now = this.now();
-		const holds = (id: string) => {
-			const lease = state.leases.get(id);
-			return lease !== undefined && isLive(lease, now);
-		};
-		const atWork = new Set<string>();
-		for (const [seat, ids] of live) {
-			if (seat !== this.assistant && ids.some(holds)) atWork.add(seat);
-		}
-		return atWork;
 	}
 
 	private opensExchange(message: Message, state: RoomState): boolean {
@@ -784,7 +786,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * hears about it, then what it opened, then the room sends. One message,
 	 * one event, one order — stated here rather than at each of the commit sites.
 	 */
-	private committed(message: Message): void {
+	private committed(message: Message, route: boolean): void {
 		this.emit({ type: 'message', message });
 		const state = this.state();
 		if (state.exchange?.from === message.seq) {
@@ -792,6 +794,7 @@ class SessionImpl implements Session, RunningRoom {
 			this.emit({ type: 'exchange_opened', exchange: state.exchange });
 		}
 		for (const seat of message.wakes ?? []) this.send(activationId(message.seq, seat), seat);
+		if (route) this.steer(message);
 		void this.reconcile();
 	}
 
@@ -802,7 +805,7 @@ class SessionImpl implements Session, RunningRoom {
 	 */
 	private heard(entry: LogEntry, fresh: boolean): void {
 		if (entry.type === 'message') {
-			this.committed(entry.message);
+			this.committed(entry.message, true);
 			return;
 		}
 		if (entry.type === 'close') {
@@ -848,15 +851,39 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/** One wake over the wire. A wake a message caused carries the line a running activation is steered with. */
-	private send(id: string, seat: string): void {
-		this.sentAt.set(id, this.now());
-		const parsed = parseId(id);
-		const message =
-			parsed?.kind === 'wake' ? this.log.messages.find((m) => m.seq === parsed.seq) : undefined;
-		const steer =
-			message === undefined ? {} : { steer: { seq: message.seq, line: renderLine(message) } };
+	/**
+	 * Every seat at work hears a message as a steer into its activation: a
+	 * wake named for the message, with the line to steer in. The seat side
+	 * steers it once however often it arrives. The assistant composing
+	 * hears no steer: it reads the record it was woken on.
+	 */
+	private steer(message: Message): void {
+		const author = authorOf(message);
+		const state = this.state();
+		for (const [seat, ids] of this.live(state)) {
+			if (seat === author || !this.holds(state, ids)) continue;
+			if (seat === this.assistant && ids.some((id) => parseId(id)?.kind === 'wake')) continue;
+			this.send(activationId(message.seq, seat), seat, {
+				seq: message.seq,
+				line: renderLine(message),
+			});
+		}
+	}
+
+	/** Whether one of these activations holds a live lease. */
+	private holds(state: RoomState, ids: string[]): boolean {
+		const now = this.now();
+		return ids.some((id) => {
+			const lease = state.leases.get(id);
+			return lease !== undefined && isLive(lease, now);
+		});
+	}
+
+	/** A wake to a seat, or a steer into the activation it runs. A wake is timed for the resend; a steer is not. */
+	private send(id: string, seat: string, steer?: { seq: Seq; line: string }): void {
+		if (steer === undefined) this.sentAt.set(id, this.now());
 		void this.port(seat)
-			.wake({ room: this.name, seat, activation: id, ...steer })
+			.wake({ room: this.name, seat, activation: id, ...(steer === undefined ? {} : { steer }) })
 			.catch(() => {});
 	}
 
@@ -983,7 +1010,7 @@ class SessionImpl implements Session, RunningRoom {
 			return stale('the seat is not on the roster');
 		}
 		return lease.phase === 'running'
-			? this.claim(lease.activation, seat, lease.heard ?? 0)
+			? this.claim(lease.activation, seat)
 			: this.release(lease, seat);
 	}
 
@@ -996,7 +1023,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * is capped there, so an activation that runs on expires on the room's
 	 * alarm, and the room counts it as one that came to nothing.
 	 */
-	private async claim(id: string, seat: string, heard: Seq): Promise<LeaseResponse> {
+	private async claim(id: string, seat: string): Promise<LeaseResponse> {
 		const now = this.now();
 		let expiry = now + this.runtime.wake.expiry;
 		let fresh = false;
@@ -1006,10 +1033,9 @@ class SessionImpl implements Session, RunningRoom {
 			if (known === undefined && !this.due(state).has(id)) return undefined;
 			if (known !== undefined && !isLive(known, now)) return undefined;
 			fresh = known === undefined;
-			const since = known === undefined ? now : Date.parse(known.since);
-			expiry = Math.min(expiry, since + this.runtime.wake.deadline);
-			const taken = Math.max(known?.heard ?? this.log.lastSeq, heard);
-			return { id, phase: 'running', expiry, heard: taken, at: this.iso() };
+			const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
+			expiry = Math.min(expiry, claimedAt + this.runtime.wake.deadline);
+			return { id, phase: 'running', expiry, at: this.iso() };
 		});
 		if (!written) return stale('the lease ended');
 		if (fresh) {
@@ -1029,7 +1055,7 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	private async release(lease: Lease, seat: string): Promise<LeaseResponse> {
-		const ended = await this.end(lease.activation, seat, lease.reason ?? 'released', lease.heard);
+		const ended = await this.end(lease.activation, seat, lease.reason ?? 'released');
 		if (!ended) return stale('the lease ended');
 		void this.reconcile();
 		return { ok: { expiry: this.now(), lastSeq: this.log.lastSeq } };
@@ -1041,7 +1067,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * that never claimed: the row ends it before it starts, and the wake or
 	 * the draft it stood for is answered.
 	 */
-	private async end(id: string, seat: string, reason: EndReason, heard = 0): Promise<boolean> {
+	private async end(id: string, seat: string, reason: EndReason): Promise<boolean> {
 		let started = true;
 		const written = await this.log.write('lease', () => {
 			const known = this.state().leases.get(id);
@@ -1050,8 +1076,7 @@ class SessionImpl implements Session, RunningRoom {
 			const expired = known !== undefined && isExpired(known, this.now());
 			if (known !== undefined && expired !== (reason === 'expired')) return undefined;
 			started = known !== undefined;
-			const taken = Math.max(known?.heard ?? this.log.lastSeq, heard);
-			return { id, phase: 'ended', reason, heard: taken, at: this.iso() };
+			return { id, phase: 'ended', reason, at: this.iso() };
 		});
 		if (!written) return false;
 		if (!started) return true;
@@ -1155,7 +1180,7 @@ class SessionImpl implements Session, RunningRoom {
 		let changed = false;
 		for (const row of rows) {
 			const seat = seatOf(row.id, this.assistant) ?? '';
-			if (!(await this.end(row.id, seat, 'abandoned', row.heard))) continue;
+			if (!(await this.end(row.id, seat, 'abandoned'))) continue;
 			changed = true;
 			this.emit({ type: 'abandoned', agent: seat, activation: row.id });
 		}
@@ -1257,6 +1282,10 @@ class SessionImpl implements Session, RunningRoom {
 			// A write queued ahead of the stop lands first, so the record says who was present.
 			await this.log.settled();
 			await this.leaveEverybody();
+		} catch (error) {
+			// A stop that found another run's fence has nothing left to write: the
+			// run said `superseded`, and the name is the other run's.
+			if (!this.evicted) throw error;
 		} finally {
 			// The name comes free whatever the storage did. A failed write must
 			// not leave a room that can never be started again.

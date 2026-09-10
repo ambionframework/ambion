@@ -68,8 +68,9 @@ files and added `docs/assets/ambion-exchange.svg`; the branch took them
 as they are. #57, outside the plan, added `docs/durability.md`, the
 history checker (`test/consistency.test.ts`, `test/support/history.ts`)
 and the split tests (`test/split.test.ts`), and made the seat ask a lost
-claim or release again once. The branch took them as they are, with
-`heard` on the release the branch's rows carry.
+claim or release again once. #59 fenced every run by its run row and put
+the pure rules under LemmaScript. #61 landed PR 8. The branch took them
+as they are.
 
 Sizes are lines of diff without the lockfile and the generated report.
 PRs 9 to 12 are independent of each other and could land in any order;
@@ -399,33 +400,32 @@ Tests: the branch's changes to `lease`, `reconcile`, `restart`, `session`,
 Cloudflare package; drop those hunks, PR 14 takes the final files.
 
 **Where main and the branch parted, and met.** PR 7 landed on main as
-#56 with the same outcomes and a different mechanism. Main derives who
+#56 with the same outcomes and a different mechanism, and
+`planning/pr48-remaining.md` on main says the mechanism is the decision:
+`heard` on the lease rows is not needed, and neither is `wakes` naming
+the seats at work. The branch holds main's design now. The fold reads who
 heard what from where the rows sit: `LeaseState.since`, `until` and
 `heardThrough` are the `after` of the first row, the ended row and the
 last running row, and `reached` adds every seat at work when the message
-landed. The branch keeps `heard` on every lease row and names the seats
-at work in `wakes` on the message. It keeps them because PR 12 replaces
-the rows with a checkpoint whose `after` is the floor, so a seq derived
-from the row's position is lost there, and the deadline of PR 10 reads
-the claim time off the row. The branch adopted main's decisions:
+landed. The session steers a seat at work from `steer`, and `wakes` names
+the seats at rest alone. Two things the branch adds for the PRs after 7:
 
-- A lease that expired or failed answers nothing it heard, whatever it
-  said. Its words stay on the record, and the seat reads them at the next
-  attempt. The `spoke` rule is gone from `pendingWakes`.
-- A lease that stood down answers through the seq its release said. The
-  branch's release row carries `heard` for it; main reads the last
-  renewal's `after`. `lease.test.ts` "answers a question that landed
-  between its last renewal and its release" proves it with the `hold`
-  fault.
-- The cast (`Cast`, `steady`, `troubled` in `test/support/cast.ts`) and
-  `test/hosts.test.ts`, the handover under load and the split the design
-  forbids, run on the branch unchanged; `pnpm chaos` runs the handover at
-  every write.
+- `LeaseState.claimedAt` is the first row's `at`, and the deadline of PR
+  10 counts from it. `pr48-remaining.md` asks for that name.
+- The checkpoint of PR 12 carries `LeaseSnapshot` rows, the lease states
+  as the fold held them, in place of the lease rows it replaced: a seq
+  read off a row's position is lost with the row, so the checkpoint keeps
+  what the rows said. `foldLeases` seeds from the snapshots and folds the
+  rows since on top.
 
-Main hides a wake at the cap inside `pendingWakes`; the branch reports it
-and PR 11 writes it off as a lease ended `abandoned`. PR 11 keeps that.
-Main's `session.test.ts` aborts the room after the one failed activation;
-the branch's version runs the three attempts to the cap and stays.
+The rules `atWork`, `heard`, `expired`, `givesUp` and `nextAttempt` in
+`room/rules.verified.ts` are the ones main proves; the branch runs them
+from `lease.ts` and `reconcile.ts`. Main hides a wake at the cap inside
+`pendingWakes`; the branch reports it and PR 11 writes it off as a lease
+ended `abandoned`, with `givesUp` in the decision, as `pr48-remaining.md`
+says PR 11 should. Main's `session.test.ts` aborts the room after the one
+failed activation; the branch's version runs the three attempts to the
+cap and stays.
 
 ---
 

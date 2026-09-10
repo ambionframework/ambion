@@ -30,7 +30,6 @@ import type {
 	Clock,
 	Message,
 	ModelResolver,
-	Seq,
 	SessionEvent,
 	SessionOpener,
 } from '../types.ts';
@@ -244,12 +243,7 @@ export class SeatActor implements SeatPort {
 	private async release(id: string, activation: Activation): Promise<void> {
 		for (let attempt = 0; attempt < 2; attempt += 1) {
 			try {
-				await this.room.lease({
-					activation: id,
-					phase: 'ended',
-					reason: activation.reason,
-					heard: activation.taken,
-				});
+				await this.room.lease({ activation: id, phase: 'ended', reason: activation.reason });
 				return;
 			} catch {
 				// The release never came back: asked again, once.
@@ -264,11 +258,7 @@ export class SeatActor implements SeatPort {
 	 */
 	private async renew(activation: Activation): Promise<number | 'stale' | 'lost'> {
 		try {
-			const renewed = await this.room.lease({
-				activation: activation.id,
-				phase: 'running',
-				heard: activation.taken,
-			});
+			const renewed = await this.room.lease({ activation: activation.id, phase: 'running' });
 			return 'stale' in renewed ? 'stale' : renewed.ok.expiry;
 		} catch {
 			return 'lost';
@@ -306,7 +296,7 @@ export class SeatActor implements SeatPort {
 		const { clock, room, seat, sessions } = this.context;
 		return {
 			view: () => this.room.view(id),
-			renew: (heard: Seq) => this.room.lease({ activation: id, phase: 'running', heard }),
+			renew: () => this.room.lease({ activation: id, phase: 'running' }),
 			build: (view: ActivationView, activation: Activation) => this.build(view, activation),
 			persist: (agent: PiAgent) => {
 				this.audit ??= sessions.open(`${room}:${seat}`, room);

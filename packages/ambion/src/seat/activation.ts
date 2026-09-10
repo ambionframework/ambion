@@ -38,8 +38,8 @@ import type { ActivationView, EndReason, LeaseResponse, ViewResponse } from '../
 export interface ActivationHost {
 	/** What this activation reads, as the room renders it now. */
 	view(): Promise<ViewResponse>;
-	/** Renew the lease, carrying what the activation has taken. The answer says how far the record has moved. */
-	renew(heard: Seq): Promise<LeaseResponse>;
+	/** Renew the lease. The answer says how far the record has moved. */
+	renew(): Promise<LeaseResponse>;
 	/** Build the model over the view, with the hands the view names. */
 	build(view: ActivationView, activation: Activation): Agent;
 	/** Keep what the model did, in the seat's own downstream session. */
@@ -157,7 +157,7 @@ export class Activation {
 	 * and the renewal says how far it reaches.
 	 */
 	private async moved(agent: Agent): Promise<boolean> {
-		const renewed = await this.host.renew(this.taken);
+		const renewed = await this.host.renew();
 		if ('stale' in renewed || renewed.ok.lastSeq <= this.heardThrough) return false;
 		agent.clearAllQueues();
 		return true;

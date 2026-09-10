@@ -45,13 +45,17 @@ const script = byAgent({
 			: quiet(),
 });
 
-/** Every row the storage holds, as the entries a fold reads, with no checkpoint among them. */
+/**
+ * Every row the storage holds, as the entries a fold reads: no checkpoint
+ * and no run row among them, and without the run stamp the log strips.
+ */
 async function raw(sessions: Parameters<typeof rowsOf>[0], name: string): Promise<LogEntry[]> {
 	const rows = await rowsOf(sessions, name);
 	return rows.flatMap((row): LogEntry[] => {
 		const type = row.type.slice('ambion/'.length);
-		if (type === 'checkpoint') return [];
-		return [{ type, [type]: row.data } as LogEntry];
+		if (type === 'checkpoint' || type === 'run') return [];
+		const { written: _written, ...data } = row.data as { written?: string };
+		return [{ type, [type]: data } as LogEntry];
 	});
 }
 

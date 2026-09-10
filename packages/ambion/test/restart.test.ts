@@ -156,11 +156,17 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			]);
 			expect(resumed.exchange()).toMatchObject({ owner: 'priya' });
 
-			// alpha's lease is held by a run that is gone: it expires, and the exchange closes
+			// alpha's lease is held by a run that is gone: it expires, alpha is woken
+			// again after the backoff, and the exchange closes once alpha stands down
 			held.resolve();
 			await clock.advance(60_000);
-			await resumed.quiet();
 			expect(events.some((e) => e.type === 'error' && e.agent === 'alpha')).toBe(true);
+			expect(resumed.exchange()).toMatchObject({ owner: 'priya' });
+			await clock.advance(30_000);
+			await resumed.quiet();
+			expect(
+				events.filter((e) => e.type === 'activation_start' && e.agent === 'alpha'),
+			).toHaveLength(1);
 			expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 			expect(await summaries(resumed)).toHaveLength(1);
 			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'idle' });

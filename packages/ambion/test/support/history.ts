@@ -36,7 +36,7 @@ export interface Entry {
 
 /** The room said no, and nothing landed. Anything else is an outcome the client cannot tell. */
 const DEFINITIVE =
-	/visit has ended|is stopped|not in this session|one name names one participant|is not seated|already running|has no composition|not in the runtime's catalog|already in this session/;
+	/visit has ended|is stopped|not in this session|one name names one participant|is not seated|already running|has no composition|not in the runtime's catalog|already in this session|superseded/;
 
 export class History {
 	readonly entries: Entry[] = [];
@@ -50,6 +50,7 @@ export class History {
 		key: string | undefined,
 		action: () => Promise<T>,
 		seen?: (value: T) => Entry['seen'],
+		stale?: () => boolean,
 	): Promise<T | undefined> {
 		const invoke = this.push({
 			client,
@@ -59,6 +60,22 @@ export class History {
 		});
 		try {
 			const value = await action();
+			// An answer from a run that lost the name while the action ran is no answer:
+			// the host knows the run is gone, and the client cannot tell what landed. The
+			// check runs when the client resumes, so a run that lost the name between the
+			// answer and the resume is counted too: that reads as one check fewer, never
+			// as a wrong one.
+			if (stale?.()) {
+				this.push({
+					client,
+					op,
+					phase: 'info',
+					of: invoke.index,
+					...(key === undefined ? {} : { key }),
+					error: 'answered by a run that lost the name',
+				});
+				return undefined;
+			}
 			this.push({
 				client,
 				op,
@@ -197,10 +214,30 @@ function prefixBreak(
 	return undefined;
 }
 
-/** Every seq on the storage names one message. */
+/**
+ * The rows that stand, the way the log reads them: a run row is the
+ * fence, and an entry another run wrote past it is void. Run rows are
+ * left out; the fold has no use for them.
+ */
+export function standing(rows: Checked['rows']): Checked['rows'] {
+	const kept: { type: string; data: unknown }[] = [];
+	let fence: string | undefined;
+	for (const row of rows) {
+		const data = row.data as { run?: string; written?: string };
+		if (row.type === 'ambion/run') {
+			fence = data.run;
+			continue;
+		}
+		if (fence !== undefined && data.written !== undefined && data.written !== fence) continue;
+		kept.push(row);
+	}
+	return kept;
+}
+
+/** Every seq on the storage names one message, among the entries that stand. */
 function seqs(rows: Checked['rows']): string[] {
 	const seen = new Map<number, number>();
-	for (const row of rows) {
+	for (const row of standing(rows)) {
 		if (row.type !== 'ambion/message') continue;
 		const seq = (row.data as { seq: number }).seq;
 		seen.set(seq, (seen.get(seq) ?? 0) + 1);
@@ -214,7 +251,7 @@ function seqs(rows: Checked['rows']): string[] {
 function exclusion(rows: Checked['rows']): string[] {
 	const found: string[] = [];
 	const running = new Map<string, string>();
-	for (const row of rows) {
+	for (const row of standing(rows)) {
 		if (row.type !== 'ambion/lease') continue;
 		const lease = row.data as LeaseRow;
 		const parsed = parseId(lease.id);

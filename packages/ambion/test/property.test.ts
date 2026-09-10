@@ -110,6 +110,19 @@ const STEPS = [
 type Step = (typeof STEPS)[number];
 const OPERATIONS: Operation[] = ['wake', 'view', 'commit', 'lease'];
 
+/**
+ * What a step may hear back: the storage refused the write, the visit is
+ * over, or the roster already says so. Anything else is a defect the walk
+ * found, and the test fails on it.
+ */
+const EXPECTED =
+	/the disk is full|visit has ended|one name names one participant|is not seated in this session/;
+
+const expected = (error: unknown): undefined => {
+	if (EXPECTED.test(String(error))) return undefined;
+	throw error;
+};
+
 /** One walk: the room, the runtime it runs in, and what the walk did so far. */
 class Walk {
 	/** The events of the run that holds the room now. A crashed run's events are its own. */
@@ -242,11 +255,20 @@ class Walk {
 		this.runtime.evict(this.name);
 		this.visits.clear();
 		const activations = await liveLeases(this.sessions, this.name, this.clock.now());
-		this.runtime = this.host();
-		this.session = await resumeSession(this.name, {
-			runtime: this.runtime,
-			streamFn: scripted(script),
-		});
+		// A resume writes the run row first, and a host tries again when the storage fails it.
+		for (let attempt = 0; ; attempt += 1) {
+			this.runtime = this.host();
+			try {
+				this.session = await resumeSession(this.name, {
+					runtime: this.runtime,
+					streamFn: scripted(script),
+				});
+				break;
+			} catch (error) {
+				if (attempt === 2) throw error;
+				expected(error);
+			}
+		}
 		this.inherited = { activations, exchange: this.session.exchange() !== undefined };
 		this.watch();
 	}
