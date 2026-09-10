@@ -487,12 +487,11 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 	it('cuts a lease the last run took, over a wire this run has not opened yet', async () => {
 		const { opened, clock } = await world(storage);
 		try {
-			const held = deferred();
+			// the activation never answers, so the run the crash leaves behind
+			// writes nothing after the test ends
 			const script = byAgent({
-				alpha: async (_c, _n, call) => {
-					if (call === 1) await held.promise;
-					return quiet();
-				},
+				alpha: (_c, _n, call) =>
+					call === 1 ? new Promise<never>(() => {}) : Promise.resolve(quiet()),
 			});
 			const name = roomName(`restart-${storage.name}`);
 			const first = createRuntime({ sessions: opened.sessions, clock, agents });
@@ -537,7 +536,6 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await tick();
 			// the seat side hears the cut over the wire, and the room opened it to say so
 			expect(cuts).toEqual(['2:alpha']);
-			held.resolve();
 			await stopSession(resumed);
 		} finally {
 			await opened.dispose();
