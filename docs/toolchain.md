@@ -352,10 +352,20 @@ harness in
 - **The random walk** (`property.test.ts`) loses and repeats requests on
   the wire, fails a write before or after it lands, and crashes the room
   up to three times.
+- **The history** (`consistency.test.ts`). Two people and the host act
+  at once against whichever run holds the room, under a nemesis that
+  crashes the run, fails the storage, faults the wire and jumps the
+  clock. Every action is recorded as an invocation and an outcome, and
+  the checker in `test/support/history.ts` holds the history to the
+  record: what [`durability.md`](durability.md) §2 to §4 promise.
+- **The split** (`split.test.ts`). A paused host comes back after a
+  second host resumed the name, in process and as a process under
+  `SIGSTOP`. The tests pin what [`durability.md`](durability.md) §5
+  says happens, and turn when a fence lands.
 
 `AMBION_CHAOS=all` widens the sweep to JSONL, the handover to every
-write, and the kill to every third write; `pnpm chaos` runs all three
-widened, with 200 seeds of the walk.
+write, and the kill to every third write; `pnpm chaos` runs all of them
+widened, with 200 seeds of the walk and of the history.
 
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:
 `vitest.config.ts` excludes `test/live` from `pnpm test`, and

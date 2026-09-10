@@ -172,14 +172,22 @@ export class SeatActor implements SeatPort {
 		await this.next();
 	}
 
-	/** The lease, or nothing: the room refused it, or the claim never came back. */
+	/**
+	 * The lease, or nothing: the room refused it, or the claim never came
+	 * back twice. A claim the seat never heard back on is asked again once:
+	 * a claim of an id the room already runs is a renewal, so the row lands
+	 * once whichever call reached it.
+	 */
 	private async claim(id: string): Promise<{ expiry: number } | undefined> {
-		try {
-			const claimed = await this.room.lease({ activation: id, phase: 'running' });
-			return 'stale' in claimed ? undefined : claimed.ok;
-		} catch {
-			return undefined;
+		for (let attempt = 0; attempt < 2; attempt += 1) {
+			try {
+				const claimed = await this.room.lease({ activation: id, phase: 'running' });
+				return 'stale' in claimed ? undefined : claimed.ok;
+			} catch {
+				// The claim never came back: asked again, once.
+			}
 		}
+		return undefined;
 	}
 
 	/** The wake that queued, to its end. */
@@ -189,12 +197,20 @@ export class SeatActor implements SeatPort {
 		if (queued !== undefined) await this.take(queued);
 	}
 
-	/** The lease is released, however the activation went. A room that is gone answers stale, and that is fine. */
+	/**
+	 * The lease is released, however the activation went. A release the seat
+	 * never heard back on is asked again once; a lease that ended answers
+	 * stale, and that is fine. A release lost twice leaves the room to end
+	 * the lease on its side.
+	 */
 	private async release(id: string, activation: Activation): Promise<void> {
-		try {
-			await this.room.lease({ activation: id, phase: 'ended', reason: activation.reason });
-		} catch {
-			// The release never reached the room. The room ends the lease on its side.
+		for (let attempt = 0; attempt < 2; attempt += 1) {
+			try {
+				await this.room.lease({ activation: id, phase: 'ended', reason: activation.reason });
+				return;
+			} catch {
+				// The release never came back: asked again, once.
+			}
 		}
 	}
 
