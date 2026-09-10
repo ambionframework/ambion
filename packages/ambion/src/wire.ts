@@ -9,8 +9,10 @@
  * The seat reaches the room through three calls: `view` reads what an
  * activation is given, `commit` puts one message on the record, and
  * `lease` claims, renews or releases the activation. The room reaches a
- * seat through one: `wake` names an activation the seat runs, and carries
- * the line a running activation is steered with when a message caused it.
+ * seat through two: `wake` names an activation the seat runs, and carries
+ * the line a running activation is steered with when a message caused it;
+ * `cut` names an activation whose lease the room ended, so the seat side
+ * stops it now.
  */
 import type { Attention, Message, Seq } from './types.ts';
 
@@ -93,6 +95,8 @@ export interface Wake {
 
 export interface SeatPort {
 	wake(wake: Wake): Promise<void>;
+	/** The room ended this activation's lease: stop it, and run what queued behind it. */
+	cut(activation: string): Promise<void>;
 }
 
 // -- a seat reaching its room -------------------------------------------------

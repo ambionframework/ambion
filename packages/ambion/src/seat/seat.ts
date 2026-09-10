@@ -102,6 +102,9 @@ interface Current {
 	activation: Activation;
 	/** The activation ran to its end, and its release is in flight. It takes no steer. */
 	over: boolean;
+	/** Resolves when the room ended the lease: the actor moves on, whatever the run still does. */
+	cut: () => void;
+	cutOff: Promise<void>;
 }
 
 /**
@@ -156,22 +159,44 @@ export class SeatActor implements SeatPort {
 		if (!this.queued.includes(id)) this.queued.push(id);
 	}
 
+	/**
+	 * The room ended this activation's lease. The activation is aborted, and
+	 * the actor moves on at once: a run that ignores the abort is left to
+	 * finish on its own, and every call it still makes is answered stale.
+	 */
+	async cut(activation: string): Promise<void> {
+		if (this.current?.id === activation) this.cutCurrent();
+	}
+
 	/** Cut the activation in flight, whatever its id. The room hears how it ended. */
 	abort(): void {
-		this.current?.activation.abort();
+		this.cutCurrent();
+	}
+
+	private cutCurrent(): void {
+		const current = this.current;
+		if (current === undefined) return;
+		current.activation.abort();
+		current.cut();
 	}
 
 	private async take(id: string): Promise<void> {
 		// Held before the claim, so a steer that lands while the claim is in
 		// flight reaches the activation and not the floor.
 		const activation = new Activation(id, this.context.seat, this.host(id));
-		const current: Current = { id, activation, over: false };
+		let cut = () => {};
+		const cutOff = new Promise<void>((resolve) => {
+			cut = resolve;
+		});
+		const current: Current = { id, activation, over: false, cut, cutOff };
 		this.current = current;
 		const claimed = await this.claim(id);
 		if (claimed !== undefined) {
-			const stopRenewing = this.renewUntil(activation, claimed.expiry);
+			const stopRenewing = this.renewUntil(current, claimed.expiry);
 			try {
-				await activation.run();
+				// The cut ends the wait, and never the run: a run that ignores the
+				// abort finishes on its own, past a seat that took its next wake.
+				await Promise.race([activation.run(), cutOff]);
 			} finally {
 				stopRenewing();
 				// Over, and holding the seat through the release: a wake that lands
@@ -225,31 +250,44 @@ export class SeatActor implements SeatPort {
 		}
 	}
 
-	/** One renewal: the new expiry, or nothing when the room refused it or it never reached the room. */
-	private async renew(activation: Activation): Promise<number | undefined> {
+	/**
+	 * One renewal: the new expiry, `stale` when the room refused it, or
+	 * `lost` when it never reached the room.
+	 */
+	private async renew(activation: Activation): Promise<number | 'stale' | 'lost'> {
 		try {
 			const renewed = await this.room.lease({ activation: activation.id, phase: 'running' });
-			return 'stale' in renewed ? undefined : renewed.ok.expiry;
+			return 'stale' in renewed ? 'stale' : renewed.ok.expiry;
 		} catch {
-			return undefined;
+			return 'lost';
 		}
 	}
 
 	/**
 	 * Renew at half the expiry, for as long as the activation runs and the
-	 * room renews it. The cancel stops the loop for good: a renewal in flight
-	 * when the activation ends arms nothing when it comes back.
+	 * room renews it. A refused renewal cuts the activation now: its lease
+	 * ended, so nothing it writes lands. A renewal that never reached the
+	 * room leaves the lease to expire where it stands, and the actor cuts
+	 * the activation at that expiry, when the room expires the lease. The
+	 * cancel stops the loop for good: a renewal in flight when the
+	 * activation ends arms nothing when it comes back.
 	 */
-	private renewUntil(activation: Activation, firstExpiry: number): () => void {
+	private renewUntil(current: Current, firstExpiry: number): () => void {
 		const clock = this.context.clock;
 		let stopped = false;
 		let cancel = () => {};
-		const schedule = (expiry: number) => {
-			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void again());
+		const cut = () => {
+			if (this.current === current) this.cutCurrent();
 		};
-		const again = async () => {
-			const renewed = await this.renew(activation);
-			if (!stopped && renewed !== undefined) schedule(renewed);
+		const schedule = (expiry: number) => {
+			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void again(expiry));
+		};
+		const again = async (held: number) => {
+			const renewed = await this.renew(current.activation);
+			if (stopped) return;
+			if (renewed === 'stale') cut();
+			else if (renewed === 'lost') cancel = clock.alarm(held, cut);
+			else schedule(renewed);
 		};
 		schedule(firstExpiry);
 		return () => {

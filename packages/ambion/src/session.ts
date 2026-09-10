@@ -38,7 +38,7 @@ import { activationId, draftId, isExpired, isLive, parseId, seatOf } from './roo
 import type { VisitRuntime } from './room/presence.ts';
 import { type Decision, decide, liveSeats, working } from './room/reconcile.ts';
 import { type RoomFacts, seatsOf, viewOf } from './room/view.ts';
-import { inProcessTransport, SeatActor, wakes } from './seat/seat.ts';
+import { inProcessTransport, wakes } from './seat/seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
@@ -1280,13 +1280,14 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * Cut one seat: every lease it holds ends revoked, every wake pending for
-	 * it and every draft due for it is written off the same way, and the
-	 * activation in flight is aborted where the seat runs in this process.
+	 * it and every draft due for it is written off the same way, and the seat
+	 * side is told to stop, wherever the seat runs. The room writes first, so
+	 * a seat that never hears the cut is refused whatever it writes after it.
 	 */
 	private async cut(seat: string, ids: string[]): Promise<void> {
 		for (const id of ids) await this.end(id, seat, 'revoked');
 		const port = this.ports.get(seat);
-		if (port instanceof SeatActor) port.abort();
+		for (const id of ids) void port?.cut(id).catch(() => {});
 	}
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */

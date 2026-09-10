@@ -5,6 +5,7 @@ import {
 	defineAgent,
 	defineHuman,
 	InMemorySessionRepo,
+	inProcessTransport,
 	isSpoken,
 	type Message,
 	passive,
@@ -621,6 +622,52 @@ describe('startSession', () => {
 		await stopSession(session);
 	});
 
+	it('tells the seat side to stop, over the wire, when it cuts a lease', async () => {
+		const hangs = deferred();
+		const solo = defineAgent({
+			name: 'solo',
+			identity: 'Never stops.',
+			instructions: 'wait',
+			model: 'scripted/solo',
+		});
+		// a transport of the host's own: the room reaches it through the wire alone
+		const cuts: string[] = [];
+		const inProcess = inProcessTransport();
+		const runtime = createRuntime({
+			transport: {
+				connect: (room, seat, host) => {
+					const port = inProcess.connect(room, seat, host);
+					return {
+						wake: (wake) => port.wake(wake),
+						cut: (activation) => {
+							cuts.push(activation);
+							return port.cut(activation);
+						},
+					};
+				},
+			},
+		});
+		const session = startSession({
+			name: roomName('cut'),
+			assistant,
+			agents: [solo],
+			runtime,
+			streamFn: scripted(async () => {
+				hangs.resolve();
+				return new Promise<never>(() => {});
+			}),
+		});
+		const visit = await enter(session);
+		await visit.deliver({ text: 'wait for me' });
+		await hangs.promise;
+		session.abort();
+		await session.quiet();
+		// the room ended the lease and told the seat, and the seat stopped: the room is idle
+		expect(cuts).toEqual(['2:solo']);
+		expect(session.seats().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
+		await stopSession(session);
+	});
+
 	it('answers a commit from a lease that ended stale, before what the record moved past', async () => {
 		const solo = defineAgent({
 			name: 'solo',
@@ -629,7 +676,9 @@ describe('startSession', () => {
 			model: 'scripted/solo',
 		});
 		// the seats hear no wake, so the test holds the seat's side of the wire itself
-		const runtime = createRuntime({ transport: { connect: () => ({ wake: async () => {} }) } });
+		const runtime = createRuntime({
+			transport: { connect: () => ({ wake: async () => {}, cut: async () => {} }) },
+		});
 		const session = startSession({
 			name: roomName('stale'),
 			assistant,

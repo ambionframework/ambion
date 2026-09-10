@@ -676,13 +676,25 @@ system prompt and the context, and sends the two strings with the model
 id and the hand the activation holds. The seat side resolves the definition
 by name through the runtime's catalog, builds the Pi `Agent`, and reaches
 the room through three calls: `view`, `commit` and `lease`. The room
-reaches a seat through one, `wake`, which carries the line a running
-activation is steered with when a message caused it. Every request and
-response survives a round trip through `JSON.stringify` unchanged
+reaches a seat through two. `wake` carries the line a running activation
+is steered with when a message caused it. `cut` names an activation whose
+lease the room ended, so the seat side stops it now, wherever the seat
+runs. Every request and response survives a round trip through
+`JSON.stringify` unchanged
 ([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
 live in two processes. The room answers the three calls from the fold: a
 lease is a row on the log, and the seat side releases it when the
 activation ends.
+
+**A cut is the room's word, and the record is written before it.** The
+room ends every lease the seat holds as `revoked`, and then it cuts. A
+seat that never hears the cut is refused whatever it writes, because its
+lease ended. A seat that hears it aborts the activation and moves on to
+the wake that queued behind it. A model call that ignores the abort
+finishes on its own, past a seat that has moved on. A renewal the room
+refuses cuts the activation the same way, and a renewal that never
+reached the room leaves the lease to expire where it stands: the seat
+cuts the activation at that expiry, when the room expires the lease.
 
 **A host owns a `Runtime`.** It holds the clock, the session opener, the
 model call, the catalog, the rooms that are running, the workspace names
