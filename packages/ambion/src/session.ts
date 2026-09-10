@@ -278,7 +278,6 @@ class ReadOnlySession implements SessionView {
 			name: this.name,
 			state,
 			live: liveSeats(state, this.runtime.clock.now()),
-			defOf: (name) => this.runtime.catalog.get(name),
 		});
 	}
 
@@ -387,7 +386,7 @@ class SessionImpl implements Session, RunningRoom {
 			}
 		}
 		await this.log.write('composition', {
-			assistant: composition.assistant.name,
+			assistant: seatRow({ def: composition.assistant, attention: 'none' }),
 			...(composition.goal === undefined ? {} : { goal: composition.goal }),
 			agents: composition.agents.map(seatRow),
 			available: composition.available.map(seatRow),
@@ -406,7 +405,7 @@ class SessionImpl implements Session, RunningRoom {
 			throw new Error(`Session '${this.name}' has no composition on its record: start it instead.`);
 		}
 		const names = [
-			state.composition.assistant,
+			state.composition.assistant.name,
 			...state.roster.map((seat) => seat.name),
 			...state.composition.available.map((seat) => seat.name),
 		];
@@ -446,7 +445,7 @@ class SessionImpl implements Session, RunningRoom {
 
 	private get assistant(): string {
 		return (
-			this.state().composition?.assistant ??
+			this.state().composition?.assistant.name ??
 			this.starting.find((s) => s.kind === 'agent' && s.assistant)?.name ??
 			''
 		);
@@ -488,7 +487,6 @@ class SessionImpl implements Session, RunningRoom {
 			name: this.name,
 			state,
 			live: this.live(state),
-			defOf: (name) => this.defs.get(name),
 		});
 	}
 
@@ -724,7 +722,12 @@ class SessionImpl implements Session, RunningRoom {
 			message.kind === 'seated'
 				? [
 						...state.roster,
-						{ name: message.from, attention: message.attention ?? 'broadcast', assistant: false },
+						{
+							name: message.from,
+							identity: message.identity ?? '',
+							attention: message.attention ?? 'broadcast',
+							assistant: false,
+						},
 					]
 				: state.roster;
 		const atWork = this.atWork(state, live);
@@ -869,7 +872,6 @@ class SessionImpl implements Session, RunningRoom {
 			assistant: this.assistant,
 			state,
 			live: this.live(state),
-			defOf: (name) => this.defs.get(name),
 			unseen: (since) => this.log.since(since).length,
 		};
 	}
@@ -945,12 +947,11 @@ class SessionImpl implements Session, RunningRoom {
 					(names.length ? `Seat one of: ${names.join(', ')}.` : 'The reserve is empty.'),
 			);
 		}
-		const identity = this.defs.get(held.name)?.identity ?? '';
 		return {
 			kind: 'seated',
 			...stamp,
 			from: held.name,
-			identity,
+			identity: held.identity,
 			by: seat,
 			attention: held.attention,
 		};
@@ -1287,6 +1288,7 @@ function unwrap(seat: AgentSeat): Placed {
 
 const seatRow = (placed: Placed): SeatRow => ({
 	name: placed.def.name,
+	identity: placed.def.identity,
 	attention: placed.attention,
 });
 

@@ -16,9 +16,9 @@ const backoff = (attempt: number) => attempt * 30_000;
 const composition = (): LogEntry => ({
 	type: 'composition',
 	composition: {
-		assistant: 'assistant',
-		agents: [{ name: 'product', attention: 'broadcast' }],
-		available: [{ name: 'surveyor', attention: 'broadcast' }],
+		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
+		agents: [{ name: 'product', identity: 'The product.', attention: 'broadcast' }],
+		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'broadcast' }],
 		after: 0,
 		at,
 	},

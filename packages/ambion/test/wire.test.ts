@@ -30,10 +30,10 @@ const rows: Record<string, LeaseRow | CloseRow | CompositionRow> = {
 	ended: { id: '2:product', after: 3, phase: 'ended', reason: 'released', heard: 3, at },
 	close: { owner: 'priya', from: 2, through: 4, after: 4, at, wakes: ['assistant'] },
 	composition: {
-		assistant: 'assistant',
+		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
 		goal: 'Decide the pour date.',
-		agents: [{ name: 'product', attention: 'broadcast' }],
-		available: [{ name: 'surveyor', attention: 'named' }],
+		agents: [{ name: 'product', identity: 'The product.', attention: 'broadcast' }],
+		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'named' }],
 		after: 0,
 		at,
 	},

@@ -25,7 +25,6 @@ export interface RoomFacts {
 	readonly state: RoomState;
 	/** The seats live now, by name. */
 	readonly live: ReadonlyMap<string, string[]>;
-	defOf(name: string): AgentDefinition | undefined;
 	/** How many messages landed after this seq. */
 	unseen(since: Seq): number;
 }
@@ -35,7 +34,7 @@ export function seatsOf(facts: Omit<RoomFacts, 'unseen' | 'now' | 'assistant'>):
 	const seats: SeatInfo[] = facts.state.roster.map((seat) => ({
 		kind: 'agent' as const,
 		name: seat.name,
-		identity: facts.defOf(seat.name)?.identity ?? '',
+		identity: seat.identity,
 		status: facts.live.has(seat.name) ? ('active' as const) : ('idle' as const),
 		attention: seat.attention,
 		sessionId: `${facts.name}:${seat.name}`,
@@ -128,7 +127,7 @@ function openedBy(seq: Seq | undefined, state: RoomState): boolean {
 function reserved(facts: RoomFacts): { name: string; identity: string }[] {
 	return facts.state.reserve.map((seat) => ({
 		name: seat.name,
-		identity: facts.defOf(seat.name)?.identity ?? '',
+		identity: seat.identity,
 	}));
 }
 

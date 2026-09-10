@@ -572,7 +572,8 @@ sooner.
 reads takes the narrower type and cannot start anything by accident. Its
 `seats()` folds the same composition row a running room folds, so a stopped
 room says who was in it: the roster, every seat idle, and every person the
-record knows.
+record knows. The row and every seating carry each agent's identity, so a
+read needs the log and no definition.
 
 One file per concern, in layers an import points down through, and
 `session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)

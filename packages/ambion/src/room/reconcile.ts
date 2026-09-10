@@ -50,7 +50,7 @@ export interface Decision {
  * by name, with the ids that make them live.
  */
 export function liveSeats(state: RoomState, now: number): Map<string, string[]> {
-	const assistant = state.composition?.assistant ?? '';
+	const assistant = state.composition?.assistant.name ?? '';
 	const live = new Map<string, string[]>();
 	const add = (seat: string | undefined, id: string) => {
 		if (seat === undefined) return;
@@ -72,7 +72,7 @@ export function liveSeats(state: RoomState, now: number): Map<string, string[]> 
  * summary is not the room still working, so a draft holds no exchange open.
  */
 export function working(state: RoomState, now: number): boolean {
-	const assistant = state.composition?.assistant ?? '';
+	const assistant = state.composition?.assistant.name ?? '';
 	for (const [seat, ids] of liveSeats(state, now)) {
 		if (seat !== assistant) return true;
 		if (ids.some((id) => parseId(id)?.kind === 'wake')) return true;
@@ -136,7 +136,7 @@ function expiries(state: RoomState, now: number): Decision['expired'] {
 function closing(state: RoomState, now: number): Decision['close'] {
 	const exchange = state.exchange;
 	if (exchange === undefined || working(state, now)) return undefined;
-	const assistant = state.composition?.assistant ?? '';
+	const assistant = state.composition?.assistant.name ?? '';
 	const speaksForItself = (name: string) => !state.people.has(name) && name !== assistant;
 	const owed =
 		draftOver(state.messages, exchange.from, state.lastSeq, speaksForItself) !== undefined;
@@ -155,7 +155,7 @@ function closing(state: RoomState, now: number): Decision['close'] {
  * room or sent longer ago than the resend window.
  */
 function dueWakes(state: RoomState, options: DecideOptions): Send[] {
-	const assistant = state.composition?.assistant ?? '';
+	const assistant = state.composition?.assistant.name ?? '';
 	const wakes = state.pending
 		.filter((wake) => !capped(wake.attempts, options) && ready(wake, options.now))
 		.filter((wake) => unsent(wake.id, options))

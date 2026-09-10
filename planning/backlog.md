@@ -593,3 +593,23 @@ disk, and `repo.list()` shows it from then on.
 **Fix.** A second call on the opener, `find(id)`, that returns nothing on a
 miss, or an option on `open`. `resumeSession` and `readSession` take the
 one that creates nothing; `startSession` keeps the one that creates.
+
+### 34. The catalog is keyed by bare name, per runtime
+
+**What.** The seat side resolves a definition by name through the
+runtime's catalog (`seat/seat.ts`). Every room a runtime holds writes its
+definitions into that one map, so two rooms in one runtime that define the
+same name differently share one entry, and the last room to start wins.
+The log side has no such gap: the composition row and every seating carry
+the identity, so a read reports what the run held.
+
+**Why deferred.** The room already refuses a duplicate name inside one
+roster. Two rooms in one runtime with one name and two definitions is a
+host that wants two runtimes. The catalog exists so that a transport can
+hand a seat in another process the definition it needs by name.
+
+**Options.** The runtime refuses a second, different definition under a
+name it holds. Or the in-process transport hands the actor the room's own
+definitions, and the catalog serves the out-of-process case alone. Either
+way, a definition digest on the composition row and the claim lets a seat
+tell that it runs the definition the room seated.

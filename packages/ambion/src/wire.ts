@@ -69,12 +69,17 @@ export interface CloseRow {
 /** One seat in a composition: its name and what wakes it. */
 export interface SeatRow {
 	name: string;
+	identity: string;
 	attention: Attention;
 }
 
-/** What a run started with. The roster folds from the latest one. */
+/**
+ * What a run started with. The roster folds from the latest one, and a
+ * reader without the definitions reads every identity off it.
+ */
 export interface CompositionRow {
-	assistant: string;
+	/** The assistant's seat. Its attention is `none`. */
+	assistant: SeatRow;
 	goal?: string;
 	agents: SeatRow[];
 	available: SeatRow[];

@@ -213,6 +213,41 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		}
 	});
 
+	it('reads every identity off the log, in a process that holds no definition', async () => {
+		const { opened, runtime } = await world(storage);
+		try {
+			const name = roomName(`restart-identity-${storage.name}`);
+			const session = startSession({
+				name,
+				assistant,
+				agents: [alpha],
+				available: [beta],
+				runtime: runtime(),
+				streamFn: scripted(byAgent({})),
+			});
+			// before the replay, the seats fold from the row the run is about to write
+			expect(session.seats().map((s) => [s.name, s.identity])).toEqual([
+				['alpha', 'Alpha.'],
+				['assistant', assistant.identity],
+			]);
+			await session.messages();
+			await session.seat(beta);
+			await session.quiet();
+			await stopSession(session);
+
+			// a fresh runtime knows no definition: the composition row and the seating carry them
+			const view = readSession(name, { runtime: createRuntime({ sessions: opened.sessions }) });
+			await view.messages();
+			expect(view.seats().map((s) => [s.name, s.identity])).toEqual([
+				['alpha', 'Alpha.'],
+				['assistant', assistant.identity],
+				['beta', 'Beta.'],
+			]);
+		} finally {
+			await opened.dispose();
+		}
+	});
+
 	it('writes one composition per run, and the latest roster wins', async () => {
 		const { opened, runtime } = await world(storage);
 		try {

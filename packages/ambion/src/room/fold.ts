@@ -32,9 +32,10 @@ import {
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
 
-/** One agent on the roster: its name, what wakes it, and whether it is the assistant. */
+/** One agent on the roster: its name, how the room knows it, what wakes it, and whether it is the assistant. */
 interface RosterSeat {
 	name: string;
+	identity: string;
 	attention: Attention;
 	assistant: boolean;
 }
@@ -104,7 +105,7 @@ export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): Ro
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
 	const leases = foldLeases(leaseRows);
-	const assistant = composition?.assistant ?? '';
+	const assistant = composition?.assistant.name ?? '';
 	const isPerson = (name: string) => people.has(name);
 	const above = messages.filter((message) => message.seq >= floor);
 	return {
@@ -194,7 +195,7 @@ function foldRoster(
 	if (composition === undefined) return [];
 	const roster: RosterSeat[] = [
 		...composition.agents.map((seat) => ({ ...seat, assistant: false })),
-		{ name: composition.assistant, attention: 'none' as const, assistant: true },
+		{ ...composition.assistant, assistant: true },
 	];
 	for (const message of messages) {
 		if (message.seq > composition.after) reseat(roster, message);
@@ -210,6 +211,7 @@ function reseat(roster: RosterSeat[], message: Message): void {
 	if (message.kind === 'seated') {
 		roster.push({
 			name: message.from,
+			identity: message.identity ?? '',
 			attention: message.attention ?? 'broadcast',
 			assistant: false,
 		});

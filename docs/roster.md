@@ -305,7 +305,7 @@ revokes every lease in flight and commits `left` for every person present
 `startSession` writes its own composition row, the roster folds from that
 row and the seatings after it, and the record says who was seated in
 between. A read of the stopped room (`readSession`) folds the roster the
-run left.
+run left, and reads every identity off the rows.
 
 **A seat that leaves keeps its downstream session.** Rule 8 puts every
 activation's turns in `<room>:<agent>`. An agent seated, unseated and
