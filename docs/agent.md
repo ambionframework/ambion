@@ -325,10 +325,12 @@ A steer is a wake into a running activation, and the lease records that
 it landed: the seat side renews with `heard`, the seq the activation has
 taken. A wake to a seat at rest is on the message, so a wake lost on the
 way is sent again after the resend window, and the seat side steers a
-message once however often it arrives. When a pass ends, the activation
-renews its lease, and the renewal says how far the record reaches. An
-activation that heard less than that reads the room again through a
-fresh view.
+message once however often it arrives. A claim or a release the seat
+never heard back on is asked again once: a claim of an id the room
+already runs is a renewal, and a release of a lease that ended is
+answered stale. When a pass ends, the activation renews its lease, and
+the renewal says how far the record reaches. An activation that heard
+less than that reads the room again through a fresh view.
 
 **3. Speaking is a tool; silence is the default.** An activated agent holds
 one built-in tool, `say({ to?, text })` (`sayTool` in `seat/hands.ts`). Ending

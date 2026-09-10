@@ -260,9 +260,10 @@ npm install @ambionframework/ambion
 
 The design is specified in [`docs/agent.md`](docs/agent.md),
 [`docs/exchange.md`](docs/exchange.md), [`docs/presence.md`](docs/presence.md),
-[`docs/assistant.md`](docs/assistant.md), [`docs/roster.md`](docs/roster.md), and
-[`docs/workspace.md`](docs/workspace.md). Build and contribution instructions
-are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+[`docs/assistant.md`](docs/assistant.md), [`docs/roster.md`](docs/roster.md),
+[`docs/workspace.md`](docs/workspace.md), and [`docs/durability.md`](docs/durability.md),
+which says what the record promises when something fails. Build and
+contribution instructions are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 

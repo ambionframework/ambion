@@ -23,6 +23,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `docs/assistant.md`   | Design contract for the assistant, the room's counterpart to the people in it               |
 | `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`        |
 | `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`        |
+| `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`   |
 | `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs              |
 | `examples/site`       | Runnable example                                                                            |
 | `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                |
@@ -60,7 +61,7 @@ pnpm install
 pnpm check     # build, typecheck, lint, test — the gate CI runs
 pnpm format    # biome --write, then prettier --write
 pnpm test:live # the room on a real model; needs <PROVIDER>_API_KEY and costs money
-pnpm chaos     # the crash sweep on both storages, the handover at every write, the kill at every third write, 200 seeds of the walk
+pnpm chaos     # the sweeps on both storages, the handover at every write, the kill at every third write, 200 seeds of the walk and the history
 ```
 
 Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.

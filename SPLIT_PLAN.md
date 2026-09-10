@@ -65,7 +65,11 @@ branch has it, with its doubt tests in `test/doubt.test.ts`. PR 7 landed
 with a different mechanism for the same outcomes; the note under PR 7
 says what the branch adopted and what it kept. #55 rewrote the README
 files and added `docs/assets/ambion-exchange.svg`; the branch took them
-as they are.
+as they are. #57, outside the plan, added `docs/durability.md`, the
+history checker (`test/consistency.test.ts`, `test/support/history.ts`)
+and the split tests (`test/split.test.ts`), and made the seat ask a lost
+claim or release again once. The branch took them as they are, with
+`heard` on the release the branch's rows carry.
 
 Sizes are lines of diff without the lockfile and the generated report.
 PRs 9 to 12 are independent of each other and could land in any order;

@@ -209,14 +209,23 @@ export class SeatActor implements SeatPort {
 		await this.next();
 	}
 
-	/** The lease, or nothing: the room refused it, or the claim never came back. The wake is sent again. */
+	/**
+	 * The lease, or nothing: the room refused it, or the claim never came
+	 * back twice. A claim the seat never heard back on is asked again once:
+	 * a claim of an id the room already runs is a renewal, so one activation
+	 * starts whichever call reached the room first. A claim lost twice leaves
+	 * the wake to be sent again.
+	 */
 	private async claim(id: string): Promise<{ expiry: number } | undefined> {
-		try {
-			const claimed = await this.room.lease({ activation: id, phase: 'running' });
-			return 'stale' in claimed ? undefined : claimed.ok;
-		} catch {
-			return undefined;
+		for (let attempt = 0; attempt < 2; attempt += 1) {
+			try {
+				const claimed = await this.room.lease({ activation: id, phase: 'running' });
+				return 'stale' in claimed ? undefined : claimed.ok;
+			} catch {
+				// The claim never came back: asked again, once.
+			}
 		}
+		return undefined;
 	}
 
 	/** The next wake that queued, to its end. */
@@ -225,18 +234,26 @@ export class SeatActor implements SeatPort {
 		if (queued !== undefined) await this.take(queued);
 	}
 
-	/** The lease is released, however the activation went. A room that is gone answers stale, and that is fine. */
+	/**
+	 * The lease is released, however the activation went. A release the seat
+	 * never heard back on is asked again once; a lease that ended answers
+	 * stale, and that is fine. A release lost twice leaves the lease to
+	 * expire in the room, which reports it as an activation that came to
+	 * nothing.
+	 */
 	private async release(id: string, activation: Activation): Promise<void> {
-		try {
-			await this.room.lease({
-				activation: id,
-				phase: 'ended',
-				reason: activation.reason,
-				heard: activation.taken,
-			});
-		} catch {
-			// The release never reached the room: the lease expires there, which
-			// the room reports as a failed activation.
+		for (let attempt = 0; attempt < 2; attempt += 1) {
+			try {
+				await this.room.lease({
+					activation: id,
+					phase: 'ended',
+					reason: activation.reason,
+					heard: activation.taken,
+				});
+				return;
+			} catch {
+				// The release never came back: asked again, once.
+			}
 		}
 	}
 

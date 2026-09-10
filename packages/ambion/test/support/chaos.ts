@@ -281,11 +281,7 @@ export class World {
 
 	/** Nothing live and nothing open, on the fold the room holds now. */
 	private idle(): boolean {
-		const seats = this.session.seats();
-		return (
-			this.session.exchange() === undefined &&
-			seats.every((s) => s.kind !== 'agent' || s.status === 'idle')
-		);
+		return idle(this.session);
 	}
 
 	/** The scenario, start to end. */
@@ -328,6 +324,15 @@ export class World {
 			`rows: ${rows.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
 		].join('\n');
 	}
+}
+
+/** Nothing live and nothing open, on the fold the room holds now. */
+export function idle(session: Session): boolean {
+	const seats = session.seats();
+	return (
+		session.exchange() === undefined &&
+		seats.every((s) => s.kind !== 'agent' || s.status === 'idle')
+	);
 }
 
 /** The promise, or an error naming what did not happen within `ms`. */
