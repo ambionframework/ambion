@@ -30,7 +30,7 @@ import {
 	stubModel,
 	type Transport,
 } from './host/runtime.ts';
-import { type Committed, RoomLog } from './log/log.ts';
+import { type Committed, type LogEntry, RoomLog } from './log/log.ts';
 import { renderLine } from './render.ts';
 import { assertAssistant } from './room/assistant.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
@@ -67,6 +67,7 @@ import type {
 	EndReason,
 	Lease,
 	LeaseResponse,
+	LeaseRow,
 	SeatPort,
 	SeatRow,
 	ViewResponse,
@@ -354,7 +355,7 @@ class SessionImpl implements Session, RunningRoom {
 		this.runtime = runtime;
 		this.transport = runtime.transport ?? inProcessTransport();
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
-		this.log = new RoomLog(this.sessions.open(name));
+		this.log = new RoomLog(this.sessions.open(name), (entry, fresh) => this.heard(entry, fresh));
 		this.stream = options.streamFn ?? runtime.stream;
 		this.model = options.streamFn ? stubModel : runtime.model;
 		this.starting = composition && compositionRow(composition, this.iso());
@@ -482,8 +483,10 @@ class SessionImpl implements Session, RunningRoom {
 		}
 	}
 
+	/** The record, once every write asked for has landed or failed and every doubt is settled. */
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
 		await this.ready;
+		await this.log.settled();
 		return this.log.since(options.since);
 	}
 
@@ -562,12 +565,18 @@ class SessionImpl implements Session, RunningRoom {
 		// A person the log holds as present is here already: the last run wrote
 		// no `left`, and the host's word is what says otherwise. Nothing commits.
 		if (this.state().people.get(human.name)?.presence !== 'present') {
-			await this.commitPresence({
-				kind: 'arrived',
-				from: human.name,
-				identity: human.identity,
-				...(human.preferences === undefined ? {} : { preferences: human.preferences }),
-			});
+			try {
+				await this.commitPresence({
+					kind: 'arrived',
+					from: human.name,
+					identity: human.identity,
+					...(human.preferences === undefined ? {} : { preferences: human.preferences }),
+				});
+			} catch (error) {
+				// An arrival the storage refused is no visit: the next visit writes it again.
+				this.visits.delete(human.name);
+				throw error;
+			}
 		}
 		return this.handle(visit);
 	}
@@ -757,6 +766,54 @@ class SessionImpl implements Session, RunningRoom {
 		for (const seat of message.wakes ?? []) this.send(activationId(message.seq, seat), seat);
 		if (route) this.steer(message);
 		void this.reconcile();
+	}
+
+	/**
+	 * An entry the log found on a read in doubt: it landed, and this room
+	 * never heard. The room acts on it as on a write it confirmed: the host
+	 * hears the event, and a message is routed.
+	 */
+	private heard(entry: LogEntry, fresh: boolean): void {
+		if (entry.type === 'message') {
+			this.committed(entry.message, true);
+			return;
+		}
+		if (entry.type === 'close') {
+			const question = this.log.messages.find((m) => m.seq === entry.close.from);
+			this.emit({
+				type: 'exchange_closed',
+				exchange: {
+					owner: entry.close.owner,
+					from: entry.close.from,
+					at: question?.at ?? entry.close.at,
+					through: entry.close.through,
+				},
+			});
+			return;
+		}
+		if (entry.type === 'lease') this.heardLease(entry.lease, fresh);
+	}
+
+	/** A lease row found: a fresh claim starts an activation, and an end ends one. A row that ends a lease the log never held is a wake written off, and starts nothing. */
+	private heardLease(lease: LeaseRow, fresh: boolean): void {
+		const seat = seatOf(lease.id, this.assistant) ?? '';
+		if (lease.phase === 'running') {
+			if (fresh) {
+				this.idleReported = false;
+				this.emit({ type: 'activation_start', agent: seat });
+			}
+			return;
+		}
+		if (fresh) return;
+		const spoke = this.log.messages.some((m) => m.activationId === lease.id);
+		this.emit({ type: 'activation_end', agent: seat, spoke });
+		if (lease.reason === 'expired') {
+			this.emit({
+				type: 'error',
+				agent: seat,
+				error: new Error('The activation ran past its lease.'),
+			});
+		}
 	}
 
 	/** The question at `seq` opened an exchange, and the room says so. */
@@ -1223,14 +1280,17 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * Dropped from memory: the alarm is cancelled, every call a seat makes
-	 * from now on is stale, every visit is over, nothing the host does with
-	 * the handle writes, and nobody waits on the room. The record keeps what
-	 * landed before, and the next run over it continues from there.
+	 * Dropped from memory: the alarm is cancelled, the log is closed, every
+	 * call a seat makes from now on is stale, every visit is over, nothing
+	 * the host does with the handle writes, nothing reaches a listener again,
+	 * and nobody waits on the room. The record keeps what landed before, and
+	 * nothing this run had in flight lands after.
 	 */
 	evict(): void {
 		this.evicted = true;
+		this.log.close();
 		this.cancelAlarm();
+		this.listeners.clear();
 		for (const visit of this.visits.values()) visit.gone = true;
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
 		for (const resolve of this.settledWaiters.splice(0)) resolve();

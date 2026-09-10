@@ -517,7 +517,10 @@ controls:
 - **`deliver()`** resolves when the message is durable — its write is
   confirmed, it is on the record, and activations are dispatched. A write
   that fails rejects `deliver()`, and the message is nowhere: not on the
-  record, not on the stream, and nobody woke for it. It never waits for
+  record, not on the stream, and nobody woke for it. A write that landed
+  and lost its confirmation rejects too, and the room is in doubt: it reads
+  the storage before its next write, so the message is on the record, with
+  no event for it (`planning/backlog.md` item 33). It never waits for
   completion, because activations run in parallel and have no single caller
   to return to. `deliver({ key })` names the delivery: a repeated key lands
   once, so a host that never learned whether a delivery landed delivers it
@@ -691,6 +694,15 @@ one per claim this document makes loudly:
   every storage ([`restart.test.ts`](../packages/ambion/test/restart.test.ts));
 - `decide` writes nothing the second time
   ([`reconcile.test.ts`](../packages/ambion/test/reconcile.test.ts)).
+
+What a crash leaves is proved in
+[`chaos.test.ts`](../packages/ambion/test/chaos.test.ts): the room crashes
+at every write its log takes, before and after the entry lands, and is
+killed from outside mid-activation, and a host that resumes it and retries
+under the same key reaches the same record every time, less the answer of
+a seat whose lease the dead run held.
+[`toolchain.md`](toolchain.md) §8 says how the sweep runs and how to widen
+it.
 
 All in-process, in vitest, on a scripted stream where determinism matters.
 

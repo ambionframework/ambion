@@ -16,10 +16,19 @@
  * enforced where the write happens.
  *
  * Beside the messages, the log holds rows about the room: what a run
- * started with, and the range an exchange turned out to hold. A row takes
- * no seq and carries `after`, the last seq when it landed. It joins the
- * same queue, so a row and the messages around it land in the order they
- * were asked for.
+ * started with, the leases its seats hold, and the range an exchange
+ * turned out to hold. A row takes no seq and carries `after`, the last seq
+ * when it landed. It joins the same queue, so a row and the messages
+ * around it land in the order they were asked for.
+ *
+ * An append that fails leaves the log in doubt: the storage may hold the
+ * entry, and the cache does not. The log reads what the storage holds past
+ * its cursor at once, on the queue behind the failed write, and again
+ * before the next write when that read failed too. A write whose
+ * confirmation was lost is on the record before anything lands on top of
+ * it, and a read of the record waits for the queue. The cursor moves to
+ * the last entry every read saw, so a read costs the entries since the
+ * one before it, whatever the log's age.
  */
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from '../types.ts';
@@ -87,8 +96,25 @@ export class RoomLog {
 	private readonly byKey = new Map<string, Message>();
 	/** The serial queue. One commit at a time, in the order they were asked for. */
 	private tail: Promise<unknown> = Promise.resolve();
+	private closed = false;
+	/** Pi's id of every entry the cache holds past the cursor: what a read in doubt finds again. */
+	private readonly known = new Set<string>();
+	/** Pi's seq of the last entry a read saw: the next read starts past it. */
+	private cursor = 0;
+	/** An append failed, and the storage may hold what the cache does not. */
+	private doubt = false;
+	/** The replay is over: what a read finds from now on is news, and `found` hears it. */
+	private replayed = false;
 
-	constructor(open: Promise<PiSession>) {
+	/**
+	 * `found` hears every entry the log finds on a read in doubt: it landed,
+	 * and the writer never heard. The room acts on it the way it acts on a
+	 * write it confirmed.
+	 */
+	constructor(
+		open: Promise<PiSession>,
+		private readonly found?: (entry: LogEntry, fresh: boolean) => void,
+	) {
 		this.ready = this.replay(open);
 		// A host can hold a session and read nothing from it for hours, so
 		// nothing may await `ready` for a long time. Mark the rejection handled
@@ -99,18 +125,44 @@ export class RoomLog {
 
 	private async replay(open: Promise<PiSession>): Promise<PiSession> {
 		const piSession = await open;
-		const found = await piSession.findEntries();
-		// findEntries does not promise append order; Pi's seq does.
-		found.sort((a, b) => a.seq - b.seq);
-		for (const entry of found) {
-			if (entry.type !== 'custom') continue;
-			const known = toEntry(entry.customType, entry.data);
-			if (known !== undefined) this.cache(known);
-		}
+		await this.read(piSession);
+		this.replayed = true;
 		return piSession;
 	}
 
-	private cache(entry: LogEntry): void {
+	/**
+	 * Cache every entry the storage holds past the cursor that the cache
+	 * lacks, tell `found` about each one after the replay, and move the
+	 * cursor to the last entry seen. Nothing at or before the cursor is
+	 * read again, so the ids kept to tell a found entry from a cached one
+	 * are only those appended since.
+	 */
+	private async read(piSession: PiSession): Promise<void> {
+		const afterSeq = this.cursor;
+		// Pi reads a cursor against the order: oldest first, past `afterSeq`.
+		const query = afterSeq === 0 ? {} : { order: 'oldestFirst' as const, cursor: { afterSeq } };
+		const found = (await piSession.findEntries(query)).filter((entry) => entry.seq > afterSeq);
+		// findEntries does not promise append order; Pi's seq does.
+		found.sort((a, b) => a.seq - b.seq);
+		for (const entry of found) {
+			this.cursor = Math.max(this.cursor, entry.seq);
+			if (entry.type !== 'custom' || this.known.has(entry.id)) continue;
+			const known = toEntry(entry.customType, entry.data);
+			if (known === undefined) continue;
+			const fresh = known.type !== 'lease' || !this.holds(known.lease.id);
+			this.cache(known, entry.id);
+			if (this.replayed) this.found?.(known, fresh);
+		}
+		this.known.clear();
+	}
+
+	/** Whether the cache holds a row for this lease id already. */
+	private holds(id: string): boolean {
+		return this.entries.some((entry) => entry.type === 'lease' && entry.lease.id === id);
+	}
+
+	private cache(entry: LogEntry, id: string): void {
+		this.known.add(id);
 		this.entries.push(entry);
 		if (entry.type !== 'message') return;
 		const message = entry.message;
@@ -131,13 +183,13 @@ export class RoomLog {
 		row: RowData<K> | (() => RowData<K> | undefined),
 	): Promise<boolean> {
 		const link = this.tail.then(async () => {
-			const piSession = await this.ready;
+			const piSession = await this.open();
 			const data = typeof row === 'function' ? row() : row;
 			if (data === undefined) return false;
 			const stamped = { ...data, after: this.lastSeq };
-			await piSession.appendCustomEntry(ENTRY_TYPES[type], stamped);
+			const id = await this.append(piSession, ENTRY_TYPES[type], stamped);
 			const entry = toEntry(ENTRY_TYPES[type], stamped);
-			if (entry !== undefined) this.cache(entry);
+			if (entry !== undefined) this.cache(entry, id);
 			return true;
 		});
 		this.tail = link.catch(() => {});
@@ -161,7 +213,44 @@ export class RoomLog {
 		return link;
 	}
 
-	/** Resolves once every write asked for so far has landed or failed. */
+	/**
+	 * Closed: every write from here on fails, and nothing is cached. A room
+	 * dropped from memory closes its log, so a write it still had in flight
+	 * fails the way a process that died would have failed to make it.
+	 */
+	close(): void {
+		this.closed = true;
+	}
+
+	/**
+	 * The session to write to, or the failure a closed log answers every
+	 * write with. A log in doubt reads the storage first.
+	 */
+	private async open(): Promise<PiSession> {
+		if (this.closed) throw new Error('The log is closed.');
+		const piSession = await this.ready;
+		if (this.doubt) {
+			await this.read(piSession);
+			this.doubt = false;
+		}
+		return piSession;
+	}
+
+	/**
+	 * One append. A failure puts the log in doubt, whatever the storage did
+	 * with the entry, and queues the read that settles it.
+	 */
+	private async append(piSession: PiSession, type: string, data: unknown): Promise<string> {
+		try {
+			return await piSession.appendCustomEntry(type, data);
+		} catch (error) {
+			this.doubt = true;
+			this.tail = this.tail.then(() => this.open()).catch(() => {});
+			throw error;
+		}
+	}
+
+	/** Resolves once every write asked for so far has landed or failed, and every doubt is settled. */
 	settled(): Promise<void> {
 		return this.tail.then(() => {});
 	}
@@ -170,7 +259,7 @@ export class RoomLog {
 		intent: CommitIntent<T>,
 		landed: ((message: T) => void) | undefined,
 	): Promise<Committed<T>> {
-		const piSession = await this.ready;
+		const piSession = await this.open();
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
 		if (seen !== undefined) return { message: seen as T, repeated: true };
 		if (intent.readThrough !== undefined && this.lastSeq > intent.readThrough) {
@@ -182,8 +271,8 @@ export class RoomLog {
 			seq: this.lastSeq + 1,
 			...(intent.key === undefined ? {} : { key: intent.key }),
 		} as T;
-		await piSession.appendCustomEntry(ENTRY_TYPES.message, stamped);
-		this.cache({ type: 'message', message: stamped });
+		const id = await this.append(piSession, ENTRY_TYPES.message, stamped);
+		this.cache({ type: 'message', message: stamped }, id);
 		landed?.(stamped);
 		return { message: stamped };
 	}

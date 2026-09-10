@@ -59,6 +59,7 @@ pnpm install
 pnpm check     # build, typecheck, lint, test — the gate CI runs
 pnpm format    # biome --write, then prettier --write
 pnpm test:live # the room on a real model; needs <PROVIDER>_API_KEY and costs money
+pnpm chaos     # the crash sweep on both storages, the kill at every third write, 200 seeds of the walk
 ```
 
 Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
