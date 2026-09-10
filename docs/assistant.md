@@ -1,9 +1,10 @@
 # The assistant
 
-This document is the design contract for the assistant: the agent every
-session seats, which reads how each person reads and turns the room's work
-into one message for the person who asked. It is shipped. The code lives with the rest
-of the runtime in [`packages/ambion/src`](../packages/ambion/src) —
+This document is the design contract for the assistant: the constrained agent
+every session seats as its human-facing synthesis layer. It reads how each
+person reads and consolidates the room's work when the exchange does not
+already hold one answer. It is shipped. The code lives with the rest of the
+runtime in [`packages/ambion/src`](../packages/ambion/src) —
 the summary in [`session.ts`](../packages/ambion/src/session.ts), the fold a
 seat reads in [`render.ts`](../packages/ambion/src/render.ts), the shapes
 in [`types.ts`](../packages/ambion/src/types.ts). Read
@@ -12,11 +13,10 @@ in [`types.ts`](../packages/ambion/src/types.ts). Read
 
 One sentence:
 
-> **A person asks a question. Several agents wake and work it out between
-> them. When the room goes quiet, the room's assistant writes that person one
-> summary of what they arrived at, the way they read — the person reads that
-> in place of the working, and from the next activation the seats read it
-> too.**
+> **A person asks a question. Agents wake and work it out between them. If
+> their work needs consolidating when the room goes quiet, the assistant writes
+> that person one summary, the way they read. The human-facing view and later
+> agent contexts can use it in place of the working.**
 
 ---
 
