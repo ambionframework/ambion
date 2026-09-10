@@ -9,9 +9,9 @@
  * history and the log together: an acknowledged delivery is on the record
  * once, a delivery in doubt is on it at most once, a refused one never,
  * every read is a prefix of the record, a client's reads move forward and
- * hold what it delivered, every seq on the storage is one message, one
- * attempt at a wake runs at a time, and nothing is pending once the room
- * drains.
+ * hold every delivery acknowledged before them, every seq on the storage
+ * is one message, one attempt at a wake or a draft runs at a time, and
+ * nothing is pending once the room drains.
  */
 import type { Clock, LeaseRow, Message, Seq } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
@@ -143,31 +143,33 @@ function deliveries(history: History, record: readonly Message[]): string[] {
 	return found;
 }
 
-/** Every read is a prefix of the record, a client's reads move forward, and they hold what it delivered. */
+/**
+ * Every read is a prefix of the record, a client's reads move forward, and
+ * every read holds every delivery acknowledged before the read was asked.
+ */
 function reads(history: History, record: readonly Message[]): string[] {
 	const found: string[] = [];
 	const last = new Map<string, number>();
-	const delivered = new Map<string, { key: string; index: number }[]>();
+	const acknowledged: { key: string; index: number }[] = [];
 	for (const entry of history.entries) {
 		if (entry.phase !== 'ok') continue;
 		if (entry.op === 'deliver' && entry.key !== undefined) {
-			const own = delivered.get(entry.client) ?? [];
-			delivered.set(entry.client, [...own, { key: entry.key, index: entry.index }]);
+			acknowledged.push({ key: entry.key, index: entry.index });
 		}
 		if (entry.op !== 'read' || entry.seen === undefined) continue;
-		found.push(...oneRead(entry, entry.seen, record, last.get(entry.client) ?? 0, delivered));
+		found.push(...oneRead(entry, entry.seen, record, last.get(entry.client) ?? 0, acknowledged));
 		last.set(entry.client, entry.seen.at(-1)?.seq ?? 0);
 	}
 	return found;
 }
 
-/** What one read breaks: the prefix, the client's forward motion, or the client's own deliveries. */
+/** What one read breaks: the prefix, the client's forward motion, or a delivery acknowledged before it. */
 function oneRead(
 	entry: Entry,
 	seen: NonNullable<Entry['seen']>,
 	record: readonly Message[],
 	lastSeen: number,
-	delivered: ReadonlyMap<string, { key: string; index: number }[]>,
+	acknowledged: readonly { key: string; index: number }[],
 ): string[] {
 	const found: string[] = [];
 	const who = `read #${entry.index} by ${entry.client}`;
@@ -175,9 +177,9 @@ function oneRead(
 	if (cut !== undefined) found.push(`${who} is not a prefix of the record at position ${cut}`);
 	if ((seen.at(-1)?.seq ?? 0) < lastSeen) found.push(`${who} moved backwards`);
 	const invoked = entry.of ?? entry.index;
-	for (const own of delivered.get(entry.client) ?? []) {
+	for (const own of acknowledged) {
 		if (own.index < invoked && !seen.some((s) => s.key === own.key)) {
-			found.push(`${who} lacks its own delivery ${own.key}`);
+			found.push(`${who} lacks delivery ${own.key}, acknowledged before it was asked`);
 		}
 	}
 	return found;
@@ -208,7 +210,7 @@ function seqs(rows: Checked['rows']): string[] {
 		.map(([seq, n]) => `seq ${seq} is on the storage ${n} times`);
 }
 
-/** One attempt at a wake runs at a time: the next claims only after the last ended. */
+/** One attempt at a wake or a draft runs at a time: the next claims only after the last ended. */
 function exclusion(rows: Checked['rows']): string[] {
 	const found: string[] = [];
 	const running = new Map<string, string>();
@@ -216,15 +218,16 @@ function exclusion(rows: Checked['rows']): string[] {
 		if (row.type !== 'ambion/lease') continue;
 		const lease = row.data as LeaseRow;
 		const parsed = parseId(lease.id);
-		if (parsed?.kind !== 'wake') continue;
-		const wake = activationId(parsed.seq, parsed.seat);
-		const held = running.get(wake);
+		if (parsed === undefined) continue;
+		const attempt =
+			parsed.kind === 'wake' ? activationId(parsed.seq, parsed.seat) : `close:${parsed.through}`;
+		const held = running.get(attempt);
 		if (lease.phase === 'running') {
 			if (held !== undefined && held !== lease.id)
 				found.push(`${lease.id} claimed while ${held} ran`);
-			running.set(wake, lease.id);
+			running.set(attempt, lease.id);
 		} else if (held === lease.id) {
-			running.delete(wake);
+			running.delete(attempt);
 		}
 	}
 	return found;

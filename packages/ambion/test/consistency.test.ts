@@ -60,7 +60,7 @@ class Cluster {
 	session!: Session;
 	private disk: FailMode = false;
 	private failedBefore = 0;
-	/** Requests the nemesis dropped, counted when taken: every one may fail an activation, and that is one error. */
+	/** Room calls the nemesis dropped, counted when taken: every one fails an activation, and that is one error. A dropped wake is sent again and fails nothing. */
 	private dropped = 0;
 	private droppedBefore = 0;
 	/** Leases live when time jumped past the whole expiry: every one expires, and that is one error. */
@@ -114,8 +114,29 @@ class Cluster {
 		this.session.subscribe((event) => this.events.push(event));
 	}
 
+	/** The errors a run may carry: what it inherited, the cast's failures, the drops and the jumps it saw. */
+	private allowance(): number {
+		return (
+			this.inherited.activations +
+			(this.cast.failures() - this.failedBefore) +
+			(this.dropped - this.droppedBefore) +
+			(this.jumped - this.jumpedBefore)
+		);
+	}
+
+	/** Every run is held to its own bound: a run that dies is checked before the next one starts. */
+	private bounded(): void {
+		const errors = this.events.flatMap((e) =>
+			e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
+		);
+		expect(errors.length, `errors on a run: ${errors.join('; ')}`).toBeLessThanOrEqual(
+			this.allowance(),
+		);
+	}
+
 	/** The run dies and a fresh host resumes the name over the same log. */
 	async crash(): Promise<void> {
+		this.bounded();
 		this.runtime.evict(this.name);
 		this.epoch += 1;
 		const activations = await liveLeases(this.opened.sessions, this.name, this.clock.now());
@@ -138,7 +159,7 @@ class Cluster {
 		const kind = this.pick(['drop', 'duplicate', 'delay'] as const);
 		const on = this.pick(OPERATIONS);
 		const taken = () => {
-			if (kind === 'drop') this.dropped += 1;
+			if (kind === 'drop' && on !== 'wake') this.dropped += 1;
 			return true;
 		};
 		this.faults.push({ on, kind, match: taken, ...(kind === 'delay' ? { ms: 2_000 } : {}) });
@@ -163,13 +184,8 @@ class Cluster {
 	}
 
 	async check(): Promise<void> {
-		const errorsAllowed =
-			this.inherited.activations +
-			(this.cast.failures() - this.failedBefore) +
-			(this.dropped - this.droppedBefore) +
-			(this.jumped - this.jumpedBefore);
 		await invariants(this.session, this.events, {
-			allowErrors: errorsAllowed,
+			allowErrors: this.allowance(),
 			sessions: this.opened.sessions,
 			inherited: this.inherited.activations,
 			inheritedExchange: this.inherited.exchange,

@@ -352,8 +352,8 @@ harness in
 - **The random walk** (`property.test.ts`) loses and repeats requests on
   the wire, fails a write before or after it lands, and crashes the room
   up to three times.
-- **The history** (`consistency.test.ts`). Two people and the host act
-  at once against whichever run holds the room, under a nemesis that
+- **The history** (`consistency.test.ts`). Two people and the host take
+  turns against whichever run holds the room, under a nemesis that
   crashes the run, fails the storage, faults the wire and jumps the
   clock. Every action is recorded as an invocation and an outcome, and
   the checker in `test/support/history.ts` holds the history to the

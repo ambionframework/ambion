@@ -175,8 +175,8 @@ export class SeatActor implements SeatPort {
 	/**
 	 * The lease, or nothing: the room refused it, or the claim never came
 	 * back twice. A claim the seat never heard back on is asked again once:
-	 * a claim of an id the room already runs is a renewal, so the row lands
-	 * once whichever call reached it.
+	 * a claim of an id the room already runs is a renewal, so one activation
+	 * starts whichever call reached the room first.
 	 */
 	private async claim(id: string): Promise<{ expiry: number } | undefined> {
 		for (let attempt = 0; attempt < 2; attempt += 1) {

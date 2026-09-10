@@ -130,26 +130,33 @@ describe('a split: two live hosts over one log', () => {
 
 	const child = fileURLToPath(new URL('./support/child.ts', import.meta.url));
 
+	/** Every `write N` line the child prints, as it prints it. */
+	function writes(stdout: NodeJS.ReadableStream, report: (last: number) => void): void {
+		let buffer = '';
+		stdout.on('data', (chunk: Buffer) => {
+			buffer += chunk.toString();
+			const lines = buffer.split('\n');
+			buffer = lines.pop() ?? '';
+			for (const line of lines) {
+				const reported = /^write (\d+)$/.exec(line);
+				if (reported) report(Number(reported[1]));
+			}
+		});
+	}
+
 	/** Run the child until its log takes `at` appends, then stop it where it stands. */
 	function stopAt(dir: string, name: string, at: number) {
 		const args = ['--experimental-transform-types', '--no-warnings', child, dir, name, '40'];
 		const process_ = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'inherit'] });
 		const exited = new Promise<void>((resolve) => process_.on('exit', () => resolve()));
 		const stopped = new Promise<number>((resolve, reject) => {
-			let last = 0;
-			let buffer = '';
-			process_.stdout.on('data', (chunk: Buffer) => {
-				buffer += chunk.toString();
-				const lines = buffer.split('\n');
-				buffer = lines.pop() ?? '';
-				for (const line of lines) {
-					const reported = /^write (\d+)$/.exec(line);
-					if (reported) last = Number(reported[1]);
-					if (last >= at) {
-						process_.kill('SIGSTOP');
-						resolve(last);
-					}
-				}
+			let sent = false;
+			// stopped once, where it stands; what it writes after the continue is its own
+			writes(process_.stdout, (last) => {
+				if (last < at || sent) return;
+				sent = true;
+				process_.kill('SIGSTOP');
+				resolve(last);
 			});
 			process_.on('error', reject);
 			process_.on('exit', () => reject(new Error('the child ended before the stop')));

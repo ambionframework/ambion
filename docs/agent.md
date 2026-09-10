@@ -325,7 +325,7 @@ backoff. A wake to a seat at rest is on the message, so a wake lost on
 the way is sent again after the resend window, and the seat side runs a
 wake sent twice once. A claim or a release the seat never heard back on
 is asked again once: a claim of an id the room already runs is a
-renewal, so the row lands once whichever call reached it. When a pass ends,
+renewal, and a release of a lease that ended is answered stale. When a pass ends,
 the activation renews its lease, and the renewal says how far the record
 reaches. An activation that heard less than that reads the room again
 through a fresh view.
