@@ -1286,8 +1286,8 @@ class SessionImpl implements Session, RunningRoom {
 	 */
 	private async cut(seat: string, ids: string[]): Promise<void> {
 		for (const id of ids) await this.end(id, seat, 'revoked');
-		const port = this.ports.get(seat);
-		for (const id of ids) void port?.cut(id).catch(() => {});
+		const port = this.port(seat);
+		for (const id of ids) void port.cut(id).catch(() => {});
 	}
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */

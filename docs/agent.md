@@ -696,6 +696,10 @@ refuses cuts the activation the same way, and a renewal that never
 reached the room leaves the lease to expire where it stands: the seat
 cuts the activation at that expiry, when the room expires the lease.
 
+**A cut reaches a seat the run never woke.** A run that resumes over a
+live lease holds no wire to the seat that took it. The room opens one to
+say the cut, so a seat that still runs the activation stops.
+
 **A host owns a `Runtime`.** It holds the clock, the session opener, the
 model call, the catalog, the rooms that are running, the workspace names
 that are taken, and the policy for wakes and retries: how long a lease
