@@ -624,3 +624,39 @@ chaos sweep holds every answer to exactly once again, and
 `restart.test.ts` pins the seat woken again on the next run. Item 29
 stands for the cap: at three attempts the wake is dropped, and nothing
 says so.
+
+### 35. Two live hosts over one log corrupt it
+
+**What.** A host that is paused past its leases, and a second host that
+resumes the name while it is paused, both write from their own last seq
+once the first comes back. In memory, a seq is on the storage twice and
+a delivery the first host acknowledged is off the record the second host
+reads. On JSONL, Pi's storage refuses to load the file, and no run can
+open the name again. `split.test.ts` pins both;
+[`docs/durability.md`](../docs/durability.md) §5 states it.
+
+**Where.** `RoomLog` in `log/log.ts` assigns seqs from its own cache;
+nothing on the storage refuses a second writer.
+
+**Fix.** A run epoch. Every run writes its composition row first, and the
+row is the fence: the fold voids every later entry from an earlier run,
+and a run that reads past its cursor and finds a later composition
+evicts itself. A superseded host loses the writes it acknowledged after
+the fence; a storage with a conditional append (SQLite, a Durable
+Object) refuses them instead, and loses nothing. Pi's JSONL storage
+needs the Pi seq to stay consecutive, so the fence there is the
+conditional append or nothing.
+
+### 36. Every host in the tests shares one clock
+
+**What.** A resumed host whose clock runs ahead of the last run's expires
+the leases it inherited early; one that runs behind holds them past their
+time. No test moves two clocks apart, and no test tears a JSONL tail or
+loses an `fsync`.
+
+**Where.** `test/consistency.test.ts`, `test/split.test.ts`;
+[`docs/durability.md`](../docs/durability.md) §5.
+
+**Fix.** A clock per host in the history harness, with a drift the
+nemesis picks, and a storage fault that truncates the last line of the
+file before a resume.

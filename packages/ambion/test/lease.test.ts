@@ -105,9 +105,14 @@ describe('a lease', () => {
 		expect((await session.messages()).filter(isSpoken)).toHaveLength(2);
 	});
 
-	it('expires a lease whose release was lost, and answers the late release stale', async () => {
+	it('expires a lease whose release was lost twice, and answers the late release stale', async () => {
+		// a release the seat never heard back on is asked again once, so both are lost
+		const ended = (l: unknown) => (l as { phase: string }).phase === 'ended';
 		const { session, clock } = open(
-			[{ on: 'lease', kind: 'drop', match: (l) => (l as { phase: string }).phase === 'ended' }],
+			[
+				{ on: 'lease', kind: 'drop', match: ended },
+				{ on: 'lease', kind: 'drop', match: ended },
+			],
 			(_c, _a, call) => (call === 1 ? speak('hi') : quiet()),
 		);
 		const events = collect(session);
