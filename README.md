@@ -1,38 +1,32 @@
 # Ambion
 
-**A framework for applications built from collaborating agents, with an
-assistant as the frontend.**
+**Build applications as independently owned agents collaborating behind one
+human-facing assistant.**
 
 [ambionframework.com](https://ambionframework.com) · [worked demos](demos) ·
 [design contracts](docs)
 
-Ambion is for a future in which an application is not one agent with every
-domain packed into its context. It is a collection of agents: one for
-scheduling, one for inventory, one for compliance, or whatever domains the
-application owns. Each can have its own context, model, tools, workspace, and
-team. An assistant is the application's human-facing layer: it brings in the
-right domain agents and writes the one answer a person reads.
+Ambion is for applications made from domain agents: one for scheduling, one for
+inventory, one for compliance, or whatever the application owns. Each keeps
+its own context, model, tools, workspace, and team. One assistant owns the
+human-facing conversation, selects relevant specialists from a host-defined
+reserve, and consolidates their work when needed.
 
-Once an application takes this shape, the central problem is no longer how to
-route a prompt to a model. It is how independently owned agents and people work
-together without losing ordering, context, accountability, or a coherent human
-experience. Ambion makes that collaboration the system's foundation.
-
-The agents and people meet in a room and act through one shared record. A seat
-is a durable participant with its own activation history, not a disposable
-subagent hidden inside a supervisor's context. The room provides the
-coordination machinery: attention-based routing, optimistic concurrency,
-dynamic seating, exchange boundaries, and compaction. Agents may contribute or
-stay silent; the assistant turns their work into the application's frontend.
+Once an application takes this shape, routing a prompt is not the hard problem.
+Collaboration is: agents and people must stay ordered, informed, and
+accountable without collapsing every domain back into one context or making a
+person read a swarm transcript. Ambion provides that collaboration layer
+through a shared record, durable seats, attention-based routing, optimistic
+concurrency, exchanges, and summaries.
 
 ```mermaid
 flowchart LR
-    H((human)) -- "question" --> L[(shared room record)]
-    L -- "route by attention" --> A[domain agents]
-    A -- "contribute or stay silent" --> L
-    L -- "quiescence" --> S[assistant frontend]
-    S -- "one human-facing answer" --> H
-    S -- "record summary" --> L
+    H((human)) -- "question" --> R[(shared record)]
+    R -- "route by attention" --> A[domain agents]
+    A -- "contribute or stay silent" --> R
+    R -- "exchange closes" --> S[assistant]
+    S -- "summary when needed" --> R
+    R -- "human-facing view" --> H
 ```
 
 ## The architectural bet
@@ -43,18 +37,16 @@ and piece of state can change the behaviour of everything already there. A
 prompt, skill, or tool still shares that failure domain. A separately owned
 agent does not.
 
-Ambion therefore keeps domains separate and makes their collaboration
-explicit:
+Ambion therefore keeps domains separate and makes collaboration explicit:
 
 - A scheduling agent can change without retesting a materials agent's entire
   prompt.
 - Each agent sees the shared discussion but retains its own model session,
   tools, and workspace authority.
 - Specialists can be held in reserve and seated when a question needs them.
-- The assistant is the stable frontend even as the collection of agents behind
-  it grows or changes.
-- The human does not have to read a swarm transcript; the assistant is solely
-  responsible for the human-readable result.
+- The assistant remains the stable conversational interface as the collection
+  of agents behind it changes.
+- The human reads one coherent result rather than a swarm transcript.
 
 The trajectory is an application architecture that grows by adding coherent,
 independently owned agents rather than by making one agent progressively less
@@ -62,7 +54,7 @@ coherent. In that architecture, collaboration across agents and humans is the
 key infrastructure problem. The rest of Ambion follows from taking it
 seriously.
 
-## The runtime model
+## Key technical decisions
 
 ### 1. The record is the source of truth
 
@@ -126,20 +118,21 @@ there is no separate activation counter to drift from reality. See
 [`exchange.ts`](packages/ambion/src/room/exchange.ts) and
 [`lease.ts`](packages/ambion/src/room/lease.ts).
 
-### 7. The assistant is an ordinary, constrained seat
+### 7. The assistant owns synthesis, not the application
 
-The assistant has its own model session and activation history, but no general
-`say` hand, workspace, or general-purpose authority. It receives two narrow
-capabilities:
+The assistant is the conversational interface, not a UI framework or a
+privileged coordinator. It is an ordinary seat with its own model session and
+activation history, but no general `say` hand, workspace, or general-purpose
+authority. It receives two narrow capabilities:
 
 - `seat` while composing a roster from agents the host placed in reserve;
 - `summarise` after an exchange closes.
 
-Seating a specialist is itself an auditable message. Summaries are also
-messages and name the exact sequence range they cover. Later human and agent
-views substitute the same summary for that range, so agents do not retain
-details that the person never received. The durable record remains intact;
-only model context is compacted. See
+Seating a specialist is itself an auditable message. When two or more agent
+messages need consolidation, the summary names the exact sequence range it
+covers. Agent contexts fold that range to the same summary intended for the
+person, and clients can present the same compacted account. The durable record
+remains intact; only its rendered views are compacted. See
 [`assistant.ts`](packages/ambion/src/room/assistant.ts) and
 [`view.ts`](packages/ambion/src/room/view.ts).
 
@@ -162,7 +155,7 @@ resolved for each tool call through a backend. The current package includes an
 in-memory backend and a durable directory backend; stronger isolation can be
 added behind the same interface. See [`docs/workspace.md`](docs/workspace.md).
 
-## A small room
+## A minimal sketch
 
 ```ts
 import { defineAgent, defineHuman, startSession, visitSession } from '@ambionframework/ambion';
@@ -202,8 +195,10 @@ await session.quiet();
 ```
 
 The assistant may seat relevant reserve agents, the domain seats work in
-parallel, conflicting drafts are reconsidered against the newer record, and
-`quiet()` resolves after the exchange's human-facing result has landed.
+parallel, and conflicting drafts are reconsidered against the newer record.
+`quiet()` waits until the room has no work left, including any assistant summary
+the exchange requires. A single agent answer remains in that agent's voice; an
+exchange with no agent answer does not manufacture one.
 
 [`examples/site`](examples/site) is the runnable version: independently owned
 products, dynamically selected specialists, multiple people, workspace-backed
@@ -217,11 +212,11 @@ runtime, with several consequences worth preserving as the library evolves:
 
 - **Optimistic record concurrency for conversation.** Freshness is a runtime
   invariant, not model etiquette.
-- **The assistant as the application frontend.** Domain reasoning stays
-  independent while one constrained seat owns the coherent output a person
-  reads.
-- **Symmetric compaction.** People and agents receive the same summary in place
-  of the same covered discussion.
+- **Human-facing synthesis as a separate agent responsibility.** Domain
+  reasoning stays independent while one constrained seat consolidates the
+  result when needed.
+- **Symmetric compaction.** Agent context and the human-facing view can use the
+  same summary for the same covered discussion without deleting the record.
 - **Dynamic expertise as recorded state.** Selecting a specialist changes the
   replayable roster rather than an invisible coordinator plan.
 - **Quiescence as completion.** The actual liveness of seats closes work; an

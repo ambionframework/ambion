@@ -6,7 +6,7 @@ the reserve, a building control liaison and the plant desk, and the room's
 assistant seats one when a question turns on what it alone holds. Three
 people share the room — a project manager in the site office, a foreman on
 the deck with a phone, and a quantity surveyor at a cost desk. One assistant
-writes for all three, each the way they read.
+owns the human-facing synthesis for all three, shaped to how each reads.
 
 Each product holds its own state and its own API and knows nothing of the
 others' internals. It asks them on the record, the way a person does. The
@@ -64,18 +64,6 @@ rests on and names the file. When it changes its own state it appends one
 line to today's diary with `bash`, and `/diary` shows what the products have
 left there. Every product has its own home on the drive, and the diary is
 the one file they all write to.
-
-**The assistant seats who the question needs.** `/who` lists two
-specialists on call and not in the room. Ask "can I promise Thursday for the
-pour?" and watch `· building-control seated by assistant` land before the
-products answer: the assistant read the question and the reserve, judged
-that the date turns on an inspection slot, and seated the one seat that
-holds them. The newcomer wakes on its seating, reads the room as it stands,
-and answers beside the products. The assistant seats eagerly: everyone whose
-identity touches the question, because a seated specialist with nothing to
-add stays quiet for the price of a glance, and one that was never seated
-costs the answer. `/seat` and `/unseat` do the same by hand, and both land
-on the record.
 
 **The assistant seats who the question needs.** `/who` lists two
 specialists on call and not in the room. Ask "can I promise Thursday for the
