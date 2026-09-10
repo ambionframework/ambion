@@ -187,13 +187,13 @@ names free.
 
 **`startSession` refuses an assistant that names a workspace**, the same way
 it refuses one that carries tools (`assistant.md` §12, §17;
-`assertAssistant` in `assistant.ts` checks `tools.length > 0`).
+`assertAssistant` in `room/assistant.ts` checks `tools.length > 0`).
 `startSession` is the one place that knows a given `AgentDefinition` is
 about to become the room's assistant. `defineAgent` builds a plain value and
 has no way to know that.
 
 **The refusal is a fail-fast check on a dead configuration.** `handsFor`
-(`session.ts`) returns before it reaches `seat.def.tools.map(toPiTool)` for
+(`seat/hands.ts`) returns before it reaches `seat.def.tools.map(toPiTool)` for
 the assistant's seat: the assistant is handed `[summarise]` or `[]` on every
 activation. The built-in tools bind in that same skipped branch (§5), so an
 assistant that named a workspace would reach neither them nor any tool of
@@ -240,7 +240,7 @@ declares `execute` with one parameter or none.
 
 **`ctx.workspace()` resolves fresh on every call, and calls `connect` every
 time.** The runtime binds an activation's tools knowing which seat they
-belong to (`handsFor` in `session.ts`), so `ctx` knows the agent. The call
+belong to (`handsFor` in `seat/hands.ts`), so `ctx` knows the agent. The call
 does three things, in order:
 
 1. The agent has no `workspace` field: resolve `undefined`.
@@ -296,7 +296,7 @@ filesystem tools come from.
 `AgentHarnessTool`'s `execute` as its context argument. That mechanism
 belongs to `AgentHarness` (`harness/agent-harness.ts`), a self-contained
 engine with its own lanes, compaction, and navigation. Ambion's runtime
-imports Pi's lower-level `Agent` class (`activation.ts`, `session.ts`), and
+imports Pi's lower-level `Agent` class (`seat/activation.ts`, `seat/seat.ts`), and
 `AgentHarness` appears in no file under `packages/ambion/src`. `ToolContext`
 is addressed to `defineTool`'s own shape, at the layer Ambion builds on.
 `planning/backlog.md` holds the wider question of which class is Ambion's
@@ -377,7 +377,7 @@ one built-in call runs every call in that batch one at a time, custom tools
 included. A batch of custom tools alone still runs in parallel.
 
 **The wrapped value takes a one-line cast to `AgentTool`**, the way
-`toPiTool` (`seat.ts`) casts a Pi-native tool. Strict mode does not
+`toPiTool` (`seat/hands.ts`) casts a Pi-native tool. Strict mode does not
 consider `Static<typeof readSchema>` assignable to `AgentTool`'s default
 `params` type on its own.
 
@@ -868,8 +868,8 @@ the four built-in tools, the just-bash adapter, the in-memory default and
 workspace's files without an agent (§8). A workspace-connected agent's
 system prompt states the four tools' reach, `WORKSPACE_PARAGRAPH` in
 `render.ts` (§5). `startSession`'s public signature did not change (§3).
-`handsFor()` in `session.ts` binds the four built-ins beside what
-`toPiTool` (`seat.ts`) already did, and `toPiTool` takes the seat's agent
+`handsFor()` in `seat/hands.ts` binds the four built-ins beside what
+`toPiTool` (`seat/hands.ts`) already did, and `toPiTool` takes the seat's agent
 so it can build a `ToolContext` for a `defineTool`-built tool. No
 `defineAgent` call in [`README.md`](../README.md), [`agent.md`](agent.md)
 or [`examples/site`](../examples/site) changed: none of those agents uses a

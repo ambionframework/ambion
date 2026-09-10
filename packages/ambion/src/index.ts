@@ -39,8 +39,11 @@ export type {
 	RunningRoom,
 	Runtime,
 	SessionRepoLike,
+	Transport,
 } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, sessionsOver, systemClock } from './host/runtime.ts';
+export type { SeatContext } from './seat/seat.ts';
+export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {
 	ReadSessionOptions,
 	Session,
@@ -90,6 +93,22 @@ export type {
 	WorkspaceHandle,
 } from './types.ts';
 export { isPresence, isSpoken, isSummary } from './types.ts';
+export type {
+	ActivationView,
+	Commit,
+	CommitResponse,
+	EndReason,
+	Hand,
+	Intent,
+	Lease,
+	LeaseResponse,
+	SeatPort,
+	SeatRoom,
+	Stale,
+	ViewResponse,
+	Wake,
+} from './wire.ts';
+export { assertWire, roundTrip } from './wire.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

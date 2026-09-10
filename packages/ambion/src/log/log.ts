@@ -15,7 +15,7 @@
  * record moved past that, and hands back what the author missed — rule 5,
  * enforced where the write happens.
  */
-import type { Agent, Session as PiSession } from '@earendil-works/pi-agent-core';
+import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from '../types.ts';
 
 /** The record lives as custom entries of this type in a Pi session. */
@@ -110,20 +110,5 @@ export class RoomLog {
 	since(cursor: Seq | undefined): Message[] {
 		if (cursor === undefined) return [...this.messages];
 		return this.messages.filter((message) => message.seq > cursor);
-	}
-}
-
-/** Every turn a model took, in the downstream session that owns it. */
-export async function persistTurns(
-	open: Promise<PiSession>,
-	agent: Agent,
-	at: string,
-): Promise<void> {
-	const piSeat = await open;
-	await piSeat.appendCustomEntry('ambion/activation', { at });
-	for (const message of agent.state.messages) {
-		// Provider messages may carry undefined-valued fields, which Pi's
-		// durability check rejects; a JSON round-trip drops them.
-		await piSeat.appendMessage(JSON.parse(JSON.stringify(message)));
 	}
 }

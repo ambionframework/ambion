@@ -6,8 +6,8 @@ assistant that seats them. It is shipped. The code lives with the rest of
 the runtime in [`packages/ambion/src`](../packages/ambion/src): the seating
 and the reserve in [`session.ts`](../packages/ambion/src/session.ts), the
 composing activation and the `seat` tool in
-[`assistant.ts`](../packages/ambion/src/assistant.ts), the routing in
-[`seat.ts`](../packages/ambion/src/seat.ts), and the shapes in
+[`assistant.ts`](../packages/ambion/src/room/assistant.ts), the routing in
+[`seat.ts`](../packages/ambion/src/seat/seat.ts), and the shapes in
 [`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md), [`exchange.md`](exchange.md),
 [`presence.md`](presence.md) and [`assistant.md`](assistant.md) first. This

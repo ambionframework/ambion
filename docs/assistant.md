@@ -63,7 +63,7 @@ it refuses a say. Two things make it the seat it is, and both are data:
 
 A seat carries none of that. Which seat is the assistant, who is owed a
 message, and whom it is drafting for now are held by the assistant itself
-(`Assistant` in [`assistant.ts`](../packages/ambion/src/assistant.ts)); the
+(`Assistant` in [`assistant.ts`](../packages/ambion/src/room/assistant.ts)); the
 room asks it, and no seat carries a field for it.
 
 The assistant holds one thing nothing else in the room holds: **what a
