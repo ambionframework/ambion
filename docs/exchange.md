@@ -147,11 +147,11 @@ messages alone, and their seqs stay `1..n`.
 A room resumed over its log continues a mid-exchange room. The question is
 still open, the seats the last run left live hold their leases until they
 expire, and the wakes it left pending are sent again. A lease that expires
-answers the wake it held: the exchange closes once nothing is live, and the
-assistant writes what it owes ([`agent.md`](agent.md) §5). A run that
-starts over a log with an exchange open finds nothing live at its first
-reconcile, closes the exchange, and its host hears `exchange_closed` for
-it.
+without a word leaves its wake pending: the seat is woken again after the
+backoff, and the exchange stays open until it answers or the attempts run
+out ([`agent.md`](agent.md) §5). A run that starts over a log with an
+exchange open finds nothing live at its first reconcile, closes the
+exchange, and its host hears `exchange_closed` for it.
 
 Every closed exchange is on the log, so a host that wants a history of
 exchanges reads the close rows off the room's Pi session.
@@ -271,20 +271,19 @@ The exchange is proved beside the assistant that first reads one, in
 - the person whose question opened the exchange owns it, and a second
   person speaking into it owns nothing (§4);
 - an exchange outlives its owner's visit (§4);
-- an exchange closes at the quiet the room observed, and a question that
+- an exchange closes at the quiet the room decided on, and a question that
   lands before the row is written opens the next (§3);
-- a quiet observed on one exchange never closes the next, and a question
-  the assistant already woke on composes nothing and closes at once (§3);
+- a quiet decided on one exchange never closes the next, and the roster
+  stands for it (§3);
 - an exchange closes before anything is written about it, and the room
   settles before it goes quiet (§6).
 
 [`restart.test.ts`](../packages/ambion/test/restart.test.ts) proves that a
 stopped room writes no close, that the next run closes the exchange
 before `quiet()` answers, and that a room resumed mid-exchange continues
-it, with a lease the dead run held expiring into the close (§5, §6).
-[`presence.test.ts`](../packages/ambion/test/presence.test.ts) proves that
-a close the storage refuses leaves the exchange open, and that whoever
-waits still hears the room (§6).
+it (§5, §6). [`presence.test.ts`](../packages/ambion/test/presence.test.ts)
+proves that a close the storage refuses leaves the exchange open, and that
+whoever waits still hears the room (§6).
 
 All in-process, in vitest, on a scripted stream.
 

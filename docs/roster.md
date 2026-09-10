@@ -304,11 +304,11 @@ argument for giving it one.
 
 **`stop` leaves the roster to the next composition.** `stopSession`
 revokes every lease in flight and commits `left` for every person present
-([`presence.md`](presence.md) §8). It writes no `unseated`. The
-next `startSession` writes its own composition row, the roster folds from
-that row and the seatings after it, and the record says who was seated in
+([`presence.md`](presence.md) §8). It writes no `unseated`. The next
+`startSession` writes its own composition row, the roster folds from that
+row and the seatings after it, and the record says who was seated in
 between. A read of the stopped room (`readSession`) folds the roster the
-run left.
+run left, and reads every identity off the rows.
 
 **A seat that leaves keeps its downstream session.** Rule 8 puts every
 activation's turns in `<room>:<agent>`. An agent seated, unseated and
@@ -395,9 +395,7 @@ this document makes loudly:
   departure (§5);
 - `stop` leaves the roster to the next composition row, and the next run
   starts from its own (§5);
-- the threshold counts an agent that spoke and was unseated (§7);
-- every identity reads off the log, in a process that holds no definition
-  (§7, in [`restart.test.ts`](../packages/ambion/test/restart.test.ts)).
+- the threshold counts an agent that spoke and was unseated (§7).
 
 All in-process, in vitest, on a scripted stream.
 

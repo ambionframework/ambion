@@ -40,6 +40,8 @@ export type {
 	Transport,
 } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, sessionsOver, systemClock } from './host/runtime.ts';
+export type { Sql, SqlValue } from './host/sqlite.ts';
+export { SqliteSessionStorage, sqliteSessions } from './host/sqlite.ts';
 export type { SeatContext } from './seat/seat.ts';
 export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {

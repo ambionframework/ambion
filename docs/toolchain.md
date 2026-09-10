@@ -17,8 +17,9 @@ deliberate departures noted in [§10](#10-departures-from-flue).
 ```
 ambion/
 ├── packages/
-│   ├── ambion/            @ambionframework/ambion   — the runtime library
-│   └── cli/               @ambionframework/cli      — the `ambion` binary
+│   ├── ambion/            @ambionframework/ambion      — the runtime library
+│   ├── cli/               @ambionframework/cli         — the `ambion` binary
+│   └── cloudflare/        @ambionframework/cloudflare  — the room as Durable Objects (private)
 ├── examples/
 │   └── site/              the runnable example: a multi-agent room
 ├── scripts/
@@ -35,14 +36,16 @@ ambion/
 └── pnpm-workspace.yaml    packages/*, examples/*
 ```
 
-**Rule.** `packages/*` is publishable. `examples/*` is private and exists to
-be run. `examples/site` is the runnable example; the gate type-checks it with
-everything else, so an example that breaks fails the build.
+**Rule.** `packages/*` is publishable, with one exception: `packages/cloudflare`
+is private, because nothing deploys it yet. `examples/*` is private and exists
+to be run. `examples/site` is the runnable example; the gate type-checks it
+with everything else, so an example that breaks fails the build.
 
 ### Package graph
 
 ```
-@ambionframework/cli  ──depends on──▶  @ambionframework/ambion
+@ambionframework/cli         ──depends on──▶  @ambionframework/ambion
+@ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion
 ```
 
 Internal dependencies use `workspace:*` and are rewritten to the published
@@ -57,7 +60,9 @@ if the workspace protocol does not resolve.
 [`presence.md`](presence.md), [`assistant.md`](assistant.md) and
 [`workspace.md`](workspace.md) are its contracts.
 `@ambionframework/cli` is the `ambion` binary; it currently reports its
-version and nothing else.
+version and nothing else. `@ambionframework/cloudflare` runs a room as
+Cloudflare Durable Objects, one object per room and one per seat, over
+the runtime's public exports alone; its README says what is built.
 
 ### The core's layers
 
@@ -66,19 +71,19 @@ only. Biome refuses every other import (`noRestrictedImports`, one
 override per layer in `biome.jsonc`), so the layout is a fact the gate
 holds, and a reviewer reads a file knowing what it cannot reach.
 
-| Layer                               | What it holds                                                                                                                            | May import                        |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                                                                | Nothing that does anything        |
-| `host/`                             | What a host owns: the runtime value, a clock, an opener                                                                                  | The vocabulary                    |
-| `log/`                              | The log: one serial queue over a Pi session                                                                                              | The vocabulary                    |
-| `room/`                             | Every fact and every decision, pure over the log: the fold, the lease, the exchange, presence, the assistant's rules, the view, `decide` | The vocabulary, the log's entries |
-| `tools/`                            | What an agent's tools reach into: the workspace and its backends                                                                         | The vocabulary, `host/`           |
-| `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport                                       | The vocabulary, `host/`, `tools/` |
-| `session.ts`                        | The room, which composes them all                                                                                                        | Everything                        |
+| Layer                               | What it holds                                                                                                                  | May import                            |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the rows and the wire, and what a participant reads                                         | Nothing that does anything            |
+| `host/`                             | What a host owns: the runtime value, a clock, an opener, a SQLite storage                                                      | The vocabulary                        |
+| `log/`                              | The log: one serial queue over a Pi session                                                                                    | The vocabulary                        |
+| `room/`                             | Every fact and every decision, pure over the log: the fold, the lease, the exchange, the assistant's rules, the view, `decide` | The vocabulary, the log's entry types |
+| `tools/`                            | What an agent's tools reach into: the workspace and its backends                                                               | The vocabulary, `host/`               |
+| `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport                             | The vocabulary, `host/`, `tools/`     |
+| `session.ts`                        | The room, which composes them all                                                                                              | Everything                            |
 
 Two rules hold across packages: the core imports no platform module
-(`node:sqlite`, `cloudflare:*`), and every other package reaches the core
-through `@ambionframework/ambion`, its published surface.
+(`cloudflare:*`, `node:sqlite`), and every other package reaches the core
+through `@ambionframework/ambion`, never a file inside it.
 
 ---
 
@@ -124,8 +129,11 @@ is `^26.2.0` and not `^26.3.0`); adding the package to
 **Block install scripts.** pnpm 10 refuses to run `preinstall`/`install`/
 `postinstall` unless a package is allowlisted. `onlyBuiltDependencies` is the
 deliberate exception set and is currently **empty** — nothing in the tree needs
-one. Adding an entry means accepting that package's arbitrary code execution at
-install time, so it should be a reviewed change.
+one. `workerd`, which the Cloudflare package's test pool pulls in, declares a
+`postinstall` and runs without it: its binary arrives as a platform package
+(`@cloudflare/workerd-linux-64` and its siblings), and the ignored script
+only checks for it. Adding an entry means accepting that package's arbitrary
+code execution at install time, so it should be a reviewed change.
 
 **Do not leave credentials lying around.** Every `actions/checkout` step sets
 `persist-credentials: false`, so the job token is not written into `.git/config`
@@ -170,15 +178,16 @@ Notable settings and what they buy:
 ```
 build       dependsOn: ^build            outputs: dist/**
 check:types dependsOn: build, ^build     (needs upstream .d.mts)
-test        dependsOn: build, ^build     inputs: src, test, vitest configs, tsconfig, package.json
+test        dependsOn: build, ^build     inputs: src, test, vitest configs, wrangler.jsonc, tsconfig, package.json
 dev         persistent, never cached
 ```
 
 `check:types` and `test` wait on upstream builds because the CLI type-checks
 against the runtime's _emitted_ declarations. That is the same
 resolution a published consumer gets, so a broken `exports` map fails here,
-before release. `test` names its inputs, so a change outside them, a
-document or a demo report, reads the cached result.
+before release. `test` names its inputs, so a change outside them — a
+document, a demo report — reads the cached result, and a change to a
+package's `wrangler.jsonc` runs the workerd tier again.
 
 ---
 
@@ -280,7 +289,7 @@ Three jobs, on push to `main`, on every pull request, and on demand.
 | Job       | What it proves                                                      |
 | --------- | ------------------------------------------------------------------- |
 | **check** | Formatting, types, lint, the complexity budget, and Knip on Node 22 |
-| **test**  | The suite passes on Node 22 **and** 24                              |
+| **test**  | The suite passes on Node 22 **and** 24, the workerd tier inside it  |
 | **cli**   | The published artifact actually works                               |
 
 The `cli` job is the one that matters most and the one a unit test cannot
@@ -311,33 +320,34 @@ real key, and proves what a scripted stream cannot. It lives in
 [`packages/ambion/test/live`](../packages/ambion/test/live), one file per
 claim:
 
-| File                | What it proves                                                                                                                               |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loop.test.ts`      | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error`    |
-| `judgment.test.ts`  | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                                 |
-| `exchange.test.ts`  | Three seats race under the lock, the room goes quiet, the assistant writes in the person's shape, and it seats a specialist from the reserve |
-| `record.test.ts`    | A second run of a name reads the record the first run left, and answers from it                                                              |
-| `workspace.test.ts` | The four built-in tools reach a workspace on a real provider                                                                                 |
-| `control.test.ts`   | `abort()` ends a request in flight without a mark, and the room keeps running                                                                |
+| File                | What it proves                                                                                                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loop.test.ts`      | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error` and is tried again to the cap |
+| `judgment.test.ts`  | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                                                            |
+| `exchange.test.ts`  | Three seats race under the lock, the room goes quiet, the assistant writes in the person's shape, and it seats a specialist from the reserve                            |
+| `record.test.ts`    | A second run of a name reads the record the first run left, and answers from it                                                                                         |
+| `workspace.test.ts` | The four built-in tools reach a workspace on a real provider                                                                                                            |
+| `control.test.ts`   | `abort()` ends a request in flight without a mark, and the room keeps running                                                                                           |
+| `resume.test.ts`    | A second runtime resumes a room mid-exchange on a real model, the lease the first run held expires, and the assistant writes the summary                                |
 
 Every test holds the record to the same invariants whatever the model said:
 seqs contiguous, one `message` event per message, every author on the
-roster, every summary covering the range before it, no `error` event, and
-every activation ended. Every test ends with one line of what it spent,
-read off the seats' downstream sessions.
+roster, every key unique, every summary covering the range before it, no
+`error` event, and every activation ended. Every test ends with one line of
+what it spent, read off the seats' downstream sessions.
 
 **One harness, two tiers.** The invariants live in
 [`test/support/invariants.ts`](../packages/ambion/test/support/invariants.ts),
 and the live support re-exports them. The scripted tier runs the same
 scenarios on every storage (`matrix.test.ts`): Pi's in-memory repository,
-and Pi's JSONL repository over a temporary directory. It runs them on a
-clock it moves by hand (`test/support/clock.ts`), so a test never waits
-on real time, and over a transport that serializes every request and
-response between a seat and the room (`test/support/transport.ts`), so a
-value that would not survive the wire fails the scenario, and under a
+Pi's JSONL repository, and the core's SQLite storage over a `node:sqlite`
+file. It runs them on a clock it moves by hand,
+over a transport that serializes every request and response, and under a
 random walk that loses and repeats them (`property.test.ts`, `AMBION_SEEDS`
 widens it). The live tier runs the room on a real model and holds it to the
-same invariants.
+same invariants. The workerd tier, in `packages/cloudflare`, runs the room
+inside Cloudflare's runtime as part of `turbo test`, with no key and no
+network.
 
 **The chaos tests are the evidence that the log is the truth.** They live in
 [`test/chaos.test.ts`](../packages/ambion/test/chaos.test.ts) over the
@@ -380,9 +390,9 @@ harness in
   `SIGSTOP`. The tests pin what [`durability.md`](durability.md) §5
   says happens, and turn when a fence lands.
 
-`AMBION_CHAOS=all` widens the sweep to JSONL, the handover to every
-write, and the kill to every third write; `pnpm chaos` runs all of them
-widened, with 200 seeds of the walk and of the history.
+`AMBION_CHAOS=all` widens the sweep to JSONL and SQLite, the handover to
+every write, and the kill to every third write; `pnpm chaos` runs all of
+them widened, with 200 seeds of the walk and of the history.
 
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:
 `vitest.config.ts` excludes `test/live` from `pnpm test`, and

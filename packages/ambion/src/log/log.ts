@@ -1,5 +1,5 @@
 /**
- * The log: every entry a room committed, in the order it landed.
+ * The log: every message a room committed, in the order it took a seq.
  *
  * It is the one thing a live room and a read of a stopped one share, so it
  * knows nothing about either: it replays a Pi session into memory and
@@ -15,12 +15,6 @@
  * record moved past that, and hands back what the author missed — rule 5,
  * enforced where the write happens.
  *
- * Beside the messages, the log holds rows about the room: what a run
- * started with, the leases its seats hold, and the range an exchange
- * turned out to hold. A row takes no seq and carries `after`, the last seq
- * when it landed. It joins the same queue, so a row and the messages
- * around it land in the order they were asked for.
- *
  * The log reads what the storage holds past its cursor before every
  * write, and again on the queue behind a write that failed. A write whose
  * confirmation was lost is on the record before anything lands on top of
@@ -35,18 +29,33 @@
  * a row of another run is superseded: it tells the room, and every write
  * from then on fails. A log with no run of its own writes nothing about
  * runs, and reads the fence like any other reader.
+ *
+ * A checkpoint replaces every row before it: the fold reads the rows it
+ * carries and nothing older, so the log drops those rows from its cache
+ * once a checkpoint covers them. The messages stay. What a fold costs is
+ * then bounded by the rows since the last checkpoint, whatever the log's
+ * age.
  */
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from '../types.ts';
-import type { CloseRow, CompositionRow, LeaseRow, RunRow, Without } from '../wire.ts';
+import {
+	type CheckpointRow,
+	type CloseRow,
+	type CompositionRow,
+	isCheckpoint,
+	type LeaseRow,
+	type RunRow,
+	type Without,
+} from '../wire.ts';
 import { nextSeq, refused, supersedes, voided } from './rules.verified.ts';
 
-/** The five kinds of custom entry the room writes to its Pi session. */
+/** The six kinds of custom entry the room writes to its Pi session. */
 const ENTRY_TYPES = {
 	message: 'ambion/message',
 	lease: 'ambion/lease',
 	close: 'ambion/close',
 	composition: 'ambion/composition',
+	checkpoint: 'ambion/checkpoint',
 	run: 'ambion/run',
 } as const;
 
@@ -56,6 +65,7 @@ export type LogEntry =
 	| { type: 'lease'; lease: LeaseRow }
 	| { type: 'close'; close: CloseRow }
 	| { type: 'composition'; composition: CompositionRow }
+	| { type: 'checkpoint'; checkpoint: CheckpointRow }
 	| { type: 'run'; run: RunRow };
 
 /** A row that is not a message: it takes no seq, and carries `after`, the last seq when it was written. */
@@ -66,6 +76,7 @@ export type RowData<K extends Row['type']> = {
 	lease: Without<LeaseRow, 'after'>;
 	close: Without<CloseRow, 'after'>;
 	composition: Without<CompositionRow, 'after'>;
+	checkpoint: Without<CheckpointRow, 'after'>;
 	run: Without<RunRow, 'after'>;
 }[K];
 
@@ -74,6 +85,7 @@ const BY_TYPE: Record<string, LogEntry['type']> = {
 	[ENTRY_TYPES.lease]: 'lease',
 	[ENTRY_TYPES.close]: 'close',
 	[ENTRY_TYPES.composition]: 'composition',
+	[ENTRY_TYPES.checkpoint]: 'checkpoint',
 	[ENTRY_TYPES.run]: 'run',
 };
 
@@ -88,6 +100,7 @@ function toEntry(customType: string, data: unknown): LogEntry | undefined {
 	const type = BY_TYPE[customType];
 	if (type === undefined) return undefined;
 	const { written: _written, ...entry } = data as Stored;
+	if (type === 'checkpoint' && !isCheckpoint(entry)) return undefined;
 	return { type, [type]: entry } as LogEntry;
 }
 
@@ -130,6 +143,8 @@ export class RoomLog {
 	private fenced = false;
 	/** A later run's row was found: this run's writes are over. */
 	private superseded = false;
+	/** How many rows the cache holds past the last checkpoint. The room writes the next one from this. */
+	rowsSinceCheckpoint = 0;
 
 	/**
 	 * `found` hears every entry the log finds on a read: it landed, and the
@@ -156,7 +171,23 @@ export class RoomLog {
 		const piSession = await open;
 		await this.read(piSession);
 		this.replayed = true;
+		this.compact();
 		return piSession;
+	}
+
+	/**
+	 * Drop every row the latest checkpoint replaced. The checkpoint stays,
+	 * and so does every message: the fold reads the checkpoint's rows in
+	 * place of the ones dropped, and the messages as they are.
+	 */
+	private compact(): void {
+		const at = this.entries.findLastIndex((entry) => entry.type === 'checkpoint');
+		if (at < 0) return;
+		const messages = this.entries.slice(0, at).filter((entry) => entry.type === 'message');
+		this.entries.splice(0, at, ...messages);
+		this.rowsSinceCheckpoint = this.entries
+			.slice(messages.length + 1)
+			.filter((entry) => entry.type !== 'message').length;
 	}
 
 	/**
@@ -197,7 +228,11 @@ export class RoomLog {
 		}
 	}
 
-	/** One entry a read found that the cache lacks: cached unless void, and reported after the replay. */
+	/**
+	 * One entry a read found that the cache lacks: cached unless void, and
+	 * reported after the replay. A checkpoint a superseded run wrote past
+	 * the fence is void like any other entry.
+	 */
 	private take(entry: { id: string; customType: string; data?: unknown }): void {
 		const known = toEntry(entry.customType, entry.data);
 		if (known === undefined || this.voided(known, writerOf(entry.data))) return;
@@ -224,6 +259,8 @@ export class RoomLog {
 	private cache(entry: LogEntry, id: string): void {
 		this.known.add(id);
 		this.entries.push(entry);
+		if (entry.type === 'checkpoint') this.compact();
+		else if (entry.type !== 'message') this.rowsSinceCheckpoint += 1;
 		if (entry.type !== 'message') return;
 		const message = entry.message;
 		this.messages.push(message);
@@ -248,8 +285,7 @@ export class RoomLog {
 			if (data === undefined) return false;
 			const stamped = { ...data, after: this.lastSeq };
 			const id = await this.append(piSession, ENTRY_TYPES[type], stamped);
-			const entry = toEntry(ENTRY_TYPES[type], stamped);
-			if (entry !== undefined) this.cache(entry, id);
+			this.cache({ type, [type]: stamped } as unknown as LogEntry, id);
 			return true;
 		});
 		this.tail = link.catch(() => {});
@@ -274,10 +310,9 @@ export class RoomLog {
 	}
 
 	/**
-	 * Closed: every write asked for from here on fails. A room dropped from
-	 * memory closes its log, so a write it still had queued fails the way a
-	 * process that died would have failed to make it. An append the storage
-	 * already took lands and is cached: it is on the record.
+	 * Closed: every write from here on fails, and nothing is cached. A room
+	 * dropped from memory closes its log, so a write it still had in flight
+	 * fails the way a process that died would have failed to make it.
 	 */
 	close(): void {
 		this.closed = true;

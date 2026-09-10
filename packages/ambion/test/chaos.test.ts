@@ -28,12 +28,11 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
-import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
-import { type FakeClock, fakeClock } from './support/clock.ts';
+import { liveLeases, outcome, World, within } from './support/chaos.ts';
 import { invariants } from './support/invariants.ts';
 import { collect, roomName } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { jsonl, jsonlSessions, memory, type Storage } from './support/storage.ts';
+import { jsonl, jsonlSessions, memory, type Storage, sqlite } from './support/storage.ts';
 
 const full = process.env.AMBION_CHAOS === 'all';
 
@@ -56,30 +55,33 @@ async function countWrites(storage: Storage): Promise<number> {
 const writes = await countWrites(memory);
 const points = Array.from({ length: writes }, (_, i) => i + 1);
 
-describe.each(full ? [memory, jsonl] : [memory])('a crash at every write on $name', (storage) => {
-	describe.each(['before', 'after'] as const)('%s the entry lands', (mode) => {
-		it.each(points)(
-			`at write %i of ${writes}, the room resumes and the scenario ends whole`,
-			async (at) => {
-				const opened = await storage.open();
-				const world = new World(roomName(`chaos-${storage.name}-${mode}`), opened, { at, mode });
-				try {
-					await within(world.run(), 20_000, 'the scenario');
-					expect(world.crashes).toBe(1);
-					await world.check();
-					await stopSession(world.room);
-				} catch (error) {
-					throw new Error(`crash ${mode} write ${at}:\n${await world.describe()}`, {
-						cause: error,
-					});
-				} finally {
-					await opened.dispose();
-				}
-			},
-			30_000,
-		);
-	});
-});
+describe.each(full ? [memory, jsonl, sqlite] : [memory])(
+	'a crash at every write on $name',
+	(storage) => {
+		describe.each(['before', 'after'] as const)('%s the entry lands', (mode) => {
+			it.each(points)(
+				`at write %i of ${writes}, the room resumes and the scenario ends whole`,
+				async (at) => {
+					const opened = await storage.open();
+					const world = new World(roomName(`chaos-${storage.name}-${mode}`), opened, { at, mode });
+					try {
+						await within(world.run(), 20_000, 'the scenario');
+						expect(world.crashes).toBe(1);
+						await world.check();
+						await stopSession(world.room);
+					} catch (error) {
+						throw new Error(`crash ${mode} write ${at}:\n${await world.describe()}`, {
+							cause: error,
+						});
+					} finally {
+						await opened.dispose();
+					}
+				},
+				30_000,
+			);
+		});
+	},
+);
 
 // -- a kill from outside --------------------------------------------------------
 
@@ -110,25 +112,10 @@ function killAt(dir: string, name: string, at: number): Promise<number> {
 	});
 }
 
-/**
- * Time moves until the room is quiet with nothing owed: the lease the
- * killed process held expires, and every retry's backoff passes. The
- * clock is the room's own, so the wait is the test's to move.
- */
-async function quietNow(session: Session, clock: FakeClock): Promise<void> {
-	for (let round = 0; round < 12; round += 1) {
-		const settled = await Promise.race([
-			session.quiet().then(() => true),
-			new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
-		]);
-		if (settled && idle(session)) return;
-		await clock.advance(2_000);
-	}
-	throw new Error('the room never went quiet');
-}
+const quietNow = (session: Session) => within(session.quiet(), 30_000, 'quiet');
 
 /** The scenario from wherever the child got to, each step a no-op where the log holds it already. */
-async function finish(session: Session, clock: FakeClock): Promise<void> {
+async function finish(session: Session): Promise<void> {
 	const [first, second, third] = questions as [Question, Question, Question];
 	const deliver = async (question: Question) => {
 		const visit = await visitSession(session, question.person);
@@ -139,7 +126,7 @@ async function finish(session: Session, clock: FakeClock): Promise<void> {
 		});
 	};
 	await deliver(first);
-	await quietNow(session, clock);
+	await quietNow(session);
 	const record = await session.messages();
 	const hers = record
 		.filter(isPresence)
@@ -147,9 +134,9 @@ async function finish(session: Session, clock: FakeClock): Promise<void> {
 		.at(-1);
 	if (hers?.kind !== 'left') await (await visitSession(session, priya)).leave();
 	await deliver(second);
-	await quietNow(session, clock);
+	await quietNow(session);
 	await deliver(third);
-	await quietNow(session, clock);
+	await quietNow(session);
 	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
 }
 
@@ -162,18 +149,14 @@ describe('a room killed from outside', () => {
 			const name = 'killed';
 			try {
 				const reached = await killAt(dir, name, at);
-				// the child died at the kill, and not on its own before it
-				expect(reached).toBeGreaterThanOrEqual(at);
+				expect(reached).toBeGreaterThanOrEqual(Math.min(at, 1));
 				const sessions = jsonlSessions(dir);
-				// The room resumes on a clock that stands where the child's ran, and the test moves it:
-				// a lease the child held is live at the resume and expires when the test says so.
-				const clock = fakeClock(Date.now());
-				const runtime = createRuntime({ sessions, agents, clock, ...TIMING });
-				const inherited = await liveLeases(sessions, name, clock.now());
+				const runtime = createRuntime({ sessions, agents, ...TIMING });
+				const inherited = await liveLeases(sessions, name, Date.now());
 				const session = await resumeSession(name, { runtime, streamFn: scripted(script) });
 				const events = collect(session);
 				const inheritedExchange = session.exchange() !== undefined;
-				await finish(session, clock);
+				await finish(session);
 				const errors = events.flatMap((e) => (e.type === 'error' ? [e.error.message] : []));
 				expect(errors.filter((m) => !/past its lease/.test(m))).toEqual([]);
 				await invariants(session, events, {

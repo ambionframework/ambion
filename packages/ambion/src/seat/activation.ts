@@ -4,18 +4,15 @@
  * A seat is seated for as long as the room runs. An activation lasts seconds,
  * and it owns what belongs to one:
  *
- * - **Its id.** Derived from the record: the message that woke the seat and
- *   the seat's name, or the close it answers and the attempt. Every call it
- *   makes carries it.
+ * - **Its id.** Derived from the log: the message that woke the seat and the
+ *   seat's name, or the close it answers and the attempt. Every entry it
+ *   writes carries it.
  * - **What it has heard.** `readThrough` is the seq this activation can commit
  *   against: the record as it stood when the activation read it, advanced as steers
  *   land in its transcript and by its own says. Rule 5 refuses anything
  *   drafted against a record that moved past it.
  * - **What arrived while it worked.** A message that lands mid-activation is steered
- *   in; the seqs wait in order until the transcript shows they were read. A
- *   steer reaches the model after the request it lands during, never inside
- *   that request's own context: Pi polls its queue once before the first
- *   request, so the activation holds a steer until the model has been asked.
+ *   in; the seqs wait in order until the transcript shows they were read.
  * - **Whether it left a mark.** `spoke` is the one thing the room asks a
  *   finished activation.
  *
@@ -58,9 +55,6 @@ export class Activation {
 	private heardThrough: Seq = 0;
 	/** Record seqs steered to the live agent, awaiting their drain (FIFO). */
 	private pending: Seq[] = [];
-	/** The lines steered in before the model was asked. They reach the agent once it is. */
-	private held: string[] = [];
-	private askedModel = false;
 	private agent: Agent | undefined;
 	private cancelled = false;
 	/** Whether it left a mark on the record. The room's first question. */
@@ -87,25 +81,24 @@ export class Activation {
 	}
 
 	/**
-	 * A message landed while this activation was working. It reaches the model as a
-	 * steer (rule 2), and its seq waits until the transcript shows it arrived.
+	 * The seq this activation has taken: heard, or steered in and waiting in
+	 * the transcript. The lease carries it, so the log says which wakes this
+	 * activation answers.
 	 */
-	steer(seq: Seq, line: string): void {
-		this.pending.push(seq);
-		if (this.askedModel) this.agent?.steer(userMessage(`[new] ${line}`, this.host.now()));
-		else this.held.push(line);
+	get taken(): Seq {
+		return Math.max(this.heardThrough, ...this.pending);
 	}
 
 	/**
-	 * The model has been asked: Pi's first poll of its queue is behind, so a
-	 * steer queued from here on follows the request instead of joining it.
-	 * The seat side calls this from the stream function it hands Pi.
+	 * A message landed while this activation was working. It reaches the model as a
+	 * steer (rule 2), and its seq waits until the transcript shows it arrived.
+	 * False when the activation had taken it already: a wake sent twice steers once.
 	 */
-	asked(): void {
-		this.askedModel = true;
-		for (const line of this.held.splice(0)) {
-			this.agent?.steer(userMessage(`[new] ${line}`, this.host.now()));
-		}
+	steer(seq: Seq, line: string): boolean {
+		if (seq <= this.taken) return false;
+		this.pending.push(seq);
+		this.agent?.steer(userMessage(`[new] ${line}`, this.host.now()));
+		return true;
 	}
 
 	/** Pi's abort ends the run but not its queues; this stops the rebuild too. */
@@ -140,8 +133,6 @@ export class Activation {
 			// A fresh view hands the seat the whole record: heard up to here.
 			this.heardThrough = view.lastSeq;
 			this.pending = [];
-			this.held = [];
-			this.askedModel = false;
 			const agent = this.host.build(view, this);
 			this.agent = agent;
 			agent.subscribe((event) => this.note(event));
@@ -161,17 +152,13 @@ export class Activation {
 	}
 
 	/**
-	 * Whether the record moved past what this activation heard. A steer still
-	 * queued on the agent says so: it landed after the run drained its queue.
-	 * So does a renewal whose `lastSeq` is past what was heard: a steer that
-	 * was dropped on the way is not lost, because the message is on the
-	 * record. Nothing awaits between this check and the release, so a steer
-	 * that lands after it wakes the seat afresh.
+	 * Whether the record moved past what this activation heard: a steer that
+	 * was dropped on the way is not lost, because the message is on the record
+	 * and the renewal says how far it reaches.
 	 */
 	private async moved(agent: Agent): Promise<boolean> {
 		const renewed = await this.host.renew();
-		if ('stale' in renewed) return false;
-		if (!agent.hasQueuedMessages() && renewed.ok.lastSeq <= this.heardThrough) return false;
+		if ('stale' in renewed || renewed.ok.lastSeq <= this.heardThrough) return false;
 		agent.clearAllQueues();
 		return true;
 	}

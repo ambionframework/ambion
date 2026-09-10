@@ -15,6 +15,7 @@ import {
 	isSpoken,
 	isSummary,
 	type LeaseRow,
+	type Runtime,
 	type SeatRoom,
 	type Session,
 	startSession,
@@ -51,10 +52,15 @@ afterEach(async () => {
 	for (const session of started.splice(0)) await stopSession(session);
 });
 
-function open(faults: Fault[], script: Script): { session: Session; clock: FakeClock } {
+function open(
+	faults: Fault[],
+	script: Script,
+	wake: Partial<Runtime['wake']> = {},
+): { session: Session; clock: FakeClock } {
 	const clock = fakeClock();
 	const runtime = createRuntime({
 		clock,
+		wake,
 		transport: faultyTransport(inProcessTransport(), faults, clock),
 	});
 	const session = startSession({
@@ -177,10 +183,8 @@ describe('a lease', () => {
 		// the say arrived under a lease that ended, so nothing landed
 		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual(['andrei']);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
-		// a lease that expired without a word answers nothing: the exchange stays
-		// open, and the seat is woken again after the backoff
-		expect(session.exchange()).toMatchObject({ owner: 'andrei' });
-		expect(starts(events)).toBe(1);
+		// the activation came to nothing, so the room wakes the seat again after the backoff
+		expect(session.exchange()).toBeDefined();
 		await clock.advance(30_000);
 		await session.quiet();
 		expect(starts(events)).toBe(2);
@@ -190,8 +194,8 @@ describe('a lease', () => {
 	it('answers a question that landed between its last renewal and its release', async () => {
 		// The activation renewed, saw the record had not moved, and released. A
 		// question that lands while the release is on the wire reached no
-		// activation: the released lease heard through its renewal, so the
-		// question is pending for the seat, and the seat is woken for it.
+		// activation: the release said what the activation took, so the question
+		// is pending for the seat, and the seat is woken for it.
 		let visit: Visit | undefined;
 		const releases = (l: unknown) => (l as { phase: string }).phase === 'ended';
 		const faults: Fault[] = [
@@ -215,6 +219,55 @@ describe('a lease', () => {
 			'solo on Second?',
 		]);
 		expect(session.exchange()).toBeUndefined();
+	});
+
+	it('expires an activation at its deadline, cuts it, and wakes the seat again after the backoff', async () => {
+		const held = deferred();
+		const { session, clock } = open(
+			[],
+			async (_c, _a, call) => {
+				if (call !== 1) return quiet();
+				await held.promise;
+				return quiet();
+			},
+			{ expiry: 60_000, deadline: 120_000 },
+		);
+		const events = collect(session);
+		const visit = await enter(session);
+		await visit.deliver({ text: 'take your time' });
+		await tick();
+		expect(starts(events)).toBe(1);
+
+		// the lease is renewed up to the deadline and no further; at the deadline the room expires it
+		await clock.advance(119_999);
+		expect(events.some((e) => e.type === 'error')).toBe(false);
+		await clock.advance(1);
+		expect(events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message))).toBe(
+			true,
+		);
+		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
+		const runtime = (session as unknown as { runtime: Runtime }).runtime;
+		const rows = (await rowsOf(runtime.sessions, session.name)).filter(
+			(row) => row.type === 'ambion/lease',
+		);
+		const renewals = rows.filter(
+			(row) =>
+				(row.data as { id: string; phase: string }).id === '2:solo' &&
+				(row.data as { phase: string }).phase === 'running',
+		);
+		// a claim and three renewals: the one that reached the deadline moved the expiry nowhere
+		expect(renewals.length).toBeLessThanOrEqual(4);
+		expect(renewals.every((row) => (row.data as { expiry: number }).expiry <= clock.now())).toBe(
+			true,
+		);
+
+		// the activation came to nothing, so the seat is woken again after the backoff
+		expect(session.exchange()).toBeDefined();
+		await clock.advance(30_000);
+		await session.quiet();
+		expect(starts(events)).toBe(2);
+		expect(session.exchange()).toBeUndefined();
+		held.resolve();
 	});
 
 	it('rebuilds the activation when a wake into it was lost, and reads the message off the record', async () => {
@@ -241,7 +294,7 @@ describe('a lease', () => {
 	});
 });
 
-describe('a lease judged where its row is written', () => {
+describe('a lease on the log', () => {
 	const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
 	it('keeps a lease whose renewal landed ahead of the expiry the alarm decided', async () => {

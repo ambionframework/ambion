@@ -1,7 +1,7 @@
 /**
  * Every scenario, on every storage, on a clock the test holds. `memory` is
- * where the scenarios prove the room; `jsonl` proves the same room writes
- * through to disk and reads back.
+ * where the scenarios prove the room; `jsonl` and `sqlite` prove the same
+ * room writes through to disk and reads back.
  */
 import { describe, expect, it } from 'vitest';
 import { createRuntime, inProcessTransport } from '../src/index.ts';

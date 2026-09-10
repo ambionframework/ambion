@@ -2,10 +2,10 @@
  * Activations, named by what caused them, and the leases they hold.
  *
  * An activation's id is derived from the log: the seq of the message that
- * woke the seat and the seat's name, or the close it answers and the
- * attempt number. Nothing mints an id, so a wake is safe to send twice, a
- * retried commit lands once, and a request from an activation whose lease
- * ended is refused because the fold says so.
+ * woke the seat and the seat's name, or the close it answers, and the
+ * attempt number after the first. Nothing mints an id, so a wake is safe to
+ * send twice, a retried commit lands once, and a request from an activation
+ * whose lease ended is refused because the fold says so.
  *
  * A lease has two phases. `running` is a claim or a renewal, with an
  * expiry; `ended` is terminal, with a reason. The last row for an id wins,
@@ -16,24 +16,23 @@
  * says which: a lease at work when the message landed holds a row before
  * it and ends, if it ends, after it. A lease answers a message it heard,
  * or that its view held because it was claimed after the message, while
- * it runs and once it ended released, refused or revoked. A lease that
- * stood down answers through the seq its last renewal confirmed, so a
- * message that landed between that renewal and the release is pending
- * for the seat, as a first attempt. A lease that
+ * it runs and once it ended released, refused, revoked or abandoned. A
+ * lease that stood down answers through the seq its last renewal
+ * confirmed, so a message that landed between that renewal and the
+ * release is pending for the seat, as a first attempt. A lease that
  * expired or failed answers nothing it heard, whatever it said: its words
  * stay on the record, and the seat reads them at the next attempt. The
  * failure counts as one attempt, and the message is pending again for
- * that seat after the backoff, under the next attempt's id, until the
- * cap. The fold reports every wake still pending with its attempts; the
- * room sends it when it is due.
+ * that seat after the backoff, under the next attempt's id. The fold
+ * reports every wake still pending with its attempts; the room decides
+ * the cap, and writes it.
  */
 
 import type { Message, Seq } from '../types.ts';
-import type { EndReason, LeaseRow } from '../wire.ts';
+import type { EndReason, LeaseRow, LeaseSnapshot } from '../wire.ts';
 import {
 	atWork as atWorkRule,
 	expired,
-	givesUp,
 	heard as heardRule,
 	nextAttempt,
 } from './rules.verified.ts';
@@ -65,44 +64,31 @@ export function parseId(id: string): ParsedId | undefined {
 	return undefined;
 }
 
-/** The last row for one id: whether it runs, until when, or why it ended, and where on the log. */
-export interface LeaseState {
-	id: string;
-	phase: 'running' | 'ended';
-	/** When a running lease expires, in milliseconds since the epoch. */
-	expiry?: number;
-	reason?: EndReason;
-	/** When the last row was written, ISO. */
-	at: string;
-	/** The last seq when the first row landed: the activation's view held the record through here. */
-	since: Seq;
-	/** The last seq when the ended row landed, for an ended lease. */
-	until?: Seq;
-	/** The last seq when the last running row landed: the activation confirmed it heard through here. */
-	heardThrough: Seq;
-}
+/** A lease as the fold holds it: whether it runs, until when, or why it ended, and where on the log. */
+export type LeaseState = LeaseSnapshot;
 
-export function foldLeases(rows: readonly LeaseRow[]): Map<string, LeaseState> {
-	const leases = new Map<string, LeaseState>();
+/**
+ * The leases, folded over their rows. A checkpoint hands in the states its
+ * rows folded to before it replaced them; the rows since fold on top.
+ */
+export function foldLeases(
+	rows: readonly LeaseRow[],
+	snapshots: readonly LeaseSnapshot[] = [],
+): Map<string, LeaseState> {
+	const leases = new Map<string, LeaseState>(snapshots.map((lease) => [lease.id, lease]));
 	for (const row of rows) {
 		const known = leases.get(row.id);
 		// Ended is terminal: a renewal that lands after the end changes nothing.
 		if (known?.phase === 'ended') continue;
+		const claimedAt = known?.claimedAt ?? row.at;
 		const since = known?.since ?? row.after;
 		const heardThrough = row.phase === 'running' ? row.after : (known?.heardThrough ?? row.after);
+		const shared = { id: row.id, at: row.at, claimedAt, since, heardThrough };
 		leases.set(
 			row.id,
 			row.phase === 'running'
-				? { id: row.id, phase: 'running', expiry: row.expiry, at: row.at, since, heardThrough }
-				: {
-						id: row.id,
-						phase: 'ended',
-						reason: row.reason,
-						at: row.at,
-						since,
-						until: row.after,
-						heardThrough,
-					},
+				? { ...shared, phase: 'running', expiry: row.expiry }
+				: { ...shared, phase: 'ended', reason: row.reason, until: row.after },
 		);
 	}
 	return leases;
@@ -115,7 +101,7 @@ export const isExpired = (lease: LeaseState, now: number): boolean =>
 export const isLive = (lease: LeaseState, now: number): boolean =>
 	lease.phase === 'running' && !isExpired(lease, now);
 
-/** A wake on the log that no lease has answered. */
+/** A wake on the log that no lease of its seat has answered. */
 export interface PendingWake {
 	/** The id of the next attempt. */
 	id: string;
@@ -123,20 +109,18 @@ export interface PendingWake {
 	seq: Seq;
 	/** When the message was written, ISO. */
 	at: string;
-	/** How many activations took this wake and came to nothing. */
+	/** How many activations heard this message and came to nothing. */
 	attempts: number;
 	/** When the next attempt may start, or undefined when it may start now. */
 	notBefore: number | undefined;
 }
 
 export interface WakeOptions {
-	/** How many attempts the room makes at one wake before it gives up. */
-	attempts: number;
 	/** How long the room waits before the next attempt, after `attempt` failed ones. */
 	backoff(attempt: number): number;
 }
 
-/** A lease that ended this way took the wake and came to nothing. */
+/** A lease that ended this way heard the message and came to nothing. */
 const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set(['failed', 'expired']);
 
 /**
@@ -216,7 +200,7 @@ const heard = (lease: LeaseState, seq: Seq): boolean =>
 		seq,
 	);
 
-/** The wake as pending, or nothing when a lease answered it or the room gave up. */
+/** The wake as pending, or nothing when a lease that heard the message answered it. */
 function statusOf(
 	message: Message,
 	seat: string,
@@ -224,10 +208,8 @@ function statusOf(
 	options: WakeOptions,
 ): PendingWake | undefined {
 	if (taken.some((lease) => !cameToNothing(lease))) return undefined;
-	const failed = taken.filter((lease) => cameToNothing(lease));
-	const attempts = failed.length;
-	if (givesUp(attempts, options.attempts)) return undefined;
-	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
+	const attempts = taken.length;
+	const last = Math.max(0, ...taken.map((lease) => Date.parse(lease.at)));
 	return {
 		id: activationId(message.seq, seat, nextAttempt(attempts)),
 		seat,
@@ -238,7 +220,7 @@ function statusOf(
 	};
 }
 
-/** A lease that ended this way answers nothing it heard; every other lease answers all of it. */
+/** A lease that ended this way answers nothing it heard, whatever it said; every other lease answers all of it. */
 const cameToNothing = (lease: LeaseState): boolean =>
 	lease.phase === 'ended' && lease.reason !== undefined && CAME_TO_NOTHING.has(lease.reason);
 

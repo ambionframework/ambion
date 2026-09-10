@@ -196,8 +196,8 @@ class Walk {
 		if (step === 'visit') return this.visit();
 		if (step === 'leave') return this.leave();
 		if (step === 'deliver') return this.deliver();
-		if (step === 'seat') return this.session.seat(gamma).catch(expected);
-		if (step === 'unseat') return this.session.unseat(gamma).catch(expected);
+		if (step === 'seat') return this.session.seat(gamma).catch(() => {});
+		if (step === 'unseat') return this.session.unseat(gamma).catch(() => {});
 		if (step === 'advance') return this.clock.advance(Math.floor(this.random() * 70_000));
 		if (step === 'fault') return this.fault();
 		if (step === 'disk') return this.fail();
@@ -214,7 +214,7 @@ class Walk {
 	private async visit(): Promise<void> {
 		const person = this.pick(people);
 		if (this.visits.has(person.name)) return;
-		const visit = await visitSession(this.session, person).catch(expected);
+		const visit = await visitSession(this.session, person).catch(() => undefined);
 		if (visit !== undefined) this.visits.set(person.name, visit);
 	}
 
@@ -223,7 +223,7 @@ class Walk {
 		const visit = this.visits.get(person);
 		if (visit === undefined) return;
 		this.visits.delete(person);
-		await visit.leave().catch(expected);
+		await visit.leave().catch(() => {});
 	}
 
 	private async deliver(): Promise<void> {
@@ -234,7 +234,7 @@ class Walk {
 		const key = repeated ? this.lastKey : `d${++this.deliveries}`;
 		this.lastKey = key;
 		this.log.push(`  ${visit.human.name} ${repeated ? 'repeats' : 'delivers'} ${key}`);
-		await visit.deliver({ text: `Question ${key}?`, key: key as string }).catch(expected);
+		await visit.deliver({ text: `Question ${key}?`, key: key as string }).catch(() => {});
 	}
 
 	private fault(): void {

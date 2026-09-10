@@ -96,19 +96,22 @@ export interface SeatContext {
 	readonly emit?: (event: SessionEvent) => void;
 }
 
-/** One activation the actor holds while it runs. */
-interface Current {
-	id: string;
-	activation: Activation;
-	/** The activation ran to its end, and its release is in flight. It takes no steer. */
-	over: boolean;
-}
-
 /**
  * The seat's side of the wire. One actor per seat, for as long as the room
  * runs; one activation at a time, named by the wake that started it.
  */
+/** One activation the actor holds: running, or over and releasing its lease. */
+interface Current {
+	id: string;
+	activation: Activation;
+	over: boolean;
+	/** Resolves when the room ended the lease: the actor moves on, whatever the run still does. */
+	cut: () => void;
+	cutOff: Promise<void>;
+}
+
 export class SeatActor implements SeatPort {
+	/** The activation running, or over and releasing its lease. Held until the release lands. */
 	private current: Current | undefined;
 	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
 	private readonly queued: string[] = [];
@@ -121,9 +124,9 @@ export class SeatActor implements SeatPort {
 
 	/**
 	 * A wake starts an activation when none runs. While one runs, a wake a
-	 * message caused is steered into it (rule 2), and any other wake runs
-	 * next. An activation that is over takes no steer: it reads nothing
-	 * more, so what landed runs as an activation of its own.
+	 * message caused is steered into it (rule 2), and the lease says so; any
+	 * other wake runs next. An activation that is over takes no steer: what
+	 * landed runs as an activation of its own.
 	 */
 	async wake(wake: Wake): Promise<void> {
 		if (this.current === undefined) {
@@ -135,7 +138,8 @@ export class SeatActor implements SeatPort {
 			this.enqueue(wake.activation);
 			return;
 		}
-		this.current.activation.steer(wake.steer.seq, wake.steer.line);
+		const activation = this.current.activation;
+		if (activation.steer(wake.steer.seq, wake.steer.line)) await this.renew(activation);
 	}
 
 	/**
@@ -151,31 +155,51 @@ export class SeatActor implements SeatPort {
 		await this.take(id);
 	}
 
-	/** A wake sent twice queues once, and keeps the place the first one took. */
+	/** A wake sent twice queues once. */
 	private enqueue(id: string): void {
 		if (!this.queued.includes(id)) this.queued.push(id);
 	}
 
-	/** Cut the activation in flight, whatever its id. The room hears how it ended. */
+	/**
+	 * The room ended this activation's lease. The activation is aborted, and
+	 * the actor moves on at once: a run that ignores the abort is left to
+	 * finish on its own, and every call it still makes is answered stale.
+	 */
+	async cut(activation: string): Promise<void> {
+		if (this.current?.id === activation) this.cutCurrent();
+	}
+
+	/** Cut the activation in flight, whatever its id. The room writes what that means. */
 	abort(): void {
-		this.current?.activation.abort();
+		this.cutCurrent();
+	}
+
+	private cutCurrent(): void {
+		const current = this.current;
+		if (current === undefined) return;
+		current.activation.abort();
+		current.cut();
 	}
 
 	private async take(id: string): Promise<void> {
 		// Held before the claim, so a steer that lands while the claim is in
 		// flight reaches the activation and not the floor.
 		const activation = new Activation(id, this.context.seat, this.host(id));
-		const current: Current = { id, activation, over: false };
+		let cut = () => {};
+		const cutOff = new Promise<void>((resolve) => {
+			cut = resolve;
+		});
+		const current: Current = { id, activation, over: false, cut, cutOff };
 		this.current = current;
 		const claimed = await this.claim(id);
 		if (claimed !== undefined) {
-			const stopRenewing = this.renewUntil(activation, claimed.expiry);
+			const stopRenewing = this.renewUntil(current, claimed.expiry);
 			try {
-				await activation.run();
+				await Promise.race([activation.run(), cutOff]);
 			} finally {
 				stopRenewing();
-				// Over, and holding the seat through the release: a wake that lands
-				// now runs next, and never beside the activation that is releasing.
+				// Held through the release: a wake that lands now runs next, and
+				// never beside the activation that is releasing.
 				current.over = true;
 				await this.release(id, activation);
 			}
@@ -188,7 +212,8 @@ export class SeatActor implements SeatPort {
 	 * The lease, or nothing: the room refused it, or the claim never came
 	 * back twice. A claim the seat never heard back on is asked again once:
 	 * a claim of an id the room already runs is a renewal, so one activation
-	 * starts whichever call reached the room first.
+	 * starts whichever call reached the room first. A claim lost twice leaves
+	 * the wake to be sent again.
 	 */
 	private async claim(id: string): Promise<{ expiry: number } | undefined> {
 		for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -211,8 +236,9 @@ export class SeatActor implements SeatPort {
 	/**
 	 * The lease is released, however the activation went. A release the seat
 	 * never heard back on is asked again once; a lease that ended answers
-	 * stale, and that is fine. A release lost twice leaves the room to end
-	 * the lease on its side.
+	 * stale, and that is fine. A release lost twice leaves the lease to
+	 * expire in the room, which reports it as an activation that came to
+	 * nothing.
 	 */
 	private async release(id: string, activation: Activation): Promise<void> {
 		for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -225,37 +251,45 @@ export class SeatActor implements SeatPort {
 		}
 	}
 
-	/** One renewal: the new expiry, or nothing when the room refused it or it never reached the room. */
-	private async renew(activation: Activation): Promise<number | undefined> {
+	/**
+	 * One renewal, carrying what the activation has taken: the new expiry,
+	 * `stale` when the room refused it, or `lost` when it never reached the
+	 * room.
+	 */
+	private async renew(activation: Activation): Promise<number | 'stale' | 'lost'> {
 		try {
 			const renewed = await this.room.lease({ activation: activation.id, phase: 'running' });
-			return 'stale' in renewed ? undefined : renewed.ok.expiry;
+			return 'stale' in renewed ? 'stale' : renewed.ok.expiry;
 		} catch {
-			return undefined;
+			return 'lost';
 		}
 	}
 
 	/**
-	 * Renew at half the expiry, for as long as the activation runs and the
-	 * room renews it. The cancel stops the loop for good: a renewal in flight
-	 * when the activation ends arms nothing when it comes back.
+	 * Renew at half the expiry, for as long as the activation runs. A refused
+	 * renewal cuts the activation now. A renewal that moves the expiry
+	 * nowhere says the lease reached its deadline, and one that was lost
+	 * leaves the lease to expire where it stands: the actor cuts the
+	 * activation at that expiry, when the room expires the lease.
 	 */
-	private renewUntil(activation: Activation, firstExpiry: number): () => void {
+	private renewUntil(current: Current, firstExpiry: number): () => void {
 		const clock = this.context.clock;
-		let stopped = false;
+		const cut = () => {
+			if (this.current === current) this.cutCurrent();
+		};
 		let cancel = () => {};
 		const schedule = (expiry: number) => {
-			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void again());
+			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void again(expiry));
 		};
-		const again = async () => {
-			const renewed = await this.renew(activation);
-			if (!stopped && renewed !== undefined) schedule(renewed);
+		const again = async (held: number) => {
+			const renewed = await this.renew(current.activation);
+			if (renewed === 'stale') cut();
+			else if (renewed === 'lost') cancel = clock.alarm(held, cut);
+			else if (renewed <= held) cancel = clock.alarm(renewed, cut);
+			else schedule(renewed);
 		};
 		schedule(firstExpiry);
-		return () => {
-			stopped = true;
-			cancel();
-		};
+		return () => cancel();
 	}
 
 	private host(id: string) {
@@ -273,20 +307,12 @@ export class SeatActor implements SeatPort {
 		};
 	}
 
-	/**
-	 * The model over the view: the prompt the room rendered, the model the
-	 * definition names, the hands. The stream function tells the activation
-	 * when the model is asked, so a steer never joins the request it lands during.
-	 */
+	/** The model over the view: the prompt the room rendered, the model the definition names, the hands. */
 	private build(view: ActivationView, activation: Activation): PiAgent {
 		const def = this.context.catalog.get(view.seat);
 		if (def === undefined) throw new Error(`'${view.seat}' is not in the runtime's catalog.`);
-		const stream = this.context.stream;
 		return new Agent({
-			streamFn: (model, context, options) => {
-				activation.asked();
-				return stream(model, context, options);
-			},
+			streamFn: this.context.stream,
 			initialState: {
 				systemPrompt: view.systemPrompt,
 				model: this.context.model(view.model, def.name),

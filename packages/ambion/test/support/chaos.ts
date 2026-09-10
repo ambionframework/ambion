@@ -50,12 +50,7 @@ import { scripted } from './scripted.ts';
 import { type FailMode, type OpenedStorage, tappedOpener } from './storage.ts';
 import { serializing } from './transport.ts';
 
-/**
- * The record the scenario must come to, whatever happened on the way:
- * every delivery on it once, every answer the cast owes once, and every
- * summary owed written once. A seat whose lease the dead run held is woken
- * again after the backoff, so its answer is on the record like every other.
- */
+/** The record the scenario must come to, whatever happened on the way. */
 export async function outcome(
 	session: Session,
 	sessions: SessionOpener,
@@ -278,10 +273,15 @@ export class World {
 				new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
 			]);
 			if (this.dead) continue;
-			if (settled && idle(this.session)) return;
+			if (settled && this.idle()) return;
 			await this.clock.advance(31_000);
 		}
 		throw new Error('the room never went quiet');
+	}
+
+	/** Nothing live and nothing open, on the fold the room holds now. */
+	private idle(): boolean {
+		return idle(this.session);
 	}
 
 	/** The scenario, start to end. */

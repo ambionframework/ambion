@@ -252,8 +252,9 @@ Quiescence is still simply "no agent is active".
 
 **A failed model call is a refused commit with extra steps.** If the assistant's
 activation errors, no summary is written, the range stays uncompacted and
-fully visible, and the room's alarm is another chance after the backoff.
-The safe direction is the default, and it takes no special case.
+fully
+visible, and the next quiescence is another chance. The safe direction is
+the default, and it takes no special case.
 
 The event the room emits on a refusal is `conflict`, and it carries the
 author and what they missed. It names the author because the lock covers
@@ -274,8 +275,8 @@ writes one message per exchange, to one person, and the exchange says whom
 **A person's exchange outlives their visit.** Priya may ask and walk out
 before the room settles. The exchange is still hers, it still closes, and
 the assistant still writes its summary — addressed to her, the way she
-reads, waiting for her. How she reads is on the record, with her arrival,
-so the room keeps it after she leaves.
+reads, waiting for her. How she reads is run state the room keeps after she
+leaves.
 
 **Sam gets no summary for a question he did not ask.** His message into
 Priya's exchange steers whoever is working and owns nothing. His own next
@@ -292,12 +293,12 @@ while the assistant drafts for Priya, Sam stays owed, and the room wakes
 the assistant again for him at its next reconcile. A person whose draft the
 assistant could not land waits for the backoff instead, so a model that
 keeps failing never retries on its own end (§5). Who is owed is a fold
-over the log: a close that names the assistant, with no summary covering
-it and no draft that stood down over it. A draft stands down when the
-assistant ends it without writing, and when the host revokes it: `abort()`
-and `stopSession` write the draft off with every wake still pending. A
-later close by the same person joins the draft, and one message reaches
-back to the earliest question still owed.
+over the log: a close that holds two or more agent messages, with no
+summary covering it and no draft that stood down over it. A draft stands
+down when the assistant ends it without writing, and when the host revokes
+it: `abort()` and `stopSession` write the draft off with every wake still
+pending. A later close by the same person joins the draft, and one message
+reaches back to the earliest question still owed.
 
 ---
 
@@ -542,10 +543,10 @@ assistant does not mean it always writes — it means somebody is always
 there to judge whether writing would help.
 
 **A restarted room seats it again with the agents.** The assistant is
-composition, like an agent. How each person reads is on the record, with
-their latest arrival, so a person known from a replayed record reads the
-way they last said they do, and a room resumed over its log writes for a
-person the last run owed, the way they read.
+composition, like an agent. How each person reads is on the record: their
+`arrived` carries `preferences` when they said so, and the assistant reads
+the latest arrival's. A room resumed over its log writes for a person the
+last run owed, the way they read.
 
 **An agent-only room pays for one idle seat.** A room nobody visits seats
 the assistant, lists it in every roster, and never activates it. That is one
@@ -772,11 +773,11 @@ afterwards.
 **A summary is owed until the third attempt.** A race is handled inside
 the activation. An activation that fails outright, or that runs out of
 drafts, is one attempt, and the room's own alarm wakes the assistant again
-after the backoff, whether or not anybody speaks into the room. After
-three attempts the room stops trying. The range stays whole and every
-reader still sees it, so nothing is lost; but the one message never
-arrives, and nothing reports that the room gave up
-([`planning/backlog.md`](../planning/backlog.md) item 29).
+after the backoff, whether or not anybody speaks into the room. After three
+attempts the room gives up: it writes the draft it does not make as a
+lease ended `abandoned`, and the host hears an `abandoned` event that
+names it. The range stays whole and every reader still sees it, so nothing
+is lost, and the one message never arrives.
 
 **What a client owes.** §10 asks a client to re-present past messages when
 a new one arrives. That is more than a log does, and no client in this

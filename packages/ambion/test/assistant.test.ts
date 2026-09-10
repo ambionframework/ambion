@@ -21,6 +21,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { renderRecord } from '../src/render.ts';
+import { within } from './support/chaos.ts';
 import { fakeClock } from './support/clock.ts';
 import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
 import {
@@ -28,6 +29,7 @@ import {
 	contextText,
 	quiet,
 	type Script,
+	says,
 	scripted,
 	seat,
 	speak,
@@ -114,9 +116,9 @@ function open(options: {
 		assistant: options.assistant ?? assistant,
 		agents: options.agents ?? [product],
 		...(options.available ? { available: options.available } : {}),
+		runtime: options.runtime ?? runtime,
 		streamFn: scripted(options.script),
 		...(options.repo ? { repo: options.repo } : {}),
-		runtime: options.runtime ?? runtime,
 	});
 	started.push(session);
 	return session;
@@ -176,16 +178,12 @@ const writesEach =
 	(_context, _name, call) =>
 		call % 2 === 1 ? summarise(`${text} ${call}`) : quiet();
 
-/** A product that is still reading when the room changes under it. */
+/** A product that is still reading when the room changes under it, then answers twice. */
 function heldUntil(held: Promise<void>): Script {
-	return async (_context, _name, call) => {
-		if (call === 1) {
-			await held;
-			return quiet('still reading');
-		}
-		if (call === 2) return speak('answer 1');
-		if (call === 3) return speak('answer 2');
-		return quiet();
+	const answers = says(['answer 1', 'answer 2']);
+	return async (context, name, call) => {
+		if (call === 1) await held;
+		return answers(context, name, call);
 	};
 }
 
@@ -775,7 +773,7 @@ describe('the assistant', () => {
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
 		await drafting.promise;
 		session.abort();
-		await session.quiet();
+		await within(session.quiet(), 2_000, 'quiet after the abort');
 		expect(summaries(await session.messages())).toHaveLength(0);
 		expect(session.exchange()).toBeUndefined();
 		// the revocation stands: nothing wakes the assistant for the same close again

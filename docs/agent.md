@@ -235,7 +235,7 @@ type Message =
       seq: number; // monotonic, assigned at commit, strictly ordered
       key?: string; // the key the commit carried; a repeated key lands once
       activationId?: string; // the activation that wrote it; absent on a delivery
-      wakes?: string[]; // the seats at rest the message wakes, written with it
+      wakes?: string[]; // every seat the message reaches: idle ones its reach wakes, and every seat at work
       at: string; // stamped by the runtime, at the moment it landed
       from: string; // a participant's name — stamped by the runtime, never claimed
       to?: string; // present when the delivery or say was directed
@@ -283,9 +283,10 @@ one union and one sequence.
 
 Beyond identity, the mechanics are eight rules. The first six are the
 room's routing and voice; all of the routing is one function, `routing` in
-`session.ts`, and it is written on the message: `wakes` names every seat at
-rest the message wakes, so a message and its routing are one write. A seat
-at work is steered once the write is confirmed (rule 2).
+`session.ts`, and it is written on the message: `wakes` names every seat
+the message reaches, so a message and its routing are one write. The seat
+side decides what reaching it means: a fresh activation for a seat at
+rest, and a steer into the activation of a seat at work.
 
 **1. Every message activates every idle agent, in parallel.** A human's
 delivery, a person arriving, and a colleague's undirected `say` route
@@ -310,32 +311,37 @@ excludes the author and wakes the subject ([`roster.md`](roster.md) §3).
 
 **2. Whatever arrives mid-activation is steered in, and working views reset at
 idle.** Replies and deliveries alike, directed or undirected: each arrival
-is injected into every active agent's running activation at the next safe point,
-so nobody finishes blind and answers stale. "Round" is deliberately a
-soft-edged word: the room has no barrier, only quiet, and quiet is what
+names every seat at work in its `wakes`, whatever the seat's attention,
+and the seat side injects it into the running activation at the next safe
+point, so nobody finishes blind and answers stale. "Round" is deliberately
+a soft-edged word: the room has no barrier, only quiet, and quiet is what
 `settled` reports. Mid-flight, each agent may see the conversation in a
 slightly different order than the record. Its working view is its own,
 temporary by design: when the agent goes idle the view is discarded, and
-the next activation reads the record itself. The record is canonical.
+the next activation reads the record itself. The record is canonical. The
+assistant is the one seat rule 2 leaves out: a composing activation
+decides on the question as it was asked ([`roster.md`](roster.md) §4), and
+a drafting one learns what landed from the refusal of its draft
+([`assistant.md`](assistant.md) §5).
 
-A steer is the room's word to a running activation, and the log does not
-record it. The log says who was at work when the message landed: a lease
-that holds a row before the message and ends, if it ends, after it. A
-message such a lease heard is answered when the lease stands down, and
-pending again when the lease expired or failed, so a run that dies while
-the seat works loses nothing: the seat is woken for the message after the
-backoff. A wake to a seat at rest is on the message, so a wake lost on
-the way is sent again after the resend window, and the seat side runs a
-wake sent twice once. A wake that lands while an activation is releasing
-its lease is no steer: that activation reads nothing more, so the wake
-runs as an activation of its own, after the release. The seat runs one
-activation at a time and every wake that queued behind it in turn. A
-claim or a release the seat never heard back on
-is asked again once: a claim of an id the room already runs is a
-renewal, and a release of a lease that ended is answered stale. When a pass ends,
-the activation renews its lease, and the renewal says how far the record
-reaches. An activation that heard less than that reads the room again
-through a fresh view.
+A steer is a wake into a running activation, and the log does not record
+it. The log says who was at work when the message landed: a lease that
+holds a row before the message and ends, if it ends, after it. A message
+such a lease heard is answered when the lease stands down, and pending
+again when the lease expired or failed, so a run that dies while the seat
+works loses nothing: the seat is woken for the message after the backoff.
+A wake to a seat at rest is on the message, so a wake lost on the way is
+sent again after the resend window, and the seat side steers a message
+once however often it arrives. A wake that lands while an
+activation is releasing its lease is no steer: that activation reads
+nothing more, so the wake runs as an activation of its own, after the
+release. The seat runs one activation at a time and every wake that
+queued behind it in turn. A claim or a release the seat never heard back
+on is asked again once: a claim of an id the room
+already runs is a renewal, and a release of a lease that ended is
+answered stale. When a pass ends, the activation renews its lease, and
+the renewal says how far the record reaches. An activation that heard
+less than that reads the room again through a fresh view.
 
 **3. Speaking is a tool; silence is the default.** An activated agent holds
 one built-in tool, `say({ to?, text })` (`sayTool` in `seat/hands.ts`). Ending
@@ -372,7 +378,7 @@ the room first. A `say` is a message the whole room pays for.
 **5. No one speaks over the room.** A message commits only against a record
 its author has read in full. For a seat that is its `say`, checked against
 the view it was handed plus every steer that has landed in its transcript
-since (`readThrough` in `seat/activation.ts`). If the record moved past that, the say
+since (`readThrough` in `activation.ts`). If the record moved past that, the say
 fails without landing, and the failure carries the messages the seat
 missed: the same steering contract, enforced at the tool boundary, where
 delivery is guaranteed. The seat then decides again — speak because
@@ -463,6 +469,7 @@ type SessionEvent =
   | { type: 'tool_execution_end'; agent: string; toolName: string }
   | { type: 'activation_end'; agent: string; spoke: boolean }
   | { type: 'error'; agent: string; error: Error }
+  | { type: 'abandoned'; agent: string; activation: string }
   | { type: 'exchange_opened'; exchange: Exchange }
   | { type: 'exchange_closed'; exchange: ClosedExchange }
   | { type: 'quiet' }
@@ -496,12 +503,14 @@ the exchange. The two words this document uses are `activation` and
 `exchange`; `turn` in these pages is Pi's, or plain English in a sentence a
 model reads.
 
-Three events are the room's own:
+Four events are the room's own:
 
 - `message`;
 - `conflict` — rule 5's lock refusing a message that raced past the
   record, so the host sees every race the lock caught;
-- `error`, which distinguishes a failed activation from a quiet one.
+- `error`, which distinguishes a failed activation from a quiet one;
+- `abandoned`, the room giving up on a wake or a draft at the cap, naming
+  the attempt it does not make.
 
 `settled()` is a promise with no event beside it: it resolves at the
 moment no agent is active, and the window between `settled()` and `quiet`
@@ -553,28 +562,29 @@ controls:
 - **`abort()`** revokes every lease in flight and every wake still
   pending: the room writes `ended` with reason `revoked` for each one, cuts
   the seat side with Pi's own abort, and settles. What was said stays, what
-  was mid-flight ends without speaking, and an aborted activation stays
-  cancelled even if a steer was still queued against it. A draft the
-  assistant held is written off with them: the summary is owed no longer.
-  The room is still running afterwards.
+  was mid-flight ends without speaking, nothing the seats were sent runs
+  after the cut, and an aborted activation stays cancelled even if a steer
+  was still queued against it. A draft the assistant held is written off
+  with them: the summary is owed no longer. The room is still running
+  afterwards.
 - **`stopSession`** is the one that ends it, and it is `abort()` plus
   everything else a run holds: the visits close with a `left` for everyone
   present, the alarm is cancelled, and the handle is spent. It writes no
-  `unseated` and no close: the next run writes its own composition, the
-  roster folds from that ([`roster.md`](roster.md) §5), and an exchange
-  left open closes at the next run's first reconcile.
+  `unseated`: the next run writes its own composition, and the roster folds
+  from that ([`roster.md`](roster.md) §5).
 - **`resumeSession(name, { runtime })`** brings a name back up over its
   log, with the composition the log holds. The first row every run
   writes is its run row, and it fences every earlier run. A run that
   finds a later run's row emits `superseded` and drops itself from
-  memory. It writes nothing more ([`durability.md`](durability.md) §1). Every name on the roster
-  resolves through the runtime's catalog, which `createRuntime({ agents })`
-  fills. The room reconciles at once: a lease the last run left expires, a
-  wake it left pending is sent again, and an exchange it left open closes
-  once nothing works on it. `runtime.evict(name)` is the other half: it
-  drops a running room from memory and writes nothing. The dropped handle
-  writes nothing either: a stop, an abort or a departure on it is a no-op,
-  and whoever waits on `quiet()` or `settled()` is released.
+  memory. It writes nothing more ([`durability.md`](durability.md) §1).
+  Every name on the roster resolves through the runtime's catalog. The room reconciles at once: a
+  lease the last run left expires, a wake it left pending is sent again,
+  an activation that expired without speaking is tried again after the
+  backoff, and an exchange it left open closes once nothing is owed on it.
+  `runtime.evict(name)` is the other half: it drops a running room from
+  memory, closes its log, and writes nothing. The dropped handle writes
+  nothing either: a stop, an abort or a departure on it is a no-op, and
+  whoever waits on `quiet()` or `settled()` is released.
 
 `messages()` and `seats()` are the pull side; the stream is the push side.
 A listener learns nothing the pulls cannot tell it — it only learns it
@@ -584,82 +594,93 @@ sooner.
 `seats()`, `subscribe()` — and `Session` extends it, so code that only
 reads takes the narrower type and cannot start anything by accident. Its
 `seats()` folds the same rows a running room folds, so a stopped room says
-who was in it and which seat still holds a lease.
+who was in it and which seat still holds a lease. The composition row and
+every seating carry each agent's identity, so a read needs the log and no
+definition.
 
 One file per concern, in layers an import points down through, and
 `session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
 §1 names the layers, and Biome holds them): the
 log in [`log.ts`](../packages/ambion/src/log/log.ts), the rules it writes
 by in [`rules.verified.ts`](../packages/ambion/src/log/rules.verified.ts),
-every fact folded
-over it in [`fold.ts`](../packages/ambion/src/room/fold.ts), the step the
-room takes in [`reconcile.ts`](../packages/ambion/src/room/reconcile.ts),
-who is here in [`presence.ts`](../packages/ambion/src/room/presence.ts), a
-seat, what wakes it and the seat's side of the wire in
-[`seat.ts`](../packages/ambion/src/seat/seat.ts), one activation in
-[`activation.ts`](../packages/ambion/src/seat/activation.ts), the hands it
-holds in [`hands.ts`](../packages/ambion/src/seat/hands.ts), an activation's
-id and lease in [`lease.ts`](../packages/ambion/src/room/lease.ts), the rules
-the fold decides by in
-[`rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts), the exchange in
-[`exchange.ts`](../packages/ambion/src/room/exchange.ts), what the assistant
-writes in [`assistant.ts`](../packages/ambion/src/room/assistant.ts), what
-crosses between a seat and its room in
+every fact folded over it
+in [`fold.ts`](../packages/ambion/src/room/fold.ts), the step the room takes in
+[`reconcile.ts`](../packages/ambion/src/room/reconcile.ts), who is here in
+[`presence.ts`](../packages/ambion/src/room/presence.ts), a seat, what wakes it
+and the seat's side of the wire in [`seat.ts`](../packages/ambion/src/seat/seat.ts),
+an activation's id and lease in [`lease.ts`](../packages/ambion/src/room/lease.ts),
+the rules the fold decides by in
+[`rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts),
+one activation in [`activation.ts`](../packages/ambion/src/seat/activation.ts),
+the hands it holds in [`hands.ts`](../packages/ambion/src/seat/hands.ts),
+the exchange in [`exchange.ts`](../packages/ambion/src/room/exchange.ts), what the
+assistant writes in [`assistant.ts`](../packages/ambion/src/room/assistant.ts),
+what crosses between a seat and its room in
 [`wire.ts`](../packages/ambion/src/wire.ts), what an activation is given
-in [`view.ts`](../packages/ambion/src/room/view.ts), what an
-agent's tools reach into in
-[`workspace.ts`](../packages/ambion/src/tools/workspace.ts), what a host
-owns in [`runtime.ts`](../packages/ambion/src/host/runtime.ts), and what
-any of them reads in [`render.ts`](../packages/ambion/src/render.ts).
+in [`view.ts`](../packages/ambion/src/room/view.ts), what an agent's tools reach
+into in [`workspace.ts`](../packages/ambion/src/tools/workspace.ts), what a host
+owns in [`runtime.ts`](../packages/ambion/src/host/runtime.ts), a storage
+over any SQLite in [`sqlite.ts`](../packages/ambion/src/host/sqlite.ts), and
+what any of them reads in [`render.ts`](../packages/ambion/src/render.ts).
 
 **The log is the truth, and the room moves by reconciling.** Every fact
 about the room is a fold over the log and the clock: the roster, the
-reserve, the people, the open exchange, the closes, the leases, the wakes
-still pending and the summaries still owed
-([`fold.ts`](../packages/ambion/src/room/fold.ts)). `reconcile()` folds
-the log, decides, writes what it decided, and sends
-([`reconcile.ts`](../packages/ambion/src/room/reconcile.ts)). It runs
-after every commit, every lease change, every alarm and every wake, and
-running it twice writes nothing. Four kinds of entry hold it all, in the
-room's one Pi session: `ambion/message`, `ambion/lease`, `ambion/close`
-and `ambion/composition`. Every entry beside a message carries `after`,
-the last message seq when it was written. The room holds one cache beside
-the log: when it last sent each wake, which a resumed room starts empty.
+reserve, the people, the open exchange, the leases, the wakes still
+pending and the summaries still owed. `reconcile()` folds the log, decides,
+writes what it decided, and sends. It runs after every commit, every lease
+change, every alarm and every wake, and running it twice writes nothing.
+Five kinds of entry hold it all, in the room's one Pi session:
+`ambion/message`, `ambion/lease`, `ambion/close`, `ambion/composition` and
+`ambion/checkpoint`. Every entry beside a message carries `after`, the last
+message seq when it was written.
+
+**A checkpoint bounds what a fold costs.** Once the log took
+`runtime.checkpoint.rows` rows past the last checkpoint, the room writes
+the next one: the composition, the closes and the leases a later fold
+still reads, behind a floor below which every wake was answered. The fold
+reads a checkpoint in place of every row before it, and the log drops
+those rows from memory. The rows stay on the storage, and a checkpoint the
+room cannot read is ignored: the fold then reads the rows.
 
 **A seat is seated for the run. An activation lasts seconds.** An
 activation's id is derived from the log: the seq of the message that woke
-the seat and the seat's name (`2:product`), or the close it answers and
-the attempt number (`close:9:1`). Nothing mints an id, so a wake is safe
-to send twice, a retried commit lands once, and every message an
-activation writes carries its `activationId`. An activation holds a
-lease: `running`, claimed and renewed with an expiry, then `ended`, with
-a reason — `released`, `failed`, `refused`, `revoked` or `expired`. A
-request from an activation whose lease ended is refused as `stale`. A
-running lease that stops renewing expires on the room's alarm: the room
-reports the expiry as an `error` event, and the seat's next request is
-refused. What landed while an activation worked and whether it left a
+the seat and the seat's name (`2:product`, and `2:product:2` for the
+second attempt), or the close it answers and the attempt number
+(`close:9:1`). Nothing mints an id, so a wake is safe to send twice, a
+retried commit lands once, and every entry an activation writes carries
+its `activationId`. An activation holds a lease: `running`, claimed and
+renewed with an expiry, then `ended`, with a reason — `released`,
+`failed`, `refused`, `revoked`, `expired` or `abandoned`. Where a row sits
+on the log says what the activation heard: the record as it stood at the
+claim, and every message that landed while the lease ran. A request from
+an activation whose lease ended is refused as `stale`. A running lease that
+stops renewing expires on the room's alarm: the room reports a failed
+activation as an `error` event, and the seat's next request is refused.
+No lease runs past `runtime.wake.deadline` from its claim: the room caps
+every renewal there, the seat side cuts the activation when its lease
+reaches the deadline, and the room counts it as an activation that came
+to nothing. What landed while an activation worked and whether it left a
 mark belong to the activation and end with it. Rule 5's `readThrough` is
 an activation's fact.
 
-**A message is answered by a lease that heard it.** A message reaches a
-seat two ways: it names the seats at rest it wakes in `wakes`, and every
-seat at work hears it as a steer. A lease heard a message when it was at
-work as the message landed, or when it was claimed after the message, so
-its view held it. The message is answered while such a lease runs and
-once it ended released, refused or revoked. A lease that stood down
-answers through the seq its last renewal confirmed: a message that
-landed between that renewal and the release reached no activation, and
-the seat is woken for it. A lease that expired or
-failed answers nothing it heard, whatever it said: its words stay on the
-record, the seat reads them at the next attempt, and the failure counts
-as one attempt. The room wakes the seat again after the backoff, under
-the next attempt's id. A message no lease answers is pending: the room
-sends the wake again after the resend window, and a seat with a wake
-pending is live, so the exchange stays open and `settled()` waits for the
-claim. `runtime.retry` holds the policy for wakes and summaries alike:
-three attempts thirty seconds apart by default, and at the cap the room
-stops. A summary the assistant could not write is retried the same way,
-and at the cap the range stays whole.
+**A message is answered by a lease that heard it, and an activation that
+came to nothing is tried again.** A message reaches a seat two ways: it
+names the seats at rest it wakes in `wakes`, and every seat at work hears
+it as a steer. A lease heard a message when it was at work as the message
+landed, or when it was claimed after the message, so its view held it.
+The message is answered while such a lease runs, and once it ended
+released, refused, revoked or abandoned. A lease that stood down answers
+through the seq its last renewal confirmed: a message that landed between
+that renewal and the release reached no activation, and the seat is woken
+for it. A lease that expired or failed answers nothing it heard, whatever
+it said: its words stay on the record, the seat reads them at the next
+attempt, and the failure counts as one attempt. The room wakes the seat again after the backoff
+(`runtime.retry`, the same policy the summaries use, three attempts thirty
+seconds apart by default), under the next attempt's id. At the cap the
+room gives up: it writes the attempt it does not make as a lease ended
+`abandoned`, which answers the message, and the host hears an `abandoned`
+event that names it. A seat with a wake pending is live, so the exchange
+stays open through the backoff, and `settled()` waits for the attempt.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
@@ -669,28 +690,28 @@ the shorthand for one. The default runtime opens sessions in an in-memory
 `InMemorySessionRepo`. A name that outlives the process is a durable
 `SessionRepo` implementation; the API stays the same.
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
-surface, and Ambion adds no storage layer of its own.
+surface, and Ambion adds one storage of its own: `sqliteSessions(sql)`,
+Pi's `SessionStorage` over any SQLite a host reaches through two calls,
+`run` and `all` ([`sqlite.ts`](../packages/ambion/src/host/sqlite.ts)). A
+process wraps `node:sqlite` in them; a Durable Object wraps its own
+storage. "Durable" means the storage's append resolved: Pi's JSONL
+repository calls no `fsync`.
 
 **What crosses between a seat and its room is JSON.** The room renders the
 system prompt and the context, and sends the two strings with the model
 id and the hand the activation holds. The seat side resolves the definition
 by name through the runtime's catalog, builds the Pi `Agent`, and reaches
 the room through three calls: `view`, `commit` and `lease`. The room
-reaches a seat through one, `wake`, which carries the line a running
-activation is steered with when a message caused it. Every request and
-response survives a round trip through `JSON.stringify` unchanged
+reaches a seat through two: `wake`, and `cut` for an activation whose
+lease the room ended. Every request and response
+survives a round trip through `JSON.stringify` unchanged
 ([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
-live in two processes. The room answers the three calls from the fold: a
-lease is a row on the log, and the seat side releases it when the
-activation ends.
+live in two processes.
 
 **A host owns a `Runtime`.** It holds the clock, the session opener, the
-model call, the catalog, the rooms that are running, the workspace names
-that are taken, and the policy for wakes and retries: how long a lease
-lasts between renewals, how long a wake waits before it is sent again, and
-how many drafts the assistant is given
-([`runtime.ts`](../packages/ambion/src/host/runtime.ts)). `startSession`,
-`readSession`, `resumeSession` and `defineWorkspace` take one as an option and default to
+model call, the rooms that are running and the workspace names that are
+taken ([`runtime.ts`](../packages/ambion/src/host/runtime.ts)). `startSession`,
+`readSession` and `defineWorkspace` take one as an option and default to
 `defaultRuntime`, one value per process. Two runtimes in one process share
 nothing: one name runs in both, and neither reads the other. "One run per
 name" above holds per runtime.
@@ -715,13 +736,8 @@ one per claim this document makes loudly:
 - the name opening back into its record;
 - events in order, errors as events, abort quieting the room — including
   an abort with a steer still queued;
-- a wake lost on the way is sent again, a wake sent twice runs once, a
-  release lost on the way expires, and a request under a lease that ended
-  is refused ([`lease.test.ts`](../packages/ambion/test/lease.test.ts));
-- a room resumed over its log continues where the last run stopped, on
-  every storage ([`restart.test.ts`](../packages/ambion/test/restart.test.ts));
-- `decide` writes nothing the second time
-  ([`reconcile.test.ts`](../packages/ambion/test/reconcile.test.ts)).
+- a seat whose model call throws is woken again after the backoff, and the
+  room gives up at the cap.
 
 What a crash leaves is proved in
 [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts): the room crashes

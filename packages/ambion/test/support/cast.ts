@@ -97,10 +97,7 @@ export const steady = (): Cast => ({
  * first activation that takes a person's question, and the room wakes it
  * again after the backoff. The colleague's answers are questions to the
  * product, so a seat's say wakes a peer and the peer answers it, across a
- * crash like a person's. A failure in a pass the activation rebuilt after
- * the record moved is not in this cast: the lease spoke in its first
- * pass, so it answers its wake, and what the rebuilt pass was answering
- * is lost (backlog item 31).
+ * crash like a person's.
  */
 export function troubled(): Cast {
 	const seen = new Set<string>();

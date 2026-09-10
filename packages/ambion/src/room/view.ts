@@ -1,8 +1,8 @@
 /**
  * What an activation is given, read off the fold and rendered: the seats,
  * the people, the record, the hand the activation holds and what it holds
- * it for. Every function is pure over the facts it is handed, so the view a
- * seat reads in one process is the view it reads in another.
+ * it for. Every function is pure over the folded state, so the view a seat
+ * reads in one process is the view it reads in another.
  */
 
 import {
@@ -23,14 +23,14 @@ export interface RoomFacts {
 	readonly now: number;
 	readonly assistant: string;
 	readonly state: RoomState;
-	/** The seats live now, by name, with the ids that make them live. */
+	/** The seats live now, by name. */
 	readonly live: ReadonlyMap<string, string[]>;
 	/** How many messages landed after this seq. */
 	unseen(since: Seq): number;
 }
 
-/** The roster and the people, as `seats()` reports them, off one folded state and nothing else. */
-export function seatsOf(facts: Pick<RoomFacts, 'name' | 'state' | 'live'>): SeatInfo[] {
+/** The roster and the people, as `seats()` reports them, off one folded state. */
+export function seatsOf(facts: Omit<RoomFacts, 'unseen' | 'now' | 'assistant'>): SeatInfo[] {
 	const seats: SeatInfo[] = facts.state.roster.map((seat) => ({
 		kind: 'agent' as const,
 		name: seat.name,
@@ -61,7 +61,12 @@ export function viewOf(
 	const state = facts.state;
 	const { hand, closing, composing } = handOf(id, seat, facts);
 	const speaking: SeatSpeaking = {
-		def,
+		def: {
+			name: def.name,
+			identity: def.identity,
+			instructions: def.instructions,
+			connected: def.workspace !== undefined,
+		},
 		assistant: seat === facts.assistant,
 		closing: closing && { ...closing, preferences: state.people.get(closing.person)?.preferences },
 		composing: composing && { ...composing, reserve: reserved(facts) },
@@ -88,10 +93,8 @@ type Hands = {
 
 /**
  * What an activation is for, read off its id and the fold: a draft closes
- * an exchange still owed, the assistant woken by the question that opened
- * one composes the room for it, and every other seat speaks. A draft id
- * names one close; the hand it holds covers every close its person is
- * owed, so a close that joined the draft after the claim is read too.
+ * an exchange, the assistant woken by the question that opened one
+ * composes the room for it, and every other seat speaks.
  */
 function handOf(id: string, seat: string, facts: RoomFacts): Hands {
 	const state = facts.state;
@@ -122,7 +125,10 @@ function openedBy(seq: Seq | undefined, state: RoomState): boolean {
 
 /** The reserve as the assistant reads it: a name and an identity per agent. */
 function reserved(facts: RoomFacts): { name: string; identity: string }[] {
-	return facts.state.reserve.map((seat) => ({ name: seat.name, identity: seat.identity }));
+	return facts.state.reserve.map((seat) => ({
+		name: seat.name,
+		identity: seat.identity,
+	}));
 }
 
 /** What the prose is given of this room, built fresh for each activation. */
