@@ -254,7 +254,10 @@ summary is owed and the assistant is idle, the room wakes it.
 composing activation.** The seat is live, so the routing leaves the
 assistant out of the question's `wakes`. A queued compose would land into a
 room that may have settled. The roster stands as it is for that exchange,
-and the next question composes again: one seat, one activation.
+and the next question composes again: one seat, one activation. A question
+that opens its exchange only once the last one closed gets no composing
+activation either ([`exchange.md`](exchange.md) §3): its wakes were
+decided while the last exchange was open, and the roster stands.
 
 **What the newcomer reads.** Every activation rebuilds the seat's context
 from the record as it stands ([`agent.md`](agent.md) rule 2), so a
@@ -348,9 +351,11 @@ Each boundary is stated so a later change has to argue with it.
 - **A seating is on the record, and so is the composition.** Every
   `startSession` writes a composition row beside the messages: the
   assistant, the goal, the agents seated and the agents in reserve, each
-  with its attention. The roster folds from the latest row and the
-  seatings and unseatings after it, so a stopped room reads back, and a
-  resumed room starts from what its last run held.
+  with its name, its identity and its attention. The roster folds from the
+  latest row and the seatings and unseatings after it, so a stopped room
+  reads back, and a resumed room starts from what its last run held. A read
+  from a process that holds no definition reports every identity off the
+  log.
 - **The threshold reads the record.** The rule that a summary is written
   when the agents said more than one thing counts messages from any name
   that is not a person and not the assistant, so an agent that spoke and

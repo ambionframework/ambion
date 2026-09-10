@@ -100,7 +100,7 @@ function handOf(id: string, seat: string, facts: RoomFacts): Hands {
 	const state = facts.state;
 	const parsed = parseId(id);
 	if (parsed?.kind === 'draft') {
-		const owed = state.owed.find((o) => o.through === parsed.through);
+		const owed = state.owed.find((o) => o.closes.includes(parsed.through));
 		if (owed === undefined) return { hand: 'none' };
 		return {
 			hand: 'summarise',

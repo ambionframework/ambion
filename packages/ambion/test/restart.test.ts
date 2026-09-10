@@ -22,7 +22,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { collect, crash, deferred, roomName } from './support/room.ts';
+import { collect, crash, deferred, roomName, rowsOf, tick } from './support/room.ts';
 import {
 	byAgent,
 	quiet,
@@ -32,7 +32,7 @@ import {
 	summarise,
 	toolNames,
 } from './support/scripted.ts';
-import { type OpenedStorage, storages } from './support/storage.ts';
+import { memory, type OpenedStorage, storages } from './support/storage.ts';
 import { faultyTransport } from './support/transport.ts';
 
 const assistant = defineAgent({
@@ -248,6 +248,61 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		}
 	});
 
+	it('leaves an open exchange to the next run, which closes it before it answers', async () => {
+		const { opened, runtime } = await world(storage);
+		try {
+			const name = roomName(`restart-exchange-${storage.name}`);
+			const working = deferred();
+			const one = startSession({
+				name,
+				assistant,
+				agents: [alpha],
+				runtime: runtime(),
+				streamFn: scripted(
+					byAgent({
+						alpha: async () => {
+							working.resolve();
+							await new Promise(() => {});
+							return quiet();
+						},
+					}),
+				),
+			});
+			const heard = collect(one);
+			const visit = await visitSession(one, priya);
+			await visit.deliver({ text: 'Is anybody there?' });
+			await working.promise;
+			// a stop mid-exchange: the lease is revoked, and the stopped room closes nothing
+			await stopSession(one);
+			expect(heard.map((e) => e.type)).not.toContain('exchange_closed');
+			const before = await rowsOf(opened.sessions, name);
+			expect(before.map((row) => row.type)).not.toContain('ambion/close');
+
+			// the next run closes it as it starts, and quiet() waits for that close
+			const two = startSession({
+				name,
+				assistant,
+				agents: [alpha],
+				runtime: runtime(),
+				streamFn: scripted(byAgent({})),
+			});
+			const events = collect(two);
+			await two.quiet();
+			// the close is on the stream when quiet() answers, before any other call replays the log
+			expect(events.map((e) => e.type)).toContain('exchange_closed');
+			expect(two.exchange()).toBeUndefined();
+			const question = (await two.messages()).find((m) => m.kind === 'said');
+			const closes = (await rowsOf(opened.sessions, name)).filter(
+				(row) => row.type === 'ambion/close',
+			);
+			expect(closes).toHaveLength(1);
+			expect(closes[0]?.data).toMatchObject({ owner: 'priya', from: question?.seq });
+			await stopSession(two);
+		} finally {
+			await opened.dispose();
+		}
+	});
+
 	it('writes one composition per run, and the latest roster wins', async () => {
 		const { opened, runtime } = await world(storage);
 		try {
@@ -448,5 +503,92 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		} finally {
 			await opened.dispose();
 		}
+	});
+});
+
+describe('a room dropped from memory', () => {
+	async function dropped() {
+		const opened = await memory.open();
+		const runtime = createRuntime({ clock: fakeClock(), sessions: opened.sessions });
+		const held = deferred();
+		const session = startSession({
+			name: roomName('evicted'),
+			assistant,
+			agents: [alpha],
+			runtime,
+			streamFn: scripted(
+				byAgent({
+					alpha: async (_c, _n, call) => {
+						if (call !== 1) return quiet();
+						await held.promise;
+						return quiet();
+					},
+				}),
+			),
+		});
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'go' });
+		await tick();
+		runtime.evict(session.name);
+		return { session, visit, opened, held };
+	}
+
+	it('answers quiet() and settled() at once', async () => {
+		const { session, held } = await dropped();
+		await expect(session.quiet()).resolves.toBeUndefined();
+		await expect(session.settled()).resolves.toBeUndefined();
+		held.resolve();
+	});
+
+	it('releases whoever was already waiting on quiet() or settled()', async () => {
+		const opened = await memory.open();
+		const runtime = createRuntime({ clock: fakeClock(), sessions: opened.sessions });
+		const held = deferred();
+		const session = startSession({
+			name: roomName('evicted-waiting'),
+			assistant,
+			agents: [alpha],
+			runtime,
+			streamFn: scripted(
+				byAgent({
+					alpha: async (_c, _n, call) => {
+						if (call !== 1) return quiet();
+						await held.promise;
+						return quiet();
+					},
+				}),
+			),
+		});
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'go' });
+		// both wait while the room is up, and the eviction lands before either has parked
+		const waiting = Promise.all([session.quiet(), session.settled()]);
+		runtime.evict(session.name);
+		await expect(waiting).resolves.toEqual([undefined, undefined]);
+		held.resolve();
+	});
+
+	it('writes nothing for a stop on the dropped handle', async () => {
+		const { session, opened, held } = await dropped();
+		await tick();
+		const before = (await rowsOf(opened.sessions, session.name)).length;
+		await stopSession(session);
+		await tick();
+		expect((await rowsOf(opened.sessions, session.name)).length).toBe(before);
+		held.resolve();
+	});
+
+	it('writes nothing for an abort or a departure on the dropped handle', async () => {
+		const { session, visit, opened, held } = await dropped();
+		await tick();
+		const before = (await rowsOf(opened.sessions, session.name)).length;
+		session.abort();
+		await tick();
+		await tick();
+		await visit.leave();
+		await tick();
+		expect((await rowsOf(opened.sessions, session.name)).length).toBe(before);
+		await expect(visit.deliver({ text: 'still there?' })).rejects.toThrow();
+		held.resolve();
 	});
 });

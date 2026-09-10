@@ -58,9 +58,9 @@ order. A change requested on PR n is made on PR n and rebased forward.
 | 14  | The Cloudflare adapter                                     | `3defaf3`, `a20ba46`, later deltas         | ~0.9k             | 9, 13 |
 | 15  | The demo that crashes, and its report                      | `4474de1`, `346cf31`                       | ~0.2k + generated | 12    |
 
-PRs 1 to 4 landed on main as #49, #50, #51 and #52. PR 4 landed with two
-decisions the branch had not made; the note under PR 5 says what they are
-and what PR 5 does about them.
+PRs 1 to 5 landed on main as #49, #50, #51, #52 and #53. PRs 4 and 5
+landed with decisions the branch had not made; the note under PR 5 says
+what they are, and the branch holds them now.
 
 Sizes are lines of diff without the lockfile and the generated report.
 PRs 9 to 12 are independent of each other and could land in any order;
@@ -286,26 +286,39 @@ message a live seat heard only through a steer is lost with a crash. PR 7
 closes it. Say so in the PR description; it is still a strict improvement
 over main, which cannot resume at all.
 
-**Where main and the branch part.** PR 4 landed on main as #52 with two
-decisions the branch had not made, and this PR meets both:
+**Where main and the branch parted, and met.** PR 4 landed on main as
+#52 and PR 5 as #53, each with decisions the branch had not made. The
+branch adopted them at the merges after each, so the final tree holds:
 
 - Every `SeatRow` carries `identity`, and `CompositionRow.assistant` is a
   `SeatRow`, so `readSession` reads every identity off the log and needs
-  no definition. The branch adopted this at the merge after #52; keep it.
-- With the leases in memory, main closes an exchange at the quiet it
-  observed: a question that lands after that moment and before the close
-  row is written opens the next exchange, and a close the storage refuses
-  still answers whoever waits on `quiet()`. Main pins this in
-  `test/assistant.test.ts` ("closes at the quiet it observed", "never
-  closes the next exchange", "composes nothing for a question the
-  assistant already woke on") and `test/presence.test.ts` ("answers
-  whoever waits when the close itself cannot be written"), over a
-  `gatedOpener` in `test/support/storage.ts`. With the leases on the log
-  the release lands behind the held message, `decide` folds only what
-  landed, `close()` checks the fold again where it lands, and a refused
-  write arms the resend window. The branch's `docs/exchange.md` §5 says
-  so. This PR replaces those four tests and drops `gatedOpener`; say in
-  its description that the close row now names the quiet the log holds.
+  no definition.
+- A close names the quiet the room decided on: `through` is the record as
+  the decision saw it, the row is written wherever the fold still shows
+  the same exchange open, and a question that landed after the decision
+  opens the next exchange the moment the close lands. `close()` checks
+  the exchange and `stopped`, and nothing else.
+- A close the storage refuses still answers `settled()` and `quiet()`,
+  and the room looks again after the resend window.
+- A stopped or dropped handle writes nothing: `stop()` on an evicted room
+  returns, `abort()` and `leave()` on it are no-ops, and `quiet()` and
+  `settled()` answer at once.
+- An expiry the alarm decided is not written over a renewal that landed
+  ahead of it, and a draft is handed every close its person is owed, so a
+  later close joins the draft under the claim.
+
+Main pins these in `test/assistant.test.ts`, `test/presence.test.ts`,
+`test/restart.test.ts` and `test/lease.test.ts` over a `gatedOpener` and
+a `faultyOpener` that can fail one entry type. One test of #53 is not on
+the branch: "composes nothing for a question the assistant already woke
+on" delivers a message to the assistant, which PR 8 refuses at the door
+(`test/session.test.ts` "refuses a delivery directed at the assistant").
+PR 8 drops that test or rewrites it without the directed delivery. Three
+more tests of #53 name PR 5 answers that PR 7 replaces: a wake answered
+by any lease of its id, an expiry that closes on the fold that holds it,
+and an expiry on resume that wakes nobody again. PR 7 rewrites them as
+the branch's `test/reconcile.test.ts` and `test/restart.test.ts` have
+them.
 
 ---
 

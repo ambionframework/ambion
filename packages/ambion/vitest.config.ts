@@ -7,6 +7,8 @@ import { configDefaults, defineConfig } from 'vitest/config';
  */
 export default defineConfig({
 	test: {
+		// The scenarios run on three storages, two of them on disk: a test under the gate's load takes seconds.
+		testTimeout: 20_000,
 		exclude: [...configDefaults.exclude, 'test/live/**'],
 	},
 });

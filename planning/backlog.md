@@ -606,7 +606,8 @@ the identity, so a read reports what the run held.
 **Why deferred.** The room already refuses a duplicate name inside one
 roster. Two rooms in one runtime with one name and two definitions is a
 host that wants two runtimes. The catalog exists so that a transport can
-hand a seat in another process the definition it needs by name.
+hand a seat in another process the definition it needs by name, and so
+that `resumeSession` can resolve a roster it reads off the log.
 
 **Options.** The runtime refuses a second, different definition under a
 name it holds. Or the in-process transport hands the actor the room's own

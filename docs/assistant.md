@@ -62,10 +62,11 @@ it refuses a say. Two things make it the seat it is, and both are data:
   reserve. [`roster.md`](roster.md) is the contract for it.
 
 A seat carries none of that. Which seat is the assistant is on the
-composition row; who is owed a message is a fold over the close rows and
-the summaries (`fold.ts`); what it is drafting for now is on the id of the
-activation it holds (`close:<through>:<attempt>`). No seat carries a field
-for any of it.
+composition row; who is owed a message is a fold over the close rows, the
+summaries and the leases (`foldOwed` in
+[`fold.ts`](../packages/ambion/src/room/fold.ts)); what it is drafting for
+now is on the id of the activation it holds (`close:<through>:<attempt>`).
+No seat carries a field for any of it.
 
 The assistant holds one thing nothing else in the room holds: **what a
 message to a person is for**, as its instructions say it. What differs by
@@ -737,18 +738,20 @@ settles, so rule 1 keeps its letter. But the room makes a model call that
 no message asked for, and that is a second kind of trigger. §15 bounds it:
 the close of an exchange, one assistant, one message.
 
-**An aborted exchange still closes.** `abort()` cancels the activations in
-flight and the room settles, so the exchange it was working on closes and
-the assistant writes for its owner. That is right — the exchange ended, and its
-person still gets what the room reached before it was cut off — but the
-message stands for work somebody stopped. `stopSession` is the other case,
-below.
+**An aborted exchange still closes.** `abort()` revokes the leases in
+flight and the room reconciles, so the exchange it was working on closes
+and the assistant writes for its owner. That is right — the exchange ended,
+and its person still gets what the room reached before it was cut off —
+but the message stands for work somebody stopped. A draft the assistant
+held at the abort is written off with the rest: the summary it stood for
+is owed no longer. `stopSession` is the other case, below.
 
-**A run that stops mid-exchange writes no summary.** `stopSession` aborts
-the activations in flight, so the exchange never closes. It aborts a draft in
-flight for the same reason, and a draft that does finish after the stop
-commits nothing. The person asked and heard nothing, and the record shows a
-question, some work and a shutdown. Accepted.
+**A run that stops mid-exchange writes no summary.** `stopSession` revokes
+the leases in flight and writes no close, so the exchange stays open on
+the log. It revokes a draft in flight for the same reason, and a draft
+that does finish after the stop commits nothing. The next run over the
+same log closes the exchange at its first reconcile
+([`exchange.md`](exchange.md) §5) and writes what it owes then. Accepted.
 
 **A widened range is bounded by a race, and nothing else.** A summary
 covers one exchange, so the only thing that can make a range large is what

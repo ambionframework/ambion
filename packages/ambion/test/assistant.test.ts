@@ -11,6 +11,8 @@ import {
 	InMemorySessionRepo,
 	isSpoken,
 	type Message,
+	passive,
+	type Runtime,
 	type Session,
 	type SessionEvent,
 	type SummaryMessage,
@@ -29,9 +31,11 @@ import {
 	type Script,
 	says,
 	scripted,
+	seat,
 	speak,
 	summarise,
 } from './support/scripted.ts';
+import { gatedOpener, memory } from './support/storage.ts';
 
 /** The ordinary assistant: it writes once, then ends its activation. */
 const writes =
@@ -101,15 +105,18 @@ const runtime = createRuntime({ clock });
 function open(options: {
 	script: Script;
 	agents?: Parameters<typeof startSession>[0]['agents'];
+	available?: Parameters<typeof startSession>[0]['available'];
 	assistant?: Parameters<typeof startSession>[0]['assistant'];
 	repo?: SessionRepo;
+	runtime?: Runtime;
 }): Session {
 	const session = startSession({
 		name: roomName(),
 		goal: 'Decide the pour date and keep the plan honest.',
 		assistant: options.assistant ?? assistant,
 		agents: options.agents ?? [product],
-		runtime,
+		...(options.available ? { available: options.available } : {}),
+		runtime: options.runtime ?? runtime,
 		streamFn: scripted(options.script),
 		...(options.repo ? { repo: options.repo } : {}),
 	});
@@ -868,6 +875,138 @@ describe('an exchange', () => {
 		await quiescent(session);
 		expect(events.filter((e) => e.type === 'exchange_opened')).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(1);
+	});
+
+	/** Resolves when the named seat's next activation ends. */
+	const activationEnded = (session: Session, agent: string) =>
+		new Promise<void>((resolve) => {
+			const off = session.subscribe((event) => {
+				if (event.type !== 'activation_end' || event.agent !== agent) return;
+				off();
+				resolve();
+			});
+		});
+
+	/** A room over a storage that holds the writes the test names. */
+	const gated = async (
+		held: (type: string, data: { text?: string }) => Promise<void> | undefined,
+	) =>
+		createRuntime({
+			clock,
+			sessions: gatedOpener((await memory.open()).sessions, (type, data) =>
+				held(type, data as { text?: string }),
+			),
+		});
+
+	/**
+	 * A question asked the moment the named seat stops, before the room has
+	 * decided on the quiet: the close the room decides is for the record
+	 * without it, and the question waits on the storage until the test lets
+	 * it land.
+	 */
+	const askedAsStops = (session: Session, seat: string, ask: () => Promise<void>) =>
+		new Promise<{ landed: Promise<void> }>((resolve) => {
+			const off = session.subscribe((event) => {
+				if (event.type !== 'activation_end' || event.agent !== seat) return;
+				off();
+				resolve({ landed: ask() });
+			});
+		});
+
+	const surveyor = defineAgent({
+		name: 'surveyor',
+		identity: 'Quantity surveyor.',
+		instructions: 'x',
+		model: 'scripted/surveyor',
+	});
+
+	const ranges = (events: SessionEvent[]) =>
+		events.flatMap((e) =>
+			e.type === 'exchange_closed' ? [[e.exchange.from, e.exchange.through]] : [],
+		);
+	const openings = (events: SessionEvent[]) =>
+		events.flatMap((e) => (e.type === 'exchange_opened' ? [e.exchange.from] : []));
+
+	it('closes at the quiet it observed, and a question that lands before the row opens the next', async () => {
+		const gate = deferred();
+		const working = deferred();
+		const session = open({
+			runtime: await gated((_type, data) => (data.text === 'second?' ? gate.promise : undefined)),
+			script: byAgent({
+				product: async (_context, _name, call) => {
+					if (call !== 1) return quiet();
+					await working.promise;
+					return quiet();
+				},
+			}),
+		});
+		const events = collect(session);
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'first?' });
+		const asked = askedAsStops(session, 'product', () => visit.deliver({ text: 'second?' }));
+		working.resolve();
+		const { landed: second } = await asked;
+		await tick();
+		await tick();
+		gate.resolve();
+		await second;
+		await quiescent(session);
+
+		const record = await session.messages();
+		const [first, next] = record.filter(isSpoken);
+		// the first exchange holds what the room had when it went quiet, and the second
+		// question opened its own, announced once the first closed, and worked on
+		expect(ranges(events)).toEqual([
+			[first?.seq, first?.seq],
+			[next?.seq, record.at(-1)?.seq],
+		]);
+		expect(openings(events)).toEqual([first?.seq, next?.seq]);
+		const order = events.map((e) => e.type);
+		expect(order.lastIndexOf('exchange_opened')).toBeGreaterThan(order.indexOf('exchange_closed'));
+		expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(2);
+	});
+
+	it('never closes the next exchange on a quiet it observed for the last one, and the roster stands for it', async () => {
+		const gate = deferred();
+		const working = deferred();
+		const session = open({
+			runtime: await gated((_type, data) => (data.text === 'second?' ? gate.promise : undefined)),
+			agents: [passive(product)],
+			available: [surveyor],
+			script: byAgent({
+				product: async () => {
+					await working.promise;
+					return quiet();
+				},
+				// composes nobody for the first question; the second gets no composing activation
+				assistant: (_context, _name, call) => (call === 2 ? seat('surveyor') : quiet()),
+			}),
+		});
+		const events = collect(session);
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ to: product, text: 'first?' });
+		await activationEnded(session, 'assistant');
+		// the second question wakes nobody, and it is asked the moment the product stops
+		const asked = askedAsStops(session, 'product', () => visit.deliver({ text: 'second?' }));
+		working.resolve();
+		const { landed: second } = await asked;
+		await tick();
+		await tick();
+		gate.resolve();
+		await second;
+		await quiescent(session);
+
+		const record = await session.messages();
+		const [first, next] = record.filter(isSpoken);
+		// the first exchange closed where its quiet was observed; the second opened on that
+		// close, nobody worked on it, and it closed at once holding the question alone
+		expect(ranges(events)).toEqual([
+			[first?.seq, first?.seq],
+			[next?.seq, next?.seq],
+		]);
+		expect(openings(events)).toEqual([first?.seq, next?.seq]);
+		expect(record.some((m) => m.kind === 'seated')).toBe(false);
+		expect(session.exchange()).toBeUndefined();
 	});
 
 	it('closes before the summary that stands for it', async () => {

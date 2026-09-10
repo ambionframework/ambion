@@ -323,11 +323,12 @@ a drafting one learns what landed from the refusal of its draft
 
 A steer is a wake into a running activation, and the lease records that
 it landed: the seat side renews with `heard`, the seq the activation has
-taken. A wake lost on the way is sent again after the resend window, and
-the seat side steers a message once however often it arrives. When a pass
-ends, the activation renews its lease, and the renewal says how far the
-record reaches. An activation that heard less than that reads the room
-again through a fresh view.
+taken. A wake to a seat at rest is on the message, so a wake lost on the
+way is sent again after the resend window, and the seat side steers a
+message once however often it arrives. When a pass ends, the activation
+renews its lease, and the renewal says how far the record reaches. An
+activation that heard less than that reads the room again through a
+fresh view.
 
 **3. Speaking is a tool; silence is the default.** An activated agent holds
 one built-in tool, `say({ to?, text })` (`sayTool` in `seat/hands.ts`). Ending
@@ -561,7 +562,9 @@ controls:
   an activation that expired without speaking is tried again after the
   backoff, and an exchange it left open closes once nothing is owed on it.
   `runtime.evict(name)` is the other half: it drops a running room from
-  memory, closes its log, and writes nothing.
+  memory, closes its log, and writes nothing. The dropped handle writes
+  nothing either: a stop, an abort or a departure on it is a no-op, and
+  whoever waits on `quiet()` or `settled()` is released.
 
 `messages()` and `seats()` are the pull side; the stream is the push side.
 A listener learns nothing the pulls cannot tell it — it only learns it
@@ -570,10 +573,10 @@ sooner.
 `readSession(name, { repo })` returns the pull side alone — `messages()`,
 `seats()`, `subscribe()` — and `Session` extends it, so code that only
 reads takes the narrower type and cannot start anything by accident. Its
-`seats()` folds the same composition row a running room folds, so a stopped
-room says who was in it: the roster, every seat idle, and every person the
-record knows. The row and every seating carry each agent's identity, so a
-read needs the log and no definition.
+`seats()` folds the same rows a running room folds, so a stopped room says
+who was in it and which seat still holds a lease. The composition row and
+every seating carry each agent's identity, so a read needs the log and no
+definition.
 
 One file per concern, in layers an import points down through, and
 `session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)

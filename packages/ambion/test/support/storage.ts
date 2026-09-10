@@ -134,7 +134,12 @@ export const backends: readonly Backend[] = [
  * fails the append: before it lands, the entry is nowhere; after, the
  * entry is on the storage and the writer never learns it.
  */
-export type AppendHook = (id: string, n: number, phase: 'before' | 'after') => void;
+export type AppendHook = (
+	id: string,
+	n: number,
+	phase: 'before' | 'after',
+	customType: string | undefined,
+) => void;
 
 /** An opener whose every append reports itself to the hook, and fails when the hook throws. */
 export function tappedOpener(sessions: SessionOpener, hook: AppendHook): SessionOpener {
@@ -146,12 +151,13 @@ export function tappedOpener(sessions: SessionOpener, hook: AppendHook): Session
 					return async (...args: unknown[]) => {
 						const n = (counts.get(id) ?? 0) + 1;
 						counts.set(id, n);
-						hook(id, n, 'before');
+						const customType = property === 'appendCustomEntry' ? String(args[0]) : undefined;
+						hook(id, n, 'before', customType);
 						const append = Reflect.get(target, property, receiver) as (
 							...a: unknown[]
 						) => Promise<unknown>;
 						const result = await append.apply(target, args);
-						hook(id, n, 'after');
+						hook(id, n, 'after', customType);
 						return result;
 					};
 				}
@@ -167,19 +173,51 @@ export type FailMode = false | 'before' | 'after';
 
 export interface FaultyOpener {
 	readonly sessions: SessionOpener;
-	/** Every write fails while `on` is set: `true` and `'before'` lose it, `'after'` lands it and loses the confirmation. */
-	fail(on: boolean | FailMode): void;
+	/**
+	 * Every write fails while `on` is set: `true` and `'before'` lose it, `'after'`
+	 * lands it and loses the confirmation. `only` narrows it to one entry type.
+	 */
+	fail(on: boolean | FailMode, only?: string): void;
 }
 
 /** An opener whose sessions refuse to write while the test says so. */
 export function faultyOpener(sessions: SessionOpener): FaultyOpener {
 	let failing: FailMode = false;
+	let onlyType: string | undefined;
 	return {
-		sessions: tappedOpener(sessions, (_id, _n, phase) => {
-			if (failing === phase) throw new Error('the disk is full');
+		sessions: tappedOpener(sessions, (_id, _n, phase, customType) => {
+			if (failing !== phase) return;
+			if (onlyType === undefined || onlyType === customType) throw new Error('the disk is full');
 		}),
-		fail: (on) => {
+		fail: (on, only) => {
 			failing = on === true ? 'before' : on;
+			onlyType = only;
 		},
 	};
+}
+
+// -- a storage that holds a write ---------------------------------------------
+
+/** An opener whose sessions hold one write until the test lets it land. */
+export function gatedOpener(
+	sessions: SessionOpener,
+	held: (customType: string, data: unknown) => Promise<void> | undefined,
+): SessionOpener {
+	const gated = (piSession: PiSession): PiSession =>
+		new Proxy(piSession, {
+			get(target, property, receiver) {
+				if (property === 'appendCustomEntry') {
+					return async (customType: string, data: unknown) => {
+						await held(customType, data);
+						return (Reflect.get(target, property, receiver) as (...a: unknown[]) => unknown).apply(
+							target,
+							[customType, data],
+						);
+					};
+				}
+				const value = Reflect.get(target, property, receiver);
+				return typeof value === 'function' ? value.bind(target) : value;
+			},
+		});
+	return { open: async (id, parentId) => gated(await sessions.open(id, parentId)) };
 }

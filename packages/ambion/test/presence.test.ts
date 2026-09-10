@@ -17,7 +17,7 @@ import {
 } from '../src/index.ts';
 import { andrei, assistant, collect, deferred, roomName as name } from './support/room.ts';
 import { contextText, quiet, scripted } from './support/scripted.ts';
-import { faultyOpener, memory } from './support/storage.ts';
+import { type FaultyOpener, faultyOpener, memory } from './support/storage.ts';
 
 // -- a room that never speaks ------------------------------------------------
 
@@ -337,7 +337,7 @@ describe('presence', () => {
 // -- a storage that fails ----------------------------------------------------
 
 /** A room over a storage the test can break and mend. */
-async function brittle(): Promise<{ session: Session; fail: (on: boolean) => void }> {
+async function brittle(): Promise<{ session: Session; fail: FaultyOpener['fail'] }> {
 	const faulty = faultyOpener((await memory.open()).sessions);
 	const runtime = createRuntime({ sessions: faulty.sessions });
 	const session = startSession({
@@ -369,6 +369,35 @@ describe('a storage that fails', () => {
 		const record = await session.messages();
 		expect(record.map((m) => m.seq)).toEqual([1, 2]);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said']);
+		await stopSession(session);
+	});
+
+	it('answers whoever waits when the close itself cannot be written, and closes at the next reconcile', async () => {
+		const { session, fail } = await brittle();
+		const events = collect(session);
+		const visit = await visitSession(session, andrei);
+		await session.settled();
+		// the close is the one write that fails
+		fail(true, 'ambion/close');
+		await visit.deliver({ text: 'first?' });
+		// the seat is woken; the host waits for the room to be quiet
+		const waiting = session.quiet();
+		await expect(waiting).resolves.toBeUndefined();
+		expect(events.map((e) => e.type)).not.toContain('exchange_closed');
+		expect(events.map((e) => e.type)).toContain('quiet');
+		expect(session.exchange()).toMatchObject({ owner: 'andrei' });
+
+		// the storage mends, the seats work and stop again, and the close is written then
+		fail(false);
+		await visit.deliver({ text: 'still there?' });
+		await session.quiet();
+		expect(session.exchange()).toBeUndefined();
+		const closed = events.filter((e) => e.type === 'exchange_closed');
+		expect(closed).toHaveLength(1);
+		const record = await session.messages();
+		expect(closed[0]).toMatchObject({
+			exchange: { owner: 'andrei', from: record[1]?.seq, through: record.at(-1)?.seq },
+		});
 		await stopSession(session);
 	});
 
