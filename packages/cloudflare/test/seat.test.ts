@@ -17,7 +17,9 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	await room.start({ name: 'seat-test', assistant: 'assistant', agents: ['product'] });
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	await room.deliver({ from: 'priya', text: 'When is the pour?', key: 'q1' });
-	expect(await until(() => seat.wakes())).toBe(1);
+	// the worker's resend window is 50 ms: a seat whose alarm claims the lease
+	// later than that is woken again, so the count is at least one
+	expect(await until(() => seat.wakes())).toBeGreaterThanOrEqual(1);
 
 	// the seat's alarm runs the activation: a lease claimed, a say, the lease renewed at the
 	// end of the pass, and released
