@@ -21,9 +21,10 @@
  *
  * What is left in this file is what the assistant *is*: what a room refuses
  * to seat as one, the threshold a summary is written above, and what the
- * room holds of the assistant while it runs: how each person reads, who is
- * owed, and the one draft or composition in flight. The two tools are hands
- * the seat side gives it (`seat/hands.ts`).
+ * room holds of the assistant while it runs: who is owed, and the one draft
+ * or composition in flight. How each person reads is on the record, with
+ * their arrival. The two tools are hands the seat side gives it
+ * (`seat/hands.ts`).
  */
 import type { AgentDefinition, Message, Seq } from '../types.ts';
 import { isAgent, isSpoken } from '../types.ts';
@@ -97,16 +98,14 @@ export interface Composing {
 }
 
 /**
- * The assistant in one room: how each person reads, who is owed a message,
- * and the one it is drafting now.
+ * The assistant in one room: who is owed a message, and the one it is
+ * drafting now.
  *
  * A seat knows nothing about any of this. The assistant is a seat like every
  * other, and what makes it the assistant is held here — so the room asks *the
  * assistant* whether a name is it, rather than every seat carrying the answer.
  */
 export class Assistant {
-	/** How each person who visited this run reads. Run state: a restart begins empty. */
-	private readonly preferences = new Map<string, string | undefined>();
 	/**
 	 * People owed a message, and the seq their range starts at. A race or a
 	 * failed activation leaves one owed; the next quiet room writes it.
@@ -145,15 +144,6 @@ export class Assistant {
 	/** Whether this name is the assistant. It answers about the assistant and nothing else. */
 	is(name: string): boolean {
 		return name === this.name;
-	}
-
-	/** A person is in the room: how they read, as their latest visit says it. */
-	serve(person: string, preferences: string | undefined): void {
-		this.preferences.set(person, preferences);
-	}
-
-	preferencesOf(person: string): string | undefined {
-		return this.preferences.get(person);
 	}
 
 	/** What the assistant is closing, while it is closing it. */

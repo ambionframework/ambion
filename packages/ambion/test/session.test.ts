@@ -281,10 +281,13 @@ describe('startSession', () => {
 		expect(new Set(seqs).size).toBe(seqs.length);
 		await stopSession(again);
 
-		// you can read a room that is not running
+		// you can read a room that is not running: the record, and the roster it folds
 		const view = readSession(name);
 		expect(spoken(await view.messages()).map((m) => m.text)).toContain('for the record');
-		expect(view.seats().every((seat) => seat.kind === 'human')).toBe(true);
+		expect(view.seats().map((seat) => seat.name)).toEqual(['scribe', 'assistant', 'andrei']);
+		expect(view.seats().every((seat) => seat.kind === 'human' || seat.status === 'idle')).toBe(
+			true,
+		);
 
 		const fresh = startSession({
 			name: roomName('identity'),

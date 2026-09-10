@@ -28,9 +28,9 @@ same name and never see each other.
 that runs unattended for days must not scan its whole record per message
 or render all of it per activation.
 
-**Done when.** `Attendance` updates an index on append and `known()` is
-O(1). `RoomView.record` takes a window policy, and the design contract
-names the module that owns it.
+**Done when.** The fold advances an index per entry, and `foldRoom` is
+O(1) per message. `RoomView.record` takes a window policy, and the design
+contract names the module that owns it.
 
 ## 4. Load the provider registry on demand (backlog 4)
 

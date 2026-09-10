@@ -236,7 +236,7 @@ export interface RoomView {
 }
 
 /** The exchange the assistant is closing: whose it was, how they read, and its range. */
-export interface Closing {
+interface Closing {
 	/** The person whose question opened it, and who reads the message. */
 	readonly person: string;
 	/** How they read, or nothing when they said nothing about it. */
@@ -252,7 +252,7 @@ interface Reserved {
 }
 
 /** The exchange the assistant is composing the room for: whose question, and who is in reserve. */
-export interface ComposingView {
+interface ComposingView {
 	readonly person: string;
 	readonly from: Seq;
 	readonly reserve: readonly Reserved[];

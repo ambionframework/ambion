@@ -574,7 +574,7 @@ describe('the host', () => {
 		);
 	});
 
-	it('unseats what the run added at stop, and leaves the starting composition alone', async () => {
+	it('leaves the roster to the next composition at stop, and the next run starts from its own', async () => {
 		const session = open({ script: byAgent({}), agents: [product], available: [surveyor] });
 		await session.seat(surveyor);
 		await session.quiet();
@@ -582,10 +582,23 @@ describe('the host', () => {
 		await stopSession(session);
 		started.pop();
 
+		// the record says who was seated, and a read of the stopped room folds it
 		const { readSession } = await import('../src/index.ts');
-		const record = await readSession(session.name).messages();
-		expect(kinds(record)).toEqual(['seated', 'unseated']);
-		expect(record.at(-1)).toMatchObject({ kind: 'unseated', from: 'surveyor' });
+		const stopped = readSession(session.name);
+		expect(kinds(await stopped.messages())).toEqual(['seated']);
+		expect(seatNames(stopped as Session)).toEqual(['product', 'assistant', 'surveyor']);
+
+		// the next run writes its own composition, and the roster folds from that
+		const again = startSession({
+			name: session.name,
+			assistant,
+			agents: [product],
+			available: [surveyor],
+			streamFn: scripted(byAgent({})),
+		});
+		started.push(again);
+		await again.messages();
+		expect(seatNames(again)).toEqual(['product', 'assistant']);
 	});
 });
 

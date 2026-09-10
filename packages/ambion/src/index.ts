@@ -32,8 +32,6 @@ export {
 } from '@earendil-works/pi-agent-core';
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
 export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from './define.ts';
-// The room's own exchange: what a question opened, and what quiescence closed.
-export type { ClosedExchange, Exchange } from './exchange.ts';
 export type {
 	CreateRuntimeOptions,
 	RunningRoom,
@@ -71,6 +69,8 @@ export type {
 	AmbionTool,
 	Attention,
 	Clock,
+	ClosedExchange,
+	Exchange,
 	HumanDefinition,
 	HumanSeatInfo,
 	Message,
@@ -95,8 +95,10 @@ export type {
 export { isPresence, isSpoken, isSummary } from './types.ts';
 export type {
 	ActivationView,
+	CloseRow,
 	Commit,
 	CommitResponse,
+	CompositionRow,
 	EndReason,
 	Hand,
 	Intent,
@@ -104,6 +106,7 @@ export type {
 	LeaseResponse,
 	SeatPort,
 	SeatRoom,
+	SeatRow,
 	Stale,
 	ViewResponse,
 	Wake,

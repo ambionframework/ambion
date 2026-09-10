@@ -1,5 +1,6 @@
 /**
- * What crosses between a seat and its room. Every shape here is plain JSON:
+ * What crosses between a seat and its room, and what the log holds beside
+ * a message. Every shape here is plain JSON:
  * an optional key is written only when it is present, and no value is
  * `undefined`, a `Date`, a `Map`, a `Set`, a class instance or a function. A
  * request and its response survive a round trip through `JSON.stringify`
@@ -11,7 +12,42 @@
  * seat through one: `wake` names an activation the seat runs, and carries
  * the line a running activation is steered with when a message caused it.
  */
-import type { Message, Seq } from './types.ts';
+import type { Attention, Message, Seq } from './types.ts';
+
+// -- rows on the log beside the messages --------------------------------------
+
+/** `Omit` over each member of a union, so a discriminated row keeps its shape. */
+export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+/** The room went quiet with an exchange open, and closed it. */
+export interface CloseRow {
+	owner: string;
+	from: Seq;
+	through: Seq;
+	after: Seq;
+	at: string;
+}
+
+/** One seat in a composition: its name, how the room knows it, and what wakes it. */
+export interface SeatRow {
+	name: string;
+	identity: string;
+	attention: Attention;
+}
+
+/**
+ * What a run started with. The roster folds from the latest one, and a
+ * reader without the definitions reads every identity off it.
+ */
+export interface CompositionRow {
+	/** The assistant's seat. Its attention is `none`. */
+	assistant: SeatRow;
+	goal?: string;
+	agents: SeatRow[];
+	available: SeatRow[];
+	after: Seq;
+	at: string;
+}
 
 /** Why a lease ended: the activation ran to its end, it never reached the record, or the record kept moving past its drafts. */
 export type EndReason = 'released' | 'failed' | 'refused';

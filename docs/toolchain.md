@@ -71,13 +71,10 @@ holds, and a reviewer reads a file knowing what it cannot reach.
 | `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                          | Nothing that does anything        |
 | `host/`                             | What a host owns: the runtime value, a clock, an opener                                            | The vocabulary                    |
 | `log/`                              | The log: one serial queue over a Pi session                                                        | The vocabulary                    |
-| `room/`                             | What the room holds beside the log: an activation's id, the assistant's rules                      | The vocabulary                    |
+| `room/`                             | Every fact the log holds about the room, pure over it: the fold, the exchange, presence, the view  | The vocabulary, the log's entries |
 | `tools/`                            | What an agent's tools reach into: the workspace and its backends                                   | The vocabulary, `host/`           |
 | `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport | The vocabulary, `host/`, `tools/` |
 | `session.ts`                        | The room, which composes them all                                                                  | Everything                        |
-
-The two files beside `session.ts` at the root of `src`, the exchange and
-presence, are in no layer yet, and no override constrains them.
 
 Two rules hold across packages: the core imports no platform module
 (`node:sqlite`, `cloudflare:*`), and every other package reaches the core

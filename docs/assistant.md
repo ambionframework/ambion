@@ -98,7 +98,7 @@ answers for anyone.
 
 The unit is the **exchange**, and it belongs to the core:
 [`exchange.md`](exchange.md) specifies it, and
-[`exchange.ts`](../packages/ambion/src/exchange.ts) is where it lives. A
+[`exchange.ts`](../packages/ambion/src/room/exchange.ts) is where it lives. A
 question, and everything the room does until it goes quiet again. A
 person's question opens one; quiescence closes it; what lands in between
 steers the seats already working and changes nothing.
@@ -269,8 +269,8 @@ writes one message per exchange, to one person, and the exchange says whom
 **A person's exchange outlives their visit.** Priya may ask and walk out
 before the room settles. The exchange is still hers, it still closes, and
 the assistant still writes its summary — addressed to her, the way she
-reads, waiting for her. How she reads is run state the room keeps after she
-leaves.
+reads, waiting for her. How she reads is on the record, with her arrival,
+so the room keeps it after she leaves.
 
 **Sam gets no summary for a question he did not ask.** His message into
 Priya's exchange steers whoever is working and owns nothing. His own next
@@ -526,11 +526,9 @@ assistant does not mean it always writes — it means somebody is always
 there to judge whether writing would help.
 
 **A restarted room seats it again with the agents.** The assistant is
-composition, like an agent. How each person reads is run state, like an
-exchange (§6): a person known from a replayed record has no preferences on
-file until they visit in the new run. No question can be asked without a
-visit, so the assistant never writes for somebody whose preferences the room
-has not seen.
+composition, like an agent. How each person reads is on the record, with
+their latest arrival, so a person known from a replayed record reads the
+way they last said they do.
 
 **An agent-only room pays for one idle seat.** A room nobody visits seats
 the assistant, lists it in every roster, and never activates it. That is one
@@ -735,10 +733,11 @@ message stands for work somebody stopped. `stopSession` is the other case,
 below.
 
 **A run that stops mid-exchange writes no summary.** `stopSession` aborts
-the activations in flight, so the exchange never closes. It aborts a draft in
-flight for the same reason, and a draft that does finish after the stop
-commits nothing. The person asked and heard nothing, and the record shows a
-question, some work and a shutdown. Accepted.
+the activations in flight and writes no close, so the exchange stays open
+on the log. It aborts a draft in flight for the same reason, and a draft
+that does finish after the stop commits nothing. The next run over the same
+log closes the exchange at its start ([`exchange.md`](exchange.md) §5) and
+writes what it owes then. Accepted.
 
 **A widened range is bounded by a race, and nothing else.** A summary
 covers one exchange, so the only thing that can make a range large is what
