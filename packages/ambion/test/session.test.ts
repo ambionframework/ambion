@@ -1,6 +1,7 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import {
+	createRuntime,
 	defineAgent,
 	defineHuman,
 	InMemorySessionRepo,
@@ -568,6 +569,94 @@ describe('startSession', () => {
 		await expect(again.messages()).rejects.toThrow(/one name names one participant/);
 		await expect(visitSession(again, andrei)).rejects.toThrow(/one name names one participant/);
 		await expect(stopSession(again)).rejects.toThrow(/one name names one participant/);
+	});
+
+	it('frees the name a refused start took, without a stop', async () => {
+		const repo = new InMemorySessionRepo();
+		const name = roomName('refused');
+		const first = startSession({ name, assistant, repo, streamFn: scripted(() => quiet()) });
+		await visitSession(first, andrei);
+		await stopSession(first);
+
+		const impostor = defineAgent({
+			name: 'andrei',
+			identity: "An agent wearing a person's name.",
+			instructions: 'confuse',
+			model: 'scripted/impostor',
+		});
+		const refused = startSession({
+			name,
+			assistant,
+			agents: [impostor],
+			repo,
+			streamFn: scripted(() => quiet()),
+		});
+		await expect(refused.messages()).rejects.toThrow(/one name names one participant/);
+		// nothing runs under the name, and the host never stopped the handle it holds:
+		// a composition that stands takes the name and reads the record the first run left
+		const again = startSession({ name, assistant, repo, streamFn: scripted(() => quiet()) });
+		expect((await again.messages()).map((m) => m.from)).toEqual(['andrei', 'andrei']);
+		await stopSession(again);
+	});
+
+	it('refuses a delivery directed at the assistant, which wakes for nothing said', async () => {
+		const alone = defineAgent({
+			name: 'alone',
+			identity: 'The one agent.',
+			instructions: 'answer',
+			model: 'scripted/alone',
+		});
+		const session = startSession({
+			name: roomName('directed'),
+			assistant,
+			agents: [alone],
+			streamFn: scripted(() => quiet()),
+		});
+		const visit = await enter(session);
+		await expect(visit.deliver({ to: assistant, text: 'Write it up for me.' })).rejects.toThrow(
+			/wakes for nothing said/,
+		);
+		// and nothing landed: the record holds the arrival alone
+		expect((await session.messages()).map((m) => m.kind)).toEqual(['arrived']);
+		await stopSession(session);
+	});
+
+	it('answers a commit from a lease that ended stale, before what the record moved past', async () => {
+		const solo = defineAgent({
+			name: 'solo',
+			identity: 'Speaks once.',
+			instructions: 'speak',
+			model: 'scripted/solo',
+		});
+		// the seats hear no wake, so the test holds the seat's side of the wire itself
+		const runtime = createRuntime({ transport: { connect: () => ({ wake: async () => {} }) } });
+		const session = startSession({
+			name: roomName('stale'),
+			assistant,
+			agents: [solo],
+			runtime,
+			streamFn: scripted(() => quiet()),
+		});
+		const events = collect(session);
+		const visit = await enter(session);
+		await visit.deliver({ text: 'first' });
+		const room = runtime.running.get(session.name);
+		if (room === undefined) throw new Error('the room is not running');
+		expect(await room.lease({ activation: '2:solo', phase: 'running' })).toMatchObject({ ok: {} });
+		// the record moves past what the activation read, and then its lease ends
+		await visit.deliver({ text: 'second' });
+		await room.lease({ activation: '2:solo', phase: 'ended', reason: 'released' });
+		const late = await room.commit({
+			activation: '2:solo',
+			key: 'late',
+			readThrough: 2,
+			intent: { kind: 'said', text: 'too late' },
+		});
+		// stale, not missed: nothing this activation writes lands, whatever the record did,
+		// so the room reports no conflict for a seat that has nothing to redraft
+		expect(late).toEqual({ stale: 'the lease ended' });
+		expect(events.some((event) => event.type === 'conflict')).toBe(false);
+		await stopSession(session);
 	});
 
 	it('refuses a duplicate agent name', () => {

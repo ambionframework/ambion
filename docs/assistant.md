@@ -281,6 +281,11 @@ so the room keeps it after she leaves.
 Priya's exchange steers whoever is working and owns nothing. His own next
 question opens his own exchange, and the assistant writes it for him.
 
+**Nobody addresses the assistant.** It sits at the narrow end of
+attention and wakes for nothing said (§11), so a delivery directed at it
+is a message nobody reads. The room refuses one. A person who wants the
+assistant to write again asks the room, and the close is what wakes it.
+
 **Two people owed at once are written for one after the other.** The
 assistant is one seat and holds one activation. If Sam's exchange closes
 while the assistant drafts for Priya, Sam stays owed, and the room wakes
