@@ -112,6 +112,19 @@ async function until(done: () => boolean): Promise<void> {
 }
 
 describe('a seat actor', () => {
+	it('queues a wake that lands while the activation releases, and steers it into nothing', async () => {
+		const { room, actor } = play();
+		void actor.wake(wakeOf('1:product'));
+		await room.releasing.promise;
+		// the activation is over and its release is in flight: it reads nothing more,
+		// so the message runs as an activation of its own, and none runs beside it
+		await actor.wake({ ...wakeOf('2:product'), steer: { seq: 2, line: '[priya] And the pump?' } });
+		room.letGo.resolve();
+		await until(() => room.releases.length === 2);
+		expect(room.claims).toEqual(['1:product', '2:product']);
+		expect(room.mostHeld).toBe(1);
+	});
+
 	it('takes a wake to its end: it claims the lease, runs, and releases', async () => {
 		const { room, actor } = play();
 		room.letGo.resolve();
@@ -142,17 +155,20 @@ describe('a seat actor', () => {
 		expect(room.mostHeld).toBe(1);
 	});
 
-	it('resolves run once the wake that queued behind the activation has run too, and a wake sent twice runs once', async () => {
+	it('resolves run once every wake that queued behind the activation has run, in order and once each', async () => {
 		const { room, actor } = play();
 		const ran = actor.run('1:product');
 		await room.releasing.promise;
 		await actor.wake(wakeOf('2:product'));
+		await actor.wake(wakeOf('3:product'));
+		// a wake sent twice queues once and keeps the place the first one took;
+		// the wake of the activation that is releasing runs no second time
 		await actor.wake(wakeOf('2:product'));
 		await actor.wake(wakeOf('1:product'));
 		room.letGo.resolve();
 		await ran;
-		expect(room.claims).toEqual(['1:product', '2:product']);
-		expect(room.releases).toEqual(['1:product', '2:product']);
+		expect(room.claims).toEqual(['1:product', '2:product', '3:product']);
+		expect(room.releases).toEqual(['1:product', '2:product', '3:product']);
 		expect(room.mostHeld).toBe(1);
 	});
 });

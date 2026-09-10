@@ -197,6 +197,9 @@ export function startSession(options: StartSessionOptions): Session {
 	assertFree(runtime, options.name);
 	const session = SessionImpl.start(options, runtime);
 	runtime.running.set(options.name, session);
+	// A composition the record refuses frees the name: the handle answers
+	// every call with the refusal, and nothing runs under it.
+	session.started().catch(() => free(runtime, session));
 	return session;
 }
 
@@ -218,10 +221,15 @@ export async function resumeSession(
 	try {
 		await session.started();
 	} catch (error) {
-		if (runtime.running.get(name) === session) runtime.running.delete(name);
+		free(runtime, session);
 		throw error;
 	}
 	return session;
+}
+
+/** The name comes free, unless another room took it since. */
+function free(runtime: Runtime, session: SessionImpl): void {
+	if (runtime.running.get(session.name) === session) runtime.running.delete(session.name);
 }
 
 function assertFree(runtime: Runtime, name: string): void {
@@ -655,8 +663,14 @@ class SessionImpl implements Session, RunningRoom {
 	): Promise<void> {
 		const to = input.to?.name;
 		const state = this.state();
-		if (to !== undefined && !state.people.has(to) && !this.onRoster(to, state)) {
+		const target = state.roster.find((seat) => seat.name === to);
+		if (to !== undefined && !state.people.has(to) && target === undefined) {
 			throw new Error(`Cannot direct a delivery to '${to}': not in this session.`);
+		}
+		// A seat at the narrow end wakes for nothing said, so a delivery to it
+		// is a message nobody reads. The assistant sits there.
+		if (target?.attention === 'none') {
+			throw new Error(`Cannot direct a delivery to '${to}': it wakes for nothing said.`);
 		}
 		await this.commitMessage<SpokenMessage>(input.key ?? crypto.randomUUID(), undefined, () => ({
 			kind: 'said',

@@ -213,10 +213,13 @@ alone seats what a question needs from its reserve
 ([`roster.md`](roster.md) §1).
 
 **One run per name.** `startSession` refuses a name already running in this
-process. Two live rooms over one record would each replay it, each append
-to it, and diverge. Names are unique inside a roster too: `startSession`
-refuses a duplicate, and so does `visitSession`, so `say({ to })` always
-names exactly one participant.
+process, and the log fences a run in another process
+([`durability.md`](durability.md) §1). Two live rooms over one record
+would each replay it, each append to it, and diverge. A start the record
+refuses frees the name: the handle answers every call with the refusal,
+and the next start takes the name. Names are unique inside a roster too:
+`startSession` refuses a duplicate, and so does `visitSession`, so
+`say({ to })` always names exactly one participant.
 
 `startSession` is synchronous and the room is usable at once; the replay it
 needs is awaited by the first call that needs it. `stopSession` returns a
@@ -323,7 +326,11 @@ pending again when the lease expired or failed, so a run that dies while
 the seat works loses nothing: the seat is woken for the message after the
 backoff. A wake to a seat at rest is on the message, so a wake lost on
 the way is sent again after the resend window, and the seat side runs a
-wake sent twice once. A claim or a release the seat never heard back on
+wake sent twice once. A wake that lands while an activation is releasing
+its lease is no steer: that activation reads nothing more, so the wake
+runs as an activation of its own, after the release. The seat runs one
+activation at a time and every wake that queued behind it in turn. A
+claim or a release the seat never heard back on
 is asked again once: a claim of an id the room already runs is a
 renewal, and a release of a lease that ended is answered stale. When a pass ends,
 the activation renews its lease, and the renewal says how far the record

@@ -100,6 +100,8 @@ export interface SeatContext {
 interface Current {
 	id: string;
 	activation: Activation;
+	/** The activation ran to its end, and its release is in flight. It takes no steer. */
+	over: boolean;
 }
 
 /**
@@ -108,8 +110,8 @@ interface Current {
  */
 export class SeatActor implements SeatPort {
 	private current: Current | undefined;
-	/** The wake that arrived while an activation ran, and runs next. */
-	private queued: string | undefined;
+	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
+	private readonly queued: string[] = [];
 	private audit: Promise<PiSession> | undefined;
 
 	constructor(
@@ -120,7 +122,8 @@ export class SeatActor implements SeatPort {
 	/**
 	 * A wake starts an activation when none runs. While one runs, a wake a
 	 * message caused is steered into it (rule 2), and any other wake runs
-	 * next.
+	 * next. An activation that is over takes no steer: it reads nothing
+	 * more, so what landed runs as an activation of its own.
 	 */
 	async wake(wake: Wake): Promise<void> {
 		if (this.current === undefined) {
@@ -128,24 +131,29 @@ export class SeatActor implements SeatPort {
 			return;
 		}
 		if (this.current.id === wake.activation) return;
-		if (wake.steer === undefined) {
-			this.queued = wake.activation;
+		if (wake.steer === undefined || this.current.over) {
+			this.enqueue(wake.activation);
 			return;
 		}
 		this.current.activation.steer(wake.steer.seq, wake.steer.line);
 	}
 
 	/**
-	 * One activation to its end: claim, run, release, then the wake that
-	 * queued behind it. A host that runs a seat inside one request awaits
+	 * One activation to its end: claim, run, release, then whatever queued
+	 * behind it, in order. A host that runs a seat inside one request awaits
 	 * this, and it resolves once the seat has nothing left to run.
 	 */
 	async run(id: string): Promise<void> {
 		if (this.current !== undefined) {
-			this.queued = id;
+			this.enqueue(id);
 			return;
 		}
 		await this.take(id);
+	}
+
+	/** A wake sent twice queues once, and keeps the place the first one took. */
+	private enqueue(id: string): void {
+		if (!this.queued.includes(id)) this.queued.push(id);
 	}
 
 	/** Cut the activation in flight, whatever its id. The room hears how it ended. */
@@ -157,7 +165,8 @@ export class SeatActor implements SeatPort {
 		// Held before the claim, so a steer that lands while the claim is in
 		// flight reaches the activation and not the floor.
 		const activation = new Activation(id, this.context.seat, this.host(id));
-		this.current = { id, activation };
+		const current: Current = { id, activation, over: false };
+		this.current = current;
 		const claimed = await this.claim(id);
 		if (claimed !== undefined) {
 			const stopRenewing = this.renewUntil(activation, claimed.expiry);
@@ -165,6 +174,9 @@ export class SeatActor implements SeatPort {
 				await activation.run();
 			} finally {
 				stopRenewing();
+				// Over, and holding the seat through the release: a wake that lands
+				// now runs next, and never beside the activation that is releasing.
+				current.over = true;
 				await this.release(id, activation);
 			}
 		}
@@ -190,10 +202,9 @@ export class SeatActor implements SeatPort {
 		return undefined;
 	}
 
-	/** The wake that queued, to its end. */
+	/** The next wake that queued, to its end. */
 	private async next(): Promise<void> {
-		const queued = this.queued;
-		this.queued = undefined;
+		const queued = this.queued.shift();
 		if (queued !== undefined) await this.take(queued);
 	}
 
