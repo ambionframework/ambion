@@ -11,9 +11,16 @@ interface Pending {
 	fire: () => void;
 }
 
-/** Let the promise chains an alarm started run to their end. */
+/**
+ * Let the promise chains an alarm started run to their end. A storage on
+ * disk answers a write after real I/O, so the wait yields real time too:
+ * a few milliseconds, several times, with the event loop drained between.
+ */
 const settle = async (): Promise<void> => {
-	for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve));
+	for (let round = 0; round < 5; round += 1) {
+		for (let i = 0; i < 10; i += 1) await new Promise((resolve) => setImmediate(resolve));
+		await new Promise((resolve) => setTimeout(resolve, 1));
+	}
 };
 
 export function fakeClock(start = Date.parse('2026-01-01T09:00:00.000Z')): FakeClock {

@@ -317,8 +317,37 @@ and Pi's JSONL repository over a temporary directory. It runs them on a
 clock it moves by hand (`test/support/clock.ts`), so a test never waits
 on real time, and over a transport that serializes every request and
 response between a seat and the room (`test/support/transport.ts`), so a
-value that would not survive the wire fails the scenario. The live tier
-runs the room on a real model and holds it to the same invariants.
+value that would not survive the wire fails the scenario, and under a
+random walk that loses and repeats them (`property.test.ts`, `AMBION_SEEDS`
+widens it). The live tier runs the room on a real model and holds it to the
+same invariants.
+
+**The chaos tests are the evidence that the log is the truth.** They live in
+[`test/chaos.test.ts`](../packages/ambion/test/chaos.test.ts) over the
+harness in
+[`test/support/chaos.ts`](../packages/ambion/test/support/chaos.ts), and
+`pnpm test` runs them:
+
+- **A crash at every write.** One scenario runs once to count the appends
+  its log takes, then once per append, crashing the room at that append:
+  before the entry lands, and again after it landed and before the room
+  heard. The world resumes the name in a fresh runtime, puts back the
+  people who were present, and retries the host action that failed under
+  the same key. Every run must come to the same record: every delivery on
+  it once, every answer at most once, every summary owed written once. A
+  seat whose lease the dead run held answers nothing: the lease expires
+  and the room does not send that wake again (`planning/backlog.md` item
+  34), so that answer is the one the record may lack.
+- **A kill from outside.** The same scenario runs in a child process on a
+  JSONL storage, on the system clock, with short leases. The test sends
+  `SIGKILL` at a write, resumes over the directory, finishes the scenario,
+  and checks the same record.
+- **The random walk** (`property.test.ts`) loses and repeats requests on
+  the wire, fails a write before or after it lands, and crashes the room
+  up to three times.
+
+`AMBION_CHAOS=all` widens the sweep to JSONL and the kill to every third
+write; `pnpm chaos` runs both widened, with 200 seeds of the walk.
 
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:
 `vitest.config.ts` excludes `test/live` from `pnpm test`, and

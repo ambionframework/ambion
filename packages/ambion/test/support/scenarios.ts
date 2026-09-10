@@ -21,6 +21,7 @@ import {
 import { invariants } from './invariants.ts';
 import { collect, deferred } from './room.ts';
 import {
+	answersLastQuestion,
 	byAgent,
 	callTool,
 	contextText,
@@ -32,6 +33,7 @@ import {
 	speak,
 	summarise,
 	toolNames,
+	toolResultTexts,
 } from './scripted.ts';
 import { backends } from './storage.ts';
 
@@ -90,34 +92,9 @@ function composes(names: string[], summary: string): Script {
 	};
 }
 
-/** Every tool result the model has been shown so far, oldest first. */
-function toolResults(context: Context): string[] {
-	return context.messages.flatMap((message) =>
-		message.role === 'toolResult'
-			? [message.content.map((c) => (c.type === 'text' ? c.text : '')).join('')]
-			: [],
-	);
-}
-
 /** Two answers to every question, then silence until the next. */
 const twoAnswersEach: Script = (_context, _name, call) =>
 	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
-
-/**
- * A seat that answers the last question on the record once. A refused say
- * speaks again; a delivered one ends the pass; a record that already holds
- * the answer stays quiet.
- */
-const answersOnce: Script = (context, name) => {
-	const text = contextText(context);
-	const question = [...text.matchAll(/^\[(?:priya|sam)\] (.+?)(?: {2}\(.*\))?$/gm)].at(-1)?.[1];
-	if (question === undefined) return quiet();
-	const answer = `${name} on ${question}`;
-	if (text.includes(`[${name}] ${answer}`) || toolResults(context).includes('delivered')) {
-		return quiet();
-	}
-	return speak(answer);
-};
 
 async function finish(
 	session: Session,
@@ -162,11 +139,11 @@ export const twoPeopleTwoExchanges: Scenario = {
 			agents: [product, colleague],
 			streamFn: scripted(
 				byAgent({
-					product: answersOnce,
-					colleague: answersOnce,
+					product: answersLastQuestion(['priya', 'sam']),
+					colleague: answersLastQuestion(['priya', 'sam']),
 					assistant: (context) => {
 						const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
-						if (!holding(context, 'summarise') || toolResults(context).includes('delivered')) {
+						if (!holding(context, 'summarise') || toolResultTexts(context).includes('delivered')) {
 							return quiet();
 						}
 						return summarise(`for ${person}`);
@@ -255,7 +232,7 @@ export const twoWorkspaces: Scenario = {
 			streamFn: scripted(
 				byAgent({
 					alpha: async (context, _name, call) => {
-						alphaResults.push(...toolResults(context).slice(alphaResults.length));
+						alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));
 						if (call === 1)
 							return callTool('write', { path: '/home/alpha/note.txt', content: 'one' });
 						if (call === 2) {
@@ -265,7 +242,7 @@ export const twoWorkspaces: Scenario = {
 						return call === 3 ? speak('alpha done') : quiet();
 					},
 					beta: (context, _name, call) => {
-						betaResults.push(...toolResults(context).slice(betaResults.length));
+						betaResults.push(...toolResultTexts(context).slice(betaResults.length));
 						if (call === 1) return callTool('bash', { command: 'echo two > /home/beta/note.txt' });
 						if (call === 2) return callTool('read', { path: '/home/beta/note.txt' });
 						return call === 3 ? speak('beta done') : quiet();
