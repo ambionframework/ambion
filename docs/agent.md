@@ -525,7 +525,10 @@ controls:
 - **`deliver()`** resolves when the message is durable — its write is
   confirmed, it is on the record, and activations are dispatched. A write
   that fails rejects `deliver()`, and the message is nowhere: not on the
-  record, not on the stream, and nobody woke for it. It never waits for
+  record, not on the stream, and nobody woke for it. A write that landed
+  and lost its confirmation rejects too, and the room is in doubt: it reads
+  the storage at once, and the message it finds is on the record, on the
+  stream, and the seats it reaches wake for it. It never waits for
   completion, because activations run in parallel and have no single caller
   to return to. `deliver({ key })` names the delivery: a repeated key lands
   once, so a host that never learned whether a delivery landed delivers it

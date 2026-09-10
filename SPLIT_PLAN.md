@@ -58,9 +58,10 @@ order. A change requested on PR n is made on PR n and rebased forward.
 | 14  | The Cloudflare adapter                                     | `3defaf3`, `a20ba46`, later deltas         | ~0.9k             | 9, 13 |
 | 15  | The demo that crashes, and its report                      | `4474de1`, `346cf31`                       | ~0.2k + generated | 12    |
 
-PRs 1 to 5 landed on main as #49, #50, #51, #52 and #53. PRs 4 and 5
-landed with decisions the branch had not made; the note under PR 5 says
-what they are, and the branch holds them now.
+PRs 1 to 6 landed on main as #49, #50, #51, #52, #53 and #54. PRs 4 and
+5 landed with decisions the branch had not made; the note under PR 5 says
+what they are, and the branch holds them now. PR 6 landed as the branch
+has it, with its doubt tests in `test/doubt.test.ts`.
 
 Sizes are lines of diff without the lockfile and the generated report.
 PRs 9 to 12 are independent of each other and could land in any order;
