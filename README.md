@@ -19,7 +19,7 @@ person read a swarm transcript. Ambion provides that collaboration layer
 through a shared record, durable seats, attention-based routing, optimistic
 concurrency, exchanges, and summaries.
 
-![One exchange in an Ambion shared session: a person's question and independent domain-agent contributions form an ordered exchange, which the assistant consolidates when needed.](docs/assets/ambion-exchange.svg)
+![Collaborating agents working within an exchange: a question opens a bounded sequence on the shared record, agents contribute or stay silent, new messages steer active work, and quiet closes the exchange before optional assistant synthesis.](docs/assets/ambion-exchange.svg)
 
 ## The architectural bet
 

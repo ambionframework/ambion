@@ -1,9 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="860" viewBox="0 0 1440 860" role="img" aria-labelledby="title desc">
-  <title id="title">One exchange in an Ambion shared session</title>
-  <desc id="desc">A person asks a question on an ordered room record. Independently owned domain agents contribute or remain silent. Quiescence closes the exchange, and a constrained assistant records one human-facing summary when consolidation is needed.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="820" viewBox="0 0 1440 820" role="img" aria-labelledby="title desc">
+  <title id="title">Collaborating agents working within an exchange</title>
+  <desc id="desc">A question opens an exchange on a shared ordered record. Independent agents activate, collaborate, and may remain silent. A new message steers an agent already at work without restarting it. Quiescence closes the exchange, after which a constrained assistant may add a human-facing summary.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6c7371"/>
+      <path d="M0 0 10 5 0 10Z" fill="#6c7371"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#3f5bb5"/>
     </marker>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
       <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#232a2b" flood-opacity="0.08"/>
@@ -13,115 +16,114 @@
       .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
       .ink { fill: #232a2b; }
       .dim { fill: #6c7371; }
-      .small { font-size: 15px; }
-      .label { font-size: 13px; font-weight: 700; letter-spacing: 1.4px; }
-      .card-title { font-size: 19px; font-weight: 700; }
+      .small { font-size: 14px; }
       .body { font-size: 16px; }
+      .label { font-size: 12px; font-weight: 700; letter-spacing: 1.4px; }
+      .title { font-size: 19px; font-weight: 700; }
     </style>
   </defs>
 
-  <rect width="1440" height="860" rx="28" fill="#f4f3ee"/>
-  <text x="72" y="72" class="sans ink" font-size="34" font-weight="700">One exchange in a shared session</text>
-  <text x="72" y="105" class="sans dim" font-size="17">The room coordinates independently owned agents; the assistant owns the human-facing synthesis.</text>
+  <rect width="1440" height="820" rx="28" fill="#f4f3ee"/>
+  <text x="72" y="70" class="sans ink" font-size="34" font-weight="700">Collaboration lives inside an exchange</text>
+  <text x="72" y="103" class="sans dim" font-size="17">A shared record gives independently owned agents one ordered boundary for work.</text>
 
-  <!-- Participant -->
+  <!-- Independent agents -->
+  <text x="396" y="151" class="sans dim label">INDEPENDENT AGENT BOUNDARIES</text>
   <g filter="url(#shadow)">
-    <rect x="72" y="174" width="238" height="132" rx="16" fill="#fbfaf6" stroke="#dad7cb"/>
+    <rect x="396" y="174" width="244" height="126" rx="16" fill="#fbfaf6" stroke="#8fa8ef" stroke-width="2"/>
+    <rect x="664" y="174" width="244" height="126" rx="16" fill="#fbfaf6" stroke="#7fc468" stroke-width="2"/>
+    <rect x="932" y="174" width="244" height="126" rx="16" fill="#fbfaf6" stroke="#e0a94e" stroke-width="2"/>
   </g>
-  <circle cx="111" cy="217" r="18" fill="#232a2b"/>
-  <path d="M84 275c4-24 14-36 27-36s23 12 27 36" fill="#e3e2d9"/>
-  <text x="151" y="214" class="sans ink card-title">Priya</text>
-  <text x="151" y="239" class="sans dim small">exchange owner</text>
-  <text x="94" y="286" class="sans ink body">“Can we promise Thursday?”</text>
+  <text x="420" y="210" class="sans ink title">Agent A</text>
+  <text x="420" y="236" class="sans dim small">own context · tools · data</text>
+  <rect x="420" y="257" width="74" height="24" rx="12" fill="#e8ecfa"/>
+  <text x="457" y="274" text-anchor="middle" class="mono ink" font-size="11">active</text>
 
-  <!-- Agent modules -->
-  <text x="390" y="151" class="sans dim label">INDEPENDENT DOMAIN BOUNDARIES</text>
-  <g filter="url(#shadow)">
-    <rect x="390" y="174" width="250" height="132" rx="16" fill="#fbfaf6" stroke="#8fa8ef" stroke-width="2"/>
-    <rect x="664" y="174" width="250" height="132" rx="16" fill="#fbfaf6" stroke="#7fc468" stroke-width="2"/>
-    <rect x="938" y="174" width="250" height="132" rx="16" fill="#fbfaf6" stroke="#e0a94e" stroke-width="2"/>
-  </g>
-  <text x="414" y="210" class="sans ink card-title">Materials</text>
-  <text x="414" y="236" class="sans dim small">own context · tools · data</text>
-  <rect x="414" y="258" width="88" height="25" rx="12" fill="#e8ecfa"/>
-  <text x="429" y="276" class="mono ink" font-size="12">broadcast</text>
-
-  <text x="688" y="210" class="sans ink card-title">Scheduling</text>
+  <text x="688" y="210" class="sans ink title">Agent B</text>
   <text x="688" y="236" class="sans dim small">own context · tools · data</text>
-  <rect x="688" y="258" width="88" height="25" rx="12" fill="#e5f1e1"/>
-  <text x="703" y="276" class="mono ink" font-size="12">presence</text>
+  <rect x="688" y="257" width="74" height="24" rx="12" fill="#e5f1e1"/>
+  <text x="725" y="274" text-anchor="middle" class="mono ink" font-size="11">active</text>
 
-  <text x="962" y="210" class="sans ink card-title">Compliance</text>
-  <text x="962" y="236" class="sans dim small">seated from the reserve</text>
-  <rect x="962" y="258" width="69" height="25" rx="12" fill="#f4eadc"/>
-  <text x="978" y="276" class="mono ink" font-size="12">named</text>
+  <text x="956" y="210" class="sans ink title">Agent C</text>
+  <text x="956" y="236" class="sans dim small">reads, then has nothing to add</text>
+  <rect x="956" y="257" width="74" height="24" rx="12" fill="#f4eadc"/>
+  <text x="993" y="274" text-anchor="middle" class="mono ink" font-size="11">silent</text>
 
-  <!-- Routing arrows -->
-  <path d="M310 240 C345 240 348 377 390 377" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
-  <path d="M515 306 V350" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
-  <path d="M789 306 V350" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
-  <path d="M1063 306 V350" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
-
-  <!-- Shared record -->
+  <!-- Shared session -->
   <g filter="url(#shadow)">
-    <rect x="350" y="354" width="1018" height="262" rx="20" fill="#fbfaf6" stroke="#dad7cb"/>
+    <rect x="72" y="350" width="1296" height="304" rx="20" fill="#fbfaf6" stroke="#dad7cb"/>
   </g>
-  <text x="382" y="390" class="sans ink card-title">Shared session record</text>
-  <text x="1334" y="390" text-anchor="end" class="mono dim" font-size="13">APPEND-ONLY · ORDERED · REPLAYABLE</text>
-  <line x1="414" y1="452" x2="1304" y2="452" stroke="#c3bfb1" stroke-width="3"/>
+  <text x="104" y="389" class="sans ink title">Shared session record</text>
+  <text x="1336" y="389" text-anchor="end" class="mono dim" font-size="12">APPEND-ONLY · ORDERED · REPLAYABLE</text>
 
-  <!-- Timeline messages -->
+  <!-- Exchange background and boundary -->
+  <rect x="226" y="415" width="890" height="190" rx="14" fill="#f1ead6" fill-opacity="0.7" stroke="#c2a049" stroke-width="1.5"/>
+  <text x="250" y="446" class="sans ink label">EXCHANGE · ONE OWNER · ONE SEQUENCE RANGE</text>
+  <line x1="266" y1="500" x2="1288" y2="500" stroke="#c3bfb1" stroke-width="3"/>
+
+  <!-- Timeline -->
   <g class="sans">
-    <circle cx="434" cy="452" r="19" fill="#232a2b"/>
-    <text x="434" y="458" text-anchor="middle" fill="#fbfaf6" font-size="14" font-weight="700">1</text>
-    <text x="404" y="492" class="ink small" font-weight="700">question</text>
-    <text x="404" y="514" class="dim" font-size="13">Priya</text>
+    <circle cx="278" cy="500" r="21" fill="#232a2b"/>
+    <text x="278" y="506" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">42</text>
+    <text x="246" y="541" class="ink small" font-weight="700">question</text>
+    <text x="246" y="562" class="dim" font-size="12">opens exchange</text>
 
-    <circle cx="626" cy="452" r="19" fill="#3f5bb5"/>
-    <text x="626" y="458" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">2</text>
-    <text x="587" y="492" class="ink small" font-weight="700">constraint</text>
-    <text x="587" y="514" class="dim" font-size="13">Materials</text>
+    <circle cx="454" cy="500" r="19" fill="#3f5bb5"/>
+    <text x="454" y="506" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">43</text>
+    <text x="427" y="541" class="ink small" font-weight="700">Agent A</text>
+    <text x="427" y="562" class="dim" font-size="12">contributes</text>
 
-    <circle cx="818" cy="452" r="19" fill="#3d7a2f"/>
-    <text x="818" y="458" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">3</text>
-    <text x="783" y="492" class="ink small" font-weight="700">revision</text>
-    <text x="783" y="514" class="dim" font-size="13">Scheduling</text>
+    <circle cx="630" cy="500" r="21" fill="#fbfaf6" stroke="#3f5bb5" stroke-width="4"/>
+    <text x="630" y="506" text-anchor="middle" class="ink" font-size="13" font-weight="700">44</text>
+    <text x="607" y="541" fill="#3f5bb5" font-size="14" font-weight="700">steer</text>
+    <text x="586" y="562" class="dim" font-size="12">new message arrives</text>
 
-    <circle cx="1010" cy="452" r="19" fill="#a3641a"/>
-    <text x="1010" y="458" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">4</text>
-    <text x="969" y="492" class="ink small" font-weight="700">confirmation</text>
-    <text x="969" y="514" class="dim" font-size="13">Compliance</text>
+    <circle cx="806" cy="500" r="19" fill="#3d7a2f"/>
+    <text x="806" y="506" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">45</text>
+    <text x="779" y="541" class="ink small" font-weight="700">Agent B</text>
+    <text x="779" y="562" class="dim" font-size="12">builds on A</text>
 
-    <circle cx="1262" cy="452" r="24" fill="#232a2b" stroke="#c2a049" stroke-width="5"/>
-    <text x="1262" y="458" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">5</text>
-    <text x="1218" y="492" class="ink small" font-weight="700">summary</text>
-    <text x="1218" y="514" class="dim" font-size="13">Assistant</text>
+    <circle cx="982" cy="500" r="19" fill="#3f5bb5"/>
+    <text x="982" y="506" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">46</text>
+    <text x="955" y="541" class="ink small" font-weight="700">Agent A</text>
+    <text x="944" y="562" class="dim" font-size="12">reconsiders, adds</text>
+
+    <line x1="1084" y1="461" x2="1084" y2="576" stroke="#c2a049" stroke-width="2"/>
+    <circle cx="1084" cy="500" r="7" fill="#c2a049"/>
+    <text x="1063" y="594" class="ink small" font-weight="700">quiet closes</text>
+
+    <circle cx="1246" cy="500" r="23" fill="#232a2b" stroke="#c2a049" stroke-width="4"/>
+    <text x="1246" y="506" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">47</text>
+    <text x="1216" y="541" class="ink small" font-weight="700">summary</text>
+    <text x="1188" y="562" class="dim" font-size="12">outside covered range</text>
   </g>
 
-  <!-- Exchange range -->
-  <path d="M414 552 v14 q0 12 12 12 h572 q12 0 12-12 v-14" fill="none" stroke="#c2a049" stroke-width="2"/>
-  <text x="712" y="601" text-anchor="middle" class="sans ink small" font-weight="700">EXCHANGE · owner Priya · sequence 1–4</text>
-  <path d="M1030 567 C1110 567 1162 540 1238 474" fill="none" stroke="#c2a049" stroke-width="2" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+  <!-- Agent activity and steering -->
+  <path d="M518 300V330Q518 340 508 340H454V477" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M786 300V330Q786 340 796 340H806V477" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M1054 300V325" fill="none" stroke="#6c7371" stroke-width="2" stroke-dasharray="4 5"/>
+  <text x="1070" y="329" class="sans dim" font-size="12">no commit</text>
+  <path d="M630 477V332Q630 320 618 320H578" fill="none" stroke="#3f5bb5" stroke-width="2.5" marker-end="url(#arrow-blue)"/>
+  <text x="642" y="326" class="sans" fill="#3f5bb5" font-size="13" font-weight="700">joins Agent A after its current request boundary</text>
 
-  <!-- Assistant -->
+  <!-- Person and assistant roles -->
   <g filter="url(#shadow)">
-    <rect x="888" y="674" width="480" height="122" rx="18" fill="#232a2b"/>
+    <rect x="72" y="174" width="244" height="126" rx="16" fill="#232a2b"/>
+    <rect x="904" y="696" width="464" height="82" rx="16" fill="#232a2b"/>
   </g>
-  <text x="916" y="711" class="sans" fill="#fff" font-size="20" font-weight="700">Assistant · constrained seat</text>
-  <text x="916" y="739" class="sans" fill="#cfd2cf" font-size="15">On open: seat relevant reserve agents</text>
-  <text x="916" y="765" class="sans" fill="#cfd2cf" font-size="15">On close: summarise when consolidation is needed</text>
-  <rect x="1245" y="702" width="91" height="27" rx="13" fill="#f1ead6"/>
-  <text x="1290" y="721" text-anchor="middle" class="mono ink" font-size="12">no say</text>
-  <path d="M1010 578 V638 Q1010 650 1022 650 H1068 V674" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
-  <path d="M1262 674 V548 Q1262 536 1274 536 H1320 V452 H1288" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="96" y="210" class="sans" fill="#fff" font-size="19" font-weight="700">Person</text>
+  <text x="96" y="238" class="sans" fill="#cfd2cf" font-size="14">asks, then can steer the work</text>
+  <text x="96" y="270" class="mono" fill="#f1ead6" font-size="12">exchange owner</text>
+  <path d="M194 300V331Q194 340 205 340H278V477" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <!-- Invariants -->
-  <g class="sans">
-    <rect x="72" y="664" width="246" height="42" rx="21" fill="#eceada"/>
-    <text x="195" y="690" text-anchor="middle" class="ink small" font-weight="700">silence leaves no message</text>
-    <rect x="72" y="718" width="246" height="42" rx="21" fill="#eceada"/>
-    <text x="195" y="744" text-anchor="middle" class="ink small" font-weight="700">stale drafts are refused</text>
-    <rect x="72" y="772" width="246" height="42" rx="21" fill="#eceada"/>
-    <text x="195" y="798" text-anchor="middle" class="ink small" font-weight="700">quiet closes the exchange</text>
-  </g>
+  <text x="932" y="729" class="sans" fill="#fff" font-size="19" font-weight="700">Assistant · constrained seat</text>
+  <text x="932" y="756" class="sans" fill="#cfd2cf" font-size="14">after close: consolidate when needed · no general say</text>
+  <path d="M1084 606V670Q1084 682 1096 682H1136V696" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M1320 696V500H1270" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Runtime invariant notes -->
+  <rect x="72" y="696" width="244" height="34" rx="17" fill="#eceada"/>
+  <text x="194" y="718" text-anchor="middle" class="sans ink small" font-weight="700">stale commits are refused</text>
+  <rect x="72" y="744" width="244" height="34" rx="17" fill="#eceada"/>
+  <text x="194" y="766" text-anchor="middle" class="sans ink small" font-weight="700">silence adds no message</text>
 </svg>
