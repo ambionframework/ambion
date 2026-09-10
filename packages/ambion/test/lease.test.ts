@@ -119,11 +119,20 @@ describe('a lease', () => {
 		expect(session.exchange()).toBeDefined();
 
 		await clock.advance(60_000);
-		await session.quiet();
 		expect(events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message))).toBe(
 			true,
 		);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
+		// the expired lease answers nothing, whatever it said: the seat is woken again
+		// after the backoff, reads its own words on the record, and stands down
+		expect(session.exchange()).toBeDefined();
+		await clock.advance(30_000);
+		await session.quiet();
+		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(2);
+		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
+			'andrei',
+			'solo',
+		]);
 		expect(session.exchange()).toBeUndefined();
 
 		const room = session as unknown as SeatRoom;

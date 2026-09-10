@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LogEntry } from '../src/log/log.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
+import { parseId } from '../src/room/lease.ts';
 import { type DecideOptions, decide, working } from '../src/room/reconcile.ts';
 import type { Message } from '../src/types.ts';
 import type { CloseRow, LeaseRow, Without } from '../src/wire.ts';
@@ -31,9 +32,14 @@ const arrived = (seq: number, from: string): LogEntry => ({
 	type: 'message',
 	message: { kind: 'arrived', seq, at, from, identity: 'A person.' },
 });
+/** A lease row lands after the message that caused it, or after the close a draft answers. */
+const afterOf = (id: string): number => {
+	const parsed = parseId(id);
+	return parsed === undefined ? 0 : parsed.kind === 'wake' ? parsed.seq : parsed.through;
+};
 const lease = (row: Without<LeaseRow, 'after'>): LogEntry => ({
 	type: 'lease',
-	lease: { ...row, after: 0 } as LeaseRow,
+	lease: { ...row, after: afterOf(row.id) } as LeaseRow,
 });
 const close = (row: Omit<CloseRow, 'after' | 'at'>): LogEntry => ({
 	type: 'close',
@@ -172,7 +178,7 @@ describe('decide', () => {
 	});
 
 	it('wakes the seat again after a lease that came to nothing, and stops at the cap', () => {
-		const ended = (id: string, reason: 'expired' | 'failed', when: number) =>
+		const ended = (id: string, reason: 'expired' | 'failed' | 'released', when: number) =>
 			lease({ id, phase: 'ended', reason, at: new Date(when).toISOString() });
 		// the seat claimed, and its lease expired without a word: the wake is
 		// pending again under the next attempt's id, after the backoff
@@ -193,14 +199,23 @@ describe('decide', () => {
 		expect(decide(expired, options({ now: T0 + 90_000 })).sends).toEqual([
 			{ id: '2:product:2', seat: 'product' },
 		]);
-		// a lease that spoke before it expired answered the wake
+		// a lease that spoke and then expired answers nothing: the seat reads its own
+		// words at the next attempt
 		const spoke = fold([
 			...opened(),
 			lease({ id: '2:product', phase: 'running', expiry: T0 + 60_000, at }),
 			said(3, 'product', { activationId: '2:product' }),
 			ended('2:product', 'expired', T0 + 60_000),
 		]);
-		expect(spoke.pending).toEqual([]);
+		expect(spoke.pending).toMatchObject([{ id: '2:product:2', attempts: 1 }]);
+		// a lease that stood down answers every message it heard, and every one its view held
+		const stood = fold([
+			...opened(),
+			said(3, 'priya', { wakes: ['product'] }),
+			lease({ id: '3:product', phase: 'running', expiry: T0 + 60_000, at }),
+			ended('3:product', 'released', T0 + 1_000),
+		]);
+		expect(stood.pending).toEqual([]);
 		// at the cap the wake is pending no longer: the exchange closes
 		const capped = fold([
 			...opened(),
@@ -231,27 +246,42 @@ describe('decide', () => {
 		const first = decide(fold(entries), options({ now }));
 		expect(first.expired).toHaveLength(1);
 		expect(first).toMatchObject({ close: undefined, sends: [] });
-		// pass two: nothing is live, so the exchange closes
+		// pass two: the expired lease answers nothing, so the wake is pending again after
+		// the backoff, the exchange stays open, and the alarm waits for the backoff
 		const expired: LogEntry[] = [...entries, ...first.expired.map((row) => lease(row))];
 		const second = decide(fold(expired), options({ now }));
-		expect(second).toMatchObject({ expired: [], sends: [] });
-		expect(second.close).toMatchObject({ through: 4, wakes: ['assistant'] });
-		// pass three: the draft the close owes is sent
-		const closed: LogEntry[] = [
-			...expired,
-			...(second.close ? [{ type: 'close' as const, close: { ...second.close, after: 4 } }] : []),
-		];
-		const third = decide(fold(closed), options({ now }));
+		expect(second).toMatchObject({ expired: [], close: undefined, sends: [] });
+		expect(second.alarmAt).toBe(now + 30_000);
+		// pass three, after the backoff: the seat is woken again
+		const later = now + 30_000;
+		const third = decide(fold(expired), options({ now: later }));
 		expect(third).toMatchObject({ expired: [], close: undefined });
-		expect(third.sends).toEqual([{ id: 'close:4:1', seat: 'assistant' }]);
-		// pass four: nothing
-		const sent = new Set(third.sends.map((send) => send.id));
-		const fourth = decide(
+		expect(third.sends).toEqual([{ id: '2:product:2', seat: 'product' }]);
+		// pass four: the seat read its own words and stood down, so the exchange closes
+		const stood: LogEntry[] = [
+			...expired,
+			lease({ id: '2:product:2', phase: 'running', expiry: later + 60_000, at }),
+			lease({ id: '2:product:2', phase: 'ended', reason: 'released', at }),
+		];
+		const fourth = decide(fold(stood), options({ now: later }));
+		expect(fourth).toMatchObject({ expired: [], sends: [] });
+		expect(fourth.close).toMatchObject({ through: 4, wakes: ['assistant'] });
+		// pass five: the draft the close owes is sent
+		const closed: LogEntry[] = [
+			...stood,
+			...(fourth.close ? [{ type: 'close' as const, close: { ...fourth.close, after: 4 } }] : []),
+		];
+		const fifth = decide(fold(closed), options({ now: later }));
+		expect(fifth).toMatchObject({ expired: [], close: undefined });
+		expect(fifth.sends).toEqual([{ id: 'close:4:1', seat: 'assistant' }]);
+		// pass six: nothing
+		const sent = new Set(fifth.sends.map((send) => send.id));
+		const sixth = decide(
 			fold(closed),
-			options({ now, sentAt: (id) => (sent.has(id) ? now : undefined) }),
+			options({ now: later, sentAt: (id) => (sent.has(id) ? later : undefined) }),
 		);
-		expect(fourth).toMatchObject({ expired: [], close: undefined, sends: [] });
-		expect(fourth.alarmAt).toBe(now + 5_000);
+		expect(sixth).toMatchObject({ expired: [], close: undefined, sends: [] });
+		expect(sixth.alarmAt).toBe(later + 5_000);
 	});
 
 	it('closes nothing and wakes nobody once stopped', () => {

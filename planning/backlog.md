@@ -582,21 +582,15 @@ past it; a host on the system clock waits it out.
 `revoked` at the first reconcile. A host that does not know keeps the
 expiry.
 
-### 31. A wake a seat at work heard through a steer alone is lost with a crash
+### 31. A wake a seat at work heard through a steer alone is lost with a crash — closed
 
-**What.** A message names the seats at rest it wakes in `wakes`, and the
-room steers every seat at work in memory. A run that dies while a seat
-works loses that steer with the run: the message is on the record, the
-seat's lease expires, and nothing wakes the seat for it again.
-
-**Where.** `steer` in `session.ts`; [`docs/agent.md`](../docs/agent.md)
-rule 2.
-
-**Fix.** `wakes` names every seat the message reaches, at rest and at
-work, and every lease row carries `heard`, the seq the activation has
-taken, so the fold says which wakes an activation answered. The seat side
-then decides between a fresh activation and a steer into the one that
-runs.
+The log says who was at work when a message landed: a lease that holds a
+row before it and ends, if it ends, after it (`pendingWakes` in
+`room/lease.ts`). A message such a lease heard is pending again when the
+lease came to nothing, so the seat is woken for it after the backoff.
+`hosts.test.ts` pins it: a crash at every write of a scenario where a
+seat's say wakes a peer, and the peer answers on the next run. The seat
+side still hears a steer in memory; the log carries no `heard`.
 
 ### 32. Opening a name that does not exist creates it
 

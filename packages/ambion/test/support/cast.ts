@@ -11,6 +11,7 @@ import {
 	type HumanDefinition,
 } from '../../src/index.ts';
 import {
+	answersEveryQuestion,
 	answersLastQuestion,
 	byAgent,
 	quiet,
@@ -18,6 +19,7 @@ import {
 	summarise,
 	toolNames,
 	toolResultTexts,
+	unanswered,
 } from './scripted.ts';
 
 export const assistant = defineAgent({
@@ -48,15 +50,88 @@ export const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
 export const agents: readonly AgentDefinition[] = [assistant, product, colleague];
 const people = [priya.name, sam.name];
 
+const assistantScript: Script = (context) =>
+	toolNames(context).includes('summarise') && !toolResultTexts(context).includes('delivered')
+		? summarise('The one message.')
+		: quiet();
+
 /** Every seat answers the last question once; the assistant writes once per draft. */
 export const script: Script = byAgent({
 	product: answersLastQuestion(people),
 	colleague: answersLastQuestion(people),
-	assistant: (context) =>
-		toolNames(context).includes('summarise') && !toolResultTexts(context).includes('delivered')
-			? summarise('The one message.')
-			: quiet(),
+	assistant: assistantScript,
 });
+
+/** One answer the record must hold once. */
+export interface Answer {
+	seat: string;
+	text: string;
+}
+
+/**
+ * The cast a world runs: the stream every runtime over the room runs, and
+ * what the record must come to. The stream's own state survives a crash
+ * of the room, the way a model does.
+ */
+export interface Cast {
+	readonly script: Script;
+	/** Every answer the record must hold once, for one question. */
+	answers(question: Question): Answer[];
+	/** The people the summaries are written for, in order. */
+	readonly summaries: readonly string[];
+	/** How many activations the cast itself failed: every one is an error on the stream. */
+	failures(): number;
+}
+
+/** Every seat answers every question once, first time. */
+export const steady = (): Cast => ({
+	script,
+	answers: (question) =>
+		question.answered.map((seat) => ({ seat, text: `${seat} on ${question.text}` })),
+	summaries: [priya.name, sam.name],
+	failures: () => 0,
+});
+
+/**
+ * A cast under trouble. The product's model is down at the start of the
+ * first activation that takes a person's question, and the room wakes it
+ * again after the backoff. The colleague's answers are questions to the
+ * product, so a seat's say wakes a peer and the peer answers it, across a
+ * crash like a person's. A failure in a pass the activation rebuilt after
+ * the record moved is not in this cast: the lease spoke in its first
+ * pass, so it answers its wake, and what the rebuilt pass was answering
+ * is lost (backlog item 31).
+ */
+export function troubled(): Cast {
+	const seen = new Set<string>();
+	let failed = 0;
+	const productScript: Script = (context, name, call) => {
+		const next = unanswered(context, name, people)[0];
+		const starting = toolResultTexts(context).length === 0;
+		if (starting && next !== undefined && !seen.has(next)) {
+			seen.add(next);
+			failed += 1;
+			throw new Error('the model is down');
+		}
+		return answersEveryQuestion([...people, colleague.name])(context, name, call);
+	};
+	return {
+		script: byAgent({
+			product: productScript,
+			colleague: answersLastQuestion(people),
+			assistant: assistantScript,
+		}),
+		answers: (question) =>
+			question.answered.flatMap((seat) => {
+				const own = { seat, text: `${seat} on ${question.text}` };
+				return seat === colleague.name
+					? [own, { seat: product.name, text: `${product.name} on ${own.text}` }]
+					: [own];
+			}),
+		summaries: [priya.name, sam.name],
+		failures: () => failed,
+	};
+}
 
 /** The script with a wait before every answer, so a kill from outside lands mid-activation. */
 export const slowly =
