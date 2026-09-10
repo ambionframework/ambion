@@ -21,6 +21,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { renderRecord } from '../src/render.ts';
+import { fakeClock } from './support/clock.ts';
 import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
 import {
 	byAgent,
@@ -95,6 +96,10 @@ const dan = defineHuman({ name: 'dan', identity: 'Quantity surveyor.' });
 
 const started: Session[] = [];
 
+/** One clock the tests move by hand, and one runtime over it. */
+const clock = fakeClock();
+const runtime = createRuntime({ clock });
+
 function open(options: {
 	script: Script;
 	agents?: Parameters<typeof startSession>[0]['agents'];
@@ -111,7 +116,7 @@ function open(options: {
 		...(options.available ? { available: options.available } : {}),
 		streamFn: scripted(options.script),
 		...(options.repo ? { repo: options.repo } : {}),
-		...(options.runtime ? { runtime: options.runtime } : {}),
+		runtime: options.runtime ?? runtime,
 	});
 	started.push(session);
 	return session;
@@ -404,9 +409,12 @@ describe('the assistant', () => {
 		// the activation ended after the second refusal, and did not draft for ever
 		expect(drafts).toHaveLength(3);
 
-		// the range is still owed, and the next quiescence writes it
+		// the range is still owed: the next question joins it, and the draft is due after the backoff
 		const written = nextSummary(session);
 		await visit.deliver({ text: 'And the pump?' });
+		await quiescent(session);
+		expect(summaries(await session.messages())).toHaveLength(0);
+		await clock.advance(30_000);
 		const summary = await written;
 
 		expect(summary.text).toBe('draft 4');
@@ -444,7 +452,7 @@ describe('the assistant', () => {
 		).toMatchObject([{ spoke: false }]);
 	});
 
-	it('drafts again at the next quiescence when its activation fails outright', async () => {
+	it('drafts again after the backoff when its activation fails outright', async () => {
 		const session = open({
 			agents: [product, attentive(greeter)],
 			script: byAgent({
@@ -463,9 +471,13 @@ describe('the assistant', () => {
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
 		expect(summaries(await session.messages())).toHaveLength(0);
 
-		// a failed activation leaves the summary owed, and the next quiet room writes it
+		// a failed activation leaves the summary owed; an arrival is not the backoff passing
 		const written = nextSummary(session);
 		await visitSession(session, sam);
+		await quiescent(session);
+		expect(summaries(await session.messages())).toHaveLength(0);
+		// the room's own alarm writes it, once the backoff has passed
+		await clock.advance(30_000);
 		const summary = await written;
 
 		expect(summary.text).toBe('written the second time');
@@ -748,6 +760,31 @@ describe('the assistant', () => {
 		await expect(session.quiet()).resolves.toBeUndefined();
 	});
 
+	it('writes off a draft the host revoked: abort quiets the room, and nothing is owed', async () => {
+		const drafting = deferred();
+		const hangs: Script = () => {
+			drafting.resolve();
+			return new Promise<never>(() => {});
+		};
+		const session = open({ script: byAgent({ product: twoAnswers, assistant: hangs }) });
+		const events = collect(session);
+		const starts = () =>
+			events.filter((e) => e.type === 'activation_start' && e.agent === 'assistant').length;
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await drafting.promise;
+		session.abort();
+		await session.quiet();
+		expect(summaries(await session.messages())).toHaveLength(0);
+		expect(session.exchange()).toBeUndefined();
+		// the revocation stands: nothing wakes the assistant for the same close again
+		expect(starts()).toBe(1);
+		await clock.advance(200_000);
+		expect(starts()).toBe(1);
+		await expect(session.quiet()).resolves.toBeUndefined();
+	});
+
 	it('does not report that a stopped room went quiet', async () => {
 		const session = open({
 			script: byAgent({ product: twoAnswers, assistant: writes('The one message.') }),
@@ -842,58 +879,6 @@ describe('an exchange', () => {
 		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(1);
 	});
 
-	it('closes at the quiet it observed, and a question that lands before the row opens the next', async () => {
-		const gate = deferred();
-		const hold = (_type: string, data: unknown) =>
-			(data as { text?: string }).text === 'second?' ? gate.promise : undefined;
-		const runtime = createRuntime({ sessions: gatedOpener((await memory.open()).sessions, hold) });
-		const working = deferred();
-		const session = open({
-			runtime,
-			script: byAgent({
-				product: async (_context, _name, call) => {
-					if (call !== 1) return quiet();
-					await working.promise;
-					return quiet();
-				},
-			}),
-		});
-		const events = collect(session);
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'first?' });
-		// the second question is on the queue and not yet on the record when the seat stops
-		const second = visit.deliver({ text: 'second?' });
-		const stopped = new Promise<void>((resolve) => {
-			const off = session.subscribe((event) => {
-				if (event.type !== 'activation_end') return;
-				off();
-				resolve();
-			});
-		});
-		working.resolve();
-		await stopped;
-		gate.resolve();
-		await second;
-		await quiescent(session);
-
-		const record = await session.messages();
-		const [first, next] = record.filter(isSpoken);
-		const opened = events.filter((e) => e.type === 'exchange_opened');
-		const closed = events.filter((e) => e.type === 'exchange_closed');
-		// the first exchange holds what the room had when it went quiet
-		expect(closed.map((e) => e.type === 'exchange_closed' && e.exchange)).toEqual([
-			{ owner: 'priya', from: first?.seq, at: first?.at, through: first?.seq },
-			{ owner: 'priya', from: next?.seq, at: next?.at, through: record.at(-1)?.seq },
-		]);
-		// and the second question opened its own, announced once the first closed
-		expect(opened.map((e) => e.type === 'exchange_opened' && e.exchange.from)).toEqual([
-			first?.seq,
-			next?.seq,
-		]);
-		const order = events.map((e) => e.type);
-		expect(order.lastIndexOf('exchange_opened')).toBeGreaterThan(order.indexOf('exchange_closed'));
-	});
-
 	/** Resolves when the named seat's next activation ends. */
 	const activationEnded = (session: Session, agent: string) =>
 		new Promise<void>((resolve) => {
@@ -909,9 +894,25 @@ describe('an exchange', () => {
 		held: (type: string, data: { text?: string }) => Promise<void> | undefined,
 	) =>
 		createRuntime({
+			clock,
 			sessions: gatedOpener((await memory.open()).sessions, (type, data) =>
 				held(type, data as { text?: string }),
 			),
+		});
+
+	/**
+	 * A question asked the moment the named seat stops, before the room has
+	 * decided on the quiet: the close the room decides is for the record
+	 * without it, and the question waits on the storage until the test lets
+	 * it land.
+	 */
+	const askedAsStops = (session: Session, seat: string, ask: () => Promise<void>) =>
+		new Promise<{ landed: Promise<void> }>((resolve) => {
+			const off = session.subscribe((event) => {
+				if (event.type !== 'activation_end' || event.agent !== seat) return;
+				off();
+				resolve({ landed: ask() });
+			});
 		});
 
 	const surveyor = defineAgent({
@@ -928,7 +929,46 @@ describe('an exchange', () => {
 	const openings = (events: SessionEvent[]) =>
 		events.flatMap((e) => (e.type === 'exchange_opened' ? [e.exchange.from] : []));
 
-	it('never closes the next exchange on a quiet it observed for the last one', async () => {
+	it('closes at the quiet it observed, and a question that lands before the row opens the next', async () => {
+		const gate = deferred();
+		const working = deferred();
+		const session = open({
+			runtime: await gated((_type, data) => (data.text === 'second?' ? gate.promise : undefined)),
+			script: byAgent({
+				product: async (_context, _name, call) => {
+					if (call !== 1) return quiet();
+					await working.promise;
+					return quiet();
+				},
+			}),
+		});
+		const events = collect(session);
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'first?' });
+		const asked = askedAsStops(session, 'product', () => visit.deliver({ text: 'second?' }));
+		working.resolve();
+		const { landed: second } = await asked;
+		await tick();
+		await tick();
+		gate.resolve();
+		await second;
+		await quiescent(session);
+
+		const record = await session.messages();
+		const [first, next] = record.filter(isSpoken);
+		// the first exchange holds what the room had when it went quiet, and the second
+		// question opened its own, announced once the first closed, and worked on
+		expect(ranges(events)).toEqual([
+			[first?.seq, first?.seq],
+			[next?.seq, record.at(-1)?.seq],
+		]);
+		expect(openings(events)).toEqual([first?.seq, next?.seq]);
+		const order = events.map((e) => e.type);
+		expect(order.lastIndexOf('exchange_opened')).toBeGreaterThan(order.indexOf('exchange_closed'));
+		expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(2);
+	});
+
+	it('never closes the next exchange on a quiet it observed for the last one, and the roster stands for it', async () => {
 		const gate = deferred();
 		const working = deferred();
 		const session = open({
@@ -940,50 +980,42 @@ describe('an exchange', () => {
 					await working.promise;
 					return quiet();
 				},
-				// composes twice: nobody for the first question, the surveyor for the second
+				// composes nobody for the first question; the second gets no composing activation
 				assistant: (_context, _name, call) => (call === 2 ? seat('surveyor') : quiet()),
-				surveyor: (_context, _name, call) => (call === 1 ? speak('11.7 tonnes.') : quiet()),
 			}),
 		});
 		const events = collect(session);
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ to: product, text: 'first?' });
 		await activationEnded(session, 'assistant');
-		// the second question wakes nobody, and it is still on the queue when the product stops
-		const second = visit.deliver({ text: 'second?' });
-		const stopped = activationEnded(session, 'product');
+		// the second question wakes nobody, and it is asked the moment the product stops
+		const asked = askedAsStops(session, 'product', () => visit.deliver({ text: 'second?' }));
 		working.resolve();
-		await stopped;
+		const { landed: second } = await asked;
+		await tick();
+		await tick();
 		gate.resolve();
 		await second;
 		await quiescent(session);
 
 		const record = await session.messages();
 		const [first, next] = record.filter(isSpoken);
-		const seated = record.find((m) => m.kind === 'seated');
-		// the first exchange closed where its quiet was observed; the second held the composing
-		// activation, the seating and what the newcomer said, and closed when they stopped
+		// the first exchange closed where its quiet was observed; the second opened on that
+		// close, nobody worked on it, and it closed at once holding the question alone
 		expect(ranges(events)).toEqual([
 			[first?.seq, first?.seq],
-			[next?.seq, record.at(-1)?.seq],
+			[next?.seq, next?.seq],
 		]);
 		expect(openings(events)).toEqual([first?.seq, next?.seq]);
-		expect(seated).toMatchObject({ from: 'surveyor', by: 'assistant' });
-		expect(seated?.seq).toBeGreaterThan(next?.seq ?? 0);
+		expect(record.some((m) => m.kind === 'seated')).toBe(false);
 		expect(session.exchange()).toBeUndefined();
 	});
 
 	it('composes nothing for a question the assistant already woke on, and closes it at once', async () => {
-		const hey = deferred();
-		const close = deferred();
-		let closes = 0;
+		const gate = deferred();
 		const working = deferred();
 		const session = open({
-			runtime: await gated((type, data) => {
-				if (data.text === 'hey') return hey.promise;
-				if (type === 'ambion/close' && ++closes === 1) return close.promise;
-				return undefined;
-			}),
+			runtime: await gated((_type, data) => (data.text === 'hey' ? gate.promise : undefined)),
 			agents: [passive(product)],
 			available: [surveyor],
 			script: byAgent({
@@ -997,16 +1029,16 @@ describe('an exchange', () => {
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ to: product, text: 'first?' });
 		await activationEnded(session, 'assistant');
-		// a word to the assistant lands after the quiet was observed, and before the close is written
-		const said = visit.deliver({ to: assistant, text: 'hey' });
-		const stopped = activationEnded(session, 'product');
+		// a word to the assistant is asked the moment the product stops, and lands before the close
+		const asked = askedAsStops(session, 'product', () =>
+			visit.deliver({ to: assistant, text: 'hey' }),
+		);
 		working.resolve();
-		await stopped;
-		hey.resolve();
+		const { landed: said } = await asked;
+		await tick();
+		await tick();
+		gate.resolve();
 		await said;
-		// the assistant woke on that word and ended before the close landed
-		await activationEnded(session, 'assistant');
-		close.resolve();
 		await quiescent(session);
 
 		const record = await session.messages();

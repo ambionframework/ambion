@@ -334,9 +334,9 @@ Presence is a fold over the record (`foldPeople` in
 from their last `arrived` until their next `left`. The record rebuilds
 everything — who has ever been here, who is here now, when, and where each
 of them stopped reading. Presence is kept in one place, and the place is
-the record. A run that dies writes no `left`, so a person stays present
-until the host says they left: a visit on the next run hands back a handle
-and commits nothing, and `leave()` on it writes the `left`.
+the record. A crash writes no `left`, so a person stays present until the
+host says they left: a visit on the next run, started or resumed, hands
+back a handle and commits nothing, and `leave()` on it writes the `left`.
 
 ---
 

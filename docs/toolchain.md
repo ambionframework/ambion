@@ -66,15 +66,15 @@ only. Biome refuses every other import (`noRestrictedImports`, one
 override per layer in `biome.jsonc`), so the layout is a fact the gate
 holds, and a reviewer reads a file knowing what it cannot reach.
 
-| Layer                               | What it holds                                                                                      | May import                        |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                          | Nothing that does anything        |
-| `host/`                             | What a host owns: the runtime value, a clock, an opener                                            | The vocabulary                    |
-| `log/`                              | The log: one serial queue over a Pi session                                                        | The vocabulary                    |
-| `room/`                             | Every fact the log holds about the room, pure over it: the fold, the exchange, presence, the view  | The vocabulary, the log's entries |
-| `tools/`                            | What an agent's tools reach into: the workspace and its backends                                   | The vocabulary, `host/`           |
-| `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport | The vocabulary, `host/`, `tools/` |
-| `session.ts`                        | The room, which composes them all                                                                  | Everything                        |
+| Layer                               | What it holds                                                                                                                            | May import                        |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                                                                | Nothing that does anything        |
+| `host/`                             | What a host owns: the runtime value, a clock, an opener                                                                                  | The vocabulary                    |
+| `log/`                              | The log: one serial queue over a Pi session                                                                                              | The vocabulary                    |
+| `room/`                             | Every fact and every decision, pure over the log: the fold, the lease, the exchange, presence, the assistant's rules, the view, `decide` | The vocabulary, the log's entries |
+| `tools/`                            | What an agent's tools reach into: the workspace and its backends                                                                         | The vocabulary, `host/`           |
+| `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport                                       | The vocabulary, `host/`, `tools/` |
+| `session.ts`                        | The room, which composes them all                                                                                                        | Everything                        |
 
 Two rules hold across packages: the core imports no platform module
 (`node:sqlite`, `cloudflare:*`), and every other package reaches the core
@@ -246,11 +246,10 @@ budget a test would hit the wall three times sooner than the code it exercises.
 The wider budget measures a test body from where it actually starts. A test
 that has become a program still fails — the tree's worst test scores 8.
 
-The runtime's densest method, `SessionImpl.dispatch`, sits at exactly 10.
-Routing is the room's whole policy and is meant to stay one readable piece, so
-it has no headroom on purpose: the next branch added to it forces a
-deliberate decision. Everything else
-in the tree scores 9 or below.
+The runtime's routing, `SessionImpl.routing`, and its step,
+`reconcileOnce`, are glue over pure functions in `fold.ts` and
+`reconcile.ts`, one function per fact, and each stays under the budget.
+Everything in the tree scores 10 or below.
 
 The budget is a lint rule, so it runs wherever `check:lint` runs — the `check` job on a pull request, and the gate the release
 re-runs before it publishes. There was nothing to add to `ci.yml`.

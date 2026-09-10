@@ -100,22 +100,25 @@ export const backends: readonly Backend[] = [
 
 export interface FaultyOpener {
 	readonly sessions: SessionOpener;
-	/** Every write fails while `on` is true. Reads and opens keep working. */
-	fail(on: boolean): void;
+	/** Every write fails while `on` is true, or every write of one entry type when `only` names it. Reads and opens keep working. */
+	fail(on: boolean, only?: string): void;
 }
 
 /** An opener whose sessions refuse to write while the test says so. */
 export function faultyOpener(sessions: SessionOpener): FaultyOpener {
 	let failing = false;
-	const refuse = () => {
-		if (failing) throw new Error('the disk is full');
+	let onlyType: string | undefined;
+	const refuse = (customType: unknown) => {
+		if (failing && (onlyType === undefined || onlyType === customType)) {
+			throw new Error('the disk is full');
+		}
 	};
 	const brittle = (piSession: PiSession): PiSession =>
 		new Proxy(piSession, {
 			get(target, property, receiver) {
 				if (property === 'appendCustomEntry' || property === 'appendMessage') {
 					return async (...args: unknown[]) => {
-						refuse();
+						refuse(args[0]);
 						return (Reflect.get(target, property, receiver) as (...a: unknown[]) => unknown).apply(
 							target,
 							args,
@@ -128,8 +131,9 @@ export function faultyOpener(sessions: SessionOpener): FaultyOpener {
 		});
 	return {
 		sessions: { open: async (id, parentId) => brittle(await sessions.open(id, parentId)) },
-		fail: (on) => {
+		fail: (on, only) => {
 			failing = on;
+			onlyType = only;
 		},
 	};
 }

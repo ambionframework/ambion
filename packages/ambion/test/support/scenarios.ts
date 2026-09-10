@@ -24,6 +24,7 @@ import {
 	byAgent,
 	callTool,
 	contextText,
+	insists,
 	quiet,
 	type Script,
 	scripted,
@@ -118,8 +119,12 @@ const answersOnce: Script = (context, name) => {
 	return speak(answer);
 };
 
-async function finish(session: Session, events: ReturnType<typeof collect>): Promise<void> {
-	await invariants(session, events);
+async function finish(
+	session: Session,
+	events: ReturnType<typeof collect>,
+	runtime: Runtime,
+): Promise<void> {
+	await invariants(session, events, { sessions: runtime.sessions });
 	await stopSession(session);
 }
 
@@ -143,7 +148,7 @@ export const oneExchange: Scenario = {
 		expect(record.filter(isSpoken).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
 		const summary = record.find(isSummary);
 		expect(summary).toMatchObject({ to: 'priya', text: 'The one message.' });
-		await finish(session, events);
+		await finish(session, events, runtime);
 	},
 };
 
@@ -183,7 +188,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 			['sam', 'for sam'],
 		]);
 		expect(session.seats().find((s) => s.name === 'priya')).toMatchObject({ presence: 'absent' });
-		await finish(session, events);
+		await finish(session, events, runtime);
 	},
 };
 
@@ -201,8 +206,7 @@ export const seatFromReserve: Scenario = {
 					assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
 					product: (_context, _name, call) =>
 						call <= 3 ? speak('The pour is Saturday.') : quiet(),
-					surveyor: (_context, _name, call) =>
-						call === 1 ? speak('11.7 tonnes on site.') : quiet(),
+					surveyor: insists('11.7 tonnes on site.'),
 				}),
 			),
 		});
@@ -218,7 +222,7 @@ export const seatFromReserve: Scenario = {
 		expect(record.filter(isSpoken).map((m) => m.from)).toContain('surveyor');
 		expect(record.find(isSummary)).toBeDefined();
 		expect(session.seats().map((s) => s.name)).toContain('surveyor');
-		await finish(session, events);
+		await finish(session, events, runtime);
 	},
 };
 
@@ -293,7 +297,7 @@ export const twoWorkspaces: Scenario = {
 		const said = (await session.messages()).filter(isSpoken).map((m) => m.text);
 		expect(said).toContain('alpha done');
 		expect(said).toContain('beta done');
-		await finish(session, events);
+		await finish(session, events, runtime);
 		await destroyWorkspace(directoryDrive);
 		await Promise.all([memoryBackend.dispose(), directoryBackend.dispose()]);
 	},

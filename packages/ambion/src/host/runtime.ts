@@ -44,6 +44,8 @@ export interface RunningRoom extends SeatRoom {
 	/** Where the room's sessions open: a seat's audit session opens beside them. */
 	readonly sessions: SessionOpener;
 	emit(event: SessionEvent): void;
+	/** Drop the room from memory. The record keeps everything. */
+	evict(): void;
 }
 
 /**
@@ -70,11 +72,19 @@ export interface Runtime {
 	/** The model call every seat in this runtime makes, unless a room overrides it. */
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
+	/** How long a wake stays unanswered before the room sends it again, and how long a lease lasts between renewals. */
+	readonly wake: { readonly resend: number; readonly expiry: number };
+	/** How many times the room retries a failed summary, and how long it waits before each retry. */
+	readonly retry: { readonly attempts: number; readonly backoff: (attempt: number) => number };
+	/** Drop a running room from memory and write nothing. The record keeps everything. */
+	evict(name: string): void;
 }
 
 export interface CreateRuntimeOptions {
 	clock?: Clock;
 	transport?: Transport;
+	/** Definitions the catalog starts with. `resumeSession` resolves a room's names through it. */
+	agents?: readonly AgentDefinition[];
 	/** Where the rooms' Pi sessions open. `repo` is the shorthand for `sessionsOver(repo)`. */
 	sessions?: SessionOpener;
 	repo?: SessionRepoLike<SessionMetadata, SessionCreateOptions>;
@@ -83,6 +93,8 @@ export interface CreateRuntimeOptions {
 	 * model then resolves to a stub, because a custom stream never reads it.
 	 */
 	stream?: StreamFn;
+	wake?: Partial<Runtime['wake']>;
+	retry?: Partial<Runtime['retry']>;
 }
 
 /** What `sessionsOver` needs of a Pi repository: list, open, create. */
@@ -157,16 +169,24 @@ export const stubModel: ModelResolver = (id) =>
 	({ id, name: id, api: 'scripted', provider: 'scripted' }) as unknown as Model<Api>;
 
 export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
+	const running = new Map<string, RunningRoom>();
 	const sessions = options.sessions ?? sessionsOver(options.repo ?? new InMemorySessionRepo());
 	return {
-		running: new Map(),
+		running,
 		taken: new Set(),
-		catalog: new Map(),
+		catalog: new Map((options.agents ?? []).map((def) => [def.name, def])),
 		clock: options.clock ?? systemClock(),
 		sessions,
 		...(options.transport === undefined ? {} : { transport: options.transport }),
 		stream: options.stream ?? registryStream,
 		model: options.stream ? stubModel : registryModel,
+		wake: { resend: 5_000, expiry: 60_000, ...options.wake },
+		retry: { attempts: 3, backoff: (attempt) => attempt * 30_000, ...options.retry },
+		evict(name) {
+			const room = running.get(name);
+			running.delete(name);
+			room?.evict();
+		},
 	};
 }
 

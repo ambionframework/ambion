@@ -13,6 +13,7 @@ import {
 	createRuntime,
 	type Lease,
 	type LeaseResponse,
+	type LeaseRow,
 	roundTrip,
 	type ViewResponse,
 	type Wake,
@@ -24,8 +25,10 @@ import { jsonl } from './support/storage.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 
-const rows: Record<string, CloseRow | CompositionRow> = {
-	close: { owner: 'priya', from: 2, through: 4, after: 4, at },
+const rows: Record<string, LeaseRow | CloseRow | CompositionRow> = {
+	claim: { id: '2:product', after: 2, phase: 'running', expiry: 60_000, at },
+	end: { id: '2:product', after: 4, phase: 'ended', reason: 'released', at },
+	close: { owner: 'priya', from: 2, through: 4, after: 4, at, wakes: ['assistant'] },
 	composition: {
 		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
 		goal: 'Decide the pour date.',
@@ -125,6 +128,7 @@ describe('the wire', () => {
 			const written = await rowsOf(opened.sessions, name);
 			expect(written.map((row) => row.type)).toContain('ambion/close');
 			expect(written.map((row) => row.type)).toContain('ambion/composition');
+			expect(written.map((row) => row.type)).toContain('ambion/lease');
 			for (const row of written) {
 				expect(() => assertWire(row.data)).not.toThrow();
 				expect(roundTrip(row.data)).toStrictEqual(row.data);

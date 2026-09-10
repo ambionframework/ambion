@@ -80,19 +80,19 @@ on top of work nobody asked for. That question still owns what follows.
 room that settles has finished. A seat that says something wakes its
 readers inside its own `say`, before its own lease ends, so the room is
 never briefly empty in the middle of a burst. What is live is read off the
-leases held and the wakes still pending, so there is no count beside them
-to keep in step. The room writes a close row, and `through` is the record
-as it stood at the moment the room went quiet, so a closed exchange names
-the range it turned out to hold. A quiet the room observed on one
-exchange closes that exchange alone. A question that lands after that
-moment and before the row is written opens the next exchange. The host
-hears `exchange_opened` for it once the row is on the log, and an exchange
-nobody works on closes at once, the way a question that wakes nobody does.
+leases and the wakes still pending, folded over the log, so there is no
+count beside them to keep in step. The room writes a close row, and
+`through` is the record as it stood when the room decided on the quiet, so
+a closed exchange names the range it turned out to hold. A quiet the room
+decided on one exchange closes that exchange alone. A question that lands
+after that decision and before the row is written opens the next exchange.
+The host hears `exchange_opened` for it once the row is on the log, the
+roster stands for it, and an exchange nobody works on closes at the next
+reconcile, the way a question that wakes nobody does.
 
-A question that wakes no seat has no seat to stop, so the room runs the
-same check once the question is routed: nothing is working, so the
-exchange closes at once, holding the question alone
-([`roster.md`](roster.md) §6).
+A question that wakes no seat has no seat to stop, so the room reconciles
+once the question is committed: nothing is working, so the exchange closes
+at once, holding the question alone ([`roster.md`](roster.md) §6).
 
 **What lands while it is open steers it and changes nothing.** The owner,
 the range, and who the answer belongs to all stay fixed. A second question
@@ -140,14 +140,18 @@ An exchange is a fold over the log. The open exchange is the first
 question a person asked after the last close row's `through`
 (`openExchange` in [`exchange.ts`](../packages/ambion/src/room/exchange.ts)). A
 close is a row on the log beside the messages: `{ owner, from, through,
-at }`. It takes no seq; `through` orders it. `messages()` returns the
+at, wakes? }`. It takes no seq; `through` orders it. `wakes` names the
+assistant when the exchange owes a summary. `messages()` returns the
 messages alone, and their seqs stay `1..n`.
 
-A run that starts over a log with an exchange open closes it first. The
-seats that worked on it went with the run that started it, so nothing is
-live, and the close row lands before the room takes its first message.
-The host of the new run hears `exchange_closed` for it, and the assistant
-writes what that exchange owes.
+A room resumed over its log continues a mid-exchange room. The question is
+still open, the seats the last run left live hold their leases until they
+expire, and the wakes it left pending are sent again. A lease that expires
+answers the wake it held: the exchange closes once nothing is live, and the
+assistant writes what it owes ([`agent.md`](agent.md) §5). A run that
+starts over a log with an exchange open finds nothing live at its first
+reconcile, closes the exchange, and its host hears `exchange_closed` for
+it.
 
 Every closed exchange is on the log, so a host that wants a history of
 exchanges reads the close rows off the room's Pi session.
@@ -194,17 +198,19 @@ room draws about its assistant.
 `quiet`. A host that acts between `settled()` and `quiet` acts while a
 summary is drafted, and that window is the one place it can.
 
-**An aborted exchange still closes.** `abort()` cancels the activations in
-flight and the room settles, so the exchange closes with the range it
-reached. **A stopped room closes nothing.** `stopSession` aborts the
-activations in flight and writes no close row. A release that lands after
-the stop must not write into a log the next run has started over. The
-exchange stays open on the log, and the next run closes it at its start
-(§5). A run that dies without `stop` leaves the exchange open the same way.
+**An aborted exchange still closes.** `abort()` revokes the leases in
+flight, writes off the wakes still pending, and the room reconciles, so the
+exchange closes with the range it reached. **A stopped room closes
+nothing.** `stopSession` revokes the leases in flight and writes no close
+row. A release that lands after the stop must not write into a log the
+next run has started over. The exchange stays open on the log, and the
+next run closes it at its first reconcile (§5). A run that dies without
+`stop` leaves the exchange open the same way, with its leases live until
+they expire.
 
 **A close the storage refuses leaves the exchange open.** `settled()` and
-`quiet()` still answer, and the room still says `quiet`; the next time the
-seats stop, the room writes the close again.
+`quiet()` still answer, and the room still says `quiet`; the room looks
+again after the resend window, and writes the close then.
 
 ---
 
@@ -273,8 +279,9 @@ The exchange is proved beside the assistant that first reads one, in
   settles before it goes quiet (§6).
 
 [`restart.test.ts`](../packages/ambion/test/restart.test.ts) proves that a
-stopped room writes no close, and that the next run closes the exchange
-before `quiet()` answers (§5, §6).
+stopped room writes no close, that the next run closes the exchange
+before `quiet()` answers, and that a room resumed mid-exchange continues
+it, with a lease the dead run held expiring into the close (§5, §6).
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts) proves that
 a close the storage refuses leaves the exchange open, and that whoever
 waits still hears the room (§6).

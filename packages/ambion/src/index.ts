@@ -44,12 +44,13 @@ export type { SeatContext } from './seat/seat.ts';
 export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {
 	ReadSessionOptions,
+	ResumeSessionOptions,
 	Session,
 	SessionView,
 	StartSessionOptions,
 	Visit,
 } from './session.ts';
-export { readSession, startSession, stopSession, visitSession } from './session.ts';
+export { readSession, resumeSession, startSession, stopSession, visitSession } from './session.ts';
 export type {
 	MemoryBackendFile,
 	MemoryBackendOptions,
@@ -104,6 +105,7 @@ export type {
 	Intent,
 	Lease,
 	LeaseResponse,
+	LeaseRow,
 	SeatPort,
 	SeatRoom,
 	SeatRow,
