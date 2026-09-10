@@ -121,6 +121,8 @@ export class World {
 	writes = 0;
 	/** What the run that holds the room now inherited: leases live at its resume, and an open exchange. */
 	inherited = { activations: 0, exchange: false };
+	/** The cast's failures before the run that holds the room now: its errors are its own. */
+	private failedBefore = 0;
 	private runtime!: Runtime;
 	private session!: Session;
 	private off: () => void = () => {};
@@ -171,6 +173,7 @@ export class World {
 
 	private watch(): void {
 		this.events = [];
+		this.failedBefore = this.cast.failures();
 		this.off = this.session.subscribe((event) => this.events.push(event));
 	}
 
@@ -302,7 +305,7 @@ export class World {
 		expect(errors.filter((m) => !/past its lease|the model is down/.test(m))).toEqual([]);
 		await invariants(this.session, this.events, {
 			sessions: this.opened.sessions,
-			allowErrors: this.inherited.activations + this.cast.failures(),
+			allowErrors: this.inherited.activations + this.cast.failures() - this.failedBefore,
 			inherited: this.inherited.activations,
 			inheritedExchange: this.inherited.exchange,
 		});

@@ -629,7 +629,10 @@ seat two ways: it names the seats at rest it wakes in `wakes`, and every
 seat at work hears it as a steer. A lease heard a message when it was at
 work as the message landed, or when it was claimed after the message, so
 its view held it. The message is answered while such a lease runs and
-once it ended released, refused or revoked. A lease that expired or
+once it ended released, refused or revoked. A lease that stood down
+answers through the seq its last renewal confirmed: a message that
+landed between that renewal and the release reached no activation, and
+the seat is woken for it. A lease that expired or
 failed answers nothing it heard, whatever it said: its words stay on the
 record, the seat reads them at the next attempt, and the failure counts
 as one attempt. The room wakes the seat again after the backoff, under

@@ -37,9 +37,9 @@ const afterOf = (id: string): number => {
 	const parsed = parseId(id);
 	return parsed === undefined ? 0 : parsed.kind === 'wake' ? parsed.seq : parsed.through;
 };
-const lease = (row: Without<LeaseRow, 'after'>): LogEntry => ({
+const lease = (row: Without<LeaseRow, 'after'>, after = afterOf(row.id)): LogEntry => ({
 	type: 'lease',
-	lease: { ...row, after: afterOf(row.id) } as LeaseRow,
+	lease: { ...row, after } as LeaseRow,
 });
 const close = (row: Omit<CloseRow, 'after' | 'at'>): LogEntry => ({
 	type: 'close',
@@ -232,6 +232,43 @@ describe('decide', () => {
 			{ type: 'message', message: { kind: 'unseated', seq: 3, at, from: 'product' } },
 		]);
 		expect(unseated.pending).toEqual([]);
+	});
+
+	it('leaves pending what landed between the last renewal and the release, and what the assistant composed through', () => {
+		// the seat renewed after 3, message 4 landed, and the release landed after 4: no
+		// activation heard 4, so it is pending for the seat as a first attempt
+		const window = fold([
+			...opened(),
+			lease({ id: '2:product', phase: 'running', expiry: T0 + 60_000, at }),
+			said(3, 'product', { activationId: '2:product' }),
+			lease({ id: '2:product', phase: 'running', expiry: T0 + 60_000, at }, 3),
+			said(4, 'priya'),
+			lease({ id: '2:product', phase: 'ended', reason: 'released', at }, 4),
+		]);
+		expect(window.pending).toMatchObject([{ id: '4:product', seat: 'product', attempts: 0 }]);
+		// a lease that heard 4 before it stood down answers it
+		const heard = fold([
+			...opened(),
+			lease({ id: '2:product', phase: 'running', expiry: T0 + 60_000, at }),
+			said(3, 'product', { activationId: '2:product' }),
+			said(4, 'priya'),
+			lease({ id: '2:product', phase: 'running', expiry: T0 + 60_000, at }, 4),
+			lease({ id: '2:product', phase: 'ended', reason: 'released', at }, 4),
+		]);
+		expect(heard.pending).toEqual([]);
+		// the assistant composing hears no steer: a failed draft leaves the compose
+		// pending again, and nothing for the message that landed while it composed
+		const composed = fold([
+			composition(),
+			arrived(1, 'priya'),
+			said(2, 'priya', { wakes: ['product', 'assistant'] }),
+			lease({ id: '2:assistant', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({ id: '2:product', phase: 'running', expiry: T0 + 60_000, at }),
+			said(3, 'product', { activationId: '2:product' }),
+			lease({ id: '2:product', phase: 'ended', reason: 'released', at }, 3),
+			lease({ id: '2:assistant', phase: 'ended', reason: 'failed', at }, 3),
+		]);
+		expect(composed.pending.map((wake) => wake.id)).toEqual(['2:assistant:2']);
 	});
 
 	it('writes nothing the second time', () => {

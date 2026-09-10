@@ -19,11 +19,13 @@ import {
 	type Session,
 	startSession,
 	stopSession,
+	type Visit,
 	visitSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { assistant, collect, deferred, enter, roomName, rowsOf, tick } from './support/room.ts';
 import {
+	answersEveryQuestion,
 	byAgent,
 	contextText,
 	quiet,
@@ -177,6 +179,36 @@ describe('a lease', () => {
 		await clock.advance(30_000);
 		await session.quiet();
 		expect(starts(events)).toBe(2);
+		expect(session.exchange()).toBeUndefined();
+	});
+
+	it('answers a question that landed between its last renewal and its release', async () => {
+		// The activation renewed, saw the record had not moved, and released. A
+		// question that lands while the release is on the wire reached no
+		// activation: the released lease heard through its renewal, so the
+		// question is pending for the seat, and the seat is woken for it.
+		let visit: Visit | undefined;
+		const releases = (l: unknown) => (l as { phase: string }).phase === 'ended';
+		const faults: Fault[] = [
+			{
+				on: 'lease',
+				kind: 'hold',
+				match: releases,
+				hold: async () => {
+					await visit?.deliver({ text: 'Second?' });
+				},
+			},
+		];
+		const { session } = open(faults, byAgent({ solo: answersEveryQuestion(['andrei']) }));
+		visit = await enter(session);
+		await visit.deliver({ text: 'First?' });
+		await session.quiet();
+		expect((await session.messages()).filter(isSpoken).map((m) => m.text)).toEqual([
+			'First?',
+			'solo on First?',
+			'Second?',
+			'solo on Second?',
+		]);
 		expect(session.exchange()).toBeUndefined();
 	});
 

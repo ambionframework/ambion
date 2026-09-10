@@ -53,9 +53,11 @@ export type Operation = 'wake' | 'view' | 'commit' | 'lease';
 
 export interface Fault {
 	on: Operation;
-	kind: 'drop' | 'duplicate' | 'delay';
+	kind: 'drop' | 'duplicate' | 'delay' | 'hold';
 	/** For `delay`: how long the request waits on the clock. */
 	ms?: number;
+	/** For `hold`: what happens while the request is held, before it is sent. */
+	hold?: () => Promise<void>;
 	/** Narrow the fault to one request; the first matching request takes it. */
 	match?: (request: unknown) => boolean;
 	/** Let this many matching requests through before the fault takes one. */
@@ -66,7 +68,8 @@ export interface Fault {
  * A transport that fails the way a network does. Each fault is taken by the
  * first request it matches, in order. A dropped wake is lost; a dropped
  * room call rejects, so the seat never learns the outcome. A
- * duplicated request is sent twice. A delayed one waits on the clock.
+ * duplicated request is sent twice. A delayed one waits on the clock. A
+ * held one waits for `hold` to run, so a test lands something in between.
  */
 export function faultyTransport(transport: Transport, faults: Fault[], clock: Clock): Transport {
 	const take = (on: Operation, request: unknown): Fault | undefined => {
@@ -89,6 +92,7 @@ export function faultyTransport(transport: Transport, faults: Fault[], clock: Cl
 		const fault = take(on, request);
 		if (fault?.kind === 'drop') throw new Error(`${on} dropped`);
 		if (fault?.kind === 'delay') await wait(fault.ms ?? 0);
+		if (fault?.kind === 'hold') await fault.hold?.();
 		if (fault?.kind === 'duplicate') void send().catch(() => {});
 		return send();
 	};

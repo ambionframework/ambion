@@ -81,50 +81,49 @@ describe('a handover under load', () => {
 
 describe('a split: two live hosts over one log', () => {
 	// The design forbids it: two live rooms over one record each append to it and
-	// diverge. Nothing fences the first host out yet, so this test fails: both hosts
-	// assign the same seqs, and a later reader folds a record with a seq twice.
-	it.fails(
-		'the second host fences the first out, and the record holds every seq once',
-		async () => {
-			const opened = await memory.open();
-			const clock = fakeClock();
-			const host = () =>
-				createRuntime({
-					sessions: opened.sessions,
-					clock,
-					agents,
-					transport: serializing(inProcessTransport()),
-				});
-			const first = host();
-			const name = roomName('split');
-			const room = startSession({
-				name,
-				runtime: first,
-				assistant,
-				agents: [product, colleague],
-				streamFn: scripted(script),
+	// diverge. Nothing fences the first host out yet, and this test pins what the
+	// storage ends up with: both hosts assign the same seqs. It turns when a fence lands.
+	it('both hosts write the same seqs, and nothing fences the first out yet', async () => {
+		const opened = await memory.open();
+		const clock = fakeClock();
+		const host = () =>
+			createRuntime({
+				sessions: opened.sessions,
+				clock,
+				agents,
+				transport: serializing(inProcessTransport()),
 			});
-			const hers = await visitSession(room, priya);
-			await hers.deliver({ text: 'First?', key: 'q1' });
-			await room.quiet();
-			// the second host takes the name while the first is alive and keeps taking questions
-			const second = host();
-			const taken = await resumeSession(name, { runtime: second, streamFn: scripted(script) });
-			const his = await visitSession(taken, sam);
-			await his.deliver({ text: 'Second?', key: 'q2' });
-			await taken.quiet();
-			await hers.deliver({ text: 'Third?', key: 'q3' });
-			await room.quiet();
-			const seqs = (await rowsOf(opened.sessions, name)).flatMap((r) =>
-				r.type === 'ambion/message' ? [(r.data as { seq: number }).seq] : [],
+		const first = host();
+		const name = roomName('split');
+		const room = startSession({
+			name,
+			runtime: first,
+			assistant,
+			agents: [product, colleague],
+			streamFn: scripted(script),
+		});
+		const hers = await visitSession(room, priya);
+		await hers.deliver({ text: 'First?', key: 'q1' });
+		await room.quiet();
+		// the second host takes the name while the first is alive and keeps taking questions
+		const second = host();
+		const taken = await resumeSession(name, { runtime: second, streamFn: scripted(script) });
+		const his = await visitSession(taken, sam);
+		await his.deliver({ text: 'Second?', key: 'q2' });
+		await taken.quiet();
+		await hers.deliver({ text: 'Third?', key: 'q3' });
+		await room.quiet();
+		const seqs = (await rowsOf(opened.sessions, name)).flatMap((r) =>
+			r.type === 'ambion/message' ? [(r.data as { seq: number }).seq] : [],
+		);
+		try {
+			expect(new Set(seqs).size, `seqs on the storage: ${seqs.join(' ')}`).toBeLessThan(
+				seqs.length,
 			);
-			try {
-				expect(new Set(seqs).size, `seqs on the storage: ${seqs.join(' ')}`).toBe(seqs.length);
-			} finally {
-				await stopSession(room);
-				await stopSession(taken);
-				await opened.dispose();
-			}
-		},
-	);
+		} finally {
+			await stopSession(room);
+			await stopSession(taken);
+			await opened.dispose();
+		}
+	});
 });

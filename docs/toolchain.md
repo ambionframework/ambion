@@ -343,8 +343,8 @@ harness in
   room crashes at every third write. The second host wakes the failed
   seat again after the backoff, and a seat's say a peer heard as a steer
   before the crash is answered on the next run. The same file pins the
-  split the design forbids, two live hosts over one log, as a test that
-  fails until a fence exists.
+  split the design forbids, two live hosts over one log: both write the
+  same seqs, and the test turns when a fence lands.
 - **A kill from outside.** The same scenario runs in a child process on a
   JSONL storage, on the system clock, with short leases. The test sends
   `SIGKILL` at a write, resumes over the directory, finishes the scenario,
