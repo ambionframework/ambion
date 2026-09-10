@@ -163,7 +163,8 @@ describe('a room killed from outside', () => {
 			const name = 'killed';
 			try {
 				const reached = await killAt(dir, name, at);
-				expect(reached).toBeGreaterThanOrEqual(Math.min(at, 1));
+				// the child died at the kill, and not on its own before it
+				expect(reached).toBeGreaterThanOrEqual(at);
 				const sessions = jsonlSessions(dir);
 				// The room resumes on a clock that stands where the child's ran, and the test moves it:
 				// a lease the child held is live at the resume and expires when the test says so.

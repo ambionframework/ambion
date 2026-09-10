@@ -566,6 +566,8 @@ class SessionImpl implements Session, RunningRoom {
 		// no `left`, and the host's word is what says otherwise. Nothing commits.
 		// An arrival whose confirmation was lost is read back first.
 		await this.log.settled();
+		// A room that stopped while this waited seats nobody.
+		this.assertRunning();
 		if (this.state().people.get(human.name)?.presence !== 'present') {
 			try {
 				await this.commitPresence({
@@ -1129,7 +1131,8 @@ class SessionImpl implements Session, RunningRoom {
 				changed = await this.apply(decision);
 			} catch {
 				this.settle();
-				this.arm(this.now() + this.runtime.wake.resend);
+				// A write that failed because the room is gone arms nothing.
+				if (!this.gone()) this.arm(this.now() + this.runtime.wake.resend);
 				return;
 			}
 			// Whoever waits hears it once the room has nothing more to write: a
@@ -1261,6 +1264,8 @@ class SessionImpl implements Session, RunningRoom {
 			if (this.evicted) return;
 			await this.ready;
 			await this.revoke(() => true);
+			// A write queued ahead of the stop lands first, so the record says who was present.
+			await this.log.settled();
 			await this.leaveEverybody();
 		} finally {
 			// The name comes free whatever the storage did. A failed write must
@@ -1291,7 +1296,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * call a seat makes from now on is stale, every visit is over, nothing
 	 * the host does with the handle writes, nothing reaches a listener again,
 	 * and nobody waits on the room. The record keeps what landed before, and
-	 * nothing this run had in flight lands after.
+	 * nothing this run had queued lands after.
 	 */
 	evict(): void {
 		this.evicted = true;

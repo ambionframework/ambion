@@ -214,9 +214,10 @@ export class RoomLog {
 	}
 
 	/**
-	 * Closed: every write from here on fails, and nothing is cached. A room
-	 * dropped from memory closes its log, so a write it still had in flight
-	 * fails the way a process that died would have failed to make it.
+	 * Closed: every write asked for from here on fails. A room dropped from
+	 * memory closes its log, so a write it still had queued fails the way a
+	 * process that died would have failed to make it. An append the storage
+	 * already took lands and is cached: it is on the record.
 	 */
 	close(): void {
 		this.closed = true;
