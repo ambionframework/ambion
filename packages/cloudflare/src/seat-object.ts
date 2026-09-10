@@ -18,6 +18,8 @@ type Phase = 'pending' | 'running';
 
 export class SeatObject extends DurableObject<Env> {
 	private actor: SeatActor | undefined;
+	/** A run is in flight in this instance. A second alarm while it runs has nothing to do. */
+	private running = false;
 
 	/**
 	 * A wake for the activation the object holds, or for a fresh one when it
@@ -65,6 +67,17 @@ export class SeatObject extends DurableObject<Env> {
 	}
 
 	override async alarm(): Promise<void> {
+		if (this.running) return;
+		this.running = true;
+		try {
+			await this.run();
+		} finally {
+			this.running = false;
+		}
+	}
+
+	/** One activation to its end, or the lease a run this instance never saw left behind. */
+	private async run(): Promise<void> {
 		const activation = await this.ctx.storage.get<string>('activation');
 		const room = await this.ctx.storage.get<string>('room');
 		const seat = await this.ctx.storage.get<string>('seat');
@@ -77,6 +90,7 @@ export class SeatObject extends DurableObject<Env> {
 		};
 		if ((await this.ctx.storage.get<Phase>('phase')) === 'running') {
 			// A run that never came back: the object was evicted mid-activation.
+			// A run in flight in this instance never reaches here: `running` holds it off.
 			await seatRoom.lease({ activation, phase: 'ended', reason: 'failed' });
 			await this.clear();
 			return;

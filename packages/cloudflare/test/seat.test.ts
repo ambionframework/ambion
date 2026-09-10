@@ -5,7 +5,7 @@
  * so the test waits for what they do.
  */
 
-import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
+import { env, runInDurableObject } from 'cloudflare:test';
 import type { LeaseRow, Message } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
@@ -22,8 +22,9 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	expect(await until(() => seat.wakes())).toBeGreaterThanOrEqual(1);
 
 	// the seat's alarm runs the activation: a lease claimed, a say, the lease renewed at the
-	// end of the pass, and released
-	await runDurableObjectAlarm(seat);
+	// end of the pass, and released. The handler is invoked twice at once: a second alarm
+	// while a run is in flight has nothing to do, and never ends that run's lease as failed
+	await runInDurableObject(seat, (instance) => Promise.all([instance.alarm(), instance.alarm()]));
 	const said = await until(async () => {
 		const messages: Message[] = await room.messages();
 		return messages.find((m) => m.kind === 'said' && m.from === 'product');
