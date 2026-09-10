@@ -18,6 +18,13 @@ permissions:
   contents: read
 
 jobs:
+  lemmascript:
+    name: Verify contracts
+    uses: midspiral/LemmaScript/.github/workflows/verify.yml@cb1dda6b958aede92a8f79e54d1a82735c8d498f
+    with:
+      backend: dafny
+      typecheck: false
+
   check:
     name: Lint and types
     runs-on: ubuntu-latest
