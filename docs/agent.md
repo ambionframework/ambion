@@ -642,20 +642,25 @@ to nothing. What landed while an activation worked and whether it left a
 mark belong to the activation and end with it. Rule 5's `readThrough` is
 an activation's fact.
 
-**A wake is answered by a lease that heard it, and an activation that came
-to nothing is tried again.** A message and a seat in its `wakes` is one
-wake. Any lease of that seat that heard the message answers it once it ran
-to a release, a refusal, a revocation or an abandonment, or once it spoke.
-A lease that expired or failed without speaking answers nothing: the wake
-stays pending, the failure counts as one attempt, and the room wakes the
-seat again after the backoff (`runtime.retry`, the same policy the
-summaries use, three attempts thirty seconds apart by default). At the cap
-the room gives up: it writes the attempt it does not make as a lease
-ended `abandoned`, which answers the wake, and the host hears an
-`abandoned` event that names it. An activation that spoke and then died
-stands: what it said is on the record, and nobody is woken to say it
-again. A seat with a wake pending is live, so the exchange stays open
-through the backoff, and `settled()` waits for the attempt.
+**A message is answered by a lease that heard it, and an activation that
+came to nothing is tried again.** A message reaches a seat two ways: it
+names the seats at rest it wakes in `wakes`, and every seat at work hears
+it as a steer. The log names both: `wakes` holds every seat the message
+reached, and every lease row carries `heard`, the seq the activation had
+taken when the row was written. A message is answered while a lease that
+heard it runs, and once that lease ended released, refused, revoked or
+abandoned. A lease that stood down answers through the seq its release
+said: a message that landed after the activation last took the record
+reached no activation, and the seat is woken for it. A lease that expired
+or failed answers nothing it heard, whatever it said: its words stay on
+the record, the seat reads them at the next attempt, and the failure
+counts as one attempt. The room wakes the seat again after the backoff
+(`runtime.retry`, the same policy the summaries use, three attempts thirty
+seconds apart by default), under the next attempt's id. At the cap the
+room gives up: it writes the attempt it does not make as a lease ended
+`abandoned`, which answers the message, and the host hears an `abandoned`
+event that names it. A seat with a wake pending is live, so the exchange
+stays open through the backoff, and `settled()` waits for the attempt.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — opened through a `SessionOpener`

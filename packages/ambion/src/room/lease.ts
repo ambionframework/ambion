@@ -12,13 +12,20 @@
  * the seq the activation has taken. The last row for an id wins, and an
  * ended lease never runs again.
  *
- * A wake is a message and a seat it reaches. It is answered by any lease of
- * that seat that heard the message and ran to a release, a refusal, a
- * revocation or an abandonment, or that spoke while it ran. A lease that
- * expired or failed without speaking answers nothing: the wake stays
- * pending, the failure counts as one attempt, and the room wakes the seat
- * again after the backoff. The fold reports every wake still pending with
- * its attempts; the room decides the cap, and writes it.
+ * A message reaches a seat two ways: the room names the seats at rest it
+ * wakes in `wakes`, and every seat at work hears it as a steer. The log
+ * names both: `wakes` holds every seat the message reached, and every lease
+ * row carries `heard`, the seq the activation had taken when the row was
+ * written. A lease answers a message it heard while it runs, and once it
+ * ended released, refused, revoked or abandoned. A lease that stood down
+ * answers through the seq its release said, so a message that landed after
+ * the activation last took the record is pending for the seat, as a first
+ * attempt. A lease that expired or failed answers nothing it heard,
+ * whatever it said: its words stay on the record, and the seat reads them
+ * at the next attempt. The failure counts as one attempt, and the message
+ * is pending again for that seat after the backoff, under the next
+ * attempt's id. The fold reports every wake still pending with its
+ * attempts; the room decides the cap, and writes it.
  */
 
 import type { Message, Seq } from '../types.ts';
@@ -110,6 +117,7 @@ export interface WakeOptions {
 	backoff(attempt: number): number;
 }
 
+/** A lease that ended this way heard the message and came to nothing. */
 const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set(['failed', 'expired']);
 
 /**
@@ -123,14 +131,12 @@ export function pendingWakes(
 	roster: ReadonlySet<string>,
 	options: WakeOptions,
 ): PendingWake[] {
-	const spoke = new Set(
-		messages.flatMap((m) => (m.activationId === undefined ? [] : [m.activationId])),
-	);
 	const bySeat = leasesBySeat(leases, roster);
 	const pending: PendingWake[] = [];
 	for (const message of messages) {
 		for (const seat of (message.wakes ?? []).filter((name) => roster.has(name))) {
-			const wake = statusOf(message, seat, bySeat.get(seat) ?? [], spoke, options);
+			const heard = (bySeat.get(seat) ?? []).filter((lease) => lease.heard >= message.seq);
+			const wake = statusOf(message, seat, heard, options);
 			if (wake !== undefined) pending.push(wake);
 		}
 	}
@@ -151,19 +157,16 @@ function leasesBySeat(
 	return bySeat;
 }
 
-/** The wake as pending, or nothing when a lease answered it. */
+/** The wake as pending, or nothing when a lease that heard the message answered it. */
 function statusOf(
 	message: Message,
 	seat: string,
-	leases: readonly LeaseState[],
-	spoke: ReadonlySet<string>,
+	heard: readonly LeaseState[],
 	options: WakeOptions,
 ): PendingWake | undefined {
-	const heard = leases.filter((lease) => lease.heard >= message.seq);
-	if (heard.some((lease) => answers(lease, spoke))) return undefined;
-	const failed = heard.filter((lease) => !spoke.has(lease.id) && cameToNothing(lease));
-	const attempts = failed.length;
-	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
+	if (heard.some((lease) => !cameToNothing(lease))) return undefined;
+	const attempts = heard.length;
+	const last = Math.max(0, ...heard.map((lease) => Date.parse(lease.at)));
 	return {
 		id: activationId(message.seq, seat, attempts + 1),
 		seat,
@@ -174,12 +177,7 @@ function statusOf(
 	};
 }
 
-/** A lease that heard the message answers it: it runs, it ran to its end, or it spoke. */
-function answers(lease: LeaseState, spoke: ReadonlySet<string>): boolean {
-	if (lease.phase === 'running' || spoke.has(lease.id)) return true;
-	return !cameToNothing(lease);
-}
-
+/** A lease that ended this way answers nothing it heard, whatever it said; every other lease answers all of it. */
 const cameToNothing = (lease: LeaseState): boolean =>
 	lease.phase === 'ended' && lease.reason !== undefined && CAME_TO_NOTHING.has(lease.reason);
 

@@ -344,7 +344,17 @@ harness in
   heard. The world resumes the name in a fresh runtime, puts back the
   people who were present, and retries the host action that failed under
   the same key. Every run must come to the same record: every delivery on
-  it once, every answer once, every summary owed written once.
+  it once, every answer once, every summary owed written once. A seat
+  whose lease the dead run held is woken again after the backoff, and
+  answers then.
+- **A handover under load** (`hosts.test.ts`). A cast under trouble runs
+  the same sweep: the product's model is down the first time it takes a
+  question, the colleague's answers are questions to the product, and the
+  room crashes at every third write. The second host wakes the failed
+  seat again after the backoff, and a seat's say a peer heard as a steer
+  before the crash is answered on the next run. The same file pins the
+  split the design forbids, two live hosts over one log: both write the
+  same seqs, and the test turns when a fence lands.
 - **A kill from outside.** The same scenario runs in a child process on a
   JSONL storage, on the system clock, with short leases. The test sends
   `SIGKILL` at a write, resumes over the directory, finishes the scenario,
@@ -353,8 +363,9 @@ harness in
   the wire, fails a write before or after it lands, and crashes the room
   up to three times.
 
-`AMBION_CHAOS=all` widens the sweep to JSONL and SQLite and the kill to every third
-write; `pnpm chaos` runs both widened, with 200 seeds of the walk.
+`AMBION_CHAOS=all` widens the sweep to JSONL and SQLite, the handover to
+every write, and the kill to every third write; `pnpm chaos` runs all
+three widened, with 200 seeds of the walk.
 
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:
 `vitest.config.ts` excludes `test/live` from `pnpm test`, and

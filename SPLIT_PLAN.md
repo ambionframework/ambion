@@ -58,10 +58,14 @@ order. A change requested on PR n is made on PR n and rebased forward.
 | 14  | The Cloudflare adapter                                     | `3defaf3`, `a20ba46`, later deltas         | ~0.9k             | 9, 13 |
 | 15  | The demo that crashes, and its report                      | `4474de1`, `346cf31`                       | ~0.2k + generated | 12    |
 
-PRs 1 to 6 landed on main as #49, #50, #51, #52, #53 and #54. PRs 4 and
-5 landed with decisions the branch had not made; the note under PR 5 says
-what they are, and the branch holds them now. PR 6 landed as the branch
-has it, with its doubt tests in `test/doubt.test.ts`.
+PRs 1 to 7 landed on main as #49, #50, #51, #52, #53, #54 and #56. PRs 4
+and 5 landed with decisions the branch had not made; the note under PR 5
+says what they are, and the branch holds them now. PR 6 landed as the
+branch has it, with its doubt tests in `test/doubt.test.ts`. PR 7 landed
+with a different mechanism for the same outcomes; the note under PR 7
+says what the branch adopted and what it kept. #55 rewrote the README
+files and added `docs/assets/ambion-exchange.svg`; the branch took them
+as they are.
 
 Sizes are lines of diff without the lockfile and the generated report.
 PRs 9 to 12 are independent of each other and could land in any order;
@@ -389,6 +393,35 @@ Tests: the branch's changes to `lease`, `reconcile`, `restart`, `session`,
 **Extract.** `git cherry-pick -x 20dfe55 2b0c65b`, plus
 `test/live/resume.test.ts` from `174aca5`. `20dfe55` also touches the
 Cloudflare package; drop those hunks, PR 14 takes the final files.
+
+**Where main and the branch parted, and met.** PR 7 landed on main as
+#56 with the same outcomes and a different mechanism. Main derives who
+heard what from where the rows sit: `LeaseState.since`, `until` and
+`heardThrough` are the `after` of the first row, the ended row and the
+last running row, and `reached` adds every seat at work when the message
+landed. The branch keeps `heard` on every lease row and names the seats
+at work in `wakes` on the message. It keeps them because PR 12 replaces
+the rows with a checkpoint whose `after` is the floor, so a seq derived
+from the row's position is lost there, and the deadline of PR 10 reads
+the claim time off the row. The branch adopted main's decisions:
+
+- A lease that expired or failed answers nothing it heard, whatever it
+  said. Its words stay on the record, and the seat reads them at the next
+  attempt. The `spoke` rule is gone from `pendingWakes`.
+- A lease that stood down answers through the seq its release said. The
+  branch's release row carries `heard` for it; main reads the last
+  renewal's `after`. `lease.test.ts` "answers a question that landed
+  between its last renewal and its release" proves it with the `hold`
+  fault.
+- The cast (`Cast`, `steady`, `troubled` in `test/support/cast.ts`) and
+  `test/hosts.test.ts`, the handover under load and the split the design
+  forbids, run on the branch unchanged; `pnpm chaos` runs the handover at
+  every write.
+
+Main hides a wake at the cap inside `pendingWakes`; the branch reports it
+and PR 11 writes it off as a lease ended `abandoned`. PR 11 keeps that.
+Main's `session.test.ts` aborts the room after the one failed activation;
+the branch's version runs the three attempts to the cap and stays.
 
 ---
 
