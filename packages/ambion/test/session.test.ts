@@ -1,6 +1,7 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import {
+	createRuntime,
 	defineAgent,
 	defineHuman,
 	InMemorySessionRepo,
@@ -567,7 +568,58 @@ describe('startSession', () => {
 		// the record is replayed by the first call, and that call is refused
 		await expect(again.messages()).rejects.toThrow(/one name names one participant/);
 		await expect(visitSession(again, andrei)).rejects.toThrow(/one name names one participant/);
+		// The refused start frees the name for a composition the record accepts.
+		const third = startSession({ name, assistant, repo, streamFn: scripted(() => quiet()) });
+		expect((await third.messages()).map((message) => message.kind)).toEqual(['arrived', 'left']);
 		await expect(stopSession(again)).rejects.toThrow(/one name names one participant/);
+		await stopSession(third);
+	});
+
+	it('refuses a delivery directed at the assistant, which wakes for nothing said', async () => {
+		const session = startSession({
+			name: roomName('to-assistant'),
+			assistant,
+			streamFn: scripted(() => quiet()),
+		});
+		const visit = await enter(session);
+		await expect(visit.deliver({ to: assistant, text: 'psst' })).rejects.toThrow(
+			/wakes for nothing said/,
+		);
+		await stopSession(session);
+	});
+
+	it('answers a dead activation stale before reporting what the record moved past', async () => {
+		const solo = defineAgent({
+			name: 'solo',
+			identity: 'Speaks once.',
+			instructions: 'speak',
+			model: 'scripted/solo',
+		});
+		const runtime = createRuntime({ transport: { connect: () => ({ wake: async () => {} }) } });
+		const session = startSession({
+			name: roomName('stale'),
+			assistant,
+			agents: [solo],
+			runtime,
+			streamFn: scripted(() => quiet()),
+		});
+		const events = collect(session);
+		const visit = await enter(session);
+		await visit.deliver({ text: 'first' });
+		const room = runtime.running.get(session.name);
+		if (room === undefined) throw new Error('the room is not running');
+		expect(await room.lease({ activation: '2:solo', phase: 'running' })).toMatchObject({ ok: {} });
+		await visit.deliver({ text: 'second' });
+		await room.lease({ activation: '2:solo', phase: 'ended', reason: 'released' });
+		const late = await room.commit({
+			activation: '2:solo',
+			key: 'late',
+			readThrough: 2,
+			intent: { kind: 'said', text: 'too late' },
+		});
+		expect(late).toEqual({ stale: 'the lease ended' });
+		expect(events.some((event) => event.type === 'conflict')).toBe(false);
+		await stopSession(session);
 	});
 
 	it('refuses a duplicate agent name', () => {
