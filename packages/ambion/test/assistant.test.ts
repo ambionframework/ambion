@@ -1029,10 +1029,8 @@ describe('an exchange', () => {
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ to: product, text: 'first?' });
 		await activationEnded(session, 'assistant');
-		// a word to the assistant is asked the moment the product stops, and lands before the close
-		const asked = askedAsStops(session, 'product', () =>
-			visit.deliver({ to: assistant, text: 'hey' }),
-		);
+		// another question is asked the moment the product stops, and lands before the close
+		const asked = askedAsStops(session, 'product', () => visit.deliver({ text: 'hey' }));
 		working.resolve();
 		const { landed: said } = await asked;
 		await tick();
