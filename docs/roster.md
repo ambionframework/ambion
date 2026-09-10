@@ -196,10 +196,10 @@ open wakes it the same way, and the runtime hands it one tool, `seat`,
 bound to the reserve. The assistant bookends the exchange: it composes the
 room at the open and consolidates what the room said at the close.
 
-The order inside `publish` is what makes it parallel. A question lands, the
-room opens the exchange and activates the assistant, then it routes the
-question and activates the seats. The assistant reads the question while
-the seats do.
+The order inside the commit is what makes it parallel. A question lands,
+the room sees the exchange it opened and wakes the assistant, then it
+routes the question and wakes the seats. The assistant reads the question
+while the seats do.
 
 **What the assistant is handed.** The same context every seat reads, and
 two things more: the reserve (§2) as a second roster, and the ask at the
@@ -299,11 +299,13 @@ Unseating is the direction the room cannot take back, so the assistant
 holds no tool for it. [`planning/backlog.md`](../planning/backlog.md) holds the
 argument for giving it one.
 
-**`stop` unseats what the run added.** `stopSession` commits `left` for
-every person present ([`presence.md`](presence.md) §8). It commits
-`unseated`, in the same way and without routing, for every seat the run
-added after it started. The next run begins from the composition
-`startSession` was given, and the record says who was seated in between.
+**`stop` leaves the roster to the next composition.** `stopSession`
+aborts every activation in flight and commits `left` for every person
+present ([`presence.md`](presence.md) §8). It writes no `unseated`. The
+next `startSession` writes its own composition row, the roster folds from
+that row and the seatings after it, and the record says who was seated in
+between. A read of the stopped room (`readSession`) folds the roster the
+run left.
 
 **A seat that leaves keeps its downstream session.** Rule 8 puts every
 activation's turns in `<room>:<agent>`. An agent seated, unseated and
@@ -321,9 +323,9 @@ until something unrelated activated and ended.
 
 This case exists today, in a room where every seat is `named` and a
 question is undirected. It is common once a room may start with the
-assistant alone and an empty reserve. So `publish` runs the same check the end
-of an activation runs: after routing, if nothing is working, the room
-settles and the exchange closes. The exchange holds one message, the
+assistant alone and an empty reserve. So the room runs the same check the
+end of an activation runs once the question is committed: after routing,
+if nothing is working, the room settles and the exchange closes. The exchange holds one message, the
 question, and the assistant writes nothing for it, because an exchange the
 agents said nothing into writes nothing ([`assistant.md`](assistant.md)
 §4). The host hears `exchange_opened`, `exchange_closed` and `quiet`, in
@@ -343,10 +345,13 @@ Each boundary is stated so a later change has to argue with it.
 - **The assistant never defines an agent.** It seats from the reserve, and
   the host decides what is in it by writing `available`. §2.
 - **A seat never reads the reserve.** §2.
-- **A seating is on the record, and the starting composition is not.** The
-  record holds what happened in the run. What the run started with is the
-  run's, as `agent.md` §5 says of the roster and `presence.md` says of the
-  people.
+- **A seating is on the record, and so is the composition.** Every
+  `startSession` writes a composition row beside the messages: the
+  assistant, the goal, the agents seated and the agents in reserve, each
+  with its name, its identity and its attention. The roster folds from the
+  latest row and the seatings and unseatings after it, so a stopped room
+  reads back. A read from a process that holds no definition reports every
+  identity off the log.
 - **The threshold reads the record.** The rule that a summary is written
   when the agents said more than one thing counts messages from any name
   that is not a person and not the assistant, so an agent that spoke and
@@ -384,9 +389,11 @@ this document makes loudly:
 - the host seats and unseats by hand, an unseat aborts the activation in
   flight, and a say directed at the unseated colleague is refused with the
   departure (§5);
-- `stop` unseats what the run added and leaves the starting composition
-  alone (§5);
-- the threshold counts an agent that spoke and was unseated (§7).
+- `stop` leaves the roster to the next composition row, and the next run
+  starts from its own (§5);
+- the threshold counts an agent that spoke and was unseated (§7);
+- every identity reads off the log, in a process that holds no definition
+  (§7, in [`restart.test.ts`](../packages/ambion/test/restart.test.ts)).
 
 All in-process, in vitest, on a scripted stream.
 

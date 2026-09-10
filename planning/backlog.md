@@ -24,23 +24,22 @@ nothing. `test/runtime.test.ts` proves two runtimes never see each other.
 
 ### 2. Nothing bounds the record, and the room rescans it per message
 
-**What.** `Attendance.known()` rebuilds a map from the whole record on
-every call. The room calls it on each dispatch, on each `seats()`, and per
-person in `peopleViews()`, which adds two more linear scans per person.
-Every activation renders the whole record into the prompt through
+**What.** `foldRoom` folds the whole log again after every entry: the
+people, the roster and the open exchange are each a pass over every
+message. Every activation renders the whole record into the prompt through
 `renderRecord`.
 
 **Why.** Cost is O(n) per message and O(n²) over a run. Context grows
 without limit. `docs/agent.md` §8 says Ambion owns no context window, and
 `docs/assistant.md` §16 forbids a compactor, so today nothing owns it.
 
-**Where.** `packages/ambion/src/presence.ts`, `known()` and
-`lastChangeAt()`; `packages/ambion/src/session.ts`, nine call sites;
+**Where.** `packages/ambion/src/room/fold.ts`, `foldRoom`;
+`packages/ambion/src/room/presence.ts`, `foldPeople`;
 `packages/ambion/src/render.ts`, `renderRecord`.
 
-**Fix.** Short term: `Attendance` keeps an incremental index that updates
-on append. Long term: a window policy on `RoomView.record`, and a decision
-in the contract about which module owns it.
+**Fix.** Short term: the fold keeps an index it advances per entry. Long
+term: a window policy on `RoomView.record`, and a decision in the
+contract about which module owns it.
 
 ### 3. `session.ts` holds four jobs
 
@@ -321,13 +320,11 @@ both
 exchanges. Nothing pins that behaviour; the tests cover the failure and the
 retry separately. See [`docs/assistant.md`](../docs/assistant.md) §5.
 
-### 19. Exchanges are run state
+### 19. Exchanges are run state — closed
 
-`Exchanges` holds the open exchange in memory, so a restart begins with none —
-right for a room mid-question, and a limit for anything that wants to work
-over past exchanges. A closed exchange is an owner and a range, so it is
-derivable from the record; nothing derives it today. See
-[`docs/exchange.md`](../docs/exchange.md) §5.
+An exchange is a fold over the log: the open one is the first question
+after the last close row, and every close is a row beside the messages.
+See [`docs/exchange.md`](../docs/exchange.md) §5.
 
 ### 20. A second non-seat writer
 
@@ -500,3 +497,23 @@ collaboration patterns people and agents work in.
 
 **Where.** `seated` in [`define.ts`](../packages/ambion/src/define.ts), the
 roster in [`render.ts`](../packages/ambion/src/render.ts).
+
+### 26. The catalog is keyed by bare name, per runtime
+
+**What.** The seat side resolves a definition by name through the
+runtime's catalog (`seat.ts`). Every room a runtime holds writes its
+definitions into that one map, so two rooms in one runtime that define the
+same name differently share one entry, and the last room to start wins.
+The log side no longer has this gap: the composition row and every seating
+carry the identity, so a read reports what the run held.
+
+**Why deferred.** The room already refuses a duplicate name inside one
+roster. Two rooms in one runtime with one name and two definitions is a
+host that wants two runtimes. The catalog exists so that a transport can
+hand a seat in another process the definition it needs by name.
+
+**Options.** The runtime refuses a second, different definition under a
+name it holds. Or the in-process transport hands the actor the room's own
+definitions, and the catalog serves the out-of-process case alone. Either
+way, a definition digest on the composition row and the claim lets a seat
+tell that it runs the definition the room seated.

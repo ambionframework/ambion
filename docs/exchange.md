@@ -2,7 +2,7 @@
 
 This document is the design contract for the exchange: the room's own unit
 of work. It is shipped. The code lives in
-[`exchange.ts`](../packages/ambion/src/exchange.ts), and
+[`exchange.ts`](../packages/ambion/src/room/exchange.ts), and
 [`session.ts`](../packages/ambion/src/session.ts) opens and closes one as
 the room runs. Read [`agent.md`](agent.md) first: an exchange is made of
 the activations that document specifies, and it changes none of the eight
@@ -40,7 +40,7 @@ in a sentence a model reads.
 ## 2. The shape
 
 A room is a sequence of exchanges, and the exchanges have one shape
-([`exchange.ts`](../packages/ambion/src/exchange.ts)):
+([`exchange.ts`](../packages/ambion/src/room/exchange.ts)):
 
 ```ts
 interface Exchange {
@@ -76,13 +76,18 @@ the exchange itself, for the case where the room is busy and has no owner:
 somebody arrives, the seat that watches the door wakes, and a question lands
 on top of work nobody asked for. That question still owns what follows.
 
-**Quiescence closes it.** The room settles when no agent is active, and a
+**Quiescence closes it.** The room settles when nothing is live, and a
 room that settles has finished. A seat that says something wakes its
-readers inside its own `say`, before its own activation ends, so the room is
-never briefly empty in the middle of a burst. What is running is read off
-the seats, because a seat holds the activation it is taking, so there is no
-count beside them to keep in step. `through` is the record as it stood at
-that moment, so a closed exchange names the range it turned out to hold.
+readers inside its own `say`, before its own lease ends, so the room is
+never briefly empty in the middle of a burst. What is live is read off the
+leases held and the wakes still pending, so there is no count beside them
+to keep in step. The room writes a close row, and `through` is the record
+as it stood at the moment the room went quiet, so a closed exchange names
+the range it turned out to hold. A quiet the room observed on one
+exchange closes that exchange alone. A question that lands after that
+moment and before the row is written opens the next exchange. The host
+hears `exchange_opened` for it once the row is on the log, and an exchange
+nobody works on closes at once, the way a question that wakes nobody does.
 
 A question that wakes no seat has no seat to stop, so the room runs the
 same check once the question is routed: nothing is working, so the
@@ -129,18 +134,23 @@ into a quiet room, opens his own exchange.
 
 ---
 
-## 5. Run state
+## 5. A fold over the log
 
-An exchange belongs to a running room. `Exchanges` holds the open one in
-memory, and a restart begins with none. That is right for a room
-mid-question: the record keeps what was said, and nobody is mid-question
-after a restart. A person whose question the room was working on asks
-again, and that question opens a new exchange.
+An exchange is a fold over the log. The open exchange is the first
+question a person asked after the last close row's `through`
+(`openExchange` in [`exchange.ts`](../packages/ambion/src/room/exchange.ts)). A
+close is a row on the log beside the messages: `{ owner, from, through,
+at }`. It takes no seq; `through` orders it. `messages()` returns the
+messages alone, and their seqs stay `1..n`.
 
-A closed exchange is an owner and a range, so it is derivable from the
-record. Nothing derives it today; a host that wants a history of exchanges
-records the `exchange_closed` events as they arrive.
-[`planning/backlog.md`](../planning/backlog.md) holds the work.
+A run that starts over a log with an exchange open closes it first. The
+seats that worked on it went with the run that started it, so nothing is
+live, and the close row lands before the room takes its first message.
+The host of the new run hears `exchange_closed` for it, and the assistant
+writes what that exchange owes.
+
+Every closed exchange is on the log, so a host that wants a history of
+exchanges reads the close rows off the room's Pi session.
 
 ---
 
@@ -167,6 +177,10 @@ controls):
   the assistant owes nobody one. That is the moment a host waits for when it
   wants the one message a person reads.
 
+Both wait for the room to be up first: a call made right after
+`startSession` answers after the replay, and after the close of an
+exchange the last run left open (§5).
+
 The two differ because the assistant is a seat like any other, and its
 activation counts. The assistant writing about an exchange is not the room
 still working on it, so a drafting activation closes no exchange, and the
@@ -182,9 +196,15 @@ summary is drafted, and that window is the one place it can.
 
 **An aborted exchange still closes.** `abort()` cancels the activations in
 flight and the room settles, so the exchange closes with the range it
-reached. **A run that stops mid-exchange closes nothing.** `stopSession`
-aborts the activations in flight and takes the room down, and the exchange
-never closes: the next run begins with none.
+reached. **A stopped room closes nothing.** `stopSession` aborts the
+activations in flight and writes no close row. A release that lands after
+the stop must not write into a log the next run has started over. The
+exchange stays open on the log, and the next run closes it at its start
+(§5). A run that dies without `stop` leaves the exchange open the same way.
+
+**A close the storage refuses leaves the exchange open.** `settled()` and
+`quiet()` still answer, and the room still says `quiet`; the next time the
+seats stop, the room writes the close again.
 
 ---
 
@@ -245,8 +265,19 @@ The exchange is proved beside the assistant that first reads one, in
 - the person whose question opened the exchange owns it, and a second
   person speaking into it owns nothing (§4);
 - an exchange outlives its owner's visit (§4);
+- an exchange closes at the quiet the room observed, and a question that
+  lands before the row is written opens the next (§3);
+- a quiet observed on one exchange never closes the next, and a question
+  the assistant already woke on composes nothing and closes at once (§3);
 - an exchange closes before anything is written about it, and the room
   settles before it goes quiet (§6).
+
+[`restart.test.ts`](../packages/ambion/test/restart.test.ts) proves that a
+stopped room writes no close, and that the next run closes the exchange
+before `quiet()` answers (§5, §6).
+[`presence.test.ts`](../packages/ambion/test/presence.test.ts) proves that
+a close the storage refuses leaves the exchange open, and that whoever
+waits still hears the room (§6).
 
 All in-process, in vitest, on a scripted stream.
 

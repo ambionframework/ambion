@@ -1,21 +1,40 @@
 /**
- * Everything that crosses between a seat and its room is plain JSON: it
- * survives the wire unchanged.
+ * Everything that crosses between a seat and its room, and every row on the
+ * log, is plain JSON: it survives the wire unchanged.
  */
 import { describe, expect, it } from 'vitest';
 import {
 	type ActivationView,
 	assertWire,
+	type CloseRow,
 	type Commit,
 	type CommitResponse,
+	type CompositionRow,
+	createRuntime,
 	type Lease,
 	type LeaseResponse,
 	roundTrip,
 	type ViewResponse,
 	type Wake,
 } from '../src/index.ts';
+import { fakeClock } from './support/clock.ts';
+import { roomName, rowsOf } from './support/room.ts';
+import { oneExchange } from './support/scenarios.ts';
+import { jsonl } from './support/storage.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
+
+const rows: Record<string, CloseRow | CompositionRow> = {
+	close: { owner: 'priya', from: 2, through: 4, after: 4, at },
+	composition: {
+		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
+		goal: 'Decide the pour date.',
+		agents: [{ name: 'product', identity: 'The product.', attention: 'broadcast' }],
+		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'named' }],
+		after: 0,
+		at,
+	},
+};
 
 const wake: Wake = {
 	room: 'site',
@@ -80,7 +99,7 @@ const responses: Record<string, ViewResponse | CommitResponse | LeaseResponse> =
 };
 
 describe('the wire', () => {
-	it.each(Object.entries({ wake, ...requests, ...responses }))(
+	it.each(Object.entries({ ...rows, wake, ...requests, ...responses }))(
 		'carries %s unchanged',
 		(_name, value) => {
 			expect(() => assertWire(value)).not.toThrow();
@@ -95,5 +114,23 @@ describe('the wire', () => {
 		expect(() => assertWire({ expiry: Number.NaN })).toThrow(/finite/);
 		expect(() => assertWire({ fire: () => {} })).toThrow(/is a function/);
 		expect(() => assertWire({ error: new Error('boom') })).toThrow(/is a Error/);
+	});
+
+	it('replays a JSONL log whose every row is plain JSON', async () => {
+		const opened = await jsonl.open();
+		try {
+			const runtime = createRuntime({ sessions: opened.sessions, clock: fakeClock() });
+			const name = roomName('wire-jsonl');
+			await oneExchange.run({ runtime, name });
+			const written = await rowsOf(opened.sessions, name);
+			expect(written.map((row) => row.type)).toContain('ambion/close');
+			expect(written.map((row) => row.type)).toContain('ambion/composition');
+			for (const row of written) {
+				expect(() => assertWire(row.data)).not.toThrow();
+				expect(roundTrip(row.data)).toStrictEqual(row.data);
+			}
+		} finally {
+			await opened.dispose();
+		}
 	});
 });

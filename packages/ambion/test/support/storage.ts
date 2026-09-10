@@ -133,3 +133,29 @@ export function faultyOpener(sessions: SessionOpener): FaultyOpener {
 		},
 	};
 }
+
+// -- a storage that holds a write ---------------------------------------------
+
+/** An opener whose sessions hold one write until the test lets it land. */
+export function gatedOpener(
+	sessions: SessionOpener,
+	held: (customType: string, data: unknown) => Promise<void> | undefined,
+): SessionOpener {
+	const gated = (piSession: PiSession): PiSession =>
+		new Proxy(piSession, {
+			get(target, property, receiver) {
+				if (property === 'appendCustomEntry') {
+					return async (customType: string, data: unknown) => {
+						await held(customType, data);
+						return (Reflect.get(target, property, receiver) as (...a: unknown[]) => unknown).apply(
+							target,
+							[customType, data],
+						);
+					};
+				}
+				const value = Reflect.get(target, property, receiver);
+				return typeof value === 'function' ? value.bind(target) : value;
+			},
+		});
+	return { open: async (id, parentId) => gated(await sessions.open(id, parentId)) };
+}

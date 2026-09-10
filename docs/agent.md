@@ -244,6 +244,8 @@ type Message =
       from: string; // the participant whose presence changed — stamped by the runtime
       identity?: string; // on 'arrived' and 'seated': how the room knew them
       by?: string; // on 'seated': the assistant, when it did the seating
+      attention?: Attention; // on 'seated': what wakes the seat; absent means 'broadcast'
+      preferences?: string; // on 'arrived': how the person reads, when they said so
     }
   | {
       kind: 'summary';
@@ -534,21 +536,33 @@ reads takes the narrower type and cannot start anything by accident.
 One file per concern, in layers an import points down through, and
 `session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
 §1 names the layers, and Biome holds them): the
-log in [`log.ts`](../packages/ambion/src/log/log.ts), who is here in
-[`presence.ts`](../packages/ambion/src/presence.ts), a seat, what wakes it
+log in [`log.ts`](../packages/ambion/src/log/log.ts), every fact folded
+over it in [`fold.ts`](../packages/ambion/src/room/fold.ts), who is here in
+[`presence.ts`](../packages/ambion/src/room/presence.ts), a seat, what wakes it
 and the seat's side of the wire in
 [`seat.ts`](../packages/ambion/src/seat/seat.ts), one activation in
 [`activation.ts`](../packages/ambion/src/seat/activation.ts), the hands it
 holds in [`hands.ts`](../packages/ambion/src/seat/hands.ts), an activation's
 id in [`lease.ts`](../packages/ambion/src/room/lease.ts), the exchange in
-[`exchange.ts`](../packages/ambion/src/exchange.ts), what the assistant
+[`exchange.ts`](../packages/ambion/src/room/exchange.ts), what the assistant
 writes in [`assistant.ts`](../packages/ambion/src/room/assistant.ts), what
 crosses between a seat and its room in
-[`wire.ts`](../packages/ambion/src/wire.ts), what an
+[`wire.ts`](../packages/ambion/src/wire.ts), what an activation is given
+in [`view.ts`](../packages/ambion/src/room/view.ts), what an
 agent's tools reach into in
 [`workspace.ts`](../packages/ambion/src/tools/workspace.ts), what a host
 owns in [`runtime.ts`](../packages/ambion/src/host/runtime.ts), and what
 any of them reads in [`render.ts`](../packages/ambion/src/render.ts).
+
+**The log holds what the room does not hold in memory.** The roster, the
+reserve, the people, the open exchange and the closes are each a fold over
+the log ([`fold.ts`](../packages/ambion/src/room/fold.ts)). Three kinds of
+entry hold them, in the room's one Pi session: `ambion/message`,
+`ambion/close` and `ambion/composition`. Every entry beside a message
+carries `after`, the last message seq when it was written. A stopped room
+reads back the roster its run left, and a run starts from the composition
+row it writes. The leases the room holds and the summaries it owes stay in
+memory.
 
 **A seat is seated for the run. An activation lasts seconds.** What an
 activation has heard, what landed while it worked, and whether it left a mark

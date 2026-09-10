@@ -12,10 +12,25 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { Static, TSchema } from 'typebox';
-import type { ClosedExchange, Exchange } from './exchange.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = number;
+
+/** A question the room is working on. */
+export interface Exchange {
+	/** The person whose question opened it, and who owns what follows. */
+	readonly owner: string;
+	/** The seq of that question: where the exchange starts. */
+	readonly from: Seq;
+	/** When it opened, ISO. */
+	readonly at: string;
+}
+
+/** An exchange the room has finished, and the range it turned out to hold. */
+export interface ClosedExchange extends Exchange {
+	/** The last seq on the record when the room went quiet. */
+	readonly through: Seq;
+}
 
 // -- what a host provides -----------------------------------------------------
 
@@ -84,6 +99,10 @@ export interface PresenceMessage {
 	 * is the seat it names.
 	 */
 	by?: string;
+	/** What wakes the seat, on `seated`. Absent means `broadcast`. */
+	attention?: Attention;
+	/** How the person reads, on `arrived`, when they said so. */
+	preferences?: string;
 }
 
 /**
