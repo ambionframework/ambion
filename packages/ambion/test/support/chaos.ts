@@ -29,18 +29,19 @@ import {
 	startSession,
 	visitSession,
 } from '../../src/index.ts';
-import { activationId, foldLeases, isLive } from '../../src/room/lease.ts';
-import type { CloseRow, LeaseRow } from '../../src/wire.ts';
+import { foldLeases, isLive } from '../../src/room/lease.ts';
+import type { LeaseRow } from '../../src/wire.ts';
 import {
 	agents,
 	assistant,
+	type Cast,
 	colleague,
 	priya,
 	product,
 	type Question,
 	questions,
 	sam,
-	script,
+	steady,
 } from './cast.ts';
 import { type FakeClock, fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
@@ -51,50 +52,33 @@ import { serializing } from './transport.ts';
 
 /**
  * The record the scenario must come to, whatever happened on the way:
- * every delivery on it once, every answer at most once, and every
- * summary owed written once. A seat whose lease the dead run held answers
- * once at most: the lease expires, and the room does not send the wake
- * again (backlog item 34), so that answer is the one the record may lack.
+ * every delivery on it once, every answer the cast owes once, and every
+ * summary owed written once. A seat whose lease the dead run held is woken
+ * again after the backoff, so its answer is on the record like every other.
  */
-export async function outcome(session: Session, sessions: SessionOpener): Promise<void> {
+export async function outcome(
+	session: Session,
+	sessions: SessionOpener,
+	cast: Cast = steady(),
+): Promise<void> {
 	const record = await session.messages();
-	const rows = await rowsOf(sessions, session.name);
-	const expired = new Set(
-		rows.flatMap((r) => {
-			const lease = r.type === 'ambion/lease' ? (r.data as LeaseRow) : undefined;
-			return lease?.phase === 'ended' && lease.reason === 'expired' ? [lease.id] : [];
-		}),
-	);
 	for (const question of questions) {
 		const landed = record.filter((m) => m.key === question.key);
 		expect(landed, `delivery ${question.key}`).toHaveLength(1);
-		const asked = landed[0] as Message;
-		expect(asked).toMatchObject({ kind: 'said', from: question.person.name });
-		for (const seat of question.answered) {
+		expect(landed[0]).toMatchObject({ kind: 'said', from: question.person.name });
+		for (const answer of cast.answers(question)) {
 			const answers = record
 				.filter(isSpoken)
-				.filter((m) => m.from === seat && m.text === `${seat} on ${question.text}`);
-			expect(answers.length, `${seat} on ${question.key}`).toBeLessThanOrEqual(1);
-			if (!expired.has(activationId(asked.seq, seat))) {
-				expect(answers, `${seat} on ${question.key}`).toHaveLength(1);
-			}
+				.filter((m) => m.from === answer.seat && m.text === answer.text);
+			expect(answers, `${answer.seat} on ${question.key}: ${answer.text}`).toHaveLength(1);
 		}
 	}
-	// every close that woke the assistant is one summary to the person whose exchange it was
-	const closes = rows.flatMap((r) => (r.type === 'ambion/close' ? [r.data as CloseRow] : []));
+	expect(record.filter(isSummary).map((m) => m.to)).toEqual(cast.summaries);
+	const closes = (await rowsOf(sessions, session.name)).filter((r) => r.type === 'ambion/close');
 	expect(closes).toHaveLength(3);
-	const owed = closes.filter((c) => c.wakes?.includes(assistant.name)).map((c) => c.owner);
-	expect(record.filter(isSummary).map((m) => m.to)).toEqual(owed);
 	expect(session.exchange()).toBeUndefined();
 	expect(session.seats().find((s) => s.name === priya.name)).toMatchObject({ presence: 'absent' });
 	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
-}
-
-/** The record an untroubled run comes to: two answers to the first two questions owe a summary each. */
-export async function wholeOutcome(session: Session, sessions: SessionOpener): Promise<void> {
-	await outcome(session, sessions);
-	const record = await session.messages();
-	expect(record.filter(isSummary).map((m) => m.to)).toEqual([priya.name, sam.name]);
 }
 
 /** The leases running and not expired on the log at `now`: what a resumed room inherits. */
@@ -137,6 +121,8 @@ export class World {
 	writes = 0;
 	/** What the run that holds the room now inherited: leases live at its resume, and an open exchange. */
 	inherited = { activations: 0, exchange: false };
+	/** The cast's failures before the run that holds the room now: its errors are its own. */
+	private failedBefore = 0;
 	private runtime!: Runtime;
 	private session!: Session;
 	private off: () => void = () => {};
@@ -148,6 +134,7 @@ export class World {
 		readonly name: string,
 		readonly opened: OpenedStorage,
 		private readonly crashAt?: CrashPoint,
+		private readonly cast: Cast = steady(),
 	) {
 		this.sessions = tappedOpener(opened.sessions, (id, _n, phase) => this.appended(id, phase));
 	}
@@ -186,6 +173,7 @@ export class World {
 
 	private watch(): void {
 		this.events = [];
+		this.failedBefore = this.cast.failures();
 		this.off = this.session.subscribe((event) => this.events.push(event));
 	}
 
@@ -204,7 +192,7 @@ export class World {
 			runtime: this.runtime,
 			assistant,
 			agents: [product, colleague],
-			streamFn: scripted(script),
+			streamFn: scripted(this.cast.script),
 		});
 		this.watch();
 	}
@@ -220,7 +208,7 @@ export class World {
 		try {
 			this.session = await resumeSession(this.name, {
 				runtime: this.runtime,
-				streamFn: scripted(script),
+				streamFn: scripted(this.cast.script),
 			});
 		} catch (error) {
 			if (!/no composition/.test(String(error))) throw error;
@@ -313,15 +301,15 @@ export class World {
 	/** The record's shape, then the scenario's outcome. */
 	async check(): Promise<void> {
 		const errors = this.events.flatMap((e) => (e.type === 'error' ? [e.error.message] : []));
-		// the one error a crash leaves: the lease the dead run held expired
-		expect(errors.filter((m) => !/past its lease/.test(m))).toEqual([]);
+		// the errors a run may carry: the lease the dead run held expired, and the cast's own failures
+		expect(errors.filter((m) => !/past its lease|the model is down/.test(m))).toEqual([]);
 		await invariants(this.session, this.events, {
 			sessions: this.opened.sessions,
-			allowErrors: this.inherited.activations,
+			allowErrors: this.inherited.activations + this.cast.failures() - this.failedBefore,
 			inherited: this.inherited.activations,
 			inheritedExchange: this.inherited.exchange,
 		});
-		await outcome(this.session, this.opened.sessions);
+		await outcome(this.session, this.opened.sessions, this.cast);
 	}
 
 	/** What the world looks like when a check fails: the log rows, for the failure message. */

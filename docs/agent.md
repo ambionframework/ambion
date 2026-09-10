@@ -316,11 +316,14 @@ temporary by design: when the agent goes idle the view is discarded, and
 the next activation reads the record itself. The record is canonical.
 
 A steer is the room's word to a running activation, and the log does not
-record it: a message a seat at work heard through a steer alone is read
-off the record at the seat's next activation, and a run that dies while
-the seat works loses the steer with the run. A wake to a seat at rest is
-on the message, so a wake lost on the way is sent again after the resend
-window, and the seat side runs a wake sent twice once. When a pass ends,
+record it. The log says who was at work when the message landed: a lease
+that holds a row before the message and ends, if it ends, after it. A
+message such a lease heard is answered when the lease stands down, and
+pending again when the lease expired or failed, so a run that dies while
+the seat works loses nothing: the seat is woken for the message after the
+backoff. A wake to a seat at rest is on the message, so a wake lost on
+the way is sent again after the resend window, and the seat side runs a
+wake sent twice once. When a pass ends,
 the activation renews its lease, and the renewal says how far the record
 reaches. An activation that heard less than that reads the room again
 through a fresh view.
@@ -621,17 +624,25 @@ refused. What landed while an activation worked and whether it left a
 mark belong to the activation and end with it. Rule 5's `readThrough` is
 an activation's fact.
 
-**A wake is answered by a lease of its id.** A message and a seat in its
-`wakes` is one wake. The seat claims the lease the wake names, and from
-then on the wake is answered, whatever the activation comes to: a lease
-that expired or failed answers it too, and the room wakes the seat again
-for nothing. The message stays on the record, and the seat reads it at its
-next activation. A wake no lease answers is pending: the room sends it
-again after the resend window, and a seat with a wake pending is live, so
-the exchange stays open and `settled()` waits for the claim. A summary the
-assistant could not write is the one attempt the room repeats: it wakes
-the assistant again after the backoff (`runtime.retry`, three attempts
-thirty seconds apart by default), and at the cap the range stays whole.
+**A message is answered by a lease that heard it.** A message reaches a
+seat two ways: it names the seats at rest it wakes in `wakes`, and every
+seat at work hears it as a steer. A lease heard a message when it was at
+work as the message landed, or when it was claimed after the message, so
+its view held it. The message is answered while such a lease runs and
+once it ended released, refused or revoked. A lease that stood down
+answers through the seq its last renewal confirmed: a message that
+landed between that renewal and the release reached no activation, and
+the seat is woken for it. A lease that expired or
+failed answers nothing it heard, whatever it said: its words stay on the
+record, the seat reads them at the next attempt, and the failure counts
+as one attempt. The room wakes the seat again after the backoff, under
+the next attempt's id. A message no lease answers is pending: the room
+sends the wake again after the resend window, and a seat with a wake
+pending is live, so the exchange stays open and `settled()` waits for the
+claim. `runtime.retry` holds the policy for wakes and summaries alike:
+three attempts thirty seconds apart by default, and at the cap the room
+stops. A summary the assistant could not write is retried the same way,
+and at the cap the range stays whole.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
@@ -699,8 +710,7 @@ What a crash leaves is proved in
 [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts): the room crashes
 at every write its log takes, before and after the entry lands, and is
 killed from outside mid-activation, and a host that resumes it and retries
-under the same key reaches the same record every time, less the answer of
-a seat whose lease the dead run held.
+under the same key reaches the same record every time.
 [`toolchain.md`](toolchain.md) §8 says how the sweep runs and how to widen
 it.
 

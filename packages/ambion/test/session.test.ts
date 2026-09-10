@@ -343,10 +343,19 @@ describe('startSession', () => {
 		});
 		const faultVisit = await visitSession(faulty, andrei);
 		const faultEvents = collect(faulty);
+		const failed = new Promise<void>((resolve) => {
+			faulty.subscribe((e) => {
+				if (e.type === 'activation_end') resolve();
+			});
+		});
 		await faultVisit.deliver({ text: 'trigger' });
-		await faulty.settled();
+		await failed;
 		expect(faultEvents.some((e) => e.type === 'error' && e.agent === 'solo')).toBe(true);
 		expect(spoken(await faulty.messages())).toHaveLength(1);
+		// the failed activation is one attempt: the wake is pending again after the
+		// backoff, so the room is still working, and only an abort settles it now
+		faulty.abort();
+		await faulty.settled();
 
 		// abort quiets an active room, keeping what was already said
 		const hung = startSession({

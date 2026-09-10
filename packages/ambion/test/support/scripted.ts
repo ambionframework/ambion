@@ -122,6 +122,38 @@ export const answersLastQuestion =
 	};
 
 /**
+ * The questions the seat has not answered, oldest first: every line one of
+ * `people` said, less the ones directed at another seat, the ones the
+ * record already holds an answer to, and the ones this activation
+ * delivered an answer to.
+ */
+export function unanswered(context: Context, name: string, people: string[]): string[] {
+	const text = contextText(context);
+	const asked = new RegExp(
+		`^\\[(?:${people.join('|')})(?: → ([a-z0-9-]+))?\\] (.+?)(?: {2}\\(.*\\))?$`,
+		'gm',
+	);
+	const open = [...text.matchAll(asked)]
+		.filter((line) => line[1] === undefined || line[1] === name)
+		.map((line) => line[2] ?? '')
+		.filter((question) => !text.includes(`[${name}] ${name} on ${question}`));
+	const delivered = toolResultTexts(context).filter((result) => result === 'delivered').length;
+	return open.slice(delivered);
+}
+
+/**
+ * A seat that answers every question it was asked, one say per model call,
+ * oldest first. A refused say is said again, and a record that holds every
+ * answer stays quiet.
+ */
+export const answersEveryQuestion =
+	(people: string[]): Script =>
+	(context, name) => {
+		const next = unanswered(context, name, people)[0];
+		return next === undefined ? quiet() : speak(`${name} on ${next}`);
+	};
+
+/**
  * A seat that says one thing and means it: a refused say is said again, and
  * a delivered one ends the pass. What lands beside it never changes its mind.
  */

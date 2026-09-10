@@ -28,7 +28,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
-import { idle, liveLeases, outcome, World, wholeOutcome, within } from './support/chaos.ts';
+import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
 import { collect, roomName } from './support/room.ts';
@@ -44,7 +44,6 @@ async function countWrites(storage: Storage): Promise<number> {
 	try {
 		await world.run();
 		await world.check();
-		await wholeOutcome(world.room, opened.sessions);
 		// the stop writes too, and no sweep run gets that far before its check
 		const writes = world.writes;
 		await stopSession(world.room);

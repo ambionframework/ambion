@@ -74,7 +74,16 @@ live('the model and the loop', () => {
 		try {
 			const { session, events } = open('refused', { agents: [clerk()] });
 			const visit = await enter(session, person);
+			const ended = new Promise<void>((resolve) => {
+				session.subscribe((e) => {
+					if (e.type === 'activation_end') resolve();
+				});
+			});
 			await visit.deliver({ text: 'What is the status of order 7781?' });
+			await within(ended, 60_000, 'the activation ending');
+			// the failed activation is one attempt, and the room would wake the seat
+			// again after the backoff: the abort writes that wake off
+			session.abort();
 			await within(session.settled(), 60_000, 'the room settling');
 
 			const errors = errorsIn(events);

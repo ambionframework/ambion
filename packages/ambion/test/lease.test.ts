@@ -19,11 +19,13 @@ import {
 	type Session,
 	startSession,
 	stopSession,
+	type Visit,
 	visitSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { assistant, collect, deferred, enter, roomName, rowsOf, tick } from './support/room.ts';
 import {
+	answersEveryQuestion,
 	byAgent,
 	contextText,
 	quiet,
@@ -119,11 +121,20 @@ describe('a lease', () => {
 		expect(session.exchange()).toBeDefined();
 
 		await clock.advance(60_000);
-		await session.quiet();
 		expect(events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message))).toBe(
 			true,
 		);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
+		// the expired lease answers nothing, whatever it said: the seat is woken again
+		// after the backoff, reads its own words on the record, and stands down
+		expect(session.exchange()).toBeDefined();
+		await clock.advance(30_000);
+		await session.quiet();
+		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(2);
+		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
+			'andrei',
+			'solo',
+		]);
 		expect(session.exchange()).toBeUndefined();
 
 		const room = session as unknown as SeatRoom;
@@ -161,9 +172,43 @@ describe('a lease', () => {
 		// the say arrived under a lease that ended, so nothing landed
 		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual(['andrei']);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
-		// the expired lease answers the wake: the exchange closed, and the seat is not woken again
-		await session.quiet();
+		// a lease that expired without a word answers nothing: the exchange stays
+		// open, and the seat is woken again after the backoff
+		expect(session.exchange()).toMatchObject({ owner: 'andrei' });
 		expect(starts(events)).toBe(1);
+		await clock.advance(30_000);
+		await session.quiet();
+		expect(starts(events)).toBe(2);
+		expect(session.exchange()).toBeUndefined();
+	});
+
+	it('answers a question that landed between its last renewal and its release', async () => {
+		// The activation renewed, saw the record had not moved, and released. A
+		// question that lands while the release is on the wire reached no
+		// activation: the released lease heard through its renewal, so the
+		// question is pending for the seat, and the seat is woken for it.
+		let visit: Visit | undefined;
+		const releases = (l: unknown) => (l as { phase: string }).phase === 'ended';
+		const faults: Fault[] = [
+			{
+				on: 'lease',
+				kind: 'hold',
+				match: releases,
+				hold: async () => {
+					await visit?.deliver({ text: 'Second?' });
+				},
+			},
+		];
+		const { session } = open(faults, byAgent({ solo: answersEveryQuestion(['andrei']) }));
+		visit = await enter(session);
+		await visit.deliver({ text: 'First?' });
+		await session.quiet();
+		expect((await session.messages()).filter(isSpoken).map((m) => m.text)).toEqual([
+			'First?',
+			'solo on First?',
+			'Second?',
+			'solo on Second?',
+		]);
 		expect(session.exchange()).toBeUndefined();
 	});
 

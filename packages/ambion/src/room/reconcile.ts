@@ -121,7 +121,7 @@ function closing(state: RoomState, now: number): Decision['close'] {
 function dueWakes(state: RoomState, options: DecideOptions): Send[] {
 	const assistant = state.composition?.assistant.name ?? '';
 	const wakes = state.pending
-		.filter((wake) => unsent(wake.id, options))
+		.filter((wake) => due(wake, options.now) && unsent(wake.id, options))
 		.map((wake) => ({ id: wake.id, seat: wake.seat }));
 	const drafts = state.owed
 		.filter((owed) => due(owed, options.now))
@@ -137,8 +137,8 @@ function unsent(id: string, options: DecideOptions): boolean {
 }
 
 /** An owed draft whose backoff has passed. */
-const due = (owed: Owed, now: number): boolean =>
-	owed.notBefore === undefined || owed.notBefore <= now;
+const due = (attempt: Pick<Owed, 'notBefore'>, now: number): boolean =>
+	attempt.notBefore === undefined || attempt.notBefore <= now;
 
 /** When each pending wake and each owed draft is next due, or sent again. */
 function retryTimes(state: RoomState, options: DecideOptions): number[] {
@@ -147,7 +147,7 @@ function retryTimes(state: RoomState, options: DecideOptions): number[] {
 			? notBefore
 			: (options.sentAt(id) ?? options.now) + options.resend;
 	return [
-		...state.pending.map((wake) => again(wake.id, undefined)),
+		...state.pending.map((wake) => again(wake.id, wake.notBefore)),
 		...state.owed.map((owed) => again(draftId(owed.through, owed.attempts + 1), owed.notBefore)),
 	];
 }
