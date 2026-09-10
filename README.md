@@ -19,15 +19,7 @@ person read a swarm transcript. Ambion provides that collaboration layer
 through a shared record, durable seats, attention-based routing, optimistic
 concurrency, exchanges, and summaries.
 
-```mermaid
-flowchart LR
-    H((human)) -- "question" --> R[(shared record)]
-    R -- "route by attention" --> A[domain agents]
-    A -- "contribute or stay silent" --> R
-    R -- "exchange closes" --> S[assistant]
-    S -- "summary when needed" --> R
-    R -- "human-facing view" --> H
-```
+![One exchange in an Ambion shared session: a person's question and independent domain-agent contributions form an ordered exchange, which the assistant consolidates when needed.](docs/assets/ambion-exchange.svg)
 
 ## The architectural bet
 
