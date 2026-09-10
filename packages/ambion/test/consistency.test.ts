@@ -25,7 +25,7 @@ import { foldRoom } from '../src/room/fold.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { type Entry, History, violations } from './support/history.ts';
+import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
 import { roomName, rowsOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
@@ -106,9 +106,19 @@ class Cluster {
 	private host(): Runtime {
 		const current = { gate: undefined as Promise<void> | undefined, release: () => {}, held: 0 };
 		this.current = current;
-		// every run's appends go through its own gate, so a cut holds the old run's write alone
+		// every run's appends go through its own gate, so a cut holds the old run's write alone;
+		// an armed cut takes the next append: it holds the write, crashes the run and resumes
+		// the name while the write is held, and then lets the write land past the fence
 		const sessions = gatedOpener(this.sessions, () => {
-			if (current.gate !== undefined) current.held += 1;
+			// a takeover's own writes are never cut: the cut would wait for the takeover it stops
+			if (this.cutArmed && !this.takingOver && current === this.current) {
+				this.cutArmed = false;
+				current.held += 1;
+				current.gate = new Promise<void>((resolve) => {
+					current.release = resolve;
+				});
+				void this.crash().finally(() => current.release());
+			}
 			return current.gate;
 		});
 		return createRuntime({
@@ -119,19 +129,17 @@ class Cluster {
 		});
 	}
 
+	/** Whether the next append the run makes is the one the nemesis cuts. */
+	private cutArmed = false;
+
 	/**
-	 * The run dies with a write in flight: the next append is held, the run
-	 * is evicted and the name resumed while it is held, and then the write
-	 * lands, past the fence. The fence makes it void.
+	 * The run will die with a write in flight: the next append is held, the
+	 * run is evicted and the name resumed while it is held, and then the
+	 * write lands, past the fence. The fence makes it void. A cut still
+	 * armed at the drain is dropped.
 	 */
-	async cut(): Promise<void> {
-		const run = this.current;
-		run.gate = new Promise<void>((resolve) => {
-			run.release = resolve;
-		});
-		for (let i = 0; i < 40 && run.held === 0; i += 1) await yields();
-		await this.crash();
-		run.release();
+	cut(): void {
+		this.cutArmed = true;
 	}
 
 	async start(): Promise<void> {
@@ -152,8 +160,19 @@ class Cluster {
 		this.failedBefore = this.cast.failures();
 		this.droppedBefore = this.dropped;
 		this.jumpedBefore = this.jumped;
-		this.session.subscribe((event) => this.events.push(event));
+		const session = this.session;
+		session.subscribe((event) => {
+			this.events.push(event);
+			// the host's duty on `superseded`: the run is gone, and the name is resumed again
+			if (event.type === 'superseded' && this.session === session) {
+				this.bounded();
+				void this.takeover();
+			}
+		});
 	}
+
+	/** The takeovers asked for so far, one after the other; the drain waits for the last. */
+	private resuming: Promise<void> = Promise.resolve();
 
 	/** The errors a run may carry: what it inherited, the cast's failures, the drops and the jumps it saw. */
 	private allowance(): number {
@@ -179,6 +198,34 @@ class Cluster {
 	async crash(): Promise<void> {
 		this.bounded();
 		this.runtime.evict(this.name);
+		await this.takeover();
+	}
+
+	/**
+	 * A fresh host takes the name: after a crash, and after a run heard it
+	 * was superseded. A run row that lands late fences the runs whose rows
+	 * came before it, even when its own run is gone, so a live run can lose
+	 * the name to a dead one, and the host resumes again. One takeover at a
+	 * time: a host resumes a name once, whatever asked for it.
+	 */
+	private takeover(): Promise<void> {
+		this.resuming = this.resuming.then(() => this.resumeAgain());
+		return this.resuming;
+	}
+
+	/** A takeover is resuming the name: its own writes are never cut. */
+	private takingOver = false;
+
+	private async resumeAgain(): Promise<void> {
+		this.takingOver = true;
+		try {
+			await this.resumed();
+		} finally {
+			this.takingOver = false;
+		}
+	}
+
+	private async resumed(): Promise<void> {
 		this.epoch += 1;
 		const activations = await liveLeases(this.opened.sessions, this.name, this.clock.now());
 		// A resume writes the run row first, and a host tries again when the storage fails it.
@@ -227,6 +274,8 @@ class Cluster {
 	async drain(): Promise<void> {
 		this.faults.length = 0;
 		this.disk = false;
+		this.cutArmed = false;
+		await this.resuming;
 		// in steps under the expiry, so an activation in flight renews across them
 		for (let i = 0; i < 14; i += 1) await this.advance(31_000);
 		await within(this.session.quiet(), 10_000, 'quiet after the drain');
@@ -240,7 +289,7 @@ class Cluster {
 			inheritedExchange: this.inherited.exchange,
 		});
 		const rows = await rowsOf(this.opened.sessions, this.name);
-		const entries = rows.flatMap((row) => {
+		const entries = standing(rows).flatMap((row) => {
 			const type = row.type.slice('ambion/'.length);
 			if (type === 'message') return [{ type, message: row.data } as never];
 			if (type === 'lease') return [{ type, lease: row.data } as never];
@@ -379,7 +428,7 @@ class Host {
 		} else if (op === 'disk') {
 			await cluster.history.run('host', 'disk', undefined, async () => cluster.failDisk());
 		} else if (op === 'cut') {
-			await cluster.history.run('host', 'cut', undefined, () => cluster.cut());
+			await cluster.history.run('host', 'cut', undefined, async () => cluster.cut());
 		} else {
 			await cluster.history.run('host', 'crash', undefined, () => cluster.crash());
 		}

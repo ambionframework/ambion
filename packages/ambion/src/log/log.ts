@@ -29,11 +29,12 @@
  * one before it, whatever the log's age.
  *
  * A run is fenced by its run row. Every entry a run writes carries its
- * run id. A run row from a later run is the fence: an entry of an earlier
- * run that lands after it is void, and the log skips it. A log that finds
- * a later run's row is superseded: it tells the room, and every write
- * from then on fails. A log with no run of its own reads and writes
- * nothing about runs.
+ * run id. The fence is positional: as a read passes the storage in order,
+ * a run row moves the fence to that run, and an entry of another run past
+ * it is void, so the log skips it. A log that passes its own row and then
+ * a row of another run is superseded: it tells the room, and every write
+ * from then on fails. A log with no run of its own writes nothing about
+ * runs, and reads the fence like any other reader.
  */
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from '../types.ts';
@@ -174,9 +175,26 @@ export class RoomLog {
 		found.sort((a, b) => a.seq - b.seq);
 		for (const entry of found) {
 			this.cursor = Math.max(this.cursor, entry.seq);
-			if (entry.type === 'custom' && !this.known.has(entry.id)) this.take(entry);
+			if (entry.type !== 'custom') continue;
+			// The fence is positional: a run row moves it where the row sits, cached or not.
+			if (entry.customType === ENTRY_TYPES.run) this.pass(writerOf(entry.data));
+			if (!this.known.has(entry.id)) this.take(entry);
 		}
 		this.known.clear();
+	}
+
+	/**
+	 * The read passed a run row. The fence moves to that run. This log's
+	 * own row marks it fenced: a row of another run past it is a later
+	 * run's, and supersedes this log.
+	 */
+	private pass(run: string | undefined): void {
+		this.fence = run;
+		if (run === this.run) this.fenced = true;
+		else if (supersedes(this.fenced, false) && !this.superseded) {
+			this.superseded = true;
+			this.lost?.();
+		}
 	}
 
 	/** One entry a read found that the cache lacks: cached unless void, and reported after the replay. */
@@ -190,20 +208,11 @@ export class RoomLog {
 
 	/**
 	 * Whether a stored entry is void: written by a run other than the one
-	 * whose row landed last. A run row moves the fence. A row of another
-	 * run found once this run's own row is on the log is a later run's, and
-	 * supersedes this log. An entry written before runs were fenced belongs
-	 * to whatever run stood.
+	 * whose row the read passed last. An entry written before runs were
+	 * fenced belongs to whatever run stood.
 	 */
 	private voided(entry: LogEntry, written: string | undefined): boolean {
-		if (entry.type === 'run') {
-			this.fence = entry.run.run;
-			if (supersedes(this.fenced, entry.run.run === this.run) && !this.superseded) {
-				this.superseded = true;
-				this.lost?.();
-			}
-			return false;
-		}
+		if (entry.type === 'run') return false;
 		return voided(this.fence !== undefined, written !== undefined, written === this.fence);
 	}
 
@@ -240,10 +249,6 @@ export class RoomLog {
 			const stamped = { ...data, after: this.lastSeq };
 			const id = await this.append(piSession, ENTRY_TYPES[type], stamped);
 			const entry = toEntry(ENTRY_TYPES[type], stamped);
-			if (entry?.type === 'run') {
-				this.fence = entry.run.run;
-				this.fenced = true;
-			}
 			if (entry !== undefined) this.cache(entry, id);
 			return true;
 		});

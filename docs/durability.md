@@ -23,14 +23,17 @@ about an append breaks every promise below.
 
 **One run per name, fenced by its row.** `startSession` and
 `resumeSession` refuse a name the runtime already runs. Across runtimes,
-the log fences: the first row every run writes is its run row, with a
-fresh run id, and every entry the run writes carries that id. A run row
-of a later run is the fence. An entry of an earlier run that lands past
-it is void, and every reader skips it. A run reads the storage before
-every write, so a run that finds a later run's row learns it lost the
-name: it emits `superseded`, drops itself from memory, and writes
-nothing more. §5 says what a superseded run loses, and where the fence
-does not reach.
+the log fences. The first row every run writes is its run row, with a
+fresh run id, and every entry the run writes carries that id. The fence
+is positional: a reader passes the storage in order, and a run row moves
+the fence to that run. An entry of another run past the fence is void,
+and every reader skips it, the fencing run included. A run reads the
+storage before every write. A run that passes its own row and then a
+row of another run has lost the name: it emits `superseded`, drops
+itself from memory, and writes nothing more. A run row that lands late
+fences every run whose row came before it, even when its own run is
+gone, so a live run can lose the name to a dead one. §5 says what a
+superseded run loses, and where the fence does not reach.
 
 ## 2. What a delivery promises
 
@@ -138,7 +141,9 @@ by its instructions.
   the dead run held.
 - Run one host per name. Evict a room with `runtime.evict(name)` before
   another host takes it. Treat `superseded` the way it treats its own
-  eviction: nothing that run answers from then on is an answer.
+  eviction: nothing that run answers from then on is an answer, and the
+  host resumes the name again. A stop on a superseded run resolves, and
+  the event says why it wrote nothing.
 - Retry a resume the storage failed: the run row is the first write a
   resumed run makes.
 - Read `messages()` after a resume for what the stream did not carry.
@@ -178,19 +183,20 @@ the storage together and reports every guarantee that broke:
   owed.
 
 **The clients take turns.** The people and the host interleave at every
-await, and the nemesis acts between two actions, with one exception: a
-cut holds a client's append, crashes the run and resumes the name while
-the append is held, and then lets it land past the fence. An answer from
-a run that lost the name while the action ran is recorded as `info`.
+await, and the nemesis acts between two actions, with one exception. A
+cut takes the next append a client makes. It holds the append, crashes
+the run and resumes the name while the append is held, and then lets it
+land past the fence. An answer from a run that lost the name while the
+action ran is recorded as `info`.
 
 **The nemesis** crashes the run and resumes it in a fresh runtime, and
 cuts it with an append in flight. It fails the next write before or
 after it lands. It drops, repeats and delays requests on the wire. It
 jumps the clock the way a paused process sees it. Every run is held to a
 bound on the errors it reports, checked when the run dies and at the
-end. The bound is the leases the run inherited, the failures the cast
-injects, the room calls the nemesis dropped, and the leases live across
-a jump past the expiry.
+end. The bound has four parts: the leases the run inherited, the
+failures the cast injects, the room calls the nemesis dropped, and the
+leases live across a jump past the expiry.
 
 **The rules are proved.** The pure rules in
 [`log/rules.verified.ts`](../packages/ambion/src/log/rules.verified.ts)
@@ -198,11 +204,12 @@ and
 [`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)
 carry `//@ requires` and `//@ ensures` contracts. LemmaScript turns them
 into Dafny obligations, and CI proves them on every push. The log and
-the fold run these bodies, so the proof is about the code that runs: the
-next seq, the refusal of a commit that read too little, the fence, what
-supersedes a run, when a lease is expired, who was at work when a message
-landed, who heard it, and the cap on attempts. The proof says what each
-rule decides. The tests say what the room does with the decision.
+the fold run these bodies, so the proof is about the code that runs. The
+rules are the next seq, the refusal of a commit that read too little,
+the fence, what supersedes a run, when a lease is expired, who was at
+work when a message landed, who heard it, and the cap on attempts. The
+proof says what each rule decides. The tests say what the room does with
+the decision.
 
 `pnpm test` runs 25 seeds of the history and the walk. `pnpm chaos` runs
 200 of each, the sweep on JSONL too, the handover at every write, and

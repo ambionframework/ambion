@@ -458,7 +458,8 @@ type SessionEvent =
   | { type: 'error'; agent: string; error: Error }
   | { type: 'exchange_opened'; exchange: Exchange }
   | { type: 'exchange_closed'; exchange: ClosedExchange }
-  | { type: 'quiet' };
+  | { type: 'quiet' }
+  | { type: 'superseded' };
 ```
 
 **One message on the record, one `message` event.** What a person
@@ -557,9 +558,9 @@ controls:
   left open closes at the next run's first reconcile.
 - **`resumeSession(name, { runtime })`** brings a name back up over its
   log, with the composition the log holds. The first row every run
-  writes is its run row, and it fences every earlier run: a run that
-  finds a later run's row emits `superseded`, drops itself from memory,
-  and writes nothing more ([`durability.md`](durability.md) §1). Every name on the roster
+  writes is its run row, and it fences every earlier run. A run that
+  finds a later run's row emits `superseded` and drops itself from
+  memory. It writes nothing more ([`durability.md`](durability.md) §1). Every name on the roster
   resolves through the runtime's catalog, which `createRuntime({ agents })`
   fills. The room reconciles at once: a lease the last run left expires, a
   wake it left pending is sent again, and an exchange it left open closes

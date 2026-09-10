@@ -28,7 +28,6 @@ export function heard(
 	heardThrough: number,
 	seq: number,
 ): boolean {
-	//@ requires heardThrough >= since
 	//@ ensures !liveOrFailed ==> (\result <==> seq <= heardThrough)
 	//@ ensures liveOrFailed && since >= seq ==> \result
 	//@ ensures liveOrFailed && !ended && since < seq ==> \result

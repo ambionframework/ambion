@@ -39,7 +39,7 @@ import {
 } from './support/cast.ts';
 import { idle } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { History, violations } from './support/history.ts';
+import { History, standing, violations } from './support/history.ts';
 import { collect, roomName, rowsOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { gatedOpener, jsonlSessions, memory } from './support/storage.ts';
@@ -47,9 +47,9 @@ import { serializing } from './support/transport.ts';
 
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
-/** The rows as the fold reads them. */
+/** The rows as the fold reads them: the ones that stand past every fence. */
 function entriesOf(rows: { type: string; data: unknown }[]): LogEntry[] {
-	return rows.flatMap((row) => {
+	return standing(rows).flatMap((row) => {
 		const type = row.type.slice('ambion/'.length);
 		if (type === 'message') return [{ type, message: row.data } as LogEntry];
 		if (type === 'lease') return [{ type, lease: row.data } as LogEntry];

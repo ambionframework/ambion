@@ -126,8 +126,10 @@ describe('a split: two live hosts over one log', () => {
 			const third = await resumeSession(name, { runtime: host(), streamFn: scripted(script) });
 			expect((await third.messages()).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
 			await stopSession(third);
-			// the second host learns at its next write: its stop finds the fence
-			await expect(stopSession(taken)).rejects.toThrow(/superseded/);
+			// the second host learns at its next write: its stop finds the fence, says so, and frees the name
+			const taken_events = collect(taken);
+			await stopSession(taken);
+			expect(taken_events.some((e) => e.type === 'superseded')).toBe(true);
 			expect(second.running.has(name)).toBe(false);
 		} finally {
 			await opened.dispose();

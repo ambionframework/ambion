@@ -10,6 +10,7 @@ import {
 	type SessionOpener,
 	type SessionView,
 } from '../../src/index.ts';
+import { standing } from './history.ts';
 import { rowsOf } from './room.ts';
 
 export interface InvariantOptions {
@@ -71,7 +72,8 @@ export async function invariants(
 
 /** Every message a seat wrote carries an activation id whose lease was running when it landed. */
 async function leased(session: SessionView, sessions: SessionOpener): Promise<void> {
-	const rows = await rowsOf(sessions, session.name);
+	// among the rows that stand: a row a superseded run wrote past the fence is void
+	const rows = standing(await rowsOf(sessions, session.name));
 	const running = new Set<string>();
 	for (const row of rows) {
 		if (row.type === 'ambion/lease') {

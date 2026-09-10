@@ -23,7 +23,6 @@ lemma atWork_ensures(since: int, ended: bool, until: int, seq_: int)
 }
 
 function heard(liveOrFailed: bool, since: int, ended: bool, until: int, heardThrough: int, seq_: int): bool
-  requires (heardThrough >= since)
 {
   if liveOrFailed then
     (atWork(since, ended, until, seq_) || (since >= seq_))
@@ -32,7 +31,6 @@ function heard(liveOrFailed: bool, since: int, ended: bool, until: int, heardThr
 }
 
 lemma heard_ensures(liveOrFailed: bool, since: int, ended: bool, until: int, heardThrough: int, seq_: int)
-  requires (heardThrough >= since)
   ensures (!(liveOrFailed) ==> (heard(liveOrFailed, since, ended, until, heardThrough, seq_) <==> (seq_ <= heardThrough)))
   ensures (liveOrFailed ==> (since >= seq_) ==> heard(liveOrFailed, since, ended, until, heardThrough, seq_))
   ensures (liveOrFailed ==> !(ended) ==> (since < seq_) ==> heard(liveOrFailed, since, ended, until, heardThrough, seq_))

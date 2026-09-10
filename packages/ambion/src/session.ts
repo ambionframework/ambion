@@ -442,7 +442,9 @@ class SessionImpl implements Session, RunningRoom {
 	private superseded(): void {
 		if (this.evicted) return;
 		this.emit({ type: 'superseded' });
-		this.runtime.evict(this.name);
+		// This run alone: the runtime may hold a newer room under the name by now.
+		if (this.runtime.running.get(this.name) === this) this.runtime.running.delete(this.name);
+		this.evict();
 	}
 
 	/** A room with an exchange open or a lease live is busy, and says so when it goes quiet. */
@@ -1288,6 +1290,10 @@ class SessionImpl implements Session, RunningRoom {
 			// A write queued ahead of the stop lands first, so the record says who was present.
 			await this.log.settled();
 			await this.leaveEverybody();
+		} catch (error) {
+			// A stop that found another run's fence has nothing left to write: the
+			// run said `superseded`, and the name is the other run's.
+			if (!this.evicted) throw error;
 		} finally {
 			// The name comes free whatever the storage did. A failed write must
 			// not leave a room that can never be started again.

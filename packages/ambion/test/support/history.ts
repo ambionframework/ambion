@@ -61,7 +61,10 @@ export class History {
 		try {
 			const value = await action();
 			// An answer from a run that lost the name while the action ran is no answer:
-			// the host knows the run is gone, and the client cannot tell what landed.
+			// the host knows the run is gone, and the client cannot tell what landed. The
+			// check runs when the client resumes, so a run that lost the name between the
+			// answer and the resume is counted too: that reads as one check fewer, never
+			// as a wrong one.
 			if (stale?.()) {
 				this.push({
 					client,
@@ -212,22 +215,32 @@ function prefixBreak(
 }
 
 /**
- * Every seq on the storage names one message, among the entries that
- * stand: a run row is the fence, and an entry another run wrote after it
- * is void, the way the log reads it.
+ * The rows that stand, the way the log reads them: a run row is the
+ * fence, and an entry another run wrote past it is void. Run rows are
+ * left out; the fold has no use for them.
  */
-function seqs(rows: Checked['rows']): string[] {
-	const seen = new Map<number, number>();
+export function standing(rows: Checked['rows']): Checked['rows'] {
+	const kept: { type: string; data: unknown }[] = [];
 	let fence: string | undefined;
 	for (const row of rows) {
-		const data = row.data as { seq?: number; run?: string; written?: string };
+		const data = row.data as { run?: string; written?: string };
 		if (row.type === 'ambion/run') {
 			fence = data.run;
 			continue;
 		}
-		if (row.type !== 'ambion/message' || data.seq === undefined) continue;
 		if (fence !== undefined && data.written !== undefined && data.written !== fence) continue;
-		seen.set(data.seq, (seen.get(data.seq) ?? 0) + 1);
+		kept.push(row);
+	}
+	return kept;
+}
+
+/** Every seq on the storage names one message, among the entries that stand. */
+function seqs(rows: Checked['rows']): string[] {
+	const seen = new Map<number, number>();
+	for (const row of standing(rows)) {
+		if (row.type !== 'ambion/message') continue;
+		const seq = (row.data as { seq: number }).seq;
+		seen.set(seq, (seen.get(seq) ?? 0) + 1);
 	}
 	return [...seen]
 		.filter(([, n]) => n > 1)
@@ -238,7 +251,7 @@ function seqs(rows: Checked['rows']): string[] {
 function exclusion(rows: Checked['rows']): string[] {
 	const found: string[] = [];
 	const running = new Map<string, string>();
-	for (const row of rows) {
+	for (const row of standing(rows)) {
 		if (row.type !== 'ambion/lease') continue;
 		const lease = row.data as LeaseRow;
 		const parsed = parseId(lease.id);
