@@ -21,7 +21,7 @@ ambion/
 │   ├── cli/               @ambionframework/cli      — the `ambion` binary
 │   └── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
 ├── examples/
-│   └── site/              the runnable example: a multi-agent room
+│   └── site/              the runnable example: a multi-agent room, on Node and on workerd
 ├── scripts/
 │   ├── packages.mjs       shared, side-effect-free: finds the publishable packages
 │   ├── version.mjs        set/verify the single version across them
@@ -66,6 +66,27 @@ holds the room over the core's SQLite storage on `ctx.storage.sql`, one
 holds each seat and runs one activation inside one alarm, and RPC is the
 wire. It publishes nothing and deploys nowhere; its tests run inside
 workerd, which is the only place the objects it declares exist.
+
+`examples/site` opens the same room three ways: `pnpm start` in a
+terminal, `pnpm demo` as one run that crashes and resumes, and
+`pnpm dev:cloudflare` as Durable Objects under wrangler's local workerd.
+`pnpm demo:cloudflare` drives that worker and drops the room object while
+the seats work, which the run on Node cannot stage: one process holds the
+room and every seat there. The two demos write two reports, and
+`demos/README.md` says what each one proves.
+The products, the specialists, the people and the assistant come from one
+`room.ts` in all three. The room reads no file at run time: `pnpm seed`
+writes `drive/` into `src/drive-seed.ts`, and the example's `test` task
+proves the two hold the same documents.
+
+**The core needs `nodejs_compat` to bundle for workerd.** Its one entry
+point imports `node:crypto`, `node:path` and `node:fs/promises`, which
+that flag supplies. `directoryBackend` is the one part that needs a real
+disk, and it loads just-bash's `ReadWriteFs` on the first connect: a
+static import of that name refuses to bundle for any target but Node,
+because just-bash offers it in its Node build alone. A split of the
+Node-only surface into its own entry point stands in
+[`planning/backlog.md`](../planning/backlog.md).
 
 ### The core's layers
 

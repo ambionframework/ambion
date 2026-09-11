@@ -33,6 +33,8 @@ showed.
 | 2026-09-02 | [The Site Drive](2026-09-02-the-site-drive.html)                     | sonnet-5   | [artifact](https://claude.ai/code/artifact/bb026bd2-1ce3-4aeb-b496-68416695bb63) |
 | 2026-09-03 | [One Assistant, Three Readers](2026-09-03-one-assistant-three-readers.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/52643e13-6b26-4311-8ab9-f1e9d9cea242) |
 | 2026-09-03 | [Who the Question Needs](2026-09-03-who-the-question-needs.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/8cbbe725-691f-449f-828e-479221fc9bde) |
+| 2026-09-11 | [The Room Comes Back](2026-09-11-the-room-comes-back.html)                 | sonnet-5   | [artifact](https://claude.ai/code/artifact/15d2e9e4-5b3b-4275-a8e4-2982912c661f) |
+| 2026-09-11 | [The Room Goes, The Seats Stay](2026-09-11-the-room-goes-the-seats-stay.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/bfcaa808-211d-45f0-bd99-880e9dee38d6) |
 
 ## What each run changed
 
@@ -187,3 +189,50 @@ runtime now asks the assistant to seat everyone a question touches, on the
 argument that a seated specialist with nothing to add costs one glance and
 a missing one costs the answer, and the cap on seatings is the reserve
 itself.
+
+**The Room Comes Back.** The run that durable state was built against. The
+same suite and the same three people, and the process dies as the first
+answer to Sam's question lands: the runtime that holds the room is dropped
+with six leases running, and nothing is written about the crash. A second
+runtime resumes the name over the same log. It folds the roster, the
+people, the open exchange and the leases back from the rows, expires the
+six leases on its own alarm 10.8 seconds later, wakes the six seats again,
+closes the exchange, and writes Sam the one message, with the crash inside
+the range it covers. Four questions open four exchanges across the two
+runtimes, and each one is written for. The report shows every lease the
+dead run held, what it had heard, how it ended, and which run wrote its
+last row.
+
+The record is one SQLite database on disk, and each runtime opens the file
+for itself: the second runtime shares nothing in memory with the first, so
+everything it knows about the room it reads off the log. Every run writes
+an `ambion/run` row before anything else and stamps every later entry with
+its own id, so a write from the dead run after the resume counts for
+nothing. Ten checkpoints carry the fold the rows before them made. A lease
+that expired answers nothing, whatever it said, so all six seats took a
+second attempt and read their own first answer in it: the room prefers a
+seat that reads its own words twice to a question that nobody answers.
+
+**The Room Goes, The Seats Stay.** The first run on Cloudflare, and the one
+`demo.ts` cannot stage. A room there is one Durable Object for the record
+and one for each seat, so the platform can take the room and leave the
+seats running. The demo waits until the seats hold their leases, drops the
+room object, and lets them finish. Four activations claimed a lease from
+one run and released it to the next: their answers went onto the record of
+the room that came back, under the ids the dead run had written. Nothing
+expired, and no wake was sent twice.
+
+A seat's credential is its lease row on the log, not a session with the
+process that wrote it, so a room that comes back over the same storage
+serves the activation the dead run started. One fault stood in the way and
+this run found it: the seat object built one stub for the room and kept it
+for the whole activation, and a stub dies with the object it names. The
+commit threw on the dead stub, the release threw after it, and the seat
+wrote nothing at all. The seat takes a stub per call now, and a test in
+workerd holds it there.
+
+The report also shows what each seat did inside its own object. Those
+events reach no other object, so the seat writes them as structured log
+lines and the demo reads them back through the query wrangler serves over
+them: 59 tool calls in this run, by the activation that made each one.
+The first version of this page could not show them, and said so.

@@ -20,8 +20,15 @@ export const product = defineAgent({
 	model: 'scripted/product',
 });
 
+export const slow = defineAgent({
+	name: 'slow',
+	identity: 'Answers, but not at once.',
+	instructions: 'Answer what is asked.',
+	model: 'scripted/slow',
+});
+
 configure({
-	agents: [assistant, product],
+	agents: [assistant, product, slow],
 	stream: scripted,
 	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often.
 	wake: { resend: 50 },

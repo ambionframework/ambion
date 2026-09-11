@@ -39,9 +39,18 @@ importers:
         specifier: ^1.3.18
         version: 1.3.18
     devDependencies:
+      '@ambionframework/cloudflare':
+        specifier: workspace:*
+        version: link:../../packages/cloudflare
+      '@cloudflare/workers-types':
+        specifier: ^5.20260801.0
+        version: 5.20260910.1
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+      wrangler:
+        specifier: ^4.124.0
+        version: 4.124.0(@cloudflare/workers-types@5.20260910.1)
 
   packages/ambion:
     dependencies:

@@ -1,0 +1,18 @@
+{
+	"name": "ambion-site-example",
+	// The worker: it configures the catalog and exports the two objects.
+	"main": "src/worker.ts",
+	// The date the local workerd supports. A newer one refuses to start.
+	"compatibility_date": "2026-08-15",
+	"compatibility_flags": ["nodejs_compat"],
+	// Every request is logged, and the seats' own events go out as structured
+	// log lines. `demo-cloudflare.ts` reads them back.
+	"observability": { "enabled": true, "head_sampling_rate": 1 },
+	"durable_objects": {
+		"bindings": [
+			{ "name": "ROOM", "class_name": "DemoRoom" },
+			{ "name": "SEAT", "class_name": "SeatObject" }
+		]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["DemoRoom", "SeatObject"] }]
+}

@@ -28,7 +28,7 @@
 
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join, posix } from 'node:path';
-import { Bash, type IFileSystem, InMemoryFs, ReadWriteFs } from 'just-bash';
+import { Bash, type IFileSystem, InMemoryFs } from 'just-bash';
 import type { AgentDefinition, WorkspaceBackend } from '../types.ts';
 import { BashEnv } from './bash-env.ts';
 
@@ -177,9 +177,16 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
  * succeeds — a backend that fails to delete leaves the workspace live and
  * reachable, the same failure `destroyWorkspace` (`workspace.ts` §2) expects
  * to be able to retry.
+ *
+ * This backend is the one part of the core that needs a real disk, and it
+ * loads `ReadWriteFs` on the first connect. A bundler for a runtime without a
+ * disk, such as workerd, then keeps the rest of the package: just-bash offers
+ * `ReadWriteFs` in its Node build alone, and a static import of it refuses to
+ * bundle for every other target.
  */
 export function directoryBackend(root: string): WorkspaceBackend {
 	const resource = lazyResource(async () => {
+		const { ReadWriteFs } = await import('just-bash');
 		await mkdir(root, { recursive: true });
 		return new ReadWriteFs({ root });
 	});

@@ -17,9 +17,6 @@
  *
  * `main.ts` opens this interactively. `demo.ts` drives one scripted run of it.
  */
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
 	attentive,
 	defineAgent,
@@ -31,6 +28,7 @@ import {
 	type SeedWriter,
 } from '@ambionframework/ambion';
 import { Type } from 'typebox';
+import { DRIVE_SEED } from './drive-seed.ts';
 
 export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
 export const ROOM_NAME = 'kestrel-yard-block-c';
@@ -51,20 +49,16 @@ export const GOAL = `
 
 // -- the site drive ----------------------------------------------------------
 
-/** The documents checked in beside this file: what every run starts from. */
-const DRIVE_SEED = fileURLToPath(new URL('../drive', import.meta.url));
-
 /** The scenario's date, which is the diary file every product appends to. */
 export const TODAY = '2026-08-25';
 
-/** Every checked-in document: read one off disk, write it into the drive, move on. */
+/**
+ * Every checked-in document, written into the drive. The documents come from
+ * a generated module, so this file reads no disk and the room runs on a host
+ * that has none. `pnpm seed` writes the module from `drive/`.
+ */
 async function seedDrive(write: SeedWriter): Promise<void> {
-	const entries = readdirSync(DRIVE_SEED, { recursive: true, withFileTypes: true });
-	for (const entry of entries) {
-		if (!entry.isFile()) continue;
-		const full = join(entry.parentPath, entry.name);
-		await write.writeFile(`/${full.slice(DRIVE_SEED.length + 1)}`, readFileSync(full, 'utf8'));
-	}
+	for (const [path, text] of Object.entries(DRIVE_SEED)) await write.writeFile(path, text);
 }
 
 const driveBackend = memoryBackend({ seed: seedDrive });
