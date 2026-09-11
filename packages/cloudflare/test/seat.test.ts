@@ -61,3 +61,29 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	expect(answered).toBe(true);
 	expect(await until(async () => (await room.exchange()) === undefined)).toBe(true);
 });
+
+it('takes the cut the room sends over RPC when it revokes a wake', async () => {
+	const room = env.ROOM.get(env.ROOM.idFromName('cut-test'));
+	const seat = env.SEAT.get(env.SEAT.idFromName('cut-test:product'));
+	await room.start({ name: 'cut-test', assistant: 'assistant', agents: ['product'] });
+	await room.visit({ name: 'priya', identity: 'Project manager.' });
+	await room.deliver({ from: 'priya', text: 'When is the pour?', key: 'q1' });
+	expect(await until(() => seat.wakes())).toBe(1);
+
+	// the room writes off every wake it owes, and tells the seat side over the wire
+	await room.abort();
+	expect(await until(() => seat.cuts())).toBe(1);
+	// the lease the room revoked ends on the record, so the alarm claims nothing
+	const revoked = await until(async () =>
+		runInDurableObject(room, async (_instance, state) => {
+			const piSession = await sqlSessions(state).open('cut-test');
+			const rows = await piSession.findEntries({ customType: 'ambion/lease' });
+			const leases = rows.flatMap((row) => (row.type === 'custom' ? [row.data as LeaseRow] : []));
+			return leases.find((lease) => lease.phase === 'ended' && lease.reason === 'revoked');
+		}),
+	);
+	expect(revoked).toMatchObject({ id: '2:product', reason: 'revoked' });
+	await runDurableObjectAlarm(seat);
+	const messages: Message[] = await room.messages();
+	expect(messages.filter((m) => m.from === 'product')).toEqual([]);
+});

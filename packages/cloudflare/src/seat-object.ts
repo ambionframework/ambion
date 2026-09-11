@@ -42,8 +42,14 @@ export class SeatObject extends DurableObject<Env> {
 		if (!(await this.ctx.storage.get<boolean>('hold'))) await this.ctx.storage.setAlarm(Date.now());
 	}
 
-	/** The room ended this activation's lease: the actor stops it, when it runs here. */
+	/**
+	 * The room ended this activation's lease: the actor stops it, when it runs
+	 * here. A cut for an activation this object holds but has not started
+	 * reaches no actor, and the alarm that starts it is refused its claim.
+	 */
 	async cut(activation: string): Promise<void> {
+		const cuts = (await this.ctx.storage.get<number>('cuts')) ?? 0;
+		await this.ctx.storage.put('cuts', cuts + 1);
 		await this.actor?.cut(activation);
 	}
 
@@ -62,6 +68,11 @@ export class SeatObject extends DurableObject<Env> {
 	/** How many wakes this seat has taken. The tests read it. */
 	async wakes(): Promise<number> {
 		return (await this.ctx.storage.get<number>('wakes')) ?? 0;
+	}
+
+	/** How many cuts the room has sent this seat. The tests read it. */
+	async cuts(): Promise<number> {
+		return (await this.ctx.storage.get<number>('cuts')) ?? 0;
 	}
 
 	override async alarm(): Promise<void> {

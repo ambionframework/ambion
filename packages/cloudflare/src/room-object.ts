@@ -58,6 +58,12 @@ export interface Person {
 }
 
 /** The clock over the object's alarm. The alarm handler runs `reconcile`, so `fire` is never held. */
+/**
+ * The object's alarm as the room's clock. An object holds one alarm, so the
+ * cancel deletes whatever stands: the room arms one alarm at a time, and it
+ * cancels the one it holds before it arms the next. A second caller in this
+ * object would take the first one's alarm away.
+ */
 function alarmClock(state: DurableObjectState): Clock {
 	return {
 		now: () => Date.now(),
