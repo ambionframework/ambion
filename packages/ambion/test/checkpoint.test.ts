@@ -148,6 +148,44 @@ describe('a checkpoint', () => {
 	});
 });
 
+describe('a checkpoint the log caches', () => {
+	it('holds a row for every lease it carries, so a later end is not a first row', async () => {
+		const opened = await memory.open();
+		try {
+			const at = '2026-01-01T09:00:00.000Z';
+			const heard: { id: string; first: boolean }[] = [];
+			const log = new RoomLog(
+				opened.sessions.open(roomName('checkpoint-first')),
+				(entry, first) => {
+					if (entry.type === 'lease') heard.push({ id: entry.lease.id, first });
+				},
+			);
+			await log.ready;
+			await log.write('composition', {
+				assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
+				agents: [{ name: 'solo', identity: 'Answers.', attention: 'broadcast' }],
+				available: [],
+				at,
+			});
+			await log.write('lease', { id: '2:solo', phase: 'running', expiry: 60_000, at });
+			// the checkpoint carries the live lease, and the log drops the row it replaced
+			const row = checkpointOf(fold(log), 0);
+			if (row === undefined) throw new Error('the room wrote no checkpoint');
+			expect(row.leases.map((lease) => lease.id)).toEqual(['2:solo']);
+			await log.write('checkpoint', row);
+			await log.write('lease', { id: '2:solo', phase: 'ended', reason: 'released', at });
+			// the end row ends a lease the log holds: it is no first row, so the room
+			// reports the activation ending and never a second one starting
+			expect(heard).toEqual([
+				{ id: '2:solo', first: true },
+				{ id: '2:solo', first: false },
+			]);
+		} finally {
+			await opened.dispose();
+		}
+	});
+});
+
 describe('a checkpoint past the fence', () => {
 	it('is void, and the log folds the one that stood', async () => {
 		const opened = await memory.open();

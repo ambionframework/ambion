@@ -675,7 +675,9 @@ assistant could not write ends the same way, and the range stays whole.
 carries the composition, the closes and the leases a later fold still
 reads, behind a `floor`: no wake on a message below it is pending. A fold
 reads a checkpoint in place of every row before it, and the log drops
-those rows from memory. The messages stay, and the storage keeps every
+those rows from memory. What a fold costs is then the rows since the last
+checkpoint; what a replay costs is every entry the storage holds, because
+a checkpoint trims the cache and never the storage. The messages stay, and the storage keeps every
 row: a checkpoint is a cache over the log, so a reader that cannot read
 one ignores it and folds the rows instead. A checkpoint is an entry like
 any other, so the fence voids one a superseded run wrote.

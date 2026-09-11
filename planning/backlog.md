@@ -561,8 +561,13 @@ fold still reads, behind a floor below which every wake was answered. The
 log drops the rows the checkpoint replaced, so what a fold costs is the
 rows since the last checkpoint, whatever the room's age.
 
-**The remainder.** The messages still grow without bound, and every fold
-reads them all. Item 2 holds that cost.
+**The remainder.** Three costs stand. The messages still grow without
+bound, and every fold reads them all: item 2 holds that. A replay still
+reads every entry the storage holds, because a checkpoint trims the cache
+and never the storage; only the steady-state fold is bounded. And the log
+keeps every lease id it has seen a row for, so that a row a read finds in
+doubt is not read as the first row of its lease; that set grows with the
+log.
 
 ### 28. A person present at a crash stays present until the host returns
 
