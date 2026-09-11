@@ -50,6 +50,15 @@ start it again: `/messages` and `/seats` answer from the log, and the next
 question runs in the new process. `.wrangler/` holds that state; delete it
 to start the room over.
 
+**One process going down does not take the work of the others.** With the
+server running, `pnpm demo:cloudflare` in a second terminal asks a
+question, waits until the seats hold their leases, drops the room object,
+and lets the seats finish. Each seat commits into the room that comes
+back, under the lease id the dead run wrote. `demo.ts` cannot stage this:
+one process holds the room and every seat there, so a crash takes them
+together. `/log` and `/crash` are the two routes that demo needs and a
+room in service does not.
+
 ## What to look for
 
 **Opening the room wakes one seat, not all of them.** Each seat is seated
@@ -129,14 +138,15 @@ discussion and the products hold the state.
 
 ## The files
 
-| File            | What                                                                                                            |
-| --------------- | --------------------------------------------------------------------------------------------------------------- |
-| `room.ts`       | The products and the specialists on call, their APIs and state; the drive they share; the people; the assistant |
-| `main.ts`       | The room open in your terminal                                                                                  |
-| `demo.ts`       | One run that crashes and resumes, written out as JSON for a report                                              |
-| `worker.ts`     | The same room as Cloudflare Durable Objects, with the routes that drive it                                      |
-| `drive/`        | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary                |
-| `drive-seed.ts` | `drive/` as one record of path to text. `pnpm seed` writes it; do not edit it                                   |
+| File                 | What                                                                                                            |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `room.ts`            | The products and the specialists on call, their APIs and state; the drive they share; the people; the assistant |
+| `main.ts`            | The room open in your terminal                                                                                  |
+| `demo.ts`            | One run that crashes and resumes, written out as JSON for a report                                              |
+| `worker.ts`          | The same room as Cloudflare Durable Objects, with the routes that drive it                                      |
+| `demo-cloudflare.ts` | One run against that worker: the room object is dropped while the seats work                                    |
+| `drive/`             | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary                |
+| `drive-seed.ts`      | `drive/` as one record of path to text. `pnpm seed` writes it; do not edit it                                   |
 
 The contracts are [`docs/agent.md`](../../docs/agent.md),
 [`docs/presence.md`](../../docs/presence.md),

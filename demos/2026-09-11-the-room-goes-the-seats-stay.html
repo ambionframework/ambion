@@ -1,0 +1,1039 @@
+<meta charset="utf-8">
+<title>The Room Goes, The Seats Stay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>:root {
+	--paper: #f4f3ee;
+	--card: #fbfaf6;
+	--sunk: #eceada;
+	--ink: #232a2b;
+	--dim: #6c7371;
+	--line: #dad7cb;
+	--c-shifts: #3f5bb5;
+	--c-tasks: #3d7a2f;
+	--c-materials: #a3641a;
+	--c-priya: #232a2b;
+	--c-sam: #232a2b;
+	--c-dan: #232a2b;
+	--present: #3d7a2f;
+	--away: #8a5a20;
+	--absent: #c3bfb1;
+	--miss: #f1ead6;
+	--miss-line: #c2a049;
+	--add: #3d7a2f;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--paper: #13171a;
+		--card: #1a2023;
+		--sunk: #161b1e;
+		--ink: #e3e2d9;
+		--dim: #8a918e;
+		--line: #2b3235;
+		--c-shifts: #8fa8ef;
+		--c-tasks: #7fc468;
+		--c-materials: #e0a94e;
+		--c-priya: #e3e2d9;
+		--c-sam: #e3e2d9;
+		--c-dan: #e3e2d9;
+		--present: #7fc468;
+		--away: #dfae62;
+		--absent: #4d5451;
+		--miss: #232419;
+		--miss-line: #7c6828;
+		--add: #7fc468;
+	}
+}
+:root[data-theme='dark'] {
+	--paper: #13171a;
+	--card: #1a2023;
+	--sunk: #161b1e;
+	--ink: #e3e2d9;
+	--dim: #8a918e;
+	--line: #2b3235;
+	--c-shifts: #8fa8ef;
+	--c-tasks: #7fc468;
+	--c-materials: #e0a94e;
+	--c-priya: #e3e2d9;
+	--c-sam: #e3e2d9;
+	--c-dan: #e3e2d9;
+	--present: #7fc468;
+	--away: #dfae62;
+	--absent: #4d5451;
+	--miss: #232419;
+	--miss-line: #7c6828;
+	--add: #7fc468;
+}
+* {
+	box-sizing: border-box;
+}
+body {
+	margin: 0;
+	background: var(--paper);
+	color: var(--ink);
+	font:
+		16px/1.65 'IBM Plex Sans',
+		system-ui,
+		sans-serif;
+}
+pre b {
+	font-weight: 500;
+	background: var(--miss);
+	box-shadow: 0 0 0 3px var(--miss);
+	border-radius: 1px;
+}
+
+main {
+	max-width: 60rem;
+	margin: 0 auto;
+	padding: 3.5rem 1.25rem 6rem;
+}
+h1 {
+	font:
+		600 2.7rem/1.12 Spectral,
+		Georgia,
+		serif;
+	margin: 0 0 0.5rem;
+	letter-spacing: -0.012em;
+	text-wrap: balance;
+}
+h2 {
+	font:
+		600 1.5rem/1.25 Spectral,
+		Georgia,
+		serif;
+	margin: 0 0 0.45rem;
+	text-wrap: balance;
+}
+section {
+	margin-top: 3.5rem;
+}
+.lede {
+	color: var(--dim);
+	max-width: 45rem;
+	margin: 0 0 1.6rem;
+	font-size: 1.06rem;
+}
+.meta {
+	font:
+		500 0.72rem/1.6 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	margin: 0 0 1.6rem;
+}
+.note {
+	color: var(--dim);
+	max-width: 45rem;
+	margin: 0 0 1.4rem;
+}
+.stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+	gap: 1px;
+	background: var(--line);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	overflow: hidden;
+	margin: 0 0 1rem;
+}
+.stat {
+	background: var(--card);
+	padding: 0.9rem 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+.stat b {
+	font:
+		600 1.6rem/1 'IBM Plex Mono',
+		monospace;
+	font-variant-numeric: tabular-nums;
+}
+.stat span {
+	font-size: 0.78rem;
+	color: var(--dim);
+	line-height: 1.35;
+}
+.apps {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+	gap: 1rem;
+	margin-top: 1.4rem;
+}
+.app {
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	padding: 1.05rem 1.1rem;
+	border-top: 3px solid currentColor;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.app-h {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.5rem;
+}
+.app .agent {
+	font:
+		600 0.8rem/1 'IBM Plex Mono',
+		monospace;
+	letter-spacing: 0.02em;
+}
+.app .seat {
+	font:
+		400 0.68rem/1 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+.app h3 {
+	font:
+		600 1.08rem/1.3 Spectral,
+		Georgia,
+		serif;
+	margin: 0;
+	color: var(--ink);
+}
+.app p {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--dim);
+	line-height: 1.5;
+}
+ul.api {
+	list-style: none;
+	margin: 0.15rem 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+}
+ul.api li {
+	font:
+		400 0.74rem/1.5 'IBM Plex Mono',
+		monospace;
+	color: var(--ink);
+	background: var(--sunk);
+	border-radius: 2px;
+	padding: 0.2rem 0.45rem;
+	overflow-wrap: anywhere;
+}
+.app-f {
+	margin-top: auto;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--line);
+	font:
+		500 0.72rem/1.5 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+}
+ol.steps {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.55rem;
+}
+ol.steps li {
+	display: flex;
+	gap: 0.85rem;
+	align-items: baseline;
+}
+ol.steps .n {
+	font:
+		500 0.72rem/1 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+	border: 1px solid var(--line);
+	border-radius: 2px;
+	padding: 0.25rem 0.4rem;
+	flex: none;
+}
+.key {
+	display: flex;
+	gap: 1.1rem;
+	flex-wrap: wrap;
+	font-size: 0.78rem;
+	color: var(--dim);
+	margin: 1.2rem 0 0.6rem;
+}
+.key span {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+.key i {
+	width: 11px;
+	height: 11px;
+	border-radius: 2px;
+	display: inline-block;
+}
+.band {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+.lane {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+.lane .lbl {
+	font:
+		500 0.75rem/1 'IBM Plex Mono',
+		monospace;
+	width: 3.6rem;
+	flex: none;
+	color: var(--dim);
+}
+.cells {
+	display: flex;
+	gap: 2px;
+	flex: 1;
+	min-width: 0;
+}
+.cells i {
+	flex: 1;
+	height: 16px;
+	border-radius: 1px;
+	background: var(--absent);
+}
+.cells i.s-present {
+	background: var(--present);
+}
+.cells i.s-away {
+	background: var(--away);
+}
+.tw {
+	overflow-x: auto;
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	margin-top: 1.3rem;
+}
+table {
+	border-collapse: collapse;
+	width: 100%;
+	background: var(--card);
+	font-size: 0.86rem;
+}
+th,
+td {
+	text-align: left;
+	padding: 0.65rem 0.8rem;
+	border-bottom: 1px solid var(--line);
+	vertical-align: top;
+}
+th {
+	font:
+		500 0.68rem/1.5 'IBM Plex Mono',
+		monospace;
+	text-transform: uppercase;
+	letter-spacing: 0.07em;
+	color: var(--dim);
+	white-space: nowrap;
+}
+tr:last-child td {
+	border-bottom: 0;
+}
+.tid {
+	font:
+		500 0.8rem/1.5 'IBM Plex Mono',
+		monospace;
+	white-space: nowrap;
+}
+.was {
+	color: var(--dim);
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.now {
+	white-space: normal;
+	font-variant-numeric: tabular-nums;
+}
+.now b {
+	color: var(--add);
+	font-weight: 600;
+}
+.nb {
+	display: block;
+	color: var(--dim);
+	font-size: 0.8rem;
+	margin-top: 0.25rem;
+	line-height: 1.45;
+}
+tr.changed {
+	background: var(--sunk);
+}
+ul.record {
+	list-style: none;
+	margin: 1.3rem 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	background: var(--line);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	overflow: hidden;
+}
+ul.record li {
+	background: var(--card);
+	display: flex;
+	gap: 0.9rem;
+	padding: 0.85rem 1rem;
+}
+ul.record li.miss {
+	background: var(--miss);
+	box-shadow: inset 3px 0 0 var(--miss-line);
+}
+.seq {
+	font:
+		500 0.72rem/1.7 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+	font-variant-numeric: tabular-nums;
+	flex: none;
+	width: 1.7rem;
+	text-align: right;
+}
+.body {
+	min-width: 0;
+	flex: 1;
+}
+.who {
+	font:
+		600 0.82rem/1.5 'IBM Plex Mono',
+		monospace;
+	letter-spacing: 0.02em;
+	margin-bottom: 0.15rem;
+}
+.who.person {
+	text-transform: uppercase;
+	letter-spacing: 0.09em;
+	font-size: 0.74rem;
+}
+.who .to {
+	font-weight: 400;
+	color: var(--dim);
+	margin-left: 0.4rem;
+	text-transform: none;
+	letter-spacing: 0;
+}
+.text {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+li.pres .body {
+	font:
+		500 0.84rem/1.7 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+li.pres .dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex: none;
+	background: var(--absent);
+}
+li.p-arrived .dot,
+li.p-returned .dot {
+	background: var(--present);
+}
+li.p-away .dot {
+	background: var(--away);
+}
+.c-shifts {
+	color: var(--c-shifts);
+}
+.c-tasks {
+	color: var(--c-tasks);
+}
+.c-materials {
+	color: var(--c-materials);
+}
+.c-priya,
+.c-sam,
+.c-dan {
+	color: var(--ink);
+}
+pre {
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	padding: 1.1rem 1.2rem;
+	overflow-x: auto;
+	font:
+		400 0.8rem/1.65 'IBM Plex Mono',
+		monospace;
+	margin: 1.3rem 0 0;
+}
+.findings {
+	display: flex;
+	flex-direction: column;
+	gap: 1.4rem;
+	margin-top: 1.4rem;
+}
+.finding {
+	border-left: 2px solid var(--line);
+	padding-left: 1.1rem;
+}
+.finding h3 {
+	font:
+		600 1rem/1.4 'IBM Plex Sans',
+		sans-serif;
+	margin: 0 0 0.3rem;
+}
+.finding p {
+	margin: 0;
+	color: var(--dim);
+}
+.finding p + p {
+	margin-top: 0.5rem;
+}
+footer {
+	margin-top: 4rem;
+	padding-top: 1.5rem;
+	border-top: 1px solid var(--line);
+	color: var(--dim);
+	font-size: 0.85rem;
+}
+code {
+	font:
+		400 0.88em/1.5 'IBM Plex Mono',
+		monospace;
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 2px;
+	padding: 0.05em 0.35em;
+}
+.lane .tail {
+	font:
+		500 0.7rem/1 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+	width: 8.5rem;
+	flex: none;
+	text-align: right;
+}
+.cells i.a-none {
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--line);
+	height: 14px;
+}
+.cells i.a-spoke {
+	background: currentColor;
+	height: 14px;
+}
+.cells i.a-idle {
+	background: transparent;
+	box-shadow: inset 0 0 0 2px currentColor;
+	height: 14px;
+}
+.alanes .lane {
+	color: var(--ink);
+}
+.alanes .lane .lbl {
+	width: 5.6rem;
+}
+.alanes .lane:nth-child(1) {
+	color: var(--c-shifts);
+}
+.alanes .lane:nth-child(2) {
+	color: var(--c-tasks);
+}
+.alanes .lane:nth-child(3) {
+	color: var(--c-materials);
+}
+
+.pill {
+	display: inline-block;
+	font:
+		500 0.68rem/1.5 'IBM Plex Mono',
+		monospace;
+	padding: 0.05rem 0.4rem;
+	border-radius: 2px;
+	white-space: nowrap;
+}
+.pill.spoke {
+	background: var(--add);
+	color: var(--card);
+}
+.pill.idle {
+	background: transparent;
+	color: var(--dim);
+	box-shadow: inset 0 0 0 1px var(--line);
+}
+.num {
+	text-align: right;
+	white-space: nowrap;
+	font:
+		400 0.82rem/1.5 'IBM Plex Mono',
+		monospace;
+	font-variant-numeric: tabular-nums;
+}
+.cf {
+	color: var(--miss-line);
+	font-weight: 600;
+}
+.api-cell {
+	font:
+		400 0.76rem/1.5 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+}
+details.seat,
+details.act {
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	background: var(--card);
+	margin-top: 0.6rem;
+}
+details.seat > summary,
+details.act > summary {
+	cursor: pointer;
+	padding: 0.7rem 0.9rem;
+	display: flex;
+	gap: 0.6rem;
+	align-items: baseline;
+	flex-wrap: wrap;
+	font:
+		500 0.85rem/1.5 'IBM Plex Mono',
+		monospace;
+	list-style: none;
+}
+details.seat > summary::-webkit-details-marker,
+details.act > summary::-webkit-details-marker {
+	display: none;
+}
+details.seat > summary::before,
+details.act > summary::before {
+	content: '▸';
+	color: var(--dim);
+	flex: none;
+}
+details.seat[open] > summary::before,
+details.act[open] > summary::before {
+	content: '▾';
+}
+details.seat > summary:focus-visible,
+details.act > summary:focus-visible {
+	outline: 2px solid var(--add);
+	outline-offset: -2px;
+}
+.sm {
+	color: var(--dim);
+	font-weight: 400;
+	font-size: 0.76rem;
+	margin-left: auto;
+}
+details.act {
+	margin: 0 0.9rem 0.6rem;
+	background: var(--sunk);
+}
+details.act .n {
+	color: var(--dim);
+}
+.turn {
+	padding: 0.55rem 0.9rem;
+	border-top: 1px solid var(--line);
+	font-size: 0.85rem;
+}
+.rl {
+	display: block;
+	font:
+		500 0.66rem/1.6 'IBM Plex Mono',
+		monospace;
+	text-transform: uppercase;
+	letter-spacing: 0.09em;
+	color: var(--dim);
+}
+.turn.call code {
+	display: block;
+	overflow-wrap: anywhere;
+	background: transparent;
+	border: 0;
+	padding: 0;
+	color: var(--ink);
+}
+.turn.res pre.mini {
+	margin: 0.2rem 0 0;
+	padding: 0.5rem 0.6rem;
+	font-size: 0.74rem;
+	background: var(--card);
+}
+details.turn.ctx {
+	border: 0;
+	border-top: 1px solid var(--line);
+	border-radius: 0;
+	margin: 0;
+}
+details.turn.ctx > summary {
+	font:
+		500 0.72rem/1.6 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+	padding: 0.5rem 0.9rem;
+	cursor: pointer;
+	list-style: none;
+	display: flex;
+	gap: 0.5rem;
+}
+details.turn.ctx > summary::-webkit-details-marker {
+	display: none;
+}
+details.turn.ctx > summary::before {
+	content: '▸';
+}
+details.turn.ctx[open] > summary::before {
+	content: '▾';
+}
+details.turn.ctx pre {
+	margin: 0 0.9rem 0.7rem;
+	font-size: 0.72rem;
+}
+.len {
+	margin-left: auto;
+}
+@media (max-width: 38rem) {
+	h1 {
+		font-size: 2.05rem;
+	}
+	.lane .tail {
+		display: none;
+	}
+	.lane .lbl {
+		width: 2.9rem;
+	}
+	ul.record li {
+		padding: 0.75rem 0.7rem;
+	}
+}
+
+.people {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+	gap: 1rem;
+	margin-top: 1.4rem;
+}
+.person {
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	padding: 1.05rem 1.1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+.person .nm {
+	font:
+		600 0.78rem/1 'IBM Plex Mono',
+		monospace;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+}
+.person .rl2 {
+	font:
+		600 1.05rem/1.3 Spectral,
+		Georgia,
+		serif;
+}
+.person p {
+	margin: 0;
+	font-size: 0.85rem;
+	color: var(--dim);
+	line-height: 1.55;
+}
+.person .acts {
+	margin-top: auto;
+	padding-top: 0.55rem;
+	border-top: 1px solid var(--line);
+	font:
+		500 0.72rem/1.5 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+}
+
+.pill.failed {
+	background: transparent;
+	color: var(--warn, #b45309);
+	box-shadow: inset 0 0 0 1px currentColor;
+}
+
+/* -- the full session inspector ------------------------------------------ */
+.turn {
+	position: relative;
+	padding-left: 2.6rem;
+}
+.tn {
+	position: absolute;
+	left: 0.9rem;
+	top: 0.55rem;
+	font:
+		500 0.64rem/1.6 'IBM Plex Mono',
+		monospace;
+	color: var(--absent);
+	font-variant-numeric: tabular-nums;
+}
+.turn pre {
+	margin: 0.3rem 0 0;
+	padding: 0.55rem 0.7rem;
+	font-size: 0.74rem;
+	line-height: 1.55;
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 32rem;
+	overflow: auto;
+}
+.turn.call pre.args {
+	background: var(--paper);
+}
+.turn.think div {
+	white-space: pre-wrap;
+}
+.turn.tmeta {
+	padding-top: 0.35rem;
+	padding-bottom: 0.35rem;
+}
+.turn.tmeta .sm {
+	font:
+		500 0.7rem/1.5 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+}
+.turn.res.bad .rl {
+	color: var(--miss-line);
+}
+.turn.res.bad pre {
+	border-color: var(--miss-line);
+	background: var(--miss);
+}
+details.turn.steer {
+	border: 0;
+	border-top: 1px solid var(--line);
+	border-radius: 0;
+	margin: 0;
+	padding: 0;
+}
+details.turn.steer > summary {
+	font:
+		500 0.72rem/1.6 'IBM Plex Mono',
+		monospace;
+	color: var(--miss-line);
+	padding: 0.5rem 0.9rem 0.5rem 2.6rem;
+	cursor: pointer;
+	list-style: none;
+	display: flex;
+	gap: 0.5rem;
+	position: relative;
+}
+details.turn.steer > summary::-webkit-details-marker {
+	display: none;
+}
+details.turn.steer > summary::before {
+	content: '▸';
+	position: absolute;
+	left: 1.7rem;
+}
+details.turn.steer[open] > summary::before {
+	content: '▾';
+}
+details.turn.steer pre {
+	margin: 0 0.9rem 0.7rem 2.6rem;
+}
+details.turn.ctx > summary {
+	padding-left: 2.6rem;
+	position: relative;
+}
+details.turn.ctx > summary::before {
+	position: absolute;
+	left: 1.7rem;
+}
+details.turn.ctx .tn {
+	top: 0.5rem;
+}
+details.turn.ctx pre {
+	margin: 0 0.9rem 0.7rem 2.6rem;
+	max-height: 34rem;
+	overflow: auto;
+	white-space: pre-wrap;
+}
+
+.exchanges {
+	display: flex;
+	flex-direction: column;
+	gap: 1.6rem;
+	margin-top: 1.4rem;
+}
+.exchange {
+	border: 1px solid var(--line);
+	border-radius: 3px;
+	background: var(--card);
+	padding: 1.1rem 1.2rem;
+}
+.xh {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+}
+.xh .nm {
+	font:
+		600 0.78rem/1 'IBM Plex Mono',
+		monospace;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+}
+.xh .sm {
+	margin: 0;
+	font:
+		400 0.72rem/1.5 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+}
+.exchange p.q {
+	margin: 0.6rem 0 1rem;
+	font:
+		500 1.12rem/1.5 Spectral,
+		Georgia,
+		serif;
+}
+details.working {
+	margin: 0 0 1rem;
+}
+details.working > summary {
+	cursor: pointer;
+	font:
+		500 0.74rem/1.6 'IBM Plex Mono',
+		monospace;
+	color: var(--dim);
+	list-style: none;
+	display: flex;
+	gap: 0.5rem;
+}
+details.working > summary::-webkit-details-marker {
+	display: none;
+}
+details.working > summary::before {
+	content: '▸';
+}
+details.working[open] > summary::before {
+	content: '▾';
+}
+details.working ul.record {
+	margin-top: 0.7rem;
+}
+.answer {
+	border-left: 2px solid var(--add);
+	background: var(--sunk);
+	padding: 0.85rem 1rem;
+	border-radius: 0 3px 3px 0;
+}
+p.answer.pass {
+	border-left-color: var(--line);
+	color: var(--dim);
+	margin: 0;
+	font-size: 0.9rem;
+}
+.answer .who {
+	font:
+		600 0.8rem/1.5 'IBM Plex Mono',
+		monospace;
+	margin-bottom: 0.3rem;
+}
+.answer .to {
+	font-weight: 400;
+	color: var(--dim);
+	margin-left: 0.5rem;
+}
+.answer .text {
+	white-space: pre-wrap;
+}
+ul.record li.fold {
+	background: var(--sunk);
+}
+ul.record li.sum {
+	background: var(--miss);
+	box-shadow: inset 3px 0 0 var(--add);
+}
+ul.record li.sum .who {
+	font-weight: 600;
+}
+.person .aide {
+	border-top: 1px solid var(--line);
+	padding-top: 0.6rem;
+}
+.person .aide .rl {
+	margin-bottom: 0.3rem;
+}
+.person .aide p {
+	font-size: 0.82rem;
+}
+.lane.aide {
+	color: var(--add);
+}
+.alanes .lane:nth-child(4) {
+	color: var(--add);
+}
+.alanes .lane .lbl {
+	width: 5.6rem;
+}
+.c-aide {
+	color: var(--add);
+}
+.app .api li b {
+	color: var(--dim);
+	font-weight: 500;
+}
+.app.c-aide {
+	color: var(--add);
+}
+</style>
+<main>
+<p class="meta">Ambion demo &middot; 11 September 2026 &middot; anthropic/claude-sonnet-5 &middot; room &lsquo;kestrel-yard-block-c&rsquo; &middot; on Cloudflare Durable Objects, in workerd</p>
+<h1>The Room Goes, The Seats Stay</h1>
+<p class="lede">A room on Cloudflare is one Durable Object for the record and one for each seat, so the platform can take the room and leave the seats running. This run does exactly that. 4 leases were running when the room object was dropped, and the seats holding them never noticed: they were waiting on a model. 4 activations claimed a lease from one run and released it to the next — their work went onto the record of the room that came back, under the id the dead run had written. Nothing expired, and no wake was sent twice.</p>
+<div class="stats"><div class="stat"><b>2</b><span>runs took the name</span></div><div class="stat"><b>4</b><span>leases live at the crash</span></div><div class="stat"><b>4</b><span>activations crossed it</span></div><div class="stat"><b>9</b><span>agent answers</span></div><div class="stat"><b>56</b><span>lease rows</span></div><div class="stat"><b>15</b><span>messages</span></div></div>
+<p class="note">Every line is read off one live run. The people were scripted only in what they asked; the crash was scripted to land once the seats held their leases, and nothing else about it was.</p>
+
+<section>
+<h2>What the run did</h2>
+<ol class="steps"><li><span class="n">1</span><span>the room starts as Durable Objects: one for the record, one for each seat</span></li><li><span class="n">2</span><span>priya asks the question she has to answer today</span></li><li><span class="n">3</span><span>the seats take their leases, and the room writes a row for each</span></li><li><span class="n">4</span><span>the platform takes the room object; every seat object keeps working</span></li><li><span class="n">5</span><span>the seats commit into the room that came back, under the leases the dead run wrote</span></li><li><span class="n">6</span><span>the exchange closes, and the assistant writes priya the one message</span></li></ol>
+</section>
+
+<section>
+<h2>Every activation, and which run served it</h2>
+<p class="note">A seat's credential is its lease row on the log, not a session with the process that wrote it. The room reads the fold and asks nothing about which run issued the lease, so a room that comes back over the same storage serves the activation the dead run started. <b>Crossed the crash</b> marks an activation whose lease one run claimed and another released.</p>
+<div class="tw"><table><thead><tr><th>Activation</th><th>Lease claimed by</th><th>Heard through</th><th>How it ended</th><th>Ended by</th><th>Crossed the crash</th></tr></thead><tbody><tr><td class="tid">1:task-management</td><td>run 1</td><td>[9]</td><td>released</td><td>run 2</td><td><b>yes</b></td></tr><tr><td class="tid">2:time-tracker</td><td>run 1</td><td>[8]</td><td>released</td><td>run 2</td><td><b>yes</b></td></tr><tr><td class="tid">2:materials-tracker</td><td>run 1</td><td>[8]</td><td>released</td><td>run 2</td><td><b>yes</b></td></tr><tr><td class="tid">2:assistant</td><td>run 1</td><td>[2]</td><td>released</td><td>run 2</td><td><b>yes</b></td></tr><tr><td class="tid">3:building-control</td><td>run 2</td><td>[12]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">5:temporary-works</td><td>run 2</td><td>[6]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">4:plant-hire</td><td>run 2</td><td>[11]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">7:temporary-works</td><td>run 2</td><td>[14]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">10:task-management</td><td>run 2</td><td>[13]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">10:time-tracker</td><td>run 2</td><td>[12]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">10:materials-tracker</td><td>run 2</td><td>[13]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">12:plant-hire</td><td>run 2</td><td>[13]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">13:time-tracker</td><td>run 2</td><td>[14]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">13:building-control</td><td>run 2</td><td>[13]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">14:task-management</td><td>run 2</td><td>[14]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">14:materials-tracker</td><td>run 2</td><td>[14]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">14:building-control</td><td>run 2</td><td>[14]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">14:plant-hire</td><td>run 2</td><td>[14]</td><td>released</td><td>run 2</td><td>no</td></tr><tr><td class="tid">close:14:1</td><td>run 2</td><td>[14]</td><td>released</td><td>run 2</td><td>no</td></tr></tbody></table></div>
+<p class="note" style="margin-top:1.4rem">No id carries an attempt number, so every wake was answered on its first attempt. Nothing was said twice, and nobody waited out a lease expiry.</p>
+</section>
+
+<section>
+<h2>The record, and the run that wrote each line</h2>
+<p class="note">Every run writes an <code>ambion/run</code> row before anything else and stamps each later entry with its own id. 2 runs took this name, so the stamp says on which side of the crash a message landed.</p>
+<div class="tw"><table><thead><tr><th>Seq</th><th>Kind</th><th>From</th><th>Written by</th><th>Text</th></tr></thead><tbody><tr><td>[1]</td><td class="tid">arrived</td><td class="tid">priya</td><td>run 1</td><td></td></tr><tr><td>[2]</td><td class="tid">said</td><td class="tid">priya</td><td>run 1</td><td>Can I tell the client Thursday for the Level 3 pour, or not?</td></tr><tr><td>[3]</td><td class="tid">seated</td><td class="tid">building-control</td><td>run 2</td><td></td></tr><tr><td>[4]</td><td class="tid">seated</td><td class="tid">plant-hire</td><td>run 2</td><td></td></tr><tr><td>[5]</td><td class="tid">seated</td><td class="tid">temporary-works</td><td>run 2</td><td></td></tr><tr><td>[6]</td><td class="tid">said</td><td class="tid">plant-hire</td><td>run 2</td><td>Checking the hire board and pour plan before I answer on Thursday.</td></tr><tr><td>[7]</td><td class="tid">said</td><td class="tid">materials-tracker</td><td>run 2</td><td>Materials position: rebar 16mm (7.5t short) is covered by D-4471, delivered Wed 26 Aug, confirmed. Concrete D-4488, 96m³ C32/40 from Trent Ready-Mix, </td></tr><tr><td>[8]</td><td class="tid">said</td><td class="tid">time-tracker</td><td>run 2</td><td>On labour: Concrete crew is fine for Thursday — 6 of 6 on site hold pour supervision/power float, 41h logged, under the 45h threshold. But the pump op</td></tr><tr><td>[9]</td><td class="tid">said</td><td class="tid">task-management</td><td>run 2</td><td>To tie it to the task chain: T-133 (rebar delivery) is due Wed 26 Aug, T-126 (rebar fixing complete, sam) can&#x27;t close before that, and T-121 (pre-pour</td></tr><tr><td>[10]</td><td class="tid">said</td><td class="tid">plant-hire</td><td>run 2</td><td>If it moves to Friday: the pump (H-207, Rapid Pumps) is currently booked on site Wed evening for Thu 27 only, and still provisional (T-130 not signed </td></tr><tr><td>[11]</td><td class="tid">said</td><td class="tid">building-control</td><td>run 2</td><td>To close the loop for priya: inspection_slots confirms nothing booked yet this week, and Thu 27 Aug 13:00 is the slot that supports a Friday pour — it</td></tr><tr><td>[12]</td><td class="tid">said</td><td class="tid">building-control</td><td>run 2</td><td>(No change from my last — still waiting on priya to confirm Friday before I request the Thu 27 Aug 13:00 slot.)</td></tr><tr><td>[13]</td><td class="tid">said</td><td class="tid">materials-tracker</td><td>run 2</td><td>On the concrete side for a Friday plan: Trent Ready-Mix&#x27;s D-4488 (96m³) is provisional for Thu 27 Aug 07:00, but their terms are lead 24h lock-in with</td></tr><tr><td>[14]</td><td class="tid">said</td><td class="tid">time-tracker</td><td>run 2</td><td>Moving to Friday doesn&#x27;t fix the labour gap by itself: crew_hours still shows 0 Groundworks on site today (22h logged, 3 on the books), and they&#x27;re th</td></tr><tr><td>[15]</td><td class="tid">summary</td><td class="tid">assistant</td><td>run 2</td><td>Thursday is off — earliest is Friday, and even that needs three things cleared, none confirmed yet: (1) you book the Thu 27 Aug 13:00 building control</td></tr></tbody></table></div>
+<p class="note" style="margin-top:1.4rem">The exchange closed into one message. <b>assistant</b> wrote it for <b>priya</b>, covering the whole question, and the crash is inside the range it stands for:</p><blockquote class="answer">Thursday is off — earliest is Friday, and even that needs three things cleared, none confirmed yet: (1) you book the Thu 27 Aug 13:00 building control slot once T-126 rebar fixing/formwork close by then; (2) Groundworks must be rostered on for the pour day — currently 0 on site, and they&#x27;re the only trade holding pump-operation cert; (3) you confirm Friday so plant-hire can shift the pump booking and materials-tracker can move the Trent concrete slot off Thursday (both free if done now, before lock-in). Nothing else is blocking — say the word on Friday and these three get actioned.</blockquote>
+</section>
+
+<section>
+<h2>What this run proves, and what it does not</h2>
+<p class="note"><b>It proves the partial failure.</b> One process going down does not take the work of the processes around it. That is the failure a platform of small objects makes ordinary, and the one a single-process demo cannot stage: there, a crash takes the room and every seat together.</p>
+<p class="note"><b>A stub held too long broke it.</b> The seat object built one stub for the room and kept it for the whole activation. A stub dies with the object it names, so the commit threw, the release threw after it, and the seat wrote nothing: the lease sat live until it expired, and the room sent the wake again a minute later. The seat takes a stub per call now, and <code>packages/cloudflare/test/restart.test.ts</code> holds it there.</p>
+<p class="note"><b>It shows less of the room than the run on Node.</b> A seat's tool calls, its own transcript and what it spent are inside its object, and no call carries them out yet. The report for the run on Node has them, and cannot have this. The two demos prove different things, and the repository keeps both.</p>
+</section>
+</main>

@@ -8,6 +8,7 @@
 		"start": "node --env-file-if-exists=.env src/main.ts",
 		"demo": "node --env-file-if-exists=.env src/demo.ts",
 		"dev:cloudflare": "wrangler dev",
+		"demo:cloudflare": "node src/demo-cloudflare.ts",
 		"seed": "node scripts/drive-seed.mjs",
 		"check:types": "tsc --noEmit",
 		"test": "node scripts/drive-seed.mjs --check"

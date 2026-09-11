@@ -1,4 +1,10 @@
 {
 	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		// The example compiles for two runtimes: `main.ts` and `demo.ts` run on
+		// Node, `worker.ts` runs in workerd. Both ambient sets are here, so one
+		// pass checks both.
+		"types": ["node", "@cloudflare/workers-types/experimental"]
+	},
 	"include": ["src"]
 }

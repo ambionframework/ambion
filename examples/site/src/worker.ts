@@ -12,7 +12,7 @@
 import type { AgentSeat } from '@ambionframework/ambion';
 import { isSeatedAgent } from '@ambionframework/ambion';
 import type { Env, SeatSpec } from '@ambionframework/cloudflare';
-import { configure, RoomObject, SeatObject } from '@ambionframework/cloudflare';
+import { configure, RoomObject, SeatObject, sqlSessions } from '@ambionframework/cloudflare';
 import { AGENTS, ASSISTANT, AVAILABLE, dan, GOAL, priya, ROOM_NAME, sam } from './room.ts';
 
 /** The definition a seat carries, whether the room's list gave it an attention or not. */
@@ -28,7 +28,28 @@ configure({
 	wake: { resend: 2_000 },
 });
 
-export { RoomObject, SeatObject };
+/**
+ * The room, with two calls a demo needs and a room in service does not.
+ * `log` reads the rows beside the messages, and `crash` drops the object the
+ * way the platform may drop it: the seats around it keep running, and the
+ * next call to this name builds the room again over the same storage.
+ */
+export class DemoRoom extends RoomObject {
+	async log(): Promise<{ type: string; data: unknown }[]> {
+		const piSession = await sqlSessions(this.ctx).open(ROOM_NAME);
+		const entries = await piSession.findEntries();
+		entries.sort((a, b) => a.seq - b.seq);
+		return entries.flatMap((entry) =>
+			entry.type === 'custom' ? [{ type: entry.customType, data: entry.data }] : [],
+		);
+	}
+
+	async crash(): Promise<void> {
+		this.ctx.abort('the demo takes the room while the seats work');
+	}
+}
+
+export { SeatObject };
 
 const PEOPLE = [priya, sam, dan];
 
@@ -48,7 +69,7 @@ const json = (body: unknown, status = 200) =>
 	});
 
 /** The one room this worker serves, by the name its composition carries. */
-function room(env: Env) {
+function room(env: DemoEnv) {
 	return env.ROOM.get(env.ROOM.idFromName(ROOM_NAME));
 }
 
@@ -58,8 +79,13 @@ function personOf(name: string) {
 	return { name: person.name, identity: person.identity, preferences: person.preferences };
 }
 
+/** The bindings this worker holds: the room is the demo's own subclass. */
+interface DemoEnv extends Omit<Env, 'ROOM'> {
+	ROOM: DurableObjectNamespace<DemoRoom>;
+}
+
 /** The room object as the worker holds it: what `ROOM.get` hands back. */
-type RoomStub = ReturnType<Env['ROOM']['get']>;
+type RoomStub = DurableObjectStub<DemoRoom>;
 
 /** One route: the method and path it answers, and what it does to the room. */
 type Route = (stub: RoomStub, request: Request, url: URL) => Promise<unknown>;
@@ -93,10 +119,17 @@ const ROUTES: Record<string, Route> = {
 		return stub.messages(since === null ? undefined : Number(since));
 	},
 	'GET /seats': async (stub) => stub.seats(),
+	'GET /log': async (stub) => stub.log(),
+	'POST /crash': async (stub) => {
+		// The object goes away without answering: the call it never finishes is
+		// the crash, so the demo reads this failure as the room going down.
+		await stub.crash().catch(() => {});
+		return { crashed: ROOM_NAME };
+	},
 	'GET /exchange': async (stub) => (await stub.exchange()) ?? null,
 };
 
-async function route(request: Request, env: Env): Promise<Response> {
+async function route(request: Request, env: DemoEnv): Promise<Response> {
 	const url = new URL(request.url);
 	const taken = ROUTES[`${request.method} ${url.pathname}`];
 	if (taken === undefined) return json({ routes: Object.keys(ROUTES) }, 404);
@@ -104,7 +137,7 @@ async function route(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-	async fetch(request: Request, env: Env): Promise<Response> {
+	async fetch(request: Request, env: DemoEnv): Promise<Response> {
 		try {
 			return await route(request, env);
 		} catch (error) {

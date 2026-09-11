@@ -70,6 +70,10 @@ workerd, which is the only place the objects it declares exist.
 `examples/site` opens the same room three ways: `pnpm start` in a
 terminal, `pnpm demo` as one run that crashes and resumes, and
 `pnpm dev:cloudflare` as Durable Objects under wrangler's local workerd.
+`pnpm demo:cloudflare` drives that worker and drops the room object while
+the seats work, which the run on Node cannot stage: one process holds the
+room and every seat there. The two demos write two reports, and
+`demos/README.md` says what each one proves.
 The products, the specialists, the people and the assistant come from one
 `room.ts` in all three. The room reads no file at run time: `pnpm seed`
 writes `drive/` into `src/drive-seed.ts`, and the example's `test` task
