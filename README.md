@@ -6,7 +6,7 @@ human-facing assistant.**
 [ambionframework.com](https://ambionframework.com) · [worked demos](demos) ·
 [design contracts](docs)
 
-Ambion is for applications assembled from multiple domain agents: one for 
+Ambion is for applications assembled from multiple domain agents: one for
 scheduling, one for inventory, one for compliance, or whatever the application
 owns. Each keeps its own context, model, tools, workspace, and team. One
 assistant owns the human-facing conversation, selects relevant specialists
