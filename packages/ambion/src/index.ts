@@ -98,6 +98,7 @@ export type {
 export { isPresence, isSpoken, isSummary } from './types.ts';
 export type {
 	ActivationView,
+	CheckpointRow,
 	CloseRow,
 	Commit,
 	CommitResponse,
@@ -106,8 +107,10 @@ export type {
 	Hand,
 	Intent,
 	Lease,
+	LeaseHold,
 	LeaseResponse,
 	LeaseRow,
+	RunRow,
 	SeatPort,
 	SeatRoom,
 	SeatRow,

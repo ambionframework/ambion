@@ -167,6 +167,14 @@ words on the record. The room hands them to the model, and the model
 decides what to add. A scripted model stands down; a real one is held
 by its instructions.
 
+**What one platform gives.** `packages/cloudflare` holds a room in one
+Durable Object, over the core's SQLite storage on the object's own
+`ctx.storage.sql`. The platform gives one instance per id, and the object
+resumes in its constructor, so the room's writer and its storage share a
+lifetime. An instance the platform took away is fenced by the resume's run
+row, and its late write is void. The storage refuses an append the record
+moved under, so that write is refused rather than acknowledged.
+
 ## 6. What a host must do
 
 - Retry a delivery it never heard back on under the same key.

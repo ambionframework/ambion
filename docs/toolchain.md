@@ -18,7 +18,8 @@ deliberate departures noted in [§10](#10-departures-from-flue).
 ambion/
 ├── packages/
 │   ├── ambion/            @ambionframework/ambion   — the runtime library
-│   └── cli/               @ambionframework/cli      — the `ambion` binary
+│   ├── cli/               @ambionframework/cli      — the `ambion` binary
+│   └── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
 ├── examples/
 │   └── site/              the runnable example: a multi-agent room
 ├── scripts/
@@ -35,14 +36,16 @@ ambion/
 └── pnpm-workspace.yaml    packages/*, examples/*
 ```
 
-**Rule.** `packages/*` is publishable. `examples/*` is private and exists to
-be run. `examples/site` is the runnable example; the gate type-checks it with
+**Rule.** `packages/*` is publishable, except `packages/cloudflare`, which
+is `private` and exists to be run on a platform. `examples/*` is private and
+exists to be run. `examples/site` is the runnable example; the gate type-checks it with
 everything else, so an example that breaks fails the build.
 
 ### Package graph
 
 ```
-@ambionframework/cli  ──depends on──▶  @ambionframework/ambion
+@ambionframework/cli         ──depends on──▶  @ambionframework/ambion
+@ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion
 ```
 
 Internal dependencies use `workspace:*` and are rewritten to the published
@@ -58,6 +61,11 @@ if the workspace protocol does not resolve.
 [`workspace.md`](workspace.md) are its contracts.
 `@ambionframework/cli` is the `ambion` binary; it currently reports its
 version and nothing else.
+`@ambionframework/cloudflare` runs a room as Durable Objects: one object
+holds the room over the core's SQLite storage on `ctx.storage.sql`, one
+holds each seat and runs one activation inside one alarm, and RPC is the
+wire. It publishes nothing and deploys nowhere; its tests run inside
+workerd, which is the only place the objects it declares exist.
 
 ### The core's layers
 
