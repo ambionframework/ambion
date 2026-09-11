@@ -80,11 +80,10 @@ export class SeatObject extends DurableObject<Env> {
 		const room = await this.ctx.storage.get<string>('room');
 		const seat = await this.ctx.storage.get<string>('seat');
 		if (activation === undefined || room === undefined || seat === undefined) return;
-		const stub = this.env.ROOM.get(this.env.ROOM.idFromName(room));
 		const seatRoom: SeatRoom = {
-			view: (id) => stub.view(id),
-			commit: (commit) => stub.commit(commit),
-			lease: (lease) => stub.lease(lease),
+			view: (id) => this.roomStub(room).view(id),
+			commit: (commit) => this.roomStub(room).commit(commit),
+			lease: (lease) => this.roomStub(room).lease(lease),
 		};
 		if ((await this.ctx.storage.get<Phase>('phase')) === 'running') {
 			// A run that never came back: the object was evicted mid-activation.
@@ -109,6 +108,17 @@ export class SeatObject extends DurableObject<Env> {
 			this.actor = undefined;
 			await this.clear();
 		}
+	}
+
+	/**
+	 * A stub for the room, taken for one call. A stub dies with the object it
+	 * names, so an activation that held one across an eviction lost the room
+	 * and wrote nothing: the commit threw, the release threw after it, and the
+	 * lease it holds sat live until it expired. A stub taken per call reaches
+	 * the room that holds the name now, and builds it again when none does.
+	 */
+	private roomStub(room: string) {
+		return this.env.ROOM.get(this.env.ROOM.idFromName(room));
 	}
 
 	private async clear(): Promise<void> {
