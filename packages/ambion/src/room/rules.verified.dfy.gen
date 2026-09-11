@@ -22,19 +22,18 @@ lemma atWork_ensures(since: int, ended: bool, until: int, seq_: int)
 {
 }
 
-function heard(liveOrFailed: bool, since: int, ended: bool, until: int, heardThrough: int, seq_: int): bool
+function heard(liveOrFailed: bool, ended: bool, until: int, heardThrough: int, seq_: int): bool
 {
   if liveOrFailed then
-    (atWork(since, ended, until, seq_) || (since >= seq_))
+    (!(ended) || (seq_ <= until))
   else
     (seq_ <= heardThrough)
 }
 
-lemma heard_ensures(liveOrFailed: bool, since: int, ended: bool, until: int, heardThrough: int, seq_: int)
-  ensures (!(liveOrFailed) ==> (heard(liveOrFailed, since, ended, until, heardThrough, seq_) <==> (seq_ <= heardThrough)))
-  ensures (liveOrFailed ==> (since >= seq_) ==> heard(liveOrFailed, since, ended, until, heardThrough, seq_))
-  ensures (liveOrFailed ==> !(ended) ==> (since < seq_) ==> heard(liveOrFailed, since, ended, until, heardThrough, seq_))
-  ensures (!(liveOrFailed) ==> (seq_ > heardThrough) ==> !(heard(liveOrFailed, since, ended, until, heardThrough, seq_)))
+lemma heard_ensures(liveOrFailed: bool, ended: bool, until: int, heardThrough: int, seq_: int)
+  ensures (!(liveOrFailed) ==> (heard(liveOrFailed, ended, until, heardThrough, seq_) <==> (seq_ <= heardThrough)))
+  ensures (liveOrFailed ==> !(ended) ==> heard(liveOrFailed, ended, until, heardThrough, seq_))
+  ensures (liveOrFailed ==> ended ==> (heard(liveOrFailed, ended, until, heardThrough, seq_) <==> (seq_ <= until)))
 {
 }
 

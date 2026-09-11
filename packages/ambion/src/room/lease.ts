@@ -221,14 +221,19 @@ const atWork = (lease: LeaseState, seq: Seq): boolean =>
 
 /**
  * The lease heard the message. A lease that runs or came to nothing heard
- * every message it was at work for, and every one its view held. A lease
- * that stood down heard what its last renewal confirmed: a message that
- * landed between that renewal and the release reached no activation.
+ * every message through its end, whether it was at work for the message or
+ * the message landed before it claimed: its view held the record either
+ * way. A lease that stood down heard what its last renewal confirmed: a
+ * message that landed between that renewal and the release reached no
+ * activation.
+ *
+ * The rule reads `until` alone, because `foldLeases` holds every lease to
+ * `until >= since`: an end row lands at or after the first row, and `after`
+ * only grows.
  */
 const heard = (lease: LeaseState, seq: Seq): boolean =>
 	heardRule(
 		lease.phase === 'running' || cameToNothing(lease),
-		lease.since,
 		lease.until !== undefined,
 		lease.until ?? 0,
 		lease.heardThrough,
