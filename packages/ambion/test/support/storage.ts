@@ -105,6 +105,12 @@ export const sqlite: Storage = {
 
 export const storages: readonly Storage[] = [memory, jsonl, sqlite];
 
+/** The storages a room in a process of its own opens over one directory, by name. */
+export function childSessions(name: string, dir: string): SessionOpener {
+	if (name === 'sqlite') return sqliteSessions(nodeSql(new DatabaseSync(join(dir, 'room.db'))));
+	return jsonlSessions(dir);
+}
+
 // -- workspace backends ------------------------------------------------------
 
 export interface Backend {

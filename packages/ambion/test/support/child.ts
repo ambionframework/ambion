@@ -1,11 +1,11 @@
 /**
  * A room in a process of its own, for the test that kills it. It runs the
- * chaos scenario on a JSONL storage over the directory it is given, on the
- * system clock, with short leases, and prints one line per append the
- * room's log takes. The parent kills it at the line it chose, then resumes
- * the name over the same directory.
+ * chaos scenario over the directory it is given, on the storage it is
+ * named, on the system clock, with short leases, and prints one line per
+ * append the room's log takes. The parent kills it at the line it chose,
+ * then resumes the name over the same directory.
  *
- *   node --experimental-transform-types child.ts <dir> <name> <delay-ms>
+ *   node --experimental-transform-types child.ts <dir> <name> <delay-ms> <storage>
  */
 import { createRuntime, startSession, visitSession } from '../../src/index.ts';
 import {
@@ -20,12 +20,14 @@ import {
 	TIMING,
 } from './cast.ts';
 import { scripted } from './scripted.ts';
-import { jsonlSessions, tappedOpener } from './storage.ts';
+import { childSessions, tappedOpener } from './storage.ts';
 
-const [dir, name, delay] = process.argv.slice(2);
-if (dir === undefined || name === undefined) throw new Error('usage: child.ts <dir> <name> <ms>');
+const [dir, name, delay, storage] = process.argv.slice(2);
+if (dir === undefined || name === undefined) {
+	throw new Error('usage: child.ts <dir> <name> <ms> <storage>');
+}
 
-const sessions = tappedOpener(jsonlSessions(dir), (id, n, phase) => {
+const sessions = tappedOpener(childSessions(storage ?? 'jsonl', dir), (id, n, phase) => {
 	if (id === name && phase === 'after') process.stdout.write(`write ${n}\n`);
 });
 const runtime = createRuntime({ sessions, agents, ...TIMING });
