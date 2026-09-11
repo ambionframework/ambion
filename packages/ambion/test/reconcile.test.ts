@@ -50,6 +50,7 @@ const fold = (entries: LogEntry[]): RoomState => foldRoom(entries, retry);
 const options = (over: Partial<DecideOptions> = {}): DecideOptions => ({
 	now: T0,
 	resend: 5_000,
+	attempts: retry.attempts,
 	sentAt: () => undefined,
 	stopped: false,
 	...over,
@@ -168,13 +169,25 @@ describe('decide', () => {
 		expect(decide(once, options({ now: T0 + 31_000 })).sends).toEqual([
 			{ id: 'close:4:2', seat: 'assistant' },
 		]);
-		// at the cap the draft is owed no longer: nothing is sent, and no alarm waits on it
+		// at the cap the room gives up: it writes the attempt it does not make,
+		// sends nothing, and waits on nothing
 		const capped = fold([...owed, failed(2, T0 + 40_000), failed(3, T0 + 100_000)]);
-		expect(capped.owed).toEqual([]);
+		expect(capped.owed).toMatchObject([{ person: 'priya', attempts: 3 }]);
 		expect(decide(capped, options({ now: T0 + 1_000_000 }))).toMatchObject({
+			abandoned: [{ id: 'close:4:4', phase: 'ended', reason: 'abandoned' }],
+			close: undefined,
 			sends: [],
 			alarmAt: undefined,
 		});
+		// the row answers the close: the room owes nothing more, and says so once
+		const gaveUp = fold([
+			...owed,
+			failed(2, T0 + 40_000),
+			failed(3, T0 + 100_000),
+			lease({ id: 'close:4:4', phase: 'ended', reason: 'abandoned', at }),
+		]);
+		expect(gaveUp.owed).toEqual([]);
+		expect(decide(gaveUp, options({ now: T0 + 1_000_000 })).abandoned).toEqual([]);
 	});
 
 	it('wakes the seat again after a lease that came to nothing, and stops at the cap', () => {
@@ -216,16 +229,32 @@ describe('decide', () => {
 			ended('3:product', 'released', T0 + 1_000),
 		]);
 		expect(stood.pending).toEqual([]);
-		// at the cap the wake is pending no longer: the exchange closes
-		const capped = fold([
+		// at the cap the room gives up: it writes the attempt it does not make,
+		// and holds the close for the fold that carries the row
+		const tried = [
 			...opened(),
 			ended('2:product', 'failed', T0 + 1_000),
 			ended('2:product:2', 'failed', T0 + 40_000),
 			ended('2:product:3', 'expired', T0 + 100_000),
+		];
+		const capped = fold(tried);
+		expect(capped.pending).toMatchObject([{ id: '2:product:4', attempts: 3 }]);
+		expect(decide(capped, options({ now: T0 + 100_000 }))).toMatchObject({
+			abandoned: [{ id: '2:product:4', phase: 'ended', reason: 'abandoned' }],
+			close: undefined,
+			sends: [],
+		});
+		// the row answers the wake: nothing works on the exchange, so it closes
+		const gaveUp = fold([
+			...tried,
+			lease({ id: '2:product:4', phase: 'ended', reason: 'abandoned', at }, 2),
 		]);
-		expect(capped.pending).toEqual([]);
-		expect(working(capped, T0 + 100_000)).toBe(false);
-		expect(decide(capped, options({ now: T0 + 100_000 })).close).toMatchObject({ through: 2 });
+		expect(gaveUp.pending).toEqual([]);
+		expect(working(gaveUp, T0 + 100_000)).toBe(false);
+		expect(decide(gaveUp, options({ now: T0 + 100_000 }))).toMatchObject({
+			abandoned: [],
+			close: { through: 2 },
+		});
 		// a seat the host unseated answers nothing: what it was sent is not pending
 		const unseated = fold([
 			...opened(),
@@ -328,6 +357,7 @@ describe('decide', () => {
 		]);
 		expect(decide(state, options({ stopped: true }))).toEqual({
 			expired: [],
+			abandoned: [],
 			close: undefined,
 			sends: [],
 			alarmAt: undefined,

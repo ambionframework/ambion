@@ -96,6 +96,12 @@ heard. They are the ones it was at work for, and the ones its view held
 because it was claimed after them. A lease answers them while it runs
 and once it stood down, through the seq its last renewal confirmed.
 
+**The room says when it gives up.** At the cap the room writes the
+attempt it does not make, ended `abandoned`, and the host hears an
+`abandoned` event. The row answers the wake or the close it stood for, so
+no reader sees the room still owing it, and the record says the room
+stopped trying.
+
 **A lease that came to nothing answers nothing.** A lease that expired
 or failed leaves every message it heard pending again, whatever it said.
 Its words stay on the record, and the seat reads them at the next

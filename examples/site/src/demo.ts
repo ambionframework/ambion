@@ -153,6 +153,9 @@ function narrate(event: SessionEvent): void {
 		process.stderr.write(`  — ${owner}'s exchange closed (${from}–${through})\n`);
 	}
 	if (event.type === 'error') process.stderr.write(`! ${event.agent}: ${event.error.message}\n`);
+	if (event.type === 'abandoned') {
+		process.stderr.write(`! the room gave up on ${event.agent} (${event.activation})\n`);
+	}
 }
 
 /**

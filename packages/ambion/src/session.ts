@@ -37,7 +37,7 @@ import { type Committed, type LogEntry, RoomLog } from './log/log.ts';
 import { renderLine } from './render.ts';
 import { assertAssistant } from './room/assistant.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
-import { activationId, isExpired, isLive, parseId, seatOf } from './room/lease.ts';
+import { activationId, isExpired, isLive, type LeaseState, parseId, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { type Decision, decide, liveSeats, working } from './room/reconcile.ts';
 import { type RoomFacts, seatsOf, viewOf } from './room/view.ts';
@@ -308,7 +308,7 @@ class StaleError extends Error {}
 const stale = (why: string) => ({ stale: why });
 
 /** The reasons that end an activation before it starts. */
-const WRITES_OFF: ReadonlySet<EndReason> = new Set(['revoked']);
+const WRITES_OFF: ReadonlySet<EndReason> = new Set(['revoked', 'abandoned']);
 
 /** How many times one pass folds, decides and writes before it yields. */
 const PASSES = 8;
@@ -863,7 +863,14 @@ class SessionImpl implements Session, RunningRoom {
 			void this.reconcile();
 			return;
 		}
-		if (first) return;
+		if (first) {
+			// A row that ends a lease the log never held is an attempt nobody made.
+			if (lease.reason === 'abandoned') {
+				this.emit({ type: 'abandoned', agent: seat, activation: lease.id });
+				void this.reconcile();
+			}
+			return;
+		}
 		const spoke = this.log.messages.some((m) => m.activationId === lease.id);
 		this.emit({ type: 'activation_end', agent: seat, spoke });
 		if (lease.reason === 'expired') {
@@ -1113,6 +1120,8 @@ class SessionImpl implements Session, RunningRoom {
 	 * End one lease, for whatever reason. Nothing to end is not an error. A
 	 * revocation may name an activation that never claimed: the row ends it
 	 * before it starts, and the wake or the draft it stood for is answered.
+	 * An abandonment names an activation that never claimed and nothing else:
+	 * a lease that started ends how it went.
 	 * An expiry is judged where the row is written: a renewal that landed
 	 * ahead of it keeps the lease, and the row is not written. The row says
 	 * how the activation went, and `heardLease` says so once.
@@ -1120,12 +1129,22 @@ class SessionImpl implements Session, RunningRoom {
 	private end(id: string, reason: EndReason): Promise<boolean> {
 		return this.log.write('lease', () => {
 			const known = this.state().leases.get(id);
-			if (known?.phase === 'ended') return undefined;
-			if (known === undefined && !WRITES_OFF.has(reason)) return undefined;
-			const expired = known !== undefined && isExpired(known, this.now());
-			if (known !== undefined && expired !== (reason === 'expired')) return undefined;
+			if (!this.ends(known, reason)) return undefined;
 			return { id, phase: 'ended', reason, at: this.iso() };
 		});
+	}
+
+	/**
+	 * Whether the row lands. A lease the log never held takes a row that
+	 * writes an activation off. A lease that already ended takes no second
+	 * row, and neither takes an abandonment. An expiry is judged here: a
+	 * renewal that landed ahead of it keeps the lease, and every other
+	 * reason needs a lease that still holds.
+	 */
+	private ends(known: LeaseState | undefined, reason: EndReason): boolean {
+		if (known === undefined) return WRITES_OFF.has(reason);
+		if (known.phase === 'ended' || reason === 'abandoned') return false;
+		return isExpired(known, this.now()) === (reason === 'expired');
 	}
 
 	// -- reconcile ----------------------------------------------------------------
@@ -1150,6 +1169,7 @@ class SessionImpl implements Session, RunningRoom {
 			const decision = decide(this.state(), {
 				now: this.now(),
 				resend: this.runtime.wake.resend,
+				attempts: this.runtime.retry.attempts,
 				sentAt: (id) => this.sentAt.get(id),
 				stopped: this.stopped,
 			});
@@ -1185,10 +1205,11 @@ class SessionImpl implements Session, RunningRoom {
 	/** Write what the decision wrote, send what it sent. True when anything changed. */
 	private async apply(decision: Decision): Promise<boolean> {
 		let changed = false;
-		for (const expired of decision.expired) {
+		// The decision says how each lease ends: expired first, then given up on.
+		for (const row of [...decision.expired, ...decision.abandoned]) {
 			// A room that went away mid-pass writes nothing more of what it decided.
 			if (this.gone()) return changed;
-			changed = (await this.end(expired.id, 'expired')) || changed;
+			changed = (await this.end(row.id, row.reason)) || changed;
 		}
 		if (decision.close && !this.gone()) changed = (await this.close(decision.close)) || changed;
 		for (const send of decision.sends) this.send(send.id, send.seat);

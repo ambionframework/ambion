@@ -200,6 +200,78 @@ describe('a lease', () => {
 		held.resolve();
 	});
 
+	it('gives up on a wake at the cap, writes the attempt it does not make, and closes', async () => {
+		const { session, clock, runtime } = open([], () => {
+			throw new Error('the model failed');
+		});
+		const events = collect(session);
+		const visit = await enter(session);
+		await visit.deliver({ text: 'answer me' });
+		await tick();
+		// the first attempt failed; the second and the third fail after their backoffs
+		await clock.advance(30_000);
+		await clock.advance(60_000);
+		await session.quiet();
+		expect(events.filter((e) => e.type === 'error')).toHaveLength(3);
+
+		// the room gives up: the attempt it does not make is on the record, once
+		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
+			{ type: 'abandoned', agent: 'solo', activation: '2:solo:4' },
+		]);
+		const rows = await rowsOf(runtime.sessions, session.name);
+		const gaveUp = rows.filter((row) => {
+			const lease = row.data as LeaseRow;
+			return row.type === 'ambion/lease' && lease.phase === 'ended' && lease.reason === 'abandoned';
+		});
+		expect(gaveUp.map((row) => (row.data as LeaseRow).id)).toEqual(['2:solo:4']);
+
+		// the wake is answered, so the exchange closes and the seat stands idle
+		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
+		expect(session.exchange()).toBeUndefined();
+		expect(session.seats().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
+		// and the room stays that way: no fourth attempt starts, whatever the clock does
+		await clock.advance(600_000);
+		await session.quiet();
+		expect(starts(events)).toBe(3);
+	});
+
+	it('gives up on a summary at the cap, and the range stays whole for every reader', async () => {
+		const { session, clock, runtime } = open(
+			[],
+			byAgent({
+				solo: says(['I answered.', 'And again.']),
+				assistant: (context) => {
+					if (!toolNames(context).includes('summarise')) return quiet();
+					throw new Error('the model failed');
+				},
+			}),
+		);
+		const events = collect(session);
+		const visit = await enter(session);
+		await visit.deliver({ text: 'answer me' });
+		await session.quiet();
+		// the close owes a summary, and the first draft failed
+		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
+		await clock.advance(30_000);
+		await clock.advance(60_000);
+		await session.quiet();
+		expect(events.filter((e) => e.type === 'error')).toHaveLength(3);
+
+		// the room gives up on the summary, and says so once
+		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
+			{ type: 'abandoned', agent: 'assistant', activation: 'close:4:4' },
+		]);
+		const rows = await rowsOf(runtime.sessions, session.name);
+		expect(
+			rows.filter((row) => (row.data as LeaseRow).id === 'close:4:4').map((row) => row.data),
+		).toMatchObject([{ phase: 'ended', reason: 'abandoned' }]);
+		// nothing is owed, no summary was written, and the record stands whole
+		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
+		await clock.advance(600_000);
+		await session.quiet();
+		expect(events.filter((e) => e.type === 'abandoned')).toHaveLength(1);
+	});
+
 	it('refuses a commit from an activation whose renewals were lost past the expiry', async () => {
 		const held = deferred();
 		// the claim goes through; the one renewal before the expiry is lost
