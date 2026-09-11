@@ -1077,7 +1077,9 @@ class SessionImpl implements Session, RunningRoom {
 	 * due: the next attempt at a pending wake, or at an owed draft. Anything
 	 * else was answered already, and a second run of it would answer twice.
 	 * The clock is read where the row is written: a renewal that waited on
-	 * the queue is judged against the lease as it stands then.
+	 * the queue is judged against the lease as it stands then. No lease runs
+	 * past the deadline: the expiry a claim or a renewal takes is capped
+	 * there, so an activation that runs on expires on the room's alarm.
 	 */
 	private async claim(id: string): Promise<LeaseResponse> {
 		let expiry = 0;
@@ -1087,7 +1089,8 @@ class SessionImpl implements Session, RunningRoom {
 			const now = this.now();
 			if (known === undefined && (this.stopped || !this.due(state).has(id))) return undefined;
 			if (known !== undefined && !isLive(known, now)) return undefined;
-			expiry = now + this.runtime.wake.expiry;
+			const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
+			expiry = Math.min(now + this.runtime.wake.expiry, claimedAt + this.runtime.wake.deadline);
 			return { id, phase: 'running', expiry, at: this.iso() };
 		});
 		if (!written) return stale('the lease ended');

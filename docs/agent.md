@@ -637,7 +637,11 @@ a reason — `released`, `failed`, `refused`, `revoked` or `expired`. A
 request from an activation whose lease ended is refused as `stale`. A
 running lease that stops renewing expires on the room's alarm: the room
 reports the expiry as an `error` event, and the seat's next request is
-refused. What landed while an activation worked and whether it left a
+refused. No lease runs past `runtime.wake.deadline` from its claim, ten
+minutes by default: the room caps every claim and every renewal there,
+the seat cuts the activation when a renewal moves the expiry nowhere,
+and the room counts an activation that runs on as one that came to
+nothing. What landed while an activation worked and whether it left a
 mark belong to the activation and end with it. Rule 5's `readThrough` is
 an activation's fact.
 

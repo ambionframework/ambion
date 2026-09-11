@@ -266,10 +266,11 @@ export class SeatActor implements SeatPort {
 	/**
 	 * Renew at half the expiry, for as long as the activation runs and the
 	 * room renews it. A refused renewal cuts the activation now: its lease
-	 * ended, so nothing it writes lands. A renewal that never reached the
-	 * room leaves the lease to expire where it stands, and the actor cuts
-	 * the activation at that expiry, when the room expires the lease. The
-	 * cancel stops the loop for good: a renewal in flight when the
+	 * ended, so nothing it writes lands. A renewal that moves the expiry
+	 * nowhere says the lease reached its deadline, and one that never
+	 * reached the room leaves the lease to expire where it stands: the actor
+	 * cuts the activation at that expiry, when the room expires the lease.
+	 * The cancel stops the loop for good: a renewal in flight when the
 	 * activation ends arms nothing when it comes back.
 	 */
 	private renewUntil(current: Current, firstExpiry: number): () => void {
@@ -287,6 +288,7 @@ export class SeatActor implements SeatPort {
 			if (stopped) return;
 			if (renewed === 'stale') cut();
 			else if (renewed === 'lost') cancel = clock.alarm(held, cut);
+			else if (renewed <= held) cancel = clock.alarm(renewed, cut);
 			else schedule(renewed);
 		};
 		schedule(firstExpiry);

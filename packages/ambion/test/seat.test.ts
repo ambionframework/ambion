@@ -48,6 +48,8 @@ class PlayedRoom implements SeatRoom {
 	refuseRenewals = false;
 	/** Every renewal from now on never reaches the room. */
 	loseRenewals = false;
+	/** Every renewal from now on moves the expiry nowhere: the lease reached its deadline. */
+	capRenewals: number | undefined;
 
 	constructor(private readonly clock: Clock) {}
 
@@ -78,7 +80,8 @@ class PlayedRoom implements SeatRoom {
 				return ok;
 			}
 			if (this.loseRenewals) throw new Error('the renewal never reached the room');
-			return this.refuseRenewals ? { stale: 'the lease ended' } : ok;
+			if (this.refuseRenewals) return { stale: 'the lease ended' };
+			return this.capRenewals === undefined ? ok : { ok: { expiry: this.capRenewals, lastSeq: 1 } };
 		}
 		if (this.releases.length === 0) {
 			this.releasing.resolve();
@@ -206,6 +209,23 @@ describe('a seat actor', () => {
 		// the renewal is lost, so the room expires the lease where it stands: the
 		// actor waits for that expiry and cuts the activation there, not before
 		room.loseRenewals = true;
+		await tick();
+		await clock.advance(31_000);
+		expect(room.releases).toEqual([]);
+		await clock.advance(30_000);
+		await ran;
+		expect(room.releases).toEqual(['1:product']);
+	});
+
+	it('cuts the activation at the deadline, when a renewal moves the expiry nowhere', async () => {
+		const { room, actor, clock } = play(deaf);
+		room.letGo.resolve();
+		const deadline = clock.now() + 60_000;
+		const ran = actor.run('1:product');
+		await until(() => room.claims.length === 1);
+		// the room renews no further: the lease reached its deadline, and the
+		// actor cuts the activation there, not at the renewal that said so
+		room.capRenewals = deadline;
 		await tick();
 		await clock.advance(31_000);
 		expect(room.releases).toEqual([]);
