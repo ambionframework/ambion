@@ -1,8 +1,7 @@
 # Backlog
 
 Two kinds of work, in one file. The first part holds architectural debt in
-what is built, found in the review of 2026-09-03 on the head that seats
-agents from a reserve. Every item names what it is, what it costs, where it
+what is built. Every item names what it is, what it costs, where it
 lives, and the smallest change that removes it, and the items sit in order
 of cost. The second part holds design work a branch decided not to do, and
 why it is worth doing. The design contracts in [`../docs/`](../docs) hold
@@ -12,15 +11,6 @@ the open questions about a design; this file holds the work.
 ## Part one: debt in what is built
 
 ## Runtime module boundaries
-
-### 1. The room is a process global — closed
-
-`host/runtime.ts` holds the clock, the session opener, the model call,
-the catalog, the rooms that run and the workspace names that are taken.
-`startSession`, `readSession` and `defineWorkspace` take a `Runtime` and
-default to `defaultRuntime`, the one process-wide value. The default model
-call alone reads `process.env`; a runtime with its own `stream` reads
-nothing. `test/runtime.test.ts` proves two runtimes never see each other.
 
 ### 2. Nothing bounds the record, and the room rescans it per message
 
@@ -41,23 +31,9 @@ without limit. `docs/agent.md` §8 says Ambion owns no context window, and
 term: a window policy on `RoomView.record`, and a decision in the
 contract about which module owns it.
 
-### 3. `session.ts` holds four jobs — closed, with a remainder
+### 3. `session.ts` holds four jobs
 
-**What was done.** The commit path lives in `log/log.ts`. The three tools,
-`say`, `summarise` and `seat`, live in `seat/hands.ts`, and the seat side
-of the wire runs an activation in `seat/seat.ts`. Every fact the room held
-in memory is a fold in `room/fold.ts`, the decision is
-`room/reconcile.ts`, and what an activation reads is `room/view.ts`. The
-reserve is a fold, so it needs no module.
-
-The room now has one reaction per log entry. The log calls `hear` for
-every entry it takes after the replay, whether this run appended it or a
-read found it, so `committed` and `heard` are one function and the
-emissions that sat inside `end`, `close` and `claim` are gone. Those three
-are writes and nothing else, and no caller threads a seat name into a
-write to name the event it causes.
-
-**What is left.** `session.ts` holds compose, route, hear, the seat's
+**What.** `session.ts` holds compose, route, hear, the seat's
 three calls (`view`, `commit`, `lease`) and the reconcile glue, and it is
 over the 600 lines `next.md` asked for. The seat's three calls are the
 next piece to move: an `answers.ts` over a narrow interface on the room
@@ -86,12 +62,6 @@ this tree, and `docs/toolchain.md` §3 says nothing in the tree needs one.
 
 **Fix.** Make `registry()` a dynamic import, or move default provider
 resolution to the host. `streamFn` is already the extension surface.
-
-### 5. `defineAgent` imports the shell runtime — closed
-
-`BUILTIN_TOOL_NAMES` lives in `types.ts`, and the vocabulary imports
-nothing that does anything: Biome refuses it
-([`docs/toolchain.md`](../docs/toolchain.md) §1).
 
 ### 6. Two copies of typebox
 
@@ -207,6 +177,23 @@ build again.
 Node-only surface: `directoryBackend`, the JSONL storage, and whatever
 else needs a disk. Then a build check that the main entry bundles for
 workerd with no compatibility flag.
+
+### 45. The resume has no live proof
+
+**What.** Every tier that proves a resume runs on a scripted model. The
+room on a real model is proved for an exchange and a summary, and for
+nothing that fails: no live test kills a room mid-activation and watches
+the seat answer again after the backoff. This is what PR 48's plan called
+PR 7's remainder, and the last piece of that plan still open.
+
+**Where.** `packages/ambion/test/live/`. The runtime side is on `main`;
+the two test files are on the branch tagged `split-source`.
+`test/live/support.ts` may need the fake clock the kill test uses, so the
+wait for an expiry does not cost sixty real seconds.
+
+**Fix.** `test/live/resume.test.ts`: a room on a real model dies
+mid-activation, a second runtime resumes it, and the seat answers again.
+It needs a provider key and costs money, so it runs in the live tier.
 
 ## Docs, tests, and generated artifacts
 
@@ -364,19 +351,6 @@ seat context averaging 3,800 in the example — 13%, spent describing seats
 that cannot be addressed. One seat per room cuts that to one line, and the
 example's `identity` for it is one sentence. Worth re-measuring once the
 assistant speaks.
-
-### 18. A test for the owed-summary merge — closed
-
-Who is owed is a fold (`foldOwed` in `room/fold.ts`): a later close by the
-same person joins the draft, and one message reaches back to the earliest
-question still owed. `restart.test.ts` pins it, on both storages, across a
-crash.
-
-### 19. Exchanges are run state — closed
-
-An exchange is a fold over the log: the open one is the first question
-after the last close row, and every close is a row beside the messages.
-See [`docs/exchange.md`](../docs/exchange.md) §5.
 
 ### 20. A second non-seat writer
 
@@ -572,15 +546,9 @@ definitions, and the catalog serves the out-of-process case alone. Either
 way, a definition digest on the composition row and the claim lets a seat
 tell that it runs the definition the room seated.
 
-### 27. Lease rows grow with every activation — closed, with a remainder
+### 27. A fold still grows with the room, in three places
 
-Every `runtime.checkpoint.rows` rows the room writes an
-`ambion/checkpoint`: the composition, the closes and the leases a later
-fold still reads, behind a floor below which every wake was answered. The
-log drops the rows the checkpoint replaced, so what a fold costs is the
-rows since the last checkpoint, whatever the room's age.
-
-**The remainder.** Three costs stand. The messages still grow without
+**What.** Three costs stand. The messages still grow without
 bound, and every fold reads them all: item 2 holds that. A replay still
 reads every entry the storage holds, because a checkpoint trims the cache
 and never the storage; only the steady-state fold is bounded. And the log
@@ -602,15 +570,9 @@ returning visit under a new identity is refused.
 everyone it does not hold a connection for. The runtime keeps no clock over
 a visit, and should not start one.
 
-### 29. Three attempts, then the summary or the wake is never tried again — closed, with a remainder
+### 29. The room writes off a close, and no host can ask it again
 
-The fold reports every wake and every draft at the cap, with the attempts
-that reached it, and the cap is the room's decision. `decide` returns the
-attempt the room does not make, ended `abandoned`, and `session.ts`
-writes it. The row answers the wake or the close it stood for, so no
-reader sees the room still owing it. The host hears an `abandoned` event.
-
-**The remainder.** No host verb resets the attempts for one close. A
+**What.** No host verb resets the attempts for one close. A
 person who wants the summary after the room gave up asks again, and the
 next question opens an exchange of its own.
 
@@ -628,16 +590,6 @@ past it; a host on the system clock waits it out.
 `resumeSession(name, { revoke: true })` ends every running lease as
 `revoked` at the first reconcile. A host that does not know keeps the
 expiry.
-
-### 31. A wake a seat at work heard through a steer alone is lost with a crash — closed
-
-The log says who was at work when a message landed: a lease that holds a
-row before it and ends, if it ends, after it (`pendingWakes` in
-`room/lease.ts`). A message such a lease heard is pending again when the
-lease came to nothing, so the seat is woken for it after the backoff.
-`hosts.test.ts` pins it: a crash at every write of a scenario where a
-seat's say wakes a peer, and the peer answers on the next run. The seat
-side still hears a steer in memory; the log carries no `heard`.
 
 ### 32. Opening a name that does not exist creates it
 
@@ -662,39 +614,6 @@ shortest form, and it does not generate from a model of the room.
 **Fix.** A criterion for adopting `fast-check`: the first failure the walk
 finds that takes more than an hour to reduce by hand.
 
-### 34. A wake whose lease expired is never sent again — closed
-
-A lease that expired or failed without a word answers nothing
-(`pendingWakes` in `room/lease.ts`): the wake is pending again under the
-next attempt's id, after the backoff, with the cap the summaries use. The
-chaos sweep holds every answer to exactly once again, and
-`restart.test.ts` pins the seat woken again on the next run. Item 29
-stands for the cap: at three attempts the wake is dropped, and nothing
-says so.
-
-### 35. Two live hosts over one log corrupt it — closed
-
-The run row is the fence (`RoomLog` in `log/log.ts`): every run writes
-it first, every entry carries its writer, an entry of an earlier run past
-a later run's row is void, and a run reads before every write, so it
-learns it lost the name and drops itself with `superseded`.
-`split.test.ts` and `hosts.test.ts` pin it, and `consistency.test.ts`
-cuts a run with an append in flight.
-
-**The remainder is closed on a storage that can refuse.** A session may
-offer `appendAfter`: the log hands it the position its read left, and the
-entry lands next to it or the storage says the record moved and writes
-nothing. The SQLite storage offers it, in one statement that takes the
-seq it asserts. A run fenced while its write waited is refused before it
-acknowledges, so it loses nothing: `split.test.ts` runs the same split on
-both storages and holds each to what it promises.
-
-**What still stands.** A storage that cannot promise the refusal does not
-offer it, and the fence voids what it takes: the run acknowledges the one
-write it held. Pi's JSONL storage reads its own memory, so the fence does
-not reach it at all: JSONL is a storage for one host. A read before every
-write costs a scan of the entries since the last read, on every storage.
-
 ### 36. Every host in the tests shares one clock
 
 **What.** A resumed host whose clock runs ahead of the last run's expires
@@ -716,7 +635,6 @@ The model runs custom tools and workspace tools before that commit. A
 process partitioned from the room keeps running after its lease expired,
 and the next attempt starts while the first still changes files or calls
 an external API. Both attempts can complete the same effect.
-[`planning/findings-distributed.md`](findings-distributed.md) F2.
 
 **Where.** `seat/activation.ts`; `tools/workspace.ts`.
 
@@ -731,7 +649,6 @@ state at-least-once effects.
 that hold functions, catalogs and openers. A seat in another process
 cannot be built from the wire alone, and an agent definition holds tool
 functions that cannot cross JSON.
-[`planning/findings-distributed.md`](findings-distributed.md) F3.
 
 **Where.** `host/runtime.ts`; `seat/seat.ts`.
 
@@ -744,8 +661,7 @@ it. The wire carries identifiers and capability tokens.
 **What.** `SeatActor` holds the current activation, one queued wake,
 the steer queue, the Pi agent and the renewal loop in memory, and the
 room caches one port per seat. Two processes that answer for one seat
-can both start work. [`planning/findings-distributed.md`](findings-distributed.md)
-F4 and F5: the audit log of a seat has no activation id on its rows and
+can both start work. F4 and F5: the audit log of a seat has no activation id on its rows and
 no exclusive writer either.
 
 **Where.** `seat/seat.ts`; the audit session in `seat/activation.ts`.
@@ -759,8 +675,7 @@ on every audit row.
 **What.** The `taken` set and a handle's `destroyed` flag are process
 memory. Two hosts can define the same name, and one can destroy a
 directory another activation uses. The directory backend shares files
-and fences nothing. [`planning/findings-distributed.md`](findings-distributed.md)
-F6.
+and fences nothing.
 
 **Where.** `tools/workspace.ts`; `host/runtime.ts`.
 
@@ -773,7 +688,6 @@ that connect and every mutation present.
 restart loses subscribers, and a client can miss `message`,
 `exchange_closed`, `error` or `quiet` while it reconnects. `settled()`
 and `quiet()` resolve early on a run that is gone.
-[`planning/findings-distributed.md`](findings-distributed.md) F7.
 
 **Where.** `session.ts`.
 
