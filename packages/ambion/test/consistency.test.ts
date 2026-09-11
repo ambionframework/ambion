@@ -126,6 +126,8 @@ class Cluster {
 			clock: this.clock,
 			agents,
 			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
+			// Small on purpose: the history runs over rows a checkpoint replaced.
+			checkpoint: { rows: 4 },
 		});
 	}
 

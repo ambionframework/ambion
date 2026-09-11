@@ -553,22 +553,16 @@ definitions, and the catalog serves the out-of-process case alone. Either
 way, a definition digest on the composition row and the claim lets a seat
 tell that it runs the definition the room seated.
 
-### 27. Lease rows grow with every activation
+### 27. Lease rows grow with every activation — closed, with a remainder
 
-**What.** Every activation writes two lease rows at least: a claim and an
-end, plus one renewal per half expiry. A room that runs for a month holds
-tens of thousands of rows beside a few thousand messages, and every fold
-reads them all.
+Every `runtime.checkpoint.rows` rows the room writes an
+`ambion/checkpoint`: the composition, the closes and the leases a later
+fold still reads, behind a floor below which every wake was answered. The
+log drops the rows the checkpoint replaced, so what a fold costs is the
+rows since the last checkpoint, whatever the room's age.
 
-**Why.** The fold is O(rows) per operation. Item 2 records the same cost
-for messages; leases add the larger term.
-
-**Where.** `foldLeases` in `room/lease.ts`; `RoomLog.replay` in `log/log.ts`.
-
-**Fix.** A lease that ended and that no owed draft counts (an id older than
-the last close) can leave the fold. A checkpoint row that carries the
-folded state up to a seq, written by `reconcile` every N rows, lets the
-replay start from it.
+**The remainder.** The messages still grow without bound, and every fold
+reads them all. Item 2 holds that cost.
 
 ### 28. A person present at a crash stays present until the host returns
 

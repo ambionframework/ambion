@@ -43,6 +43,14 @@ fences every run whose row came before it, even when its own run is
 gone, so a live run can lose the name to a dead one. §5 says what a
 superseded run loses, and where the fence does not reach.
 
+**A checkpoint replaces rows, and never a message.** The room writes one
+every `runtime.checkpoint.rows` rows. It carries the composition, the
+closes and the leases a later fold still reads, behind a floor below
+which every wake was answered. The rows it replaces stay on the storage,
+so a reader that ignores the checkpoint folds the same room from them.
+The fence voids a checkpoint a superseded run wrote, like any other
+entry.
+
 ## 2. What a delivery promises
 
 **Acknowledged: on the record once.** `deliver()` resolves once the

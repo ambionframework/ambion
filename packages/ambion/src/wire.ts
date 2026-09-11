@@ -37,6 +37,30 @@ export type LeaseRow =
 	| { id: string; after: Seq; phase: 'ended'; reason: EndReason; at: string };
 
 /**
+ * What the rows for one activation fold to: whether it runs, until when,
+ * or why it ended, and where on the log each fact landed. A checkpoint
+ * carries these in place of the rows that made them, so the shape crosses
+ * the wire.
+ */
+export interface LeaseHold {
+	id: string;
+	phase: 'running' | 'ended';
+	/** When a running lease expires, in milliseconds since the epoch. */
+	expiry?: number;
+	reason?: EndReason;
+	/** When the last row was written, ISO. */
+	at: string;
+	/** When the first row was written, ISO: the activation runs from here to its deadline. */
+	claimedAt: string;
+	/** The last seq when the first row landed: the activation's view held the record through here. */
+	since: Seq;
+	/** The last seq when the ended row landed, for an ended lease. */
+	until?: Seq;
+	/** The last seq when the last running row landed: the activation confirmed it heard through here. */
+	heardThrough: Seq;
+}
+
+/**
  * A run took the name: the first row every run writes. The row is the
  * fence between runs. Every entry a run writes carries its `run`, and an
  * entry of an earlier run that lands after a later run's row is void.
@@ -45,6 +69,39 @@ export interface RunRow {
 	run: string;
 	after: Seq;
 	at: string;
+}
+
+/**
+ * The room as it stood, in one row. A fold reads a checkpoint as the
+ * composition, the closes and the leases it carries, and nothing older; a
+ * wake on a message below `floor` was answered when the checkpoint was
+ * written. A checkpoint is a cache over the log: the rows it replaces stay
+ * on the storage, and a checkpoint the room cannot read is ignored.
+ */
+export interface CheckpointRow {
+	/** The shape of this row. A checkpoint of another shape is ignored. */
+	v: 1;
+	/** No wake on a message before this seq is pending. */
+	floor: Seq;
+	composition: CompositionRow;
+	closes: CloseRow[];
+	leases: LeaseHold[];
+	after: Seq;
+	at: string;
+}
+
+/** Whether a row read off the log is a checkpoint this room can fold. */
+export function isCheckpoint(row: unknown): row is CheckpointRow {
+	if (typeof row !== 'object' || row === null) return false;
+	const candidate = row as Partial<CheckpointRow>;
+	return (
+		candidate.v === 1 &&
+		typeof candidate.floor === 'number' &&
+		typeof candidate.composition === 'object' &&
+		candidate.composition !== null &&
+		Array.isArray(candidate.closes) &&
+		Array.isArray(candidate.leases)
+	);
 }
 
 /** The room went quiet with an exchange open, and closed it. */

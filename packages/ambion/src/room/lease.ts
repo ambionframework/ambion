@@ -29,7 +29,7 @@
  */
 
 import type { Message, Seq } from '../types.ts';
-import type { EndReason, LeaseRow } from '../wire.ts';
+import type { EndReason, LeaseHold, LeaseRow } from '../wire.ts';
 import {
 	atWork as atWorkRule,
 	expired,
@@ -64,27 +64,23 @@ export function parseId(id: string): ParsedId | undefined {
 	return undefined;
 }
 
-/** The last row for one id: whether it runs, until when, or why it ended, and where on the log. */
-export interface LeaseState {
-	id: string;
-	phase: 'running' | 'ended';
-	/** When a running lease expires, in milliseconds since the epoch. */
-	expiry?: number;
-	reason?: EndReason;
-	/** When the last row was written, ISO. */
-	at: string;
-	/** When the first row was written, ISO: the activation runs from here to its deadline. */
-	claimedAt: string;
-	/** The last seq when the first row landed: the activation's view held the record through here. */
-	since: Seq;
-	/** The last seq when the ended row landed, for an ended lease. */
-	until?: Seq;
-	/** The last seq when the last running row landed: the activation confirmed it heard through here. */
-	heardThrough: Seq;
-}
+/**
+ * The last row for one id: whether it runs, until when, or why it ended,
+ * and where on the log. A checkpoint carries these in place of the rows
+ * that made them, so the shape is the wire's ([`LeaseHold`](../wire.ts)).
+ */
+export type LeaseState = LeaseHold;
 
-export function foldLeases(rows: readonly LeaseRow[]): Map<string, LeaseState> {
-	const leases = new Map<string, LeaseState>();
+/**
+ * Every lease the rows fold to. `held` is what a checkpoint carried: the
+ * rows after it fold onto those, so a lease the checkpoint holds keeps
+ * the seqs and the times its first rows wrote.
+ */
+export function foldLeases(
+	rows: readonly LeaseRow[],
+	held: readonly LeaseHold[] = [],
+): Map<string, LeaseState> {
+	const leases = new Map<string, LeaseState>(held.map((lease) => [lease.id, lease]));
 	for (const row of rows) {
 		const known = leases.get(row.id);
 		// Ended is terminal: a renewal that lands after the end changes nothing.
