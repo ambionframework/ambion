@@ -189,6 +189,25 @@ covers `examples/site`, verified clean with `--workspace examples/site`.
 
 **Fix.** Add an `examples/*` entry so the coverage is declared.
 
+### 44. The core has no platform boundary
+
+**What.** `packages/ambion` has one entry point, and it imports
+`node:crypto`, `node:path` and `node:fs/promises`. A worker bundles it
+only with `nodejs_compat`. `directoryBackend`, which needs a real disk,
+now loads just-bash's `ReadWriteFs` on the first connect, because a
+static import of that name refuses to bundle for any target but Node.
+The dynamic import is a workaround: nothing stops the next Node-only
+import from landing in the same entry point and breaking the workerd
+build again.
+
+**Where.** `packages/ambion/src/tools/just-bash.ts`;
+`packages/ambion/src/host/`; `packages/ambion/package.json` exports.
+
+**Fix.** A second entry point, `@ambionframework/ambion/node`, for the
+Node-only surface: `directoryBackend`, the JSONL storage, and whatever
+else needs a disk. Then a build check that the main entry bundles for
+workerd with no compatibility flag.
+
 ## Docs, tests, and generated artifacts
 
 ### 12. The package README documents the previous API

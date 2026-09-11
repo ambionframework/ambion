@@ -95,7 +95,7 @@ export type {
 	WorkspaceBackend,
 	WorkspaceHandle,
 } from './types.ts';
-export { isPresence, isSpoken, isSummary } from './types.ts';
+export { isPresence, isSeatedAgent, isSpoken, isSummary } from './types.ts';
 export type {
 	ActivationView,
 	CheckpointRow,

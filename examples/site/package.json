@@ -7,13 +7,19 @@
 	"scripts": {
 		"start": "node --env-file-if-exists=.env src/main.ts",
 		"demo": "node --env-file-if-exists=.env src/demo.ts",
-		"check:types": "tsc --noEmit"
+		"dev:cloudflare": "wrangler dev",
+		"seed": "node scripts/drive-seed.mjs",
+		"check:types": "tsc --noEmit",
+		"test": "node scripts/drive-seed.mjs --check"
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
 		"typebox": "^1.3.18"
 	},
 	"devDependencies": {
-		"typescript": "^7.0.2"
+		"typescript": "^7.0.2",
+		"@ambionframework/cloudflare": "workspace:*",
+		"@cloudflare/workers-types": "^5.20260801.0",
+		"wrangler": "^4.124.0"
 	}
 }

@@ -17,13 +17,38 @@ holding the documents the site works to.
 cd examples/site
 echo 'ANTHROPIC_API_KEY=…' > .env   # git ignores it; both scripts read it
 pnpm start                          # open it in your terminal
-pnpm demo                           # one scripted run, captured as JSON
+pnpm demo                           # one run that crashes and comes back, captured as JSON
 ```
 
 `AMBION_MODEL` picks the model every product and the assistant run on. It
 defaults to `anthropic/claude-sonnet-5`. Each run seeds a fresh in-memory
-drive from `drive/`, so the checked-in documents stay as they are between
-runs and nothing on disk changes.
+drive from `drive-seed.ts`, so the checked-in documents stay as they are
+between runs and nothing on disk changes. Edit `drive/` and run `pnpm seed`
+to write that module again.
+
+## The same room on Cloudflare
+
+`worker.ts` runs this room as Durable Objects: one object holds the record
+and the session, one holds each seat. The products, the specialists, the
+people and the assistant come from `room.ts` unchanged.
+
+```sh
+cd examples/site
+echo 'ANTHROPIC_API_KEY=…' > .dev.vars   # git ignores it; wrangler reads it
+pnpm dev:cloudflare                      # workerd on localhost:8787
+
+curl -XPOST localhost:8787/start
+curl -XPOST localhost:8787/visit   -H 'content-type: application/json' -d '{"person":"priya"}'
+curl -XPOST localhost:8787/deliver -H 'content-type: application/json' \
+  -d '{"from":"priya","text":"Can I tell the client Thursday for the Level 3 pour, or not?"}'
+curl localhost:8787/messages
+```
+
+The log lives in the room object's own SQLite, the object's alarm is the
+room's clock, and the room reaches a seat over RPC. Stop the server and
+start it again: `/messages` and `/seats` answer from the log, and the next
+question runs in the new process. `.wrangler/` holds that state; delete it
+to start the room over.
 
 ## What to look for
 
@@ -104,15 +129,18 @@ discussion and the products hold the state.
 
 ## The files
 
-| File      | What                                                                                                            |
-| --------- | --------------------------------------------------------------------------------------------------------------- |
-| `room.ts` | The products and the specialists on call, their APIs and state; the drive they share; the people; the assistant |
-| `main.ts` | The room open in your terminal                                                                                  |
-| `demo.ts` | One scripted run, written out as JSON for a report                                                              |
-| `drive/`  | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary                |
+| File            | What                                                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------------------- |
+| `room.ts`       | The products and the specialists on call, their APIs and state; the drive they share; the people; the assistant |
+| `main.ts`       | The room open in your terminal                                                                                  |
+| `demo.ts`       | One run that crashes and resumes, written out as JSON for a report                                              |
+| `worker.ts`     | The same room as Cloudflare Durable Objects, with the routes that drive it                                      |
+| `drive/`        | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary                |
+| `drive-seed.ts` | `drive/` as one record of path to text. `pnpm seed` writes it; do not edit it                                   |
 
 The contracts are [`docs/agent.md`](../../docs/agent.md),
 [`docs/presence.md`](../../docs/presence.md),
 [`docs/assistant.md`](../../docs/assistant.md),
 [`docs/workspace.md`](../../docs/workspace.md) and
-[`docs/roster.md`](../../docs/roster.md).
+[`docs/roster.md`](../../docs/roster.md) and
+[`docs/durability.md`](../../docs/durability.md).

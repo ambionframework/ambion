@@ -3,21 +3,39 @@
  *
  * The products, the specialists on call, their APIs, the people and the
  * assistant all live in `room.ts`; this file only decides who arrives, what
- * they ask, and when they leave — then writes out the event timeline, every
- * activation with its outcome, whom the assistant seated and what it wrote,
- * and each seat's own downstream session.
+ * they ask, when they leave, and when the process dies — then writes out
+ * the event timeline, every activation with its outcome, whom the assistant
+ * seated and what it wrote, the room's own log, and each seat's own
+ * downstream session.
+ *
+ * The run crashes once, on purpose: as the first answer to Sam's question
+ * lands, the runtime that holds the room is dropped, and a second runtime
+ * resumes the name over the same log. What the dead run held expires, what
+ * it left pending is sent again, and the exchange closes into one message.
+ *
+ * The record is one SQLite database on disk, and each runtime opens the file
+ * for itself. The second runtime shares nothing in memory with the first, so
+ * everything it knows about the room it reads off the log.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm demo   (from examples/site)
  */
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import {
+	createRuntime,
 	destroyWorkspace,
-	InMemorySessionRepo,
 	isPresence,
 	isSpoken,
 	isSummary,
 	type Message,
+	resumeSession,
+	type Session,
 	type SessionEvent,
+	type Sql,
+	type SqlValue,
+	sqliteSessions,
 	startSession,
 	stopSession,
 	visitSession,
@@ -50,8 +68,25 @@ const OUT = process.env.DEMO_OUT ?? 'demo-run.json';
 const PEOPLE = new Set([priya.name, sam.name, dan.name]);
 /** The four tools a workspace binds; every other tool is a product's own API. */
 const WORKSPACE_TOOLS = new Set(['read', 'write', 'edit', 'bash']);
-const repo = new InMemorySessionRepo();
 const NAME = ROOM_NAME;
+const DB = join(mkdtempSync(join(tmpdir(), 'ambion-demo-')), 'room.db');
+
+/** The two calls the core's SQLite storage makes. A host wraps its own driver in them. */
+function nodeSql(database: DatabaseSync): Sql {
+	return {
+		run: (query, ...params) => {
+			database.prepare(query).run(...params);
+		},
+		all: (query, ...params) => database.prepare(query).all(...params) as Record<string, SqlValue>[],
+	};
+}
+
+/** One connection per runtime, on one file: a resumed room reads what a dead one wrote. */
+function openDatabase(): DatabaseSync {
+	const database = new DatabaseSync(DB);
+	database.exec('PRAGMA journal_mode = WAL');
+	return database;
+}
 const timeline: { at: string; event: SessionEvent }[] = [];
 const steps: { at: string; step: string }[] = [];
 
@@ -76,13 +111,21 @@ let lastFrom = '(the room opening)';
 /** The drive as every run starts: the seed, before any product touches it. */
 const driveBefore = await driveFiles();
 
-const session = startSession({
+/**
+ * A short lease, so the leases the dead run held expire within seconds of the
+ * resume, and a low checkpoint threshold, so the resumed room reads one row in
+ * place of the rows before it. A host picks both.
+ */
+const LEASE = { wake: { expiry: 15_000 }, checkpoint: { rows: 24 } };
+const firstDatabase = openDatabase();
+const first = createRuntime({ sessions: sqliteSessions(nodeSql(firstDatabase)), ...LEASE });
+let session: Session = startSession({
 	name: NAME,
 	goal: GOAL,
 	assistant: ASSISTANT,
 	agents: AGENTS,
 	available: AVAILABLE,
-	repo,
+	runtime: first,
 });
 
 /** The roster as the run starts, before any question composes it. */
@@ -165,16 +208,28 @@ function narrate(event: SessionEvent): void {
  */
 const quiescent = () => session.quiet();
 
-session.subscribe((event) => {
-	const at = new Date().toISOString();
-	track(event, at);
-	narrate(event);
-	timeline.push(
-		event.type === 'error'
-			? { at, event: { ...event, error: { message: event.error.message } } as never }
-			: { at, event },
-	);
-});
+/** Every event, from the run that holds the room now. A resumed room is watched again. */
+function watch(room: Session): void {
+	room.subscribe((event) => {
+		const at = new Date().toISOString();
+		track(event, at);
+		narrate(event);
+		timeline.push(
+			event.type === 'error'
+				? { at, event: { ...event, error: { message: event.error.message } } as never }
+				: { at, event },
+		);
+	});
+}
+watch(session);
+
+/**
+ * The room's alarm never holds the process open: `systemClock` unrefs its
+ * timer, so a host decides how long its own process lives. This one lives for
+ * the whole run, because the room waits on an alarm while the dead run's
+ * leases run out and nothing else is in flight.
+ */
+const alive = setInterval(() => {}, 1000);
 
 const step = (s: string) => {
 	process.stderr.write(`\n=== ${s} ===\n`);
@@ -197,9 +252,39 @@ await quiescent();
 
 step('sam opens it from the deck with a forecast; the products already seated hold what he needs');
 const samVisit = await visitSession(session, sam);
+/** The seq of the first product answer to sam: the message the crash lands on. */
+const firstAnswer = new Promise<number>((resolve) => {
+	const off = session.subscribe((event) => {
+		if (event.type !== 'message' || !isSpoken(event.message)) return;
+		if (PEOPLE.has(event.message.from)) return;
+		off();
+		resolve(event.message.seq);
+	});
+});
 await samVisit.deliver({
 	text: 'Rain all Thursday morning. I am not pouring into that. What do you need from me to move it?',
 });
+const crashedAt = await firstAnswer;
+
+step(
+	'the process dies as the first answer to sam lands: the leases it held stay on the log, and nothing is released',
+);
+first.evict(NAME);
+const crashedAtTime = new Date().toISOString();
+
+step(
+	'a second process resumes the room over the same log: the wakes still pending are sent again, the leases the dead run held expire, and the exchange closes',
+);
+const secondDatabase = openDatabase();
+const second = createRuntime({
+	sessions: sqliteSessions(nodeSql(secondDatabase)),
+	agents: [...first.catalog.values()],
+	...LEASE,
+});
+session = await resumeSession(NAME, { runtime: second });
+watch(session);
+// sam is present on the log, so the visit puts nothing on the record.
+await visitSession(session, sam);
 await quiescent();
 
 step('dan opens it to price the move; the plant desk is on call for exactly this');
@@ -244,9 +329,12 @@ const seatSessions: {
 	sessionId: string;
 	blocks: { at: string; turns: unknown[] }[];
 }[] = [];
-for (const metadata of await repo.list()) {
-	if (!metadata.id.startsWith(`${NAME}:`)) continue;
-	const piSeat = await repo.open(metadata);
+/** The record, read back through a third connection: nothing of the run is in it. */
+const reader = sqliteSessions(nodeSql(openDatabase()));
+for (const seat of seats) {
+	if (seat.kind !== 'agent') continue;
+	const id = seat.sessionId;
+	const piSeat = await reader.open(id);
 	const entries = await piSeat.findEntries();
 	entries.sort((a, b) => a.seq - b.seq);
 	const blocks: { at: string; turns: unknown[] }[] = [];
@@ -259,24 +347,36 @@ for (const metadata of await repo.list()) {
 		const message = (entry as { message?: unknown }).message;
 		if (message !== undefined) blocks.at(-1)?.turns.push(message);
 	}
-	const slug = metadata.id.slice(NAME.length + 1);
 	seatSessions.push({
-		agent: slug,
+		agent: seat.name,
 		// The assistant is a seat like any other; the roster says which seat writes
 		// for people, and that is the only thing that tells them apart.
-		kind: assistants.has(slug) ? 'assistant' : 'agent',
-		sessionId: metadata.id,
+		kind: assistants.has(seat.name) ? 'assistant' : 'agent',
+		sessionId: id,
 		blocks,
 	});
 }
 
+/** The room's own log: every row beside the messages, in the order they landed. */
+const roomLog: { type: string; data: unknown }[] = [];
+const piRoom = await reader.open(NAME);
+const roomEntries = await piRoom.findEntries();
+roomEntries.sort((a, b) => a.seq - b.seq);
+for (const entry of roomEntries) {
+	if (entry.type === 'custom') roomLog.push({ type: entry.customType, data: entry.data });
+}
+
 await stopSession(session);
+clearInterval(alive);
 
 // The drive as the run left it, then the workspace retired: the in-memory
 // filesystem is dropped, and the checked-in seed on disk is untouched.
 const driveAfter = await driveFiles();
 await destroyWorkspace(SITE_DRIVE);
-process.stderr.write(`\ndrive destroyed after capture\n`);
+firstDatabase.close();
+secondDatabase.close();
+rmSync(join(DB, '..'), { recursive: true, force: true });
+process.stderr.write(`\ndrive destroyed and the record dropped after capture\n`);
 
 writeFileSync(
 	OUT,
@@ -288,6 +388,8 @@ writeFileSync(
 			steps,
 			timeline,
 			record: await session.messages().catch(() => finalRecord),
+			crash: { at: crashedAt, time: crashedAtTime, leaseExpiry: LEASE.wake.expiry },
+			log: roomLog,
 			summaries: finalRecord.filter(isSummary),
 			missedOnReturn: missed,
 			sinceOnReturn,
