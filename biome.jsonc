@@ -88,7 +88,7 @@
 		//   host/                         what a host owns: the runtime value, a SQLite storage
 		//   log/                          the log: one serial queue over a Pi session
 		//   room/                         every fact and every decision, pure over the log
-		//   tools/                        what an agent's tools reach into
+		//   tools/                        the workspace port, and the hands over it
 		//   seat/                         the seat side of the wire: one activation at a time
 		//   session.ts                    the room, which composes them all
 		//
@@ -248,8 +248,14 @@
 			}
 		},
 		{
-			// A host package reaches the core through its published surface.
-			"includes": ["packages/cloudflare/src/**", "packages/cli/src/**", "examples/**/src/**"],
+			// A package outside the core reaches it through its published surface:
+			// a host, a workspace backend, and an example alike.
+			"includes": [
+				"packages/cloudflare/src/**",
+				"packages/cli/src/**",
+				"packages/workspace/src/**",
+				"examples/**/src/**"
+			],
 			"linter": {
 				"rules": {
 					"style": {
@@ -260,6 +266,31 @@
 									{
 										"group": ["@ambionframework/ambion/*", "**/packages/ambion/src/*"],
 										"message": "Reach the core through `@ambionframework/ambion`, never a file inside it."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The workspace package's tests reach the core's test support by
+			// relative path: it is not published, so no specifier names it. The
+			// core's own source is a different matter — `vitest.config.ts` and
+			// `tsconfig.check.json` alias the package name to it, so a test reads
+			// one module and not two.
+			"includes": ["packages/workspace/test/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["**/ambion/src/**"],
+										"message": "Reach the core through `@ambionframework/ambion`; the config aliases it to the source."
 									}
 								]
 							}

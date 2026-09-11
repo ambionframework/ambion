@@ -8,6 +8,8 @@ removes a concept, a boundary that is not real, or a place where the same
 idea is written twice.
 
 Numbers in brackets refer to [`backlog.md`](backlog.md).
+[`simplification.md`](simplification.md) holds ten changes, and its order
+supersedes this one. Every item below appears there.
 
 ## 1. Name the room's lifecycle, in place of three booleans
 

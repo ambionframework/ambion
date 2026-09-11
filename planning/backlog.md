@@ -161,22 +161,23 @@ covers `examples/site`, verified clean with `--workspace examples/site`.
 
 ### 44. The core has no platform boundary
 
-**What.** `packages/ambion` has one entry point, and it imports
-`node:crypto`, `node:path` and `node:fs/promises`. A worker bundles it
-only with `nodejs_compat`. `directoryBackend`, which needs a real disk,
-now loads just-bash's `ReadWriteFs` on the first connect, because a
-static import of that name refuses to bundle for any target but Node.
-The dynamic import is a workaround: nothing stops the next Node-only
-import from landing in the same entry point and breaking the workerd
-build again.
+**What.** The filesystem left with `@ambionframework/workspace`, and
+`packages/ambion/src` now imports no `node:` module at all. What is left
+of the platform is Pi's JSONL repository, which the core re-exports from
+its one entry point, and a build that proves the claim. Nothing stops the
+next Node-only import from landing in the same entry point.
 
-**Where.** `packages/ambion/src/tools/just-bash.ts`;
-`packages/ambion/src/host/`; `packages/ambion/package.json` exports.
+**Where.** `packages/ambion/src/index.ts`, the `JsonlSessionRepo`
+re-export; `packages/ambion/package.json` exports;
+`.github/workflows/ci.yml`.
 
-**Fix.** A second entry point, `@ambionframework/ambion/node`, for the
-Node-only surface: `directoryBackend`, the JSONL storage, and whatever
-else needs a disk. Then a build check that the main entry bundles for
-workerd with no compatibility flag.
+**Fix.** A build check that the main entry bundles for workerd with no
+compatibility flag. Then a second entry point,
+`@ambionframework/ambion/node`, for whatever the check finds.
+
+**Note.** `@ambionframework/workspace` needs `nodejs_compat` and a real
+disk for `directoryBackend`. A room on workerd reaches no workspace
+today.
 
 ### 45. The resume has no live proof
 
@@ -422,7 +423,7 @@ the `bash` tool's own description promises a Unix shell.
 - Whether `connect` should seed `/dev` into a `ReadWriteFs` the way just-bash
   seeds it into an `InMemoryFs`, so the two backends at least agree.
 
-**Where.** `connectOver` in [`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts).
+**Where.** `connectOver` in [`just-bash.ts`](../packages/workspace/src/just-bash.ts).
 
 ### 23. A backend on a real machine
 
@@ -451,7 +452,7 @@ abort signal because `useradd` and a process spawn are real waits.
 
 **Where.** `WorkspaceBackend` in
 [`types.ts`](../packages/ambion/src/types.ts); `directoryBackend` in
-[`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts) is the shape to copy.
+[`just-bash.ts`](../packages/workspace/src/just-bash.ts) is the shape to copy.
 
 ### 24. Whether Agent or AgentHarness is Ambion's foundation
 

@@ -388,10 +388,15 @@ function askOf(seat: SeatSpeaking, room: RoomView): string {
 }
 
 /**
- * What a workspace's four tools reach. Ambion's own `just-bash.ts` decides
- * this set (`Bash` built with `javascript: true, python: true`, and no
- * `network` option); this paragraph states it in prose, and the two files
- * must stay in step.
+ * What a workspace's four tools reach. `just-bash.ts` in
+ * `@ambionframework/workspace` decides this set (`Bash` built with
+ * `javascript: true, python: true`, and no `network` option); this paragraph
+ * states it in prose, and the two files must stay in step.
+ *
+ * The two now sit in two packages, and nothing holds them together but this
+ * note. A backend that reaches a different set makes this paragraph wrong for
+ * its agents. `docs/workspace.md` §12 holds the open question: the prose
+ * belongs to the backend, and the room has no way to ask for it yet.
  */
 const WORKSPACE_PARAGRAPH = [
 	`Your workspace gives you four tools: read, write, edit and bash, over a shared virtual`,

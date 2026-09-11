@@ -52,16 +52,8 @@ export type {
 	Visit,
 } from './session.ts';
 export { readSession, resumeSession, startSession, stopSession, visitSession } from './session.ts';
-export type {
-	MemoryBackendFile,
-	MemoryBackendOptions,
-	MemoryWorkspaceBackend,
-	SeedWriter,
-} from './tools/just-bash.ts';
-// A workspace over a real directory, or the in-memory default with seeding
-// and read-back. Neither import is needed for the in-memory default's own
-// use inside `defineWorkspace` — only a host that wants to seed or read it.
-export { directoryBackend, memoryBackend } from './tools/just-bash.ts';
+// A backend is a port, and the core holds no filesystem behind it.
+// `@ambionframework/workspace` holds two over a virtual Unix filesystem.
 export type { DefineWorkspaceOptions } from './tools/workspace.ts';
 export { defineWorkspace, destroyWorkspace } from './tools/workspace.ts';
 export type {

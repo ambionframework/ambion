@@ -19,7 +19,8 @@ ambion/
 ├── packages/
 │   ├── ambion/            @ambionframework/ambion   — the runtime library
 │   ├── cli/               @ambionframework/cli      — the `ambion` binary
-│   └── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
+│   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
+│   └── workspace/         @ambionframework/workspace — a filesystem behind a workspace
 ├── examples/
 │   └── site/              the runnable example: a multi-agent room, on Node and on workerd
 ├── scripts/
@@ -46,7 +47,13 @@ everything else, so an example that breaks fails the build.
 ```
 @ambionframework/cli         ──depends on──▶  @ambionframework/ambion
 @ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion
+@ambionframework/workspace   ──depends on──▶  @ambionframework/ambion
 ```
+
+The core depends on nothing in this repository. `@ambionframework/workspace`
+implements a port the core names, so the arrow points the same way a host's
+does: the core holds the idea of a workspace, and the package holds a
+filesystem behind it.
 
 Internal dependencies use `workspace:*` and are rewritten to the published
 version by pnpm at pack time. That one edge is what the scaffold exercises:
@@ -79,14 +86,19 @@ The products, the specialists, the people and the assistant come from one
 writes `drive/` into `src/drive-seed.ts`, and the example's `test` task
 proves the two hold the same documents.
 
-**The core needs `nodejs_compat` to bundle for workerd.** Its one entry
-point imports `node:crypto`, `node:path` and `node:fs/promises`, which
-that flag supplies. `directoryBackend` is the one part that needs a real
-disk, and it loads just-bash's `ReadWriteFs` on the first connect: a
-static import of that name refuses to bundle for any target but Node,
-because just-bash offers it in its Node build alone. A split of the
-Node-only surface into its own entry point stands in
-[`planning/backlog.md`](../planning/backlog.md).
+**The core's `src` imports no `node:` module.** The filesystem left with
+`@ambionframework/workspace`, and the core reads the clock and the random
+identifier off globals that workerd supplies. What the core still holds of
+a platform is its JSONL storage, through Pi.
+
+**`@ambionframework/workspace` needs `nodejs_compat`.** It imports
+`node:fs/promises`, `node:path` and `node:crypto`. `directoryBackend` needs
+a real disk on top of that, and it loads just-bash's `ReadWriteFs` on the
+first connect: a static import of that name refuses to bundle for any
+target but Node, because just-bash offers it in its Node build alone. A
+room on workerd reaches no workspace today, and
+[`planning/backlog.md`](../planning/backlog.md) §44 holds what a split of
+the Node-only surface still needs.
 
 ### The core's layers
 
@@ -101,7 +113,7 @@ holds, and a reviewer reads a file knowing what it cannot reach.
 | `host/`                             | What a host owns: the runtime value, a clock, an opener                                                                                  | The vocabulary                    |
 | `log/`                              | The log: one serial queue over a Pi session                                                                                              | The vocabulary                    |
 | `room/`                             | Every fact and every decision, pure over the log: the fold, the lease, the exchange, presence, the assistant's rules, the view, `decide` | The vocabulary, the log's entries |
-| `tools/`                            | What an agent's tools reach into: the workspace and its backends                                                                         | The vocabulary, `host/`           |
+| `tools/`                            | The workspace port, and the four hands over it. No filesystem: `@ambionframework/workspace` holds one                                    | The vocabulary, `host/`           |
 | `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport                                       | The vocabulary, `host/`, `tools/` |
 | `session.ts`                        | The room, which composes them all                                                                                                        | Everything                        |
 
@@ -367,14 +379,17 @@ real key, and proves what a scripted stream cannot. It lives in
 [`packages/ambion/test/live`](../packages/ambion/test/live), one file per
 claim:
 
-| File                | What it proves                                                                                                                               |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loop.test.ts`      | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error`    |
-| `judgment.test.ts`  | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                                 |
-| `exchange.test.ts`  | Three seats race under the lock, the room goes quiet, the assistant writes in the person's shape, and it seats a specialist from the reserve |
-| `record.test.ts`    | A second run of a name reads the record the first run left, and answers from it                                                              |
-| `workspace.test.ts` | The four built-in tools reach a workspace on a real provider                                                                                 |
-| `control.test.ts`   | `abort()` ends a request in flight without a mark, and the room keeps running                                                                |
+| File               | What it proves                                                                                                                               |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loop.test.ts`     | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error`    |
+| `judgment.test.ts` | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                                 |
+| `exchange.test.ts` | Three seats race under the lock, the room goes quiet, the assistant writes in the person's shape, and it seats a specialist from the reserve |
+| `record.test.ts`   | A second run of a name reads the record the first run left, and answers from it                                                              |
+| `control.test.ts`  | `abort()` ends a request in flight without a mark, and the room keeps running                                                                |
+
+`@ambionframework/workspace` runs a live tier of its own, over the same
+support, and `workspace.test.ts` there proves that the four built-in tools
+reach a workspace on a real provider. `pnpm test:live` runs both.
 
 Every test holds the record to the same invariants whatever the model said:
 seqs contiguous, one `message` event per message, every author on the
