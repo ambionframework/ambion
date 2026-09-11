@@ -96,6 +96,13 @@ the backoff, and at the cap it stops. `runtime.retry` holds the policy:
 three attempts by default, thirty seconds after the first failure and
 sixty after the second.
 
+**No lease runs past its deadline.** The room caps the expiry of every
+claim and every renewal at the claim time plus `runtime.wake.deadline`,
+ten minutes by default. A renewal that moves the expiry nowhere tells the
+seat the lease reached the deadline, and the seat cuts the activation
+there. The room expires the lease on its alarm, so an activation that
+runs on is one attempt that came to nothing.
+
 **A claim asked twice starts one activation.** A claim of an id the room
 already runs is a renewal, and lands as a renewal row. The seat asks
 again once when it never heard back. A release asked twice ends the

@@ -72,8 +72,13 @@ export interface Runtime {
 	/** The model call every seat in this runtime makes, unless a room overrides it. */
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
-	/** How long a wake stays unanswered before the room sends it again, and how long a lease lasts between renewals. */
-	readonly wake: { readonly resend: number; readonly expiry: number };
+	/**
+	 * How long a wake stays unanswered before the room sends it again, how
+	 * long a lease lasts between renewals, and how long an activation may run
+	 * from its claim: the room renews no lease past the deadline, so an
+	 * activation that runs on expires and counts as an attempt.
+	 */
+	readonly wake: { readonly resend: number; readonly expiry: number; readonly deadline: number };
 	/** How many times the room retries a failed summary, and how long it waits before each retry. */
 	readonly retry: { readonly attempts: number; readonly backoff: (attempt: number) => number };
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
@@ -180,7 +185,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		...(options.transport === undefined ? {} : { transport: options.transport }),
 		stream: options.stream ?? registryStream,
 		model: options.stream ? stubModel : registryModel,
-		wake: { resend: 5_000, expiry: 60_000, ...options.wake },
+		wake: { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake },
 		retry: { attempts: 3, backoff: (attempt) => attempt * 30_000, ...options.retry },
 		evict(name) {
 			const room = running.get(name);

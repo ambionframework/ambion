@@ -74,6 +74,8 @@ export interface LeaseState {
 	reason?: EndReason;
 	/** When the last row was written, ISO. */
 	at: string;
+	/** When the first row was written, ISO: the activation runs from here to its deadline. */
+	claimedAt: string;
 	/** The last seq when the first row landed: the activation's view held the record through here. */
 	since: Seq;
 	/** The last seq when the ended row landed, for an ended lease. */
@@ -89,16 +91,26 @@ export function foldLeases(rows: readonly LeaseRow[]): Map<string, LeaseState> {
 		// Ended is terminal: a renewal that lands after the end changes nothing.
 		if (known?.phase === 'ended') continue;
 		const since = known?.since ?? row.after;
+		const claimedAt = known?.claimedAt ?? row.at;
 		const heardThrough = row.phase === 'running' ? row.after : (known?.heardThrough ?? row.after);
 		leases.set(
 			row.id,
 			row.phase === 'running'
-				? { id: row.id, phase: 'running', expiry: row.expiry, at: row.at, since, heardThrough }
+				? {
+						id: row.id,
+						phase: 'running',
+						expiry: row.expiry,
+						at: row.at,
+						claimedAt,
+						since,
+						heardThrough,
+					}
 				: {
 						id: row.id,
 						phase: 'ended',
 						reason: row.reason,
 						at: row.at,
+						claimedAt,
 						since,
 						until: row.after,
 						heardThrough,
