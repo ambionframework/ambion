@@ -690,7 +690,23 @@ the shorthand for one. The default runtime opens sessions in an in-memory
 `InMemorySessionRepo`. A name that outlives the process is a durable
 `SessionRepo` implementation; the API stays the same.
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
-surface, and Ambion adds no storage layer of its own.
+surface.
+
+**The core holds one storage of its own: SQLite.**
+[`sqliteSessions(sql)`](../packages/ambion/src/host/sqlite.ts) opens every
+session in one database, keyed by id: the room's log, and each seat's
+audit session beside it. It reaches the database through two calls, `run`
+a statement and `all` its rows, so a host wraps whatever SQLite it holds
+— `node:sqlite` in a process, a Durable Object's own storage on
+Cloudflare — and the core owns the schema and every statement. The core
+imports no platform module, so the wrapper is the host's.
+
+Two runs may write to one SQLite at once. It takes each entry's seq from
+the database as the row lands, so two runs over one database write
+consecutive seqs. Pi's JSONL repository holds the next seq in memory, so
+two runs over one file write the same seq twice and the file no longer
+reads: a host that runs two rooms over one name needs the SQLite storage,
+or a repository of its own that behaves like it.
 
 **What crosses between a seat and its room is JSON.** The room renders the
 system prompt and the context, and sends the two strings with the model

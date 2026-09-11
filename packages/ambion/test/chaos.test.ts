@@ -33,7 +33,7 @@ import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
 import { collect, roomName } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { jsonl, jsonlSessions, memory, type Storage } from './support/storage.ts';
+import { jsonlSessions, memory, type Storage, storages } from './support/storage.ts';
 
 const full = process.env.AMBION_CHAOS === 'all';
 
@@ -56,7 +56,7 @@ async function countWrites(storage: Storage): Promise<number> {
 const writes = await countWrites(memory);
 const points = Array.from({ length: writes }, (_, i) => i + 1);
 
-describe.each(full ? [memory, jsonl] : [memory])('a crash at every write on $name', (storage) => {
+describe.each(full ? storages : [memory])('a crash at every write on $name', (storage) => {
 	describe.each(['before', 'after'] as const)('%s the entry lands', (mode) => {
 		it.each(points)(
 			`at write %i of ${writes}, the room resumes and the scenario ends whole`,
