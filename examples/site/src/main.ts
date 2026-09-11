@@ -112,6 +112,11 @@ session.subscribe((event: SessionEvent) => {
 			errored.add(event.agent);
 			show(`${red}! ${event.agent}: ${event.error.message}${reset}`);
 			break;
+		// Every attempt came to nothing: the room stops, and the one message
+		// for this question never arrives. A person reads that here.
+		case 'abandoned':
+			show(`${red}! the room gave up on ${event.agent} (${event.activation})${reset}`);
+			break;
 		// The exchange somebody asked for. A client that could re-render would fold
 		// the working between these two into a thinking state; a terminal cannot,
 		// so it draws the boundary instead.

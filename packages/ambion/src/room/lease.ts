@@ -155,8 +155,6 @@ export const startsNow = (owed: Pick<Due, 'notBefore'>, now: number): boolean =>
 	owed.notBefore === undefined || owed.notBefore <= now;
 
 export interface WakeOptions {
-	/** How many attempts the room makes at one wake before it gives up. */
-	attempts: number;
 	/** How long the room waits before the next attempt, after `attempt` failed ones. */
 	backoff(attempt: number): number;
 }

@@ -62,9 +62,11 @@ export interface RoomState {
 	readonly lastSeq: Seq;
 }
 
-/** The retry policy for the drafts: how many attempts the room makes, and how long it waits after `attempt` failed ones. */
+/**
+ * What the fold needs of the retry policy: how long the room waits after
+ * `attempt` failed ones. The cap belongs to the decision, not the fold.
+ */
 export interface FoldOptions {
-	attempts: number;
 	backoff(attempt: number): number;
 }
 
