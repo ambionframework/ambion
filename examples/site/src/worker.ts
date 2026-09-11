@@ -36,7 +36,12 @@ configure({
  */
 export class DemoRoom extends RoomObject {
 	async log(): Promise<{ type: string; data: unknown }[]> {
-		const piSession = await sqlSessions(this.ctx).open(ROOM_NAME);
+		// The name the object was started with, and not the one this module
+		// holds: a worker that served a second room would read the wrong log,
+		// and an id nothing wrote opens as an empty session rather than failing.
+		const name = await this.ctx.storage.get<string>('name');
+		if (name === undefined) throw new Error('The room is not started.');
+		const piSession = await sqlSessions(this.ctx).open(name);
 		const entries = await piSession.findEntries();
 		entries.sort((a, b) => a.seq - b.seq);
 		return entries.flatMap((entry) =>

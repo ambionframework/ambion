@@ -11,6 +11,7 @@
  * report shares; the run-specific colours are added below it.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
+import { esc, foldLeases, plural, rowsOf as rows } from './report-log.mjs';
 
 const [, , inPath, outPath] = process.argv;
 if (!inPath || !outPath) {
@@ -20,18 +21,10 @@ if (!inPath || !outPath) {
 const run = JSON.parse(readFileSync(inPath, 'utf8'));
 const css = readFileSync(new URL('./report.css', import.meta.url), 'utf8');
 
-const esc = (s) =>
-	String(s ?? '')
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&#x27;');
 const n = (x) => x.toLocaleString('en-GB');
 const money = (x) => `$${x.toFixed(2)}`;
 const words = (t) => t.trim().split(/\s+/).length;
 const times = (x) => (x === 1 ? 'once' : `${x} times`);
-const plural = (x, one, many) => `${x} ${x === 1 ? one : many}`;
 
 const PEOPLE = new Set(run.people.map((p) => p.name));
 const ASSISTANT = run.assistant.name;
@@ -365,24 +358,11 @@ const avgWords = summaries.length
 const crash = run.crash ?? { at: 0, time: run.ranAt, leaseExpiry: 0 };
 const crashTime = Date.parse(crash.time);
 const log = run.log ?? [];
-const rowsOf = (kind) => log.filter((r) => r.type === `ambion/${kind}`).map((r) => r.data);
+const rowsOf = (kind) => rows(log, kind);
 const leaseRows = rowsOf('lease');
 /** The runs that wrote the log, in order: every row carries the run that wrote it. */
 const runs = rowsOf('run');
-/**
- * What the rows for one activation fold to. The last row wins, the first row
- * says when the activation claimed the lease, and the last running row says
- * the seq the activation had taken.
- */
-const leases = [...new Map(leaseRows.map((r) => [r.id, r])).values()].map((last) => {
-	const mine = leaseRows.filter((r) => r.id === last.id);
-	const running = mine.filter((r) => r.phase === 'running');
-	return {
-		...last,
-		claimedAt: mine[0]?.at ?? last.at,
-		heardThrough: running.at(-1)?.after ?? mine[0]?.after ?? 0,
-	};
-});
+const leases = foldLeases(log);
 const expiredLeases = leases.filter((l) => l.phase === 'ended' && l.reason === 'expired');
 const abandoned = leases.filter((l) => l.phase === 'ended' && l.reason === 'abandoned');
 const heldAtCrash = leases.filter(
@@ -421,8 +401,7 @@ function leaseTable() {
 				l.phase === 'ended'
 					? `${l.reason} at +${seconds(Date.parse(l.at) - crashTime)}`
 					: 'still running';
-			const wrote = runs.findIndex((r) => r.run === l.written);
-			const by = wrote < 0 ? 'before the fence' : `run ${wrote + 1}`;
+			const by = l.endedBy;
 			return `<tr><td class="tid">${esc(l.id)}</td><td>${esc(l.claimedAt.slice(11, 23))}</td><td>[${l.heardThrough}]</td><td>${esc(ended)}</td><td>${esc(by)}</td></tr>`;
 		})
 		.join('');

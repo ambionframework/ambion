@@ -334,7 +334,8 @@ const seatSessions: {
 	blocks: { at: string; turns: unknown[] }[];
 }[] = [];
 /** The record, read back through a third connection: nothing of the run is in it. */
-const reader = sqliteSessions(nodeSql(openDatabase()));
+const readerDatabase = openDatabase();
+const reader = sqliteSessions(nodeSql(readerDatabase));
 for (const seat of seats) {
 	if (seat.kind !== 'agent') continue;
 	const id = seat.sessionId;
@@ -379,6 +380,7 @@ const driveAfter = await driveFiles();
 await destroyWorkspace(SITE_DRIVE);
 firstDatabase.close();
 secondDatabase.close();
+readerDatabase.close();
 rmSync(join(DB, '..'), { recursive: true, force: true });
 process.stderr.write(`\ndrive destroyed and the record dropped after capture\n`);
 

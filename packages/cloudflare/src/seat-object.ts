@@ -8,13 +8,39 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import type { SeatRoom, Wake } from '@ambionframework/ambion';
+import type { SeatRoom, SessionEvent, Wake } from '@ambionframework/ambion';
 import { SeatActor, systemClock } from '@ambionframework/ambion';
 import { runtimeFor } from './configure.ts';
 import type { Env } from './room-object.ts';
 import { sqlSessions } from './storage.ts';
 
 type Phase = 'pending' | 'running';
+
+/**
+ * What a seat does inside its own object, as one structured log line.
+ *
+ * An activation runs in the seat's object, and the events it raises reach no
+ * other object: `emit` is a call in this process. Cloudflare indexes the
+ * fields of an object given to `console.log`, so a line per event is what
+ * carries a seat's tool calls and its failures out to a reader. `ambion` marks
+ * the line, and the three names say which activation raised it.
+ *
+ * The core writes nothing to stdout. A host decides where its events go, and
+ * this is that decision for this host.
+ */
+function logEvent(room: string, seat: string, activation: string, event: SessionEvent): void {
+	const error = event.type === 'error' ? { error: event.error.message } : {};
+	console.log({
+		ambion: 'seat',
+		room,
+		seat,
+		activation,
+		event: event.type,
+		...('toolName' in event ? { tool: event.toolName } : {}),
+		...error,
+		at: new Date().toISOString(),
+	});
+}
 
 export class SeatObject extends DurableObject<Env> {
 	private actor: SeatActor | undefined;
@@ -80,11 +106,7 @@ export class SeatObject extends DurableObject<Env> {
 		const room = await this.ctx.storage.get<string>('room');
 		const seat = await this.ctx.storage.get<string>('seat');
 		if (activation === undefined || room === undefined || seat === undefined) return;
-		const seatRoom: SeatRoom = {
-			view: (id) => this.roomStub(room).view(id),
-			commit: (commit) => this.roomStub(room).commit(commit),
-			lease: (lease) => this.roomStub(room).lease(lease),
-		};
+		const seatRoom = this.roomFor(room);
 		if ((await this.ctx.storage.get<Phase>('phase')) === 'running') {
 			// A run that never came back: the object was evicted mid-activation.
 			await seatRoom.lease({ activation, phase: 'ended', reason: 'failed' });
@@ -101,6 +123,7 @@ export class SeatObject extends DurableObject<Env> {
 			sessions: runtime.sessions,
 			stream: runtime.stream,
 			model: runtime.model,
+			emit: (event) => logEvent(room, seat, activation, event),
 		});
 		try {
 			await this.actor.run(activation);
@@ -108,6 +131,15 @@ export class SeatObject extends DurableObject<Env> {
 			this.actor = undefined;
 			await this.clear();
 		}
+	}
+
+	/** The three calls this seat makes on its room, each over a stub of its own. */
+	private roomFor(room: string): SeatRoom {
+		return {
+			view: (id) => this.roomStub(room).view(id),
+			commit: (commit) => this.roomStub(room).commit(commit),
+			lease: (lease) => this.roomStub(room).lease(lease),
+		};
 	}
 
 	/**

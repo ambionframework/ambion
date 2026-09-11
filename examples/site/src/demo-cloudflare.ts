@@ -23,9 +23,21 @@ interface LogRow {
 	type: string;
 	data: Record<string, unknown>;
 }
+/** One event a seat raised inside its own object, read back from the logs. */
+interface SeatEvent {
+	room: string;
+	seat: string;
+	activation: string;
+	event: string;
+	tool?: string;
+	error?: string;
+	at: string;
+}
 interface LeaseData {
 	id: string;
 	phase: 'running' | 'ended';
+	/** The run that wrote this row. The fence stamps every entry with it. */
+	written?: string;
 }
 interface Say {
 	seq: number;
@@ -64,9 +76,39 @@ async function until<T>(read: () => Promise<T | undefined>, ms = 180_000): Promi
 }
 
 const log = () => call<LogRow[]>('/log');
+
+/**
+ * What the seats did inside their own objects, out of Cloudflare's logs.
+ *
+ * An activation runs in the seat's object and raises its events there, so the
+ * room's log holds no tool call. The seat writes each one as a structured log
+ * line instead, and wrangler keeps them where a query can reach: this is the
+ * local explorer, and a deployed worker answers the same question through the
+ * Workers Logs API.
+ */
+async function seatEvents(): Promise<SeatEvent[]> {
+	const response = await fetch(`${WORKER}/cdn-cgi/local/explorer/api/local/observability/query`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({
+			sql: `SELECT message FROM logs WHERE message LIKE '%"ambion":"seat"%' ORDER BY ts_ms`,
+		}),
+	});
+	if (!response.ok) return [];
+	const answer = (await response.json()) as { result?: { rows?: [string][] } };
+	// Each row holds what one `console.log` was given, as the array it was called with.
+	return (answer.result?.rows ?? []).flatMap((row) => {
+		try {
+			return JSON.parse(row[0]) as SeatEvent[];
+		} catch {
+			return [];
+		}
+	});
+}
 const messages = () => call<Say[]>('/messages');
-const rowsOf = (rows: LogRow[], kind: string) =>
-	rows.filter((row) => row.type === `ambion/${kind}`);
+/** Every row of one kind, read as the shape that kind carries on the wire. */
+const rowsOf = <T>(rows: LogRow[], kind: string): T[] =>
+	rows.filter((row) => row.type === `ambion/${kind}`).map((row) => row.data as T);
 
 // The worker answers before the room starts, so any response says it is up.
 const up = await fetch(WORKER).then(
@@ -93,7 +135,7 @@ await call('/deliver', {
 
 step('the seats take their leases, and the room writes a row for each');
 const claimed = await until(async () => {
-	const held = rowsOf(await log(), 'lease');
+	const held = rowsOf<LeaseData>(await log(), 'lease');
 	return held.length >= 2 ? held : undefined;
 });
 process.stderr.write(`  ${claimed.length} leases running\n`);
@@ -107,7 +149,7 @@ const answers = await until(async () => {
 	const said = (await messages()).filter((m) => m.kind === 'said' && m.from !== 'priya');
 	return said.length > 0 ? said : undefined;
 });
-process.stderr.write(`  ${answers.length} answers on the record after the crash\n`);
+process.stderr.write(`  ${answers.length} agent answers on the record\n`);
 
 step('the exchange closes, and the assistant writes priya the one message');
 const summary = await until(async () => (await messages()).find((m) => m.kind === 'summary'));
@@ -118,12 +160,31 @@ process.stderr.write(
 // Every lease ends before the log is read, so the capture holds the release
 // of the draft the summary came from and not the row before it.
 const rows = await until(async () => {
-	const held = rowsOf(await log(), 'lease').map((row) => row.data as unknown as LeaseData);
+	const held = rowsOf<LeaseData>(await log(), 'lease');
 	const ids = [...new Set(held.map((row) => row.id))];
 	const ended = ids.every((id) => held.filter((row) => row.id === id).at(-1)?.phase === 'ended');
 	return ended ? await log() : undefined;
 });
 const seats = await call<{ kind: string; name: string }[]>('/seats');
+const events = await seatEvents();
+process.stderr.write(`  ${events.length} seat events read back from the logs\n`);
+
+/**
+ * A lease one run claimed and another ended is the crossing this demo is for.
+ * A run where none crossed proves nothing, and the report says so; the
+ * operator hears it here, where running it again is still cheap.
+ */
+const finalLeases = rowsOf<LeaseData>(rows, 'lease');
+const crossed = [...new Set(finalLeases.map((row) => row.id))].filter((id) => {
+	const mine = finalLeases.filter((row) => row.id === id);
+	return mine[0]?.written !== mine[mine.length - 1]?.written;
+});
+process.stderr.write(`  ${crossed.length} activations crossed the crash\n`);
+if (crossed.length === 0) {
+	process.stderr.write(
+		'\nNo activation crossed the crash. This run proves nothing; run it again.\n',
+	);
+}
 writeFileSync(
 	OUT,
 	JSON.stringify(
@@ -135,9 +196,10 @@ writeFileSync(
 			steps,
 			crash: { time: crashedAtTime, leases: claimed.length },
 			log: rows,
-			runs: rowsOf(rows, 'run').map((row) => row.data),
+			runs: rowsOf<{ run: string }>(rows, 'run'),
 			record: await messages(),
 			seats,
+			events,
 		},
 		null,
 		2,

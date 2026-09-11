@@ -25,58 +25,40 @@ if (!inPath || !outPath) {
 const run = JSON.parse(readFileSync(inPath, 'utf8'));
 const css = readFileSync(new URL('./report.css', import.meta.url), 'utf8');
 
-const esc = (s) =>
-	String(s ?? '')
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&#x27;');
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+import { attemptOf, esc, foldLeases, plural, rowsOf, runsOf, writerOf } from './report-log.mjs';
 
-// -- the log, folded ---------------------------------------------------------------
-const rowsOf = (kind) => run.log.filter((row) => row.type === `ambion/${kind}`).map((r) => r.data);
-const runs = rowsOf('run').map((row) => row.run);
-/** Which run wrote a row: the fence stamps every entry with the run that took the name. */
+const log = run.log;
+const runs = runsOf(log);
+/** Which run wrote a row, as the page names it. */
 const wroteIt = (row) => {
-	const at = runs.indexOf(row.written);
-	return at < 0 ? '—' : `run ${at + 1}`;
+	const at = writerOf(runs, row);
+	return at === undefined ? '—' : `run ${at}`;
 };
-
-const leaseRows = rowsOf('lease');
-const ids = [...new Set(leaseRows.map((row) => row.id))];
-/** One activation: its first row, its last, and the run behind each. */
-const leases = ids.map((id) => {
-	const mine = leaseRows.filter((row) => row.id === id);
-	const first = mine[0];
-	const last = mine[mine.length - 1];
-	return {
-		id,
-		claimedBy: wroteIt(first),
-		endedBy: wroteIt(last),
-		state: last.phase === 'ended' ? last.reason : 'running',
-		heardThrough: [...mine].reverse().find((row) => row.phase === 'running')?.after ?? first.after,
-		crossed: wroteIt(first) !== wroteIt(last),
-	};
-});
+const leaseRows = rowsOf(log, 'lease');
+const leases = foldLeases(log);
 const crossed = leases.filter((lease) => lease.crossed);
-/**
- * Which attempt an id names. Nothing mints an id: a wake is `<seq>:<seat>`
- * and later attempts add the number, a draft is `close:<through>:<attempt>`
- * and counts from one. So a trailing number is a retry for a wake, and only
- * a number above one is a retry for a draft.
- */
-const attemptOf = (id) => {
-	const draft = /^close:\d+:(\d+)$/.exec(id);
-	if (draft) return Number(draft[1]);
-	const wake = /^\d+:.+:(\d+)$/.exec(id);
-	return wake ? Number(wake[1]) : 1;
-};
+/** The activations that crossed the crash and still put their work on the record. */
+const survived = crossed.filter((lease) => lease.state === 'released');
 const retried = leases.filter((lease) => attemptOf(lease.id) > 1);
-const lost = leases.filter((lease) => lease.state === 'expired' || lease.state === 'failed');
-const messageRows = rowsOf('message');
+/** Every lease that ended any way but released: the room got nothing from it. */
+const lost = leases.filter((lease) => lease.phase === 'ended' && lease.state !== 'released');
+const messageRows = rowsOf(log, 'message');
 const summary = run.record.find((m) => m.kind === 'summary');
 const answered = run.record.filter((m) => m.kind === 'said' && m.from !== 'priya');
+
+/**
+ * What each seat did inside its own object, out of Cloudflare's logs. The
+ * room's log cannot hold this: a tool call is raised in the seat's object and
+ * reaches no other, so the seat writes each event as a structured log line
+ * and the demo reads them back.
+ */
+const events = run.events ?? [];
+const byActivation = new Map();
+for (const event of events) {
+	byActivation.set(event.activation, [...(byActivation.get(event.activation) ?? []), event]);
+}
+const toolCalls = events.filter((event) => event.event === 'tool_execution_start');
+const errors = events.filter((event) => event.event === 'error');
 
 const ranAt = new Date(run.ranAt).toLocaleDateString('en-GB', {
 	day: 'numeric',
@@ -93,6 +75,20 @@ function leaseTable() {
 		)
 		.join('');
 	return `<div class="tw"><table><thead><tr><th>Activation</th><th>Lease claimed by</th><th>Heard through</th><th>How it ended</th><th>Ended by</th><th>Crossed the crash</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function seatTable() {
+	const rows = [...byActivation.entries()]
+		.map(([activation, raised]) => {
+			const tools = raised
+				.filter((event) => event.event === 'tool_execution_start')
+				.map((event) => event.tool);
+			const failed = raised.filter((event) => event.event === 'error').map((event) => event.error);
+			const seat = raised[0]?.seat ?? '';
+			return `<tr><td class="tid">${esc(activation)}</td><td class="tid">${esc(seat)}</td><td>${tools.length ? tools.map((tool) => `<code>${esc(tool)}</code>`).join(' ') : '<span style="opacity:.55">no tool</span>'}</td><td>${esc(failed.join('; '))}</td></tr>`;
+		})
+		.join('');
+	return `<div class="tw"><table><thead><tr><th>Activation</th><th>Seat</th><th>Tools it called</th><th>What failed</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function recordTable() {
@@ -114,8 +110,8 @@ const html = `<meta charset="utf-8">
 <main>
 <p class="meta">Ambion demo &middot; ${esc(ranAt)} &middot; ${esc(run.model)} &middot; room &lsquo;${esc(run.name)}&rsquo; &middot; on Cloudflare Durable Objects, in workerd</p>
 <h1>The Room Goes, The Seats Stay</h1>
-<p class="lede">A room on Cloudflare is one Durable Object for the record and one for each seat, so the platform can take the room and leave the seats running. This run does exactly that. ${plural(run.crash.leases, 'lease was', 'leases were')} running when the room object was dropped, and the seats holding them never noticed: they were waiting on a model. ${crossed.length ? `${plural(crossed.length, 'activation', 'activations')} claimed a lease from one run and released it to the next` : 'No activation crossed the crash'} — their work went onto the record of the room that came back, under the id the dead run had written. ${lost.length ? `${plural(lost.length, 'lease', 'leases')} expired.` : 'Nothing expired, and no wake was sent twice.'}</p>
-<div class="stats">${stat(runs.length, 'runs took the name')}${stat(run.crash.leases, 'leases live at the crash')}${stat(crossed.length, 'activations crossed it')}${stat(answered.length, 'agent answers')}${stat(leaseRows.length, 'lease rows')}${stat(messageRows.length, 'messages')}</div>
+<p class="lede">A room on Cloudflare is one Durable Object for the record and one for each seat, so the platform can take the room and leave the seats running. This run does exactly that. ${plural(run.crash.leases, 'lease was', 'leases were')} running when the room object was dropped, and the seats holding them never noticed: they were waiting on a model. ${survived.length ? `${plural(survived.length, 'activation', 'activations')} claimed a lease from one run and released it to the next` : 'No activation crossed the crash and lived'} — their work went onto the record of the room that came back, under the id the dead run had written. ${lost.length ? `${plural(lost.length, 'lease', 'leases')} ended another way: ${esc(lost.map((l) => `${l.id} ${l.state}`).join(', '))}.` : 'Every lease ended released, so the room lost no activation to the crash.'}</p>
+<div class="stats">${stat(runs.length, 'runs took the name')}${stat(run.crash.leases, 'leases live at the crash')}${stat(survived.length, 'activations crossed it')}${stat(answered.length, 'agent answers')}${stat(leaseRows.length, 'lease rows')}${stat(messageRows.length, 'messages')}${stat(toolCalls.length, 'tool calls, from the logs')}</div>
 <p class="note">Every line is read off one live run. The people were scripted only in what they asked; the crash was scripted to land once the seats held their leases, and nothing else about it was.</p>
 
 <section>
@@ -129,6 +125,16 @@ const html = `<meta charset="utf-8">
 ${leaseTable()}
 <p class="note" style="margin-top:1.4rem">${retried.length ? `${plural(retried.length, 'activation', 'activations')} ran as a second attempt: ${retried.map((l) => `<code>${esc(l.id)}</code>`).join(', ')}.` : 'No id carries an attempt number, so every wake was answered on its first attempt. Nothing was said twice, and nobody waited out a lease expiry.'}</p>
 </section>
+
+${
+	events.length
+		? `<section>
+<h2>Inside the seats, out of the logs</h2>
+<p class="note">A tool call happens inside the seat's own object and reaches no other, so the room's log cannot hold it. Each seat writes its events as structured log lines instead, and this run read ${plural(events.length, 'line', 'lines')} back through the query wrangler serves over them. ${plural(toolCalls.length, 'tool call', 'tool calls')} and ${plural(errors.length, 'failure', 'failures')} are below, by the activation that raised them. A deployed worker answers the same question through the Workers Logs API.</p>
+${seatTable()}
+</section>`
+		: ''
+}
 
 <section>
 <h2>The record, and the run that wrote each line</h2>

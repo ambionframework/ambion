@@ -230,3 +230,9 @@ for the whole activation, and a stub dies with the object it names. The
 commit threw on the dead stub, the release threw after it, and the seat
 wrote nothing at all. The seat takes a stub per call now, and a test in
 workerd holds it there.
+
+The report also shows what each seat did inside its own object. Those
+events reach no other object, so the seat writes them as structured log
+lines and the demo reads them back through the query wrangler serves over
+them: 59 tool calls in this run, by the activation that made each one.
+The first version of this page could not show them, and said so.

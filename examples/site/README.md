@@ -59,6 +59,16 @@ one process holds the room and every seat there, so a crash takes them
 together. `/log` and `/crash` are the two routes that demo needs and a
 room in service does not.
 
+**What a seat does, it says in the logs.** An activation runs inside the
+seat's own object, so its tool calls and its failures reach no other
+object and the room's log cannot hold them. Each seat writes them as
+structured log lines instead. `observability` in `wrangler.jsonc` turns
+the capture on, `pnpm demo:cloudflare` reads them back through the query
+wrangler serves over them, and the report lists every tool each
+activation called. A deployed worker answers the same question through
+the [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/)
+API.
+
 ## What to look for
 
 **Opening the room wakes one seat, not all of them.** Each seat is seated
