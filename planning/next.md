@@ -10,9 +10,15 @@ makes the ones after it a smaller diff. Numbers refer to
 next two items land in it. Splitting first keeps each of them a local
 diff.
 
-**Done when.** `say` lives in `seat/hands.ts`, which it does. The commit
-path lives in `log/log.ts`, which it does. The reserve lives in its own
-module. `session.ts` holds compose and route and stays under 600 lines.
+**What is done.** `say` lives in `seat/hands.ts`. The commit path lives
+in `log/log.ts`. The reserve is a fold, so it needs no module. The room
+reacts to the log in one place: the log calls `hear` for every entry it
+takes, and the room no longer holds a second path for the entries it
+wrote itself.
+
+**Done when.** The seat's three calls (`view`, `commit`, `lease`) live in
+`answers.ts`, over a narrow interface on the room. `session.ts` holds
+compose, route and hear, and stays under 600 lines.
 
 ## 2. A `Runtime` value in place of the process globals (backlog 1) — done
 

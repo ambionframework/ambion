@@ -16,6 +16,14 @@ it. That is the roster, the people, the open exchange, every lease, every
 wake still pending and every summary still owed. Nothing the room holds
 in memory outlives what the log says.
 
+**The room reacts to the log, and to nothing else.** The log tells the room
+about every entry it takes, and the room has one reaction per entry. An
+entry this run appended and an entry a read found reach the room the same
+way, so a message another run wrote, and a message whose confirmation this
+run lost, become an event and a wake exactly as a message this run
+committed does. The room writes down to the log and hears back up from it,
+and it holds no second path for the entries it wrote itself.
+
 **Durable means the storage's append resolved.** Pi's in-memory repository
 holds the record for the life of the process. Pi's JSONL repository
 writes every entry to a file and calls no `fsync`. A storage that lies

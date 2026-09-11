@@ -2,7 +2,9 @@
  * How the room moves: it folds the log, decides, and writes what it decided.
  *
  * `decide` is pure. It reads the folded state and the clock and returns the
- * rows to write, the wakes to send, and when to look again. The room applies
+ * rows to write, the wakes to send, and when to look again. Every wake it
+ * sends comes off one list, `state.due`: the activations the room owes,
+ * whether a message decided one or a close owes one. The room applies
  * a decision, and a second decision over the result writes nothing: that is
  * what makes it safe to run after every commit, every lease change, every
  * alarm and every wake, and after a resume that does not know what the last
@@ -11,8 +13,8 @@
 
 import type { CloseRow, LeaseRow, Without } from '../wire.ts';
 import { draftOver } from './assistant.ts';
-import type { Owed, RoomState } from './fold.ts';
-import { draftId, isExpired, isLive, parseId, seatOf } from './lease.ts';
+import type { RoomState } from './fold.ts';
+import { isExpired, isLive, parseId, seatOf, startsNow } from './lease.ts';
 
 export interface DecideOptions {
 	now: number;
@@ -24,6 +26,7 @@ export interface DecideOptions {
 	stopped: boolean;
 }
 
+/** One wake over the wire: the activation, and the seat that takes it. */
 interface Send {
 	id: string;
 	seat: string;
@@ -56,9 +59,8 @@ export function liveSeats(state: RoomState, now: number): Map<string, string[]> 
 		if (isLive(lease, now)) add(seatOf(lease.id, assistant), lease.id);
 	}
 	for (const wake of state.pending) add(wake.seat, wake.id);
-	for (const owed of state.owed) {
-		if (due(owed, now)) add(assistant, draftId(owed.through, owed.attempts + 1));
-	}
+	// A draft in its backoff holds nobody: the room is at rest until it is due.
+	for (const owed of state.owed) if (startsNow(owed, now)) add(owed.seat, owed.id);
 	return live;
 }
 
@@ -114,20 +116,15 @@ function closing(state: RoomState, now: number): Decision['close'] {
 }
 
 /**
- * Every wake the room sends now: a pending wake, and an owed draft whose
- * backoff has passed, each one never sent by this room or sent longer ago
- * than the resend window.
+ * Every wake the room sends now: an activation it owes whose backoff has
+ * passed, and which this room never sent or sent longer ago than the
+ * resend window. A wake a message decided and a draft a close owes are one
+ * list here, because the room schedules them the same way.
  */
 function dueWakes(state: RoomState, options: DecideOptions): Send[] {
-	const assistant = state.composition?.assistant.name ?? '';
-	const wakes = state.pending
-		.filter((wake) => due(wake, options.now) && unsent(wake.id, options))
-		.map((wake) => ({ id: wake.id, seat: wake.seat }));
-	const drafts = state.owed
-		.filter((owed) => due(owed, options.now))
-		.map((owed) => ({ id: draftId(owed.through, owed.attempts + 1), seat: assistant }))
-		.filter((send) => unsent(send.id, options));
-	return [...wakes, ...drafts];
+	return state.due
+		.filter((owed) => startsNow(owed, options.now) && unsent(owed.id, options))
+		.map((owed) => ({ id: owed.id, seat: owed.seat }));
 }
 
 /** A wake this room never sent, or sent longer ago than the resend window. */
@@ -136,20 +133,13 @@ function unsent(id: string, options: DecideOptions): boolean {
 	return sent === undefined || options.now - sent >= options.resend;
 }
 
-/** An owed draft whose backoff has passed. */
-const due = (attempt: Pick<Owed, 'notBefore'>, now: number): boolean =>
-	attempt.notBefore === undefined || attempt.notBefore <= now;
-
-/** When each pending wake and each owed draft is next due, or sent again. */
+/** When each activation the room owes is next due, or sent again. */
 function retryTimes(state: RoomState, options: DecideOptions): number[] {
-	const again = (id: string, notBefore: number | undefined) =>
-		notBefore !== undefined && notBefore > options.now
-			? notBefore
-			: (options.sentAt(id) ?? options.now) + options.resend;
-	return [
-		...state.pending.map((wake) => again(wake.id, wake.notBefore)),
-		...state.owed.map((owed) => again(draftId(owed.through, owed.attempts + 1), owed.notBefore)),
-	];
+	return state.due.map((owed) =>
+		startsNow(owed, options.now)
+			? (options.sentAt(owed.id) ?? options.now) + options.resend
+			: (owed.notBefore ?? options.now),
+	);
 }
 
 function nextAlarm(state: RoomState, options: DecideOptions): number | undefined {

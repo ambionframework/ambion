@@ -14,8 +14,11 @@
  *
  * - **Compose.** Write the composition, admit the people, seat and unseat
  *   while it runs, and take it all down again.
- * - **Commit.** One queue, one seq at a time, for every author (rule 5), and
- *   one `message` event per message however it was written.
+ * - **Commit.** One queue, one seq at a time, for every author (rule 5).
+ * - **Hear.** One reaction per entry on the log, whether this run wrote the
+ *   entry or found it on a read. The room writes down and hears back up, so
+ *   a message it committed and a message another run left reach a host the
+ *   same way.
  * - **Route.** Who wakes for a message, written with it, and who is steered.
  * - **Answer a seat.** The view an activation reads, the commit it asks for,
  *   and the lease it holds — the three calls in `wire.ts`.
@@ -34,7 +37,7 @@ import { type Committed, type LogEntry, RoomLog } from './log/log.ts';
 import { renderLine } from './render.ts';
 import { assertAssistant } from './room/assistant.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
-import { activationId, draftId, isExpired, isLive, parseId, seatOf } from './room/lease.ts';
+import { activationId, isExpired, isLive, parseId, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { type Decision, decide, liveSeats, working } from './room/reconcile.ts';
 import { type RoomFacts, seatsOf, viewOf } from './room/view.ts';
@@ -61,6 +64,7 @@ import {
 	type SummaryMessage,
 } from './types.ts';
 import type {
+	CloseRow,
 	Commit,
 	CommitResponse,
 	CompositionRow,
@@ -367,7 +371,7 @@ class SessionImpl implements Session, RunningRoom {
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
 		this.log = new RoomLog(
 			this.sessions.open(name),
-			(entry, fresh) => this.heard(entry, fresh),
+			(entry, first) => this.hear(entry, first),
 			this.run,
 			() => this.superseded(),
 		);
@@ -721,9 +725,10 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * One operation on the room's commit queue: the draft is built where the
-	 * write happens, with the wakes the room decides for it, and what the room
-	 * does with a fresh message runs inside the same link of the queue. A
-	 * repeated key lands nothing, so the room does nothing with it either.
+	 * write happens, with the wakes the room decides for it. The log hears
+	 * the message inside the same link, so what the room does with it happens
+	 * before anything lands on top. A repeated key lands nothing, so the
+	 * room does nothing with it either.
 	 */
 	private commitMessage<T extends Message>(
 		key: string,
@@ -731,22 +736,19 @@ class SessionImpl implements Session, RunningRoom {
 		draft: (state: RoomState) => Omit<T, 'seq' | 'key' | 'wakes'>,
 		route = true,
 	): Promise<Committed<T>> {
-		return this.log.commit<T>(
-			{
-				key,
-				...(readThrough === undefined ? {} : { readThrough }),
-				draft: () => {
-					const state = this.state();
-					const message = draft(state);
-					const woken = route ? this.routing(message as unknown as Message, state) : [];
-					return { ...message, ...(woken.length === 0 ? {} : { wakes: woken }) } as Omit<
-						T,
-						'seq' | 'key'
-					>;
-				},
+		return this.log.commit<T>({
+			key,
+			...(readThrough === undefined ? {} : { readThrough }),
+			draft: () => {
+				const state = this.state();
+				const message = draft(state);
+				const woken = route ? this.routing(message as unknown as Message, state) : [];
+				return { ...message, ...(woken.length === 0 ? {} : { wakes: woken }) } as Omit<
+					T,
+					'seq' | 'key'
+				>;
 			},
-			(message) => this.committed(message, route),
-		);
+		});
 	}
 
 	/** A presence change the room observed, under a fresh key: the room's own word, never a retry. */
@@ -795,62 +797,73 @@ class SessionImpl implements Session, RunningRoom {
 		return state.exchange === undefined && isSpoken(message) && state.people.has(message.from);
 	}
 
+	// -- what the room hears --------------------------------------------------
+
 	/**
-	 * What happens to every message once its write is confirmed: the host
-	 * hears about it, then what it opened, then the room sends the wakes the
-	 * message carries and steers every seat at work. One message, one event,
-	 * one order — stated here rather than at each of the commit sites.
+	 * One entry, one reaction. The log calls this for every entry it takes
+	 * after the replay: one this run appended, and one a read found because
+	 * the confirmation was lost or another run wrote it. The room reacts the
+	 * same way to both, so it has one path from the record to a host and
+	 * never a second one for the entries it wrote itself. `first` says the
+	 * log held no earlier row for this lease id.
 	 */
-	private committed(message: Message, route: boolean): void {
+	private hear(entry: LogEntry, first: boolean): void {
+		if (entry.type === 'message') this.heardMessage(entry.message);
+		else if (entry.type === 'close') this.heardClose(entry.close);
+		else if (entry.type === 'lease') this.heardLease(entry.lease, first);
+	}
+
+	/**
+	 * A message on the record: the host hears about it, then what it opened,
+	 * then the room sends the wakes the message carries and steers every seat
+	 * at work. One message, one event, one order.
+	 */
+	private heardMessage(message: Message): void {
 		this.emit({ type: 'message', message });
 		this.noteExchange(message.seq);
 		for (const seat of message.wakes ?? []) this.send(activationId(message.seq, seat), seat);
-		if (route) this.steer(message);
+		this.steer(message);
 		void this.reconcile();
 	}
 
 	/**
-	 * An entry the log found on a read in doubt: it landed, and this room
-	 * never heard. The room acts on it as on a write it confirmed: the host
-	 * hears the event, and a message is routed.
+	 * An exchange ended at the range the close names. The host hears it
+	 * before anything is written about it: the assistant is the first reader
+	 * of a closed exchange and not the only one. A question that landed
+	 * ahead of the close opens the next exchange, and the room says so.
 	 */
-	private heard(entry: LogEntry, fresh: boolean): void {
-		if (entry.type === 'message') {
-			this.committed(entry.message, true);
-			return;
-		}
-		if (entry.type === 'close') {
-			const question = this.log.messages.find((m) => m.seq === entry.close.from);
-			this.emit({
-				type: 'exchange_closed',
-				exchange: {
-					owner: entry.close.owner,
-					from: entry.close.from,
-					at: question?.at ?? entry.close.at,
-					through: entry.close.through,
-				},
-			});
-			// A question that landed ahead of the close opens the next exchange, as it does at `close`.
-			const next = this.state().exchange;
-			if (next !== undefined) this.noteExchange(next.from);
-			return;
-		}
-		if (entry.type === 'lease') this.heardLease(entry.lease, fresh);
+	private heardClose(close: CloseRow): void {
+		const question = this.log.messages.find((m) => m.seq === close.from);
+		this.emit({
+			type: 'exchange_closed',
+			exchange: {
+				owner: close.owner,
+				from: close.from,
+				at: question?.at ?? close.at,
+				through: close.through,
+			},
+		});
+		const next = this.state().exchange;
+		if (next !== undefined) this.noteExchange(next.from);
 	}
 
-	/** A lease row found: a fresh claim starts an activation, and an end ends one. A row that ends a lease the log never held is a wake written off, and starts nothing. */
-	private heardLease(lease: LeaseRow, fresh: boolean): void {
+	/**
+	 * A lease row: the first row of an id starts an activation, and an end
+	 * row ends one. A row that ends a lease the log never held is a wake
+	 * written off, and starts nothing.
+	 */
+	private heardLease(lease: LeaseRow, first: boolean): void {
 		const seat = seatOf(lease.id, this.assistant) ?? '';
 		if (lease.phase === 'running') {
-			if (fresh) {
+			if (first) {
 				this.idleReported = false;
 				this.emit({ type: 'activation_start', agent: seat });
 			}
-			// The claim that lost its confirmation never armed the expiry: this pass does.
+			// A claim that lost its confirmation never armed the expiry: this pass does.
 			void this.reconcile();
 			return;
 		}
-		if (fresh) return;
+		if (first) return;
 		const spoke = this.log.messages.some((m) => m.activationId === lease.id);
 		this.emit({ type: 'activation_end', agent: seat, spoke });
 		if (lease.reason === 'expired') {
@@ -1055,9 +1068,7 @@ class SessionImpl implements Session, RunningRoom {
 		await this.ready;
 		const seat = seatOf(lease.activation, this.assistant);
 		if (seat === undefined || !this.onRoster(seat)) return stale('the seat is not on the roster');
-		return lease.phase === 'running'
-			? this.claim(lease.activation, seat)
-			: this.release(lease, seat);
+		return lease.phase === 'running' ? this.claim(lease.activation) : this.release(lease);
 	}
 
 	/**
@@ -1070,75 +1081,51 @@ class SessionImpl implements Session, RunningRoom {
 	 * past the deadline: the expiry a claim or a renewal takes is capped
 	 * there, so an activation that runs on expires on the room's alarm.
 	 */
-	private async claim(id: string, seat: string): Promise<LeaseResponse> {
+	private async claim(id: string): Promise<LeaseResponse> {
 		let expiry = 0;
-		let fresh = false;
 		const written = await this.log.write('lease', () => {
 			const state = this.state();
 			const known = state.leases.get(id);
 			const now = this.now();
 			if (known === undefined && (this.stopped || !this.due(state).has(id))) return undefined;
 			if (known !== undefined && !isLive(known, now)) return undefined;
-			fresh = known === undefined;
 			const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
 			expiry = Math.min(now + this.runtime.wake.expiry, claimedAt + this.runtime.wake.deadline);
 			return { id, phase: 'running', expiry, at: this.iso() };
 		});
 		if (!written) return stale('the lease ended');
-		if (fresh) {
-			this.idleReported = false;
-			this.emit({ type: 'activation_start', agent: seat });
-		}
-		void this.reconcile();
 		return { ok: { expiry, lastSeq: this.log.lastSeq } };
 	}
 
 	/** The ids the fold says may claim a fresh lease now. */
 	private due(state: RoomState): Set<string> {
-		return new Set([
-			...state.pending.map((wake) => wake.id),
-			...state.owed.map((owed) => draftId(owed.through, owed.attempts + 1)),
-		]);
+		return new Set(state.due.map((owed) => owed.id));
 	}
 
-	private async release(lease: Lease, seat: string): Promise<LeaseResponse> {
-		const ended = await this.end(lease.activation, seat, lease.reason ?? 'released');
+	private async release(lease: Lease): Promise<LeaseResponse> {
+		const ended = await this.end(lease.activation, lease.reason ?? 'released');
 		if (!ended) return stale('the lease ended');
 		void this.reconcile();
 		return { ok: { expiry: this.now(), lastSeq: this.log.lastSeq } };
 	}
 
 	/**
-	 * End one lease, for whatever reason, and say so once. Nothing to end is
-	 * not an error. A revocation may name an activation that never claimed:
-	 * the row ends it before it starts, and the wake or the draft it stood
-	 * for is answered. An expiry is judged where the row is written: a
-	 * renewal that landed ahead of it keeps the lease, and the row is not
-	 * written.
+	 * End one lease, for whatever reason. Nothing to end is not an error. A
+	 * revocation may name an activation that never claimed: the row ends it
+	 * before it starts, and the wake or the draft it stood for is answered.
+	 * An expiry is judged where the row is written: a renewal that landed
+	 * ahead of it keeps the lease, and the row is not written. The row says
+	 * how the activation went, and `heardLease` says so once.
 	 */
-	private async end(id: string, seat: string, reason: EndReason): Promise<boolean> {
-		let started = true;
-		const written = await this.log.write('lease', () => {
+	private end(id: string, reason: EndReason): Promise<boolean> {
+		return this.log.write('lease', () => {
 			const known = this.state().leases.get(id);
 			if (known?.phase === 'ended') return undefined;
 			if (known === undefined && !WRITES_OFF.has(reason)) return undefined;
 			const expired = known !== undefined && isExpired(known, this.now());
 			if (known !== undefined && expired !== (reason === 'expired')) return undefined;
-			started = known !== undefined;
 			return { id, phase: 'ended', reason, at: this.iso() };
 		});
-		if (!written) return false;
-		if (!started) return true;
-		const spoke = this.state().messages.some((m) => m.activationId === id);
-		this.emit({ type: 'activation_end', agent: seat, spoke });
-		if (reason === 'expired') {
-			this.emit({
-				type: 'error',
-				agent: seat,
-				error: new Error('The activation ran past its lease.'),
-			});
-		}
-		return true;
 	}
 
 	// -- reconcile ----------------------------------------------------------------
@@ -1201,8 +1188,7 @@ class SessionImpl implements Session, RunningRoom {
 		for (const expired of decision.expired) {
 			// A room that went away mid-pass writes nothing more of what it decided.
 			if (this.gone()) return changed;
-			const seat = seatOf(expired.id, this.assistant) ?? '';
-			changed = (await this.end(expired.id, seat, 'expired')) || changed;
+			changed = (await this.end(expired.id, 'expired')) || changed;
 		}
 		if (decision.close && !this.gone()) changed = (await this.close(decision.close)) || changed;
 		for (const send of decision.sends) this.send(send.id, send.seat);
@@ -1212,24 +1198,15 @@ class SessionImpl implements Session, RunningRoom {
 	/**
 	 * The room went quiet on an exchange, so that exchange ends at the record
 	 * as the decision saw it: the close is a row on the log, written where the
-	 * fold still says the same exchange is open. A question that landed after
-	 * the decision opens the next exchange the moment this one closes, and the
-	 * room says so; the next pass closes it at once when nobody works on it.
-	 * The host hears the close before anything is written about it: the
-	 * assistant is the first reader of a closed exchange and not the only one.
+	 * fold still says the same exchange is open. `heardClose` says so, and
+	 * opens the next exchange when a question landed after the decision; the
+	 * next pass closes that one at once when nobody works on it.
 	 */
-	private async close(close: NonNullable<Decision['close']>): Promise<boolean> {
-		let exchange: Exchange | undefined;
-		const written = await this.log.write('close', () => {
-			exchange = this.state().exchange;
-			if (exchange?.from !== close.from || this.stopped) return undefined;
+	private close(close: NonNullable<Decision['close']>): Promise<boolean> {
+		return this.log.write('close', () => {
+			if (this.state().exchange?.from !== close.from || this.stopped) return undefined;
 			return close;
 		});
-		if (!written || exchange === undefined) return false;
-		this.emit({ type: 'exchange_closed', exchange: { ...exchange, through: close.through } });
-		const next = this.state().exchange;
-		if (next !== undefined) this.noteExchange(next.from);
-		return true;
 	}
 
 	/**
@@ -1288,7 +1265,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * a seat that never hears the cut is refused whatever it writes after it.
 	 */
 	private async cut(seat: string, ids: string[]): Promise<void> {
-		for (const id of ids) await this.end(id, seat, 'revoked');
+		for (const id of ids) await this.end(id, 'revoked');
 		const port = this.port(seat);
 		for (const id of ids) void port.cut(id).catch(() => {});
 	}
