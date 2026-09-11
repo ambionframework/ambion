@@ -15,7 +15,7 @@
  */
 import type { Clock, LeaseChange, Message, Seq } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
-import { activationId, parseId } from '../../src/room/lease.ts';
+import { parseId } from '../../src/room/lease.ts';
 
 export type Outcome = 'ok' | 'fail' | 'info';
 
@@ -251,9 +251,7 @@ function seqs(stored: Checked['stored']): string[] {
 function owedBy(id: string): string | undefined {
 	const parsed = parseId(id);
 	if (parsed === undefined) return undefined;
-	return parsed.cause === 'message'
-		? activationId(parsed.position, parsed.seat ?? '')
-		: `close:${parsed.position}`;
+	return `${parsed.cause}:${parsed.position}:${parsed.seat}`;
 }
 
 /** One activation the room owes runs at a time: the next claims only after the last ended. */

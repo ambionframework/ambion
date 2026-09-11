@@ -94,26 +94,26 @@ describe('heard', () => {
 describe('foldLeases', () => {
 	it('holds every lease to until >= since, which is what lets heard read until alone', () => {
 		const leases = foldLeases([
-			running('2:solo', 2),
-			running('2:solo', 3),
-			ended('2:solo', 5),
-			running('9:other', 9),
+			running('message:2:solo:1', 2),
+			running('message:2:solo:1', 3),
+			ended('message:2:solo:1', 5),
+			running('message:9:other:1', 9),
 		]);
 		for (const lease of leases.values()) {
 			if (lease.until === undefined) continue;
 			expect(lease.until).toBeGreaterThanOrEqual(lease.since);
 		}
-		expect(leases.get('2:solo')).toMatchObject({ since: 2, until: 5, heardThrough: 3 });
+		expect(leases.get('message:2:solo:1')).toMatchObject({ since: 2, until: 5, heardThrough: 3 });
 	});
 
 	it('keeps until >= since for a lease a checkpoint carried, which ends later', () => {
 		// The checkpoint holds the claim; the end lands after it. `since` comes
 		// off the checkpoint, and `until` off the change, so the fold must still
 		// order them.
-		const held = foldLeases([running('2:solo', 2), running('2:solo', 3)]);
+		const held = foldLeases([running('message:2:solo:1', 2), running('message:2:solo:1', 3)]);
 		const carried = [...held.values()];
-		const leases = foldLeases([ended('2:solo', 5)], carried);
-		const lease = leases.get('2:solo');
+		const leases = foldLeases([ended('message:2:solo:1', 5)], carried);
+		const lease = leases.get('message:2:solo:1');
 		expect(lease).toMatchObject({ since: 2, until: 5, heardThrough: 3 });
 		expect(lease?.until).toBeGreaterThanOrEqual(lease?.since ?? 0);
 	});
@@ -138,7 +138,11 @@ describe('the two questions a lease answers', () => {
 	const pendingIds = (reason: EndReason) =>
 		pendingWakes(
 			[spoken(2), spoken(6)],
-			foldLeases([running('2:solo', 2), running('2:solo', 4), ended('2:solo', 8, reason)]),
+			foldLeases([
+				running('message:2:solo:1', 2),
+				running('message:2:solo:1', 4),
+				ended('message:2:solo:1', 8, reason),
+			]),
 			new Set(['solo']),
 			options,
 			'assistant',
@@ -150,18 +154,18 @@ describe('the two questions a lease answers', () => {
 		const refused = foldLeases([running('c', 2), ended('c', 3, 'refused')]).get('c');
 		expect(refused && cameToNothing(refused)).toBe(true);
 		// seq 2 is answered; seq 6 landed past the last renewal and reached nobody.
-		expect(pendingIds('refused')).toEqual(['6:solo']);
+		expect(pendingIds('refused')).toEqual(['message:6:solo:1']);
 	});
 
 	it('leaves every message pending when the lease answered nothing', () => {
 		for (const reason of ['failed', 'expired'] as const) {
-			expect(pendingIds(reason)).toEqual(['2:solo:2', '6:solo:2']);
+			expect(pendingIds(reason)).toEqual(['message:2:solo:2', 'message:6:solo:2']);
 		}
 	});
 
 	it('answers through the last renewal when the lease stood down', () => {
 		for (const reason of ['released', 'revoked'] as const) {
-			expect(pendingIds(reason)).toEqual(['6:solo']);
+			expect(pendingIds(reason)).toEqual(['message:6:solo:1']);
 		}
 	});
 });

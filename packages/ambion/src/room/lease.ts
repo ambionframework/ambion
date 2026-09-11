@@ -45,43 +45,34 @@ import {
 export type Cause = 'message' | 'close';
 
 /**
- * The id of the activation a message wakes on a seat: the first attempt
- * bare, later ones numbered.
+ * The id of one activation: what caused it, where the cause sits on the
+ * record, the seat that takes it, and which attempt this is. One spelling
+ * for both causes, so every reader asks the same four questions of it.
  */
-export const activationId = (seq: Seq, seat: string, attempt = 1): string =>
-	attempt === 1 ? `${seq}:${seat}` : `${seq}:${seat}:${attempt}`;
+export const activationId = (cause: Cause, position: Seq, seat: string, attempt = 1): string =>
+	`${cause}:${position}:${seat}:${attempt}`;
 
-/** The id of the assistant's attempt at the summary a close owes. */
-const draftId = (through: Seq, attempt: number): string => `close:${through}:${attempt}`;
-
-/**
- * What an id says about the activation: what caused it, where on the record
- * the cause sits, which attempt this is, and the seat, for a cause that
- * names one. A close names no seat, because the assistant is the only seat
- * that drafts; `seatOf` reads it off the room.
- */
+/** What an id says about the activation it names. */
 export interface ParsedId {
 	cause: Cause;
-	/** The seq of the cause: the message that woke the seat, or the close's `through`. */
+	/** Where the cause sits: the message that woke the seat, or the close's `through`. */
 	position: Seq;
+	seat: string;
 	attempt: number;
-	seat?: string;
 }
+
+const ID = /^(message|close):(\d+):([a-z][a-z0-9-]*):(\d+)$/;
 
 /** What an id says caused the activation, or nothing for an id the room did not derive. */
 export function parseId(id: string): ParsedId | undefined {
-	const close = /^close:(\d+):(\d+)$/.exec(id);
-	if (close) return { cause: 'close', position: Number(close[1]), attempt: Number(close[2]) };
-	const message = /^(\d+):([a-z][a-z0-9-]*)(?::(\d+))?$/.exec(id);
-	if (message) {
-		return {
-			cause: 'message',
-			position: Number(message[1]),
-			seat: message[2] ?? '',
-			attempt: message[3] === undefined ? 1 : Number(message[3]),
-		};
-	}
-	return undefined;
+	const parts = ID.exec(id);
+	if (parts === null) return undefined;
+	return {
+		cause: parts[1] as Cause,
+		position: Number(parts[2]),
+		seat: parts[3] ?? '',
+		attempt: Number(parts[4]),
+	};
 }
 
 /**
@@ -218,9 +209,8 @@ function leasesBySeat(
 	const bySeat = new Map<string, LeaseHold[]>();
 	for (const lease of leases.values()) {
 		const parsed = parseId(lease.id);
-		const seat = parsed?.cause === 'message' ? parsed.seat : undefined;
-		if (seat === undefined || !roster.has(seat)) continue;
-		bySeat.set(seat, [...(bySeat.get(seat) ?? []), lease]);
+		if (parsed?.cause !== 'message' || !roster.has(parsed.seat)) continue;
+		bySeat.set(parsed.seat, [...(bySeat.get(parsed.seat) ?? []), lease]);
 	}
 	return bySeat;
 }
@@ -307,7 +297,7 @@ export function dueFrom(
 	const attempt = nextAttempt(attempts);
 	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
 	return {
-		id: cause === 'message' ? activationId(position, seat, attempt) : draftId(position, attempt),
+		id: activationId(cause, position, seat, attempt),
 		seat,
 		attempts,
 		notBefore: attempts === 0 ? undefined : last + options.backoff(attempts),
@@ -324,9 +314,5 @@ const answersNothing = (lease: LeaseHold): boolean => endedFor(lease, ANSWERS_NO
 /** The attempt came to nothing, so the next one is numbered after it. */
 export const cameToNothing = (lease: LeaseHold): boolean => endedFor(lease, CAME_TO_NOTHING);
 
-/** The seat an id belongs to: the one it names, or the assistant for a draft. */
-export function seatOf(id: string, assistant: string): string | undefined {
-	const parsed = parseId(id);
-	if (parsed === undefined) return undefined;
-	return parsed.seat ?? assistant;
-}
+/** The seat an id names, or nothing for an id the room did not derive. */
+export const seatOf = (id: string): string | undefined => parseId(id)?.seat;

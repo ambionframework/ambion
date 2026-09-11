@@ -844,7 +844,8 @@ class SessionImpl implements Session, RunningRoom {
 	private heardMessage(message: Message): void {
 		this.emit({ type: 'message', message });
 		this.noteExchange(message.seq);
-		for (const seat of message.wakes ?? []) this.send(activationId(message.seq, seat), seat);
+		for (const seat of message.wakes ?? [])
+			this.send(activationId('message', message.seq, seat), seat);
 		this.steer(message);
 		void this.reconcile();
 	}
@@ -876,7 +877,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * wake written off, and starts nothing.
 	 */
 	private heardLease(lease: LeaseChange, first: boolean): void {
-		const seat = seatOf(lease.id, this.assistant) ?? '';
+		const seat = seatOf(lease.id) ?? '';
 		if (lease.phase === 'running') {
 			if (first) {
 				this.idleReported = false;
@@ -926,7 +927,7 @@ class SessionImpl implements Session, RunningRoom {
 		for (const [seat, ids] of this.live(state)) {
 			if (seat === author || !this.holds(state, ids)) continue;
 			if (seat === this.assistant && ids.some((id) => parseId(id)?.cause === 'message')) continue;
-			this.send(activationId(message.seq, seat), seat, {
+			this.send(activationId('message', message.seq, seat), seat, {
 				seq: message.seq,
 				line: renderLine(message),
 			});
@@ -988,7 +989,7 @@ class SessionImpl implements Session, RunningRoom {
 	private liveSeatOf(id: string, state: RoomState): string | undefined {
 		const lease = state.leases.get(id);
 		if (lease === undefined || !isLive(lease, this.now())) return undefined;
-		const seat = seatOf(id, this.assistant);
+		const seat = seatOf(id);
 		return seat !== undefined && this.onRoster(seat, state) ? seat : undefined;
 	}
 
@@ -1097,7 +1098,7 @@ class SessionImpl implements Session, RunningRoom {
 	async lease(lease: Lease): Promise<LeaseResponse> {
 		if (this.gone()) return stale('the room is gone');
 		await this.ready;
-		const seat = seatOf(lease.activation, this.assistant);
+		const seat = seatOf(lease.activation);
 		if (seat === undefined || !this.onRoster(seat)) return stale('the seat is not on the roster');
 		return lease.phase === 'running' ? this.claim(lease.activation) : this.release(lease);
 	}

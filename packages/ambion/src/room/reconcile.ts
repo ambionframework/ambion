@@ -54,14 +54,13 @@ export interface Decision {
  * by name, with the ids that make them live.
  */
 export function liveSeats(state: RoomState, now: number): Map<string, string[]> {
-	const assistant = state.composition?.assistant.name ?? '';
 	const live = new Map<string, string[]>();
 	const add = (seat: string | undefined, id: string) => {
 		if (seat === undefined) return;
 		live.set(seat, [...(live.get(seat) ?? []), id]);
 	};
 	for (const lease of state.leases.values()) {
-		if (isLive(lease, now)) add(seatOf(lease.id, assistant), lease.id);
+		if (isLive(lease, now)) add(seatOf(lease.id), lease.id);
 	}
 	for (const wake of state.pending) add(wake.seat, wake.id);
 	// A draft in its backoff holds nobody: the room is at rest until it is due.

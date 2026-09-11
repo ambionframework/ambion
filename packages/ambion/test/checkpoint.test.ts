@@ -141,7 +141,7 @@ describe('a checkpoint', () => {
 			if (checkpoint === undefined) throw new Error('the room wrote no checkpoint');
 			await journal.write('checkpoint', checkpoint);
 			// the draft is on the checkpoint, and the close is owed no longer
-			expect(checkpoint.leases.map((lease) => lease.id)).toContain('close:4:1');
+			expect(checkpoint.leases.map((lease) => lease.id)).toContain('close:4:assistant:1');
 			expect(fold(journal).owed).toEqual([]);
 			await stopSession(session);
 		} finally {
@@ -170,18 +170,28 @@ describe('a checkpoint the room folds', () => {
 				available: [],
 				at,
 			});
-			await journal.write('lease', { id: '2:solo', phase: 'running', expiry: 60_000, at });
+			await journal.write('lease', {
+				id: 'message:2:solo:1',
+				phase: 'running',
+				expiry: 60_000,
+				at,
+			});
 			// the checkpoint carries the live lease, and the journal drops the entry it replaced
 			const checkpoint = checkpointOf(fold(journal), 0);
 			if (checkpoint === undefined) throw new Error('the room wrote no checkpoint');
-			expect(checkpoint.leases.map((lease) => lease.id)).toEqual(['2:solo']);
+			expect(checkpoint.leases.map((lease) => lease.id)).toEqual(['message:2:solo:1']);
 			await journal.write('checkpoint', checkpoint);
-			await journal.write('lease', { id: '2:solo', phase: 'ended', reason: 'released', at });
+			await journal.write('lease', {
+				id: 'message:2:solo:1',
+				phase: 'ended',
+				reason: 'released',
+				at,
+			});
 			// the end ends a lease the fold holds: the room reports the
 			// activation ending and never a second one starting
 			expect(heard).toEqual([
-				{ id: '2:solo', opens: true },
-				{ id: '2:solo', opens: false },
+				{ id: 'message:2:solo:1', opens: true },
+				{ id: 'message:2:solo:1', opens: false },
 			]);
 		} finally {
 			await opened.dispose();

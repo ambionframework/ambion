@@ -537,7 +537,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await resumed.settled();
 			await tick();
 			// the seat side hears the cut over the wire, and the room opened it to say so
-			expect(cuts).toEqual(['2:alpha']);
+			expect(cuts).toEqual(['message:2:alpha:1']);
 			await stopSession(resumed);
 		} finally {
 			await opened.dispose();

@@ -23,6 +23,7 @@ import {
 	type Visit,
 	visitSession,
 } from '../src/index.ts';
+import { parseId } from '../src/room/lease.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { assistant, collect, deferred, enter, roomName, storedOf, tick } from './support/room.ts';
 import {
@@ -150,7 +151,7 @@ describe('a lease', () => {
 
 		const room = session as unknown as SeatRoom;
 		await expect(
-			room.lease({ activation: '2:solo', phase: 'ended', reason: 'released' }),
+			room.lease({ activation: 'message:2:solo:1', phase: 'ended', reason: 'released' }),
 		).resolves.toEqual({
 			stale: 'the lease ended',
 		});
@@ -184,7 +185,7 @@ describe('a lease', () => {
 		const stored = await storedOf(runtime.sessions, session.name);
 		const renewals = stored.flatMap((entry) => {
 			const lease = entry.data as LeaseChange;
-			const mine = entry.type === 'ambion/lease' && lease.id === '2:solo';
+			const mine = entry.type === 'ambion/lease' && lease.id === 'message:2:solo:1';
 			return mine && lease.phase === 'running' ? [lease.expiry] : [];
 		});
 		// the room wrote a claim and renewals, and no change takes the lease past the deadline
@@ -216,7 +217,7 @@ describe('a lease', () => {
 
 		// the room gives up: the attempt it does not make is on the record, once
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
-			{ type: 'abandoned', agent: 'solo', activation: '2:solo:4' },
+			{ type: 'abandoned', agent: 'solo', activation: 'message:2:solo:4' },
 		]);
 		const stored = await storedOf(runtime.sessions, session.name);
 		const gaveUp = stored.filter((entry) => {
@@ -225,7 +226,7 @@ describe('a lease', () => {
 				entry.type === 'ambion/lease' && lease.phase === 'ended' && lease.reason === 'abandoned'
 			);
 		});
-		expect(gaveUp.map((entry) => (entry.data as LeaseChange).id)).toEqual(['2:solo:4']);
+		expect(gaveUp.map((entry) => (entry.data as LeaseChange).id)).toEqual(['message:2:solo:4']);
 
 		// the wake is answered, so the exchange closes and the seat stands idle
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
@@ -261,12 +262,12 @@ describe('a lease', () => {
 
 		// the room gives up on the summary, and says so once
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
-			{ type: 'abandoned', agent: 'assistant', activation: 'close:4:4' },
+			{ type: 'abandoned', agent: 'assistant', activation: 'close:4:assistant:4' },
 		]);
 		const stored = await storedOf(runtime.sessions, session.name);
 		expect(
 			stored
-				.filter((entry) => (entry.data as LeaseChange).id === 'close:4:4')
+				.filter((entry) => (entry.data as LeaseChange).id === 'close:4:assistant:4')
 				.map((entry) => entry.data),
 		).toMatchObject([{ phase: 'ended', reason: 'abandoned' }]);
 		// nothing is owed, no summary was written, and the record stands whole
@@ -378,7 +379,11 @@ describe('a lease judged where its change is written', () => {
 		// the claim lands at once; the first renewal is held on the storage
 		const sessions = gatedOpener(base.sessions, (type, data) => {
 			const entry = data as LeaseChange;
-			if (type !== 'ambion/lease' || entry.phase !== 'running' || !entry.id.endsWith(':solo')) {
+			if (
+				type !== 'ambion/lease' ||
+				entry.phase !== 'running' ||
+				parseId(entry.id)?.seat !== 'solo'
+			) {
 				return undefined;
 			}
 			runningRows += 1;
@@ -421,7 +426,7 @@ describe('a lease judged where its change is written', () => {
 		const stored = (await storedOf(base.sessions, session.name))
 			.filter((r) => r.type === 'ambion/lease')
 			.map((r) => r.data as LeaseChange)
-			.filter((l) => l.id.endsWith(':solo'));
+			.filter((l) => parseId(l.id)?.seat === 'solo');
 		// the claim, the renewal, the check at the run's end, and one release: no expiry
 		expect(stored.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual(['released']);
 	});
@@ -440,7 +445,10 @@ describe('a lease judged where its change is written', () => {
 						on: 'view',
 						kind: 'delay',
 						ms: 10_000,
-						match: (id) => typeof id === 'string' && id.startsWith('close:') && id.endsWith(':2'),
+						match: (id) => {
+							const parsed = typeof id === 'string' ? parseId(id) : undefined;
+							return parsed?.cause === 'close' && parsed.attempt === 2;
+						},
 					},
 				],
 				clock,
