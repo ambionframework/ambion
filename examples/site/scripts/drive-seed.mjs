@@ -11,7 +11,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DRIVE = fileURLToPath(new URL('../drive', import.meta.url));
-const OUT = fileURLToPath(new URL('../src/drive-seed.ts', import.meta.url));
+/** The module, as a URL to import it by and a path to write it to. */
+const MODULE = new URL('../src/drive-seed.ts', import.meta.url);
+const OUT = fileURLToPath(MODULE);
 
 /** Every checked-in document, keyed by the path it takes in the drive. */
 function read() {
@@ -46,7 +48,7 @@ ${entries}
 
 const seed = read();
 if (process.argv.includes('--check')) {
-	const { DRIVE_SEED } = await import(OUT);
+	const { DRIVE_SEED } = await import(MODULE.href);
 	const same = JSON.stringify(DRIVE_SEED) === JSON.stringify(seed);
 	if (!same) {
 		process.stderr.write('src/drive-seed.ts is out of step with drive/. Run `pnpm seed`.\n');

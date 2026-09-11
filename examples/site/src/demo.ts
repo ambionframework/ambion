@@ -253,18 +253,22 @@ await quiescent();
 step('sam opens it from the deck with a forecast; the products already seated hold what he needs');
 const samVisit = await visitSession(session, sam);
 /** The seq of the first product answer to sam: the message the crash lands on. */
+let stopWatchingForIt = () => {};
 const firstAnswer = new Promise<number>((resolve) => {
-	const off = session.subscribe((event) => {
+	stopWatchingForIt = session.subscribe((event) => {
 		if (event.type !== 'message' || !isSpoken(event.message)) return;
 		if (PEOPLE.has(event.message.from)) return;
-		off();
 		resolve(event.message.seq);
 	});
 });
 await samVisit.deliver({
 	text: 'Rain all Thursday morning. I am not pouring into that. What do you need from me to move it?',
 });
-const crashedAt = await firstAnswer;
+// The delivery opened the exchange, so the room goes quiet only when it
+// closes. A run where every product declines has nothing to crash into: it
+// takes the close instead of waiting for an answer that never comes.
+const crashedAt = await Promise.race([firstAnswer, quiescent().then(() => lastSeq)]);
+stopWatchingForIt();
 
 step(
 	'the process dies as the first answer to sam lands: the leases it held stay on the log, and nothing is released',
