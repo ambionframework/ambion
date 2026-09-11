@@ -7,11 +7,12 @@ whether it has anything to add. The assistant selects specialists from the
 room's reserve and consolidates multi-agent work when needed, without gaining
 general-purpose authority over the application.
 
-`defineAgent` makes an agent, `defineHuman` names a person, `defineTool` gives
-agents hands, and `defineWorkspace` names the identity and data boundary those
-hands reach into. `startSession` brings up the room, `visitSession` puts
-somebody in it, `readSession` reads it without starting anything, and
-`stopSession` takes it down.
+The root import is deliberately the small application surface. `defineAgent`
+makes an agent, `defineHuman` names a person, `defineTool` gives agents hands,
+and `defineWorkspace` names the identity and data boundary those hands reach
+into. `startSession` brings up the room, `visitSession` puts somebody in it,
+`readSession` reads it without starting anything, and `stopSession` takes it
+down.
 
 ```ts
 import {
@@ -54,6 +55,12 @@ await session.quiet();
 
 await stopSession(session);
 ```
+
+Hosts that replace time, persistence, model sessions, transport, or workspace
+storage import those integration points from `@ambionframework/ambion/host`.
+Transport authors can import the advanced, JSON-safe seat protocol from
+`@ambionframework/ambion/protocol`. Neither subpath is needed to define and run
+an application with the defaults.
 
 The design contract is [`docs/agent.md`](https://github.com/ambionframework/ambion/blob/main/docs/agent.md),
 with presence — who is in a session, and what the agents do about it — in

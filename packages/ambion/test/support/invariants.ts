@@ -3,13 +3,9 @@
  * leaves has one shape, and every scenario ends by checking it.
  */
 import { expect } from 'vitest';
-import {
-	isSummary,
-	type LeaseRow,
-	type SessionEvent,
-	type SessionOpener,
-	type SessionView,
-} from '../../src/index.ts';
+import { isSummary, type SessionEvent, type SessionView } from '../../src/index.ts';
+import { type SessionOpener } from '../../src/host.ts';
+import { type LeaseRow } from '../../src/wire.ts';
 import { standing } from './history.ts';
 import { rowsOf } from './room.ts';
 

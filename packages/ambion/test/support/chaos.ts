@@ -15,22 +15,20 @@
  */
 import { expect } from 'vitest';
 import {
-	createRuntime,
 	type HumanDefinition,
-	inProcessTransport,
 	isSpoken,
 	isSummary,
 	type Message,
-	type Runtime,
 	resumeSession,
 	type Session,
 	type SessionEvent,
-	type SessionOpener,
 	startSession,
 	visitSession,
 } from '../../src/index.ts';
+import { createRuntime, type Runtime, type SessionOpener } from '../../src/host.ts';
+import { inProcessTransport } from '../../src/protocol.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
-import type { LeaseRow } from '../../src/wire.ts';
+import type { LeaseRow } from '../../src/protocol.ts';
 import {
 	agents,
 	assistant,

@@ -4,7 +4,8 @@
  * through to disk and reads back.
  */
 import { describe, expect, it } from 'vitest';
-import { createRuntime, inProcessTransport } from '../src/index.ts';
+import { createRuntime } from '../src/host.ts';
+import { inProcessTransport } from '../src/protocol.ts';
 import { fakeClock } from './support/clock.ts';
 import { roomName } from './support/room.ts';
 import { scenarios } from './support/scenarios.ts';

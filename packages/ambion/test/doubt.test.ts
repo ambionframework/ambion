@@ -5,7 +5,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-	createRuntime,
 	defineAgent,
 	defineHuman,
 	isPresence,
@@ -14,6 +13,7 @@ import {
 	startSession,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime } from '../src/host.ts';
 import { fakeClock } from './support/clock.ts';
 import { collect, roomName, rowsOf } from './support/room.ts';
 import {

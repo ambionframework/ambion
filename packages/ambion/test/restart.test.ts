@@ -6,13 +6,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-	createRuntime,
 	defineAgent,
 	defineHuman,
-	inProcessTransport,
 	isSpoken,
 	isSummary,
-	type Runtime,
 	readSession,
 	resumeSession,
 	type Session,
@@ -20,6 +17,8 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime, type Runtime } from '../src/host.ts';
+import { inProcessTransport } from '../src/protocol.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { collect, crash, deferred, roomName, rowsOf, tick } from './support/room.ts';
 import {

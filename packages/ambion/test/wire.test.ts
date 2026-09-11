@@ -3,21 +3,20 @@
  * log, is plain JSON: it survives the wire unchanged.
  */
 import { describe, expect, it } from 'vitest';
+import { createRuntime } from '../src/host.ts';
 import {
 	type ActivationView,
 	assertWire,
-	type CloseRow,
 	type Commit,
 	type CommitResponse,
-	type CompositionRow,
-	createRuntime,
 	type Lease,
 	type LeaseResponse,
 	type LeaseRow,
 	roundTrip,
 	type ViewResponse,
 	type Wake,
-} from '../src/index.ts';
+} from '../src/protocol.ts';
+import type { CloseRow, CompositionRow } from '../src/wire.ts';
 import { fakeClock } from './support/clock.ts';
 import { roomName, rowsOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';

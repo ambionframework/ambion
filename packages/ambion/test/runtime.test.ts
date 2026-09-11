@@ -7,7 +7,6 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-	createRuntime,
 	defineWorkspace,
 	destroyWorkspace,
 	isSpoken,
@@ -16,6 +15,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime } from '../src/host.ts';
 import { fakeClock } from './support/clock.ts';
 import { andrei, assistant, roomName } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';

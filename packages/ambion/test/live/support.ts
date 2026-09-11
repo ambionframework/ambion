@@ -16,7 +16,6 @@ import {
 	type DefineAgentOptions,
 	defineAgent,
 	defineHuman,
-	InMemorySessionRepo,
 	isSpoken,
 	type Message,
 	type Session,
@@ -24,6 +23,7 @@ import {
 	type StartSessionOptions,
 	startSession,
 } from '../../src/index.ts';
+import { InMemorySessionRepo } from '../../src/host.ts';
 import { collect, roomName } from '../support/room.ts';
 
 /** The model every live seat runs on. The example reads the same variable. */

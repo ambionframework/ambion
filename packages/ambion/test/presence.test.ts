@@ -1,20 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	attentive,
-	createRuntime,
 	defineAgent,
 	defineHuman,
-	InMemorySessionRepo,
 	isSpoken,
 	type Message,
 	passive,
 	readSession,
 	type Session,
-	type SessionOpener,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime, InMemorySessionRepo, type SessionOpener } from '../src/host.ts';
 import { andrei, assistant, collect, deferred, roomName as name } from './support/room.ts';
 import { contextText, quiet, scripted } from './support/scripted.ts';
 import { type FaultyOpener, faultyOpener, memory } from './support/storage.ts';

@@ -4,15 +4,12 @@ import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	attentive,
-	createRuntime,
 	defineAgent,
 	defineHuman,
 	defineTool,
-	InMemorySessionRepo,
 	isSpoken,
 	type Message,
 	passive,
-	type Runtime,
 	type Session,
 	type SessionEvent,
 	type SummaryMessage,
@@ -20,6 +17,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime, InMemorySessionRepo, type Runtime } from '../src/host.ts';
 import { renderRecord } from '../src/render.ts';
 import { fakeClock } from './support/clock.ts';
 import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';

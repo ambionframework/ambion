@@ -2,12 +2,11 @@ import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import {
 	defineAgent,
 	defineHuman,
-	type Runtime,
 	type Session,
 	type SessionEvent,
-	type SessionOpener,
 	visitSession,
 } from '../../src/index.ts';
+import { type Runtime, type SessionOpener } from '../../src/host.ts';
 
 /** A trivial assistant: every room seats one, and nothing that uses it tests what it writes. */
 export const assistant = defineAgent({

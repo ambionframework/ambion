@@ -3,7 +3,6 @@ import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	attentive,
-	createRuntime,
 	defineAgent,
 	defineHuman,
 	isPresence,
@@ -17,6 +16,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime } from '../src/host.ts';
 import { fakeClock } from './support/clock.ts';
 import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
 import {

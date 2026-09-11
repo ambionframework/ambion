@@ -12,12 +12,12 @@ import {
 	destroyWorkspace,
 	isSpoken,
 	isSummary,
-	type Runtime,
 	type Session,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../../src/index.ts';
+import { type Runtime } from '../../src/host.ts';
 import { invariants } from './invariants.ts';
 import { collect, deferred } from './room.ts';
 import {

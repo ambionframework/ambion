@@ -10,9 +10,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-	createRuntime,
-	inProcessTransport,
-	type Runtime,
 	resumeSession,
 	type Session,
 	type SessionEvent,
@@ -21,6 +18,8 @@ import {
 	type Visit,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime, type Runtime } from '../src/host.ts';
+import { inProcessTransport } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases } from './support/chaos.ts';

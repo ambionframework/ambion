@@ -19,7 +19,7 @@ import {
 	type SessionOpener,
 	sessionsOver,
 	type WorkspaceBackend,
-} from '../../src/index.ts';
+} from '../../src/host.ts';
 
 export interface OpenedStorage {
 	readonly sessions: SessionOpener;

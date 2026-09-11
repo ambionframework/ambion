@@ -20,13 +20,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
-	createRuntime,
 	isPresence,
 	resumeSession,
 	type Session,
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime } from '../src/host.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
 import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';

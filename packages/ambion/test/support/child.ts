@@ -7,7 +7,8 @@
  *
  *   node --experimental-transform-types child.ts <dir> <name> <delay-ms>
  */
-import { createRuntime, startSession, visitSession } from '../../src/index.ts';
+import { startSession, visitSession } from '../../src/index.ts';
+import { createRuntime } from '../../src/host.ts';
 import {
 	agents,
 	assistant,

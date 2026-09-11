@@ -5,7 +5,8 @@
  * pick them up and use them against a filesystem it has never seen.
  */
 import { expect, it } from 'vitest';
-import { defineWorkspace, destroyWorkspace, memoryBackend, stopSession } from '../../src/index.ts';
+import { defineWorkspace, destroyWorkspace, stopSession } from '../../src/index.ts';
+import { memoryBackend } from '../../src/host.ts';
 import { enter, roomName } from '../support/room.ts';
 import {
 	agent,

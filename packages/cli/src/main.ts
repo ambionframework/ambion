@@ -2,11 +2,14 @@
 /**
  * The `ambion` binary.
  *
- * Importing PACKAGE_NAME is the point: it proves turbo built the runtime first
- * and that the CLI resolved it across the workspace.
+ * Importing the application package proves turbo built the runtime first and
+ * that the CLI resolved it across the workspace.
  */
-import { PACKAGE_NAME } from '@ambionframework/ambion';
+import { defineAgent } from '@ambionframework/ambion';
 import { cliVersion } from './lib/version.ts';
+
+const PACKAGE_NAME = '@ambionframework/ambion';
+void defineAgent;
 
 function help(version: string): string {
 	return [

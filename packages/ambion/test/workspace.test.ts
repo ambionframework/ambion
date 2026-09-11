@@ -13,14 +13,13 @@ import {
 	defineTool,
 	defineWorkspace,
 	destroyWorkspace,
-	directoryBackend,
 	isSpoken,
 	type Session,
 	startSession,
 	stopSession,
 	type ToolContext,
-	type WorkspaceBackend,
 } from '../src/index.ts';
+import { directoryBackend, type WorkspaceBackend } from '../src/host.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/tools/bash-env.ts';
 import { MEMORY_LIMIT_BYTES, memoryBackend } from '../src/tools/just-bash.ts';
 import { assistant, enter, roomName as name } from './support/room.ts';

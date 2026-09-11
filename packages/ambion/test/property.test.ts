@@ -9,13 +9,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-	createRuntime,
 	defineAgent,
 	defineHuman,
-	inProcessTransport,
 	isSummary,
 	passive,
-	type Runtime,
 	resumeSession,
 	type Session,
 	type SessionEvent,
@@ -24,6 +21,8 @@ import {
 	type Visit,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime, type Runtime } from '../src/host.ts';
+import { inProcessTransport } from '../src/protocol.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';

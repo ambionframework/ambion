@@ -1,10 +1,8 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import {
-	createRuntime,
 	defineAgent,
 	defineHuman,
-	InMemorySessionRepo,
 	isSpoken,
 	type Message,
 	passive,
@@ -13,6 +11,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime, InMemorySessionRepo } from '../src/host.ts';
 import { andrei, assistant, collect, deferred, enter, roomName } from './support/room.ts';
 import { byAgent, contextText, quiet, scripted, speak } from './support/scripted.ts';
 

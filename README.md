@@ -149,6 +149,11 @@ added behind the same interface. See [`docs/workspace.md`](docs/workspace.md).
 
 ## A minimal sketch
 
+The first application needs only the root package. Host adapters and the
+advanced transport protocol are separate concerns, available from
+`@ambionframework/ambion/host` and `@ambionframework/ambion/protocol` when an
+embedding environment needs them.
+
 ```ts
 import { defineAgent, defineHuman, startSession, visitSession } from '@ambionframework/ambion';
 

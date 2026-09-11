@@ -16,14 +16,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
-	createRuntime,
-	inProcessTransport,
 	resumeSession,
 	type Session,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime } from '../src/host.ts';
+import { inProcessTransport } from '../src/protocol.ts';
 import type { LogEntry } from '../src/log/log.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import {

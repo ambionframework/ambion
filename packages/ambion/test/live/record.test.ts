@@ -5,13 +5,13 @@
  */
 import { expect, it } from 'vitest';
 import {
-	InMemorySessionRepo,
 	isPresence,
 	readSession,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../../src/index.ts';
+import { InMemorySessionRepo } from '../../src/host.ts';
 import { collect, roomName } from '../support/room.ts';
 import {
 	agent,

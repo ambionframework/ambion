@@ -5,18 +5,17 @@
  */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
+import { defineAgent } from '../src/index.ts';
+import { type Clock, createRuntime } from '../src/host.ts';
 import {
-	type Clock,
 	type CommitResponse,
-	createRuntime,
-	defineAgent,
 	type Lease,
 	type LeaseResponse,
 	SeatActor,
 	type SeatRoom,
 	type ViewResponse,
 	type Wake,
-} from '../src/index.ts';
+} from '../src/protocol.ts';
 import { fakeClock } from './support/clock.ts';
 import { deferred, tick } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';

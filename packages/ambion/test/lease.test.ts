@@ -8,20 +8,18 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-	createRuntime,
 	defineAgent,
 	defineHuman,
-	inProcessTransport,
 	isSpoken,
 	isSummary,
-	type LeaseRow,
-	type SeatRoom,
 	type Session,
 	startSession,
 	stopSession,
 	type Visit,
 	visitSession,
 } from '../src/index.ts';
+import { createRuntime } from '../src/host.ts';
+import { inProcessTransport, type LeaseRow, type SeatRoom } from '../src/protocol.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { assistant, collect, deferred, enter, roomName, rowsOf, tick } from './support/room.ts';
 import {

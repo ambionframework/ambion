@@ -8,14 +8,9 @@
  * `AMBION_CHAOS=all` widens the handover to a crash at every write.
  */
 import { describe, expect, it } from 'vitest';
-import {
-	createRuntime,
-	inProcessTransport,
-	resumeSession,
-	startSession,
-	stopSession,
-	visitSession,
-} from '../src/index.ts';
+import { resumeSession, startSession, stopSession, visitSession } from '../src/index.ts';
+import { createRuntime } from '../src/host.ts';
+import { inProcessTransport } from '../src/protocol.ts';
 import {
 	agents,
 	assistant,
