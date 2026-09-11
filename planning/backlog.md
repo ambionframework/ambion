@@ -727,3 +727,21 @@ and `quiet()` resolve early on a run that is gone.
 
 **Fix.** Status reads off the record with a durable cursor, so a client
 that reconnects reads what it missed.
+
+### 42. The crash sweep counts one activation end too many
+
+**What.** `pnpm chaos` fails now and then on the crash sweep. The
+invariant that every `activation_end` has a start, or a lease the run
+inherited, sees one end more than it counts starts. It reproduced on
+`jsonl`, "before the entry lands", at write 5 of 42, in about one run in
+three, and only with all five sweep files in one vitest run. The CI gate
+never saw it: `pnpm check` runs the sweeps at their small seed count.
+Either the room emits a second end for one lease, or the resume counts
+what it inherited too low.
+
+**Where.** `test/support/invariants.ts` line 64; `test/support/chaos.ts`
+`inherited`; `session.ts` `end`.
+
+**Fix.** Print every lease row and every activation event of the failing
+run, and say which lease has the extra end. Then fix the room or the
+count.

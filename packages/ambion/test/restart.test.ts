@@ -484,6 +484,64 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		}
 	});
 
+	it('cuts a lease the last run took, over a wire this run has not opened yet', async () => {
+		const { opened, clock } = await world(storage);
+		try {
+			// the activation never answers, so the run the crash leaves behind
+			// writes nothing after the test ends
+			const script = byAgent({
+				alpha: (_c, _n, call) =>
+					call === 1 ? new Promise<never>(() => {}) : Promise.resolve(quiet()),
+			});
+			const name = roomName(`restart-${storage.name}`);
+			const first = createRuntime({ sessions: opened.sessions, clock, agents });
+			const session = startSession({
+				name,
+				assistant,
+				agents: [alpha],
+				runtime: first,
+				streamFn: scripted(script),
+			});
+			const visit = await visitSession(session, priya);
+			await visit.deliver({ text: 'Anyone?' });
+			await tick();
+			expect(session.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
+			crash(first, session);
+
+			// the resumed run inherits the live lease and never wakes alpha, so it
+			// holds no port for that seat when the abort revokes what it inherited
+			const cuts: string[] = [];
+			const inProcess = inProcessTransport();
+			const second = createRuntime({
+				sessions: opened.sessions,
+				clock,
+				agents,
+				transport: {
+					connect: (room, seat, host) => {
+						const port = inProcess.connect(room, seat, host);
+						return {
+							wake: (wake) => port.wake(wake),
+							cut: (activation) => {
+								cuts.push(activation);
+								return port.cut(activation);
+							},
+						};
+					},
+				},
+			});
+			const resumed = await resumeSession(name, { runtime: second, streamFn: scripted(script) });
+			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
+			resumed.abort();
+			await resumed.settled();
+			await tick();
+			// the seat side hears the cut over the wire, and the room opened it to say so
+			expect(cuts).toEqual(['2:alpha']);
+			await stopSession(resumed);
+		} finally {
+			await opened.dispose();
+		}
+	});
+
 	it('refuses to resume a name whose seats the catalog does not hold, and one with no composition', async () => {
 		const { opened, runtime } = await world(storage);
 		try {

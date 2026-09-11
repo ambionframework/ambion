@@ -4,6 +4,7 @@
  * queued behind it runs next.
  */
 import type { StreamFn } from '@earendil-works/pi-agent-core';
+import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import {
 	type Clock,
@@ -43,6 +44,10 @@ class PlayedRoom implements SeatRoom {
 	readonly releasing = deferred();
 	/** The first release waits here. */
 	readonly letGo = deferred();
+	/** Every renewal from now on is answered stale: the room ended the lease. */
+	refuseRenewals = false;
+	/** Every renewal from now on never reaches the room. */
+	loseRenewals = false;
 
 	constructor(private readonly clock: Clock) {}
 
@@ -68,8 +73,12 @@ class PlayedRoom implements SeatRoom {
 		const ok = { ok: { expiry: this.clock.now() + 60_000, lastSeq: 1 } };
 		if (lease.phase === 'running') {
 			// A lease not yet held is a claim; one held is a renewal.
-			if (!this.holding.has(lease.activation)) this.claimed(lease.activation);
-			return ok;
+			if (!this.holding.has(lease.activation)) {
+				this.claimed(lease.activation);
+				return ok;
+			}
+			if (this.loseRenewals) throw new Error('the renewal never reached the room');
+			return this.refuseRenewals ? { stale: 'the lease ended' } : ok;
 		}
 		if (this.releases.length === 0) {
 			this.releasing.resolve();
@@ -87,6 +96,9 @@ class PlayedRoom implements SeatRoom {
 	}
 }
 
+/** A model call that never answers and never hears an abort. */
+const deaf: StreamFn = () => createAssistantMessageEventStream();
+
 function play(stream: StreamFn = scripted(() => quiet())) {
 	const clock = fakeClock();
 	const runtime = createRuntime({ clock, stream });
@@ -101,7 +113,7 @@ function play(stream: StreamFn = scripted(() => quiet())) {
 		stream: runtime.stream,
 		model: runtime.model,
 	});
-	return { room, actor };
+	return { room, actor, clock };
 }
 
 const wakeOf = (activation: string): Wake => ({ room: 'played', seat: 'product', activation });
@@ -153,6 +165,53 @@ describe('a seat actor', () => {
 		await until(() => room.releases.length === 1);
 		expect(room.claims).toEqual(['1:product']);
 		expect(room.mostHeld).toBe(1);
+	});
+
+	it('cuts an activation whose run ignores the abort, and runs what queued behind it', async () => {
+		const { room, actor } = play(deaf);
+		room.letGo.resolve();
+		const ran = actor.run('1:product');
+		await until(() => room.claims.length === 1);
+		await actor.wake(wakeOf('2:product'));
+		// the room ended the first lease: the actor moves on now, and the deaf run is left behind
+		await actor.cut('1:product');
+		await until(() => room.claims.length === 2);
+		expect(room.releases).toEqual(['1:product']);
+		await actor.cut('2:product');
+		await ran;
+		expect(room.releases).toEqual(['1:product', '2:product']);
+		expect(room.mostHeld).toBe(1);
+	});
+
+	it('cuts the activation when the room refuses its renewal', async () => {
+		const { room, actor, clock } = play(deaf);
+		room.letGo.resolve();
+		const ran = actor.run('1:product');
+		await until(() => room.claims.length === 1);
+		// the room answers the renewal stale: the lease ended, so nothing this
+		// activation writes lands, and the actor stops waiting on it
+		room.refuseRenewals = true;
+		// the claim is answered; one tick lets the actor arm its renewal alarm
+		await tick();
+		await clock.advance(31_000);
+		await ran;
+		expect(room.releases).toEqual(['1:product']);
+	});
+
+	it('cuts the activation at the expiry it held when a renewal never reached the room', async () => {
+		const { room, actor, clock } = play(deaf);
+		room.letGo.resolve();
+		const ran = actor.run('1:product');
+		await until(() => room.claims.length === 1);
+		// the renewal is lost, so the room expires the lease where it stands: the
+		// actor waits for that expiry and cuts the activation there, not before
+		room.loseRenewals = true;
+		await tick();
+		await clock.advance(31_000);
+		expect(room.releases).toEqual([]);
+		await clock.advance(30_000);
+		await ran;
+		expect(room.releases).toEqual(['1:product']);
 	});
 
 	it('resolves run once every wake that queued behind the activation has run, in order and once each', async () => {

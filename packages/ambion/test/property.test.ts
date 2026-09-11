@@ -108,7 +108,7 @@ const STEPS = [
 	'crash',
 ] as const;
 type Step = (typeof STEPS)[number];
-const OPERATIONS: Operation[] = ['wake', 'view', 'commit', 'lease'];
+const OPERATIONS: Operation[] = ['wake', 'cut', 'view', 'commit', 'lease'];
 
 /**
  * What a step may hear back: the storage refused the write, the visit is

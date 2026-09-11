@@ -44,12 +44,15 @@ export function serializing(transport: Transport): SerializingTransport {
 				lease: async (lease) => check('lease response', await room.lease(check('lease', lease))),
 			};
 			const port = transport.connect(wrapped, seat, runtime);
-			return { wake: (wake) => port.wake(check('wake', wake)) };
+			return {
+				wake: (wake) => port.wake(check('wake', wake)),
+				cut: (activation) => port.cut(check('cut', activation)),
+			};
 		},
 	};
 }
 
-export type Operation = 'wake' | 'view' | 'commit' | 'lease';
+export type Operation = 'wake' | 'cut' | 'view' | 'commit' | 'lease';
 
 export interface Fault {
 	on: Operation;
@@ -110,7 +113,10 @@ export function faultyTransport(transport: Transport, faults: Fault[], clock: Cl
 				lease: (lease) => through('lease', lease, () => room.lease(lease)),
 			};
 			const port: SeatPort = transport.connect(wrapped, seat, runtime);
-			return { wake: (wake) => through('wake', wake, () => port.wake(wake)).catch(() => {}) };
+			return {
+				wake: (wake) => through('wake', wake, () => port.wake(wake)).catch(() => {}),
+				cut: (activation) => through('cut', activation, () => port.cut(activation)).catch(() => {}),
+			};
 		},
 	};
 }
