@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { core } from './vitest.config.ts';
+import { core, record } from './vitest.config.ts';
 
 /**
  * The live tier: a room on a real model, with a real key, reaching a real
@@ -11,7 +11,7 @@ import { core } from './vitest.config.ts';
  * why each one is what it is.
  */
 export default defineConfig({
-	resolve: { alias: { '@ambionframework/ambion': core } },
+	resolve: { alias: { '@ambionframework/ambion': core, '@ambionframework/record': record } },
 	test: {
 		include: ['test/live/**/*.test.ts'],
 		fileParallelism: false,
