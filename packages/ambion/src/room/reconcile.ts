@@ -78,7 +78,7 @@ export function working(state: RoomState, now: number): boolean {
 	const assistant = state.composition?.assistant.name ?? '';
 	for (const [seat, ids] of liveSeats(state, now)) {
 		if (seat !== assistant) return true;
-		if (ids.some((id) => parseId(id)?.kind === 'wake')) return true;
+		if (ids.some((id) => parseId(id)?.cause === 'message')) return true;
 	}
 	return false;
 }

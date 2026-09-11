@@ -35,7 +35,7 @@ const arrived = (seq: number, from: string): Entry => ({
 /** A lease change lands after the message that caused it, or after the close a draft answers. */
 const afterOf = (id: string): number => {
 	const parsed = parseId(id);
-	return parsed === undefined ? 0 : parsed.kind === 'wake' ? parsed.seq : parsed.through;
+	return parsed?.position ?? 0;
 };
 const lease = (entry: Without<LeaseChange, 'after'>, after = afterOf(entry.id)): Entry => ({
 	kind: 'lease',

@@ -24,9 +24,10 @@ names for five primitives. `SessionImpl` holds 58 methods and 24 fields.
 The assistant appears in 14 of the 24 source files. Each number has a
 different local cause, and the three causes share one root.
 
-## 1. One owed activation, in place of a wake and a draft
+## 1. One owed activation, in place of a wake and a draft — the fold landed
 
-`next.md` §3 holds this as a note. It is the first item to do.
+`next.md` §3 holds this as a note. The fold and the vocabulary landed. One
+piece waits on a decision, and the text names it.
 
 **What.** `room/lease.ts` folds the wakes a message owes.
 `room/fold.ts` folds the summaries a close owes. Both produce `Due`.
@@ -56,6 +57,35 @@ identifier a seat holds. `liveSeats` reads two lists.
 on the journal. A message causes one. A close causes one. The cause is a
 position either way. One identifier format, one fold over the attempts,
 one backoff, one set of reasons.
+
+**What landed.** `dueFrom` folds the attempts once, for both causes, and
+derives the id of every activation the room owes. `Cause` is `message` or
+`close`, `ParsedId` is one shape with a `cause` and a `position`, and the
+five readers that branched on `seq` against `through` read `position`.
+`WakeOptions` is `DueOptions`.
+
+The two reason sets are one where they agree, and the review found they
+disagree for a reason neither copy stated. `lease.ts` asked one set two
+questions: _did the attempt come to nothing_, and _did the lease answer
+what it heard_. `fold.ts` asked the first alone, and counted `refused`
+for it. The sets are named for their questions now, and `CAME_TO_NOTHING`
+derives from `ANSWERS_NOTHING`, so the part they share cannot drift:
+
+```text
+ANSWERS_NOTHING  = { failed, expired }
+CAME_TO_NOTHING  = ANSWERS_NOTHING + { refused }
+```
+
+`rules.test.ts` pins the difference with the one case that shows it: a
+message that landed between a lease's last renewal and its end.
+
+**What waits, and why.** One identifier format. A message-caused id is
+`<seq>:<seat>` and a close-caused id is `close:<through>:<attempt>`, so a
+close names no seat and `seatOf` still takes the assistant's name to
+resolve one. One spelling would end that. It also rewrites 139 ids the
+tests hold and every lease id on a journal already written, so a room
+resumed over one would not parse its own. Decide it with a storage
+format change, not on its own.
 
 **What it unblocks.** Items 2 and 3 both carry the two kinds through
 today. This item makes each of them a smaller change.

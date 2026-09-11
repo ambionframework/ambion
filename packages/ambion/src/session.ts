@@ -925,7 +925,7 @@ class SessionImpl implements Session, RunningRoom {
 		const state = this.state();
 		for (const [seat, ids] of this.live(state)) {
 			if (seat === author || !this.holds(state, ids)) continue;
-			if (seat === this.assistant && ids.some((id) => parseId(id)?.kind === 'wake')) continue;
+			if (seat === this.assistant && ids.some((id) => parseId(id)?.cause === 'message')) continue;
 			this.send(activationId(message.seq, seat), seat, {
 				seq: message.seq,
 				line: renderLine(message),

@@ -8,9 +8,10 @@
  * while every lease keeps `until >= since`.
  */
 import { describe, expect, it } from 'vitest';
-import { foldLeases } from '../src/room/lease.ts';
+import { cameToNothing, foldLeases, pendingWakes } from '../src/room/lease.ts';
 import { atWork, heard } from '../src/room/rules.verified.ts';
-import type { LeaseChange } from '../src/wire.ts';
+import type { Message } from '../src/types.ts';
+import type { EndReason, LeaseChange } from '../src/wire.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const running = (id: string, after: number): LeaseChange => ({
@@ -20,11 +21,11 @@ const running = (id: string, after: number): LeaseChange => ({
 	expiry: 60_000,
 	at,
 });
-const ended = (id: string, after: number): LeaseChange => ({
+const ended = (id: string, after: number, reason: EndReason = 'released'): LeaseChange => ({
 	id,
 	after,
 	phase: 'ended',
-	reason: 'released',
+	reason,
 	at,
 });
 
@@ -115,5 +116,52 @@ describe('foldLeases', () => {
 		const lease = leases.get('2:solo');
 		expect(lease).toMatchObject({ since: 2, until: 5, heardThrough: 3 });
 		expect(lease?.until).toBeGreaterThanOrEqual(lease?.since ?? 0);
+	});
+});
+
+describe('the two questions a lease answers', () => {
+	const spoken = (seq: number): Message => ({
+		kind: 'said',
+		seq,
+		from: 'priya',
+		text: 'When is the pour?',
+		wakes: ['solo'],
+		at,
+	});
+	const options = { backoff: () => 1_000 };
+
+	/**
+	 * One lease over the message at seq 2: it claimed, renewed at 4, and ended
+	 * at 8. The message at seq 6 landed between the renewal and the end, so
+	 * what the lease answers decides whether that message is still pending.
+	 */
+	const pendingIds = (reason: EndReason) =>
+		pendingWakes(
+			[spoken(2), spoken(6)],
+			foldLeases([running('2:solo', 2), running('2:solo', 4), ended('2:solo', 8, reason)]),
+			new Set(['solo']),
+			options,
+			'assistant',
+		).map((wake) => wake.id);
+
+	it('counts a refused attempt, and still answers only through the last renewal', () => {
+		// A message never ends an activation `refused` today. The rule holds all
+		// the same: the attempt counts, and the lease answers what it confirmed.
+		const refused = foldLeases([running('c', 2), ended('c', 3, 'refused')]).get('c');
+		expect(refused && cameToNothing(refused)).toBe(true);
+		// seq 2 is answered; seq 6 landed past the last renewal and reached nobody.
+		expect(pendingIds('refused')).toEqual(['6:solo']);
+	});
+
+	it('leaves every message pending when the lease answered nothing', () => {
+		for (const reason of ['failed', 'expired'] as const) {
+			expect(pendingIds(reason)).toEqual(['2:solo:2', '6:solo:2']);
+		}
+	});
+
+	it('answers through the last renewal when the lease stood down', () => {
+		for (const reason of ['released', 'revoked'] as const) {
+			expect(pendingIds(reason)).toEqual(['6:solo']);
+		}
 	});
 });

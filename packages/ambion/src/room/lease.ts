@@ -37,28 +37,48 @@ import {
 	nextAttempt,
 } from './rules.verified.ts';
 
-/** The id of the activation a message wakes on a seat: the first attempt bare, later ones numbered. */
+/**
+ * What caused an activation. A message the room delivered causes one, and a
+ * close that owes a summary causes one. The journal holds both, and the
+ * room schedules them the same way.
+ */
+export type Cause = 'message' | 'close';
+
+/**
+ * The id of the activation a message wakes on a seat: the first attempt
+ * bare, later ones numbered.
+ */
 export const activationId = (seq: Seq, seat: string, attempt = 1): string =>
 	attempt === 1 ? `${seq}:${seat}` : `${seq}:${seat}:${attempt}`;
 
 /** The id of the assistant's attempt at the summary a close owes. */
 export const draftId = (through: Seq, attempt: number): string => `close:${through}:${attempt}`;
 
-export type ParsedId =
-	| { kind: 'wake'; seq: Seq; seat: string; attempt: number }
-	| { kind: 'draft'; through: Seq; attempt: number };
+/**
+ * What an id says about the activation: what caused it, where on the record
+ * the cause sits, which attempt this is, and the seat, for a cause that
+ * names one. A close names no seat, because the assistant is the only seat
+ * that drafts; `seatOf` reads it off the room.
+ */
+export interface ParsedId {
+	cause: Cause;
+	/** The seq of the cause: the message that woke the seat, or the close's `through`. */
+	position: Seq;
+	attempt: number;
+	seat?: string;
+}
 
 /** What an id says caused the activation, or nothing for an id the room did not derive. */
 export function parseId(id: string): ParsedId | undefined {
-	const draft = /^close:(\d+):(\d+)$/.exec(id);
-	if (draft) return { kind: 'draft', through: Number(draft[1]), attempt: Number(draft[2]) };
-	const wake = /^(\d+):([a-z][a-z0-9-]*)(?::(\d+))?$/.exec(id);
-	if (wake) {
+	const close = /^close:(\d+):(\d+)$/.exec(id);
+	if (close) return { cause: 'close', position: Number(close[1]), attempt: Number(close[2]) };
+	const message = /^(\d+):([a-z][a-z0-9-]*)(?::(\d+))?$/.exec(id);
+	if (message) {
 		return {
-			kind: 'wake',
-			seq: Number(wake[1]),
-			seat: wake[2] ?? '',
-			attempt: wake[3] === undefined ? 1 : Number(wake[3]),
+			cause: 'message',
+			position: Number(message[1]),
+			seat: message[2] ?? '',
+			attempt: message[3] === undefined ? 1 : Number(message[3]),
 		};
 	}
 	return undefined;
@@ -144,13 +164,27 @@ export interface PendingWake extends Due {
 export const startsNow = (owed: Pick<Due, 'notBefore'>, now: number): boolean =>
 	owed.notBefore === undefined || owed.notBefore <= now;
 
-export interface WakeOptions {
+/** What the fold needs to schedule an activation the room owes. */
+export interface DueOptions {
 	/** How long the room waits before the next attempt, after `attempt` failed ones. */
 	backoff(attempt: number): number;
 }
 
-/** A lease that ended this way took the wake and came to nothing. */
-const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set(['failed', 'expired']);
+/**
+ * A lease that ended this way answers nothing it heard. The seat read the
+ * record and left nothing anybody can use, so every message it heard is
+ * pending again for that seat.
+ */
+const ANSWERS_NOTHING: ReadonlySet<EndReason> = new Set<EndReason>(['failed', 'expired']);
+
+/**
+ * A lease that ended this way took the activation and came to nothing, so
+ * the next attempt is numbered after it. It holds `refused` beside the two
+ * above: an assistant that ran out of drafts made an attempt, and the range
+ * it owes stays owed. A message never ends an activation `refused`, so the
+ * two sets differ over the assistant's drafts alone.
+ */
+const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set<EndReason>([...ANSWERS_NOTHING, 'refused']);
 
 /**
  * Every wake a message decided that no lease has answered, for a seat still
@@ -161,7 +195,7 @@ export function pendingWakes(
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
 	roster: ReadonlySet<string>,
-	options: WakeOptions,
+	options: DueOptions,
 	assistant: string,
 ): PendingWake[] {
 	const bySeat = leasesBySeat(leases, roster);
@@ -184,8 +218,9 @@ function leasesBySeat(
 	const bySeat = new Map<string, LeaseHold[]>();
 	for (const lease of leases.values()) {
 		const parsed = parseId(lease.id);
-		if (parsed?.kind !== 'wake' || !roster.has(parsed.seat)) continue;
-		bySeat.set(parsed.seat, [...(bySeat.get(parsed.seat) ?? []), lease]);
+		const seat = parsed?.cause === 'message' ? parsed.seat : undefined;
+		if (seat === undefined || !roster.has(seat)) continue;
+		bySeat.set(seat, [...(bySeat.get(seat) ?? []), lease]);
 	}
 	return bySeat;
 }
@@ -227,7 +262,7 @@ const atWork = (lease: LeaseHold, seq: Seq): boolean =>
  */
 const heard = (lease: LeaseHold, seq: Seq): boolean =>
 	heardRule(
-		lease.phase === 'running' || cameToNothing(lease),
+		lease.phase === 'running' || answersNothing(lease),
 		lease.until !== undefined,
 		lease.until ?? 0,
 		lease.heardThrough,
@@ -243,29 +278,55 @@ function statusOf(
 	message: Message,
 	seat: string,
 	taken: readonly LeaseHold[],
-	options: WakeOptions,
+	options: DueOptions,
 ): PendingWake | undefined {
-	if (taken.some((lease) => !cameToNothing(lease))) return undefined;
+	// A lease that answered the message settles it, whatever the attempts say.
+	if (taken.some((lease) => !answersNothing(lease))) return undefined;
 	const failed = taken.filter((lease) => cameToNothing(lease));
-	const attempts = failed.length;
-	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
 	return {
-		id: activationId(message.seq, seat, nextAttempt(attempts)),
-		seat,
+		...dueFrom('message', message.seq, seat, failed, options),
 		seq: message.seq,
 		at: message.at,
+	};
+}
+
+/**
+ * What the room owes, from the attempts that came to nothing: the id the
+ * next attempt claims, how many came before it, and when it may start. Both
+ * causes fold the same way, so both read this, and the id of every
+ * activation the room owes is derived here.
+ */
+export function dueFrom(
+	cause: Cause,
+	position: Seq,
+	seat: string,
+	failed: readonly LeaseHold[],
+	options: DueOptions,
+): Due {
+	const attempts = failed.length;
+	const attempt = nextAttempt(attempts);
+	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
+	return {
+		id: cause === 'message' ? activationId(position, seat, attempt) : draftId(position, attempt),
+		seat,
 		attempts,
 		notBefore: attempts === 0 ? undefined : last + options.backoff(attempts),
 	};
 }
 
-/** A lease that ended this way answers nothing it heard; every other lease answers all of it. */
-const cameToNothing = (lease: LeaseHold): boolean =>
-	lease.phase === 'ended' && lease.reason !== undefined && CAME_TO_NOTHING.has(lease.reason);
+/** Whether the lease ended for a reason in `reasons`. */
+const endedFor = (lease: LeaseHold, reasons: ReadonlySet<EndReason>): boolean =>
+	lease.phase === 'ended' && lease.reason !== undefined && reasons.has(lease.reason);
+
+/** The lease answers nothing it heard; every other lease answers all of it. */
+const answersNothing = (lease: LeaseHold): boolean => endedFor(lease, ANSWERS_NOTHING);
+
+/** The attempt came to nothing, so the next one is numbered after it. */
+export const cameToNothing = (lease: LeaseHold): boolean => endedFor(lease, CAME_TO_NOTHING);
 
 /** The seat an id belongs to: the one it names, or the assistant for a draft. */
 export function seatOf(id: string, assistant: string): string | undefined {
 	const parsed = parseId(id);
 	if (parsed === undefined) return undefined;
-	return parsed.kind === 'wake' ? parsed.seat : assistant;
+	return parsed.seat ?? assistant;
 }
