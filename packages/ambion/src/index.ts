@@ -73,6 +73,7 @@ export type {
 	Clock,
 	ClosedExchange,
 	Exchange,
+	FencedSession,
 	HumanDefinition,
 	HumanSeatInfo,
 	Message,
