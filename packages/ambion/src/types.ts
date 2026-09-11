@@ -53,18 +53,27 @@ export type ModelResolver = (id: string, agent: string) => Model<Api>;
 /** The names a workspace binds to every connected agent. `defineAgent` keeps them free. */
 export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(['read', 'write', 'edit', 'bash']);
 
-/** What a participant said. */
-export interface SpokenMessage {
-	kind: 'said';
+/**
+ * What the runtime stamps on every entry of the record, whoever caused it.
+ * Nothing a seat sends carries any of it: the room assigns the seq, keeps the
+ * key, decides the wakes and reads the clock.
+ */
+interface Stamped {
+	/** The position on the record: monotonic, assigned at commit, never reused. */
 	seq: Seq;
 	/** The key the commit carried. A repeated key lands once. */
 	key?: string;
-	/** The activation that wrote it. Absent on a person's delivery. */
+	/** The activation that wrote it. Absent when the room itself did. */
 	activationId?: string;
 	/** The seats the room decided to wake for it, written with the message. */
 	wakes?: string[];
 	/** ISO timestamp, stamped by the runtime at the moment it landed. */
 	at: string;
+}
+
+/** What a participant said. */
+export interface SpokenMessage extends Stamped {
+	kind: 'said';
 	/** A participant's name — stamped by the runtime, never claimed. */
 	from: string;
 	/** Present when the delivery or say was directed. */
@@ -82,14 +91,8 @@ export type PresenceChange = 'arrived' | 'left' | 'seated' | 'unseated';
  * What happened to a participant. It carries no text, because they said
  * nothing: writing words under their name is what rule 7 exists to prevent.
  */
-export interface PresenceMessage {
+export interface PresenceMessage extends Stamped {
 	kind: PresenceChange;
-	seq: Seq;
-	key?: string;
-	/** The assistant's activation, on a `seated` it wrote. */
-	activationId?: string;
-	wakes?: string[];
-	at: string;
 	/**
 	 * The participant whose presence changed: a person, stamped from the visit
 	 * the runtime observed, or the agent the runtime seated or unseated.
@@ -116,13 +119,8 @@ export interface PresenceMessage {
  * What one exchange came to. The assistant writes it. Nobody speaks it, so it is
  * not a `said`: a person did not hear it in a room.
  */
-export interface SummaryMessage {
+export interface SummaryMessage extends Stamped {
 	kind: 'summary';
-	seq: Seq;
-	key?: string;
-	activationId?: string;
-	wakes?: string[];
-	at: string;
 	/** The assistant that wrote it. */
 	from: string;
 	/** The person whose question opened the exchange. Always present. */
@@ -132,8 +130,25 @@ export interface SummaryMessage {
 	covers: { from: Seq; through: Seq };
 }
 
+/**
+ * The room went quiet with an exchange open, so the room closed it. Nobody
+ * spoke it and nobody wrote it: it is the room's own word on a stretch of
+ * work, and it holds the range that stretch turned out to cover.
+ *
+ * It is a message because everything that wakes a seat is a message. A close
+ * wakes the assistant, for the person who owns it, and the assistant writes
+ * the one message that person reads.
+ */
+export interface ClosedMessage extends Stamped {
+	kind: 'closed';
+	/** The person whose question opened it, and who owns what it holds. */
+	from: string;
+	/** The range it stands for, contiguous and ending just before this seq. */
+	covers: { from: Seq; through: Seq };
+}
+
 /** One entry on a session's record. */
-export type Message = SpokenMessage | PresenceMessage | SummaryMessage;
+export type Message = SpokenMessage | PresenceMessage | SummaryMessage | ClosedMessage;
 
 export function isSpoken(message: Message): message is SpokenMessage {
 	return message.kind === 'said';
@@ -143,17 +158,23 @@ export function isSummary(message: Message): message is SummaryMessage {
 	return message.kind === 'summary';
 }
 
+export function isClosed(message: Message): message is ClosedMessage {
+	return message.kind === 'closed';
+}
+
 export function isPresence(message: Message): message is PresenceMessage {
-	return !isSpoken(message) && !isSummary(message);
+	return !isSpoken(message) && !isSummary(message) && !isClosed(message);
 }
 
 /**
  * Who wrote a message, or nobody. For a person's message and an agent's say
  * that is `from`. A seating names its subject in `from` and its author in
  * `by`: the assistant when it did the seating, and nobody when the host did.
+ * A close has no author: the room observed it.
  */
 export function authorOf(message: Message): string | undefined {
-	if (!isPresence(message)) return message.from;
+	if (isSpoken(message) || isSummary(message)) return message.from;
+	if (isClosed(message)) return undefined;
 	if (message.kind === 'seated' || message.kind === 'unseated') return message.by;
 	return message.from;
 }

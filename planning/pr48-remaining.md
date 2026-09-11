@@ -128,7 +128,7 @@ cast under trouble must still end whole, and the history checker's
 ## PR 12: the checkpoint
 
 **Scope.** Every `runtime.checkpoint.rows` rows, the room writes an
-`ambion/checkpoint` row: the composition, the closes and the leases a
+`ambion/checkpoint` row: the composition and the leases a
 later fold still reads, behind a floor below which every wake was
 answered. The fold reads a checkpoint in place of every row before it;
 the log drops those rows from memory after the replay and after each

@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	type ActivationView,
 	assertWire,
-	type CloseRow,
 	type Commit,
 	type CommitResponse,
 	type CompositionRow,
@@ -25,10 +24,9 @@ import { jsonl } from './support/storage.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 
-const rows: Record<string, LeaseRow | CloseRow | CompositionRow> = {
+const rows: Record<string, LeaseRow | CompositionRow> = {
 	claim: { id: '2:product', after: 2, phase: 'running', expiry: 60_000, at },
 	end: { id: '2:product', after: 4, phase: 'ended', reason: 'released', at },
-	close: { owner: 'priya', from: 2, through: 4, after: 4, at, wakes: ['assistant'] },
 	composition: {
 		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
 		goal: 'Decide the pour date.',
@@ -46,7 +44,7 @@ const wake: Wake = {
 	steer: { seq: 3, line: '[priya] And the pump?' },
 };
 const view: ActivationView = {
-	activation: 'close:4:1',
+	activation: '5:assistant',
 	seat: 'assistant',
 	model: 'scripted/assistant',
 	lastSeq: 4,
@@ -69,7 +67,7 @@ const requests: Record<string, Commit | Lease | string> = {
 		intent: { kind: 'said', to: 'priya', text: 'No.' },
 	},
 	summary: {
-		activation: 'close:4:1',
+		activation: '5:assistant',
 		key: 'call-3',
 		readThrough: 4,
 		intent: {
@@ -126,7 +124,6 @@ describe('the wire', () => {
 			const name = roomName('wire-jsonl');
 			await oneExchange.run({ runtime, name });
 			const written = await rowsOf(opened.sessions, name);
-			expect(written.map((row) => row.type)).toContain('ambion/close');
 			expect(written.map((row) => row.type)).toContain('ambion/composition');
 			expect(written.map((row) => row.type)).toContain('ambion/lease');
 			for (const row of written) {

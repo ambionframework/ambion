@@ -67,7 +67,12 @@ describe('createRuntime', () => {
 
 			const reader = createRuntime({ sessions: jsonlSessions(dir), clock: fakeClock() });
 			const view = readSession(name, { runtime: reader });
-			expect((await view.messages()).map((m) => m.kind)).toEqual(['arrived', 'said', 'left']);
+			expect((await view.messages()).map((m) => m.kind)).toEqual([
+				'arrived',
+				'said',
+				'closed',
+				'left',
+			]);
 			expect((await view.messages()).filter(isSpoken).map((m) => m.text)).toEqual(['kept on disk']);
 		} finally {
 			await opened.dispose();

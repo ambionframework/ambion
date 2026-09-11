@@ -12,10 +12,19 @@ import {
 	renderTurnContext,
 	type SeatSpeaking,
 } from '../render.ts';
-import type { AgentDefinition, Exchange, SeatInfo, Seq } from '../types.ts';
+import {
+	type AgentDefinition,
+	type ClosedMessage,
+	type Exchange,
+	isClosed,
+	isSummary,
+	type SeatInfo,
+	type Seq,
+} from '../types.ts';
 import type { ActivationView, Hand } from '../wire.ts';
+import { covered } from './exchange.ts';
 import type { RoomState } from './fold.ts';
-import { parseId } from './lease.ts';
+import { wokenBy } from './lease.ts';
 
 /** What the view is built from: the fold, and what the room holds beside it. */
 export interface RoomFacts {
@@ -87,37 +96,59 @@ type Hands = {
 };
 
 /**
- * What an activation is for, read off its id and the fold: a draft closes
- * an exchange still owed, the assistant woken by the question that opened
- * one composes the room for it, and every other seat speaks. A draft id
- * names one close; the hand it holds covers every close its person is
- * owed, so a close that joined the draft after the claim is read too.
+ * What an activation is for, read off the message that woke it: the room's
+ * close hands the assistant the one message its person reads, the question
+ * that opened an exchange hands the assistant the room to compose, and every
+ * other seat speaks. The close that woke the draft names one range; the hand
+ * covers every close its person is still owed, so a close that landed after
+ * the claim is read too.
  */
 function handOf(id: string, seat: string, facts: RoomFacts): Hands {
 	const state = facts.state;
-	const parsed = parseId(id);
-	if (parsed?.kind === 'draft') {
-		const owed = state.owed.find((o) => o.closes.includes(parsed.through));
-		if (owed === undefined) return { hand: 'none' };
-		return {
-			hand: 'summarise',
-			closing: { person: owed.person, from: owed.from, through: state.lastSeq },
-		};
+	const woke = wokenBy(id, state.messages);
+	if (woke === undefined) return { hand: 'none' };
+	if (isClosed(woke)) {
+		if (written(woke, state)) return { hand: 'none' };
+		const from = owedFrom(woke, state);
+		return { hand: 'summarise', closing: { person: woke.from, from, through: state.lastSeq } };
 	}
 	if (seat !== facts.assistant) return { hand: 'say' };
-	const question = parsed && state.messages.find((m) => m.seq === parsed.seq);
-	const opened = openedBy(parsed?.seq, state);
-	if (question === undefined || !opened) return { hand: 'none' };
+	if (!openedBy(woke.seq, state)) return { hand: 'none' };
 	return {
 		hand: 'seat',
-		composing: { person: question.from, from: question.seq, limit: state.reserve.length },
+		composing: { person: woke.from, from: woke.seq, limit: state.reserve.length },
 	};
 }
 
+/** Whether a summary already stands for the whole of this closed exchange. */
+function written(close: ClosedMessage, state: RoomState): boolean {
+	return state.messages.filter(isSummary).some((summary) => covered(summary, close));
+}
+
+/**
+ * The earliest question this person is still owed one message for: the close
+ * that woke this activation, and every other close of theirs the room owes.
+ * One message reaches back to the earliest, so a person reads one message and
+ * misses nothing.
+ *
+ * It reads the room's own list of what it owes rather than the closes again,
+ * so a close the assistant has already judged is not covered a second time,
+ * and a close a checkpoint put below the floor stays judged.
+ */
+function owedFrom(close: ClosedMessage, state: RoomState): Seq {
+	const froms = [close.covers.from];
+	for (const owed of state.due) {
+		const other = wokenBy(owed.id, state.messages);
+		if (other !== undefined && isClosed(other) && other.from === close.from) {
+			froms.push(other.covers.from);
+		}
+	}
+	return Math.min(...froms);
+}
+
 /** Whether the message at `seq` opened an exchange, open or closed since. */
-function openedBy(seq: Seq | undefined, state: RoomState): boolean {
-	if (seq === undefined) return false;
-	return state.exchange?.from === seq || state.closes.some((close) => close.from === seq);
+function openedBy(seq: Seq, state: RoomState): boolean {
+	return state.exchange?.from === seq || state.closes.some((close) => close.covers.from === seq);
 }
 
 /** The reserve as the assistant reads it: a name and an identity per agent. */

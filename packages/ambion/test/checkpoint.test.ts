@@ -1,8 +1,8 @@
 /**
- * A checkpoint bounds what a fold costs. It carries the composition, the
- * closes and the leases a later fold still reads, behind a floor below
- * which every wake was answered. The log drops the rows it replaced, the
- * messages stay, and a room that folds the rest behaves the same.
+ * A checkpoint bounds what a fold costs. It carries the composition and the
+ * leases a later fold still reads, behind a floor below which every
+ * activation was answered. The log drops the rows it replaced, the messages
+ * stay, and a room that folds the rest behaves the same.
  */
 import { describe, expect, it } from 'vitest';
 import type { CompositionRow, Seq } from '../src/index.ts';
@@ -47,8 +47,8 @@ const facts = (state: RoomState) => ({
 	roster: state.roster,
 	people: [...state.people.entries()],
 	exchange: state.exchange,
-	pending: state.pending,
-	owed: state.owed,
+	closes: state.closes,
+	due: state.due,
 	messages: state.messages,
 	lastSeq: state.lastSeq,
 });
@@ -122,9 +122,9 @@ describe('a checkpoint', () => {
 		}
 	});
 
-	it('keeps the draft that judged the last close, so the room drafts over it once', async () => {
+	it('puts the floor past a close the assistant judged, so the room drafts over it once', async () => {
 		// the assistant read the room and judged it needed no summary: the close
-		// stood down, and only its draft's lease says so
+		// stood down, and the floor is what says the room owes nothing for it
 		const { session, clock, opened } = await open(undefined);
 		try {
 			const visit = await visitSession(session, priya);
@@ -132,15 +132,21 @@ describe('a checkpoint', () => {
 			await session.quiet();
 			const log = logOf(session);
 			expect((await session.messages()).filter(isSummary)).toHaveLength(0);
-			const owed = fold(log).owed;
-			expect(owed).toEqual([]);
+			const before = fold(log);
+			expect(before.due).toEqual([]);
+			const close = before.closes.at(-1);
+			if (close === undefined) throw new Error('the room closed no exchange');
 
-			const row = checkpointOf(fold(log), clock.now());
+			const row = checkpointOf(before, clock.now());
 			if (row === undefined) throw new Error('the room wrote no checkpoint');
+			// the floor is past the close, so the draft's lease is dropped with
+			// every other row: nothing below the floor is read for an activation
+			expect(row.floor).toBeGreaterThan(close.seq);
+			expect(row.leases).toEqual([]);
 			await log.write('checkpoint', row);
-			// the draft is on the checkpoint, and the close is owed no longer
-			expect(row.leases.map((lease) => lease.id)).toContain('close:4:1');
-			expect(fold(log).owed).toEqual([]);
+			expect(fold(log).due).toEqual([]);
+			// the close is a message, so it stays whatever the checkpoint dropped
+			expect(fold(log).closes.at(-1)).toEqual(close);
 			await stopSession(session);
 		} finally {
 			await opened.dispose();
@@ -204,7 +210,6 @@ describe('a checkpoint past the fence', () => {
 				v: 1,
 				floor,
 				composition,
-				closes: [],
 				leases: [],
 				after: 0,
 				at,

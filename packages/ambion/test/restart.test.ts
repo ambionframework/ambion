@@ -10,6 +10,7 @@ import {
 	defineAgent,
 	defineHuman,
 	inProcessTransport,
+	isClosed,
 	isSpoken,
 	isSummary,
 	type Runtime,
@@ -21,7 +22,15 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { collect, crash, deferred, roomName, rowsOf, tick } from './support/room.ts';
+import {
+	assistantEnded,
+	collect,
+	crash,
+	deferred,
+	roomName,
+	rowsOf,
+	tick,
+} from './support/room.ts';
 import {
 	byAgent,
 	quiet,
@@ -211,8 +220,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
 			expect(resumed.exchange()).toBeUndefined();
 			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'idle' });
-			const rows = await rowsOf(opened.sessions, name);
-			expect(rows.map((row) => row.type)).toContain('ambion/close');
+			expect((await resumed.messages()).some(isClosed)).toBe(true);
 			await stopSession(resumed);
 		} finally {
 			await opened.dispose();
@@ -316,7 +324,11 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await stopSession(one);
 			expect(heard.map((e) => e.type)).not.toContain('exchange_closed');
 			const before = await rowsOf(opened.sessions, name);
-			expect(before.map((row) => row.type)).not.toContain('ambion/close');
+			expect(
+				before.flatMap((row) =>
+					row.type === 'ambion/message' ? [(row.data as { kind: string }).kind] : [],
+				),
+			).not.toContain('closed');
 
 			// the next run closes it as it starts, and quiet() waits for that close
 			const two = startSession({
@@ -332,11 +344,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(events.map((e) => e.type)).toContain('exchange_closed');
 			expect(two.exchange()).toBeUndefined();
 			const question = (await two.messages()).find((m) => m.kind === 'said');
-			const closes = (await rowsOf(opened.sessions, name)).filter(
-				(row) => row.type === 'ambion/close',
-			);
+			const closes = (await two.messages()).filter(isClosed);
 			expect(closes).toHaveLength(1);
-			expect(closes[0]?.data).toMatchObject({ owner: 'priya', from: question?.seq });
+			expect(closes[0]).toMatchObject({ from: 'priya', covers: { from: question?.seq } });
 			await stopSession(two);
 		} finally {
 			await opened.dispose();
@@ -413,12 +423,13 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				streamFn: scripted(script),
 			});
 			const visit = await visitSession(session, priya);
+			const failed = assistantEnded(session);
 			await visit.deliver({ text: 'First?' });
-			await session.quiet();
+			await failed;
 			// the first draft failed: priya is owed, and the room waits for the backoff
 			expect(await summaries(session)).toHaveLength(0);
 			await visit.deliver({ text: 'Second?' });
-			await session.quiet();
+			await session.settled();
 			expect(await summaries(session)).toHaveLength(0);
 			const record = await session.messages();
 			const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
@@ -430,7 +441,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				runtime: runtime(),
 				streamFn: scripted(writing),
 			});
-			await resumed.quiet();
+			await resumed.settled();
 			expect(await summaries(resumed)).toHaveLength(0);
 			await clock.advance(30_000);
 			await resumed.quiet();

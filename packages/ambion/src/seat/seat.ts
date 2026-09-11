@@ -33,7 +33,7 @@ import type {
 	SessionEvent,
 	SessionOpener,
 } from '../types.ts';
-import { isSpoken } from '../types.ts';
+import { isClosed, isSpoken } from '../types.ts';
 import type { ActivationView, SeatPort, SeatRoom, Wake } from '../wire.ts';
 import { Activation, persistTurns } from './activation.ts';
 import { hands, handsFor } from './hands.ts';
@@ -67,6 +67,9 @@ export function wakes(
 	message: Message,
 	fromAssistant: boolean,
 ): boolean {
+	// The room's own close asks a participant nothing. It reaches the assistant
+	// the room names on it, and no seat by attention.
+	if (isClosed(message)) return false;
 	// Nothing the assistant writes wakes anybody, with one exception written
 	// into the line: a seating it committed wakes the seat it names. That is the
 	// one activation the assistant can cause. The guard is on the author rather

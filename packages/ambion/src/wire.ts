@@ -1,6 +1,6 @@
 /**
  * What crosses between a seat and its room, and what the log holds beside
- * a message. Every shape here is plain JSON:
+ * the messages. Every shape here is plain JSON:
  * an optional key is written only when it is present, and no value is
  * `undefined`, a `Date`, a `Map`, a `Set`, a class instance or a function. A
  * request and its response survive a round trip through `JSON.stringify`
@@ -73,10 +73,12 @@ export interface RunRow {
 
 /**
  * The room as it stood, in one row. A fold reads a checkpoint as the
- * composition, the closes and the leases it carries, and nothing older; a
- * wake on a message below `floor` was answered when the checkpoint was
- * written. A checkpoint is a cache over the log: the rows it replaces stay
- * on the storage, and a checkpoint the room cannot read is ignored.
+ * composition and the leases it carries, and nothing older; a wake on a
+ * message below `floor` was answered when the checkpoint was written. A
+ * checkpoint carries no messages: the log keeps every one of them, and the
+ * closed exchanges are among them. A checkpoint is a cache over the log:
+ * the rows it replaces stay on the storage, and a checkpoint the room
+ * cannot read is ignored.
  */
 export interface CheckpointRow {
 	/** The shape of this row. A checkpoint of another shape is ignored. */
@@ -84,7 +86,6 @@ export interface CheckpointRow {
 	/** No wake on a message before this seq is pending. */
 	floor: Seq;
 	composition: CompositionRow;
-	closes: CloseRow[];
 	leases: LeaseHold[];
 	after: Seq;
 	at: string;
@@ -99,20 +100,8 @@ export function isCheckpoint(row: unknown): row is CheckpointRow {
 		typeof candidate.floor === 'number' &&
 		typeof candidate.composition === 'object' &&
 		candidate.composition !== null &&
-		Array.isArray(candidate.closes) &&
 		Array.isArray(candidate.leases)
 	);
-}
-
-/** The room went quiet with an exchange open, and closed it. */
-export interface CloseRow {
-	owner: string;
-	from: Seq;
-	through: Seq;
-	after: Seq;
-	at: string;
-	/** The assistant, when the exchange owes a summary. */
-	wakes?: string[];
 }
 
 /** One seat in a composition: its name, how the room knows it, and what wakes it. */

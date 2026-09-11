@@ -35,11 +35,18 @@ import {
 } from './host/runtime.ts';
 import { type Committed, type LogEntry, RoomLog } from './log/log.ts';
 import { renderLine } from './render.ts';
-import { assertAssistant } from './room/assistant.ts';
+import { assertAssistant, owesSummary } from './room/assistant.ts';
 import { checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
-import { activationId, isExpired, isLive, type LeaseState, parseId, seatOf } from './room/lease.ts';
+import {
+	activationId,
+	drafting,
+	isExpired,
+	isLive,
+	type LeaseState,
+	seatOf,
+} from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
-import { type Decision, decide, liveSeats, working } from './room/reconcile.ts';
+import { type Closing, type Decision, decide, liveSeats, working } from './room/reconcile.ts';
 import { type RoomFacts, seatsOf, viewOf } from './room/view.ts';
 import { inProcessTransport, wakes } from './seat/seat.ts';
 import {
@@ -47,9 +54,11 @@ import {
 	type AgentSeat,
 	type Attention,
 	authorOf,
+	type ClosedMessage,
 	type Exchange,
 	type HumanDefinition,
 	isAgent,
+	isClosed,
 	isSeatedAgent,
 	isSpoken,
 	type Message,
@@ -64,7 +73,6 @@ import {
 	type SummaryMessage,
 } from './types.ts';
 import type {
-	CloseRow,
 	Commit,
 	CommitResponse,
 	CompositionRow,
@@ -96,7 +104,8 @@ interface Composition {
 type Drafted =
 	| Omit<SpokenMessage, 'seq' | 'key' | 'wakes'>
 	| Omit<SummaryMessage, 'seq' | 'key' | 'wakes'>
-	| Omit<PresenceMessage, 'seq' | 'key' | 'wakes'>;
+	| Omit<PresenceMessage, 'seq' | 'key' | 'wakes'>
+	| Omit<ClosedMessage, 'seq' | 'key' | 'wakes'>;
 
 /** A presence change before the room stamps when it happened. */
 type PresenceDraft = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
@@ -160,8 +169,8 @@ export interface Session extends SessionView {
 	/** Resolves when no seat that speaks for itself is live and the assistant is not composing. */
 	settled(): Promise<void>;
 	/**
-	 * Resolves when nothing at all is live: no lease held, no wake pending,
-	 * no draft due. `settled()` reports the seats alone, which is what rule 5
+	 * Resolves when nothing at all is live: no lease held, and no activation
+	 * the room owes. `settled()` reports the seats alone, which is what rule 5
 	 * needs it to mean; this is what a host waits for when it wants the one
 	 * message a person reads.
 	 */
@@ -576,12 +585,12 @@ class SessionImpl implements Session, RunningRoom {
 		} while (awaited !== this.reconciling);
 	}
 
-	/** Nothing at all is live: no lease held, no wake pending, no draft due. */
+	/** Nothing at all is live: no lease held, and no activation the room owes. */
 	private idle(): boolean {
 		return this.live(this.state()).size === 0;
 	}
 
-	/** The seats live now: a lease held, a wake pending, or a draft due. */
+	/** The seats live now: a lease held, or an activation the room owes. */
 	private live(state: RoomState): Map<string, string[]> {
 		return liveSeats(state, this.now());
 	}
@@ -777,6 +786,7 @@ class SessionImpl implements Session, RunningRoom {
 		const assistant = this.assistant;
 		const fromAssistant = author === assistant;
 		const live = this.live(state);
+		const running = (seat: string) => this.holds(state, live.get(seat) ?? []);
 		// The room changes before the message does: a seating's newcomer is on
 		// the roster the routing reads, so the seating wakes it.
 		const roster =
@@ -787,10 +797,23 @@ class SessionImpl implements Session, RunningRoom {
 			.filter((seat) => seat.name !== author && !live.has(seat.name))
 			.filter((seat) => wakes(seat, target, message, fromAssistant))
 			.map((seat) => seat.name);
-		if (this.opensExchange(message, state) && state.reserve.length > 0 && !live.has(assistant)) {
+		// The assistant bookends the exchange. A question that opens one wakes
+		// it to compose the room, when the reserve holds anybody and nothing of
+		// the assistant's is running: composing happens before the seats work,
+		// or the moment has passed. A close wakes it to write, whatever else it
+		// is doing: the one message its person reads is owed until it is written.
+		if (this.opensExchange(message, state) && state.reserve.length > 0 && !running(assistant)) {
 			woken.push(assistant);
 		}
+		if (isClosed(message) && this.summaryOwed(message, state)) woken.push(assistant);
 		return [...new Set(woken)];
+	}
+
+	/** Whether this closed exchange owes its person the one message they read. */
+	private summaryOwed(close: ClosedMessage, state: RoomState): boolean {
+		const assistant = this.assistant;
+		const speaksForItself = (name: string) => !state.people.has(name) && name !== assistant;
+		return owesSummary(state.messages, close.covers.from, close.covers.through, speaksForItself);
 	}
 
 	private opensExchange(message: Message, state: RoomState): boolean {
@@ -809,38 +832,38 @@ class SessionImpl implements Session, RunningRoom {
 	 */
 	private hear(entry: LogEntry, first: boolean): void {
 		if (entry.type === 'message') this.heardMessage(entry.message);
-		else if (entry.type === 'close') this.heardClose(entry.close);
 		else if (entry.type === 'lease') this.heardLease(entry.lease, first);
 	}
 
 	/**
-	 * A message on the record: the host hears about it, then what it opened,
-	 * then the room sends the wakes the message carries and steers every seat
-	 * at work. One message, one event, one order.
+	 * A message on the record: the host hears about it, then what it opened or
+	 * closed, then the room sends the wakes the message carries and steers
+	 * every seat at work. One message, one event, one order.
 	 */
 	private heardMessage(message: Message): void {
 		this.emit({ type: 'message', message });
-		this.noteExchange(message.seq);
+		if (isClosed(message)) this.heardClosed(message);
+		else this.noteExchange(message.seq);
 		for (const seat of message.wakes ?? []) this.send(activationId(message.seq, seat), seat);
 		this.steer(message);
 		void this.reconcile();
 	}
 
 	/**
-	 * An exchange ended at the range the close names. The host hears it
+	 * An exchange ended at the range the close holds. The host hears it
 	 * before anything is written about it: the assistant is the first reader
 	 * of a closed exchange and not the only one. A question that landed
 	 * ahead of the close opens the next exchange, and the room says so.
 	 */
-	private heardClose(close: CloseRow): void {
-		const question = this.log.messages.find((m) => m.seq === close.from);
+	private heardClosed(close: ClosedMessage): void {
+		const question = this.log.messages.find((m) => m.seq === close.covers.from);
 		this.emit({
 			type: 'exchange_closed',
 			exchange: {
-				owner: close.owner,
-				from: close.from,
+				owner: close.from,
+				from: close.covers.from,
 				at: question?.at ?? close.at,
-				through: close.through,
+				through: close.covers.through,
 			},
 		});
 		const next = this.state().exchange;
@@ -853,7 +876,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * written off, and starts nothing.
 	 */
 	private heardLease(lease: LeaseRow, first: boolean): void {
-		const seat = seatOf(lease.id, this.assistant) ?? '';
+		const seat = seatOf(lease.id) ?? '';
 		if (lease.phase === 'running') {
 			if (first) {
 				this.idleReported = false;
@@ -898,16 +921,28 @@ class SessionImpl implements Session, RunningRoom {
 	 * activation, and the lease does not record it.
 	 */
 	private steer(message: Message): void {
+		// The room's own close asks a participant nothing, so it steers nobody.
+		if (isClosed(message)) return;
 		const author = authorOf(message);
 		const state = this.state();
 		for (const [seat, ids] of this.live(state)) {
 			if (seat === author || !this.holds(state, ids)) continue;
-			if (seat === this.assistant && ids.some((id) => parseId(id)?.kind === 'wake')) continue;
+			if (ids.some((id) => this.composing(id, state))) continue;
 			this.send(activationId(message.seq, seat), seat, {
 				seq: message.seq,
 				line: renderLine(message),
 			});
 		}
+	}
+
+	/**
+	 * Whether this activation is the assistant composing the room for a
+	 * question. It decides on the question as it was asked, so it hears no
+	 * steer, and `reached` in `lease.ts` holds the same rule from the other
+	 * side: a message reaches it by name alone.
+	 */
+	private composing(id: string, state: RoomState): boolean {
+		return seatOf(id) === this.assistant && !drafting(id, state.messages);
 	}
 
 	/** Whether any of these ids is a lease held now: a seat with a wake pending is live and at rest. */
@@ -957,7 +992,9 @@ class SessionImpl implements Session, RunningRoom {
 			assistant: this.assistant,
 			state,
 			live: this.live(state),
-			unseen: (since) => this.log.since(since).length,
+			// A person reads what participants said, and the room's own closes are
+			// not that: a gap counts the messages they would read.
+			unseen: (since) => this.log.since(since).filter((m) => !isClosed(m)).length,
 		};
 	}
 
@@ -965,7 +1002,7 @@ class SessionImpl implements Session, RunningRoom {
 	private liveSeatOf(id: string, state: RoomState): string | undefined {
 		const lease = state.leases.get(id);
 		if (lease === undefined || !isLive(lease, this.now())) return undefined;
-		const seat = seatOf(id, this.assistant);
+		const seat = seatOf(id);
 		return seat !== undefined && this.onRoster(seat, state) ? seat : undefined;
 	}
 
@@ -1073,7 +1110,7 @@ class SessionImpl implements Session, RunningRoom {
 	async lease(lease: Lease): Promise<LeaseResponse> {
 		if (this.gone()) return stale('the room is gone');
 		await this.ready;
-		const seat = seatOf(lease.activation, this.assistant);
+		const seat = seatOf(lease.activation);
 		if (seat === undefined || !this.onRoster(seat)) return stale('the seat is not on the roster');
 		return lease.phase === 'running' ? this.claim(lease.activation) : this.release(lease);
 	}
@@ -1219,16 +1256,33 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * The room went quiet on an exchange, so that exchange ends at the record
-	 * as the decision saw it: the close is a row on the log, written where the
-	 * fold still says the same exchange is open. `heardClose` says so, and
-	 * opens the next exchange when a question landed after the decision; the
-	 * next pass closes that one at once when nobody works on it.
+	 * as the decision saw it: the close is a message on the record, written
+	 * where the fold still says the same exchange is open. `heardClosed` says
+	 * so, and opens the next exchange when a question landed after the
+	 * decision; the next pass closes that one at once when nobody works on it.
 	 */
-	private close(close: NonNullable<Decision['close']>): Promise<boolean> {
-		return this.log.write('close', () => {
-			if (this.state().exchange?.from !== close.from || this.stopped) return undefined;
-			return close;
-		});
+	private async close(close: Closing): Promise<boolean> {
+		try {
+			const committed = await this.commitMessage<ClosedMessage>(
+				crypto.randomUUID(),
+				undefined,
+				(state) => {
+					if (state.exchange?.from !== close.from || this.stopped) throw new StaleError('closed');
+					return {
+						kind: 'closed',
+						at: this.iso(),
+						from: close.owner,
+						covers: { from: close.from, through: close.through },
+					};
+				},
+			);
+			return !('missed' in committed);
+		} catch (error) {
+			// The exchange the decision saw is not the one the queue found: the
+			// close it decided on is written, or the exchange moved on.
+			if (error instanceof StaleError) return false;
+			throw error;
+		}
 	}
 
 	/**

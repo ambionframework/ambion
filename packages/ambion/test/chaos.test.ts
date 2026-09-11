@@ -182,7 +182,7 @@ describe('a room killed from outside', () => {
 					inherited,
 					inheritedExchange,
 				});
-				await outcome(session, sessions);
+				await outcome(session);
 				await stopSession(session);
 			} finally {
 				await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });

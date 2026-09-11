@@ -53,7 +53,6 @@ function entriesOf(rows: { type: string; data: unknown }[]): LogEntry[] {
 		const type = row.type.slice('ambion/'.length);
 		if (type === 'message') return [{ type, message: row.data } as LogEntry];
 		if (type === 'lease') return [{ type, lease: row.data } as LogEntry];
-		if (type === 'close') return [{ type, close: row.data } as LogEntry];
 		if (type === 'composition') return [{ type, composition: row.data } as LogEntry];
 		return [];
 	});

@@ -50,11 +50,14 @@ seriously.
 
 ### 1. The record is the source of truth
 
-Speech, arrivals, departures, dynamic seating, and summaries are all ordered
-messages. [`RoomLog`](packages/ambion/src/log/log.ts) serializes writes, assigns
+Speech, arrivals, departures, dynamic seating, summaries, and the close of an
+exchange are all ordered messages.
+[`RoomLog`](packages/ambion/src/log/log.ts) serializes writes, assigns
 monotonic sequence numbers, persists a message before exposing it, and makes
-retries safe with idempotency keys. Presence is therefore data, not side
-metadata: it participates in ordering, replay, routing, and later context.
+retries safe with idempotency keys. Presence and exchange boundaries are
+therefore data, not side metadata: they participate in ordering, replay,
+routing, and later context, and a host reads the history of exchanges off
+`session.messages()` like anything else.
 
 ### 2. Conversation uses optimistic concurrency
 
@@ -100,17 +103,29 @@ in [`activation.ts`](packages/ambion/src/seat/activation.ts).
 ### 6. Quiescence defines an exchange
 
 A human question opens an exchange. When the participating seats stop and no
-work remains owed, the room closes it. The exchange stores only its owner and
-sequence range; its contents remain derivable from the log.
+work remains owed, the room writes one `closed` message holding the owner and
+the sequence range; the contents stay derivable from the record.
 
 Quiescence is the semantic boundary. No coordinator has to predict which agent
 will have the final word, and no agent needs special authority to declare the
-work complete. Pending wakes and claimed leases jointly determine liveness, so
-there is no separate activation counter to drift from reality. See
-[`exchange.ts`](packages/ambion/src/room/exchange.ts) and
+work complete. Claimed leases and the activations the room still owes jointly
+determine liveness, so there is no separate activation counter to drift from
+reality. See [`exchange.ts`](packages/ambion/src/room/exchange.ts) and
 [`lease.ts`](packages/ambion/src/room/lease.ts).
 
-### 7. The assistant owns synthesis, not the application
+### 7. One message wakes a seat, whatever the message is
+
+A question, a colleague's answer, an arrival, a seating, and the room's own
+close all reach a seat the same way: the room writes the seats it decided to
+wake onto the message, and derives the activation's id from that message's
+sequence number and the seat's name. So the room owes one kind of activation
+and schedules it one way — one retry policy, one backoff, one liveness rule —
+and what an activation may do is read off the message that woke it. A close
+wakes the assistant, and that is why the assistant's hand at a close is
+`summarise`. See [`lease.ts`](packages/ambion/src/room/lease.ts) and
+[`view.ts`](packages/ambion/src/room/view.ts).
+
+### 8. The assistant owns synthesis, not the application
 
 The assistant is the conversational interface, not a UI framework or a
 privileged coordinator. It is an ordinary seat with its own model session and
@@ -128,7 +143,7 @@ remains intact; only its rendered views are compacted. See
 [`assistant.ts`](packages/ambion/src/room/assistant.ts) and
 [`view.ts`](packages/ambion/src/room/view.ts).
 
-### 8. Boundaries are small and serializable
+### 9. Boundaries are small and serializable
 
 The core depends on narrow host interfaces: `Clock`, `SessionOpener`,
 `ModelResolver`, `Transport`, and `WorkspaceBackend`. They isolate time,
@@ -215,8 +230,10 @@ runtime, with several consequences worth preserving as the library evolves:
   orchestrator does not guess the last contributor.
 - **Presence in the event model.** Joining and leaving obey the same ordering
   and routing rules as speech.
-- **Leases as the room/seat lifecycle bridge.** Pending wakes plus claimed
-  leases define whether the room still has work.
+- **Exchange boundaries in the record.** A close is a message, so a client
+  reconstructs the history of exchanges from a read, with no side channel.
+- **Leases as the room/seat lifecycle bridge.** Claimed leases plus the
+  activations the room still owes define whether the room still has work.
 
 ## Trajectory
 

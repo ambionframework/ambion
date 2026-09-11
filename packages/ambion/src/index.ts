@@ -71,6 +71,7 @@ export type {
 	Attention,
 	Clock,
 	ClosedExchange,
+	ClosedMessage,
 	Exchange,
 	HumanDefinition,
 	HumanSeatInfo,
@@ -93,10 +94,9 @@ export type {
 	WorkspaceBackend,
 	WorkspaceHandle,
 } from './types.ts';
-export { isPresence, isSpoken, isSummary } from './types.ts';
+export { isClosed, isPresence, isSpoken, isSummary } from './types.ts';
 export type {
 	ActivationView,
-	CloseRow,
 	Commit,
 	CommitResponse,
 	CompositionRow,

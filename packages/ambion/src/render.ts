@@ -14,6 +14,7 @@
  */
 import type { AgentSeatInfo, Attention } from './types.ts';
 import {
+	isClosed,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -54,14 +55,15 @@ function plural(n: number, unit: string): string {
 }
 
 /**
- * One line of the record. A presence message has no text, so it reads as an
- * aside; a summary reads like anything else addressed to one person, because
- * that is what it is.
+ * One line of the record. A presence message and a close have no text, so
+ * each reads as an aside; a summary reads like anything else addressed to one
+ * person, because that is what it is.
  */
 export function renderLine(message: Message): string {
 	if (isSpoken(message) || isSummary(message)) {
 		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}`;
 	}
+	if (isClosed(message)) return `· ${message.from}'s exchange closed`;
 	return `· ${message.from} ${message.kind}${message.by ? ` by ${message.by}` : ''}`;
 }
 
@@ -114,15 +116,14 @@ function rows(record: readonly Message[]): Row[] {
  * one thing they missed without re-reading the whole room to them.
  *
  * A range the assistant has summarised renders as its count and the person it was
- * written for, and the summary that stands for it renders below. The record
- * keeps every message; what a seat reads is a rendering of it, built fresh at
- * each activation.
+ * written for, and the summary that stands for it renders below. The room's
+ * own closes render as nothing: a close asks a participant for nothing, and
+ * what stands for the exchange is whatever the assistant wrote under it. The
+ * record keeps every message; what a seat reads is a rendering of it, built
+ * fresh at each activation.
  */
-export function renderRecord(
-	record: readonly Message[],
-	people: PersonView[],
-	now: number,
-): string {
+export function renderRecord(full: readonly Message[], people: PersonView[], now: number): string {
+	const record = full.filter((message) => !isClosed(message));
 	if (record.length === 0) return '(the record is empty)';
 	const dividers = unseenDividers(people);
 	const lines: string[] = [];

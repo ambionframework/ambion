@@ -100,16 +100,17 @@ export const backends: readonly Backend[] = [
 
 /**
  * Called around every append a session takes: once before it lands and
- * once after. `n` counts the appends to this session id, and `customType`
- * names the entry type of a custom entry. A hook that throws fails the
- * append: before it lands, the entry is nowhere; after, the entry is on
- * the storage and the writer never learns it.
+ * once after. `n` counts the appends to this session id, `customType`
+ * names the entry type of a custom entry, and `data` is what is appended.
+ * A hook that throws fails the append: before it lands, the entry is
+ * nowhere; after, the entry is on the storage and the writer never learns it.
  */
 export type AppendHook = (
 	id: string,
 	n: number,
 	phase: 'before' | 'after',
 	customType: string | undefined,
+	data: unknown,
 ) => void;
 
 /** An opener whose every append reports itself to the hook, and fails when the hook throws. */
@@ -123,12 +124,13 @@ export function tappedOpener(sessions: SessionOpener, hook: AppendHook): Session
 						const n = (counts.get(id) ?? 0) + 1;
 						counts.set(id, n);
 						const customType = property === 'appendCustomEntry' ? String(args[0]) : undefined;
-						hook(id, n, 'before', customType);
+						const data = property === 'appendCustomEntry' ? args[1] : args[0];
+						hook(id, n, 'before', customType, data);
 						const append = Reflect.get(target, property, receiver) as (
 							...a: unknown[]
 						) => Promise<unknown>;
 						const result = await append.apply(target, args);
-						hook(id, n, 'after', customType);
+						hook(id, n, 'after', customType, data);
 						return result;
 					};
 				}
@@ -146,24 +148,28 @@ export interface FaultyOpener {
 	readonly sessions: SessionOpener;
 	/**
 	 * Every write fails while `on` is set: `true` and `'before'` lose it, `'after'` lands it and
-	 * loses the confirmation. `only` narrows the failure to one entry type. Reads and opens keep working.
+	 * loses the confirmation. `only` narrows the failure to one entry type, or to whatever a
+	 * matcher over the appended entry picks. Reads and opens keep working.
 	 */
-	fail(on: boolean | FailMode, only?: string): void;
+	fail(on: boolean | FailMode, only?: string | AppendMatcher): void;
 }
+
+/** Which appends a narrowed failure picks: the entry type, and the entry itself. */
+export type AppendMatcher = (customType: string | undefined, data: unknown) => boolean;
 
 /** An opener whose sessions refuse to write while the test says so. */
 export function faultyOpener(sessions: SessionOpener): FaultyOpener {
 	let failing: FailMode = false;
-	let onlyType: string | undefined;
+	let picked: AppendMatcher | undefined;
 	return {
-		sessions: tappedOpener(sessions, (_id, _n, phase, customType) => {
-			if (failing === phase && (onlyType === undefined || onlyType === customType)) {
+		sessions: tappedOpener(sessions, (_id, _n, phase, customType, data) => {
+			if (failing === phase && (picked === undefined || picked(customType, data))) {
 				throw new Error('the disk is full');
 			}
 		}),
 		fail: (on, only) => {
 			failing = on === true ? 'before' : on;
-			onlyType = only;
+			picked = typeof only === 'string' ? (type) => type === only : only;
 		},
 	};
 }
