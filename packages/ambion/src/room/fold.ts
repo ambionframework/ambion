@@ -13,7 +13,15 @@ import type { LogEntry } from '../log/log.ts';
 import { type Attention, type Exchange, isSummary, type Message, type Seq } from '../types.ts';
 import type { CloseRow, CompositionRow, EndReason, LeaseRow, SeatRow } from '../wire.ts';
 import { openExchange } from './exchange.ts';
-import { foldLeases, type LeaseState, type PendingWake, parseId, pendingWakes } from './lease.ts';
+import {
+	type Due,
+	draftId,
+	foldLeases,
+	type LeaseState,
+	type PendingWake,
+	parseId,
+	pendingWakes,
+} from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
 
 /** One agent on the roster: its name, how the room knows it, what wakes it, and whether it is the assistant. */
@@ -25,7 +33,7 @@ interface RosterSeat {
 }
 
 /** A summary one person is owed, and how the room has tried to write it. */
-export interface Owed {
+interface Owed extends Due {
 	person: string;
 	/** The earliest question the message must reach back to. */
 	from: Seq;
@@ -33,11 +41,10 @@ export interface Owed {
 	through: Seq;
 	/** Every close the message stands for, by `through`. */
 	closes: Seq[];
-	/** How many drafts over these closes failed, expired, or were refused. */
-	attempts: number;
-	/** When the next draft may start, or undefined when it may start now. */
-	notBefore: number | undefined;
 }
+
+/** What one person is owed, before the room counts the drafts it has tried. */
+type Grouped = Omit<Owed, keyof Due>;
 
 export interface RoomState {
 	readonly composition: CompositionRow | undefined;
@@ -49,6 +56,8 @@ export interface RoomState {
 	readonly leases: Map<string, LeaseState>;
 	readonly pending: PendingWake[];
 	readonly owed: Owed[];
+	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
+	readonly due: Due[];
 	readonly messages: readonly Message[];
 	readonly lastSeq: Seq;
 }
@@ -81,6 +90,14 @@ export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): Ro
 	const leases = foldLeases(leaseRows);
 	const assistant = composition?.assistant.name ?? '';
 	const isPerson = (name: string) => people.has(name);
+	const pending = pendingWakes(
+		messages,
+		leases,
+		new Set(roster.map((s) => s.name)),
+		options,
+		assistant,
+	);
+	const owed = foldOwed(closes, messages, leases, { assistant, ...options });
 	return {
 		composition,
 		roster,
@@ -90,8 +107,9 @@ export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): Ro
 		exchange: openExchange(messages, closes, isPerson),
 		closes,
 		leases,
-		pending: pendingWakes(messages, leases, new Set(roster.map((s) => s.name)), options, assistant),
-		owed: foldOwed(closes, messages, leases, { assistant, ...options }),
+		pending,
+		owed,
+		due: [...pending, ...owed],
 		messages,
 		lastSeq: messages.at(-1)?.seq ?? 0,
 	};
@@ -157,7 +175,7 @@ function foldOwed(
 	const open = owing.filter(
 		(close) => !summaries.some((s) => covers(s, close)) && !judged(leases, close, owing),
 	);
-	const byPerson = new Map<string, Owed>();
+	const byPerson = new Map<string, Grouped>();
 	for (const close of open) {
 		const known = byPerson.get(close.owner);
 		byPerson.set(close.owner, {
@@ -165,12 +183,10 @@ function foldOwed(
 			from: Math.min(known?.from ?? close.from, close.from),
 			through: close.through,
 			closes: [...(known?.closes ?? []), close.through],
-			attempts: 0,
-			notBefore: undefined,
 		});
 	}
 	return [...byPerson.values()]
-		.map((owed) => withAttempts(owed, leases, context.backoff))
+		.map((grouped) => withAttempts(grouped, leases, context))
 		.filter((owed) => owed.attempts < context.attempts);
 }
 
@@ -205,16 +221,25 @@ function judged(
 	return false;
 }
 
-/** How many drafts over these closes came to nothing, and when the next may start. */
+/**
+ * What a person is owed, as an activation: how many drafts over these
+ * closes came to nothing, when the next may start, and the id it claims.
+ */
 function withAttempts(
-	owed: Owed,
+	grouped: Grouped,
 	leases: ReadonlyMap<string, LeaseState>,
-	backoff: (attempt: number) => number,
+	context: OwedContext,
 ): Owed {
-	const failed = [...leases.values()].filter((lease) => cameToNothing(lease, owed.closes));
+	const failed = [...leases.values()].filter((lease) => cameToNothing(lease, grouped.closes));
 	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
 	const attempts = failed.length;
-	return { ...owed, attempts, notBefore: attempts === 0 ? undefined : last + backoff(attempts) };
+	return {
+		...grouped,
+		id: draftId(grouped.through, attempts + 1),
+		seat: context.assistant,
+		attempts,
+		notBefore: attempts === 0 ? undefined : last + context.backoff(attempts),
+	};
 }
 
 /** A draft over one of these closes that ended failed, expired, or refused. */
