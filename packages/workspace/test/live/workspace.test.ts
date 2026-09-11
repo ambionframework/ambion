@@ -37,7 +37,7 @@ live('the workspace', () => {
 			instructions: `
 				Before you answer a question about a crate, read notes/inventory.txt
 				in your home directory with the read tool. Then append one line,
-				"checked <crate>", to notes/log.txt in your home directory. Then
+				"checked <crate>", to notes/journal.txt in your home directory. Then
 				answer with one say, in one sentence, quoting the count you read.
 			`,
 			workspace: store,
@@ -57,8 +57,10 @@ live('the workspace', () => {
 		const answer = saidBy(await session.messages(), 'librarian');
 		expect(answer).toHaveLength(1);
 		expect(answer[0]?.text).toMatch(/\b7\b|seven/i);
-		const log = (await backend.readFiles()).find((f) => f.path === '/home/librarian/notes/log.txt');
-		expect(log?.text).toMatch(/checked/i);
+		const journal = (await backend.readFiles()).find(
+			(f) => f.path === '/home/librarian/notes/journal.txt',
+		);
+		expect(journal?.text).toMatch(/checked/i);
 		await invariants(session, events);
 		report('the workspace', await spent(repo, session.name));
 		await stopSession(session);

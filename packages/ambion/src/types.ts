@@ -225,11 +225,11 @@ export type SessionEvent =
 	/**
 	 * The room gave up: every attempt at a wake or a draft came to nothing,
 	 * and the cap is reached. `activation` names the attempt the room did
-	 * not make, and the log holds the row that says so.
+	 * not make, and the journal holds the row that says so.
 	 */
 	| { type: 'abandoned'; agent: string; activation: string }
 	/**
-	 * Another run took the name: its run row is on the log past this run's.
+	 * Another run took the name: its run row is on the journal past this run's.
 	 * This run is superseded, and drops itself from memory the way
 	 * `runtime.evict` does. Nothing it wrote after the other run's row is on
 	 * the record, and nothing it does from here on writes.

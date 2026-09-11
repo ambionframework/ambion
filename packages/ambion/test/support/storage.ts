@@ -197,7 +197,7 @@ export function gatedOpener(
 				// Both appends, because a storage that refuses a moved append takes
 				// the second one and a gate over the first would never hold a write.
 				// A storage without one keeps none: the wrapper must not offer what
-				// the session does not have, because the log asks before it calls.
+				// the session does not have, because the journal asks before it calls.
 				const appends = property === 'appendCustomEntry' || property === 'appendAfter';
 				if (appends && Reflect.get(target, property, receiver) !== undefined) {
 					return async (customType: string, data: unknown, ...rest: unknown[]) => {

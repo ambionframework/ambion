@@ -1,6 +1,6 @@
 /**
  * The split the design forbids, as a history: two live hosts over one
- * log. The first host is paused, in this process by holding its writes
+ * journal. The first host is paused, in this process by holding its writes
  * and in a process of its own with SIGSTOP, a second host resumes the
  * name, and the first comes back and keeps writing. In memory, the fence
  * holds: the first host's write past the fence is void, it acknowledges
@@ -60,7 +60,7 @@ function entriesOf(rows: { type: string; data: unknown }[]): Entry[] {
 
 // A storage that refuses an append the record moved under loses nothing:
 // the write the paused host held is refused before it is acknowledged.
-describe.each([memory, sqlite])('a split on $name: two live hosts over one log', (storage) => {
+describe.each([memory, sqlite])('a split on $name: two live hosts over one journal', (storage) => {
 	const refuses = storage.name === 'sqlite';
 	it('a paused host that comes back is fenced out, and loses only what the storage lets it', async () => {
 		const opened = await storage.open();
@@ -170,7 +170,7 @@ describe('a split: two live hosts over one JSONL file', () => {
 		});
 	}
 
-	/** Run the child until its log takes `at` appends, then stop it where it stands. */
+	/** Run the child until its journal takes `at` appends, then stop it where it stands. */
 	function stopAt(dir: string, name: string, at: number) {
 		const args = ['--experimental-transform-types', '--no-warnings', child, dir, name, '40'];
 		const process_ = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'inherit'] });

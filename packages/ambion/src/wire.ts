@@ -1,5 +1,5 @@
 /**
- * What crosses between a seat and its room, and what the log holds beside
+ * What crosses between a seat and its room, and what the journal holds beside
  * a message. Every shape here is plain JSON:
  * an optional key is written only when it is present, and no value is
  * `undefined`, a `Date`, a `Map`, a `Set`, a class instance or a function. A
@@ -16,7 +16,7 @@
  */
 import type { Attention, Message, Seq } from './types.ts';
 
-// -- rows on the log beside the messages --------------------------------------
+// -- rows on the journal beside the messages --------------------------------------
 
 /** `Omit` over each member of a union, so a discriminated row keeps its shape. */
 export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -38,7 +38,7 @@ export type LeaseChange =
 
 /**
  * What the rows for one activation fold to: whether it runs, until when,
- * or why it ended, and where on the log each fact landed. A checkpoint
+ * or why it ended, and where on the journal each fact landed. A checkpoint
  * carries these in place of the rows that made them, so the shape crosses
  * the wire.
  */
@@ -75,7 +75,7 @@ export interface Run {
  * The room as it stood, in one row. A fold reads a checkpoint as the
  * composition, the closes and the leases it carries, and nothing older; a
  * wake on a message below `floor` was answered when the checkpoint was
- * written. A checkpoint is a cache over the log: the rows it replaces stay
+ * written. A checkpoint is a cache over the journal: the rows it replaces stay
  * on the storage, and a checkpoint the room cannot read is ignored.
  */
 export interface Checkpoint {
@@ -90,7 +90,7 @@ export interface Checkpoint {
 	at: string;
 }
 
-/** Whether a row read off the log is a checkpoint this room can fold. */
+/** Whether a row read off the journal is a checkpoint this room can fold. */
 export function isCheckpoint(row: unknown): row is Checkpoint {
 	if (typeof row !== 'object' || row === null) return false;
 	const candidate = row as Partial<Checkpoint>;

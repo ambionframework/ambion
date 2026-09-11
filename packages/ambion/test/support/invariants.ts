@@ -16,7 +16,7 @@ import { rowsOf } from './room.ts';
 export interface InvariantOptions {
 	/** How many `error` events the run may hold. A live model may refuse one call. */
 	allowErrors?: number;
-	/** Where the room's log opens: with it, every seat's message is checked against its lease. */
+	/** Where the room's journal opens: with it, every seat's message is checked against its lease. */
 	sessions?: SessionOpener;
 	/** How many activations a resumed room inherited live: their ends land in this run, their starts did not. */
 	inherited?: number;

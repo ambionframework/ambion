@@ -292,7 +292,7 @@ while the assistant drafts for Priya, Sam stays owed, and the room wakes
 the assistant again for him at its next reconcile. A person whose draft the
 assistant could not land waits for the backoff instead, so a model that
 keeps failing never retries on its own end (§5). Who is owed is a fold
-over the log: a close that names the assistant, with no summary covering
+over the journal: a close that names the assistant, with no summary covering
 it and no draft that stood down over it. A draft stands down when the
 assistant ends it without writing, and when the host revokes it: `abort()`
 and `stopSession` write the draft off with every wake still pending. A
@@ -423,7 +423,7 @@ with them:
   thinking state and show the summary as the answer. `covers` says which
   messages to fold.
 
-This asks one thing of a client that a plain log does not do: **it must be
+This asks one thing of a client that a plain journal does not do: **it must be
 able to change how it presents past messages when a new message arrives.**
 A client that only appends will show the working as conversation.
 
@@ -544,7 +544,7 @@ there to judge whether writing would help.
 **A restarted room seats it again with the agents.** The assistant is
 composition, like an agent. How each person reads is on the record, with
 their latest arrival, so a person known from a replayed record reads the
-way they last said they do, and a room resumed over its log writes for a
+way they last said they do, and a room resumed over its journal writes for a
 person the last run owed, the way they read.
 
 **An agent-only room pays for one idle seat.** A room nobody visits seats
@@ -752,9 +752,9 @@ is owed no longer. `stopSession` is the other case, below.
 
 **A run that stops mid-exchange writes no summary.** `stopSession` revokes
 the leases in flight and writes no close, so the exchange stays open on
-the log. It revokes a draft in flight for the same reason, and a draft
+the journal. It revokes a draft in flight for the same reason, and a draft
 that does finish after the stop commits nothing. The next run over the
-same log closes the exchange at its first reconcile
+same journal closes the exchange at its first reconcile
 ([`exchange.md`](exchange.md) §5) and writes what it owes then. Accepted.
 
 **A widened range is bounded by a race, and nothing else.** A summary
@@ -779,7 +779,7 @@ the attempt it does not make, ended `abandoned`. The host hears an
 so nothing is lost, and the one message never arrives.
 
 **What a client owes.** §10 asks a client to re-present past messages when
-a new one arrives. That is more than a log does, and no client in this
+a new one arrives. That is more than a journal does, and no client in this
 repository does it.
 
 **The room still chatters.** The assistant makes ten messages readable. It does

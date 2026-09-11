@@ -213,7 +213,7 @@ alone seats what a question needs from its reserve
 ([`roster.md`](roster.md) §1).
 
 **One run per name.** `startSession` refuses a name already running in this
-process, and the log fences a run in another process
+process, and the journal fences a run in another process
 ([`durability.md`](durability.md) §1). Two live rooms over one record
 would each replay it, each append to it, and diverge. A start the record
 refuses frees the name: the handle answers every call with the refusal,
@@ -318,8 +318,8 @@ slightly different order than the record. Its working view is its own,
 temporary by design: when the agent goes idle the view is discarded, and
 the next activation reads the record itself. The record is canonical.
 
-A steer is the room's word to a running activation, and the log does not
-record it. The log says who was at work when the message landed: a lease
+A steer is the room's word to a running activation, and the journal does not
+record it. The journal says who was at work when the message landed: a lease
 that holds a row before the message and ends, if it ends, after it. A
 message such a lease heard is answered when the lease stands down, and
 pending again when the lease expired or failed, so a run that dies while
@@ -565,7 +565,7 @@ controls:
   roster folds from that ([`roster.md`](roster.md) §5), and an exchange
   left open closes at the next run's first reconcile.
 - **`resumeSession(name, { runtime })`** brings a name back up over its
-  log, with the composition the log holds. The first row every run
+  journal, with the composition the journal holds. The first row every run
   writes is its run row, and it fences every earlier run. A run that
   finds a later run's row emits `superseded` and drops itself from
   memory. It writes nothing more ([`durability.md`](durability.md) §1). Every name on the roster
@@ -590,7 +590,7 @@ who was in it and which seat still holds a lease.
 One file per concern, in layers an import points down through, and
 `session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
 §1 names the layers, and Biome holds them): the
-log in [`journal.ts`](../packages/journal/src/journal.ts), the rules it writes
+journal in [`journal.ts`](../packages/journal/src/journal.ts), the rules it writes
 by in [`rules.verified.ts`](../packages/journal/src/rules.verified.ts),
 every fact folded
 over it in [`fold.ts`](../packages/ambion/src/room/fold.ts), the step the
@@ -613,22 +613,22 @@ agent's tools reach into in
 owns in [`runtime.ts`](../packages/ambion/src/host/runtime.ts), and what
 any of them reads in [`render.ts`](../packages/ambion/src/render.ts).
 
-**The log is the truth, and the room moves by reconciling.** Every fact
-about the room is a fold over the log and the clock: the roster, the
+**The journal is the truth, and the room moves by reconciling.** Every fact
+about the room is a fold over the journal and the clock: the roster, the
 reserve, the people, the open exchange, the closes, the leases, the wakes
 still pending and the summaries still owed
 ([`fold.ts`](../packages/ambion/src/room/fold.ts)). `reconcile()` folds
-the log, decides, writes what it decided, and sends
+the journal, decides, writes what it decided, and sends
 ([`reconcile.ts`](../packages/ambion/src/room/reconcile.ts)). It runs
 after every commit, every lease change, every alarm and every wake, and
 running it twice writes nothing. Four kinds of entry hold it all, in the
 room's one Pi session: `ambion/message`, `ambion/lease`, `ambion/close`
 and `ambion/composition`. Every entry beside a message carries `after`,
 the last message seq when it was written. The room holds one cache beside
-the log: when it last sent each wake, which a resumed room starts empty.
+the journal: when it last sent each wake, which a resumed room starts empty.
 
 **A seat is seated for the run. An activation lasts seconds.** An
-activation's id is derived from the log: the seq of the message that woke
+activation's id is derived from the journal: the seq of the message that woke
 the seat and the seat's name (`2:product`), or the close it answers and
 the attempt number (`close:9:1`). Nothing mints an id, so a wake is safe
 to send twice, a retried commit lands once, and every message an
@@ -674,11 +674,11 @@ assistant could not write ends the same way, and the range stays whole.
 `ambion/checkpoint` row where it has nothing else to write. The row
 carries the composition, the closes and the leases a later fold still
 reads, behind a `floor`: no wake on a message below it is pending. A fold
-reads a checkpoint in place of every row before it, and the log drops
+reads a checkpoint in place of every row before it, and the journal drops
 those rows from memory. What a fold costs is then the rows since the last
 checkpoint; what a replay costs is every entry the storage holds, because
 a checkpoint trims the cache and never the storage. The messages stay, and the storage keeps every
-row: a checkpoint is a cache over the log, so a reader that cannot read
+row: a checkpoint is a cache over the journal, so a reader that cannot read
 one ignores it and folds the rows instead. A checkpoint is an entry like
 any other, so the fence voids one a superseded run wrote.
 
@@ -694,7 +694,7 @@ surface.
 
 **The core holds one storage of its own: SQLite.**
 [`sqliteSessions(sql)`](../packages/ambion/src/host/sqlite.ts) opens every
-session in one database, keyed by id: the room's log, and each seat's
+session in one database, keyed by id: the room's journal, and each seat's
 audit session beside it. It reaches the database through two calls, `run`
 a statement and `all` its rows, so a host wraps whatever SQLite it holds
 — `node:sqlite` in a process, a Durable Object's own storage on
@@ -706,12 +706,12 @@ the database as the row lands, and the primary key refuses a second entry
 at one seq: a writer that raced is refused, and reads again.
 
 **A storage may refuse an append the record moved under.** A session that
-can promise it offers `appendAfter`, and the log hands it the position
+can promise it offers `appendAfter`, and the journal hands it the position
 its read left: the entry lands next to that position, or the storage
 writes nothing and says so. A run fenced while its write waited is
 refused before it acknowledges, so the write it held is no loss. The
 SQLite storage offers it in one statement, which takes the seq it
-asserts. A storage that cannot promise it does not offer it, and the log
+asserts. A storage that cannot promise it does not offer it, and the journal
 appends the way it always did. Pi's JSONL repository holds the next seq in memory, so
 two runs over one file write the same seq twice and the file no longer
 reads: a host that runs two rooms over one name needs the SQLite storage,
@@ -729,7 +729,7 @@ runs. Every request and response survives a round trip through
 `JSON.stringify` unchanged
 ([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
 live in two processes. The room answers the three calls from the fold: a
-lease is a row on the log, and the seat side releases it when the
+lease is a row on the journal, and the seat side releases it when the
 activation ends.
 
 **A cut is the room's word, and the record is written before it.** The
@@ -780,14 +780,14 @@ one per claim this document makes loudly:
 - a wake lost on the way is sent again, a wake sent twice runs once, a
   release lost on the way expires, and a request under a lease that ended
   is refused ([`lease.test.ts`](../packages/ambion/test/lease.test.ts));
-- a room resumed over its log continues where the last run stopped, on
+- a room resumed over its journal continues where the last run stopped, on
   every storage ([`restart.test.ts`](../packages/ambion/test/restart.test.ts));
 - `decide` writes nothing the second time
   ([`reconcile.test.ts`](../packages/ambion/test/reconcile.test.ts)).
 
 What a crash leaves is proved in
 [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts): the room crashes
-at every write its log takes, before and after the entry lands, and is
+at every write its journal takes, before and after the entry lands, and is
 killed from outside mid-activation, and a host that resumes it and retries
 under the same key reaches the same record every time.
 [`toolchain.md`](toolchain.md) §8 says how the sweep runs and how to widen

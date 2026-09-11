@@ -437,7 +437,7 @@ describe('a storage that fails', () => {
 			streamFn: recording,
 			runtime: createRuntime({ sessions: unreachable }),
 		});
-		// the failure waits for the call that needs the log
+		// the failure waits for the call that needs the journal
 		await expect(session.messages()).rejects.toThrow(/unreachable/);
 		await expect(visitSession(session, andrei)).rejects.toThrow(/unreachable/);
 		await expect(stopSession(session)).rejects.toThrow(/unreachable/);

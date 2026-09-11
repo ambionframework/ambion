@@ -47,7 +47,7 @@ and names the backend through a port. The main entry imports no
 
 ## 3. Take the record out of the core
 
-**What.** `src/log/` and `src/host/sqlite.ts` are 791 lines: an
+**What.** `src/journal/` and `src/host/sqlite.ts` are 791 lines: an
 append-only record over pluggable storage, fenced by run, checkpointed,
 and honest about a write it is in doubt about. They import two type
 modules and nothing else.
@@ -58,13 +58,13 @@ the least to do with agents. It already has its own contract
 test tiers. Nothing in it knows what a seat is. Out on its own it can be
 read, trusted and reused; inside, it reads as plumbing for rooms.
 
-**Done when.** `@ambionframework/journal` holds the log, the fence, the
+**Done when.** `@ambionframework/journal` holds the journal, the fence, the
 checkpoint and the storages. The room depends on it the way it depends
 on Pi: for one concern, through one interface.
 
 **Watch for.** The lease rules (`room/lease.ts`, `room/reconcile.ts`)
 are a second candidate: work owed, attempts, backoff and expiry over a
-log is a durable scheduler and nothing else. Decide that after this one,
+journal is a durable scheduler and nothing else. Decide that after this one,
 because the two share a shape and moving both at once hides whether the
 shape is right.
 
@@ -72,16 +72,16 @@ shape is right.
 
 **What.** One class, 1439 lines, about 70 members and 18 fields. It is
 the room's lifecycle, the host's API, the seat's three calls, the write
-path, the reaction to every log entry, the reconcile loop, and the
+path, the reaction to every journal entry, the reconcile loop, and the
 waiters, in one place.
 
 **Why now.** Items 2 and 3 take two subjects out of its reach, and item
 1 gives it one state to carry. What is left is one subject seen from
 three sides: a host drives a room, a seat asks it for work, and the room
-answers its own log. Those are the seams, and they are already named as
+answers its own journal. Those are the seams, and they are already named as
 three interfaces.
 
-**Done when.** A `Room` value holds the log, the fold and the clock. The
+**Done when.** A `Room` value holds the journal, the fold and the clock. The
 three faces are thin modules of functions over that value:
 `answers.ts` for the seat's `view`, `commit` and `lease`; the host's API;
 and the reconcile loop. No module is over 400 lines, and the imperative

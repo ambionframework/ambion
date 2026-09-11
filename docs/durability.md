@@ -6,22 +6,22 @@ the contract. The chaos tier and the history checker hold the room to it.
 Read it with [`agent.md`](agent.md) §5, which names the mechanisms, and
 [`toolchain.md`](toolchain.md) §8, which says how the tiers run.
 
-## 1. The log is the truth
+## 1. The journal is the truth
 
 **One record, one writer, one order.** A room's record is one append-only
-log in a Pi session. Every message takes the next seq, and every row the
+journal in a Pi session. Every message takes the next seq, and every row the
 room writes beside the messages carries `after`, the last seq when it
-landed. The fold reads the log from the start and rebuilds the room from
+landed. The fold reads the journal from the start and rebuilds the room from
 it. That is the roster, the people, the open exchange, every lease, every
 wake still pending and every summary still owed. Nothing the room holds
-in memory outlives what the log says.
+in memory outlives what the journal says.
 
-**The room reacts to the log, and to nothing else.** The log tells the room
+**The room reacts to the journal, and to nothing else.** The journal tells the room
 about every entry it takes, and the room has one reaction per entry. An
 entry this run appended and an entry a read found reach the room the same
 way, so a message another run wrote, and a message whose confirmation this
 run lost, become an event and a wake exactly as a message this run
-committed does. The room writes down to the log and hears back up from it,
+committed does. The room writes down to the journal and hears back up from it,
 and it holds no second path for the entries it wrote itself.
 
 **Durable means the storage's append resolved.** Pi's in-memory repository
@@ -31,7 +31,7 @@ about an append breaks every promise below.
 
 **One run per name, fenced by its row.** `startSession` and
 `resumeSession` refuse a name the runtime already runs. Across runtimes,
-the log fences. The first row every run writes is its run row, with a
+the journal fences. The first row every run writes is its run row, with a
 fresh run id, and every entry the run writes carries that id. The fence
 is positional: a reader passes the storage in order, and a run row moves
 the fence to that run. An entry of another run past the fence is void,
@@ -56,7 +56,7 @@ entry.
 **Acknowledged: on the record once.** `deliver()` resolves once the
 write is confirmed. The message is on the record and on the stream, and
 the wake is sent to every seat it reaches. It stays on the record for
-the life of the log.
+the life of the journal.
 
 **Refused: nowhere.** A delivery the room refuses rejects `deliver()`
 before anything lands. The visit is over, the room is stopped, or the
@@ -83,7 +83,7 @@ the last seq the run has confirmed or read back, with no gap. A read
 never shows a message before the write that carries it is confirmed.
 
 **Forward only.** Two reads by one host over one run never move
-backwards. A resumed run replays the whole log first, so a read after a
+backwards. A resumed run replays the whole journal first, so a read after a
 resume holds everything the run before it confirmed.
 
 **Your own writes.** A read after an acknowledged delivery holds that
@@ -99,7 +99,7 @@ the first message the run saw.
 seat claims a lease under the wake's id and renews it while it works.
 The next attempt claims only after the last one ended.
 
-**A lease answers what it heard.** The log says which messages a lease
+**A lease answers what it heard.** The journal says which messages a lease
 heard. They are the ones it was at work for, and the ones its view held
 because it was claimed after them. A lease answers them while it runs
 and once it stood down, through the seq its last renewal confirmed.
@@ -140,7 +140,7 @@ the first host acknowledges it. The first host learns at its next write.
 Every write it held between the fence and that write is lost, and
 `split.test.ts` pins that it is that one write and no other.
 
-A storage that offers `appendAfter` loses none of it. The log hands that
+A storage that offers `appendAfter` loses none of it. The journal hands that
 append the position its read left: the entry lands next to it, or the
 storage says the record moved and writes nothing. The run is refused
 before it acknowledges, and the refusal is definite — nothing landed, so
@@ -213,7 +213,7 @@ the system clock.
 | The random walk        | `property.test.ts`    | Twenty seeded steps of visits, deliveries, seat changes, clock jumps, wire faults, disk faults and crashes; the invariants hold                          |
 | The history            | `consistency.test.ts` | Two people and the host take turns under a nemesis; every action is an invocation and an outcome; §2 to §4 are checked against the record                |
 | The split              | `split.test.ts`       | A paused host comes back after a takeover: in process, the fence holds and it loses the one write it held; under `SIGSTOP` on JSONL, Pi refuses the file |
-| The rules              | `rules.verified.ts`   | The pure rules the log and the fold decide by carry contracts, and Dafny proves them: the next seq, rule 5, the fence, who heard a message, the cap      |
+| The rules              | `rules.verified.ts`   | The pure rules the journal and the fold decide by carry contracts, and Dafny proves them: the next seq, rule 5, the fence, who heard a message, the cap  |
 
 **The history checker** lives in
 [`test/support/history.ts`](../packages/ambion/test/support/history.ts).
@@ -249,11 +249,11 @@ failures the cast injects, the room calls the nemesis dropped, and the
 leases live across a jump past the expiry.
 
 **The rules are proved.** The pure rules in
-[`log/rules.verified.ts`](../packages/journal/src/rules.verified.ts)
+[`journal/rules.verified.ts`](../packages/journal/src/rules.verified.ts)
 and
 [`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)
 carry `//@ requires` and `//@ ensures` contracts. LemmaScript turns them
-into Dafny obligations, and CI proves them on every push. The log and
+into Dafny obligations, and CI proves them on every push. The journal and
 the fold run these bodies, so the proof is about the code that runs. The
 rules are the next seq, the refusal of a commit that read too little,
 the fence, what supersedes a run, when a lease is expired, who was at

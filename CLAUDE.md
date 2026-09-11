@@ -86,7 +86,7 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   that may reach what it needs, and never above `session.ts`.
 - No `any`, no non-null assertions, no unused imports or variables.
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
-- A pure rule the log or the fold decides by lives in the layer's
+- A pure rule the journal or the fold decides by lives in the layer's
   `rules.verified.ts`, with `//@ requires` and `//@ ensures` contracts.
   Regenerate its `.dfy` and `.dfy.gen` with `npx lsc gen --backend=dafny`
   after every edit.

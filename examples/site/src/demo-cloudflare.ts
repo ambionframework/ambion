@@ -6,7 +6,7 @@
  * Object and each seat is another, so the platform can take the room alone.
  * The demo does exactly that: it waits until the seats hold leases, drops the
  * room object, and lets the seats finish. The room that comes back folds the
- * same leases off the log and takes the commits the dead run never saw.
+ * same leases off the journal and takes the commits the dead run never saw.
  *
  * Run it in two terminals, from `examples/site`:
  *
@@ -75,13 +75,13 @@ async function until<T>(read: () => Promise<T | undefined>, ms = 180_000): Promi
 	}
 }
 
-const log = () => call<LogRow[]>('/log');
+const journal = () => call<LogRow[]>('/journal');
 
 /**
  * What the seats did inside their own objects, out of Cloudflare's logs.
  *
  * An activation runs in the seat's object and raises its events there, so the
- * room's log holds no tool call. The seat writes each one as a structured log
+ * room's journal holds no tool call. The seat writes each one as a structured journal
  * line instead, and wrangler keeps them where a query can reach: this is the
  * local explorer, and a deployed worker answers the same question through the
  * Workers Logs API.
@@ -135,7 +135,7 @@ await call('/deliver', {
 
 step('the seats take their leases, and the room writes a row for each');
 const claimed = await until(async () => {
-	const held = rowsOf<LeaseData>(await log(), 'lease');
+	const held = rowsOf<LeaseData>(await journal(), 'lease');
 	return held.length >= 2 ? held : undefined;
 });
 process.stderr.write(`  ${claimed.length} leases running\n`);
@@ -157,13 +157,13 @@ process.stderr.write(
 	`\n∎ ${summary.from} → ${summary.to}\n  ${(summary.text ?? '').slice(0, 240)}\n`,
 );
 
-// Every lease ends before the log is read, so the capture holds the release
+// Every lease ends before the journal is read, so the capture holds the release
 // of the draft the summary came from and not the row before it.
 const rows = await until(async () => {
-	const held = rowsOf<LeaseData>(await log(), 'lease');
+	const held = rowsOf<LeaseData>(await journal(), 'lease');
 	const ids = [...new Set(held.map((row) => row.id))];
 	const ended = ids.every((id) => held.filter((row) => row.id === id).at(-1)?.phase === 'ended');
-	return ended ? await log() : undefined;
+	return ended ? await journal() : undefined;
 });
 const seats = await call<{ kind: string; name: string }[]>('/seats');
 const events = await seatEvents();
@@ -195,7 +195,7 @@ writeFileSync(
 			ranAt: new Date().toISOString(),
 			steps,
 			crash: { time: crashedAtTime, leases: claimed.length },
-			log: rows,
+			journal: rows,
 			runs: rowsOf<{ run: string }>(rows, 'run'),
 			record: await messages(),
 			seats,

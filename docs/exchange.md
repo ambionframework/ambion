@@ -80,13 +80,13 @@ on top of work nobody asked for. That question still owns what follows.
 room that settles has finished. A seat that says something wakes its
 readers inside its own `say`, before its own lease ends, so the room is
 never briefly empty in the middle of a burst. What is live is read off the
-leases and the wakes still pending, folded over the log, so there is no
+leases and the wakes still pending, folded over the journal, so there is no
 count beside them to keep in step. The room writes a close row, and
 `through` is the record as it stood when the room decided on the quiet, so
 a closed exchange names the range it turned out to hold. A quiet the room
 decided on one exchange closes that exchange alone. A question that lands
 after that decision and before the row is written opens the next exchange.
-The host hears `exchange_opened` for it once the row is on the log, the
+The host hears `exchange_opened` for it once the row is on the journal, the
 roster stands for it, and an exchange nobody works on closes at the next
 reconcile, the way a question that wakes nobody does.
 
@@ -134,26 +134,26 @@ into a quiet room, opens his own exchange.
 
 ---
 
-## 5. A fold over the log
+## 5. A fold over the journal
 
-An exchange is a fold over the log. The open exchange is the first
+An exchange is a fold over the journal. The open exchange is the first
 question a person asked after the last close row's `through`
 (`openExchange` in [`exchange.ts`](../packages/ambion/src/room/exchange.ts)). A
-close is a row on the log beside the messages: `{ owner, from, through,
+close is a row on the journal beside the messages: `{ owner, from, through,
 at, wakes? }`. It takes no seq; `through` orders it. `wakes` names the
 assistant when the exchange owes a summary. `messages()` returns the
 messages alone, and their seqs stay `1..n`.
 
-A room resumed over its log continues a mid-exchange room. The question is
+A room resumed over its journal continues a mid-exchange room. The question is
 still open, the seats the last run left live hold their leases until they
 expire, and the wakes it left pending are sent again. A lease that expires
 answers the wake it held: the exchange closes once nothing is live, and the
 assistant writes what it owes ([`agent.md`](agent.md) §5). A run that
-starts over a log with an exchange open finds nothing live at its first
+starts over a journal with an exchange open finds nothing live at its first
 reconcile, closes the exchange, and its host hears `exchange_closed` for
 it.
 
-Every closed exchange is on the log, so a host that wants a history of
+Every closed exchange is on the journal, so a host that wants a history of
 exchanges reads the close rows off the room's Pi session.
 
 ---
@@ -202,8 +202,8 @@ summary is drafted, and that window is the one place it can.
 flight, writes off the wakes still pending, and the room reconciles, so the
 exchange closes with the range it reached. **A stopped room closes
 nothing.** `stopSession` revokes the leases in flight and writes no close
-row. A release that lands after the stop must not write into a log the
-next run has started over. The exchange stays open on the log, and the
+row. A release that lands after the stop must not write into a journal the
+next run has started over. The exchange stays open on the journal, and the
 next run closes it at its first reconcile (§5). A run that dies without
 `stop` leaves the exchange open the same way, with its leases live until
 they expire.

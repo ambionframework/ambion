@@ -2,7 +2,7 @@
  * The room crashes at every write, and is killed from outside; every time,
  * a host resumes it and the scenario comes to the same record.
  *
- * The sweep runs one scenario once to count the appends its log takes, then
+ * The sweep runs one scenario once to count the appends its journal takes, then
  * runs it once per append, crashing the room at that append: before the
  * entry lands, and again after it landed and before the room heard. The
  * world resumes the name in a fresh runtime and retries the host action
@@ -86,7 +86,7 @@ describe.each(full ? storages : [memory])('a crash at every write on $name', (st
 const child = fileURLToPath(new URL('./support/child.ts', import.meta.url));
 
 /**
- * Run the child until its log takes `at` appends, then kill it without
+ * Run the child until its journal takes `at` appends, then kill it without
  * warning. Returns the last append it reported, which may be past `at`.
  */
 function killAt(dir: string, name: string, at: number, storage: string): Promise<number> {
@@ -135,7 +135,7 @@ async function quietNow(session: Session, clock: FakeClock): Promise<void> {
 	throw new Error('the room never went quiet');
 }
 
-/** The scenario from wherever the child got to, each step a no-op where the log holds it already. */
+/** The scenario from wherever the child got to, each step a no-op where the journal holds it already. */
 async function finish(session: Session, clock: FakeClock): Promise<void> {
 	const [first, second, third] = questions as [Question, Question, Question];
 	const deliver = async (question: Question) => {

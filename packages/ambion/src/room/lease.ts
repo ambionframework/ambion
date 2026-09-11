@@ -1,7 +1,7 @@
 /**
  * Activations, named by what caused them, and the leases they hold.
  *
- * An activation's id is derived from the log: the seq of the message that
+ * An activation's id is derived from the journal: the seq of the message that
  * woke the seat and the seat's name, or the close it answers and the
  * attempt number. Nothing mints an id, so a wake is safe to send twice, a
  * retried commit lands once, and a request from an activation whose lease
@@ -12,7 +12,7 @@
  * and an ended lease never runs again.
  *
  * A message reaches a seat two ways: the room names the seats at rest it
- * wakes in `wakes`, and every seat at work hears it as a steer. The log
+ * wakes in `wakes`, and every seat at work hears it as a steer. The journal
  * says which: a lease at work when the message landed holds a row before
  * it and ends, if it ends, after it. A lease answers a message it heard,
  * or that its view held because it was claimed after the message, while
@@ -66,7 +66,7 @@ export function parseId(id: string): ParsedId | undefined {
 
 /**
  * The last row for one id: whether it runs, until when, or why it ended,
- * and where on the log. A checkpoint carries these in place of the rows
+ * and where on the journal. A checkpoint carries these in place of the rows
  * that made them, so the shape is the wire's ([`LeaseHold`](../wire.ts)).
  */
 export type LeaseState = LeaseHold;
@@ -124,12 +124,12 @@ export const isLive = (lease: LeaseState, now: number): boolean =>
 
 /**
  * An activation the room owes a seat, and has not had. Two things on the
- * log cause one: a message that woke a seat and no lease answered, and a
+ * journal cause one: a message that woke a seat and no lease answered, and a
  * close that owes the assistant a summary. The room schedules both the same
  * way, so both read as this.
  */
 export interface Due {
-	/** The id of the next attempt. Nothing mints it: the log derives it. */
+	/** The id of the next attempt. Nothing mints it: the journal derives it. */
 	id: string;
 	/** The seat that takes the activation. */
 	seat: string;
@@ -139,7 +139,7 @@ export interface Due {
 	notBefore: number | undefined;
 }
 
-/** A wake on the log that no lease has answered. */
+/** A wake on the journal that no lease has answered. */
 export interface PendingWake extends Due {
 	seq: Seq;
 	/** When the message was written, ISO. */

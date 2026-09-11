@@ -93,7 +93,7 @@ presence changes. This keeps lifecycle state out of routing policy. See
 
 Messages arriving during a provider request are queued as steers. They are
 injected after the current request boundary, not used to restart work in the
-middle of a coherent model turn. When the log has moved beyond what the
+middle of a coherent model turn. When the journal has moved beyond what the
 activation read, it rebuilds against a fresh room view. The implementation is
 in [`activation.ts`](packages/ambion/src/seat/activation.ts).
 
@@ -101,7 +101,7 @@ in [`activation.ts`](packages/ambion/src/seat/activation.ts).
 
 A human question opens an exchange. When the participating seats stop and no
 work remains owed, the room closes it. The exchange stores only its owner and
-sequence range; its contents remain derivable from the log.
+sequence range; its contents remain derivable from the journal.
 
 Quiescence is the semantic boundary. No coordinator has to predict which agent
 will have the final word, and no agent needs special authority to declare the

@@ -6,7 +6,7 @@
  * learned, because the storage, the wire or the process failed under it.
  *
  * The checks are the guarantees `docs/durability.md` states, read off the
- * history and the log together: an acknowledged delivery is on the record
+ * history and the journal together: an acknowledged delivery is on the record
  * once, a delivery in doubt is on it at most once, a refused one never,
  * every read is a prefix of the record, a client's reads move forward and
  * hold every delivery acknowledged before them, every seq on the storage
@@ -215,7 +215,7 @@ function prefixBreak(
 }
 
 /**
- * The rows that stand, the way the log reads them: a run row is the
+ * The rows that stand, the way the journal reads them: a run row is the
  * fence, and an entry another run wrote past it is void. Run rows are
  * left out; the fold has no use for them.
  */

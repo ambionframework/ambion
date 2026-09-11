@@ -1,5 +1,5 @@
 /**
- * How the room moves: it folds the log, decides, and writes what it decided.
+ * How the room moves: it folds the journal, decides, and writes what it decided.
  *
  * `decide` is pure. It reads the folded state and the clock and returns the
  * rows to write, the wakes to send, and when to look again. Every wake it

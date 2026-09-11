@@ -1,10 +1,10 @@
 /**
- * Every fact about the room, as a fold over the log.
+ * Every fact about the room, as a fold over the journal.
  *
- * The log is the truth, and the room holds no fact beside it: the roster,
+ * The journal is the truth, and the room holds no fact beside it: the roster,
  * the reserve, the people, the open exchange, the closes, the leases, the
  * wakes still pending and the summaries still owed are each one function
- * over the entries. A room that replays the log folds the same state the
+ * over the entries. A room that replays the journal folds the same state the
  * room that wrote it held, which is what lets a room resume where it
  * stopped.
  */
@@ -207,7 +207,7 @@ const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked', 'aban
  * The summaries still owed, one per person. A close owes one when it names
  * the assistant, no summary covers it, and no draft over it or over a later
  * close of the same person stood down. Every later close of the same person
- * joins the draft: the closes fold in log order, so the latest close names
+ * joins the draft: the closes fold in journal order, so the latest close names
  * the draft, and one message reaches back to the earliest question still
  * owed. A draft at the cap is still owed here, and carries the attempts
  * that reached it: the room decides what it does about a draft it gave up

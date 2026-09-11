@@ -81,7 +81,7 @@ export async function outcome(
 	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
 }
 
-/** The leases running and not expired on the log at `now`: what a resumed room inherits. */
+/** The leases running and not expired on the journal at `now`: what a resumed room inherits. */
 export async function liveLeases(
 	sessions: SessionOpener,
 	name: string,
@@ -96,7 +96,7 @@ export async function liveLeases(
 // -- the world ----------------------------------------------------------------
 
 export interface CrashPoint {
-	/** The append to crash at, counting the room's own log alone. */
+	/** The append to crash at, counting the room's own journal alone. */
 	at: number;
 	mode: Exclude<FailMode, false>;
 }
@@ -117,7 +117,7 @@ export class World {
 	events: SessionEvent[] = [];
 	/** How many times the room crashed. */
 	crashes = 0;
-	/** How many appends the room's log took, across every run. */
+	/** How many appends the room's journal took, across every run. */
 	writes = 0;
 	/** What the run that holds the room now inherited: leases live at its resume, and an open exchange. */
 	inherited = { activations: 0, exchange: false };
@@ -186,7 +186,7 @@ export class World {
 		});
 	}
 
-	/** A room started from the composition: the first run, or a run whose log never took one. */
+	/** A room started from the composition: the first run, or a run whose journal never took one. */
 	private open(): void {
 		this.runtime = this.host();
 		this.session = startSession({
@@ -201,7 +201,7 @@ export class World {
 
 	/**
 	 * A dead room is resumed by a fresh host, with the people who were present
-	 * put back. A log that never took its composition is started again instead.
+	 * put back. A journal that never took its composition is started again instead.
 	 */
 	private async ensure(): Promise<void> {
 		if (!this.dead) return;
@@ -314,7 +314,7 @@ export class World {
 		await outcome(this.session, this.opened.sessions, this.cast);
 	}
 
-	/** What the world looks like when a check fails: the log rows, for the failure message. */
+	/** What the world looks like when a check fails: the journal rows, for the failure message. */
 	async describe(): Promise<string> {
 		const rows = await rowsOf(this.opened.sessions, this.name);
 		const messages = (await this.session.messages()).map(

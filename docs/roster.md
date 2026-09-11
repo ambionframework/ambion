@@ -355,7 +355,7 @@ Each boundary is stated so a later change has to argue with it.
   latest row and the seatings and unseatings after it, so a stopped room
   reads back, and a resumed room starts from what its last run held. A read
   from a process that holds no definition reports every identity off the
-  log.
+  journal.
 - **The threshold reads the record.** The rule that a summary is written
   when the agents said more than one thing counts messages from any name
   that is not a person and not the assistant, so an agent that spoke and
@@ -396,7 +396,7 @@ this document makes loudly:
 - `stop` leaves the roster to the next composition row, and the next run
   starts from its own (§5);
 - the threshold counts an agent that spoke and was unseated (§7);
-- every identity reads off the log, in a process that holds no definition
+- every identity reads off the journal, in a process that holds no definition
   (§7, in [`restart.test.ts`](../packages/ambion/test/restart.test.ts)).
 
 All in-process, in vitest, on a scripted stream.

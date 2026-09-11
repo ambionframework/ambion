@@ -1,6 +1,6 @@
 /**
  * The room in doubt: a write that landed while its confirmation was lost.
- * The log reads the storage at once, and the room hears what it finds the
+ * The journal reads the storage at once, and the room hears what it finds the
  * way it hears what it wrote.
  */
 import { describe, expect, it } from 'vitest';

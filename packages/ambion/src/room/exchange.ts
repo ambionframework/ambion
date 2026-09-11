@@ -20,7 +20,7 @@
  * - **What lands while it is open steers it and changes nothing.** Not the
  *   owner, not the range, not who the answer belongs to.
  *
- * An exchange is a fold over the log: the first person's question after the
+ * An exchange is a fold over the journal: the first person's question after the
  * last close is the open one. A room resumed mid-exchange continues it.
  *
  * The design contract is `docs/exchange.md`; `docs/assistant.md` says what an

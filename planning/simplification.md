@@ -14,7 +14,7 @@ note `next.md` left in the margin.
 ## The finding
 
 **The core holds one idea, and it is written three times.** The idea is
-work owed, derived from a log. A message that woke a seat is one kind of
+work owed, derived from a journal. A message that woke a seat is one kind of
 owed work. A close that owes a summary is a second kind. A wake this run
 has sent is a third. Each kind has its own vocabulary, its own identifier
 format, and its own count of attempts.
@@ -53,7 +53,7 @@ identifier a seat holds. `liveSeats` reads two lists.
 `liveSeats`, `working`.
 
 **Fix.** One concept: an activation the room owes, caused by a position
-on the log. A message causes one. A close causes one. The cause is a
+on the journal. A message causes one. A close causes one. The cause is a
 position either way. One identifier format, one fold over the attempts,
 one backoff, one set of reasons.
 
@@ -107,11 +107,11 @@ a different line to cut along.
 
 **What.** `SessionImpl` is 1439 lines, 58 methods and 24 fields. It holds
 the room's lifecycle, the host's API, the seat's three calls, the write
-path, the reaction to every log entry, the reconcile loop and the
+path, the reaction to every journal entry, the reconcile loop and the
 waiters.
 
 **Why.** Eight of the 24 fields hold state the room cannot derive: the
-log, the definitions, the visits, the ports, the listeners, the run
+journal, the definitions, the visits, the ports, the listeners, the run
 identifier, the transport and the runtime. The rest are a cache
 (`fold`, `sentAt`), a lifecycle (`replayed`, `stopped`, `evicted`), an
 event guard (`idleReported`), or a handle on something in flight
@@ -124,8 +124,8 @@ shape is correct, and today it covers one part of one pass.
 **Where.** `packages/ambion/src/session.ts`, `SessionImpl`;
 `packages/ambion/src/room/reconcile.ts`, `decide`.
 
-**Fix.** Fold the log, compute a `Decision`, apply it. Widen `decide` to
-cover the whole step. A `Room` value holds the log, the clock and the
+**Fix.** Fold the journal, compute a `Decision`, apply it. Widen `decide` to
+cover the whole step. A `Room` value holds the journal, the clock and the
 runtime. The three calls a seat makes become functions over that value.
 `next.md` §1 names the lifecycle field this needs, and it stays the first
 part of this item.
@@ -134,7 +134,7 @@ part of this item.
 
 New. It carries a trade-off, and the text names it.
 
-**What.** One log carries three positions. A message takes a `seq`. A row
+**What.** One journal carries three positions. A message takes a `seq`. A row
 takes an `after`, which is the last seq when the row landed. A read
 holds Pi's own entry seq as a cursor.
 
@@ -172,26 +172,26 @@ while the storage format is open.
 
 `next.md` §3 asked for this. It landed second.
 
-**What.** `src/log/` and `src/host/sqlite.ts` are 791 lines: an
+**What.** `src/journal/` and `src/host/sqlite.ts` are 791 lines: an
 append-only record over pluggable storage, fenced by run, checkpointed,
 and honest about a write it is in doubt about.
 
 **Why.** The record is the part of this project with the strongest
 claims and the least to do with agents. It has its own contract in
 [`../docs/durability.md`](../docs/durability.md), its own proofs in
-`log/rules.verified.ts`, and its own test tiers.
+`journal/rules.verified.ts`, and its own test tiers.
 
-**Where.** `packages/ambion/src/log/log.ts`;
-`packages/ambion/src/log/rules.verified.ts`;
+**Where.** `packages/ambion/src/journal/journal.ts`;
+`packages/ambion/src/journal/rules.verified.ts`;
 `packages/ambion/src/host/sqlite.ts`.
 
 **Fix first.** `RoomLog` holds a `leased` set and passes a `first` flag
 to `hear`. Both exist so the room emits `activation_start` once per
-activation. That is lease vocabulary inside the log, and it is the log's
+activation. That is lease vocabulary inside the journal, and it is the journal's
 one mention of a seat. The room derives `first` from the fold, and the
 set and the flag go.
 
-**Then.** `@ambionframework/journal` holds the log, the fence, the
+**Then.** `@ambionframework/journal` holds the journal, the fence, the
 checkpoint and the storages. The room depends on it the way it depends on
 Pi: for one concern, through one interface.
 
@@ -280,21 +280,21 @@ New.
 
 **What.** Five mechanisms retry, in five shapes.
 
-| Where          | Mechanism                                |
-| -------------- | ---------------------------------------- |
-| `log.ts`       | `byKey`, an idempotency key per commit   |
-| `session.ts`   | `sentAt` and the resend window           |
-| `lease.ts`     | attempts, backoff and cap, off the log   |
-| `seat/seat.ts` | `for (attempt < 2)`, written twice       |
-| `seat/seat.ts` | `queued.includes`, a dedupe on the wakes |
+| Where          | Mechanism                                  |
+| -------------- | ------------------------------------------ |
+| `journal.ts`   | `byKey`, an idempotency key per commit     |
+| `session.ts`   | `sentAt` and the resend window             |
+| `lease.ts`     | attempts, backoff and cap, off the journal |
+| `seat/seat.ts` | `for (attempt < 2)`, written twice         |
+| `seat/seat.ts` | `queued.includes`, a dedupe on the wakes   |
 
-**Why.** The policy off the log survives a crash, because a fold rebuilds
+**Why.** The policy off the journal survives a crash, because a fold rebuilds
 it. The two counted loops in `SeatActor` hold their count in memory, and
 a restart loses it.
 
 **Where.** `packages/ambion/src/seat/seat.ts`, `claim`, `release`,
 `enqueue`; `packages/ambion/src/session.ts`, `sentAt`, `forget`;
-`packages/ambion/src/log/log.ts`, `byKey`.
+`packages/ambion/src/journal/journal.ts`, `byKey`.
 
 **Fix.** `Runtime` names one policy, and every caller reads it.
 
@@ -339,7 +339,7 @@ other nine.
 ## What comes out
 
 **Two packages, and each is stronger on its own.**
-`@ambionframework/journal` is an append-only log, fenced by run and
+`@ambionframework/journal` is an append-only journal, fenced by run and
 checkpointed, that holds no reference to an agent.
 `@ambionframework/workspace` is a filesystem, a shell and four tools.
 

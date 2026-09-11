@@ -102,7 +102,7 @@ describe('decide', () => {
 			wakes: ['assistant'],
 		});
 		expect(decision.sends).toEqual([]);
-		// once the close is on the log, the draft it owes is due
+		// once the close is on the journal, the draft it owes is due
 		const closed = fold([
 			...opened(),
 			said(3, 'product', { activationId: '2:product' }),

@@ -1,6 +1,6 @@
 /**
- * A room resumed over its log continues where the last run stopped. What the
- * room held in memory is a fold over the log, so a crash loses nothing but
+ * A room resumed over its journal continues where the last run stopped. What the
+ * room held in memory is a fold over the journal, so a crash loses nothing but
  * the run: the exchange, the roster, the people, the leases and the summary
  * still owed all fold back, on every storage.
  */
@@ -72,7 +72,7 @@ const writes =
 interface World {
 	opened: OpenedStorage;
 	clock: FakeClock;
-	/** A runtime over the storage. Each call is a new host over the same log. */
+	/** A runtime over the storage. Each call is a new host over the same journal. */
 	runtime(faults?: Parameters<typeof faultyTransport>[1]): Runtime;
 }
 
@@ -253,7 +253,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		}
 	});
 
-	it('reads every identity off the log, in a process that holds no definition', async () => {
+	it('reads every identity off the journal, in a process that holds no definition', async () => {
 		const { opened, runtime } = await world(storage);
 		try {
 			const name = roomName(`restart-identity-${storage.name}`);
@@ -328,7 +328,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			});
 			const events = collect(two);
 			await two.quiet();
-			// the close is on the stream when quiet() answers, before any other call replays the log
+			// the close is on the stream when quiet() answers, before any other call replays the journal
 			expect(events.map((e) => e.type)).toContain('exchange_closed');
 			expect(two.exchange()).toBeUndefined();
 			const question = (await two.messages()).find((m) => m.kind === 'said');

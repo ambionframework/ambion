@@ -129,7 +129,7 @@ class Walk {
 	events: SessionEvent[] = [];
 	/** What the run that holds the room now inherited: leases live at its resume, and an open exchange. */
 	inherited = { activations: 0, exchange: false };
-	readonly log: string[] = [];
+	readonly journal: string[] = [];
 	readonly faults: Fault[] = [];
 	readonly clock: FakeClock = fakeClock();
 	readonly visits = new Map<string, Visit>();
@@ -188,7 +188,7 @@ class Walk {
 
 	/** One step, under a deadline: a step that hangs names itself instead of the test's timeout. */
 	step(step: Step): Promise<void> {
-		this.log.push(step);
+		this.journal.push(step);
 		return within(this.take(step), 10_000, step);
 	}
 
@@ -207,7 +207,7 @@ class Walk {
 	/** The storage fails the next write: it never lands, or it lands and the confirmation is lost. */
 	private fail(): void {
 		this.disk = this.pick(['before', 'after'] as const);
-		this.log.push(`  disk fails the next write ${this.disk}`);
+		this.journal.push(`  disk fails the next write ${this.disk}`);
 	}
 
 	/** A visit the storage refused is no visit: the host tries again another time. */
@@ -233,7 +233,7 @@ class Walk {
 		const repeated = this.lastKey !== undefined && this.random() < 0.1;
 		const key = repeated ? this.lastKey : `d${++this.deliveries}`;
 		this.lastKey = key;
-		this.log.push(`  ${visit.human.name} ${repeated ? 'repeats' : 'delivers'} ${key}`);
+		this.journal.push(`  ${visit.human.name} ${repeated ? 'repeats' : 'delivers'} ${key}`);
 		await visit.deliver({ text: `Question ${key}?`, key: key as string }).catch(expected);
 	}
 
@@ -244,11 +244,11 @@ class Walk {
 			kind,
 			...(kind === 'delay' ? { ms: 2_000 } : {}),
 		};
-		this.log.push(`  fault ${fault.kind} ${fault.on}`);
+		this.journal.push(`  fault ${fault.kind} ${fault.on}`);
 		this.faults.push(fault);
 	}
 
-	/** Up to three times: the room is dropped from memory and resumed by a new host over the same log. */
+	/** Up to three times: the room is dropped from memory and resumed by a new host over the same journal. */
 	private async crash(): Promise<void> {
 		if (this.crashes >= 3) return;
 		this.crashes += 1;
@@ -328,13 +328,13 @@ describe('the room under a random walk', () => {
 				const seats = walk.session
 					.seats()
 					.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence]);
-				walk.log.push(`seats: ${JSON.stringify(seats)}`);
-				walk.log.push(`events: ${walk.events.map(brief).join(' ')}`);
+				walk.journal.push(`seats: ${JSON.stringify(seats)}`);
+				walk.journal.push(`events: ${walk.events.map(brief).join(' ')}`);
 				const rows = await rowsOf(opened.sessions, walk.name);
-				walk.log.push(
+				walk.journal.push(
 					`rows:\n  ${rows.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
 				);
-				throw new Error(`seed ${seed} failed after:\n${walk.log.join('\n')}\n\n${detail}`, {
+				throw new Error(`seed ${seed} failed after:\n${walk.journal.join('\n')}\n\n${detail}`, {
 					cause: error,
 				});
 			}

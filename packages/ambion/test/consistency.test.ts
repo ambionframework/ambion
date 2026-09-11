@@ -196,7 +196,7 @@ class Cluster {
 		);
 	}
 
-	/** The run dies and a fresh host resumes the name over the same log. */
+	/** The run dies and a fresh host resumes the name over the same journal. */
 	async crash(): Promise<void> {
 		this.bounded();
 		this.runtime.evict(this.name);

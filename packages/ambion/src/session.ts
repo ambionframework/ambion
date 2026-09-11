@@ -1,13 +1,13 @@
 /**
- * The room: the one place where a log, the seats around it, the people
+ * The room: the one place where a journal, the seats around it, the people
  * visiting it and the exchanges they open become behaviour.
  *
  * The room is one operation and one step. `commit` appends one entry to the
- * log under a serial queue, then emits and sends. `reconcile` folds the log,
+ * journal under a serial queue, then emits and sends. `reconcile` folds the journal,
  * decides, writes what it decided, and sends; it runs after every commit,
  * every lease change, every alarm and every wake, and running it twice
- * writes nothing. Every fact about the room is a fold over the log
- * (`room/fold.ts`), so a room that resumes over the log continues where the
+ * writes nothing. Every fact about the room is a fold over the journal
+ * (`room/fold.ts`), so a room that resumes over the journal continues where the
  * last run stopped.
  *
  * What is left here is what only a room can do:
@@ -15,7 +15,7 @@
  * - **Compose.** Write the composition, admit the people, seat and unseat
  *   while it runs, and take it all down again.
  * - **Commit.** One queue, one seq at a time, for every author (rule 5).
- * - **Hear.** One reaction per entry on the log, whether this run wrote the
+ * - **Hear.** One reaction per entry on the journal, whether this run wrote the
  *   entry or found it on a read. The room writes down and hears back up, so
  *   a message it committed and a message another run left reach a host the
  *   same way.
@@ -92,7 +92,7 @@ interface Cast {
 	available: Placed[];
 }
 
-/** A message before the log stamps its seq, its key and its wakes. */
+/** A message before the journal stamps its seq, its key and its wakes. */
 type Drafted =
 	| Omit<SpokenMessage, 'seq' | 'key' | 'wakes'>
 	| Omit<SummaryMessage, 'seq' | 'key' | 'wakes'>
@@ -155,7 +155,7 @@ export interface SessionView {
 }
 
 export interface Session extends SessionView {
-	/** The question the room is working on, or nothing when nobody has asked. A fold over the log. */
+	/** The question the room is working on, or nothing when nobody has asked. A fold over the journal. */
 	exchange(): Exchange | undefined;
 	/** Resolves when no seat that speaks for itself is live and the assistant is not composing. */
 	settled(): Promise<void>;
@@ -208,7 +208,7 @@ export function startSession(options: StartSessionOptions): Session {
 }
 
 /**
- * Brings a name back up over its log, with the composition the log holds.
+ * Brings a name back up over its journal, with the composition the journal holds.
  * Every name on the roster resolves through the runtime's catalog, and the
  * first one missing is the error. The room reconciles at once: a lease the
  * last run left expires, a wake it left pending is sent again, and an
@@ -270,26 +270,26 @@ export function readSession(name: string, options: ReadSessionOptions = {}): Ses
 	);
 }
 
-/** A read needs the log, the clock and the retry policy: every identity it reports is on the log. */
+/** A read needs the journal, the clock and the retry policy: every identity it reports is on the journal. */
 class ReadOnlySession implements SessionView {
-	private readonly log: RoomJournal;
+	private readonly journal: RoomJournal;
 
 	constructor(
 		readonly name: string,
 		sessions: SessionOpener,
 		private readonly runtime: Runtime,
 	) {
-		this.log = new RoomJournal(sessions.open(name));
+		this.journal = new RoomJournal(sessions.open(name));
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
-		await this.log.ready;
-		return this.log.since(options.since);
+		await this.journal.ready;
+		return this.journal.since(options.since);
 	}
 
-	/** The roster the log folds, and everybody the record knows. Nothing stands up. */
+	/** The roster the journal folds, and everybody the record knows. Nothing stands up. */
 	seats(): SeatInfo[] {
-		const state = foldRoom(this.log.entries, this.runtime.retry);
+		const state = foldRoom(this.journal.entries, this.runtime.retry);
 		return seatsOf({ name: this.name, state, live: liveSeats(state, this.runtime.clock.now()) });
 	}
 
@@ -323,14 +323,14 @@ class SessionImpl implements Session, RunningRoom {
 	private readonly runtime: Runtime;
 	/** How this room reaches a seat: what the runtime holds, or every seat as an actor in this process. */
 	private readonly transport: Transport;
-	private readonly log: RoomJournal;
-	/** The replay, the composition on the log, and the first reconcile. Every operation waits here. */
+	private readonly journal: RoomJournal;
+	/** The replay, the composition on the journal, and the first reconcile. Every operation waits here. */
 	private readonly ready: Promise<void>;
 	/** Every definition this room can seat, by name. */
 	private readonly defs = new Map<string, AgentDefinition>();
 	/** The row this run writes about itself, or nothing for a resumed run. Before the replay, `seats()` folds this row alone. */
 	private readonly starting: Without<Composition, 'after'> | undefined;
-	/** The handles the host delivers through. Presence itself is a fold over the log. */
+	/** The handles the host delivers through. Presence itself is a fold over the journal. */
 	private readonly visits = new Map<string, VisitRuntime>();
 	private readonly ports = new Map<string, SeatPort>();
 	private readonly listeners = new Set<(event: SessionEvent) => void>();
@@ -344,7 +344,7 @@ class SessionImpl implements Session, RunningRoom {
 	/** The reconcile in flight: the rows it writes, and whoever it wakes. A caller that asks waits for it. */
 	private reconciling: Promise<void> = Promise.resolve();
 	private fold: { length: number; state: RoomState } | undefined;
-	/** The record is replayed and the composition is on the log: a seat's call is answered on the spot. */
+	/** The record is replayed and the composition is on the journal: a seat's call is answered on the spot. */
 	private replayed = false;
 	private stopped = false;
 	private evicted = false;
@@ -371,7 +371,7 @@ class SessionImpl implements Session, RunningRoom {
 		this.runtime = runtime;
 		this.transport = runtime.transport ?? inProcessTransport();
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
-		this.log = new RoomJournal(
+		this.journal = new RoomJournal(
 			this.sessions.open(name),
 			(entry) => this.hear(entry),
 			this.run,
@@ -410,7 +410,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * closes an exchange the last run left open once nothing works on it.
 	 */
 	private async compose(row: Without<Composition, 'after'>): Promise<void> {
-		await this.log.ready;
+		await this.journal.ready;
 		this.replayed = true;
 		this.seedHeardLeases();
 		const people = this.state().people;
@@ -419,15 +419,15 @@ class SessionImpl implements Session, RunningRoom {
 				throw new Error(`Duplicate agent name '${name}': one name names one participant.`);
 			}
 		}
-		await this.log.write('run', { run: this.run, at: this.iso() });
-		await this.log.write('composition', row);
+		await this.journal.write('run', { run: this.run, at: this.iso() });
+		await this.journal.write('composition', row);
 		this.wake();
 		await this.reconcile();
 	}
 
-	/** The composition off the log, and every name on it through the catalog. */
+	/** The composition off the journal, and every name on it through the catalog. */
 	private async recover(): Promise<void> {
-		await this.log.ready;
+		await this.journal.ready;
 		this.replayed = true;
 		this.seedHeardLeases();
 		const state = this.state();
@@ -445,7 +445,7 @@ class SessionImpl implements Session, RunningRoom {
 			this.defs.set(name, def);
 		}
 		// The run row is the fence: from here on, every earlier run's later writes are void.
-		await this.log.write('run', { run: this.run, at: this.iso() });
+		await this.journal.write('run', { run: this.run, at: this.iso() });
 		this.wake();
 		await this.reconcile();
 	}
@@ -480,11 +480,11 @@ class SessionImpl implements Session, RunningRoom {
 		return new Date(this.now()).toISOString();
 	}
 
-	/** Every fact about the room, folded over the log as it stands. */
+	/** Every fact about the room, folded over the journal as it stands. */
 	private state(): RoomState {
-		const length = this.log.entries.length;
+		const length = this.journal.entries.length;
 		if (this.fold?.length !== length) {
-			this.fold = { length, state: foldRoom(this.log.entries, this.runtime.retry) };
+			this.fold = { length, state: foldRoom(this.journal.entries, this.runtime.retry) };
 		}
 		return this.fold.state;
 	}
@@ -525,8 +525,8 @@ class SessionImpl implements Session, RunningRoom {
 	/** The record, once every write asked for has landed or failed and every doubt is settled. */
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
 		await this.ready;
-		await this.log.settled();
-		return this.log.since(options.since);
+		await this.journal.settled();
+		return this.journal.since(options.since);
 	}
 
 	/** The roster and the people off the fold. Before the replay, the fold is over the row this run writes. */
@@ -601,10 +601,10 @@ class SessionImpl implements Session, RunningRoom {
 		if (known) return this.handle(known);
 		const visit: VisitRuntime = { human, gone: false };
 		this.visits.set(human.name, visit);
-		// A person the log holds as present is here already: the last run wrote
+		// A person the journal holds as present is here already: the last run wrote
 		// no `left`, and the host's word is what says otherwise. Nothing commits.
 		// An arrival whose confirmation was lost is read back first.
-		await this.log.settled();
+		await this.journal.settled();
 		// A room that stopped while this waited seats nobody.
 		this.assertRunning();
 		if (this.state().people.get(human.name)?.presence !== 'present') {
@@ -729,7 +729,7 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * One operation on the room's commit queue: the draft is built where the
-	 * write happens, with the wakes the room decides for it. The log hears
+	 * write happens, with the wakes the room decides for it. The journal hears
 	 * the message inside the same link, so what the room does with it happens
 	 * before anything lands on top. A repeated key lands nothing, so the
 	 * room does nothing with it either.
@@ -740,7 +740,7 @@ class SessionImpl implements Session, RunningRoom {
 		draft: (state: RoomState) => Omit<T, 'seq' | 'key' | 'wakes'>,
 		route = true,
 	): Promise<Committed<T>> {
-		return this.log.commit<T>({
+		return this.journal.commit<T>({
 			key,
 			...(readThrough === undefined ? {} : { readThrough }),
 			draft: () => {
@@ -804,7 +804,7 @@ class SessionImpl implements Session, RunningRoom {
 	// -- what the room hears --------------------------------------------------
 
 	/**
-	 * One entry, one reaction. The log calls this for every entry it takes
+	 * One entry, one reaction. The journal calls this for every entry it takes
 	 * after the replay: one this run appended, and one a read found because
 	 * the confirmation was lost or another run wrote it. The room reacts the
 	 * same way to both, so it has one path from the record to a host and
@@ -853,7 +853,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * ahead of the close opens the next exchange, and the room says so.
 	 */
 	private heardClose(close: Close): void {
-		const question = this.log.messages.find((m) => m.seq === close.from);
+		const question = this.journal.messages.find((m) => m.seq === close.from);
 		this.emit({
 			type: 'exchange_closed',
 			exchange: {
@@ -869,7 +869,7 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * A lease row: the first row of an id starts an activation, and an end
-	 * row ends one. A row that ends a lease the log never held is a wake
+	 * row ends one. A row that ends a lease the journal never held is a wake
 	 * written off, and starts nothing.
 	 */
 	private heardLease(lease: LeaseChange, first: boolean): void {
@@ -884,14 +884,14 @@ class SessionImpl implements Session, RunningRoom {
 			return;
 		}
 		if (first) {
-			// A row that ends a lease the log never held is an attempt nobody made.
+			// A row that ends a lease the journal never held is an attempt nobody made.
 			if (lease.reason === 'abandoned') {
 				this.emit({ type: 'abandoned', agent: seat, activation: lease.id });
 				void this.reconcile();
 			}
 			return;
 		}
-		const spoke = this.log.messages.some((m) => m.activationId === lease.id);
+		const spoke = this.journal.messages.some((m) => m.activationId === lease.id);
 		this.emit({ type: 'activation_end', agent: seat, spoke });
 		if (lease.reason === 'expired') {
 			this.emit({
@@ -977,7 +977,7 @@ class SessionImpl implements Session, RunningRoom {
 			assistant: this.assistant,
 			state,
 			live: this.live(state),
-			unseen: (since) => this.log.since(since).length,
+			unseen: (since) => this.journal.since(since).length,
 		};
 	}
 
@@ -1038,8 +1038,8 @@ class SessionImpl implements Session, RunningRoom {
 
 	/** What the record holds past what the author read, or nothing when it read everything. */
 	private unheard(readThrough: Seq | undefined): Message[] | undefined {
-		if (readThrough === undefined || this.log.lastSeq <= readThrough) return undefined;
-		return this.log.since(readThrough);
+		if (readThrough === undefined || this.journal.lastSeq <= readThrough) return undefined;
+		return this.journal.since(readThrough);
 	}
 
 	/** The message a seat's intent becomes, with everything the room stamps. */
@@ -1111,7 +1111,7 @@ class SessionImpl implements Session, RunningRoom {
 	 */
 	private async claim(id: string): Promise<LeaseResponse> {
 		let expiry = 0;
-		const written = await this.log.write('lease', () => {
+		const written = await this.journal.write('lease', () => {
 			const state = this.state();
 			const known = state.leases.get(id);
 			const now = this.now();
@@ -1122,7 +1122,7 @@ class SessionImpl implements Session, RunningRoom {
 			return { id, phase: 'running', expiry, at: this.iso() };
 		});
 		if (!written) return stale('the lease ended');
-		return { ok: { expiry, lastSeq: this.log.lastSeq } };
+		return { ok: { expiry, lastSeq: this.journal.lastSeq } };
 	}
 
 	/** The ids the fold says may claim a fresh lease now. */
@@ -1134,7 +1134,7 @@ class SessionImpl implements Session, RunningRoom {
 		const ended = await this.end(lease.activation, lease.reason ?? 'released');
 		if (!ended) return stale('the lease ended');
 		void this.reconcile();
-		return { ok: { expiry: this.now(), lastSeq: this.log.lastSeq } };
+		return { ok: { expiry: this.now(), lastSeq: this.journal.lastSeq } };
 	}
 
 	/**
@@ -1148,7 +1148,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * how the activation went, and `heardLease` says so once.
 	 */
 	private end(id: string, reason: EndReason): Promise<boolean> {
-		return this.log.write('lease', () => {
+		return this.journal.write('lease', () => {
 			const known = this.state().leases.get(id);
 			if (!this.ends(known, reason)) return undefined;
 			return { id, phase: 'ended', reason, at: this.iso() };
@@ -1156,7 +1156,7 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * Whether the row lands. A lease the log never held takes a row that
+	 * Whether the row lands. A lease the journal never held takes a row that
 	 * writes an activation off. A lease that already ended takes no second
 	 * row, and neither takes an abandonment. An expiry is judged here: a
 	 * renewal that landed ahead of it keeps the lease, and every other
@@ -1184,7 +1184,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * back and what it decided is still on the fold.
 	 */
 	private async reconcileOnce(): Promise<void> {
-		await this.log.ready;
+		await this.journal.ready;
 		for (let pass = 0; pass < PASSES && !this.gone(); pass += 1) {
 			this.forget(this.state());
 			const decision = decide(this.state(), {
@@ -1240,13 +1240,13 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * The room went quiet on an exchange, so that exchange ends at the record
-	 * as the decision saw it: the close is a row on the log, written where the
+	 * as the decision saw it: the close is a row on the journal, written where the
 	 * fold still says the same exchange is open. `heardClose` says so, and
 	 * opens the next exchange when a question landed after the decision; the
 	 * next pass closes that one at once when nobody works on it.
 	 */
 	private close(close: NonNullable<Decision['close']>): Promise<boolean> {
-		return this.log.write('close', () => {
+		return this.journal.write('close', () => {
 			if (this.state().exchange?.from !== close.from || this.stopped) return undefined;
 			return close;
 		});
@@ -1271,23 +1271,23 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * A checkpoint when the log has taken enough rows since the last one.
+	 * A checkpoint when the journal has taken enough rows since the last one.
 	 * The room writes it where it has nothing else to write, so the row
 	 * stands for a room at rest, and a fold that reads it starts there.
 	 *
 	 * The row is built where it lands, like every other row: a row that
 	 * landed between the decision and the write is in the fold the
-	 * checkpoint carries, and the log drops it as one the checkpoint
+	 * checkpoint carries, and the journal drops it as one the checkpoint
 	 * replaced. A write that fails leaves the rows where they are, and the
 	 * next pass tries again.
 	 */
 	private async checkpoint(): Promise<void> {
 		// Nothing joins the queue until the rows are there: the room settles at
 		// the speed it always did, and the builder checks the count again.
-		if (this.gone() || this.log.sinceCheckpoint < this.runtime.checkpoint.rows) return;
-		await this.log
+		if (this.gone() || this.journal.sinceCheckpoint < this.runtime.checkpoint.rows) return;
+		await this.journal
 			.write('checkpoint', () => {
-				if (this.log.sinceCheckpoint < this.runtime.checkpoint.rows) return undefined;
+				if (this.journal.sinceCheckpoint < this.runtime.checkpoint.rows) return undefined;
 				return checkpointOf(this.state(), this.now());
 			})
 			.catch(() => {});
@@ -1344,12 +1344,12 @@ class SessionImpl implements Session, RunningRoom {
 		this.stopped = true;
 		this.cancelAlarm();
 		try {
-			// A room dropped from memory writes nothing: the next run over the log takes it up.
+			// A room dropped from memory writes nothing: the next run over the journal takes it up.
 			if (this.evicted) return;
 			await this.ready;
 			await this.revoke(() => true);
 			// A write queued ahead of the stop lands first, so the record says who was present.
-			await this.log.settled();
+			await this.journal.settled();
 			await this.leaveEverybody();
 		} catch (error) {
 			// A stop that found another run's fence has nothing left to write: the
@@ -1380,7 +1380,7 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * Dropped from memory: the alarm is cancelled, the log is closed, every
+	 * Dropped from memory: the alarm is cancelled, the journal is closed, every
 	 * call a seat makes from now on is stale, every visit is over, nothing
 	 * the host does with the handle writes, nothing reaches a listener again,
 	 * and nobody waits on the room. The record keeps what landed before, and
@@ -1388,7 +1388,7 @@ class SessionImpl implements Session, RunningRoom {
 	 */
 	evict(): void {
 		this.evicted = true;
-		this.log.close();
+		this.journal.close();
 		this.cancelAlarm();
 		this.listeners.clear();
 		for (const visit of this.visits.values()) visit.gone = true;
@@ -1426,7 +1426,7 @@ const seatRow = (placed: Placed): Seating => ({
 	attention: placed.attention,
 });
 
-/** The composition as the row the log holds: every seat by name, identity and attention. */
+/** The composition as the row the journal holds: every seat by name, identity and attention. */
 function compositionRow(composition: Cast, at: string): Without<Composition, 'after'> {
 	return {
 		assistant: seatRow({ def: composition.assistant, attention: 'none' }),

@@ -1,6 +1,6 @@
 /**
  * A room as Cloudflare Durable Objects: one object per room, one per seat,
- * the log in SQLite, the alarm as the clock, and RPC as the wire.
+ * the journal in SQLite, the alarm as the clock, and RPC as the wire.
  */
 export type { ConfigureOptions, SeatEvent } from './configure.ts';
 export { configure } from './configure.ts';

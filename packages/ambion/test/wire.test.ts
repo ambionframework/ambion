@@ -1,6 +1,6 @@
 /**
  * Everything that crosses between a seat and its room, and every row on the
- * log, is plain JSON: it survives the wire unchanged.
+ * journal, is plain JSON: it survives the wire unchanged.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -119,7 +119,7 @@ describe('the wire', () => {
 		expect(() => assertWire({ error: new Error('boom') })).toThrow(/is a Error/);
 	});
 
-	it('replays a JSONL log whose every row is plain JSON', async () => {
+	it('replays a JSONL journal whose every row is plain JSON', async () => {
 		const opened = await jsonl.open();
 		try {
 			const runtime = createRuntime({ sessions: opened.sessions, clock: fakeClock() });
