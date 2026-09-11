@@ -7,8 +7,10 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { expect } from 'vitest';
 import {
+	createRuntime,
 	defineAgent,
 	defineHuman,
+	inProcessTransport,
 	isSpoken,
 	isSummary,
 	type Runtime,
@@ -17,8 +19,9 @@ import {
 	stopSession,
 	visitSession,
 } from '../../src/index.ts';
+import { fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
-import { collect } from './room.ts';
+import { collect, roomName } from './room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -33,6 +36,8 @@ import {
 	toolNames,
 	toolResultTexts,
 } from './scripted.ts';
+import type { Storage } from './storage.ts';
+import { serializing } from './transport.ts';
 
 export interface ScenarioContext {
 	readonly runtime: Runtime;
@@ -201,3 +206,26 @@ export const seatFromReserve: Scenario = {
 };
 
 export const scenarios: readonly Scenario[] = [oneExchange, twoPeopleTwoExchanges, seatFromReserve];
+
+/**
+ * One scenario on one storage, on a clock the test holds and a transport that
+ * checks every request and response against the wire. Both matrices run a
+ * scenario this way: the core's over `scenarios` above, and
+ * `@ambionframework/workspace`'s over the one that needs a backend.
+ */
+export async function runScenario(
+	storage: Storage,
+	scenario: Scenario,
+	prefix: string,
+): Promise<void> {
+	const opened = await storage.open();
+	// Every request and response between a seat and the room crosses as JSON.
+	const transport = serializing(inProcessTransport());
+	try {
+		const runtime = createRuntime({ sessions: opened.sessions, clock: fakeClock(), transport });
+		await scenario.run({ runtime, name: roomName(prefix) });
+		expect(transport.violations).toEqual([]);
+	} finally {
+		await opened.dispose();
+	}
+}

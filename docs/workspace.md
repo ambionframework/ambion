@@ -78,12 +78,13 @@ the same way ([`roster.md`](roster.md) §1).
 
 ```ts
 import { defineWorkspace } from '@ambionframework/ambion';
+import { memoryBackend } from '@ambionframework/workspace';
 
 interface WorkspaceHandle {
   readonly name: string;
 }
 
-const teamSite = defineWorkspace({ name: 'team-site' });
+const teamSite = defineWorkspace({ name: 'team-site', backend: memoryBackend() });
 ```
 
 **`name` is the only public field, and it is the durable identity.** The
@@ -550,15 +551,15 @@ The runtime does not check this, and `connect` does not either.
 
 **[vercel-labs/just-bash](https://github.com/vercel-labs/just-bash) backs
 both backends in `@ambionframework/workspace`, and it is in scope for this
-work.** It runs a
-virtual Unix filesystem and shell in-process: `Bash.exec` interprets bash
-commands against whichever `IFileSystem` the instance was built over.
+work.** It runs a virtual Unix filesystem and shell in-process: `Bash.exec`
+interprets bash commands against whichever `IFileSystem` the instance was
+built over.
 
 **One filesystem belongs to the workspace, and each connected agent gets
 its own `Bash` instance over it.** `memoryBackend` holds an `InMemoryFs`.
-`connect(agent)` (§7) creates the agent's
-home in that filesystem and builds a `Bash` instance with `cwd` at the home
-and `HOME` seeded in its environment. A `Bash` instance is cheap: a probe
+`connect(agent)` (§7) creates the agent's home in that filesystem and builds
+a `Bash` instance with `cwd` at the home and `HOME` seeded in its
+environment. A `Bash` instance is cheap: a probe
 measured about 0.8 ms per construction, and about 1.7 ms for a construction
 plus one `echo`, so one per tool call costs little. Two instances over one
 filesystem share every file. A write from one is visible to the other at

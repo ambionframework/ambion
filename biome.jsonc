@@ -275,6 +275,31 @@
 			}
 		},
 		{
+			// The workspace package's tests reach the core's test support by
+			// relative path: it is not published, so no specifier names it. The
+			// core's own source is a different matter — `vitest.config.ts` and
+			// `tsconfig.check.json` alias the package name to it, so a test reads
+			// one module and not two.
+			"includes": ["packages/workspace/test/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["**/ambion/src/**"],
+										"message": "Reach the core through `@ambionframework/ambion`; the config aliases it to the source."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
 			// Biome charges a nested function for the nesting it sits in, so
 			// inside `describe` → `it` every branch costs three rather than one.
 			// Tests keep a budget — one that has become a program still fails —

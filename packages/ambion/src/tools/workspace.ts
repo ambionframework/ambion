@@ -79,6 +79,7 @@ export interface DefineWorkspaceOptions {
  */
 export function defineWorkspace(options: DefineWorkspaceOptions): WorkspaceHandle {
 	assertWorkspaceName(options.name);
+	assertBackend(options.name, options.backend);
 	const runtime = options.runtime ?? defaultRuntime;
 	if (runtime.taken.has(options.name)) {
 		throw new Error(
@@ -119,6 +120,23 @@ export async function destroyWorkspace(workspace: WorkspaceHandle): Promise<void
 function stateOf(workspace: WorkspaceHandle): WorkspaceState {
 	if (!isWorkspace(workspace)) throw new Error('Workspaces must come from defineWorkspace.');
 	return workspace as WorkspaceState;
+}
+
+/**
+ * The backend is checked where it is named, the way the name is. A handle
+ * built over a missing backend fails at the first tool call, inside an
+ * activation, as a `TypeError` a model reads. It also traps the name:
+ * `destroyWorkspace` marks the handle destroyed, throws on the same missing
+ * `destroy`, puts the mark back, and never reaches the line that frees the
+ * name. A host that reads its backend out of untyped configuration hears
+ * about it here.
+ */
+function assertBackend(name: string, backend: WorkspaceBackend | undefined): void {
+	if (typeof backend?.connect === 'function' && typeof backend?.destroy === 'function') return;
+	throw new Error(
+		`Workspace '${name}' needs a backend with 'connect' and 'destroy'. ` +
+			"'@ambionframework/workspace' holds two.",
+	);
 }
 
 function assertWorkspaceName(name: string): void {

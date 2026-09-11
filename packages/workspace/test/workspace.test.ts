@@ -28,7 +28,6 @@ import {
 	type Script,
 	scripted,
 	speak,
-	toolNames,
 } from '../../ambion/test/support/scripted.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
 import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
@@ -66,118 +65,9 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 	return session;
 }
 
-// -- defineWorkspace ---------------------------------------------------------
-
-describe('defineWorkspace', () => {
-	it('holds one handle per name until destroyWorkspace frees it', async () => {
-		const site = defineWorkspace({ name: 'site-once', backend: memoryBackend() });
-		expect(site.name).toBe('site-once');
-		expect(() => defineWorkspace({ name: 'site-once', backend: memoryBackend() })).toThrow(
-			/already defined/,
-		);
-		await destroyWorkspace(site);
-		await destroyWorkspace(site); // terminal, and a second call does nothing
-		const again = defineWorkspace({ name: 'site-once', backend: memoryBackend() });
-		expect(again).not.toBe(site);
-		await destroyWorkspace(again);
-	});
-
-	it('stays live when the backend fails to delete, so a retry is possible', async () => {
-		let attempts = 0;
-		const flaky: WorkspaceBackend = {
-			connect: () => memoryBackend().connect(agent('nobody')),
-			destroy: async () => {
-				if (++attempts === 1) throw new Error('disk busy');
-			},
-		};
-		const site = defineWorkspace({ name: 'site-flaky', backend: flaky });
-		await expect(destroyWorkspace(site)).rejects.toThrow('disk busy');
-		expect(() => defineWorkspace({ name: 'site-flaky', backend: memoryBackend() })).toThrow(
-			/already defined/,
-		);
-		await destroyWorkspace(site);
-		expect(attempts).toBe(2);
-		await destroyWorkspace(defineWorkspace({ name: 'site-flaky', backend: memoryBackend() }));
-	});
-
-	it('refuses a name the room could not address', () => {
-		expect(() => defineWorkspace({ name: 'Team Site', backend: memoryBackend() })).toThrow(
-			/Invalid workspace name/,
-		);
-	});
-
-	it('keeps the four built-in names free for an agent that names a workspace', async () => {
-		const site = defineWorkspace({ name: name('reserved'), backend: memoryBackend() });
-		const read = defineTool({
-			name: 'read',
-			description: 'A custom read.',
-			parameters: Type.Object({}),
-			execute: () => 'custom',
-		});
-		expect(() => agent('clash', { workspace: site, tools: [read] })).toThrow(
-			/'read' is a built-in/,
-		);
-		expect(() => agent('free', { tools: [read] })).not.toThrow();
-		expect(() =>
-			agent('other', { workspace: site, tools: [{ name: 'bash', execute() {} }] }),
-		).toThrow(/'bash' is a built-in/);
-		expect(() => agent('fake', { workspace: { name: 'x' } as never })).toThrow(
-			/must come from defineWorkspace/,
-		);
-		await destroyWorkspace(site);
-	});
-
-	it('refuses an assistant that names a workspace', async () => {
-		const site = defineWorkspace({ name: name('assistant'), backend: memoryBackend() });
-		const connected = agent('assistant', { workspace: site });
-		expect(() =>
-			startSession({ name: name('workspace'), assistant: connected, agents: [] }),
-		).toThrow(/names a workspace/);
-		await destroyWorkspace(site);
-	});
-});
-
 // -- the built-in tools ------------------------------------------------------
 
 describe('the built-in tools', () => {
-	it('bind read, write, edit and bash to a connected agent, and nothing to a plain one', async () => {
-		const site = defineWorkspace({ name: name('hands'), backend: memoryBackend() });
-		const seen = new Map<string, string[]>();
-		await run([agent('connected', { workspace: site }), agent('plain')], {
-			connected: (context, who) => {
-				seen.set(who, toolNames(context));
-				return quiet();
-			},
-			plain: (context, who) => {
-				seen.set(who, toolNames(context));
-				return quiet();
-			},
-		});
-		expect(seen.get('connected')).toEqual(['say', 'read', 'write', 'edit', 'bash']);
-		expect(seen.get('plain')).toEqual(['say']);
-		await destroyWorkspace(site);
-	});
-
-	it("states the workspace's reach in a connected agent's system prompt, and nothing to a plain one", async () => {
-		const site = defineWorkspace({ name: name('briefed'), backend: memoryBackend() });
-		const prompts: Record<string, string> = {};
-		await run([agent('connected', { workspace: site }), agent('plain')], {
-			connected: (context, who) => {
-				prompts[who] = context.systemPrompt ?? '';
-				return quiet();
-			},
-			plain: (context, who) => {
-				prompts[who] = context.systemPrompt ?? '';
-				return quiet();
-			},
-		});
-		expect(prompts.connected).toContain('Your workspace gives you four tools');
-		expect(prompts.connected).toContain('js-exec');
-		expect(prompts.connected).toContain('no network');
-		expect(prompts.plain).not.toContain('Your workspace gives you four tools');
-		await destroyWorkspace(site);
-	});
-
 	it('write, read and bash reach one filesystem two agents share, rooted at each home', async () => {
 		const site = defineWorkspace({ name: name('shared'), backend: memoryBackend() });
 		const results: Record<string, { tool: string; text: string; failed: boolean }[]> = {};
@@ -329,27 +219,6 @@ describe('ToolContext', () => {
 		);
 		expect(seen.outside).toBe('nowhere, signal');
 		expect(connects).toEqual(['inside', 'inside']); // one connect per call, none cached
-		await destroyWorkspace(site);
-	});
-
-	it("makes a connect failure the tool call's failure", async () => {
-		const broken: WorkspaceBackend = {
-			connect: async () => {
-				throw new Error('no such host');
-			},
-			destroy: async () => {},
-		};
-		const site = defineWorkspace({ name: name('broken'), backend: broken });
-		let result: { tool: string; text: string; failed: boolean } | undefined;
-		await run([agent('unlucky', { workspace: site })], {
-			unlucky: (context, _who, call) => {
-				if (call === 1) return callTool('bash', { command: 'true' });
-				result = toolResults(context)[0];
-				return quiet();
-			},
-		});
-		expect(result).toMatchObject({ tool: 'bash', failed: true });
-		expect(result?.text).toContain('no such host');
 		await destroyWorkspace(site);
 	});
 });

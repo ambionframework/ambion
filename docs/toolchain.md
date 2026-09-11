@@ -19,7 +19,8 @@ ambion/
 ├── packages/
 │   ├── ambion/            @ambionframework/ambion   — the runtime library
 │   ├── cli/               @ambionframework/cli      — the `ambion` binary
-│   └── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
+│   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
+│   └── workspace/         @ambionframework/workspace — a filesystem behind a workspace
 ├── examples/
 │   └── site/              the runnable example: a multi-agent room, on Node and on workerd
 ├── scripts/
@@ -85,14 +86,19 @@ The products, the specialists, the people and the assistant come from one
 writes `drive/` into `src/drive-seed.ts`, and the example's `test` task
 proves the two hold the same documents.
 
-**The core needs `nodejs_compat` to bundle for workerd.** Its one entry
-point imports `node:crypto`, `node:path` and `node:fs/promises`, which
-that flag supplies. `directoryBackend` is the one part that needs a real
-disk, and it loads just-bash's `ReadWriteFs` on the first connect: a
-static import of that name refuses to bundle for any target but Node,
-because just-bash offers it in its Node build alone. A split of the
-Node-only surface into its own entry point stands in
-[`planning/backlog.md`](../planning/backlog.md).
+**The core's `src` imports no `node:` module.** The filesystem left with
+`@ambionframework/workspace`, and the core reads the clock and the random
+identifier off globals that workerd supplies. What the core still holds of
+a platform is its JSONL storage, through Pi.
+
+**`@ambionframework/workspace` needs `nodejs_compat`.** It imports
+`node:fs/promises`, `node:path` and `node:crypto`. `directoryBackend` needs
+a real disk on top of that, and it loads just-bash's `ReadWriteFs` on the
+first connect: a static import of that name refuses to bundle for any
+target but Node, because just-bash offers it in its Node build alone. A
+room on workerd reaches no workspace today, and
+[`planning/backlog.md`](../planning/backlog.md) §44 holds what a split of
+the Node-only surface still needs.
 
 ### The core's layers
 

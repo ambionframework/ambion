@@ -42,7 +42,7 @@ async function connectOver(fs: IFileSystem, agent: AgentDefinition): Promise<Bas
 	);
 }
 
-/** How much the in-memory default holds, in bytes. A write past it fails with `ENOSPC`. */
+/** How much the in-memory backend holds, in bytes. A write past it fails with `ENOSPC`. */
 export const MEMORY_LIMIT_BYTES = 128 * 1024 * 1024;
 
 const inMemory = () => new InMemoryFs(undefined, { maxTotalBytes: MEMORY_LIMIT_BYTES });
@@ -140,7 +140,7 @@ function lazyResource<T>(build: () => Promise<T>): {
 }
 
 /**
- * The default: an in-memory filesystem that lives as long as the handle.
+ * An in-memory filesystem that lives as long as the handle.
  * Building it is async when there is a `seed` to run, so `connect` and
  * `readFiles` both await one lazily-built, memoised filesystem rather than
  * the handle building it up front. `destroy` can only ever fail to release
@@ -178,7 +178,7 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
  * reachable, the same failure `destroyWorkspace` (`workspace.ts` §2) expects
  * to be able to retry.
  *
- * This backend is the one part of the core that needs a real disk, and it
+ * This backend is the one part of this package that needs a real disk, and it
  * loads `ReadWriteFs` on the first connect. A bundler for a runtime without a
  * disk, such as workerd, then keeps the rest of the package: just-bash offers
  * `ReadWriteFs` in its Node build alone, and a static import of it refuses to

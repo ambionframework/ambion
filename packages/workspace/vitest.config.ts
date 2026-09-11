@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 /**
  * The backend suite: every test runs in process, with no key and no network.
@@ -20,5 +20,5 @@ export const core = fileURLToPath(new URL('../ambion/src/index.ts', import.meta.
 
 export default defineConfig({
 	resolve: { alias: { '@ambionframework/ambion': core } },
-	test: { exclude: ['test/live/**', '**/node_modules/**'], testTimeout: 20_000 },
+	test: { exclude: [...configDefaults.exclude, 'test/live/**'], testTimeout: 20_000 },
 });

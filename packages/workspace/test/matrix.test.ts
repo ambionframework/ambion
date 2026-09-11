@@ -9,22 +9,20 @@
  */
 
 import {
-	createRuntime,
 	defineWorkspace,
 	destroyWorkspace,
-	inProcessTransport,
 	isSpoken,
 	startSession,
 	visitSession,
 } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
-import { fakeClock } from '../../ambion/test/support/clock.ts';
-import { collect, deferred, roomName } from '../../ambion/test/support/room.ts';
+import { collect, deferred } from '../../ambion/test/support/room.ts';
 import {
 	agent,
 	assistant,
 	finish,
 	priya,
+	runScenario,
 	type Scenario,
 } from '../../ambion/test/support/scenarios.ts';
 import {
@@ -37,7 +35,6 @@ import {
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
 import { storages } from '../../ambion/test/support/storage.ts';
-import { serializing } from '../../ambion/test/support/transport.ts';
 import { backends } from './support/backends.ts';
 
 const twoWorkspaces: Scenario = {
@@ -118,16 +115,5 @@ const twoWorkspaces: Scenario = {
 };
 
 describe.each(storages)('the workspace scenario on $name', (storage) => {
-	it(twoWorkspaces.name, async () => {
-		const opened = await storage.open();
-		// Every request and response between a seat and the room crosses as JSON.
-		const transport = serializing(inProcessTransport());
-		try {
-			const runtime = createRuntime({ sessions: opened.sessions, clock: fakeClock(), transport });
-			await twoWorkspaces.run({ runtime, name: roomName(`workspace-${storage.name}`) });
-			expect(transport.violations).toEqual([]);
-		} finally {
-			await opened.dispose();
-		}
-	});
+	it(twoWorkspaces.name, () => runScenario(storage, twoWorkspaces, `workspace-${storage.name}`));
 });

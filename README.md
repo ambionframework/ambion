@@ -143,9 +143,11 @@ agents later.
 
 Workspace access follows the same capability-oriented design. An agent gets
 workspace tools only when its definition names a workspace, and access is
-resolved for each tool call through a backend. The current package includes an
-in-memory backend and a durable directory backend; stronger isolation can be
-added behind the same interface. See [`docs/workspace.md`](docs/workspace.md).
+resolved for each tool call through a backend. The core names the backend as a
+port and holds no filesystem. `@ambionframework/workspace` provides two
+backends behind that port, one in memory and one over a real directory;
+stronger isolation can be added behind the same interface. See
+[`docs/workspace.md`](docs/workspace.md).
 
 ## A minimal sketch
 
@@ -254,6 +256,12 @@ with `read:packages`, then add this to your project's `.npmrc`:
 ```sh
 export GITHUB_TOKEN=…
 npm install @ambionframework/ambion
+```
+
+Agents that reach a workspace also need a backend:
+
+```sh
+npm install @ambionframework/workspace
 ```
 
 ## Read the contracts

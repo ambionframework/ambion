@@ -161,20 +161,23 @@ covers `examples/site`, verified clean with `--workspace examples/site`.
 
 ### 44. The core has no platform boundary
 
-**What.** `packages/ambion` has one entry point, and it imports
-`node:crypto` and `node:path`. A worker bundles it only with
-`nodejs_compat`. The filesystem left with
-`@ambionframework/workspace`, so the main entry no longer imports
-`node:fs/promises` and no longer depends on just-bash. What remains is
-`node:crypto` and `node:path` in the core, and the JSONL storage.
+**What.** The filesystem left with `@ambionframework/workspace`, and
+`packages/ambion/src` now imports no `node:` module at all. What is left
+of the platform is Pi's JSONL repository, which the core re-exports from
+its one entry point, and a build that proves the claim. Nothing stops the
+next Node-only import from landing in the same entry point.
 
-**Where.** `packages/ambion/src/host/`; `packages/ambion/package.json`
-exports.
+**Where.** `packages/ambion/src/index.ts`, the `JsonlSessionRepo`
+re-export; `packages/ambion/package.json` exports;
+`.github/workflows/ci.yml`.
 
-**Fix.** A second entry point, `@ambionframework/ambion/node`, for the
-Node-only surface: the JSONL storage, and whatever else needs a disk.
-Then a build check that the main entry bundles for workerd with no
-compatibility flag.
+**Fix.** A build check that the main entry bundles for workerd with no
+compatibility flag. Then a second entry point,
+`@ambionframework/ambion/node`, for whatever the check finds.
+
+**Note.** `@ambionframework/workspace` needs `nodejs_compat` and a real
+disk for `directoryBackend`. A room on workerd reaches no workspace
+today.
 
 ### 45. The resume has no live proof
 

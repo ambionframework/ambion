@@ -24,7 +24,7 @@ export type {
 	MemoryWorkspaceBackend,
 	SeedWriter,
 } from './just-bash.ts';
-export { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from './just-bash.ts';
+export { directoryBackend, memoryBackend } from './just-bash.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/workspace';
