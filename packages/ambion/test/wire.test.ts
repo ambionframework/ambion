@@ -6,14 +6,14 @@ import { describe, expect, it } from 'vitest';
 import {
 	type ActivationView,
 	assertWire,
-	type CloseRow,
+	type Close,
 	type Commit,
 	type CommitResponse,
-	type CompositionRow,
+	type Composition,
 	createRuntime,
 	type Lease,
+	type LeaseChange,
 	type LeaseResponse,
-	type LeaseRow,
 	roundTrip,
 	type ViewResponse,
 	type Wake,
@@ -25,7 +25,7 @@ import { jsonl } from './support/storage.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 
-const rows: Record<string, LeaseRow | CloseRow | CompositionRow> = {
+const rows: Record<string, LeaseChange | Close | Composition> = {
 	claim: { id: '2:product', after: 2, phase: 'running', expiry: 60_000, at },
 	end: { id: '2:product', after: 4, phase: 'ended', reason: 'released', at },
 	close: { owner: 'priya', from: 2, through: 4, after: 4, at, wakes: ['assistant'] },

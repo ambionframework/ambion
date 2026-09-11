@@ -11,7 +11,7 @@
  * run got to.
  */
 
-import type { CloseRow, LeaseRow, Without } from '../wire.ts';
+import type { Close, LeaseChange, Without } from '../wire.ts';
 import { draftOver } from './assistant.ts';
 import type { RoomState } from './fold.ts';
 import { type Due, isExpired, isLive, parseId, seatOf, startsNow } from './lease.ts';
@@ -35,7 +35,7 @@ interface Send {
 	seat: string;
 }
 
-type Ended = Without<Extract<LeaseRow, { phase: 'ended' }>, 'after'>;
+type Ended = Without<Extract<LeaseChange, { phase: 'ended' }>, 'after'>;
 
 export interface Decision {
 	/** Leases that ran past their expiry, ended here. */
@@ -43,7 +43,7 @@ export interface Decision {
 	/** The attempts the room does not make: the activations at the cap, written off here. */
 	abandoned: Ended[];
 	/** The exchange the room closes, when nothing is live and one is open. */
-	close: Omit<CloseRow, 'after'> | undefined;
+	close: Omit<Close, 'after'> | undefined;
 	sends: Send[];
 	/** When the room looks again on its own, or undefined when nothing waits on the clock. */
 	alarmAt: number | undefined;

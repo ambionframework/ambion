@@ -33,7 +33,7 @@ import {
 	stubModel,
 	type Transport,
 } from './host/runtime.ts';
-import { type Committed, type LogEntry, RoomLog } from './log/log.ts';
+import { type Committed, type Entry, RoomJournal } from './journal/journal.ts';
 import { renderLine } from './render.ts';
 import { assertAssistant } from './room/assistant.ts';
 import { checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
@@ -64,16 +64,16 @@ import {
 	type SummaryMessage,
 } from './types.ts';
 import type {
-	CloseRow,
+	Close,
 	Commit,
 	CommitResponse,
-	CompositionRow,
+	Composition,
 	EndReason,
 	Lease,
+	LeaseChange,
 	LeaseResponse,
-	LeaseRow,
+	Seating,
 	SeatPort,
-	SeatRow,
 	ViewResponse,
 	Without,
 } from './wire.ts';
@@ -84,8 +84,8 @@ interface Placed {
 	attention: Attention;
 }
 
-/** What a run starts with, as values. The row on the log is the same, by name. */
-interface Composition {
+/** What a run starts with, as values. The entry on the journal is the same, by name. */
+interface Cast {
 	assistant: AgentDefinition;
 	goal: string | undefined;
 	agents: Placed[];
@@ -272,14 +272,14 @@ export function readSession(name: string, options: ReadSessionOptions = {}): Ses
 
 /** A read needs the log, the clock and the retry policy: every identity it reports is on the log. */
 class ReadOnlySession implements SessionView {
-	private readonly log: RoomLog;
+	private readonly log: RoomJournal;
 
 	constructor(
 		readonly name: string,
 		sessions: SessionOpener,
 		private readonly runtime: Runtime,
 	) {
-		this.log = new RoomLog(sessions.open(name));
+		this.log = new RoomJournal(sessions.open(name));
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
@@ -323,13 +323,13 @@ class SessionImpl implements Session, RunningRoom {
 	private readonly runtime: Runtime;
 	/** How this room reaches a seat: what the runtime holds, or every seat as an actor in this process. */
 	private readonly transport: Transport;
-	private readonly log: RoomLog;
+	private readonly log: RoomJournal;
 	/** The replay, the composition on the log, and the first reconcile. Every operation waits here. */
 	private readonly ready: Promise<void>;
 	/** Every definition this room can seat, by name. */
 	private readonly defs = new Map<string, AgentDefinition>();
 	/** The row this run writes about itself, or nothing for a resumed run. Before the replay, `seats()` folds this row alone. */
-	private readonly starting: Without<CompositionRow, 'after'> | undefined;
+	private readonly starting: Without<Composition, 'after'> | undefined;
 	/** The handles the host delivers through. Presence itself is a fold over the log. */
 	private readonly visits = new Map<string, VisitRuntime>();
 	private readonly ports = new Map<string, SeatPort>();
@@ -365,13 +365,13 @@ class SessionImpl implements Session, RunningRoom {
 		name: string,
 		runtime: Runtime,
 		options: { repo?: SessionRepo; streamFn?: StreamFn },
-		composition: Composition | undefined,
+		composition: Cast | undefined,
 	) {
 		this.name = name;
 		this.runtime = runtime;
 		this.transport = runtime.transport ?? inProcessTransport();
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
-		this.log = new RoomLog(
+		this.log = new RoomJournal(
 			this.sessions.open(name),
 			(entry) => this.hear(entry),
 			this.run,
@@ -409,7 +409,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * the refusal. The row is what the roster folds from. The first reconcile
 	 * closes an exchange the last run left open once nothing works on it.
 	 */
-	private async compose(row: Without<CompositionRow, 'after'>): Promise<void> {
+	private async compose(row: Without<Composition, 'after'>): Promise<void> {
 		await this.log.ready;
 		this.replayed = true;
 		this.seedHeardLeases();
@@ -534,7 +534,7 @@ class SessionImpl implements Session, RunningRoom {
 		if (!this.replayed) {
 			const rows = this.starting ? [{ ...this.starting, after: 0 }] : [];
 			const state = foldRoom(
-				rows.map((composition) => ({ type: 'composition' as const, composition })),
+				rows.map((body) => ({ kind: 'composition' as const, body, after: 0 })),
 				this.runtime.retry,
 			);
 			return seatsOf({ name: this.name, state, live: new Map() });
@@ -810,10 +810,10 @@ class SessionImpl implements Session, RunningRoom {
 	 * same way to both, so it has one path from the record to a host and
 	 * never a second one for the entries it wrote itself.
 	 */
-	private hear(entry: LogEntry): void {
-		if (entry.type === 'message') this.heardMessage(entry.message);
-		else if (entry.type === 'close') this.heardClose(entry.close);
-		else if (entry.type === 'lease') this.heardLease(entry.lease, this.opens(entry.lease.id));
+	private hear(entry: Entry): void {
+		if (entry.kind === 'message') this.heardMessage(entry.body);
+		else if (entry.kind === 'close') this.heardClose(entry.body);
+		else if (entry.kind === 'lease') this.heardLease(entry.body, this.opens(entry.body.id));
 	}
 
 	/**
@@ -852,7 +852,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * of a closed exchange and not the only one. A question that landed
 	 * ahead of the close opens the next exchange, and the room says so.
 	 */
-	private heardClose(close: CloseRow): void {
+	private heardClose(close: Close): void {
 		const question = this.log.messages.find((m) => m.seq === close.from);
 		this.emit({
 			type: 'exchange_closed',
@@ -872,7 +872,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * row ends one. A row that ends a lease the log never held is a wake
 	 * written off, and starts nothing.
 	 */
-	private heardLease(lease: LeaseRow, first: boolean): void {
+	private heardLease(lease: LeaseChange, first: boolean): void {
 		const seat = seatOf(lease.id, this.assistant) ?? '';
 		if (lease.phase === 'running') {
 			if (first) {
@@ -1024,10 +1024,11 @@ class SessionImpl implements Session, RunningRoom {
 				},
 			);
 			if ('missed' in committed) {
-				this.emit({ type: 'conflict', author: seat, missed: committed.missed });
-				return { missed: committed.missed };
+				const missed = [...committed.missed];
+				this.emit({ type: 'conflict', author: seat, missed });
+				return { missed };
 			}
-			return { committed: committed.message };
+			return { committed: committed.body };
 		} catch (error) {
 			if (error instanceof StaleError) return stale(error.message);
 			if (error instanceof RefusedError) return { refused: error.message };
@@ -1283,10 +1284,10 @@ class SessionImpl implements Session, RunningRoom {
 	private async checkpoint(): Promise<void> {
 		// Nothing joins the queue until the rows are there: the room settles at
 		// the speed it always did, and the builder checks the count again.
-		if (this.gone() || this.log.rowsSinceCheckpoint < this.runtime.checkpoint.rows) return;
+		if (this.gone() || this.log.sinceCheckpoint < this.runtime.checkpoint.rows) return;
 		await this.log
 			.write('checkpoint', () => {
-				if (this.log.rowsSinceCheckpoint < this.runtime.checkpoint.rows) return undefined;
+				if (this.log.sinceCheckpoint < this.runtime.checkpoint.rows) return undefined;
 				return checkpointOf(this.state(), this.now());
 			})
 			.catch(() => {});
@@ -1397,7 +1398,7 @@ class SessionImpl implements Session, RunningRoom {
 }
 
 /** The composition `startSession` was given, checked for duplicates the way the room refuses them. */
-function composeFrom(options: StartSessionOptions): Composition {
+function composeFrom(options: StartSessionOptions): Cast {
 	const assistant = assertAssistant(options.assistant);
 	const names = new Set<string>();
 	const take = (placed: Placed): Placed => {
@@ -1419,14 +1420,14 @@ function unwrap(seat: AgentSeat): Placed {
 	return { def, attention: isSeatedAgent(seat) ? seat.attention : 'broadcast' };
 }
 
-const seatRow = (placed: Placed): SeatRow => ({
+const seatRow = (placed: Placed): Seating => ({
 	name: placed.def.name,
 	identity: placed.def.identity,
 	attention: placed.attention,
 });
 
 /** The composition as the row the log holds: every seat by name, identity and attention. */
-function compositionRow(composition: Composition, at: string): Without<CompositionRow, 'after'> {
+function compositionRow(composition: Cast, at: string): Without<Composition, 'after'> {
 	return {
 		assistant: seatRow({ def: composition.assistant, attention: 'none' }),
 		...(composition.goal === undefined ? {} : { goal: composition.goal }),

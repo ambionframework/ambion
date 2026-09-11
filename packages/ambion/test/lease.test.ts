@@ -14,7 +14,7 @@ import {
 	inProcessTransport,
 	isSpoken,
 	isSummary,
-	type LeaseRow,
+	type LeaseChange,
 	type Runtime,
 	type SeatRoom,
 	type Session,
@@ -183,7 +183,7 @@ describe('a lease', () => {
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
 		const rows = await rowsOf(runtime.sessions, session.name);
 		const renewals = rows.flatMap((row) => {
-			const lease = row.data as LeaseRow;
+			const lease = row.data as LeaseChange;
 			const mine = row.type === 'ambion/lease' && lease.id === '2:solo';
 			return mine && lease.phase === 'running' ? [lease.expiry] : [];
 		});
@@ -220,10 +220,10 @@ describe('a lease', () => {
 		]);
 		const rows = await rowsOf(runtime.sessions, session.name);
 		const gaveUp = rows.filter((row) => {
-			const lease = row.data as LeaseRow;
+			const lease = row.data as LeaseChange;
 			return row.type === 'ambion/lease' && lease.phase === 'ended' && lease.reason === 'abandoned';
 		});
-		expect(gaveUp.map((row) => (row.data as LeaseRow).id)).toEqual(['2:solo:4']);
+		expect(gaveUp.map((row) => (row.data as LeaseChange).id)).toEqual(['2:solo:4']);
 
 		// the wake is answered, so the exchange closes and the seat stands idle
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
@@ -263,7 +263,7 @@ describe('a lease', () => {
 		]);
 		const rows = await rowsOf(runtime.sessions, session.name);
 		expect(
-			rows.filter((row) => (row.data as LeaseRow).id === 'close:4:4').map((row) => row.data),
+			rows.filter((row) => (row.data as LeaseChange).id === 'close:4:4').map((row) => row.data),
 		).toMatchObject([{ phase: 'ended', reason: 'abandoned' }]);
 		// nothing is owed, no summary was written, and the record stands whole
 		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
@@ -373,7 +373,7 @@ describe('a lease judged where its row is written', () => {
 		let runningRows = 0;
 		// the claim lands at once; the first renewal is held on the storage
 		const sessions = gatedOpener(base.sessions, (type, data) => {
-			const row = data as LeaseRow;
+			const row = data as LeaseChange;
 			if (type !== 'ambion/lease' || row.phase !== 'running' || !row.id.endsWith(':solo')) {
 				return undefined;
 			}
@@ -416,7 +416,7 @@ describe('a lease judged where its row is written', () => {
 		]);
 		const rows = (await rowsOf(base.sessions, session.name))
 			.filter((r) => r.type === 'ambion/lease')
-			.map((r) => r.data as LeaseRow)
+			.map((r) => r.data as LeaseChange)
 			.filter((l) => l.id.endsWith(':solo'));
 		// the claim, the renewal, the check at the run's end, and one release: no expiry
 		expect(rows.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual(['released']);

@@ -5,7 +5,7 @@
 import { expect } from 'vitest';
 import {
 	isSummary,
-	type LeaseRow,
+	type LeaseChange,
 	type SessionEvent,
 	type SessionOpener,
 	type SessionView,
@@ -77,7 +77,7 @@ async function leased(session: SessionView, sessions: SessionOpener): Promise<vo
 	const running = new Set<string>();
 	for (const row of rows) {
 		if (row.type === 'ambion/lease') {
-			const lease = row.data as LeaseRow;
+			const lease = row.data as LeaseChange;
 			if (lease.phase === 'running') running.add(lease.id);
 			else running.delete(lease.id);
 		}

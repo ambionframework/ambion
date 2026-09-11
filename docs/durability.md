@@ -249,7 +249,7 @@ failures the cast injects, the room calls the nemesis dropped, and the
 leases live across a jump past the expiry.
 
 **The rules are proved.** The pure rules in
-[`log/rules.verified.ts`](../packages/ambion/src/log/rules.verified.ts)
+[`log/rules.verified.ts`](../packages/record/src/rules.verified.ts)
 and
 [`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)
 carry `//@ requires` and `//@ ensures` contracts. LemmaScript turns them

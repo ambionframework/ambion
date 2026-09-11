@@ -29,7 +29,7 @@
  */
 
 import type { Message, Seq } from '../types.ts';
-import type { EndReason, LeaseHold, LeaseRow } from '../wire.ts';
+import type { EndReason, LeaseChange, LeaseHold } from '../wire.ts';
 import {
 	atWork as atWorkRule,
 	expired,
@@ -77,7 +77,7 @@ export type LeaseState = LeaseHold;
  * the seqs and the times its first rows wrote.
  */
 export function foldLeases(
-	rows: readonly LeaseRow[],
+	rows: readonly LeaseChange[],
 	held: readonly LeaseHold[] = [],
 ): Map<string, LeaseState> {
 	const leases = new Map<string, LeaseState>(held.map((lease) => [lease.id, lease]));

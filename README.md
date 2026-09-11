@@ -51,7 +51,7 @@ seriously.
 ### 1. The record is the source of truth
 
 Speech, arrivals, departures, dynamic seating, and summaries are all ordered
-messages. [`RoomLog`](packages/ambion/src/log/log.ts) serializes writes, assigns
+messages. [`Journal`](packages/record/src/journal.ts) serializes writes, assigns
 monotonic sequence numbers, persists a message before exposing it, and makes
 retries safe with idempotency keys. Presence is therefore data, not side
 metadata: it participates in ordering, replay, routing, and later context.
@@ -59,7 +59,7 @@ metadata: it participates in ordering, replay, routing, and later context.
 ### 2. Conversation uses optimistic concurrency
 
 Every agent write carries `readThrough`, the last sequence the activation has
-seen. If the record advanced, `RoomLog.commit()` refuses the draft and returns
+seen. If the record advanced, `RoomJournal.commit()` refuses the draft and returns
 the missed messages. The activation can rebuild from a fresh room view and
 decide again.
 
@@ -263,6 +263,10 @@ Agents that reach a workspace also need a backend:
 ```sh
 npm install @ambionframework/workspace
 ```
+
+The record the room writes to is
+[`@ambionframework/record`](packages/record); the core depends on it, so it
+arrives with the install above.
 
 ## Read the contracts
 

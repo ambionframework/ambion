@@ -24,7 +24,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
-import type { LogEntry } from '../src/log/log.ts';
+import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import {
 	agents,
@@ -48,13 +48,12 @@ import { serializing } from './support/transport.ts';
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
 /** The rows as the fold reads them: the ones that stand past every fence. */
-function entriesOf(rows: { type: string; data: unknown }[]): LogEntry[] {
+function entriesOf(rows: { type: string; data: unknown }[]): Entry[] {
 	return standing(rows).flatMap((row) => {
-		const type = row.type.slice('ambion/'.length);
-		if (type === 'message') return [{ type, message: row.data } as LogEntry];
-		if (type === 'lease') return [{ type, lease: row.data } as LogEntry];
-		if (type === 'close') return [{ type, close: row.data } as LogEntry];
-		if (type === 'composition') return [{ type, composition: row.data } as LogEntry];
+		const kind = row.type.slice('ambion/'.length);
+		if (kind === 'message' || kind === 'lease' || kind === 'close' || kind === 'composition') {
+			return [{ kind, body: row.data } as Entry];
+		}
 		return [];
 	});
 }

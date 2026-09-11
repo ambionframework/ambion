@@ -8,7 +8,7 @@
  * and serves the same activation, so the work in flight is not lost.
  */
 import { env, runInDurableObject } from 'cloudflare:test';
-import type { LeaseRow, RunRow } from '@ambionframework/ambion';
+import type { LeaseChange, Run } from '@ambionframework/ambion';
 import { isSpoken } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
@@ -37,10 +37,10 @@ it('serves a seat that was at work when the object went away, and takes its comm
 
 	// The seat claimed its lease, so its activation runs now. The model call it
 	// waits on is what keeps it running while the room goes away.
-	const claim = await until(async () => (await rows<LeaseRow>(stub, 'lease')).at(0));
+	const claim = await until(async () => (await rows<LeaseChange>(stub, 'lease')).at(0));
 	expect(claim.id).toBe('2:slow');
 	const claimedBy = (await writers(stub, 'lease')).at(0);
-	const firstRun = (await rows<RunRow>(stub, 'run')).map((row) => row.run).at(0);
+	const firstRun = (await rows<Run>(stub, 'run')).map((row) => row.run).at(0);
 	expect(claimedBy).toBe(firstRun);
 
 	// The platform takes the room. The seat object is untouched and keeps working.
@@ -59,7 +59,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	// Two runs took the name, and the seat's message was written by the second:
 	// the commit crossed the restart, and the room that came back took it. A
 	// message the first run wrote would mean the abort landed too late.
-	const runs = (await rows<RunRow>(again, 'run')).map((row) => row.run);
+	const runs = (await rows<Run>(again, 'run')).map((row) => row.run);
 	expect(runs).toHaveLength(2);
 	expect(runs.at(0)).toBe(firstRun);
 	const messageRows = await rows<{ from?: string }>(again, 'message');
@@ -72,7 +72,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	// assistant's draft takes a lease of its own after it, and this test says
 	// nothing about that one.
 	const leases = await until(async () => {
-		const held = await rows<LeaseRow>(again, 'lease');
+		const held = await rows<LeaseChange>(again, 'lease');
 		const mine = held.filter((row) => row.id === claim.id);
 		return mine.at(-1)?.phase === 'ended' ? held : undefined;
 	});

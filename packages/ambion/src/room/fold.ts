@@ -9,16 +9,16 @@
  * stopped.
  */
 
-import type { LogEntry, Row } from '../log/log.ts';
+import type { Entry } from '../journal/journal.ts';
 import { type Attention, type Exchange, isSummary, type Message, type Seq } from '../types.ts';
 import type {
-	CheckpointRow,
-	CloseRow,
-	CompositionRow,
+	Checkpoint,
+	Close,
+	Composition,
 	EndReason,
+	LeaseChange,
 	LeaseHold,
-	LeaseRow,
-	SeatRow,
+	Seating,
 	Without,
 } from '../wire.ts';
 import { openExchange } from './exchange.ts';
@@ -57,12 +57,12 @@ interface Owed extends Due {
 type Grouped = Omit<Owed, keyof Due>;
 
 export interface RoomState {
-	readonly composition: CompositionRow | undefined;
+	readonly composition: Composition | undefined;
 	readonly roster: RosterSeat[];
-	readonly reserve: SeatRow[];
+	readonly reserve: Seating[];
 	readonly people: Map<string, PersonState>;
 	readonly exchange: Exchange | undefined;
-	readonly closes: CloseRow[];
+	readonly closes: Close[];
 	readonly leases: Map<string, LeaseState>;
 	readonly pending: PendingWake[];
 	readonly owed: Owed[];
@@ -88,51 +88,51 @@ export interface FoldOptions {
  * before it, and the floor below which no wake is pending; the messages
  * are kept whatever it says.
  */
-function sorted(entries: readonly LogEntry[]) {
+function sorted(entries: readonly Entry[]) {
 	const messages: Message[] = [];
 	let rows = older();
 	for (const entry of entries) {
-		if (entry.type === 'message') messages.push(entry.message);
+		if (entry.kind === 'message') messages.push(entry.body);
 		else rows = folded(rows, entry);
 	}
 	return { messages, ...rows };
 }
 
-/** One row onto what the fold has read. A checkpoint replaces all of it; a run row says nothing here. */
-function folded(rows: Read, row: Row): Read {
-	if (row.type === 'checkpoint') return carried(row.checkpoint);
-	if (row.type === 'close') rows.closes.push(row.close);
-	else if (row.type === 'lease') rows.leaseRows.push(row.lease);
-	else if (row.type === 'composition') rows.composition = row.composition;
-	return rows;
+/** One entry onto what the fold has read. A checkpoint replaces all of it; a run says nothing here. */
+function folded(read: Read, entry: Entry): Read {
+	if (entry.kind === 'checkpoint') return carried(entry.body);
+	if (entry.kind === 'close') read.closes.push(entry.body);
+	else if (entry.kind === 'lease') read.changes.push(entry.body);
+	else if (entry.kind === 'composition') read.composition = entry.body;
+	return read;
 }
 
-/** What the rows fold to, before the messages join them. */
+/** What the entries beside the messages fold to, before the messages join them. */
 type Read = ReturnType<typeof older>;
 
-/** The rows a fold has read so far, before any of them landed. */
+/** What a fold has read so far, before any of it landed. */
 const older = () => ({
-	closes: [] as CloseRow[],
-	leaseRows: [] as LeaseRow[],
+	closes: [] as Close[],
+	changes: [] as LeaseChange[],
 	held: [] as LeaseHold[],
-	composition: undefined as CompositionRow | undefined,
+	composition: undefined as Composition | undefined,
 	floor: 0 as Seq,
 });
 
-/** What a checkpoint carries, in place of every row before it. */
-const carried = (checkpoint: CheckpointRow): Read => ({
+/** What a checkpoint carries, in place of everything before it. */
+const carried = (checkpoint: Checkpoint): Read => ({
 	closes: [...checkpoint.closes],
-	leaseRows: [],
+	changes: [],
 	held: [...checkpoint.leases],
 	composition: checkpoint.composition,
 	floor: checkpoint.floor,
 });
 
-export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): RoomState {
-	const { messages, closes, leaseRows, held, composition, floor } = sorted(entries);
+export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
+	const { messages, closes, changes, held, composition, floor } = sorted(entries);
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
-	const leases = foldLeases(leaseRows, held);
+	const leases = foldLeases(changes, held);
 	const assistant = composition?.assistant.name ?? '';
 	const isPerson = (name: string) => people.has(name);
 	// Every wake on a message below the floor was answered when the
@@ -165,7 +165,7 @@ export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): Ro
 
 /** The latest composition, then every seating and unseating after it, in order. */
 function foldRoster(
-	composition: CompositionRow | undefined,
+	composition: Composition | undefined,
 	messages: readonly Message[],
 ): RosterSeat[] {
 	if (composition === undefined) return [];
@@ -214,7 +214,7 @@ const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked', 'aban
  * on, and a row it writes answers the close.
  */
 function foldOwed(
-	closes: readonly CloseRow[],
+	closes: readonly Close[],
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseState>,
 	context: OwedContext,
@@ -237,7 +237,7 @@ function foldOwed(
 	return [...byPerson.values()].map((grouped) => withAttempts(grouped, leases, context));
 }
 
-const covers = (summary: Message & { kind: 'summary' }, close: CloseRow): boolean =>
+const covers = (summary: Message & { kind: 'summary' }, close: Close): boolean =>
 	summary.to === close.owner &&
 	summary.covers.from <= close.from &&
 	summary.covers.through >= close.through;
@@ -250,8 +250,8 @@ const covers = (summary: Message & { kind: 'summary' }, close: CloseRow): boolea
  */
 function judged(
 	leases: ReadonlyMap<string, LeaseState>,
-	close: CloseRow,
-	closes: readonly CloseRow[],
+	close: Close,
+	closes: readonly Close[],
 ): boolean {
 	const later = new Set(
 		closes
@@ -309,7 +309,7 @@ function cameToNothing(lease: LeaseState, closes: readonly Seq[]): boolean {
 export function checkpointOf(
 	state: RoomState,
 	now: number,
-): Without<CheckpointRow, 'after'> | undefined {
+): Without<Checkpoint, 'after'> | undefined {
 	if (state.composition === undefined) return undefined;
 	const floor = floorOf(state, now);
 	const last = state.closes.at(-1);

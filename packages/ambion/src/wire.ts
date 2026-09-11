@@ -32,7 +32,7 @@ export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired
  * One row about an activation: it holds a lease, or its lease ended. The
  * last row for an id wins, and an ended lease never runs again.
  */
-export type LeaseRow =
+export type LeaseChange =
 	| { id: string; after: Seq; phase: 'running'; expiry: number; at: string }
 	| { id: string; after: Seq; phase: 'ended'; reason: EndReason; at: string };
 
@@ -65,7 +65,7 @@ export interface LeaseHold {
  * fence between runs. Every entry a run writes carries its `run`, and an
  * entry of an earlier run that lands after a later run's row is void.
  */
-export interface RunRow {
+export interface Run {
 	run: string;
 	after: Seq;
 	at: string;
@@ -78,22 +78,22 @@ export interface RunRow {
  * written. A checkpoint is a cache over the log: the rows it replaces stay
  * on the storage, and a checkpoint the room cannot read is ignored.
  */
-export interface CheckpointRow {
+export interface Checkpoint {
 	/** The shape of this row. A checkpoint of another shape is ignored. */
 	v: 1;
 	/** No wake on a message before this seq is pending. */
 	floor: Seq;
-	composition: CompositionRow;
-	closes: CloseRow[];
+	composition: Composition;
+	closes: Close[];
 	leases: LeaseHold[];
 	after: Seq;
 	at: string;
 }
 
 /** Whether a row read off the log is a checkpoint this room can fold. */
-export function isCheckpoint(row: unknown): row is CheckpointRow {
+export function isCheckpoint(row: unknown): row is Checkpoint {
 	if (typeof row !== 'object' || row === null) return false;
-	const candidate = row as Partial<CheckpointRow>;
+	const candidate = row as Partial<Checkpoint>;
 	return (
 		candidate.v === 1 &&
 		typeof candidate.floor === 'number' &&
@@ -105,7 +105,7 @@ export function isCheckpoint(row: unknown): row is CheckpointRow {
 }
 
 /** The room went quiet with an exchange open, and closed it. */
-export interface CloseRow {
+export interface Close {
 	owner: string;
 	from: Seq;
 	through: Seq;
@@ -116,7 +116,7 @@ export interface CloseRow {
 }
 
 /** One seat in a composition: its name, how the room knows it, and what wakes it. */
-export interface SeatRow {
+export interface Seating {
 	name: string;
 	identity: string;
 	attention: Attention;
@@ -126,12 +126,12 @@ export interface SeatRow {
  * What a run started with. The roster folds from the latest one, and a
  * reader without the definitions reads every identity off it.
  */
-export interface CompositionRow {
+export interface Composition {
 	/** The assistant's seat. Its attention is `none`. */
-	assistant: SeatRow;
+	assistant: Seating;
 	goal?: string;
-	agents: SeatRow[];
-	available: SeatRow[];
+	agents: Seating[];
+	available: Seating[];
 	after: Seq;
 	at: string;
 }

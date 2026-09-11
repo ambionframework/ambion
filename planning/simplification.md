@@ -168,9 +168,9 @@ a filter, and `renderRecord` walks the list. A reader's numbering is a
 rendering job, and `render.ts` can hold it. Do this item with item 5,
 while the storage format is open.
 
-## 5. `@ambionframework/record`
+## 5. `@ambionframework/record` — done
 
-`next.md` §3 asks for this. This item adds the change to make first.
+`next.md` §3 asked for this. It landed second.
 
 **What.** `src/log/` and `src/host/sqlite.ts` are 791 lines: an
 append-only record over pluggable storage, fenced by run, checkpointed,

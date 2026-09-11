@@ -11,16 +11,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { type Sql, type SqlValue, sqliteSessions } from '@ambionframework/record';
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
 	InMemorySessionRepo,
 	JsonlSessionRepo,
 	type SessionOpener,
-	type Sql,
-	type SqlValue,
 	sessionsOver,
-	sqliteSessions,
 } from '../../src/index.ts';
 
 export interface OpenedStorage {

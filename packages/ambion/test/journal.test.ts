@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { sessionsOver } from '../src/host/runtime.ts';
 import { InMemorySessionRepo, type SpokenMessage } from '../src/index.ts';
-import { RoomLog } from '../src/log/log.ts';
+import { RoomJournal } from '../src/journal/journal.ts';
 import { deferred, roomName } from './support/room.ts';
 import { faultyOpener, memory } from './support/storage.ts';
 
@@ -18,20 +18,20 @@ const say = (text: string): Omit<SpokenMessage, 'seq' | 'key'> => ({
 	text,
 });
 
-const open = async () => new RoomLog((await memory.open()).sessions.open(roomName('log')));
+const open = async () => new RoomJournal((await memory.open()).sessions.open(roomName('log')));
 
-describe('RoomLog', () => {
+describe('RoomJournal', () => {
 	it('lands a repeated key once, and hands back the first message', async () => {
 		const log = await open();
 		const first = await log.commit({ key: 'k1', draft: say('one') });
 		const again = await log.commit({ key: 'k1', draft: say('one, again') });
-		expect(first).toEqual({ message: { ...say('one'), seq: 1, key: 'k1' } });
-		expect(again).toEqual({ message: { ...say('one'), seq: 1, key: 'k1' }, repeated: true });
+		expect(first).toEqual({ body: { ...say('one'), seq: 1, key: 'k1' } });
+		expect(again).toEqual({ body: { ...say('one'), seq: 1, key: 'k1' }, repeated: true });
 		expect(log.lastSeq).toBe(1);
 		expect(log.messages).toHaveLength(1);
 		// the next key takes the next seq
 		const next = await log.commit({ key: 'k2', draft: say('two') });
-		expect('message' in next && next.message.seq).toBe(2);
+		expect('body' in next && next.body.seq).toBe(2);
 	});
 
 	it('lets one of two commits under one readThrough land, and refuses the other with what it missed', async () => {
@@ -41,12 +41,12 @@ describe('RoomLog', () => {
 			log.commit({ key: 'a', readThrough: 1, draft: { ...say('first answer'), from: 'alpha' } }),
 			log.commit({ key: 'b', readThrough: 1, draft: { ...say('second answer'), from: 'beta' } }),
 		]);
-		expect('message' in first && first.message.seq).toBe(2);
+		expect('body' in first && first.body.seq).toBe(2);
 		expect('missed' in second && second.missed.map((m) => m.seq)).toEqual([2]);
 		// the refused commit consumed no seq
 		expect(log.lastSeq).toBe(2);
 		const third = await log.commit({ key: 'c', readThrough: 2, draft: say('third') });
-		expect('message' in third && third.message.seq).toBe(3);
+		expect('body' in third && third.body.seq).toBe(3);
 	});
 
 	it('shows a message only once its write resolves, and hears it there', async () => {
@@ -64,8 +64,8 @@ describe('RoomLog', () => {
 			},
 		};
 		const heard: number[] = [];
-		const log = new RoomLog(sessions.open(roomName('slow')), (entry) => {
-			if (entry.type === 'message') heard.push(entry.message.seq);
+		const log = new RoomJournal(sessions.open(roomName('slow')), (entry) => {
+			if (entry.kind === 'message') heard.push(entry.body.seq);
 		});
 		const commit = log.commit({ key: 'k', draft: say('slow') });
 		await new Promise((resolve) => setImmediate(resolve));
@@ -81,24 +81,24 @@ describe('RoomLog', () => {
 
 	it('drops a commit whose write fails, and the next one takes its seq', async () => {
 		const faulty = faultyOpener(sessionsOver(new InMemorySessionRepo()));
-		const log = new RoomLog(faulty.sessions.open(roomName('faulty')));
+		const log = new RoomJournal(faulty.sessions.open(roomName('faulty')));
 		await log.commit({ key: 'a', draft: say('kept') });
 		faulty.fail(true);
 		await expect(log.commit({ key: 'b', draft: say('lost') })).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		const next = await log.commit({ key: 'c', draft: say('kept too') });
-		expect('message' in next && next.message.seq).toBe(2);
+		expect('body' in next && next.body.seq).toBe(2);
 		expect(log.messages.map((m) => m.kind === 'said' && m.text)).toEqual(['kept', 'kept too']);
 		// the same key lands now: the first attempt left nothing behind
 		const retried = await log.commit({ key: 'b', draft: say('lost, retried') });
-		expect('message' in retried && retried.message.seq).toBe(3);
+		expect('body' in retried && retried.body.seq).toBe(3);
 	});
 });
 
-describe('RoomLog in doubt', () => {
+describe('RoomJournal in doubt', () => {
 	it('finds a write whose confirmation was lost before the next write lands', async () => {
 		const faulty = faultyOpener(sessionsOver(new InMemorySessionRepo()));
-		const log = new RoomLog(faulty.sessions.open(roomName('doubt')));
+		const log = new RoomJournal(faulty.sessions.open(roomName('doubt')));
 		await log.commit({ key: 'a', draft: say('one') });
 		// the append lands, and the caller hears a failure
 		faulty.fail('after');
@@ -108,7 +108,7 @@ describe('RoomLog in doubt', () => {
 		await log.settled();
 		expect(log.messages.map((m) => m.seq)).toEqual([1, 2]);
 		const next = await log.commit({ key: 'c', draft: say('three') });
-		expect('message' in next && next.message.seq).toBe(3);
+		expect('body' in next && next.body.seq).toBe(3);
 		expect(log.messages.map((m) => [m.seq, m.key])).toEqual([
 			[1, 'a'],
 			[2, 'b'],
@@ -116,7 +116,7 @@ describe('RoomLog in doubt', () => {
 		]);
 		// and the key of the write in doubt lands once: a retry hands back what landed
 		const retried = await log.commit({ key: 'b', draft: say('two, again') });
-		expect(retried).toMatchObject({ message: { seq: 2, text: 'two' }, repeated: true });
+		expect(retried).toMatchObject({ body: { seq: 2, text: 'two' }, repeated: true });
 	});
 
 	it('reads past the last entry it saw, so every read costs the entries since the one before', async () => {
@@ -134,7 +134,7 @@ describe('RoomLog in doubt', () => {
 				return piSession;
 			},
 		};
-		const log = new RoomLog(sessions.open(roomName('cursor')));
+		const log = new RoomJournal(sessions.open(roomName('cursor')));
 		for (const text of ['one', 'two', 'three', 'four']) await log.commit({ draft: say(text) });
 		faulty.fail('after');
 		await expect(log.commit({ draft: say('five') })).rejects.toThrow(/disk is full/);

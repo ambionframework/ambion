@@ -13,7 +13,7 @@
  * is one message, one attempt at a wake or a draft runs at a time, and
  * nothing is pending once the room drains.
  */
-import type { Clock, LeaseRow, Message, Seq } from '../../src/index.ts';
+import type { Clock, LeaseChange, Message, Seq } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
 import { activationId, parseId } from '../../src/room/lease.ts';
 
@@ -253,7 +253,7 @@ function exclusion(rows: Checked['rows']): string[] {
 	const running = new Map<string, string>();
 	for (const row of standing(rows)) {
 		if (row.type !== 'ambion/lease') continue;
-		const lease = row.data as LeaseRow;
+		const lease = row.data as LeaseChange;
 		const parsed = parseId(lease.id);
 		if (parsed === undefined) continue;
 		const attempt =

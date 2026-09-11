@@ -30,7 +30,7 @@ import {
 	visitSession,
 } from '../../src/index.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
-import type { LeaseRow } from '../../src/wire.ts';
+import type { LeaseChange } from '../../src/wire.ts';
 import {
 	agents,
 	assistant,
@@ -88,7 +88,7 @@ export async function liveLeases(
 	now: number,
 ): Promise<number> {
 	const rows = (await rowsOf(sessions, name)).flatMap((r) =>
-		r.type === 'ambion/lease' ? [r.data as LeaseRow] : [],
+		r.type === 'ambion/lease' ? [r.data as LeaseChange] : [],
 	);
 	return [...foldLeases(rows).values()].filter((lease) => isLive(lease, now)).length;
 }

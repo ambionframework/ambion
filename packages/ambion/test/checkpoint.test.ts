@@ -5,7 +5,7 @@
  * messages stay, and a room that folds the rest behaves the same.
  */
 import { describe, expect, it } from 'vitest';
-import type { CompositionRow, Seq } from '../src/index.ts';
+import type { Composition, Seq } from '../src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -18,7 +18,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
-import { RoomLog } from '../src/log/log.ts';
+import { RoomJournal } from '../src/journal/journal.ts';
 import { checkpointOf, foldRoom, type RoomState } from '../src/room/fold.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { collect, crash, roomName, rowsOf, tick } from './support/room.ts';
@@ -54,9 +54,9 @@ const facts = (state: RoomState) => ({
 });
 
 /** The room's own log, for a test that reads what the cache holds. */
-const logOf = (session: Session): RoomLog => (session as unknown as { log: RoomLog }).log;
-const fold = (log: RoomLog): RoomState => foldRoom(log.entries, retry);
-const rows = (log: RoomLog) => log.entries.filter((entry) => entry.type !== 'message');
+const logOf = (session: Session): RoomJournal => (session as unknown as { log: RoomJournal }).log;
+const fold = (log: RoomJournal): RoomState => foldRoom(log.entries, retry);
+const rows = (log: RoomJournal) => log.entries.filter((entry) => entry.kind !== 'message');
 
 /** The assistant writes the one message once, or judges the room and stays quiet. */
 const drafts = (text: string | undefined) => (context: unknown, _name: string, call: number) => {
@@ -113,7 +113,7 @@ describe('a checkpoint', () => {
 			// one row where there were many, every message still there, and the
 			// room folds to exactly what it folded to before
 			expect(rows(log)).toHaveLength(1);
-			expect(log.rowsSinceCheckpoint).toBe(0);
+			expect(log.sinceCheckpoint).toBe(0);
 			expect(facts(fold(log))).toEqual(before);
 			expect(log.messages).toHaveLength(before.messages.length);
 			await stopSession(session);
@@ -154,8 +154,8 @@ describe('a checkpoint the room folds', () => {
 		try {
 			const at = '2026-01-01T09:00:00.000Z';
 			const heard: { id: string; opens: boolean }[] = [];
-			const log = new RoomLog(opened.sessions.open(roomName('checkpoint-first')), (entry) => {
-				if (entry.type === 'lease') heard.push({ id: entry.lease.id, opens: opensOf(log, entry) });
+			const log = new RoomJournal(opened.sessions.open(roomName('checkpoint-first')), (entry) => {
+				if (entry.kind === 'lease') heard.push({ id: entry.body.id, opens: opensOf(log, entry) });
 			});
 			await log.ready;
 			await log.write('composition', {
@@ -189,9 +189,9 @@ describe('a checkpoint the room folds', () => {
  * (`session.ts`), and a checkpoint puts every lease it carries in that fold.
  * Read here off the fold as it stood before the row landed.
  */
-function opensOf(log: RoomLog, entry: { lease: { id: string } }): boolean {
+function opensOf(log: RoomJournal, entry: { body: { id: string } }): boolean {
 	const before = log.entries.slice(0, -1);
-	return !foldRoom(before, retry).leases.has(entry.lease.id);
+	return !foldRoom(before, retry).leases.has(entry.body.id);
 }
 
 describe('a checkpoint past the fence', () => {
@@ -201,7 +201,7 @@ describe('a checkpoint past the fence', () => {
 			const name = roomName('checkpoint-fence');
 			const piSession = await opened.sessions.open(name);
 			const at = '2026-01-01T09:00:00.000Z';
-			const composition: CompositionRow = {
+			const composition: Composition = {
 				assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
 				agents: [{ name: 'solo', identity: 'Answers.', attention: 'broadcast' }],
 				available: [],
@@ -225,11 +225,11 @@ describe('a checkpoint past the fence', () => {
 			await piSession.appendCustomEntry('ambion/run', { run: 'b', after: 0, at, written: 'b' });
 			await piSession.appendCustomEntry('ambion/checkpoint', checkpoint(99, 'a'));
 
-			const log = new RoomLog(opened.sessions.open(name));
+			const log = new RoomJournal(opened.sessions.open(name));
 			await log.ready;
 			// the reader folds the checkpoint that stood, and never the one past the fence
 			expect(fold(log).floor).toBe(7);
-			expect(rows(log).filter((entry) => entry.type === 'checkpoint')).toHaveLength(1);
+			expect(rows(log).filter((entry) => entry.kind === 'checkpoint')).toHaveLength(1);
 		} finally {
 			await opened.dispose();
 		}

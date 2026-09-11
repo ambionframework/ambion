@@ -1,11 +1,11 @@
 /**
  * Pi's `SessionStorage` over one SQLite database, reached through two
  * calls: `run` a statement, or `all` its rows. Any host that holds a
- * SQLite reaches the room's log through it: a process over `node:sqlite`,
+ * SQLite reaches a journal through it: a process over `node:sqlite`,
  * a Cloudflare Durable Object over its own storage. The host wraps its
  * driver in `Sql`, and the core owns the schema and every statement.
  *
- * One database holds any number of sessions, keyed by id: a room's log,
+ * One database holds any number of sessions, keyed by id: a room's journal,
  * and each seat's audit session beside it. It implements what the room
  * reaches — `appendCustomEntry`, `appendMessage` and `findEntries` on Pi's
  * `Session` — and refuses the rest. A lane's leaf and a session's metadata
@@ -15,12 +15,18 @@ import type {
 	Entry,
 	EntryQuery,
 	LanePointer,
+	Session as PiSession,
 	ProvisionedEntry,
 	SessionMetadata,
 	SessionStorage,
 } from '@earendil-works/pi-agent-core';
 import { Session, SessionError } from '@earendil-works/pi-agent-core';
-import type { FencedSession, SessionOpener } from '../types.ts';
+import type { FencedSession } from './journal.ts';
+
+/** Opens one Pi session by id, and creates it on the first open. */
+export interface SessionOpener {
+	open(id: string, parentId?: string): Promise<PiSession>;
+}
 
 /** What a bound parameter and a column hold. */
 export type SqlValue = string | number | null;

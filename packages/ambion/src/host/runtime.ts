@@ -81,7 +81,7 @@ export interface Runtime {
 	readonly wake: { readonly resend: number; readonly expiry: number; readonly deadline: number };
 	/** How many times the room retries a failed summary, and how long it waits before each retry. */
 	readonly retry: { readonly attempts: number; readonly backoff: (attempt: number) => number };
-	/** How many rows the log takes past the last checkpoint before the room writes the next one. */
+	/** How many entries the journal takes past the last checkpoint before the room writes the next one. */
 	readonly checkpoint: { readonly rows: number };
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
 	evict(name: string): void;

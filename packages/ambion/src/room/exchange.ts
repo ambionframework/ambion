@@ -27,7 +27,7 @@
  * assistant makes of one.
  */
 import { type Exchange, isSpoken, type Message } from '../types.ts';
-import type { CloseRow } from '../wire.ts';
+import type { Close } from '../wire.ts';
 
 /**
  * The open exchange, or nothing when nobody has asked since the last close:
@@ -35,7 +35,7 @@ import type { CloseRow } from '../wire.ts';
  */
 export function openExchange(
 	messages: readonly Message[],
-	closes: readonly CloseRow[],
+	closes: readonly Close[],
 	isPerson: (name: string) => boolean,
 ): Exchange | undefined {
 	const closedThrough = closes.at(-1)?.through ?? 0;
