@@ -10,36 +10,34 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { SeatRoom, SessionEvent, Wake } from '@ambionframework/ambion';
 import { SeatActor, systemClock } from '@ambionframework/ambion';
-import { runtimeFor } from './configure.ts';
+import type { SeatEvent } from './configure.ts';
+import { runtimeFor, seatEvent } from './configure.ts';
 import type { Env } from './room-object.ts';
 import { sqlSessions } from './storage.ts';
 
 type Phase = 'pending' | 'running';
 
 /**
- * What a seat does inside its own object, as one structured log line.
+ * What a seat did, flattened for whoever the worker gave the events to.
  *
- * An activation runs in the seat's object, and the events it raises reach no
- * other object: `emit` is a call in this process. Cloudflare indexes the
- * fields of an object given to `console.log`, so a line per event is what
- * carries a seat's tool calls and its failures out to a reader. `ambion` marks
- * the line, and the three names say which activation raised it.
+ * An activation runs inside the seat's object, and the events it raises reach
+ * no other object: `emit` is a call in this process. So this line is the only
+ * way a reader outside learns that a tool was called. `configure` decides
+ * where it goes, and writes it to the logs when the worker says nothing.
  *
- * The core writes nothing to stdout. A host decides where its events go, and
- * this is that decision for this host.
+ * The core writes nothing to stdout, and the decision is a host's to make.
  */
-function logEvent(room: string, seat: string, activation: string, event: SessionEvent): void {
-	const error = event.type === 'error' ? { error: event.error.message } : {};
-	console.log({
+function seatLine(room: string, seat: string, activation: string, event: SessionEvent): SeatEvent {
+	return {
 		ambion: 'seat',
 		room,
 		seat,
 		activation,
 		event: event.type,
 		...('toolName' in event ? { tool: event.toolName } : {}),
-		...error,
+		...(event.type === 'error' ? { error: event.error.message } : {}),
 		at: new Date().toISOString(),
-	});
+	};
 }
 
 export class SeatObject extends DurableObject<Env> {
@@ -123,7 +121,7 @@ export class SeatObject extends DurableObject<Env> {
 			sessions: runtime.sessions,
 			stream: runtime.stream,
 			model: runtime.model,
-			emit: (event) => logEvent(room, seat, activation, event),
+			emit: (event) => seatEvent(seatLine(room, seat, activation, event)),
 		});
 		try {
 			await this.actor.run(activation);

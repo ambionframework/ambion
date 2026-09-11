@@ -67,12 +67,20 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	expect(spoken).toBeGreaterThan(-1);
 	expect((await writers(again, 'message')).at(spoken)).toBe(runs.at(1));
 
-	// The lease the first run wrote is the lease the second run released, under
-	// one id: nothing expired, and no second attempt ran.
+	// The lease the first run wrote is the lease the second run released, and
+	// nothing expired. Wait for this activation's own lease to end: the
+	// assistant's draft takes a lease of its own after it, and this test says
+	// nothing about that one.
 	const leases = await until(async () => {
 		const held = await rows<LeaseRow>(again, 'lease');
-		return held.at(-1)?.phase === 'ended' ? held : undefined;
+		const mine = held.filter((row) => row.id === claim.id);
+		return mine.at(-1)?.phase === 'ended' ? held : undefined;
 	});
-	expect(new Set(leases.map((row) => row.id))).toEqual(new Set(['2:slow']));
-	expect(leases.at(-1)).toMatchObject({ phase: 'ended', reason: 'released' });
+	expect(leases.filter((row) => row.id === claim.id).at(-1)).toMatchObject({
+		phase: 'ended',
+		reason: 'released',
+	});
+	// The wake was answered on its first attempt: no id carries a second.
+	const attempts = new Set(leases.map((row) => row.id).filter((id) => id.startsWith('2:slow')));
+	expect([...attempts]).toEqual([claim.id]);
 });
