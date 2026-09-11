@@ -1,7 +1,7 @@
 # Correctness findings for a distributed host
 
 > A review report, kept as written. The backlog tracks each finding:
-> F1 is item 35, closed with a remainder; F2 to F7 are items 37 to 41;
+> F1 is item 35, now closed; F2 to F7 are items 37 to 41;
 > F8 is item 36; F9 is item 28; F10 is item 32. The LemmaScript contracts
 > the report added now live beside the code they check, in
 > `packages/ambion/src/log/rules.verified.ts` and
@@ -322,3 +322,34 @@ exist. Use two independent Node processes and a production-equivalent storage
 service. A useful test must pause the old process without killing it, expire its
 lease, start a new attempt, and then release the old process. Verify the room
 record, audit record, model count, and every external effect separately.
+
+## The boundaries one platform keeps
+
+`packages/cloudflare` is the first host that puts these boundaries on a
+real platform, so it says which of them it keeps.
+
+**One object per room.** A room is one Durable Object, and the platform
+gives one instance per id. The log lives in that object's own SQLite, so
+the room's writer and its storage share a lifetime. The object resumes in
+its constructor, under `blockConcurrencyWhile`, and the resume writes a
+run row: an instance the platform took away writes nothing a reader
+holds, because the fence voids it.
+
+**One object per seat.** A seat is one Durable Object, and one activation
+runs inside one alarm. The seat's audit session lives in that object's own
+SQLite, beside nothing else. An object the platform evicted mid-activation
+finds `phase: 'running'` at its next alarm, ends the lease `failed`, and
+the room wakes the seat again: an activation is never resumed, only
+retried.
+
+**No object per activation, and none per exchange.** An activation is
+seconds of work inside a seat's alarm, and an exchange is a span the log
+already names. Neither holds state a seat or a room does not, so neither
+earns an object, an id, or a lifetime of its own.
+
+**What the platform does not give.** The findings above stand for this
+host too. Tool effects are not fenced (F5), the configuration plane is the
+worker's code rather than a record (F2), the audit stream takes one writer
+per seat and no more (F4), the workspace is memory in the object that
+holds it (F6), and events reach a listener in one object and outlive
+nothing (F7).

@@ -7,6 +7,11 @@
 		},
 		"packages/*": {
 			"project": ["src/**/*.ts"]
+		},
+		"packages/cloudflare": {
+			"entry": ["test/worker.ts", "test/**/*.test.ts"],
+			"project": ["src/**/*.ts", "test/**/*.ts"],
+			"ignoreDependencies": ["cloudflare"]
 		}
 	}
 }
