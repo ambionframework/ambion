@@ -148,18 +148,15 @@ describe('a checkpoint', () => {
 	});
 });
 
-describe('a checkpoint the log caches', () => {
-	it('holds a row for every lease it carries, so a later end is not a first row', async () => {
+describe('a checkpoint the room folds', () => {
+	it('holds a lease it carries, so a later end starts no second activation', async () => {
 		const opened = await memory.open();
 		try {
 			const at = '2026-01-01T09:00:00.000Z';
-			const heard: { id: string; first: boolean }[] = [];
-			const log = new RoomLog(
-				opened.sessions.open(roomName('checkpoint-first')),
-				(entry, first) => {
-					if (entry.type === 'lease') heard.push({ id: entry.lease.id, first });
-				},
-			);
+			const heard: { id: string; opens: boolean }[] = [];
+			const log = new RoomLog(opened.sessions.open(roomName('checkpoint-first')), (entry) => {
+				if (entry.type === 'lease') heard.push({ id: entry.lease.id, opens: opensOf(log, entry) });
+			});
 			await log.ready;
 			await log.write('composition', {
 				assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
@@ -174,17 +171,28 @@ describe('a checkpoint the log caches', () => {
 			expect(row.leases.map((lease) => lease.id)).toEqual(['2:solo']);
 			await log.write('checkpoint', row);
 			await log.write('lease', { id: '2:solo', phase: 'ended', reason: 'released', at });
-			// the end row ends a lease the log holds: it is no first row, so the room
-			// reports the activation ending and never a second one starting
+			// the end row ends a lease the fold holds: the room reports the
+			// activation ending and never a second one starting
 			expect(heard).toEqual([
-				{ id: '2:solo', first: true },
-				{ id: '2:solo', first: false },
+				{ id: '2:solo', opens: true },
+				{ id: '2:solo', opens: false },
 			]);
 		} finally {
 			await opened.dispose();
 		}
 	});
 });
+
+/**
+ * What the room asks of a lease row: whether it starts an activation. The
+ * room keeps the answer in a set the replay seeds from the fold
+ * (`session.ts`), and a checkpoint puts every lease it carries in that fold.
+ * Read here off the fold as it stood before the row landed.
+ */
+function opensOf(log: RoomLog, entry: { lease: { id: string } }): boolean {
+	const before = log.entries.slice(0, -1);
+	return !foldRoom(before, retry).leases.has(entry.lease.id);
+}
 
 describe('a checkpoint past the fence', () => {
 	it('is void, and the log folds the one that stood', async () => {

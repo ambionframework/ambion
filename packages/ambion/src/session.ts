@@ -338,6 +338,8 @@ class SessionImpl implements Session, RunningRoom {
 	private readonly quietWaiters: (() => void)[] = [];
 	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
 	private readonly sentAt = new Map<string, number>();
+	/** Every lease id this room has heard a row for. It says `activation_start` once. */
+	private readonly heardLeases = new Set<string>();
 	private cancelAlarm: () => void = () => {};
 	/** The reconcile in flight: the rows it writes, and whoever it wakes. A caller that asks waits for it. */
 	private reconciling: Promise<void> = Promise.resolve();
@@ -371,7 +373,7 @@ class SessionImpl implements Session, RunningRoom {
 		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
 		this.log = new RoomLog(
 			this.sessions.open(name),
-			(entry, first) => this.hear(entry, first),
+			(entry) => this.hear(entry),
 			this.run,
 			() => this.superseded(),
 		);
@@ -410,6 +412,7 @@ class SessionImpl implements Session, RunningRoom {
 	private async compose(row: Without<CompositionRow, 'after'>): Promise<void> {
 		await this.log.ready;
 		this.replayed = true;
+		this.seedHeardLeases();
 		const people = this.state().people;
 		for (const name of this.defs.keys()) {
 			if (people.has(name)) {
@@ -426,6 +429,7 @@ class SessionImpl implements Session, RunningRoom {
 	private async recover(): Promise<void> {
 		await this.log.ready;
 		this.replayed = true;
+		this.seedHeardLeases();
 		const state = this.state();
 		if (state.composition === undefined) {
 			throw new Error(`Session '${this.name}' has no composition on its record: start it instead.`);
@@ -804,13 +808,29 @@ class SessionImpl implements Session, RunningRoom {
 	 * after the replay: one this run appended, and one a read found because
 	 * the confirmation was lost or another run wrote it. The room reacts the
 	 * same way to both, so it has one path from the record to a host and
-	 * never a second one for the entries it wrote itself. `first` says the
-	 * log held no earlier row for this lease id.
+	 * never a second one for the entries it wrote itself.
 	 */
-	private hear(entry: LogEntry, first: boolean): void {
+	private hear(entry: LogEntry): void {
 		if (entry.type === 'message') this.heardMessage(entry.message);
 		else if (entry.type === 'close') this.heardClose(entry.close);
-		else if (entry.type === 'lease') this.heardLease(entry.lease, first);
+		else if (entry.type === 'lease') this.heardLease(entry.lease, this.opens(entry.lease.id));
+	}
+
+	/**
+	 * Whether this row starts an activation: the room has heard no earlier row
+	 * for the id. The room keeps the set, because the question is the room's:
+	 * it says `activation_start` once. The replay seeds it from the fold, so a
+	 * resumed room starts no activation the last run already started.
+	 */
+	private opens(id: string): boolean {
+		const first = !this.heardLeases.has(id);
+		this.heardLeases.add(id);
+		return first;
+	}
+
+	/** Every lease id the room has heard a row for, seeded by the replay. */
+	private seedHeardLeases(): void {
+		for (const id of this.state().leases.keys()) this.heardLeases.add(id);
 	}
 
 	/**

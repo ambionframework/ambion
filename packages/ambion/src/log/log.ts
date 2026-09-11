@@ -140,8 +140,6 @@ export class RoomLog {
 	private closed = false;
 	/** Pi's id of every entry the cache holds past the cursor: what a read in doubt finds again. */
 	private readonly known = new Set<string>();
-	/** Every lease id the cache holds a row for. It says whether a row is the first of its lease. */
-	private readonly leased = new Set<string>();
 	/** Pi's seq of the last entry a read saw: the next read starts past it. */
 	private cursor = 0;
 	/** The replay is over: every entry the log takes from now on is news, and `hear` takes it. */
@@ -158,13 +156,13 @@ export class RoomLog {
 	/**
 	 * `hear` takes every entry the log takes after the replay: one this run
 	 * appended, and one a read found because the writer never heard or
-	 * another run wrote it. `first` says the log held no earlier row for
-	 * this lease id. `run` names the run this log writes for, or nothing for
-	 * a log that only reads. `lost` hears that a later run took the name.
+	 * another run wrote it. `run` names the run this log writes for, or
+	 * nothing for a log that only reads. `lost` hears that a later run took
+	 * the name.
 	 */
 	constructor(
 		open: Promise<PiSession>,
-		private readonly hear?: (entry: LogEntry, first: boolean) => void,
+		private readonly hear?: (entry: LogEntry) => void,
 		private readonly run?: string,
 		private readonly lost?: () => void,
 	) {
@@ -260,22 +258,16 @@ export class RoomLog {
 	 * replay is news, so nothing is heard until the replay is over.
 	 */
 	private cache(entry: LogEntry, id: string): void {
-		const first = entry.type !== 'lease' || !this.leased.has(entry.lease.id);
 		this.known.add(id);
 		this.entries.push(entry);
-		if (entry.type === 'lease') this.leased.add(entry.lease.id);
-		// A checkpoint carries the leases whose rows it replaces: the log holds
-		// a row for each of them, so a later row of theirs is not the first.
-		if (entry.type === 'checkpoint') {
-			for (const lease of entry.checkpoint.leases) this.leased.add(lease.id);
-			this.compact();
-		} else if (entry.type !== 'message') this.rowsSinceCheckpoint += 1;
+		if (entry.type === 'checkpoint') this.compact();
+		else if (entry.type !== 'message') this.rowsSinceCheckpoint += 1;
 		if (entry.type === 'message') {
 			this.messages.push(entry.message);
 			this.lastSeq = entry.message.seq;
 			if (entry.message.key !== undefined) this.byKey.set(entry.message.key, entry.message);
 		}
-		if (this.replayed) this.hear?.(entry, first);
+		if (this.replayed) this.hear?.(entry);
 	}
 
 	/**
