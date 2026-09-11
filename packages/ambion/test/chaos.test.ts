@@ -26,7 +26,7 @@ import {
 	type Session,
 	stopSession,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
 import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';

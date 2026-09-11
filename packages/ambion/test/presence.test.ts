@@ -14,7 +14,7 @@ import {
 	startSession,
 	stopSession,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { andrei, assistant, collect, deferred, roomName as name } from './support/room.ts';
 import { contextText, quiet, scripted } from './support/scripted.ts';
 import { type FaultyOpener, faultyOpener, memory } from './support/storage.ts';

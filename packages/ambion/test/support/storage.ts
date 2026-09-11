@@ -24,7 +24,7 @@ import {
 	sessionsOver,
 	sqliteSessions,
 	type WorkspaceBackend,
-} from '../../src/index.ts';
+} from '../../src/internal.ts';
 
 export interface OpenedStorage {
 	readonly sessions: SessionOpener;

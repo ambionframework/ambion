@@ -5,7 +5,7 @@
  */
 
 import { env, runInDurableObject } from 'cloudflare:test';
-import { assertWire, roundTrip } from '@ambionframework/ambion';
+import { assertWire, roundTrip } from '@ambionframework/ambion/protocol';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
 

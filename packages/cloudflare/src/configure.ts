@@ -3,13 +3,9 @@
  * by name, and the model call they make. A worker configures it once at
  * module scope, and every object in the isolate reads it.
  */
-import type {
-	AgentDefinition,
-	CreateRuntimeOptions,
-	Runtime,
-	SessionEvent,
-} from '@ambionframework/ambion';
-import { createRuntime } from '@ambionframework/ambion';
+import type { CreateRuntimeOptions, Runtime } from '@ambionframework/ambion/host';
+import type { AgentDefinition, SessionEvent } from '@ambionframework/ambion';
+import { createRuntime } from '@ambionframework/ambion/host';
 
 /**
  * One event a seat raised inside its own object, flat enough to be a log

@@ -23,7 +23,7 @@ import {
 	type SessionEvent,
 	type StartSessionOptions,
 	startSession,
-} from '../../src/index.ts';
+} from '../../src/internal.ts';
 import { collect, roomName } from '../support/room.ts';
 
 /** The model every live seat runs on. The example reads the same variable. */

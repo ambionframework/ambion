@@ -9,7 +9,7 @@ import {
 	type SessionEvent,
 	type SessionOpener,
 	type SessionView,
-} from '../../src/index.ts';
+} from '../../src/internal.ts';
 import { standing } from './history.ts';
 import { rowsOf } from './room.ts';
 

@@ -8,8 +8,9 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import type { SeatRoom, SessionEvent, Wake } from '@ambionframework/ambion';
-import { SeatActor, systemClock } from '@ambionframework/ambion';
+import type { SessionEvent } from '@ambionframework/ambion';
+import { createSeatActor, systemClock } from '@ambionframework/ambion/host';
+import type { SeatRoom, Wake } from '@ambionframework/ambion/protocol';
 import type { SeatEvent } from './configure.ts';
 import { runtimeFor, seatEvent } from './configure.ts';
 import type { Env } from './room-object.ts';
@@ -41,7 +42,7 @@ function seatLine(room: string, seat: string, activation: string, event: Session
 }
 
 export class SeatObject extends DurableObject<Env> {
-	private actor: SeatActor | undefined;
+	private actor: ReturnType<typeof createSeatActor> | undefined;
 
 	/**
 	 * A wake for the activation the object holds, or for a fresh one when it
@@ -113,7 +114,7 @@ export class SeatObject extends DurableObject<Env> {
 		}
 		await this.ctx.storage.put('phase', 'running');
 		const runtime = runtimeFor({ sessions: sqlSessions(this.ctx), clock: systemClock() });
-		this.actor = new SeatActor(seatRoom, {
+		this.actor = createSeatActor(seatRoom, {
 			clock: runtime.clock,
 			catalog: runtime.catalog,
 			room,

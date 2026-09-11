@@ -23,7 +23,7 @@ import {
 	startSession,
 	stopSession,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import type { LogEntry } from '../src/log/log.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import {

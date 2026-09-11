@@ -338,6 +338,16 @@ export class SeatActor implements SeatPort {
 	}
 }
 
+/** Build the seat side of a host transport without exposing its implementation class. */
+export function createSeatActor(
+	room: SeatRoom,
+	context: SeatContext,
+): SeatPort & {
+	run(activation: string): Promise<void>;
+} {
+	return new SeatActor(room, context);
+}
+
 // -- the transport ------------------------------------------------------------
 
 /** Every seat is an actor in this process, holding the room directly. */

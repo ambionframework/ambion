@@ -20,7 +20,7 @@ import {
 	stopSession,
 	type Visit,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases } from './support/chaos.ts';

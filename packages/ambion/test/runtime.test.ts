@@ -15,7 +15,7 @@ import {
 	startSession,
 	stopSession,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { fakeClock } from './support/clock.ts';
 import { andrei, assistant, roomName } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';

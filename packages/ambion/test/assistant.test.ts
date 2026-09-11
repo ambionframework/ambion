@@ -19,7 +19,7 @@ import {
 	startSession,
 	stopSession,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { renderRecord } from '../src/render.ts';
 import { fakeClock } from './support/clock.ts';
 import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';

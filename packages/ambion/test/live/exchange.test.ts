@@ -8,7 +8,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineHuman, defineTool, isPresence, isSummary, stopSession } from '../../src/index.ts';
+import { defineHuman, defineTool, isPresence, isSummary, stopSession } from '../../src/internal.ts';
 import { enter } from '../support/room.ts';
 import {
 	activationsOf,

@@ -5,7 +5,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineTool, stopSession } from '../../src/index.ts';
+import { defineTool, stopSession } from '../../src/internal.ts';
 import { enter } from '../support/room.ts';
 import {
 	agent,

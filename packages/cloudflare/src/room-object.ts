@@ -6,31 +6,17 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
+import type { Attention, Message, SeatInfo, Seq, Session } from '@ambionframework/ambion';
+import type { Clock, RunningRoom, Runtime, Transport, Visit } from '@ambionframework/ambion/host';
 import type {
-	Attention,
-	Clock,
 	Commit,
 	CommitResponse,
 	Lease,
 	LeaseResponse,
-	Message,
-	RunningRoom,
-	Runtime,
-	SeatInfo,
-	Seq,
-	Session,
-	Transport,
 	ViewResponse,
-	Visit,
-} from '@ambionframework/ambion';
-import {
-	defineHuman,
-	resumeSession,
-	seated,
-	startSession,
-	stopSession,
-	visitSession,
-} from '@ambionframework/ambion';
+} from '@ambionframework/ambion/protocol';
+import { resumeSession, seated, stopSession, visitSession } from '@ambionframework/ambion/host';
+import { defineHuman, startSession } from '@ambionframework/ambion';
 import { definitionOf, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';
 import { sqlSessions } from './storage.ts';

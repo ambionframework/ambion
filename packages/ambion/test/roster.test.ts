@@ -16,7 +16,7 @@ import {
 	startSession,
 	stopSession,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { fakeClock } from './support/clock.ts';
 import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
 import {
@@ -591,7 +591,7 @@ describe('the host', () => {
 		started.pop();
 
 		// the record says who was seated, and a read of the stopped room folds it
-		const { readSession } = await import('../src/index.ts');
+		const { readSession } = await import('../src/internal.ts');
 		const stopped = readSession(session.name, { runtime });
 		expect(kinds(await stopped.messages())).toEqual(['seated']);
 		expect(seatNames(stopped as Session)).toEqual(['product', 'assistant', 'surveyor']);

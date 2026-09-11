@@ -6,7 +6,8 @@
  */
 
 import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
-import type { LeaseRow, Message } from '@ambionframework/ambion';
+import type { Message } from '@ambionframework/ambion';
+import type { LeaseRow } from '@ambionframework/ambion/protocol';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
 import { until } from './until.ts';

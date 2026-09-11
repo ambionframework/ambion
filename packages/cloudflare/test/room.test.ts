@@ -3,7 +3,8 @@
  * repeated delivery key once.
  */
 import { env, runInDurableObject } from 'cloudflare:test';
-import type { Message, RunRow } from '@ambionframework/ambion';
+import type { Message } from '@ambionframework/ambion';
+import type { RunRow } from '@ambionframework/ambion/protocol';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
 import { until } from './until.ts';
