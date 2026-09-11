@@ -153,6 +153,12 @@ sides of a checkpoint.
 
 ## PR 13: the SQLite storage in the core, and the storage contract
 
+**Split in two.** The storage and the contract are one step in the plan
+and two changes in the code: the storage is a port that adds a third
+storage to every tier, and the contract is new design that rewrites the
+log's write path. PR 13a lands the storage; PR 13b lands the contract and
+closes backlog item 35.
+
 **Scope.** `host/sqlite.ts`: Pi's `SessionStorage` over any SQLite a
 host reaches through two calls, `run` and `all`. The test support wraps
 `node:sqlite`, and every scenario, the restart suite, the chaos sweep and

@@ -177,6 +177,14 @@ by its instructions.
   resumed run makes.
 - Read `messages()` after a resume for what the stream did not carry.
 
+**A host that may run two runs over one name needs a storage that takes
+the seq per append.** The core's SQLite storage does: it reads the next
+seq from the database as each row lands, and its primary key refuses a
+second entry at one seq, so a writer that raced is refused and reads
+again. Pi's JSONL repository holds the next seq in memory, so two runs
+over one file write the same seq twice and the file no longer reads. The
+fence then has nothing to read, and the record is lost.
+
 ## 7. How it is proved
 
 The scripted tier runs on a fake clock and a scripted model, so a run is

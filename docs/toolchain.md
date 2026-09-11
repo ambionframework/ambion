@@ -271,6 +271,33 @@ Everything in the tree scores 10 or below.
 The budget is a lint rule, so it runs wherever `check:lint` runs — the `check` job on a pull request, and the gate the release
 re-runs before it publishes. There was nothing to add to `ci.yml`.
 
+### Three storages, one suite
+
+Every scenario that reads or writes a record runs on each storage the
+repository holds, through `describe.each(storages)` in
+`test/support/storage.ts`:
+
+| Storage  | What it is                                         | Where it runs              |
+| -------- | -------------------------------------------------- | -------------------------- |
+| `memory` | Pi's `InMemorySessionRepo`                         | Every tier but the kill    |
+| `jsonl`  | Pi's `JsonlSessionRepo` over a temporary directory | Every tier but the history |
+| `sqlite` | The core's own storage over one `node:sqlite`      | Every tier                 |
+
+Two tiers take a storage each for a reason.
+
+The **history** tier makes two runs write to one record on purpose. Pi's
+JSONL repository holds the next seq in memory, so two runs over one file
+write the same seq twice and the file no longer reads. The SQLite storage
+reads the next seq from the database as each row lands, and its primary
+key refuses a second entry at one seq, so it is the one durable storage
+that tier can use.
+
+The **kill** tier runs a room in a process of its own and kills it without
+warning, so it needs a storage that outlives the process: `jsonl` and
+`sqlite`. The kill lands between an entry and whatever the storage writes
+beside it — for SQLite, between the row and the lane's leaf — and the room
+resumes over what the kill left.
+
 ---
 
 ## 8. Continuous integration (`.github/workflows/ci.yml`)

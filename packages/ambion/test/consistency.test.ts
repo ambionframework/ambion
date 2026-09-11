@@ -29,7 +29,7 @@ import { type Entry, History, standing, violations } from './support/history.ts'
 import { invariants } from './support/invariants.ts';
 import { roomName, rowsOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { type FailMode, gatedOpener, memory, tappedOpener } from './support/storage.ts';
+import { type FailMode, gatedOpener, memory, sqlite, tappedOpener } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
 function mulberry32(seed: number): () => number {
@@ -444,8 +444,17 @@ describe('the room under concurrent clients and a nemesis', () => {
 	it.each(Array.from({ length: seeds }, (_, i) => i + 1))(
 		'keeps every guarantee on seed %i',
 		async (seed) => {
-			const opened = await memory.open();
-			const cluster = new Cluster(roomName(`consistency-${seed}`), opened, mulberry32(seed));
+			// The seeds spread over the storages two runs may write at once. Pi's
+			// JSONL repository keeps the next seq in memory, so two runs over one
+			// file write the same seq twice and the file no longer reads; the
+			// core's SQLite storage takes the seq from the database per append.
+			const storage = seed % 2 === 0 ? memory : sqlite;
+			const opened = await storage.open();
+			const cluster = new Cluster(
+				roomName(`consistency-${storage.name}-${seed}`),
+				opened,
+				mulberry32(seed),
+			);
 			try {
 				await cluster.start();
 				const clients = [new Person(cluster, priya), new Person(cluster, sam), new Host(cluster)];
