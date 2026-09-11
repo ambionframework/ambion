@@ -42,7 +42,7 @@ import { type FakeClock, fakeClock } from './support/clock.ts';
 import { History, standing, violations } from './support/history.ts';
 import { collect, roomName, rowsOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { gatedOpener, jsonlSessions, memory } from './support/storage.ts';
+import { gatedOpener, jsonlSessions, memory, sqlite } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
@@ -59,9 +59,12 @@ function entriesOf(rows: { type: string; data: unknown }[]): LogEntry[] {
 	});
 }
 
-describe('a split: two live hosts over one log', () => {
-	it('a paused host that comes back is fenced out, and loses only the write it held', async () => {
-		const opened = await memory.open();
+// A storage that refuses an append the record moved under loses nothing:
+// the write the paused host held is refused before it is acknowledged.
+describe.each([memory, sqlite])('a split on $name: two live hosts over one log', (storage) => {
+	const refuses = storage.name === 'sqlite';
+	it('a paused host that comes back is fenced out, and loses only what the storage lets it', async () => {
+		const opened = await storage.open();
 		const clock = fakeClock();
 		const history = new History(clock);
 		// the first host's writes are held while it is paused; the second host's are not
@@ -123,12 +126,21 @@ describe('a split: two live hosts over one log', () => {
 				rows,
 				state: foldRoom(entriesOf(rows), RETRY),
 			});
-			// the one loss the fence allows: the write the first host acknowledged past the
-			// fence is off the record, and off every read after it
-			expect(found).toEqual([
-				'delivery q2 acknowledged, on the record 0 times',
-				'read #9 by sam lacks delivery q2, acknowledged before it was asked',
-			]);
+			// On a storage that takes any append, the fence allows one loss: the write
+			// the first host acknowledged past the fence is off the record, and off
+			// every read after it. On one that refuses an append the record moved
+			// under, the write is refused before it is acknowledged, and nothing is lost.
+			expect(found).toEqual(
+				refuses
+					? []
+					: [
+							'delivery q2 acknowledged, on the record 0 times',
+							'read #9 by sam lacks delivery q2, acknowledged before it was asked',
+						],
+			);
+			expect(history.entries.find((e) => e.key === 'q2' && e.phase !== 'invoke')).toMatchObject({
+				phase: refuses ? 'fail' : 'ok',
+			});
 			expect(events.some((e) => e.type === 'superseded')).toBe(true);
 			expect(history.entries.find((e) => e.key === 'q4' && e.phase !== 'invoke')).toMatchObject({
 				phase: 'fail',
@@ -140,7 +152,9 @@ describe('a split: two live hosts over one log', () => {
 			await opened.dispose();
 		}
 	});
+});
 
+describe('a split: two live hosts over one JSONL file', () => {
 	const child = fileURLToPath(new URL('./support/child.ts', import.meta.url));
 
 	/** Every `write N` line the child prints, as it prints it. */

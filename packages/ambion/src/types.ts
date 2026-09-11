@@ -47,6 +47,31 @@ export interface SessionOpener {
 	open(id: string, parentId?: string): Promise<PiSession>;
 }
 
+/**
+ * A session that refuses an append when the record moved under the writer.
+ *
+ * A run reads the storage before every write, and the read tells it where
+ * the record stood. `appendAfter` takes that position: the entry lands at
+ * the next one, or the storage says the record moved and writes nothing.
+ * A run that was fenced while its write waited is refused before it can
+ * acknowledge, so the write it held is no loss.
+ *
+ * A storage that cannot promise it does not offer it, and the log appends
+ * the way it always did. The fence still voids what such a storage takes.
+ */
+export interface FencedSession {
+	/** The entry's id, or nothing when the record moved past `expected`. */
+	appendAfter(customType: string, data: unknown, expected: number): Promise<string | undefined>;
+}
+
+/** The session as one that refuses a moved append, or nothing when its storage cannot. */
+export function fenced(session: PiSession): (PiSession & FencedSession) | undefined {
+	const candidate = session as Partial<FencedSession>;
+	return typeof candidate.appendAfter === 'function'
+		? (session as PiSession & FencedSession)
+		: undefined;
+}
+
 /** Resolves an agent's `provider/model-id` to the model Pi's loop runs. */
 export type ModelResolver = (id: string, agent: string) => Model<Api>;
 

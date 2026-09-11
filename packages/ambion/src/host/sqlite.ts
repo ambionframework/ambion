@@ -20,7 +20,7 @@ import type {
 	SessionStorage,
 } from '@earendil-works/pi-agent-core';
 import { Session, SessionError } from '@earendil-works/pi-agent-core';
-import type { SessionOpener } from '../types.ts';
+import type { FencedSession, SessionOpener } from '../types.ts';
 
 /** What a bound parameter and a column hold. */
 export type SqlValue = string | number | null;
@@ -166,6 +166,60 @@ export class SqliteSessionStorage implements SessionStorage {
 		return entry;
 	}
 
+	/**
+	 * Append one custom entry at `expected + 1`, and only while the record's
+	 * last entry is `expected`. One statement decides both: the insert takes
+	 * the seq it asserts, so a writer the record moved under inserts nothing.
+	 * The read back says which happened, because a `run` reports no rows.
+	 */
+	appendAfter(customType: string, data: unknown, expected: number): string | undefined {
+		const pointer = this.sql.all(
+			'SELECT leaf_id FROM lanes WHERE session = ? AND lane = ?',
+			this.id,
+			'main',
+		)[0];
+		if (pointer === undefined) throw new SessionError('invalid_lane', 'Lane not found: main');
+		const seq = expected + 1;
+		// The id names this write and no other. A position names none: two runs
+		// that expect the same seq derive the same id, and the read back below
+		// could not tell one run's entry from the other's.
+		const id = crypto.randomUUID();
+		const entry = {
+			type: 'custom' as const,
+			id,
+			customType,
+			data,
+			parentId: pointer.leaf_id === null ? null : String(pointer.leaf_id),
+			seq,
+			timestamp: Date.now(),
+		};
+		this.sql.run(
+			`INSERT INTO entries (session, seq, id, parent_id, lane, type, custom_type, timestamp, entry)
+			 SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+			 WHERE (SELECT COALESCE(MAX(seq), 0) FROM entries WHERE session = ?) = ?`,
+			this.id,
+			seq,
+			id,
+			entry.parentId,
+			'main',
+			'custom',
+			customType,
+			entry.timestamp,
+			JSON.stringify(entry),
+			this.id,
+			expected,
+		);
+		const landed = this.sql.all('SELECT 1 FROM entries WHERE session = ? AND id = ?', this.id, id);
+		if (landed.length === 0) return undefined;
+		this.sql.run(
+			'UPDATE lanes SET leaf_id = ? WHERE session = ? AND lane = ?',
+			id,
+			this.id,
+			'main',
+		);
+		return id;
+	}
+
 	async getEntry(id: string): Promise<Entry | undefined> {
 		const row = this.sql.all(
 			'SELECT entry FROM entries WHERE session = ? AND id = ?',
@@ -258,6 +312,13 @@ export class SqliteSessionStorage implements SessionStorage {
 
 /** A `SessionOpener` over one SQLite: any id opens, and is created on the first open. */
 export function sqliteSessions(sql: Sql): SessionOpener {
+	/** The session, and the conditional append its storage can promise. */
+	const opened = (storage: SqliteSessionStorage): Session => {
+		const session = new Session(storage);
+		const appendAfter: FencedSession['appendAfter'] = async (customType, data, expected) =>
+			storage.appendAfter(customType, data, expected);
+		return Object.assign(session, { appendAfter });
+	};
 	return {
 		async open(id, parentId) {
 			if (!SqliteSessionStorage.has(sql, id)) {
@@ -266,9 +327,9 @@ export function sqliteSessions(sql: Sql): SessionOpener {
 					createdAt: Date.now(),
 					...(parentId === undefined ? {} : { parentSessionId: parentId }),
 				};
-				return new Session(SqliteSessionStorage.open(sql, metadata));
+				return opened(SqliteSessionStorage.open(sql, metadata));
 			}
-			return new Session(new SqliteSessionStorage(sql, id));
+			return opened(new SqliteSessionStorage(sql, id));
 		},
 	};
 }

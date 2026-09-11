@@ -703,7 +703,16 @@ imports no platform module, so the wrapper is the host's.
 
 Two runs may write to one SQLite at once. It reads each entry's seq from
 the database as the row lands, and the primary key refuses a second entry
-at one seq: a writer that raced is refused, and reads again. Pi's JSONL repository holds the next seq in memory, so
+at one seq: a writer that raced is refused, and reads again.
+
+**A storage may refuse an append the record moved under.** A session that
+can promise it offers `appendAfter`, and the log hands it the position
+its read left: the entry lands next to that position, or the storage
+writes nothing and says so. A run fenced while its write waited is
+refused before it acknowledges, so the write it held is no loss. The
+SQLite storage offers it in one statement, which takes the seq it
+asserts. A storage that cannot promise it does not offer it, and the log
+appends the way it always did. Pi's JSONL repository holds the next seq in memory, so
 two runs over one file write the same seq twice and the file no longer
 reads: a host that runs two rooms over one name needs the SQLite storage,
 or a repository of its own that behaves like it.
