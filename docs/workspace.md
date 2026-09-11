@@ -3,10 +3,13 @@
 This document is the design contract for the workspace: the identity and
 data boundary an agent connects to when it is defined. The workspace is
 shipped. The handle, the resolver and the built-in tools live in
-[`workspace.ts`](../packages/ambion/src/tools/workspace.ts), the adapter around a
-just-bash instance in [`bash-env.ts`](../packages/ambion/src/tools/bash-env.ts),
-the two backends in [`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts),
-and the public shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
+[`workspace.ts`](../packages/ambion/src/tools/workspace.ts), and the public
+shapes in [`types.ts`](../packages/ambion/src/types.ts). The core holds no
+filesystem: `WorkspaceBackend` is a port, and
+[`@ambionframework/workspace`](../packages/workspace) holds two backends over
+one — the adapter around a just-bash instance in
+[`bash-env.ts`](../packages/workspace/src/bash-env.ts) and the backends
+themselves in [`just-bash.ts`](../packages/workspace/src/just-bash.ts). Read
 [`agent.md`](agent.md) first: a workspace attaches to the agent that
 document specifies, and changes none of its eight rules.
 
@@ -105,17 +108,22 @@ running (`agent.md` §5). One name has one handle in one runtime, until
 an option and defaults to `defaultRuntime`, so two hosts in one process
 define the same name in their own runtimes.
 
-**An optional `backend` field takes a `WorkspaceBackend`**, the way a
-session's `repo` option takes a `SessionRepo` (`agent.md` §5). §7 specifies
-the two functions it needs, `connect` and `destroy`. Nothing here is a
-class to extend: a `WorkspaceBackend` is a plain object holding those two
-functions, and the natural way to build one is a factory function that
-closes over whatever configuration it needs, the shape `directoryBackend`
-below has. Without the `backend` field, the handle holds an in-memory
-just-bash filesystem of its own (§8). With it, the factory decides what
-`connect` builds. `defineWorkspace`'s own API is the same either way.
+**The `backend` field takes a `WorkspaceBackend`**, the way a session's
+`repo` option takes a `SessionRepo` (`agent.md` §5). §7 specifies the two
+functions it needs, `connect` and `destroy`. Nothing here is a class to
+extend: a `WorkspaceBackend` is a plain object holding those two functions,
+and the natural way to build one is a factory function that closes over
+whatever configuration it needs, the shape `directoryBackend` below has.
+
+**The field is required, and the core ships no backend.** A room needs the
+idea of a workspace, and it does not need a disk: the core names the port,
+and a host names the implementation. `@ambionframework/workspace` holds two
+over a virtual Unix filesystem (§8).
 
 ```ts
+import { defineWorkspace } from '@ambionframework/ambion';
+import { directoryBackend } from '@ambionframework/workspace';
+
 const teamSite = defineWorkspace({
   name: 'team-site',
   backend: directoryBackend('/var/ambion/team-site'),
@@ -140,7 +148,7 @@ await destroyWorkspace(teamSite);
 It marks the handle destroyed, then calls `WorkspaceBackend.destroy()`
 (§7) once. That call performs the hard deletion: a directory-backed
 workspace's files, a real-machine backend's provisioned users and their
-homes, the in-memory default's filesystem. The mark comes first so a tool
+homes, the in-memory backend's filesystem. The mark comes first so a tool
 call that lands while the backend deletes resolves `undefined` (§4), and a
 second `destroyWorkspace` on the same handle does nothing. A backend that
 fails to delete leaves the workspace live, and the caller sees the
@@ -249,7 +257,7 @@ does three things, in order:
    resolve `{ name, env }` (§6).
 
 Nothing is cached between calls. The `env` a tool receives is a new one
-every time — a new `Bash` instance, for the in-memory default. §5's
+every time — a new `Bash` instance, for the in-memory backend. §5's
 built-in tools resolve the same way. A `destroyWorkspace` mid-activation is
 therefore visible to the very next tool call, built-in or custom, with
 nothing to invalidate. Two agents' tool calls running in parallel
@@ -268,7 +276,7 @@ passes it through, and `abort()` on a session fans out to it (`agent.md`
 and `Agent.abort()` fires the controller and nothing else. A `connect` that
 hangs would hold the activation open, and `settled()` with it. Passing
 `ctx.signal` into `connect` gives a backend that waits on something the one
-way to stop waiting. The in-memory default has nothing to wait on and
+way to stop waiting. The in-memory backend has nothing to wait on and
 ignores it.
 
 **A `connect` failure is the tool call's failure.** `ctx.workspace()`
@@ -541,13 +549,14 @@ The runtime does not check this, and `connect` does not either.
 ## 8. The just-bash backend
 
 **[vercel-labs/just-bash](https://github.com/vercel-labs/just-bash) backs
-the in-memory default, and it is in scope for this work.** It runs a
+both backends in `@ambionframework/workspace`, and it is in scope for this
+work.** It runs a
 virtual Unix filesystem and shell in-process: `Bash.exec` interprets bash
 commands against whichever `IFileSystem` the instance was built over.
 
 **One filesystem belongs to the workspace, and each connected agent gets
-its own `Bash` instance over it.** The handle (§2) holds an `InMemoryFs`
-when no `backend` field is given. `connect(agent)` (§7) creates the agent's
+its own `Bash` instance over it.** `memoryBackend` holds an `InMemoryFs`.
+`connect(agent)` (§7) creates the agent's
 home in that filesystem and builds a `Bash` instance with `cwd` at the home
 and `HOME` seeded in its environment. A `Bash` instance is cheap: a probe
 measured about 0.8 ms per construction, and about 1.7 ms for a construction
@@ -647,7 +656,7 @@ would also work with no adapter at all, just-bash earns its place on
 sandboxing: a real shell has no wall between an agent's process and the
 machine, and just-bash's virtual shell is at least a wall between an
 agent's commands and its own mount. `NodeExecutionEnv` cannot serve as the
-in-memory default, because it runs against a real directory.
+in-memory backend, because it runs against a real directory.
 
 **Every `Bash` instance runs with `javascript: true` and `python: true`, and
 no `network` option.** `connect` (§7) passes both flags on every instance it
@@ -664,7 +673,7 @@ prompt, in `render.ts`'s `WORKSPACE_PARAGRAPH` (§5) — the one prose copy of
 what these flags decide, and it has to stay in step with them by hand: the
 two live in different files, and nothing checks them against each other.
 
-**The in-memory default holds 128 MB.** `InMemoryFs` takes a byte limit at
+**The in-memory backend holds 128 MB.** `InMemoryFs` takes a byte limit at
 construction, and the default backend sets one (`MEMORY_LIMIT_BYTES` in
 `just-bash.ts`). A write past it throws `ENOSPC`, which reaches the tool as
 a failure that names the limit. A directory backend has no such cap: the
@@ -676,7 +685,7 @@ garbage collector reclaims the memory once `destroyWorkspace` (§2) drops
 the references.
 
 **`destroy()` drops the filesystem, or deletes the directory, and neither
-backend rebuilds after.** For the in-memory default it releases the
+backend rebuilds after.** For the in-memory backend it releases the
 `InMemoryFs`. For a directory backend it removes the root's contents and
 leaves the root. Either way `lazyResource`'s `mark()` (above) makes it
 permanent: a `connect` or `readFiles()` call reaching the backend directly
@@ -803,25 +812,25 @@ does: through `ToolContext` (§4), as a second property on `Workspace` (§6).
 
 ## 12. What is not decided
 
-- **Whether just-bash stays a dependency of `@ambionframework/ambion`, or
-  moves behind its own backend package.** It is a dependency today, so the
-  in-memory default needs no import. It pulls in sixteen runtime
-  dependencies of its own (`quickjs-emscripten`, `sql.js`, `undici`,
-  `re2js`, and more) for about 22 MB installed. `connect` returning a plain
-  `ExecutionEnv` (§7) is what keeps the split possible: nothing in
-  `Workspace`'s shape (§6) requires a caller to import just-bash, only the
-  `WorkspaceBackend` their factory function builds does.
 - **Whether an agent can name a workspace and decline the built-in
   tools.** §5 binds all four to every connected agent, and an agent that
   wants only its own narrower tools has no way to reach `ctx.workspace()`
   without them.
+- **Who owns the prose that states what the four tools reach.**
+  `WORKSPACE_PARAGRAPH` in the core's `render.ts` (§5) states the set the
+  just-bash backends build, and `just-bash.ts` in
+  `@ambionframework/workspace` decides it. The two sit in two packages now,
+  and nothing holds them together but a note in each. A backend that reaches
+  a different set — a real machine (§10), a network-enabled shell — makes
+  the paragraph wrong for its own agents. The prose belongs to the backend,
+  and `WorkspaceBackend` (§7) has no way to offer it.
 
 ---
 
 ## 13. What proves it
 
 The milestone tests live in
-[`workspace.test.ts`](../packages/ambion/test/workspace.test.ts), one per
+[`workspace.test.ts`](../packages/workspace/test/workspace.test.ts), one per
 claim this document makes loudly:
 
 - one handle per name until `destroyWorkspace` frees it, and a second
@@ -860,8 +869,9 @@ claim this document makes loudly:
 
 All in-process, in vitest, on a scripted stream where determinism matters.
 
-**What is built.** `defineWorkspace`, `destroyWorkspace`, `ToolContext`,
-the four built-in tools, the just-bash adapter, the in-memory default and
+**What is built.** In `@ambionframework/ambion`: `defineWorkspace`,
+`destroyWorkspace`, `ToolContext` and the four built-in tools. In
+`@ambionframework/workspace`: the just-bash adapter, `memoryBackend` and
 `directoryBackend`. Every `Bash` instance runs with `javascript` and
 `python` on and `network` unset (§8). `memoryBackend` takes an optional
 `seed` and exposes `readFiles()`, so a host can write and read an in-memory

@@ -162,21 +162,19 @@ covers `examples/site`, verified clean with `--workspace examples/site`.
 ### 44. The core has no platform boundary
 
 **What.** `packages/ambion` has one entry point, and it imports
-`node:crypto`, `node:path` and `node:fs/promises`. A worker bundles it
-only with `nodejs_compat`. `directoryBackend`, which needs a real disk,
-now loads just-bash's `ReadWriteFs` on the first connect, because a
-static import of that name refuses to bundle for any target but Node.
-The dynamic import is a workaround: nothing stops the next Node-only
-import from landing in the same entry point and breaking the workerd
-build again.
+`node:crypto` and `node:path`. A worker bundles it only with
+`nodejs_compat`. The filesystem left with
+`@ambionframework/workspace`, so the main entry no longer imports
+`node:fs/promises` and no longer depends on just-bash. What remains is
+`node:crypto` and `node:path` in the core, and the JSONL storage.
 
-**Where.** `packages/ambion/src/tools/just-bash.ts`;
-`packages/ambion/src/host/`; `packages/ambion/package.json` exports.
+**Where.** `packages/ambion/src/host/`; `packages/ambion/package.json`
+exports.
 
 **Fix.** A second entry point, `@ambionframework/ambion/node`, for the
-Node-only surface: `directoryBackend`, the JSONL storage, and whatever
-else needs a disk. Then a build check that the main entry bundles for
-workerd with no compatibility flag.
+Node-only surface: the JSONL storage, and whatever else needs a disk.
+Then a build check that the main entry bundles for workerd with no
+compatibility flag.
 
 ### 45. The resume has no live proof
 
@@ -422,7 +420,7 @@ the `bash` tool's own description promises a Unix shell.
 - Whether `connect` should seed `/dev` into a `ReadWriteFs` the way just-bash
   seeds it into an `InMemoryFs`, so the two backends at least agree.
 
-**Where.** `connectOver` in [`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts).
+**Where.** `connectOver` in [`just-bash.ts`](../packages/workspace/src/just-bash.ts).
 
 ### 23. A backend on a real machine
 
@@ -451,7 +449,7 @@ abort signal because `useradd` and a process spawn are real waits.
 
 **Where.** `WorkspaceBackend` in
 [`types.ts`](../packages/ambion/src/types.ts); `directoryBackend` in
-[`just-bash.ts`](../packages/ambion/src/tools/just-bash.ts) is the shape to copy.
+[`just-bash.ts`](../packages/workspace/src/just-bash.ts) is the shape to copy.
 
 ### 24. Whether Agent or AgentHarness is Ambion's foundation
 

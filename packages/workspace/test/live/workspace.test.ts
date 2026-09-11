@@ -4,9 +4,9 @@
  * A real provider has to accept those four schemas, and a real model has to
  * pick them up and use them against a filesystem it has never seen.
  */
+
+import { defineWorkspace, destroyWorkspace, stopSession } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
-import { defineWorkspace, destroyWorkspace, memoryBackend, stopSession } from '../../src/index.ts';
-import { enter, roomName } from '../support/room.ts';
 import {
 	agent,
 	invariants,
@@ -17,7 +17,9 @@ import {
 	saidBy,
 	spent,
 	untilQuiet,
-} from './support.ts';
+} from '../../../ambion/test/live/support.ts';
+import { enter, roomName } from '../../../ambion/test/support/room.ts';
+import { memoryBackend } from '../../src/index.ts';
 
 live('the workspace', () => {
 	it('a seat reads a file it was told about, writes one back, and answers from what it read', async () => {

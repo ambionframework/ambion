@@ -195,9 +195,9 @@ set and the flag go.
 checkpoint and the storages. The room depends on it the way it depends on
 Pi: for one concern, through one interface.
 
-## 6. `@ambionframework/workspace`
+## 6. `@ambionframework/workspace` — done
 
-`next.md` §2 asks for this. It is the first item to land.
+`next.md` §2 asked for this. It landed first.
 
 **What.** `src/tools/` is 704 lines: a virtual filesystem, a shell, and
 the four hands an agent holds over them.
@@ -208,17 +208,27 @@ largest part of the core that a reader skips to understand a room. It
 carries most of what stops the package bundling for a runtime with no
 disk ([`backlog.md`](backlog.md) §44).
 
-**Where.** `packages/ambion/src/tools/bash-env.ts`;
-`packages/ambion/src/tools/just-bash.ts`;
-`packages/ambion/src/tools/workspace.ts`.
+**Where it went.** `bash-env.ts` and `just-bash.ts` moved to
+`packages/workspace/src/`. `packages/ambion/src/tools/workspace.ts` stayed.
 
-**Fix.** `@ambionframework/workspace` holds the backends and the four
-hands. The core keeps `defineWorkspace` and the handle a seat is given,
-and names the backend through a port. The main entry imports no
+**What landed.** `@ambionframework/workspace` holds the two backends and
+the just-bash adapter, 509 lines. The core keeps `defineWorkspace`,
+`destroyWorkspace`, the handle, the resolver and the four hands, and it
+drops `just-bash` from its dependencies. The main entry imports no
 `node:fs`.
 
-**Why it lands first.** It is the least entangled of the three
-extractions. It proves the pattern for items 5 and 1 at the lowest cost.
+**One decision the plan did not name.** The four built-in hands stayed in
+the core, against `next.md` §2, which asked for them to move. They are
+Pi's own tools over an `ExecutionEnv`, so they need no filesystem, and the
+core already commits to them: `BUILTIN_TOOL_NAMES` refuses a custom tool
+under one of the four names, and `render.ts` states their reach to a
+connected agent. The idea of a workspace is the core's, and the filesystem
+behind it is not.
+
+**The API changed.** `defineWorkspace`'s `backend` field is required. It
+defaulted to an in-memory just-bash filesystem, and the core holds no
+filesystem to default to. A host names `memoryBackend()` where it named
+nothing.
 
 ## 7. One author on every message
 

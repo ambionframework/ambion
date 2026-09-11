@@ -15,6 +15,7 @@ import {
 	startSession,
 	stopSession,
 	visitSession,
+	type WorkspaceBackend,
 } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
 import { andrei, assistant, roomName } from './support/room.ts';
@@ -38,9 +39,16 @@ describe('createRuntime', () => {
 		expect(readSession(name, { runtime: first })).toBe(a);
 		expect(readSession(name, { runtime: second })).toBe(b);
 		// a workspace name is taken per runtime, the way a room name is
-		const here = defineWorkspace({ name: 'shared-drive', runtime: first });
-		const there = defineWorkspace({ name: 'shared-drive', runtime: second });
-		expect(() => defineWorkspace({ name: 'shared-drive', runtime: first })).toThrow(/already/);
+		// Nothing connects to this backend: the test takes the name and frees it.
+		const backend: WorkspaceBackend = {
+			connect: () => Promise.reject(new Error('nothing connects here')),
+			destroy: async () => {},
+		};
+		const here = defineWorkspace({ name: 'shared-drive', runtime: first, backend });
+		const there = defineWorkspace({ name: 'shared-drive', runtime: second, backend });
+		expect(() => defineWorkspace({ name: 'shared-drive', runtime: first, backend })).toThrow(
+			/already/,
+		);
 		await Promise.all([destroyWorkspace(here), destroyWorkspace(there)]);
 		await Promise.all([stopSession(a), stopSession(b)]);
 	});

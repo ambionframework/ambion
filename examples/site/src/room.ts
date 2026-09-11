@@ -24,9 +24,8 @@ import {
 	defineTool,
 	defineWorkspace,
 	type HumanDefinition,
-	memoryBackend,
-	type SeedWriter,
 } from '@ambionframework/ambion';
+import { memoryBackend, type SeedWriter } from '@ambionframework/workspace';
 import { Type } from 'typebox';
 import { DRIVE_SEED } from './drive-seed.ts';
 

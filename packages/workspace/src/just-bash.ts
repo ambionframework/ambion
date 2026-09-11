@@ -28,8 +28,8 @@
 
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join, posix } from 'node:path';
+import type { AgentDefinition, WorkspaceBackend } from '@ambionframework/ambion';
 import { Bash, type IFileSystem, InMemoryFs } from 'just-bash';
-import type { AgentDefinition, WorkspaceBackend } from '../types.ts';
 import { BashEnv } from './bash-env.ts';
 
 /** Build one agent's environment over the workspace's filesystem. */

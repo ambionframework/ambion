@@ -1,29 +1,26 @@
 import { mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
-import type { Context } from '@earendil-works/pi-ai';
-import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
-import { Bash, InMemoryFs } from 'just-bash';
-import { Type } from 'typebox';
-import { describe, expect, it } from 'vitest';
 import {
 	type AgentDefinition,
 	defineAgent,
 	defineTool,
 	defineWorkspace,
 	destroyWorkspace,
-	directoryBackend,
 	isSpoken,
 	type Session,
 	startSession,
 	stopSession,
 	type ToolContext,
 	type WorkspaceBackend,
-} from '../src/index.ts';
-import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/tools/bash-env.ts';
-import { MEMORY_LIMIT_BYTES, memoryBackend } from '../src/tools/just-bash.ts';
-import { assistant, enter, roomName as name } from './support/room.ts';
+} from '@ambionframework/ambion';
+import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
+import type { Context } from '@earendil-works/pi-ai';
+import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
+import { Bash, InMemoryFs } from 'just-bash';
+import { Type } from 'typebox';
+import { describe, expect, it } from 'vitest';
+import { assistant, enter, roomName as name } from '../../ambion/test/support/room.ts';
 import {
 	byAgent,
 	callTool,
@@ -32,7 +29,9 @@ import {
 	scripted,
 	speak,
 	toolNames,
-} from './support/scripted.ts';
+} from '../../ambion/test/support/scripted.ts';
+import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
+import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
 
 /** Every tool result the model has been shown so far, oldest first. */
 function toolResults(context: Context): { tool: string; text: string; failed: boolean }[] {
@@ -71,12 +70,14 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 
 describe('defineWorkspace', () => {
 	it('holds one handle per name until destroyWorkspace frees it', async () => {
-		const site = defineWorkspace({ name: 'site-once' });
+		const site = defineWorkspace({ name: 'site-once', backend: memoryBackend() });
 		expect(site.name).toBe('site-once');
-		expect(() => defineWorkspace({ name: 'site-once' })).toThrow(/already defined/);
+		expect(() => defineWorkspace({ name: 'site-once', backend: memoryBackend() })).toThrow(
+			/already defined/,
+		);
 		await destroyWorkspace(site);
 		await destroyWorkspace(site); // terminal, and a second call does nothing
-		const again = defineWorkspace({ name: 'site-once' });
+		const again = defineWorkspace({ name: 'site-once', backend: memoryBackend() });
 		expect(again).not.toBe(site);
 		await destroyWorkspace(again);
 	});
@@ -91,18 +92,22 @@ describe('defineWorkspace', () => {
 		};
 		const site = defineWorkspace({ name: 'site-flaky', backend: flaky });
 		await expect(destroyWorkspace(site)).rejects.toThrow('disk busy');
-		expect(() => defineWorkspace({ name: 'site-flaky' })).toThrow(/already defined/);
+		expect(() => defineWorkspace({ name: 'site-flaky', backend: memoryBackend() })).toThrow(
+			/already defined/,
+		);
 		await destroyWorkspace(site);
 		expect(attempts).toBe(2);
-		await destroyWorkspace(defineWorkspace({ name: 'site-flaky' }));
+		await destroyWorkspace(defineWorkspace({ name: 'site-flaky', backend: memoryBackend() }));
 	});
 
 	it('refuses a name the room could not address', () => {
-		expect(() => defineWorkspace({ name: 'Team Site' })).toThrow(/Invalid workspace name/);
+		expect(() => defineWorkspace({ name: 'Team Site', backend: memoryBackend() })).toThrow(
+			/Invalid workspace name/,
+		);
 	});
 
 	it('keeps the four built-in names free for an agent that names a workspace', async () => {
-		const site = defineWorkspace({ name: name('reserved') });
+		const site = defineWorkspace({ name: name('reserved'), backend: memoryBackend() });
 		const read = defineTool({
 			name: 'read',
 			description: 'A custom read.',
@@ -123,7 +128,7 @@ describe('defineWorkspace', () => {
 	});
 
 	it('refuses an assistant that names a workspace', async () => {
-		const site = defineWorkspace({ name: name('assistant') });
+		const site = defineWorkspace({ name: name('assistant'), backend: memoryBackend() });
 		const connected = agent('assistant', { workspace: site });
 		expect(() =>
 			startSession({ name: name('workspace'), assistant: connected, agents: [] }),
@@ -136,7 +141,7 @@ describe('defineWorkspace', () => {
 
 describe('the built-in tools', () => {
 	it('bind read, write, edit and bash to a connected agent, and nothing to a plain one', async () => {
-		const site = defineWorkspace({ name: name('hands') });
+		const site = defineWorkspace({ name: name('hands'), backend: memoryBackend() });
 		const seen = new Map<string, string[]>();
 		await run([agent('connected', { workspace: site }), agent('plain')], {
 			connected: (context, who) => {
@@ -154,7 +159,7 @@ describe('the built-in tools', () => {
 	});
 
 	it("states the workspace's reach in a connected agent's system prompt, and nothing to a plain one", async () => {
-		const site = defineWorkspace({ name: name('briefed') });
+		const site = defineWorkspace({ name: name('briefed'), backend: memoryBackend() });
 		const prompts: Record<string, string> = {};
 		await run([agent('connected', { workspace: site }), agent('plain')], {
 			connected: (context, who) => {
@@ -174,7 +179,7 @@ describe('the built-in tools', () => {
 	});
 
 	it('write, read and bash reach one filesystem two agents share, rooted at each home', async () => {
-		const site = defineWorkspace({ name: name('shared') });
+		const site = defineWorkspace({ name: name('shared'), backend: memoryBackend() });
 		const results: Record<string, { tool: string; text: string; failed: boolean }[]> = {};
 		const writerDone = Promise.withResolvers<void>();
 		const session = await run(
@@ -214,7 +219,7 @@ describe('the built-in tools', () => {
 	});
 
 	it('runs two edits to one file in one batch one at a time, so both land', async () => {
-		const site = defineWorkspace({ name: name('edits') });
+		const site = defineWorkspace({ name: name('edits'), backend: memoryBackend() });
 		let final: string | undefined;
 		await run([agent('editor', { workspace: site })], {
 			editor: (context, _who, call) => {
@@ -244,7 +249,7 @@ describe('the built-in tools', () => {
 	});
 
 	it('fail on the next call once the workspace is destroyed, and the activation goes on', async () => {
-		const site = defineWorkspace({ name: name('destroyed') });
+		const site = defineWorkspace({ name: name('destroyed'), backend: memoryBackend() });
 		let after: { tool: string; text: string; failed: boolean }[] = [];
 		let custom: string | undefined;
 		const probe = defineTool({

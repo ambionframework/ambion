@@ -1,5 +1,5 @@
 /**
- * The storages and the workspace backends every scenario runs on.
+ * The storages every scenario runs on.
  *
  * `memory` is Pi's in-memory repository; `jsonl` is Pi's JSONL repository
  * over a temporary directory, through Pi's own Node filesystem; `sqlite`
@@ -14,16 +14,13 @@ import { DatabaseSync } from 'node:sqlite';
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
-	directoryBackend,
 	InMemorySessionRepo,
 	JsonlSessionRepo,
-	memoryBackend,
 	type SessionOpener,
 	type Sql,
 	type SqlValue,
 	sessionsOver,
 	sqliteSessions,
-	type WorkspaceBackend,
 } from '../../src/index.ts';
 
 export interface OpenedStorage {
@@ -110,32 +107,6 @@ export function childSessions(name: string, dir: string): SessionOpener {
 	if (name === 'sqlite') return sqliteSessions(nodeSql(new DatabaseSync(join(dir, 'room.db'))));
 	return jsonlSessions(dir);
 }
-
-// -- workspace backends ------------------------------------------------------
-
-export interface Backend {
-	readonly name: 'memory' | 'directory';
-	open(): Promise<{ backend: WorkspaceBackend; dispose(): Promise<void> }>;
-}
-
-export const backends: readonly Backend[] = [
-	{
-		name: 'memory',
-		async open() {
-			return { backend: memoryBackend(), dispose: async () => {} };
-		},
-	},
-	{
-		name: 'directory',
-		async open() {
-			const dir = await mkdtemp(join(tmpdir(), 'ambion-drive-'));
-			return {
-				backend: directoryBackend(dir),
-				dispose: () => rm(dir, { recursive: true, force: true }),
-			};
-		},
-	},
-];
 
 // -- a storage that fails ----------------------------------------------------
 

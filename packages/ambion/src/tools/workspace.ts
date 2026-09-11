@@ -19,6 +19,11 @@
  *   bound to a connected agent's activation with the one argument Pi's tool is
  *   missing: the environment the workspace built for that agent.
  *
+ * **The core holds no filesystem.** `WorkspaceBackend` is a port, and a host
+ * names the backend it wants. `@ambionframework/workspace` holds two over a
+ * virtual Unix filesystem. A room needs the idea of a workspace, and it does
+ * not need a disk.
+ *
  * The design contract is docs/workspace.md.
  */
 import type {
@@ -42,7 +47,6 @@ import {
 	type WorkspaceBackend,
 	type WorkspaceHandle,
 } from '../types.ts';
-import { memoryBackend } from './just-bash.ts';
 
 /** What the public handle does not show: its backend, its runtime, and whether it is gone. */
 interface WorkspaceState extends WorkspaceHandle {
@@ -56,11 +60,14 @@ export interface DefineWorkspaceOptions {
 	/** The workspace's durable identity. The same name reaches the same workspace. */
 	name: string;
 	/**
-	 * What backs the workspace. Without it, the handle holds an in-memory
-	 * just-bash filesystem of its own. `directoryBackend` writes through to a
-	 * real directory.
+	 * What backs the workspace: one function that builds an agent's
+	 * environment, and one that deletes everything held under the name. The
+	 * core names the port and holds no filesystem.
+	 * `@ambionframework/workspace` holds two backends over a virtual Unix
+	 * filesystem: `memoryBackend` keeps the files in memory, and
+	 * `directoryBackend` writes them through to a real directory.
 	 */
-	backend?: WorkspaceBackend;
+	backend: WorkspaceBackend;
 	/** The runtime that holds the name. Defaults to `defaultRuntime`. */
 	runtime?: Runtime;
 }
@@ -81,7 +88,7 @@ export function defineWorkspace(options: DefineWorkspaceOptions): WorkspaceHandl
 	const state: WorkspaceState = {
 		[WORKSPACE_BRAND]: true,
 		name: options.name,
-		backend: options.backend ?? memoryBackend(),
+		backend: options.backend,
 		runtime,
 		destroyed: false,
 	};

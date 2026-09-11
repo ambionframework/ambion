@@ -1,15 +1,14 @@
 /**
- * The scenarios every storage and every backend runs. Each one starts a
- * room in the runtime it is given, drives it on a scripted stream, checks
- * the invariants, and stops it.
+ * The scenarios every storage runs. Each one starts a room in the runtime it
+ * is given, drives it on a scripted stream, checks the invariants, and stops
+ * it. `@ambionframework/workspace` holds the scenario that runs a room on two
+ * workspace backends, because the backends live there.
  */
 import type { Context } from '@earendil-works/pi-ai';
 import { expect } from 'vitest';
 import {
 	defineAgent,
 	defineHuman,
-	defineWorkspace,
-	destroyWorkspace,
 	isSpoken,
 	isSummary,
 	type Runtime,
@@ -19,11 +18,10 @@ import {
 	visitSession,
 } from '../../src/index.ts';
 import { invariants } from './invariants.ts';
-import { collect, deferred } from './room.ts';
+import { collect } from './room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
-	callTool,
 	contextText,
 	insists,
 	quiet,
@@ -35,7 +33,6 @@ import {
 	toolNames,
 	toolResultTexts,
 } from './scripted.ts';
-import { backends } from './storage.ts';
 
 export interface ScenarioContext {
 	readonly runtime: Runtime;
@@ -48,21 +45,21 @@ export interface Scenario {
 	run(ctx: ScenarioContext): Promise<void>;
 }
 
-const assistant = defineAgent({
+export const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Composes the room, and writes the one message a person reads.',
 	instructions: 'Seat who the question needs. Answer what was asked, once.',
 	model: 'scripted/assistant',
 });
 
-const priya = defineHuman({
+export const priya = defineHuman({
 	name: 'priya',
 	identity: 'Project manager.',
 	preferences: 'Lead with the decision.',
 });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
 
-const agent = (
+export const agent = (
 	name: string,
 	identity: string,
 	extra: Partial<Parameters<typeof defineAgent>[0]> = {},
@@ -96,7 +93,7 @@ function composes(names: string[], summary: string): Script {
 const twoAnswersEach: Script = (_context, _name, call) =>
 	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
 
-async function finish(
+export async function finish(
 	session: Session,
 	events: ReturnType<typeof collect>,
 	runtime: Runtime,
@@ -203,86 +200,4 @@ export const seatFromReserve: Scenario = {
 	},
 };
 
-export const twoWorkspaces: Scenario = {
-	name: 'two workspaces on two backends, and one destroyed mid-activation',
-	async run({ runtime, name }) {
-		const [memoryBackend, directoryBackend] = await Promise.all(backends.map((b) => b.open()));
-		if (!memoryBackend || !directoryBackend) throw new Error('two backends are expected');
-		const memoryDrive = defineWorkspace({
-			name: `${name}-memory`,
-			backend: memoryBackend.backend,
-			runtime,
-		});
-		const directoryDrive = defineWorkspace({
-			name: `${name}-directory`,
-			backend: directoryBackend.backend,
-			runtime,
-		});
-		const alpha = agent('alpha', 'Works in memory.', { workspace: memoryDrive });
-		const beta = agent('beta', 'Works on disk.', { workspace: directoryDrive });
-		const gamma = agent('gamma', 'Has no workspace.');
-		const destroyed = deferred();
-		const alphaResults: string[] = [];
-		const betaResults: string[] = [];
-		const session = startSession({
-			name,
-			runtime,
-			assistant,
-			agents: [alpha, beta, gamma],
-			streamFn: scripted(
-				byAgent({
-					alpha: async (context, _name, call) => {
-						alphaResults.push(...toolResultTexts(context).slice(alphaResults.length));
-						if (call === 1)
-							return callTool('write', { path: '/home/alpha/note.txt', content: 'one' });
-						if (call === 2) {
-							await destroyed.promise;
-							return callTool('read', { path: '/home/alpha/note.txt' });
-						}
-						return call === 3 ? speak('alpha done') : quiet();
-					},
-					beta: (context, _name, call) => {
-						betaResults.push(...toolResultTexts(context).slice(betaResults.length));
-						if (call === 1) return callTool('bash', { command: 'echo two > /home/beta/note.txt' });
-						if (call === 2) return callTool('read', { path: '/home/beta/note.txt' });
-						return call === 3 ? speak('beta done') : quiet();
-					},
-					gamma: (context) => {
-						expect(toolNames(context)).toEqual(['say']);
-						return quiet();
-					},
-				}),
-			),
-		});
-		const events = collect(session);
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'go' });
-		// alpha has written; destroy its workspace while its activation runs
-		await new Promise<void>((resolve) => {
-			const off = session.subscribe((event) => {
-				if (event.type !== 'tool_execution_end' || event.agent !== 'alpha') return;
-				off();
-				resolve();
-			});
-		});
-		await destroyWorkspace(memoryDrive);
-		destroyed.resolve();
-		await session.quiet();
-
-		expect(alphaResults.some((r) => r.includes('destroyed'))).toBe(true);
-		expect(betaResults.some((r) => r.includes('two'))).toBe(true);
-		const said = (await session.messages()).filter(isSpoken).map((m) => m.text);
-		expect(said).toContain('alpha done');
-		expect(said).toContain('beta done');
-		await finish(session, events, runtime);
-		await destroyWorkspace(directoryDrive);
-		await Promise.all([memoryBackend.dispose(), directoryBackend.dispose()]);
-	},
-};
-
-export const scenarios: readonly Scenario[] = [
-	oneExchange,
-	twoPeopleTwoExchanges,
-	seatFromReserve,
-	twoWorkspaces,
-];
+export const scenarios: readonly Scenario[] = [oneExchange, twoPeopleTwoExchanges, seatFromReserve];
