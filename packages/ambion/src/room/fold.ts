@@ -152,8 +152,8 @@ interface OwedContext extends FoldOptions {
 
 const ATTEMPT_REASONS: ReadonlySet<EndReason> = new Set(['failed', 'expired', 'refused']);
 
-/** A draft that ended this way stood down: the assistant judged the room, or the host wrote the draft off. */
-const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked']);
+/** A draft that ended this way stood down: the assistant judged the room, the host wrote the draft off, or the room gave up. */
+const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked', 'abandoned']);
 
 /**
  * The summaries still owed, one per person. A close owes one when it names
@@ -161,8 +161,9 @@ const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked']);
  * close of the same person stood down. Every later close of the same person
  * joins the draft: the closes fold in log order, so the latest close names
  * the draft, and one message reaches back to the earliest question still
- * owed. A draft at the cap is owed no longer: the room stops trying, and
- * the range stays whole for every reader.
+ * owed. A draft at the cap is still owed here, and carries the attempts
+ * that reached it: the room decides what it does about a draft it gave up
+ * on, and a row it writes answers the close.
  */
 function foldOwed(
 	closes: readonly CloseRow[],
@@ -185,9 +186,7 @@ function foldOwed(
 			closes: [...(known?.closes ?? []), close.through],
 		});
 	}
-	return [...byPerson.values()]
-		.map((grouped) => withAttempts(grouped, leases, context))
-		.filter((owed) => owed.attempts < context.attempts);
+	return [...byPerson.values()].map((grouped) => withAttempts(grouped, leases, context));
 }
 
 const covers = (summary: Message & { kind: 'summary' }, close: CloseRow): boolean =>

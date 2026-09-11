@@ -33,7 +33,6 @@ import type { EndReason, LeaseRow } from '../wire.ts';
 import {
 	atWork as atWorkRule,
 	expired,
-	givesUp,
 	heard as heardRule,
 	nextAttempt,
 } from './rules.verified.ts';
@@ -242,7 +241,11 @@ const heard = (lease: LeaseState, seq: Seq): boolean =>
 		seq,
 	);
 
-/** The wake as pending, or nothing when a lease answered it or the room gave up. */
+/**
+ * The wake as pending, or nothing when a lease answered it. A wake at the
+ * cap is still pending, and carries the attempts that reached it: the room
+ * decides what it does about a wake it gave up on.
+ */
 function statusOf(
 	message: Message,
 	seat: string,
@@ -252,7 +255,6 @@ function statusOf(
 	if (taken.some((lease) => !cameToNothing(lease))) return undefined;
 	const failed = taken.filter((lease) => cameToNothing(lease));
 	const attempts = failed.length;
-	if (givesUp(attempts, options.attempts)) return undefined;
 	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
 	return {
 		id: activationId(message.seq, seat, nextAttempt(attempts)),

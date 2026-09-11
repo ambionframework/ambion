@@ -584,19 +584,17 @@ returning visit under a new identity is refused.
 everyone it does not hold a connection for. The runtime keeps no clock over
 a visit, and should not start one.
 
-### 29. Three attempts, then the summary or the wake is never tried again
+### 29. Three attempts, then the summary or the wake is never tried again — closed, with a remainder
 
-**What.** A summary a draft could not land retries after a backoff, three
-times, on the room's alarm, and then the room stops. A wake whose
-activations failed or expired three times is dropped the same way.
-Nothing reports the range as owed or the wake as lost afterwards, and no
-later event retries either.
+The fold reports every wake and every draft at the cap, with the attempts
+that reached it, and the cap is the room's decision. `decide` returns the
+attempt the room does not make, ended `abandoned`, and `session.ts`
+writes it. The row answers the wake or the close it stood for, so no
+reader sees the room still owing it. The host hears an `abandoned` event.
 
-**Where.** `foldOwed` in `room/fold.ts`; `pendingWakes` in
-`room/lease.ts`; [`docs/assistant.md`](../docs/assistant.md) §16.
-
-**Fix.** A row at the cap that says the room gave up, an event when it is
-written, and a host verb that resets the attempts for one close.
+**The remainder.** No host verb resets the attempts for one close. A
+person who wants the summary after the room gave up asks again, and the
+next question opens an exchange of its own.
 
 ### 30. A lease the dead run held holds the exchange open until it expires
 

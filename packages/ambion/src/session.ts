@@ -308,7 +308,7 @@ class StaleError extends Error {}
 const stale = (why: string) => ({ stale: why });
 
 /** The reasons that end an activation before it starts. */
-const WRITES_OFF: ReadonlySet<EndReason> = new Set(['revoked']);
+const WRITES_OFF: ReadonlySet<EndReason> = new Set(['revoked', 'abandoned']);
 
 /** How many times one pass folds, decides and writes before it yields. */
 const PASSES = 8;
@@ -863,7 +863,14 @@ class SessionImpl implements Session, RunningRoom {
 			void this.reconcile();
 			return;
 		}
-		if (first) return;
+		if (first) {
+			// A row that ends a lease the log never held is an attempt nobody made.
+			if (lease.reason === 'abandoned') {
+				this.emit({ type: 'abandoned', agent: seat, activation: lease.id });
+				void this.reconcile();
+			}
+			return;
+		}
 		const spoke = this.log.messages.some((m) => m.activationId === lease.id);
 		this.emit({ type: 'activation_end', agent: seat, spoke });
 		if (lease.reason === 'expired') {
@@ -1150,6 +1157,7 @@ class SessionImpl implements Session, RunningRoom {
 			const decision = decide(this.state(), {
 				now: this.now(),
 				resend: this.runtime.wake.resend,
+				attempts: this.runtime.retry.attempts,
 				sentAt: (id) => this.sentAt.get(id),
 				stopped: this.stopped,
 			});
@@ -1185,10 +1193,11 @@ class SessionImpl implements Session, RunningRoom {
 	/** Write what the decision wrote, send what it sent. True when anything changed. */
 	private async apply(decision: Decision): Promise<boolean> {
 		let changed = false;
-		for (const expired of decision.expired) {
+		// The decision says how each lease ends: expired first, then given up on.
+		for (const row of [...decision.expired, ...decision.abandoned]) {
 			// A room that went away mid-pass writes nothing more of what it decided.
 			if (this.gone()) return changed;
-			changed = (await this.end(expired.id, 'expired')) || changed;
+			changed = (await this.end(row.id, row.reason)) || changed;
 		}
 		if (decision.close && !this.gone()) changed = (await this.close(decision.close)) || changed;
 		for (const send of decision.sends) this.send(send.id, send.seat);

@@ -463,6 +463,7 @@ type SessionEvent =
   | { type: 'tool_execution_end'; agent: string; toolName: string }
   | { type: 'activation_end'; agent: string; spoke: boolean }
   | { type: 'error'; agent: string; error: Error }
+  | { type: 'abandoned'; agent: string; activation: string }
   | { type: 'exchange_opened'; exchange: Exchange }
   | { type: 'exchange_closed'; exchange: ClosedExchange }
   | { type: 'quiet' }
@@ -633,7 +634,8 @@ the attempt number (`close:9:1`). Nothing mints an id, so a wake is safe
 to send twice, a retried commit lands once, and every message an
 activation writes carries its `activationId`. An activation holds a
 lease: `running`, claimed and renewed with an expiry, then `ended`, with
-a reason — `released`, `failed`, `refused`, `revoked` or `expired`. A
+a reason — `released`, `failed`, `refused`, `revoked`, `expired` or
+`abandoned`. A
 request from an activation whose lease ended is refused as `stale`. A
 running lease that stops renewing expires on the room's alarm: the room
 reports the expiry as an `error` event, and the seat's next request is
@@ -661,9 +663,11 @@ the next attempt's id. A message no lease answers is pending: the room
 sends the wake again after the resend window, and a seat with a wake
 pending is live, so the exchange stays open and `settled()` waits for the
 claim. `runtime.retry` holds the policy for wakes and summaries alike:
-three attempts thirty seconds apart by default, and at the cap the room
-stops. A summary the assistant could not write is retried the same way,
-and at the cap the range stays whole.
+three attempts thirty seconds apart by default. At the cap the room
+gives up, and it writes what it did: the attempt it does not make, ended
+`abandoned`. That row answers the wake or the close it stood for, so the
+room stops trying and the host hears an `abandoned` event. A summary the
+assistant could not write ends the same way, and the range stays whole.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — opened through a `SessionOpener`

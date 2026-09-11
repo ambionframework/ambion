@@ -14,12 +14,15 @@
 import type { CloseRow, LeaseRow, Without } from '../wire.ts';
 import { draftOver } from './assistant.ts';
 import type { RoomState } from './fold.ts';
-import { isExpired, isLive, parseId, seatOf, startsNow } from './lease.ts';
+import { type Due, isExpired, isLive, parseId, seatOf, startsNow } from './lease.ts';
+import { givesUp } from './rules.verified.ts';
 
 export interface DecideOptions {
 	now: number;
 	/** How long an unanswered wake waits before the room sends it again. */
 	resend: number;
+	/** How many attempts the room makes at one wake or one draft before it gives up. */
+	attempts: number;
 	/** When each wake was last sent by this room, or undefined when it never was. */
 	sentAt(id: string): number | undefined;
 	/** A stopped room closes nothing and wakes nobody. */
@@ -37,6 +40,8 @@ type Ended = Without<Extract<LeaseRow, { phase: 'ended' }>, 'after'>;
 export interface Decision {
 	/** Leases that ran past their expiry, ended here. */
 	expired: Ended[];
+	/** The attempts the room does not make: the activations at the cap, written off here. */
+	abandoned: Ended[];
 	/** The exchange the room closes, when nothing is live and one is open. */
 	close: Omit<CloseRow, 'after'> | undefined;
 	sends: Send[];
@@ -80,15 +85,34 @@ export function working(state: RoomState, now: number): boolean {
 
 export function decide(state: RoomState, options: DecideOptions): Decision {
 	const expired = expiries(state, options.now);
-	// An expiry changes what is live: the close waits for the fold that holds it.
-	const close = options.stopped || expired.length > 0 ? undefined : closing(state, options.now);
+	const abandoned = options.stopped ? [] : abandonments(state, options);
+	// An expiry or an abandonment changes what is live: the close waits for the fold that holds it.
+	const settled = expired.length === 0 && abandoned.length === 0;
+	const close = options.stopped || !settled ? undefined : closing(state, options.now);
 	const sends = options.stopped ? [] : dueWakes(state, options);
 	return {
 		expired,
+		abandoned,
 		close,
 		sends,
 		alarmAt: options.stopped ? undefined : nextAlarm(state, options),
 	};
+}
+
+/** An activation the room owes whose attempts reached the cap. */
+const capped = (owed: Due, options: DecideOptions): boolean =>
+	givesUp(owed.attempts, options.attempts);
+
+/**
+ * The attempt at each activation at the cap, ended before it starts. The
+ * row answers the wake or the close it stood for, so the room stops trying
+ * and every reader sees that it did.
+ */
+function abandonments(state: RoomState, options: DecideOptions): Ended[] {
+	const at = new Date(options.now).toISOString();
+	return state.due
+		.filter((owed) => capped(owed, options))
+		.map((owed) => ({ id: owed.id, phase: 'ended' as const, reason: 'abandoned' as const, at }));
 }
 
 function expiries(state: RoomState, now: number): Decision['expired'] {
@@ -123,6 +147,7 @@ function closing(state: RoomState, now: number): Decision['close'] {
  */
 function dueWakes(state: RoomState, options: DecideOptions): Send[] {
 	return state.due
+		.filter((owed) => !capped(owed, options))
 		.filter((owed) => startsNow(owed, options.now) && unsent(owed.id, options))
 		.map((owed) => ({ id: owed.id, seat: owed.seat }));
 }
@@ -135,11 +160,13 @@ function unsent(id: string, options: DecideOptions): boolean {
 
 /** When each activation the room owes is next due, or sent again. */
 function retryTimes(state: RoomState, options: DecideOptions): number[] {
-	return state.due.map((owed) =>
-		startsNow(owed, options.now)
-			? (options.sentAt(owed.id) ?? options.now) + options.resend
-			: (owed.notBefore ?? options.now),
-	);
+	return state.due
+		.filter((owed) => !capped(owed, options))
+		.map((owed) =>
+			startsNow(owed, options.now)
+				? (options.sentAt(owed.id) ?? options.now) + options.resend
+				: (owed.notBefore ?? options.now),
+		);
 }
 
 function nextAlarm(state: RoomState, options: DecideOptions): number | undefined {

@@ -773,10 +773,10 @@ afterwards.
 the activation. An activation that fails outright, or that runs out of
 drafts, is one attempt, and the room's own alarm wakes the assistant again
 after the backoff, whether or not anybody speaks into the room. After
-three attempts the room stops trying. The range stays whole and every
-reader still sees it, so nothing is lost; but the one message never
-arrives, and nothing reports that the room gave up
-([`planning/backlog.md`](../planning/backlog.md) item 29).
+three attempts the room stops trying, and it writes a row that says so:
+the attempt it does not make, ended `abandoned`. The host hears an
+`abandoned` event. The range stays whole and every reader still sees it,
+so nothing is lost, and the one message never arrives.
 
 **What a client owes.** §10 asks a client to re-present past messages when
 a new one arrives. That is more than a log does, and no client in this

@@ -26,7 +26,7 @@ export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> :
  * record, the record kept moving past its drafts, the room wrote it off,
  * or it stopped renewing.
  */
-export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired';
+export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired' | 'abandoned';
 
 /**
  * One row about an activation: it holds a lease, or its lease ended. The
