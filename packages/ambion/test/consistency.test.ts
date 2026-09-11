@@ -43,7 +43,7 @@ function mulberry32(seed: number): () => number {
 	};
 }
 
-const OPERATIONS: Operation[] = ['wake', 'view', 'commit', 'lease'];
+const OPERATIONS: Operation[] = ['wake', 'cut', 'view', 'commit', 'lease'];
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
 /** One room over one storage, and the run that holds it now. */
@@ -60,7 +60,7 @@ class Cluster {
 	session!: Session;
 	private disk: FailMode = false;
 	private failedBefore = 0;
-	/** Room calls the nemesis dropped, counted when taken: every one fails an activation, and that is one error. A dropped wake is sent again and fails nothing. */
+	/** Room calls the nemesis dropped, counted when taken: every one fails an activation, and that is one error. A dropped wake is sent again, and a dropped cut leaves the record's word to stand, so both fail nothing. */
 	private dropped = 0;
 	private droppedBefore = 0;
 	/** Leases live when time jumped past the whole expiry: every one expires, and that is one error. */
@@ -255,7 +255,7 @@ class Cluster {
 		const kind = this.pick(['drop', 'duplicate', 'delay'] as const);
 		const on = this.pick(OPERATIONS);
 		const taken = () => {
-			if (kind === 'drop' && on !== 'wake') this.dropped += 1;
+			if (kind === 'drop' && on !== 'wake' && on !== 'cut') this.dropped += 1;
 			return true;
 		};
 		this.faults.push({ on, kind, match: taken, ...(kind === 'delay' ? { ms: 2_000 } : {}) });
