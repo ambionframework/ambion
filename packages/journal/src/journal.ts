@@ -56,7 +56,7 @@ import { nextSeq, refused, supersedes, voided } from './rules.verified.ts';
 export type Seq = number;
 
 /** The session as one that refuses a moved append, or nothing when its storage cannot. */
-export function fenced(session: PiSession): (PiSession & FencedSession) | undefined {
+function fenced(session: PiSession): (PiSession & FencedSession) | undefined {
 	const candidate = session as Partial<FencedSession>;
 	return typeof candidate.appendAfter === 'function'
 		? (session as PiSession & FencedSession)
@@ -109,9 +109,6 @@ export interface Entry<TBody = unknown> {
 	readonly run?: string;
 }
 
-/** An entry that took a place on the record: `seq` is there, `after` is not. */
-export type Positioned<TBody = unknown> = Entry<TBody> & { readonly seq: Seq };
-
 /** The body each kind carries. A caller names one body shape per kind. */
 export type Bodies<TKind extends string> = Record<TKind, unknown>;
 
@@ -160,7 +157,7 @@ interface Stored {
 const writerOf = (data: unknown): string | undefined => (data as Stored).written;
 
 /** The body as the caller wrote it: everything stored but the journal's own field. */
-export function bodyOf(data: unknown): Record<string, unknown> {
+function bodyOf(data: unknown): Record<string, unknown> {
 	const { written: _written, ...body } = data as Stored;
 	return body;
 }
@@ -172,7 +169,7 @@ export function bodyOf(data: unknown): Record<string, unknown> {
  * and the journal skips it rather than caching something it cannot hold to
  * its contract.
  */
-export function envelope<TKind extends string>(
+function envelope<TKind extends string>(
 	words: Vocabulary<TKind>,
 	customType: string,
 	data: unknown,

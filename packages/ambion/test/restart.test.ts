@@ -21,7 +21,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { collect, crash, deferred, roomName, rowsOf, tick } from './support/room.ts';
+import { collect, crash, deferred, roomName, storedOf, tick } from './support/room.ts';
 import {
 	byAgent,
 	quiet,
@@ -88,8 +88,8 @@ async function world(storage: (typeof storages)[number]): Promise<World> {
 				clock,
 				agents,
 				transport: faultyTransport(inProcessTransport(), faults, clock),
-				// Every resume in this file folds over a checkpoint, not the rows it replaced.
-				checkpoint: { rows: 3 },
+				// Every resume in this file folds over a checkpoint, not the entries it replaced.
+				checkpoint: { entries: 3 },
 			}),
 	};
 }
@@ -211,8 +211,8 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
 			expect(resumed.exchange()).toBeUndefined();
 			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'idle' });
-			const rows = await rowsOf(opened.sessions, name);
-			expect(rows.map((row) => row.type)).toContain('ambion/close');
+			const stored = await storedOf(opened.sessions, name);
+			expect(stored.map((entry) => entry.type)).toContain('ambion/close');
 			await stopSession(resumed);
 		} finally {
 			await opened.dispose();
@@ -265,7 +265,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
-			// before the replay, the seats fold from the row the run is about to write
+			// before the replay, the seats fold from the composition the run is about to write
 			expect(session.seats().map((s) => [s.name, s.identity])).toEqual([
 				['alpha', 'Alpha.'],
 				['assistant', assistant.identity],
@@ -275,7 +275,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await session.quiet();
 			await stopSession(session);
 
-			// a fresh runtime knows no definition: the composition row and the seating carry them
+			// a fresh runtime knows no definition: the composition and the seating carry them
 			const view = readSession(name, { runtime: createRuntime({ sessions: opened.sessions }) });
 			await view.messages();
 			expect(view.seats().map((s) => [s.name, s.identity])).toEqual([
@@ -315,8 +315,8 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			// a stop mid-exchange: the lease is revoked, and the stopped room closes nothing
 			await stopSession(one);
 			expect(heard.map((e) => e.type)).not.toContain('exchange_closed');
-			const before = await rowsOf(opened.sessions, name);
-			expect(before.map((row) => row.type)).not.toContain('ambion/close');
+			const before = await storedOf(opened.sessions, name);
+			expect(before.map((entry) => entry.type)).not.toContain('ambion/close');
 
 			// the next run closes it as it starts, and quiet() waits for that close
 			const two = startSession({
@@ -332,8 +332,8 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(events.map((e) => e.type)).toContain('exchange_closed');
 			expect(two.exchange()).toBeUndefined();
 			const question = (await two.messages()).find((m) => m.kind === 'said');
-			const closes = (await rowsOf(opened.sessions, name)).filter(
-				(row) => row.type === 'ambion/close',
+			const closes = (await storedOf(opened.sessions, name)).filter(
+				(entry) => entry.type === 'ambion/close',
 			);
 			expect(closes).toHaveLength(1);
 			expect(closes[0]?.data).toMatchObject({ owner: 'priya', from: question?.seq });
@@ -608,13 +608,13 @@ describe('a room dropped from memory', () => {
 	it('writes nothing for an abort or a departure on the dropped handle', async () => {
 		const { session, visit, opened, held } = await dropped();
 		await tick();
-		const before = (await rowsOf(opened.sessions, session.name)).length;
+		const before = (await storedOf(opened.sessions, session.name)).length;
 		session.abort();
 		await tick();
 		await tick();
 		await visit.leave();
 		await tick();
-		expect((await rowsOf(opened.sessions, session.name)).length).toBe(before);
+		expect((await storedOf(opened.sessions, session.name)).length).toBe(before);
 		await expect(visit.deliver({ text: 'still there?' })).rejects.toThrow();
 		held.resolve();
 	});
@@ -650,10 +650,10 @@ describe('a room dropped from memory', () => {
 	it('writes nothing for a stop on the dropped handle', async () => {
 		const { session, opened, held } = await dropped();
 		await tick();
-		const before = (await rowsOf(opened.sessions, session.name)).length;
+		const before = (await storedOf(opened.sessions, session.name)).length;
 		await stopSession(session);
 		await tick();
-		expect((await rowsOf(opened.sessions, session.name)).length).toBe(before);
+		expect((await storedOf(opened.sessions, session.name)).length).toBe(before);
 		held.resolve();
 	});
 });

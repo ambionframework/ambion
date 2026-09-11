@@ -27,7 +27,7 @@ import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
-import { roomName, rowsOf } from './support/room.ts';
+import { roomName, storedOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { type FailMode, gatedOpener, memory, sqlite, tappedOpener } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
@@ -126,8 +126,8 @@ class Cluster {
 			clock: this.clock,
 			agents,
 			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
-			// Small on purpose: the history runs over rows a checkpoint replaced.
-			checkpoint: { rows: 4 },
+			// Small on purpose: the history runs over entries a checkpoint replaced.
+			checkpoint: { entries: 4 },
 		});
 	}
 
@@ -205,7 +205,7 @@ class Cluster {
 
 	/**
 	 * A fresh host takes the name: after a crash, and after a run heard it
-	 * was superseded. A run row that lands late fences the runs whose rows
+	 * was superseded. A fence that lands late voids the runs whose fences
 	 * came before it, even when its own run is gone, so a live run can lose
 	 * the name to a dead one, and the host resumes again. One takeover at a
 	 * time: a host resumes a name once, whatever asked for it.
@@ -230,7 +230,7 @@ class Cluster {
 	private async resumed(): Promise<void> {
 		this.epoch += 1;
 		const activations = await liveLeases(this.opened.sessions, this.name, this.clock.now());
-		// A resume writes the run row first, and a host tries again when the storage fails it.
+		// A resume writes the fence first, and a host tries again when the storage fails it.
 		for (let attempt = 0; ; attempt += 1) {
 			this.runtime = this.host();
 			try {
@@ -290,18 +290,18 @@ class Cluster {
 			inherited: this.inherited.activations,
 			inheritedExchange: this.inherited.exchange,
 		});
-		const rows = await rowsOf(this.opened.sessions, this.name);
-		const entries = standing(rows).flatMap((row) => {
-			const type = row.type.slice('ambion/'.length);
-			if (type === 'message') return [{ type, message: row.data } as never];
-			if (type === 'lease') return [{ type, lease: row.data } as never];
-			if (type === 'close') return [{ type, close: row.data } as never];
-			if (type === 'composition') return [{ type, composition: row.data } as never];
+		const stored = await storedOf(this.opened.sessions, this.name);
+		const entries = standing(stored).flatMap((entry) => {
+			const type = entry.type.slice('ambion/'.length);
+			if (type === 'message') return [{ type, message: entry.data } as never];
+			if (type === 'lease') return [{ type, lease: entry.data } as never];
+			if (type === 'close') return [{ type, close: entry.data } as never];
+			if (type === 'composition') return [{ type, composition: entry.data } as never];
 			return [];
 		});
 		const state = foldRoom(entries, RETRY);
 		expect(
-			violations(this.history, { record: await this.session.messages(), rows, state }),
+			violations(this.history, { record: await this.session.messages(), stored, state }),
 		).toEqual([]);
 	}
 }
@@ -475,7 +475,7 @@ describe('the room under concurrent clients and a nemesis', () => {
 				await stopSession(cluster.session);
 			} catch (error) {
 				const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
-				const rows = await rowsOf(opened.sessions, cluster.name);
+				const stored = await storedOf(opened.sessions, cluster.name);
 				const errors = cluster.events.flatMap((e) =>
 					e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
 				);
@@ -487,7 +487,7 @@ describe('the room under concurrent clients and a nemesis', () => {
 					})
 					.join(' ');
 				throw new Error(
-					`seed ${seed} failed:\n${cluster.history.describe()}\nerrors on the last run: ${errors.join('; ')} (inherited ${cluster.inherited.activations})\nevents on the last run: ${brief}\nrows:\n  ${rows
+					`seed ${seed} failed:\n${cluster.history.describe()}\nerrors on the last run: ${errors.join('; ')} (inherited ${cluster.inherited.activations})\nevents on the last run: ${brief}\nrows:\n  ${stored
 						.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`)
 						.join('\n  ')}\n\n${detail}`,
 					{ cause: error },

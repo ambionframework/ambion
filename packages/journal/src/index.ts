@@ -28,12 +28,10 @@ export type {
 	Entries,
 	Entry,
 	FencedSession,
-	Positioned,
 	Seq,
 	Vocabulary,
 } from './journal.ts';
-export { bodyOf, envelope, fenced, Journal } from './journal.ts';
-export { nextSeq, refused, supersedes, voided } from './rules.verified.ts';
+export { Journal } from './journal.ts';
 export type { SessionOpener, Sql, SqlValue } from './sqlite.ts';
 export { SqliteSessionStorage, sqliteSessions } from './sqlite.ts';
 

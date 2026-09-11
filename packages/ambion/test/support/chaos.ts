@@ -45,7 +45,7 @@ import {
 } from './cast.ts';
 import { type FakeClock, fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
-import { rowsOf } from './room.ts';
+import { storedOf } from './room.ts';
 import { scripted } from './scripted.ts';
 import { type FailMode, type OpenedStorage, tappedOpener } from './storage.ts';
 import { serializing } from './transport.ts';
@@ -74,7 +74,7 @@ export async function outcome(
 		}
 	}
 	expect(record.filter(isSummary).map((m) => m.to)).toEqual(cast.summaries);
-	const closes = (await rowsOf(sessions, session.name)).filter((r) => r.type === 'ambion/close');
+	const closes = (await storedOf(sessions, session.name)).filter((r) => r.type === 'ambion/close');
 	expect(closes).toHaveLength(3);
 	expect(session.exchange()).toBeUndefined();
 	expect(session.seats().find((s) => s.name === priya.name)).toMatchObject({ presence: 'absent' });
@@ -87,10 +87,10 @@ export async function liveLeases(
 	name: string,
 	now: number,
 ): Promise<number> {
-	const rows = (await rowsOf(sessions, name)).flatMap((r) =>
+	const stored = (await storedOf(sessions, name)).flatMap((r) =>
 		r.type === 'ambion/lease' ? [r.data as LeaseChange] : [],
 	);
-	return [...foldLeases(rows).values()].filter((lease) => isLive(lease, now)).length;
+	return [...foldLeases(stored).values()].filter((lease) => isLive(lease, now)).length;
 }
 
 // -- the world ----------------------------------------------------------------
@@ -169,7 +169,7 @@ export class World {
 			agents,
 			transport: serializing(inProcessTransport()),
 			// Small on purpose: every crash point lands on both sides of a checkpoint.
-			checkpoint: { rows: 4 },
+			checkpoint: { entries: 4 },
 		});
 	}
 
@@ -314,16 +314,16 @@ export class World {
 		await outcome(this.session, this.opened.sessions, this.cast);
 	}
 
-	/** What the world looks like when a check fails: the journal rows, for the failure message. */
+	/** What the world looks like when a check fails: the journal's entries, for the failure message. */
 	async describe(): Promise<string> {
-		const rows = await rowsOf(this.opened.sessions, this.name);
+		const stored = await storedOf(this.opened.sessions, this.name);
 		const messages = (await this.session.messages()).map(
 			(m: Message) => `#${m.seq} ${m.kind} ${m.from}${m.key ? ` (${m.key})` : ''}`,
 		);
 		return [
 			`crashes: ${this.crashes}, writes: ${this.writes}`,
 			`messages: ${messages.join('; ')}`,
-			`rows: ${rows.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
+			`stored: ${stored.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
 		].join('\n');
 	}
 }

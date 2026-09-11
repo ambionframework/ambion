@@ -1,5 +1,5 @@
 /**
- * Everything that crosses between a seat and its room, and every row on the
+ * Everything that crosses between a seat and its room, and every entry on the
  * journal, is plain JSON: it survives the wire unchanged.
  */
 import { describe, expect, it } from 'vitest';
@@ -19,13 +19,13 @@ import {
 	type Wake,
 } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
-import { roomName, rowsOf } from './support/room.ts';
+import { roomName, storedOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';
 import { jsonl } from './support/storage.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 
-const rows: Record<string, LeaseChange | Close | Composition> = {
+const stored: Record<string, LeaseChange | Close | Composition> = {
 	claim: { id: '2:product', after: 2, phase: 'running', expiry: 60_000, at },
 	end: { id: '2:product', after: 4, phase: 'ended', reason: 'released', at },
 	close: { owner: 'priya', from: 2, through: 4, after: 4, at, wakes: ['assistant'] },
@@ -102,7 +102,7 @@ const responses: Record<string, ViewResponse | CommitResponse | LeaseResponse> =
 };
 
 describe('the wire', () => {
-	it.each(Object.entries({ ...rows, wake, ...requests, ...responses }))(
+	it.each(Object.entries({ ...stored, wake, ...requests, ...responses }))(
 		'carries %s unchanged',
 		(_name, value) => {
 			expect(() => assertWire(value)).not.toThrow();
@@ -119,19 +119,19 @@ describe('the wire', () => {
 		expect(() => assertWire({ error: new Error('boom') })).toThrow(/is a Error/);
 	});
 
-	it('replays a JSONL journal whose every row is plain JSON', async () => {
+	it('replays a JSONL journal whose every entry is plain JSON', async () => {
 		const opened = await jsonl.open();
 		try {
 			const runtime = createRuntime({ sessions: opened.sessions, clock: fakeClock() });
 			const name = roomName('wire-jsonl');
 			await oneExchange.run({ runtime, name });
-			const written = await rowsOf(opened.sessions, name);
-			expect(written.map((row) => row.type)).toContain('ambion/close');
-			expect(written.map((row) => row.type)).toContain('ambion/composition');
-			expect(written.map((row) => row.type)).toContain('ambion/lease');
-			for (const row of written) {
-				expect(() => assertWire(row.data)).not.toThrow();
-				expect(roundTrip(row.data)).toStrictEqual(row.data);
+			const written = await storedOf(opened.sessions, name);
+			expect(written.map((entry) => entry.type)).toContain('ambion/close');
+			expect(written.map((entry) => entry.type)).toContain('ambion/composition');
+			expect(written.map((entry) => entry.type)).toContain('ambion/lease');
+			for (const entry of written) {
+				expect(() => assertWire(entry.data)).not.toThrow();
+				expect(roundTrip(entry.data)).toStrictEqual(entry.data);
 			}
 		} finally {
 			await opened.dispose();

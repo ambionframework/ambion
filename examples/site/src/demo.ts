@@ -111,10 +111,10 @@ const driveBefore = await driveFiles();
 
 /**
  * A short lease, so the leases the dead run held expire within seconds of the
- * resume, and a low checkpoint threshold, so the resumed room reads one row in
- * place of the rows before it. A host picks both.
+ * resume, and a low checkpoint threshold, so the resumed room reads one
+ * checkpoint in place of the entries before it. A host picks both.
  */
-const LEASE = { wake: { expiry: 15_000 }, checkpoint: { rows: 24 } };
+const LEASE = { wake: { expiry: 15_000 }, checkpoint: { entries: 24 } };
 const firstDatabase = openDatabase();
 const first = createRuntime({ sessions: sqliteSessions(nodeSql(firstDatabase)), ...LEASE });
 let session: Session = startSession({
@@ -360,7 +360,7 @@ for (const seat of seats) {
 	});
 }
 
-/** The room's own journal: every row beside the messages, in the order they landed. */
+/** The room's own journal: every entry beside the messages, in the order they landed. */
 const roomLog: { type: string; data: unknown }[] = [];
 const piRoom = await reader.open(NAME);
 const roomEntries = await piRoom.findEntries();

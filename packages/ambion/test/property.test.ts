@@ -27,7 +27,7 @@ import {
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
-import { roomName, rowsOf } from './support/room.ts';
+import { roomName, storedOf } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -255,7 +255,7 @@ class Walk {
 		this.runtime.evict(this.name);
 		this.visits.clear();
 		const activations = await liveLeases(this.sessions, this.name, this.clock.now());
-		// A resume writes the run row first, and a host tries again when the storage fails it.
+		// A resume writes the fence first, and a host tries again when the storage fails it.
 		for (let attempt = 0; ; attempt += 1) {
 			this.runtime = this.host();
 			try {
@@ -330,9 +330,9 @@ describe('the room under a random walk', () => {
 					.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence]);
 				walk.journal.push(`seats: ${JSON.stringify(seats)}`);
 				walk.journal.push(`events: ${walk.events.map(brief).join(' ')}`);
-				const rows = await rowsOf(opened.sessions, walk.name);
+				const stored = await storedOf(opened.sessions, walk.name);
 				walk.journal.push(
-					`rows:\n  ${rows.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
+					`stored:\n  ${stored.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
 				);
 				throw new Error(`seed ${seed} failed after:\n${walk.journal.join('\n')}\n\n${detail}`, {
 					cause: error,

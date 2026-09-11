@@ -81,12 +81,12 @@ room that settles has finished. A seat that says something wakes its
 readers inside its own `say`, before its own lease ends, so the room is
 never briefly empty in the middle of a burst. What is live is read off the
 leases and the wakes still pending, folded over the journal, so there is no
-count beside them to keep in step. The room writes a close row, and
+count beside them to keep in step. The room writes a close, and
 `through` is the record as it stood when the room decided on the quiet, so
 a closed exchange names the range it turned out to hold. A quiet the room
 decided on one exchange closes that exchange alone. A question that lands
-after that decision and before the row is written opens the next exchange.
-The host hears `exchange_opened` for it once the row is on the journal, the
+after that decision and before the close is written opens the next exchange.
+The host hears `exchange_opened` for it once the close is on the journal, the
 roster stands for it, and an exchange nobody works on closes at the next
 reconcile, the way a question that wakes nobody does.
 
@@ -137,9 +137,9 @@ into a quiet room, opens his own exchange.
 ## 5. A fold over the journal
 
 An exchange is a fold over the journal. The open exchange is the first
-question a person asked after the last close row's `through`
+question a person asked after the last close's `through`
 (`openExchange` in [`exchange.ts`](../packages/ambion/src/room/exchange.ts)). A
-close is a row on the journal beside the messages: `{ owner, from, through,
+close is an entry on the journal beside the messages: `{ owner, from, through,
 at, wakes? }`. It takes no seq; `through` orders it. `wakes` names the
 assistant when the exchange owes a summary. `messages()` returns the
 messages alone, and their seqs stay `1..n`.
@@ -154,7 +154,7 @@ reconcile, closes the exchange, and its host hears `exchange_closed` for
 it.
 
 Every closed exchange is on the journal, so a host that wants a history of
-exchanges reads the close rows off the room's Pi session.
+exchanges reads the closes off the room's Pi session.
 
 ---
 
@@ -201,8 +201,8 @@ summary is drafted, and that window is the one place it can.
 **An aborted exchange still closes.** `abort()` revokes the leases in
 flight, writes off the wakes still pending, and the room reconciles, so the
 exchange closes with the range it reached. **A stopped room closes
-nothing.** `stopSession` revokes the leases in flight and writes no close
-row. A release that lands after the stop must not write into a journal the
+nothing.** `stopSession` revokes the leases in flight and writes no
+close. A release that lands after the stop must not write into a journal the
 next run has started over. The exchange stays open on the journal, and the
 next run closes it at its first reconcile (§5). A run that dies without
 `stop` leaves the exchange open the same way, with its leases live until
@@ -272,7 +272,7 @@ The exchange is proved beside the assistant that first reads one, in
   person speaking into it owns nothing (§4);
 - an exchange outlives its owner's visit (§4);
 - an exchange closes at the quiet the room observed, and a question that
-  lands before the row is written opens the next (§3);
+  lands before the close is written opens the next (§3);
 - a quiet observed on one exchange never closes the next, and a question
   the assistant already woke on composes nothing and closes at once (§3);
 - an exchange closes before anything is written about it, and the room

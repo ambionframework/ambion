@@ -2,7 +2,7 @@
  * How the room moves: it folds the journal, decides, and writes what it decided.
  *
  * `decide` is pure. It reads the folded state and the clock and returns the
- * rows to write, the wakes to send, and when to look again. Every wake it
+ * entries to write, the wakes to send, and when to look again. Every wake it
  * sends comes off one list, `state.due`: the activations the room owes,
  * whether a message decided one or a close owes one. The room applies
  * a decision, and a second decision over the result writes nothing: that is
@@ -105,7 +105,7 @@ const capped = (owed: Due, options: DecideOptions): boolean =>
 
 /**
  * The attempt at each activation at the cap, ended before it starts. The
- * row answers the wake or the close it stood for, so the room stops trying
+ * entry answers the wake or the close it stood for, so the room stops trying
  * and every reader sees that it did.
  */
 function abandonments(state: RoomState, options: DecideOptions): Ended[] {

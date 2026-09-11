@@ -16,7 +16,7 @@
  *   does: an agent speaking into a quiet room opens nothing, and arriving or
  *   leaving asks nobody anything.
  * - **Quiescence closes it.** The room reconciles when nothing is live, and
- *   writes a close row that names the range the exchange turned out to hold.
+ *   writes a close that names the range the exchange turned out to hold.
  * - **What lands while it is open steers it and changes nothing.** Not the
  *   owner, not the range, not who the answer belongs to.
  *

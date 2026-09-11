@@ -1,6 +1,6 @@
 /**
  * Pi's session over the object's SQLite: an entry appended is an entry
- * replayed, in order, on the lane it was appended to, and every row is
+ * replayed, in order, on the lane it was appended to, and every entry is
  * plain JSON.
  */
 

@@ -36,7 +36,7 @@ interface SeatEvent {
 interface LeaseData {
 	id: string;
 	phase: 'running' | 'ended';
-	/** The run that wrote this row. The fence stamps every entry with it. */
+	/** The run that wrote this entry. The fence stamps every entry with it. */
 	written?: string;
 }
 interface Say {
@@ -95,20 +95,20 @@ async function seatEvents(): Promise<SeatEvent[]> {
 		}),
 	});
 	if (!response.ok) return [];
-	const answer = (await response.json()) as { result?: { rows?: [string][] } };
-	// Each row holds what one `console.log` was given, as the array it was called with.
-	return (answer.result?.rows ?? []).flatMap((row) => {
+	const answer = (await response.json()) as { result?: { stored?: [string][] } };
+	// Each entry holds what one `console.log` was given, as the array it was called with.
+	return (answer.result?.stored ?? []).flatMap((entry) => {
 		try {
-			return JSON.parse(row[0]) as SeatEvent[];
+			return JSON.parse(entry[0]) as SeatEvent[];
 		} catch {
 			return [];
 		}
 	});
 }
 const messages = () => call<Say[]>('/messages');
-/** Every row of one kind, read as the shape that kind carries on the wire. */
-const rowsOf = <T>(rows: LogRow[], kind: string): T[] =>
-	rows.filter((row) => row.type === `ambion/${kind}`).map((row) => row.data as T);
+/** Every entry of one kind, read as the shape that kind carries on the wire. */
+const rowsOf = <T>(stored: LogRow[], kind: string): T[] =>
+	stored.filter((entry) => entry.type === `ambion/${kind}`).map((entry) => entry.data as T);
 
 // The worker answers before the room starts, so any response says it is up.
 const up = await fetch(WORKER).then(
@@ -133,7 +133,7 @@ await call('/deliver', {
 	key: 'priya-1',
 });
 
-step('the seats take their leases, and the room writes a row for each');
+step('the seats take their leases, and the room writes a entry for each');
 const claimed = await until(async () => {
 	const held = rowsOf<LeaseData>(await journal(), 'lease');
 	return held.length >= 2 ? held : undefined;
@@ -158,11 +158,13 @@ process.stderr.write(
 );
 
 // Every lease ends before the journal is read, so the capture holds the release
-// of the draft the summary came from and not the row before it.
-const rows = await until(async () => {
+// of the draft the summary came from and not the entry before it.
+const stored = await until(async () => {
 	const held = rowsOf<LeaseData>(await journal(), 'lease');
-	const ids = [...new Set(held.map((row) => row.id))];
-	const ended = ids.every((id) => held.filter((row) => row.id === id).at(-1)?.phase === 'ended');
+	const ids = [...new Set(held.map((entry) => entry.id))];
+	const ended = ids.every(
+		(id) => held.filter((entry) => entry.id === id).at(-1)?.phase === 'ended',
+	);
 	return ended ? await journal() : undefined;
 });
 const seats = await call<{ kind: string; name: string }[]>('/seats');
@@ -174,9 +176,9 @@ process.stderr.write(`  ${events.length} seat events read back from the logs\n`)
  * A run where none crossed proves nothing, and the report says so; the
  * operator hears it here, where running it again is still cheap.
  */
-const finalLeases = rowsOf<LeaseData>(rows, 'lease');
-const crossed = [...new Set(finalLeases.map((row) => row.id))].filter((id) => {
-	const mine = finalLeases.filter((row) => row.id === id);
+const finalLeases = rowsOf<LeaseData>(stored, 'lease');
+const crossed = [...new Set(finalLeases.map((entry) => entry.id))].filter((id) => {
+	const mine = finalLeases.filter((entry) => entry.id === id);
 	return mine[0]?.written !== mine[mine.length - 1]?.written;
 });
 process.stderr.write(`  ${crossed.length} activations crossed the crash\n`);
@@ -195,8 +197,8 @@ writeFileSync(
 			ranAt: new Date().toISOString(),
 			steps,
 			crash: { time: crashedAtTime, leases: claimed.length },
-			journal: rows,
-			runs: rowsOf<{ run: string }>(rows, 'run'),
+			journal: stored,
+			runs: rowsOf<{ run: string }>(stored, 'run'),
 			record: await messages(),
 			seats,
 			events,

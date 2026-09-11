@@ -30,7 +30,7 @@ configure({
 
 /**
  * The room, with two calls a demo needs and a room in service does not.
- * `journal` reads the rows beside the messages, and `crash` drops the object the
+ * `journal` reads the entries beside the messages, and `crash` drops the object the
  * way the platform may drop it: the seats around it keep running, and the
  * next call to this name builds the room again over the same storage.
  */

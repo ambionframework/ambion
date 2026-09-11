@@ -320,7 +320,7 @@ the next activation reads the record itself. The record is canonical.
 
 A steer is the room's word to a running activation, and the journal does not
 record it. The journal says who was at work when the message landed: a lease
-that holds a row before the message and ends, if it ends, after it. A
+that holds a change before the message and ends, if it ends, after it. A
 message such a lease heard is answered when the lease stands down, and
 pending again when the lease expired or failed, so a run that dies while
 the seat works loses nothing: the seat is woken for the message after the
@@ -565,9 +565,9 @@ controls:
   roster folds from that ([`roster.md`](roster.md) §5), and an exchange
   left open closes at the next run's first reconcile.
 - **`resumeSession(name, { runtime })`** brings a name back up over its
-  journal, with the composition the journal holds. The first row every run
-  writes is its run row, and it fences every earlier run. A run that
-  finds a later run's row emits `superseded` and drops itself from
+  journal, with the composition the journal holds. The first entry every
+  run writes is its fence, and it voids every earlier run. A run that
+  finds a later run's fence emits `superseded` and drops itself from
   memory. It writes nothing more ([`durability.md`](durability.md) §1). Every name on the roster
   resolves through the runtime's catalog, which `createRuntime({ agents })`
   fills. The room reconciles at once: a lease the last run left expires, a
@@ -584,7 +584,7 @@ sooner.
 `readSession(name, { repo })` returns the pull side alone — `messages()`,
 `seats()`, `subscribe()` — and `Session` extends it, so code that only
 reads takes the narrower type and cannot start anything by accident. Its
-`seats()` folds the same rows a running room folds, so a stopped room says
+`seats()` folds the same entries a running room folds, so a stopped room says
 who was in it and which seat still holds a lease.
 
 One file per concern, in layers an import points down through, and
@@ -665,22 +665,23 @@ pending is live, so the exchange stays open and `settled()` waits for the
 claim. `runtime.retry` holds the policy for wakes and summaries alike:
 three attempts thirty seconds apart by default. At the cap the room
 gives up, and it writes what it did: the attempt it does not make, ended
-`abandoned`. That row answers the wake or the close it stood for, so the
+`abandoned`. That entry answers the wake or the close it stood for, so the
 room stops trying and the host hears an `abandoned` event. A summary the
 assistant could not write ends the same way, and the range stays whole.
 
 **A checkpoint bounds what a fold costs.** Every
-`runtime.checkpoint.rows` rows, 256 by default, the room writes an
-`ambion/checkpoint` row where it has nothing else to write. The row
-carries the composition, the closes and the leases a later fold still
-reads, behind a `floor`: no wake on a message below it is pending. A fold
-reads a checkpoint in place of every row before it, and the journal drops
-those rows from memory. What a fold costs is then the rows since the last
-checkpoint; what a replay costs is every entry the storage holds, because
-a checkpoint trims the cache and never the storage. The messages stay, and the storage keeps every
-row: a checkpoint is a cache over the journal, so a reader that cannot read
-one ignores it and folds the rows instead. A checkpoint is an entry like
-any other, so the fence voids one a superseded run wrote.
+`runtime.checkpoint.entries` entries, 256 by default, the room writes an
+`ambion/checkpoint` entry where it has nothing else to write. The
+checkpoint carries the composition, the closes and the leases a later fold
+still reads, behind a `floor`: no wake on a message below it is pending. A
+fold reads a checkpoint in place of every entry before it, and the journal
+drops those entries from memory. What a fold costs is then the entries
+since the last checkpoint; what a replay costs is every entry the storage
+holds, because a checkpoint trims the cache and never the storage. The
+messages stay, and the storage keeps every entry: a checkpoint is a cache
+over the journal, so a reader that cannot read one ignores it and folds
+the entries instead. A checkpoint is an entry like any other, so the fence
+voids one a superseded run wrote.
 
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
@@ -729,7 +730,7 @@ runs. Every request and response survives a round trip through
 `JSON.stringify` unchanged
 ([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
 live in two processes. The room answers the three calls from the fold: a
-lease is a row on the journal, and the seat side releases it when the
+lease is an entry on the journal, and the seat side releases it when the
 activation ends.
 
 **A cut is the room's word, and the record is written before it.** The

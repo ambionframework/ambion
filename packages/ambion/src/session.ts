@@ -24,6 +24,8 @@
  *   and the lease it holds — the three calls in `wire.ts`.
  * - **Say when it has stopped.** An exchange closed, and nothing live.
  */
+
+import type { Committed } from '@ambionframework/journal';
 import type { SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
 import {
 	defaultRuntime,
@@ -33,11 +35,11 @@ import {
 	stubModel,
 	type Transport,
 } from './host/runtime.ts';
-import { type Committed, type Entry, RoomJournal } from './journal/journal.ts';
+import { type Entry, RoomJournal } from './journal/journal.ts';
 import { renderLine } from './render.ts';
 import { assertAssistant } from './room/assistant.ts';
 import { checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
-import { activationId, isExpired, isLive, type LeaseState, parseId, seatOf } from './room/lease.ts';
+import { activationId, isExpired, isLive, parseId, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { type Decision, decide, liveSeats, working } from './room/reconcile.ts';
 import { type RoomFacts, seatsOf, viewOf } from './room/view.ts';
@@ -71,6 +73,7 @@ import type {
 	EndReason,
 	Lease,
 	LeaseChange,
+	LeaseHold,
 	LeaseResponse,
 	Seating,
 	SeatPort,
@@ -84,7 +87,7 @@ interface Placed {
 	attention: Attention;
 }
 
-/** What a run starts with, as values. The entry on the journal is the same, by name. */
+/** What a run starts with, as definitions. The journal holds the same composition, by name. */
 interface Cast {
 	assistant: AgentDefinition;
 	goal: string | undefined;
@@ -328,7 +331,7 @@ class SessionImpl implements Session, RunningRoom {
 	private readonly ready: Promise<void>;
 	/** Every definition this room can seat, by name. */
 	private readonly defs = new Map<string, AgentDefinition>();
-	/** The row this run writes about itself, or nothing for a resumed run. Before the replay, `seats()` folds this row alone. */
+	/** The composition this run writes, or nothing for a resumed run. Before the replay, `seats()` folds it alone. */
 	private readonly starting: Without<Composition, 'after'> | undefined;
 	/** The handles the host delivers through. Presence itself is a fold over the journal. */
 	private readonly visits = new Map<string, VisitRuntime>();
@@ -338,17 +341,17 @@ class SessionImpl implements Session, RunningRoom {
 	private readonly quietWaiters: (() => void)[] = [];
 	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
 	private readonly sentAt = new Map<string, number>();
-	/** Every lease id this room has heard a row for. It says `activation_start` once. */
+	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	private readonly heardLeases = new Set<string>();
 	private cancelAlarm: () => void = () => {};
-	/** The reconcile in flight: the rows it writes, and whoever it wakes. A caller that asks waits for it. */
+	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	private reconciling: Promise<void> = Promise.resolve();
 	private fold: { length: number; state: RoomState } | undefined;
 	/** The record is replayed and the composition is on the journal: a seat's call is answered on the spot. */
 	private replayed = false;
 	private stopped = false;
 	private evicted = false;
-	/** This run's id: the first row it writes, and the stamp on every entry it writes. */
+	/** This run's id: the fence it writes first, and the stamp on every entry it writes. */
 	private readonly run = crypto.randomUUID();
 	/** Whether the room has reported quiet since it was last busy. */
 	private idleReported = true;
@@ -365,7 +368,7 @@ class SessionImpl implements Session, RunningRoom {
 		name: string,
 		runtime: Runtime,
 		options: { repo?: SessionRepo; streamFn?: StreamFn },
-		composition: Cast | undefined,
+		cast: Cast | undefined,
 	) {
 		this.name = name;
 		this.runtime = runtime;
@@ -379,10 +382,10 @@ class SessionImpl implements Session, RunningRoom {
 		);
 		this.stream = options.streamFn ?? runtime.stream;
 		this.model = options.streamFn ? stubModel : runtime.model;
-		this.starting = composition && compositionRow(composition, this.iso());
-		if (composition) {
-			this.know(...composition.agents, ...composition.available, {
-				def: composition.assistant,
+		this.starting = cast && compositionOf(cast, this.iso());
+		if (cast) {
+			this.know(...cast.agents, ...cast.available, {
+				def: cast.assistant,
 				attention: 'none',
 			});
 		}
@@ -406,10 +409,10 @@ class SessionImpl implements Session, RunningRoom {
 	/**
 	 * The composition against the record, then on it. A name the record knows
 	 * as a person cannot be seated, and the first call that needs the room sees
-	 * the refusal. The row is what the roster folds from. The first reconcile
-	 * closes an exchange the last run left open once nothing works on it.
+	 * the refusal. The composition is what the roster folds from. The first
+	 * reconcile closes an exchange the last run left open once nothing works on it.
 	 */
-	private async compose(row: Without<Composition, 'after'>): Promise<void> {
+	private async compose(composition: Without<Composition, 'after'>): Promise<void> {
 		await this.journal.ready;
 		this.replayed = true;
 		this.seedHeardLeases();
@@ -420,7 +423,7 @@ class SessionImpl implements Session, RunningRoom {
 			}
 		}
 		await this.journal.write('run', { run: this.run, at: this.iso() });
-		await this.journal.write('composition', row);
+		await this.journal.write('composition', composition);
 		this.wake();
 		await this.reconcile();
 	}
@@ -444,7 +447,7 @@ class SessionImpl implements Session, RunningRoom {
 			if (def === undefined) throw new Error(`'${name}' is not in the runtime's catalog.`);
 			this.defs.set(name, def);
 		}
-		// The run row is the fence: from here on, every earlier run's later writes are void.
+		// The fence lands here: from here on, every earlier run's later writes are void.
 		await this.journal.write('run', { run: this.run, at: this.iso() });
 		this.wake();
 		await this.reconcile();
@@ -453,7 +456,7 @@ class SessionImpl implements Session, RunningRoom {
 	/**
 	 * Another run took the name. This run says so once, then drops itself
 	 * from memory: nothing it does from here on writes, and every seat it
-	 * runs hears stale. The record is the other run's from its row on.
+	 * runs hears stale. The record is the other run's from its fence on.
 	 */
 	private superseded(): void {
 		if (this.evicted) return;
@@ -529,12 +532,12 @@ class SessionImpl implements Session, RunningRoom {
 		return this.journal.since(options.since);
 	}
 
-	/** The roster and the people off the fold. Before the replay, the fold is over the row this run writes. */
+	/** The roster and the people off the fold. Before the replay, the fold is over the composition this run writes. */
 	seats(): SeatInfo[] {
 		if (!this.replayed) {
-			const rows = this.starting ? [{ ...this.starting, after: 0 }] : [];
+			const starting = this.starting ? [{ ...this.starting, after: 0 }] : [];
 			const state = foldRoom(
-				rows.map((body) => ({ kind: 'composition' as const, body, after: 0 })),
+				starting.map((body) => ({ kind: 'composition' as const, body, after: 0 })),
 				this.runtime.retry,
 			);
 			return seatsOf({ name: this.name, state, live: new Map() });
@@ -739,7 +742,7 @@ class SessionImpl implements Session, RunningRoom {
 		readThrough: Seq | undefined,
 		draft: (state: RoomState) => Omit<T, 'seq' | 'key' | 'wakes'>,
 		route = true,
-	): Promise<Committed<T>> {
+	): Promise<Committed<T, Message>> {
 		return this.journal.commit<T>({
 			key,
 			...(readThrough === undefined ? {} : { readThrough }),
@@ -817,8 +820,8 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * Whether this row starts an activation: the room has heard no earlier row
-	 * for the id. The room keeps the set, because the question is the room's:
+	 * Whether this change starts an activation: the room has heard no earlier
+	 * change for the id. The room keeps the set, because the question is the room's:
 	 * it says `activation_start` once. The replay seeds it from the fold, so a
 	 * resumed room starts no activation the last run already started.
 	 */
@@ -828,7 +831,7 @@ class SessionImpl implements Session, RunningRoom {
 		return first;
 	}
 
-	/** Every lease id the room has heard a row for, seeded by the replay. */
+	/** Every lease id the room has heard a change for, seeded by the replay. */
 	private seedHeardLeases(): void {
 		for (const id of this.state().leases.keys()) this.heardLeases.add(id);
 	}
@@ -868,9 +871,9 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * A lease row: the first row of an id starts an activation, and an end
-	 * row ends one. A row that ends a lease the journal never held is a wake
-	 * written off, and starts nothing.
+	 * A lease change: the first change of an id starts an activation, and an
+	 * end ends one. A change that ends a lease the journal never held is a
+	 * wake written off, and starts nothing.
 	 */
 	private heardLease(lease: LeaseChange, first: boolean): void {
 		const seat = seatOf(lease.id, this.assistant) ?? '';
@@ -884,7 +887,7 @@ class SessionImpl implements Session, RunningRoom {
 			return;
 		}
 		if (first) {
-			// A row that ends a lease the journal never held is an attempt nobody made.
+			// A change that ends a lease the journal never held is an attempt nobody made.
 			if (lease.reason === 'abandoned') {
 				this.emit({ type: 'abandoned', agent: seat, activation: lease.id });
 				void this.reconcile();
@@ -1104,7 +1107,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * ended. A fresh claim is taken only for an activation the fold says is
 	 * due: the next attempt at a pending wake, or at an owed draft. Anything
 	 * else was answered already, and a second run of it would answer twice.
-	 * The clock is read where the row is written: a renewal that waited on
+	 * The clock is read where the change is written: a renewal that waited on
 	 * the queue is judged against the lease as it stands then. No lease runs
 	 * past the deadline: the expiry a claim or a renewal takes is capped
 	 * there, so an activation that runs on expires on the room's alarm.
@@ -1139,12 +1142,12 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * End one lease, for whatever reason. Nothing to end is not an error. A
-	 * revocation may name an activation that never claimed: the row ends it
+	 * revocation may name an activation that never claimed: the change ends it
 	 * before it starts, and the wake or the draft it stood for is answered.
 	 * An abandonment names an activation that never claimed and nothing else:
 	 * a lease that started ends how it went.
-	 * An expiry is judged where the row is written: a renewal that landed
-	 * ahead of it keeps the lease, and the row is not written. The row says
+	 * An expiry is judged where the change is written: a renewal that landed
+	 * ahead of it keeps the lease, and nothing is written. The change says
 	 * how the activation went, and `heardLease` says so once.
 	 */
 	private end(id: string, reason: EndReason): Promise<boolean> {
@@ -1156,13 +1159,13 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * Whether the row lands. A lease the journal never held takes a row that
-	 * writes an activation off. A lease that already ended takes no second
-	 * row, and neither takes an abandonment. An expiry is judged here: a
+	 * Whether the change lands. A lease the journal never held takes a change
+	 * that writes an activation off. A lease that already ended takes no
+	 * second change, and neither takes an abandonment. An expiry is judged here: a
 	 * renewal that landed ahead of it keeps the lease, and every other
 	 * reason needs a lease that still holds.
 	 */
-	private ends(known: LeaseState | undefined, reason: EndReason): boolean {
+	private ends(known: LeaseHold | undefined, reason: EndReason): boolean {
 		if (known === undefined) return WRITES_OFF.has(reason);
 		if (known.phase === 'ended' || reason === 'abandoned') return false;
 		return isExpired(known, this.now()) === (reason === 'expired');
@@ -1228,10 +1231,10 @@ class SessionImpl implements Session, RunningRoom {
 	private async apply(decision: Decision): Promise<boolean> {
 		let changed = false;
 		// The decision says how each lease ends: expired first, then given up on.
-		for (const row of [...decision.expired, ...decision.abandoned]) {
+		for (const end of [...decision.expired, ...decision.abandoned]) {
 			// A room that went away mid-pass writes nothing more of what it decided.
 			if (this.gone()) return changed;
-			changed = (await this.end(row.id, row.reason)) || changed;
+			changed = (await this.end(end.id, end.reason)) || changed;
 		}
 		if (decision.close && !this.gone()) changed = (await this.close(decision.close)) || changed;
 		for (const send of decision.sends) this.send(send.id, send.seat);
@@ -1240,7 +1243,7 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * The room went quiet on an exchange, so that exchange ends at the record
-	 * as the decision saw it: the close is a row on the journal, written where the
+	 * as the decision saw it: the close is an entry on the journal, written where the
 	 * fold still says the same exchange is open. `heardClose` says so, and
 	 * opens the next exchange when a question landed after the decision; the
 	 * next pass closes that one at once when nobody works on it.
@@ -1271,23 +1274,24 @@ class SessionImpl implements Session, RunningRoom {
 	}
 
 	/**
-	 * A checkpoint when the journal has taken enough rows since the last one.
-	 * The room writes it where it has nothing else to write, so the row
-	 * stands for a room at rest, and a fold that reads it starts there.
+	 * A checkpoint when the journal has taken enough entries since the last
+	 * one. The room writes it where it has nothing else to write, so the
+	 * checkpoint stands for a room at rest, and a fold that reads it starts
+	 * there.
 	 *
-	 * The row is built where it lands, like every other row: a row that
-	 * landed between the decision and the write is in the fold the
+	 * The checkpoint is built where it lands, like every other entry: an
+	 * entry that landed between the decision and the write is in the fold the
 	 * checkpoint carries, and the journal drops it as one the checkpoint
-	 * replaced. A write that fails leaves the rows where they are, and the
+	 * replaced. A write that fails leaves the entries where they are, and the
 	 * next pass tries again.
 	 */
 	private async checkpoint(): Promise<void> {
-		// Nothing joins the queue until the rows are there: the room settles at
+		// Nothing joins the queue until the entries are there: the room settles at
 		// the speed it always did, and the builder checks the count again.
-		if (this.gone() || this.journal.sinceCheckpoint < this.runtime.checkpoint.rows) return;
+		if (this.gone() || this.journal.sinceCheckpoint < this.runtime.checkpoint.entries) return;
 		await this.journal
 			.write('checkpoint', () => {
-				if (this.journal.sinceCheckpoint < this.runtime.checkpoint.rows) return undefined;
+				if (this.journal.sinceCheckpoint < this.runtime.checkpoint.entries) return undefined;
 				return checkpointOf(this.state(), this.now());
 			})
 			.catch(() => {});
@@ -1420,19 +1424,19 @@ function unwrap(seat: AgentSeat): Placed {
 	return { def, attention: isSeatedAgent(seat) ? seat.attention : 'broadcast' };
 }
 
-const seatRow = (placed: Placed): Seating => ({
+const seatingOf = (placed: Placed): Seating => ({
 	name: placed.def.name,
 	identity: placed.def.identity,
 	attention: placed.attention,
 });
 
-/** The composition as the row the journal holds: every seat by name, identity and attention. */
-function compositionRow(composition: Cast, at: string): Without<Composition, 'after'> {
+/** The cast as the journal holds it: every seat by name, identity and attention. */
+function compositionOf(cast: Cast, at: string): Without<Composition, 'after'> {
 	return {
-		assistant: seatRow({ def: composition.assistant, attention: 'none' }),
-		...(composition.goal === undefined ? {} : { goal: composition.goal }),
-		agents: composition.agents.map(seatRow),
-		available: composition.available.map(seatRow),
+		assistant: seatingOf({ def: cast.assistant, attention: 'none' }),
+		...(cast.goal === undefined ? {} : { goal: cast.goal }),
+		agents: cast.agents.map(seatingOf),
+		available: cast.available.map(seatingOf),
 		at,
 	};
 }

@@ -80,7 +80,7 @@ describe('a handover under load', () => {
 });
 
 describe('a split: two live hosts over one journal', () => {
-	// The design forbids it, and the fence holds it: the second host's run row fences
+	// The design forbids it, and the fence holds it: the second host's fence voids
 	// the first out. The first host writes nothing more, says so once, and the record
 	// the second host serves holds every seq once.
 	it('the second host fences the first out, and the record holds every seq once', async () => {

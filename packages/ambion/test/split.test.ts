@@ -40,19 +40,19 @@ import {
 import { idle } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { History, standing, violations } from './support/history.ts';
-import { collect, roomName, rowsOf } from './support/room.ts';
+import { collect, roomName, storedOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { gatedOpener, jsonlSessions, memory, sqlite } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
-/** The rows as the fold reads them: the ones that stand past every fence. */
-function entriesOf(rows: { type: string; data: unknown }[]): Entry[] {
-	return standing(rows).flatMap((row) => {
-		const kind = row.type.slice('ambion/'.length);
+/** The stored entries as the fold reads them: the ones that stand past every fence. */
+function entriesOf(stored: { type: string; data: unknown }[]): Entry[] {
+	return standing(stored).flatMap((entry) => {
+		const kind = entry.type.slice('ambion/'.length);
 		if (kind === 'message' || kind === 'lease' || kind === 'close' || kind === 'composition') {
-			return [{ kind, body: row.data } as Entry];
+			return [{ kind, body: entry.data } as Entry];
 		}
 		return [];
 	});
@@ -119,11 +119,11 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			(record) => record.map((m) => ({ seq: m.seq, key: m.key })),
 		);
 		try {
-			const rows = await rowsOf(opened.sessions, name);
+			const stored = await storedOf(opened.sessions, name);
 			const found = violations(history, {
 				record: await taken.messages(),
-				rows,
-				state: foldRoom(entriesOf(rows), RETRY),
+				stored,
+				state: foldRoom(entriesOf(stored), RETRY),
 			});
 			// On a storage that takes any append, the fence allows one loss: the write
 			// the first host acknowledged past the fence is off the record, and off
@@ -229,7 +229,7 @@ describe('a split: two live hosts over one JSONL file', () => {
 			paused.continue();
 			await Promise.race([paused.exited, new Promise((resolve) => setTimeout(resolve, 3_000))]);
 			paused.kill();
-			await expect(rowsOf(jsonlSessions(dir), name)).rejects.toThrow(/non-consecutive seq/);
+			await expect(storedOf(jsonlSessions(dir), name)).rejects.toThrow(/non-consecutive seq/);
 			await stopSession(session);
 		} finally {
 			paused.kill();

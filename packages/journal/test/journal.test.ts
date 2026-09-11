@@ -90,7 +90,7 @@ async function session(id: string): Promise<PiSession> {
 const note = (text: string) => ({ text });
 
 describe('a journal', () => {
-	it('gives each positioned entry the next seq, and leaves a row without one', async () => {
+	it('gives each positioned entry the next seq, and leaves a entry without one', async () => {
 		const journal = await open();
 		const first = await journal.commit({ draft: note('one') });
 		expect('body' in first && first.body.seq).toBe(1);
@@ -183,7 +183,7 @@ describe('the envelope', () => {
 });
 
 describe('a checkpoint', () => {
-	it('replaces every row before it, and keeps every positioned entry', async () => {
+	it('replaces every entry before it, and keeps every positioned entry', async () => {
 		const journal = await open();
 		await journal.commit({ draft: note('one') });
 		await journal.write('mark', { label: 'a' });
@@ -198,7 +198,7 @@ describe('a checkpoint', () => {
 });
 
 describe('the fence', () => {
-	it('supersedes a run whose row a later run wrote past', async () => {
+	it('supersedes a run whose entry a later run wrote past', async () => {
 		const id = `journal-fence-${++names}`;
 		let lost = 0;
 		const first = await open(id, 'run-1', undefined, () => {

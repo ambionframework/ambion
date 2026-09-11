@@ -11,7 +11,7 @@ export function expired(expiry: number, now: number): boolean {
 	return expiry <= now;
 }
 
-//@ contract A lease was at work when a message landed: it held a row before the message, and ended, if it ended, after it.
+//@ contract A lease was at work when a message landed: it held a change before the message, and ended, if it ended, after it.
 export function atWork(since: number, ended: boolean, until: number, seq: number): boolean {
 	//@ ensures \result ==> since < seq
 	//@ ensures \result && ended ==> until >= seq

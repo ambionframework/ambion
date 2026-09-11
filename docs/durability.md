@@ -9,8 +9,8 @@ Read it with [`agent.md`](agent.md) §5, which names the mechanisms, and
 ## 1. The journal is the truth
 
 **One record, one writer, one order.** A room's record is one append-only
-journal in a Pi session. Every message takes the next seq, and every row the
-room writes beside the messages carries `after`, the last seq when it
+journal in a Pi session. Every message takes the next seq, and every entry
+the room writes beside the messages carries `after`, the last seq when it
 landed. The fold reads the journal from the start and rebuilds the room from
 it. That is the roster, the people, the open exchange, every lease, every
 wake still pending and every summary still owed. Nothing the room holds
@@ -29,24 +29,24 @@ holds the record for the life of the process. Pi's JSONL repository
 writes every entry to a file and calls no `fsync`. A storage that lies
 about an append breaks every promise below.
 
-**One run per name, fenced by its row.** `startSession` and
+**One run per name, fenced by one entry.** `startSession` and
 `resumeSession` refuse a name the runtime already runs. Across runtimes,
-the journal fences. The first row every run writes is its run row, with a
+the journal fences. The first entry every run writes is its fence, with a
 fresh run id, and every entry the run writes carries that id. The fence
-is positional: a reader passes the storage in order, and a run row moves
-the fence to that run. An entry of another run past the fence is void,
+is positional: a reader passes the storage in order, and a fence moves
+to that run. An entry of another run past the fence is void,
 and every reader skips it, the fencing run included. A run reads the
-storage before every write. A run that passes its own row and then a
-row of another run has lost the name: it emits `superseded`, drops
-itself from memory, and writes nothing more. A run row that lands late
-fences every run whose row came before it, even when its own run is
+storage before every write. A run that passes its own fence and then a
+fence of another run has lost the name: it emits `superseded`, drops
+itself from memory, and writes nothing more. A fence that lands late
+voids every run whose fence came before it, even when its own run is
 gone, so a live run can lose the name to a dead one. §5 says what a
 superseded run loses, and where the fence does not reach.
 
-**A checkpoint replaces rows, and never a message.** The room writes one
-every `runtime.checkpoint.rows` rows. It carries the composition, the
-closes and the leases a later fold still reads, behind a floor below
-which every wake was answered. The rows it replaces stay on the storage,
+**A checkpoint replaces entries, and never a message.** The room writes
+one every `runtime.checkpoint.entries` entries. It carries the composition,
+the closes and the leases a later fold still reads, behind a floor below
+which every wake was answered. The entries it replaces stay on the storage,
 so a reader that ignores the checkpoint folds the same room from them.
 The fence voids a checkpoint a superseded run wrote, like any other
 entry.
@@ -106,7 +106,7 @@ and once it stood down, through the seq its last renewal confirmed.
 
 **The room says when it gives up.** At the cap the room writes the
 attempt it does not make, ended `abandoned`, and the host hears an
-`abandoned` event. The row answers the wake or the close it stood for, so
+`abandoned` event. The entry answers the wake or the close it stood for, so
 no reader sees the room still owing it, and the record says the room
 stopped trying.
 
@@ -126,7 +126,7 @@ there. The room expires the lease on its alarm, so an activation that
 runs on is one attempt that came to nothing.
 
 **A claim asked twice starts one activation.** A claim of an id the room
-already runs is a renewal, and lands as a renewal row. The seat asks
+already runs is a renewal, and lands as a renewal. The seat asks
 again once when it never heard back. A release asked twice ends the
 lease once: the second call is answered stale. A release lost twice
 leaves the room to expire the lease on its side.
@@ -149,7 +149,7 @@ offers it; Pi's repositories do not.
 
 **Two live hosts over a JSONL file.** Pi's JSONL storage reads its own
 memory and appends to the file, so a run over it never sees another
-run's rows, and the fence does not reach it. Once a paused run comes
+run's entries, and the fence does not reach it. Once a paused run comes
 back, Pi refuses to load the file, and no run can open the name again.
 `split.test.ts` pins it. JSONL is a storage for one host.
 
@@ -171,8 +171,8 @@ by its instructions.
 Durable Object, over the core's SQLite storage on the object's own
 `ctx.storage.sql`. The platform gives one instance per id, and the object
 resumes in its constructor, so the room's writer and its storage share a
-lifetime. An instance the platform took away is fenced by the resume's run
-row, and its late write is void. The storage refuses an append the record
+lifetime. An instance the platform took away is fenced by the resume's
+fence, and its late write is void. The storage refuses an append the record
 moved under, so that write is refused rather than acknowledged.
 
 ## 6. What a host must do
@@ -186,7 +186,7 @@ moved under, so that write is refused rather than acknowledged.
   eviction: nothing that run answers from then on is an answer, and the
   host resumes the name again. A stop on a superseded run resolves, and
   the event says why it wrote nothing.
-- Retry a resume the storage failed: the run row is the first write a
+- Retry a resume the storage failed: the fence is the first write a
   resumed run makes.
 - Read `messages()` after a resume for what the stream did not carry.
 

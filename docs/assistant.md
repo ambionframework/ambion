@@ -62,7 +62,7 @@ it refuses a say. Two things make it the seat it is, and both are data:
   reserve. [`roster.md`](roster.md) is the contract for it.
 
 A seat carries none of that. Which seat is the assistant is on the
-composition row; who is owed a message is a fold over the close rows, the
+composition; who is owed a message is a fold over the closes, the
 summaries and the leases (`foldOwed` in
 [`fold.ts`](../packages/ambion/src/room/fold.ts)); what it is drafting for
 now is on the id of the activation it holds (`close:<through>:<attempt>`).
@@ -773,7 +773,7 @@ afterwards.
 the activation. An activation that fails outright, or that runs out of
 drafts, is one attempt, and the room's own alarm wakes the assistant again
 after the backoff, whether or not anybody speaks into the room. After
-three attempts the room stops trying, and it writes a row that says so:
+three attempts the room stops trying, and it writes an entry that says so:
 the attempt it does not make, ended `abandoned`. The host hears an
 `abandoned` event. The range stays whole and every reader still sees it,
 so nothing is lost, and the one message never arrives.

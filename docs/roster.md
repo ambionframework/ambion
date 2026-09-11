@@ -305,8 +305,8 @@ argument for giving it one.
 **`stop` leaves the roster to the next composition.** `stopSession`
 revokes every lease in flight and commits `left` for every person present
 ([`presence.md`](presence.md) §8). It writes no `unseated`. The
-next `startSession` writes its own composition row, the roster folds from
-that row and the seatings after it, and the record says who was seated in
+next `startSession` writes its own composition, the roster folds from
+that and the seatings after it, and the record says who was seated in
 between. A read of the stopped room (`readSession`) folds the roster the
 run left.
 
@@ -349,13 +349,13 @@ Each boundary is stated so a later change has to argue with it.
   the host decides what is in it by writing `available`. §2.
 - **A seat never reads the reserve.** §2.
 - **A seating is on the record, and so is the composition.** Every
-  `startSession` writes a composition row beside the messages: the
-  assistant, the goal, the agents seated and the agents in reserve, each
-  with its name, its identity and its attention. The roster folds from the
-  latest row and the seatings and unseatings after it, so a stopped room
-  reads back, and a resumed room starts from what its last run held. A read
-  from a process that holds no definition reports every identity off the
-  journal.
+  `startSession` writes a composition beside the messages: the assistant,
+  the goal, the agents seated and the agents in reserve, each with its
+  name, its identity and its attention. The roster folds from the latest
+  composition and the seatings and unseatings after it, so a stopped room
+  reads back, and a resumed room starts from what its last run held. A
+  read from a process that holds no definition reports every identity off
+  the journal.
 - **The threshold reads the record.** The rule that a summary is written
   when the agents said more than one thing counts messages from any name
   that is not a person and not the assistant, so an agent that spoke and
@@ -393,7 +393,7 @@ this document makes loudly:
 - the host seats and unseats by hand, an unseat aborts the activation in
   flight, and a say directed at the unseated colleague is refused with the
   departure (§5);
-- `stop` leaves the roster to the next composition row, and the next run
+- `stop` leaves the roster to the next composition, and the next run
   starts from its own (§5);
 - the threshold counts an agent that spoke and was unseated (§7);
 - every identity reads off the journal, in a process that holds no definition

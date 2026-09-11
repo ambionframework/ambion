@@ -11,7 +11,7 @@ import {
 	type SessionView,
 } from '../../src/index.ts';
 import { standing } from './history.ts';
-import { rowsOf } from './room.ts';
+import { storedOf } from './room.ts';
 
 export interface InvariantOptions {
 	/** How many `error` events the run may hold. A live model may refuse one call. */
@@ -72,17 +72,17 @@ export async function invariants(
 
 /** Every message a seat wrote carries an activation id whose lease was running when it landed. */
 async function leased(session: SessionView, sessions: SessionOpener): Promise<void> {
-	// among the rows that stand: a row a superseded run wrote past the fence is void
-	const rows = standing(await rowsOf(sessions, session.name));
+	// among the entries that stand: one a superseded run wrote past the fence is void
+	const stored = standing(await storedOf(sessions, session.name));
 	const running = new Set<string>();
-	for (const row of rows) {
-		if (row.type === 'ambion/lease') {
-			const lease = row.data as LeaseChange;
+	for (const entry of stored) {
+		if (entry.type === 'ambion/lease') {
+			const lease = entry.data as LeaseChange;
 			if (lease.phase === 'running') running.add(lease.id);
 			else running.delete(lease.id);
 		}
-		if (row.type !== 'ambion/message') continue;
-		const message = row.data as { activationId?: string; from: string };
+		if (entry.type !== 'ambion/message') continue;
+		const message = entry.data as { activationId?: string; from: string };
 		if (message.activationId === undefined) continue;
 		expect(running, `${message.from}'s message under ${message.activationId}`).toContain(
 			message.activationId,

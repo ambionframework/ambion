@@ -111,7 +111,8 @@ Rules that carry the most weight here:
    spans and two words: an **activation** is the room waking one seat, an
    **exchange** is a person's question and every activation until the room goes
    quiet. `turn` belongs to Pi, where it means one request to a provider, and
-   `round` belongs to nobody.
+   `round` belongs to nobody. What the journal holds is an **entry**. `row`
+   belongs to SQL, so use it only about a database table.
 5. **Simple tenses.** Present for how things work, imperative for instructions.
 6. **Keep articles and relative pronouns.** "The agent that waits", not "agent
    waits".

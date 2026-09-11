@@ -55,7 +55,7 @@ function cases(): Case[] {
 	const out: Case[] = [];
 	const flags = [true, false];
 	for (let since = 0; since <= 6; since += 1) {
-		// `foldLeases` never builds a lease whose end lands before its first row.
+		// `foldLeases` never builds a lease whose end lands before its first entry.
 		for (let until = since; until <= 6; until += 1) {
 			for (let seq = 0; seq <= 7; seq += 1) {
 				for (const liveOrFailed of flags) {

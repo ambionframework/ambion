@@ -18,9 +18,9 @@ import {
 	type Checkpoint,
 	type Close,
 	type Composition,
+	type Fence,
 	isCheckpoint,
 	type LeaseChange,
-	type Run,
 	type Without,
 } from '../wire.ts';
 
@@ -47,7 +47,7 @@ export interface Bodies {
 	lease: LeaseChange;
 	close: Close;
 	composition: Composition;
-	run: Run;
+	run: Fence;
 	checkpoint: Checkpoint;
 }
 
@@ -59,7 +59,7 @@ export type Drafts = {
 	lease: Without<LeaseChange, 'after'>;
 	close: Without<Close, 'after'>;
 	composition: Without<Composition, 'after'>;
-	run: Without<Run, 'after'>;
+	run: Without<Fence, 'after'>;
 	checkpoint: Without<Checkpoint, 'after'>;
 };
 
@@ -79,10 +79,6 @@ const WORDS: Vocabulary<Kind> = {
 
 /** One entry on the room's journal: its kind, and the body that kind carries. */
 export type Entry = Entries<Kind, Bodies>;
-
-/** The commit landed, or the key had landed before, or the record had moved. */
-export type Committed<T extends Message> =
-	{ body: T; repeated?: true } | { missed: readonly Message[] };
 
 /**
  * The room's journal: the record's machinery, in the room's vocabulary.
