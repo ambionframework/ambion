@@ -6,7 +6,7 @@
  * Object and each seat is another, so the platform can take the room alone.
  * The demo does exactly that: it waits until the seats hold leases, drops the
  * room object, and lets the seats finish. The room that comes back folds the
- * same leases off the log and takes the commits the dead run never saw.
+ * same leases off the journal and takes the commits the dead run never saw.
  *
  * Run it in two terminals, from `examples/site`:
  *
@@ -19,7 +19,7 @@ import { MODEL, ROOM_NAME } from './room.ts';
 const WORKER = process.env.AMBION_WORKER ?? 'http://localhost:8787';
 const OUT = process.env.DEMO_OUT ?? 'demo-cloudflare-run.json';
 
-interface LogRow {
+interface StoredEntry {
 	type: string;
 	data: Record<string, unknown>;
 }
@@ -36,7 +36,7 @@ interface SeatEvent {
 interface LeaseData {
 	id: string;
 	phase: 'running' | 'ended';
-	/** The run that wrote this row. The fence stamps every entry with it. */
+	/** The run that wrote this entry. The fence stamps every entry with it. */
 	written?: string;
 }
 interface Say {
@@ -75,13 +75,13 @@ async function until<T>(read: () => Promise<T | undefined>, ms = 180_000): Promi
 	}
 }
 
-const log = () => call<LogRow[]>('/log');
+const journal = () => call<StoredEntry[]>('/journal');
 
 /**
  * What the seats did inside their own objects, out of Cloudflare's logs.
  *
  * An activation runs in the seat's object and raises its events there, so the
- * room's log holds no tool call. The seat writes each one as a structured log
+ * room's journal holds no tool call. The seat writes each one as a structured journal
  * line instead, and wrangler keeps them where a query can reach: this is the
  * local explorer, and a deployed worker answers the same question through the
  * Workers Logs API.
@@ -96,7 +96,8 @@ async function seatEvents(): Promise<SeatEvent[]> {
 	});
 	if (!response.ok) return [];
 	const answer = (await response.json()) as { result?: { rows?: [string][] } };
-	// Each row holds what one `console.log` was given, as the array it was called with.
+	// The query returns SQL rows. Each one holds what one `console.log` was
+	// given, as the array it was called with.
 	return (answer.result?.rows ?? []).flatMap((row) => {
 		try {
 			return JSON.parse(row[0]) as SeatEvent[];
@@ -106,9 +107,9 @@ async function seatEvents(): Promise<SeatEvent[]> {
 	});
 }
 const messages = () => call<Say[]>('/messages');
-/** Every row of one kind, read as the shape that kind carries on the wire. */
-const rowsOf = <T>(rows: LogRow[], kind: string): T[] =>
-	rows.filter((row) => row.type === `ambion/${kind}`).map((row) => row.data as T);
+/** Every entry of one kind, read as the shape that kind carries on the wire. */
+const entriesOf = <T>(stored: StoredEntry[], kind: string): T[] =>
+	stored.filter((entry) => entry.type === `ambion/${kind}`).map((entry) => entry.data as T);
 
 // The worker answers before the room starts, so any response says it is up.
 const up = await fetch(WORKER).then(
@@ -133,9 +134,9 @@ await call('/deliver', {
 	key: 'priya-1',
 });
 
-step('the seats take their leases, and the room writes a row for each');
+step('the seats take their leases, and the room writes an entry for each');
 const claimed = await until(async () => {
-	const held = rowsOf<LeaseData>(await log(), 'lease');
+	const held = entriesOf<LeaseData>(await journal(), 'lease');
 	return held.length >= 2 ? held : undefined;
 });
 process.stderr.write(`  ${claimed.length} leases running\n`);
@@ -157,13 +158,15 @@ process.stderr.write(
 	`\n∎ ${summary.from} → ${summary.to}\n  ${(summary.text ?? '').slice(0, 240)}\n`,
 );
 
-// Every lease ends before the log is read, so the capture holds the release
-// of the draft the summary came from and not the row before it.
-const rows = await until(async () => {
-	const held = rowsOf<LeaseData>(await log(), 'lease');
-	const ids = [...new Set(held.map((row) => row.id))];
-	const ended = ids.every((id) => held.filter((row) => row.id === id).at(-1)?.phase === 'ended');
-	return ended ? await log() : undefined;
+// Every lease ends before the journal is read, so the capture holds the release
+// of the draft the summary came from and not the entry before it.
+const stored = await until(async () => {
+	const held = entriesOf<LeaseData>(await journal(), 'lease');
+	const ids = [...new Set(held.map((entry) => entry.id))];
+	const ended = ids.every(
+		(id) => held.filter((entry) => entry.id === id).at(-1)?.phase === 'ended',
+	);
+	return ended ? await journal() : undefined;
 });
 const seats = await call<{ kind: string; name: string }[]>('/seats');
 const events = await seatEvents();
@@ -174,9 +177,9 @@ process.stderr.write(`  ${events.length} seat events read back from the logs\n`)
  * A run where none crossed proves nothing, and the report says so; the
  * operator hears it here, where running it again is still cheap.
  */
-const finalLeases = rowsOf<LeaseData>(rows, 'lease');
-const crossed = [...new Set(finalLeases.map((row) => row.id))].filter((id) => {
-	const mine = finalLeases.filter((row) => row.id === id);
+const finalLeases = entriesOf<LeaseData>(stored, 'lease');
+const crossed = [...new Set(finalLeases.map((entry) => entry.id))].filter((id) => {
+	const mine = finalLeases.filter((entry) => entry.id === id);
 	return mine[0]?.written !== mine[mine.length - 1]?.written;
 });
 process.stderr.write(`  ${crossed.length} activations crossed the crash\n`);
@@ -195,8 +198,8 @@ writeFileSync(
 			ranAt: new Date().toISOString(),
 			steps,
 			crash: { time: crashedAtTime, leases: claimed.length },
-			log: rows,
-			runs: rowsOf<{ run: string }>(rows, 'run'),
+			journal: stored,
+			runs: entriesOf<{ run: string }>(stored, 'run'),
 			record: await messages(),
 			seats,
 			events,

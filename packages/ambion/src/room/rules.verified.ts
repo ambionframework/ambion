@@ -11,7 +11,7 @@ export function expired(expiry: number, now: number): boolean {
 	return expiry <= now;
 }
 
-//@ contract A lease was at work when a message landed: it held a row before the message, and ended, if it ended, after it.
+//@ contract A lease was at work when a message landed: it held a change before the message, and ended, if it ended, after it.
 export function atWork(since: number, ended: boolean, until: number, seq: number): boolean {
 	//@ ensures \result ==> since < seq
 	//@ ensures \result && ended ==> until >= seq
@@ -19,20 +19,18 @@ export function atWork(since: number, ended: boolean, until: number, seq: number
 	return since < seq && (!ended || until >= seq);
 }
 
-//@ contract A lease heard a message. One that runs or came to nothing heard what it was at work for and what its view held; one that stood down heard through the seq its last renewal confirmed.
+//@ contract A lease heard an entry. One that runs or came to nothing heard everything through its end; one that stood down heard through the seq its last renewal confirmed.
 export function heard(
 	liveOrFailed: boolean,
-	since: number,
 	ended: boolean,
 	until: number,
 	heardThrough: number,
 	seq: number,
 ): boolean {
 	//@ ensures !liveOrFailed ==> (\result <==> seq <= heardThrough)
-	//@ ensures liveOrFailed && since >= seq ==> \result
-	//@ ensures liveOrFailed && !ended && since < seq ==> \result
-	//@ ensures !liveOrFailed && seq > heardThrough ==> !\result
-	if (liveOrFailed) return atWork(since, ended, until, seq) || since >= seq;
+	//@ ensures liveOrFailed && !ended ==> \result
+	//@ ensures liveOrFailed && ended ==> (\result <==> seq <= until)
+	if (liveOrFailed) return !ended || seq <= until;
 	return seq <= heardThrough;
 }
 

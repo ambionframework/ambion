@@ -42,14 +42,14 @@ lemma voided_ensures(fenced: bool, stamped: bool, sameRun: bool)
 {
 }
 
-function supersedes(ownRowLanded: bool, sameRun: bool): bool
+function supersedes(ownEntryLanded: bool, sameRun: bool): bool
 {
-  (ownRowLanded && !(sameRun))
+  (ownEntryLanded && !(sameRun))
 }
 
-lemma supersedes_ensures(ownRowLanded: bool, sameRun: bool)
-  ensures (supersedes(ownRowLanded, sameRun) <==> (ownRowLanded && !(sameRun)))
-  ensures (sameRun ==> !(supersedes(ownRowLanded, sameRun)))
-  ensures (!(ownRowLanded) ==> !(supersedes(ownRowLanded, sameRun)))
+lemma supersedes_ensures(ownEntryLanded: bool, sameRun: bool)
+  ensures (supersedes(ownEntryLanded, sameRun) <==> (ownEntryLanded && !(sameRun)))
+  ensures (sameRun ==> !(supersedes(ownEntryLanded, sameRun)))
+  ensures (!(ownEntryLanded) ==> !(supersedes(ownEntryLanded, sameRun)))
 {
 }

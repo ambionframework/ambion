@@ -1,6 +1,6 @@
 /**
  * The split the design forbids, as a history: two live hosts over one
- * log. The first host is paused, in this process by holding its writes
+ * journal. The first host is paused, in this process by holding its writes
  * and in a process of its own with SIGSTOP, a second host resumes the
  * name, and the first comes back and keeps writing. In memory, the fence
  * holds: the first host's write past the fence is void, it acknowledges
@@ -24,7 +24,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
-import type { LogEntry } from '../src/log/log.ts';
+import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import {
 	agents,
@@ -40,28 +40,27 @@ import {
 import { idle } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { History, standing, violations } from './support/history.ts';
-import { collect, roomName, rowsOf } from './support/room.ts';
+import { collect, roomName, storedOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { gatedOpener, jsonlSessions, memory, sqlite } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
-/** The rows as the fold reads them: the ones that stand past every fence. */
-function entriesOf(rows: { type: string; data: unknown }[]): LogEntry[] {
-	return standing(rows).flatMap((row) => {
-		const type = row.type.slice('ambion/'.length);
-		if (type === 'message') return [{ type, message: row.data } as LogEntry];
-		if (type === 'lease') return [{ type, lease: row.data } as LogEntry];
-		if (type === 'close') return [{ type, close: row.data } as LogEntry];
-		if (type === 'composition') return [{ type, composition: row.data } as LogEntry];
+/** The stored entries as the fold reads them: the ones that stand past every fence. */
+function entriesOf(stored: { type: string; data: unknown }[]): Entry[] {
+	return standing(stored).flatMap((entry) => {
+		const kind = entry.type.slice('ambion/'.length);
+		if (kind === 'message' || kind === 'lease' || kind === 'close' || kind === 'composition') {
+			return [{ kind, body: entry.data } as Entry];
+		}
 		return [];
 	});
 }
 
 // A storage that refuses an append the record moved under loses nothing:
 // the write the paused host held is refused before it is acknowledged.
-describe.each([memory, sqlite])('a split on $name: two live hosts over one log', (storage) => {
+describe.each([memory, sqlite])('a split on $name: two live hosts over one journal', (storage) => {
 	const refuses = storage.name === 'sqlite';
 	it('a paused host that comes back is fenced out, and loses only what the storage lets it', async () => {
 		const opened = await storage.open();
@@ -120,11 +119,11 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one log',
 			(record) => record.map((m) => ({ seq: m.seq, key: m.key })),
 		);
 		try {
-			const rows = await rowsOf(opened.sessions, name);
+			const stored = await storedOf(opened.sessions, name);
 			const found = violations(history, {
 				record: await taken.messages(),
-				rows,
-				state: foldRoom(entriesOf(rows), RETRY),
+				stored,
+				state: foldRoom(entriesOf(stored), RETRY),
 			});
 			// On a storage that takes any append, the fence allows one loss: the write
 			// the first host acknowledged past the fence is off the record, and off
@@ -171,7 +170,7 @@ describe('a split: two live hosts over one JSONL file', () => {
 		});
 	}
 
-	/** Run the child until its log takes `at` appends, then stop it where it stands. */
+	/** Run the child until its journal takes `at` appends, then stop it where it stands. */
 	function stopAt(dir: string, name: string, at: number) {
 		const args = ['--experimental-transform-types', '--no-warnings', child, dir, name, '40'];
 		const process_ = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -230,7 +229,7 @@ describe('a split: two live hosts over one JSONL file', () => {
 			paused.continue();
 			await Promise.race([paused.exited, new Promise((resolve) => setTimeout(resolve, 3_000))]);
 			paused.kill();
-			await expect(rowsOf(jsonlSessions(dir), name)).rejects.toThrow(/non-consecutive seq/);
+			await expect(storedOf(jsonlSessions(dir), name)).rejects.toThrow(/non-consecutive seq/);
 			await stopSession(session);
 		} finally {
 			paused.kill();

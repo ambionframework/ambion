@@ -60,8 +60,8 @@ export function crash(runtime: Runtime, session: Session): void {
 	runtime.evict(session.name);
 }
 
-/** Every row the room wrote beside its messages, read off Pi's session directly. */
-export async function rowsOf(
+/** Every entry the room wrote beside its messages, as the storage holds it. */
+export async function storedOf(
 	sessions: SessionOpener,
 	name: string,
 ): Promise<{ type: string; data: unknown }[]> {

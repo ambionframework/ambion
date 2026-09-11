@@ -65,8 +65,8 @@ export function renderLine(message: Message): string {
 	return `· ${message.from} ${message.kind}${message.by ? ` by ${message.by}` : ''}`;
 }
 
-/** One rendered row: a message on its own, or the run one summary stands for. */
-type Row = { line: Message } | { fold: Message[]; by: SummaryMessage };
+/** One block of the rendered record: a message on its own, or the run one summary stands for. */
+type Block = { line: Message } | { fold: Message[]; by: SummaryMessage };
 
 /**
  * The summary that stands for each seq one covers. A summary is never folded
@@ -91,10 +91,10 @@ function foldedBy(record: readonly Message[]): Map<Seq, SummaryMessage> {
 	return by;
 }
 
-/** The record as rows, with each summarised run collapsed into one. */
-function rows(record: readonly Message[]): Row[] {
+/** The record as blocks, with each summarised run collapsed into one. */
+function blocks(record: readonly Message[]): Block[] {
 	const by = foldedBy(record);
-	const out: Row[] = [];
+	const out: Block[] = [];
 	for (const message of record) {
 		const stands = by.get(message.seq);
 		if (!stands) {
@@ -126,22 +126,22 @@ export function renderRecord(
 	if (record.length === 0) return '(the record is empty)';
 	const dividers = unseenDividers(people);
 	const lines: string[] = [];
-	for (const row of rows(record)) {
-		lines.push(renderRow(row, now), ...divide(row, dividers));
+	for (const block of blocks(record)) {
+		lines.push(renderBlock(block, now), ...divide(block, dividers));
 	}
 	return lines.join('\n');
 }
 
-function renderRow(row: Row, now: number): string {
-	if ('fold' in row) {
-		return `── ${count(row.fold.length, 'message')}, summarised for ${row.by.to} below ──`;
+function renderBlock(block: Block, now: number): string {
+	if ('fold' in block) {
+		return `── ${count(block.fold.length, 'message')}, summarised for ${block.by.to} below ──`;
 	}
-	return `${renderLine(row.line)}  (${ago(row.line.at, now)})`;
+	return `${renderLine(block.line)}  (${ago(block.line.at, now)})`;
 }
 
 /** A person's divider lands where they stopped reading, folded or not. */
-function divide(row: Row, dividers: Map<Seq, string[]>): string[] {
-	const seqs = 'fold' in row ? row.fold.map((message) => message.seq) : [row.line.seq];
+function divide(block: Block, dividers: Map<Seq, string[]>): string[] {
+	const seqs = 'fold' in block ? block.fold.map((message) => message.seq) : [block.line.seq];
 	return seqs.flatMap((seq) =>
 		(dividers.get(seq) ?? []).map((name) => `── ${name} has not seen anything below this line ──`),
 	);

@@ -2,7 +2,7 @@
  * A wake is safe to send twice, a lost one is sent again, a lost release
  * expires, and a lost wake into a running activation is read off the
  * record. Rule 4 of the design:
- * every activation's id is derived from the log, so nothing that crosses
+ * every activation's id is derived from the journal, so nothing that crosses
  * the wire has to arrive exactly once.
  */
 import type { Context } from '@earendil-works/pi-ai';
@@ -14,7 +14,7 @@ import {
 	inProcessTransport,
 	isSpoken,
 	isSummary,
-	type LeaseRow,
+	type LeaseChange,
 	type Runtime,
 	type SeatRoom,
 	type Session,
@@ -24,7 +24,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { assistant, collect, deferred, enter, roomName, rowsOf, tick } from './support/room.ts';
+import { assistant, collect, deferred, enter, roomName, storedOf, tick } from './support/room.ts';
 import {
 	answersEveryQuestion,
 	byAgent,
@@ -181,13 +181,13 @@ describe('a lease', () => {
 			true,
 		);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
-		const rows = await rowsOf(runtime.sessions, session.name);
-		const renewals = rows.flatMap((row) => {
-			const lease = row.data as LeaseRow;
-			const mine = row.type === 'ambion/lease' && lease.id === '2:solo';
+		const stored = await storedOf(runtime.sessions, session.name);
+		const renewals = stored.flatMap((entry) => {
+			const lease = entry.data as LeaseChange;
+			const mine = entry.type === 'ambion/lease' && lease.id === '2:solo';
 			return mine && lease.phase === 'running' ? [lease.expiry] : [];
 		});
-		// the room wrote a claim and renewals, and no row takes the lease past the deadline
+		// the room wrote a claim and renewals, and no change takes the lease past the deadline
 		expect(renewals.length).toBeGreaterThan(1);
 		expect(renewals.every((expiry) => expiry <= clock.now())).toBe(true);
 
@@ -218,12 +218,14 @@ describe('a lease', () => {
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
 			{ type: 'abandoned', agent: 'solo', activation: '2:solo:4' },
 		]);
-		const rows = await rowsOf(runtime.sessions, session.name);
-		const gaveUp = rows.filter((row) => {
-			const lease = row.data as LeaseRow;
-			return row.type === 'ambion/lease' && lease.phase === 'ended' && lease.reason === 'abandoned';
+		const stored = await storedOf(runtime.sessions, session.name);
+		const gaveUp = stored.filter((entry) => {
+			const lease = entry.data as LeaseChange;
+			return (
+				entry.type === 'ambion/lease' && lease.phase === 'ended' && lease.reason === 'abandoned'
+			);
 		});
-		expect(gaveUp.map((row) => (row.data as LeaseRow).id)).toEqual(['2:solo:4']);
+		expect(gaveUp.map((entry) => (entry.data as LeaseChange).id)).toEqual(['2:solo:4']);
 
 		// the wake is answered, so the exchange closes and the seat stands idle
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
@@ -261,9 +263,11 @@ describe('a lease', () => {
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
 			{ type: 'abandoned', agent: 'assistant', activation: 'close:4:4' },
 		]);
-		const rows = await rowsOf(runtime.sessions, session.name);
+		const stored = await storedOf(runtime.sessions, session.name);
 		expect(
-			rows.filter((row) => (row.data as LeaseRow).id === 'close:4:4').map((row) => row.data),
+			stored
+				.filter((entry) => (entry.data as LeaseChange).id === 'close:4:4')
+				.map((entry) => entry.data),
 		).toMatchObject([{ phase: 'ended', reason: 'abandoned' }]);
 		// nothing is owed, no summary was written, and the record stands whole
 		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
@@ -363,7 +367,7 @@ describe('a lease', () => {
 	});
 });
 
-describe('a lease judged where its row is written', () => {
+describe('a lease judged where its change is written', () => {
 	const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
 	it('keeps a lease whose renewal landed ahead of the expiry the alarm decided', async () => {
@@ -373,8 +377,8 @@ describe('a lease judged where its row is written', () => {
 		let runningRows = 0;
 		// the claim lands at once; the first renewal is held on the storage
 		const sessions = gatedOpener(base.sessions, (type, data) => {
-			const row = data as LeaseRow;
-			if (type !== 'ambion/lease' || row.phase !== 'running' || !row.id.endsWith(':solo')) {
+			const entry = data as LeaseChange;
+			if (type !== 'ambion/lease' || entry.phase !== 'running' || !entry.id.endsWith(':solo')) {
 				return undefined;
 			}
 			runningRows += 1;
@@ -397,7 +401,7 @@ describe('a lease judged where its row is written', () => {
 		const visit = await enter(session);
 		await visit.deliver({ text: 'go' });
 		await tick();
-		// half the expiry: the renewal is asked for, and its row waits on the storage
+		// half the expiry: the renewal is asked for, and its change waits on the storage
 		await clock.advance(30_000);
 		expect(runningRows).toBe(2);
 		// the expiry: the alarm decides on the fold that still shows it, behind the renewal
@@ -414,12 +418,12 @@ describe('a lease judged where its row is written', () => {
 			'andrei',
 			'solo',
 		]);
-		const rows = (await rowsOf(base.sessions, session.name))
+		const stored = (await storedOf(base.sessions, session.name))
 			.filter((r) => r.type === 'ambion/lease')
-			.map((r) => r.data as LeaseRow)
+			.map((r) => r.data as LeaseChange)
 			.filter((l) => l.id.endsWith(':solo'));
 		// the claim, the renewal, the check at the run's end, and one release: no expiry
-		expect(rows.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual(['released']);
+		expect(stored.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual(['released']);
 	});
 
 	it('hands a draft every close its person is owed, when a later close joined it under the claim', async () => {

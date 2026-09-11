@@ -1,0 +1,55 @@
+{
+	"name": "@ambionframework/journal",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "An append-only journal over a Pi session: one serial queue, fenced by run, checkpointed, and honest about a write it is in doubt about.",
+	"license": "Apache-2.0",
+	"homepage": "https://ambionframework.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ambionframework/ambion.git",
+		"directory": "packages/journal"
+	},
+	"keywords": [
+		"ambion",
+		"append-only",
+		"durability",
+		"event-log",
+		"fencing",
+		"journal"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.mts",
+			"import": "./dist/index.mjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"publishConfig": {
+		"registry": "https://npm.pkg.github.com",
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsdown",
+		"check:types": "tsc -p tsconfig.check.json --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"devDependencies": {
+		"tsdown": "^0.22.14",
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11"
+	},
+	"dependencies": {
+		"@earendil-works/pi-agent-core": "^0.84.3"
+	}
+}

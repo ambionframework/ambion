@@ -1,6 +1,6 @@
 /**
  * The room in doubt: a write that landed while its confirmation was lost.
- * The log reads the storage at once, and the room hears what it finds the
+ * The journal reads the storage at once, and the room hears what it finds the
  * way it hears what it wrote.
  */
 import { describe, expect, it } from 'vitest';
@@ -15,7 +15,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
-import { collect, roomName, rowsOf } from './support/room.ts';
+import { collect, roomName, storedOf } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -126,8 +126,8 @@ describe('a room in doubt', () => {
 		await delivered;
 		for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
 		await session.quiet();
-		const rows = await rowsOf(opened.sessions, session.name);
-		expect(rows.filter((r) => r.type === 'ambion/close')).toHaveLength(2);
+		const stored = await storedOf(opened.sessions, session.name);
+		expect(stored.filter((r) => r.type === 'ambion/close')).toHaveLength(2);
 		expect(count(events, 'exchange_opened')).toBe(2);
 		expect(count(events, 'exchange_closed')).toBe(2);
 	});

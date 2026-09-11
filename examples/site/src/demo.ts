@@ -5,17 +5,17 @@
  * assistant all live in `room.ts`; this file only decides who arrives, what
  * they ask, when they leave, and when the process dies — then writes out
  * the event timeline, every activation with its outcome, whom the assistant
- * seated and what it wrote, the room's own log, and each seat's own
+ * seated and what it wrote, the room's own journal, and each seat's own
  * downstream session.
  *
  * The run crashes once, on purpose: as the first answer to Sam's question
  * lands, the runtime that holds the room is dropped, and a second runtime
- * resumes the name over the same log. What the dead run held expires, what
+ * resumes the name over the same journal. What the dead run held expires, what
  * it left pending is sent again, and the exchange closes into one message.
  *
  * The record is one SQLite database on disk, and each runtime opens the file
  * for itself. The second runtime shares nothing in memory with the first, so
- * everything it knows about the room it reads off the log.
+ * everything it knows about the room it reads off the journal.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm demo   (from examples/site)
  */
@@ -33,13 +33,11 @@ import {
 	resumeSession,
 	type Session,
 	type SessionEvent,
-	type Sql,
-	type SqlValue,
-	sqliteSessions,
 	startSession,
 	stopSession,
 	visitSession,
 } from '@ambionframework/ambion';
+import { type Sql, type SqlValue, sqliteSessions } from '@ambionframework/journal';
 import {
 	AGENTS,
 	ASSISTANT,
@@ -113,10 +111,10 @@ const driveBefore = await driveFiles();
 
 /**
  * A short lease, so the leases the dead run held expire within seconds of the
- * resume, and a low checkpoint threshold, so the resumed room reads one row in
- * place of the rows before it. A host picks both.
+ * resume, and a low checkpoint threshold, so the resumed room reads one
+ * checkpoint in place of the entries before it. A host picks both.
  */
-const LEASE = { wake: { expiry: 15_000 }, checkpoint: { rows: 24 } };
+const LEASE = { wake: { expiry: 15_000 }, checkpoint: { entries: 24 } };
 const firstDatabase = openDatabase();
 const first = createRuntime({ sessions: sqliteSessions(nodeSql(firstDatabase)), ...LEASE });
 let session: Session = startSession({
@@ -271,13 +269,13 @@ const crashedAt = await Promise.race([firstAnswer, quiescent().then(() => lastSe
 stopWatchingForIt();
 
 step(
-	'the process dies as the first answer to sam lands: the leases it held stay on the log, and nothing is released',
+	'the process dies as the first answer to sam lands: the leases it held stay on the journal, and nothing is released',
 );
 first.evict(NAME);
 const crashedAtTime = new Date().toISOString();
 
 step(
-	'a second process resumes the room over the same log: the wakes still pending are sent again, the leases the dead run held expire, and the exchange closes',
+	'a second process resumes the room over the same journal: the wakes still pending are sent again, the leases the dead run held expire, and the exchange closes',
 );
 const secondDatabase = openDatabase();
 const second = createRuntime({
@@ -287,7 +285,7 @@ const second = createRuntime({
 });
 session = await resumeSession(NAME, { runtime: second });
 watch(session);
-// sam is present on the log, so the visit puts nothing on the record.
+// sam is present on the journal, so the visit puts nothing on the record.
 await visitSession(session, sam);
 await quiescent();
 
@@ -362,7 +360,7 @@ for (const seat of seats) {
 	});
 }
 
-/** The room's own log: every row beside the messages, in the order they landed. */
+/** The room's own journal: every entry beside the messages, in the order they landed. */
 const roomLog: { type: string; data: unknown }[] = [];
 const piRoom = await reader.open(NAME);
 const roomEntries = await piRoom.findEntries();
@@ -395,7 +393,7 @@ writeFileSync(
 			timeline,
 			record: await session.messages().catch(() => finalRecord),
 			crash: { at: crashedAt, time: crashedAtTime, leaseExpiry: LEASE.wake.expiry },
-			log: roomLog,
+			journal: roomLog,
 			summaries: finalRecord.filter(isSummary),
 			missedOnReturn: missed,
 			sinceOnReturn,

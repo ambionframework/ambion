@@ -85,9 +85,9 @@
 		// The core is laid out in layers, and an import points down only:
 		//
 		//   types, wire, define, render   the vocabulary: shapes, and what a participant reads
-		//   host/                         what a host owns: the runtime value, a SQLite storage
-		//   log/                          the log: one serial queue over a Pi session
-		//   room/                         every fact and every decision, pure over the log
+		//   host/                         what a host owns: the runtime value
+		//   journal/                      the room's kinds, over @ambionframework/journal
+		//   room/                         every fact and every decision, pure over the journal
 		//   tools/                        the workspace port, and the hands over it
 		//   seat/                         the seat side of the wire: one activation at a time
 		//   session.ts                    the room, which composes them all
@@ -111,7 +111,7 @@
 									{
 										"group": [
 											"./host/*",
-											"./log/*",
+											"./journal/*",
 											"./room/*",
 											"./tools/*",
 											"./seat/*",
@@ -138,7 +138,7 @@
 								"patterns": [
 									{
 										"group": [
-											"../log/*",
+											"../journal/*",
 											"../room/*",
 											"../tools/*",
 											"../seat/*",
@@ -155,7 +155,7 @@
 			}
 		},
 		{
-			"includes": ["packages/ambion/src/log/**"],
+			"includes": ["packages/ambion/src/journal/**"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -172,7 +172,7 @@
 											"../session.ts",
 											"../index.ts"
 										],
-										"message": "The log knows entries and a queue, and nothing that reads them."
+										"message": "The journal names the room's kinds, and nothing that reads them."
 									}
 								]
 							}
@@ -217,7 +217,13 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["../log/*", "../room/*", "../seat/*", "../session.ts", "../index.ts"],
+										"group": [
+											"../journal/*",
+											"../room/*",
+											"../seat/*",
+											"../session.ts",
+											"../index.ts"
+										],
 										"message": "A workspace is what a tool reaches into; it knows no room and no seat."
 									}
 								]
@@ -237,7 +243,7 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["../log/*", "../room/*", "../session.ts", "../index.ts"],
+										"group": ["../journal/*", "../room/*", "../session.ts", "../index.ts"],
 										"message": "The seat side reaches its room through the wire alone: no log, no fold, no session."
 									}
 								]
@@ -291,6 +297,28 @@
 									{
 										"group": ["**/ambion/src/**"],
 										"message": "Reach the core through `@ambionframework/ambion`; the config aliases it to the source."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The record sits below the core: it holds a journal and knows no
+			// room, no seat and no agent.
+			"includes": ["packages/journal/src/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["@ambionframework/*", "**/packages/ambion/**"],
+										"message": "The record knows no room. Nothing in this repository sits below it."
 									}
 								]
 							}

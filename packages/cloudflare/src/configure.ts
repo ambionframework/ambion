@@ -12,7 +12,7 @@ import type {
 import { createRuntime } from '@ambionframework/ambion';
 
 /**
- * One event a seat raised inside its own object, flat enough to be a log
+ * One event a seat raised inside its own object, flat enough to be a journal
  * line. The three names say which activation raised it, and `ambion` marks
  * the line for a query that reads the logs back.
  */

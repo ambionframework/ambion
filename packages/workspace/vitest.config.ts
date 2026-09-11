@@ -17,8 +17,10 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * timeout there reports the runner and not the backend.
  */
 export const core = fileURLToPath(new URL('../ambion/src/index.ts', import.meta.url));
+/** The core's source names the journal; one module, the way the core's own suite reads it. */
+export const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
 
 export default defineConfig({
-	resolve: { alias: { '@ambionframework/ambion': core } },
+	resolve: { alias: { '@ambionframework/ambion': core, '@ambionframework/journal': journal } },
 	test: { exclude: [...configDefaults.exclude, 'test/live/**'], testTimeout: 20_000 },
 });

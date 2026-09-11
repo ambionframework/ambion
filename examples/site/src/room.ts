@@ -306,7 +306,7 @@ export const temporaryWorksState = {
 
 /** Every call any product makes, so a host can show its API traffic. */
 export const apiLog: { app: string; tool: string; params: unknown; result: string }[] = [];
-const log = (app: string, tool: string, params: unknown, result: string) => {
+const journal = (app: string, tool: string, params: unknown, result: string) => {
 	apiLog.push({ app, tool, params, result });
 	return result;
 };
@@ -318,7 +318,7 @@ const crewHours = defineTool({
 	description: 'Hours logged per trade this week, who is on site today, and overtime exposure.',
 	parameters: Type.Object({}),
 	execute: () =>
-		log(
+		journal(
 			'time-tracker',
 			'crew_hours',
 			{},
@@ -344,7 +344,7 @@ const certifiedFor = defineTool({
 	execute: ({ ticket }) => {
 		const word = ticket.toLowerCase().split(' ')[0] ?? '';
 		const hits = shiftsState.crew.filter((c) => c.tickets.some((t) => t.includes(word)));
-		return log(
+		return journal(
 			'time-tracker',
 			'certified_for',
 			{ ticket },
@@ -371,7 +371,7 @@ const requestOvertime = defineTool({
 	}),
 	execute: ({ trade, date, hours, reason }) => {
 		shiftsState.overtimeRequests.push({ trade, date, hours, reason, state: 'awaiting approval' });
-		return log(
+		return journal(
 			'time-tracker',
 			'request_overtime',
 			{ trade, date, hours, reason },
@@ -390,7 +390,7 @@ const taskList = defineTool({
 		owner: Type.Optional(Type.String()),
 	}),
 	execute: ({ status, owner }) =>
-		log(
+		journal(
 			'task-management',
 			'task_list',
 			{ status, owner },
@@ -419,7 +419,7 @@ const blockingChain = defineTool({
 				...t.blockedBy.flatMap((b) => walk(b, depth + 1)),
 			];
 		};
-		return log(
+		return journal(
 			'task-management',
 			'blocking_chain',
 			{ id },
@@ -439,11 +439,11 @@ const updateTask = defineTool({
 	}),
 	execute: ({ id, status, due, note }) => {
 		const t = tasksState.find((x) => x.id === id);
-		if (!t) return log('task-management', 'update_task', { id }, `No task ${id}.`);
+		if (!t) return journal('task-management', 'update_task', { id }, `No task ${id}.`);
 		if (status) t.status = status as Task['status'];
 		if (due) t.due = due;
 		if (note) t.note = note;
-		return log(
+		return journal(
 			'task-management',
 			'update_task',
 			{ id, status, due, note },
@@ -459,7 +459,7 @@ const stockCheck = defineTool({
 	description: 'What is on site against what the next pour needs, and what is on order.',
 	parameters: Type.Object({}),
 	execute: () =>
-		log(
+		journal(
 			'materials-tracker',
 			'stock_check',
 			{},
@@ -482,7 +482,7 @@ const deliveryBoard = defineTool({
 	description: 'Inbound deliveries with supplier, ETA and whether the slot is firm.',
 	parameters: Type.Object({}),
 	execute: () =>
-		log(
+		journal(
 			'materials-tracker',
 			'deliveries',
 			{},
@@ -499,7 +499,7 @@ const supplierTerms = defineTool({
 	execute: ({ supplier }) => {
 		const word = supplier.toLowerCase().split(' ')[0] ?? '';
 		const s = materialsState.suppliers.find((x) => x.name.toLowerCase().includes(word));
-		return log(
+		return journal(
 			'materials-tracker',
 			'supplier_terms',
 			{ supplier },
@@ -518,11 +518,11 @@ const moveDelivery = defineTool({
 	}),
 	execute: ({ ref, eta, reason }) => {
 		const d = materialsState.deliveries.find((x) => x.ref === ref);
-		if (!d) return log('materials-tracker', 'move_delivery', { ref }, `No delivery ${ref}.`);
+		if (!d) return journal('materials-tracker', 'move_delivery', { ref }, `No delivery ${ref}.`);
 		const was = d.eta;
 		d.eta = eta;
 		d.state = 'provisional — re-booked';
-		return log(
+		return journal(
 			'materials-tracker',
 			'move_delivery',
 			{ ref, eta, reason },
@@ -539,7 +539,7 @@ const inspectionSlots = defineTool({
 		'Which inspection slots building control can still take, and the deadline to book each one.',
 	parameters: Type.Object({}),
 	execute: () =>
-		log(
+		journal(
 			'building-control',
 			'inspection_slots',
 			{},
@@ -565,7 +565,7 @@ const requestInspection = defineTool({
 	execute: ({ slot, inspection, requestedBy }) => {
 		const found = inspectionsState.slots.find((s) => s.slot === slot);
 		if (!found) {
-			return log('building-control', 'request_inspection', { slot }, `No slot '${slot}'.`);
+			return journal('building-control', 'request_inspection', { slot }, `No slot '${slot}'.`);
 		}
 		found.state = 'requested';
 		inspectionsState.requests.push({
@@ -574,7 +574,7 @@ const requestInspection = defineTool({
 			requestedBy,
 			state: 'awaiting the project manager’s confirmation',
 		});
-		return log(
+		return journal(
 			'building-control',
 			'request_inspection',
 			{ slot, inspection, requestedBy },
@@ -591,7 +591,7 @@ const hireBoard = defineTool({
 		'Plant on hire or booked: what, from whom, on site when, for which day, and whether it is confirmed.',
 	parameters: Type.Object({}),
 	execute: () =>
-		log(
+		journal(
 			'plant-hire',
 			'hire_board',
 			{},
@@ -611,7 +611,7 @@ const hireTerms = defineTool({
 	execute: ({ supplier }) => {
 		const word = supplier.toLowerCase().split(' ')[0] ?? '';
 		const s = plantState.suppliers.find((x) => x.name.toLowerCase().includes(word));
-		return log(
+		return journal(
 			'plant-hire',
 			'hire_terms',
 			{ supplier },
@@ -631,12 +631,12 @@ const moveHire = defineTool({
 	}),
 	execute: ({ ref, onSite, forDay, reason }) => {
 		const h = plantState.hires.find((x) => x.ref === ref);
-		if (!h) return log('plant-hire', 'move_hire', { ref }, `No hire ${ref}.`);
+		if (!h) return journal('plant-hire', 'move_hire', { ref }, `No hire ${ref}.`);
 		const was = h.forDay;
 		h.onSite = onSite;
 		h.forDay = forDay;
 		h.state = 'provisional — re-booked, T-130 not confirmed';
-		return log(
+		return journal(
 			'plant-hire',
 			'move_hire',
 			{ ref, onSite, forDay, reason },
@@ -653,7 +653,7 @@ const checkStatus = defineTool({
 		'The temporary works checks a pour needs, what each one requires, and whether it is booked.',
 	parameters: Type.Object({}),
 	execute: () =>
-		log(
+		journal(
 			'temporary-works',
 			'check_status',
 			{},
@@ -677,10 +677,10 @@ const bookCheck = defineTool({
 	}),
 	execute: ({ ref, morning, requestedBy }) => {
 		const c = temporaryWorksState.checks.find((x) => x.ref === ref);
-		if (!c) return log('temporary-works', 'book_check', { ref }, `No check ${ref}.`);
+		if (!c) return journal('temporary-works', 'book_check', { ref }, `No check ${ref}.`);
 		c.state = `booked for ${morning}, 06:30`;
 		temporaryWorksState.bookings.push({ ref, morning, requestedBy });
-		return log(
+		return journal(
 			'temporary-works',
 			'book_check',
 			{ ref, morning, requestedBy },

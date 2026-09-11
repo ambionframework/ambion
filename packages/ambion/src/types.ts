@@ -5,16 +5,16 @@
  * seat in the roster, an event on the stream, a definition it wrote itself.
  * Nothing in this file does anything; the files beside it are what happens.
  */
-import type {
-	AgentToolResult,
-	ExecutionEnv,
-	Session as PiSession,
-} from '@earendil-works/pi-agent-core';
+
+import type { Seq as RecordSeq, SessionOpener } from '@ambionframework/journal';
+import type { AgentToolResult, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { Static, TSchema } from 'typebox';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
-export type Seq = number;
+export type Seq = RecordSeq;
+
+export type { SessionOpener };
 
 /** A question the room is working on. */
 export interface Exchange {
@@ -40,36 +40,6 @@ export interface Clock {
 	now(): number;
 	/** Arrange one call of `fire` at `at`. Returns the cancel. */
 	alarm(at: number, fire: () => void): () => void;
-}
-
-/** Opens one Pi session by id, and creates it on the first open. */
-export interface SessionOpener {
-	open(id: string, parentId?: string): Promise<PiSession>;
-}
-
-/**
- * A session that refuses an append when the record moved under the writer.
- *
- * A run reads the storage before every write, and the read tells it where
- * the record stood. `appendAfter` takes that position: the entry lands at
- * the next one, or the storage says the record moved and writes nothing.
- * A run that was fenced while its write waited is refused before it can
- * acknowledge, so the write it held is no loss.
- *
- * A storage that cannot promise it does not offer it, and the log appends
- * the way it always did. The fence still voids what such a storage takes.
- */
-export interface FencedSession {
-	/** The entry's id, or nothing when the record moved past `expected`. */
-	appendAfter(customType: string, data: unknown, expected: number): Promise<string | undefined>;
-}
-
-/** The session as one that refuses a moved append, or nothing when its storage cannot. */
-export function fenced(session: PiSession): (PiSession & FencedSession) | undefined {
-	const candidate = session as Partial<FencedSession>;
-	return typeof candidate.appendAfter === 'function'
-		? (session as PiSession & FencedSession)
-		: undefined;
 }
 
 /** Resolves an agent's `provider/model-id` to the model Pi's loop runs. */
@@ -255,13 +225,13 @@ export type SessionEvent =
 	/**
 	 * The room gave up: every attempt at a wake or a draft came to nothing,
 	 * and the cap is reached. `activation` names the attempt the room did
-	 * not make, and the log holds the row that says so.
+	 * not make, and the journal holds the entry that says so.
 	 */
 	| { type: 'abandoned'; agent: string; activation: string }
 	/**
-	 * Another run took the name: its run row is on the log past this run's.
+	 * Another run took the name: its fence is on the journal past this run's.
 	 * This run is superseded, and drops itself from memory the way
-	 * `runtime.evict` does. Nothing it wrote after the other run's row is on
+	 * `runtime.evict` does. Nothing it wrote after the other run's fence is on
 	 * the record, and nothing it does from here on writes.
 	 */
 	| { type: 'superseded' }

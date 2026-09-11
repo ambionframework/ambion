@@ -6,22 +6,22 @@ the contract. The chaos tier and the history checker hold the room to it.
 Read it with [`agent.md`](agent.md) §5, which names the mechanisms, and
 [`toolchain.md`](toolchain.md) §8, which says how the tiers run.
 
-## 1. The log is the truth
+## 1. The journal is the truth
 
 **One record, one writer, one order.** A room's record is one append-only
-log in a Pi session. Every message takes the next seq, and every row the
-room writes beside the messages carries `after`, the last seq when it
-landed. The fold reads the log from the start and rebuilds the room from
+journal in a Pi session. Every message takes the next seq, and every entry
+the room writes beside the messages carries `after`, the last seq when it
+landed. The fold reads the journal from the start and rebuilds the room from
 it. That is the roster, the people, the open exchange, every lease, every
 wake still pending and every summary still owed. Nothing the room holds
-in memory outlives what the log says.
+in memory outlives what the journal says.
 
-**The room reacts to the log, and to nothing else.** The log tells the room
+**The room reacts to the journal, and to nothing else.** The journal tells the room
 about every entry it takes, and the room has one reaction per entry. An
 entry this run appended and an entry a read found reach the room the same
 way, so a message another run wrote, and a message whose confirmation this
 run lost, become an event and a wake exactly as a message this run
-committed does. The room writes down to the log and hears back up from it,
+committed does. The room writes down to the journal and hears back up from it,
 and it holds no second path for the entries it wrote itself.
 
 **Durable means the storage's append resolved.** Pi's in-memory repository
@@ -29,24 +29,24 @@ holds the record for the life of the process. Pi's JSONL repository
 writes every entry to a file and calls no `fsync`. A storage that lies
 about an append breaks every promise below.
 
-**One run per name, fenced by its row.** `startSession` and
+**One run per name, fenced by one entry.** `startSession` and
 `resumeSession` refuse a name the runtime already runs. Across runtimes,
-the log fences. The first row every run writes is its run row, with a
+the journal fences. The first entry every run writes is its fence, with a
 fresh run id, and every entry the run writes carries that id. The fence
-is positional: a reader passes the storage in order, and a run row moves
-the fence to that run. An entry of another run past the fence is void,
+is positional: a reader passes the storage in order, and a fence moves
+to that run. An entry of another run past the fence is void,
 and every reader skips it, the fencing run included. A run reads the
-storage before every write. A run that passes its own row and then a
-row of another run has lost the name: it emits `superseded`, drops
-itself from memory, and writes nothing more. A run row that lands late
-fences every run whose row came before it, even when its own run is
+storage before every write. A run that passes its own fence and then a
+fence of another run has lost the name: it emits `superseded`, drops
+itself from memory, and writes nothing more. A fence that lands late
+voids every run whose fence came before it, even when its own run is
 gone, so a live run can lose the name to a dead one. §5 says what a
 superseded run loses, and where the fence does not reach.
 
-**A checkpoint replaces rows, and never a message.** The room writes one
-every `runtime.checkpoint.rows` rows. It carries the composition, the
-closes and the leases a later fold still reads, behind a floor below
-which every wake was answered. The rows it replaces stay on the storage,
+**A checkpoint replaces entries, and never a message.** The room writes
+one every `runtime.checkpoint.entries` entries. It carries the composition,
+the closes and the leases a later fold still reads, behind a floor below
+which every wake was answered. The entries it replaces stay on the storage,
 so a reader that ignores the checkpoint folds the same room from them.
 The fence voids a checkpoint a superseded run wrote, like any other
 entry.
@@ -56,7 +56,7 @@ entry.
 **Acknowledged: on the record once.** `deliver()` resolves once the
 write is confirmed. The message is on the record and on the stream, and
 the wake is sent to every seat it reaches. It stays on the record for
-the life of the log.
+the life of the journal.
 
 **Refused: nowhere.** A delivery the room refuses rejects `deliver()`
 before anything lands. The visit is over, the room is stopped, or the
@@ -83,7 +83,7 @@ the last seq the run has confirmed or read back, with no gap. A read
 never shows a message before the write that carries it is confirmed.
 
 **Forward only.** Two reads by one host over one run never move
-backwards. A resumed run replays the whole log first, so a read after a
+backwards. A resumed run replays the whole journal first, so a read after a
 resume holds everything the run before it confirmed.
 
 **Your own writes.** A read after an acknowledged delivery holds that
@@ -99,14 +99,14 @@ the first message the run saw.
 seat claims a lease under the wake's id and renews it while it works.
 The next attempt claims only after the last one ended.
 
-**A lease answers what it heard.** The log says which messages a lease
+**A lease answers what it heard.** The journal says which messages a lease
 heard. They are the ones it was at work for, and the ones its view held
 because it was claimed after them. A lease answers them while it runs
 and once it stood down, through the seq its last renewal confirmed.
 
 **The room says when it gives up.** At the cap the room writes the
 attempt it does not make, ended `abandoned`, and the host hears an
-`abandoned` event. The row answers the wake or the close it stood for, so
+`abandoned` event. The entry answers the wake or the close it stood for, so
 no reader sees the room still owing it, and the record says the room
 stopped trying.
 
@@ -126,7 +126,7 @@ there. The room expires the lease on its alarm, so an activation that
 runs on is one attempt that came to nothing.
 
 **A claim asked twice starts one activation.** A claim of an id the room
-already runs is a renewal, and lands as a renewal row. The seat asks
+already runs is a renewal, and lands as a renewal. The seat asks
 again once when it never heard back. A release asked twice ends the
 lease once: the second call is answered stale. A release lost twice
 leaves the room to expire the lease on its side.
@@ -140,7 +140,7 @@ the first host acknowledges it. The first host learns at its next write.
 Every write it held between the fence and that write is lost, and
 `split.test.ts` pins that it is that one write and no other.
 
-A storage that offers `appendAfter` loses none of it. The log hands that
+A storage that offers `appendAfter` loses none of it. The journal hands that
 append the position its read left: the entry lands next to it, or the
 storage says the record moved and writes nothing. The run is refused
 before it acknowledges, and the refusal is definite — nothing landed, so
@@ -149,7 +149,7 @@ offers it; Pi's repositories do not.
 
 **Two live hosts over a JSONL file.** Pi's JSONL storage reads its own
 memory and appends to the file, so a run over it never sees another
-run's rows, and the fence does not reach it. Once a paused run comes
+run's entries, and the fence does not reach it. Once a paused run comes
 back, Pi refuses to load the file, and no run can open the name again.
 `split.test.ts` pins it. JSONL is a storage for one host.
 
@@ -171,8 +171,8 @@ by its instructions.
 Durable Object, over the core's SQLite storage on the object's own
 `ctx.storage.sql`. The platform gives one instance per id, and the object
 resumes in its constructor, so the room's writer and its storage share a
-lifetime. An instance the platform took away is fenced by the resume's run
-row, and its late write is void. The storage refuses an append the record
+lifetime. An instance the platform took away is fenced by the resume's
+fence, and its late write is void. The storage refuses an append the record
 moved under, so that write is refused rather than acknowledged.
 
 ## 6. What a host must do
@@ -186,7 +186,7 @@ moved under, so that write is refused rather than acknowledged.
   eviction: nothing that run answers from then on is an answer, and the
   host resumes the name again. A stop on a superseded run resolves, and
   the event says why it wrote nothing.
-- Retry a resume the storage failed: the run row is the first write a
+- Retry a resume the storage failed: the fence is the first write a
   resumed run makes.
 - Read `messages()` after a resume for what the stream did not carry.
 
@@ -213,7 +213,7 @@ the system clock.
 | The random walk        | `property.test.ts`    | Twenty seeded steps of visits, deliveries, seat changes, clock jumps, wire faults, disk faults and crashes; the invariants hold                          |
 | The history            | `consistency.test.ts` | Two people and the host take turns under a nemesis; every action is an invocation and an outcome; §2 to §4 are checked against the record                |
 | The split              | `split.test.ts`       | A paused host comes back after a takeover: in process, the fence holds and it loses the one write it held; under `SIGSTOP` on JSONL, Pi refuses the file |
-| The rules              | `rules.verified.ts`   | The pure rules the log and the fold decide by carry contracts, and Dafny proves them: the next seq, rule 5, the fence, who heard a message, the cap      |
+| The rules              | `rules.verified.ts`   | The pure rules the journal and the fold decide by carry contracts, and Dafny proves them: the next seq, rule 5, the fence, who heard a message, the cap  |
 
 **The history checker** lives in
 [`test/support/history.ts`](../packages/ambion/test/support/history.ts).
@@ -249,11 +249,11 @@ failures the cast injects, the room calls the nemesis dropped, and the
 leases live across a jump past the expiry.
 
 **The rules are proved.** The pure rules in
-[`log/rules.verified.ts`](../packages/ambion/src/log/rules.verified.ts)
+[`journal/rules.verified.ts`](../packages/journal/src/rules.verified.ts)
 and
 [`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)
 carry `//@ requires` and `//@ ensures` contracts. LemmaScript turns them
-into Dafny obligations, and CI proves them on every push. The log and
+into Dafny obligations, and CI proves them on every push. The journal and
 the fold run these bodies, so the proof is about the code that runs. The
 rules are the next seq, the refusal of a commit that read too little,
 the fence, what supersedes a run, when a lease is expired, who was at

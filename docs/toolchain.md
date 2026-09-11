@@ -20,6 +20,7 @@ ambion/
 │   ├── ambion/            @ambionframework/ambion   — the runtime library
 │   ├── cli/               @ambionframework/cli      — the `ambion` binary
 │   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
+│   ├── journal/           @ambionframework/journal   — the journal a room writes to
 │   └── workspace/         @ambionframework/workspace — a filesystem behind a workspace
 ├── examples/
 │   └── site/              the runnable example: a multi-agent room, on Node and on workerd
@@ -45,15 +46,16 @@ everything else, so an example that breaks fails the build.
 ### Package graph
 
 ```
+@ambionframework/ambion      ──depends on──▶  @ambionframework/journal
 @ambionframework/cli         ──depends on──▶  @ambionframework/ambion
-@ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion
+@ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion, journal
 @ambionframework/workspace   ──depends on──▶  @ambionframework/ambion
 ```
 
-The core depends on nothing in this repository. `@ambionframework/workspace`
-implements a port the core names, so the arrow points the same way a host's
-does: the core holds the idea of a workspace, and the package holds a
-filesystem behind it.
+`@ambionframework/journal` depends on nothing in this repository: it holds a
+journal and knows no room. `@ambionframework/workspace` implements a port the
+core names, so its arrow points the other way: the core holds the idea of a
+workspace, and the package holds a filesystem behind it.
 
 Internal dependencies use `workspace:*` and are rewritten to the published
 version by pnpm at pack time. That one edge is what the scaffold exercises:
@@ -107,15 +109,15 @@ only. Biome refuses every other import (`noRestrictedImports`, one
 override per layer in `biome.jsonc`), so the layout is a fact the gate
 holds, and a reviewer reads a file knowing what it cannot reach.
 
-| Layer                               | What it holds                                                                                                                            | May import                        |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                                                                | Nothing that does anything        |
-| `host/`                             | What a host owns: the runtime value, a clock, an opener                                                                                  | The vocabulary                    |
-| `log/`                              | The log: one serial queue over a Pi session                                                                                              | The vocabulary                    |
-| `room/`                             | Every fact and every decision, pure over the log: the fold, the lease, the exchange, presence, the assistant's rules, the view, `decide` | The vocabulary, the log's entries |
-| `tools/`                            | The workspace port, and the four hands over it. No filesystem: `@ambionframework/workspace` holds one                                    | The vocabulary, `host/`           |
-| `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport                                       | The vocabulary, `host/`, `tools/` |
-| `session.ts`                        | The room, which composes them all                                                                                                        | Everything                        |
+| Layer                               | What it holds                                                                                                                                | May import                            |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                                                                    | Nothing that does anything            |
+| `host/`                             | What a host owns: the runtime value, a clock, an opener                                                                                      | The vocabulary                        |
+| `journal/`                          | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                        | The vocabulary                        |
+| `room/`                             | Every fact and every decision, pure over the journal: the fold, the lease, the exchange, presence, the assistant's rules, the view, `decide` | The vocabulary, the journal's entries |
+| `tools/`                            | The workspace port, and the four hands over it. No filesystem: `@ambionframework/workspace` holds one                                        | The vocabulary, `host/`               |
+| `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport                                           | The vocabulary, `host/`, `tools/`     |
+| `session.ts`                        | The room, which composes them all                                                                                                            | Everything                            |
 
 Two rules hold across packages: the core imports no platform module
 (`node:sqlite`, `cloudflare:*`), and every other package reaches the core
@@ -410,14 +412,14 @@ random walk that loses and repeats them (`property.test.ts`, `AMBION_SEEDS`
 widens it). The live tier runs the room on a real model and holds it to the
 same invariants.
 
-**The chaos tests are the evidence that the log is the truth.** They live in
+**The chaos tests are the evidence that the journal is the truth.** They live in
 [`test/chaos.test.ts`](../packages/ambion/test/chaos.test.ts) over the
 harness in
 [`test/support/chaos.ts`](../packages/ambion/test/support/chaos.ts), and
 `pnpm test` runs them:
 
 - **A crash at every write.** One scenario runs once to count the appends
-  its log takes, then once per append, crashing the room at that append:
+  its journal takes, then once per append, crashing the room at that append:
   before the entry lands, and again after it landed and before the room
   heard. The world resumes the name in a fresh runtime, puts back the
   people who were present, and retries the host action that failed under
@@ -431,7 +433,7 @@ harness in
   room crashes at every third write. The second host wakes the failed
   seat again after the backoff, and a seat's say a peer heard as a steer
   before the crash is answered on the next run. The same file pins the
-  split the design forbids, two live hosts over one log: both write the
+  split the design forbids, two live hosts over one journal: both write the
   same seqs, and the test turns when a fence lands.
 - **A kill from outside.** The same scenario runs in a child process on a
   JSONL storage, on the system clock, with short leases. The test sends

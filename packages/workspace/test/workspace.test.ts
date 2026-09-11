@@ -349,8 +349,8 @@ describe('the just-bash adapter', () => {
 
 	it('creates /tmp before a temp file needs it, and appends to it', async () => {
 		const { env: alpha } = await env();
-		const file = await alpha.createTempFile({ prefix: 'bash-', suffix: '.log' });
-		expect(file.ok && file.value).toMatch(/^\/tmp\/bash-[0-9a-f]+\.log$/);
+		const file = await alpha.createTempFile({ prefix: 'bash-', suffix: '.journal' });
+		expect(file.ok && file.value).toMatch(/^\/tmp\/bash-[0-9a-f]+\.journal$/);
 		if (!file.ok) return;
 		await alpha.appendFile(file.value, 'a');
 		await alpha.appendFile(file.value, 'b');
@@ -454,14 +454,14 @@ describe('directoryBackend', () => {
 		let read: string | undefined;
 		await run([agent('scribe', { workspace: site })], {
 			scribe: (context, _who, call) => {
-				if (call === 1) return callTool('write', { path: 'log.md', content: '# day one\n' });
-				if (call === 2) return callTool('bash', { command: 'cat ~/log.md' });
+				if (call === 1) return callTool('write', { path: 'journal.md', content: '# day one\n' });
+				if (call === 2) return callTool('bash', { command: 'cat ~/journal.md' });
 				read = toolResults(context).at(-1)?.text;
 				return quiet();
 			},
 		});
 		expect(read).toBe('# day one\n');
-		expect(await readFile(join(root, 'home', 'scribe', 'log.md'), 'utf8')).toBe('# day one\n');
+		expect(await readFile(join(root, 'home', 'scribe', 'journal.md'), 'utf8')).toBe('# day one\n');
 		await destroyWorkspace(site);
 		expect(await readdir(root)).toEqual([]);
 	});

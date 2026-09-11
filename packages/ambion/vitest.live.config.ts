@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import { journal } from './vitest.config.ts';
 
 /**
  * The live tier: the same room, on a real model, with a real key. Each file
@@ -14,6 +15,7 @@ import { defineConfig } from 'vitest/config';
  *   before this one does.
  */
 export default defineConfig({
+	resolve: { alias: { '@ambionframework/journal': journal } },
 	test: {
 		include: ['test/live/**/*.test.ts'],
 		fileParallelism: false,

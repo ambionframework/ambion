@@ -6,14 +6,14 @@
  * learned, because the storage, the wire or the process failed under it.
  *
  * The checks are the guarantees `docs/durability.md` states, read off the
- * history and the log together: an acknowledged delivery is on the record
+ * history and the journal together: an acknowledged delivery is on the record
  * once, a delivery in doubt is on it at most once, a refused one never,
  * every read is a prefix of the record, a client's reads move forward and
  * hold every delivery acknowledged before them, every seq on the storage
  * is one message, one attempt at a wake or a draft runs at a time, and
  * nothing is pending once the room drains.
  */
-import type { Clock, LeaseRow, Message, Seq } from '../../src/index.ts';
+import type { Clock, LeaseChange, Message, Seq } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
 import { activationId, parseId } from '../../src/room/lease.ts';
 
@@ -123,8 +123,8 @@ export class History {
 export interface Checked {
 	/** The record the room holds at the end. */
 	record: readonly Message[];
-	/** Every row on the storage, in append order. */
-	rows: readonly { type: string; data: unknown }[];
+	/** Every entry on the storage, in append order. */
+	stored: readonly { type: string; data: unknown }[];
 	/** The fold at the end, after the drain. */
 	state: RoomState;
 }
@@ -134,8 +134,8 @@ export function violations(history: History, checked: Checked): string[] {
 	const found: string[] = [];
 	found.push(...deliveries(history, checked.record));
 	found.push(...reads(history, checked.record));
-	found.push(...seqs(checked.rows));
-	found.push(...exclusion(checked.rows));
+	found.push(...seqs(checked.stored));
+	found.push(...exclusion(checked.stored));
 	found.push(...drained(checked.state));
 	return found;
 }
@@ -215,31 +215,31 @@ function prefixBreak(
 }
 
 /**
- * The rows that stand, the way the log reads them: a run row is the
- * fence, and an entry another run wrote past it is void. Run rows are
- * left out; the fold has no use for them.
+ * The entries that stand, the way the journal reads them: a fence voids an
+ * entry another run wrote past it. The fences are left out; the fold has no
+ * use for them.
  */
-export function standing(rows: Checked['rows']): Checked['rows'] {
+export function standing(stored: Checked['stored']): Checked['stored'] {
 	const kept: { type: string; data: unknown }[] = [];
 	let fence: string | undefined;
-	for (const row of rows) {
-		const data = row.data as { run?: string; written?: string };
-		if (row.type === 'ambion/run') {
+	for (const entry of stored) {
+		const data = entry.data as { run?: string; written?: string };
+		if (entry.type === 'ambion/run') {
 			fence = data.run;
 			continue;
 		}
 		if (fence !== undefined && data.written !== undefined && data.written !== fence) continue;
-		kept.push(row);
+		kept.push(entry);
 	}
 	return kept;
 }
 
 /** Every seq on the storage names one message, among the entries that stand. */
-function seqs(rows: Checked['rows']): string[] {
+function seqs(stored: Checked['stored']): string[] {
 	const seen = new Map<number, number>();
-	for (const row of standing(rows)) {
-		if (row.type !== 'ambion/message') continue;
-		const seq = (row.data as { seq: number }).seq;
+	for (const entry of standing(stored)) {
+		if (entry.type !== 'ambion/message') continue;
+		const seq = (entry.data as { seq: number }).seq;
 		seen.set(seq, (seen.get(seq) ?? 0) + 1);
 	}
 	return [...seen]
@@ -248,12 +248,12 @@ function seqs(rows: Checked['rows']): string[] {
 }
 
 /** One attempt at a wake or a draft runs at a time: the next claims only after the last ended. */
-function exclusion(rows: Checked['rows']): string[] {
+function exclusion(stored: Checked['stored']): string[] {
 	const found: string[] = [];
 	const running = new Map<string, string>();
-	for (const row of standing(rows)) {
-		if (row.type !== 'ambion/lease') continue;
-		const lease = row.data as LeaseRow;
+	for (const entry of standing(stored)) {
+		if (entry.type !== 'ambion/lease') continue;
+		const lease = entry.data as LeaseChange;
 		const parsed = parseId(lease.id);
 		if (parsed === undefined) continue;
 		const attempt =

@@ -14,7 +14,7 @@ the open questions about a design; this file holds the work.
 
 ### 2. Nothing bounds the record, and the room rescans it per message
 
-**What.** `foldRoom` folds the whole log again after every entry: the
+**What.** `foldRoom` folds the whole journal again after every entry: the
 people, the roster and the open exchange are each a pass over every
 message. Every activation renders the whole record into the prompt through
 `renderRecord`.
@@ -37,7 +37,7 @@ contract about which module owns it.
 three calls (`view`, `commit`, `lease`) and the reconcile glue, and it is
 over the 600 lines `next.md` asked for. The seat's three calls are the
 next piece to move: an `answers.ts` over a narrow interface on the room
-(the log, the fold, the clock, `emit`).
+(the journal, the fold, the clock, `emit`).
 
 **Where.** `packages/ambion/src/session.ts`.
 
@@ -532,19 +532,19 @@ roster in [`render.ts`](../packages/ambion/src/render.ts).
 runtime's catalog (`seat.ts`). Every room a runtime holds writes its
 definitions into that one map, so two rooms in one runtime that define the
 same name differently share one entry, and the last room to start wins.
-The log side no longer has this gap: the composition row and every seating
+The journal side no longer has this gap: the composition and every seating
 carry the identity, so a read reports what the run held.
 
 **Why deferred.** The room already refuses a duplicate name inside one
 roster. Two rooms in one runtime with one name and two definitions is a
 host that wants two runtimes. The catalog exists so that a transport can
 hand a seat in another process the definition it needs by name, and so
-that `resumeSession` can resolve a roster it reads off the log.
+that `resumeSession` can resolve a roster it reads off the journal.
 
 **Options.** The runtime refuses a second, different definition under a
 name it holds. Or the in-process transport hands the actor the room's own
 definitions, and the catalog serves the out-of-process case alone. Either
-way, a definition digest on the composition row and the claim lets a seat
+way, a definition digest on the composition and the claim lets a seat
 tell that it runs the definition the room seated.
 
 ### 27. A fold still grows with the room, in three places
@@ -552,10 +552,10 @@ tell that it runs the definition the room seated.
 **What.** Three costs stand. The messages still grow without
 bound, and every fold reads them all: item 2 holds that. A replay still
 reads every entry the storage holds, because a checkpoint trims the cache
-and never the storage; only the steady-state fold is bounded. And the log
-keeps every lease id it has seen a row for, so that a row a read finds in
-doubt is not read as the first row of its lease; that set grows with the
-log.
+and never the storage; only the steady-state fold is bounded. And the journal
+keeps every lease id it has seen a change for, so that a change a read finds
+in doubt is not read as the first change of its lease; that set grows with
+the journal.
 
 ### 28. A person present at a crash stays present until the host returns
 
@@ -662,14 +662,14 @@ it. The wire carries identifiers and capability tokens.
 **What.** `SeatActor` holds the current activation, one queued wake,
 the steer queue, the Pi agent and the renewal loop in memory, and the
 room caches one port per seat. Two processes that answer for one seat
-can both start work. F4 and F5: the audit log of a seat has no activation id on its rows and
-no exclusive writer either.
+can both start work. F4 and F5: the audit journal of a seat has no
+activation id on its entries and no exclusive writer either.
 
 **Where.** `seat/seat.ts`; the audit session in `seat/activation.ts`.
 
 **Fix.** One durable actor per room and seat, keyed by the run. One
 audit stream per activation id, or an activation id and a stable index
-on every audit row.
+on every audit entry.
 
 ### 40. A workspace is unique in one runtime
 
@@ -709,6 +709,6 @@ what it inherited too low.
 **Where.** `test/support/invariants.ts` line 64; `test/support/chaos.ts`
 `inherited`; `session.ts` `end`.
 
-**Fix.** Print every lease row and every activation event of the failing
+**Fix.** Print every lease change and every activation event of the failing
 run, and say which lease has the extra end. Then fix the room or the
 count.

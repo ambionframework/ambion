@@ -1,5 +1,5 @@
 /**
- * Two hosts over one log. A handover: the host that runs the room dies
+ * Two hosts over one journal. A handover: the host that runs the room dies
  * and another resumes the name, while a seat's model fails and is woken
  * again, a seat's say wakes a peer, and people keep asking. A split: the
  * first host is still alive when the second resumes, which the design
@@ -79,8 +79,8 @@ describe('a handover under load', () => {
 	});
 });
 
-describe('a split: two live hosts over one log', () => {
-	// The design forbids it, and the fence holds it: the second host's run row fences
+describe('a split: two live hosts over one journal', () => {
+	// The design forbids it, and the fence holds it: the second host's fence voids
 	// the first out. The first host writes nothing more, says so once, and the record
 	// the second host serves holds every seq once.
 	it('the second host fences the first out, and the record holds every seq once', async () => {

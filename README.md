@@ -51,7 +51,7 @@ seriously.
 ### 1. The record is the source of truth
 
 Speech, arrivals, departures, dynamic seating, and summaries are all ordered
-messages. [`RoomLog`](packages/ambion/src/log/log.ts) serializes writes, assigns
+messages. [`Journal`](packages/journal/src/journal.ts) serializes writes, assigns
 monotonic sequence numbers, persists a message before exposing it, and makes
 retries safe with idempotency keys. Presence is therefore data, not side
 metadata: it participates in ordering, replay, routing, and later context.
@@ -59,7 +59,7 @@ metadata: it participates in ordering, replay, routing, and later context.
 ### 2. Conversation uses optimistic concurrency
 
 Every agent write carries `readThrough`, the last sequence the activation has
-seen. If the record advanced, `RoomLog.commit()` refuses the draft and returns
+seen. If the record advanced, `RoomJournal.commit()` refuses the draft and returns
 the missed messages. The activation can rebuild from a fresh room view and
 decide again.
 
@@ -93,7 +93,7 @@ presence changes. This keeps lifecycle state out of routing policy. See
 
 Messages arriving during a provider request are queued as steers. They are
 injected after the current request boundary, not used to restart work in the
-middle of a coherent model turn. When the log has moved beyond what the
+middle of a coherent model turn. When the journal has moved beyond what the
 activation read, it rebuilds against a fresh room view. The implementation is
 in [`activation.ts`](packages/ambion/src/seat/activation.ts).
 
@@ -101,7 +101,7 @@ in [`activation.ts`](packages/ambion/src/seat/activation.ts).
 
 A human question opens an exchange. When the participating seats stop and no
 work remains owed, the room closes it. The exchange stores only its owner and
-sequence range; its contents remain derivable from the log.
+sequence range; its contents remain derivable from the journal.
 
 Quiescence is the semantic boundary. No coordinator has to predict which agent
 will have the final word, and no agent needs special authority to declare the
@@ -263,6 +263,10 @@ Agents that reach a workspace also need a backend:
 ```sh
 npm install @ambionframework/workspace
 ```
+
+The record the room writes to is
+[`@ambionframework/journal`](packages/journal); the core depends on it, so it
+arrives with the install above.
 
 ## Read the contracts
 

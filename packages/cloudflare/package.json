@@ -25,7 +25,8 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"@ambionframework/ambion": "workspace:*"
+		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/journal": "workspace:*"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.22.0",

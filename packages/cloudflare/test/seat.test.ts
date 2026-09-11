@@ -6,7 +6,7 @@
  */
 
 import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
-import type { LeaseRow, Message } from '@ambionframework/ambion';
+import type { LeaseChange, Message } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
 import { until } from './until.ts';
@@ -33,8 +33,10 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	const leases = await until(async () =>
 		runInDurableObject(room, async (_instance, state) => {
 			const piSession = await sqlSessions(state).open('seat-test');
-			const rows = await piSession.findEntries({ customType: 'ambion/lease' });
-			const found = rows.map((row) => (row.type === 'custom' ? (row.data as LeaseRow) : undefined));
+			const stored = await piSession.findEntries({ customType: 'ambion/lease' });
+			const found = stored.map((entry) =>
+				entry.type === 'custom' ? (entry.data as LeaseChange) : undefined,
+			);
 			return found.at(-1)?.phase === 'ended' ? found : undefined;
 		}),
 	);
@@ -83,8 +85,10 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	const revoked = await until(async () =>
 		runInDurableObject(room, async (_instance, state) => {
 			const piSession = await sqlSessions(state).open('cut-test');
-			const rows = await piSession.findEntries({ customType: 'ambion/lease' });
-			const leases = rows.flatMap((row) => (row.type === 'custom' ? [row.data as LeaseRow] : []));
+			const stored = await piSession.findEntries({ customType: 'ambion/lease' });
+			const leases = stored.flatMap((entry) =>
+				entry.type === 'custom' ? [entry.data as LeaseChange] : [],
+			);
 			return leases.find((lease) => lease.phase === 'ended' && lease.reason === 'revoked');
 		}),
 	);

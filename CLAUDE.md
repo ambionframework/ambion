@@ -17,6 +17,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `session.ts` composes them      |
 | `packages/cli`        | The `ambion` binary                                                                       |
 | `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Private; tested in workerd  |
+| `packages/journal`    | An append-only journal over a Pi session: one queue, fenced by run, checkpointed          |
 | `packages/workspace`  | A workspace backend: a virtual Unix filesystem and shell, in memory or over a directory   |
 | `docs/agent.md`       | Design contract for the core — read before changing the runtime                           |
 | `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`          |
@@ -73,7 +74,9 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
 - Pi (`@earendil-works/pi-agent-core`) owns the model loop, tools, transcript.
   just-bash owns the virtual filesystem and shell behind a workspace, in
   `packages/workspace`; the core names the port and holds no filesystem.
-  Ambion owns only participants-as-values and the session. A third concern is a
+  `packages/journal` owns the journal: the queue, the fence, the checkpoint and
+  the envelope every entry shares. Ambion owns only participants-as-values and
+  the session. A third concern is a
   design failure: push it into a dependency or drop it. `render.ts` is
   everything a participant reads — prompts, roster, record, the ask at the end
   of a turn — and stays pure and stateless so it does not become one. What the
@@ -83,7 +86,7 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   that may reach what it needs, and never above `session.ts`.
 - No `any`, no non-null assertions, no unused imports or variables.
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
-- A pure rule the log or the fold decides by lives in the layer's
+- A pure rule the journal or the fold decides by lives in the layer's
   `rules.verified.ts`, with `//@ requires` and `//@ ensures` contracts.
   Regenerate its `.dfy` and `.dfy.gen` with `npx lsc gen --backend=dafny`
   after every edit.
@@ -108,7 +111,8 @@ Rules that carry the most weight here:
    spans and two words: an **activation** is the room waking one seat, an
    **exchange** is a person's question and every activation until the room goes
    quiet. `turn` belongs to Pi, where it means one request to a provider, and
-   `round` belongs to nobody.
+   `round` belongs to nobody. What the journal holds is an **entry**. `row`
+   belongs to SQL, so use it only about a database table.
 5. **Simple tenses.** Present for how things work, imperative for instructions.
 6. **Keep articles and relative pronouns.** "The agent that waits", not "agent
    waits".

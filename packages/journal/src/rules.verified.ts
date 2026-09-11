@@ -1,11 +1,11 @@
 /**
- * The rules the log writes by, as functions LemmaScript checks. Every
- * function here is pure, and `log.ts` runs these bodies: the proof is
- * about the code the log runs. `lsc check` turns the `//@` annotations
+ * The rules the journal writes by, as functions LemmaScript checks. Every
+ * function here is pure, and `journal.ts` runs these bodies: the proof is
+ * about the code the journal runs. `lsc check` turns the `//@` annotations
  * into Dafny obligations, and CI verifies them.
  */
 
-//@ contract The next message takes the seq after the last one the log confirmed.
+//@ contract The next positioned entry takes the seq after the last one the journal confirmed.
 export function nextSeq(lastSeq: number): number {
 	//@ requires lastSeq >= 0
 	//@ ensures \result == lastSeq + 1
@@ -13,7 +13,7 @@ export function nextSeq(lastSeq: number): number {
 	return lastSeq + 1;
 }
 
-//@ contract Rule 5: a commit that read through a seq is refused once the record moved past it.
+//@ contract A commit that read through a seq is refused once the record moved past it.
 export function refused(lastSeq: number, readThrough: number): boolean {
 	//@ requires lastSeq >= 0
 	//@ requires readThrough >= 0
@@ -32,10 +32,10 @@ export function voided(fenced: boolean, stamped: boolean, sameRun: boolean): boo
 	return fenced && stamped && !sameRun;
 }
 
-//@ contract A run row of another run supersedes this run once this run's own row is on the log.
-export function supersedes(ownRowLanded: boolean, sameRun: boolean): boolean {
-	//@ ensures \result <==> ownRowLanded && !sameRun
+//@ contract A run entry of another run supersedes this run once this run's own entry is on the journal.
+export function supersedes(ownEntryLanded: boolean, sameRun: boolean): boolean {
+	//@ ensures \result <==> ownEntryLanded && !sameRun
 	//@ ensures sameRun ==> !\result
-	//@ ensures !ownRowLanded ==> !\result
-	return ownRowLanded && !sameRun;
+	//@ ensures !ownEntryLanded ==> !\result
+	return ownEntryLanded && !sameRun;
 }

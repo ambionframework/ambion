@@ -1,8 +1,8 @@
 /**
- * How the room moves: it folds the log, decides, and writes what it decided.
+ * How the room moves: it folds the journal, decides, and writes what it decided.
  *
  * `decide` is pure. It reads the folded state and the clock and returns the
- * rows to write, the wakes to send, and when to look again. Every wake it
+ * entries to write, the wakes to send, and when to look again. Every wake it
  * sends comes off one list, `state.due`: the activations the room owes,
  * whether a message decided one or a close owes one. The room applies
  * a decision, and a second decision over the result writes nothing: that is
@@ -11,7 +11,7 @@
  * run got to.
  */
 
-import type { CloseRow, LeaseRow, Without } from '../wire.ts';
+import type { Close, LeaseChange, Without } from '../wire.ts';
 import { draftOver } from './assistant.ts';
 import type { RoomState } from './fold.ts';
 import { type Due, isExpired, isLive, parseId, seatOf, startsNow } from './lease.ts';
@@ -35,7 +35,7 @@ interface Send {
 	seat: string;
 }
 
-type Ended = Without<Extract<LeaseRow, { phase: 'ended' }>, 'after'>;
+type Ended = Without<Extract<LeaseChange, { phase: 'ended' }>, 'after'>;
 
 export interface Decision {
 	/** Leases that ran past their expiry, ended here. */
@@ -43,7 +43,7 @@ export interface Decision {
 	/** The attempts the room does not make: the activations at the cap, written off here. */
 	abandoned: Ended[];
 	/** The exchange the room closes, when nothing is live and one is open. */
-	close: Omit<CloseRow, 'after'> | undefined;
+	close: Omit<Close, 'after'> | undefined;
 	sends: Send[];
 	/** When the room looks again on its own, or undefined when nothing waits on the clock. */
 	alarmAt: number | undefined;
@@ -105,7 +105,7 @@ const capped = (owed: Due, options: DecideOptions): boolean =>
 
 /**
  * The attempt at each activation at the cap, ended before it starts. The
- * row answers the wake or the close it stood for, so the room stops trying
+ * entry answers the wake or the close it stood for, so the room stops trying
  * and every reader sees that it did.
  */
 function abandonments(state: RoomState, options: DecideOptions): Ended[] {

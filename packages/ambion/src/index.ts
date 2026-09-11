@@ -17,6 +17,10 @@
  * docs/assistant.md, docs/workspace.md and docs/roster.md.
  */
 
+// The room writes to a journal: `@ambionframework/journal` holds the queue,
+// the fence, the checkpoint and the SQLite storage. A host that opens a
+// session names the opener.
+export type { SessionOpener } from '@ambionframework/journal';
 export type {
 	ExecutionEnv,
 	SessionMetadata,
@@ -40,7 +44,6 @@ export type {
 	Transport,
 } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, sessionsOver, systemClock } from './host/runtime.ts';
-export { type Sql, SqliteSessionStorage, type SqlValue, sqliteSessions } from './host/sqlite.ts';
 export type { SeatContext } from './seat/seat.ts';
 export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {
@@ -65,7 +68,6 @@ export type {
 	Clock,
 	ClosedExchange,
 	Exchange,
-	FencedSession,
 	HumanDefinition,
 	HumanSeatInfo,
 	Message,
@@ -79,7 +81,6 @@ export type {
 	SeatStatus,
 	Seq,
 	SessionEvent,
-	SessionOpener,
 	SpokenMessage,
 	SummaryMessage,
 	ToolContext,
@@ -90,22 +91,22 @@ export type {
 export { isPresence, isSeatedAgent, isSpoken, isSummary } from './types.ts';
 export type {
 	ActivationView,
-	CheckpointRow,
-	CloseRow,
+	Checkpoint,
+	Close,
 	Commit,
 	CommitResponse,
-	CompositionRow,
+	Composition,
 	EndReason,
+	Fence,
 	Hand,
 	Intent,
 	Lease,
+	LeaseChange,
 	LeaseHold,
 	LeaseResponse,
-	LeaseRow,
-	RunRow,
+	Seating,
 	SeatPort,
 	SeatRoom,
-	SeatRow,
 	Stale,
 	ViewResponse,
 	Wake,

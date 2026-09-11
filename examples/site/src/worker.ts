@@ -30,14 +30,14 @@ configure({
 
 /**
  * The room, with two calls a demo needs and a room in service does not.
- * `log` reads the rows beside the messages, and `crash` drops the object the
+ * `journal` reads the entries beside the messages, and `crash` drops the object the
  * way the platform may drop it: the seats around it keep running, and the
  * next call to this name builds the room again over the same storage.
  */
 export class DemoRoom extends RoomObject {
-	async log(): Promise<{ type: string; data: unknown }[]> {
+	async journal(): Promise<{ type: string; data: unknown }[]> {
 		// The name the object was started with, and not the one this module
-		// holds: a worker that served a second room would read the wrong log,
+		// holds: a worker that served a second room would read the wrong journal,
 		// and an id nothing wrote opens as an empty session rather than failing.
 		const name = await this.ctx.storage.get<string>('name');
 		if (name === undefined) throw new Error('The room is not started.');
@@ -97,7 +97,7 @@ type Route = (stub: RoomStub, request: Request, url: URL) => Promise<unknown>;
 
 /**
  * The routes. `start` composes the room, `visit` puts a person in it,
- * `deliver` asks a question, and the reads report what the log holds.
+ * `deliver` asks a question, and the reads report what the journal holds.
  * Nothing here is a channel: it is the smallest surface that drives a room.
  */
 const ROUTES: Record<string, Route> = {
@@ -124,7 +124,7 @@ const ROUTES: Record<string, Route> = {
 		return stub.messages(since === null ? undefined : Number(since));
 	},
 	'GET /seats': async (stub) => stub.seats(),
-	'GET /log': async (stub) => stub.log(),
+	'GET /journal': async (stub) => stub.journal(),
 	'POST /crash': async (stub) => {
 		// The object goes away without answering: the call it never finishes is
 		// the crash, so the demo reads this failure as the room going down.

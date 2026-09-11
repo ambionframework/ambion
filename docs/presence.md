@@ -296,7 +296,7 @@ and `left` follows `leave()`. Nothing on the record comes from a clock.
 The seq counts from 1, is monotonic, is assigned when the message commits,
 and is strictly ordered. A cursor is exclusive: `since` names a message the
 reader has, and the read starts after it. It is separate from Pi's storage
-seq — that stays Pi's, and `RoomLog` sorts replayed entries by it.
+seq — that stays Pi's, and `RoomJournal` sorts replayed entries by it.
 
 ---
 
@@ -393,7 +393,7 @@ of thing in one sequence on one commit path. No message lands between a
 person leaving and a mark being written, because there is no second write.
 
 **Durability is free.** The record persists through Pi's `SessionRepo` and
-`RoomLog` replays it. Nothing extra is stored, so nothing extra is lost,
+`RoomJournal` replays it. Nothing extra is stored, so nothing extra is lost,
 and a durable `SessionRepo` — Pi's `JsonlSessionRepo`, or another — carries
 presence with it.
 

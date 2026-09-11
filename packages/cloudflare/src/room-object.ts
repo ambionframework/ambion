@@ -1,5 +1,5 @@
 /**
- * The room as one Durable Object. The log lives in the object's SQLite, the
+ * The room as one Durable Object. The journal lives in the object's SQLite, the
  * alarm is the room's clock, and a seat is reached over RPC to the seat
  * object named `<room>:<seat>`. The constructor resumes the room the
  * storage names, so an evicted room comes back where it stopped.
@@ -102,7 +102,7 @@ export class RoomObject extends DurableObject<Env> {
 		});
 	}
 
-	/** Start the room from names the worker configured. The composition lands on the log. */
+	/** Start the room from names the worker configured. The composition lands on the journal. */
 	async start(options: StartOptions): Promise<void> {
 		if (this.room !== undefined) throw new Error(`Room '${this.room.name}' is running.`);
 		await this.ctx.storage.put('name', options.name);

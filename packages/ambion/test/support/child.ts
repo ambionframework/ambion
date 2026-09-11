@@ -2,7 +2,7 @@
  * A room in a process of its own, for the test that kills it. It runs the
  * chaos scenario over the directory it is given, on the storage it is
  * named, on the system clock, with short leases, and prints one line per
- * append the room's log takes. The parent kills it at the line it chose,
+ * append the room's journal takes. The parent kills it at the line it chose,
  * then resumes the name over the same directory.
  *
  *   node --experimental-transform-types child.ts <dir> <name> <delay-ms> <storage>
@@ -51,5 +51,5 @@ await session.quiet();
 await his.deliver({ text: third.text, key: third.key, to: third.to });
 await session.quiet();
 process.stdout.write('done\n');
-// The process ends without a stop: what the log holds is what a crash leaves.
+// The process ends without a stop: what the journal holds is what a crash leaves.
 process.exit(0);

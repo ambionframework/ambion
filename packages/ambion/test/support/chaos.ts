@@ -30,7 +30,7 @@ import {
 	visitSession,
 } from '../../src/index.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
-import type { LeaseRow } from '../../src/wire.ts';
+import type { LeaseChange } from '../../src/wire.ts';
 import {
 	agents,
 	assistant,
@@ -45,7 +45,7 @@ import {
 } from './cast.ts';
 import { type FakeClock, fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
-import { rowsOf } from './room.ts';
+import { storedOf } from './room.ts';
 import { scripted } from './scripted.ts';
 import { type FailMode, type OpenedStorage, tappedOpener } from './storage.ts';
 import { serializing } from './transport.ts';
@@ -74,29 +74,29 @@ export async function outcome(
 		}
 	}
 	expect(record.filter(isSummary).map((m) => m.to)).toEqual(cast.summaries);
-	const closes = (await rowsOf(sessions, session.name)).filter((r) => r.type === 'ambion/close');
+	const closes = (await storedOf(sessions, session.name)).filter((r) => r.type === 'ambion/close');
 	expect(closes).toHaveLength(3);
 	expect(session.exchange()).toBeUndefined();
 	expect(session.seats().find((s) => s.name === priya.name)).toMatchObject({ presence: 'absent' });
 	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
 }
 
-/** The leases running and not expired on the log at `now`: what a resumed room inherits. */
+/** The leases running and not expired on the journal at `now`: what a resumed room inherits. */
 export async function liveLeases(
 	sessions: SessionOpener,
 	name: string,
 	now: number,
 ): Promise<number> {
-	const rows = (await rowsOf(sessions, name)).flatMap((r) =>
-		r.type === 'ambion/lease' ? [r.data as LeaseRow] : [],
+	const stored = (await storedOf(sessions, name)).flatMap((r) =>
+		r.type === 'ambion/lease' ? [r.data as LeaseChange] : [],
 	);
-	return [...foldLeases(rows).values()].filter((lease) => isLive(lease, now)).length;
+	return [...foldLeases(stored).values()].filter((lease) => isLive(lease, now)).length;
 }
 
 // -- the world ----------------------------------------------------------------
 
 export interface CrashPoint {
-	/** The append to crash at, counting the room's own log alone. */
+	/** The append to crash at, counting the room's own journal alone. */
 	at: number;
 	mode: Exclude<FailMode, false>;
 }
@@ -117,7 +117,7 @@ export class World {
 	events: SessionEvent[] = [];
 	/** How many times the room crashed. */
 	crashes = 0;
-	/** How many appends the room's log took, across every run. */
+	/** How many appends the room's journal took, across every run. */
 	writes = 0;
 	/** What the run that holds the room now inherited: leases live at its resume, and an open exchange. */
 	inherited = { activations: 0, exchange: false };
@@ -169,7 +169,7 @@ export class World {
 			agents,
 			transport: serializing(inProcessTransport()),
 			// Small on purpose: every crash point lands on both sides of a checkpoint.
-			checkpoint: { rows: 4 },
+			checkpoint: { entries: 4 },
 		});
 	}
 
@@ -186,7 +186,7 @@ export class World {
 		});
 	}
 
-	/** A room started from the composition: the first run, or a run whose log never took one. */
+	/** A room started from the composition: the first run, or a run whose journal never took one. */
 	private open(): void {
 		this.runtime = this.host();
 		this.session = startSession({
@@ -201,7 +201,7 @@ export class World {
 
 	/**
 	 * A dead room is resumed by a fresh host, with the people who were present
-	 * put back. A log that never took its composition is started again instead.
+	 * put back. A journal that never took its composition is started again instead.
 	 */
 	private async ensure(): Promise<void> {
 		if (!this.dead) return;
@@ -314,16 +314,16 @@ export class World {
 		await outcome(this.session, this.opened.sessions, this.cast);
 	}
 
-	/** What the world looks like when a check fails: the log rows, for the failure message. */
+	/** What the world looks like when a check fails: the journal's entries, for the failure message. */
 	async describe(): Promise<string> {
-		const rows = await rowsOf(this.opened.sessions, this.name);
+		const stored = await storedOf(this.opened.sessions, this.name);
 		const messages = (await this.session.messages()).map(
 			(m: Message) => `#${m.seq} ${m.kind} ${m.from}${m.key ? ` (${m.key})` : ''}`,
 		);
 		return [
 			`crashes: ${this.crashes}, writes: ${this.writes}`,
 			`messages: ${messages.join('; ')}`,
-			`rows: ${rows.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
+			`entries: ${stored.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
 		].join('\n');
 	}
 }

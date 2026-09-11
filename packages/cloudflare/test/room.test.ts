@@ -3,7 +3,7 @@
  * repeated delivery key once.
  */
 import { env, runInDurableObject } from 'cloudflare:test';
-import type { Message, RunRow } from '@ambionframework/ambion';
+import type { Fence, Message } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
 import { until } from './until.ts';
@@ -62,13 +62,15 @@ it('resumes over its own storage after an abort, and fences the run before it', 
 	const runs = await until(async () =>
 		runInDurableObject(again, async (_instance, state) => {
 			const piSession = await sqlSessions(state).open('room-fence');
-			const rows = await piSession.findEntries({ customType: 'ambion/run' });
-			return rows.length > 1 ? rows : undefined;
+			const stored = await piSession.findEntries({ customType: 'ambion/run' });
+			return stored.length > 1 ? stored : undefined;
 		}),
 	);
-	// two runs, each with a name of its own: the fence is the second one's row,
+	// two runs, each with a name of its own: the second run's fence stands,
 	// and an entry the first run writes past it is void for every reader
-	const ids = (runs ?? []).map((row) => (row.type === 'custom' ? (row.data as RunRow).run : ''));
+	const ids = (runs ?? []).map((entry) =>
+		entry.type === 'custom' ? (entry.data as Fence).run : '',
+	);
 	expect(ids).toHaveLength(2);
 	expect(new Set(ids).size).toBe(2);
 	// the record holds both deliveries: the resume lost nothing

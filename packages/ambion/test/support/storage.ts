@@ -11,16 +11,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { type Sql, type SqlValue, sqliteSessions } from '@ambionframework/journal';
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
 	InMemorySessionRepo,
 	JsonlSessionRepo,
 	type SessionOpener,
-	type Sql,
-	type SqlValue,
 	sessionsOver,
-	sqliteSessions,
 } from '../../src/index.ts';
 
 export interface OpenedStorage {
@@ -199,7 +197,7 @@ export function gatedOpener(
 				// Both appends, because a storage that refuses a moved append takes
 				// the second one and a gate over the first would never hold a write.
 				// A storage without one keeps none: the wrapper must not offer what
-				// the session does not have, because the log asks before it calls.
+				// the session does not have, because the journal asks before it calls.
 				const appends = property === 'appendCustomEntry' || property === 'appendAfter';
 				if (appends && Reflect.get(target, property, receiver) !== undefined) {
 					return async (customType: string, data: unknown, ...rest: unknown[]) => {
