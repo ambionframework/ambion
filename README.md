@@ -6,11 +6,11 @@ human-facing assistant.**
 [ambionframework.com](https://ambionframework.com) · [worked demos](demos) ·
 [design contracts](docs)
 
-Ambion is for applications made from domain agents: one for scheduling, one for
-inventory, one for compliance, or whatever the application owns. Each keeps
-its own context, model, tools, workspace, and team. One assistant owns the
-human-facing conversation, selects relevant specialists from a host-defined
-reserve, and consolidates their work when needed.
+Ambion is for applications assembled from multiple domain agents: one for 
+scheduling, one for inventory, one for compliance, or whatever the application
+owns. Each keeps its own context, model, tools, workspace, and team. One
+assistant owns the human-facing conversation, selects relevant specialists
+from a host-defined reserve, and consolidates their work when needed.
 
 Once an application takes this shape, routing a prompt is not the hard problem.
 Collaboration is: agents and people must stay ordered, informed, and
