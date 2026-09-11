@@ -17,7 +17,10 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	await room.start({ name: 'seat-test', assistant: 'assistant', agents: ['product'] });
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	await room.deliver({ from: 'priya', text: 'When is the pour?', key: 'q1' });
-	expect(await until(() => seat.wakes())).toBe(1);
+	// At least one wake reached the seat. The room sends a wake nobody has taken
+	// again every 50 ms here, so how many arrive before the alarm runs is the
+	// runner's speed and not the room's behaviour.
+	expect(await until(() => seat.wakes())).toBeGreaterThanOrEqual(1);
 
 	// the seat's alarm runs the activation: a lease claimed, a say, the lease renewed at the
 	// end of the pass, and released
@@ -68,7 +71,10 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	await room.start({ name: 'cut-test', assistant: 'assistant', agents: ['product'] });
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	await room.deliver({ from: 'priya', text: 'When is the pour?', key: 'q1' });
-	expect(await until(() => seat.wakes())).toBe(1);
+	// At least one wake reached the seat. The room sends a wake nobody has taken
+	// again every 50 ms here, so how many arrive before the alarm runs is the
+	// runner's speed and not the room's behaviour.
+	expect(await until(() => seat.wakes())).toBeGreaterThanOrEqual(1);
 
 	// the room writes off every wake it owes, and tells the seat side over the wire
 	await room.abort();
