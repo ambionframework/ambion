@@ -323,7 +323,7 @@ export class World {
 		return [
 			`crashes: ${this.crashes}, writes: ${this.writes}`,
 			`messages: ${messages.join('; ')}`,
-			`stored: ${stored.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
+			`entries: ${stored.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
 		].join('\n');
 	}
 }

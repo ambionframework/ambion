@@ -90,7 +90,7 @@ async function session(id: string): Promise<PiSession> {
 const note = (text: string) => ({ text });
 
 describe('a journal', () => {
-	it('gives each positioned entry the next seq, and leaves a entry without one', async () => {
+	it('gives each positioned entry the next seq, and leaves every other one without', async () => {
 		const journal = await open();
 		const first = await journal.commit({ draft: note('one') });
 		expect('body' in first && first.body.seq).toBe(1);
@@ -198,7 +198,7 @@ describe('a checkpoint', () => {
 });
 
 describe('the fence', () => {
-	it('supersedes a run whose entry a later run wrote past', async () => {
+	it('supersedes a run whose fence a later run wrote past', async () => {
 		const id = `journal-fence-${++names}`;
 		let lost = 0;
 		const first = await open(id, 'run-1', undefined, () => {
@@ -216,5 +216,25 @@ describe('the fence', () => {
 		expect(lost).toBe(1);
 		// what the superseded run wrote before the fence stands
 		expect(second.positioned.map((body) => body.text)).toEqual(['mine']);
+	});
+});
+
+describe('the envelope', () => {
+	it('refuses to acknowledge a write its own vocabulary turns down', async () => {
+		// A vocabulary that turns down what the caller drafts: the storage would
+		// hold the entry and the cache never would, so the next note would take a
+		// seq this one already took. The journal says so rather than acknowledging.
+		const strict: Vocabulary<Kind> = { ...WORDS, accepts: (kind) => kind !== 'mark' };
+		const journal = new Journal<Kind, Bodies, 'note', Drafts>(
+			session(`journal-strict-${++names}`),
+			strict,
+		);
+		await journal.ready;
+		await expect(journal.write('mark', { label: 'turned down' })).rejects.toThrow(
+			/turns down 'test\/mark'/,
+		);
+		// nothing joined the cache, and the count the checkpoint reads is untouched
+		expect(journal.entries).toEqual([]);
+		expect(journal.sinceCheckpoint).toBe(0);
 	});
 });

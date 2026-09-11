@@ -383,8 +383,7 @@ export class Journal<
 			const stamped = { ...data, after: this.lastSeq };
 			const stored = this.words.stored(kind);
 			const id = await this.append(piSession, stored, stamped);
-			const entry = envelope(this.words, stored, stamped) as Entries<TKind, TBodies> | undefined;
-			if (entry !== undefined) this.cache(entry, id);
+			this.took(stored, stamped, id);
 			return true;
 		});
 		this.tail = link.catch(() => {});
@@ -497,9 +496,25 @@ export class Journal<
 		} as T;
 		const stored = this.words.stored(this.words.positioned);
 		const id = await this.append(piSession, stored, stamped);
-		const entry = envelope(this.words, stored, stamped) as Entries<TKind, TBodies> | undefined;
-		if (entry !== undefined) this.cache(entry, id);
+		this.took(stored, stamped, id);
 		return { body: stamped };
+	}
+
+	/**
+	 * One entry this journal appended, into the cache. A vocabulary that
+	 * turns down what the journal wrote breaks the journal's contract: the
+	 * storage holds the entry, the cache never will, and the next positioned
+	 * entry takes a seq this one already took. Say so where it happens.
+	 */
+	private took(stored: string, body: unknown, id: string): void {
+		const entry = envelope(this.words, stored, body) as Entries<TKind, TBodies> | undefined;
+		if (entry === undefined) {
+			throw new Error(
+				`The vocabulary turns down '${stored}', which this journal wrote. ` +
+					"'accepts' must take every body the caller drafts.",
+			);
+		}
+		this.cache(entry, id);
 	}
 
 	since(cursor: Seq | undefined): TBodies[TPositioned][] {

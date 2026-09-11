@@ -104,4 +104,16 @@ describe('foldLeases', () => {
 		}
 		expect(leases.get('2:solo')).toMatchObject({ since: 2, until: 5, heardThrough: 3 });
 	});
+
+	it('keeps until >= since for a lease a checkpoint carried, which ends later', () => {
+		// The checkpoint holds the claim; the end lands after it. `since` comes
+		// off the checkpoint, and `until` off the change, so the fold must still
+		// order them.
+		const held = foldLeases([running('2:solo', 2), running('2:solo', 3)]);
+		const carried = [...held.values()];
+		const leases = foldLeases([ended('2:solo', 5)], carried);
+		const lease = leases.get('2:solo');
+		expect(lease).toMatchObject({ since: 2, until: 5, heardThrough: 3 });
+		expect(lease?.until).toBeGreaterThanOrEqual(lease?.since ?? 0);
+	});
 });

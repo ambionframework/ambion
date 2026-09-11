@@ -929,7 +929,7 @@ describe('an exchange', () => {
 	const openings = (events: SessionEvent[]) =>
 		events.flatMap((e) => (e.type === 'exchange_opened' ? [e.exchange.from] : []));
 
-	it('closes at the quiet it observed, and a question that lands before the entry opens the next', async () => {
+	it('closes at the quiet it observed, and a question that lands before the close opens the next', async () => {
 		const gate = deferred();
 		const working = deferred();
 		const session = open({

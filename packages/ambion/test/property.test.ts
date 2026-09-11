@@ -332,7 +332,7 @@ describe('the room under a random walk', () => {
 				walk.journal.push(`events: ${walk.events.map(brief).join(' ')}`);
 				const stored = await storedOf(opened.sessions, walk.name);
 				walk.journal.push(
-					`stored:\n  ${stored.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
+					`entries:\n  ${stored.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
 				);
 				throw new Error(`seed ${seed} failed after:\n${walk.journal.join('\n')}\n\n${detail}`, {
 					cause: error,

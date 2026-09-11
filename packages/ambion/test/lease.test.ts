@@ -367,7 +367,7 @@ describe('a lease', () => {
 	});
 });
 
-describe('a lease judged where its entry is written', () => {
+describe('a lease judged where its change is written', () => {
 	const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
 	it('keeps a lease whose renewal landed ahead of the expiry the alarm decided', async () => {

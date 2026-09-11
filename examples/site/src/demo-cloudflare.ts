@@ -19,7 +19,7 @@ import { MODEL, ROOM_NAME } from './room.ts';
 const WORKER = process.env.AMBION_WORKER ?? 'http://localhost:8787';
 const OUT = process.env.DEMO_OUT ?? 'demo-cloudflare-run.json';
 
-interface LogRow {
+interface StoredEntry {
 	type: string;
 	data: Record<string, unknown>;
 }
@@ -75,7 +75,7 @@ async function until<T>(read: () => Promise<T | undefined>, ms = 180_000): Promi
 	}
 }
 
-const journal = () => call<LogRow[]>('/journal');
+const journal = () => call<StoredEntry[]>('/journal');
 
 /**
  * What the seats did inside their own objects, out of Cloudflare's logs.
@@ -95,11 +95,12 @@ async function seatEvents(): Promise<SeatEvent[]> {
 		}),
 	});
 	if (!response.ok) return [];
-	const answer = (await response.json()) as { result?: { stored?: [string][] } };
-	// Each entry holds what one `console.log` was given, as the array it was called with.
-	return (answer.result?.stored ?? []).flatMap((entry) => {
+	const answer = (await response.json()) as { result?: { rows?: [string][] } };
+	// The query returns SQL rows. Each one holds what one `console.log` was
+	// given, as the array it was called with.
+	return (answer.result?.rows ?? []).flatMap((row) => {
 		try {
-			return JSON.parse(entry[0]) as SeatEvent[];
+			return JSON.parse(row[0]) as SeatEvent[];
 		} catch {
 			return [];
 		}
@@ -107,7 +108,7 @@ async function seatEvents(): Promise<SeatEvent[]> {
 }
 const messages = () => call<Say[]>('/messages');
 /** Every entry of one kind, read as the shape that kind carries on the wire. */
-const rowsOf = <T>(stored: LogRow[], kind: string): T[] =>
+const entriesOf = <T>(stored: StoredEntry[], kind: string): T[] =>
 	stored.filter((entry) => entry.type === `ambion/${kind}`).map((entry) => entry.data as T);
 
 // The worker answers before the room starts, so any response says it is up.
@@ -133,9 +134,9 @@ await call('/deliver', {
 	key: 'priya-1',
 });
 
-step('the seats take their leases, and the room writes a entry for each');
+step('the seats take their leases, and the room writes an entry for each');
 const claimed = await until(async () => {
-	const held = rowsOf<LeaseData>(await journal(), 'lease');
+	const held = entriesOf<LeaseData>(await journal(), 'lease');
 	return held.length >= 2 ? held : undefined;
 });
 process.stderr.write(`  ${claimed.length} leases running\n`);
@@ -160,7 +161,7 @@ process.stderr.write(
 // Every lease ends before the journal is read, so the capture holds the release
 // of the draft the summary came from and not the entry before it.
 const stored = await until(async () => {
-	const held = rowsOf<LeaseData>(await journal(), 'lease');
+	const held = entriesOf<LeaseData>(await journal(), 'lease');
 	const ids = [...new Set(held.map((entry) => entry.id))];
 	const ended = ids.every(
 		(id) => held.filter((entry) => entry.id === id).at(-1)?.phase === 'ended',
@@ -176,7 +177,7 @@ process.stderr.write(`  ${events.length} seat events read back from the logs\n`)
  * A run where none crossed proves nothing, and the report says so; the
  * operator hears it here, where running it again is still cheap.
  */
-const finalLeases = rowsOf<LeaseData>(stored, 'lease');
+const finalLeases = entriesOf<LeaseData>(stored, 'lease');
 const crossed = [...new Set(finalLeases.map((entry) => entry.id))].filter((id) => {
 	const mine = finalLeases.filter((entry) => entry.id === id);
 	return mine[0]?.written !== mine[mine.length - 1]?.written;
@@ -198,7 +199,7 @@ writeFileSync(
 			steps,
 			crash: { time: crashedAtTime, leases: claimed.length },
 			journal: stored,
-			runs: rowsOf<{ run: string }>(stored, 'run'),
+			runs: entriesOf<{ run: string }>(stored, 'run'),
 			record: await messages(),
 			seats,
 			events,

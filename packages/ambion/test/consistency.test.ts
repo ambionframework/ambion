@@ -487,7 +487,7 @@ describe('the room under concurrent clients and a nemesis', () => {
 					})
 					.join(' ');
 				throw new Error(
-					`seed ${seed} failed:\n${cluster.history.describe()}\nerrors on the last run: ${errors.join('; ')} (inherited ${cluster.inherited.activations})\nevents on the last run: ${brief}\nrows:\n  ${stored
+					`seed ${seed} failed:\n${cluster.history.describe()}\nerrors on the last run: ${errors.join('; ')} (inherited ${cluster.inherited.activations})\nevents on the last run: ${brief}\nentries:\n  ${stored
 						.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`)
 						.join('\n  ')}\n\n${detail}`,
 					{ cause: error },
