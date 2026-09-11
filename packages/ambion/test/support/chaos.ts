@@ -168,6 +168,8 @@ export class World {
 			clock: this.clock,
 			agents,
 			transport: serializing(inProcessTransport()),
+			// Small on purpose: every crash point lands on both sides of a checkpoint.
+			checkpoint: { rows: 4 },
 		});
 	}
 

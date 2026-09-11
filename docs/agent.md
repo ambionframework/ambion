@@ -669,6 +669,19 @@ gives up, and it writes what it did: the attempt it does not make, ended
 room stops trying and the host hears an `abandoned` event. A summary the
 assistant could not write ends the same way, and the range stays whole.
 
+**A checkpoint bounds what a fold costs.** Every
+`runtime.checkpoint.rows` rows, 256 by default, the room writes an
+`ambion/checkpoint` row where it has nothing else to write. The row
+carries the composition, the closes and the leases a later fold still
+reads, behind a `floor`: no wake on a message below it is pending. A fold
+reads a checkpoint in place of every row before it, and the log drops
+those rows from memory. What a fold costs is then the rows since the last
+checkpoint; what a replay costs is every entry the storage holds, because
+a checkpoint trims the cache and never the storage. The messages stay, and the storage keeps every
+row: a checkpoint is a cache over the log, so a reader that cannot read
+one ignores it and folds the rows instead. A checkpoint is an entry like
+any other, so the fence voids one a superseded run wrote.
+
 Storage is Pi's. The record lives in a Pi session — each message a custom
 entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
 on the room's `Runtime`. `sessionsOver(repo)` makes an opener from Pi's own

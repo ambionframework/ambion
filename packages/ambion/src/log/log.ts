@@ -44,16 +44,25 @@
  */
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from '../types.ts';
-import type { CloseRow, CompositionRow, LeaseRow, RunRow, Without } from '../wire.ts';
+import {
+	type CheckpointRow,
+	type CloseRow,
+	type CompositionRow,
+	isCheckpoint,
+	type LeaseRow,
+	type RunRow,
+	type Without,
+} from '../wire.ts';
 import { nextSeq, refused, supersedes, voided } from './rules.verified.ts';
 
-/** The five kinds of custom entry the room writes to its Pi session. */
+/** The six kinds of custom entry the room writes to its Pi session. */
 const ENTRY_TYPES = {
 	message: 'ambion/message',
 	lease: 'ambion/lease',
 	close: 'ambion/close',
 	composition: 'ambion/composition',
 	run: 'ambion/run',
+	checkpoint: 'ambion/checkpoint',
 } as const;
 
 /** One entry on the log: a message with a seq, or a row about the room around the messages. */
@@ -62,7 +71,8 @@ export type LogEntry =
 	| { type: 'lease'; lease: LeaseRow }
 	| { type: 'close'; close: CloseRow }
 	| { type: 'composition'; composition: CompositionRow }
-	| { type: 'run'; run: RunRow };
+	| { type: 'run'; run: RunRow }
+	| { type: 'checkpoint'; checkpoint: CheckpointRow };
 
 /** A row that is not a message: it takes no seq, and carries `after`, the last seq when it was written. */
 export type Row = Exclude<LogEntry, { type: 'message' }>;
@@ -73,6 +83,7 @@ export type RowData<K extends Row['type']> = {
 	close: Without<CloseRow, 'after'>;
 	composition: Without<CompositionRow, 'after'>;
 	run: Without<RunRow, 'after'>;
+	checkpoint: Without<CheckpointRow, 'after'>;
 }[K];
 
 const BY_TYPE: Record<string, LogEntry['type']> = {
@@ -81,6 +92,7 @@ const BY_TYPE: Record<string, LogEntry['type']> = {
 	[ENTRY_TYPES.close]: 'close',
 	[ENTRY_TYPES.composition]: 'composition',
 	[ENTRY_TYPES.run]: 'run',
+	[ENTRY_TYPES.checkpoint]: 'checkpoint',
 };
 
 /** What the storage holds for one entry: the entry's data, and the run that wrote it. */
@@ -94,6 +106,8 @@ function toEntry(customType: string, data: unknown): LogEntry | undefined {
 	const type = BY_TYPE[customType];
 	if (type === undefined) return undefined;
 	const { written: _written, ...entry } = data as Stored;
+	// A checkpoint of a shape this room does not read is no entry at all.
+	if (type === 'checkpoint' && !isCheckpoint(entry)) return undefined;
 	return { type, [type]: entry } as LogEntry;
 }
 
@@ -138,6 +152,8 @@ export class RoomLog {
 	private fenced = false;
 	/** A later run's row was found: this run's writes are over. */
 	private superseded = false;
+	/** How many rows the cache holds past the last checkpoint. The room writes the next one from this. */
+	rowsSinceCheckpoint = 0;
 
 	/**
 	 * `hear` takes every entry the log takes after the replay: one this run
@@ -165,6 +181,23 @@ export class RoomLog {
 		await this.read(piSession);
 		this.replayed = true;
 		return piSession;
+	}
+
+	/**
+	 * Drop every row the latest checkpoint replaced. The checkpoint stays,
+	 * and so does every message: the fold reads the checkpoint's rows in
+	 * place of the ones dropped, and the messages as they are. The run rows
+	 * go with them, because the fence is read off the storage and never off
+	 * the cache.
+	 */
+	private compact(): void {
+		const at = this.entries.findLastIndex((entry) => entry.type === 'checkpoint');
+		if (at < 0) return;
+		const messages = this.entries.slice(0, at).filter((entry) => entry.type === 'message');
+		this.entries.splice(0, at, ...messages);
+		this.rowsSinceCheckpoint = this.entries
+			.slice(messages.length + 1)
+			.filter((entry) => entry.type !== 'message').length;
 	}
 
 	/**
@@ -231,6 +264,12 @@ export class RoomLog {
 		this.known.add(id);
 		this.entries.push(entry);
 		if (entry.type === 'lease') this.leased.add(entry.lease.id);
+		// A checkpoint carries the leases whose rows it replaces: the log holds
+		// a row for each of them, so a later row of theirs is not the first.
+		if (entry.type === 'checkpoint') {
+			for (const lease of entry.checkpoint.leases) this.leased.add(lease.id);
+			this.compact();
+		} else if (entry.type !== 'message') this.rowsSinceCheckpoint += 1;
 		if (entry.type === 'message') {
 			this.messages.push(entry.message);
 			this.lastSeq = entry.message.seq;

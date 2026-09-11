@@ -36,7 +36,7 @@ import {
 import { type Committed, type LogEntry, RoomLog } from './log/log.ts';
 import { renderLine } from './render.ts';
 import { assertAssistant } from './room/assistant.ts';
-import { foldRoom, type RoomState } from './room/fold.ts';
+import { checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
 import { activationId, isExpired, isLive, type LeaseState, parseId, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { type Decision, decide, liveSeats, working } from './room/reconcile.ts';
@@ -1185,6 +1185,7 @@ class SessionImpl implements Session, RunningRoom {
 			// Whoever waits hears it once the room has nothing more to write: a
 			// pass that expired a lease is followed by the pass that closes.
 			if (!changed) {
+				await this.checkpoint();
 				this.settle();
 				this.arm(decision.alarmAt);
 				return;
@@ -1246,6 +1247,29 @@ class SessionImpl implements Session, RunningRoom {
 			this.emit({ type: 'quiet' });
 		}
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
+	}
+
+	/**
+	 * A checkpoint when the log has taken enough rows since the last one.
+	 * The room writes it where it has nothing else to write, so the row
+	 * stands for a room at rest, and a fold that reads it starts there.
+	 *
+	 * The row is built where it lands, like every other row: a row that
+	 * landed between the decision and the write is in the fold the
+	 * checkpoint carries, and the log drops it as one the checkpoint
+	 * replaced. A write that fails leaves the rows where they are, and the
+	 * next pass tries again.
+	 */
+	private async checkpoint(): Promise<void> {
+		// Nothing joins the queue until the rows are there: the room settles at
+		// the speed it always did, and the builder checks the count again.
+		if (this.gone() || this.log.rowsSinceCheckpoint < this.runtime.checkpoint.rows) return;
+		await this.log
+			.write('checkpoint', () => {
+				if (this.log.rowsSinceCheckpoint < this.runtime.checkpoint.rows) return undefined;
+				return checkpointOf(this.state(), this.now());
+			})
+			.catch(() => {});
 	}
 
 	private arm(at: number | undefined): void {
