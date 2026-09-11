@@ -33,7 +33,7 @@ showed.
 | 2026-09-02 | [The Site Drive](2026-09-02-the-site-drive.html)                     | sonnet-5   | [artifact](https://claude.ai/code/artifact/bb026bd2-1ce3-4aeb-b496-68416695bb63) |
 | 2026-09-03 | [One Assistant, Three Readers](2026-09-03-one-assistant-three-readers.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/52643e13-6b26-4311-8ab9-f1e9d9cea242) |
 | 2026-09-03 | [Who the Question Needs](2026-09-03-who-the-question-needs.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/8cbbe725-691f-449f-828e-479221fc9bde) |
-| 2026-09-11 | [The Room Comes Back](2026-09-11-the-room-comes-back.html)                 | sonnet-5   | —                                                                                |
+| 2026-09-11 | [The Room Comes Back](2026-09-11-the-room-comes-back.html)                 | sonnet-5   | [artifact](https://claude.ai/code/artifact/15d2e9e4-5b3b-4275-a8e4-2982912c661f) |
 
 ## What each run changed
 
