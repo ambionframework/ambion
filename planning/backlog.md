@@ -653,7 +653,7 @@ chaos sweep holds every answer to exactly once again, and
 stands for the cap: at three attempts the wake is dropped, and nothing
 says so.
 
-### 35. Two live hosts over one log corrupt it — closed, with a remainder
+### 35. Two live hosts over one log corrupt it — closed
 
 The run row is the fence (`RoomLog` in `log/log.ts`): every run writes
 it first, every entry carries its writer, an entry of an earlier run past
@@ -662,14 +662,19 @@ learns it lost the name and drops itself with `superseded`.
 `split.test.ts` and `hosts.test.ts` pin it, and `consistency.test.ts`
 cuts a run with an append in flight.
 
-**The remainder.** A superseded run acknowledges the one write it held
-past the fence, and that write is lost. A storage with a conditional
-append refuses it before it is acknowledged. The `SessionOpener`
-contract gains that append when the SQLite storage lands, and the
-Durable Object storage offers it too. Pi's JSONL storage reads its own
-memory, so the fence does not reach it: JSONL is a storage for one host.
-A read before every write costs a scan of the entries since the last
-read, on every storage.
+**The remainder is closed on a storage that can refuse.** A session may
+offer `appendAfter`: the log hands it the position its read left, and the
+entry lands next to it or the storage says the record moved and writes
+nothing. The SQLite storage offers it, in one statement that takes the
+seq it asserts. A run fenced while its write waited is refused before it
+acknowledges, so it loses nothing: `split.test.ts` runs the same split on
+both storages and holds each to what it promises.
+
+**What still stands.** A storage that cannot promise the refusal does not
+offer it, and the fence voids what it takes: the run acknowledges the one
+write it held. Pi's JSONL storage reads its own memory, so the fence does
+not reach it at all: JSONL is a storage for one host. A read before every
+write costs a scan of the entries since the last read, on every storage.
 
 ### 36. Every host in the tests shares one clock
 

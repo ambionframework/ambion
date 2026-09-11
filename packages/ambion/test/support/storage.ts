@@ -159,11 +159,17 @@ export function tappedOpener(sessions: SessionOpener, hook: AppendHook): Session
 	const tapped = (id: string, piSession: PiSession): PiSession =>
 		new Proxy(piSession, {
 			get(target, property, receiver) {
-				if (property === 'appendCustomEntry' || property === 'appendMessage') {
+				// `appendAfter` is an append like the others: a storage that refuses a
+				// moved append takes it, and the tap counts every write either way.
+				const appends =
+					property === 'appendCustomEntry' ||
+					property === 'appendMessage' ||
+					property === 'appendAfter';
+				if (appends && Reflect.get(target, property, receiver) !== undefined) {
 					return async (...args: unknown[]) => {
 						const n = (counts.get(id) ?? 0) + 1;
 						counts.set(id, n);
-						const customType = property === 'appendCustomEntry' ? String(args[0]) : undefined;
+						const customType = property === 'appendMessage' ? undefined : String(args[0]);
 						hook(id, n, 'before', customType);
 						const append = Reflect.get(target, property, receiver) as (
 							...a: unknown[]
@@ -219,12 +225,17 @@ export function gatedOpener(
 	const gated = (piSession: PiSession): PiSession =>
 		new Proxy(piSession, {
 			get(target, property, receiver) {
-				if (property === 'appendCustomEntry') {
-					return async (customType: string, data: unknown) => {
+				// Both appends, because a storage that refuses a moved append takes
+				// the second one and a gate over the first would never hold a write.
+				// A storage without one keeps none: the wrapper must not offer what
+				// the session does not have, because the log asks before it calls.
+				const appends = property === 'appendCustomEntry' || property === 'appendAfter';
+				if (appends && Reflect.get(target, property, receiver) !== undefined) {
+					return async (customType: string, data: unknown, ...rest: unknown[]) => {
 						await held(customType, data);
 						return (Reflect.get(target, property, receiver) as (...a: unknown[]) => unknown).apply(
 							target,
-							[customType, data],
+							[customType, data, ...rest],
 						);
 					};
 				}

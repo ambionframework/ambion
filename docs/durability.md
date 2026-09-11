@@ -133,14 +133,19 @@ leaves the room to expire the lease on its side.
 
 ## 5. What the room does not promise
 
-**The writes a superseded run acknowledged past the fence.** A host is
-paused with a write in flight, and a second host resumes the name. The
-write lands past the fence, void, and the first host acknowledges it.
-The first host learns at its next write. Every write it held between
-the fence and that write is lost, and `split.test.ts` pins that it is
-that one write and no other. A storage with a conditional append refuses
-such a write before it is acknowledged, and loses nothing:
-`planning/backlog.md` item 35 says what it takes.
+**The writes a superseded run acknowledged past the fence, on a storage
+that takes any append.** A host is paused with a write in flight, and a
+second host resumes the name. The write lands past the fence, void, and
+the first host acknowledges it. The first host learns at its next write.
+Every write it held between the fence and that write is lost, and
+`split.test.ts` pins that it is that one write and no other.
+
+A storage that offers `appendAfter` loses none of it. The log hands that
+append the position its read left: the entry lands next to it, or the
+storage says the record moved and writes nothing. The run is refused
+before it acknowledges, and the refusal is definite — nothing landed, so
+a client may deliver again under the same key. The core's SQLite storage
+offers it; Pi's repositories do not.
 
 **Two live hosts over a JSONL file.** Pi's JSONL storage reads its own
 memory and appends to the file, so a run over it never sees another

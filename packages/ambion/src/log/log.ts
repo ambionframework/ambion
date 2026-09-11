@@ -43,7 +43,7 @@
  * runs, and reads the fence like any other reader.
  */
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
-import type { Message, Seq } from '../types.ts';
+import { fenced, type Message, type Seq } from '../types.ts';
 import {
 	type CheckpointRow,
 	type CloseRow,
@@ -354,12 +354,26 @@ export class RoomLog {
 	private async append(piSession: PiSession, type: string, data: unknown): Promise<string> {
 		const stored = this.run === undefined ? data : { ...(data as object), written: this.run };
 		try {
-			return await piSession.appendCustomEntry(type, stored);
+			return await this.landed(piSession, type, stored);
 		} catch (error) {
 			// The storage may hold what the cache does not: the read that settles it is queued.
 			this.tail = this.tail.then(() => this.open()).catch(() => {});
 			throw error;
 		}
+	}
+
+	/**
+	 * The append itself. A storage that refuses a moved append takes the
+	 * cursor the read left: the entry lands next to what this run read, or
+	 * the record moved under the write and nothing lands. A run fenced while
+	 * its write waited is refused here, so it acknowledges nothing.
+	 */
+	private async landed(piSession: PiSession, type: string, stored: unknown): Promise<string> {
+		const refuses = fenced(piSession);
+		if (refuses === undefined) return piSession.appendCustomEntry(type, stored);
+		const id = await refuses.appendAfter(type, stored, this.cursor);
+		if (id === undefined) throw new Error('The record moved under the write.');
+		return id;
 	}
 
 	/**

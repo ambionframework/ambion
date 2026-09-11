@@ -36,7 +36,7 @@ export interface Entry {
 
 /** The room said no, and nothing landed. Anything else is an outcome the client cannot tell. */
 const DEFINITIVE =
-	/visit has ended|is stopped|not in this session|one name names one participant|is not seated|already running|has no composition|not in the runtime's catalog|already in this session|superseded/;
+	/visit has ended|is stopped|not in this session|one name names one participant|is not seated|already running|has no composition|not in the runtime's catalog|already in this session|superseded|moved under the write/;
 
 export class History {
 	readonly entries: Entry[] = [];
