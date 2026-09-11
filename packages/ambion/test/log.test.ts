@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { sessionsOver } from '../src/host/runtime.ts';
-import { InMemorySessionRepo, type SpokenMessage } from '../src/index.ts';
+import { InMemorySessionRepo, type SpokenMessage } from '../src/internal.ts';
 import { RoomLog } from '../src/log/log.ts';
 import { deferred, roomName } from './support/room.ts';
 import { faultyOpener, memory } from './support/storage.ts';

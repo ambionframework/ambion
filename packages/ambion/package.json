@@ -22,6 +22,18 @@
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs"
 		},
+		"./host": {
+			"types": "./dist/host.d.mts",
+			"import": "./dist/host.mjs"
+		},
+		"./protocol": {
+			"types": "./dist/protocol.d.mts",
+			"import": "./dist/protocol.mjs"
+		},
+		"./node": {
+			"types": "./dist/node.d.mts",
+			"import": "./dist/node.mjs"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",

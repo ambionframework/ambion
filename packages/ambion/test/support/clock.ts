@@ -1,4 +1,4 @@
-import type { Clock } from '../../src/index.ts';
+import type { Clock } from '../../src/internal.ts';
 
 /** A clock a test moves by hand. Alarms fire inside `advance`, in order. */
 export interface FakeClock extends Clock {

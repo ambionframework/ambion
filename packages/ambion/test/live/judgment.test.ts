@@ -6,7 +6,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineTool, passive, stopSession } from '../../src/index.ts';
+import { defineTool, passive, stopSession } from '../../src/internal.ts';
 import { enter } from '../support/room.ts';
 import {
 	activationsOf,

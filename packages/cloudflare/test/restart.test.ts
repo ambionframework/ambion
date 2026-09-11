@@ -8,8 +8,8 @@
  * and serves the same activation, so the work in flight is not lost.
  */
 import { env, runInDurableObject } from 'cloudflare:test';
-import type { LeaseRow, RunRow } from '@ambionframework/ambion';
-import { isSpoken } from '@ambionframework/ambion';
+import { isSpoken } from '@ambionframework/ambion/host';
+import type { LeaseRow, RunRow } from '@ambionframework/ambion/protocol';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
 import { until } from './until.ts';

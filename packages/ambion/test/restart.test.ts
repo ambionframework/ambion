@@ -19,7 +19,7 @@ import {
 	startSession,
 	stopSession,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { collect, crash, deferred, roomName, rowsOf, tick } from './support/room.ts';
 import {

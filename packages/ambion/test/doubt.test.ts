@@ -13,7 +13,7 @@ import {
 	type SessionEvent,
 	startSession,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { fakeClock } from './support/clock.ts';
 import { collect, roomName, rowsOf } from './support/room.ts';
 import {

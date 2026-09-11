@@ -5,7 +5,7 @@
  * a real one has an open HTTP stream to close.
  */
 import { expect, it } from 'vitest';
-import { stopSession } from '../../src/index.ts';
+import { stopSession } from '../../src/internal.ts';
 import { enter } from '../support/room.ts';
 import {
 	agent,

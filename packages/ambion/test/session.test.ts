@@ -13,7 +13,7 @@ import {
 	startSession,
 	stopSession,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { andrei, assistant, collect, deferred, enter, roomName } from './support/room.ts';
 import { byAgent, contextText, quiet, scripted, speak } from './support/scripted.ts';
 

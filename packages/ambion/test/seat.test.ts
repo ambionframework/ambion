@@ -17,7 +17,7 @@ import {
 	type SeatRoom,
 	type ViewResponse,
 	type Wake,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { fakeClock } from './support/clock.ts';
 import { deferred, tick } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';

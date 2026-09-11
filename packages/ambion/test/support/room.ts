@@ -7,7 +7,7 @@ import {
 	type SessionEvent,
 	type SessionOpener,
 	visitSession,
-} from '../../src/index.ts';
+} from '../../src/internal.ts';
 
 /** A trivial assistant: every room seats one, and nothing that uses it tests what it writes. */
 export const assistant = defineAgent({

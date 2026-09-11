@@ -9,7 +9,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type HumanDefinition,
-} from '../../src/index.ts';
+} from '../../src/internal.ts';
 import {
 	answersEveryQuestion,
 	answersLastQuestion,

@@ -22,7 +22,7 @@ import {
 	stopSession,
 	type Visit,
 	visitSession,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { assistant, collect, deferred, enter, roomName, rowsOf, tick } from './support/room.ts';
 import {

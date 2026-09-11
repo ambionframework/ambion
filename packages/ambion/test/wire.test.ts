@@ -17,7 +17,7 @@ import {
 	roundTrip,
 	type ViewResponse,
 	type Wake,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { fakeClock } from './support/clock.ts';
 import { roomName, rowsOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';

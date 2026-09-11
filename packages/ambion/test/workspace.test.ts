@@ -20,7 +20,7 @@ import {
 	stopSession,
 	type ToolContext,
 	type WorkspaceBackend,
-} from '../src/index.ts';
+} from '../src/internal.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/tools/bash-env.ts';
 import { MEMORY_LIMIT_BYTES, memoryBackend } from '../src/tools/just-bash.ts';
 import { assistant, enter, roomName as name } from './support/room.ts';

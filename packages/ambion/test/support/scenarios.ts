@@ -17,7 +17,7 @@ import {
 	startSession,
 	stopSession,
 	visitSession,
-} from '../../src/index.ts';
+} from '../../src/internal.ts';
 import { invariants } from './invariants.ts';
 import { collect, deferred } from './room.ts';
 import {
