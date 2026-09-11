@@ -52,7 +52,7 @@ export const activationId = (seq: Seq, seat: string, attempt = 1): string =>
 	attempt === 1 ? `${seq}:${seat}` : `${seq}:${seat}:${attempt}`;
 
 /** The id of the assistant's attempt at the summary a close owes. */
-export const draftId = (through: Seq, attempt: number): string => `close:${through}:${attempt}`;
+const draftId = (through: Seq, attempt: number): string => `close:${through}:${attempt}`;
 
 /**
  * What an id says about the activation: what caused it, where on the record
