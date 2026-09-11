@@ -49,7 +49,7 @@ describe('RoomLog', () => {
 		expect('message' in third && third.message.seq).toBe(3);
 	});
 
-	it('shows a message only once its write resolves', async () => {
+	it('shows a message only once its write resolves, and hears it there', async () => {
 		const opened = await memory.open();
 		const slow = deferred();
 		const sessions = {
@@ -63,17 +63,20 @@ describe('RoomLog', () => {
 				return piSession;
 			},
 		};
-		const log = new RoomLog(sessions.open(roomName('slow')));
-		const landed: number[] = [];
-		const commit = log.commit({ key: 'k', draft: say('slow') }, (m) => landed.push(m.seq));
+		const heard: number[] = [];
+		const log = new RoomLog(sessions.open(roomName('slow')), (entry) => {
+			if (entry.type === 'message') heard.push(entry.message.seq);
+		});
+		const commit = log.commit({ key: 'k', draft: say('slow') });
 		await new Promise((resolve) => setImmediate(resolve));
 		expect(log.messages).toHaveLength(0);
 		expect(log.lastSeq).toBe(0);
-		expect(landed).toEqual([]);
+		expect(heard).toEqual([]);
 		slow.resolve();
 		await commit;
 		expect(log.messages).toHaveLength(1);
-		expect(landed).toEqual([1]);
+		// the log hears what it appended, the way it hears what a read finds
+		expect(heard).toEqual([1]);
 	});
 
 	it('drops a commit whose write fails, and the next one takes its seq', async () => {

@@ -115,19 +115,33 @@ export const isExpired = (lease: LeaseState, now: number): boolean =>
 export const isLive = (lease: LeaseState, now: number): boolean =>
 	lease.phase === 'running' && !isExpired(lease, now);
 
-/** A wake on the log that no lease has answered. */
-export interface PendingWake {
-	/** The id of the next attempt. */
+/**
+ * An activation the room owes a seat, and has not had. Two things on the
+ * log cause one: a message that woke a seat and no lease answered, and a
+ * close that owes the assistant a summary. The room schedules both the same
+ * way, so both read as this.
+ */
+export interface Due {
+	/** The id of the next attempt. Nothing mints it: the log derives it. */
 	id: string;
+	/** The seat that takes the activation. */
 	seat: string;
-	seq: Seq;
-	/** When the message was written, ISO. */
-	at: string;
-	/** How many activations took this wake and came to nothing. */
+	/** How many activations took it and came to nothing. */
 	attempts: number;
 	/** When the next attempt may start, or undefined when it may start now. */
 	notBefore: number | undefined;
 }
+
+/** A wake on the log that no lease has answered. */
+export interface PendingWake extends Due {
+	seq: Seq;
+	/** When the message was written, ISO. */
+	at: string;
+}
+
+/** Whether the next attempt at this may start: its backoff has passed. */
+export const startsNow = (owed: Pick<Due, 'notBefore'>, now: number): boolean =>
+	owed.notBefore === undefined || owed.notBefore <= now;
 
 export interface WakeOptions {
 	/** How many attempts the room makes at one wake before it gives up. */

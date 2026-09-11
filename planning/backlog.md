@@ -50,11 +50,18 @@ in memory is a fold in `room/fold.ts`, the decision is
 `room/reconcile.ts`, and what an activation reads is `room/view.ts`. The
 reserve is a fold, so it needs no module.
 
-**What is left.** `session.ts` holds compose, route, the seat's three
-calls (`view`, `commit`, `lease`) and the reconcile glue, and it is over
-the 600 lines `next.md` asked for. The seat's three calls are the next
-piece to move: an `answers.ts` over a narrow interface on the room (the
-log, the fold, the clock, `emit`).
+The room now has one reaction per log entry. The log calls `hear` for
+every entry it takes after the replay, whether this run appended it or a
+read found it, so `committed` and `heard` are one function and the
+emissions that sat inside `end`, `close` and `claim` are gone. Those three
+are writes and nothing else, and no caller threads a seat name into a
+write to name the event it causes.
+
+**What is left.** `session.ts` holds compose, route, hear, the seat's
+three calls (`view`, `commit`, `lease`) and the reconcile glue, and it is
+over the 600 lines `next.md` asked for. The seat's three calls are the
+next piece to move: an `answers.ts` over a narrow interface on the room
+(the log, the fold, the clock, `emit`).
 
 **Where.** `packages/ambion/src/session.ts`.
 
@@ -107,6 +114,30 @@ Model<Api>` when a host passes a custom `streamFn`.
 **Where.** `packages/ambion/src/host/runtime.ts`, `stubModel`.
 
 **Fix.** Build a real `Model` value with Pi's own shape.
+
+### 43. A draft in its backoff lets the room report quiet
+
+**What.** `liveSeats` in `room/reconcile.ts` holds a seat live for a
+pending wake whatever its backoff, and holds the assistant live for an
+owed draft only once the backoff has passed. So a draft that failed
+leaves the room reporting `quiet` for the length of the backoff, and
+`quiet()` resolves, although the assistant still owes that person a
+message and drafts again 30 seconds later.
+
+**Why.** `SessionEvent.quiet` says what it means: "no seat is taking an
+activation, and the assistant owes nobody a message". The second half is
+untrue in that window, and `quiet()` is what a host waits on when it
+wants the one message a person reads
+([`docs/agent.md`](../docs/agent.md) §5).
+
+**Where.** `packages/ambion/src/room/reconcile.ts`, `liveSeats`.
+
+**Fix.** Hold the assistant live for every owed draft, the way a pending
+wake holds its seat. It is one word in `liveSeats`, and it needs one
+decision first: a live assistant is a seat `routing` will not wake, so a
+question that opens an exchange during that window would not wake the
+assistant to compose. That is already true of a draft that is due now,
+so the change makes the window longer rather than new.
 
 ## Toolchain and project structure
 

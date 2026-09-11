@@ -28,6 +28,12 @@
  * the last entry every read saw, so a read costs the entries since the
  * one before it, whatever the log's age.
  *
+ * The log is the room's one input. Every entry it takes reaches the room
+ * the same way, whether this run appended it or a read found it: `hear`
+ * runs inside the link that took the entry, before the next write starts.
+ * So the room has one reaction per entry, and never a second path for the
+ * entries it wrote itself.
+ *
  * A run is fenced by its run row. Every entry a run writes carries its
  * run id. The fence is positional: as a read passes the storage in order,
  * a run row moves the fence to that run, and an entry of another run past
@@ -120,9 +126,11 @@ export class RoomLog {
 	private closed = false;
 	/** Pi's id of every entry the cache holds past the cursor: what a read in doubt finds again. */
 	private readonly known = new Set<string>();
+	/** Every lease id the cache holds a row for. It says whether a row is the first of its lease. */
+	private readonly leased = new Set<string>();
 	/** Pi's seq of the last entry a read saw: the next read starts past it. */
 	private cursor = 0;
-	/** The replay is over: what a read finds from now on is news, and `found` hears it. */
+	/** The replay is over: every entry the log takes from now on is news, and `hear` takes it. */
 	private replayed = false;
 	/** The run whose row landed last: entries of any other run after it are void. */
 	private fence: string | undefined;
@@ -132,15 +140,15 @@ export class RoomLog {
 	private superseded = false;
 
 	/**
-	 * `found` hears every entry the log finds on a read: it landed, and the
-	 * writer never heard, or another run wrote it. The room acts on it the
-	 * way it acts on a write it confirmed. `run` names the run this log
-	 * writes for, or nothing for a log that only reads. `lost` hears that a
-	 * later run took the name.
+	 * `hear` takes every entry the log takes after the replay: one this run
+	 * appended, and one a read found because the writer never heard or
+	 * another run wrote it. `first` says the log held no earlier row for
+	 * this lease id. `run` names the run this log writes for, or nothing for
+	 * a log that only reads. `lost` hears that a later run took the name.
 	 */
 	constructor(
 		open: Promise<PiSession>,
-		private readonly found?: (entry: LogEntry, fresh: boolean) => void,
+		private readonly hear?: (entry: LogEntry, first: boolean) => void,
 		private readonly run?: string,
 		private readonly lost?: () => void,
 	) {
@@ -197,13 +205,11 @@ export class RoomLog {
 		}
 	}
 
-	/** One entry a read found that the cache lacks: cached unless void, and reported after the replay. */
+	/** One entry a read found that the cache lacks: cached unless void. */
 	private take(entry: { id: string; customType: string; data?: unknown }): void {
 		const known = toEntry(entry.customType, entry.data);
 		if (known === undefined || this.voided(known, writerOf(entry.data))) return;
-		const fresh = known.type !== 'lease' || !this.holds(known.lease.id);
 		this.cache(known, entry.id);
-		if (this.replayed) this.found?.(known, fresh);
 	}
 
 	/**
@@ -216,19 +222,21 @@ export class RoomLog {
 		return voided(this.fence !== undefined, written !== undefined, written === this.fence);
 	}
 
-	/** Whether the cache holds a row for this lease id already. */
-	private holds(id: string): boolean {
-		return this.entries.some((entry) => entry.type === 'lease' && entry.lease.id === id);
-	}
-
+	/**
+	 * One entry into the cache, and the room hears it. Nothing during the
+	 * replay is news, so nothing is heard until the replay is over.
+	 */
 	private cache(entry: LogEntry, id: string): void {
+		const first = entry.type !== 'lease' || !this.leased.has(entry.lease.id);
 		this.known.add(id);
 		this.entries.push(entry);
-		if (entry.type !== 'message') return;
-		const message = entry.message;
-		this.messages.push(message);
-		this.lastSeq = message.seq;
-		if (message.key !== undefined) this.byKey.set(message.key, message);
+		if (entry.type === 'lease') this.leased.add(entry.lease.id);
+		if (entry.type === 'message') {
+			this.messages.push(entry.message);
+			this.lastSeq = entry.message.seq;
+			if (entry.message.key !== undefined) this.byKey.set(entry.message.key, entry.message);
+		}
+		if (this.replayed) this.hear?.(entry, first);
 	}
 
 	/**
@@ -258,15 +266,12 @@ export class RoomLog {
 
 	/**
 	 * Commit one message. The check, the append and the cache update run
-	 * inside one link of the queue, and `landed` runs there too, before the
-	 * next commit starts: what a caller does with a fresh message happens
+	 * inside one link of the queue, and `hear` runs there too, before the
+	 * next commit starts: what the room does with a fresh message happens
 	 * before anything else lands on top of it.
 	 */
-	commit<T extends Message>(
-		intent: CommitIntent<T>,
-		landed?: (message: T) => void,
-	): Promise<Committed<T>> {
-		const link = this.tail.then(() => this.land(intent, landed));
+	commit<T extends Message>(intent: CommitIntent<T>): Promise<Committed<T>> {
+		const link = this.tail.then(() => this.land(intent));
 		// One write that fails must not stop the next one. The queue keeps its
 		// order; the caller of the failed write sees its failure.
 		this.tail = link.catch(() => {});
@@ -332,10 +337,7 @@ export class RoomLog {
 		} while (awaited !== this.tail);
 	}
 
-	private async land<T extends Message>(
-		intent: CommitIntent<T>,
-		landed: ((message: T) => void) | undefined,
-	): Promise<Committed<T>> {
+	private async land<T extends Message>(intent: CommitIntent<T>): Promise<Committed<T>> {
 		const piSession = await this.open();
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
 		if (seen !== undefined) return { message: seen as T, repeated: true };
@@ -350,7 +352,6 @@ export class RoomLog {
 		} as T;
 		const id = await this.append(piSession, ENTRY_TYPES.message, stamped);
 		this.cache({ type: 'message', message: stamped }, id);
-		landed?.(stamped);
 		return { message: stamped };
 	}
 
