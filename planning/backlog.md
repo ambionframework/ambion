@@ -115,29 +115,41 @@ Model<Api>` when a host passes a custom `streamFn`.
 
 **Fix.** Build a real `Model` value with Pi's own shape.
 
-### 43. A draft in its backoff lets the room report quiet
+### 43. A draft in its backoff lets the room report quiet — closed
 
-**What.** `liveSeats` in `room/reconcile.ts` holds a seat live for a
-pending wake whatever its backoff, and holds the assistant live for an
-owed draft only once the backoff has passed. So a draft that failed
-leaves the room reporting `quiet` for the length of the backoff, and
-`quiet()` resolves, although the assistant still owes that person a
-message and drafts again 30 seconds later.
+`liveSeats` in `room/reconcile.ts` holds a seat live for every activation
+the room owes, backoff included, so `quiet` means what it says. The one
+list it reads is `state.due`, which the close-as-a-message change made
+single (item 44). The routing's compose guard now asks whether the
+assistant holds a live lease, so a question that lands inside a draft's
+backoff still wakes it to compose.
 
-**Why.** `SessionEvent.quiet` says what it means: "no seat is taking an
-activation, and the assistant owes nobody a message". The second half is
-untrue in that window, and `quiet()` is what a host waits on when it
-wants the one message a person reads
-([`docs/agent.md`](../docs/agent.md) §5).
+### 44. One kind of activation, and the close is a message — closed
 
-**Where.** `packages/ambion/src/room/reconcile.ts`, `liveSeats`.
+A close of an exchange used to be a row beside the messages, and the
+summary it owed had its own id shape (`close:<through>:<attempt>`), its own
+fold (`foldOwed`), its own retry accounting and its own "came to nothing"
+reasons. A pending wake had the same four things, written once more. A
+close is now a `closed` message on the record, so one fold
+(`dueActivations` in `room/lease.ts`) answers every activation the room
+owes, and one id shape names them all. What an activation may do is read
+off the message that woke it (`handOf` in `room/view.ts`).
 
-**Fix.** Hold the assistant live for every owed draft, the way a pending
-wake holds its seat. It is one word in `liveSeats`, and it needs one
-decision first: a live assistant is a seat `routing` will not wake, so a
-question that opens an exchange during that window would not wake the
-assistant to compose. That is already true of a draft that is due now,
-so the change makes the window longer rather than new.
+A checkpoint carries no closes for the same reason (item 27): the log
+keeps every message, so every closed exchange is on the record whatever a
+checkpoint drops, and the floor is what says the room owes nothing for a
+close below it.
+
+One behaviour changed with it: a running lease answers a close the way it
+answers any other message, so a resumed room waits for a dead run's draft
+lease to expire instead of re-sending the wake at once. Item 30 is the
+same wait, and one fix serves both.
+
+**What is left.** `reached` in `room/lease.ts` still names the assistant to
+keep an ordinary message from becoming a pending wake for a seat that no
+attention reaches. The deeper fix is to write every seat a message reached
+into its `wakes`, live or not, and let one `send` carry a wake or a steer:
+`reached` becomes `message.wakes`, and the at-work branch goes.
 
 ## Toolchain and project structure
 
@@ -348,25 +360,25 @@ assistant speaks.
 
 ### 18. A test for the owed-summary merge — closed
 
-Who is owed is a fold (`foldOwed` in `room/fold.ts`): a later close by the
-same person joins the draft, and one message reaches back to the earliest
-question still owed. `restart.test.ts` pins it, on both storages, across a
-crash.
+Who is owed is a fold (`dueActivations` in `room/lease.ts`), and the range
+the hand carries reaches back to the earliest question the person is still
+owed (`owedFrom` in `room/view.ts`). `restart.test.ts` pins it, on both
+storages, across a crash.
 
 ### 19. Exchanges are run state — closed
 
-An exchange is a fold over the log: the open one is the first question
-after the last close row, and every close is a row beside the messages.
+An exchange is a fold over the record: the open one is the first question
+past the last close's range, and every close is a message.
 See [`docs/exchange.md`](../docs/exchange.md) §5.
 
 ### 20. A second non-seat writer
 
-The room owes summaries through one fold (`foldOwed` in `room/fold.ts`)
-and one decision (`dueWakes` in `room/reconcile.ts`). If a room-level
-compactor ever arrives ([`docs/assistant.md`](../docs/assistant.md) §16
-forbids it by name today), it wants the same fold and the same decision.
-Two writers is the point at which they should become their own module
-rather than two functions beside the assistant's.
+The room owes every activation through one fold (`dueActivations` in
+`room/lease.ts`) and one decision (`dueWakes` in `room/reconcile.ts`). If a
+room-level compactor ever arrives
+([`docs/assistant.md`](../docs/assistant.md) §16 forbids it by name today),
+it wants the same fold and the same decision, and one more message kind
+that wakes the seat that writes it.
 
 ### 21. A credentials boundary for tool calls leaving the workspace
 
@@ -556,10 +568,10 @@ tell that it runs the definition the room seated.
 ### 27. Lease rows grow with every activation — closed, with a remainder
 
 Every `runtime.checkpoint.rows` rows the room writes an
-`ambion/checkpoint`: the composition, the closes and the leases a later
-fold still reads, behind a floor below which every wake was answered. The
-log drops the rows the checkpoint replaced, so what a fold costs is the
-rows since the last checkpoint, whatever the room's age.
+`ambion/checkpoint`: the composition and the leases a later fold still
+reads, behind a floor below which every activation was answered. The log
+drops the rows the checkpoint replaced, so what a fold costs is the rows
+since the last checkpoint, whatever the room's age.
 
 **The remainder.** Three costs stand. The messages still grow without
 bound, and every fold reads them all: item 2 holds that. A replay still
@@ -585,11 +597,11 @@ a visit, and should not start one.
 
 ### 29. Three attempts, then the summary or the wake is never tried again — closed, with a remainder
 
-The fold reports every wake and every draft at the cap, with the attempts
-that reached it, and the cap is the room's decision. `decide` returns the
+The fold reports every activation at the cap, with the attempts that
+reached it, and the cap is the room's decision. `decide` returns the
 attempt the room does not make, ended `abandoned`, and `session.ts`
-writes it. The row answers the wake or the close it stood for, so no
-reader sees the room still owing it. The host hears an `abandoned` event.
+writes it. The row answers the message that owed it, so no reader sees the
+room still owing it. The host hears an `abandoned` event.
 
 **The remainder.** No host verb resets the attempts for one close. A
 person who wants the summary after the room gave up asks again, and the
@@ -613,7 +625,7 @@ expiry.
 ### 31. A wake a seat at work heard through a steer alone is lost with a crash — closed
 
 The log says who was at work when a message landed: a lease that holds a
-row before it and ends, if it ends, after it (`pendingWakes` in
+row before it and ends, if it ends, after it (`dueActivations` in
 `room/lease.ts`). A message such a lease heard is pending again when the
 lease came to nothing, so the seat is woken for it after the backoff.
 `hosts.test.ts` pins it: a crash at every write of a scenario where a
@@ -646,7 +658,7 @@ finds that takes more than an hour to reduce by hand.
 ### 34. A wake whose lease expired is never sent again — closed
 
 A lease that expired or failed without a word answers nothing
-(`pendingWakes` in `room/lease.ts`): the wake is pending again under the
+(`dueActivations` in `room/lease.ts`): the wake is pending again under the
 next attempt's id, after the backoff, with the cap the summaries use. The
 chaos sweep holds every answer to exactly once again, and
 `restart.test.ts` pins the seat woken again on the next run. Item 29

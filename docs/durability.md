@@ -12,9 +12,9 @@ Read it with [`agent.md`](agent.md) §5, which names the mechanisms, and
 log in a Pi session. Every message takes the next seq, and every row the
 room writes beside the messages carries `after`, the last seq when it
 landed. The fold reads the log from the start and rebuilds the room from
-it. That is the roster, the people, the open exchange, every lease, every
-wake still pending and every summary still owed. Nothing the room holds
-in memory outlives what the log says.
+it. That is the roster, the people, the open exchange, the closed ones,
+every lease and every activation the room still owes. Nothing the room
+holds in memory outlives what the log says.
 
 **The room reacts to the log, and to nothing else.** The log tells the room
 about every entry it takes, and the room has one reaction per entry. An
@@ -44,12 +44,13 @@ gone, so a live run can lose the name to a dead one. §5 says what a
 superseded run loses, and where the fence does not reach.
 
 **A checkpoint replaces rows, and never a message.** The room writes one
-every `runtime.checkpoint.rows` rows. It carries the composition, the
-closes and the leases a later fold still reads, behind a floor below
-which every wake was answered. The rows it replaces stay on the storage,
-so a reader that ignores the checkpoint folds the same room from them.
-The fence voids a checkpoint a superseded run wrote, like any other
-entry.
+every `runtime.checkpoint.rows` rows. It carries the composition and the
+leases a later fold still reads, behind a floor below which every
+activation was answered. So every closed exchange stays on the record: a
+close is a message, and the floor is what says the room owes nothing for
+a close below it. The rows it replaces stay on the storage, so a reader
+that ignores the checkpoint folds the same room from them. The fence
+voids a checkpoint a superseded run wrote, like any other entry.
 
 ## 2. What a delivery promises
 
@@ -106,13 +107,12 @@ and once it stood down, through the seq its last renewal confirmed.
 
 **The room says when it gives up.** At the cap the room writes the
 attempt it does not make, ended `abandoned`, and the host hears an
-`abandoned` event. The row answers the wake or the close it stood for, so
-no reader sees the room still owing it, and the record says the room
-stopped trying.
+`abandoned` event. The row answers the message that owed it, so no reader
+sees the room still owing it, and the record says the room stopped trying.
 
-**A lease that came to nothing answers nothing.** A lease that expired
-or failed leaves every message it heard pending again, whatever it said.
-Its words stay on the record, and the seat reads them at the next
+**A lease that came to nothing answers nothing.** A lease that expired,
+failed or was refused leaves every message it heard due again, whatever it
+said. Its words stay on the record, and the seat reads them at the next
 attempt. The failure is one attempt. The room wakes the seat again after
 the backoff, and at the cap it stops. `runtime.retry` holds the policy:
 three attempts by default, thirty seconds after the first failure and
@@ -207,9 +207,8 @@ the storage together and reports every guarantee that broke:
 - every read is a prefix of the record, a client's reads move forward,
   and every read holds every delivery acknowledged before it was asked;
 - every seq on the storage names one message;
-- one attempt at a wake or a draft runs at a time;
-- once the room drains, nothing runs, nothing is pending, nothing is
-  owed.
+- one attempt at an activation runs at a time;
+- once the room drains, nothing runs and nothing is due.
 
 **The clients take turns.** The people and the host interleave at every
 await, and the nemesis acts between two actions, with one exception. A

@@ -6,15 +6,20 @@ makes the ones after it a smaller diff. Numbers refer to
 
 ## 1. Split `session.ts` (backlog 3)
 
-**Why first.** The file grew from 842 to 1063 lines in one change, and the
-next two items land in it. Splitting first keeps each of them a local
-diff.
+**Why first.** The file is 1,438 lines, and the next two items land in it.
+Splitting first keeps each of them a local diff.
 
 **What is done.** `say` lives in `seat/hands.ts`. The commit path lives
 in `log/log.ts`. The reserve is a fold, so it needs no module. The room
 reacts to the log in one place: the log calls `hear` for every entry it
 takes, and the room no longer holds a second path for the entries it
-wrote itself.
+wrote itself. Closing an exchange is a commit like any other, so the room
+writes one kind of entry and routes it in one place.
+
+**What moved against it.** The close became a message (backlog 44), which
+took about 100 lines out of `room/fold.ts` and added about 45 to the
+routing and the commit here. The room's own writes are now one path, which
+is what makes the split below a smaller diff than it was.
 
 **Done when.** The seat's three calls (`view`, `commit`, `lease`) live in
 `answers.ts`, over a narrow interface on the room. `session.ts` holds

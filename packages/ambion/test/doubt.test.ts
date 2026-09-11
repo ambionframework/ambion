@@ -8,6 +8,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	isClosed,
 	isPresence,
 	isSpoken,
 	type SessionEvent,
@@ -15,7 +16,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
-import { collect, roomName, rowsOf } from './support/room.ts';
+import { collect, roomName } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -89,8 +90,11 @@ describe('a room in doubt', () => {
 	it('opens the next exchange when the close it found had a question queued ahead of it', async () => {
 		const opened = await memory.open();
 		let failNextClose = false;
-		const sessions = tappedOpener(opened.sessions, (_id, _n, phase, customType) => {
-			if (failNextClose && phase === 'after' && customType === 'ambion/close') {
+		const sessions = tappedOpener(opened.sessions, (_id, _n, phase, customType, data) => {
+			// The close is a message, so the hook picks it by what was appended.
+			const closing =
+				customType === 'ambion/message' && (data as { kind?: string }).kind === 'closed';
+			if (failNextClose && phase === 'after' && closing) {
 				failNextClose = false;
 				throw new Error('the disk is full');
 			}
@@ -126,8 +130,9 @@ describe('a room in doubt', () => {
 		await delivered;
 		for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
 		await session.quiet();
-		const rows = await rowsOf(opened.sessions, session.name);
-		expect(rows.filter((r) => r.type === 'ambion/close')).toHaveLength(2);
+		// the injected failure fired: the hook reset the flag when it threw
+		expect(failNextClose).toBe(false);
+		expect((await session.messages()).filter(isClosed)).toHaveLength(2);
 		expect(count(events, 'exchange_opened')).toBe(2);
 		expect(count(events, 'exchange_closed')).toBe(2);
 	});

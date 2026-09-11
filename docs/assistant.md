@@ -54,18 +54,20 @@ it refuses a say. Two things make it the seat it is, and both are data:
 - It is seated at `none`, the narrow end of the attention scale
   ([`agent.md`](agent.md) rule 6): nothing said in the room wakes it, and
   it cannot be addressed.
-- The close of an exchange wakes it, for the person who owns that exchange,
-  and that activation holds one tool, `summarise`, bound to the range it
-  must stand for.
+- The room's `closed` message wakes it, for the person who owns that
+  exchange, and that activation holds one tool, `summarise`, bound to the
+  range it must stand for. A close wakes a seat the way every other message
+  does ([`exchange.md`](exchange.md) §5), so the room owes the draft as one
+  more activation and schedules it like any other.
 - The open of an exchange wakes it too, when the room holds agents in
   reserve, and that activation holds one tool, `seat`, bound to the
   reserve. [`roster.md`](roster.md) is the contract for it.
 
 A seat carries none of that. Which seat is the assistant is on the
-composition row; who is owed a message is a fold over the close rows, the
-summaries and the leases (`foldOwed` in
-[`fold.ts`](../packages/ambion/src/room/fold.ts)); what it is drafting for
-now is on the id of the activation it holds (`close:<through>:<attempt>`).
+composition row; who is owed a message is a fold over the closes, the
+summaries and the leases (`dueActivations` in
+[`lease.ts`](../packages/ambion/src/room/lease.ts)); what it is drafting
+for is the message its activation's id names (`<close seq>:assistant`).
 No seat carries a field for any of it.
 
 The assistant holds one thing nothing else in the room holds: **what a
@@ -292,12 +294,12 @@ while the assistant drafts for Priya, Sam stays owed, and the room wakes
 the assistant again for him at its next reconcile. A person whose draft the
 assistant could not land waits for the backoff instead, so a model that
 keeps failing never retries on its own end (§5). Who is owed is a fold
-over the log: a close that names the assistant, with no summary covering
-it and no draft that stood down over it. A draft stands down when the
+over the record: a close that names the assistant, with no summary covering
+it and no attempt at it that stood down. An attempt stands down when the
 assistant ends it without writing, and when the host revokes it: `abort()`
-and `stopSession` write the draft off with every wake still pending. A
-later close by the same person joins the draft, and one message reaches
-back to the earliest question still owed.
+and `stopSession` write the draft off with every wake still pending. Every
+close of the same person still owed joins the range the hand carries, so
+one message reaches back to the earliest question still owed.
 
 ---
 
@@ -763,10 +765,10 @@ lands while the assistant drafts. That is seconds of room at most. It is the
 right bound to have, and it is the one the design leans
 on now that a range no longer reaches back to a person's last summary.
 
-**A stopped room never reports that it is quiet.** `quiet` says that no
-seat is taking an activation and the assistant owes nobody one. A room that is
-closing is
-neither, so shutdown drains whoever waited on `quiet()` and emits nothing
+**A stopped room never reports that it is quiet.** `quiet` says the room
+owes nothing: no lease is held, and no activation is due, a draft inside
+its backoff included. A room that is closing owes whatever its last run
+left, so shutdown drains whoever waited on `quiet()` and emits nothing
 afterwards.
 
 **A summary is owed until the third attempt.** A race is handled inside
@@ -835,8 +837,8 @@ document makes loudly:
 - A fold names the person its summary was written for, and two overlapping
   ranges stay apart. §5, §8.
 - An empty say is refused, so nothing empty stands inside a range. §4.
-- A room with a summary owed is quiet, because owing one is not working on
-  one; and a stopped room never reports that it went quiet. §5, §16.
+- A room with a summary owed is not quiet, and it goes quiet once it gives
+  up; and a stopped room never reports that it went quiet. §5, §16.
 - `startSession` refuses an assistant whose name an agent holds, and
   `visitSession` refuses a person who takes the assistant's name. §14.
 - The assistant is seated when the room starts, and a room nobody visits

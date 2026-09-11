@@ -351,9 +351,9 @@ harness in
   heard. The world resumes the name in a fresh runtime, puts back the
   people who were present, and retries the host action that failed under
   the same key. Every run must come to the same record: every delivery on
-  it once, every answer once, every summary owed written once. A seat
-  whose lease the dead run held is woken again after the backoff, and
-  answers then.
+  it once, every answer once, every summary owed written once, and one
+  `closed` message per exchange. A seat whose lease the dead run held is
+  woken again after the backoff, and answers then.
 - **A handover under load** (`hosts.test.ts`). A cast under trouble runs
   the same sweep: the product's model is down the first time it takes a
   question, the colleague's answers are questions to the product, and the

@@ -16,10 +16,9 @@
  * enforced where the write happens.
  *
  * Beside the messages, the log holds rows about the room: what a run
- * started with, the leases its seats hold, and the range an exchange
- * turned out to hold. A row takes no seq and carries `after`, the last seq
- * when it landed. It joins the same queue, so a row and the messages
- * around it land in the order they were asked for.
+ * started with, and the leases its seats hold. A row takes no seq and
+ * carries `after`, the last seq when it landed. It joins the same queue, so
+ * a row and the messages around it land in the order they were asked for.
  *
  * The log reads what the storage holds past its cursor before every
  * write, and again on the queue behind a write that failed. A write whose
@@ -46,7 +45,6 @@ import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message, Seq } from '../types.ts';
 import {
 	type CheckpointRow,
-	type CloseRow,
 	type CompositionRow,
 	isCheckpoint,
 	type LeaseRow,
@@ -55,11 +53,10 @@ import {
 } from '../wire.ts';
 import { nextSeq, refused, supersedes, voided } from './rules.verified.ts';
 
-/** The six kinds of custom entry the room writes to its Pi session. */
+/** The five kinds of custom entry the room writes to its Pi session. */
 const ENTRY_TYPES = {
 	message: 'ambion/message',
 	lease: 'ambion/lease',
-	close: 'ambion/close',
 	composition: 'ambion/composition',
 	run: 'ambion/run',
 	checkpoint: 'ambion/checkpoint',
@@ -69,7 +66,6 @@ const ENTRY_TYPES = {
 export type LogEntry =
 	| { type: 'message'; message: Message }
 	| { type: 'lease'; lease: LeaseRow }
-	| { type: 'close'; close: CloseRow }
 	| { type: 'composition'; composition: CompositionRow }
 	| { type: 'run'; run: RunRow }
 	| { type: 'checkpoint'; checkpoint: CheckpointRow };
@@ -80,7 +76,6 @@ export type Row = Exclude<LogEntry, { type: 'message' }>;
 /** What a caller passes to `write`: the row without `after`, which the log stamps. */
 export type RowData<K extends Row['type']> = {
 	lease: Without<LeaseRow, 'after'>;
-	close: Without<CloseRow, 'after'>;
 	composition: Without<CompositionRow, 'after'>;
 	run: Without<RunRow, 'after'>;
 	checkpoint: Without<CheckpointRow, 'after'>;
@@ -89,7 +84,6 @@ export type RowData<K extends Row['type']> = {
 const BY_TYPE: Record<string, LogEntry['type']> = {
 	[ENTRY_TYPES.message]: 'message',
 	[ENTRY_TYPES.lease]: 'lease',
-	[ENTRY_TYPES.close]: 'close',
 	[ENTRY_TYPES.composition]: 'composition',
 	[ENTRY_TYPES.run]: 'run',
 	[ENTRY_TYPES.checkpoint]: 'checkpoint',

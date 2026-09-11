@@ -1,20 +1,19 @@
 /**
  * How the room moves: it folds the log, decides, and writes what it decided.
  *
- * `decide` is pure. It reads the folded state and the clock and returns the
- * rows to write, the wakes to send, and when to look again. Every wake it
- * sends comes off one list, `state.due`: the activations the room owes,
- * whether a message decided one or a close owes one. The room applies
- * a decision, and a second decision over the result writes nothing: that is
- * what makes it safe to run after every commit, every lease change, every
- * alarm and every wake, and after a resume that does not know what the last
- * run got to.
+ * `decide` is pure. It reads the folded state and the clock and returns what
+ * to write, the wakes to send, and when to look again. Every wake it sends
+ * comes off one list, `state.due`: the activations the room owes, whatever
+ * message caused each one. The room applies a decision, and a second decision
+ * over the result writes nothing: that is what makes it safe to run after
+ * every commit, every lease change, every alarm and every wake, and after a
+ * resume that does not know what the last run got to.
  */
 
-import type { CloseRow, LeaseRow, Without } from '../wire.ts';
-import { draftOver } from './assistant.ts';
+import type { Seq } from '../types.ts';
+import type { LeaseRow, Without } from '../wire.ts';
 import type { RoomState } from './fold.ts';
-import { type Due, isExpired, isLive, parseId, seatOf, startsNow } from './lease.ts';
+import { type Due, drafting, isExpired, isLive, seatOf, startsNow } from './lease.ts';
 import { givesUp } from './rules.verified.ts';
 
 export interface DecideOptions {
@@ -37,48 +36,52 @@ interface Send {
 
 type Ended = Without<Extract<LeaseRow, { phase: 'ended' }>, 'after'>;
 
+/** The exchange the room closes, and the range it turned out to cover. */
+export interface Closing {
+	owner: string;
+	from: Seq;
+	through: Seq;
+}
+
 export interface Decision {
 	/** Leases that ran past their expiry, ended here. */
 	expired: Ended[];
 	/** The attempts the room does not make: the activations at the cap, written off here. */
 	abandoned: Ended[];
 	/** The exchange the room closes, when nothing is live and one is open. */
-	close: Omit<CloseRow, 'after'> | undefined;
+	close: Closing | undefined;
 	sends: Send[];
 	/** When the room looks again on its own, or undefined when nothing waits on the clock. */
 	alarmAt: number | undefined;
 }
 
 /**
- * The seats holding a live lease, a pending wake, or a draft that is due,
- * by name, with the ids that make them live.
+ * The seats holding a live lease or an activation the room still owes, by
+ * name, with the ids that make them live. A seat is live through a backoff
+ * too: the room owes the activation, so the room is not at rest, and it says
+ * `quiet` only once it owes nothing.
  */
 export function liveSeats(state: RoomState, now: number): Map<string, string[]> {
-	const assistant = state.composition?.assistant.name ?? '';
 	const live = new Map<string, string[]>();
 	const add = (seat: string | undefined, id: string) => {
 		if (seat === undefined) return;
 		live.set(seat, [...(live.get(seat) ?? []), id]);
 	};
 	for (const lease of state.leases.values()) {
-		if (isLive(lease, now)) add(seatOf(lease.id, assistant), lease.id);
+		if (isLive(lease, now)) add(seatOf(lease.id), lease.id);
 	}
-	for (const wake of state.pending) add(wake.seat, wake.id);
-	// A draft in its backoff holds nobody: the room is at rest until it is due.
-	for (const owed of state.owed) if (startsNow(owed, now)) add(owed.seat, owed.id);
+	for (const owed of state.due) add(owed.seat, owed.id);
 	return live;
 }
 
 /**
- * Whether the exchange is still being worked on: a seat that speaks for
- * itself is live, or the assistant is composing. The assistant drafting a
- * summary is not the room still working, so a draft holds no exchange open.
+ * Whether the exchange is still being worked on: any live activation except
+ * the assistant's draft. The assistant writing about an exchange is not the
+ * room still working on it, so a draft holds no exchange open.
  */
 export function working(state: RoomState, now: number): boolean {
-	const assistant = state.composition?.assistant.name ?? '';
-	for (const [seat, ids] of liveSeats(state, now)) {
-		if (seat !== assistant) return true;
-		if (ids.some((id) => parseId(id)?.kind === 'wake')) return true;
+	for (const ids of liveSeats(state, now).values()) {
+		if (ids.some((id) => !drafting(id, state.messages))) return true;
 	}
 	return false;
 }
@@ -105,8 +108,8 @@ const capped = (owed: Due, options: DecideOptions): boolean =>
 
 /**
  * The attempt at each activation at the cap, ended before it starts. The
- * row answers the wake or the close it stood for, so the room stops trying
- * and every reader sees that it did.
+ * row answers the message that owed it, so the room stops trying and every
+ * reader sees that it did.
  */
 function abandonments(state: RoomState, options: DecideOptions): Ended[] {
 	const at = new Date(options.now).toISOString();
@@ -122,28 +125,21 @@ function expiries(state: RoomState, now: number): Decision['expired'] {
 		.map((lease) => ({ id: lease.id, phase: 'ended' as const, reason: 'expired' as const, at }));
 }
 
-/** The exchange closes when nothing works on it. It names the assistant when it owes a summary. */
-function closing(state: RoomState, now: number): Decision['close'] {
+/**
+ * The exchange closes when nothing works on it, over the range the record
+ * reached. Who the close wakes is the room's routing to decide where the
+ * close is written, not the decision's.
+ */
+function closing(state: RoomState, now: number): Closing | undefined {
 	const exchange = state.exchange;
 	if (exchange === undefined || working(state, now)) return undefined;
-	const assistant = state.composition?.assistant.name ?? '';
-	const speaksForItself = (name: string) => !state.people.has(name) && name !== assistant;
-	const owed =
-		draftOver(state.messages, exchange.from, state.lastSeq, speaksForItself) !== undefined;
-	return {
-		owner: exchange.owner,
-		from: exchange.from,
-		through: state.lastSeq,
-		at: new Date(now).toISOString(),
-		...(owed ? { wakes: [assistant] } : {}),
-	};
+	return { owner: exchange.owner, from: exchange.from, through: state.lastSeq };
 }
 
 /**
  * Every wake the room sends now: an activation it owes whose backoff has
  * passed, and which this room never sent or sent longer ago than the
- * resend window. A wake a message decided and a draft a close owes are one
- * list here, because the room schedules them the same way.
+ * resend window.
  */
 function dueWakes(state: RoomState, options: DecideOptions): Send[] {
 	return state.due

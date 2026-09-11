@@ -2,36 +2,31 @@
  * Every fact about the room, as a fold over the log.
  *
  * The log is the truth, and the room holds no fact beside it: the roster,
- * the reserve, the people, the open exchange, the closes, the leases, the
- * wakes still pending and the summaries still owed are each one function
- * over the entries. A room that replays the log folds the same state the
- * room that wrote it held, which is what lets a room resume where it
- * stopped.
+ * the reserve, the people, the open exchange, the closed ones, the leases and
+ * the activations still due are each one function over the entries. A room
+ * that replays the log folds the same state the room that wrote it held,
+ * which is what lets a room resume where it stopped.
  */
 
 import type { LogEntry, Row } from '../log/log.ts';
-import { type Attention, type Exchange, isSummary, type Message, type Seq } from '../types.ts';
+import {
+	type Attention,
+	type ClosedMessage,
+	type Exchange,
+	isClosed,
+	type Message,
+	type Seq,
+} from '../types.ts';
 import type {
 	CheckpointRow,
-	CloseRow,
 	CompositionRow,
-	EndReason,
 	LeaseHold,
 	LeaseRow,
 	SeatRow,
 	Without,
 } from '../wire.ts';
 import { openExchange } from './exchange.ts';
-import {
-	type Due,
-	draftId,
-	foldLeases,
-	isLive,
-	type LeaseState,
-	type PendingWake,
-	parseId,
-	pendingWakes,
-} from './lease.ts';
+import { type Due, dueActivations, foldLeases, isLive, type LeaseState, parseId } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
 
 /** One agent on the roster: its name, how the room knows it, what wakes it, and whether it is the assistant. */
@@ -42,35 +37,20 @@ interface RosterSeat {
 	assistant: boolean;
 }
 
-/** A summary one person is owed, and how the room has tried to write it. */
-interface Owed extends Due {
-	person: string;
-	/** The earliest question the message must reach back to. */
-	from: Seq;
-	/** The latest close it stands for. The draft id names this. */
-	through: Seq;
-	/** Every close the message stands for, by `through`. */
-	closes: Seq[];
-}
-
-/** What one person is owed, before the room counts the drafts it has tried. */
-type Grouped = Omit<Owed, keyof Due>;
-
 export interface RoomState {
 	readonly composition: CompositionRow | undefined;
 	readonly roster: RosterSeat[];
 	readonly reserve: SeatRow[];
 	readonly people: Map<string, PersonState>;
 	readonly exchange: Exchange | undefined;
-	readonly closes: CloseRow[];
+	/** Every exchange the room has closed, in record order. */
+	readonly closes: ClosedMessage[];
 	readonly leases: Map<string, LeaseState>;
-	readonly pending: PendingWake[];
-	readonly owed: Owed[];
-	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
+	/** Every activation the room owes, whatever message caused it. */
 	readonly due: Due[];
 	readonly messages: readonly Message[];
 	readonly lastSeq: Seq;
-	/** No wake on a message before this seq is pending: the latest checkpoint said so. */
+	/** No activation on a message before this seq is due: the latest checkpoint said so. */
 	readonly floor: Seq;
 }
 
@@ -84,9 +64,9 @@ export interface FoldOptions {
 
 /**
  * The entries, sorted by kind. The latest composition stands. A checkpoint
- * carries the composition, the closes and the leases in place of every row
- * before it, and the floor below which no wake is pending; the messages
- * are kept whatever it says.
+ * carries the composition and the leases in place of every row before it,
+ * and the floor below which nothing is due; the messages are kept whatever
+ * it says, so every closed exchange is still on the record.
  */
 function sorted(entries: readonly LogEntry[]) {
 	const messages: Message[] = [];
@@ -101,8 +81,7 @@ function sorted(entries: readonly LogEntry[]) {
 /** One row onto what the fold has read. A checkpoint replaces all of it; a run row says nothing here. */
 function folded(rows: Read, row: Row): Read {
 	if (row.type === 'checkpoint') return carried(row.checkpoint);
-	if (row.type === 'close') rows.closes.push(row.close);
-	else if (row.type === 'lease') rows.leaseRows.push(row.lease);
+	if (row.type === 'lease') rows.leaseRows.push(row.lease);
 	else if (row.type === 'composition') rows.composition = row.composition;
 	return rows;
 }
@@ -112,7 +91,6 @@ type Read = ReturnType<typeof older>;
 
 /** The rows a fold has read so far, before any of them landed. */
 const older = () => ({
-	closes: [] as CloseRow[],
 	leaseRows: [] as LeaseRow[],
 	held: [] as LeaseHold[],
 	composition: undefined as CompositionRow | undefined,
@@ -121,7 +99,6 @@ const older = () => ({
 
 /** What a checkpoint carries, in place of every row before it. */
 const carried = (checkpoint: CheckpointRow): Read => ({
-	closes: [...checkpoint.closes],
 	leaseRows: [],
 	held: [...checkpoint.leases],
 	composition: checkpoint.composition,
@@ -129,34 +106,29 @@ const carried = (checkpoint: CheckpointRow): Read => ({
 });
 
 export function foldRoom(entries: readonly LogEntry[], options: FoldOptions): RoomState {
-	const { messages, closes, leaseRows, held, composition, floor } = sorted(entries);
+	const { messages, leaseRows, held, composition, floor } = sorted(entries);
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
 	const leases = foldLeases(leaseRows, held);
 	const assistant = composition?.assistant.name ?? '';
-	const isPerson = (name: string) => people.has(name);
-	// Every wake on a message below the floor was answered when the
-	// checkpoint was written, so nothing below it is read for one again.
-	const pending = pendingWakes(
-		messages.filter((message) => message.seq >= floor),
-		leases,
-		new Set(roster.map((s) => s.name)),
-		options,
-		assistant,
-	);
-	const owed = foldOwed(closes, messages, leases, { assistant, ...options });
+	const seated = new Set(roster.map((seat) => seat.name));
 	return {
 		composition,
 		roster,
-		reserve:
-			composition?.available.filter((seat) => !roster.some((s) => s.name === seat.name)) ?? [],
+		reserve: composition?.available.filter((seat) => !seated.has(seat.name)) ?? [],
 		people,
-		exchange: openExchange(messages, closes, isPerson),
-		closes,
+		exchange: openExchange(messages, (name) => people.has(name)),
+		closes: messages.filter(isClosed),
 		leases,
-		pending,
-		owed,
-		due: [...pending, ...owed],
+		// Every activation on a message below the floor was answered when the
+		// checkpoint was written, so nothing below it is read for one again.
+		due: dueActivations(
+			messages.filter((message) => message.seq >= floor),
+			leases,
+			seated,
+			options,
+			assistant,
+		),
 		messages,
 		lastSeq: messages.at(-1)?.seq ?? 0,
 		floor,
@@ -194,117 +166,16 @@ function reseat(roster: RosterSeat[], message: Message): void {
 	}
 }
 
-interface OwedContext extends FoldOptions {
-	assistant: string;
-}
-
-const ATTEMPT_REASONS: ReadonlySet<EndReason> = new Set(['failed', 'expired', 'refused']);
-
-/** A draft that ended this way stood down: the assistant judged the room, the host wrote the draft off, or the room gave up. */
-const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked', 'abandoned']);
-
 /**
- * The summaries still owed, one per person. A close owes one when it names
- * the assistant, no summary covers it, and no draft over it or over a later
- * close of the same person stood down. Every later close of the same person
- * joins the draft: the closes fold in log order, so the latest close names
- * the draft, and one message reaches back to the earliest question still
- * owed. A draft at the cap is still owed here, and carries the attempts
- * that reached it: the room decides what it does about a draft it gave up
- * on, and a row it writes answers the close.
- */
-function foldOwed(
-	closes: readonly CloseRow[],
-	messages: readonly Message[],
-	leases: ReadonlyMap<string, LeaseState>,
-	context: OwedContext,
-): Owed[] {
-	const summaries = messages.filter(isSummary);
-	const owing = closes.filter((close) => close.wakes?.includes(context.assistant));
-	const open = owing.filter(
-		(close) => !summaries.some((s) => covers(s, close)) && !judged(leases, close, owing),
-	);
-	const byPerson = new Map<string, Grouped>();
-	for (const close of open) {
-		const known = byPerson.get(close.owner);
-		byPerson.set(close.owner, {
-			person: close.owner,
-			from: Math.min(known?.from ?? close.from, close.from),
-			through: close.through,
-			closes: [...(known?.closes ?? []), close.through],
-		});
-	}
-	return [...byPerson.values()].map((grouped) => withAttempts(grouped, leases, context));
-}
-
-const covers = (summary: Message & { kind: 'summary' }, close: CloseRow): boolean =>
-	summary.to === close.owner &&
-	summary.covers.from <= close.from &&
-	summary.covers.through >= close.through;
-
-/**
- * A draft over this close, or over a later close of the same person, stood
- * down without writing: released, so the assistant judged the room and the
- * judgment stands for everything it read; or revoked, so the host wrote the
- * draft off the way `abort()` writes off every wake still pending.
- */
-function judged(
-	leases: ReadonlyMap<string, LeaseState>,
-	close: CloseRow,
-	closes: readonly CloseRow[],
-): boolean {
-	const later = new Set(
-		closes
-			.filter((c) => c.owner === close.owner && c.through >= close.through)
-			.map((c) => c.through),
-	);
-	for (const lease of leases.values()) {
-		const parsed = parseId(lease.id);
-		if (parsed?.kind !== 'draft' || !later.has(parsed.through)) continue;
-		if (lease.phase === 'ended' && lease.reason !== undefined && STOOD_DOWN.has(lease.reason)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-/**
- * What a person is owed, as an activation: how many drafts over these
- * closes came to nothing, when the next may start, and the id it claims.
- */
-function withAttempts(
-	grouped: Grouped,
-	leases: ReadonlyMap<string, LeaseState>,
-	context: OwedContext,
-): Owed {
-	const failed = [...leases.values()].filter((lease) => cameToNothing(lease, grouped.closes));
-	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
-	const attempts = failed.length;
-	return {
-		...grouped,
-		id: draftId(grouped.through, attempts + 1),
-		seat: context.assistant,
-		attempts,
-		notBefore: attempts === 0 ? undefined : last + context.backoff(attempts),
-	};
-}
-
-/** A draft over one of these closes that ended failed, expired, or refused. */
-function cameToNothing(lease: LeaseState, closes: readonly Seq[]): boolean {
-	const parsed = parseId(lease.id);
-	if (parsed?.kind !== 'draft' || !closes.includes(parsed.through)) return false;
-	return lease.phase === 'ended' && lease.reason !== undefined && ATTEMPT_REASONS.has(lease.reason);
-}
-
-/**
- * The checkpoint that stands for this state: the composition, every close
- * and every lease a later fold still reads, behind the floor. The floor is
- * the earliest seq anything unfinished reaches back to: the open exchange,
- * a wake pending, a draft owed, a lease live. Below it every wake was
- * answered and every close was covered or stood down, so the rows about
- * them can go. The last close stays, whatever the floor: the next exchange
- * opens after it. A room with no composition writes no checkpoint, because
- * a fold that reads one reads no roster.
+ * The checkpoint that stands for this state: the composition, and every
+ * lease a later fold still reads, behind the floor. The floor is the
+ * earliest seq anything unfinished reaches back to: the open exchange, an
+ * activation the room owes, a lease live. Below it every activation was
+ * answered, so the rows about them can go, and a close below it is one the
+ * room owes nothing for. The messages stay whatever the floor says, so
+ * every closed exchange is still on the record and the next exchange still
+ * opens after the last close. A room with no composition writes no
+ * checkpoint, because a fold that reads one reads no roster.
  */
 export function checkpointOf(
 	state: RoomState,
@@ -312,15 +183,11 @@ export function checkpointOf(
 ): Without<CheckpointRow, 'after'> | undefined {
 	if (state.composition === undefined) return undefined;
 	const floor = floorOf(state, now);
-	const last = state.closes.at(-1);
-	const closes = state.closes.filter((close) => close.through >= floor || close === last);
-	const kept = new Set(closes.map((close) => close.through));
 	return {
 		v: 1,
 		floor,
 		composition: state.composition,
-		closes,
-		leases: [...state.leases.values()].filter((lease) => reads(lease, floor, now, kept)),
+		leases: [...state.leases.values()].filter((lease) => reads(lease, floor, now)),
 		at: new Date(now).toISOString(),
 	};
 }
@@ -330,31 +197,21 @@ function floorOf(state: RoomState, now: number): Seq {
 	const seqs = [
 		state.lastSeq + 1,
 		...(state.exchange === undefined ? [] : [state.exchange.from]),
-		...state.pending.map((wake) => wake.seq),
-		...state.owed.map((owed) => owed.from),
+		...state.due.map((owed) => owed.seq),
 		...[...state.leases.values()]
 			.filter((lease) => isLive(lease, now))
-			.map((lease) => named(lease.id)),
+			.map((lease) => parseId(lease.id)?.seq ?? 0),
 	];
 	return Math.min(...seqs);
 }
 
 /**
  * Whether a later fold still reads this lease. A lease that holds, or that
- * answers a message above the floor, is read for a wake. A draft is read
- * for a close the checkpoint carries: it says the close stood down, and
- * without it the room would draft over that close again.
+ * answers a message above the floor, is read for the activation that
+ * message owes. A lease below the floor answers nothing a later fold asks
+ * about, because no message below the floor is read for an activation.
  */
-function reads(lease: LeaseState, floor: Seq, now: number, closes: ReadonlySet<Seq>): boolean {
+function reads(lease: LeaseState, floor: Seq, now: number): boolean {
 	if (isLive(lease, now) || lease.heardThrough >= floor) return true;
-	const parsed = parseId(lease.id);
-	if (parsed === undefined) return false;
-	return parsed.kind === 'draft' ? closes.has(parsed.through) : parsed.seq >= floor;
-}
-
-/** The seq an activation's id names: the message that woke it, or the close it answers. */
-function named(id: string): Seq {
-	const parsed = parseId(id);
-	if (parsed === undefined) return 0;
-	return parsed.kind === 'wake' ? parsed.seq : parsed.through;
+	return (parseId(lease.id)?.seq ?? 0) >= floor;
 }

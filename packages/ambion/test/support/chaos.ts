@@ -18,6 +18,7 @@ import {
 	createRuntime,
 	type HumanDefinition,
 	inProcessTransport,
+	isClosed,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -56,11 +57,7 @@ import { serializing } from './transport.ts';
  * summary owed written once. A seat whose lease the dead run held is woken
  * again after the backoff, so its answer is on the record like every other.
  */
-export async function outcome(
-	session: Session,
-	sessions: SessionOpener,
-	cast: Cast = steady(),
-): Promise<void> {
+export async function outcome(session: Session, cast: Cast = steady()): Promise<void> {
 	const record = await session.messages();
 	for (const question of questions) {
 		const landed = record.filter((m) => m.key === question.key);
@@ -74,8 +71,7 @@ export async function outcome(
 		}
 	}
 	expect(record.filter(isSummary).map((m) => m.to)).toEqual(cast.summaries);
-	const closes = (await rowsOf(sessions, session.name)).filter((r) => r.type === 'ambion/close');
-	expect(closes).toHaveLength(3);
+	expect(record.filter(isClosed)).toHaveLength(3);
 	expect(session.exchange()).toBeUndefined();
 	expect(session.seats().find((s) => s.name === priya.name)).toMatchObject({ presence: 'absent' });
 	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
@@ -207,6 +203,11 @@ export class World {
 		if (!this.dead) return;
 		this.dead = false;
 		this.runtime = this.host();
+		// Read before the run exists: what the last run left, and nothing this
+		// one claims. The resume's own reconcile sends its pending wakes without
+		// waiting, so a read after it could count a claim of this run's as
+		// inherited, and see its start as well.
+		const leases = await liveLeases(this.opened.sessions, this.name, this.clock.now());
 		try {
 			this.session = await resumeSession(this.name, {
 				runtime: this.runtime,
@@ -218,10 +219,9 @@ export class World {
 			await this.session.messages();
 			return;
 		}
-		this.inherited = {
-			activations: await liveLeases(this.opened.sessions, this.name, this.clock.now()),
-			exchange: this.session.exchange() !== undefined,
-		};
+		// Watched with nothing awaited since the resume: an activation the resume
+		// started is one this run saw begin.
+		this.inherited = { activations: leases, exchange: this.session.exchange() !== undefined };
 		this.watch();
 		for (const person of this.present.values()) await visitSession(this.session, person);
 	}
@@ -311,7 +311,7 @@ export class World {
 			inherited: this.inherited.activations,
 			inheritedExchange: this.inherited.exchange,
 		});
-		await outcome(this.session, this.opened.sessions, this.cast);
+		await outcome(this.session, this.cast);
 	}
 
 	/** What the world looks like when a check fails: the log rows, for the failure message. */

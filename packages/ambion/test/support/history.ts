@@ -247,7 +247,7 @@ function seqs(rows: Checked['rows']): string[] {
 		.map(([seq, n]) => `seq ${seq} is on the storage ${n} times`);
 }
 
-/** One attempt at a wake or a draft runs at a time: the next claims only after the last ended. */
+/** One attempt at an activation runs at a time: the next claims only after the last ended. */
 function exclusion(rows: Checked['rows']): string[] {
 	const found: string[] = [];
 	const running = new Map<string, string>();
@@ -256,8 +256,7 @@ function exclusion(rows: Checked['rows']): string[] {
 		const lease = row.data as LeaseRow;
 		const parsed = parseId(lease.id);
 		if (parsed === undefined) continue;
-		const attempt =
-			parsed.kind === 'wake' ? activationId(parsed.seq, parsed.seat) : `close:${parsed.through}`;
+		const attempt = activationId(parsed.seq, parsed.seat);
 		const held = running.get(attempt);
 		if (lease.phase === 'running') {
 			if (held !== undefined && held !== lease.id)
@@ -270,14 +269,12 @@ function exclusion(rows: Checked['rows']): string[] {
 	return found;
 }
 
-/** Once the room drained, nothing runs, nothing is pending, and nothing is owed. */
+/** Once the room drained, nothing runs and nothing is due. */
 function drained(state: RoomState): string[] {
 	const found: string[] = [];
 	for (const lease of state.leases.values()) {
 		if (lease.phase === 'running') found.push(`${lease.id} still runs after the drain`);
 	}
-	for (const wake of state.pending) found.push(`${wake.id} still pending after the drain`);
-	for (const owed of state.owed)
-		found.push(`a summary for ${owed.person} still owed after the drain`);
+	for (const owed of state.due) found.push(`${owed.id} still due after the drain`);
 	return found;
 }

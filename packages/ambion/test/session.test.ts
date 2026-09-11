@@ -230,7 +230,7 @@ describe('startSession', () => {
 		await (await enter(session)).deliver({ text: 'who said what?' });
 		await session.settled();
 
-		const said = (await session.messages()).at(-1);
+		const said = (await session.messages()).filter(isSpoken).at(-1);
 		expect(said?.from).toBe('liar'); // stamped, regardless of what the content claimed
 		const roster = contexts.at(-1) ?? '';
 		expect(roster).toContain('- aside (idle, named only): Watches quietly.');
@@ -318,20 +318,23 @@ describe('startSession', () => {
 		await orderedVisit.deliver({ text: 'say hi' });
 		await ordered.settled();
 		// one event per message on the record, whoever wrote it, and the exchange
-		// that message opened around it. One answer needs no summary, so the room
-		// goes quiet in the same tick the exchange closes: nothing is owed.
+		// that message opened around it. The close is a message too, and the
+		// event for the exchange follows it. One answer needs no summary, so the
+		// room goes quiet in the same tick the exchange closes: nothing is owed.
 		expect(events.map((e) => e.type)).toEqual([
 			'message',
 			'exchange_opened',
 			'activation_start',
 			'message',
 			'activation_end',
+			'message',
 			'exchange_closed',
 			'quiet',
 		]);
 		expect(events.flatMap((e) => (e.type === 'message' ? [e.message.from] : []))).toEqual([
 			'andrei',
 			'solo',
+			'andrei',
 		]);
 
 		// an activation that throws is an error event, never a silent decline

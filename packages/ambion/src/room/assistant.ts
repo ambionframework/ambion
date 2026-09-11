@@ -11,9 +11,9 @@
  *
  * - It is seated at the narrow end of attention, `none`, so nothing said in
  *   the room wakes it.
- * - A close wakes it, for the person who owns the closed exchange. That
- *   activation holds one tool, `summarise`, bound to the range it must stand
- *   for.
+ * - The room's `closed` message wakes it, for the person who owns that
+ *   exchange. That activation holds one tool, `summarise`, bound to the range
+ *   it must stand for.
  * - An opened exchange wakes it too, when the room holds agents in reserve.
  *   That activation holds one tool, `seat`, bound to the reserve. The
  *   assistant bookends the exchange: it composes the room at the open and
@@ -21,9 +21,9 @@
  *
  * What is left in this file is what the assistant *is*: what a room refuses
  * to seat as one, and the threshold a summary is written above. The two
- * tools are hands the seat side gives it (`seat/hands.ts`). Who is owed and
- * when the next draft starts are folds over the log (`fold.ts`), and the
- * room's `reconcile` sends the wake.
+ * tools are hands the seat side gives it (`seat/hands.ts`). Which activation
+ * the room owes it, and when the next attempt starts, are folds over the log
+ * (`fold.ts`), and the room's `reconcile` sends the wake.
  */
 import type { AgentDefinition, Message, Seq } from '../types.ts';
 import { isAgent, isSpoken } from '../types.ts';
@@ -56,22 +56,22 @@ export function assertAssistant(assistant: unknown): AgentDefinition {
 }
 
 /**
- * What a summary would stand for, or nothing when one message already serves:
- * one answer is left as it was given, in the voice that gave it, and an
- * exchange the agents said nothing into writes nothing at all.
+ * Whether a closed exchange owes its person one message, or one message
+ * already serves: a single answer is left as it was given, in the voice that
+ * gave it, and an exchange the agents said nothing into writes nothing at all.
  *
  * It counts what the room produced, not what people said into it, and it
  * counts messages rather than speakers — one product saying four things needs
  * consolidating as much as three products saying one each.
  */
-export function draftOver(
+export function owesSummary(
 	record: readonly Message[],
 	from: Seq,
 	through: Seq,
 	fromSeat: (name: string) => boolean,
-): { from: Seq; through: Seq } | undefined {
+): boolean {
 	const said = record.filter(
 		(m) => m.seq >= from && m.seq <= through && isSpoken(m) && fromSeat(m.from),
 	);
-	return said.length < 2 ? undefined : { from, through };
+	return said.length >= 2;
 }

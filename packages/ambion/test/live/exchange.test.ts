@@ -8,7 +8,14 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineHuman, defineTool, isPresence, isSummary, stopSession } from '../../src/index.ts';
+import {
+	defineHuman,
+	defineTool,
+	isClosed,
+	isPresence,
+	isSummary,
+	stopSession,
+} from '../../src/index.ts';
 import { enter } from '../support/room.ts';
 import {
 	activationsOf,
@@ -92,9 +99,17 @@ live('the exchange', () => {
 		const closed = events.filter((e) => e.type === 'exchange_closed');
 		expect(opened).toHaveLength(1);
 		expect(closed).toHaveLength(1);
+		// The close is a message, so the event and the record say the same thing.
+		const close = messages.filter(isClosed).at(-1);
 		expect(closed[0]).toMatchObject({
-			exchange: { owner: andrei.name, through: summary?.covers.through },
+			exchange: {
+				owner: andrei.name,
+				from: close?.covers.from,
+				through: close?.covers.through,
+			},
 		});
+		// The summary lands after the close, so it covers the close as well.
+		expect(summary?.covers.through).toBe(close?.seq);
 		// The room went quiet on judgment: three seats, and a bounded number of glances.
 		const glances = ['planner', 'logistics', 'finance'].reduce(
 			(sum, name) => sum + activationsOf(events, name),

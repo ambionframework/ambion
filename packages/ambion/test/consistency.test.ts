@@ -295,7 +295,6 @@ class Cluster {
 			const type = row.type.slice('ambion/'.length);
 			if (type === 'message') return [{ type, message: row.data } as never];
 			if (type === 'lease') return [{ type, lease: row.data } as never];
-			if (type === 'close') return [{ type, close: row.data } as never];
 			if (type === 'composition') return [{ type, composition: row.data } as never];
 			return [];
 		});

@@ -16,31 +16,45 @@
  *   does: an agent speaking into a quiet room opens nothing, and arriving or
  *   leaving asks nobody anything.
  * - **Quiescence closes it.** The room reconciles when nothing is live, and
- *   writes a close row that names the range the exchange turned out to hold.
+ *   writes a `closed` message that holds the range the exchange turned out to
+ *   cover.
  * - **What lands while it is open steers it and changes nothing.** Not the
  *   owner, not the range, not who the answer belongs to.
  *
- * An exchange is a fold over the log: the first person's question after the
+ * An exchange is a fold over the record: the first person's question after the
  * last close is the open one. A room resumed mid-exchange continues it.
  *
  * The design contract is `docs/exchange.md`; `docs/assistant.md` says what an
  * assistant makes of one.
  */
-import { type Exchange, isSpoken, type Message } from '../types.ts';
-import type { CloseRow } from '../wire.ts';
+import {
+	type ClosedMessage,
+	type Exchange,
+	isClosed,
+	isSpoken,
+	type Message,
+	type SummaryMessage,
+} from '../types.ts';
 
 /**
  * The open exchange, or nothing when nobody has asked since the last close:
- * the first question a person asked after the last close's `through`.
+ * the first question a person asked past the last close's range. A close ends
+ * the exchange through the range it holds and no further, so a question that
+ * landed while the close waited on the queue opens the next exchange.
  */
 export function openExchange(
 	messages: readonly Message[],
-	closes: readonly CloseRow[],
 	isPerson: (name: string) => boolean,
 ): Exchange | undefined {
-	const closedThrough = closes.at(-1)?.through ?? 0;
+	const closedThrough = messages.filter(isClosed).at(-1)?.covers.through ?? 0;
 	const question = messages.find(
 		(message) => message.seq > closedThrough && isSpoken(message) && isPerson(message.from),
 	);
 	return question && { owner: question.from, from: question.seq, at: question.at };
 }
+
+/** Whether this summary stands for the whole of this closed exchange. */
+export const covered = (summary: SummaryMessage, close: ClosedMessage): boolean =>
+	summary.to === close.from &&
+	summary.covers.from <= close.covers.from &&
+	summary.covers.through >= close.covers.through;

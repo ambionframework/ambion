@@ -9,6 +9,7 @@ import {
 	defineHuman,
 	defineTool,
 	InMemorySessionRepo,
+	isClosed,
 	isSpoken,
 	type Message,
 	passive,
@@ -143,6 +144,8 @@ function quiescent(session: Session): Promise<void> {
 }
 
 const summaries = (record: Message[]) => record.filter((m) => m.kind === 'summary');
+/** The last seq a record ending in a close held before it: the range that close stands for. */
+const beforeTheClose = (record: Message[]) => (record.at(-1)?.seq ?? 0) - 1;
 const said = (record: Message[]) => record.filter(isSpoken).map((m) => m.text);
 
 // -- what the products say ---------------------------------------------------
@@ -223,7 +226,14 @@ describe('the assistant', () => {
 
 		const record = await session.messages();
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
-		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said', 'said', 'summary']);
+		expect(record.map((m) => m.kind)).toEqual([
+			'arrived',
+			'said',
+			'said',
+			'said',
+			'closed',
+			'summary',
+		]);
 
 		// what an assistant is handed: the range it covers, and one hand that reaches the record
 		expect(hands).toEqual(['summarise', 'summarise']);
@@ -412,7 +422,7 @@ describe('the assistant', () => {
 		// the range is still owed: the next question joins it, and the draft is due after the backoff
 		const written = nextSummary(session);
 		await visit.deliver({ text: 'And the pump?' });
-		await quiescent(session);
+		await session.settled();
 		expect(summaries(await session.messages())).toHaveLength(0);
 		await clock.advance(30_000);
 		const summary = await written;
@@ -465,16 +475,17 @@ describe('the assistant', () => {
 		});
 		const events = collect(session);
 
+		const failed = assistantEnded(session);
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await quiescent(session);
+		await failed;
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
 		expect(summaries(await session.messages())).toHaveLength(0);
 
 		// a failed activation leaves the summary owed; an arrival is not the backoff passing
 		const written = nextSummary(session);
 		await visitSession(session, sam);
-		await quiescent(session);
+		await session.settled();
 		expect(summaries(await session.messages())).toHaveLength(0);
 		// the room's own alarm writes it, once the backoff has passed
 		await clock.advance(30_000);
@@ -702,6 +713,33 @@ describe('the assistant', () => {
 		expect(written[0]?.covers.from).toBe(questions[0]?.seq);
 	});
 
+	it('leaves behind a close it judged, and writes for the next exchange alone', async () => {
+		const session = open({
+			script: byAgent({
+				product: twoAnswersEach,
+				// the first exchange needed nothing; the second gets the one message
+				assistant: (_context, _name, call) => (call === 1 ? quiet() : summarise('the answer')),
+			}),
+		});
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'First?' });
+		await quiescent(session);
+		// the assistant read the first exchange and judged it needed nothing
+		expect(summaries(await session.messages())).toHaveLength(0);
+
+		await visit.deliver({ text: 'Second?' });
+		await quiescent(session);
+
+		const record = await session.messages();
+		const written = summaries(record);
+		expect(written).toHaveLength(1);
+		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
+		// the judgment stands: the one message reaches back to her second question
+		// and never over the exchange the assistant already read
+		expect(written[0]?.covers.from).toBe(questions[1]?.seq);
+	});
+
 	it('goes quiet when the summary lands, and settles before it', async () => {
 		const session = open({
 			script: byAgent({ product: twoAnswers, assistant: writes('Thursday is out.') }),
@@ -745,19 +783,30 @@ describe('the assistant', () => {
 		expect(contexts.at(-1)).toContain('The message is empty');
 	});
 
-	it('is quiet with a summary owed, because owing one is not working on one', async () => {
+	it('is not quiet while it owes a summary, and goes quiet when it gives up', async () => {
 		const session = open({
 			script: byAgent({ product: twoAnswers, assistant: broken }),
 		});
+		const failed = assistantEnded(session);
 
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await quiescent(session);
+		await failed;
 
 		// the activation failed, so the summary is owed and the range is still whole
 		expect(summaries(await session.messages())).toHaveLength(0);
-		// and a host asking again is not made to wait for work nobody is doing
-		await expect(session.quiet()).resolves.toBeUndefined();
+		// the seats have stopped, and the room still owes her a message
+		await session.settled();
+		const quieted = quiescent(session).then(() => 'quiet');
+		await tick();
+		await tick();
+		expect(await Promise.race([quieted, tick().then(() => 'owed')])).toBe('owed');
+
+		// three attempts are the cap: the room stops trying, and says so
+		await clock.advance(31_000);
+		await clock.advance(61_000);
+		expect(await quieted).toBe('quiet');
+		expect(summaries(await session.messages())).toHaveLength(0);
 	});
 
 	it('writes off a draft the host revoked: abort quiets the room, and nothing is owed', async () => {
@@ -845,10 +894,63 @@ describe('an exchange', () => {
 		expect(closed).toHaveLength(1);
 		expect(opened[0]).toMatchObject({ exchange: { owner: 'priya', from: question?.seq } });
 		expect(closed[0]).toMatchObject({
-			exchange: { owner: 'priya', from: question?.seq, through: record.at(-1)?.seq },
+			exchange: { owner: 'priya', from: question?.seq, through: beforeTheClose(record) },
 		});
 		// the assistant is not scripted here, so it reads and stays quiet
 		expect(summaries(record)).toHaveLength(0);
+	});
+
+	it('closes into a message that holds the range, and no seat reads a line for it', async () => {
+		const contexts: string[] = [];
+		const session = open({
+			script: byAgent({
+				product: (context, _name, call) => {
+					contexts.push(contextText(context));
+					return call === 1 || call === 3 ? speak(`answer ${call}`) : quiet();
+				},
+			}),
+		});
+		const events = collect(session);
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'First?' });
+		await quiescent(session);
+		await visit.deliver({ text: 'Second?' });
+		await quiescent(session);
+
+		const record = await session.messages();
+		const closes = record.filter(isClosed);
+		// one close per exchange, on the record, in order
+		expect(closes).toHaveLength(2);
+		expect(record.map((m) => m.kind)).toEqual([
+			'arrived',
+			'said',
+			'said',
+			'closed',
+			'said',
+			'said',
+			'closed',
+		]);
+		for (const close of closes) {
+			// it holds its person and the range, ending just before its own seq
+			expect(close.from).toBe('priya');
+			expect(close.covers.through).toBe(close.seq - 1);
+			expect(close.covers.from).toBeLessThanOrEqual(close.covers.through);
+			// nobody wrote it, and one answer needs no summary, so it wakes nobody
+			expect(close.activationId).toBeUndefined();
+			expect(close.wakes).toBeUndefined();
+		}
+		// the second exchange starts past the first close's range
+		expect(closes[1]?.covers.from).toBeGreaterThan(closes[0]?.covers.through ?? 0);
+		// a host hears it as a message, and as the exchange's end, in that order
+		const order = events.map((e) => e.type);
+		const heard = events.flatMap((e) =>
+			e.type === 'message' && isClosed(e.message) ? [e.message.seq] : [],
+		);
+		expect(heard).toEqual(closes.map((close) => close.seq));
+		expect(order.indexOf('message')).toBeLessThan(order.indexOf('exchange_closed'));
+		// and the seats read no line for it: the room asked them nothing
+		expect(contexts.join('\n')).not.toContain('exchange closed');
 	});
 
 	it('opens for nobody but a person, and never twice at once', async () => {
@@ -960,7 +1062,7 @@ describe('an exchange', () => {
 		// question opened its own, announced once the first closed, and worked on
 		expect(ranges(events)).toEqual([
 			[first?.seq, first?.seq],
-			[next?.seq, record.at(-1)?.seq],
+			[next?.seq, beforeTheClose(record)],
 		]);
 		expect(openings(events)).toEqual([first?.seq, next?.seq]);
 		const order = events.map((e) => e.type);
@@ -1004,7 +1106,7 @@ describe('an exchange', () => {
 		// close, nobody worked on it, and it closed at once holding the question alone
 		expect(ranges(events)).toEqual([
 			[first?.seq, first?.seq],
-			[next?.seq, next?.seq],
+			[next?.seq, beforeTheClose(record)],
 		]);
 		expect(openings(events)).toEqual([first?.seq, next?.seq]);
 		expect(record.some((m) => m.kind === 'seated')).toBe(false);
@@ -1047,7 +1149,7 @@ describe('an exchange', () => {
 		expect(openings(events)).toEqual([first?.seq, next?.seq]);
 		expect(ranges(events)).toEqual([
 			[first?.seq, first?.seq],
-			[next?.seq, next?.seq],
+			[next?.seq, beforeTheClose(record)],
 		]);
 		expect(record.some((m) => m.kind === 'seated')).toBe(false);
 		expect(session.seats().find((s) => s.name === 'assistant')).toMatchObject({ status: 'idle' });

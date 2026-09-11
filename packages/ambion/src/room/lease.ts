@@ -1,35 +1,51 @@
 /**
- * Activations, named by what caused them, and the leases they hold.
+ * Activations, named by the message that caused them, and the leases they hold.
  *
- * An activation's id is derived from the log: the seq of the message that
- * woke the seat and the seat's name, or the close it answers and the
- * attempt number. Nothing mints an id, so a wake is safe to send twice, a
- * retried commit lands once, and a request from an activation whose lease
- * ended is refused because the fold says so.
+ * An activation's id is derived from the record: the seq of the message that
+ * woke the seat, the seat's name, and the attempt number. Nothing mints an
+ * id, so a wake is safe to send twice, a retried commit lands once, and a
+ * request from an activation whose lease ended is refused because the fold
+ * says so.
+ *
+ * One message wakes a seat, whatever the message is. A person's question, a
+ * colleague's say, somebody arriving, a seating, and the room's own close all
+ * reach a seat the same way, so the room owes one kind of activation and
+ * schedules it one way. What the activation may do is read off the message
+ * that woke it (`view.ts`): a close wakes the assistant, and that activation
+ * writes the one message a person reads.
  *
  * A lease has two phases. `running` is a claim or a renewal, with an
  * expiry; `ended` is terminal, with a reason. The last row for an id wins,
  * and an ended lease never runs again.
  *
- * A message reaches a seat two ways: the room names the seats at rest it
- * wakes in `wakes`, and every seat at work hears it as a steer. The log
- * says which: a lease at work when the message landed holds a row before
- * it and ends, if it ends, after it. A lease answers a message it heard,
- * or that its view held because it was claimed after the message, while
- * it runs and once it ended released, refused or revoked. A lease that
- * stood down answers through the seq its last renewal confirmed, so a
- * message that landed between that renewal and the release is pending
- * for the seat, as a first attempt. A lease that
- * expired or failed answers nothing it heard, whatever it said: its words
- * stay on the record, and the seat reads them at the next attempt. The
- * failure counts as one attempt, and the message is pending again for
- * that seat after the backoff, under the next attempt's id, until the
- * cap. The fold reports every wake still pending with its attempts; the
- * room sends it when it is due.
+ * A participant's message reaches a seat two ways: the room names the seats
+ * at rest it wakes in `wakes`, and every seat at work hears it as a steer.
+ * The log says which: a lease at work when the message landed holds a row
+ * before it and ends, if it ends, after it. A lease answers a message it
+ * heard, or that its view held because it was claimed after the message,
+ * while it runs and once it ended released, revoked or abandoned. A lease
+ * that stood down answers through the seq its last renewal confirmed, so a
+ * message that landed between that renewal and the release is due for the
+ * seat again, as a first attempt.
+ *
+ * The room's own close steers nobody, so it reaches the assistant it names
+ * and no other seat, and only the attempts at that close answer it. A
+ * summary that stands for the whole of a close answers it too: that is the
+ * one thing the record itself says about an activation, and it is what lets
+ * one message cover several closes of the same person.
+ *
+ * A lease that expired, failed or was refused answers nothing it heard,
+ * whatever it said: its words stay on the record, and the seat reads them at
+ * the next attempt. The failure counts as one attempt, and the message is
+ * due again for that seat after the backoff, under the next attempt's id.
+ * The fold reports every activation still due with its attempts, the ones at
+ * the cap included; the room decides what it does about an activation it
+ * gave up on, and sends the rest when they are due.
  */
 
-import type { Message, Seq } from '../types.ts';
+import { isClosed, isSummary, type Message, type Seq } from '../types.ts';
 import type { EndReason, LeaseHold, LeaseRow } from '../wire.ts';
+import { covered } from './exchange.ts';
 import {
 	atWork as atWorkRule,
 	expired,
@@ -41,28 +57,40 @@ import {
 export const activationId = (seq: Seq, seat: string, attempt = 1): string =>
 	attempt === 1 ? `${seq}:${seat}` : `${seq}:${seat}:${attempt}`;
 
-/** The id of the assistant's attempt at the summary a close owes. */
-export const draftId = (through: Seq, attempt: number): string => `close:${through}:${attempt}`;
-
-export type ParsedId =
-	| { kind: 'wake'; seq: Seq; seat: string; attempt: number }
-	| { kind: 'draft'; through: Seq; attempt: number };
+/** What an id says caused the activation: the message, the seat, and the attempt. */
+export interface ParsedId {
+	seq: Seq;
+	seat: string;
+	attempt: number;
+}
 
 /** What an id says caused the activation, or nothing for an id the room did not derive. */
 export function parseId(id: string): ParsedId | undefined {
-	const draft = /^close:(\d+):(\d+)$/.exec(id);
-	if (draft) return { kind: 'draft', through: Number(draft[1]), attempt: Number(draft[2]) };
-	const wake = /^(\d+):([a-z][a-z0-9-]*)(?::(\d+))?$/.exec(id);
-	if (wake) {
-		return {
-			kind: 'wake',
-			seq: Number(wake[1]),
-			seat: wake[2] ?? '',
-			attempt: wake[3] === undefined ? 1 : Number(wake[3]),
-		};
-	}
-	return undefined;
+	const parsed = /^(\d+):([a-z][a-z0-9-]*)(?::(\d+))?$/.exec(id);
+	if (parsed === null) return undefined;
+	return {
+		seq: Number(parsed[1]),
+		seat: parsed[2] ?? '',
+		attempt: parsed[3] === undefined ? 1 : Number(parsed[3]),
+	};
 }
+
+/** The seat an id belongs to, or nothing for an id the room did not derive. */
+export const seatOf = (id: string): string | undefined => parseId(id)?.seat;
+
+/** The message that woke this activation, or nothing when the record holds none under the id. */
+export const wokenBy = (id: string, messages: readonly Message[]): Message | undefined => {
+	const parsed = parseId(id);
+	return parsed && messages.find((message) => message.seq === parsed.seq);
+};
+
+/**
+ * Whether this activation answers a close: the assistant writing the one
+ * message a person reads. It is read off the record rather than off the id,
+ * because what woke a seat is what its activation is for.
+ */
+export const drafting = (id: string, messages: readonly Message[]): boolean =>
+	wokenBy(id, messages)?.kind === 'closed';
 
 /**
  * The last row for one id: whether it runs, until when, or why it ended,
@@ -123,27 +151,22 @@ export const isLive = (lease: LeaseState, now: number): boolean =>
 	lease.phase === 'running' && !isExpired(lease, now);
 
 /**
- * An activation the room owes a seat, and has not had. Two things on the
- * log cause one: a message that woke a seat and no lease answered, and a
- * close that owes the assistant a summary. The room schedules both the same
- * way, so both read as this.
+ * An activation the room owes a seat, and has not had. One message on the
+ * record causes it, and the message says what it is for.
  */
 export interface Due {
-	/** The id of the next attempt. Nothing mints it: the log derives it. */
+	/** The id of the next attempt. Nothing mints it: the record derives it. */
 	id: string;
 	/** The seat that takes the activation. */
 	seat: string;
+	/** The message that caused it. */
+	seq: Seq;
+	/** When that message was written, ISO. */
+	at: string;
 	/** How many activations took it and came to nothing. */
 	attempts: number;
 	/** When the next attempt may start, or undefined when it may start now. */
 	notBefore: number | undefined;
-}
-
-/** A wake on the log that no lease has answered. */
-export interface PendingWake extends Due {
-	seq: Seq;
-	/** When the message was written, ISO. */
-	at: string;
 }
 
 /** Whether the next attempt at this may start: its backoff has passed. */
@@ -155,34 +178,48 @@ export interface WakeOptions {
 	backoff(attempt: number): number;
 }
 
-/** A lease that ended this way took the wake and came to nothing. */
-const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set(['failed', 'expired']);
+/** A lease that ended this way took the activation and came to nothing. */
+const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set(['failed', 'expired', 'refused']);
 
 /**
- * Every wake a message decided that no lease has answered, for a seat still
- * on the roster. A seat that left the roster answers no wake: what it was
- * sent is not pending.
+ * Every activation a message decided that no lease has answered, for a seat
+ * still on the roster. A seat that left the roster answers nothing: what it
+ * was sent is no longer due.
  */
-export function pendingWakes(
+export function dueActivations(
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseState>,
 	roster: ReadonlySet<string>,
 	options: WakeOptions,
 	assistant: string,
-): PendingWake[] {
+): Due[] {
 	const bySeat = leasesBySeat(leases, roster);
-	const pending: PendingWake[] = [];
+	const done = settled(messages);
+	const due: Due[] = [];
 	for (const message of messages) {
+		if (done(message)) continue;
 		for (const seat of reached(message, bySeat, roster, assistant)) {
-			const taken = (bySeat.get(seat) ?? []).filter((lease) => heard(lease, message.seq));
-			const wake = statusOf(message, seat, taken, options);
-			if (wake !== undefined) pending.push(wake);
+			const owed = statusOf(message, seat, standing(message, bySeat.get(seat) ?? []), options);
+			if (owed !== undefined) due.push(owed);
 		}
 	}
-	return pending;
+	return due;
 }
 
-/** Every lease a wake claimed, by seat, for the seats on the roster. */
+/**
+ * Whether the record already holds what a message asked for. A close asks the
+ * assistant for the one message its person reads, so a summary that stands
+ * for the whole of that close answers it, whichever draft wrote the summary:
+ * a draft widens its range when the room moves, so one message can answer
+ * several closes. Nothing else a message asks for is on the record, and only
+ * a lease answers it.
+ */
+function settled(messages: readonly Message[]): (message: Message) => boolean {
+	const summaries = messages.filter(isSummary);
+	return (message) => isClosed(message) && summaries.some((summary) => covered(summary, message));
+}
+
+/** Every lease an activation claimed, by seat, for the seats on the roster. */
 function leasesBySeat(
 	leases: ReadonlyMap<string, LeaseState>,
 	roster: ReadonlySet<string>,
@@ -190,7 +227,7 @@ function leasesBySeat(
 	const bySeat = new Map<string, LeaseState[]>();
 	for (const lease of leases.values()) {
 		const parsed = parseId(lease.id);
-		if (parsed?.kind !== 'wake' || !roster.has(parsed.seat)) continue;
+		if (parsed === undefined || !roster.has(parsed.seat)) continue;
 		bySeat.set(parsed.seat, [...(bySeat.get(parsed.seat) ?? []), lease]);
 	}
 	return bySeat;
@@ -198,8 +235,9 @@ function leasesBySeat(
 
 /**
  * The seats a message reached: the ones it names, and every seat at work
- * when it landed. The assistant composing hears no steer, so a message
- * reaches it by name alone.
+ * when it landed. The room's own close steers nobody, so it reaches the
+ * assistant it names and no other seat. The assistant composing hears no
+ * steer either, so a message reaches it by name alone.
  */
 function reached(
 	message: Message,
@@ -208,6 +246,7 @@ function reached(
 	assistant: string,
 ): Set<string> {
 	const seats = new Set((message.wakes ?? []).filter((seat) => roster.has(seat)));
+	if (isClosed(message)) return seats;
 	for (const [seat, held] of bySeat) {
 		if (seat === message.from || seat === assistant) continue;
 		if (held.some((lease) => atWork(lease, message.seq))) seats.add(seat);
@@ -215,7 +254,18 @@ function reached(
 	return seats;
 }
 
-/** The lease held a row before the message and ended, if it ended, after it. */
+/**
+ * Every lease that stands for this activation. A message that steers is
+ * answered by any activation of the seat that heard it, however that
+ * activation started. The room's own close steers nobody, so only the
+ * attempts at that close stand for it.
+ */
+function standing(message: Message, held: readonly LeaseState[]): LeaseState[] {
+	if (isClosed(message)) return held.filter((lease) => parseId(lease.id)?.seq === message.seq);
+	return held.filter((lease) => heard(lease, message.seq));
+}
+
+/** The lease held a row before the message and ended, if it ends, after it. */
 const atWork = (lease: LeaseState, seq: Seq): boolean =>
 	atWorkRule(lease.since, lease.until !== undefined, lease.until ?? 0, seq);
 
@@ -236,20 +286,19 @@ const heard = (lease: LeaseState, seq: Seq): boolean =>
 	);
 
 /**
- * The wake as pending, or nothing when a lease answered it. A wake at the
- * cap is still pending, and carries the attempts that reached it: the room
- * decides what it does about a wake it gave up on.
+ * The activation as due, or nothing when a lease answered it. One at the cap
+ * is still due, and carries the attempts that reached it: the room decides
+ * what it does about an activation it gave up on.
  */
 function statusOf(
 	message: Message,
 	seat: string,
 	taken: readonly LeaseState[],
 	options: WakeOptions,
-): PendingWake | undefined {
+): Due | undefined {
 	if (taken.some((lease) => !cameToNothing(lease))) return undefined;
-	const failed = taken.filter((lease) => cameToNothing(lease));
-	const attempts = failed.length;
-	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
+	const attempts = taken.length;
+	const last = Math.max(0, ...taken.map((lease) => Date.parse(lease.at)));
 	return {
 		id: activationId(message.seq, seat, nextAttempt(attempts)),
 		seat,
@@ -263,10 +312,3 @@ function statusOf(
 /** A lease that ended this way answers nothing it heard; every other lease answers all of it. */
 const cameToNothing = (lease: LeaseState): boolean =>
 	lease.phase === 'ended' && lease.reason !== undefined && CAME_TO_NOTHING.has(lease.reason);
-
-/** The seat an id belongs to: the one it names, or the assistant for a draft. */
-export function seatOf(id: string, assistant: string): string | undefined {
-	const parsed = parseId(id);
-	if (parsed === undefined) return undefined;
-	return parsed.kind === 'wake' ? parsed.seat : assistant;
-}

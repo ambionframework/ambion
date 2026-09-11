@@ -226,47 +226,53 @@ needs is awaited by the first call that needs it. `stopSession` returns a
 promise, because draining is the point of calling it.
 
 The record holds one union (`Message` in `types.ts`): what a participant
-said, what a person did, and what one exchange came to.
+said, what a person did, what one exchange came to, and the room's own word
+that an exchange is over. The runtime stamps the same five fields on every
+kind, whoever caused it.
 
 ```ts
+interface Stamped {
+  seq: number; // monotonic, assigned at commit, strictly ordered
+  key?: string; // the key the commit carried; a repeated key lands once
+  activationId?: string; // the activation that wrote it; absent when the room did
+  wakes?: string[]; // the seats at rest the message wakes, written with it
+  at: string; // stamped by the runtime, at the moment it landed
+}
+
 type Message =
-  | {
+  | (Stamped & {
       kind: 'said';
-      seq: number; // monotonic, assigned at commit, strictly ordered
-      key?: string; // the key the commit carried; a repeated key lands once
-      activationId?: string; // the activation that wrote it; absent on a delivery
-      wakes?: string[]; // the seats at rest the message wakes, written with it
-      at: string; // stamped by the runtime, at the moment it landed
       from: string; // a participant's name — stamped by the runtime, never claimed
       to?: string; // present when the delivery or say was directed
       text: string;
-    }
-  | {
+    })
+  | (Stamped & {
       kind: 'arrived' | 'left' | 'seated' | 'unseated';
-      seq: number;
-      key?: string;
-      activationId?: string; // on a 'seated' the assistant wrote
-      wakes?: string[];
-      at: string;
       from: string; // the participant whose presence changed — stamped by the runtime
       identity?: string; // on 'arrived' and 'seated': how the room knew them
       by?: string; // on 'seated': the assistant, when it did the seating
       attention?: Attention; // on 'seated': what wakes the seat; absent means 'broadcast'
       preferences?: string; // on 'arrived': how the person reads, when they said so
-    }
-  | {
+    })
+  | (Stamped & {
       kind: 'summary';
-      seq: number;
-      key?: string;
-      activationId?: string;
-      wakes?: string[];
-      at: string;
       from: string; // the assistant, which wrote it
       to: string; // the person whose question opened the exchange
       text: string;
       covers: { from: number; through: number }; // the range it stands for
-    };
+    })
+  | (Stamped & {
+      kind: 'closed';
+      from: string; // the person whose question opened the exchange
+      covers: { from: number; through: number }; // the range it turned out to cover
+    });
 ```
+
+A `closed` message is on the record because everything that wakes a seat is
+a message: a close wakes the assistant, and that activation writes the one
+message its person reads ([`exchange.md`](exchange.md) §5). Nobody speaks a
+close and nobody writes it, so `authorOf` answers nobody for it, it wakes
+no seat by attention, and a participant's rendered record leaves it out.
 
 Every kind carries `key`: the name of the commit that landed it. A seat's
 say and the assistant's two tools take Pi's tool call id as the key; a
@@ -394,9 +400,10 @@ who sits out — one widening scale, from the narrowest:
 
 - `none` — nothing said in the room reaches it, and it cannot be addressed:
   the runtime refuses a directed say to it, so no message waits unread. The seat that is
-  present and unreachable, waiting for something other than a message. The
-  assistant sits here ([`assistant.md`](assistant.md)), woken by the open
-  and the close of an exchange and by nothing else.
+  present and unreachable, waiting for a message no attention reaches. The
+  assistant sits here ([`assistant.md`](assistant.md)), woken by the
+  question that opened an exchange and by the room's own close of one, and
+  by nothing else.
 - `named` — hears a message addressed to it, seated as `passive(archivist)`.
   The expert in the corner: hearing nothing, costing nothing, until someone
   asks.
@@ -416,7 +423,9 @@ The routing is the scale, and reads as one line (`wakes` in `seat/seat.ts`):
 every message has a **reach** — `named` for a directed say, `broadcast` for
 anything else said, `presence` for somebody arriving or leaving, or a
 colleague seated or unseated — and a seat wakes when its attention is at
-least that wide. A message that names a seat additionally wakes that seat,
+least that wide. The room's own close of an exchange has no reach at all:
+it asks a participant nothing, and it wakes the assistant the room named on
+it ([`exchange.md`](exchange.md) §5). A message that names a seat additionally wakes that seat,
 however narrowly it is seated: a directed say names the one it addresses
 and wakes nobody else, which is what makes it a focusing act, and a seating
 names the seat it seats ([`roster.md`](roster.md) §3).
@@ -471,9 +480,9 @@ type SessionEvent =
 ```
 
 **One message on the record, one `message` event.** What a person
-delivered, what an agent said, a person arriving or leaving, and the
-summary an assistant wrote all reach the host the same way, because they are the
-same thing: an entry the room committed. Who wrote it is `message.from`,
+delivered, what an agent said, a person arriving or leaving, the summary an
+assistant wrote, and the room's own close of an exchange all reach the host
+the same way, because they are the same thing: an entry the room committed. Who wrote it is `message.from`,
 which the roster already names, so the stream does not split by author. The
 event is atomic as the record is: one event, the whole message, exactly as
 it landed.
@@ -545,8 +554,9 @@ controls:
   activation.
   The assistant writing about an exchange is not the room still working on it, so
   the room is never held busy while it writes.
-- **`quiet()`** is the second moment — no agent at all is taking an activation —
-  for a host that wants the one message a person reads
+- **`quiet()`** is the second moment — the room owes nothing at all: no
+  lease is held, and no activation is due, a draft inside its backoff
+  included — for a host that wants the one message a person reads
   ([`assistant.md`](assistant.md) §14). The two differ because the assistant is a seat
   like any other, and its activation counts. That difference keeps an
   exchange's end fixed. [`exchange.md`](exchange.md)
@@ -615,24 +625,29 @@ any of them reads in [`render.ts`](../packages/ambion/src/render.ts).
 
 **The log is the truth, and the room moves by reconciling.** Every fact
 about the room is a fold over the log and the clock: the roster, the
-reserve, the people, the open exchange, the closes, the leases, the wakes
-still pending and the summaries still owed
+reserve, the people, the open exchange, the closed ones, the leases and the
+activations the room still owes
 ([`fold.ts`](../packages/ambion/src/room/fold.ts)). `reconcile()` folds
 the log, decides, writes what it decided, and sends
 ([`reconcile.ts`](../packages/ambion/src/room/reconcile.ts)). It runs
 after every commit, every lease change, every alarm and every wake, and
-running it twice writes nothing. Four kinds of entry hold it all, in the
-room's one Pi session: `ambion/message`, `ambion/lease`, `ambion/close`
-and `ambion/composition`. Every entry beside a message carries `after`,
+running it twice writes nothing. Five kinds of entry hold it all, in the
+room's one Pi session: `ambion/message`, `ambion/lease`, `ambion/run`,
+`ambion/composition` and `ambion/checkpoint`. Every entry beside a message carries `after`,
 the last message seq when it was written. The room holds one cache beside
 the log: when it last sent each wake, which a resumed room starts empty.
 
 **A seat is seated for the run. An activation lasts seconds.** An
-activation's id is derived from the log: the seq of the message that woke
-the seat and the seat's name (`2:product`), or the close it answers and
-the attempt number (`close:9:1`). Nothing mints an id, so a wake is safe
+activation's id is derived from the record: the seq of the message that
+woke the seat, the seat's name, and the attempt (`2:product`, then
+`2:product:2`). One message wakes a seat, whatever the message is, so one
+shape of id names every activation and the room owes one kind of work: the
+assistant's draft at a close is the activation `9:assistant` for the
+`closed` message at seq 9. Nothing mints an id, so a wake is safe
 to send twice, a retried commit lands once, and every message an
-activation writes carries its `activationId`. An activation holds a
+activation writes carries its `activationId`. What an activation may do is
+read off the message that woke it
+([`view.ts`](../packages/ambion/src/room/view.ts)). An activation holds a
 lease: `running`, claimed and renewed with an expiry, then `ended`, with
 a reason — `released`, `failed`, `refused`, `revoked`, `expired` or
 `abandoned`. A
@@ -652,30 +667,32 @@ seat two ways: it names the seats at rest it wakes in `wakes`, and every
 seat at work hears it as a steer. A lease heard a message when it was at
 work as the message landed, or when it was claimed after the message, so
 its view held it. The message is answered while such a lease runs and
-once it ended released, refused or revoked. A lease that stood down
+once it ended released, revoked or abandoned. A lease that stood down
 answers through the seq its last renewal confirmed: a message that
 landed between that renewal and the release reached no activation, and
-the seat is woken for it. A lease that expired or
-failed answers nothing it heard, whatever it said: its words stay on the
+the seat is woken for it. A lease that expired, failed or was
+refused answers nothing it heard, whatever it said: its words stay on the
 record, the seat reads them at the next attempt, and the failure counts
 as one attempt. The room wakes the seat again after the backoff, under
-the next attempt's id. A message no lease answers is pending: the room
-sends the wake again after the resend window, and a seat with a wake
-pending is live, so the exchange stays open and `settled()` waits for the
-claim. `runtime.retry` holds the policy for wakes and summaries alike:
-three attempts thirty seconds apart by default. At the cap the room
-gives up, and it writes what it did: the attempt it does not make, ended
-`abandoned`. That row answers the wake or the close it stood for, so the
+the next attempt's id. A message no lease answers is due: the room
+sends the wake again after the resend window, and a seat with an
+activation due is live, so the exchange stays open and `settled()` waits
+for the claim. `runtime.retry` holds one policy, because the room owes one
+kind of activation: three attempts thirty seconds apart by default. At the
+cap the room gives up, and it writes what it did: the attempt it does not
+make, ended `abandoned`. That row answers the message that owed it, so the
 room stops trying and the host hears an `abandoned` event. A summary the
 assistant could not write ends the same way, and the range stays whole.
 
 **A checkpoint bounds what a fold costs.** Every
 `runtime.checkpoint.rows` rows, 256 by default, the room writes an
 `ambion/checkpoint` row where it has nothing else to write. The row
-carries the composition, the closes and the leases a later fold still
-reads, behind a `floor`: no wake on a message below it is pending. A fold
-reads a checkpoint in place of every row before it, and the log drops
-those rows from memory. What a fold costs is then the rows since the last
+carries the composition and the leases a later fold still reads, behind a
+`floor`: no activation on a message below it is due. It carries no
+messages, so every closed exchange stays on the record whatever a
+checkpoint drops, and the floor is what says the room owes nothing for a
+close below it. A fold reads a checkpoint in place of every row before it,
+and the log drops those rows from memory. What a fold costs is then the rows since the last
 checkpoint; what a replay costs is every entry the storage holds, because
 a checkpoint trims the cache and never the storage. The messages stay, and the storage keeps every
 row: a checkpoint is a cache over the log, so a reader that cannot read

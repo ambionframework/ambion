@@ -155,7 +155,7 @@ describe('a room that starts with the assistant alone', () => {
 			events.map((e) => e.type).filter((t) => t.startsWith('exchange') || t === 'quiet'),
 		).toEqual(['exchange_opened', 'exchange_closed', 'quiet']);
 		expect(session.exchange()).toBeUndefined();
-		expect(kinds(await session.messages())).toEqual(['arrived', 'said']);
+		expect(kinds(await session.messages())).toEqual(['arrived', 'said', 'closed']);
 	});
 
 	it('closes an exchange nobody woke in a room where every seat is named', async () => {
@@ -270,7 +270,7 @@ describe('seating', () => {
 			by: 'assistant',
 			identity: 'Quantity surveyor. Holds the tonnage.',
 		});
-		expect(kinds(record)).toEqual(['arrived', 'said', 'seated', 'said']);
+		expect(kinds(record)).toEqual(['arrived', 'said', 'seated', 'said', 'closed']);
 		expect(seatNames(session)).toEqual(['product', 'assistant', 'surveyor']);
 
 		// the newcomer woke once, on its seating, and read the question it was seated for
@@ -292,7 +292,7 @@ describe('seating', () => {
 		await visit.deliver({ text: 'How much steel is on site?' });
 		await session.quiet();
 
-		expect(kinds(await session.messages())).toEqual(['arrived', 'said', 'seated']);
+		expect(kinds(await session.messages())).toEqual(['arrived', 'said', 'seated', 'closed']);
 		// the product woke once, for the question; the surveyor once, for its seating
 		expect(activated(events).filter((n) => n !== 'assistant')).toEqual(['product', 'surveyor']);
 	});
@@ -631,23 +631,22 @@ describe('a failed draft', () => {
 
 		const visit = await visitSession(session, priya);
 		// two answers, a close, and a draft that fails: priya is owed, and the room waits
+		const failed = assistantEnded(session);
 		await visit.deliver({ to: product, text: 'First?' });
-		await session.quiet();
+		await failed;
 		expect(assistantActs()).toBe(1);
 
 		// a question that wakes nobody is not the backoff passing
 		await visit.deliver({ text: 'Anyone?' });
-		await session.quiet();
+		await session.settled();
 		expect(assistantActs()).toBe(1);
 		await clock.advance(29_999);
 		expect(assistantActs()).toBe(1);
 
 		// the backoff passes on the room's own alarm: the draft is due again, and fails again
 		await clock.advance(1);
-		await session.quiet();
 		expect(assistantActs()).toBe(2);
 		await clock.advance(60_000);
-		await session.quiet();
 		expect(assistantActs()).toBe(3);
 
 		// three attempts are the cap: the range stays whole, and the room stops trying

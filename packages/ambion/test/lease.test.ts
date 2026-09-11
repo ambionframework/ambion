@@ -24,7 +24,16 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { assistant, collect, deferred, enter, roomName, rowsOf, tick } from './support/room.ts';
+import {
+	assistant,
+	assistantEnded,
+	collect,
+	deferred,
+	enter,
+	roomName,
+	rowsOf,
+	tick,
+} from './support/room.ts';
 import {
 	answersEveryQuestion,
 	byAgent,
@@ -247,10 +256,12 @@ describe('a lease', () => {
 			}),
 		);
 		const events = collect(session);
+		const failed = assistantEnded(session);
 		const visit = await enter(session);
 		await visit.deliver({ text: 'answer me' });
-		await session.quiet();
-		// the close owes a summary, and the first draft failed
+		// the close owes a summary, and the first draft failed: the room is not
+		// quiet while it owes one, so it waits on the backoff, not on quiet()
+		await failed;
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 		await clock.advance(30_000);
 		await clock.advance(60_000);
@@ -259,11 +270,11 @@ describe('a lease', () => {
 
 		// the room gives up on the summary, and says so once
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
-			{ type: 'abandoned', agent: 'assistant', activation: 'close:4:4' },
+			{ type: 'abandoned', agent: 'assistant', activation: '5:assistant:4' },
 		]);
 		const rows = await rowsOf(runtime.sessions, session.name);
 		expect(
-			rows.filter((row) => (row.data as LeaseRow).id === 'close:4:4').map((row) => row.data),
+			rows.filter((row) => (row.data as LeaseRow).id === '5:assistant:4').map((row) => row.data),
 		).toMatchObject([{ phase: 'ended', reason: 'abandoned' }]);
 		// nothing is owed, no summary was written, and the record stands whole
 		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
@@ -436,7 +447,8 @@ describe('a lease judged where its row is written', () => {
 						on: 'view',
 						kind: 'delay',
 						ms: 10_000,
-						match: (id) => typeof id === 'string' && id.startsWith('close:') && id.endsWith(':2'),
+						// the second attempt at a draft: the close's seq, the assistant, the attempt
+						match: (id) => typeof id === 'string' && id.endsWith(':assistant:2'),
 					},
 				],
 				clock,
@@ -468,8 +480,9 @@ describe('a lease judged where its row is written', () => {
 		started.push(session);
 		const events = collect(session);
 		const visit = await visitSession(session, priya);
+		const failed = assistantEnded(session);
 		await visit.deliver({ text: 'First?' });
-		await session.quiet();
+		await failed;
 		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
 
 		// the seat works on the second exchange when the backoff passes and the draft is claimed

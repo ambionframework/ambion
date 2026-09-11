@@ -13,12 +13,12 @@
 import * as readline from 'node:readline';
 import {
 	type Attention,
+	isClosed,
 	isSpoken,
 	isSummary,
 	type Message,
 	readSession,
 	type SessionEvent,
-	type SummaryMessage,
 	startSession,
 	stopSession,
 	type Visit,
@@ -73,28 +73,27 @@ const show = (line: string) => {
 	rl.prompt(true);
 };
 
+/** One coloured line for a message on the record, whoever wrote it. */
+function shown(m: Message): string {
+	// The summary is the one message its person reads instead of the working.
+	// The range it stands for is above it, and it wakes nobody.
+	if (isSummary(m)) return `${paint(m.from, `∎ ${m.from} → ${m.to}`)} (${span(m)}): ${m.text}`;
+	// A close is the room's own word: this person's exchange is over, and the
+	// range it turned out to hold is on the record beside it.
+	if (isClosed(m)) return `${dim}· ${m.from}'s exchange closed (${span(m)})${reset}`;
+	if (!isSpoken(m)) return `${dim}· ${m.from} ${m.kind}${reset}`;
+	return `${paint(m.from, `${m.from}${m.to ? ` → ${m.to}` : ''}:`)} ${m.text}`;
+}
+
 const errored = new Set<string>();
 session.subscribe((event: SessionEvent) => {
 	switch (event.type) {
 		case 'activation_start':
 			show(`${dim}· ${event.agent} is reading…${reset}`);
 			break;
-		case 'message': {
-			const m = event.message;
-			if (isSummary(m)) {
-				// The one message its person reads instead of the working. The
-				// range it stands for is above it, and it wakes nobody.
-				show(`${paint(m.from, `∎ ${m.from} → ${m.to}`)} (${span(m)}): ${m.text}`);
-				break;
-			}
-			if (!isSpoken(m)) {
-				show(`${dim}· ${m.from} ${m.kind}${reset}`);
-				break;
-			}
-			const arrow = m.to ? ` → ${m.to}` : '';
-			show(`${paint(m.from, `${m.from}${arrow}:`)} ${m.text}`);
+		case 'message':
+			show(shown(event.message));
 			break;
-		}
 		case 'tool_execution_start':
 			show(`${dim}· ${event.agent} calls ${event.toolName}…${reset}`);
 			break;
@@ -189,12 +188,15 @@ function who(): void {
 	}
 }
 
-const span = (m: SummaryMessage) => `${m.covers.from}–${m.covers.through}`;
+/** The range a message stands for: a summary, or the close of an exchange. */
+const span = (m: { covers: { from: number; through: number } }) =>
+	`${m.covers.from}–${m.covers.through}`;
 
-/** One line per entry, whoever wrote it: three kinds, one record. */
+/** One line per entry, whoever wrote it: four kinds, one record. */
 function line(m: Message): string {
 	if (isSummary(m)) return `[${m.seq}] ∎ ${m.from} → ${m.to} (${span(m)}): ${m.text}`;
 	if (isSpoken(m)) return `[${m.seq}] ${m.from}${m.to ? ` → ${m.to}` : ''}: ${m.text}`;
+	if (isClosed(m)) return `[${m.seq}] · ${m.from}'s exchange closed (${span(m)})`;
 	return `[${m.seq}] · ${m.from} ${m.kind}${m.by ? ` by ${m.by}` : ''}`;
 }
 

@@ -136,7 +136,7 @@ describe('presence', () => {
 		await session.settled();
 
 		// the arrival never woke a second activation; it landed inside the running one
-		expect(await kinds(session)).toEqual(['arrived', 'said', 'arrived']);
+		expect(await kinds(session)).toEqual(['arrived', 'said', 'arrived', 'closed']);
 		expect(seen.some((c) => c.includes('[new] · mara arrived'))).toBe(true);
 	});
 
@@ -248,9 +248,9 @@ describe('presence', () => {
 		await session.settled();
 
 		const missed = await session.messages({ since: again.since });
-		expect(missed.map((m) => m.kind)).toEqual(['arrived', 'said']);
+		expect(missed.map((m) => m.kind)).toEqual(['arrived', 'said', 'closed']);
 		expect(missed.every((m) => m.seq > (left?.seq ?? 0))).toBe(true);
-		expect(await session.messages()).toHaveLength(5);
+		expect(await session.messages()).toHaveLength(6);
 	});
 
 	it('closes its visits when the run stops, without waking anybody', async () => {
@@ -330,7 +330,7 @@ describe('presence', () => {
 		expect(bare).not.toContain('This session exists to:');
 		// the audience paragraph is about routing, not purpose, so it needs no goal
 		expect(bare).toContain('Who is reading can change while you work');
-		expect(await kinds(without)).toEqual(['arrived', 'said']);
+		expect(await kinds(without)).toEqual(['arrived', 'said', 'closed']);
 	});
 });
 
@@ -378,7 +378,7 @@ describe('a storage that fails', () => {
 		const visit = await visitSession(session, andrei);
 		await session.settled();
 		// the close is the one write that fails
-		fail(true, 'ambion/close');
+		fail(true, (_type, data) => (data as { kind?: string }).kind === 'closed');
 		await visit.deliver({ text: 'first?' });
 		// the seat is woken; the host waits for the room to be quiet
 		const waiting = session.quiet();
@@ -395,8 +395,9 @@ describe('a storage that fails', () => {
 		const closed = events.filter((e) => e.type === 'exchange_closed');
 		expect(closed).toHaveLength(1);
 		const record = await session.messages();
+		// the close is the last message on the record, and it holds everything before it
 		expect(closed[0]).toMatchObject({
-			exchange: { owner: 'andrei', from: record[1]?.seq, through: record.at(-1)?.seq },
+			exchange: { owner: 'andrei', from: record[1]?.seq, through: (record.at(-1)?.seq ?? 0) - 1 },
 		});
 		await stopSession(session);
 	});
