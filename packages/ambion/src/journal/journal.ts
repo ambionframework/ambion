@@ -1,17 +1,17 @@
 /**
  * The room's record, as the vocabulary its journal is written in.
  *
- * `@ambionframework/record` holds the machinery and the envelope: one serial
- * queue, the fence between runs, the checkpoint that replaces the rows
- * before it, the idempotency key, the refusal of a commit the record moved
- * past, and the read that settles a write in doubt. It reads no body.
+ * `@ambionframework/journal` holds the machinery and the envelope: one
+ * serial queue, the fence between runs, the checkpoint that replaces every
+ * entry before it, the idempotency key, the refusal of a commit the record
+ * moved past, and the read that settles a write in doubt. It reads no body.
  *
  * What lives here is the part that is the room's: the six kinds of entry it
  * writes, what the storage holds each one under, and what it accepts as a
- * body under each. A message takes a position; every other kind is a row
- * beside the messages, and carries `after`, the last seq when it landed.
+ * body under each. A message takes a position; every other kind sits beside
+ * the messages, and carries `after`, the last seq when it landed.
  */
-import { type Entries, Journal, type Vocabulary } from '@ambionframework/record';
+import { type Entries, Journal, type Vocabulary } from '@ambionframework/journal';
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message } from '../types.ts';
 import {

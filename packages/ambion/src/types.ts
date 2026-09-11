@@ -6,7 +6,7 @@
  * Nothing in this file does anything; the files beside it are what happens.
  */
 
-import type { Seq as RecordSeq, SessionOpener } from '@ambionframework/record';
+import type { Seq as RecordSeq, SessionOpener } from '@ambionframework/journal';
 import type { AgentToolResult, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { Static, TSchema } from 'typebox';

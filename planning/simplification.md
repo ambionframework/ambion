@@ -168,7 +168,7 @@ a filter, and `renderRecord` walks the list. A reader's numbering is a
 rendering job, and `render.ts` can hold it. Do this item with item 5,
 while the storage format is open.
 
-## 5. `@ambionframework/record` — done
+## 5. `@ambionframework/journal` — done
 
 `next.md` §3 asked for this. It landed second.
 
@@ -191,7 +191,7 @@ activation. That is lease vocabulary inside the log, and it is the log's
 one mention of a seat. The room derives `first` from the fold, and the
 set and the flag go.
 
-**Then.** `@ambionframework/record` holds the log, the fence, the
+**Then.** `@ambionframework/journal` holds the log, the fence, the
 checkpoint and the storages. The room depends on it the way it depends on
 Pi: for one concern, through one interface.
 
@@ -339,7 +339,7 @@ other nine.
 ## What comes out
 
 **Two packages, and each is stronger on its own.**
-`@ambionframework/record` is an append-only log, fenced by run and
+`@ambionframework/journal` is an append-only log, fenced by run and
 checkpointed, that holds no reference to an agent.
 `@ambionframework/workspace` is a filesystem, a shell and four tools.
 

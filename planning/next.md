@@ -58,7 +58,7 @@ the least to do with agents. It already has its own contract
 test tiers. Nothing in it knows what a seat is. Out on its own it can be
 read, trusted and reused; inside, it reads as plumbing for rooms.
 
-**Done when.** `@ambionframework/record` holds the log, the fence, the
+**Done when.** `@ambionframework/journal` holds the log, the fence, the
 checkpoint and the storages. The room depends on it the way it depends
 on Pi: for one concern, through one interface.
 

@@ -35,9 +35,9 @@ importers:
       '@ambionframework/ambion':
         specifier: workspace:*
         version: link:../../packages/ambion
-      '@ambionframework/record':
+      '@ambionframework/journal':
         specifier: workspace:*
-        version: link:../../packages/record
+        version: link:../../packages/journal
       '@ambionframework/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
@@ -60,9 +60,9 @@ importers:
 
   packages/ambion:
     dependencies:
-      '@ambionframework/record':
+      '@ambionframework/journal':
         specifier: workspace:*
-        version: link:../record
+        version: link:../journal
       '@earendil-works/pi-agent-core':
         specifier: ^0.84.3
         version: 0.84.3(ws@8.21.3)(zod@4.4.3)
@@ -104,9 +104,9 @@ importers:
       '@ambionframework/ambion':
         specifier: workspace:*
         version: link:../ambion
-      '@ambionframework/record':
+      '@ambionframework/journal':
         specifier: workspace:*
-        version: link:../record
+        version: link:../journal
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.22.0
@@ -130,7 +130,7 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/record:
+  packages/journal:
     dependencies:
       '@earendil-works/pi-agent-core':
         specifier: ^0.84.3

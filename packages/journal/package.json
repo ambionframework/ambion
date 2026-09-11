@@ -1,21 +1,22 @@
 {
-	"name": "@ambionframework/record",
+	"name": "@ambionframework/journal",
 	"version": "0.0.0",
 	"type": "module",
-	"description": "An append-only record over a Pi session: one serial queue, fenced by run, checkpointed, and honest about a write it is in doubt about.",
+	"description": "An append-only journal over a Pi session: one serial queue, fenced by run, checkpointed, and honest about a write it is in doubt about.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/ambionframework/ambion.git",
-		"directory": "packages/record"
+		"directory": "packages/journal"
 	},
 	"keywords": [
 		"ambion",
 		"append-only",
 		"durability",
 		"event-log",
-		"fencing"
+		"fencing",
+		"journal"
 	],
 	"exports": {
 		".": {

@@ -37,7 +37,7 @@ import {
 	stopSession,
 	visitSession,
 } from '@ambionframework/ambion';
-import { type Sql, type SqlValue, sqliteSessions } from '@ambionframework/record';
+import { type Sql, type SqlValue, sqliteSessions } from '@ambionframework/journal';
 import {
 	AGENTS,
 	ASSISTANT,

@@ -20,7 +20,7 @@ ambion/
 │   ├── ambion/            @ambionframework/ambion   — the runtime library
 │   ├── cli/               @ambionframework/cli      — the `ambion` binary
 │   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
-│   ├── record/            @ambionframework/record    — the journal a room writes to
+│   ├── journal/           @ambionframework/journal   — the journal a room writes to
 │   └── workspace/         @ambionframework/workspace — a filesystem behind a workspace
 ├── examples/
 │   └── site/              the runnable example: a multi-agent room, on Node and on workerd
@@ -46,13 +46,13 @@ everything else, so an example that breaks fails the build.
 ### Package graph
 
 ```
-@ambionframework/ambion      ──depends on──▶  @ambionframework/record
+@ambionframework/ambion      ──depends on──▶  @ambionframework/journal
 @ambionframework/cli         ──depends on──▶  @ambionframework/ambion
-@ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion, record
+@ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion, journal
 @ambionframework/workspace   ──depends on──▶  @ambionframework/ambion
 ```
 
-`@ambionframework/record` depends on nothing in this repository: it holds a
+`@ambionframework/journal` depends on nothing in this repository: it holds a
 journal and knows no room. `@ambionframework/workspace` implements a port the
 core names, so its arrow points the other way: the core holds the idea of a
 workspace, and the package holds a filesystem behind it.
@@ -113,7 +113,7 @@ holds, and a reviewer reads a file knowing what it cannot reach.
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
 | `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                                                                | Nothing that does anything        |
 | `host/`                             | What a host owns: the runtime value, a clock, an opener                                                                                  | The vocabulary                    |
-| `journal/`                          | The room's six kinds, over `@ambionframework/record`. No queue and no fence: the package holds those                                     | The vocabulary                    |
+| `journal/`                          | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                    | The vocabulary                    |
 | `room/`                             | Every fact and every decision, pure over the log: the fold, the lease, the exchange, presence, the assistant's rules, the view, `decide` | The vocabulary, the log's entries |
 | `tools/`                            | The workspace port, and the four hands over it. No filesystem: `@ambionframework/workspace` holds one                                    | The vocabulary, `host/`           |
 | `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport                                       | The vocabulary, `host/`, `tools/` |

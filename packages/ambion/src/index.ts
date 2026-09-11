@@ -17,9 +17,10 @@
  * docs/assistant.md, docs/workspace.md and docs/roster.md.
  */
 
-// The record is `@ambionframework/record`: the log, the fence, the
-// checkpoint and the SQLite storage. A host that opens one names it.
-export type { SessionOpener } from '@ambionframework/record';
+// The room writes to a journal: `@ambionframework/journal` holds the queue,
+// the fence, the checkpoint and the SQLite storage. A host that opens a
+// session names the opener.
+export type { SessionOpener } from '@ambionframework/journal';
 export type {
 	ExecutionEnv,
 	SessionMetadata,

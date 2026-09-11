@@ -51,7 +51,7 @@ seriously.
 ### 1. The record is the source of truth
 
 Speech, arrivals, departures, dynamic seating, and summaries are all ordered
-messages. [`Journal`](packages/record/src/journal.ts) serializes writes, assigns
+messages. [`Journal`](packages/journal/src/journal.ts) serializes writes, assigns
 monotonic sequence numbers, persists a message before exposing it, and makes
 retries safe with idempotency keys. Presence is therefore data, not side
 metadata: it participates in ordering, replay, routing, and later context.
@@ -265,7 +265,7 @@ npm install @ambionframework/workspace
 ```
 
 The record the room writes to is
-[`@ambionframework/record`](packages/record); the core depends on it, so it
+[`@ambionframework/journal`](packages/journal); the core depends on it, so it
 arrives with the install above.
 
 ## Read the contracts

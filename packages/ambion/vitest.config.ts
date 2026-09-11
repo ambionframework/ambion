@@ -14,14 +14,14 @@ import { configDefaults, defineConfig } from 'vitest/config';
  */
 
 /**
- * The record resolves to its source, not to its built `dist`. The suite runs
+ * The journal resolves to its source, not to its built `dist`. The suite runs
  * against the code in this repository, so a tier never reads a stale build,
  * and the live tier needs no build at all.
  */
-export const record = fileURLToPath(new URL('../record/src/index.ts', import.meta.url));
+export const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
 
 export default defineConfig({
-	resolve: { alias: { '@ambionframework/record': record } },
+	resolve: { alias: { '@ambionframework/journal': journal } },
 	test: {
 		exclude: [...configDefaults.exclude, 'test/live/**'],
 		testTimeout: 20_000,

@@ -3,8 +3,8 @@
  * owns the schema and every statement (`sqliteSessions`); this file wraps
  * `ctx.storage.sql` in the two calls the core makes.
  */
-import type { SessionOpener, Sql, SqlValue } from '@ambionframework/record';
-import { sqliteSessions } from '@ambionframework/record';
+import type { SessionOpener, Sql, SqlValue } from '@ambionframework/journal';
+import { sqliteSessions } from '@ambionframework/journal';
 
 /** The object's SQLite as the core reaches it. */
 export function sqlOver(storage: SqlStorage): Sql {

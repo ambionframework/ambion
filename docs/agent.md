@@ -382,7 +382,7 @@ rule 3's bar, now with the hearing enforced.
 First to commit wins, and ties are impossible: a commit is one operation
 on the room's commit queue, the check and the write run inside that one
 operation, and nothing observes a message before its write is confirmed
-(`RoomJournal.commit`, over `@ambionframework/record`). A room with no races pays nothing. The refusal shows on the stream as `conflict`, which
+(`RoomJournal.commit`, over `@ambionframework/journal`). A room with no races pays nothing. The refusal shows on the stream as `conflict`, which
 names the author: an assistant's summary is refused at the same boundary, for
 the same reason. The guarantee is the point: every message on the record
 was written by somebody who had read everything before it.
@@ -590,8 +590,8 @@ who was in it and which seat still holds a lease.
 One file per concern, in layers an import points down through, and
 `session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
 §1 names the layers, and Biome holds them): the
-log in [`journal.ts`](../packages/record/src/journal.ts), the rules it writes
-by in [`rules.verified.ts`](../packages/record/src/rules.verified.ts),
+log in [`journal.ts`](../packages/journal/src/journal.ts), the rules it writes
+by in [`rules.verified.ts`](../packages/journal/src/rules.verified.ts),
 every fact folded
 over it in [`fold.ts`](../packages/ambion/src/room/fold.ts), the step the
 room takes in [`reconcile.ts`](../packages/ambion/src/room/reconcile.ts),
