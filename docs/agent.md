@@ -701,9 +701,9 @@ a statement and `all` its rows, so a host wraps whatever SQLite it holds
 Cloudflare — and the core owns the schema and every statement. The core
 imports no platform module, so the wrapper is the host's.
 
-Two runs may write to one SQLite at once. It takes each entry's seq from
-the database as the row lands, so two runs over one database write
-consecutive seqs. Pi's JSONL repository holds the next seq in memory, so
+Two runs may write to one SQLite at once. It reads each entry's seq from
+the database as the row lands, and the primary key refuses a second entry
+at one seq: a writer that raced is refused, and reads again. Pi's JSONL repository holds the next seq in memory, so
 two runs over one file write the same seq twice and the file no longer
 reads: a host that runs two rooms over one name needs the SQLite storage,
 or a repository of its own that behaves like it.
