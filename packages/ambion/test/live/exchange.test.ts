@@ -9,7 +9,7 @@
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { defineHuman, defineTool, isPresence, isSummary, stopSession } from '../../src/index.ts';
-import { enter } from '../support/room.ts';
+import { enter, messageBefore } from '../support/room.ts';
 import {
 	activationsOf,
 	agent,
@@ -79,7 +79,7 @@ live('the exchange', () => {
 		const summary = summaries[0];
 		expect(summary).toMatchObject({ from: 'assistant', to: andrei.name });
 		expect(summary?.covers.from).toBe(question?.seq);
-		expect(summary?.covers.through).toBe((summary?.seq ?? 0) - 1);
+		expect(summary?.covers.through).toBe(messageBefore(messages, summary?.seq ?? 0));
 		expect(summary?.text.trim()).toMatch(/^VERDICT:/);
 		expect(
 			summary?.text

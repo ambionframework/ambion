@@ -247,8 +247,8 @@ function stoppingReason(draft: Draft): string | undefined {
 
 /**
  * A refused draft widens the range it covers. The messages that won the race
- * are now inside it, so the redraft stands for them too and the summary stays
- * contiguous with what it covers.
+ * are now inside it, so the redraft stands for them too and the summary
+ * leaves no message between it and what it covers.
  */
 function widen(hands: Hands, draft: Draft, missed: Message[]): Error {
 	draft.through = missed.at(-1)?.seq ?? draft.through;
