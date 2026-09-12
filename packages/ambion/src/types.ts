@@ -53,7 +53,11 @@ export interface SpokenMessage {
 	kind: 'said';
 	/** The place it took on the record. The journal gives it; a draft has none. */
 	seq: Seq;
-	/** The key the commit carried. The journal gives it; a repeated key lands once. */
+	/**
+	 * The idempotency token the commit carried. The journal gives it. A host
+	 * that never learned whether a delivery landed delivers it again under
+	 * the same token, and the token lands once (`docs/durability.md` §2).
+	 */
 	key?: string;
 	/** The activation that wrote it. Absent on a person's delivery. */
 	activationId?: string;

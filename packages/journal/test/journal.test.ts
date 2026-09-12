@@ -116,10 +116,49 @@ describe('a journal', () => {
 		const first = await journal.commit({ key: 'k', draft: note('once') });
 		const again = await journal.commit({ key: 'k', draft: note('twice') });
 		if (!('entry' in first) || !('entry' in again)) throw new Error('both commits land');
-		expect(again.repeated).toBe(true);
+		// The second commit answers with the first entry and drops its own draft.
 		expect(again.entry).toEqual(first.entry);
+		expect(again.entry.body.text).toBe('once');
 		expect(journal.record).toHaveLength(1);
 		expect(journal.lastSeq).toBe(1);
+	});
+
+	it("takes every kind but the record, so a record entry stays commit's alone", async () => {
+		const journal = await open();
+		await journal.write('mark', { label: 'beside' });
+		// `check:types` holds the line below. Widen `write` back to every kind
+		// and the directive goes unused, which fails the gate.
+		// @ts-expect-error the record kind is not one `write` takes
+		const refused = () => journal.write('note', note('past the checks'));
+		expect(refused).toBeTypeOf('function');
+		expect(journal.entries.map((entry) => entry.kind)).toEqual(['mark']);
+		expect(journal.record).toHaveLength(0);
+	});
+
+	it('keeps a token across a checkpoint, so no dedup window opens', async () => {
+		const journal = await open();
+		const first = await journal.commit({ key: 'k', draft: note('once') });
+		await journal.write('checkpoint', { v: 1, floor: 1 });
+		const again = await journal.commit({ key: 'k', draft: note('twice') });
+		if (!('entry' in first) || !('entry' in again)) throw new Error('both commits land');
+		// The checkpoint keeps every record entry, and the token with it.
+		expect(again.entry).toEqual(first.entry);
+		expect(journal.record).toHaveLength(1);
+		expect(journal.lastSeq).toBe(2);
+	});
+
+	it('meets a token the storage holds, so a retry after a restart lands nothing', async () => {
+		const id = `journal-token-${++names}`;
+		const first = await open(id);
+		await first.commit({ key: 'k', draft: note('once') });
+		// A second journal over the same storage replays the record, and the
+		// replay carries every token into the index: a caller that retries
+		// after a crash meets the token the storage holds.
+		const second = await open(id);
+		const again = await second.commit({ key: 'k', draft: note('twice') });
+		expect('entry' in again && again.entry.seq).toBe(1);
+		expect(second.record.map((entry) => entry.body.text)).toEqual(['once']);
+		expect(second.lastSeq).toBe(1);
 	});
 
 	it('refuses a commit the record moved past, and hands back what it missed', async () => {
@@ -194,6 +233,20 @@ describe('the envelope', () => {
 		expect(second.entries.map((entry) => entry.body)).toEqual([{ text: 'one' }, { label: 'a' }]);
 		// and the journal this run appended into holds the same envelopes
 		expect(first.entries).toEqual(second.entries);
+	});
+
+	it('keeps the three names for itself, whatever a body calls them', async () => {
+		const journal = await open(`journal-reserved-${++names}`, 'run-1');
+		// A body that names the journal's own three loses them here. Nothing in
+		// the room writes such a body; the journal holds to it for any caller.
+		const body = { text: 'mine', seq: 99, key: 'stolen', run: 'ghost' };
+		const landed = await journal.commit({ draft: body as unknown as { text: string } });
+		if (!('entry' in landed)) throw new Error('the commit lands');
+		expect(landed.entry).toEqual({ kind: 'note', body: { text: 'mine' }, seq: 1, run: 'run-1' });
+		// the body's `key` never became a token: an unrelated commit under it lands
+		const other = await journal.commit({ key: 'stolen', draft: note('other') });
+		expect('entry' in other && other.entry.seq).toBe(2);
+		expect(journal.record).toHaveLength(2);
 	});
 
 	it('skips an entry that took no place on the record', async () => {

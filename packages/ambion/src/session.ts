@@ -190,9 +190,11 @@ export interface Visit {
 	/** The seq of this person's last `left`, or undefined the first time. A live read. */
 	readonly since: Seq | undefined;
 	/**
-	 * Put a message on the record. `key` names the delivery: a repeated key
-	 * lands once, so a host that never learned whether a delivery landed
-	 * delivers it again under the same key.
+	 * Put a message on the record. `key` is the delivery's idempotency token:
+	 * a repeated token lands once, so a host that never learned whether a
+	 * delivery landed delivers it again under the same token. The message the
+	 * token landed carries it back, so a host reads which delivery it was.
+	 * A host that names none gets a token of its own that matches nothing.
 	 */
 	deliver(input: { to?: Participant; text: string; key?: string }): Promise<void>;
 	leave(): Promise<void>;
@@ -734,8 +736,8 @@ class SessionImpl implements Session, RunningRoom {
 	 * One operation on the room's commit queue: the draft is built where the
 	 * write happens, with the wakes the room decides for it. The journal hears
 	 * the message inside the same link, so what the room does with it happens
-	 * before anything lands on top. A repeated key lands nothing, so the
-	 * room does nothing with it either.
+	 * before anything lands on top. A repeated token appends nothing, so the
+	 * journal hears nothing, and the room reacts to nothing.
 	 */
 	private commitMessage<T extends Message>(
 		key: string,

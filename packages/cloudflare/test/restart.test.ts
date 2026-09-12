@@ -41,6 +41,9 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	expect(claim.id).toBe('message:4:slow:1');
 	const claimedBy = (await writers(stub, 'lease')).at(0);
 	const firstRun = (await writers(stub, 'run')).at(0);
+	// Both sides read the journal's stamp, so say the stamp is there: two
+	// entries a run never stamped agree with each other and prove nothing.
+	expect(firstRun).toEqual(expect.any(String));
 	expect(claimedBy).toBe(firstRun);
 
 	// The platform takes the room. The seat object is untouched and keeps working.
@@ -61,6 +64,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	// message the first run wrote would mean the abort landed too late.
 	const runs = await writers(again, 'run');
 	expect(runs).toHaveLength(2);
+	expect(new Set(runs).size).toBe(2);
 	expect(runs.at(0)).toBe(firstRun);
 	const messageRows = await stored<{ from?: string }>(again, 'message');
 	const spoken = messageRows.findIndex((entry) => entry.from === 'slow');

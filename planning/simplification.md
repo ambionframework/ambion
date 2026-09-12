@@ -275,6 +275,13 @@ room joins the envelope to the body in one place,
 took the name, and `Checkpoint`, `Close` and `LeaseChange` name no place
 at all.
 
+**It breaks the storage format, and nothing migrates.** A journal the
+earlier version wrote holds the run under `written`, so a reader at this
+version finds every entry unstamped and voids none of them: a superseded
+run's entries come back on the next resume. The version is 0.0.0 and no
+room outlives the change, so the decision is to take the break. A room on
+an older journal starts a new one.
+
 ## 6. `@ambionframework/workspace` — done
 
 `next.md` §2 asked for this. It landed first.

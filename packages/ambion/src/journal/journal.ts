@@ -50,9 +50,10 @@ const KINDS: Readonly<Record<string, Kind>> = Object.fromEntries(
 /**
  * What a body is before the journal gives it a place. Two of the room's
  * kinds name where they sit: a message, which a person reads by number, and
- * a composition, which the roster folds from. A message also names the key
- * its commit carried, because `docs/durability.md` promises a host that a
- * delivery it acknowledged is on the record once. The journal keeps both
+ * a composition, which the roster folds from. A message also names the
+ * idempotency token its commit carried, because `docs/durability.md` §2
+ * promises a host that a delivery it acknowledged is on the record once,
+ * and a host reads the token to hold the room to it. The journal keeps both
  * fields of its own, so the room drafts the body without them and joins the
  * two back together when it reads.
  */

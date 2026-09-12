@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import type { Seq } from '../src/index.ts';
 import {
 	createRuntime,
 	inProcessTransport,
@@ -47,14 +48,23 @@ import { serializing } from './support/transport.ts';
 
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
-/** The stored entries as the fold reads them: the ones that stand past every fence. */
+/** What the storage holds beside a body: the journal's own three. */
+type Stored = Record<string, unknown> & { seq: Seq; key?: string };
+
+/**
+ * The stored entries as the fold reads them: the ones that stand past every
+ * fence. The storage holds the journal's own three beside the body, so this
+ * splits them off the way the journal does. A body handed over whole folds
+ * with no place at all, and every check over the fold goes quiet.
+ */
 function entriesOf(stored: { type: string; data: unknown }[]): Entry[] {
 	return standing(stored).flatMap((entry) => {
 		const kind = entry.type.slice('ambion/'.length);
-		if (kind === 'message' || kind === 'lease' || kind === 'close' || kind === 'composition') {
-			return [{ kind, body: entry.data } as Entry];
+		if (kind !== 'message' && kind !== 'lease' && kind !== 'close' && kind !== 'composition') {
+			return [];
 		}
-		return [];
+		const { seq, key, run: _run, ...body } = entry.data as Stored;
+		return [{ kind, body, seq, ...(key === undefined ? {} : { key }) } as Entry];
 	});
 }
 
@@ -120,10 +130,15 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		);
 		try {
 			const stored = await storedOf(opened.sessions, name);
+			const folded = foldRoom(entriesOf(stored), RETRY);
+			// The fold read the record. A fold that reads no place answers every
+			// check below with nothing, and the checks say the room is whole.
+			expect(folded.lastSeq).toBeGreaterThan(0);
+			expect(folded.messages.every((message) => message.seq > 0)).toBe(true);
 			const found = violations(history, {
 				record: await taken.messages(),
 				stored,
-				state: foldRoom(entriesOf(stored), RETRY),
+				state: folded,
 			});
 			// On a storage that takes any append, the fence allows one loss: the write
 			// the first host acknowledged past the fence is off the record, and off

@@ -11,7 +11,7 @@
  * run got to.
  */
 
-import type { Close, LeaseChange, Without } from '../wire.ts';
+import type { Close, LeaseChange } from '../wire.ts';
 import { draftOver } from './assistant.ts';
 import type { RoomState } from './fold.ts';
 import { type Due, isExpired, isLive, parseId, seatOf, startsNow } from './lease.ts';
@@ -35,7 +35,7 @@ interface Send {
 	seat: string;
 }
 
-type Ended = Without<Extract<LeaseChange, { phase: 'ended' }>, 'seq'>;
+type Ended = Extract<LeaseChange, { phase: 'ended' }>;
 
 export interface Decision {
 	/** Leases that ran past their expiry, ended here. */

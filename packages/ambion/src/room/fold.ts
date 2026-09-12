@@ -11,15 +11,7 @@
 
 import { type Entry, placed } from '../journal/journal.ts';
 import { type Attention, type Exchange, isSummary, type Message, type Seq } from '../types.ts';
-import type {
-	Checkpoint,
-	Close,
-	Composition,
-	EndReason,
-	LeaseHold,
-	Seating,
-	Without,
-} from '../wire.ts';
+import type { Checkpoint, Close, Composition, EndReason, LeaseHold, Seating } from '../wire.ts';
 import { openExchange } from './exchange.ts';
 import {
 	cameToNothing,
@@ -304,10 +296,7 @@ function draftedOver(lease: LeaseHold, covering: readonly Seq[]): boolean {
  * opens after it. A room with no composition writes no checkpoint, because
  * a fold that reads one reads no roster.
  */
-export function checkpointOf(
-	state: RoomState,
-	now: number,
-): Without<Checkpoint, 'seq'> | undefined {
+export function checkpointOf(state: RoomState, now: number): Checkpoint | undefined {
 	if (state.composition === undefined) return undefined;
 	const floor = floorOf(state, now);
 	const last = state.closes.at(-1);

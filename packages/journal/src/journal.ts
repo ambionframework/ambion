@@ -26,12 +26,20 @@
  * the body alone and reads the place off the entry, so no fact stands in
  * two fields.
  *
- * Every commit carries a key. A repeated key returns the entry the first
- * commit landed and writes nothing, which is what lets a caller retry a
- * commit whose outcome it never learned. A commit may also name
- * `readThrough`: the seq its author has read. The queue refuses it when the
- * record moved past that, and hands back what the author missed —
- * optimistic concurrency, enforced where the write happens.
+ * **A key is an idempotency token, and a `readThrough` is a conditional
+ * write.** The two checks the queue runs answer different questions. A
+ * repeated key returns the entry the first commit landed and writes
+ * nothing, which is what lets a caller retry a commit whose outcome it
+ * never learned. A `readThrough` names the seq the author has read: the
+ * queue refuses the commit when the record moved past that, and hands back
+ * what the author missed — optimistic concurrency, enforced where the write
+ * happens. A commit may name both, and either check alone can stop it.
+ *
+ * The key index is the record itself. Every record entry the journal takes
+ * carries its key into the index, on the replay as well as on the append,
+ * so a caller that retries after a crash meets the token the storage holds
+ * and not a memory the crash took. A checkpoint keeps every record entry,
+ * so the token never expires and the journal holds no dedup window.
  *
  * The journal reads what the storage holds past its cursor before every
  * write, and again on the queue behind a write that failed. A write whose
@@ -107,7 +115,7 @@ export interface Entry<TBody = unknown> {
 	readonly body: TBody;
 	/** The place it took on the record. Every entry takes one. */
 	readonly seq: Seq;
-	/** The key the commit carried. A repeated key lands once. */
+	/** The idempotency token the commit carried. A repeated token lands once. */
 	readonly key?: string;
 	/** The run that wrote it, or nothing from before runs were fenced. */
 	readonly run?: string;
@@ -152,7 +160,10 @@ export interface Vocabulary<TKind extends string = string> {
  * What the storage holds for one entry: the body the caller wrote, and the
  * three fields the journal keeps beside it. A caller that writes a field of
  * its own under one of these three names loses it to the journal, which is
- * why they are named for the journal and not for any domain.
+ * why they are named for the journal and never for any domain. The journal
+ * writes all three, so such a field never reaches the envelope: a body that
+ * names its own `key` does not become an idempotency token, and one that
+ * names its own `run` does not stand in for the fence.
  */
 interface Stored {
 	seq?: unknown;
@@ -181,9 +192,14 @@ function drafted<T>(draft: T | (() => T)): T {
 	return typeof draft === 'function' ? (draft as () => T)() : draft;
 }
 
-/** One body, with the journal's own three beside it, as the storage holds it. */
+/**
+ * One body, with the journal's own three beside it, as the storage holds it.
+ * `bodyOf` takes the three off a stored entry, and this puts them back, so
+ * the two are inverses: a body that carries a field under one of the three
+ * names loses it here, and never reaches the envelope.
+ */
 const beside = (body: unknown, seq: Seq, key?: string, run?: string): Stored => ({
-	...(body as object),
+	...bodyOf(body),
 	seq,
 	...(key === undefined ? {} : { key }),
 	...(run === undefined ? {} : { run }),
@@ -225,7 +241,13 @@ function positionOf(value: unknown): Seq | undefined {
 
 /** What a caller commits: the body, and the two checks the queue runs. */
 export interface CommitIntent<TBody> {
-	/** Names this commit. A repeated key lands once. */
+	/**
+	 * The idempotency token for this commit. The caller chooses it, and the
+	 * journal reads it for one question: did this commit land before? A
+	 * repeated token appends nothing and answers with the entry that landed.
+	 * A caller with nothing to retry under names a token of its own that
+	 * matches nothing.
+	 */
 	key?: string;
 	/** The seq the author has read. The queue refuses the commit when the record moved past it. */
 	readThrough?: Seq;
@@ -236,9 +258,14 @@ export interface CommitIntent<TBody> {
 	draft: TBody | (() => TBody);
 }
 
-/** The commit landed, or the key had landed before, or the record had moved. */
+/**
+ * The entry the commit stands for, or the record moved under it. A commit
+ * whose key had landed before answers with the entry that first landed, so
+ * a caller reads one shape whether its own write appended or a retry
+ * deduplicated.
+ */
 export type Committed<TBody, TAll = TBody> =
-	| { entry: Entry<TBody>; repeated?: true }
+	| { entry: Entry<TBody> }
 	/** Every record entry the journal took past what the author read. */
 	| { missed: readonly Entry<TAll>[] };
 
@@ -411,8 +438,12 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	 * around it land in the order they were asked. The draft is built
 	 * where the write happens, and a builder that returns nothing writes
 	 * nothing: the check it ran found the entry no longer needed.
+	 *
+	 * A record entry is `commit`'s alone. This takes every other kind, so a
+	 * caller cannot put an entry on the record without the two checks the
+	 * commit queue runs for it.
 	 */
-	write<K extends TKind>(
+	write<K extends Exclude<TKind, TRecord>>(
 		kind: K,
 		draft: TBodies[K] | (() => TBodies[K] | undefined),
 	): Promise<boolean> {
@@ -523,7 +554,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	): Promise<Committed<T, TBodies[TRecord]>> {
 		const piSession = await this.open();
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
-		if (seen !== undefined) return { entry: seen as Entry<T>, repeated: true };
+		if (seen !== undefined) return { entry: seen as Entry<T> };
 		if (intent.readThrough !== undefined && refused(this.lastCommitted, intent.readThrough)) {
 			return { missed: this.since(intent.readThrough) };
 		}

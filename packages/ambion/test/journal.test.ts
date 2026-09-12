@@ -27,7 +27,7 @@ describe('RoomJournal', () => {
 		const again = await journal.commit({ key: 'k1', draft: say('one, again') });
 		const landed = { kind: 'message', body: say('one'), seq: 1, key: 'k1' };
 		expect(first).toEqual({ entry: landed });
-		expect(again).toEqual({ entry: landed, repeated: true });
+		expect(again).toEqual({ entry: landed });
 		expect(journal.lastSeq).toBe(1);
 		expect(journal.messages()).toHaveLength(1);
 		// the body the storage holds carries no place of its own: the entry does
@@ -130,7 +130,7 @@ describe('RoomJournal in doubt', () => {
 		]);
 		// and the key of the write in doubt lands once: a retry hands back what landed
 		const retried = await journal.commit({ key: 'b', draft: say('two, again') });
-		expect(retried).toMatchObject({ entry: { seq: 2, body: { text: 'two' } }, repeated: true });
+		expect(retried).toMatchObject({ entry: { seq: 2, body: { text: 'two' } } });
 	});
 
 	it('reads past the last entry it saw, so every read costs the entries since the one before', async () => {
