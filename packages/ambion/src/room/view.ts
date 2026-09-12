@@ -1,6 +1,6 @@
 /**
  * What an activation is given, read off the fold and rendered: the seats,
- * the people, the record, the hand the activation holds and what it holds
+ * the people, the record, the tool the activation holds and what it holds
  * it for. Every function is pure over the facts it is handed, so the view a
  * seat reads in one process is the view it reads in another.
  */
@@ -13,7 +13,7 @@ import {
 	type SeatSpeaking,
 } from '../render.ts';
 import type { AgentDefinition, Exchange, SeatInfo, Seq } from '../types.ts';
-import type { ActivationView, Hand } from '../wire.ts';
+import type { ActivationView, ToolName } from '../wire.ts';
 import type { RoomState } from './fold.ts';
 import { parseId } from './lease.ts';
 
@@ -51,7 +51,7 @@ export function seatsOf(facts: Pick<RoomFacts, 'name' | 'state' | 'live'>): Seat
 	return seats;
 }
 
-/** The view one activation reads: two rendered strings, the model id, and the hand. */
+/** The view one activation reads: two rendered strings, the model id, and the tool. */
 export function viewOf(
 	id: string,
 	seat: string,
@@ -59,7 +59,7 @@ export function viewOf(
 	facts: RoomFacts,
 ): ActivationView {
 	const state = facts.state;
-	const { hand, closing, composing } = handOf(id, seat, facts);
+	const { tool, closing, composing } = handOf(id, seat, facts);
 	const speaking: SeatSpeaking = {
 		def,
 		assistant: seat === facts.assistant,
@@ -74,14 +74,14 @@ export function viewOf(
 		lastSeq: state.lastSeq,
 		systemPrompt: renderSystemPrompt(speaking, room),
 		context: renderTurnContext(speaking, room),
-		hand,
+		...(tool === undefined ? {} : { tool }),
 		...(closing ? { closing } : {}),
 		...(composing ? { composing } : {}),
 	};
 }
 
 type Hands = {
-	hand: Hand;
+	tool?: ToolName;
 	closing?: ActivationView['closing'];
 	composing?: ActivationView['composing'];
 };
@@ -90,7 +90,7 @@ type Hands = {
  * What an activation is for, read off its id and the fold: a draft closes
  * an exchange still owed, the assistant woken by the question that opened
  * one composes the room for it, and every other seat speaks. A draft id
- * names one close; the hand it holds covers every close its person is
+ * names one close; the tool it holds covers every close its person is
  * owed, so a close that joined the draft after the claim is read too.
  */
 function handOf(id: string, seat: string, facts: RoomFacts): Hands {
@@ -98,18 +98,18 @@ function handOf(id: string, seat: string, facts: RoomFacts): Hands {
 	const parsed = parseId(id);
 	if (parsed?.cause === 'close') {
 		const owed = state.owed.find((o) => o.covering.includes(parsed.position));
-		if (owed === undefined) return { hand: 'none' };
+		if (owed === undefined) return {};
 		return {
-			hand: 'summarise',
+			tool: 'summarise',
 			closing: { person: owed.person, from: owed.from, through: state.lastSeq },
 		};
 	}
-	if (seat !== facts.assistant) return { hand: 'say' };
+	if (seat !== facts.assistant) return { tool: 'say' };
 	const question = parsed && state.messages.find((m) => m.seq === parsed.position);
 	const opened = openedBy(parsed?.position, state);
-	if (question === undefined || !opened) return { hand: 'none' };
+	if (question === undefined || !opened) return {};
 	return {
-		hand: 'seat',
+		tool: 'seat',
 		composing: { person: question.from, from: question.seq, limit: state.reserve.length },
 	};
 }

@@ -7,7 +7,7 @@ import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { defineAgent, defineTool, defineToolShape, SAY, SEAT, SUMMARISE } from '../src/define.ts';
 import { handsFor } from '../src/seat/hands.ts';
-import type { ActivationView } from '../src/wire.ts';
+import type { ActivationView, ToolName } from '../src/wire.ts';
 
 const FLAG = defineToolShape({
 	name: 'flag',
@@ -69,7 +69,7 @@ describe('the shapes the room binds', () => {
 		lastSeq: 1,
 		systemPrompt: '',
 		context: '',
-		hand: 'say',
+		tool: 'say',
 	};
 	const held = {} as Parameters<typeof handsFor>[2];
 
@@ -77,13 +77,9 @@ describe('the shapes the room binds', () => {
 		['say', {}, SAY],
 		['summarise', { closing: { person: 'priya', from: 1, through: 2 } }, SUMMARISE],
 		['seat', { composing: { person: 'priya', from: 1, limit: 1 } }, SEAT],
-	])('builds %s from the shape it published', (hand, over, shape) => {
-		const [tool] = handsFor(
-			{ ...view, hand: hand as ActivationView['hand'], ...over },
-			agent,
-			held,
-		);
-		expect(tool?.name).toBe(hand);
-		expect(tool?.parameters).toBe(shape.parameters);
+	])('builds %s from the shape it published', (name, over, shape) => {
+		const [bound] = handsFor({ ...view, tool: name as ToolName, ...over }, agent, held);
+		expect(bound?.name).toBe(name);
+		expect(bound?.parameters).toBe(shape.parameters);
 	});
 });

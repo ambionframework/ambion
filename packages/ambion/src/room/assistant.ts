@@ -31,7 +31,7 @@ import { isAgent, isSpoken } from '../types.ts';
 /**
  * The assistant shapes what a room already does, and never makes anything
  * happen. It carries no tools of its own, so the rule is a fact about the
- * definition rather than a promise about behaviour: the one hand the runtime
+ * definition and no promise about behaviour: the one tool the runtime
  * gives it writes to the record and reaches nothing else. `startSession`
  * refuses anything else as the room's assistant.
  */

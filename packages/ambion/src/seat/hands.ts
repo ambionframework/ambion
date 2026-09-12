@@ -139,14 +139,14 @@ function sayTool(hands: Hands): AgentTool {
  * is nothing else to leave out.
  */
 export function handsFor(view: ActivationView, def: AgentDefinition, held: Hands): AgentTool[] {
-	if (view.hand === 'say') {
+	if (view.tool === 'say') {
 		return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
 	}
-	if (view.hand === 'summarise' && view.closing) {
+	if (view.tool === 'summarise' && view.closing) {
 		const draft: Draft = { ...view.closing, refusals: 0, calls: 0 };
 		return [summariseTool(held, draft)];
 	}
-	if (view.hand === 'seat' && view.composing) {
+	if (view.tool === 'seat' && view.composing) {
 		const composing: Composing = { ...view.composing, seated: 0, calls: 0 };
 		return [seatTool(held, composing)];
 	}

@@ -152,7 +152,7 @@ export class Activation {
 			// An aborted activation stays cancelled, and one that does not rebuild
 			// is a single pass whatever landed: a summarising activation answers a room
 			// that moved with a redraft inside its own tool.
-			if (this.cancelled || view.hand !== 'say') return false;
+			if (this.cancelled || view.tool !== 'say') return false;
 			// Awaited here, so a renewal that fails is caught below and not returned as a rejection.
 			return await this.moved(agent);
 		} catch (error) {

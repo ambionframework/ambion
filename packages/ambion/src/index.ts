@@ -114,7 +114,6 @@ export type {
 	Composition,
 	EndReason,
 	Fence,
-	Hand,
 	Intent,
 	Lease,
 	LeaseChange,
@@ -124,6 +123,7 @@ export type {
 	SeatPort,
 	SeatRoom,
 	Stale,
+	ToolName,
 	ViewResponse,
 	Wake,
 } from './wire.ts';
