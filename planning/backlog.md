@@ -235,7 +235,7 @@ nothing, and rung 3 pays for an activation.
   argument against is that a preference written for a summary may read
   badly as a filter on what a product says.
 - **Which invariant it touches.** Three hold today: the assistant is seated
-  `none`, `handsFor` gives it empty hands outside an open or a close, and
+  `none`, `toolsFor` gives it no tool outside an open or a close, and
   `wakes` refuses to wake anybody for what the assistant writes, with the one
   exception of a seat it seats. A steer that reaches a
   running seat as a `[new]` line touches the third, because the room would
@@ -248,8 +248,8 @@ nothing, and rung 3 pays for an activation.
   (`SUMMARY_PARAGRAPH`) is the precedent.
 
 **Where.** `dispatch` in
-[`session.ts`](../packages/ambion/src/session.ts), `handsFor` in
-[`hands.ts`](../packages/ambion/src/seat/hands.ts), `wakes` in
+[`session.ts`](../packages/ambion/src/session.ts), `toolsFor` in
+[`tools.ts`](../packages/ambion/src/seat/tools.ts), `wakes` in
 [`seat.ts`](../packages/ambion/src/seat/seat.ts), the assistant's paragraphs in
 [`render.ts`](../packages/ambion/src/render.ts).
 
@@ -259,9 +259,9 @@ nothing, and rung 3 pays for an activation.
 gives the assistant `seat` alone. Two ways to take a seat back off the roster
 while the room runs, and both return the agent to the reserve:
 
-- An `unseat` in the assistant's hands, at the open of an exchange beside
+- An `unseat` the assistant holds, at the open of an exchange beside
   `seat`, to take a colleague out of an exchange the colleague is not helping.
-- A `leave` in the seat's own hands: a seated specialist that judges its part
+- A `leave` a seat holds itself: a seated specialist that judges its part
   done ends its activation with a tool call that takes it back to the reserve,
   the way `say` is a tool and silence is a decision.
 
@@ -278,7 +278,7 @@ better than anybody when its own part is done.
 
 - **What an unseat does to an activation in flight.** The host's `unseat`
   aborts it. An assistant that aborts a colleague mid-say is the destructive
-  act `roster.md` §5 keeps out of its hands, so an assistant's unseat would
+  act `roster.md` §5 keeps from it, so an assistant's unseat would
   wait for the seat to go idle, which is a second mechanism.
 - **Whether a seat unseated mid-exchange counts at the close.** The
   threshold reads the record, so it does; whether that is right when the
@@ -309,7 +309,7 @@ to route.
 
 It is also what [`docs/assistant.md`](../docs/assistant.md) §12's rung 3 wants. The assistant is
 a seat at `none`; letting it take part in an exchange is a wider attention and
-a `say` in its hands. With reseating that is a host's decision — _this room
+a `say` it holds. With reseating that is a host's decision — _this room
 lets the assistant speak_ — rather than a code change in the runtime.
 
 **What it needs deciding.**
@@ -325,10 +325,10 @@ lets the assistant speak_ — rather than a code change in the runtime.
 - **Who may do it.** A host, certainly. An agent, never — a room where an
   agent can widen its own attention is a room that can make itself expensive.
 - **What the assistant holds when something else wakes it.** Nothing, today:
-  `handsFor` gives the assistant `seat` for the activation an open wakes it for,
+  `toolsFor` gives the assistant `seat` for the activation an open wakes it for,
   `summarise` for the activation a close
   woke it
-  for, and empty hands otherwise, so a wider attention alone buys a seat that
+  for, and no tool otherwise, so a wider attention alone buys a seat that
   reads the room and ends its activation. Rung 3 is a `say` added there on purpose,
   with the paragraph that says when waking the assistant is worth the money.
 
@@ -553,7 +553,7 @@ carry the identity, so a read reports what the run held.
 **Why deferred.** The room already refuses a duplicate name inside one
 roster. Two rooms in one runtime with one name and two definitions is a
 host that wants two runtimes. The catalog exists so that a transport can
-hand a seat in another process the definition it needs by name, and so
+give a seat in another process the definition it needs by name, and so
 that `resumeSession` can resolve a roster it reads off the journal.
 
 **Options.** The runtime refuses a second, different definition under a
@@ -801,7 +801,7 @@ assistant was woken for, the range a closing assistant covers, and the open
 question a seated agent reads.
 
 The numbering stays inside `render.ts`, because nothing a participant sends
-back names a place. The three hands take `{ to?, text }`, `{ text }` and
+back names a place. The three tools take `{ to?, text }`, `{ text }` and
 `{ name }`: no tool carries a seq either way.
 
 Three tests pin it, and each fails when `render.ts` hands back the raw

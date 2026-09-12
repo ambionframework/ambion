@@ -211,7 +211,7 @@ rebuild when the room moves, and nothing that lands while it decides is
 steered into it, because what it decides is who to seat, and the record as
 it stood at the question is what that turns on. The first live run showed
 why the steer has to stay out: an assistant handed the products' answers
-mid-decision kept weighing them and drafting a close it had no hand to
+mid-decision kept weighing them and drafting a close it had no tool to
 deliver.
 
 **What `seat` does.** It takes a name from the reserve, and it is refused a

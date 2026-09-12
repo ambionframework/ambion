@@ -44,7 +44,7 @@ so the next reason to arrive lands in one copy.
 
 The two kinds then reach every module that reads them. `parseId` returns
 two kinds. `seatOf` needs the assistant's name to resolve a draft.
-`handOf` branches on the kind. `working` tests the kind of every
+`toolOf` branches on the kind. `working` tests the kind of every
 identifier a seat holds. `liveSeats` reads two lists.
 
 **Where.** `packages/ambion/src/room/lease.ts`, `pendingWakes`,
@@ -125,15 +125,15 @@ opened exchange and a closed exchange hold no place on that order. So no
 value of `attention` states them, and the room writes the assistant's
 name in at two points instead.
 
-**Why the cause cannot carry the third fact.** `handOf` already reads the
-cause for a close, and it holds the hand a close binds. It falls back to
+**Why the cause cannot carry the third fact.** `toolOf` already reads the
+cause for a close, and it binds the tool a close names. It falls back to
 the name for an open, because an opened exchange is `message`-caused, so
 the id cannot tell the question that opened the exchange from the
 question an agent answers.
 
 **Where.** `packages/ambion/src/session.ts`, `routing`, `assistant`;
 `packages/ambion/src/room/reconcile.ts`, `closing`;
-`packages/ambion/src/room/view.ts`, `handOf`, `RoomFacts`;
+`packages/ambion/src/room/view.ts`, `toolOf`, `RoomFacts`;
 `packages/ambion/src/room/fold.ts`, `foldRoster`;
 `packages/ambion/src/room/assistant.ts`, `assertAssistant`;
 `packages/ambion/src/render.ts`, four reads of `seat.assistant`;
@@ -162,7 +162,7 @@ export interface RoleDefinition {
   guidance?: string;
 }
 
-/** The journal's copy. The fold reads the events; `handOf` reads the name. */
+/** The journal's copy. The fold reads the events; `toolOf` reads the name. */
 export interface Role {
   name: string;
   answers: Partial<Record<ExchangeEvent, string>>;
@@ -186,7 +186,7 @@ export const ASSISTANT = defineRole({
 });
 ```
 
-**A tool is a shape and a body.** A hand the room binds and a tool an
+**A tool is a shape and a body.** A tool the room binds and a tool an
 agent declares already share one type: both are a name, a description, a
 parameter schema and an `execute`. Three binders already produce one by
 name — the room, the workspace and the agent — and
@@ -223,33 +223,41 @@ causes the activation. It becomes `closed`, for the exchange that closed.
 So `Kind` keeps `close` for an entry on the journal, and `Cause` reads
 `closed` for why an activation exists. The documents state the two apart.
 
-`Hand` is already `'say' | 'summarise' | 'seat' | 'none'` in `wire.ts`.
-It becomes `ToolName`, and the field `hand` becomes `tool`. A hand is a
-tool: `defineAgent` names the field `tools` and calls them hands in the
-same docblock, and a hand is a metaphor where the rule asks for the
-mechanism. `none` goes, because nothing reads it — `view.ts` writes it,
-and the three tests in `hands.ts` and `activation.ts` all fall through.
-Absence says the same, and it leaves `none` to `Attention` alone.
+`Hand` was `'say' | 'summarise' | 'seat' | 'none'` in `wire.ts`. It is
+`ToolName`, and the field `hand` is `tool`. A hand is a tool:
+`defineAgent` named the field `tools` and called them hands in the same
+docblock, and a hand is a metaphor where the rule asks for the mechanism.
+`none` went with it, because nothing read it — `view.ts` wrote it, and
+the three tests in `tools.ts` and `activation.ts` fall through. Absence
+says the same, and `none` means one thing again, on `Attention`.
 
 `ToolName` holds the room's three while the room is the one binder. A
-role that names a tool the agent brings widens it to a string, so the
-closed set is what stands today and never a promise. `hands.ts`, `handOf`
-and `Hands` keep their names here: `seat/hands.ts` renames beside a
-`tools/` directory that holds the workspace port, and item 10 owns that
-layout.
+role that names a tool the agent brings widens it to any name, so the
+closed set is what stands today and never a promise.
+
+**The word went everywhere, so the sweep did.** `seat/hands.ts` is
+`seat/tools.ts`. `handsFor` is `toolsFor`, and the `Binding` it takes is
+what a bound tool reaches. `handOf` in `view.ts` is `toolOf`, and the
+`Bound` it answers with names the tool and what it stands over. Two types
+carried the name `Hands` with two meanings, and neither does now. The
+prose in `docs/`, both `README.md` files and the tests follows, and the
+ordinary verb stays where it reads as one: Pi hands a tool call its
+arguments, and the journal hands back what a commit landed.
 
 **The sequence.** One storage-format change covers `Seating.role` and the
 new members of `Cause`, the way item 4 covered the counter. Five steps,
 and each one builds and passes the gate on its own:
 
 1. **The exchange's events become causes.** `Cause` gains `opened` and
-   `closed`. `handOf` reads the cause in every branch, so the hand stops
-   reading the seat's name. No new type.
-2. **`defineToolShape`, and the room publishes its shapes.** `SAY`,
-   `SEAT` and `SUMMARISE` become shapes, `defineTool` takes one, and
-   `hands.ts` builds every hand through the same path. Nothing changes at
-   runtime. This step stands on its own and makes every step after it
-   smaller.
+   `closed`. `toolOf` reads the cause in every branch, so the room stops
+   reading the seat's name to bind a tool. No new type.
+2. **`defineToolShape`, and the room publishes its shapes.** — done.
+   `SAY`, `SUMMARISE` and `SEAT` are shapes, `defineTool` takes one, and
+   `seat/tools.ts` spreads them. The room keeps Pi's own signature for
+   its three, because `say` reads the tool call's id and names its commit
+   with it, so the two meet at the shape and never at the construction. A
+   description belongs to a body, because the room writes `summarise`
+   with the person it writes for in it. Nothing changed at runtime.
 3. **The binder table.** One table resolves a tool name to its binder,
    and `BUILTIN_TOOL_NAMES` becomes row 2 of it. A seating is refused
    where a shape does not resolve, so a host reads the failure at
@@ -455,7 +463,7 @@ disk ([`backlog.md`](backlog.md) §44).
 
 **What landed.** `@ambionframework/workspace` holds the two backends and
 the just-bash adapter, 509 lines. The core keeps `defineWorkspace`,
-`destroyWorkspace`, the handle, the resolver and the four hands, and it
+`destroyWorkspace`, the handle, the resolver and the four tools, and it
 drops `just-bash` from its dependencies. The main entry imports no
 `node:fs`.
 
@@ -606,7 +614,7 @@ subjects that share a shape hide whether the shape is right.
 **A role is a value a host writes.** `defineRole` names the events a seat
 answers and the tool it holds at each. The assistant is the first role,
 and the runtime reads no seat's name to route, to close, or to bind a
-hand.
+tool.
 
 **The measure.** The core loses about 1500 lines and four vocabularies:
 the wake and the draft, the author and the subject, six tests for what is

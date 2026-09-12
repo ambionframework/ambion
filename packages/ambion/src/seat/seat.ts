@@ -12,7 +12,7 @@
  * seat rather than about the room: every message has a reach, and a seat
  * wakes when its attention is at least that wide. The seat's own actor: it
  * takes a wake, claims the lease, reads the room's view, builds the Pi
- * `Agent` over it with the hands the view names (`hands.ts`), runs it,
+ * `Agent` over it with the tools the view names (`tools.ts`), runs it,
  * renews the lease while it runs, and releases the lease when it stops.
  * And the transport that puts every seat in the room's own process. What
  * the actor knows of the room, it learns through three calls (`wire.ts`).
@@ -36,7 +36,7 @@ import type {
 import { isSpoken, isSummary } from '../types.ts';
 import type { ActivationView, SeatPort, SeatRoom, Wake } from '../wire.ts';
 import { Activation, persistTurns } from './activation.ts';
-import { hands, handsFor } from './hands.ts';
+import { binding, toolsFor } from './tools.ts';
 
 // -- routing -----------------------------------------------------------------
 
@@ -316,7 +316,7 @@ export class SeatActor implements SeatPort {
 
 	/**
 	 * The model over the view: the prompt the room rendered, the model the
-	 * definition names, the hands. The stream function tells the activation
+	 * definition names, the tools. The stream function tells the activation
 	 * when the model is asked, so a steer never joins the request it lands during.
 	 */
 	private build(view: ActivationView, activation: Activation): PiAgent {
@@ -332,7 +332,7 @@ export class SeatActor implements SeatPort {
 				systemPrompt: view.systemPrompt,
 				model: this.context.model(view.model, def.name),
 				thinkingLevel: 'off',
-				tools: handsFor(view, def, hands(activation, this.room)),
+				tools: toolsFor(view, def, binding(activation, this.room)),
 				messages: [],
 			},
 		});

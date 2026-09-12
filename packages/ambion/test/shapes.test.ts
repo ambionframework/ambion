@@ -6,7 +6,7 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { defineAgent, defineTool, defineToolShape, SAY, SEAT, SUMMARISE } from '../src/define.ts';
-import { handsFor } from '../src/seat/hands.ts';
+import { toolsFor } from '../src/seat/tools.ts';
 import type { ActivationView, ToolName } from '../src/wire.ts';
 
 const FLAG = defineToolShape({
@@ -58,7 +58,7 @@ describe('the shapes the room binds', () => {
 	 * states its own name and parameters again reads the same to a model, and
 	 * a role that names the shape stops reaching it.
 	 *
-	 * `handsFor` reads nothing off what an activation holds while it builds, so
+	 * `toolsFor` reads nothing off what an activation holds while it builds, so
 	 * the test hands it nothing.
 	 */
 	const agent = defineAgent({ name: 'solo', identity: 'Answers.', instructions: '.', model: 'm' });
@@ -71,14 +71,14 @@ describe('the shapes the room binds', () => {
 		context: '',
 		tool: 'say',
 	};
-	const held = {} as Parameters<typeof handsFor>[2];
+	const held = {} as Parameters<typeof toolsFor>[2];
 
 	it.each([
 		['say', {}, SAY],
 		['summarise', { closing: { person: 'priya', from: 1, through: 2 } }, SUMMARISE],
 		['seat', { composing: { person: 'priya', from: 1, limit: 1 } }, SEAT],
 	])('builds %s from the shape it published', (name, over, shape) => {
-		const [bound] = handsFor({ ...view, tool: name as ToolName, ...over }, agent, held);
+		const [bound] = toolsFor({ ...view, tool: name as ToolName, ...over }, agent, held);
 		expect(bound?.name).toBe(name);
 		expect(bound?.parameters).toBe(shape.parameters);
 	});

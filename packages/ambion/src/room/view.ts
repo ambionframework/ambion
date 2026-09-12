@@ -59,7 +59,7 @@ export function viewOf(
 	facts: RoomFacts,
 ): ActivationView {
 	const state = facts.state;
-	const { tool, closing, composing } = handOf(id, seat, facts);
+	const { tool, closing, composing } = toolOf(id, seat, facts);
 	const speaking: SeatSpeaking = {
 		def,
 		assistant: seat === facts.assistant,
@@ -80,7 +80,7 @@ export function viewOf(
 	};
 }
 
-type Hands = {
+type Bound = {
 	tool?: ToolName;
 	closing?: ActivationView['closing'];
 	composing?: ActivationView['composing'];
@@ -93,7 +93,7 @@ type Hands = {
  * names one close; the tool it holds covers every close its person is
  * owed, so a close that joined the draft after the claim is read too.
  */
-function handOf(id: string, seat: string, facts: RoomFacts): Hands {
+function toolOf(id: string, seat: string, facts: RoomFacts): Bound {
 	const state = facts.state;
 	const parsed = parseId(id);
 	if (parsed?.cause === 'close') {

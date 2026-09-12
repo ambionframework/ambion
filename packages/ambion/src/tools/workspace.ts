@@ -184,7 +184,7 @@ async function connect(
 type BuiltinTool = AgentHarnessTool<ExecutionToolContext>;
 
 /**
- * The hands a workspace gives an agent: Pi's own `read`, `write`, `edit` and
+ * The tools a workspace gives an agent: Pi's own `read`, `write`, `edit` and
  * `bash`, unmodified, bound to this agent. An agent with no workspace gets
  * none; an agent with one gets all four, on every activation.
  */

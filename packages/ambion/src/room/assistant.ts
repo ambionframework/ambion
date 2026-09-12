@@ -21,7 +21,7 @@
  *
  * What is left in this file is what the assistant *is*: what a room refuses
  * to seat as one, and the threshold a summary is written above. The two
- * tools are hands the seat side gives it (`seat/hands.ts`). Who is owed and
+ * tools are what the seat side binds for it (`seat/tools.ts`). Who is owed and
  * when the next draft starts are folds over the journal (`fold.ts`), and the
  * room's `reconcile` sends the wake.
  */

@@ -32,7 +32,7 @@ import {
 	toolNames,
 } from './support/scripted.ts';
 
-/** Which activation the assistant is taking, read off the one hand it holds. */
+/** Which activation the assistant is taking, read off the one tool it holds. */
 const holding = (context: Context, tool: string) => toolNames(context).includes(tool);
 
 /**
@@ -191,13 +191,13 @@ describe('the reserve', () => {
 
 	it('is what the assistant reads at an open, minus who is seated', async () => {
 		const reserves: string[] = [];
-		const hands: string[][] = [];
+		const tools: string[][] = [];
 		const session = open({
 			script: byAgent({
 				assistant: (context) => {
 					if (!holding(context, 'seat')) return quiet();
 					reserves.push(contextText(context));
-					hands.push(toolNames(context));
+					tools.push(toolNames(context));
 					return quiet();
 				},
 			}),
@@ -209,7 +209,7 @@ describe('the reserve', () => {
 		await visit.deliver({ text: 'How much steel is on site?' });
 		await session.quiet();
 
-		expect(hands).toEqual([['seat']]);
+		expect(tools).toEqual([['seat']]);
 		expect(reserves[0]).toContain('The reserve: agents not in the room');
 		expect(reserves[0]).toContain('- surveyor: Quantity surveyor. Holds the tonnage.');
 		expect(reserves[0]).toContain('- architect: Architect. Holds the drawings.');

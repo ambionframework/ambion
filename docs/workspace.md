@@ -201,8 +201,8 @@ it refuses one that carries tools (`assistant.md` §12, §17;
 about to become the room's assistant. `defineAgent` builds a plain value and
 has no way to know that.
 
-**The refusal is a fail-fast check on a dead configuration.** `handsFor`
-(`seat/hands.ts`) returns before it reaches `seat.def.tools.map(toPiTool)` for
+**The refusal is a fail-fast check on a dead configuration.** `toolsFor`
+(`seat/tools.ts`) returns before it reaches `seat.def.tools.map(toPiTool)` for
 the assistant's seat: the assistant is handed `[summarise]` or `[]` on every
 activation. The built-in tools bind in that same skipped branch (§5), so an
 assistant that named a workspace would reach neither them nor any tool of
@@ -249,7 +249,7 @@ declares `execute` with one parameter or none.
 
 **`ctx.workspace()` resolves fresh on every call, and calls `connect` every
 time.** The runtime binds an activation's tools knowing which seat they
-belong to (`handsFor` in `seat/hands.ts`), so `ctx` knows the agent. The call
+belong to (`toolsFor` in `seat/tools.ts`), so `ctx` knows the agent. The call
 does three things, in order:
 
 1. The agent has no `workspace` field: resolve `undefined`.
@@ -349,7 +349,7 @@ const bash = createBashTool();
 missing, fresh on every call.** `AgentHarnessTool`'s `execute` takes five
 arguments, `(toolCallId, params, signal, onUpdate, context)`, where
 `context` is `ExecutionToolContext`, `{ env: ExecutionEnv }`. Ambion's
-`AgentTool` (what `handsFor` hands a seat) takes the first four. The
+`AgentTool` (what `toolsFor` gives a seat) takes the first four. The
 wrapper passes its four arguments through, awaits `ctx.workspace()` (§4),
 and passes `{ env: workspace.env }` as the fifth. `workspace.env` is an
 `ExecutionEnv` (§6), so that argument is a plain assignment.
@@ -386,7 +386,7 @@ one built-in call runs every call in that batch one at a time, custom tools
 included. A batch of custom tools alone still runs in parallel.
 
 **The wrapped value takes a one-line cast to `AgentTool`**, the way
-`toPiTool` (`seat/hands.ts`) casts a Pi-native tool. Strict mode does not
+`toPiTool` (`seat/tools.ts`) casts a Pi-native tool. Strict mode does not
 consider `Static<typeof readSchema>` assignable to `AgentTool`'s default
 `params` type on its own.
 
@@ -879,8 +879,8 @@ All in-process, in vitest, on a scripted stream where determinism matters.
 workspace's files without an agent (§8). A workspace-connected agent's
 system prompt states the four tools' reach, `WORKSPACE_PARAGRAPH` in
 `render.ts` (§5). `startSession`'s public signature did not change (§3).
-`handsFor()` in `seat/hands.ts` binds the four built-ins beside what
-`toPiTool` (`seat/hands.ts`) already did, and `toPiTool` takes the seat's agent
+`toolsFor()` in `seat/tools.ts` binds the four built-ins beside what
+`toPiTool` (`seat/tools.ts`) already did, and `toPiTool` takes the seat's agent
 so it can build a `ToolContext` for a `defineTool`-built tool. No
 `defineAgent` call in [`README.md`](../README.md), [`agent.md`](agent.md)
 or [`examples/site`](../examples/site) changed: none of those agents uses a

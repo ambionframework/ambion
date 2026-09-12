@@ -69,7 +69,7 @@ instruction.
 
 ### 3. Silence is a result
 
-A normal activation receives the `say` hand. Calling it appends a message;
+A normal activation receives the `say` tool. Calling it appends a message;
 finishing without calling it appends nothing. The runtime does not manufacture
 an empty acknowledgement just because a model was activated. This makes it
 cheap, semantically, to wake all plausibly relevant agents and let each decide
@@ -114,7 +114,7 @@ there is no separate activation counter to drift from reality. See
 
 The assistant is the conversational interface, not a UI framework or a
 privileged coordinator. It is an ordinary seat with its own model session and
-activation history, but no general `say` hand, workspace, or general-purpose
+activation history, but no general `say` tool, workspace, or general-purpose
 authority. It receives two narrow capabilities:
 
 - `seat` while composing a roster from agents the host placed in reserve;

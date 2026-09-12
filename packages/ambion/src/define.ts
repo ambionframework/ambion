@@ -35,12 +35,12 @@ export interface DefineAgentOptions {
 	instructions: string;
 	/** A Pi model identifier, `provider/model-id`. */
 	model: string;
-	/** Extra hands, defined with `defineTool` (or Pi's own — both work unchanged). */
+	/** The agent's own tools, defined with `defineTool` (or Pi's own — both work unchanged). */
 	tools?: readonly unknown[];
 	/**
 	 * The workspace the agent reaches through its tools, from `defineWorkspace`.
 	 * Naming one binds `read`, `write`, `edit` and `bash` to every activation,
-	 * and hands every tool a `ctx.workspace()` that resolves to it.
+	 * and gives every tool a `ctx.workspace()` that resolves to it.
 	 */
 	workspace?: WorkspaceHandle;
 }

@@ -41,7 +41,7 @@ with no disk [44]. A room needs the idea of a workspace, and it does not
 need a filesystem.
 
 **Done when.** `@ambionframework/workspace` holds the backends and the
-hands. The core keeps `defineWorkspace` and the handle a seat is given,
+tools. The core keeps `defineWorkspace` and the handle a seat is given,
 and names the backend through a port. The main entry imports no
 `node:fs`.
 

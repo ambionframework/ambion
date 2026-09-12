@@ -20,7 +20,7 @@
  *   finished activation.
  *
  * The room renders what the activation reads and hands it over as a view;
- * the seat side builds the model, the prompt and the hands from it, runs it,
+ * the seat side builds the model, the prompt and the tools from it, runs it,
  * and reads again while the room keeps moving underneath.
  *
  * **Three spans, and only two are ours.** Pi has a *turn* — one request to a
@@ -178,7 +178,7 @@ export class Activation {
 
 	/**
 	 * A steer has landed in the transcript, so this activation has now heard it, and
-	 * the room hears what its hands did. Steers drain FIFO, so the oldest
+	 * the room hears what its tools did. Steers drain FIFO, so the oldest
 	 * pending seq is the one that landed.
 	 */
 	private note(event: AgentEvent): void {

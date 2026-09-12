@@ -800,7 +800,7 @@ document makes loudly:
 - An exchange the room answered twice closes into one message, addressed to
   the person who asked, leaving no message between it and the range it
   covers, drafted from that range
-  and with one hand that reaches the record and nothing else. The
+  and with one tool that reaches the record and nothing else. The
   activation names whom it writes for and how they read. §2, §3, §4, §7,
   §14.
 - One answer is left as it was given, in the voice that gave it. §4.

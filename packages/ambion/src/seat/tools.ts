@@ -1,9 +1,9 @@
 /**
- * The hands a seat holds: the tools the room gives an activation, bound to
+ * The bound a seat holds: the tools the room gives an activation, bound to
  * it and to the room. A seat that speaks for itself holds `say`, the four
  * built-in tools when its agent names a workspace, and the agent's own
- * tools. The assistant holds one hand: `summarise` at a close, `seat` at
- * the open of an exchange. Every hand commits through the room's `commit`
+ * tools. The assistant holds one tool: `summarise` at a close, `seat` at
+ * the open of an exchange. Every one commits through the room's `commit`
  * call and reads the room's answer through `landed`.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
@@ -58,15 +58,15 @@ function delivered(): AgentToolResult<Record<string, never>> {
 	return { content: [{ type: 'text', text: 'delivered' }], details: {} };
 }
 
-/** What every hand a seat holds reaches: the activation it belongs to, and the room. */
-export interface Hands {
+/** What every tool the room binds reaches: the activation it belongs to, and the room. */
+export interface Binding {
 	readonly activation: Activation;
 	readonly room: SeatRoom;
-	/** What a hand makes of the room's answer: a mark on the record, a refusal, or a lease that ended. */
+	/** What a tool makes of the room's answer: a mark on the record, a refusal, or a lease that ended. */
 	landed(response: CommitResponse): AgentToolResult<Record<string, never>>;
 }
 
-export function hands(activation: Activation, room: SeatRoom): Hands {
+export function binding(activation: Activation, room: SeatRoom): Binding {
 	return {
 		activation,
 		room,
@@ -80,7 +80,7 @@ export function hands(activation: Activation, room: SeatRoom): Hands {
 			if ('missed' in response) {
 				throw new Error('The room moved. Read what landed, then decide again.');
 			}
-			// The lease ended under this hand: the room is closing, or the seat
+			// The lease ended under this tool: the room is closing, or the seat
 			// ran past its lease. Nothing it writes now lands, so the turn is over.
 			activation.abort();
 			return standDown(`Your turn ended: ${response.stale}.`) as AgentToolResult<
@@ -90,8 +90,8 @@ export function hands(activation: Activation, room: SeatRoom): Hands {
 	};
 }
 
-/** The one hand every seat that speaks for itself holds. */
-function sayTool(hands: Hands): AgentTool {
+/** The one tool every seat that speaks for itself holds. */
+function sayTool(bound: Binding): AgentTool {
 	return {
 		...SAY,
 		label: SAY.name,
@@ -109,15 +109,15 @@ function sayTool(hands: Hands): AgentTool {
 			if (text === '') {
 				throw new Error('The message is empty. Say something, or end your turn instead.');
 			}
-			const response = await hands.room.commit({
-				activation: hands.activation.id,
+			const response = await bound.room.commit({
+				activation: bound.activation.id,
 				key: toolCallId,
-				readThrough: hands.activation.readThrough,
+				readThrough: bound.activation.readThrough,
 				intent: { kind: 'said', ...(to === undefined ? {} : { to }), text },
 			});
 			if ('missed' in response) {
 				// Now heard, the seat decides again against the record as it stands.
-				hands.activation.heard(response.missed.at(-1)?.seq ?? 0);
+				bound.activation.heard(response.missed.at(-1)?.seq ?? 0);
 				throw new Error(
 					refusal(
 						'Not delivered — the room moved while you were speaking. New on the record:',
@@ -126,7 +126,7 @@ function sayTool(hands: Hands): AgentTool {
 					),
 				);
 			}
-			return hands.landed(response);
+			return bound.landed(response);
 		},
 	};
 }
@@ -134,11 +134,11 @@ function sayTool(hands: Hands): AgentTool {
 /**
  * What an activation holds. A seat speaks, reaches its workspace through the
  * four built-in tools when it names one, and uses its own tools; the assistant
- * holds the one hand its view names, and it reaches the record. `startSession`
+ * holds the one tool its view names, and it reaches the record. `startSession`
  * refuses an assistant that carries tools or a workspace of its own, so there
  * is nothing else to leave out.
  */
-export function handsFor(view: ActivationView, def: AgentDefinition, held: Hands): AgentTool[] {
+export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
 	if (view.tool === 'say') {
 		return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
 	}
@@ -153,7 +153,7 @@ export function handsFor(view: ActivationView, def: AgentDefinition, held: Hands
 	return [];
 }
 
-// -- the assistant's hands ----------------------------------------------------
+// -- the assistant's bound ----------------------------------------------------
 
 /**
  * One summarising activation's own state. The range is read off the view when the
@@ -174,14 +174,14 @@ interface Draft {
 }
 
 /**
- * The assistant's one hand at a close, and it reaches the record and nothing
+ * The assistant's one tool at a close, and it reaches the record and nothing
  * else. It commits on the same queue a say commits on, under the same
  * `readThrough`, so a summary drafted against a record that has moved is
  * refused — and the refusal reaches the assistant inside its own activation,
  * carrying what it missed, so the redraft happens now rather than at the next
  * quiescence.
  */
-function summariseTool(hands: Hands, closing: Draft): AgentTool {
+function summariseTool(bound: Binding, closing: Draft): AgentTool {
 	const person = closing.person;
 	return {
 		...SUMMARISE,
@@ -197,8 +197,8 @@ function summariseTool(hands: Hands, closing: Draft): AgentTool {
 			if (text === '') {
 				throw new Error(`The message is empty. Write what ${person} reads, or end your turn.`);
 			}
-			const response = await hands.room.commit({
-				activation: hands.activation.id,
+			const response = await bound.room.commit({
+				activation: bound.activation.id,
 				key: toolCallId,
 				readThrough: closing.through,
 				intent: {
@@ -208,9 +208,9 @@ function summariseTool(hands: Hands, closing: Draft): AgentTool {
 					covers: { from: closing.from, through: closing.through },
 				},
 			});
-			if ('missed' in response) throw widen(hands, closing, response.missed);
+			if ('missed' in response) throw widen(bound, closing, response.missed);
 			if ('committed' in response) closing.written = true;
-			return hands.landed(response);
+			return bound.landed(response);
 		},
 	};
 }
@@ -245,12 +245,12 @@ function stoppingReason(draft: Draft): string | undefined {
  * are now inside it, so the redraft stands for them too and the summary
  * leaves no message between it and what it covers.
  */
-function widen(hands: Hands, draft: Draft, missed: Message[]): Error {
+function widen(bound: Binding, draft: Draft, missed: Message[]): Error {
 	draft.through = missed.at(-1)?.seq ?? draft.through;
 	draft.refusals += 1;
 	// The room kept moving past every draft: the range stays owed, and the
 	// lease says why the activation ended.
-	if (draft.refusals >= ASSISTANT_DRAFTS) hands.activation.refused = true;
+	if (draft.refusals >= ASSISTANT_DRAFTS) bound.activation.refused = true;
 	return new Error(
 		refusal(
 			'Not written — the room moved while you were drafting. It is now yours to cover too:',
@@ -278,7 +278,7 @@ interface Composing {
 }
 
 /**
- * The assistant's hand at the open of an exchange, and it reaches the reserve
+ * The assistant's tool at the open of an exchange, and it reaches the reserve
  * and the record and nothing else. It commits outside rule 5's lock: the
  * assistant decides on the question, and what the seats said while it decided
  * does not change what the question needs. The room refuses a name that is
@@ -287,7 +287,7 @@ interface Composing {
  * and a model that keeps calling after the reserve is empty, or keeps naming
  * what is not there, has the activation ended for it.
  */
-function seatTool(hands: Hands, composing: Composing): AgentTool {
+function seatTool(bound: Binding, composing: Composing): AgentTool {
 	return {
 		...SEAT,
 		label: SEAT.name,
@@ -299,13 +299,13 @@ function seatTool(hands: Hands, composing: Composing): AgentTool {
 			const stop = standDown(composeStoppingReason(composing));
 			if (stop) return stop;
 			const name = (rawParams as { name: string }).name.trim();
-			const response = await hands.room.commit({
-				activation: hands.activation.id,
+			const response = await bound.room.commit({
+				activation: bound.activation.id,
 				key: toolCallId,
 				intent: { kind: 'seated', name },
 			});
 			if ('committed' in response) composing.seated += 1;
-			return hands.landed(response);
+			return bound.landed(response);
 		},
 	};
 }

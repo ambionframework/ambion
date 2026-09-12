@@ -2,7 +2,7 @@
  * The Ambion runtime: five primitives, and a dependency for every other concern.
  *
  * `defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
- * gives agents hands, `defineWorkspace` names the identity and data boundary
+ * gives agents tools, `defineWorkspace` names the identity and data boundary
  * an agent's tools reach into, `seated` chooses what wakes a seat — with
  * `passive` and `attentive` for the two points worth naming — and
  * `startSession` brings up a named room the agents work in and people visit.
