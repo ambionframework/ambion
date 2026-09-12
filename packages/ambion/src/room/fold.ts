@@ -174,7 +174,7 @@ function foldRoster(
 		{ ...composition.assistant, assistant: true },
 	];
 	for (const message of messages) {
-		if (message.seq > composition.after) reseat(roster, message);
+		if (message.seq > composition.seq) reseat(roster, message);
 	}
 	return roster;
 }
@@ -302,7 +302,7 @@ function draftedOver(lease: LeaseHold, covering: readonly Seq[]): boolean {
 export function checkpointOf(
 	state: RoomState,
 	now: number,
-): Without<Checkpoint, 'after'> | undefined {
+): Without<Checkpoint, 'seq'> | undefined {
 	if (state.composition === undefined) return undefined;
 	const floor = floorOf(state, now);
 	const last = state.closes.at(-1);

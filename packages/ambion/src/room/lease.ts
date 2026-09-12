@@ -89,10 +89,10 @@ export function foldLeases(
 		const known = leases.get(change.id);
 		// Ended is terminal: a renewal that lands after the end changes nothing.
 		if (known?.phase === 'ended') continue;
-		const since = known?.since ?? change.after;
+		const since = known?.since ?? change.seq;
 		const claimedAt = known?.claimedAt ?? change.at;
 		const heardThrough =
-			change.phase === 'running' ? change.after : (known?.heardThrough ?? change.after);
+			change.phase === 'running' ? change.seq : (known?.heardThrough ?? change.seq);
 		leases.set(
 			change.id,
 			change.phase === 'running'
@@ -112,7 +112,7 @@ export function foldLeases(
 						at: change.at,
 						claimedAt,
 						since,
-						until: change.after,
+						until: change.seq,
 						heardThrough,
 					},
 		);

@@ -14,16 +14,16 @@ import type { Message } from '../src/types.ts';
 import type { EndReason, LeaseChange } from '../src/wire.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
-const running = (id: string, after: number): LeaseChange => ({
+const running = (id: string, seq: number): LeaseChange => ({
 	id,
-	after,
+	seq,
 	phase: 'running',
 	expiry: 60_000,
 	at,
 });
-const ended = (id: string, after: number, reason: EndReason = 'released'): LeaseChange => ({
+const ended = (id: string, seq: number, reason: EndReason = 'released'): LeaseChange => ({
 	id,
-	after,
+	seq,
 	phase: 'ended',
 	reason,
 	at,

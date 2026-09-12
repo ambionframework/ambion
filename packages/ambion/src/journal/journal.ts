@@ -56,11 +56,11 @@ export interface Bodies {
  * seq at commit; every other kind takes `after`, the last seq when it landed.
  */
 export type Drafts = {
-	lease: Without<LeaseChange, 'after'>;
-	close: Without<Close, 'after'>;
-	composition: Without<Composition, 'after'>;
-	run: Without<Fence, 'after'>;
-	checkpoint: Without<Checkpoint, 'after'>;
+	lease: Without<LeaseChange, 'seq'>;
+	close: Without<Close, 'seq'>;
+	composition: Without<Composition, 'seq'>;
+	run: Without<Fence, 'seq'>;
+	checkpoint: Without<Checkpoint, 'seq'>;
 };
 
 /**
@@ -71,7 +71,7 @@ export type Drafts = {
 const WORDS: Vocabulary<Kind> = {
 	stored: (kind) => STORED[kind],
 	kindOf: (customType) => KINDS[customType],
-	positioned: 'message',
+	record: 'message',
 	run: 'run',
 	checkpoint: 'checkpoint',
 	accepts: (kind, body) => kind !== 'checkpoint' || isCheckpoint(body),
@@ -97,6 +97,6 @@ export class RoomJournal extends Journal<Kind, Bodies, 'message', Drafts> {
 
 	/** The replayed record, then every message as its write is confirmed. */
 	get messages(): Message[] {
-		return this.positioned;
+		return this.record;
 	}
 }

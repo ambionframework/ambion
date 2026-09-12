@@ -20,30 +20,32 @@ const composition = (): Entry => ({
 		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
 		agents: [{ name: 'product', identity: 'The product.', attention: 'broadcast' }],
 		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'broadcast' }],
-		after: 0,
+		seq: 0,
 		at,
 	},
+	seq: 0,
 });
 const said = (seq: number, from: string, extra: Partial<Message> = {}): Entry => ({
 	kind: 'message',
 	body: { kind: 'said', seq, at, from, text: `message ${seq}`, ...extra } as Message,
+	seq,
 });
 const arrived = (seq: number, from: string): Entry => ({
 	kind: 'message',
 	body: { kind: 'arrived', seq, at, from, identity: 'A person.' },
+	seq,
 });
 /** A lease change lands after the message that caused it, or after the close a draft answers. */
-const afterOf = (id: string): number => {
-	const parsed = parseId(id);
-	return parsed?.position ?? 0;
-};
-const lease = (entry: Without<LeaseChange, 'after'>, after = afterOf(entry.id)): Entry => ({
+const causeOf = (id: string): number => parseId(id)?.position ?? 0;
+const lease = (entry: Without<LeaseChange, 'seq'>, seq = causeOf(entry.id)): Entry => ({
 	kind: 'lease',
-	body: { ...entry, after } as LeaseChange,
+	body: { ...entry, seq } as LeaseChange,
+	seq,
 });
-const close = (entry: Omit<Close, 'after' | 'at'>): Entry => ({
+const close = (entry: Omit<Close, 'seq' | 'at'>): Entry => ({
 	kind: 'close',
-	body: { ...entry, after: entry.through, at },
+	body: { ...entry, seq: entry.through, at },
+	seq: entry.through,
 });
 
 const fold = (entries: Entry[]): RoomState => foldRoom(entries, retry);
@@ -262,7 +264,7 @@ describe('decide', () => {
 		// a seat the host unseated answers nothing: what it was sent is not pending
 		const unseated = fold([
 			...opened(),
-			{ kind: 'message' as const, body: { kind: 'unseated', seq: 3, at, from: 'product' } },
+			{ kind: 'message' as const, body: { kind: 'unseated', seq: 3, at, from: 'product' }, seq: 3 },
 		]);
 		expect(unseated.pending).toEqual([]);
 	});
@@ -341,7 +343,9 @@ describe('decide', () => {
 		// pass five: the draft the close owes is sent
 		const closed: Entry[] = [
 			...stood,
-			...(fourth.close ? [{ kind: 'close' as const, body: { ...fourth.close, after: 4 } }] : []),
+			...(fourth.close
+				? [{ kind: 'close' as const, body: { ...fourth.close, seq: 4 }, seq: 4 }]
+				: []),
 		];
 		const fifth = decide(fold(closed), options({ now: later }));
 		expect(fifth).toMatchObject({ expired: [], close: undefined });

@@ -712,3 +712,25 @@ what it inherited too low.
 **Fix.** Print every lease change and every activation event of the failing
 run, and say which lease has the extra end. Then fix the room or the
 count.
+
+---
+
+## 48. An agent reads the journal's place, not the message's number
+
+**What.** One counter gives out every place on the record, so the messages
+are not contiguous. `render.ts` shows an agent the raw place: a room two
+messages in says "priya asked at message 4", because the fence and the
+composition took the first two.
+
+**Why it matters.** The number anchors what the agent reads. A number that
+skips reads as a gap the agent cannot see, and it invites the model to
+reason about messages that are not there.
+
+**Where.** `packages/ambion/src/render.ts`, `renderSystemPrompt` and the
+exchange line; every place a seq reaches a participant.
+
+**Fix.** Number the record for the reader where it is rendered: the first
+message is 1, the next is 2. The journal keeps its places, and nothing a
+participant sends back names one, so the numbering stays inside
+`render.ts`. `simplification.md` §4 names this as the rendering job the
+shared counter leaves behind.

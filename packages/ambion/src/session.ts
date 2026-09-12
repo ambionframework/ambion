@@ -332,7 +332,7 @@ class SessionImpl implements Session, RunningRoom {
 	/** Every definition this room can seat, by name. */
 	private readonly defs = new Map<string, AgentDefinition>();
 	/** The composition this run writes, or nothing for a resumed run. Before the replay, `seats()` folds it alone. */
-	private readonly starting: Without<Composition, 'after'> | undefined;
+	private readonly starting: Without<Composition, 'seq'> | undefined;
 	/** The handles the host delivers through. Presence itself is a fold over the journal. */
 	private readonly visits = new Map<string, VisitRuntime>();
 	private readonly ports = new Map<string, SeatPort>();
@@ -412,7 +412,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * the refusal. The composition is what the roster folds from. The first
 	 * reconcile closes an exchange the last run left open once nothing works on it.
 	 */
-	private async compose(composition: Without<Composition, 'after'>): Promise<void> {
+	private async compose(composition: Without<Composition, 'seq'>): Promise<void> {
 		await this.journal.ready;
 		this.replayed = true;
 		this.seedHeardLeases();
@@ -535,9 +535,9 @@ class SessionImpl implements Session, RunningRoom {
 	/** The roster and the people off the fold. Before the replay, the fold is over the composition this run writes. */
 	seats(): SeatInfo[] {
 		if (!this.replayed) {
-			const starting = this.starting ? [{ ...this.starting, after: 0 }] : [];
+			const starting = this.starting ? [{ ...this.starting, seq: 0 }] : [];
 			const state = foldRoom(
-				starting.map((body) => ({ kind: 'composition' as const, body, after: 0 })),
+				starting.map((body) => ({ kind: 'composition' as const, body, seq: 0 })),
 				this.runtime.retry,
 			);
 			return seatsOf({ name: this.name, state, live: new Map() });
@@ -1042,7 +1042,7 @@ class SessionImpl implements Session, RunningRoom {
 
 	/** What the record holds past what the author read, or nothing when it read everything. */
 	private unheard(readThrough: Seq | undefined): Message[] | undefined {
-		if (readThrough === undefined || this.journal.lastSeq <= readThrough) return undefined;
+		if (readThrough === undefined || this.journal.lastCommitted <= readThrough) return undefined;
 		return this.journal.since(readThrough);
 	}
 
@@ -1126,7 +1126,7 @@ class SessionImpl implements Session, RunningRoom {
 			return { id, phase: 'running', expiry, at: this.iso() };
 		});
 		if (!written) return stale('the lease ended');
-		return { ok: { expiry, lastSeq: this.journal.lastSeq } };
+		return { ok: { expiry, lastSeq: this.journal.lastCommitted } };
 	}
 
 	/** The ids the fold says may claim a fresh lease now. */
@@ -1138,7 +1138,7 @@ class SessionImpl implements Session, RunningRoom {
 		const ended = await this.end(lease.activation, lease.reason ?? 'released');
 		if (!ended) return stale('the lease ended');
 		void this.reconcile();
-		return { ok: { expiry: this.now(), lastSeq: this.journal.lastSeq } };
+		return { ok: { expiry: this.now(), lastSeq: this.journal.lastCommitted } };
 	}
 
 	/**
@@ -1432,7 +1432,7 @@ const seatingOf = (placed: Placed): Seating => ({
 });
 
 /** The cast as the journal holds it: every seat by name, identity and attention. */
-function compositionOf(cast: Cast, at: string): Without<Composition, 'after'> {
+function compositionOf(cast: Cast, at: string): Without<Composition, 'seq'> {
 	return {
 		assistant: seatingOf({ def: cast.assistant, attention: 'none' }),
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),

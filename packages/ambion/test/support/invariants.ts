@@ -36,8 +36,12 @@ export async function invariants(
 	options: InvariantOptions = {},
 ): Promise<void> {
 	const messages = await session.messages();
-	// Seqs are contiguous from 1.
-	expect(messages.map((m) => m.seq)).toEqual(messages.map((_, i) => i + 1));
+	// Every place on the record is its own, and the record is in order. One
+	// counter gives out every place, so the record is not contiguous: an entry
+	// beside it takes a place from the same counter.
+	const places = messages.map((m) => m.seq);
+	expect(places).toEqual([...places].sort((a, b) => a - b));
+	expect(new Set(places).size).toBe(places.length);
 	// One message, one event, in record order — from the first message this run saw.
 	const emitted = events.flatMap((e) => (e.type === 'message' ? [e.message.seq] : []));
 	const since = emitted[0] ?? Number.POSITIVE_INFINITY;
@@ -57,8 +61,13 @@ export async function invariants(
 	const keys = messages.flatMap((m) => (m.key === undefined ? [] : [m.key]));
 	expect(new Set(keys).size).toBe(keys.length);
 	for (const summary of messages.filter(isSummary)) {
-		expect(summary.covers.through).toBe(summary.seq - 1);
+		// A summary reaches back over a range that ends before it, and it leaves
+		// no message behind: the places between its `through` and its own are
+		// the entries the room wrote about the draft, and never a message.
+		expect(summary.covers.through).toBeLessThan(summary.seq);
 		expect(summary.covers.from).toBeLessThanOrEqual(summary.covers.through);
+		const skipped = messages.filter((m) => m.seq > summary.covers.through && m.seq < summary.seq);
+		expect(skipped).toEqual([]);
 	}
 	expect(errorsIn(events).length).toBeLessThanOrEqual(options.allowErrors ?? 0);
 	expect(count(events, 'activation_start') + (options.inherited ?? 0)).toBe(

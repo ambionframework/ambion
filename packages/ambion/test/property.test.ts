@@ -27,7 +27,7 @@ import {
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
-import { roomName, storedOf } from './support/room.ts';
+import { messageBefore, roomName, storedOf } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -318,9 +318,10 @@ describe('the room under a random walk', () => {
 					inherited: walk.inherited.activations,
 					inheritedExchange: walk.inherited.exchange,
 				});
-				// every summary stands for a range that ends right before it, whatever the walk did
-				for (const summary of (await walk.session.messages()).filter(isSummary)) {
-					expect(summary.covers.through).toBe(summary.seq - 1);
+				// every summary stands through the last message before it, whatever the walk did
+				const record = await walk.session.messages();
+				for (const summary of record.filter(isSummary)) {
+					expect(summary.covers.through).toBe(messageBefore(record, summary.seq));
 				}
 				await stopSession(walk.session);
 			} catch (error) {

@@ -537,7 +537,7 @@ describe('startSession', () => {
 		await session.settled();
 
 		const said = spoken(await session.messages());
-		expect(said.map((m) => [m.seq, m.text, m.key])).toEqual([[2, 'once', 'delivery-1']]);
+		expect(said.map((m) => [m.seq, m.text, m.key])).toEqual([[4, 'once', 'delivery-1']]);
 		// one message, one event, one activation
 		expect(events.filter((e) => e.type === 'message' && e.message.kind === 'said')).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
@@ -663,7 +663,7 @@ describe('startSession', () => {
 		session.abort();
 		await session.quiet();
 		// the room ended the lease and told the seat, and the seat stopped: the room is idle
-		expect(cuts).toEqual(['message:2:solo:1']);
+		expect(cuts).toEqual(['message:4:solo:1']);
 		expect(session.seats().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
 		await stopSession(session);
 	});
@@ -691,14 +691,14 @@ describe('startSession', () => {
 		await visit.deliver({ text: 'first' });
 		const room = runtime.running.get(session.name);
 		if (room === undefined) throw new Error('the room is not running');
-		expect(await room.lease({ activation: 'message:2:solo:1', phase: 'running' })).toMatchObject({
+		expect(await room.lease({ activation: 'message:4:solo:1', phase: 'running' })).toMatchObject({
 			ok: {},
 		});
 		// the record moves past what the activation read, and then its lease ends
 		await visit.deliver({ text: 'second' });
-		await room.lease({ activation: 'message:2:solo:1', phase: 'ended', reason: 'released' });
+		await room.lease({ activation: 'message:4:solo:1', phase: 'ended', reason: 'released' });
 		const late = await room.commit({
-			activation: 'message:2:solo:1',
+			activation: 'message:4:solo:1',
 			key: 'late',
 			readThrough: 2,
 			intent: { kind: 'said', text: 'too late' },

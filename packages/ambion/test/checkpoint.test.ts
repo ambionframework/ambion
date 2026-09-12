@@ -141,7 +141,11 @@ describe('a checkpoint', () => {
 			if (checkpoint === undefined) throw new Error('the room wrote no checkpoint');
 			await journal.write('checkpoint', checkpoint);
 			// the draft is on the checkpoint, and the close is owed no longer
-			expect(checkpoint.leases.map((lease) => lease.id)).toContain('close:4:assistant:1');
+			const lastClose = fold(journal).closes.at(-1);
+			expect(lastClose).toBeDefined();
+			expect(checkpoint.leases.map((lease) => lease.id)).toContain(
+				`close:${lastClose?.through}:assistant:1`,
+			);
 			expect(fold(journal).owed).toEqual([]);
 			await stopSession(session);
 		} finally {
@@ -221,7 +225,7 @@ describe('a checkpoint past the fence', () => {
 				assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
 				agents: [{ name: 'solo', identity: 'Answers.', attention: 'broadcast' }],
 				available: [],
-				after: 0,
+				seq: 0,
 				at,
 			};
 			const checkpoint = (floor: Seq, written: string) => ({
@@ -230,15 +234,15 @@ describe('a checkpoint past the fence', () => {
 				composition,
 				closes: [],
 				leases: [],
-				after: 0,
+				seq: 0,
 				at,
 				written,
 			});
 			// run 'a' wrote a checkpoint, run 'b' took the name, and 'a' wrote one more
-			await piSession.appendCustomEntry('ambion/run', { run: 'a', after: 0, at, written: 'a' });
+			await piSession.appendCustomEntry('ambion/run', { run: 'a', seq: 0, at, written: 'a' });
 			await piSession.appendCustomEntry('ambion/composition', { ...composition, written: 'a' });
 			await piSession.appendCustomEntry('ambion/checkpoint', checkpoint(7, 'a'));
-			await piSession.appendCustomEntry('ambion/run', { run: 'b', after: 0, at, written: 'b' });
+			await piSession.appendCustomEntry('ambion/run', { run: 'b', seq: 0, at, written: 'b' });
 			await piSession.appendCustomEntry('ambion/checkpoint', checkpoint(99, 'a'));
 
 			const journal = new RoomJournal(opened.sessions.open(name));

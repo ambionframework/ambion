@@ -21,7 +21,15 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { collect, crash, deferred, roomName, storedOf, tick } from './support/room.ts';
+import {
+	collect,
+	crash,
+	deferred,
+	messageBefore,
+	roomName,
+	storedOf,
+	tick,
+} from './support/room.ts';
 import {
 	byAgent,
 	quiet,
@@ -438,7 +446,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(written).toHaveLength(1);
 			// one message reaches back to the first question, and covers the second
 			expect(written[0]?.covers.from).toBe(questions[0]?.seq);
-			expect(written[0]?.covers.through).toBe((written[0]?.seq ?? 0) - 1);
+			expect(written[0]?.covers.through).toBe(
+				messageBefore(await resumed.messages(), written[0]?.seq ?? 0),
+			);
 			expect(written[0]?.to).toBe('priya');
 			await stopSession(resumed);
 		} finally {
@@ -537,7 +547,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await resumed.settled();
 			await tick();
 			// the seat side hears the cut over the wire, and the room opened it to say so
-			expect(cuts).toEqual(['message:2:alpha:1']);
+			expect(cuts).toEqual(['message:4:alpha:1']);
 			await stopSession(resumed);
 		} finally {
 			await opened.dispose();

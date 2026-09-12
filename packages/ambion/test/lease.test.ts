@@ -25,7 +25,16 @@ import {
 } from '../src/index.ts';
 import { parseId } from '../src/room/lease.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
-import { assistant, collect, deferred, enter, roomName, storedOf, tick } from './support/room.ts';
+import {
+	assistant,
+	collect,
+	deferred,
+	enter,
+	messageBefore,
+	roomName,
+	storedOf,
+	tick,
+} from './support/room.ts';
 import {
 	answersEveryQuestion,
 	byAgent,
@@ -185,7 +194,7 @@ describe('a lease', () => {
 		const stored = await storedOf(runtime.sessions, session.name);
 		const renewals = stored.flatMap((entry) => {
 			const lease = entry.data as LeaseChange;
-			const mine = entry.type === 'ambion/lease' && lease.id === 'message:2:solo:1';
+			const mine = entry.type === 'ambion/lease' && parseId(lease.id)?.seat === 'solo';
 			return mine && lease.phase === 'running' ? [lease.expiry] : [];
 		});
 		// the room wrote a claim and renewals, and no change takes the lease past the deadline
@@ -217,7 +226,7 @@ describe('a lease', () => {
 
 		// the room gives up: the attempt it does not make is on the record, once
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
-			{ type: 'abandoned', agent: 'solo', activation: 'message:2:solo:4' },
+			{ type: 'abandoned', agent: 'solo', activation: 'message:4:solo:4' },
 		]);
 		const stored = await storedOf(runtime.sessions, session.name);
 		const gaveUp = stored.filter((entry) => {
@@ -226,7 +235,7 @@ describe('a lease', () => {
 				entry.type === 'ambion/lease' && lease.phase === 'ended' && lease.reason === 'abandoned'
 			);
 		});
-		expect(gaveUp.map((entry) => (entry.data as LeaseChange).id)).toEqual(['message:2:solo:4']);
+		expect(gaveUp.map((entry) => (entry.data as LeaseChange).id)).toEqual(['message:4:solo:4']);
 
 		// the wake is answered, so the exchange closes and the seat stands idle
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
@@ -261,13 +270,15 @@ describe('a lease', () => {
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(3);
 
 		// the room gives up on the summary, and says so once
-		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
-			{ type: 'abandoned', agent: 'assistant', activation: 'close:4:assistant:4' },
-		]);
+		const abandoned = events.filter((e) => e.type === 'abandoned');
+		expect(abandoned).toHaveLength(1);
+		const givenUp = (abandoned[0] as { agent: string; activation: string }).activation;
+		expect(abandoned[0]).toMatchObject({ agent: 'assistant' });
+		expect(parseId(givenUp)).toMatchObject({ cause: 'close', seat: 'assistant', attempt: 4 });
 		const stored = await storedOf(runtime.sessions, session.name);
 		expect(
 			stored
-				.filter((entry) => (entry.data as LeaseChange).id === 'close:4:assistant:4')
+				.filter((entry) => (entry.data as LeaseChange).id === givenUp)
 				.map((entry) => entry.data),
 		).toMatchObject([{ phase: 'ended', reason: 'abandoned' }]);
 		// nothing is owed, no summary was written, and the record stands whole
@@ -509,6 +520,6 @@ describe('a lease judged where its change is written', () => {
 		const summaries = record.filter(isSummary);
 		expect(summaries).toHaveLength(1);
 		expect(summaries[0]?.covers.from).toBe(questions[0]?.seq);
-		expect(summaries[0]?.covers.through).toBe((summaries[0]?.seq ?? 0) - 1);
+		expect(summaries[0]?.covers.through).toBe(messageBefore(record, summaries[0]?.seq ?? 0));
 	});
 });

@@ -160,10 +160,9 @@ runtime. The three calls a seat makes become functions over that value.
 `next.md` §1 names the lifecycle field this needs, and it stays the first
 part of this item.
 
-## 4. One order for the messages and the entries — the rules landed
+## 4. One order for the messages and the entries — done
 
-New. It carries a trade-off, and the text names it. The rule collapse
-landed with item 5. The shared counter waits, and the reason is below.
+New. It carried a trade-off, and the text names what it cost.
 
 **What.** One journal carries three positions. A message takes a `seq`. Every
 other entry takes an `after`, the last seq when it landed. A read
@@ -203,13 +202,28 @@ heard(liveOrFailed, ended, until, heardThrough, seq)
 `packages/ambion/test/rules.test.ts` pins the new rule against the old
 formula for every lease the fold can build.
 
-**What waits, and why.** The shared counter stays deferred. `lastSeq` is
-the last position a person reads, and 13 call sites mean it that way. One
-counter makes a lease change move `lastSeq`, so rule 5 would refuse a say
-that raced one. The fix is a second counter, `lastCommitted`, which adds a
-concept to remove a field. Do it when item 1 has taken the wake and the
-draft down to one owed activation, because that is what makes the lease
-positions cheap to move.
+**What the counter cost.** One counter gives out every place, and `after`
+is gone from every body. The journal's envelope holds one required `seq`
+in place of `seq?` and `after?` with a rule about which, and
+`Vocabulary.positioned` is `Vocabulary.record`: the kind that makes up the
+record a reader reads, which is no longer a statement about position.
+
+The counter needed the second one this text predicted. `lastSeq` is the
+place the last entry took; `lastCommitted` is the place the last record
+entry took. Three places read the wrong one at first, and the seat's
+renewal loop was the one that showed it: `ViewResponse.lastSeq` and
+`LeaseResponse.lastSeq` name a place on the record, and feeding them the
+journal's counter made every renewal report its own landing as movement.
+The activation read again, renewed again, and the room wrote leases until
+it ran out of memory. The wire says what `lastSeq` means now.
+
+**What it ended.** The messages were contiguous from 1, and they are not
+any more: the fence and the composition take the first two places, and a
+lease change sits between two messages. Three test invariants stated the
+contiguity and now state what is true — every place is its own and in
+order, and a summary stands through the last message before it, leaving no
+message between. A reader's numbering is a rendering job; `render.ts`
+still shows an agent the raw place, and `backlog.md` holds that.
 
 **The trade-off.** Today a `seq` is a position on the record a person
 reads, and the messages are contiguous. One shared counter ends the

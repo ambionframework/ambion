@@ -33,8 +33,8 @@ export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired
  * last entry for an id wins, and an ended lease never runs again.
  */
 export type LeaseChange =
-	| { id: string; after: Seq; phase: 'running'; expiry: number; at: string }
-	| { id: string; after: Seq; phase: 'ended'; reason: EndReason; at: string };
+	| { id: string; seq: Seq; phase: 'running'; expiry: number; at: string }
+	| { id: string; seq: Seq; phase: 'ended'; reason: EndReason; at: string };
 
 /**
  * What the entries for one activation fold to: whether it runs, until when,
@@ -67,7 +67,7 @@ export interface LeaseHold {
  */
 export interface Fence {
 	run: string;
-	after: Seq;
+	seq: Seq;
 	at: string;
 }
 
@@ -86,7 +86,7 @@ export interface Checkpoint {
 	composition: Composition;
 	closes: Close[];
 	leases: LeaseHold[];
-	after: Seq;
+	seq: Seq;
 	at: string;
 }
 
@@ -109,7 +109,7 @@ export interface Close {
 	owner: string;
 	from: Seq;
 	through: Seq;
-	after: Seq;
+	seq: Seq;
 	at: string;
 	/** The assistant, when the exchange owes a summary. */
 	wakes?: string[];
@@ -132,7 +132,7 @@ export interface Composition {
 	goal?: string;
 	agents: Seating[];
 	available: Seating[];
-	after: Seq;
+	seq: Seq;
 	at: string;
 }
 
@@ -166,6 +166,7 @@ export interface ActivationView {
 	seat: string;
 	/** The agent's `provider/model-id`, resolved on the seat side. */
 	model: string;
+	/** The last place on the record: what this view held, and what a commit reads through. */
 	lastSeq: Seq;
 	systemPrompt: string;
 	context: string;
@@ -205,6 +206,12 @@ export interface Lease {
 	reason?: EndReason;
 }
 
+/**
+ * The lease holds, with its expiry and the last place on the record. The seat
+ * reads `lastSeq` against what its view held: the record moved when it grew.
+ * An entry beside the record moves neither, so a renewal never reports its
+ * own landing as movement.
+ */
 export type LeaseResponse = { ok: { expiry: number; lastSeq: Seq } } | Stale;
 
 export interface SeatRoom {
