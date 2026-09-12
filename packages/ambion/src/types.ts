@@ -51,8 +51,9 @@ export const BUILTIN_TOOL_NAMES: ReadonlySet<string> = new Set(['read', 'write',
 /** What a participant said. */
 export interface SpokenMessage {
 	kind: 'said';
+	/** The place it took on the record. The journal gives it; a draft has none. */
 	seq: Seq;
-	/** The key the commit carried. A repeated key lands once. */
+	/** The key the commit carried. The journal gives it; a repeated key lands once. */
 	key?: string;
 	/** The activation that wrote it. Absent on a person's delivery. */
 	activationId?: string;

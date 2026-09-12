@@ -7,6 +7,7 @@
  * `foldLeases` builds. `heard` reads `until` alone, and that is sound only
  * while every lease keeps `until >= since`.
  */
+import type { Entry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { cameToNothing, foldLeases, pendingWakes } from '../src/room/lease.ts';
 import { atWork, heard } from '../src/room/rules.verified.ts';
@@ -14,20 +15,16 @@ import type { Message } from '../src/types.ts';
 import type { EndReason, LeaseChange } from '../src/wire.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
-const running = (id: string, seq: number): LeaseChange => ({
-	id,
+/** One lease change on the journal: the body, and the place the entry took. */
+const change = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
+	kind: 'lease',
+	body,
 	seq,
-	phase: 'running',
-	expiry: 60_000,
-	at,
 });
-const ended = (id: string, seq: number, reason: EndReason = 'released'): LeaseChange => ({
-	id,
-	seq,
-	phase: 'ended',
-	reason,
-	at,
-});
+const running = (id: string, seq: number): Entry<LeaseChange> =>
+	change(seq, { id, phase: 'running', expiry: 60_000, at });
+const ended = (id: string, seq: number, reason: EndReason = 'released'): Entry<LeaseChange> =>
+	change(seq, { id, phase: 'ended', reason, at });
 
 /**
  * What `heard` said before it read `until` alone. The two agree for every

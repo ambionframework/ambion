@@ -9,14 +9,13 @@
  * stopped.
  */
 
-import type { Entry } from '../journal/journal.ts';
+import { type Entry, placed } from '../journal/journal.ts';
 import { type Attention, type Exchange, isSummary, type Message, type Seq } from '../types.ts';
 import type {
 	Checkpoint,
 	Close,
 	Composition,
 	EndReason,
-	LeaseChange,
 	LeaseHold,
 	Seating,
 	Without,
@@ -94,7 +93,7 @@ function sorted(entries: readonly Entry[]) {
 	const messages: Message[] = [];
 	let read = older();
 	for (const entry of entries) {
-		if (entry.kind === 'message') messages.push(entry.body);
+		if (entry.kind === 'message') messages.push(placed(entry));
 		else read = folded(read, entry);
 	}
 	return { messages, ...read };
@@ -104,8 +103,8 @@ function sorted(entries: readonly Entry[]) {
 function folded(read: Read, entry: Entry): Read {
 	if (entry.kind === 'checkpoint') return carried(entry.body);
 	if (entry.kind === 'close') read.closes.push(entry.body);
-	else if (entry.kind === 'lease') read.changes.push(entry.body);
-	else if (entry.kind === 'composition') read.composition = entry.body;
+	else if (entry.kind === 'lease') read.changes.push(entry);
+	else if (entry.kind === 'composition') read.composition = { ...entry.body, seq: entry.seq };
 	return read;
 }
 
@@ -115,7 +114,7 @@ type Read = ReturnType<typeof older>;
 /** What a fold has read so far, before any of it landed. */
 const older = () => ({
 	closes: [] as Close[],
-	changes: [] as LeaseChange[],
+	changes: [] as Extract<Entry, { kind: 'lease' }>[],
 	held: [] as LeaseHold[],
 	composition: undefined as Composition | undefined,
 	floor: 0 as Seq,

@@ -14,10 +14,17 @@
  * entry that is on the record.
  *
  * **The record holds two kinds of entry, and it reads neither.** A
- * *record* entry takes the next seq and a key of its own; every other kind
- * takes the next seq alone. Both join the same queue, so
- * they land in the order they were asked for. What each one means belongs to
- * the caller, which names its kinds in a `Vocabulary`.
+ * *record* entry makes up the record a reader reads; every other kind sits
+ * beside it. Both join the same queue, so they land in the order they were
+ * asked for. What each one means belongs to the caller, which names its
+ * kinds in a `Vocabulary`.
+ *
+ * **The envelope is the journal's, and the body is the caller's.** The
+ * storage holds three fields beside every body: the place the entry took,
+ * the key its commit carried, and the run that wrote it. One counter gives
+ * out every place, so a seq names one entry of any kind. A caller drafts
+ * the body alone and reads the place off the entry, so no fact stands in
+ * two fields.
  *
  * Every commit carries a key. A repeated key returns the entry the first
  * commit landed and writes nothing, which is what lets a caller retry a
@@ -85,13 +92,13 @@ export interface FencedSession {
  * One entry on a journal: the one envelope every user shares.
  *
  * `kind` is what the writer called it, and `body` is what the writer wrote.
- * The journal never reads a body for what it means. It reads the envelope,
- * and it holds every entry to it: every entry carries `seq`, the place it
- * took on the record, from the one counter the journal keeps. An entry
- * without one is not one this journal takes.
+ * The other three fields are the journal's own, and the storage holds them
+ * beside the body: `seq` is the place the entry took, from the one counter
+ * the journal keeps, `key` is what named the commit, and `run` is who wrote
+ * it. An entry that took no place is not one this journal takes.
  *
- * The body keeps its own copy of `seq` and `key`, because that is how the
- * storage holds them.
+ * The journal reads a body for one thing, and never for what it means: it
+ * asks the caller's `accepts` whether the body is one that caller reads.
  */
 export interface Entry<TBody = unknown> {
 	/** What the writer called it. */
@@ -141,23 +148,46 @@ export interface Vocabulary<TKind extends string = string> {
 	accepts(kind: TKind, body: unknown): boolean;
 }
 
-/** What each kind writes, by kind. A caller names one draft shape per kind. */
-export type Drafts = Record<string, object>;
-
-/** What the storage holds for one entry: the body's own fields, and the run that wrote it. */
+/**
+ * What the storage holds for one entry: the body the caller wrote, and the
+ * three fields the journal keeps beside it. A caller that writes a field of
+ * its own under one of these three names loses it to the journal, which is
+ * why they are named for the journal and not for any domain.
+ */
 interface Stored {
-	written?: string;
+	seq?: unknown;
+	key?: unknown;
+	run?: unknown;
 	[field: string]: unknown;
 }
 
-/** The run that wrote a stored entry, or nothing for an entry written before runs were fenced. */
-const writerOf = (data: unknown): string | undefined => (data as Stored).written;
+/** The run that wrote a stored entry: the fence reads it before any envelope. */
+const writerOf = (data: unknown): string | undefined => {
+	const run = (data as Stored).run;
+	return typeof run === 'string' ? run : undefined;
+};
 
-/** The body as the caller wrote it: everything stored but the journal's own field. */
+/** The body as the caller wrote it: everything stored but the journal's own three. */
 function bodyOf(data: unknown): Record<string, unknown> {
-	const { written: _written, ...body } = data as Stored;
+	const { seq: _seq, key: _key, run: _run, ...body } = data as Stored;
 	return body;
 }
+
+/**
+ * The body a draft yields. A body may be any shape the caller chose, so the
+ * branch reads the draft's own form rather than narrowing on it.
+ */
+function drafted<T>(draft: T | (() => T)): T {
+	return typeof draft === 'function' ? (draft as () => T)() : draft;
+}
+
+/** One body, with the journal's own three beside it, as the storage holds it. */
+const beside = (body: unknown, seq: Seq, key?: string, run?: string): Stored => ({
+	...(body as object),
+	seq,
+	...(key === undefined ? {} : { key }),
+	...(run === undefined ? {} : { run }),
+});
 
 /**
  * The envelope a stored entry folds to, or nothing when it is not one this
@@ -173,55 +203,50 @@ function envelope<TKind extends string>(
 ): Entry | undefined {
 	const kind = words.kindOf(customType);
 	if (kind === undefined) return undefined;
+	const stored = data as Stored;
 	const body = bodyOf(data);
 	if (!words.accepts(kind, body)) return undefined;
-	const seq = positionOf(body.seq);
+	const seq = positionOf(stored.seq);
 	// Every entry takes a place on the record; one without is not an entry.
 	if (seq === undefined) return undefined;
 	return {
 		kind,
 		body,
 		seq,
-		...(typeof body.key === 'string' ? { key: body.key } : {}),
-		...(writerOf(data) === undefined ? {} : { run: writerOf(data) }),
+		...(typeof stored.key === 'string' ? { key: stored.key } : {}),
+		...(typeof stored.run === 'string' ? { run: stored.run } : {}),
 	};
 }
 
-/** A position off a stored body, or nothing when it is not one. */
+/** A place off a stored field, or nothing when the field holds no place. */
 function positionOf(value: unknown): Seq | undefined {
 	return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
-/** What a caller commits: the body minus its seq, and the two checks the queue runs. */
+/** What a caller commits: the body, and the two checks the queue runs. */
 export interface CommitIntent<TBody> {
 	/** Names this commit. A repeated key lands once. */
 	key?: string;
 	/** The seq the author has read. The queue refuses the commit when the record moved past it. */
 	readThrough?: Seq;
 	/**
-	 * The body, or a function of the record as it stands when the commit runs.
-	 * The argument is the place the last record entry took, which is what an
-	 * author reads through; an entry beside the record moves neither.
+	 * The body, or a function that builds it where the write happens. The
+	 * journal keeps the place of its own, so a draft never names one.
 	 */
-	draft: Omit<TBody, 'seq' | 'key'> | ((lastCommitted: Seq) => Omit<TBody, 'seq' | 'key'>);
+	draft: TBody | (() => TBody);
 }
 
 /** The commit landed, or the key had landed before, or the record had moved. */
 export type Committed<TBody, TAll = TBody> =
-	| { body: TBody; repeated?: true }
-	/** Every body the record took past what the author read. */
-	| { missed: readonly TAll[] };
+	| { entry: Entry<TBody>; repeated?: true }
+	/** Every record entry the journal took past what the author read. */
+	| { missed: readonly Entry<TAll>[] };
 
-export class Journal<
-	TKind extends string,
-	TBodies extends Bodies<TKind>,
-	TRecord extends TKind,
-	TDrafts extends Drafts,
-> {
+export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecord extends TKind> {
 	/** Every entry, replayed then appended, in the order the writes were confirmed. */
 	readonly entries: Entries<TKind, TBodies>[] = [];
-	/** The bodies of the entries that took a position, in order. */
-	readonly record: TBodies[TRecord][] = [];
+	/** The entries that make up the record, in order. */
+	readonly record: Entry<TBodies[TRecord]>[] = [];
 	readonly ready: Promise<PiSession>;
 	/** The place the last entry took. The next entry of any kind takes the one after it. */
 	lastSeq = 0;
@@ -231,7 +256,7 @@ export class Journal<
 	 * neither what they read nor what they missed.
 	 */
 	lastCommitted = 0;
-	private readonly byKey = new Map<string, TBodies[TRecord]>();
+	private readonly byKey = new Map<string, Entry<TBodies[TRecord]>>();
 	/** The serial queue. One commit at a time, in the order they were asked for. */
 	private tail: Promise<unknown> = Promise.resolve();
 	private closed = false;
@@ -361,15 +386,23 @@ export class Journal<
 		if (entry.kind === this.words.checkpoint) this.compact();
 		else if (entry.kind !== this.words.record) this.sinceCheckpoint += 1;
 		this.lastSeq = Math.max(this.lastSeq, entry.seq);
-		if (entry.kind === this.words.record) {
-			// The kind is the condition, and it is the one narrowing the
-			// type-checker cannot follow from a mapped union to its own member.
-			const body = entry.body as TBodies[TRecord];
-			this.record.push(body);
+		if (this.recorded(entry)) {
+			this.record.push(entry);
 			this.lastCommitted = entry.seq;
-			if (entry.key !== undefined) this.byKey.set(entry.key, body);
+			if (entry.key !== undefined) this.byKey.set(entry.key, entry);
 		}
 		if (this.replayed) this.hear?.(entry);
+	}
+
+	/**
+	 * Whether this entry makes up the record. The kind says so, and this
+	 * states the narrowing that follows: the type-checker cannot read it off
+	 * a mapped union on its own.
+	 */
+	private recorded(
+		entry: Entries<TKind, TBodies>,
+	): entry is Entries<TKind, TBodies> & Entry<TBodies[TRecord]> {
+		return entry.kind === this.words.record;
 	}
 
 	/**
@@ -379,18 +412,18 @@ export class Journal<
 	 * where the write happens, and a builder that returns nothing writes
 	 * nothing: the check it ran found the entry no longer needed.
 	 */
-	write<K extends keyof TDrafts & TKind>(
+	write<K extends TKind>(
 		kind: K,
-		draft: TDrafts[K] | (() => TDrafts[K] | undefined),
+		draft: TBodies[K] | (() => TBodies[K] | undefined),
 	): Promise<boolean> {
 		const link = this.tail.then(async () => {
 			const piSession = await this.open();
-			const data = typeof draft === 'function' ? draft() : draft;
-			if (data === undefined) return false;
-			const stamped = { ...data, seq: nextSeq(this.lastSeq) };
-			const stored = this.words.stored(kind);
-			const id = await this.append(piSession, stored, stamped);
-			this.took(stored, stamped, id);
+			const body = drafted(draft);
+			if (body === undefined) return false;
+			const customType = this.words.stored(kind);
+			const stored = beside(body, nextSeq(this.lastSeq), undefined, this.run);
+			const id = await this.append(piSession, customType, stored);
+			this.took(customType, stored, id);
 			return true;
 		});
 		this.tail = link.catch(() => {});
@@ -443,14 +476,13 @@ export class Journal<
 	}
 
 	/**
-	 * One append, stamped with the run that writes it. A failure puts the
-	 * journal in doubt, whatever the storage did with the entry, and queues the
-	 * read that settles it.
+	 * One append of what the storage holds: the body, and the journal's own
+	 * three beside it. A failure puts the journal in doubt, whatever the
+	 * storage did with the entry, and queues the read that settles it.
 	 */
 	private async append(piSession: PiSession, type: string, data: unknown): Promise<string> {
-		const stored = this.run === undefined ? data : { ...(data as object), written: this.run };
 		try {
-			return await this.landed(piSession, type, stored);
+			return await this.landed(piSession, type, data);
 		} catch (error) {
 			// The storage may hold what the cache does not: the read that settles it is queued.
 			this.tail = this.tail.then(() => this.open()).catch(() => {});
@@ -491,42 +523,40 @@ export class Journal<
 	): Promise<Committed<T, TBodies[TRecord]>> {
 		const piSession = await this.open();
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
-		if (seen !== undefined) return { body: seen as T, repeated: true };
+		if (seen !== undefined) return { entry: seen as Entry<T>, repeated: true };
 		if (intent.readThrough !== undefined && refused(this.lastCommitted, intent.readThrough)) {
 			return { missed: this.since(intent.readThrough) };
 		}
-		const draft =
-			typeof intent.draft === 'function' ? intent.draft(this.lastCommitted) : intent.draft;
-		const stamped = {
-			...draft,
-			seq: nextSeq(this.lastSeq),
-			...(intent.key === undefined ? {} : { key: intent.key }),
-		} as T;
-		const stored = this.words.stored(this.words.record);
-		const id = await this.append(piSession, stored, stamped);
-		this.took(stored, stamped, id);
-		return { body: stamped };
+		const body = drafted(intent.draft);
+		const customType = this.words.stored(this.words.record);
+		const stored = beside(body, nextSeq(this.lastSeq), intent.key, this.run);
+		const id = await this.append(piSession, customType, stored);
+		return { entry: this.took(customType, stored, id) as Entry<T> };
 	}
 
 	/**
-	 * One entry this journal appended, into the cache. A vocabulary that
-	 * turns down what the journal wrote breaks the journal's contract: the
-	 * storage holds the entry, the cache never will, and the next record
-	 * entry takes a seq this one already took. Say so where it happens.
+	 * One entry this journal appended, into the cache. The envelope folds
+	 * from the bytes the append took, so the cache holds what the storage
+	 * holds. A vocabulary that turns down what the journal wrote breaks the
+	 * journal's contract: the storage holds the entry, the cache never will,
+	 * and the next record entry takes a seq this one already took. Say so
+	 * where it happens.
 	 */
-	private took(stored: string, body: unknown, id: string): void {
-		const entry = envelope(this.words, stored, body) as Entries<TKind, TBodies> | undefined;
+	private took(customType: string, stored: Stored, id: string): Entries<TKind, TBodies> {
+		const entry = envelope(this.words, customType, stored) as Entries<TKind, TBodies> | undefined;
 		if (entry === undefined) {
 			throw new Error(
-				`The vocabulary turns down '${stored}', which this journal wrote. ` +
+				`The vocabulary turns down '${customType}', which this journal wrote. ` +
 					"'accepts' must take every body the caller drafts.",
 			);
 		}
 		this.cache(entry, id);
+		return entry;
 	}
 
-	since(cursor: Seq | undefined): TBodies[TRecord][] {
+	/** Every record entry past a place. */
+	since(cursor: Seq | undefined): Entry<TBodies[TRecord]>[] {
 		if (cursor === undefined) return [...this.record];
-		return this.record.filter((body) => (positionOf((body as Stored).seq) ?? 0) > cursor);
+		return this.record.filter((entry) => entry.seq > cursor);
 	}
 }

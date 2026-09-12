@@ -28,6 +28,7 @@
  * room sends it when it is due.
  */
 
+import type { Entry } from '@ambionframework/journal';
 import type { Message, Seq } from '../types.ts';
 import type { EndReason, LeaseChange, LeaseHold } from '../wire.ts';
 import {
@@ -81,18 +82,17 @@ export function parseId(id: string): ParsedId | undefined {
  * the seqs and the times its first changes wrote.
  */
 export function foldLeases(
-	changes: readonly LeaseChange[],
+	changes: readonly Entry<LeaseChange>[],
 	held: readonly LeaseHold[] = [],
 ): Map<string, LeaseHold> {
 	const leases = new Map<string, LeaseHold>(held.map((lease) => [lease.id, lease]));
-	for (const change of changes) {
+	for (const { body: change, seq } of changes) {
 		const known = leases.get(change.id);
 		// Ended is terminal: a renewal that lands after the end changes nothing.
 		if (known?.phase === 'ended') continue;
-		const since = known?.since ?? change.seq;
+		const since = known?.since ?? seq;
 		const claimedAt = known?.claimedAt ?? change.at;
-		const heardThrough =
-			change.phase === 'running' ? change.seq : (known?.heardThrough ?? change.seq);
+		const heardThrough = change.phase === 'running' ? seq : (known?.heardThrough ?? seq);
 		leases.set(
 			change.id,
 			change.phase === 'running'
@@ -112,7 +112,7 @@ export function foldLeases(
 						at: change.at,
 						claimedAt,
 						since,
-						until: change.seq,
+						until: seq,
 						heardThrough,
 					},
 		);

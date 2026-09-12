@@ -35,7 +35,7 @@ import {
 	stubModel,
 	type Transport,
 } from './host/runtime.ts';
-import { type Entry, RoomJournal } from './journal/journal.ts';
+import { type Body, type Entry, placed, RoomJournal } from './journal/journal.ts';
 import { renderLine } from './render.ts';
 import { assertAssistant } from './room/assistant.ts';
 import { checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
@@ -287,7 +287,7 @@ class ReadOnlySession implements SessionView {
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
 		await this.journal.ready;
-		return this.journal.since(options.since);
+		return this.journal.messages(options.since);
 	}
 
 	/** The roster the journal folds, and everybody the record knows. Nothing stands up. */
@@ -422,7 +422,7 @@ class SessionImpl implements Session, RunningRoom {
 				throw new Error(`Duplicate agent name '${name}': one name names one participant.`);
 			}
 		}
-		await this.journal.write('run', { run: this.run, at: this.iso() });
+		await this.journal.write('run', { at: this.iso() });
 		await this.journal.write('composition', composition);
 		this.wake();
 		await this.reconcile();
@@ -448,7 +448,7 @@ class SessionImpl implements Session, RunningRoom {
 			this.defs.set(name, def);
 		}
 		// The fence lands here: from here on, every earlier run's later writes are void.
-		await this.journal.write('run', { run: this.run, at: this.iso() });
+		await this.journal.write('run', { at: this.iso() });
 		this.wake();
 		await this.reconcile();
 	}
@@ -529,7 +529,7 @@ class SessionImpl implements Session, RunningRoom {
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
 		await this.ready;
 		await this.journal.settled();
-		return this.journal.since(options.since);
+		return this.journal.messages(options.since);
 	}
 
 	/** The roster and the people off the fold. Before the replay, the fold is over the composition this run writes. */
@@ -740,20 +740,17 @@ class SessionImpl implements Session, RunningRoom {
 	private commitMessage<T extends Message>(
 		key: string,
 		readThrough: Seq | undefined,
-		draft: (state: RoomState) => Omit<T, 'seq' | 'key' | 'wakes'>,
+		draft: (state: RoomState) => Omit<Body<T>, 'wakes'>,
 		route = true,
-	): Promise<Committed<T, Message>> {
-		return this.journal.commit<T>({
+	): Promise<Committed<Body<T>, Body<Message>>> {
+		return this.journal.commit<Body<T>>({
 			key,
 			...(readThrough === undefined ? {} : { readThrough }),
 			draft: () => {
 				const state = this.state();
 				const message = draft(state);
 				const woken = route ? this.routing(message as unknown as Message, state) : [];
-				return { ...message, ...(woken.length === 0 ? {} : { wakes: woken }) } as Omit<
-					T,
-					'seq' | 'key'
-				>;
+				return { ...message, ...(woken.length === 0 ? {} : { wakes: woken }) } as Body<T>;
 			},
 		});
 	}
@@ -813,7 +810,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * never a second one for the entries it wrote itself.
 	 */
 	private hear(entry: Entry): void {
-		if (entry.kind === 'message') this.heardMessage(entry.body);
+		if (entry.kind === 'message') this.heardMessage(placed(entry));
 		else if (entry.kind === 'close') this.heardClose(entry.body);
 		else if (entry.kind === 'lease') this.heardLease(entry.body, this.opens(entry.body.id));
 	}
@@ -856,7 +853,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * ahead of the close opens the next exchange, and the room says so.
 	 */
 	private heardClose(close: Close): void {
-		const question = this.journal.messages.find((m) => m.seq === close.from);
+		const question = this.journal.messages().find((m) => m.seq === close.from);
 		this.emit({
 			type: 'exchange_closed',
 			exchange: {
@@ -894,7 +891,7 @@ class SessionImpl implements Session, RunningRoom {
 			}
 			return;
 		}
-		const spoke = this.journal.messages.some((m) => m.activationId === lease.id);
+		const spoke = this.journal.messages().some((m) => m.activationId === lease.id);
 		this.emit({ type: 'activation_end', agent: seat, spoke });
 		if (lease.reason === 'expired') {
 			this.emit({
@@ -980,7 +977,7 @@ class SessionImpl implements Session, RunningRoom {
 			assistant: this.assistant,
 			state,
 			live: this.live(state),
-			unseen: (since) => this.journal.since(since).length,
+			unseen: (since) => this.journal.messages(since).length,
 		};
 	}
 
@@ -1027,11 +1024,11 @@ class SessionImpl implements Session, RunningRoom {
 				},
 			);
 			if ('missed' in committed) {
-				const missed = [...committed.missed];
+				const missed = committed.missed.map(placed);
 				this.emit({ type: 'conflict', author: seat, missed });
 				return { missed };
 			}
-			return { committed: committed.body };
+			return { committed: placed(committed.entry) };
 		} catch (error) {
 			if (error instanceof StaleError) return stale(error.message);
 			if (error instanceof RefusedError) return { refused: error.message };
@@ -1042,7 +1039,7 @@ class SessionImpl implements Session, RunningRoom {
 	/** What the record holds past what the author read, or nothing when it read everything. */
 	private unheard(readThrough: Seq | undefined): Message[] | undefined {
 		if (readThrough === undefined || this.journal.lastCommitted <= readThrough) return undefined;
-		return this.journal.since(readThrough);
+		return this.journal.messages(readThrough);
 	}
 
 	/** The message a seat's intent becomes, with everything the room stamps. */

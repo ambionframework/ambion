@@ -25,13 +25,16 @@ describe('RoomJournal', () => {
 		const journal = await open();
 		const first = await journal.commit({ key: 'k1', draft: say('one') });
 		const again = await journal.commit({ key: 'k1', draft: say('one, again') });
-		expect(first).toEqual({ body: { ...say('one'), seq: 1, key: 'k1' } });
-		expect(again).toEqual({ body: { ...say('one'), seq: 1, key: 'k1' }, repeated: true });
+		const landed = { kind: 'message', body: say('one'), seq: 1, key: 'k1' };
+		expect(first).toEqual({ entry: landed });
+		expect(again).toEqual({ entry: landed, repeated: true });
 		expect(journal.lastSeq).toBe(1);
-		expect(journal.messages).toHaveLength(1);
+		expect(journal.messages()).toHaveLength(1);
+		// the body the storage holds carries no place of its own: the entry does
+		expect(journal.messages()[0]).toEqual({ ...say('one'), seq: 1, key: 'k1' });
 		// the next key takes the next seq
 		const next = await journal.commit({ key: 'k2', draft: say('two') });
-		expect('body' in next && next.body.seq).toBe(2);
+		expect('entry' in next && next.entry.seq).toBe(2);
 	});
 
 	it('lets one of two commits under one readThrough land, and refuses the other with what it missed', async () => {
@@ -49,12 +52,12 @@ describe('RoomJournal', () => {
 				draft: { ...say('second answer'), from: 'beta' },
 			}),
 		]);
-		expect('body' in first && first.body.seq).toBe(2);
-		expect('missed' in second && second.missed.map((m) => m.seq)).toEqual([2]);
+		expect('entry' in first && first.entry.seq).toBe(2);
+		expect('missed' in second && second.missed.map((e) => e.seq)).toEqual([2]);
 		// the refused commit consumed no seq
 		expect(journal.lastSeq).toBe(2);
 		const third = await journal.commit({ key: 'c', readThrough: 2, draft: say('third') });
-		expect('body' in third && third.body.seq).toBe(3);
+		expect('entry' in third && third.entry.seq).toBe(3);
 	});
 
 	it('shows a message only once its write resolves, and hears it there', async () => {
@@ -73,16 +76,16 @@ describe('RoomJournal', () => {
 		};
 		const heard: number[] = [];
 		const journal = new RoomJournal(sessions.open(roomName('slow')), (entry) => {
-			if (entry.kind === 'message') heard.push(entry.body.seq);
+			if (entry.kind === 'message') heard.push(entry.seq);
 		});
 		const commit = journal.commit({ key: 'k', draft: say('slow') });
 		await new Promise((resolve) => setImmediate(resolve));
-		expect(journal.messages).toHaveLength(0);
+		expect(journal.messages()).toHaveLength(0);
 		expect(journal.lastSeq).toBe(0);
 		expect(heard).toEqual([]);
 		slow.resolve();
 		await commit;
-		expect(journal.messages).toHaveLength(1);
+		expect(journal.messages()).toHaveLength(1);
 		// the journal hears what it appended, the way it hears what a read finds
 		expect(heard).toEqual([1]);
 	});
@@ -95,11 +98,14 @@ describe('RoomJournal', () => {
 		await expect(journal.commit({ key: 'b', draft: say('lost') })).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		const next = await journal.commit({ key: 'c', draft: say('kept too') });
-		expect('body' in next && next.body.seq).toBe(2);
-		expect(journal.messages.map((m) => m.kind === 'said' && m.text)).toEqual(['kept', 'kept too']);
+		expect('entry' in next && next.entry.seq).toBe(2);
+		expect(journal.messages().map((m) => m.kind === 'said' && m.text)).toEqual([
+			'kept',
+			'kept too',
+		]);
 		// the same key lands now: the first attempt left nothing behind
 		const retried = await journal.commit({ key: 'b', draft: say('lost, retried') });
-		expect('body' in retried && retried.body.seq).toBe(3);
+		expect('entry' in retried && retried.entry.seq).toBe(3);
 	});
 });
 
@@ -114,17 +120,17 @@ describe('RoomJournal in doubt', () => {
 		faulty.fail(false);
 		// the journal reads the storage at once: `two` is on the record before anything else lands
 		await journal.settled();
-		expect(journal.messages.map((m) => m.seq)).toEqual([1, 2]);
+		expect(journal.messages().map((m) => m.seq)).toEqual([1, 2]);
 		const next = await journal.commit({ key: 'c', draft: say('three') });
-		expect('body' in next && next.body.seq).toBe(3);
-		expect(journal.messages.map((m) => [m.seq, m.key])).toEqual([
+		expect('entry' in next && next.entry.seq).toBe(3);
+		expect(journal.messages().map((m) => [m.seq, m.key])).toEqual([
 			[1, 'a'],
 			[2, 'b'],
 			[3, 'c'],
 		]);
 		// and the key of the write in doubt lands once: a retry hands back what landed
 		const retried = await journal.commit({ key: 'b', draft: say('two, again') });
-		expect(retried).toMatchObject({ body: { seq: 2, text: 'two' }, repeated: true });
+		expect(retried).toMatchObject({ entry: { seq: 2, body: { text: 'two' } }, repeated: true });
 	});
 
 	it('reads past the last entry it saw, so every read costs the entries since the one before', async () => {
@@ -153,7 +159,7 @@ describe('RoomJournal in doubt', () => {
 		await expect(journal.commit({ draft: say('seven') })).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		await journal.settled();
-		expect(journal.messages.map((m) => m.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+		expect(journal.messages().map((m) => m.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
 		// the journal reads before every write, and every read returns only what landed since the
 		// one before: the replay, then the entry the last commit appended, then the lost one
 		// found by the read in doubt, then nothing before the next commit, and so on

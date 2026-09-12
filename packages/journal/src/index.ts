@@ -12,6 +12,10 @@
  * each one means belongs to the caller, which names its kinds in a
  * `Vocabulary`.
  *
+ * The journal holds three fields beside every body: the place the entry
+ * took, the key its commit carried, and the run that wrote it. A caller
+ * drafts the body alone, and reads those three off the entry.
+ *
  * ```ts
  * const journal = new Journal(open, words, (entry) => react(entry), runId, () => lost());
  * await journal.commit({ key, readThrough, draft: () => ({ text: 'hello' }) });
@@ -25,7 +29,6 @@ export type {
 	Bodies,
 	CommitIntent,
 	Committed,
-	Drafts,
 	Entries,
 	Entry,
 	FencedSession,

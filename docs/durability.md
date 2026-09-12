@@ -17,6 +17,13 @@ is the roster, the people, the open exchange, every lease, every wake still
 pending and every summary still owed. Nothing the room holds
 in memory outlives what the journal says.
 
+**The envelope is the journal's, and the body is the caller's.** The
+storage holds three fields beside every body: `seq`, the place the entry
+took; `key`, what the commit was named; and `run`, who wrote it. The
+journal reads those three, and it reads a body only to ask the room
+whether the body is one the room takes. A reader that wants the place of
+an entry reads it off the entry. One fact stands in one field.
+
 **The room reacts to the journal, and to nothing else.** The journal tells the room
 about every entry it takes, and the room has one reaction per entry. An
 entry this run appended and an entry a read found reach the room the same

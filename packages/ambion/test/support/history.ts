@@ -223,12 +223,12 @@ export function standing(stored: Checked['stored']): Checked['stored'] {
 	const kept: { type: string; data: unknown }[] = [];
 	let fence: string | undefined;
 	for (const entry of stored) {
-		const data = entry.data as { run?: string; written?: string };
+		const run = (entry.data as { run?: string }).run;
 		if (entry.type === 'ambion/run') {
-			fence = data.run;
+			fence = run;
 			continue;
 		}
-		if (fence !== undefined && data.written !== undefined && data.written !== fence) continue;
+		if (fence !== undefined && run !== undefined && run !== fence) continue;
 		kept.push(entry);
 	}
 	return kept;
