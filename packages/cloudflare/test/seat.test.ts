@@ -97,6 +97,12 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	);
 	expect(revoked).toMatchObject({ id: 'message:4:product:1', reason: 'revoked' });
 	await runDurableObjectAlarm(seat);
+	// The room reaches rest before the record is read. A lease the seat still
+	// held would hold the exchange open, so anything it was going to say is on
+	// the record once the exchange closes. Reading the record the moment the
+	// alarm returns asks the question before the answer could exist, and the
+	// runner decides the answer.
+	expect(await until(async () => (await room.exchange()) === undefined)).toBe(true);
 	const messages: Message[] = await room.messages();
 	expect(messages.filter((m) => m.from === 'product')).toEqual([]);
 });

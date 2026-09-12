@@ -222,8 +222,10 @@ any more: the fence and the composition take the first two places, and a
 lease change sits between two messages. Three test invariants stated the
 contiguity and now state what is true — every place is its own and in
 order, and a summary stands through the last message before it, leaving no
-message between. A reader's numbering is a rendering job; `render.ts`
-still shows an agent the raw place, and `backlog.md` holds that.
+message between. A reader's numbering is a rendering job, and `render.ts`
+holds it: `numbered` counts the messages up to a place, so a participant
+reads the message's place on the record and never the journal's.
+`backlog.md` item 48 records it.
 
 **The trade-off.** Today a `seq` is a position on the record a person
 reads, and the messages are contiguous. One shared counter ends the
