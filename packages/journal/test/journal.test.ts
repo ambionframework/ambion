@@ -102,8 +102,16 @@ describe('a journal', () => {
 		const mark = journal.entries.find((entry) => entry.kind === 'mark');
 		expect(mark?.seq).toBe(2);
 		expect(journal.lastSeq).toBe(3);
-		// Rule 5 reads the record alone, so a mark moves neither what an
-		// author read nor what they missed.
+		expect(journal.lastCommitted).toBe(3);
+
+		// A mark past the last note moves the counter and leaves the record
+		// where it stands. Rule 5 and every caller that asks how far the record
+		// reaches read `lastCommitted`: an entry beside the record moves neither
+		// what an author read nor what they missed. A caller that reads
+		// `lastSeq` for that sees every write of its own as the record moving,
+		// and asks again for ever.
+		await journal.write('mark', { label: 'b' });
+		expect(journal.lastSeq).toBe(4);
 		expect(journal.lastCommitted).toBe(3);
 	});
 

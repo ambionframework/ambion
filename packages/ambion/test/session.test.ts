@@ -691,8 +691,15 @@ describe('startSession', () => {
 		await visit.deliver({ text: 'first' });
 		const room = runtime.running.get(session.name);
 		if (room === undefined) throw new Error('the room is not running');
-		expect(await room.lease({ activation: 'message:4:solo:1', phase: 'running' })).toMatchObject({
-			ok: {},
+		const claimed = await room.lease({ activation: 'message:4:solo:1', phase: 'running' });
+		expect(claimed).toMatchObject({ ok: {} });
+		// A renewal writes an entry beside the record, and the record stands
+		// where it stood. The seat reads `lastSeq` against what its view held to
+		// decide whether to read again: a renewal that reported its own landing
+		// as movement would read again, renew again, and never stop.
+		const renewed = await room.lease({ activation: 'message:4:solo:1', phase: 'running' });
+		expect(renewed).toMatchObject({
+			ok: { lastSeq: 'ok' in claimed ? claimed.ok.lastSeq : -1 },
 		});
 		// the record moves past what the activation read, and then its lease ends
 		await visit.deliver({ text: 'second' });
