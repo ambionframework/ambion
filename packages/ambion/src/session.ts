@@ -782,7 +782,6 @@ class SessionImpl implements Session, RunningRoom {
 		const author = authorOf(message);
 		const target = targetOf(message);
 		const assistant = this.assistant;
-		const fromAssistant = author === assistant;
 		const live = this.live(state);
 		// The room changes before the message does: a seating's newcomer is on
 		// the roster the routing reads, so the seating wakes it.
@@ -792,7 +791,7 @@ class SessionImpl implements Session, RunningRoom {
 				: state.roster;
 		const woken = roster
 			.filter((seat) => seat.name !== author && !live.has(seat.name))
-			.filter((seat) => wakes(seat, target, message, fromAssistant))
+			.filter((seat) => wakes(seat, target, message))
 			.map((seat) => seat.name);
 		if (this.opensExchange(message, state) && state.reserve.length > 0 && !live.has(assistant)) {
 			woken.push(assistant);
