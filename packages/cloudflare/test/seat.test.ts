@@ -29,7 +29,10 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 		const messages: Message[] = await room.messages();
 		return messages.find((m) => m.kind === 'said' && m.from === 'product');
 	});
-	expect(said).toMatchObject({ activationId: '2:product', text: 'The pour is Saturday.' });
+	expect(said).toMatchObject({
+		activationId: 'message:4:product:1',
+		text: 'The pour is Saturday.',
+	});
 	const leases = await until(async () =>
 		runInDurableObject(room, async (_instance, state) => {
 			const piSession = await sqlSessions(state).open('seat-test');
@@ -41,7 +44,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 		}),
 	);
 	expect(leases.map((lease) => lease?.phase)).toEqual(['running', 'running', 'ended']);
-	expect(leases.at(-1)).toMatchObject({ id: '2:product', reason: 'released' });
+	expect(leases.at(-1)).toMatchObject({ id: 'message:4:product:1', reason: 'released' });
 	// the seat's audit session holds the activation's turns, in the seat's own storage
 	const audited = await runInDurableObject(seat, async (_instance, state) => {
 		const piSession = await sqlSessions(state).open('seat-test:product');
@@ -92,7 +95,7 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 			return leases.find((lease) => lease.phase === 'ended' && lease.reason === 'revoked');
 		}),
 	);
-	expect(revoked).toMatchObject({ id: '2:product', reason: 'revoked' });
+	expect(revoked).toMatchObject({ id: 'message:4:product:1', reason: 'revoked' });
 	await runDurableObjectAlarm(seat);
 	const messages: Message[] = await room.messages();
 	expect(messages.filter((m) => m.from === 'product')).toEqual([]);

@@ -23,8 +23,9 @@ import type {
 } from '../wire.ts';
 import { openExchange } from './exchange.ts';
 import {
+	cameToNothing,
 	type Due,
-	draftId,
+	dueFrom,
 	foldLeases,
 	isLive,
 	type PendingWake,
@@ -173,7 +174,7 @@ function foldRoster(
 		{ ...composition.assistant, assistant: true },
 	];
 	for (const message of messages) {
-		if (message.seq > composition.after) reseat(roster, message);
+		if (message.seq > composition.seq) reseat(roster, message);
 	}
 	return roster;
 }
@@ -196,8 +197,6 @@ function reseat(roster: RosterSeat[], message: Message): void {
 interface OwedContext extends FoldOptions {
 	assistant: string;
 }
-
-const ATTEMPT_REASONS: ReadonlySet<EndReason> = new Set(['failed', 'expired', 'refused']);
 
 /** A draft that ended this way stood down: the assistant judged the room, the host wrote the draft off, or the room gave up. */
 const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked', 'abandoned']);
@@ -259,7 +258,7 @@ function judged(
 	);
 	for (const lease of leases.values()) {
 		const parsed = parseId(lease.id);
-		if (parsed?.kind !== 'draft' || !later.has(parsed.through)) continue;
+		if (parsed?.cause !== 'close' || !later.has(parsed.position)) continue;
 		if (lease.phase === 'ended' && lease.reason !== undefined && STOOD_DOWN.has(lease.reason)) {
 			return true;
 		}
@@ -276,23 +275,18 @@ function withAttempts(
 	leases: ReadonlyMap<string, LeaseHold>,
 	context: OwedContext,
 ): Owed {
-	const failed = [...leases.values()].filter((lease) => cameToNothing(lease, grouped.covering));
-	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
-	const attempts = failed.length;
+	const failed = [...leases.values()].filter((lease) => draftedOver(lease, grouped.covering));
 	return {
 		...grouped,
-		id: draftId(grouped.through, attempts + 1),
-		seat: context.assistant,
-		attempts,
-		notBefore: attempts === 0 ? undefined : last + context.backoff(attempts),
+		...dueFrom('close', grouped.through, context.assistant, failed, context),
 	};
 }
 
-/** A draft over one of these closes that ended failed, expired, or refused. */
-function cameToNothing(lease: LeaseHold, covering: readonly Seq[]): boolean {
+/** A draft over one of these closes that came to nothing. */
+function draftedOver(lease: LeaseHold, covering: readonly Seq[]): boolean {
 	const parsed = parseId(lease.id);
-	if (parsed?.kind !== 'draft' || !covering.includes(parsed.through)) return false;
-	return lease.phase === 'ended' && lease.reason !== undefined && ATTEMPT_REASONS.has(lease.reason);
+	if (parsed?.cause !== 'close' || !covering.includes(parsed.position)) return false;
+	return cameToNothing(lease);
 }
 
 /**
@@ -308,7 +302,7 @@ function cameToNothing(lease: LeaseHold, covering: readonly Seq[]): boolean {
 export function checkpointOf(
 	state: RoomState,
 	now: number,
-): Without<Checkpoint, 'after'> | undefined {
+): Without<Checkpoint, 'seq'> | undefined {
 	if (state.composition === undefined) return undefined;
 	const floor = floorOf(state, now);
 	const last = state.closes.at(-1);
@@ -348,12 +342,11 @@ function reads(lease: LeaseHold, floor: Seq, now: number, kept: ReadonlySet<Seq>
 	if (isLive(lease, now) || lease.heardThrough >= floor) return true;
 	const parsed = parseId(lease.id);
 	if (parsed === undefined) return false;
-	return parsed.kind === 'draft' ? kept.has(parsed.through) : parsed.seq >= floor;
+	return parsed.cause === 'close' ? kept.has(parsed.position) : parsed.position >= floor;
 }
 
 /** The seq an activation's id names: the message that woke it, or the close it answers. */
 function named(id: string): Seq {
 	const parsed = parseId(id);
-	if (parsed === undefined) return 0;
-	return parsed.kind === 'wake' ? parsed.seq : parsed.through;
+	return parsed?.position ?? 0;
 }

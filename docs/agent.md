@@ -623,13 +623,15 @@ the journal, decides, writes what it decided, and sends
 after every commit, every lease change, every alarm and every wake, and
 running it twice writes nothing. Four kinds of entry hold it all, in the
 room's one Pi session: `ambion/message`, `ambion/lease`, `ambion/close`
-and `ambion/composition`. Every entry beside a message carries `after`,
-the last message seq when it was written. The room holds one cache beside
-the journal: when it last sent each wake, which a resumed room starts empty.
+and `ambion/composition`. Every entry takes its place from one counter, so
+a seq names one entry of any kind and the messages are not contiguous. The
+room holds one cache beside the journal: when it last sent each wake, which
+a resumed room starts empty.
 
 **A seat is seated for the run. An activation lasts seconds.** An
-activation's id is derived from the journal: the seq of the message that woke
-the seat and the seat's name (`2:product`), or the close it answers and
+activation's id is derived from the journal: what caused it, where the
+cause sits, the seat and the attempt (`message:4:product:1`), or the close
+it answers and
 the attempt number (`close:9:1`). Nothing mints an id, so a wake is safe
 to send twice, a retried commit lands once, and every message an
 activation writes carries its `activationId`. An activation holds a

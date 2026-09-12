@@ -14,8 +14,8 @@
  * entry that is on the record.
  *
  * **The record holds two kinds of entry, and it reads neither.** A
- * *positioned* entry takes the next seq; every other kind takes no seq and
- * carries `after`, the last seq when it landed. Both join the same queue, so
+ * *record* entry takes the next seq and a key of its own; every other kind
+ * takes the next seq alone. Both join the same queue, so
  * they land in the order they were asked for. What each one means belongs to
  * the caller, which names its kinds in a `Vocabulary`.
  *
@@ -85,26 +85,23 @@ export interface FencedSession {
  * One entry on a journal: the one envelope every user shares.
  *
  * `kind` is what the writer called it, and `body` is what the writer wrote.
- * The journal never reads a body. It reads the envelope, and it holds every
- * entry to it: a *positioned* entry carries `seq`, the place it took on the
- * record; every other kind carries `after`, the last seq when it landed. An entry
- * that carries neither, or both, is not one this journal takes.
+ * The journal never reads a body for what it means. It reads the envelope,
+ * and it holds every entry to it: every entry carries `seq`, the place it
+ * took on the record, from the one counter the journal keeps. An entry
+ * without one is not one this journal takes.
  *
- * The body keeps its own copy of `seq` and `key` today, because that is how
- * the storage holds them. `planning/simplification.md` §4 is the change that
- * moves the position out of the body for good.
+ * The body keeps its own copy of `seq` and `key`, because that is how the
+ * storage holds them.
  */
 export interface Entry<TBody = unknown> {
 	/** What the writer called it. */
 	readonly kind: string;
 	/** What the writer wrote. The journal never reads it. */
 	readonly body: TBody;
-	/** The place it took on the record, for an entry that takes one. */
-	readonly seq?: Seq;
+	/** The place it took on the record. Every entry takes one. */
+	readonly seq: Seq;
 	/** The key the commit carried. A repeated key lands once. */
 	readonly key?: string;
-	/** The last seq when an unpositioned entry landed. */
-	readonly after?: Seq;
 	/** The run that wrote it, or nothing from before runs were fenced. */
 	readonly run?: string;
 }
@@ -125,17 +122,17 @@ export type Entries<TKind extends string, TBodies extends Bodies<TKind>> = {
  * caller chose; `stored` is what the storage holds it under.
  *
  * The journal reads no body. It needs four facts: what a kind is stored as
- * and back, which kind takes a position, which kind fences a run, and which
- * kind replaces every entry before it. `accepts` is the caller's own check on a
- * body, and the journal refuses an entry it turns down.
+ * and back, which kind makes up the record, which kind fences a run, and
+ * which kind replaces every entry before it. `accepts` is the caller's own
+ * check on a body, and the journal refuses an entry it turns down.
  */
 export interface Vocabulary<TKind extends string = string> {
 	/** What the storage holds this kind under. */
 	stored(kind: TKind): string;
 	/** The kind a stored custom type names, or nothing for one this reader skips. */
 	kindOf(customType: string): TKind | undefined;
-	/** The kind that takes the next position. Every other kind sits beside them. */
-	readonly positioned: TKind;
+	/** The kind that makes up the record a reader reads. Every other kind is about it. */
+	readonly record: TKind;
 	/** The kind that fences a run. */
 	readonly run: TKind;
 	/** The kind that replaces every entry before it. */
@@ -165,9 +162,9 @@ function bodyOf(data: unknown): Record<string, unknown> {
 /**
  * The envelope a stored entry folds to, or nothing when it is not one this
  * journal takes. Strict on purpose: a kind this reader does not know, a body
- * the caller turns down, or a position of the wrong sort is no entry at all,
- * and the journal skips it rather than caching something it cannot hold to
- * its contract.
+ * the caller turns down, or no place on the record is no entry at all, and
+ * the journal skips it rather than caching something it cannot hold to its
+ * contract.
  */
 function envelope<TKind extends string>(
 	words: Vocabulary<TKind>,
@@ -179,14 +176,12 @@ function envelope<TKind extends string>(
 	const body = bodyOf(data);
 	if (!words.accepts(kind, body)) return undefined;
 	const seq = positionOf(body.seq);
-	const after = positionOf(body.after);
-	// One position, of the sort the kind takes.
-	if (kind === words.positioned ? seq === undefined : after === undefined) return undefined;
+	// Every entry takes a place on the record; one without is not an entry.
+	if (seq === undefined) return undefined;
 	return {
 		kind,
 		body,
-		...(seq === undefined ? {} : { seq }),
-		...(after === undefined ? {} : { after }),
+		seq,
 		...(typeof body.key === 'string' ? { key: body.key } : {}),
 		...(writerOf(data) === undefined ? {} : { run: writerOf(data) }),
 	};
@@ -203,8 +198,12 @@ export interface CommitIntent<TBody> {
 	key?: string;
 	/** The seq the author has read. The queue refuses the commit when the record moved past it. */
 	readThrough?: Seq;
-	/** The body, or a function of the record as it stands when the commit runs. */
-	draft: Omit<TBody, 'seq' | 'key'> | ((lastSeq: Seq) => Omit<TBody, 'seq' | 'key'>);
+	/**
+	 * The body, or a function of the record as it stands when the commit runs.
+	 * The argument is the place the last record entry took, which is what an
+	 * author reads through; an entry beside the record moves neither.
+	 */
+	draft: Omit<TBody, 'seq' | 'key'> | ((lastCommitted: Seq) => Omit<TBody, 'seq' | 'key'>);
 }
 
 /** The commit landed, or the key had landed before, or the record had moved. */
@@ -216,16 +215,23 @@ export type Committed<TBody, TAll = TBody> =
 export class Journal<
 	TKind extends string,
 	TBodies extends Bodies<TKind>,
-	TPositioned extends TKind,
+	TRecord extends TKind,
 	TDrafts extends Drafts,
 > {
 	/** Every entry, replayed then appended, in the order the writes were confirmed. */
 	readonly entries: Entries<TKind, TBodies>[] = [];
 	/** The bodies of the entries that took a position, in order. */
-	readonly positioned: TBodies[TPositioned][] = [];
+	readonly record: TBodies[TRecord][] = [];
 	readonly ready: Promise<PiSession>;
+	/** The place the last entry took. The next entry of any kind takes the one after it. */
 	lastSeq = 0;
-	private readonly byKey = new Map<string, TBodies[TPositioned]>();
+	/**
+	 * The place the last record entry took. Rule 5 reads this: what an author
+	 * read is a place on the record, and an entry beside the record moves
+	 * neither what they read nor what they missed.
+	 */
+	lastCommitted = 0;
+	private readonly byKey = new Map<string, TBodies[TRecord]>();
 	/** The serial queue. One commit at a time, in the order they were asked for. */
 	private tail: Promise<unknown> = Promise.resolve();
 	private closed = false;
@@ -241,7 +247,7 @@ export class Journal<
 	private fenced = false;
 	/** A later run's entry was found: this run's writes are over. */
 	private superseded = false;
-	/** How many entries beside the positioned ones the cache holds past the last checkpoint. */
+	/** How many entries beside the record the cache holds past the last checkpoint. */
 	sinceCheckpoint = 0;
 
 	/**
@@ -275,18 +281,18 @@ export class Journal<
 
 	/**
 	 * Drop everything the latest checkpoint replaced. The checkpoint stays,
-	 * and so does every positioned entry: a caller reads what the checkpoint
+	 * and so does every record entry: a caller reads what the checkpoint
 	 * carries in place of what was dropped. The run entries go with them,
 	 * because the fence is read off the storage and never off the cache.
 	 */
 	private compact(): void {
 		const at = this.entries.findLastIndex((entry) => entry.kind === this.words.checkpoint);
 		if (at < 0) return;
-		const kept = this.entries.slice(0, at).filter((entry) => entry.kind === this.words.positioned);
+		const kept = this.entries.slice(0, at).filter((entry) => entry.kind === this.words.record);
 		this.entries.splice(0, at, ...kept);
 		this.sinceCheckpoint = this.entries
 			.slice(kept.length + 1)
-			.filter((entry) => entry.kind !== this.words.positioned).length;
+			.filter((entry) => entry.kind !== this.words.record).length;
 	}
 
 	/**
@@ -353,22 +359,23 @@ export class Journal<
 		this.known.add(id);
 		this.entries.push(entry);
 		if (entry.kind === this.words.checkpoint) this.compact();
-		else if (entry.kind !== this.words.positioned) this.sinceCheckpoint += 1;
-		if (entry.kind === this.words.positioned && entry.seq !== undefined) {
+		else if (entry.kind !== this.words.record) this.sinceCheckpoint += 1;
+		this.lastSeq = Math.max(this.lastSeq, entry.seq);
+		if (entry.kind === this.words.record) {
 			// The kind is the condition, and it is the one narrowing the
 			// type-checker cannot follow from a mapped union to its own member.
-			const body = entry.body as TBodies[TPositioned];
-			this.positioned.push(body);
-			this.lastSeq = entry.seq;
+			const body = entry.body as TBodies[TRecord];
+			this.record.push(body);
+			this.lastCommitted = entry.seq;
 			if (entry.key !== undefined) this.byKey.set(entry.key, body);
 		}
 		if (this.replayed) this.hear?.(entry);
 	}
 
 	/**
-	 * Write one entry of a kind that takes no position. It carries `after`,
-	 * the last seq when it landed; it joins the same queue, so it and the
-	 * entries around it land in the order they were asked. The draft is built
+	 * Write one entry of a kind beside the record. It takes the next place
+	 * like any other entry; it joins the same queue, so it and the entries
+	 * around it land in the order they were asked. The draft is built
 	 * where the write happens, and a builder that returns nothing writes
 	 * nothing: the check it ran found the entry no longer needed.
 	 */
@@ -380,7 +387,7 @@ export class Journal<
 			const piSession = await this.open();
 			const data = typeof draft === 'function' ? draft() : draft;
 			if (data === undefined) return false;
-			const stamped = { ...data, after: this.lastSeq };
+			const stamped = { ...data, seq: nextSeq(this.lastSeq) };
 			const stored = this.words.stored(kind);
 			const id = await this.append(piSession, stored, stamped);
 			this.took(stored, stamped, id);
@@ -391,14 +398,14 @@ export class Journal<
 	}
 
 	/**
-	 * Commit one positioned entry. The check, the append and the cache update
+	 * Commit one record entry. The check, the append and the cache update
 	 * run inside one link of the queue, and `hear` runs there too, before the
 	 * next commit starts: what a caller does with a fresh entry happens
 	 * before anything else lands on top of it.
 	 */
-	commit<T extends TBodies[TPositioned]>(
+	commit<T extends TBodies[TRecord]>(
 		intent: CommitIntent<T>,
-	): Promise<Committed<T, TBodies[TPositioned]>> {
+	): Promise<Committed<T, TBodies[TRecord]>> {
 		const link = this.tail.then(() => this.land(intent));
 		// One write that fails must not stop the next one. The queue keeps its
 		// order; the caller of the failed write sees its failure.
@@ -479,22 +486,23 @@ export class Journal<
 		} while (awaited !== this.tail);
 	}
 
-	private async land<T extends TBodies[TPositioned]>(
+	private async land<T extends TBodies[TRecord]>(
 		intent: CommitIntent<T>,
-	): Promise<Committed<T, TBodies[TPositioned]>> {
+	): Promise<Committed<T, TBodies[TRecord]>> {
 		const piSession = await this.open();
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
 		if (seen !== undefined) return { body: seen as T, repeated: true };
-		if (intent.readThrough !== undefined && refused(this.lastSeq, intent.readThrough)) {
+		if (intent.readThrough !== undefined && refused(this.lastCommitted, intent.readThrough)) {
 			return { missed: this.since(intent.readThrough) };
 		}
-		const draft = typeof intent.draft === 'function' ? intent.draft(this.lastSeq) : intent.draft;
+		const draft =
+			typeof intent.draft === 'function' ? intent.draft(this.lastCommitted) : intent.draft;
 		const stamped = {
 			...draft,
 			seq: nextSeq(this.lastSeq),
 			...(intent.key === undefined ? {} : { key: intent.key }),
 		} as T;
-		const stored = this.words.stored(this.words.positioned);
+		const stored = this.words.stored(this.words.record);
 		const id = await this.append(piSession, stored, stamped);
 		this.took(stored, stamped, id);
 		return { body: stamped };
@@ -503,7 +511,7 @@ export class Journal<
 	/**
 	 * One entry this journal appended, into the cache. A vocabulary that
 	 * turns down what the journal wrote breaks the journal's contract: the
-	 * storage holds the entry, the cache never will, and the next positioned
+	 * storage holds the entry, the cache never will, and the next record
 	 * entry takes a seq this one already took. Say so where it happens.
 	 */
 	private took(stored: string, body: unknown, id: string): void {
@@ -517,8 +525,8 @@ export class Journal<
 		this.cache(entry, id);
 	}
 
-	since(cursor: Seq | undefined): TBodies[TPositioned][] {
-		if (cursor === undefined) return [...this.positioned];
-		return this.positioned.filter((body) => (positionOf((body as Stored).seq) ?? 0) > cursor);
+	since(cursor: Seq | undefined): TBodies[TRecord][] {
+		if (cursor === undefined) return [...this.record];
+		return this.record.filter((body) => (positionOf((body as Stored).seq) ?? 0) > cursor);
 	}
 }

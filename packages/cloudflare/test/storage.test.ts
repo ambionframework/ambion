@@ -22,7 +22,7 @@ it("appends and replays entries through the object's SQLite", async () => {
 		});
 		await first.appendMessage({ role: 'user', content: 'a turn', timestamp: 1 });
 		await first.appendCustomEntry('ambion/lease', {
-			id: '1:product',
+			id: 'message:1:product:1',
 			phase: 'running',
 			expiry: 2,
 			after: 1,

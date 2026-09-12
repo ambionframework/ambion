@@ -363,11 +363,13 @@ describe('a storage that fails', () => {
 		expect(seen.filter((e) => e.type === 'message')).toHaveLength(1);
 		expect(seen.some((e) => e.type === 'activation_start')).toBe(false);
 
-		// the queue carries on: a mended storage writes the next message, at the next seq
+		// the queue carries on: a mended storage writes the next message, at the next
+		// place. One counter gives out every place, so the fence and the composition
+		// took the first two and the record starts at 3.
 		fail(false);
 		await expect(visit.deliver({ text: 'kept' })).resolves.toBeUndefined();
 		const record = await session.messages();
-		expect(record.map((m) => m.seq)).toEqual([1, 2]);
+		expect(record.map((m) => m.seq)).toEqual([3, 4]);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said']);
 		await stopSession(session);
 	});

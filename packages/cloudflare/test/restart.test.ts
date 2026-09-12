@@ -38,7 +38,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	// The seat claimed its lease, so its activation runs now. The model call it
 	// waits on is what keeps it running while the room goes away.
 	const claim = await until(async () => (await stored<LeaseChange>(stub, 'lease')).at(0));
-	expect(claim.id).toBe('2:slow');
+	expect(claim.id).toBe('message:4:slow:1');
 	const claimedBy = (await writers(stub, 'lease')).at(0);
 	const firstRun = (await stored<Fence>(stub, 'run')).map((entry) => entry.run).at(0);
 	expect(claimedBy).toBe(firstRun);
@@ -81,6 +81,8 @@ it('serves a seat that was at work when the object went away, and takes its comm
 		reason: 'released',
 	});
 	// The wake was answered on its first attempt: no id carries a second.
-	const attempts = new Set(leases.map((entry) => entry.id).filter((id) => id.startsWith('2:slow')));
+	const attempts = new Set(
+		leases.map((entry) => entry.id).filter((id) => id.startsWith('message:4:slow:1')),
+	);
 	expect([...attempts]).toEqual([claim.id]);
 });

@@ -20,15 +20,15 @@ interface Note {
 	text: string;
 }
 interface Mark {
-	after: number;
+	seq: number;
 	label: string;
 }
 interface Run {
-	after: number;
+	seq: number;
 	run: string;
 }
 interface Checkpoint {
-	after: number;
+	seq: number;
 	v: 1;
 	floor: number;
 }
@@ -41,9 +41,9 @@ interface Bodies {
 }
 
 type Drafts = {
-	mark: Omit<Mark, 'after'>;
-	run: Omit<Run, 'after'>;
-	checkpoint: Omit<Checkpoint, 'after'>;
+	mark: Omit<Mark, 'seq'>;
+	run: Omit<Run, 'seq'>;
+	checkpoint: Omit<Checkpoint, 'seq'>;
 };
 
 const STORED: Record<Kind, string> = {
@@ -59,7 +59,7 @@ const KINDS: Record<string, Kind> = Object.fromEntries(
 const WORDS: Vocabulary<Kind> = {
 	stored: (kind) => STORED[kind],
 	kindOf: (customType) => KINDS[customType],
-	positioned: 'note',
+	record: 'note',
 	run: 'run',
 	checkpoint: 'checkpoint',
 	// A checkpoint of another shape is one this reader does not fold.
@@ -90,18 +90,29 @@ async function session(id: string): Promise<PiSession> {
 const note = (text: string) => ({ text });
 
 describe('a journal', () => {
-	it('gives each positioned entry the next seq, and leaves every other one without', async () => {
+	it('gives every entry the next seq, from one counter', async () => {
 		const journal = await open();
 		const first = await journal.commit({ draft: note('one') });
 		expect('body' in first && first.body.seq).toBe(1);
 		await journal.write('mark', { label: 'a' });
 		const second = await journal.commit({ draft: note('two') });
-		expect('body' in second && second.body.seq).toBe(2);
-		// the mark took no seq, and it carries where it landed
+		// The mark took seq 2, so the next note takes 3: one counter gives
+		// them out, and the record a reader reads is no longer contiguous.
+		expect('body' in second && second.body.seq).toBe(3);
 		const mark = journal.entries.find((entry) => entry.kind === 'mark');
-		expect(mark?.seq).toBeUndefined();
-		expect(mark?.after).toBe(1);
-		expect(journal.lastSeq).toBe(2);
+		expect(mark?.seq).toBe(2);
+		expect(journal.lastSeq).toBe(3);
+		expect(journal.lastCommitted).toBe(3);
+
+		// A mark past the last note moves the counter and leaves the record
+		// where it stands. Rule 5 and every caller that asks how far the record
+		// reaches read `lastCommitted`: an entry beside the record moves neither
+		// what an author read nor what they missed. A caller that reads
+		// `lastSeq` for that sees every write of its own as the record moving,
+		// and asks again for ever.
+		await journal.write('mark', { label: 'b' });
+		expect(journal.lastSeq).toBe(4);
+		expect(journal.lastCommitted).toBe(3);
 	});
 
 	it('lands a repeated key once, and hands back what the first commit wrote', async () => {
@@ -111,7 +122,7 @@ describe('a journal', () => {
 		if (!('body' in first) || !('body' in again)) throw new Error('both commits land');
 		expect(again.repeated).toBe(true);
 		expect(again.body).toEqual(first.body);
-		expect(journal.positioned).toHaveLength(1);
+		expect(journal.record).toHaveLength(1);
 		expect(journal.lastSeq).toBe(1);
 	});
 
@@ -163,27 +174,27 @@ describe('the envelope', () => {
 		const id = `journal-refused-${++names}`;
 		const piSession = await session(id);
 		// a checkpoint of a shape this reader does not fold
-		await piSession.appendCustomEntry(STORED.checkpoint, { after: 0, shape: 'other' });
-		await piSession.appendCustomEntry(STORED.checkpoint, { after: 0, v: 1, floor: 0 });
+		await piSession.appendCustomEntry(STORED.checkpoint, { seq: 1, shape: 'other' });
+		await piSession.appendCustomEntry(STORED.checkpoint, { seq: 2, v: 1, floor: 0 });
 		const journal = await open(id);
 		expect(journal.entries.map((entry) => entry.kind)).toEqual(['checkpoint']);
 	});
 
-	it('skips an entry whose position is of the wrong sort, or missing', async () => {
+	it('skips an entry that took no place on the record', async () => {
 		const id = `journal-position-${++names}`;
 		const piSession = await session(id);
-		// a note with no seq, and a mark with no after
-		await piSession.appendCustomEntry(STORED.note, { text: 'no place' });
+		// neither took a place: a seq that is not one, and none at all
+		await piSession.appendCustomEntry(STORED.note, { seq: 'first', text: 'no place' });
 		await piSession.appendCustomEntry(STORED.mark, { label: 'nowhere' });
 		await piSession.appendCustomEntry(STORED.note, { seq: 1, text: 'placed' });
 		const journal = await open(id);
 		expect(journal.entries.map((entry) => entry.kind)).toEqual(['note']);
-		expect(journal.positioned.map((body) => body.text)).toEqual(['placed']);
+		expect(journal.record.map((body) => body.text)).toEqual(['placed']);
 	});
 });
 
 describe('a checkpoint', () => {
-	it('replaces every entry before it, and keeps every positioned entry', async () => {
+	it('replaces every entry before it, and keeps every record entry', async () => {
 		const journal = await open();
 		await journal.commit({ draft: note('one') });
 		await journal.write('mark', { label: 'a' });
@@ -192,7 +203,7 @@ describe('a checkpoint', () => {
 		await journal.write('checkpoint', { v: 1, floor: 1 });
 		// the marks are gone, the note stays, and the count starts again
 		expect(journal.entries.map((entry) => entry.kind)).toEqual(['note', 'checkpoint']);
-		expect(journal.positioned.map((body) => body.text)).toEqual(['one']);
+		expect(journal.record.map((body) => body.text)).toEqual(['one']);
 		expect(journal.sinceCheckpoint).toBe(0);
 	});
 });
@@ -215,7 +226,7 @@ describe('the fence', () => {
 		await expect(first.commit({ draft: note('too late') })).rejects.toThrow(/superseded/);
 		expect(lost).toBe(1);
 		// what the superseded run wrote before the fence stands
-		expect(second.positioned.map((body) => body.text)).toEqual(['mine']);
+		expect(second.record.map((body) => body.text)).toEqual(['mine']);
 	});
 });
 

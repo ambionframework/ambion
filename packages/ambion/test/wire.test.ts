@@ -26,15 +26,15 @@ import { jsonl } from './support/storage.ts';
 const at = '2026-01-01T09:00:00.000Z';
 
 const stored: Record<string, LeaseChange | Close | Composition> = {
-	claim: { id: '2:product', after: 2, phase: 'running', expiry: 60_000, at },
-	end: { id: '2:product', after: 4, phase: 'ended', reason: 'released', at },
-	close: { owner: 'priya', from: 2, through: 4, after: 4, at, wakes: ['assistant'] },
+	claim: { id: 'message:2:product:1', seq: 2, phase: 'running', expiry: 60_000, at },
+	end: { id: 'message:2:product:1', seq: 4, phase: 'ended', reason: 'released', at },
+	close: { owner: 'priya', from: 2, through: 4, seq: 4, at, wakes: ['assistant'] },
 	composition: {
 		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
 		goal: 'Decide the pour date.',
 		agents: [{ name: 'product', identity: 'The product.', attention: 'broadcast' }],
 		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'named' }],
-		after: 0,
+		seq: 0,
 		at,
 	},
 };
@@ -42,11 +42,11 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 const wake: Wake = {
 	room: 'site',
 	seat: 'product',
-	activation: '3:product',
+	activation: 'message:3:product:1',
 	steer: { seq: 3, line: '[priya] And the pump?' },
 };
 const view: ActivationView = {
-	activation: 'close:4:1',
+	activation: 'close:4:assistant:1',
 	seat: 'assistant',
 	model: 'scripted/assistant',
 	lastSeq: 4,
@@ -57,19 +57,19 @@ const view: ActivationView = {
 };
 const requests: Record<string, Commit | Lease | string> = {
 	say: {
-		activation: '2:product',
+		activation: 'message:2:product:1',
 		key: 'call-1',
 		readThrough: 2,
 		intent: { kind: 'said', text: 'No.' },
 	},
 	directed: {
-		activation: '2:product',
+		activation: 'message:2:product:1',
 		key: 'call-2',
 		readThrough: 2,
 		intent: { kind: 'said', to: 'priya', text: 'No.' },
 	},
 	summary: {
-		activation: 'close:4:1',
+		activation: 'close:4:assistant:1',
 		key: 'call-3',
 		readThrough: 4,
 		intent: {
@@ -80,13 +80,13 @@ const requests: Record<string, Commit | Lease | string> = {
 		},
 	},
 	seating: {
-		activation: '2:assistant',
+		activation: 'message:2:assistant:1',
 		key: 'call-4',
 		intent: { kind: 'seated', name: 'surveyor' },
 	},
-	claim: { activation: '2:product', phase: 'running' },
-	release: { activation: '2:product', phase: 'ended', reason: 'released' },
-	viewOf: '2:product',
+	claim: { activation: 'message:2:product:1', phase: 'running' },
+	release: { activation: 'message:2:product:1', phase: 'ended', reason: 'released' },
+	viewOf: 'message:2:product:1',
 };
 const responses: Record<string, ViewResponse | CommitResponse | LeaseResponse> = {
 	view: { view },

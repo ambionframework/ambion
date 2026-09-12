@@ -123,7 +123,7 @@ export interface SummaryMessage {
 	/** The person whose question opened the exchange. Always present. */
 	to: string;
 	text: string;
-	/** The range it stands for, contiguous and ending just before this seq. */
+	/** The range it stands for, ending at the last message before this one. */
 	covers: { from: Seq; through: Seq };
 }
 

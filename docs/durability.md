@@ -9,11 +9,12 @@ Read it with [`agent.md`](agent.md) §5, which names the mechanisms, and
 ## 1. The journal is the truth
 
 **One record, one writer, one order.** A room's record is one append-only
-journal in a Pi session. Every message takes the next seq, and every entry
-the room writes beside the messages carries `after`, the last seq when it
-landed. The fold reads the journal from the start and rebuilds the room from
-it. That is the roster, the people, the open exchange, every lease, every
-wake still pending and every summary still owed. Nothing the room holds
+journal in a Pi session. One counter gives out every place: a message takes
+the next seq, and so does every entry the room writes beside the messages.
+A seq names one entry of any kind, so the messages are not contiguous. The
+fold reads the journal from the start and rebuilds the room from it. That
+is the roster, the people, the open exchange, every lease, every wake still
+pending and every summary still owed. Nothing the room holds
 in memory outlives what the journal says.
 
 **The room reacts to the journal, and to nothing else.** The journal tells the room

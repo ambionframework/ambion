@@ -96,8 +96,8 @@ type Hands = {
 function handOf(id: string, seat: string, facts: RoomFacts): Hands {
 	const state = facts.state;
 	const parsed = parseId(id);
-	if (parsed?.kind === 'draft') {
-		const owed = state.owed.find((o) => o.covering.includes(parsed.through));
+	if (parsed?.cause === 'close') {
+		const owed = state.owed.find((o) => o.covering.includes(parsed.position));
 		if (owed === undefined) return { hand: 'none' };
 		return {
 			hand: 'summarise',
@@ -105,8 +105,8 @@ function handOf(id: string, seat: string, facts: RoomFacts): Hands {
 		};
 	}
 	if (seat !== facts.assistant) return { hand: 'say' };
-	const question = parsed && state.messages.find((m) => m.seq === parsed.seq);
-	const opened = openedBy(parsed?.seq, state);
+	const question = parsed && state.messages.find((m) => m.seq === parsed.position);
+	const opened = openedBy(parsed?.position, state);
 	if (question === undefined || !opened) return { hand: 'none' };
 	return {
 		hand: 'seat',

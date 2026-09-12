@@ -129,24 +129,27 @@ async function until(done: () => boolean): Promise<void> {
 describe('a seat actor', () => {
 	it('queues a wake that lands while the activation releases, and steers it into nothing', async () => {
 		const { room, actor } = play();
-		void actor.wake(wakeOf('1:product'));
+		void actor.wake(wakeOf('message:1:product:1'));
 		await room.releasing.promise;
 		// the activation is over and its release is in flight: it reads nothing more,
 		// so the message runs as an activation of its own, and none runs beside it
-		await actor.wake({ ...wakeOf('2:product'), steer: { seq: 2, line: '[priya] And the pump?' } });
+		await actor.wake({
+			...wakeOf('message:2:product:1'),
+			steer: { seq: 2, line: '[priya] And the pump?' },
+		});
 		room.letGo.resolve();
 		await until(() => room.releases.length === 2);
-		expect(room.claims).toEqual(['1:product', '2:product']);
+		expect(room.claims).toEqual(['message:1:product:1', 'message:2:product:1']);
 		expect(room.mostHeld).toBe(1);
 	});
 
 	it('takes a wake to its end: it claims the lease, runs, and releases', async () => {
 		const { room, actor } = play();
 		room.letGo.resolve();
-		await actor.wake(wakeOf('1:product'));
+		await actor.wake(wakeOf('message:1:product:1'));
 		await until(() => room.releases.length === 1);
-		expect(room.claims).toEqual(['1:product']);
-		expect(room.releases).toEqual(['1:product']);
+		expect(room.claims).toEqual(['message:1:product:1']);
+		expect(room.releases).toEqual(['message:1:product:1']);
 		expect(room.mostHeld).toBe(1);
 	});
 
@@ -159,37 +162,40 @@ describe('a seat actor', () => {
 			}),
 		);
 		room.letGo.resolve();
-		void actor.wake(wakeOf('1:product'));
+		void actor.wake(wakeOf('message:1:product:1'));
 		await until(() => room.claims.length === 1);
-		await actor.wake({ ...wakeOf('2:product'), steer: { seq: 2, line: '[priya] And the pump?' } });
+		await actor.wake({
+			...wakeOf('message:2:product:1'),
+			steer: { seq: 2, line: '[priya] And the pump?' },
+		});
 		await tick();
-		expect(room.claims).toEqual(['1:product']);
+		expect(room.claims).toEqual(['message:1:product:1']);
 		gate.resolve();
 		await until(() => room.releases.length === 1);
-		expect(room.claims).toEqual(['1:product']);
+		expect(room.claims).toEqual(['message:1:product:1']);
 		expect(room.mostHeld).toBe(1);
 	});
 
 	it('cuts an activation whose run ignores the abort, and runs what queued behind it', async () => {
 		const { room, actor } = play(deaf);
 		room.letGo.resolve();
-		const ran = actor.run('1:product');
+		const ran = actor.run('message:1:product:1');
 		await until(() => room.claims.length === 1);
-		await actor.wake(wakeOf('2:product'));
+		await actor.wake(wakeOf('message:2:product:1'));
 		// the room ended the first lease: the actor moves on now, and the deaf run is left behind
-		await actor.cut('1:product');
+		await actor.cut('message:1:product:1');
 		await until(() => room.claims.length === 2);
-		expect(room.releases).toEqual(['1:product']);
-		await actor.cut('2:product');
+		expect(room.releases).toEqual(['message:1:product:1']);
+		await actor.cut('message:2:product:1');
 		await ran;
-		expect(room.releases).toEqual(['1:product', '2:product']);
+		expect(room.releases).toEqual(['message:1:product:1', 'message:2:product:1']);
 		expect(room.mostHeld).toBe(1);
 	});
 
 	it('cuts the activation when the room refuses its renewal', async () => {
 		const { room, actor, clock } = play(deaf);
 		room.letGo.resolve();
-		const ran = actor.run('1:product');
+		const ran = actor.run('message:1:product:1');
 		await until(() => room.claims.length === 1);
 		// the room answers the renewal stale: the lease ended, so nothing this
 		// activation writes lands, and the actor stops waiting on it
@@ -198,13 +204,13 @@ describe('a seat actor', () => {
 		await tick();
 		await clock.advance(31_000);
 		await ran;
-		expect(room.releases).toEqual(['1:product']);
+		expect(room.releases).toEqual(['message:1:product:1']);
 	});
 
 	it('cuts the activation at the expiry it held when a renewal never reached the room', async () => {
 		const { room, actor, clock } = play(deaf);
 		room.letGo.resolve();
-		const ran = actor.run('1:product');
+		const ran = actor.run('message:1:product:1');
 		await until(() => room.claims.length === 1);
 		// the renewal is lost, so the room expires the lease where it stands: the
 		// actor waits for that expiry and cuts the activation there, not before
@@ -214,14 +220,14 @@ describe('a seat actor', () => {
 		expect(room.releases).toEqual([]);
 		await clock.advance(30_000);
 		await ran;
-		expect(room.releases).toEqual(['1:product']);
+		expect(room.releases).toEqual(['message:1:product:1']);
 	});
 
 	it('cuts the activation at the deadline, when a renewal moves the expiry nowhere', async () => {
 		const { room, actor, clock } = play(deaf);
 		room.letGo.resolve();
 		const deadline = clock.now() + 60_000;
-		const ran = actor.run('1:product');
+		const ran = actor.run('message:1:product:1');
 		await until(() => room.claims.length === 1);
 		// the room renews no further: the lease reached its deadline, and the
 		// actor cuts the activation there, not at the renewal that said so
@@ -231,23 +237,31 @@ describe('a seat actor', () => {
 		expect(room.releases).toEqual([]);
 		await clock.advance(30_000);
 		await ran;
-		expect(room.releases).toEqual(['1:product']);
+		expect(room.releases).toEqual(['message:1:product:1']);
 	});
 
 	it('resolves run once every wake that queued behind the activation has run, in order and once each', async () => {
 		const { room, actor } = play();
-		const ran = actor.run('1:product');
+		const ran = actor.run('message:1:product:1');
 		await room.releasing.promise;
-		await actor.wake(wakeOf('2:product'));
-		await actor.wake(wakeOf('3:product'));
+		await actor.wake(wakeOf('message:2:product:1'));
+		await actor.wake(wakeOf('message:3:product:1'));
 		// a wake sent twice queues once and keeps the place the first one took;
 		// the wake of the activation that is releasing runs no second time
-		await actor.wake(wakeOf('2:product'));
-		await actor.wake(wakeOf('1:product'));
+		await actor.wake(wakeOf('message:2:product:1'));
+		await actor.wake(wakeOf('message:1:product:1'));
 		room.letGo.resolve();
 		await ran;
-		expect(room.claims).toEqual(['1:product', '2:product', '3:product']);
-		expect(room.releases).toEqual(['1:product', '2:product', '3:product']);
+		expect(room.claims).toEqual([
+			'message:1:product:1',
+			'message:2:product:1',
+			'message:3:product:1',
+		]);
+		expect(room.releases).toEqual([
+			'message:1:product:1',
+			'message:2:product:1',
+			'message:3:product:1',
+		]);
 		expect(room.mostHeld).toBe(1);
 	});
 });

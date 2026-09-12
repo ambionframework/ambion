@@ -15,7 +15,7 @@
  */
 import type { Clock, LeaseChange, Message, Seq } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
-import { activationId, parseId } from '../../src/room/lease.ts';
+import { parseId } from '../../src/room/lease.ts';
 
 export type Outcome = 'ok' | 'fail' | 'info';
 
@@ -247,17 +247,22 @@ function seqs(stored: Checked['stored']): string[] {
 		.map(([seq, n]) => `seq ${seq} is on the storage ${n} times`);
 }
 
-/** One attempt at a wake or a draft runs at a time: the next claims only after the last ended. */
+/** What an id is an attempt at, without the attempt number: the cause and where it sits. */
+function owedBy(id: string): string | undefined {
+	const parsed = parseId(id);
+	if (parsed === undefined) return undefined;
+	return `${parsed.cause}:${parsed.position}:${parsed.seat}`;
+}
+
+/** One activation the room owes runs at a time: the next claims only after the last ended. */
 function exclusion(stored: Checked['stored']): string[] {
 	const found: string[] = [];
 	const running = new Map<string, string>();
 	for (const entry of standing(stored)) {
 		if (entry.type !== 'ambion/lease') continue;
 		const lease = entry.data as LeaseChange;
-		const parsed = parseId(lease.id);
-		if (parsed === undefined) continue;
-		const attempt =
-			parsed.kind === 'wake' ? activationId(parsed.seq, parsed.seat) : `close:${parsed.through}`;
+		const attempt = owedBy(lease.id);
+		if (attempt === undefined) continue;
 		const held = running.get(attempt);
 		if (lease.phase === 'running') {
 			if (held !== undefined && held !== lease.id)

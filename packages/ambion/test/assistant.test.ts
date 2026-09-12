@@ -22,7 +22,14 @@ import {
 } from '../src/index.ts';
 import { renderRecord } from '../src/render.ts';
 import { fakeClock } from './support/clock.ts';
-import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
+import {
+	assistantEnded,
+	collect,
+	deferred,
+	messageBefore,
+	roomName as name,
+	tick,
+} from './support/room.ts';
 import {
 	byAgent,
 	contextText,
@@ -218,10 +225,9 @@ describe('the assistant', () => {
 		expect(summary.from).toBe('assistant');
 		expect(summary.to).toBe('priya');
 		expect(summary.text).toContain('Saturday');
-		// contiguous: it lands immediately after the range it stands for
-		expect(summary.covers.through).toBe(summary.seq - 1);
-
 		const record = await session.messages();
+		// it stands through the last message before it, and leaves none behind
+		expect(summary.covers.through).toBe(messageBefore(record, summary.seq));
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said', 'said', 'summary']);
 
@@ -368,7 +374,7 @@ describe('the assistant', () => {
 		// the redraft covers what it covered before, plus whatever won the race
 		expect(summary.text).toBe('draft 2');
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
-		expect(summary.covers.through).toBe(summary.seq - 1);
+		expect(summary.covers.through).toBe(messageBefore(record, summary.seq));
 	});
 
 	it('stops drafting after the second refusal, and writes when the room is quiet', async () => {
@@ -529,7 +535,7 @@ describe('the assistant', () => {
 		const summary = await written;
 
 		expect(summary.to).toBe('priya');
-		expect(summary.covers.through).toBe(summary.seq - 1);
+		expect(summary.covers.through).toBe(messageBefore(await session.messages(), summary.seq));
 		// how she reads outlives her visit, with the exchange she opened
 		expect(prompts[0]).toContain('Leave out who said what.');
 	});

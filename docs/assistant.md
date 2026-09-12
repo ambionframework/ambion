@@ -195,7 +195,7 @@ refuses a seat:
 
 The assistant reads the record to `through` and drafts. At the moment it
 commits, the room checks: if the record has not moved, the summary lands
-immediately after the range it covers, contiguous and in order. If the
+with no message between it and the range it covers. If the
 record has moved, the commit is refused, and the host hears the same
 `conflict` event a refused seat raises, naming the assistant and what it missed.
 
@@ -241,10 +241,12 @@ fold covers more than it does.
 Three things follow, and each removes a problem the design would otherwise
 have.
 
-**A summary is always contiguous with what it covers.** So `render.ts`
-replaces a block that ends immediately before the summary, and a client
-folds a run that ends at the message it just received. Neither has to
-reason about interleaving.
+**A summary leaves no message behind.** It stands for every message from
+`from` to the last one before it; the places between them hold the room's
+own entries about the draft, and never a message. So `render.ts` replaces
+a block that ends at the message before the summary, and a client folds a
+run that ends at the message it just received. Neither has to reason about
+interleaving.
 
 **`settled()` keeps its meaning.** The exchange can close before its
 summary lands, and the room is never held busy while the assistant writes.
@@ -317,7 +319,7 @@ export interface SummaryMessage {
   /** The person whose question opened the exchange. Always present. */
   to: string;
   text: string;
-  /** The range it stands for, contiguous and ending just before this seq. */
+  /** The range it stands for, ending at the last message before this one. */
   covers: { from: Seq; through: Seq };
 }
 
@@ -340,8 +342,8 @@ summary a message somebody was told.
 
 Two statements, and both hold.
 
-**The record is append-only.** A summary takes the next seq and lands after
-everything it covers. Nothing is deleted, nothing is rewritten, seqs are
+**The record is append-only.** A summary takes the next place and lands
+after everything it covers. Nothing is deleted, nothing is rewritten, seqs are
 monotonic, and `messages()` returns every message for ever. The past does
 not change under a reader.
 
@@ -796,7 +798,8 @@ The milestone tests live in
 document makes loudly:
 
 - An exchange the room answered twice closes into one message, addressed to
-  the person who asked, contiguous with the range it covers, drafted from that range
+  the person who asked, leaving no message between it and the range it
+  covers, drafted from that range
   and with one hand that reaches the record and nothing else. The
   activation names whom it writes for and how they read. §2, §3, §4, §7,
   §14.

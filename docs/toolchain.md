@@ -394,7 +394,8 @@ support, and `workspace.test.ts` there proves that the four built-in tools
 reach a workspace on a real provider. `pnpm test:live` runs both.
 
 Every test holds the record to the same invariants whatever the model said:
-seqs contiguous, one `message` event per message, every author on the
+seqs in order and each its own, one `message` event per message, every
+author on the
 roster, every summary covering the range before it, no `error` event, and
 every activation ended. Every test ends with one line of what it spent,
 read off the seats' downstream sessions.

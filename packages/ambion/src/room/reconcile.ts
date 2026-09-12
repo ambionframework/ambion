@@ -35,7 +35,7 @@ interface Send {
 	seat: string;
 }
 
-type Ended = Without<Extract<LeaseChange, { phase: 'ended' }>, 'after'>;
+type Ended = Without<Extract<LeaseChange, { phase: 'ended' }>, 'seq'>;
 
 export interface Decision {
 	/** Leases that ran past their expiry, ended here. */
@@ -43,7 +43,7 @@ export interface Decision {
 	/** The attempts the room does not make: the activations at the cap, written off here. */
 	abandoned: Ended[];
 	/** The exchange the room closes, when nothing is live and one is open. */
-	close: Omit<Close, 'after'> | undefined;
+	close: Omit<Close, 'seq'> | undefined;
 	sends: Send[];
 	/** When the room looks again on its own, or undefined when nothing waits on the clock. */
 	alarmAt: number | undefined;
@@ -54,14 +54,13 @@ export interface Decision {
  * by name, with the ids that make them live.
  */
 export function liveSeats(state: RoomState, now: number): Map<string, string[]> {
-	const assistant = state.composition?.assistant.name ?? '';
 	const live = new Map<string, string[]>();
 	const add = (seat: string | undefined, id: string) => {
 		if (seat === undefined) return;
 		live.set(seat, [...(live.get(seat) ?? []), id]);
 	};
 	for (const lease of state.leases.values()) {
-		if (isLive(lease, now)) add(seatOf(lease.id, assistant), lease.id);
+		if (isLive(lease, now)) add(seatOf(lease.id), lease.id);
 	}
 	for (const wake of state.pending) add(wake.seat, wake.id);
 	// A draft in its backoff holds nobody: the room is at rest until it is due.
@@ -78,7 +77,7 @@ export function working(state: RoomState, now: number): boolean {
 	const assistant = state.composition?.assistant.name ?? '';
 	for (const [seat, ids] of liveSeats(state, now)) {
 		if (seat !== assistant) return true;
-		if (ids.some((id) => parseId(id)?.kind === 'wake')) return true;
+		if (ids.some((id) => parseId(id)?.cause === 'message')) return true;
 	}
 	return false;
 }
