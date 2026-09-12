@@ -713,6 +713,35 @@ what it inherited too low.
 run, and say which lease has the extra end. Then fix the room or the
 count.
 
+### 43. Two runs over one JSONL file leave a file that does not read
+
+**What.** `pnpm chaos` fails now and then on the crash sweep, on `jsonl`,
+"after the entry lands", at an early write. A read of the storage throws
+`Invalid session mutation: has non-consecutive seq`, and the seq it names
+is Pi's own line number, which the journal never writes. The scenario
+itself ends whole: every delivery, every answer and every summary is on
+the record, in order. Only the re-read of the file fails.
+
+**Why it happens.** The sweep evicts the room and resumes it, so two
+`JsonlSessionStorage` instances hold one file. Pi's JSONL repository holds
+the next line seq in memory, and the evicted run's queued append lands
+under the new run's lines. `docs/durability.md` §6 states this weakness of
+the JSONL repository; the sweep is where it shows.
+
+**How often.** One run in eight of `test/chaos.test.ts` on its own, and it
+needs all 316 cases in one vitest run. One case on its own does not
+reproduce it, at any load. Measured on `d9dc579`, before the envelope
+change, and again after: the same rate.
+
+**Where.** `packages/ambion/test/support/room.ts` `storedOf`;
+`packages/ambion/test/support/invariants.ts` `leased`.
+
+**Fix.** Hold the jsonl sweep to what the room promises for that storage.
+A read that finds a file two runs wrote is not a broken invariant; it is
+the storage saying it cannot serve two writers. Either the sweep retries
+the read once the evicted run's queue is drained, or it skips `storedOf`
+for `jsonl` and reads the invariants off the session.
+
 ---
 
 ## 48. An agent reads the journal's place, not the message's number — done
