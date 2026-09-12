@@ -7,7 +7,7 @@
  * call and reads the room's answer through `landed`.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { Type } from 'typebox';
+import { SAY, SEAT, SUMMARISE } from '../define.ts';
 import { refusal } from '../render.ts';
 import { builtinTools, toolContext } from '../tools/workspace.ts';
 import { type AgentDefinition, isAmbionTool, type Message, type Seq } from '../types.ts';
@@ -93,16 +93,12 @@ export function hands(activation: Activation, room: SeatRoom): Hands {
 /** The one hand every seat that speaks for itself holds. */
 function sayTool(hands: Hands): AgentTool {
 	return {
-		name: 'say',
-		label: 'say',
+		...SAY,
+		label: SAY.name,
 		description:
 			'Speak on the record. Omit `to` to address the room; set `to` to a participant name ' +
 			'to address them directly — a directed say to an agent also calls them in. ' +
 			'Ending your turn without calling say is declining to speak.',
-		parameters: Type.Object({
-			to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
-			text: Type.String(),
-		}),
 		execute: async (toolCallId, rawParams) => {
 			const params = rawParams as { to?: string; text: string };
 			const to = params.to?.trim() ? params.to.trim() : undefined;
@@ -188,12 +184,11 @@ interface Draft {
 function summariseTool(hands: Hands, closing: Draft): AgentTool {
 	const person = closing.person;
 	return {
-		name: 'summarise',
-		label: 'summarise',
+		...SUMMARISE,
+		label: SUMMARISE.name,
 		description:
 			`Write the one message ${person} reads for this exchange. Call it once. ` +
 			'Ending your turn without calling it leaves the range whole, for whoever reads it.',
-		parameters: Type.Object({ text: Type.String() }),
 		execute: async (toolCallId, rawParams) => {
 			closing.calls += 1;
 			const stop = standDown(stoppingReason(closing));
@@ -294,14 +289,11 @@ interface Composing {
  */
 function seatTool(hands: Hands, composing: Composing): AgentTool {
 	return {
-		name: 'seat',
-		label: 'seat',
+		...SEAT,
+		label: SEAT.name,
 		description:
 			'Seat one agent from the reserve. It joins the room at once and reads the question. ' +
 			'Ending your turn without calling it leaves the roster as it stands.',
-		parameters: Type.Object({
-			name: Type.String({ description: 'An agent name from the reserve.' }),
-		}),
 		execute: async (toolCallId, rawParams) => {
 			composing.calls += 1;
 			const stop = standDown(composeStoppingReason(composing));

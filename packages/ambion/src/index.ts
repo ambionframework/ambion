@@ -34,8 +34,24 @@ export {
 	InMemorySessionStorage,
 	JsonlSessionRepo,
 } from '@earendil-works/pi-agent-core';
-export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
-export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from './define.ts';
+export type {
+	DefineAgentOptions,
+	DefineHumanOptions,
+	DefineToolOptions,
+	ToolShape,
+} from './define.ts';
+export {
+	attentive,
+	defineAgent,
+	defineHuman,
+	defineTool,
+	defineToolShape,
+	passive,
+	SAY,
+	SEAT,
+	SUMMARISE,
+	seated,
+} from './define.ts';
 export type {
 	CreateRuntimeOptions,
 	RunningRoom,

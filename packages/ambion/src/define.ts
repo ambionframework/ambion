@@ -8,7 +8,7 @@
  * takes — a name the room can address, a workspace tool name kept free.
  */
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
-import type { Static, TSchema } from 'typebox';
+import { type Static, type TSchema, Type } from 'typebox';
 import {
 	AGENT_BRAND,
 	type AgentDefinition,
@@ -140,6 +140,31 @@ export function attentive(agent: AgentDefinition): SeatedAgent {
 	return seated(agent, 'presence');
 }
 
+/**
+ * What binding a tool needs to know: what it is called, and what it takes.
+ *
+ * A shape is the contract, and a description is how one body presents
+ * itself. The room binds `summarise` with a description that names the
+ * person it writes for, so the description belongs to the body and never to
+ * the shape. Two bodies answer one shape when they take the same name and
+ * the same parameters.
+ */
+export interface ToolShape<TParameters extends TSchema = TSchema> {
+	name: string;
+	parameters: TParameters;
+}
+
+/**
+ * Write a shape a role names and a body answers. A host that holds the shape
+ * hands it to `defineTool`, and the room compares it by reference.
+ */
+export function defineToolShape<TParameters extends TSchema>(
+	shape: ToolShape<TParameters>,
+): ToolShape<TParameters> {
+	assertToolName(shape.name);
+	return { name: shape.name, parameters: shape.parameters };
+}
+
 export interface DefineToolOptions<TParameters extends TSchema> {
 	name: string;
 	description: string;
@@ -156,21 +181,77 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 }
 
 /**
- * A facade over Pi's tool shape, not a format of Ambion's own: parsed
+ * A tool that answers a shape somebody else published. The tool keeps the
+ * shape it answers, so a reader compares one reference to learn that this
+ * body answers that contract.
+ */
+export interface ShapedToolOptions<TParameters extends TSchema> extends Omit<
+	DefineToolOptions<TParameters>,
+	'name' | 'parameters'
+> {
+	shape: ToolShape<TParameters>;
+}
+
+/**
+ * A facade over Pi's tool shape, and no format of Ambion's own: parsed
  * parameters first, a context second, string returns allowed. A tool defined
  * with Pi's `defineTool` works unchanged wherever this one does, and reaches
  * no workspace: its signature has no room for the context.
+ *
+ * The options name a shape or state one. A tool that names one answers a
+ * contract a role can require.
  */
 export function defineTool<TParameters extends TSchema>(
-	options: DefineToolOptions<TParameters>,
+	options: DefineToolOptions<TParameters> | ShapedToolOptions<TParameters>,
 ): AmbionTool<TParameters> {
+	const shape = 'shape' in options ? options.shape : options;
 	return {
 		[TOOL_BRAND]: true,
-		name: options.name,
+		name: shape.name,
 		description: options.description,
-		parameters: options.parameters,
+		parameters: shape.parameters,
 		execute: options.execute,
+		...('shape' in options ? { shape: options.shape } : {}),
 	};
+}
+
+// -- the shapes the room binds ------------------------------------------------
+
+/**
+ * What a seat holds to speak on the record. Every seat that speaks holds it.
+ */
+export const SAY = defineToolShape({
+	name: 'say',
+	parameters: Type.Object({
+		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
+		text: Type.String(),
+	}),
+});
+
+/**
+ * What a seat holds to write the one message a person reads. A closed
+ * exchange binds it, over the range it stands for.
+ */
+export const SUMMARISE = defineToolShape({
+	name: 'summarise',
+	parameters: Type.Object({ text: Type.String() }),
+});
+
+/**
+ * What a seat holds to seat one agent from the reserve. An opened exchange
+ * binds it, over the reserve it may seat from.
+ */
+export const SEAT = defineToolShape({
+	name: 'seat',
+	parameters: Type.Object({
+		name: Type.String({ description: 'An agent name from the reserve.' }),
+	}),
+});
+
+function assertToolName(name: string): void {
+	if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+		throw new Error(`Invalid tool name '${name}': names are lowercase, alphanumeric plus dashes.`);
+	}
 }
 
 function assertName(name: string): void {
