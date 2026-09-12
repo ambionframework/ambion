@@ -224,8 +224,19 @@ So `Kind` keeps `close` for an entry on the journal, and `Cause` reads
 `closed` for why an activation exists. The documents state the two apart.
 
 `Hand` is already `'say' | 'summarise' | 'seat' | 'none'` in `wire.ts`.
-Step 2 makes it the key set of the binder table, and `none` stays what
-the room answers where a seat has nothing to hold.
+It becomes `ToolName`, and the field `hand` becomes `tool`. A hand is a
+tool: `defineAgent` names the field `tools` and calls them hands in the
+same docblock, and a hand is a metaphor where the rule asks for the
+mechanism. `none` goes, because nothing reads it — `view.ts` writes it,
+and the three tests in `hands.ts` and `activation.ts` all fall through.
+Absence says the same, and it leaves `none` to `Attention` alone.
+
+`ToolName` holds the room's three while the room is the one binder. A
+role that names a tool the agent brings widens it to a string, so the
+closed set is what stands today and never a promise. `hands.ts`, `handOf`
+and `Hands` keep their names here: `seat/hands.ts` renames beside a
+`tools/` directory that holds the workspace port, and item 10 owns that
+layout.
 
 **The sequence.** One storage-format change covers `Seating.role` and the
 new members of `Cause`, the way item 4 covered the counter. Five steps,
