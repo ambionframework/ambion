@@ -261,6 +261,27 @@ set and the flag go.
 checkpoint and the storages. The room depends on it the way it depends on
 Pi: for one concern, through one interface.
 
+**The envelope landed after it.** The package came out with the envelope
+and the body saying the same things twice: every body carried its own
+`seq`, a message carried its own `key`, and the run stamp had a third
+name, `written`. The journal reached into a body to read a place, and a
+caller that wrote a place had to agree with the journal about it. Now the
+storage holds three fields beside every body — `seq`, `key` and `run` —
+and the journal reads those three and never a body. `Drafts` is gone with
+them: a draft is a body, and `Omit<T, 'seq'>` said nothing a caller
+needed to say. `record`, `since` and `commit` speak in entries, and the
+room joins the envelope to the body in one place,
+`packages/ambion/src/journal/journal.ts`. `Fence` says only when a run
+took the name, and `Checkpoint`, `Close` and `LeaseChange` name no place
+at all.
+
+**It breaks the storage format, and nothing migrates.** A journal the
+earlier version wrote holds the run under `written`, so a reader at this
+version finds every entry unstamped and voids none of them: a superseded
+run's entries come back on the next resume. The version is 0.0.0 and no
+room outlives the change, so the decision is to take the break. A room on
+an older journal starts a new one.
+
 ## 6. `@ambionframework/workspace` — done
 
 `next.md` §2 asked for this. It landed first.

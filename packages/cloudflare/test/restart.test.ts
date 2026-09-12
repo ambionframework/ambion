@@ -8,7 +8,7 @@
  * and serves the same activation, so the work in flight is not lost.
  */
 import { env, runInDurableObject } from 'cloudflare:test';
-import type { Fence, LeaseChange } from '@ambionframework/ambion';
+import type { LeaseChange } from '@ambionframework/ambion';
 import { isSpoken } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
@@ -27,7 +27,7 @@ async function stored<T>(stub: DurableObjectStub, type: string): Promise<T[]> {
 
 /** The run that wrote each entry of one kind: every entry a fenced run writes carries it. */
 const writers = async (stub: DurableObjectStub, type: string): Promise<(string | undefined)[]> =>
-	(await stored<{ written?: string }>(stub, type)).map((entry) => entry.written);
+	(await stored<{ run?: string }>(stub, type)).map((entry) => entry.run);
 
 it('serves a seat that was at work when the object went away, and takes its commit after', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName(NAME));
@@ -40,7 +40,10 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	const claim = await until(async () => (await stored<LeaseChange>(stub, 'lease')).at(0));
 	expect(claim.id).toBe('message:4:slow:1');
 	const claimedBy = (await writers(stub, 'lease')).at(0);
-	const firstRun = (await stored<Fence>(stub, 'run')).map((entry) => entry.run).at(0);
+	const firstRun = (await writers(stub, 'run')).at(0);
+	// Both sides read the journal's stamp, so say the stamp is there: two
+	// entries a run never stamped agree with each other and prove nothing.
+	expect(firstRun).toEqual(expect.any(String));
 	expect(claimedBy).toBe(firstRun);
 
 	// The platform takes the room. The seat object is untouched and keeps working.
@@ -59,8 +62,9 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	// Two runs took the name, and the seat's message was written by the second:
 	// the commit crossed the restart, and the room that came back took it. A
 	// message the first run wrote would mean the abort landed too late.
-	const runs = (await stored<Fence>(again, 'run')).map((entry) => entry.run);
+	const runs = await writers(again, 'run');
 	expect(runs).toHaveLength(2);
+	expect(new Set(runs).size).toBe(2);
 	expect(runs.at(0)).toBe(firstRun);
 	const messageRows = await stored<{ from?: string }>(again, 'message');
 	const spoken = messageRows.findIndex((entry) => entry.from === 'slow');

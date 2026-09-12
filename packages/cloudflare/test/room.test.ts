@@ -3,7 +3,7 @@
  * repeated delivery key once.
  */
 import { env, runInDurableObject } from 'cloudflare:test';
-import type { Fence, Message } from '@ambionframework/ambion';
+import type { Message } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import { sqlSessions } from '../src/storage.ts';
 import { until } from './until.ts';
@@ -68,8 +68,9 @@ it('resumes over its own storage after an abort, and fences the run before it', 
 	);
 	// two runs, each with a name of its own: the second run's fence stands,
 	// and an entry the first run writes past it is void for every reader
+	// The journal stamps the run beside every body, and a run entry is where the fence reads it.
 	const ids = (runs ?? []).map((entry) =>
-		entry.type === 'custom' ? (entry.data as Fence).run : '',
+		entry.type === 'custom' ? ((entry.data as { run?: string }).run ?? '') : '',
 	);
 	expect(ids).toHaveLength(2);
 	expect(new Set(ids).size).toBe(2);

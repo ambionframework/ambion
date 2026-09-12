@@ -11,7 +11,13 @@
  * body under each. A message makes up the record a person reads; every other
  * kind sits beside the messages, and takes its place from the same counter.
  */
-import { type Entries, Journal, type Vocabulary } from '@ambionframework/journal';
+import {
+	type Entries,
+	type Entry as Envelope,
+	Journal,
+	type Seq,
+	type Vocabulary,
+} from '@ambionframework/journal';
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message } from '../types.ts';
 import {
@@ -41,27 +47,27 @@ const KINDS: Readonly<Record<string, Kind>> = Object.fromEntries(
 	Object.entries(STORED).map(([kind, stored]) => [stored, kind as Kind]),
 );
 
+/**
+ * What a body is before the journal gives it a place. Two of the room's
+ * kinds name where they sit: a message, which a person reads by number, and
+ * a composition, which the roster folds from. A message also names the
+ * idempotency token its commit carried, because `docs/durability.md` §2
+ * promises a host that a delivery it acknowledged is on the record once,
+ * and a host reads the token to hold the room to it. The journal keeps both
+ * fields of its own, so the room drafts the body without them and joins the
+ * two back together when it reads.
+ */
+export type Body<T> = Without<T, 'seq' | 'key'>;
+
 /** The body each kind carries. The journal reads none of them. */
 export interface Bodies {
-	message: Message;
+	message: Body<Message>;
 	lease: LeaseChange;
 	close: Close;
-	composition: Composition;
+	composition: Body<Composition>;
 	run: Fence;
 	checkpoint: Checkpoint;
 }
-
-/**
- * What each kind writes, before the journal stamps it with the place it
- * takes. One counter gives out every place, so no kind names its own.
- */
-export type Drafts = {
-	lease: Without<LeaseChange, 'seq'>;
-	close: Without<Close, 'seq'>;
-	composition: Without<Composition, 'seq'>;
-	run: Without<Fence, 'seq'>;
-	checkpoint: Without<Checkpoint, 'seq'>;
-};
 
 /**
  * The room's kinds, as the journal needs them. `accepts` is the room's own
@@ -80,12 +86,27 @@ const WORDS: Vocabulary<Kind> = {
 /** One entry on the room's journal: its kind, and the body that kind carries. */
 export type Entry = Entries<Kind, Bodies>;
 
+/** One record entry as the room reads it: the body, joined to its envelope. */
+export const placed = (entry: Envelope<Bodies['message']>): Message =>
+	({
+		...entry.body,
+		seq: entry.seq,
+		...(entry.key === undefined ? {} : { key: entry.key }),
+	}) as Message;
+
 /**
  * The room's journal: the record's machinery, in the room's vocabulary.
  * Every member the room reaches is the journal's, except the one the room
- * names in its own words: `messages`, the bodies that took a position.
+ * names in its own words: `messages`, the record as a person reads it.
  */
-export class RoomJournal extends Journal<Kind, Bodies, 'message', Drafts> {
+export class RoomJournal extends Journal<Kind, Bodies, 'message'> {
+	/**
+	 * Every record entry joined to its envelope, in order. The record only
+	 * grows, so the join tops up from where it stopped and never runs twice
+	 * over one entry.
+	 */
+	private readonly joined: Message[] = [];
+
 	constructor(
 		open: Promise<PiSession>,
 		hear?: (entry: Entry) => void,
@@ -95,8 +116,9 @@ export class RoomJournal extends Journal<Kind, Bodies, 'message', Drafts> {
 		super(open, WORDS, hear, run, lost);
 	}
 
-	/** The replayed record, then every message as its write is confirmed. */
-	get messages(): Message[] {
-		return this.record;
+	/** The record as the room reads it: every message, or every message past a place. */
+	messages(after?: Seq): Message[] {
+		for (const entry of this.record.slice(this.joined.length)) this.joined.push(placed(entry));
+		return after === undefined ? [...this.joined] : this.joined.filter((m) => m.seq > after);
 	}
 }

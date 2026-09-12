@@ -117,7 +117,7 @@ describe('a checkpoint', () => {
 			expect(beside(journal)).toHaveLength(1);
 			expect(journal.sinceCheckpoint).toBe(0);
 			expect(facts(fold(journal))).toEqual(before);
-			expect(journal.messages).toHaveLength(before.messages.length);
+			expect(journal.messages()).toHaveLength(before.messages.length);
 			await stopSession(session);
 		} finally {
 			await opened.dispose();
@@ -225,25 +225,19 @@ describe('a checkpoint past the fence', () => {
 				assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
 				agents: [{ name: 'solo', identity: 'Answers.', attention: 'broadcast' }],
 				available: [],
-				seq: 0,
+				seq: 2,
 				at,
 			};
-			const checkpoint = (floor: Seq, written: string) => ({
-				v: 1,
-				floor,
-				composition,
-				closes: [],
-				leases: [],
-				seq: 0,
-				at,
-				written,
-			});
+			const checkpoint = (floor: Seq) => ({ v: 1, floor, composition, closes: [], leases: [], at });
+			// The storage holds the journal's own three beside the body.
+			const stored = (type: string, seq: Seq, run: string, body: object) =>
+				piSession.appendCustomEntry(type, { ...body, seq, run });
 			// run 'a' wrote a checkpoint, run 'b' took the name, and 'a' wrote one more
-			await piSession.appendCustomEntry('ambion/run', { run: 'a', seq: 0, at, written: 'a' });
-			await piSession.appendCustomEntry('ambion/composition', { ...composition, written: 'a' });
-			await piSession.appendCustomEntry('ambion/checkpoint', checkpoint(7, 'a'));
-			await piSession.appendCustomEntry('ambion/run', { run: 'b', seq: 0, at, written: 'b' });
-			await piSession.appendCustomEntry('ambion/checkpoint', checkpoint(99, 'a'));
+			await stored('ambion/run', 1, 'a', { at });
+			await stored('ambion/composition', 2, 'a', composition);
+			await stored('ambion/checkpoint', 3, 'a', checkpoint(7));
+			await stored('ambion/run', 4, 'b', { at });
+			await stored('ambion/checkpoint', 5, 'a', checkpoint(99));
 
 			const journal = new RoomJournal(opened.sessions.open(name));
 			await journal.ready;

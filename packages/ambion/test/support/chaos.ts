@@ -30,6 +30,7 @@ import {
 	visitSession,
 } from '../../src/index.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
+import type { Seq } from '../../src/types.ts';
 import type { LeaseChange } from '../../src/wire.ts';
 import {
 	agents,
@@ -81,16 +82,28 @@ export async function outcome(
 	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
 }
 
+/** One read for a failure message, or what stopped it. */
+async function read(of: () => Promise<string>): Promise<string> {
+	try {
+		return await of();
+	} catch (error) {
+		return `unreadable: ${error instanceof Error ? error.message : String(error)}`;
+	}
+}
+
 /** The leases running and not expired on the journal at `now`: what a resumed room inherits. */
 export async function liveLeases(
 	sessions: SessionOpener,
 	name: string,
 	now: number,
 ): Promise<number> {
-	const stored = (await storedOf(sessions, name)).flatMap((r) =>
-		r.type === 'ambion/lease' ? [r.data as LeaseChange] : [],
-	);
-	return [...foldLeases(stored).values()].filter((lease) => isLive(lease, now)).length;
+	const changes = (await storedOf(sessions, name)).flatMap((entry) => {
+		if (entry.type !== 'ambion/lease') return [];
+		// The storage holds the journal's own fields beside the body; the fold reads the place off the entry.
+		const { seq, run: _run, ...body } = entry.data as LeaseChange & { seq: Seq; run?: string };
+		return [{ kind: 'lease', body, seq }];
+	});
+	return [...foldLeases(changes).values()].filter((lease) => isLive(lease, now)).length;
 }
 
 // -- the world ----------------------------------------------------------------
@@ -314,16 +327,25 @@ export class World {
 		await outcome(this.session, this.opened.sessions, this.cast);
 	}
 
-	/** What the world looks like when a check fails: the journal's entries, for the failure message. */
+	/**
+	 * What the world looks like when a check fails: the journal's entries, for
+	 * the failure message. A crash can leave a JSONL file that no longer reads,
+	 * so each read answers with its own failure. A helper that throws here
+	 * replaces the check's failure with its own, and hides what went wrong.
+	 */
 	async describe(): Promise<string> {
-		const stored = await storedOf(this.opened.sessions, this.name);
-		const messages = (await this.session.messages()).map(
-			(m: Message) => `#${m.seq} ${m.kind} ${m.from}${m.key ? ` (${m.key})` : ''}`,
-		);
 		return [
 			`crashes: ${this.crashes}, writes: ${this.writes}`,
-			`messages: ${messages.join('; ')}`,
-			`entries: ${stored.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
+			`messages: ${await read(async () =>
+				(await this.session.messages())
+					.map((m: Message) => `#${m.seq} ${m.kind} ${m.from}${m.key ? ` (${m.key})` : ''}`)
+					.join('; '),
+			)}`,
+			`entries: ${await read(async () =>
+				(await storedOf(this.opened.sessions, this.name))
+					.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`)
+					.join('\n  '),
+			)}`,
 		].join('\n');
 	}
 }

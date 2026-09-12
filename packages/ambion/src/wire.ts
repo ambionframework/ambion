@@ -33,8 +33,8 @@ export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired
  * last entry for an id wins, and an ended lease never runs again.
  */
 export type LeaseChange =
-	| { id: string; seq: Seq; phase: 'running'; expiry: number; at: string }
-	| { id: string; seq: Seq; phase: 'ended'; reason: EndReason; at: string };
+	| { id: string; phase: 'running'; expiry: number; at: string }
+	| { id: string; phase: 'ended'; reason: EndReason; at: string };
 
 /**
  * What the entries for one activation fold to: whether it runs, until when,
@@ -62,12 +62,11 @@ export interface LeaseHold {
 
 /**
  * A run took the name: the first entry every run writes. The entry fences
- * the runs. Every entry a run writes carries its `run`, and an entry of an
+ * the runs. The journal stamps the run on every entry beside the body, so
+ * the fence body says only when the run took the name. An entry of an
  * earlier run that lands after a later run's fence is void.
  */
 export interface Fence {
-	run: string;
-	seq: Seq;
 	at: string;
 }
 
@@ -86,7 +85,6 @@ export interface Checkpoint {
 	composition: Composition;
 	closes: Close[];
 	leases: LeaseHold[];
-	seq: Seq;
 	at: string;
 }
 
@@ -109,7 +107,6 @@ export interface Close {
 	owner: string;
 	from: Seq;
 	through: Seq;
-	seq: Seq;
 	at: string;
 	/** The assistant, when the exchange owes a summary. */
 	wakes?: string[];
@@ -132,6 +129,11 @@ export interface Composition {
 	goal?: string;
 	agents: Seating[];
 	available: Seating[];
+	/**
+	 * Where the composition sits on the record. The roster folds from here,
+	 * so a checkpoint that carries a composition carries this with it, and
+	 * the room writes it from the place the journal gives the entry.
+	 */
 	seq: Seq;
 	at: string;
 }
