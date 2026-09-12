@@ -24,10 +24,10 @@ names for five primitives. `SessionImpl` holds 58 methods and 24 fields.
 The assistant appears in 14 of the 24 source files. Each number has a
 different local cause, and the three causes share one root.
 
-## 1. One owed activation, in place of a wake and a draft — the fold landed
+## 1. One owed activation, in place of a wake and a draft — done
 
-`next.md` §3 holds this as a note. The fold and the vocabulary landed. One
-piece waits on a decision, and the text names it.
+`next.md` §3 holds this as a note. The fold, the vocabulary and the
+identifier all landed.
 
 **What.** `room/lease.ts` folds the wakes a message owes.
 `room/fold.ts` folds the summaries a close owes. Both produce `Due`.
@@ -79,16 +79,22 @@ CAME_TO_NOTHING  = ANSWERS_NOTHING + { refused }
 `rules.test.ts` pins the difference with the one case that shows it: a
 message that landed between a lease's last renewal and its end.
 
-**What waits, and why.** One identifier format. A message-caused id is
-`<seq>:<seat>` and a close-caused id is `close:<through>:<attempt>`, so a
-close names no seat and `seatOf` still takes the assistant's name to
-resolve one. One spelling would end that. It also rewrites 139 ids the
-tests hold and every lease id on a journal already written, so a room
-resumed over one would not parse its own. Decide it with a storage
-format change, not on its own.
+**The identifier landed with the counter.** The text above asked for one
+spelling, and asked to take it with a storage-format change rather than on
+its own. Item 4 opened one, so both went together:
 
-**What it unblocks.** Items 2 and 3 both carry the two kinds through
-today. This item makes each of them a smaller change.
+```text
+<cause>:<position>:<seat>:<attempt>
+```
+
+A close names its seat now, so `seatOf` reads the seat off the id and
+takes no assistant. It rewrote the ids the tests hold and every lease id
+on a journal already written, which is what made the format change the
+place to do it.
+
+**What it unblocked.** Items 2 and 3 carried the two kinds through every
+module. Each is a smaller change now, and item 8's `liveSeats` reads one
+list where it read two.
 
 ## 2. The assistant as data
 

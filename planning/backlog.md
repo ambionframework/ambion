@@ -713,7 +713,7 @@ what it inherited too low.
 run, and say which lease has the extra end. Then fix the room or the
 count.
 
-### 43. Two runs over one JSONL file leave a file that does not read
+### 49. Two runs over one JSONL file leave a file that does not read
 
 **What.** `pnpm chaos` fails now and then on the crash sweep, on `jsonl`,
 "after the entry lands", at an early write. A read of the storage throws
@@ -742,7 +742,7 @@ the storage saying it cannot serve two writers. Either the sweep retries
 the read once the evicted run's queue is drained, or it skips `storedOf`
 for `jsonl` and reads the invariants off the session.
 
-### 44. The seat's alarm does not run, and the wait reports the room
+### 50. The seat's alarm does not run, and the wait reports the room
 
 **What.** `packages/cloudflare/test/seat.test.ts` fails now and then in CI
 with `Nothing came within 20000 ms` at `test/until.ts:20`, from line 28: the
