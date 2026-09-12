@@ -211,6 +211,22 @@ to a comparison of the name and the parameters.
 room from agents, humans, tools, workspaces, roles and a session. A shape
 is half of a tool, so it belongs to the tool primitive.
 
+**The names.** The two events are `opened` and `closed`, and the type
+carries the noun. Every string union in the package spells its members
+this way: `PresenceChange`, `EndReason`, `SeatStatus`, `Attention`. One
+thing in a room opens and closes, so one word holds one meaning. `Cause`
+also spells them in an activation's id, where no type name stands beside
+them, and the id reads `opened:4:assistant:1`.
+
+`Cause` spells the second one `close` today, for the `Close` entry that
+causes the activation. It becomes `closed`, for the exchange that closed.
+So `Kind` keeps `close` for an entry on the journal, and `Cause` reads
+`closed` for why an activation exists. The documents state the two apart.
+
+`Hand` is already `'say' | 'summarise' | 'seat' | 'none'` in `wire.ts`.
+Step 2 makes it the key set of the binder table, and `none` stays what
+the room answers where a seat has nothing to hold.
+
 **The sequence.** One storage-format change covers `Seating.role` and the
 new members of `Cause`, the way item 4 covered the counter. Five steps,
 and each one builds and passes the gate on its own:
