@@ -362,6 +362,11 @@ forbids it by name today), it wants the same fold and the same decision.
 Two writers is the point at which they should become their own module
 rather than two functions beside the assistant's.
 
+[`simplification.md`](simplification.md) §2 makes a second writer
+expressible: a role answers `closed`, and any seat that takes the role
+writes. `foldOwed` already reads the close's own `wakes`, so the fold
+takes more than one writer today. The module is still the open question.
+
 ### 21. A credentials boundary for tool calls leaving the workspace
 
 **What.** [`docs/workspace.md`](../docs/workspace.md) §1 draws the workspace's
@@ -511,20 +516,30 @@ pattern in one place, and a room composes patterns the way it composes
 agents. At the limit, Ambion is the framework that defines the
 collaboration patterns people and agents work in.
 
-**What it needs deciding.**
+**What [`simplification.md`](simplification.md) §2 decides.** That item
+builds roles, and the assistant is the first one. Two of the three
+questions this entry held are answered by building it:
 
-- Whether a role is a seating choice, the way attention is, or a field on
-  the agent. Attention belongs to the seating so that one agent can sit
-  differently in two rooms, and a role is probably the same kind of thing.
-- What a role changes: the seat's instructions, its attention, or the
-  order the room wakes seats in. Only the first keeps the routing rule as
-  one comparison ([`docs/agent.md`](../docs/agent.md) rule 6).
-- Who assigns roles. The assistant never runs the room
-  ([`docs/assistant.md`](../docs/assistant.md) §2), so assigning roles is a
-  different seat's work, or the host's.
+- **A role is a seating choice.** It sits beside `attention` on
+  `Seating`, so one agent sits into different roles in two rooms.
+- **A role changes what wakes a seat and what it holds.** It leaves
+  `attention` alone, so the routing rule stays one comparison
+  ([`docs/agent.md`](../docs/agent.md) rule 6). A role carries `guidance`,
+  which is the seat's instructions for the activations that role answers.
 
-**Where.** `seated` in [`define.ts`](../packages/ambion/src/define.ts), the
-roster in [`render.ts`](../packages/ambion/src/render.ts).
+**What waits.**
+
+- **Who assigns a role.** The host does, at composition. The assistant
+  never runs the room ([`docs/assistant.md`](../docs/assistant.md) §2), so
+  a role assigned while the room runs is a different seat's work.
+- **A role that grants an ordinary tool.** §2 binds one tool per event a
+  role answers. A role that grants a tool for every activation waits for a
+  second role to ask for it.
+- **More than one role on a seat.** Two roles need a rule for two answers
+  to one event. No case states one yet.
+
+**Where.** `defineRole` and `Seating.role` after §2; the roster in
+[`render.ts`](../packages/ambion/src/render.ts).
 
 ### 26. The catalog is keyed by bare name, per runtime
 

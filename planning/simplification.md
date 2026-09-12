@@ -80,8 +80,8 @@ CAME_TO_NOTHING  = ANSWERS_NOTHING + { refused }
 message that landed between a lease's last renewal and its end.
 
 **The identifier landed with the counter.** The text above asked for one
-spelling, and asked to take it with a storage-format change rather than on
-its own. Item 4 opened one, so both went together:
+spelling, and asked to take it with a storage-format change. Item 4
+opened one, so both went together:
 
 ```text
 <cause>:<position>:<seat>:<attempt>
@@ -96,9 +96,11 @@ place to do it.
 module. Each is a smaller change now, and item 8's `liveSeats` reads one
 list where it read two.
 
-## 2. The assistant as data
+## 2. Roles, and the assistant is the first one
 
-New.
+New. An earlier reading of this item asked only for the assistant as
+data. The wider shape came out of the same reading, and it holds the
+assistant as one case.
 
 **What.** `docs/assistant.md` says the assistant is a seat, and that two
 things make it one, and that both are data. The code holds the
@@ -106,35 +108,155 @@ assistant's name as a parameter through `fold.ts`, `lease.ts`,
 `reconcile.ts`, `view.ts` and `seat.ts`. Fourteen of the 24 source files
 name it.
 
-**Why.** `Attention` ranks messages on one widening scale: `none`,
-`named`, `broadcast`, `presence`. The assistant wakes for two things that
-are not messages. An opened exchange wakes it, and a closed exchange
-wakes it. Neither sits on the scale, so the room writes the assistant's
-name into `wakes` at two points in the code.
+**Why. Three facts travel under one name.** Each one is about a seat, and
+each one is separate from the other two.
 
-Every other special case follows. `seatOf` falls back to the assistant
-for a draft. `working` asks whether a live identifier belongs to the
-assistant. `wakes` takes a `fromAssistant` flag. `handOf` compares the
-seat to the assistant. `foldOwed` filters the closes by the assistant's
-name.
+| fact              | the question it answers        | where it lives today            |
+| ----------------- | ------------------------------ | ------------------------------- |
+| attention         | which messages reach this seat | `Seating.attention`, as data    |
+| the room's events | which of them wake it          | the assistant's name, two sites |
+| the role          | what it holds once awake       | `seat === facts.assistant`      |
 
-**Where.** `packages/ambion/src/session.ts`, `routing`, `steer`,
-`assistant`; `packages/ambion/src/room/reconcile.ts`, `closing`,
-`working`, `liveSeats`; `packages/ambion/src/room/lease.ts`, `seatOf`,
-`reached`; `packages/ambion/src/room/fold.ts`, `foldOwed`;
-`packages/ambion/src/room/view.ts`, `handOf`;
-`packages/ambion/src/seat/seat.ts`, `wakes`.
+**Why the scale cannot carry the second fact.** `Attention` ranks
+messages on one widening order: `none`, `named`, `broadcast`,
+`presence`. `WIDTH` makes it a total order, and the routing rule is one
+comparison over it ([`../docs/agent.md`](../docs/agent.md) rule 6). An
+opened exchange and a closed exchange hold no place on that order. So no
+value of `attention` states them, and the room writes the assistant's
+name in at two points instead.
 
-**Fix.** A seating names what wakes it, and the two room events are
-two of the names. The scale keeps its job for the reach of a message.
-Then `assertAssistant`, the fallback in `seatOf`, the assistant clause in
-`working`, the `fromAssistant` flag, the comparison in `handOf` and both
-written-in names all go. `RoomFacts.assistant` and `OwedContext.assistant`
-go with them.
+**Why the cause cannot carry the third fact.** `handOf` already reads the
+cause for a close, and it holds the hand a close binds. It falls back to
+the name for an open, because an opened exchange is `message`-caused, so
+the id cannot tell the question that opened the exchange from the
+question an agent answers.
 
-**What it buys.** The runtime stops holding a privileged seat. A host
-writes one assistant as configuration, and the README's claim about
-agents as the unit of ownership holds in the code.
+**Where.** `packages/ambion/src/session.ts`, `routing`, `assistant`;
+`packages/ambion/src/room/reconcile.ts`, `closing`;
+`packages/ambion/src/room/view.ts`, `handOf`, `RoomFacts`;
+`packages/ambion/src/room/fold.ts`, `foldRoster`;
+`packages/ambion/src/room/assistant.ts`, `assertAssistant`;
+`packages/ambion/src/render.ts`, four reads of `seat.assistant`;
+`packages/ambion/src/wire.ts`, `Seating`, `Composition`.
+
+**Fix.** A role names what a seat does in the room's own work: the
+events it answers, and the tool it holds at each. The runtime holds the
+definition; the journal holds what a reader needs, which is the same
+split `identity` and `instructions` already take.
+
+```ts
+export type ExchangeEvent = 'opened' | 'closed';
+export type Cause = 'message' | ExchangeEvent;
+
+/** What binding a tool needs to know: what it is called, and what it takes. */
+export interface ToolShape {
+  name: string;
+  description: string;
+  parameters: TSchema;
+}
+
+/** The runtime's copy: `defineRole` writes one. */
+export interface RoleDefinition {
+  name: string;
+  answers: Partial<Record<ExchangeEvent, ToolShape>>;
+  guidance?: string;
+}
+
+/** The journal's copy. The fold reads the events; `handOf` reads the name. */
+export interface Role {
+  name: string;
+  answers: Partial<Record<ExchangeEvent, string>>;
+}
+
+export interface Seating {
+  name: string;
+  identity: string;
+  attention: Attention;
+  role?: Role;
+}
+```
+
+The assistant stops being a shape the runtime knows:
+
+```ts
+export const ASSISTANT = defineRole({
+  name: 'assistant',
+  answers: { opened: SEAT, closed: SUMMARISE },
+  guidance: '…',
+});
+```
+
+**A tool is a shape and a body.** A hand the room binds and a tool an
+agent declares already share one type: both are a name, a description, a
+parameter schema and an `execute`. Three binders already produce one by
+name — the room, the workspace and the agent — and
+`BUILTIN_TOOL_NAMES` already arbitrates two of them inside `defineAgent`.
+A role names the shape, and the binder is resolved where the seat takes
+its place:
+
+| order | binder        | when                                             |
+| ----- | ------------- | ------------------------------------------------ |
+| 1     | the room      | the name is one the room publishes               |
+| 2     | the workspace | the agent names one, and the name is a builtin   |
+| 3     | the agent     | the agent declares that name, and the shape fits |
+| —     | refuse        | nothing resolves, or the shape differs           |
+
+An agent fits a role when every shape the role answers with resolves.
+`defineToolShape` writes a shape, so the common test is one comparison of
+references: the host imports the shape the role names and hands it to
+`defineTool`. A tool written against a shape it never imported falls back
+to a comparison of the name and the parameters.
+
+`defineToolShape` is a helper and never a primitive. A host composes a
+room from agents, humans, tools, workspaces, roles and a session. A shape
+is half of a tool, so it belongs to the tool primitive.
+
+**The sequence.** One storage-format change covers `Seating.role` and the
+new members of `Cause`, the way item 4 covered the counter. Five steps,
+and each one builds and passes the gate on its own:
+
+1. **The exchange's events become causes.** `Cause` gains `opened` and
+   `closed`. `handOf` reads the cause in every branch, so the hand stops
+   reading the seat's name. No new type.
+2. **`defineToolShape`, and the room publishes its shapes.** `SAY`,
+   `SEAT` and `SUMMARISE` become shapes, `defineTool` takes one, and
+   `hands.ts` builds every hand through the same path. Nothing changes at
+   runtime. This step stands on its own and makes every step after it
+   smaller.
+3. **The binder table.** One table resolves a tool name to its binder,
+   and `BUILTIN_TOOL_NAMES` becomes row 2 of it. A seating is refused
+   where a shape does not resolve, so a host reads the failure at
+   `startSession`. `assertAssistant` goes: the assistant's shapes are the
+   room's, so the role asks the agent for nothing.
+4. **`defineRole`, `Role` on the seating, and `ASSISTANT`.** `routing`
+   and `closing` read the roster. `Composition.assistant`,
+   `RoomFacts.assistant` and `foldRoster`'s flag go.
+5. **`guidance`, and the documents.** `render.ts` renders the role's
+   guidance in place of the paragraph it holds for the assistant.
+   `README.md`, `CLAUDE.md`, `docs/agent.md`, `docs/assistant.md` and
+   `docs/roster.md` take the sixth primitive. `backlog.md` §25 loses what
+   this decides.
+
+**What it decides in [`backlog.md`](backlog.md) §25.** A role is a
+seating choice, so one agent sits into different roles in two rooms. A
+role changes what wakes a seat and what it holds, and it leaves
+`attention` alone, so the routing rule stays one comparison.
+
+**What waits.** Who assigns a role stays the host's, at composition. This
+item binds one tool per event a role answers. A role that grants a tool
+for every activation waits for a second role to ask for it. Whether a
+seat takes more than one role waits for the same reason: two roles need a
+rule for two answers to one event, and no case states one yet.
+
+**What it costs.** `assertAssistant` goes, so an agent may hold its own
+tools and a role. Nothing holds a room to one assistant, so
+`docs/assistant.md` states a convention where it stated a type. Both
+follow from roles granting what a seat holds, and both want the document
+to say so.
+
+**What it buys.** The runtime holds no privileged seat. A host writes one
+assistant as configuration, and the README's claim about agents as the
+unit of ownership holds in the code.
 
 ## 3. Split `session.ts` by phase
 
@@ -430,6 +552,12 @@ while the package moves, so the positions change once.
 **Item 1 comes third.** One owed activation is what makes item 2
 tractable, and item 2 is what makes item 3 a split.
 
+**Item 2 grew.** It asked for the assistant as data, and the reading
+found three facts under one name. It carries roles now, and it takes one
+storage-format change in five steps. The step order inside it matters
+more than the item order around it: step 2 changes nothing at runtime and
+makes the three steps after it smaller.
+
 **Items 7, 8 and 9 are cheap after 1, 2 and 3 land.** Each removes a
 vocabulary that the earlier items have already thinned.
 
@@ -447,6 +575,11 @@ checkpointed, that holds no reference to an agent.
 library, and the shape is not settled. Keep it in the core until item 2
 has taken the assistant out of it. `next.md` §3 gives the reason: two
 subjects that share a shape hide whether the shape is right.
+
+**A role is a value a host writes.** `defineRole` names the events a seat
+answers and the tool it holds at each. The assistant is the first role,
+and the runtime reads no seat's name to route, to close, or to bind a
+hand.
 
 **The measure.** The core loses about 1500 lines and four vocabularies:
 the wake and the draft, the author and the subject, six tests for what is
