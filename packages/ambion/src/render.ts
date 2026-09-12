@@ -363,11 +363,23 @@ function renderReserve(reserve: readonly Reserved[]): string[] {
 	];
 }
 
+/**
+ * The number a reader gives a message: its place in the record they read,
+ * counting from one. One counter gives out every place on the journal, so a
+ * journal place counts the entries the room wrote about the exchange too,
+ * and it skips. A number that skips names a message the reader cannot find,
+ * and reads as a gap where none is. The journal keeps its places; a
+ * participant reads these.
+ */
+const numbered = (record: readonly Message[], seq: Seq): number =>
+	record.filter((message) => message.seq <= seq).length;
+
 /** What this activation is for, in the last line the model reads. */
 function askOf(seat: SeatSpeaking, room: RoomView): string {
 	if (seat.composing) {
+		const asked = numbered(room.record, seat.composing.from);
 		return (
-			`${seat.composing.person} asked at message ${seat.composing.from}. Seat who the question ` +
+			`${seat.composing.person} asked at message ${asked}. Seat who the question ` +
 			`needs from the reserve, or end your turn to leave the roster as it stands.`
 		);
 	}
@@ -376,13 +388,14 @@ function askOf(seat: SeatSpeaking, room: RoomView): string {
 		// The assistant woken by anything but an open or a close has nothing to
 		// do in the activation, and no hands to do it with. See `handsFor`.
 		return closing
-			? `${closing.person}'s exchange is over: messages ${closing.from} to ${closing.through}. ` +
-					`Write the one message they read for it, or end your turn to leave the range whole.`
+			? `${closing.person}'s exchange is over: messages ${numbered(room.record, closing.from)} ` +
+					`to ${numbered(room.record, closing.through)}. Write the one message they read ` +
+					`for it, or end your turn to leave the range whole.`
 			: `Nothing is asked of you: read the room, and end your turn.`;
 	}
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = room.exchange
-		? `${room.exchange.owner}'s question at message ${room.exchange.from} is open. `
+		? `${room.exchange.owner}'s question at message ${numbered(room.record, room.exchange.from)} is open. `
 		: '';
 	return `${open}Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
 }

@@ -213,7 +213,7 @@ describe('the reserve', () => {
 		expect(reserves[0]).toContain('The reserve: agents not in the room');
 		expect(reserves[0]).toContain('- surveyor: Quantity surveyor. Holds the tonnage.');
 		expect(reserves[0]).toContain('- architect: Architect. Holds the drawings.');
-		expect(reserves[0]).toContain('priya asked at message 4. Seat who the question needs');
+		expect(reserves[0]).toContain('priya asked at message 2. Seat who the question needs');
 		// the seated product is in the roster, and never in the reserve
 		expect(reserves[0]).not.toContain('- product:');
 		expect(reserves[0]).toContain('- product (');
@@ -277,7 +277,7 @@ describe('seating', () => {
 		expect(activated(events).filter((n) => n === 'surveyor')).toEqual(['surveyor']);
 		expect(surveyorContexts[0]).toContain('How much steel is on site?');
 		expect(surveyorContexts[0]).toContain('· surveyor seated by assistant');
-		expect(surveyorContexts[0]).toContain("priya's question at message 4 is open.");
+		expect(surveyorContexts[0]).toContain("priya's question at message 2 is open.");
 	});
 
 	it('wakes nobody at broadcast: a seating has no words in it', async () => {

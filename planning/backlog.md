@@ -715,22 +715,26 @@ count.
 
 ---
 
-## 48. An agent reads the journal's place, not the message's number
+## 48. An agent reads the journal's place, not the message's number — done
 
 **What.** One counter gives out every place on the record, so the messages
-are not contiguous. `render.ts` shows an agent the raw place: a room two
-messages in says "priya asked at message 4", because the fence and the
+are not contiguous. `render.ts` showed an agent the raw place: a room two
+messages in said "priya asked at message 4", because the fence and the
 composition took the first two.
 
-**Why it matters.** The number anchors what the agent reads. A number that
+**Why it mattered.** The number anchors what the agent reads. A number that
 skips reads as a gap the agent cannot see, and it invites the model to
 reason about messages that are not there.
 
-**Where.** `packages/ambion/src/render.ts`, `renderSystemPrompt` and the
-exchange line; every place a seq reaches a participant.
+**What landed.** `numbered` in `render.ts` counts the messages up to a
+place, so the three lines a participant reads name the message's place on
+the record they read. `askOf` holds all three: the question a composing
+assistant was woken for, the range a closing assistant covers, and the open
+question a seated agent reads.
 
-**Fix.** Number the record for the reader where it is rendered: the first
-message is 1, the next is 2. The journal keeps its places, and nothing a
-participant sends back names one, so the numbering stays inside
-`render.ts`. `simplification.md` §4 names this as the rendering job the
-shared counter leaves behind.
+The numbering stays inside `render.ts`, because nothing a participant sends
+back names a place. The three hands take `{ to?, text }`, `{ text }` and
+`{ name }`: no tool carries a seq either way.
+
+Three tests pin it, and each fails when `render.ts` hands back the raw
+place instead.
