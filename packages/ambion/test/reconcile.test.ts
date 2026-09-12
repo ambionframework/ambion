@@ -374,3 +374,36 @@ describe('decide', () => {
 		});
 	});
 });
+
+describe('working', () => {
+	const live = { expiry: T0 + 60_000, at };
+
+	it('holds the exchange open while an activation a message caused is live', () => {
+		const state = fold([
+			...opened(),
+			lease({ id: 'message:2:product:1', phase: 'running', ...live }),
+		]);
+		expect(working(state, T0)).toBe(true);
+	});
+
+	it('holds nothing open for an activation a close caused, whichever seat holds it', () => {
+		// A close is the end of an exchange, so the activation that answers one
+		// cannot hold that exchange open. The cause decides it, and not the name
+		// of the seat: a room that read the name would keep its own writer
+		// privileged, and would never settle once any other seat drafted.
+		// the wake the question decided is answered, so nothing else is owed
+		const closed = [
+			...opened(),
+			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			close({ owner: 'priya', from: 2, through: 2, wakes: ['assistant'] }),
+		];
+		for (const seat of ['assistant', 'product']) {
+			const state = fold([
+				...closed,
+				lease({ id: `close:2:${seat}:1`, phase: 'running', ...live }),
+			]);
+			expect(working(state, T0)).toBe(false);
+		}
+	});
+});

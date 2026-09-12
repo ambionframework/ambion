@@ -69,14 +69,13 @@ export function liveSeats(state: RoomState, now: number): Map<string, string[]> 
 }
 
 /**
- * Whether the exchange is still being worked on: a seat that speaks for
- * itself is live, or the assistant is composing. The assistant drafting a
- * summary is not the room still working, so a draft holds no exchange open.
+ * Whether the exchange is still being worked on: any activation a message
+ * caused is live. A close causes the other kind, and a close is the end of
+ * an exchange, so the activation that answers one holds no exchange open —
+ * whichever seat holds it.
  */
 export function working(state: RoomState, now: number): boolean {
-	const assistant = state.composition?.assistant.name ?? '';
-	for (const [seat, ids] of liveSeats(state, now)) {
-		if (seat !== assistant) return true;
+	for (const ids of liveSeats(state, now).values()) {
 		if (ids.some((id) => parseId(id)?.cause === 'message')) return true;
 	}
 	return false;

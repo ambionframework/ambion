@@ -45,6 +45,8 @@ interface RosterSeat {
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends Due {
 	person: string;
+	/** The seat the close named to write it. */
+	writer: string;
 	/** The earliest question the message must reach back to. */
 	from: Seq;
 	/** The latest close it stands for. The draft id names this. */
@@ -144,7 +146,7 @@ export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomS
 		options,
 		assistant,
 	);
-	const owed = foldOwed(closes, messages, leases, { assistant, ...options });
+	const owed = foldOwed(closes, messages, leases, options);
 	return {
 		composition,
 		roster,
@@ -194,17 +196,19 @@ function reseat(roster: RosterSeat[], message: Message): void {
 	}
 }
 
-interface OwedContext extends FoldOptions {
-	assistant: string;
-}
+type OwedContext = FoldOptions;
+
+/** The seat a close owes its summary to, or nothing when it owes none. */
+const owes = (close: Close): string | undefined => close.wakes?.[0];
 
 /** A draft that ended this way stood down: the assistant judged the room, the host wrote the draft off, or the room gave up. */
 const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked', 'abandoned']);
 
 /**
  * The summaries still owed, one per person. A close owes one when it names
- * the assistant, no summary covers it, and no draft over it or over a later
- * close of the same person stood down. Every later close of the same person
+ * a seat, no summary covers it, and no draft over it or over a later
+ * close of the same person stood down. The close carries the name, so the
+ * fold reads who is owed off the record and never off the room. Every later close of the same person
  * joins the draft: the closes fold in journal order, so the latest close names
  * the draft, and one message reaches back to the earliest question still
  * owed. A draft at the cap is still owed here, and carries the attempts
@@ -218,7 +222,7 @@ function foldOwed(
 	context: OwedContext,
 ): Owed[] {
 	const summaries = messages.filter(isSummary);
-	const owing = closes.filter((close) => close.wakes?.includes(context.assistant));
+	const owing = closes.filter((close) => owes(close) !== undefined);
 	const open = owing.filter(
 		(close) => !summaries.some((s) => covers(s, close)) && !judged(leases, close, owing),
 	);
@@ -227,6 +231,8 @@ function foldOwed(
 		const known = byPerson.get(close.owner);
 		byPerson.set(close.owner, {
 			person: close.owner,
+			// The latest close names the seat, as it names the draft.
+			writer: owes(close) ?? '',
 			from: Math.min(known?.from ?? close.from, close.from),
 			through: close.through,
 			covering: [...(known?.covering ?? []), close.through],
@@ -278,7 +284,7 @@ function withAttempts(
 	const failed = [...leases.values()].filter((lease) => draftedOver(lease, grouped.covering));
 	return {
 		...grouped,
-		...dueFrom('close', grouped.through, context.assistant, failed, context),
+		...dueFrom('close', grouped.through, grouped.writer, failed, context),
 	};
 }
 
