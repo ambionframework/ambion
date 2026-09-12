@@ -198,8 +198,12 @@ export interface CommitIntent<TBody> {
 	key?: string;
 	/** The seq the author has read. The queue refuses the commit when the record moved past it. */
 	readThrough?: Seq;
-	/** The body, or a function of the record as it stands when the commit runs. */
-	draft: Omit<TBody, 'seq' | 'key'> | ((lastSeq: Seq) => Omit<TBody, 'seq' | 'key'>);
+	/**
+	 * The body, or a function of the record as it stands when the commit runs.
+	 * The argument is the place the last record entry took, which is what an
+	 * author reads through; an entry beside the record moves neither.
+	 */
+	draft: Omit<TBody, 'seq' | 'key'> | ((lastCommitted: Seq) => Omit<TBody, 'seq' | 'key'>);
 }
 
 /** The commit landed, or the key had landed before, or the record had moved. */

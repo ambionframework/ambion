@@ -6,10 +6,11 @@
  * what it holds, and the room that writes to one keeps that word for its
  * own content.
  *
- * A journal takes two kinds of entry, and reads neither. A *positioned*
- * entry takes the next seq; every other kind takes no seq and carries
- * `after`, the last seq when it landed. What each one means belongs to the
- * caller, which names its kinds in a `Vocabulary`.
+ * A journal takes two kinds of entry, and reads neither. A *record* entry
+ * makes up the record a reader reads; every other kind sits beside it. One
+ * counter gives out every place, so a seq names one entry of any kind. What
+ * each one means belongs to the caller, which names its kinds in a
+ * `Vocabulary`.
  *
  * ```ts
  * const journal = new Journal(open, words, (entry) => react(entry), runId, () => lost());

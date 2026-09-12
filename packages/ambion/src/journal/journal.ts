@@ -8,8 +8,8 @@
  *
  * What lives here is the part that is the room's: the six kinds of entry it
  * writes, what the storage holds each one under, and what it accepts as a
- * body under each. A message takes a position; every other kind sits beside
- * the messages, and carries `after`, the last seq when it landed.
+ * body under each. A message makes up the record a person reads; every other
+ * kind sits beside the messages, and takes its place from the same counter.
  */
 import { type Entries, Journal, type Vocabulary } from '@ambionframework/journal';
 import type { Session as PiSession } from '@earendil-works/pi-agent-core';
@@ -52,8 +52,8 @@ export interface Bodies {
 }
 
 /**
- * What each kind writes, before the journal stamps it. A message takes its
- * seq at commit; every other kind takes `after`, the last seq when it landed.
+ * What each kind writes, before the journal stamps it with the place it
+ * takes. One counter gives out every place, so no kind names its own.
  */
 export type Drafts = {
 	lease: Without<LeaseChange, 'seq'>;

@@ -5,7 +5,7 @@
  * into Dafny obligations, and CI verifies them.
  */
 
-//@ contract The next positioned entry takes the seq after the last one the journal confirmed.
+//@ contract The next entry of any kind takes the seq after the last one the journal gave out.
 export function nextSeq(lastSeq: number): number {
 	//@ requires lastSeq >= 0
 	//@ ensures \result == lastSeq + 1
