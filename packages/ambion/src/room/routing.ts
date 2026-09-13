@@ -1,0 +1,101 @@
+/**
+ * Who wakes for a message: the room's whole routing policy, in one file and
+ * pure over what it is handed.
+ *
+ * `routes` is rules 1, 4 and 6 of the core ([`docs/agent.md`](../../../../docs/agent.md)),
+ * and `wakes` is the one comparison they read off the attention scale. The
+ * room writes the answer on the message, so a message and its routing are
+ * one write, and every reader of the record reads who it woke.
+ *
+ * A seat at work is not woken. It is steered once the write is confirmed
+ * (rule 2), and the steer is not on the message.
+ */
+
+import { type Attention, authorOf, isSpoken, isSummary, type Message } from '../types.ts';
+import { answering, type RoomState } from './fold.ts';
+
+/** The attention scale, narrowest first. A seat hears what it is wide enough for. */
+const WIDTH: Record<Attention, number> = { none: 0, named: 1, broadcast: 2, presence: 3 };
+
+/**
+ * How wide a seat's attention has to be for this message to reach it: a
+ * directed say reaches the one it names, anything else said reaches the room,
+ * and a person arriving or leaving reaches the widest end.
+ *
+ * A summary reaches no seat at all. It is written for one person, over a
+ * range the room has already closed, so it is news to nobody in the room.
+ * The scale says so, because what a message reaches is the message's own
+ * business and never its author's.
+ */
+function reachOf(message: Message): Attention {
+	if (isSummary(message)) return 'none';
+	if (!isSpoken(message)) return 'presence';
+	return message.to === undefined ? 'broadcast' : 'named';
+}
+
+/**
+ * One rule, read off the scale, in three lines. A seat the message names wakes,
+ * however narrowly it is seated: a directed say names the one it addresses, and
+ * a seating names the seat it seats. Everybody else wakes when their attention
+ * is at least as wide as the message's reach — and a directed say reaches
+ * nobody else at all. Rule 1 routes, rule 6 decides who sits out, and a
+ * presence message is routed like any other.
+ */
+export function wakes(
+	seat: { name: string; attention: Attention },
+	target: string | undefined,
+	message: Message,
+): boolean {
+	if (seat.name === target) return true;
+	const reach = reachOf(message);
+	// A message that reaches nothing reaches nobody but the seat it names.
+	if (reach === 'none') return false;
+	if (WIDTH[seat.attention] < WIDTH[reach]) return false;
+	return reach !== 'named';
+}
+
+/** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
+function targetOf(message: Message): string | undefined {
+	if (isSpoken(message)) return message.to;
+	return message.kind === 'seated' ? message.from : undefined;
+}
+
+/**
+ * Who wakes for a message — the same answer for what a person said, what a
+ * person did, and what a colleague said. An idle seat wakes when the
+ * attention it was seated at reaches the message. The question that opens
+ * an exchange also wakes the seat whose role answers `opened`, when the
+ * room holds agents in reserve and that seat is idle.
+ *
+ * `live` names the seats the room is already waiting on, so nothing here
+ * wakes a seat twice.
+ */
+export function routes(
+	message: Message,
+	state: RoomState,
+	live: ReadonlyMap<string, string[]>,
+): string[] {
+	const author = authorOf(message);
+	const target = targetOf(message);
+	// The room changes before the message does: a seating's newcomer is on
+	// the roster the routing reads, so the seating wakes it.
+	const roster =
+		message.kind === 'seated'
+			? [...state.roster, { name: message.from, attention: message.attention ?? 'broadcast' }]
+			: state.roster;
+	const woken = roster
+		.filter((seat) => seat.name !== author && !live.has(seat.name))
+		.filter((seat) => wakes(seat, target, message))
+		.map((seat) => seat.name);
+	const composer = answering(state.roster, 'opened')?.name;
+	if (composer !== undefined && opens(message, state) && !live.has(composer)) {
+		woken.push(composer);
+	}
+	return [...new Set(woken)];
+}
+
+/** The message opens an exchange, and the room holds agents to compose it from. */
+function opens(message: Message, state: RoomState): boolean {
+	if (state.exchange !== undefined || state.reserve.length === 0) return false;
+	return isSpoken(message) && state.people.has(message.from);
+}
