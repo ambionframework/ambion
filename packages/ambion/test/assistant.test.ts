@@ -1213,6 +1213,57 @@ describe('a role a host writes', () => {
 			role: 'reviewer',
 		});
 	});
+
+	/**
+	 * A workspace binds the four built-in names for an agent that names one,
+	 * so a role may answer an event with one of them. `seated` accepts the
+	 * seating on that rule, and the activation binds what the rule promised.
+	 */
+	it('binds the tool the workspace brings, for a role that names one of the four', async () => {
+		const READ = defineToolShape({
+			name: 'read',
+			parameters: Type.Object({ path: Type.String() }),
+		});
+		const site = defineWorkspace({ name: roomName(), backend: fakeBackend() });
+		const held: string[][] = [];
+		const reader = defineAgent({
+			name: 'reader',
+			identity: 'Reads what an exchange came to.',
+			instructions: 'read it',
+			model: 'scripted/reader',
+			workspace: site,
+		});
+		const session = startSession({
+			name: roomName(),
+			agents: [
+				product,
+				colleague,
+				seated(reader, {
+					attention: 'none',
+					role: defineRole({ name: 'reader', answers: { closed: READ } }),
+				}),
+			],
+			runtime,
+			streamFn: scripted(
+				byAgent({
+					product: insists('Thursday is out.'),
+					colleague: insists('Nor from here.'),
+					reader: (context) => {
+						held.push(toolNames(context));
+						return quiet();
+					},
+				}),
+			),
+		});
+		started.push(session);
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await quiescent(session);
+
+		expect(held).toEqual([['read']]);
+		await destroyWorkspace(site);
+	});
 });
 
 describe('a room with nobody in the assistant role', () => {

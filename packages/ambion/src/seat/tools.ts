@@ -149,7 +149,7 @@ export function toolsFor(view: ActivationView, def: AgentDefinition, held: Bindi
 	if (view.tool === SAY.name) {
 		return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
 	}
-	if (binderOf(view.tool) !== 'room') return ownTool(view.tool, def);
+	if (binderOf(view.tool) !== 'room') return boundTool(view.tool, def);
 	if (view.tool === SUMMARISE.name && view.closing) {
 		const draft: Draft = { ...view.closing, refusals: 0, calls: 0 };
 		return [summariseTool(held, draft)];
@@ -161,10 +161,18 @@ export function toolsFor(view: ActivationView, def: AgentDefinition, held: Bindi
 	return [];
 }
 
-/** The tool of this name the agent brings, for a role that named one of its own. */
-function ownTool(name: string, def: AgentDefinition): AgentTool[] {
-	const own = def.tools.find((tool) => (tool as { name?: unknown }).name === name);
-	return own === undefined ? [] : [toPiTool(own, def)];
+/**
+ * The tool of this name the seating bound, for a role that named one the
+ * room does not bind. A workspace binds the four built-in names for an
+ * agent that names one, and the agent brings every other name.
+ */
+function boundTool(name: string, def: AgentDefinition): AgentTool[] {
+	const bound =
+		binderOf(name) === 'workspace'
+			? builtinTools(def)
+			: def.tools.map((tool) => toPiTool(tool, def));
+	const found = bound.find((tool) => tool.name === name);
+	return found === undefined ? [] : [found];
 }
 
 // -- the assistant's bound ----------------------------------------------------

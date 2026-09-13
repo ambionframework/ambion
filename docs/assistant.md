@@ -1,7 +1,8 @@
 # The assistant
 
 This document is the design contract for the assistant: the constrained agent
-every session seats as its human-facing synthesis layer. It reads how each
+a session seats as its human-facing synthesis layer. Every room seats one by
+convention, and `ASSISTANT` is the role it takes. It reads how each
 person reads and consolidates the room's work when the exchange does not
 already hold one answer. It is shipped. The code lives with the rest of the
 runtime in [`packages/ambion/src`](../packages/ambion/src) —

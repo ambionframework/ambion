@@ -114,8 +114,9 @@ there is no separate activation counter to drift from reality. See
 
 The assistant is the conversational interface, not a UI framework or a
 privileged coordinator. It is an ordinary seat with its own model session and
-activation history, but no general `say` tool, workspace, or general-purpose
-authority. It receives two narrow capabilities:
+activation history. It takes the `ASSISTANT` role, which binds one tool for
+each of the room's two events and nothing else, so it holds no general `say`
+tool and no general-purpose authority. It receives two narrow capabilities:
 
 - `seat` while composing a roster from agents the host placed in reserve;
 - `summarise` after an exchange closes.

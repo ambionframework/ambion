@@ -97,6 +97,73 @@ async function open(
 }
 
 describe('a checkpoint', () => {
+	/**
+	 * A wake's cause is derived, so a fold over a checkpoint must derive the
+	 * same one. `causeOf` reads the questions that opened an exchange, and a
+	 * checkpoint trims the closes that carry them. A fold that lost one would
+	 * derive `message:2:assistant:1` where the last one wrote
+	 * `opened:2:assistant:1`, and the room would wake the seat again for a
+	 * wake a lease already answered.
+	 */
+	it('leaves every wake the same id, whatever it trimmed', () => {
+		const at = '2026-01-01T09:00:00.000Z';
+		const composition: Composition = {
+			agents: [
+				{ name: 'solo', identity: 'Answers.', attention: 'broadcast' },
+				{
+					name: 'assistant',
+					identity: 'Writes the one message.',
+					attention: 'none',
+					role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
+				},
+			],
+			available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'broadcast' }],
+			seq: 0,
+			at,
+		};
+		const wakes = ['solo', 'assistant'];
+		const entries = [
+			{ kind: 'composition' as const, body: composition, seq: 0 },
+			{
+				kind: 'message' as const,
+				body: { kind: 'arrived', at, from: 'priya', identity: 'A.' },
+				seq: 1,
+			},
+			// the first exchange: opened at 2, answered at 3, closed at 6
+			{
+				kind: 'message' as const,
+				body: { kind: 'said', at, from: 'priya', text: 'q1', wakes },
+				seq: 2,
+			},
+			{ kind: 'message' as const, body: { kind: 'said', at, from: 'solo', text: 'a1' }, seq: 3 },
+			{ kind: 'close' as const, body: { owner: 'priya', from: 2, through: 3, at }, seq: 6 },
+			// the second exchange, still open
+			{
+				kind: 'message' as const,
+				body: { kind: 'said', at, from: 'priya', text: 'q2', wakes },
+				seq: 8,
+			},
+		] as Parameters<typeof foldRoom>[0];
+
+		const before = foldRoom(entries, retry);
+		expect(before.pending.map((wake) => wake.id)).toEqual([
+			'message:2:solo:1',
+			'opened:2:assistant:1',
+			'message:8:solo:1',
+			'opened:8:assistant:1',
+		]);
+
+		const checkpoint = checkpointOf(before, Date.parse(at));
+		const after = foldRoom(
+			[
+				{ kind: 'checkpoint' as const, body: checkpoint, seq: 9 },
+				...entries.filter((entry) => entry.kind === 'message'),
+			] as Parameters<typeof foldRoom>[0],
+			retry,
+		);
+		expect(after.pending.map((wake) => wake.id)).toEqual(before.pending.map((wake) => wake.id));
+	});
+
 	it('stands for the entries it replaces, and the journal drops them', async () => {
 		const { session, clock, opened } = await open('The one message.');
 		try {
