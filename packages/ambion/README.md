@@ -9,8 +9,9 @@ general-purpose authority over the application.
 
 `defineAgent` makes an agent, `defineHuman` names a person, `defineTool` gives
 agents tools, and `defineWorkspace` names the identity and data boundary those
-tools reach into. `defineRole` names the room's events a seat answers and the
-tool it holds at each; `ASSISTANT` is the role the room's writer takes.
+tools reach into. `defineRole` names the room's events a seat answers, the
+tool it holds at each, and the guidance it reads; `ASSISTANT` is the role the
+room's writer takes.
 `startSession` brings up the room, `visitSession` puts somebody in it,
 `readSession` reads it without starting anything, and `stopSession` takes it
 down.

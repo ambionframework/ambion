@@ -258,7 +258,8 @@ export function defineRole(role: RoleDefinition): RoleDefinition {
 		assertToolName(shape.name);
 		answers[event] = shape;
 	}
-	return { name: role.name, answers };
+	const guidance = role.guidance?.trim() || undefined;
+	return { name: role.name, answers, ...(guidance === undefined ? {} : { guidance }) };
 }
 
 /**
@@ -281,10 +282,18 @@ const entriesOf = (answers: RoleDefinition['answers']): [ExchangeEvent, ToolShap
  * The room's own role: it composes the room at the open of an exchange, and
  * it writes the one message a person reads at the close. A host seats one
  * agent in it, and the runtime knows the role by what it answers.
+ *
+ * The guidance states the seating this role reads for: attention `none`,
+ * which `StartSessionOptions.assistant` gives it. A host that seats it
+ * wider writes its own role over this one.
  */
 export const ASSISTANT = defineRole({
 	name: 'assistant',
 	answers: { opened: SEAT, closed: SUMMARISE },
+	guidance: [
+		'You are seated in the room, and nothing said in it wakes you. You compose the room',
+		'for the people in it, and you write for them.',
+	].join('\n'),
 });
 
 /**

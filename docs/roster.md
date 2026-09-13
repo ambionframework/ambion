@@ -38,25 +38,34 @@ const session = startSession({
 });
 ```
 
-**`assistant` is required, and it is the only participant a room needs.**
-`agents` and `available` are both optional and may both be empty. A room
-that names no agents and a reserve holds the assistant alone until a
+**`assistant` is the convention, and it is the only participant a room
+needs.** `agents` and `available` are both optional and may both be empty.
+A room that names no agents and a reserve holds the assistant alone until a
 question lands, and then holds whoever that question needed. A room that
 names neither holds the assistant and nothing that can answer; §6 says
-what happens to a question there.
+what happens to a question there. The option seats one agent at `none` in
+the `ASSISTANT` role, and a room that passes none closes every exchange
+and owes no summary ([`assistant.md`](assistant.md) §13).
 
 **`agents` are seated when the room starts, and they stay seated for the
 run**, as [`agent.md`](agent.md) §5 specifies. Nothing in this document
 unseats one of them but the host (§5).
 
 **`available` is the reserve: agents the room may seat later.** Both lists
-hold `AgentSeat` values, so a reserve entry carries an attention the same
-way a seated one does, and takes `broadcast` when it names none. The room
+hold `AgentSeat` values, so a reserve entry carries an attention and a role
+the same way a seated one does, and takes `broadcast` and no role when it
+names neither. The room
 refuses a name that appears in both lists, or in either list and the
 assistant, the way it refuses any duplicate name. The identity rule in
 `agent.md` §5 reads the same with one more clause: the run belongs to
 `startSession`, and its composition is the assistant, the agents seated,
 and the agents in reserve.
+
+**A seat the room seats while it runs takes no role.** A role is a choice
+the host makes at the composition, so `seat` moves an agent from the
+reserve with the attention that reserve entry names and nothing else
+([`agent.md`](agent.md) §5). A host that wants a role on a seat composes
+the next run with it.
 
 **Neither list knows anything about a workspace.** Each definition names
 its own workspace or none ([`workspace.md`](workspace.md) §3), and the

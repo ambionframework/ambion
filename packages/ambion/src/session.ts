@@ -400,11 +400,16 @@ class SessionImpl implements Session, RunningRoom {
 		return this.ready;
 	}
 
-	/** A definition the seat side resolves by name: on this room, and on the runtime's catalog. */
+	/**
+	 * A definition the seat side resolves by name: on this room, and on the
+	 * runtime's catalog. A role the seating gives goes to the runtime's roles
+	 * under its own name, so a resumed room reads its guidance back.
+	 */
 	private know(...placed: Placed[]): void {
-		for (const { def } of placed) {
+		for (const { def, role } of placed) {
 			this.defs.set(def.name, def);
 			this.runtime.catalog.set(def.name, def);
+			if (role !== undefined) this.runtime.roles.set(role.name, role);
 		}
 	}
 
@@ -443,6 +448,12 @@ class SessionImpl implements Session, RunningRoom {
 			...state.roster.map((seat) => seat.name),
 			...state.composition.available.map((seat) => seat.name),
 		];
+		for (const seat of state.roster) {
+			const role = seat.role?.name;
+			if (role !== undefined && !this.runtime.roles.has(role)) {
+				throw new Error(`Role '${role}' is not in the runtime's roles: pass it to createRuntime.`);
+			}
+		}
 		for (const name of names) {
 			const def = this.runtime.catalog.get(name);
 			if (def === undefined) throw new Error(`'${name}' is not in the runtime's catalog.`);
@@ -979,6 +990,7 @@ class SessionImpl implements Session, RunningRoom {
 			state,
 			live: this.live(state),
 			unseen: (since) => this.journal.messages(since).length,
+			guidance: (role) => this.runtime.roles.get(role)?.guidance,
 		};
 	}
 

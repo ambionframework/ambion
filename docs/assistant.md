@@ -540,6 +540,21 @@ asks the seat's role which tool it holds. A room that seats nobody in the
 role closes every exchange and owes no summary: the rules read the roster,
 so they answer that room with nothing and never with a branch.
 
+**The runtime holds no prose for the assistant either.** `ASSISTANT`
+carries `guidance`, which is what its seat reads about the role it took,
+and `render.ts` renders it under the line that names the role. The room
+writes the paragraph for each tool it binds — `seat` at the open,
+`summarise` at the close — so a second role that answers with one of them
+reads the same words, and a role that answers with a tool the agent brings
+says what to do with it in its own guidance.
+
+**A role's guidance is the runtime's, the way `instructions` are.** The
+journal holds the role's name beside the seating, and a resumed room
+resolves the prose through `runtime.roles`. `createRuntime` starts that
+catalog with `ASSISTANT`, so every room that seats one resumes unchanged; a
+host with a role of its own passes it as `createRuntime({ roles })`, and a
+resume into a runtime that does not hold the role is refused.
+
 **A person's preferences are optional, and the assistant is not.** A person
 who says nothing about how they read is written for in the style the
 assistant's instructions set. The room serves them the same way; only the
