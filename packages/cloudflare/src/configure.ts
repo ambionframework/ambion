@@ -52,7 +52,7 @@ export function configure(options: ConfigureOptions): void {
 	settings = options;
 }
 
-/** Hand a seat's event to whatever the worker configured, or to the logs. */
+/** Give a seat's event to whatever the worker configured, or to the logs. */
 export function seatEvent(event: SeatEvent): void {
 	const take = settings?.onSeatEvent ?? ((line: SeatEvent) => console.log(line));
 	take(event);

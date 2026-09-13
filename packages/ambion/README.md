@@ -8,8 +8,8 @@ room's reserve and consolidates multi-agent work when needed, without gaining
 general-purpose authority over the application.
 
 `defineAgent` makes an agent, `defineHuman` names a person, `defineTool` gives
-agents hands, and `defineWorkspace` names the identity and data boundary those
-hands reach into. `startSession` brings up the room, `visitSession` puts
+agents tools, and `defineWorkspace` names the identity and data boundary those
+tools reach into. `startSession` brings up the room, `visitSession` puts
 somebody in it, `readSession` reads it without starting anything, and
 `stopSession` takes it down.
 

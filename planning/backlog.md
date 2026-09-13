@@ -235,7 +235,7 @@ nothing, and rung 3 pays for an activation.
   argument against is that a preference written for a summary may read
   badly as a filter on what a product says.
 - **Which invariant it touches.** Three hold today: the assistant is seated
-  `none`, `handsFor` gives it empty hands outside an open or a close, and
+  `none`, `toolsFor` gives it no tool outside an open or a close, and
   `wakes` refuses to wake anybody for what the assistant writes, with the one
   exception of a seat it seats. A steer that reaches a
   running seat as a `[new]` line touches the third, because the room would
@@ -248,8 +248,8 @@ nothing, and rung 3 pays for an activation.
   (`SUMMARY_PARAGRAPH`) is the precedent.
 
 **Where.** `dispatch` in
-[`session.ts`](../packages/ambion/src/session.ts), `handsFor` in
-[`hands.ts`](../packages/ambion/src/seat/hands.ts), `wakes` in
+[`session.ts`](../packages/ambion/src/session.ts), `toolsFor` in
+[`tools.ts`](../packages/ambion/src/seat/tools.ts), `wakes` in
 [`seat.ts`](../packages/ambion/src/seat/seat.ts), the assistant's paragraphs in
 [`render.ts`](../packages/ambion/src/render.ts).
 
@@ -259,9 +259,9 @@ nothing, and rung 3 pays for an activation.
 gives the assistant `seat` alone. Two ways to take a seat back off the roster
 while the room runs, and both return the agent to the reserve:
 
-- An `unseat` in the assistant's hands, at the open of an exchange beside
+- An `unseat` the assistant holds, at the open of an exchange beside
   `seat`, to take a colleague out of an exchange the colleague is not helping.
-- A `leave` in the seat's own hands: a seated specialist that judges its part
+- A `leave` a seat holds itself: a seated specialist that judges its part
   done ends its activation with a tool call that takes it back to the reserve,
   the way `say` is a tool and silence is a decision.
 
@@ -278,7 +278,7 @@ better than anybody when its own part is done.
 
 - **What an unseat does to an activation in flight.** The host's `unseat`
   aborts it. An assistant that aborts a colleague mid-say is the destructive
-  act `roster.md` §5 keeps out of its hands, so an assistant's unseat would
+  act `roster.md` §5 keeps from it, so an assistant's unseat would
   wait for the seat to go idle, which is a second mechanism.
 - **Whether a seat unseated mid-exchange counts at the close.** The
   threshold reads the record, so it does; whether that is right when the
@@ -309,7 +309,7 @@ to route.
 
 It is also what [`docs/assistant.md`](../docs/assistant.md) §12's rung 3 wants. The assistant is
 a seat at `none`; letting it take part in an exchange is a wider attention and
-a `say` in its hands. With reseating that is a host's decision — _this room
+a `say` it holds. With reseating that is a host's decision — _this room
 lets the assistant speak_ — rather than a code change in the runtime.
 
 **What it needs deciding.**
@@ -325,10 +325,10 @@ lets the assistant speak_ — rather than a code change in the runtime.
 - **Who may do it.** A host, certainly. An agent, never — a room where an
   agent can widen its own attention is a room that can make itself expensive.
 - **What the assistant holds when something else wakes it.** Nothing, today:
-  `handsFor` gives the assistant `seat` for the activation an open wakes it for,
+  `toolsFor` gives the assistant `seat` for the activation an open wakes it for,
   `summarise` for the activation a close
   woke it
-  for, and empty hands otherwise, so a wider attention alone buys a seat that
+  for, and no tool otherwise, so a wider attention alone buys a seat that
   reads the room and ends its activation. Rung 3 is a `say` added there on purpose,
   with the paragraph that says when waking the assistant is worth the money.
 
@@ -361,6 +361,11 @@ compactor ever arrives ([`docs/assistant.md`](../docs/assistant.md) §16
 forbids it by name today), it wants the same fold and the same decision.
 Two writers is the point at which they should become their own module
 rather than two functions beside the assistant's.
+
+[`simplification.md`](simplification.md) §2 makes a second writer
+expressible: a role answers `closed`, and any seat that takes the role
+writes. `foldOwed` already reads the close's own `wakes`, so the fold
+takes more than one writer today. The module is still the open question.
 
 ### 21. A credentials boundary for tool calls leaving the workspace
 
@@ -511,20 +516,30 @@ pattern in one place, and a room composes patterns the way it composes
 agents. At the limit, Ambion is the framework that defines the
 collaboration patterns people and agents work in.
 
-**What it needs deciding.**
+**What [`simplification.md`](simplification.md) §2 decides.** That item
+builds roles, and the assistant is the first one. Two of the three
+questions this entry held are answered by building it:
 
-- Whether a role is a seating choice, the way attention is, or a field on
-  the agent. Attention belongs to the seating so that one agent can sit
-  differently in two rooms, and a role is probably the same kind of thing.
-- What a role changes: the seat's instructions, its attention, or the
-  order the room wakes seats in. Only the first keeps the routing rule as
-  one comparison ([`docs/agent.md`](../docs/agent.md) rule 6).
-- Who assigns roles. The assistant never runs the room
-  ([`docs/assistant.md`](../docs/assistant.md) §2), so assigning roles is a
-  different seat's work, or the host's.
+- **A role is a seating choice.** It sits beside `attention` on
+  `Seating`, so one agent sits into different roles in two rooms.
+- **A role changes what wakes a seat and what it holds.** It leaves
+  `attention` alone, so the routing rule stays one comparison
+  ([`docs/agent.md`](../docs/agent.md) rule 6). A role carries `guidance`,
+  which is the seat's instructions for the activations that role answers.
 
-**Where.** `seated` in [`define.ts`](../packages/ambion/src/define.ts), the
-roster in [`render.ts`](../packages/ambion/src/render.ts).
+**What waits.**
+
+- **Who assigns a role.** The host does, at composition. The assistant
+  never runs the room ([`docs/assistant.md`](../docs/assistant.md) §2), so
+  a role assigned while the room runs is a different seat's work.
+- **A role that grants an ordinary tool.** §2 binds one tool per event a
+  role answers. A role that grants a tool for every activation waits for a
+  second role to ask for it.
+- **More than one role on a seat.** Two roles need a rule for two answers
+  to one event. No case states one yet.
+
+**Where.** `defineRole` and `Seating.role` after §2; the roster in
+[`render.ts`](../packages/ambion/src/render.ts).
 
 ### 26. The catalog is keyed by bare name, per runtime
 
@@ -538,7 +553,7 @@ carry the identity, so a read reports what the run held.
 **Why deferred.** The room already refuses a duplicate name inside one
 roster. Two rooms in one runtime with one name and two definitions is a
 host that wants two runtimes. The catalog exists so that a transport can
-hand a seat in another process the definition it needs by name, and so
+give a seat in another process the definition it needs by name, and so
 that `resumeSession` can resolve a roster it reads off the journal.
 
 **Options.** The runtime refuses a second, different definition under a
@@ -713,7 +728,7 @@ what it inherited too low.
 run, and say which lease has the extra end. Then fix the room or the
 count.
 
-### 43. Two runs over one JSONL file leave a file that does not read
+### 49. Two runs over one JSONL file leave a file that does not read
 
 **What.** `pnpm chaos` fails now and then on the crash sweep, on `jsonl`,
 "after the entry lands", at an early write. A read of the storage throws
@@ -742,21 +757,26 @@ the storage saying it cannot serve two writers. Either the sweep retries
 the read once the evicted run's queue is drained, or it skips `storedOf`
 for `jsonl` and reads the invariants off the session.
 
-### 44. The seat's alarm does not run, and the wait reports the room
+### 50. A wait in the seat test reports the room, where the runner is late
 
-**What.** `packages/cloudflare/test/seat.test.ts` fails now and then in CI
-with `Nothing came within 20000 ms` at `test/until.ts:20`, from line 28: the
-wait for the product's say after `runDurableObjectAlarm(seat)`. The activation
-the alarm starts never reaches the record.
+**What.** `packages/cloudflare/test/seat.test.ts` fails now and then with
+`Nothing came within 20000 ms` at `test/until.ts:20`. Both of the file's
+tests have done it, at two different waits: the wait for the product's say
+after `runDurableObjectAlarm(seat)`, and the wait for the first wake to
+reach the seat. Each time, the work the wait is for never happens inside
+the deadline.
 
-**Why it is a wait and not the room.** The whole workerd suite runs its tests
-in under three seconds locally, so a 20 second deadline is not slowness. Five
-local runs pass. `Test on Node 22` passed the same commit in the same CI run,
-and a re-run of `Test on Node 24` passed. Two other files in the one workerd
-process, `room.test.ts` and `restart.test.ts`, abort a Durable Object on
-purpose, and both log `broken.outputGateBroken` before the seat test starts.
+**Why it is a wait and never the room.** The whole workerd suite runs its
+tests in under three seconds locally, so a 20 second deadline is not
+slowness. It wants a loaded machine: six runs of the suite on its own pass,
+on this branch and on `main` alike, and the failures land inside `pnpm
+check`, where turbo runs every package at once. `Test on Node 22` passed
+the same commit in the same CI run that `Test on Node 24` failed, and the
+re-run passed. Two other files in the one workerd process, `room.test.ts`
+and `restart.test.ts`, abort a Durable Object on purpose, and both log
+`broken.outputGateBroken` before the seat test starts.
 
-**Where.** `packages/cloudflare/test/seat.test.ts` line 28;
+**Where.** `packages/cloudflare/test/seat.test.ts` lines 28 and 86;
 `packages/cloudflare/test/until.ts`; `packages/cloudflare/src/seat-object.ts`
 `wake` and `alarm`.
 
@@ -786,7 +806,7 @@ assistant was woken for, the range a closing assistant covers, and the open
 question a seated agent reads.
 
 The numbering stays inside `render.ts`, because nothing a participant sends
-back names a place. The three hands take `{ to?, text }`, `{ text }` and
+back names a place. The three tools take `{ to?, text }`, `{ text }` and
 `{ name }`: no tool carries a seq either way.
 
 Three tests pin it, and each fails when `render.ts` hands back the raw

@@ -152,7 +152,7 @@ describe('defineWorkspace', () => {
 
 describe('the built-in tools', () => {
 	it('bind read, write, edit and bash to a connected agent, and nothing to a plain one', async () => {
-		const site = defineWorkspace({ name: name('hands'), backend: fakeBackend() });
+		const site = defineWorkspace({ name: name('tools'), backend: fakeBackend() });
 		const seen = new Map<string, string[]>();
 		await run([agent('connected', { workspace: site }), agent('plain')], {
 			connected: (context, who) => {

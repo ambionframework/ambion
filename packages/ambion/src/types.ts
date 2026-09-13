@@ -289,6 +289,12 @@ export interface AmbionTool<TParameters extends TSchema = TSchema> {
 	readonly name: string;
 	readonly description: string;
 	readonly parameters: TParameters;
+	/**
+	 * The shape this tool answers, for a tool that names one. A role that
+	 * requires the shape reads this, and one comparison of references says
+	 * that this body answers that contract.
+	 */
+	readonly shape?: { readonly name: string; readonly parameters: TSchema };
 	readonly execute: (
 		params: Static<TParameters>,
 		ctx: ToolContext,

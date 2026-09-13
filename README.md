@@ -61,7 +61,7 @@ an agent does not speak over context it has not read.
 
 ### 3. Silence is a result
 
-A normal activation receives the `say` hand. Calling it appends a message;
+A normal activation receives the `say` tool. Calling it appends a message;
 finishing without calling it appends nothing. The runtime never manufactures
 an empty acknowledgement. This makes it cheap to wake every plausibly
 relevant agent and let each decide whether it has something to add.
@@ -103,7 +103,7 @@ activation counter can drift from reality. See
 ### 7. The assistant owns synthesis for the person
 
 The assistant is the conversational interface: an ordinary seat with its own
-model session and activation history, but no general `say` hand, workspace,
+model session and activation history, but no general `say` tool, workspace,
 or general-purpose authority. It holds two narrow capabilities: `seat`, to
 compose a roster from agents the host placed in reserve, and `summarise`,
 after an exchange closes.

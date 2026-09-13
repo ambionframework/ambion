@@ -2,7 +2,7 @@
  * The Ambion runtime: five primitives, and a dependency for every other concern.
  *
  * `defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
- * gives agents hands, `defineWorkspace` names the identity and data boundary
+ * gives agents tools, `defineWorkspace` names the identity and data boundary
  * an agent's tools reach into, `seated` chooses what wakes a seat — with
  * `passive` and `attentive` for the two points worth naming — and
  * `startSession` brings up a named room the agents work in and people visit.
@@ -34,8 +34,24 @@ export {
 	InMemorySessionStorage,
 	JsonlSessionRepo,
 } from '@earendil-works/pi-agent-core';
-export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
-export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from './define.ts';
+export type {
+	DefineAgentOptions,
+	DefineHumanOptions,
+	DefineToolOptions,
+	ToolShape,
+} from './define.ts';
+export {
+	attentive,
+	defineAgent,
+	defineHuman,
+	defineTool,
+	defineToolShape,
+	passive,
+	SAY,
+	SEAT,
+	SUMMARISE,
+	seated,
+} from './define.ts';
 export type {
 	CreateRuntimeOptions,
 	RunningRoom,
@@ -98,7 +114,6 @@ export type {
 	Composition,
 	EndReason,
 	Fence,
-	Hand,
 	Intent,
 	Lease,
 	LeaseChange,
@@ -108,6 +123,7 @@ export type {
 	SeatPort,
 	SeatRoom,
 	Stale,
+	ToolName,
 	ViewResponse,
 	Wake,
 } from './wire.ts';

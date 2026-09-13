@@ -64,7 +64,7 @@ class PlayedRoom implements SeatRoom {
 				lastSeq: 1,
 				systemPrompt: 'You are the product.',
 				context: 'The record so far.',
-				hand: 'say',
+				tool: 'say',
 			},
 		};
 	}

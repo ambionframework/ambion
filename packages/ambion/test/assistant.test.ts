@@ -200,14 +200,14 @@ describe('the assistant', () => {
 	it('writes one message for an exchange the room answered more than once', async () => {
 		const contexts: string[] = [];
 		const prompts: string[] = [];
-		const hands: string[] = [];
+		const tools: string[] = [];
 		const session = open({
 			script: byAgent({
 				product: twoAnswers,
 				assistant: (context, _name, call) => {
 					contexts.push(contextText(context));
 					prompts.push(context.systemPrompt ?? '');
-					hands.push((context.tools ?? []).map((tool) => tool.name).join(','));
+					tools.push((context.tools ?? []).map((tool) => tool.name).join(','));
 					return call === 1
 						? summarise('Thursday is out. Saturday holds if the rebar lands Wednesday.')
 						: quiet();
@@ -231,8 +231,8 @@ describe('the assistant', () => {
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said', 'said', 'summary']);
 
-		// what an assistant is handed: the range it covers, and one hand that reaches the record
-		expect(hands).toEqual(['summarise', 'summarise']);
+		// what an assistant is given: the range it covers, and one tool that reaches the record
+		expect(tools).toEqual(['summarise', 'summarise']);
 		expect(contexts[0]).toContain('Can I tell the client Thursday');
 		expect(contexts[0]).toContain('the inspector needs 48h notice');
 		// what its person owns reaches it in the roster, so an assistant holds no copy
@@ -1151,7 +1151,7 @@ describe('startSession', () => {
 		expect(() => startSession(noAssistant)).toThrow(/must come from defineAgent/);
 	});
 
-	it('refuses an assistant with hands', () => {
+	it('refuses an assistant with tools', () => {
 		const book = defineTool({
 			name: 'book_inspector',
 			description: 'Book the inspector.',

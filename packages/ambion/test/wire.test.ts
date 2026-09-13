@@ -52,7 +52,7 @@ const view: ActivationView = {
 	lastSeq: 4,
 	systemPrompt: 'You are the assistant.',
 	context: 'The record so far.',
-	hand: 'summarise',
+	tool: 'summarise',
 	closing: { person: 'priya', from: 2, through: 4 },
 };
 const requests: Record<string, Commit | Lease | string> = {

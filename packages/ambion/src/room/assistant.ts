@@ -21,7 +21,7 @@
  *
  * What is left in this file is what the assistant *is*: what a room refuses
  * to seat as one, and the threshold a summary is written above. The two
- * tools are hands the seat side gives it (`seat/hands.ts`). Who is owed and
+ * tools are what the seat side binds for it (`seat/tools.ts`). Who is owed and
  * when the next draft starts are folds over the journal (`fold.ts`), and the
  * room's `reconcile` sends the wake.
  */
@@ -31,7 +31,7 @@ import { isAgent, isSpoken } from '../types.ts';
 /**
  * The assistant shapes what a room already does, and never makes anything
  * happen. It carries no tools of its own, so the rule is a fact about the
- * definition rather than a promise about behaviour: the one hand the runtime
+ * definition and no promise about behaviour: the one tool the runtime
  * gives it writes to the record and reaches nothing else. `startSession`
  * refuses anything else as the room's assistant.
  */

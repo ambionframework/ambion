@@ -115,8 +115,8 @@ holds, and a reviewer reads a file knowing what it cannot reach.
 | `host/`                             | What a host owns: the runtime value, a clock, an opener                                                                                      | The vocabulary                        |
 | `journal/`                          | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                        | The vocabulary                        |
 | `room/`                             | Every fact and every decision, pure over the journal: the fold, the lease, the exchange, presence, the assistant's rules, the view, `decide` | The vocabulary, the journal's entries |
-| `tools/`                            | The workspace port, and the four hands over it. No filesystem: `@ambionframework/workspace` holds one                                        | The vocabulary, `host/`               |
-| `seat/`                             | The seat side of the wire: one activation, the hands it holds, the actor, the in-process transport                                           | The vocabulary, `host/`, `tools/`     |
+| `tools/`                            | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                        | The vocabulary, `host/`               |
+| `seat/`                             | The seat side of the wire: one activation, the tools it holds, the actor, the in-process transport                                           | The vocabulary, `host/`, `tools/`     |
 | `session.ts`                        | The room, which composes them all                                                                                                            | Everything                            |
 
 Two rules hold across packages: the core imports no platform module
