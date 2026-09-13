@@ -96,7 +96,7 @@ place to do it.
 module. Each is a smaller change now, and item 8's `liveSeats` reads one
 list where it read two.
 
-## 2. Roles, and the assistant is the first one
+## 2. Roles, and the assistant is the first one — done
 
 New. An earlier reading of this item asked only for the assistant as
 data. The wider shape came out of the same reading, and it holds the
@@ -278,11 +278,17 @@ and each one builds and passes the gate on its own:
    shape is the agent's to bring. `StartSessionOptions.assistant` seats
    one agent at `none` in `ASSISTANT`, and it is optional: a room with
    nobody in the role closes every exchange and owes no summary.
-5. **`guidance`, and the documents.** `render.ts` renders the role's
-   guidance in place of the paragraph it holds for the assistant.
-   `README.md`, `CLAUDE.md`, `docs/agent.md`, `docs/assistant.md` and
-   `docs/roster.md` take the sixth primitive. `backlog.md` §25 loses what
-   this decides.
+5. **`guidance`, and the documents.** — done. `RoleDefinition` carries
+   `guidance`, and `render.ts` renders it under the line that names the
+   role. `render.ts` reads the tool an activation binds where it read the
+   assistant's name, so the room's prose belongs to the three tools it
+   binds. Guidance is the runtime's, the way `instructions` are:
+   `createRuntime` holds a role catalog that starts with `ASSISTANT`, a
+   seating registers the role it gives, and a resume into a runtime
+   without the role is refused. `README.md`, `CLAUDE.md`,
+   `docs/agent.md`, `docs/assistant.md` and `docs/roster.md` take the
+   sixth primitive, and `backlog.md` §25 keeps the patterns beyond the
+   assistant.
 
 **What it decides in [`backlog.md`](backlog.md) §25.** A role is a
 seating choice, so one agent sits into different roles in two rooms. A

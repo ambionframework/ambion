@@ -179,13 +179,21 @@ describe('a role', () => {
 	const agent = (options: Partial<Parameters<typeof defineAgent>[0]> = {}) =>
 		defineAgent({ name: 'solo', identity: 'A.', instructions: '.', model: 'm', ...options });
 
-	it('holds the name and the shape it answers each event with', () => {
+	it('holds the name, the shape it answers each event with, and its guidance', () => {
 		const role = defineRole({ name: 'reviewer', answers: { closed: SUMMARISE } });
 		expect(role).toEqual({ name: 'reviewer', answers: { closed: SUMMARISE } });
-		expect(ASSISTANT).toEqual({
+		expect(ASSISTANT).toMatchObject({
 			name: 'assistant',
 			answers: { opened: SEAT, closed: SUMMARISE },
 		});
+		expect(ASSISTANT.guidance).toContain('nothing said in it wakes you');
+	});
+
+	it('drops guidance that is blank, and keeps what a host wrote', () => {
+		expect(defineRole({ name: 'blank', answers: {}, guidance: '  ' }).guidance).toBeUndefined();
+		expect(defineRole({ name: 'told', answers: {}, guidance: '  Read it.  ' }).guidance).toBe(
+			'Read it.',
+		);
 	});
 
 	it('refuses a name the room cannot address', () => {

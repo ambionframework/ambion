@@ -516,16 +516,21 @@ pattern in one place, and a room composes patterns the way it composes
 agents. At the limit, Ambion is the framework that defines the
 collaboration patterns people and agents work in.
 
-**What [`simplification.md`](simplification.md) §2 decides.** That item
-builds roles, and the assistant is the first one. Two of the three
-questions this entry held are answered by building it:
+**What [`simplification.md`](simplification.md) §2 built.** `defineRole`
+ships, and the assistant is the first role. Two of the three questions
+this entry held are answered:
 
-- **A role is a seating choice.** It sits beside `attention` on
-  `Seating`, so one agent sits into different roles in two rooms.
+- **A role is a seating choice.** `Seating.role` sits beside `attention`,
+  so one agent sits into different roles in two rooms.
 - **A role changes what wakes a seat and what it holds.** It leaves
   `attention` alone, so the routing rule stays one comparison
   ([`docs/agent.md`](../docs/agent.md) rule 6). A role carries `guidance`,
-  which is the seat's instructions for the activations that role answers.
+  which is what its seat reads about the role it took.
+
+**What is left here.** The patterns beyond the assistant: leader,
+reviewer, coordinator, specialist. The mechanism holds one of them, so
+the entry is now about writing the second, and about what a second one
+asks the mechanism for.
 
 **What waits.**
 
@@ -538,8 +543,9 @@ questions this entry held are answered by building it:
 - **More than one role on a seat.** Two roles need a rule for two answers
   to one event. No case states one yet.
 
-**Where.** `defineRole` and `Seating.role` after §2; the roster in
-[`render.ts`](../packages/ambion/src/render.ts).
+**Where.** `defineRole`, `ASSISTANT` and `Seating.role` are built. A
+second role needs no runtime change to hold an event the room already
+binds a tool for.
 
 ### 26. The catalog is keyed by bare name, per runtime
 

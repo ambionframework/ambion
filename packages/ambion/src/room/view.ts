@@ -8,6 +8,7 @@
 import { SAY } from '../define.ts';
 import {
 	type PersonView,
+	type RoleView,
 	type RoomView,
 	renderSystemPrompt,
 	renderTurnContext,
@@ -27,6 +28,8 @@ export interface RoomFacts {
 	readonly live: ReadonlyMap<string, string[]>;
 	/** How many messages landed after this seq. */
 	unseen(since: Seq): number;
+	/** What a role of this name tells its seat, or nothing where it tells it none. */
+	guidance(role: string): string | undefined;
 }
 
 /** The roster and the people, as `seats()` reports them, off one folded state and nothing else. */
@@ -63,7 +66,8 @@ export function viewOf(
 	const { tool, closing, composing } = toolOf(id, role, facts);
 	const speaking: SeatSpeaking = {
 		def,
-		...(role === undefined ? {} : { role: role.name }),
+		...(role === undefined ? {} : { role: roleView(role.name, facts) }),
+		...(tool === undefined ? {} : { tool }),
 		closing: closing && { ...closing, preferences: state.people.get(closing.person)?.preferences },
 		composing: composing && { ...composing, reserve: reserved(facts) },
 	};
@@ -79,6 +83,12 @@ export function viewOf(
 		...(closing ? { closing } : {}),
 		...(composing ? { composing } : {}),
 	};
+}
+
+/** The role as the prose reads it: the name off the record, the guidance off the runtime. */
+function roleView(name: string, facts: RoomFacts): RoleView {
+	const guidance = facts.guidance(name);
+	return { name, ...(guidance === undefined ? {} : { guidance }) };
 }
 
 type Bound = {

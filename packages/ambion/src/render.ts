@@ -12,6 +12,7 @@
  * diffed and tested without starting anything. The room's mechanics hold no
  * sentences, and this file holds no state.
  */
+import { SAY, SEAT, SUMMARISE } from './define.ts';
 import type { AgentSeatInfo, Attention } from './types.ts';
 import {
 	isSpoken,
@@ -258,6 +259,13 @@ interface ComposingView {
 	readonly reserve: readonly Reserved[];
 }
 
+/** The role a seat took, as the prose reads it: what it is called, and what it says. */
+export interface RoleView {
+	readonly name: string;
+	/** What the role tells its seat. The room holds no prose of its own for a role. */
+	readonly guidance?: string;
+}
+
 /**
  * What the prose is given of the seat taking the activation. Every fact is asked
  * for outright rather than left optional: a room that stops holding one must
@@ -271,12 +279,10 @@ export interface SeatSpeaking {
 		/** Set for an agent connected to a workspace: gates WORKSPACE_PARAGRAPH. */
 		workspace?: WorkspaceHandle;
 	};
-	/**
-	 * The role this seat took, by name, or nothing where the seating gave it
-	 * none. A seat in a role answers the room's own events, and it holds one
-	 * tool at each. `assistant` is the role the room's writer takes.
-	 */
-	readonly role?: string;
+	/** The role this seat took, or nothing where the seating gave it none. */
+	readonly role?: RoleView;
+	/** The tool this activation binds, by name, or nothing where it binds none. */
+	readonly tool?: string;
 	/** The exchange this activation is closing, or nothing when something else woke it. */
 	readonly closing: Closing | undefined;
 	/** The exchange this activation composes the room for, or nothing when something else woke it. */
@@ -284,14 +290,7 @@ export interface SeatSpeaking {
 }
 
 export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
-	const lines =
-		seat.role === ASSISTANT_ROLE
-			? [...assistantHeader(seat.def.name, room.name), ``]
-			: [
-					`You are '${seat.def.name}', an agent seated in the session '${room.name}' — a shared`,
-					`room with a record. Every participant sees what is said; nobody sees your tool use.`,
-					``,
-				];
+	const lines = [...header(seat, room), ``];
 	if (room.goal) lines.push(`This session exists to: ${room.goal}`, ``);
 	lines.push(...duties(seat, room), ``);
 	lines.push(
@@ -304,10 +303,15 @@ export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
 	return lines.join('\n');
 }
 
-/** What this seat is for: the assistant composes or writes one message, a seat speaks or does not. */
+/**
+ * What this seat is for, read off the tool the activation binds. The room
+ * wrote the prose for each tool it binds, and a role that names a tool the
+ * room does not bind says what to do with it in its own guidance.
+ */
 function duties(seat: SeatSpeaking, room: RoomView): string[] {
-	if (seat.composing) return COMPOSE_PARAGRAPH;
-	if (seat.role === ASSISTANT_ROLE) return ASSISTANT_PARAGRAPH;
+	const bound = seat.tool === undefined ? undefined : ROOM_DUTIES[seat.tool];
+	if (bound) return [...bound];
+	if (seat.tool !== SAY.name) return [];
 	const lines = [
 		`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 		`your turn without saying anything, and no mark is left. Speak only when your reply`,
@@ -383,21 +387,19 @@ const numbered = (record: readonly Message[], seq: Seq): number =>
 function askOf(seat: SeatSpeaking, room: RoomView): string {
 	if (seat.composing) {
 		const asked = numbered(room.record, seat.composing.from);
-		return (
-			`${seat.composing.person} asked at message ${asked}. Seat who the question ` +
-			`needs from the reserve, or end your turn to leave the roster as it stands.`
-		);
+		return `${seat.composing.person} asked at message ${asked}. ${action(seat)}`;
 	}
 	const closing = seat.closing;
-	if (seat.role === ASSISTANT_ROLE) {
-		// The assistant woken by anything but an open or a close has nothing to
-		// do in the activation, and no tools to do it with. See `toolsFor`.
-		return closing
-			? `${closing.person}'s exchange is over: messages ${numbered(room.record, closing.from)} ` +
-					`to ${numbered(room.record, closing.through)}. Write the one message they read ` +
-					`for it, or end your turn to leave the range whole.`
-			: `Nothing is asked of you: read the room, and end your turn.`;
+	if (closing) {
+		const from = numbered(room.record, closing.from);
+		return (
+			`${closing.person}'s exchange is over: messages ${from} ` +
+			`to ${numbered(room.record, closing.through)}. ${action(seat)}`
+		);
 	}
+	// A seat the room woke with no tool has nothing to do in the activation.
+	// See `toolsFor`.
+	if (seat.tool === undefined) return `Nothing is asked of you: read the room, and end your turn.`;
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = room.exchange
 		? `${room.exchange.owner}'s question at message ${numbered(room.record, room.exchange.from)} is open. `
@@ -442,22 +444,26 @@ const AUDIENCE_PARAGRAPH = [
 ];
 
 /**
- * The role whose prose this file holds. Step 5 of item 2 in
- * `planning/simplification.md` moves this prose onto the role, as
- * `guidance` a host writes, and the name goes with it.
+ * How a room opens the prompt it hands a seat: what it is called, the role it
+ * took, and what that role tells it. The room names the role; the role's own
+ * guidance is the host's prose, so the room holds none for any role.
  */
-const ASSISTANT_ROLE = 'assistant';
-
-/** How a room opens the prompt it hands the assistant. */
-function assistantHeader(assistant: string, room: string): string[] {
+function header(seat: SeatSpeaking, room: RoomView): string[] {
+	const role = seat.role;
+	if (role === undefined) {
+		return [
+			`You are '${seat.def.name}', an agent seated in the session '${room.name}' — a shared`,
+			`room with a record. Every participant sees what is said; nobody sees your tool use.`,
+		];
+	}
 	return [
-		`You are '${assistant}', the assistant in the session '${room}' — a shared room with a`,
-		`record. You are seated in it, and nothing said in it wakes you. You compose the room`,
-		`for the people in it, and you write for them.`,
+		`You are '${seat.def.name}', the ${role.name} in the session '${room.name}' — a shared`,
+		`room with a record.`,
+		...(role.guidance === undefined ? [] : role.guidance.trim().split('\n')),
 	];
 }
 
-/** What the assistant is asked for at the open of an exchange, and the whole of what it may do. */
+/** What a seat holding `seat` is asked for, and the whole of what it may do. */
 const COMPOSE_PARAGRAPH = [
 	`One of the people in the room has just asked a question, and the agents seated in the`,
 	`room are reading it now. Seating is the seat tool: it takes one name from the reserve`,
@@ -485,8 +491,8 @@ function reader(closing: Closing): string[] {
 	return lines;
 }
 
-/** What the assistant is asked for, and the whole of what it may do. */
-const ASSISTANT_PARAGRAPH = [
+/** What a seat holding `summarise` is asked for, and the whole of what it may do. */
+const SUMMARISE_PARAGRAPH = [
 	`One of the people in the room asked a question, the agents worked it out between them,`,
 	`and the room is quiet again. Writing is the summarise tool. Give it the one message your`,
 	`person reads instead of the working: their question, answered once, for somebody who has`,
@@ -526,3 +532,27 @@ const SUMMARY_PARAGRAPH = [
 	`If you need a fact it left out, read it again from your own tools rather than asking the`,
 	`room to repeat itself.`,
 ];
+
+/** What the room says about each tool it binds. A role's own tool reads its guidance. */
+const ROOM_DUTIES: Readonly<Record<string, readonly string[]>> = {
+	[SEAT.name]: COMPOSE_PARAGRAPH,
+	[SUMMARISE.name]: SUMMARISE_PARAGRAPH,
+};
+
+/**
+ * What the seat is asked to do with the tool this activation binds. The room
+ * wrote the line for each tool it binds; a role that answers with a tool the
+ * agent brings reads its own guidance for the rest.
+ */
+const ROOM_ASKS: Readonly<Record<string, string>> = {
+	[SEAT.name]:
+		'Seat who the question needs from the reserve, or end your turn to leave the roster as it stands.',
+	[SUMMARISE.name]:
+		'Write the one message they read for it, or end your turn to leave the range whole.',
+};
+
+function action(seat: SeatSpeaking): string {
+	const tool = seat.tool;
+	if (tool === undefined) return 'End your turn.';
+	return ROOM_ASKS[tool] ?? `Call ${tool}, or end your turn to leave it as it stands.`;
+}

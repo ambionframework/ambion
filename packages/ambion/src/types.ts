@@ -404,6 +404,16 @@ export type AgentSeat = AgentDefinition | SeatedAgent;
 export interface RoleDefinition {
 	name: string;
 	answers: Partial<Record<ExchangeEvent, ToolShape>>;
+	/**
+	 * What the seat reads about the role it took. The room renders it under
+	 * the line that names the role, above the seat's own identity and
+	 * instructions.
+	 *
+	 * It is the runtime's, the way `instructions` are: the journal holds the
+	 * role's name, and a room resolves the prose by that name. A runtime a
+	 * room resumes in needs the role, so `createRuntime` takes one.
+	 */
+	guidance?: string;
 }
 
 /** Who may be addressed by name. */
