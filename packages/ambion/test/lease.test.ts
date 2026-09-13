@@ -274,7 +274,7 @@ describe('a lease', () => {
 		expect(abandoned).toHaveLength(1);
 		const givenUp = (abandoned[0] as { agent: string; activation: string }).activation;
 		expect(abandoned[0]).toMatchObject({ agent: 'assistant' });
-		expect(parseId(givenUp)).toMatchObject({ cause: 'close', seat: 'assistant', attempt: 4 });
+		expect(parseId(givenUp)).toMatchObject({ cause: 'closed', seat: 'assistant', attempt: 4 });
 		const stored = await storedOf(runtime.sessions, session.name);
 		expect(
 			stored
@@ -458,7 +458,7 @@ describe('a lease judged where its change is written', () => {
 						ms: 10_000,
 						match: (id) => {
 							const parsed = typeof id === 'string' ? parseId(id) : undefined;
-							return parsed?.cause === 'close' && parsed.attempt === 2;
+							return parsed?.cause === 'closed' && parsed.attempt === 2;
 						},
 					},
 				],

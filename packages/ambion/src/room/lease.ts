@@ -1,11 +1,12 @@
 /**
  * Activations, named by what caused them, and the leases they hold.
  *
- * An activation's id is derived from the journal: the seq of the message that
- * woke the seat and the seat's name, or the close it answers and the
- * attempt number. Nothing mints an id, so a wake is safe to send twice, a
- * retried commit lands once, and a request from an activation whose lease
- * ended is refused because the fold says so.
+ * An activation's id is derived from the journal: what caused it, where the
+ * cause sits on the record, the seat's name and the attempt number. Nothing
+ * mints an id, so a wake is safe to send twice, a retried commit lands once,
+ * and a request from an activation whose lease ended is refused because the
+ * fold says so. The id carries the cause, so a reader asks the id what the
+ * activation is for and never asks the roster.
  *
  * A lease has two phases. `running` is a claim or a renewal, with an
  * expiry; `ended` is terminal, with a reason. The last change for an id wins,
@@ -39,16 +40,21 @@ import {
 } from './rules.verified.ts';
 
 /**
- * What caused an activation. A message the room delivered causes one, and a
- * close that owes a summary causes one. The journal holds both, and the
- * room schedules them the same way.
+ * What caused an activation. Three things cause one, and the journal holds
+ * all three: a message the room delivered, the question that opened an
+ * exchange, and a close that owes a summary. The room schedules them the
+ * same way, so `Due` reads the same for each.
+ *
+ * `opened` and `closed` name the exchange's two events. `Kind` keeps
+ * `close` for the entry a close writes; a cause reads `closed`, for the
+ * exchange that closed.
  */
-export type Cause = 'message' | 'close';
+export type Cause = 'message' | 'opened' | 'closed';
 
 /**
  * The id of one activation: what caused it, where the cause sits on the
  * record, the seat that takes it, and which attempt this is. One spelling
- * for both causes, so every reader asks the same four questions of it.
+ * for every cause, so every reader asks the same four questions of it.
  */
 export const activationId = (cause: Cause, position: Seq, seat: string, attempt = 1): string =>
 	`${cause}:${position}:${seat}:${attempt}`;
@@ -62,7 +68,7 @@ export interface ParsedId {
 	attempt: number;
 }
 
-const ID = /^(message|close):(\d+):([a-z][a-z0-9-]*):(\d+)$/;
+const ID = /^(message|opened|closed):(\d+):([a-z][a-z0-9-]*):(\d+)$/;
 
 /** What an id says caused the activation, or nothing for an id the room did not derive. */
 export function parseId(id: string): ParsedId | undefined {
@@ -128,10 +134,10 @@ export const isLive = (lease: LeaseHold, now: number): boolean =>
 	lease.phase === 'running' && !isExpired(lease, now);
 
 /**
- * An activation the room owes a seat, and has not had. Two things on the
- * journal cause one: a message that woke a seat and no lease answered, and a
- * close that owes the assistant a summary. The room schedules both the same
- * way, so both read as this.
+ * An activation the room owes a seat, and has not had. Three things on the
+ * journal cause one: a message that woke a seat and no lease answered, the
+ * question that opened an exchange, and a close that owes a summary. The
+ * room schedules all three the same way, so all three read as this.
  */
 export interface Due {
 	/** The id of the next attempt. Nothing mints it: the journal derives it. */
@@ -178,6 +184,12 @@ const ANSWERS_NOTHING: ReadonlySet<EndReason> = new Set<EndReason>(['failed', 'e
 const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set<EndReason>([...ANSWERS_NOTHING, 'refused']);
 
 /**
+ * Why a seat's wake on this message exists. The fold decides it once, and
+ * the id carries the answer to every reader after it.
+ */
+export type CauseOf = (seat: string, seq: Seq) => Cause;
+
+/**
  * Every wake a message decided that no lease has answered, for a seat still
  * on the roster. A seat that left the roster answers no wake: what it was
  * sent is not pending.
@@ -187,21 +199,25 @@ export function pendingWakes(
 	leases: ReadonlyMap<string, LeaseHold>,
 	roster: ReadonlySet<string>,
 	options: DueOptions,
-	assistant: string,
+	causeOf: CauseOf,
 ): PendingWake[] {
 	const bySeat = leasesBySeat(leases, roster);
 	const pending: PendingWake[] = [];
 	for (const message of messages) {
-		for (const seat of reached(message, bySeat, roster, assistant)) {
+		for (const seat of reached(message, bySeat, roster)) {
 			const taken = (bySeat.get(seat) ?? []).filter((lease) => heard(lease, message.seq));
-			const wake = statusOf(message, seat, taken, options);
+			const wake = statusOf(message, seat, taken, options, causeOf(seat, message.seq));
 			if (wake !== undefined) pending.push(wake);
 		}
 	}
 	return pending;
 }
 
-/** Every lease a wake claimed, by seat, for the seats on the roster. */
+/**
+ * Every lease a wake claimed, by seat, for the seats on the roster. A
+ * message causes one and an open causes one; a close causes the activation
+ * `foldOwed` reads, so this skips it.
+ */
 function leasesBySeat(
 	leases: ReadonlyMap<string, LeaseHold>,
 	roster: ReadonlySet<string>,
@@ -209,7 +225,8 @@ function leasesBySeat(
 	const bySeat = new Map<string, LeaseHold[]>();
 	for (const lease of leases.values()) {
 		const parsed = parseId(lease.id);
-		if (parsed?.cause !== 'message' || !roster.has(parsed.seat)) continue;
+		if (parsed === undefined || parsed.cause === 'closed') continue;
+		if (!roster.has(parsed.seat)) continue;
 		bySeat.set(parsed.seat, [...(bySeat.get(parsed.seat) ?? []), lease]);
 	}
 	return bySeat;
@@ -217,22 +234,25 @@ function leasesBySeat(
 
 /**
  * The seats a message reached: the ones it names, and every seat at work
- * when it landed. The assistant composing hears no steer, so a message
- * reaches it by name alone.
+ * when it landed. A seat composing the room for an exchange hears no steer,
+ * so a message reaches that seat by name alone.
  */
 function reached(
 	message: Message,
 	bySeat: ReadonlyMap<string, LeaseHold[]>,
 	roster: ReadonlySet<string>,
-	assistant: string,
 ): Set<string> {
 	const seats = new Set((message.wakes ?? []).filter((seat) => roster.has(seat)));
 	for (const [seat, held] of bySeat) {
-		if (seat === message.from || seat === assistant) continue;
-		if (held.some((lease) => atWork(lease, message.seq))) seats.add(seat);
+		if (seat === message.from) continue;
+		if (held.some((lease) => steered(lease, message.seq))) seats.add(seat);
 	}
 	return seats;
 }
+
+/** The lease was at work when the message landed, and it takes a steer. */
+const steered = (lease: LeaseHold, seq: Seq): boolean =>
+	atWork(lease, seq) && parseId(lease.id)?.cause !== 'opened';
 
 /** The lease held a change before the message and ended, if it ended, after it. */
 const atWork = (lease: LeaseHold, seq: Seq): boolean =>
@@ -269,12 +289,13 @@ function statusOf(
 	seat: string,
 	taken: readonly LeaseHold[],
 	options: DueOptions,
+	cause: Cause,
 ): PendingWake | undefined {
 	// A lease that answered the message settles it, whatever the attempts say.
 	if (taken.some((lease) => !answersNothing(lease))) return undefined;
 	const failed = taken.filter((lease) => cameToNothing(lease));
 	return {
-		...dueFrom('message', message.seq, seat, failed, options),
+		...dueFrom(cause, message.seq, seat, failed, options),
 		seq: message.seq,
 		at: message.at,
 	};

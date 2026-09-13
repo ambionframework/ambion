@@ -46,7 +46,7 @@ const wake: Wake = {
 	steer: { seq: 3, line: '[priya] And the pump?' },
 };
 const view: ActivationView = {
-	activation: 'close:4:assistant:1',
+	activation: 'closed:4:assistant:1',
 	seat: 'assistant',
 	model: 'scripted/assistant',
 	lastSeq: 4,
@@ -69,7 +69,7 @@ const requests: Record<string, Commit | Lease | string> = {
 		intent: { kind: 'said', to: 'priya', text: 'No.' },
 	},
 	summary: {
-		activation: 'close:4:assistant:1',
+		activation: 'closed:4:assistant:1',
 		key: 'call-3',
 		readThrough: 4,
 		intent: {
@@ -80,7 +80,7 @@ const requests: Record<string, Commit | Lease | string> = {
 		},
 	},
 	seating: {
-		activation: 'message:2:assistant:1',
+		activation: 'opened:2:assistant:1',
 		key: 'call-4',
 		intent: { kind: 'seated', name: 'surveyor' },
 	},

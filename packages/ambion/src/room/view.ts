@@ -59,7 +59,7 @@ export function viewOf(
 	facts: RoomFacts,
 ): ActivationView {
 	const state = facts.state;
-	const { tool, closing, composing } = toolOf(id, seat, facts);
+	const { tool, closing, composing } = toolOf(id, facts);
 	const speaking: SeatSpeaking = {
 		def,
 		assistant: seat === facts.assistant,
@@ -87,16 +87,19 @@ type Bound = {
 };
 
 /**
- * What an activation is for, read off its id and the fold: a draft closes
- * an exchange still owed, the assistant woken by the question that opened
- * one composes the room for it, and every other seat speaks. A draft id
- * names one close; the tool it holds covers every close its person is
- * owed, so a close that joined the draft after the claim is read too.
+ * What an activation is for, read off its cause and the fold: an activation
+ * a close caused writes the summary, one the open caused composes the room,
+ * and one a message caused speaks. The fold decided the cause, so this
+ * reads the id and never the roster.
+ *
+ * A draft id names one close; the tool it holds covers every close its
+ * person is owed, so a close that joined the draft after the claim is read
+ * too.
  */
-function toolOf(id: string, seat: string, facts: RoomFacts): Bound {
+function toolOf(id: string, facts: RoomFacts): Bound {
 	const state = facts.state;
 	const parsed = parseId(id);
-	if (parsed?.cause === 'close') {
+	if (parsed?.cause === 'closed') {
 		const owed = state.owed.find((o) => o.covering.includes(parsed.position));
 		if (owed === undefined) return {};
 		return {
@@ -104,20 +107,13 @@ function toolOf(id: string, seat: string, facts: RoomFacts): Bound {
 			closing: { person: owed.person, from: owed.from, through: state.lastSeq },
 		};
 	}
-	if (seat !== facts.assistant) return { tool: 'say' };
-	const question = parsed && state.messages.find((m) => m.seq === parsed.position);
-	const opened = openedBy(parsed?.position, state);
-	if (question === undefined || !opened) return {};
+	if (parsed?.cause !== 'opened') return { tool: 'say' };
+	const question = state.messages.find((m) => m.seq === parsed.position);
+	if (question === undefined) return {};
 	return {
 		tool: 'seat',
 		composing: { person: question.from, from: question.seq, limit: state.reserve.length },
 	};
-}
-
-/** Whether the message at `seq` opened an exchange, open or closed since. */
-function openedBy(seq: Seq | undefined, state: RoomState): boolean {
-	if (seq === undefined) return false;
-	return state.exchange?.from === seq || state.closes.some((close) => close.from === seq);
 }
 
 /** The reserve as the assistant reads it: a name and an identity per agent. */

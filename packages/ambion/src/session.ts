@@ -914,9 +914,9 @@ class SessionImpl implements Session, RunningRoom {
 
 	/**
 	 * Every seat at work hears the message as a steer (rule 2), except its
-	 * author and the assistant while it composes: a composing activation
-	 * decides on the question as it was asked, and what the seats say while
-	 * it decides is theirs to say. The steer is the room's word to a running
+	 * author and a seat composing the room: a composing activation decides
+	 * on the question as it was asked, and what the seats say while it
+	 * decides is theirs to say. The steer is the room's word to a running
 	 * activation, and the lease does not record it.
 	 */
 	private steer(message: Message): void {
@@ -924,7 +924,7 @@ class SessionImpl implements Session, RunningRoom {
 		const state = this.state();
 		for (const [seat, ids] of this.live(state)) {
 			if (seat === author || !this.holds(state, ids)) continue;
-			if (seat === this.assistant && ids.some((id) => parseId(id)?.cause === 'message')) continue;
+			if (ids.some((id) => parseId(id)?.cause === 'opened')) continue;
 			this.send(activationId('message', message.seq, seat), seat, {
 				seq: message.seq,
 				line: renderLine(message),

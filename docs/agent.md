@@ -630,9 +630,10 @@ a resumed room starts empty.
 
 **A seat is seated for the run. An activation lasts seconds.** An
 activation's id is derived from the journal: what caused it, where the
-cause sits, the seat and the attempt (`message:4:product:1`), or the close
-it answers and
-the attempt number (`close:9:1`). Nothing mints an id, so a wake is safe
+cause sits, the seat and the attempt. Three things cause one, and the id
+names which: a message the room delivered (`message:4:product:1`), the
+question that opened an exchange (`opened:2:assistant:1`), and a close
+that owes a summary (`closed:9:assistant:1`). Nothing mints an id, so a wake is safe
 to send twice, a retried commit lands once, and every message an
 activation writes carries its `activationId`. An activation holds a
 lease: `running`, claimed and renewed with an expiry, then `ended`, with

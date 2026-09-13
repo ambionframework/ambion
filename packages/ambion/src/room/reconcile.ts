@@ -4,7 +4,7 @@
  * `decide` is pure. It reads the folded state and the clock and returns the
  * entries to write, the wakes to send, and when to look again. Every wake it
  * sends comes off one list, `state.due`: the activations the room owes,
- * whether a message decided one or a close owes one. The room applies
+ * whatever caused each one. The room applies
  * a decision, and a second decision over the result writes nothing: that is
  * what makes it safe to run after every commit, every lease change, every
  * alarm and every wake, and after a resume that does not know what the last
@@ -69,16 +69,23 @@ export function liveSeats(state: RoomState, now: number): Map<string, string[]> 
 }
 
 /**
- * Whether the exchange is still being worked on: any activation a message
- * caused is live. A close causes the other kind, and a close is the end of
- * an exchange, so the activation that answers one holds no exchange open —
+ * Whether the exchange is still being worked on: any activation the
+ * exchange's own work caused is live. A message causes one, and the
+ * question that opened the exchange causes one. A close is the end of an
+ * exchange, so the activation that answers one holds no exchange open —
  * whichever seat holds it.
  */
 export function working(state: RoomState, now: number): boolean {
 	for (const ids of liveSeats(state, now).values()) {
-		if (ids.some((id) => parseId(id)?.cause === 'message')) return true;
+		if (ids.some(holdsExchange)) return true;
 	}
 	return false;
+}
+
+/** The activation holds an exchange open: a message caused it, or the open did. */
+function holdsExchange(id: string): boolean {
+	const cause = parseId(id)?.cause;
+	return cause === 'message' || cause === 'opened';
 }
 
 export function decide(state: RoomState, options: DecideOptions): Decision {

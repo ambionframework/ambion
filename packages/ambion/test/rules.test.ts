@@ -142,7 +142,7 @@ describe('the two questions a lease answers', () => {
 			]),
 			new Set(['solo']),
 			options,
-			'assistant',
+			() => 'message',
 		).map((wake) => wake.id);
 
 	it('counts a refused attempt, and still answers only through the last renewal', () => {

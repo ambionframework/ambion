@@ -248,9 +248,11 @@ arguments, and the journal hands back what a commit landed.
 new members of `Cause`, the way item 4 covered the counter. Five steps,
 and each one builds and passes the gate on its own:
 
-1. **The exchange's events become causes.** `Cause` gains `opened` and
-   `closed`. `toolOf` reads the cause in every branch, so the room stops
-   reading the seat's name to bind a tool. No new type.
+1. **The exchange's events become causes.** — done. `Cause` gains `opened`
+   and `closed`, and the fold decides the cause of every wake it derives.
+   `toolOf` reads the cause in every branch, so the room stops reading the
+   seat's name to bind a tool. `working` and `steer` read the cause too.
+   No new type.
 2. **`defineToolShape`, and the room publishes its shapes.** — done.
    `SAY`, `SUMMARISE` and `SEAT` are shapes, `defineTool` takes one, and
    `seat/tools.ts` spreads them. The room keeps Pi's own signature for

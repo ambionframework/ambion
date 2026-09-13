@@ -144,7 +144,7 @@ describe('a checkpoint', () => {
 			const lastClose = fold(journal).closes.at(-1);
 			expect(lastClose).toBeDefined();
 			expect(checkpoint.leases.map((lease) => lease.id)).toContain(
-				`close:${lastClose?.through}:assistant:1`,
+				`closed:${lastClose?.through}:assistant:1`,
 			);
 			expect(fold(journal).owed).toEqual([]);
 			await stopSession(session);
