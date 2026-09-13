@@ -39,12 +39,13 @@ import {
 } from './host/runtime.ts';
 import { type Body, type Entry, placed, RoomJournal } from './journal/journal.ts';
 import { renderLine } from './render.ts';
-import { answering, checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
+import { checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
 import { activationId, isExpired, isLive, parseId, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { type Decision, decide, liveSeats, working } from './room/reconcile.ts';
+import { routes } from './room/routing.ts';
 import { seatsOf } from './room/view.ts';
-import { inProcessTransport, wakes } from './seat/seat.ts';
+import { inProcessTransport } from './seat/seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
@@ -54,7 +55,6 @@ import {
 	type HumanDefinition,
 	isAgent,
 	isSeatedAgent,
-	isSpoken,
 	type Message,
 	type ModelResolver,
 	type Participant,
@@ -771,7 +771,7 @@ class SessionImpl implements Session, RunningRoom {
 			draft: () => {
 				const state = this.state();
 				const message = draft(state);
-				const woken = route ? this.routing(message as unknown as Message, state) : [];
+				const woken = route ? routes(message as unknown as Message, state, this.live(state)) : [];
 				return { ...message, ...(woken.length === 0 ? {} : { wakes: woken }) } as Body<T>;
 			},
 		});
@@ -785,43 +785,6 @@ class SessionImpl implements Session, RunningRoom {
 			() => ({ ...change, at: this.iso() }),
 			route,
 		);
-	}
-
-	/**
-	 * Who wakes for a message — the room's whole policy in one place, and
-	 * the same for what a person said, what a person did, and what a
-	 * colleague said. An idle seat wakes when the attention it was seated at
-	 * reaches the message (rules 1, 4 and 6, in `wakes`). A person's question
-	 * that opens an exchange also wakes the assistant, when the reserve holds
-	 * anybody and the assistant is idle. A seat at work is not woken: it is
-	 * steered once the write is confirmed (rule 2), and the steer is not on
-	 * the message.
-	 */
-	private routing(message: Message, state: RoomState): string[] {
-		const author = authorOf(message);
-		const target = targetOf(message);
-		const live = this.live(state);
-		// The room changes before the message does: a seating's newcomer is on
-		// the roster the routing reads, so the seating wakes it.
-		const roster =
-			message.kind === 'seated'
-				? [...state.roster, { name: message.from, attention: message.attention ?? 'broadcast' }]
-				: state.roster;
-		const woken = roster
-			.filter((seat) => seat.name !== author && !live.has(seat.name))
-			.filter((seat) => wakes(seat, target, message))
-			.map((seat) => seat.name);
-		const composer = answering(state.roster, 'opened')?.name;
-		if (composer !== undefined && this.opening(message, state) && !live.has(composer)) {
-			woken.push(composer);
-		}
-		return [...new Set(woken)];
-	}
-
-	/** The message opens an exchange, and the room holds agents to compose it from. */
-	private opening(message: Message, state: RoomState): boolean {
-		if (state.exchange !== undefined || state.reserve.length === 0) return false;
-		return isSpoken(message) && state.people.has(message.from);
 	}
 
 	// -- what the room hears --------------------------------------------------
@@ -1319,10 +1282,4 @@ function compositionOf(cast: Cast, at: string): Without<Composition, 'seq'> {
 		available: cast.available.map(seatingOf),
 		at,
 	};
-}
-
-/** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
-function targetOf(message: Message): string | undefined {
-	if (isSpoken(message)) return message.to;
-	return message.kind === 'seated' ? message.from : undefined;
 }

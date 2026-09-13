@@ -285,9 +285,9 @@ below applies to all three kinds unchanged, which is why the record holds
 one union and one sequence.
 
 Beyond identity, the mechanics are eight rules. The first six are the
-room's routing and voice; all of the routing is one function, `routing` in
-`session.ts`, and it is written on the message: `wakes` names every seat at
-rest the message wakes, so a message and its routing are one write. A seat
+room's routing and voice; all of the routing is one file,
+`room/routing.ts`, and it is written on the message: `wakes` names every
+seat at rest the message wakes, so a message and its routing are one write. A seat
 at work is steered once the write is confirmed (rule 2).
 
 **1. Every message activates every idle agent, in parallel.** A human's
@@ -415,7 +415,7 @@ enough to be worth a word. A bare agent takes the default. `none` is where
 a seat in a role sits: the assistant wakes for the room's own events and
 for nothing said.
 
-The routing is the scale, and reads as one line (`wakes` in `seat/seat.ts`):
+The routing is the scale, and reads as one line (`wakes` in `room/routing.ts`):
 every message has a **reach** — `named` for a directed say, `broadcast` for
 anything else said, `presence` for somebody arriving or leaving, or a
 colleague seated or unseated — and a seat wakes when its attention is at

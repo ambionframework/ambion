@@ -41,9 +41,18 @@ the room as a value (its name, its journal, the runtime) and nine
 behaviours the room owns. `session.ts` keeps three one-line methods, and
 the twelve members are the coupling written down.
 
-**What is next.** The write path and the reconcile loop, in that order.
-`simplification.md` §3 names the shape both take: fold, decide, apply,
-with `decide` widened to cover the whole step.
+**What moved with it.** The routing is `room/routing.ts`: `routes` decides
+who a message wakes, and `wakes` is the comparison it reads off the
+attention scale. `wakes` had been in `seat/seat.ts`, where only
+`session.ts` read it; the rule is the room's, and it is pure.
+
+**What does not split.** The room's reaction to an entry (`hear` and the
+three `heard` methods) shares two fields with the reconcile loop:
+`sentAt`, which `send` writes and `forget` and `decide` read, and
+`idleReported`, which four methods write. Two files over one pair of
+mutable fields spreads the state the way `next.md` §1 warned three
+booleans would. They are one concern, and what is left of item 3 is to
+widen `decide` to cover the whole step, where both of them live.
 
 **What `Answering` still gives away.** It hands an answer the whole
 `RoomJournal`, where the three calls read `messages`, `lastCommitted` and

@@ -26,59 +26,14 @@ import { Agent } from '@earendil-works/pi-agent-core';
 import type { RunningRoom, Transport } from '../host/runtime.ts';
 import type {
 	AgentDefinition,
-	Attention,
 	Clock,
-	Message,
 	ModelResolver,
 	SessionEvent,
 	SessionOpener,
 } from '../types.ts';
-import { isSpoken, isSummary } from '../types.ts';
 import type { ActivationView, SeatPort, SeatRoom, Wake } from '../wire.ts';
 import { Activation, persistTurns } from './activation.ts';
 import { binding, toolsFor } from './tools.ts';
-
-// -- routing -----------------------------------------------------------------
-
-/** The attention scale, narrowest first. A seat hears what it is wide enough for. */
-const WIDTH: Record<Attention, number> = { none: 0, named: 1, broadcast: 2, presence: 3 };
-
-/**
- * How wide a seat's attention has to be for this message to reach it: a
- * directed say reaches the one it names, anything else said reaches the room,
- * and a person arriving or leaving reaches the widest end.
- *
- * A summary reaches no seat at all. It is written for one person, over a
- * range the room has already closed, so it is news to nobody in the room.
- * The scale says so, because what a message reaches is the message's own
- * business and never its author's.
- */
-function reachOf(message: Message): Attention {
-	if (isSummary(message)) return 'none';
-	if (!isSpoken(message)) return 'presence';
-	return message.to === undefined ? 'broadcast' : 'named';
-}
-
-/**
- * One rule, read off the scale, in three lines. A seat the message names wakes,
- * however narrowly it is seated: a directed say names the one it addresses, and
- * a seating names the seat it seats. Everybody else wakes when their attention
- * is at least as wide as the message's reach — and a directed say reaches
- * nobody else at all. Rule 1 routes, rule 6 decides who sits out, and a
- * presence message is routed like any other.
- */
-export function wakes(
-	seat: { name: string; attention: Attention },
-	target: string | undefined,
-	message: Message,
-): boolean {
-	if (seat.name === target) return true;
-	const reach = reachOf(message);
-	// A message that reaches nothing reaches nobody but the seat it names.
-	if (reach === 'none') return false;
-	if (WIDTH[seat.attention] < WIDTH[reach]) return false;
-	return reach !== 'named';
-}
 
 // -- the actor ----------------------------------------------------------------
 
