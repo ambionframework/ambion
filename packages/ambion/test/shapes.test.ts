@@ -73,6 +73,24 @@ describe('the shapes the room binds', () => {
 	};
 	const held = {} as Parameters<typeof toolsFor>[2];
 
+	/**
+	 * Every activation that binds `say` reads one parameter schema now, where
+	 * each used to build its own. A binder that wrote into the schema it was
+	 * given would reach every activation after it.
+	 */
+	it('leaves the shapes it binds as it found them', () => {
+		const before = JSON.stringify([SAY, SUMMARISE, SEAT]);
+		for (const [hand, over] of [
+			['say', {}],
+			['summarise', { closing: { person: 'priya', from: 1, through: 2 } }],
+			['seat', { composing: { person: 'priya', from: 1, limit: 1 } }],
+		] as const) {
+			toolsFor({ ...view, tool: hand as ToolName, ...over }, agent, held);
+			toolsFor({ ...view, tool: hand as ToolName, ...over }, agent, held);
+		}
+		expect(JSON.stringify([SAY, SUMMARISE, SEAT])).toBe(before);
+	});
+
 	it.each([
 		['say', {}, SAY],
 		['summarise', { closing: { person: 'priya', from: 1, through: 2 } }, SUMMARISE],

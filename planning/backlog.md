@@ -757,21 +757,26 @@ the storage saying it cannot serve two writers. Either the sweep retries
 the read once the evicted run's queue is drained, or it skips `storedOf`
 for `jsonl` and reads the invariants off the session.
 
-### 50. The seat's alarm does not run, and the wait reports the room
+### 50. A wait in the seat test reports the room, where the runner is late
 
-**What.** `packages/cloudflare/test/seat.test.ts` fails now and then in CI
-with `Nothing came within 20000 ms` at `test/until.ts:20`, from line 28: the
-wait for the product's say after `runDurableObjectAlarm(seat)`. The activation
-the alarm starts never reaches the record.
+**What.** `packages/cloudflare/test/seat.test.ts` fails now and then with
+`Nothing came within 20000 ms` at `test/until.ts:20`. Both of the file's
+tests have done it, at two different waits: the wait for the product's say
+after `runDurableObjectAlarm(seat)`, and the wait for the first wake to
+reach the seat. Each time, the work the wait is for never happens inside
+the deadline.
 
-**Why it is a wait and not the room.** The whole workerd suite runs its tests
-in under three seconds locally, so a 20 second deadline is not slowness. Five
-local runs pass. `Test on Node 22` passed the same commit in the same CI run,
-and a re-run of `Test on Node 24` passed. Two other files in the one workerd
-process, `room.test.ts` and `restart.test.ts`, abort a Durable Object on
-purpose, and both log `broken.outputGateBroken` before the seat test starts.
+**Why it is a wait and never the room.** The whole workerd suite runs its
+tests in under three seconds locally, so a 20 second deadline is not
+slowness. It wants a loaded machine: six runs of the suite on its own pass,
+on this branch and on `main` alike, and the failures land inside `pnpm
+check`, where turbo runs every package at once. `Test on Node 22` passed
+the same commit in the same CI run that `Test on Node 24` failed, and the
+re-run passed. Two other files in the one workerd process, `room.test.ts`
+and `restart.test.ts`, abort a Durable Object on purpose, and both log
+`broken.outputGateBroken` before the seat test starts.
 
-**Where.** `packages/cloudflare/test/seat.test.ts` line 28;
+**Where.** `packages/cloudflare/test/seat.test.ts` lines 28 and 86;
 `packages/cloudflare/test/until.ts`; `packages/cloudflare/src/seat-object.ts`
 `wake` and `alarm`.
 
