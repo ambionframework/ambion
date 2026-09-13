@@ -20,7 +20,7 @@
  *   finished activation.
  *
  * The room renders what the activation reads and hands it over as a view;
- * the seat side builds the model, the prompt and the hands from it, runs it,
+ * the seat side builds the model, the prompt and the tools from it, runs it,
  * and reads again while the room keeps moving underneath.
  *
  * **Three spans, and only two are ours.** Pi has a *turn* — one request to a
@@ -152,7 +152,7 @@ export class Activation {
 			// An aborted activation stays cancelled, and one that does not rebuild
 			// is a single pass whatever landed: a summarising activation answers a room
 			// that moved with a redraft inside its own tool.
-			if (this.cancelled || view.hand !== 'say') return false;
+			if (this.cancelled || view.tool !== 'say') return false;
 			// Awaited here, so a renewal that fails is caught below and not returned as a rejection.
 			return await this.moved(agent);
 		} catch (error) {
@@ -178,7 +178,7 @@ export class Activation {
 
 	/**
 	 * A steer has landed in the transcript, so this activation has now heard it, and
-	 * the room hears what its hands did. Steers drain FIFO, so the oldest
+	 * the room hears what its tools did. Steers drain FIFO, so the oldest
 	 * pending seq is the one that landed.
 	 */
 	private note(event: AgentEvent): void {

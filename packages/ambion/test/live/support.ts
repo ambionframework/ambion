@@ -5,7 +5,7 @@
  *
  * A live test proves what a scripted stream cannot: that a model id resolves
  * through Pi's registry, that a real provider accepts the tools the room
- * hands a seat, that the judgment the prompt asks for holds on a real model,
+ * gives a seat, that the judgment the prompt asks for holds on a real model,
  * and that a real request can be cancelled. It does not prove the routing;
  * `../session.test.ts` and its neighbours prove that, deterministically.
  */

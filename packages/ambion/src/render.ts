@@ -386,7 +386,7 @@ function askOf(seat: SeatSpeaking, room: RoomView): string {
 	const closing = seat.closing;
 	if (seat.assistant) {
 		// The assistant woken by anything but an open or a close has nothing to
-		// do in the activation, and no hands to do it with. See `handsFor`.
+		// do in the activation, and no tools to do it with. See `toolsFor`.
 		return closing
 			? `${closing.person}'s exchange is over: messages ${numbered(room.record, closing.from)} ` +
 					`to ${numbered(room.record, closing.through)}. Write the one message they read ` +

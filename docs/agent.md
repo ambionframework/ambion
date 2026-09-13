@@ -10,7 +10,7 @@ shipped. The whole runtime lives in
 Four functions build a room, and one sentence holds the whole of it:
 
 > **`defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
-> gives agents hands, and `startSession` brings up a named room the agents
+> gives agents tools, and `startSession` brings up a named room the agents
 > work in and people visit — each agent deciding for itself whether to speak,
 > to whom, and which colleague to call in.**
 
@@ -106,7 +106,7 @@ receives the parsed parameters as its first argument and a `ToolContext`
 as its second: `ctx.workspace()` resolves the agent's workspace, and
 `ctx.signal` is the abort signal Pi gives the call. It may return a plain
 string or Pi's full content shape. A tool defined with Pi's own
-`defineTool` works unchanged (`toPiTool` in `seat/hands.ts` accepts both), so
+`defineTool` works unchanged (`toPiTool` in `seat/tools.ts` accepts both), so
 learning Pi's format is the same as learning Ambion's. An agent that names
 a workspace also holds four built-in tools, `read`, `write`, `edit` and
 `bash` ([`workspace.md`](workspace.md) §5).
@@ -338,7 +338,7 @@ reaches. An activation that heard less than that reads the room again
 through a fresh view.
 
 **3. Speaking is a tool; silence is the default.** An activated agent holds
-one built-in tool, `say({ to?, text })` (`sayTool` in `seat/hands.ts`). Ending
+one built-in tool, `say({ to?, text })` (`sayTool` in `seat/tools.ts`). Ending
 an activation without calling it is declining. Declining leaves no mark on the
 record — the way a colleague reads the room and keeps working. The tool
 refuses an empty text for the same reason: a message with nothing in it
@@ -440,7 +440,7 @@ runtime observed opening. No one self-reports who they are.
 **8. The room hears what you said — and your keystrokes are kept aside.**
 Each agent's tool calls belong to its own working context; other
 participants see its `say`s only, because the record is all any view
-renders. The hands are still auditable: every activation's full turns land
+renders. The tools are still auditable: every activation's full turns land
 in the seat's own downstream Pi session — `<room>:<agent>`, parented to the
 room's, named by `seats().sessionId`, opened by the same opener
 (`persistTurns` in `seat/activation.ts`) — so what an agent actually did can be replayed long after
@@ -515,7 +515,7 @@ One distinction keeps rule 8 honest: the event stream serves the host, and
 the host holds no seat at the table. Participants' contexts never see each
 other's tool executions. The stream sees them, because the host operating
 the room is the code that owns it, and debugging a room means watching
-hands as well as hearing voices.
+tool calls as well as hearing voices.
 
 ### The exchange: the room's own unit of work
 
@@ -599,7 +599,7 @@ who is here in [`presence.ts`](../packages/ambion/src/room/presence.ts), a
 seat, what wakes it and the seat's side of the wire in
 [`seat.ts`](../packages/ambion/src/seat/seat.ts), one activation in
 [`activation.ts`](../packages/ambion/src/seat/activation.ts), the hands it
-holds in [`hands.ts`](../packages/ambion/src/seat/hands.ts), an activation's
+holds in [`tools.ts`](../packages/ambion/src/seat/tools.ts), an activation's
 id and lease in [`lease.ts`](../packages/ambion/src/room/lease.ts), the rules
 the fold decides by in
 [`rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts), the exchange in
@@ -722,7 +722,7 @@ or a repository of its own that behaves like it.
 
 **What crosses between a seat and its room is JSON.** The room renders the
 system prompt and the context, and sends the two strings with the model
-id and the hand the activation holds. The seat side resolves the definition
+id and the tool the activation holds. The seat side resolves the definition
 by name through the runtime's catalog, builds the Pi `Agent`, and reaches
 the room through three calls: `view`, `commit` and `lease`. The room
 reaches a seat through two. `wake` carries the line a running activation

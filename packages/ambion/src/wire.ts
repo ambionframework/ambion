@@ -160,8 +160,12 @@ export interface SeatPort {
 
 // -- a seat reaching its room -------------------------------------------------
 
-/** The one hand an activation holds, beside a seat's own tools. */
-export type Hand = 'say' | 'summarise' | 'seat' | 'none';
+/**
+ * The one tool the room binds into an activation, beside a seat's own.
+ * The room is the one binder today, so the three names are a closed set. A
+ * role that names a tool an agent brings widens it to any name.
+ */
+export type ToolName = 'say' | 'summarise' | 'seat';
 
 export interface ActivationView {
 	activation: string;
@@ -172,10 +176,11 @@ export interface ActivationView {
 	lastSeq: Seq;
 	systemPrompt: string;
 	context: string;
-	hand: Hand;
-	/** The exchange this activation closes, when its hand is `summarise`. */
+	/** The tool the room binds, or nothing where this activation holds none. */
+	tool?: ToolName;
+	/** The exchange this activation closes, when its tool is `summarise`. */
 	closing?: { person: string; from: Seq; through: Seq };
-	/** The exchange this activation composes the room for, when its hand is `seat`. */
+	/** The exchange this activation composes the room for, when its tool is `seat`. */
 	composing?: { person: string; from: Seq; limit: number };
 }
 
