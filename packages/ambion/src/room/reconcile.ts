@@ -13,7 +13,7 @@
 
 import type { Close, LeaseChange } from '../wire.ts';
 import { draftOver } from './assistant.ts';
-import type { RoomState } from './fold.ts';
+import { answering, type RoomState } from './fold.ts';
 import { type Due, isExpired, isLive, parseId, seatOf, startsNow } from './lease.ts';
 import { givesUp } from './rules.verified.ts';
 
@@ -127,20 +127,25 @@ function expiries(state: RoomState, now: number): Decision['expired'] {
 		.map((lease) => ({ id: lease.id, phase: 'ended' as const, reason: 'expired' as const, at }));
 }
 
-/** The exchange closes when nothing works on it. It names the assistant when it owes a summary. */
+/**
+ * The exchange closes when nothing works on it. It names the seat whose role
+ * answers `closed`, when the exchange owes a summary. A room with no such
+ * seat closes the exchange and owes nothing.
+ */
 function closing(state: RoomState, now: number): Decision['close'] {
 	const exchange = state.exchange;
 	if (exchange === undefined || working(state, now)) return undefined;
-	const assistant = state.composition?.assistant.name ?? '';
-	const speaksForItself = (name: string) => !state.people.has(name) && name !== assistant;
+	const writer = answering(state.roster, 'closed')?.name;
+	const speaksForItself = (name: string) => !state.people.has(name) && name !== writer;
 	const owed =
+		writer !== undefined &&
 		draftOver(state.messages, exchange.from, state.lastSeq, speaksForItself) !== undefined;
 	return {
 		owner: exchange.owner,
 		from: exchange.from,
 		through: state.lastSeq,
 		at: new Date(now).toISOString(),
-		...(owed ? { wakes: [assistant] } : {}),
+		...(owed && writer !== undefined ? { wakes: [writer] } : {}),
 	};
 }
 

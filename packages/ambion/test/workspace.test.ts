@@ -1,6 +1,6 @@
 /**
  * What the core owns of a workspace: the handle, the resolver, and the four
- * hands it binds to a connected agent.
+ * tools it binds to a connected agent.
  *
  * The core names `WorkspaceBackend` as a port and holds no filesystem, so
  * every test here runs on a fake backend (`support/workspace.ts`). What the
@@ -135,15 +135,6 @@ describe('defineWorkspace', () => {
 		expect(() => agent('fake', { workspace: { name: 'x' } as never })).toThrow(
 			/must come from defineWorkspace/,
 		);
-		await destroyWorkspace(site);
-	});
-
-	it('refuses an assistant that names a workspace', async () => {
-		const site = defineWorkspace({ name: name('assistant'), backend: fakeBackend() });
-		const connected = agent('assistant', { workspace: site });
-		expect(() =>
-			startSession({ name: name('workspace'), assistant: connected, agents: [] }),
-		).toThrow(/names a workspace/);
 		await destroyWorkspace(site);
 	});
 });

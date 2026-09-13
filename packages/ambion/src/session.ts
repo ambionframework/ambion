@@ -27,6 +27,7 @@
 
 import type { Committed } from '@ambionframework/journal';
 import type { SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
+import { ASSISTANT, roleOf, seated } from './define.ts';
 import {
 	defaultRuntime,
 	type RunningRoom,
@@ -37,8 +38,7 @@ import {
 } from './host/runtime.ts';
 import { type Body, type Entry, placed, RoomJournal } from './journal/journal.ts';
 import { renderLine } from './render.ts';
-import { assertAssistant } from './room/assistant.ts';
-import { checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
+import { answering, checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
 import { activationId, isExpired, isLive, parseId, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { type Decision, decide, liveSeats, working } from './room/reconcile.ts';
@@ -58,6 +58,7 @@ import {
 	type ModelResolver,
 	type Participant,
 	type PresenceMessage,
+	type RoleDefinition,
 	type SeatInfo,
 	type Seq,
 	type SessionEvent,
@@ -81,15 +82,15 @@ import type {
 	Without,
 } from './wire.ts';
 
-/** An agent with the attention it takes when seated. */
+/** An agent with the attention and the role it takes when seated. */
 interface Placed {
 	def: AgentDefinition;
 	attention: Attention;
+	role?: RoleDefinition;
 }
 
 /** What a run starts with, as definitions. The journal holds the same composition, by name. */
 interface Cast {
-	assistant: AgentDefinition;
 	goal: string | undefined;
 	agents: Placed[];
 	available: Placed[];
@@ -119,11 +120,15 @@ export interface StartSessionOptions {
 	/**
 	 * The room's assistant: an agent that composes the room at the open of an
 	 * exchange, from the reserve, and writes the one message a person reads
-	 * when their exchange closes, shaped to how that person reads. It is seated
-	 * with the agents, at `none`, and it writes for every person who visits.
-	 * It carries no tools and no workspace: the room refuses one that does.
+	 * when their exchange closes, shaped to how that person reads.
+	 *
+	 * The option seats it with the agents, at `none`, in the `ASSISTANT`
+	 * role. It is the same seating as
+	 * `seated(agent, { attention: 'none', role: ASSISTANT })` in `agents`,
+	 * and it is the convention a room follows. A room without one closes
+	 * every exchange and owes no summary.
 	 */
-	assistant: AgentDefinition;
+	assistant?: AgentDefinition;
 	/** What the room is for. Read by every agent; gates the arrival paragraph. */
 	goal?: string;
 	/**
@@ -385,12 +390,7 @@ class SessionImpl implements Session, RunningRoom {
 		this.stream = options.streamFn ?? runtime.stream;
 		this.model = options.streamFn ? stubModel : runtime.model;
 		this.starting = cast && compositionOf(cast, this.iso());
-		if (cast) {
-			this.know(...cast.agents, ...cast.available, {
-				def: cast.assistant,
-				attention: 'none',
-			});
-		}
+		if (cast) this.know(...cast.agents, ...cast.available);
 		this.ready = this.starting ? this.compose(this.starting) : this.recover();
 		void this.ready.catch(() => {});
 	}
@@ -440,7 +440,6 @@ class SessionImpl implements Session, RunningRoom {
 			throw new Error(`Session '${this.name}' has no composition on its record: start it instead.`);
 		}
 		const names = [
-			state.composition.assistant.name,
 			...state.roster.map((seat) => seat.name),
 			...state.composition.available.map((seat) => seat.name),
 		];
@@ -492,10 +491,6 @@ class SessionImpl implements Session, RunningRoom {
 			this.fold = { length, state: foldRoom(this.journal.entries, this.runtime.retry) };
 		}
 		return this.fold.state;
-	}
-
-	private get assistant(): string {
-		return this.state().composition?.assistant.name ?? this.starting?.assistant.name ?? '';
 	}
 
 	private gone(): boolean {
@@ -717,14 +712,17 @@ class SessionImpl implements Session, RunningRoom {
 		});
 	}
 
-	/** The host takes an agent off the roster. Never the assistant. */
+	/** The host takes an agent off the roster. Never a seat that holds a role. */
 	async unseat(agent: AgentDefinition): Promise<void> {
 		this.assertRunning();
 		await this.ready;
-		if (!this.onRoster(agent.name))
-			throw new Error(`'${agent.name}' is not seated in this session.`);
-		if (agent.name === this.assistant) {
-			throw new Error(`'${agent.name}' is the assistant: a room cannot run without one.`);
+		const seat = this.state().roster.find((s) => s.name === agent.name);
+		if (seat === undefined) throw new Error(`'${agent.name}' is not seated in this session.`);
+		if (seat.role !== undefined) {
+			throw new Error(
+				`'${agent.name}' holds the role '${seat.role.name}': a role is a seating choice, ` +
+					'so the next composition decides it.',
+			);
 		}
 		await this.revoke((seat) => seat === agent.name);
 		await this.commitPresence({ kind: 'unseated', from: agent.name });
@@ -780,7 +778,6 @@ class SessionImpl implements Session, RunningRoom {
 	private routing(message: Message, state: RoomState): string[] {
 		const author = authorOf(message);
 		const target = targetOf(message);
-		const assistant = this.assistant;
 		const live = this.live(state);
 		// The room changes before the message does: a seating's newcomer is on
 		// the roster the routing reads, so the seating wakes it.
@@ -792,14 +789,17 @@ class SessionImpl implements Session, RunningRoom {
 			.filter((seat) => seat.name !== author && !live.has(seat.name))
 			.filter((seat) => wakes(seat, target, message))
 			.map((seat) => seat.name);
-		if (this.opensExchange(message, state) && state.reserve.length > 0 && !live.has(assistant)) {
-			woken.push(assistant);
+		const composer = answering(state.roster, 'opened')?.name;
+		if (composer !== undefined && this.opening(message, state) && !live.has(composer)) {
+			woken.push(composer);
 		}
 		return [...new Set(woken)];
 	}
 
-	private opensExchange(message: Message, state: RoomState): boolean {
-		return state.exchange === undefined && isSpoken(message) && state.people.has(message.from);
+	/** The message opens an exchange, and the room holds agents to compose it from. */
+	private opening(message: Message, state: RoomState): boolean {
+		if (state.exchange !== undefined || state.reserve.length === 0) return false;
+		return isSpoken(message) && state.people.has(message.from);
 	}
 
 	// -- what the room hears --------------------------------------------------
@@ -976,7 +976,6 @@ class SessionImpl implements Session, RunningRoom {
 		return {
 			name: this.name,
 			now: this.now(),
-			assistant: this.assistant,
 			state,
 			live: this.live(state),
 			unseen: (since) => this.journal.messages(since).length,
@@ -1400,9 +1399,12 @@ class SessionImpl implements Session, RunningRoom {
 	}
 }
 
-/** The composition `startSession` was given, checked for duplicates the way the room refuses them. */
+/**
+ * The composition `startSession` was given, checked for duplicates the way
+ * the room refuses them. The assistant is a seating like every other: the
+ * option seats it at `none`, in the `ASSISTANT` role, beside the agents.
+ */
 function composeFrom(options: StartSessionOptions): Cast {
-	const assistant = assertAssistant(options.assistant);
 	const names = new Set<string>();
 	const take = (placed: Placed): Placed => {
 		if (names.has(placed.def.name)) {
@@ -1412,27 +1414,34 @@ function composeFrom(options: StartSessionOptions): Cast {
 		return placed;
 	};
 	const agents = (options.agents ?? []).map((seat) => take(unwrap(seat)));
-	take({ def: assistant, attention: 'none' });
+	if (options.assistant !== undefined) {
+		agents.push(take(unwrap(seated(options.assistant, { attention: 'none', role: ASSISTANT }))));
+	}
 	const available = (options.available ?? []).map((seat) => take(unwrap(seat)));
-	return { assistant, goal: options.goal?.trim() || undefined, agents, available };
+	return { goal: options.goal?.trim() || undefined, agents, available };
 }
 
 function unwrap(seat: AgentSeat): Placed {
 	const def = isSeatedAgent(seat) ? seat.agent : seat;
 	if (!isAgent(def)) throw new Error('Agents must come from defineAgent or seated().');
-	return { def, attention: isSeatedAgent(seat) ? seat.attention : 'broadcast' };
+	if (!isSeatedAgent(seat)) return { def, attention: 'broadcast' };
+	return {
+		def,
+		attention: seat.attention,
+		...(seat.role === undefined ? {} : { role: seat.role }),
+	};
 }
 
 const seatingOf = (placed: Placed): Seating => ({
 	name: placed.def.name,
 	identity: placed.def.identity,
 	attention: placed.attention,
+	...(placed.role === undefined ? {} : { role: roleOf(placed.role) }),
 });
 
-/** The cast as the journal holds it: every seat by name, identity and attention. */
+/** The cast as the journal holds it: every seat by name, identity, attention and role. */
 function compositionOf(cast: Cast, at: string): Without<Composition, 'seq'> {
 	return {
-		assistant: seatingOf({ def: cast.assistant, attention: 'none' }),
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
 		agents: cast.agents.map(seatingOf),
 		available: cast.available.map(seatingOf),

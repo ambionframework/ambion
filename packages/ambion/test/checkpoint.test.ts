@@ -169,8 +169,15 @@ describe('a checkpoint the room folds', () => {
 			);
 			await journal.ready;
 			await journal.write('composition', {
-				assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
-				agents: [{ name: 'solo', identity: 'Answers.', attention: 'broadcast' }],
+				agents: [
+					{ name: 'solo', identity: 'Answers.', attention: 'broadcast' },
+					{
+						name: 'assistant',
+						identity: 'Writes the one message.',
+						attention: 'none',
+						role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
+					},
+				],
 				available: [],
 				at,
 			});
@@ -222,8 +229,15 @@ describe('a checkpoint past the fence', () => {
 			const piSession = await opened.sessions.open(name);
 			const at = '2026-01-01T09:00:00.000Z';
 			const composition: Composition = {
-				assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
-				agents: [{ name: 'solo', identity: 'Answers.', attention: 'broadcast' }],
+				agents: [
+					{ name: 'solo', identity: 'Answers.', attention: 'broadcast' },
+					{
+						name: 'assistant',
+						identity: 'Writes the one message.',
+						attention: 'none',
+						role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
+					},
+				],
 				available: [],
 				seq: 2,
 				at,

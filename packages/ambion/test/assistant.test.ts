@@ -7,7 +7,11 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	defineRole,
 	defineTool,
+	defineToolShape,
+	defineWorkspace,
+	destroyWorkspace,
 	InMemorySessionRepo,
 	isSpoken,
 	type Message,
@@ -16,6 +20,7 @@ import {
 	type Session,
 	type SessionEvent,
 	type SummaryMessage,
+	seated,
 	startSession,
 	stopSession,
 	visitSession,
@@ -32,15 +37,19 @@ import {
 } from './support/room.ts';
 import {
 	byAgent,
+	callTool,
 	contextText,
+	insists,
 	quiet,
 	type Script,
 	scripted,
 	seat,
 	speak,
 	summarise,
+	toolNames,
 } from './support/scripted.ts';
 import { gatedOpener, memory } from './support/storage.ts';
+import { fakeBackend } from './support/workspace.ts';
 
 /** The ordinary assistant: it writes once, then ends its activation. */
 const writes =
@@ -647,7 +656,7 @@ describe('the assistant', () => {
 		expect(metadata).toBeDefined();
 		// and the room lists it as the seat it is: an agent, seated none, the assistant
 		const seat = session.seats().find((s) => s.name === 'assistant');
-		expect(seat).toMatchObject({ kind: 'agent', assistant: true, attention: 'none' });
+		expect(seat).toMatchObject({ kind: 'agent', role: 'assistant', attention: 'none' });
 		const piSeat = metadata && (await repo.open(metadata));
 		const entries = (await piSeat?.findEntries()) ?? [];
 		expect(entries.some((e) => e.type === 'custom' && e.customType === 'ambion/activation')).toBe(
@@ -680,7 +689,7 @@ describe('the assistant', () => {
 		const seat = session.seats().find((s) => s.name === 'assistant');
 		expect(seat).toMatchObject({
 			kind: 'agent',
-			assistant: true,
+			role: 'assistant',
 			attention: 'none',
 			status: 'idle',
 		});
@@ -819,9 +828,9 @@ describe('the assistant', () => {
 		await session.settled();
 
 		const seats = session.seats();
-		expect(seats.filter((s) => s.kind === 'agent' && s.assistant).map((s) => s.name)).toEqual([
-			'assistant',
-		]);
+		expect(
+			seats.filter((s) => s.kind === 'agent' && s.role === 'assistant').map((s) => s.name),
+		).toEqual(['assistant']);
 		expect(seats.find((s) => s.name === 'priya')).toEqual({
 			kind: 'human',
 			name: 'priya',
@@ -1143,33 +1152,136 @@ describe('a fold', () => {
 	});
 });
 
-describe('startSession', () => {
-	it('refuses a room with no assistant', () => {
-		const noAssistant = { name: roomName(), agents: [product] } as unknown as Parameters<
-			typeof startSession
-		>[0];
-		expect(() => startSession(noAssistant)).toThrow(/must come from defineAgent/);
-	});
+describe('a role a host writes', () => {
+	const FLAG = defineToolShape({ name: 'flag', parameters: Type.Object({ note: Type.String() }) });
 
-	it('refuses an assistant with tools', () => {
+	/**
+	 * The room binds `say`, `summarise` and `seat`. A role may name a tool
+	 * the agent brings instead, and the seating proved the name resolves, so
+	 * the activation the close causes holds that tool and nothing else.
+	 */
+	it('binds the tool the agent brings, for the event the role answers', async () => {
+		const flagged: string[] = [];
+		const held: string[][] = [];
+		const flag = defineTool({
+			shape: FLAG,
+			description: 'Flag what the exchange came to.',
+			execute: (params: { note: string }) => {
+				flagged.push(params.note);
+				return 'flagged';
+			},
+		});
+		const reviewer = defineAgent({
+			name: 'reviewer',
+			identity: 'Reads what an exchange came to.',
+			instructions: 'flag it',
+			model: 'scripted/reviewer',
+			tools: [flag],
+		});
+		const session = startSession({
+			name: roomName(),
+			agents: [
+				product,
+				colleague,
+				seated(reviewer, {
+					attention: 'none',
+					role: defineRole({ name: 'reviewer', answers: { closed: FLAG } }),
+				}),
+			],
+			runtime,
+			streamFn: scripted(
+				byAgent({
+					product: insists('Thursday is out.'),
+					colleague: insists('Nor from here.'),
+					reviewer: (context, _who, call) => {
+						held.push(toolNames(context));
+						return call === 1 ? callTool('flag', { note: 'two agents, one answer' }) : quiet();
+					},
+				}),
+			),
+		});
+		started.push(session);
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await quiescent(session);
+
+		expect(held[0]).toEqual(['flag']);
+		expect(flagged).toEqual(['two agents, one answer']);
+		// the room lists the role it seated, and the record holds it by tool name
+		expect(session.seats().find((s) => s.name === 'reviewer')).toMatchObject({
+			role: 'reviewer',
+		});
+	});
+});
+
+describe('a room with nobody in the assistant role', () => {
+	it('opens and closes an exchange, and owes no summary', async () => {
+		// Nothing holds a room to an assistant. The room closes the exchange
+		// the way it always does, and no close names a seat, so nothing is
+		// owed and nobody drafts.
+		const session = startSession({
+			name: roomName(),
+			agents: [product],
+			runtime,
+			streamFn: scripted(byAgent({ product: insists('Thursday is out.') })),
+		});
+		const events = collect(session);
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await quiescent(session);
+
+		const record = await session.messages();
+		expect(record.filter((m) => m.kind === 'summary')).toEqual([]);
+		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said']);
+		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(1);
+		expect(session.seats().every((s) => s.kind !== 'agent' || s.role === undefined)).toBe(true);
+		await stopSession(session);
+	});
+});
+
+describe('an assistant that brings its own tools', () => {
+	it('is seated, and its drafting activation still holds summarise alone', async () => {
+		// `assertAssistant` refused a definition like this. A role is a
+		// seating choice now, so the definition is the host's business: the
+		// close binds one tool, so the tools it brings reach no model.
 		const book = defineTool({
-			name: 'book_inspector',
+			name: 'book-inspector',
 			description: 'Book the inspector.',
 			parameters: Type.Object({}),
 			execute: () => 'booked',
 		});
-		expect(() =>
-			open({
-				script: byAgent({}),
-				assistant: defineAgent({
-					name: 'assistant',
-					identity: 'Writes the one message a person reads.',
-					instructions: 'summarise',
-					model: 'scripted/assistant',
-					tools: [book],
-				}),
+		const site = defineWorkspace({ name: roomName(), backend: fakeBackend() });
+		const held: string[][] = [];
+		const session = open({
+			script: byAgent({
+				product: insists('Thursday is out.'),
+				colleague: insists('Nor from here.'),
+				assistant: (context, _who, call) => {
+					held.push(toolNames(context));
+					return call === 1 ? summarise('The one message.') : quiet();
+				},
 			}),
-		).toThrow(/never acts in it/);
+			assistant: defineAgent({
+				name: 'assistant',
+				identity: 'Writes the one message a person reads.',
+				instructions: 'summarise',
+				model: 'scripted/assistant',
+				workspace: site,
+				tools: [book],
+			}),
+			agents: [product, colleague],
+		});
+
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'Can I tell the client Thursday?' });
+		await quiescent(session);
+
+		// one tool on every model call of the drafting activation: no `say`, and
+		// none of the four a workspace binds
+		expect(held).toEqual([['summarise'], ['summarise']]);
+		await destroyWorkspace(site);
 	});
 });
 

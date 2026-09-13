@@ -34,7 +34,7 @@ const session = startSession({
   goal: 'Run the site office.',
   assistant,
   agents: [timeTracker, passive(inspector)], // optional: seated now
-  available: [quantitySurveyor, seated(architect, 'named')], // optional: the reserve
+  available: [quantitySurveyor, seated(architect, { attention: 'named' })], // optional: the reserve
 });
 ```
 
@@ -284,7 +284,7 @@ Two verbs on `Session`, and the assistant's tool is a thin binding over the
 first:
 
 ```ts
-session.seat(inspector); // or seated(inspector, 'named')
+session.seat(inspector); // or seated(inspector, { attention: 'named' })
 session.unseat(inspector);
 ```
 

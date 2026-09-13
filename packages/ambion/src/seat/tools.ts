@@ -7,7 +7,7 @@
  * call and reads the room's answer through `landed`.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { SAY, SEAT, SUMMARISE } from '../define.ts';
+import { binderOf, SAY, SEAT, SUMMARISE } from '../define.ts';
 import { refusal } from '../render.ts';
 import { builtinTools, toolContext } from '../tools/workspace.ts';
 import { type AgentDefinition, isAmbionTool, type Message, type Seq } from '../types.ts';
@@ -132,25 +132,39 @@ function sayTool(bound: Binding): AgentTool {
 }
 
 /**
- * What an activation holds. A seat speaks, reaches its workspace through the
- * four built-in tools when it names one, and uses its own tools; the assistant
- * holds the one tool its view names, and it reaches the record. `startSession`
- * refuses an assistant that carries tools or a workspace of its own, so there
- * is nothing else to leave out.
+ * What an activation holds: the one tool its view names, built by the binder
+ * that answers the name.
+ *
+ * A message causes an activation that speaks, so the view names `say`, and a
+ * seat that speaks also reaches its workspace through the four built-in
+ * tools and brings its own. An event of the exchange causes an activation
+ * that holds one tool and nothing else: what the seat does with it is the
+ * whole of the activation.
+ *
+ * The seating proved the name resolves (`defineRole`), so a name the room
+ * does not bind is the agent's own.
  */
 export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
-	if (view.tool === 'say') {
+	if (view.tool === undefined) return [];
+	if (view.tool === SAY.name) {
 		return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
 	}
-	if (view.tool === 'summarise' && view.closing) {
+	if (binderOf(view.tool) !== 'room') return ownTool(view.tool, def);
+	if (view.tool === SUMMARISE.name && view.closing) {
 		const draft: Draft = { ...view.closing, refusals: 0, calls: 0 };
 		return [summariseTool(held, draft)];
 	}
-	if (view.tool === 'seat' && view.composing) {
+	if (view.tool === SEAT.name && view.composing) {
 		const composing: Composing = { ...view.composing, seated: 0, calls: 0 };
 		return [seatTool(held, composing)];
 	}
 	return [];
+}
+
+/** The tool of this name the agent brings, for a role that named one of its own. */
+function ownTool(name: string, def: AgentDefinition): AgentTool[] {
+	const own = def.tools.find((tool) => (tool as { name?: unknown }).name === name);
+	return own === undefined ? [] : [toPiTool(own, def)];
 }
 
 // -- the assistant's bound ----------------------------------------------------

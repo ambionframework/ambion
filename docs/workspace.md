@@ -194,21 +194,12 @@ built-in for the same name on the model's menu, or replace it silently.
 so it makes the check itself. An agent with no workspace keeps all four
 names free.
 
-**`startSession` refuses an assistant that names a workspace**, the same way
-it refuses one that carries tools (`assistant.md` §12, §17;
-`assertAssistant` in `room/assistant.ts` checks `tools.length > 0`).
-`startSession` is the one place that knows a given `AgentDefinition` is
-about to become the room's assistant. `defineAgent` builds a plain value and
-has no way to know that.
-
-**The refusal is a fail-fast check on a dead configuration.** `toolsFor`
-(`seat/tools.ts`) returns before it reaches `seat.def.tools.map(toPiTool)` for
-the assistant's seat: the assistant is handed `[summarise]` or `[]` on every
-activation. The built-in tools bind in that same skipped branch (§5), so an
-assistant that named a workspace would reach neither them nor any tool of
-its own. The field would be live in the definition and inert at runtime.
-Refusing it at `startSession` catches that at the boundary where it is
-written.
+**A workspace an assistant names is inert, and the room allows it.** A role
+binds one tool for the activation an event causes, so the assistant is
+handed `[summarise]` or `[]`. The built-in tools bind in the branch a
+message causes (§5), which the assistant never reaches at attention `none`.
+The field stays live in the definition and inert at runtime. A role is a
+seating choice, so what an agent's definition holds is the host's business.
 
 **`startSession` sees no workspace.** It takes what `agent.md` §5 lists —
 a name, its assistant, its agents, the agents it holds in reserve, an

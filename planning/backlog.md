@@ -788,6 +788,23 @@ the failure names the step that did not happen.
 
 ---
 
+### 51. Two seats in one role
+
+**What.** `answering` in `room/fold.ts` takes the first seat on the roster
+whose role answers an event. A roster with two seats in one role gives the
+second one nothing: `closing` names one writer, and `foldOwed` reads one
+seat off `Close.wakes`.
+
+**Why it waits.** One rule would fan the event out to every seat that
+answers it, with one `Owed` per writer. No case asks for it: a room writes
+one message a person reads, so a second writer would write a second one.
+
+**What it needs.** A second role, to say whether two seats in one role is a
+roster a host writes on purpose. Take it up with the question of whether one
+seat takes more than one role, which `simplification.md` item 2 also defers.
+
+---
+
 ## 48. An agent reads the journal's place, not the message's number — done
 
 **What.** One counter gives out every place on the record, so the messages

@@ -6,17 +6,21 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import {
+	ASSISTANT,
 	binderOf,
 	defineAgent,
+	defineRole,
 	defineTool,
 	defineToolShape,
+	roleOf,
 	SAY,
 	SEAT,
 	SUMMARISE,
+	seated,
 } from '../src/define.ts';
 import { toolsFor } from '../src/seat/tools.ts';
 import { defineWorkspace, destroyWorkspace } from '../src/tools/workspace.ts';
-import type { ActivationView, ToolName } from '../src/wire.ts';
+import type { ActivationView } from '../src/wire.ts';
 import { fakeBackend } from './support/workspace.ts';
 
 const FLAG = defineToolShape({
@@ -154,8 +158,8 @@ describe('the shapes the room binds', () => {
 			['summarise', { closing: { person: 'priya', from: 1, through: 2 } }],
 			['seat', { composing: { person: 'priya', from: 1, limit: 1 } }],
 		] as const) {
-			toolsFor({ ...view, tool: name as ToolName, ...over }, agent, held);
-			toolsFor({ ...view, tool: name as ToolName, ...over }, agent, held);
+			toolsFor({ ...view, tool: name as string, ...over }, agent, held);
+			toolsFor({ ...view, tool: name as string, ...over }, agent, held);
 		}
 		expect(JSON.stringify([SAY, SUMMARISE, SEAT])).toBe(before);
 	});
@@ -165,8 +169,92 @@ describe('the shapes the room binds', () => {
 		['summarise', { closing: { person: 'priya', from: 1, through: 2 } }, SUMMARISE],
 		['seat', { composing: { person: 'priya', from: 1, limit: 1 } }, SEAT],
 	])('builds %s from the shape it published', (name, over, shape) => {
-		const [bound] = toolsFor({ ...view, tool: name as ToolName, ...over }, agent, held);
+		const [bound] = toolsFor({ ...view, tool: name as string, ...over }, agent, held);
 		expect(bound?.name).toBe(name);
 		expect(bound?.parameters).toBe(shape.parameters);
+	});
+});
+
+describe('a role', () => {
+	const agent = (options: Partial<Parameters<typeof defineAgent>[0]> = {}) =>
+		defineAgent({ name: 'solo', identity: 'A.', instructions: '.', model: 'm', ...options });
+
+	it('holds the name and the shape it answers each event with', () => {
+		const role = defineRole({ name: 'reviewer', answers: { closed: SUMMARISE } });
+		expect(role).toEqual({ name: 'reviewer', answers: { closed: SUMMARISE } });
+		expect(ASSISTANT).toEqual({
+			name: 'assistant',
+			answers: { opened: SEAT, closed: SUMMARISE },
+		});
+	});
+
+	it('refuses a name the room cannot address', () => {
+		expect(() => defineRole({ name: 'The Writer', answers: {} })).toThrow(
+			/Invalid participant name/,
+		);
+	});
+
+	it('is what the journal holds, by tool name', () => {
+		expect(roleOf(ASSISTANT)).toEqual({
+			name: 'assistant',
+			answers: { opened: 'seat', closed: 'summarise' },
+		});
+		expect(roleOf(defineRole({ name: 'writer', answers: {} }))).toEqual({
+			name: 'writer',
+			answers: {},
+		});
+	});
+
+	/**
+	 * The room binds its own three for any seat, so every agent fits a role
+	 * that answers with them. That is what lets the assistant be an ordinary
+	 * agent: the role asks its definition for nothing.
+	 */
+	it('fits any agent when the room binds every shape it names', () => {
+		expect(() => seated(agent(), { attention: 'none', role: ASSISTANT })).not.toThrow();
+	});
+
+	it('fits an agent that brings the tool it names, by shape or by parameters', () => {
+		const role = defineRole({ name: 'flagger', answers: { closed: FLAG } });
+		const byShape = defineTool({ shape: FLAG, description: 'Flag it.', execute: async () => 'ok' });
+		const byParameters = defineTool({
+			name: 'flag',
+			description: 'Flag it.',
+			parameters: Type.Object({ reason: Type.String() }),
+			execute: async () => 'ok',
+		});
+		expect(() => seated(agent({ tools: [byShape] }), { role })).not.toThrow();
+		expect(() => seated(agent({ tools: [byParameters] }), { role })).not.toThrow();
+	});
+
+	it('refuses an agent that brings no tool of that name', () => {
+		const role = defineRole({ name: 'flagger', answers: { closed: FLAG } });
+		expect(() => seated(agent(), { role })).toThrow(
+			/answers 'closed' with 'flag', and the agent brings no tool of that name/,
+		);
+	});
+
+	it('refuses an agent whose tool of that name takes other parameters', () => {
+		const role = defineRole({ name: 'flagger', answers: { closed: FLAG } });
+		const other = defineTool({
+			name: 'flag',
+			description: 'Flag it.',
+			parameters: Type.Object({ why: Type.String() }),
+			execute: async () => 'ok',
+		});
+		expect(() => seated(agent({ tools: [other] }), { role })).toThrow(
+			/the tool it brings takes other parameters/,
+		);
+	});
+
+	it('refuses an agent that names no workspace for a shape a workspace binds', () => {
+		const role = defineRole({
+			name: 'reader',
+			answers: { closed: defineToolShape({ name: 'read', parameters: Type.Object({}) }) },
+		});
+		expect(() => seated(agent(), { role })).toThrow(/the agent names no workspace/);
+		const site = defineWorkspace({ name: 'shapes-role-site', backend: fakeBackend() });
+		expect(() => seated(agent({ workspace: site }), { role })).not.toThrow();
+		destroyWorkspace(site);
 	});
 });

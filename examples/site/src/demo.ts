@@ -316,9 +316,9 @@ const missed =
 	priyaBack.since === undefined ? [] : await session.messages({ since: priyaBack.since });
 const sinceOnReturn = priyaBack.since;
 const seats = session.seats();
-/** The seat that writes for people: the roster marks it, and nothing else tells it apart. */
+/** The seat that writes for people: the roster names its role, and nothing else tells it apart. */
 const assistants = new Set(
-	seats.flatMap((seat) => (seat.kind === 'agent' && seat.assistant ? [seat.name] : [])),
+	seats.flatMap((seat) => (seat.kind === 'agent' && seat.role === 'assistant' ? [seat.name] : [])),
 );
 
 /**

@@ -487,10 +487,11 @@ be constant. One rule decides whether the assistant is still an assistant:
 > never speak under a person's name.
 
 §11 enforces the waking half in one line, because the guard is on the
-author, whatever it wrote, with the one exception §11 names. The rest is
-checkable by reading a definition: the assistant carries no tools of its
-own, and `startSession` refuses one that does. What it holds is the
-runtime's, and the runtime hands it nothing that reaches a product.
+author, whatever it wrote, with the one exception §11 names. The rest the
+role enforces: `ASSISTANT` answers `opened` with `seat` and `closed` with
+`summarise`, and an activation binds one tool. A tool the definition brings
+reaches no model, because the assistant wakes for the room's own events
+alone.
 
 What the rule forbids, permanently:
 
@@ -519,18 +520,24 @@ and what `startSession` refuses.
 
 ---
 
-## 13. It is required
+## 13. It is the convention
 
-Every room seats an assistant. `startSession` takes `assistant` as a required
-field, and refuses a room that omits one, names one that did not come from
-`defineAgent`, or names one that carries tools or a workspace.
+Every room seats an assistant. `startSession` takes `assistant` and seats
+it with the agents, at `none`, in the `ASSISTANT` role. It is the same
+seating as `seated(agent, { attention: 'none', role: ASSISTANT })` in
+`agents`, and the option is the shorthand a room uses.
 
-**One room, one assistant, always.** A room never holds a person whose
-exchange resolves differently from anybody else's: every question closes
-through the same seat, whether the room answered it once or ten times, and
-whoever asked it. There is no second code path for "nobody is holding
-preferences for them," and nothing in the runtime branches on whether the
-room has an assistant, because a room cannot be composed without one.
+**One room, one assistant, by convention.** A room never holds a person
+whose exchange resolves differently from anybody else's: every question
+closes through the same seat, whether the room answered it once or ten
+times, and whoever asked it. There is no second code path for "nobody is
+holding preferences for them."
+
+**The runtime holds no privileged seat.** `reconcile` asks the roster which
+seat answers `closed`, `routing` asks which answers `opened`, and `view`
+asks the seat's role which tool it holds. A room that seats nobody in the
+role closes every exchange and owes no summary: the rules read the roster,
+so they answer that room with nothing and never with a branch.
 
 **A person's preferences are optional, and the assistant is not.** A person
 who says nothing about how they read is written for in the style the
@@ -543,8 +550,8 @@ written only when the room said more than one thing. Requiring an
 assistant does not mean it always writes — it means somebody is always
 there to judge whether writing would help.
 
-**A restarted room seats it again with the agents.** The assistant is
-composition, like an agent. How each person reads is on the record, with
+**A restarted room seats it again with the agents.** The assistant is one
+seating on the composition, like every other agent. How each person reads is on the record, with
 their latest arrival, so a person known from a replayed record reads the
 way they last said they do, and a room resumed over its journal writes for a
 person the last run owed, the way they read.
@@ -649,10 +656,9 @@ writes to the record and nothing else — no `to`, because a summary is
 always addressed to the person whose exchange closed. At the open it is
 `seat({ name })`, which moves one agent from the reserve to the roster and
 commits the seating to the record ([`roster.md`](roster.md) §4). No
-activation holds both, and none holds a `say`. `startSession` refuses an
-assistant that carries tools of its own, so §12's rule — never call a tool
-that changes a product's state — stays a checkable fact about the
-definition.
+activation holds both, and none holds a `say`. The role binds one tool per
+event, so §12's rule — never call a tool that changes a product's state —
+stays a fact about what the room hands the seat.
 
 **Writing is a tool, and silence is a decision.** An activation that ends
 without calling `summarise` leaves the range whole, and every reader
@@ -804,8 +810,9 @@ document makes loudly:
   activation names whom it writes for and how they read. §2, §3, §4, §7,
   §14.
 - One answer is left as it was given, in the voice that gave it. §4.
-- `startSession` refuses a room with no assistant, and one whose assistant
-  holds tools. §12, §13.
+- A room with nobody in the `ASSISTANT` role closes every exchange and owes
+  no summary. An assistant that brings its own tools is seated, and its
+  drafting activation still holds `summarise` alone. §12, §13.
 - A summary wakes nobody, and the next activation reads the fold and the
   summary in place of the messages, while the record keeps every one of
   them. The fold paragraph reaches a seat once the record holds a summary.
@@ -842,6 +849,8 @@ document makes loudly:
   one; and a stopped room never reports that it went quiet. §5, §16.
 - `startSession` refuses an assistant whose name an agent holds, and
   `visitSession` refuses a person who takes the assistant's name. §14.
+- A role names the shape its seat answers each event with, and `seated`
+  refuses an agent that answers none of them. §12.
 - The assistant is seated when the room starts, and a room nobody visits
   never activates it. §13.
 

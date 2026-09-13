@@ -406,11 +406,11 @@ who sits out — one widening scale, from the narrowest:
   `attentive(concierge)`.
 
 **The scale is the mechanism; the words are shorthand for points on it.**
-`seated(agent, attention)` is the general form, and `passive` and
+`seated(agent, { attention, role })` is the general form, and `passive` and
 `attentive` are one line each over it — the two points a room names often
-enough to be worth a word. A bare agent takes the default. `none` is the
-runtime's own point: it is where the assistant sits, and nothing in a room's
-composition asks for it.
+enough to be worth a word. A bare agent takes the default. `none` is where
+a seat in a role sits: the assistant wakes for the room's own events and
+for nothing said.
 
 The routing is the scale, and reads as one line (`wakes` in `seat/seat.ts`):
 every message has a **reach** — `named` for a directed say, `broadcast` for

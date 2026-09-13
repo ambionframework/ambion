@@ -10,8 +10,23 @@
  */
 
 import { type Entry, placed } from '../journal/journal.ts';
-import { type Attention, type Exchange, isSummary, type Message, type Seq } from '../types.ts';
-import type { Checkpoint, Close, Composition, EndReason, LeaseHold, Seating } from '../wire.ts';
+import {
+	type Attention,
+	type Exchange,
+	type ExchangeEvent,
+	isSummary,
+	type Message,
+	type Seq,
+} from '../types.ts';
+import type {
+	Checkpoint,
+	Close,
+	Composition,
+	EndReason,
+	LeaseHold,
+	Role,
+	Seating,
+} from '../wire.ts';
 import { openExchange } from './exchange.ts';
 import {
 	type CauseOf,
@@ -26,13 +41,27 @@ import {
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
 
-/** One agent on the roster: its name, how the room knows it, what wakes it, and whether it is the assistant. */
-interface RosterSeat {
+/** One agent on the roster: its name, how the room knows it, what wakes it, and its role. */
+export interface RosterSeat {
 	name: string;
 	identity: string;
 	attention: Attention;
-	assistant: boolean;
+	role?: Role;
 }
+
+/**
+ * The seat whose role answers this event, or nothing when no seat on the
+ * roster answers it. A room with no such seat answers the event with
+ * nothing: it closes an exchange and writes no summary, and it opens one
+ * and composes no room.
+ *
+ * The first seat that answers takes it. Two seats in one role is a roster
+ * the room does not need yet, and `planning/backlog.md` holds the question.
+ */
+export const answering = (
+	roster: readonly RosterSeat[],
+	event: ExchangeEvent,
+): RosterSeat | undefined => roster.find((seat) => seat.role?.answers[event] !== undefined);
 
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends Due {
@@ -136,7 +165,7 @@ export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomS
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
-		causeOf(composition?.assistant.name ?? '', opensOf(exchange, closes)),
+		causeOf(answering(roster, 'opened')?.name, opensOf(exchange, closes)),
 	);
 	const owed = foldOwed(closes, messages, leases, options);
 	return {
@@ -163,11 +192,12 @@ const opensOf = (exchange: Exchange | undefined, closes: readonly Close[]): Read
 
 /**
  * Why a seat's wake on this message exists. The question that opened an
- * exchange causes the composing seat's activation, and every other wake a
- * message causes. The fold decides it once, and the id carries the answer.
+ * exchange causes the activation of the seat whose role answers `opened`,
+ * and every other wake a message causes. The fold decides it once, and the
+ * id carries the answer.
  */
 const causeOf =
-	(composer: string, opens: ReadonlySet<Seq>): CauseOf =>
+	(composer: string | undefined, opens: ReadonlySet<Seq>): CauseOf =>
 	(seat, seq) =>
 		seat === composer && opens.has(seq) ? 'opened' : 'message';
 
@@ -177,17 +207,18 @@ function foldRoster(
 	messages: readonly Message[],
 ): RosterSeat[] {
 	if (composition === undefined) return [];
-	const roster: RosterSeat[] = [
-		...composition.agents.map((seat) => ({ ...seat, assistant: false })),
-		{ ...composition.assistant, assistant: true },
-	];
+	const roster: RosterSeat[] = composition.agents.map((seat) => ({ ...seat }));
 	for (const message of messages) {
 		if (message.seq > composition.seq) reseat(roster, message);
 	}
 	return roster;
 }
 
-/** One seating or unseating applied to the roster. Any other message changes nothing. */
+/**
+ * One seating or unseating applied to the roster. Any other message changes
+ * nothing. A seat the room seats while it runs takes no role: a role is a
+ * choice the host makes at the composition.
+ */
 function reseat(roster: RosterSeat[], message: Message): void {
 	if (message.kind !== 'seated' && message.kind !== 'unseated') return;
 	const at = roster.findIndex((seat) => seat.name === message.from);
@@ -197,7 +228,6 @@ function reseat(roster: RosterSeat[], message: Message): void {
 			name: message.from,
 			identity: message.identity ?? '',
 			attention: message.attention ?? 'broadcast',
-			assistant: false,
 		});
 	}
 }

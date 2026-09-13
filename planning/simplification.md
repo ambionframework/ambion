@@ -268,13 +268,16 @@ and each one builds and passes the gate on its own:
    brings a name the room binds reaches a model with two tools under
    one name, so the table refuses that agent. Nothing changed for an
    agent that brings a name no other binder claims.
-4. **`defineRole`, `Role` on the seating, and `ASSISTANT`.** `routing`
-   and `closing` read the roster. `Composition.assistant`,
-   `RoomFacts.assistant` and `foldRoster`'s flag go. A seating is
-   refused where a shape the role names does not resolve, so a host
-   reads the failure at `startSession`. `assertAssistant` goes: the
-   assistant's shapes are the room's, so the role asks the agent for
-   nothing.
+4. **`defineRole`, `Role` on the seating, and `ASSISTANT`.** — done.
+   `routing`, `closing` and `view` read the roster. `Composition.assistant`,
+   `RoomFacts.assistant` and `foldRoster`'s flag go, and `assertAssistant`
+   with them. `seated` takes an options object, so a seating chooses the
+   attention and the role. `seated` refuses an agent that answers none of
+   the shapes a role names: the room binds its own three for any seat, a
+   workspace binds its four for an agent that names one, and every other
+   shape is the agent's to bring. `StartSessionOptions.assistant` seats
+   one agent at `none` in `ASSISTANT`, and it is optional: a room with
+   nobody in the role closes every exchange and owes no summary.
 5. **`guidance`, and the documents.** `render.ts` renders the role's
    guidance in place of the paragraph it holds for the assistant.
    `README.md`, `CLAUDE.md`, `docs/agent.md`, `docs/assistant.md` and
