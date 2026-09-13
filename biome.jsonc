@@ -88,6 +88,7 @@
 		//   host/                         what a host owns: the runtime value
 		//   journal/                      the room's kinds, over @ambionframework/journal
 		//   room/                         every fact and every decision, pure over the journal
+		//   answers.ts                    what the room answers a seat's three calls with
 		//   tools/                        the workspace port, and the four tools over it
 		//   seat/                         the seat side of the wire: one activation at a time
 		//   session.ts                    the room, which composes them all
@@ -199,6 +200,26 @@
 											"../index.ts"
 										],
 										"message": "The room's facts and decisions are pure over the log: no host, no tool, no seat."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["packages/ambion/src/answers.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["./tools/*", "./seat/*", "./session.ts", "./index.ts"],
+										"message": "An answer reads the room: no workspace, no seat, and never the session."
 									}
 								]
 							}

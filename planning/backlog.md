@@ -33,11 +33,17 @@ contract about which module owns it.
 
 ### 3. `session.ts` holds four jobs
 
-**What.** `session.ts` holds compose, route, hear, the seat's
-three calls (`view`, `commit`, `lease`) and the reconcile glue, and it is
-over the 600 lines `next.md` asked for. The seat's three calls are the
-next piece to move: an `answers.ts` over a narrow interface on the room
-(the journal, the fold, the clock, `emit`).
+**What.** `session.ts` holds compose, route, hear and the reconcile glue,
+and it is over the 600 lines `next.md` asked for.
+
+**What moved.** The seat's three calls are `answers.ts`, over `Answering`:
+the room as a value (its name, its journal, the runtime) and nine
+behaviours the room owns. `session.ts` keeps three one-line methods, and
+the twelve members are the coupling written down.
+
+**What is next.** The write path and the reconcile loop, in that order.
+`simplification.md` §3 names the shape both take: fold, decide, apply,
+with `decide` widened to cover the whole step.
 
 **Where.** `packages/ambion/src/session.ts`.
 
