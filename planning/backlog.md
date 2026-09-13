@@ -45,6 +45,14 @@ the twelve members are the coupling written down.
 `simplification.md` §3 names the shape both take: fold, decide, apply,
 with `decide` widened to cover the whole step.
 
+**What `Answering` still gives away.** It hands an answer the whole
+`RoomJournal`, where the three calls read `messages`, `lastCommitted` and
+`write`. An answer that called `journal.commit` would put a message on the
+record with no wakes, because `write()` is what routes. Nothing does it
+today. Narrowing the member to the three costs two more entries on the
+interface, and it is worth doing when a second reader of `Answering`
+arrives.
+
 **Where.** `packages/ambion/src/session.ts`.
 
 ### 4. Importing the package loads every provider SDK

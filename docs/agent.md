@@ -348,7 +348,7 @@ refuses an empty text for the same reason: a message with nothing in it
 still takes a seq, renders in every context after it, and wakes whoever
 hears it.
 
-The runtime's prompt (`systemPrompt` in `session.ts`) sets the
+The runtime's prompt (`renderSystemPrompt` in `render.ts`) sets the
 bar for every seat: a reply must add something the record does not already
 hold — new information, a decision moved forward, or a genuinely different
 perspective — and a point already made, even in other words, is met with
