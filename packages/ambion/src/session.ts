@@ -82,6 +82,22 @@ import type {
 	Without,
 } from './wire.ts';
 
+/**
+ * Where the room is in its life. One field answers every question the room
+ * asks about itself, so no guard reads two.
+ *
+ * - `starting` — the record is not replayed yet. `seats()` folds the
+ *   composition this run is about to write, and a seat's call waits.
+ * - `running` — the composition is on the journal, and the room answers.
+ * - `stopped` — the host closed the run. What was queued still lands, and
+ *   the name comes free.
+ * - `evicted` — the room is dropped from memory. Nothing lands, nothing is
+ *   answered, and nothing reaches a listener.
+ *
+ * Eviction is terminal: a room that lost its name takes no phase after it.
+ */
+type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
+
 /** An agent with the attention and the role it takes when seated. */
 interface Placed {
 	def: AgentDefinition;
@@ -354,10 +370,7 @@ class SessionImpl implements Session, RunningRoom {
 	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	private reconciling: Promise<void> = Promise.resolve();
 	private fold: { length: number; state: RoomState } | undefined;
-	/** The record is replayed and the composition is on the journal: a seat's call is answered on the spot. */
-	private replayed = false;
-	private stopped = false;
-	private evicted = false;
+	private phase: Phase = 'starting';
 	/** This run's id: the fence it writes first, and the stamp on every entry it writes. */
 	private readonly run = crypto.randomUUID();
 	/** Whether the room has reported quiet since it was last busy. */
@@ -421,7 +434,7 @@ class SessionImpl implements Session, RunningRoom {
 	 */
 	private async compose(composition: Without<Composition, 'seq'>): Promise<void> {
 		await this.journal.ready;
-		this.replayed = true;
+		this.enter('running');
 		this.seedHeardLeases();
 		const people = this.state().people;
 		for (const name of this.defs.keys()) {
@@ -438,7 +451,7 @@ class SessionImpl implements Session, RunningRoom {
 	/** The composition off the journal, and every name on it through the catalog. */
 	private async recover(): Promise<void> {
 		await this.journal.ready;
-		this.replayed = true;
+		this.enter('running');
 		this.seedHeardLeases();
 		const state = this.state();
 		if (state.composition === undefined) {
@@ -471,7 +484,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * runs hears stale. The record is the other run's from its fence on.
 	 */
 	private superseded(): void {
-		if (this.evicted) return;
+		if (this.phase === 'evicted') return;
 		this.emit({ type: 'superseded' });
 		// This run alone: the runtime may hold a newer room under the name by now.
 		if (this.runtime.running.get(this.name) === this) this.runtime.running.delete(this.name);
@@ -504,8 +517,14 @@ class SessionImpl implements Session, RunningRoom {
 		return this.fold.state;
 	}
 
+	/** Take a phase. Eviction is terminal, so nothing follows it. */
+	private enter(phase: Phase): void {
+		if (this.phase !== 'evicted') this.phase = phase;
+	}
+
+	/** The room answers nothing more: the host stopped it, or it was dropped. */
 	private gone(): boolean {
-		return this.stopped || this.evicted;
+		return this.phase === 'stopped' || this.phase === 'evicted';
 	}
 
 	private assertRunning(): void {
@@ -540,14 +559,18 @@ class SessionImpl implements Session, RunningRoom {
 		return this.journal.messages(options.since);
 	}
 
-	/** The roster and the people off the fold. Before the replay, the fold is over the composition this run writes. */
+	/**
+	 * The roster and the people off the fold. Until this run's composition
+	 * lands, the fold is over the composition the run is about to write, so a
+	 * host reads the room it asked for from the first call.
+	 *
+	 * The question is the composition, and never the phase: a room dropped
+	 * before it wrote anything still answers with the room it was given.
+	 */
 	seats(): SeatInfo[] {
-		if (!this.replayed) {
-			const starting = this.starting ? [{ ...this.starting, seq: 0 }] : [];
-			const state = foldRoom(
-				starting.map((body) => ({ kind: 'composition' as const, body, seq: 0 })),
-				this.runtime.retry,
-			);
+		if (this.state().composition === undefined && this.starting !== undefined) {
+			const body = { ...this.starting, seq: 0 };
+			const state = foldRoom([{ kind: 'composition' as const, body, seq: 0 }], this.runtime.retry);
 			return seatsOf({ name: this.name, state, live: new Map() });
 		}
 		const state = this.state();
@@ -1128,7 +1151,7 @@ class SessionImpl implements Session, RunningRoom {
 			const state = this.state();
 			const known = state.leases.get(id);
 			const now = this.now();
-			if (known === undefined && (this.stopped || !this.due(state).has(id))) return undefined;
+			if (known === undefined && (this.gone() || !this.due(state).has(id))) return undefined;
 			if (known !== undefined && !isLive(known, now)) return undefined;
 			const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
 			expiry = Math.min(now + this.runtime.wake.expiry, claimedAt + this.runtime.wake.deadline);
@@ -1205,7 +1228,7 @@ class SessionImpl implements Session, RunningRoom {
 				resend: this.runtime.wake.resend,
 				attempts: this.runtime.retry.attempts,
 				sentAt: (id) => this.sentAt.get(id),
-				stopped: this.stopped,
+				stopped: this.gone(),
 			});
 			let changed: boolean;
 			try {
@@ -1260,7 +1283,7 @@ class SessionImpl implements Session, RunningRoom {
 	 */
 	private close(close: NonNullable<Decision['close']>): Promise<boolean> {
 		return this.journal.write('close', () => {
-			if (this.state().exchange?.from !== close.from || this.stopped) return undefined;
+			if (this.state().exchange?.from !== close.from || this.gone()) return undefined;
 			return close;
 		});
 	}
@@ -1328,7 +1351,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * the room looks again until nothing it picks is live.
 	 */
 	private async revoke(which: (seat: string) => boolean): Promise<void> {
-		if (this.evicted) return;
+		if (this.phase === 'evicted') return;
 		await this.ready.catch(() => {});
 		for (let pass = 0; pass < PASSES; pass += 1) {
 			const picked = [...this.live(this.state())].filter(([seat]) => which(seat));
@@ -1352,14 +1375,14 @@ class SessionImpl implements Session, RunningRoom {
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */
 	async stop(): Promise<void> {
-		if (this.stopped) return;
+		if (this.phase === 'stopped') return;
 		// Stopped from here on: a visit that arrives during the shutdown is
 		// refused rather than seated into a room that is going away.
-		this.stopped = true;
+		this.enter('stopped');
 		this.cancelAlarm();
 		try {
 			// A room dropped from memory writes nothing: the next run over the journal takes it up.
-			if (this.evicted) return;
+			if (this.phase === 'evicted') return;
 			await this.ready;
 			await this.revoke(() => true);
 			// A write queued ahead of the stop lands first, so the record says who was present.
@@ -1368,7 +1391,7 @@ class SessionImpl implements Session, RunningRoom {
 		} catch (error) {
 			// A stop that found another run's fence has nothing left to write: the
 			// run said `superseded`, and the name is the other run's.
-			if (!this.evicted) throw error;
+			if (this.phase !== 'evicted') throw error;
 		} finally {
 			// The name comes free whatever the storage did. A failed write must
 			// not leave a room that can never be started again.
@@ -1401,7 +1424,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * nothing this run had queued lands after.
 	 */
 	evict(): void {
-		this.evicted = true;
+		this.phase = 'evicted';
 		this.journal.close();
 		this.cancelAlarm();
 		this.listeners.clear();

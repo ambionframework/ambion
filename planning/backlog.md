@@ -774,9 +774,10 @@ the deadline.
 
 **Why it is a wait and never the room.** The whole workerd suite runs its
 tests in under three seconds locally, so a 20 second deadline is not
-slowness. It wants a loaded machine: six runs of the suite on its own pass,
-on this branch and on `main` alike, and the failures land inside `pnpm
-check`, where turbo runs every package at once. `Test on Node 22` passed
+slowness. It wants a loaded machine, and it does not want one every time:
+the suite on its own failed once in 14 runs, and the same test on its own
+passed 10 of 10. The failures land inside `pnpm check`, where turbo runs
+every package at once. `Test on Node 22` passed
 the same commit in the same CI run that `Test on Node 24` failed, and the
 re-run passed. Two other files in the one workerd process, `room.test.ts`
 and `restart.test.ts`, abort a Durable Object on purpose, and both log
