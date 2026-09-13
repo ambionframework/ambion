@@ -586,6 +586,28 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 });
 
 describe('a room dropped from memory', () => {
+	/**
+	 * `seats()` answers off the composition, and never off the room's phase.
+	 * A room dropped before it wrote anything wrote no composition, so it
+	 * answers with the one it was given: a host reads the room it asked for
+	 * whatever happened to the run.
+	 */
+	it('answers with the composition it was given, dropped before it wrote one', async () => {
+		const opened = await memory.open();
+		const runtime = createRuntime({ clock: fakeClock(), sessions: opened.sessions });
+		const name = roomName('evicted-early');
+		const session = startSession({
+			name,
+			assistant,
+			agents: [alpha, beta],
+			runtime,
+			streamFn: scripted(byAgent({})),
+		});
+		runtime.evict(name);
+		expect(session.seats().map((s) => s.name)).toEqual(['alpha', 'beta', 'assistant']);
+		await opened.dispose();
+	});
+
 	/** A room with one activation held open, over a storage the test can read. */
 	async function dropped() {
 		const opened = await memory.open();

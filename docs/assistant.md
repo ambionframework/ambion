@@ -6,9 +6,10 @@ convention, and `ASSISTANT` is the role it takes. It reads how each
 person reads and consolidates the room's work when the exchange does not
 already hold one answer. It is shipped. The code lives with the rest of the
 runtime in [`packages/ambion/src`](../packages/ambion/src) —
-the summary in [`session.ts`](../packages/ambion/src/session.ts), the fold a
-seat reads in [`render.ts`](../packages/ambion/src/render.ts), the shapes
-in [`types.ts`](../packages/ambion/src/types.ts). Read
+the summary a seat commits in
+[`answers.ts`](../packages/ambion/src/answers.ts), the fold a seat reads in
+[`render.ts`](../packages/ambion/src/render.ts), the shapes in
+[`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md), [`exchange.md`](exchange.md) and
 [`presence.md`](presence.md) first.
 

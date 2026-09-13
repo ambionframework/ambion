@@ -33,11 +33,25 @@ contract about which module owns it.
 
 ### 3. `session.ts` holds four jobs
 
-**What.** `session.ts` holds compose, route, hear, the seat's
-three calls (`view`, `commit`, `lease`) and the reconcile glue, and it is
-over the 600 lines `next.md` asked for. The seat's three calls are the
-next piece to move: an `answers.ts` over a narrow interface on the room
-(the journal, the fold, the clock, `emit`).
+**What.** `session.ts` holds compose, route, hear and the reconcile glue,
+and it is over the 600 lines `next.md` asked for.
+
+**What moved.** The seat's three calls are `answers.ts`, over `Answering`:
+the room as a value (its name, its journal, the runtime) and nine
+behaviours the room owns. `session.ts` keeps three one-line methods, and
+the twelve members are the coupling written down.
+
+**What is next.** The write path and the reconcile loop, in that order.
+`simplification.md` §3 names the shape both take: fold, decide, apply,
+with `decide` widened to cover the whole step.
+
+**What `Answering` still gives away.** It hands an answer the whole
+`RoomJournal`, where the three calls read `messages`, `lastCommitted` and
+`write`. An answer that called `journal.commit` would put a message on the
+record with no wakes, because `write()` is what routes. Nothing does it
+today. Narrowing the member to the three costs two more entries on the
+interface, and it is worth doing when a second reader of `Answering`
+arrives.
 
 **Where.** `packages/ambion/src/session.ts`.
 
@@ -774,9 +788,10 @@ the deadline.
 
 **Why it is a wait and never the room.** The whole workerd suite runs its
 tests in under three seconds locally, so a 20 second deadline is not
-slowness. It wants a loaded machine: six runs of the suite on its own pass,
-on this branch and on `main` alike, and the failures land inside `pnpm
-check`, where turbo runs every package at once. `Test on Node 22` passed
+slowness. It wants a loaded machine, and it does not want one every time:
+the suite on its own failed once in 14 runs, and the same test on its own
+passed 10 of 10. The failures land inside `pnpm check`, where turbo runs
+every package at once. `Test on Node 22` passed
 the same commit in the same CI run that `Test on Node 24` failed, and the
 re-run passed. Two other files in the one workerd process, `room.test.ts`
 and `restart.test.ts`, abort a Durable Object on purpose, and both log
