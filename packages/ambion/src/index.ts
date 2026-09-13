@@ -35,6 +35,7 @@ export {
 	JsonlSessionRepo,
 } from '@earendil-works/pi-agent-core';
 export type {
+	Binder,
 	DefineAgentOptions,
 	DefineHumanOptions,
 	DefineToolOptions,
@@ -42,6 +43,7 @@ export type {
 } from './define.ts';
 export {
 	attentive,
+	binderOf,
 	defineAgent,
 	defineHuman,
 	defineTool,

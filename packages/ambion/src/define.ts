@@ -48,7 +48,8 @@ export interface DefineAgentOptions {
 export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 	assertName(options.name);
 	const tools = options.tools ?? [];
-	if (options.workspace !== undefined) assertWorkspaceTools(options.name, options.workspace, tools);
+	if (options.workspace !== undefined) assertWorkspace(options.name, options.workspace);
+	assertAgentTools(options.name, tools, options.workspace !== undefined);
 	return {
 		[AGENT_BRAND]: true,
 		name: options.name,
@@ -61,25 +62,13 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 }
 
 /**
- * The four built-in names belong to the workspace. A custom tool under one of
- * them would fight the built-in for the same name on the model's menu, or
- * replace it silently, so an agent that names a workspace keeps them free.
+ * A workspace reaches an agent as a handle `defineWorkspace` wrote. A plain
+ * object under the field answers no port, and it fails at the first tool
+ * call. The check is where the host names the workspace.
  */
-function assertWorkspaceTools(
-	agent: string,
-	workspace: WorkspaceHandle,
-	tools: readonly unknown[],
-): void {
+function assertWorkspace(agent: string, workspace: WorkspaceHandle): void {
 	if (!isWorkspace(workspace)) {
 		throw new Error(`The workspace for '${agent}' must come from defineWorkspace.`);
-	}
-	for (const tool of tools) {
-		const name = (tool as { name?: unknown }).name;
-		if (typeof name === 'string' && BUILTIN_TOOL_NAMES.has(name)) {
-			throw new Error(
-				`Agent '${agent}' names a workspace, so '${name}' is a built-in tool: give the custom tool another name.`,
-			);
-		}
 	}
 }
 
@@ -247,6 +236,56 @@ export const SEAT = defineToolShape({
 		name: Type.String({ description: 'An agent name from the reserve.' }),
 	}),
 });
+
+// -- who binds a tool of this name --------------------------------------------
+
+/**
+ * Who answers a tool of this name. A role names a tool, and the name says
+ * which binder brings the body: the room binds its own three, a workspace
+ * binds the four it gives every agent that names one, and an agent brings
+ * every other.
+ */
+export type Binder = 'room' | 'workspace' | 'agent';
+
+/** The names the room binds. A seat holds one of them where its view names it. */
+const ROOM_TOOL_NAMES: ReadonlySet<string> = new Set([SAY.name, SUMMARISE.name, SEAT.name]);
+
+/** Which binder answers a tool of this name. */
+export function binderOf(name: string): Binder {
+	if (ROOM_TOOL_NAMES.has(name)) return 'room';
+	if (BUILTIN_TOOL_NAMES.has(name)) return 'workspace';
+	return 'agent';
+}
+
+/** What a binder other than the agent does with the name it claims. */
+const CLAIMS: Readonly<Record<Exclude<Binder, 'agent'>, string>> = {
+	room: 'the room binds it into every activation that speaks',
+	workspace: 'it is a built-in tool a workspace binds',
+};
+
+/**
+ * An agent brings the tools no other binder claims.
+ *
+ * The room binds its three into every activation that holds one. An agent
+ * that brings one of those names reaches a model with two tools under that
+ * name, so the room's three stay free for every agent.
+ *
+ * A workspace binds its four for an agent that names one. An agent that
+ * names no workspace binds none of the four, so it may take those names.
+ */
+function assertAgentTools(agent: string, tools: readonly unknown[], workspace: boolean): void {
+	for (const tool of tools) {
+		const name = (tool as { name?: unknown }).name;
+		if (typeof name !== 'string') continue;
+		const binder = binderOf(name);
+		if (binder === 'agent') continue;
+		if (binder === 'workspace' && !workspace) continue;
+		throw new Error(
+			`Agent '${agent}' brings a tool named '${name}': ${CLAIMS[binder]}. ` +
+				'Give it another name.',
+		);
+	}
+}
 
 function assertToolName(name: string): void {
 	if (!/^[a-z][a-z0-9-]*$/.test(name)) {

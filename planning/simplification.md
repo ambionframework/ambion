@@ -258,14 +258,21 @@ and each one builds and passes the gate on its own:
    with it, so the two meet at the shape and never at the construction. A
    description belongs to a body, because the room writes `summarise`
    with the person it writes for in it. Nothing changed at runtime.
-3. **The binder table.** One table resolves a tool name to its binder,
-   and `BUILTIN_TOOL_NAMES` becomes row 2 of it. A seating is refused
-   where a shape does not resolve, so a host reads the failure at
-   `startSession`. `assertAssistant` goes: the assistant's shapes are the
-   room's, so the role asks the agent for nothing.
+3. **The binder table.** — done. `binderOf` answers which binder brings
+   a tool of a given name. The room binds its three, a workspace binds
+   its four for an agent that names one, and an agent brings every
+   other. `BUILTIN_TOOL_NAMES` is row 2 of the table, and `defineAgent`
+   reads the table for every tool an agent declares. An agent that
+   brings a name the room binds reaches a model with two tools under
+   one name, so the table refuses that agent. Nothing changed for an
+   agent that brings a name no other binder claims.
 4. **`defineRole`, `Role` on the seating, and `ASSISTANT`.** `routing`
    and `closing` read the roster. `Composition.assistant`,
-   `RoomFacts.assistant` and `foldRoster`'s flag go.
+   `RoomFacts.assistant` and `foldRoster`'s flag go. A seating is
+   refused where a shape the role names does not resolve, so a host
+   reads the failure at `startSession`. `assertAssistant` goes: the
+   assistant's shapes are the room's, so the role asks the agent for
+   nothing.
 5. **`guidance`, and the documents.** `render.ts` renders the role's
    guidance in place of the paragraph it holds for the assistant.
    `README.md`, `CLAUDE.md`, `docs/agent.md`, `docs/assistant.md` and

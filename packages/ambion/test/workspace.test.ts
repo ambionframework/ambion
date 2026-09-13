@@ -126,12 +126,12 @@ describe('defineWorkspace', () => {
 			execute: () => 'custom',
 		});
 		expect(() => agent('clash', { workspace: site, tools: [read] })).toThrow(
-			/'read' is a built-in/,
+			/named 'read': it is a built-in tool/,
 		);
 		expect(() => agent('free', { tools: [read] })).not.toThrow();
 		expect(() =>
 			agent('other', { workspace: site, tools: [{ name: 'bash', execute() {} }] }),
-		).toThrow(/'bash' is a built-in/);
+		).toThrow(/named 'bash': it is a built-in tool/);
 		expect(() => agent('fake', { workspace: { name: 'x' } as never })).toThrow(
 			/must come from defineWorkspace/,
 		);

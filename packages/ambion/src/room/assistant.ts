@@ -44,7 +44,7 @@ export function assertAssistant(assistant: unknown): AgentDefinition {
 			`Assistant '${assistant.name}' holds tools: the assistant shapes what a room does and never acts in it.`,
 		);
 	}
-	// A workspace binds tools the assistant never holds: the hands it is given
+	// A workspace binds tools the assistant never holds: the tools it is given
 	// never reach them, so the field would be live in the definition and
 	// inert at runtime. Refusing it here catches that where it is written.
 	if (assistant.workspace !== undefined) {

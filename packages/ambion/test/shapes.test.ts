@@ -5,9 +5,19 @@
  */
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { defineAgent, defineTool, defineToolShape, SAY, SEAT, SUMMARISE } from '../src/define.ts';
+import {
+	binderOf,
+	defineAgent,
+	defineTool,
+	defineToolShape,
+	SAY,
+	SEAT,
+	SUMMARISE,
+} from '../src/define.ts';
 import { toolsFor } from '../src/seat/tools.ts';
+import { defineWorkspace, destroyWorkspace } from '../src/tools/workspace.ts';
 import type { ActivationView, ToolName } from '../src/wire.ts';
+import { fakeBackend } from './support/workspace.ts';
 
 const FLAG = defineToolShape({
 	name: 'flag',
@@ -48,6 +58,65 @@ describe('a tool shape', () => {
 	});
 });
 
+describe('who binds a tool of this name', () => {
+	it('gives the room its three, the workspace its four, and the agent the rest', () => {
+		expect(['say', 'summarise', 'seat'].map(binderOf)).toEqual(['room', 'room', 'room']);
+		expect(['read', 'write', 'edit', 'bash'].map(binderOf)).toEqual([
+			'workspace',
+			'workspace',
+			'workspace',
+			'workspace',
+		]);
+		expect(binderOf('flag')).toBe('agent');
+	});
+
+	const bring = (name: string) =>
+		defineTool({ name, description: 'd', parameters: Type.Object({}), execute: async () => 'x' });
+	const withTool = (name: string) => () =>
+		defineAgent({
+			name: 'solo',
+			identity: 'A.',
+			instructions: '.',
+			model: 'm',
+			tools: [bring(name)],
+		});
+
+	/**
+	 * An agent that brought `say` reached a model with two tools under one
+	 * name, because the room binds its own beside the agent's.
+	 */
+	it('refuses an agent that brings a name the room binds', () => {
+		expect(withTool('say')).toThrow(/the room binds it into every activation/);
+		expect(withTool('summarise')).toThrow(/the room binds it into every activation/);
+		expect(withTool('seat')).toThrow(/the room binds it into every activation/);
+	});
+
+	/**
+	 * A workspace binds its four for an agent that names one. An agent that
+	 * names none binds nothing under them, so it may take the name.
+	 * `workspace.test.ts` holds both halves of that.
+	 */
+	it('leaves a name only the workspace binds to an agent that names none', () => {
+		expect(withTool('read')).not.toThrow();
+		const site = defineWorkspace({ name: 'shapes-site', backend: fakeBackend() });
+		expect(() =>
+			defineAgent({
+				name: 'solo',
+				identity: 'A.',
+				instructions: '.',
+				model: 'm',
+				workspace: site,
+				tools: [bring('bash')],
+			}),
+		).toThrow(/is a built-in tool a workspace binds/);
+		destroyWorkspace(site);
+	});
+
+	it('takes every other name', () => {
+		expect(() => withTool('flag')()).not.toThrow();
+	});
+});
+
 describe('the shapes the room binds', () => {
 	it('publishes one for each tool it binds', () => {
 		expect([SAY.name, SUMMARISE.name, SEAT.name]).toEqual(['say', 'summarise', 'seat']);
@@ -80,13 +149,13 @@ describe('the shapes the room binds', () => {
 	 */
 	it('leaves the shapes it binds as it found them', () => {
 		const before = JSON.stringify([SAY, SUMMARISE, SEAT]);
-		for (const [hand, over] of [
+		for (const [name, over] of [
 			['say', {}],
 			['summarise', { closing: { person: 'priya', from: 1, through: 2 } }],
 			['seat', { composing: { person: 'priya', from: 1, limit: 1 } }],
 		] as const) {
-			toolsFor({ ...view, tool: hand as ToolName, ...over }, agent, held);
-			toolsFor({ ...view, tool: hand as ToolName, ...over }, agent, held);
+			toolsFor({ ...view, tool: name as ToolName, ...over }, agent, held);
+			toolsFor({ ...view, tool: name as ToolName, ...over }, agent, held);
 		}
 		expect(JSON.stringify([SAY, SUMMARISE, SEAT])).toBe(before);
 	});
