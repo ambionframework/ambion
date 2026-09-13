@@ -202,7 +202,7 @@ describe('the reserve', () => {
 				},
 			}),
 			agents: [product],
-			available: [surveyor, seated(architect, 'named')],
+			available: [surveyor, seated(architect, { attention: 'named' })],
 		});
 
 		const visit = await visitSession(session, priya);
@@ -511,7 +511,7 @@ describe('the host', () => {
 		expect(seatNames(session)).toEqual(['product', 'assistant']);
 		expect(kinds(await session.messages())).toEqual(['seated', 'said', 'unseated']);
 
-		await expect(session.unseat(assistant)).rejects.toThrow(/is the assistant/);
+		await expect(session.unseat(assistant)).rejects.toThrow(/holds the role 'assistant'/);
 		await expect(session.unseat(surveyor)).rejects.toThrow(/is not seated/);
 	});
 

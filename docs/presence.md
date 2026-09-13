@@ -550,7 +550,7 @@ export type SeatInfo =
       attention: Attention;
       sessionId: string;
       /** Set when this seat is the room's assistant. See assistant.md. */
-      assistant?: true;
+      role?: string;
     }
   | {
       kind: 'human';

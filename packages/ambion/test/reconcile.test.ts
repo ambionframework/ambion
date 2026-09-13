@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
 import { parseId } from '../src/room/lease.ts';
-import { type DecideOptions, decide, working } from '../src/room/reconcile.ts';
+import { type DecideOptions, decide, liveSeats, working } from '../src/room/reconcile.ts';
 import type { Message } from '../src/types.ts';
 import type { Close, LeaseChange } from '../src/wire.ts';
 
@@ -17,8 +17,15 @@ const retry = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 const composition = (): Entry => ({
 	kind: 'composition',
 	body: {
-		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
-		agents: [{ name: 'product', identity: 'The product.', attention: 'broadcast' }],
+		agents: [
+			{ name: 'product', identity: 'The product.', attention: 'broadcast' },
+			{
+				name: 'assistant',
+				identity: 'Writes the one message.',
+				attention: 'none',
+				role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
+			},
+		],
 		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'broadcast' }],
 		at,
 	},
@@ -108,7 +115,7 @@ describe('decide', () => {
 			close({ owner: 'priya', from: 2, through: 4, wakes: ['assistant'] }),
 		]);
 		expect(decide(closed, options()).sends).toEqual([
-			{ id: 'close:4:assistant:1', seat: 'assistant' },
+			{ id: 'closed:4:assistant:1', seat: 'assistant' },
 		]);
 	});
 
@@ -121,14 +128,9 @@ describe('decide', () => {
 			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
 			close({ owner: 'priya', from: 2, through: 2 }),
 			said(3, 'priya'),
-			lease({ id: 'close:2:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({ id: 'closed:2:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
 		]);
 		expect(working(drafting, T0)).toBe(false);
-		const composing = fold([
-			...opened(),
-			lease({ id: 'message:2:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
-		]);
-		expect(working(composing, T0)).toBe(true);
 	});
 
 	it('sends a pending wake it never sent, and again once the resend window passed', () => {
@@ -147,7 +149,7 @@ describe('decide', () => {
 	it('drafts again after the backoff, and stops at the cap', () => {
 		const failed = (n: number, when: number) =>
 			lease({
-				id: `close:4:assistant:${n}`,
+				id: `closed:4:assistant:${n}`,
 				phase: 'ended',
 				reason: 'failed',
 				at: new Date(when).toISOString(),
@@ -158,7 +160,7 @@ describe('decide', () => {
 			said(4, 'product', { activationId: 'message:2:product:1' }),
 			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
 			close({ owner: 'priya', from: 2, through: 4, wakes: ['assistant'] }),
-			lease({ id: 'close:4:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({ id: 'closed:4:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
 			failed(1, T0 + 1_000),
 		];
 		const once = fold(owed);
@@ -168,14 +170,14 @@ describe('decide', () => {
 		expect(decide(once, options({ now: T0 + 30_999 })).sends).toEqual([]);
 		expect(decide(once, options({ now: T0 + 30_999 })).alarmAt).toBe(T0 + 31_000);
 		expect(decide(once, options({ now: T0 + 31_000 })).sends).toEqual([
-			{ id: 'close:4:assistant:2', seat: 'assistant' },
+			{ id: 'closed:4:assistant:2', seat: 'assistant' },
 		]);
 		// at the cap the room gives up: it writes the attempt it does not make,
 		// sends nothing, and waits on nothing
 		const capped = fold([...owed, failed(2, T0 + 40_000), failed(3, T0 + 100_000)]);
 		expect(capped.owed).toMatchObject([{ person: 'priya', attempts: 3 }]);
 		expect(decide(capped, options({ now: T0 + 1_000_000 }))).toMatchObject({
-			abandoned: [{ id: 'close:4:assistant:4', phase: 'ended', reason: 'abandoned' }],
+			abandoned: [{ id: 'closed:4:assistant:4', phase: 'ended', reason: 'abandoned' }],
 			close: undefined,
 			sends: [],
 			alarmAt: undefined,
@@ -185,7 +187,7 @@ describe('decide', () => {
 			...owed,
 			failed(2, T0 + 40_000),
 			failed(3, T0 + 100_000),
-			lease({ id: 'close:4:assistant:4', phase: 'ended', reason: 'abandoned', at }),
+			lease({ id: 'closed:4:assistant:4', phase: 'ended', reason: 'abandoned', at }),
 		]);
 		expect(gaveUp.owed).toEqual([]);
 		expect(decide(gaveUp, options({ now: T0 + 1_000_000 })).abandoned).toEqual([]);
@@ -294,13 +296,13 @@ describe('decide', () => {
 			composition(),
 			arrived(1, 'priya'),
 			said(2, 'priya', { wakes: ['product', 'assistant'] }),
-			lease({ id: 'message:2:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({ id: 'opened:2:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
 			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
 			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }, 3),
-			lease({ id: 'message:2:assistant:1', phase: 'ended', reason: 'failed', at }, 3),
+			lease({ id: 'opened:2:assistant:1', phase: 'ended', reason: 'failed', at }, 3),
 		]);
-		expect(composed.pending.map((wake) => wake.id)).toEqual(['message:2:assistant:2']);
+		expect(composed.pending.map((wake) => wake.id)).toEqual(['opened:2:assistant:2']);
 	});
 
 	it('writes nothing the second time', () => {
@@ -342,7 +344,7 @@ describe('decide', () => {
 		];
 		const fifth = decide(fold(closed), options({ now: later }));
 		expect(fifth).toMatchObject({ expired: [], close: undefined });
-		expect(fifth.sends).toEqual([{ id: 'close:4:assistant:1', seat: 'assistant' }]);
+		expect(fifth.sends).toEqual([{ id: 'closed:4:assistant:1', seat: 'assistant' }]);
 		// pass six: nothing
 		const sent = new Set(fifth.sends.map((send) => send.id));
 		const sixth = decide(
@@ -379,6 +381,21 @@ describe('working', () => {
 		expect(working(state, T0)).toBe(true);
 	});
 
+	it('holds the exchange open while the activation the open caused is live', () => {
+		// The question wakes the seat that composes the room, and its lease
+		// answers that wake, so this activation is the only thing live. The
+		// exchange stays open until it ends: the room that closed here would
+		// close every exchange before the room was composed for it.
+		const composing = fold([
+			composition(),
+			arrived(1, 'priya'),
+			said(2, 'priya', { wakes: ['assistant'] }),
+			lease({ id: 'opened:2:assistant:1', phase: 'running', ...live }),
+		]);
+		expect([...liveSeats(composing, T0).keys()]).toEqual(['assistant']);
+		expect(working(composing, T0)).toBe(true);
+	});
+
 	it('holds nothing open for an activation a close caused, whichever seat holds it', () => {
 		// A close is the end of an exchange, so the activation that answers one
 		// cannot hold that exchange open. The cause decides it, and not the name
@@ -394,7 +411,7 @@ describe('working', () => {
 		for (const seat of ['assistant', 'product']) {
 			const state = fold([
 				...closed,
-				lease({ id: `close:2:${seat}:1`, phase: 'running', ...live }),
+				lease({ id: `closed:2:${seat}:1`, phase: 'running', ...live }),
 			]);
 			expect(working(state, T0)).toBe(false);
 		}

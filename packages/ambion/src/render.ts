@@ -179,7 +179,7 @@ function seatNotes(seat: AgentSeatInfo): string[] {
 	const parts: string[] = [seat.status];
 	const note = ATTENTION_NOTE[seat.attention];
 	if (note) parts.push(note);
-	if (seat.assistant) parts.push('the assistant');
+	if (seat.role) parts.push(`the ${seat.role}`);
 	return parts;
 }
 
@@ -271,8 +271,12 @@ export interface SeatSpeaking {
 		/** Set for an agent connected to a workspace: gates WORKSPACE_PARAGRAPH. */
 		workspace?: WorkspaceHandle;
 	};
-	/** Whether this seat is the room's assistant, which writes for people and never speaks. */
-	readonly assistant: boolean;
+	/**
+	 * The role this seat took, by name, or nothing where the seating gave it
+	 * none. A seat in a role answers the room's own events, and it holds one
+	 * tool at each. `assistant` is the role the room's writer takes.
+	 */
+	readonly role?: string;
 	/** The exchange this activation is closing, or nothing when something else woke it. */
 	readonly closing: Closing | undefined;
 	/** The exchange this activation composes the room for, or nothing when something else woke it. */
@@ -280,13 +284,14 @@ export interface SeatSpeaking {
 }
 
 export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
-	const lines = seat.assistant
-		? [...assistantHeader(seat.def.name, room.name), ``]
-		: [
-				`You are '${seat.def.name}', an agent seated in the session '${room.name}' — a shared`,
-				`room with a record. Every participant sees what is said; nobody sees your tool use.`,
-				``,
-			];
+	const lines =
+		seat.role === ASSISTANT_ROLE
+			? [...assistantHeader(seat.def.name, room.name), ``]
+			: [
+					`You are '${seat.def.name}', an agent seated in the session '${room.name}' — a shared`,
+					`room with a record. Every participant sees what is said; nobody sees your tool use.`,
+					``,
+				];
 	if (room.goal) lines.push(`This session exists to: ${room.goal}`, ``);
 	lines.push(...duties(seat, room), ``);
 	lines.push(
@@ -302,7 +307,7 @@ export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
 /** What this seat is for: the assistant composes or writes one message, a seat speaks or does not. */
 function duties(seat: SeatSpeaking, room: RoomView): string[] {
 	if (seat.composing) return COMPOSE_PARAGRAPH;
-	if (seat.assistant) return ASSISTANT_PARAGRAPH;
+	if (seat.role === ASSISTANT_ROLE) return ASSISTANT_PARAGRAPH;
 	const lines = [
 		`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 		`your turn without saying anything, and no mark is left. Speak only when your reply`,
@@ -384,7 +389,7 @@ function askOf(seat: SeatSpeaking, room: RoomView): string {
 		);
 	}
 	const closing = seat.closing;
-	if (seat.assistant) {
+	if (seat.role === ASSISTANT_ROLE) {
 		// The assistant woken by anything but an open or a close has nothing to
 		// do in the activation, and no tools to do it with. See `toolsFor`.
 		return closing
@@ -435,6 +440,13 @@ const AUDIENCE_PARAGRAPH = [
 	`turn, ignore it. When nobody is in the room, work for the record: state what you`,
 	`decided and why, and do not wait for an answer that nobody is there to give.`,
 ];
+
+/**
+ * The role whose prose this file holds. Step 5 of item 2 in
+ * `planning/simplification.md` moves this prose onto the role, as
+ * `guidance` a host writes, and the name goes with it.
+ */
+const ASSISTANT_ROLE = 'assistant';
 
 /** How a room opens the prompt it hands the assistant. */
 function assistantHeader(assistant: string, room: string): string[] {

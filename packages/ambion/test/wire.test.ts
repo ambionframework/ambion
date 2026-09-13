@@ -30,9 +30,16 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 	end: { id: 'message:2:product:1', seq: 4, phase: 'ended', reason: 'released', at },
 	close: { owner: 'priya', from: 2, through: 4, seq: 4, at, wakes: ['assistant'] },
 	composition: {
-		assistant: { name: 'assistant', identity: 'Writes the one message.', attention: 'none' },
 		goal: 'Decide the pour date.',
-		agents: [{ name: 'product', identity: 'The product.', attention: 'broadcast' }],
+		agents: [
+			{ name: 'product', identity: 'The product.', attention: 'broadcast' },
+			{
+				name: 'assistant',
+				identity: 'Writes the one message.',
+				attention: 'none',
+				role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
+			},
+		],
 		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'named' }],
 		seq: 0,
 		at,
@@ -46,7 +53,7 @@ const wake: Wake = {
 	steer: { seq: 3, line: '[priya] And the pump?' },
 };
 const view: ActivationView = {
-	activation: 'close:4:assistant:1',
+	activation: 'closed:4:assistant:1',
 	seat: 'assistant',
 	model: 'scripted/assistant',
 	lastSeq: 4,
@@ -69,7 +76,7 @@ const requests: Record<string, Commit | Lease | string> = {
 		intent: { kind: 'said', to: 'priya', text: 'No.' },
 	},
 	summary: {
-		activation: 'close:4:assistant:1',
+		activation: 'closed:4:assistant:1',
 		key: 'call-3',
 		readThrough: 4,
 		intent: {
@@ -80,7 +87,7 @@ const requests: Record<string, Commit | Lease | string> = {
 		},
 	},
 	seating: {
-		activation: 'message:2:assistant:1',
+		activation: 'opened:2:assistant:1',
 		key: 'call-4',
 		intent: { kind: 'seated', name: 'surveyor' },
 	},

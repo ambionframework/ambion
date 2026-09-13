@@ -5,10 +5,10 @@ Guidance for Claude Code in this repository.
 ## Project
 
 Ambion — a minimalist framework for ambient-aware, always-on agents. Agents wait
-in a session and activate only when a message is delivered to them. Five
+in a session and activate only when a message is delivered to them. Six
 primitives: `defineAgent`, `defineHuman`, `defineTool`, `defineWorkspace`,
-`startSession`. The room's assistant writes the one message a person reads when
-the room goes quiet.
+`defineRole`, `startSession`. The room's assistant writes the one message a
+person reads when the room goes quiet, and `ASSISTANT` is the role it takes.
 
 pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 

@@ -224,5 +224,5 @@ export class RoomObject extends DurableObject<Env> {
 function placed(spec: SeatSpec) {
 	return typeof spec === 'string'
 		? definitionOf(spec)
-		: seated(definitionOf(spec.name), spec.attention);
+		: seated(definitionOf(spec.name), { attention: spec.attention });
 }

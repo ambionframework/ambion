@@ -248,9 +248,11 @@ arguments, and the journal hands back what a commit landed.
 new members of `Cause`, the way item 4 covered the counter. Five steps,
 and each one builds and passes the gate on its own:
 
-1. **The exchange's events become causes.** `Cause` gains `opened` and
-   `closed`. `toolOf` reads the cause in every branch, so the room stops
-   reading the seat's name to bind a tool. No new type.
+1. **The exchange's events become causes.** — done. `Cause` gains `opened`
+   and `closed`, and the fold decides the cause of every wake it derives.
+   `toolOf` reads the cause in every branch, so the room stops reading the
+   seat's name to bind a tool. `working` and `steer` read the cause too.
+   No new type.
 2. **`defineToolShape`, and the room publishes its shapes.** — done.
    `SAY`, `SUMMARISE` and `SEAT` are shapes, `defineTool` takes one, and
    `seat/tools.ts` spreads them. The room keeps Pi's own signature for
@@ -258,14 +260,24 @@ and each one builds and passes the gate on its own:
    with it, so the two meet at the shape and never at the construction. A
    description belongs to a body, because the room writes `summarise`
    with the person it writes for in it. Nothing changed at runtime.
-3. **The binder table.** One table resolves a tool name to its binder,
-   and `BUILTIN_TOOL_NAMES` becomes row 2 of it. A seating is refused
-   where a shape does not resolve, so a host reads the failure at
-   `startSession`. `assertAssistant` goes: the assistant's shapes are the
-   room's, so the role asks the agent for nothing.
-4. **`defineRole`, `Role` on the seating, and `ASSISTANT`.** `routing`
-   and `closing` read the roster. `Composition.assistant`,
-   `RoomFacts.assistant` and `foldRoster`'s flag go.
+3. **The binder table.** — done. `binderOf` answers which binder brings
+   a tool of a given name. The room binds its three, a workspace binds
+   its four for an agent that names one, and an agent brings every
+   other. `BUILTIN_TOOL_NAMES` is row 2 of the table, and `defineAgent`
+   reads the table for every tool an agent declares. An agent that
+   brings a name the room binds reaches a model with two tools under
+   one name, so the table refuses that agent. Nothing changed for an
+   agent that brings a name no other binder claims.
+4. **`defineRole`, `Role` on the seating, and `ASSISTANT`.** — done.
+   `routing`, `closing` and `view` read the roster. `Composition.assistant`,
+   `RoomFacts.assistant` and `foldRoster`'s flag go, and `assertAssistant`
+   with them. `seated` takes an options object, so a seating chooses the
+   attention and the role. `seated` refuses an agent that answers none of
+   the shapes a role names: the room binds its own three for any seat, a
+   workspace binds its four for an agent that names one, and every other
+   shape is the agent's to bring. `StartSessionOptions.assistant` seats
+   one agent at `none` in `ASSISTANT`, and it is optional: a room with
+   nobody in the role closes every exchange and owes no summary.
 5. **`guidance`, and the documents.** `render.ts` renders the role's
    guidance in place of the paragraph it holds for the assistant.
    `README.md`, `CLAUDE.md`, `docs/agent.md`, `docs/assistant.md` and

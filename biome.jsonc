@@ -88,7 +88,7 @@
 		//   host/                         what a host owns: the runtime value
 		//   journal/                      the room's kinds, over @ambionframework/journal
 		//   room/                         every fact and every decision, pure over the journal
-		//   tools/                        the workspace port, and the hands over it
+		//   tools/                        the workspace port, and the four tools over it
 		//   seat/                         the seat side of the wire: one activation at a time
 		//   session.ts                    the room, which composes them all
 		//

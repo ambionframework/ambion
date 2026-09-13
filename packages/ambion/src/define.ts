@@ -15,16 +15,20 @@ import {
 	type AmbionTool,
 	type Attention,
 	BUILTIN_TOOL_NAMES,
+	type ExchangeEvent,
 	HUMAN_BRAND,
 	type HumanDefinition,
 	isAgent,
 	isWorkspace,
+	type RoleDefinition,
 	SEAT_BRAND,
 	type SeatedAgent,
 	TOOL_BRAND,
 	type ToolContext,
+	type ToolShape,
 	type WorkspaceHandle,
 } from './types.ts';
+import type { Role } from './wire.ts';
 
 export interface DefineAgentOptions {
 	/** Identifies the agent inside a session and on the record. */
@@ -48,7 +52,8 @@ export interface DefineAgentOptions {
 export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 	assertName(options.name);
 	const tools = options.tools ?? [];
-	if (options.workspace !== undefined) assertWorkspaceTools(options.name, options.workspace, tools);
+	if (options.workspace !== undefined) assertWorkspace(options.name, options.workspace);
+	assertAgentTools(options.name, tools, options.workspace !== undefined);
 	return {
 		[AGENT_BRAND]: true,
 		name: options.name,
@@ -61,25 +66,13 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 }
 
 /**
- * The four built-in names belong to the workspace. A custom tool under one of
- * them would fight the built-in for the same name on the model's menu, or
- * replace it silently, so an agent that names a workspace keeps them free.
+ * A workspace reaches an agent as a handle `defineWorkspace` wrote. A plain
+ * object under the field answers no port, and it fails at the first tool
+ * call. The check is where the host names the workspace.
  */
-function assertWorkspaceTools(
-	agent: string,
-	workspace: WorkspaceHandle,
-	tools: readonly unknown[],
-): void {
+function assertWorkspace(agent: string, workspace: WorkspaceHandle): void {
 	if (!isWorkspace(workspace)) {
 		throw new Error(`The workspace for '${agent}' must come from defineWorkspace.`);
-	}
-	for (const tool of tools) {
-		const name = (tool as { name?: unknown }).name;
-		if (typeof name === 'string' && BUILTIN_TOOL_NAMES.has(name)) {
-			throw new Error(
-				`Agent '${agent}' names a workspace, so '${name}' is a built-in tool: give the custom tool another name.`,
-			);
-		}
 	}
 }
 
@@ -107,19 +100,33 @@ export function defineHuman(options: DefineHumanOptions): HumanDefinition {
 	};
 }
 
+/** The whole of what a seating chooses: what wakes the seat, and its role. */
+export interface SeatingOptions {
+	/** The widest kind of message that wakes the seat. `broadcast` by default. */
+	attention?: Attention;
+	/** The role the seat takes, when the seating gives it one. */
+	role?: RoleDefinition;
+}
+
 /**
- * Seat one agent at one point of the attention scale — the widest kind of
- * message that wakes it, and the whole of what a seating chooses. The general
- * form; `passive` and `attentive` are the two points worth a name of their
- * own, and `broadcast` is what a bare agent in `agents` gets.
+ * Seat one agent: at one point of the attention scale, and in a role. The
+ * general form; `passive` and `attentive` are the two points of attention
+ * worth a name of their own, and `broadcast` is what a bare agent in
+ * `agents` gets.
  *
- * Attention belongs to the seating rather than to the agent, so the same
- * definition is the quiet corner in one room and the one who meets people in
- * another.
+ * Both choices belong to the seating rather than to the agent, so the same
+ * definition is the quiet corner in one room, the one who meets people in
+ * another, and the writer in a third.
  */
-export function seated(agent: AgentDefinition, attention: Attention): SeatedAgent {
+export function seated(agent: AgentDefinition, options: SeatingOptions = {}): SeatedAgent {
 	if (!isAgent(agent)) throw new Error('Agents must come from defineAgent.');
-	return { [SEAT_BRAND]: true, agent, attention };
+	if (options.role !== undefined) assertFits(agent, options.role);
+	return {
+		[SEAT_BRAND]: true,
+		agent,
+		attention: options.attention ?? 'broadcast',
+		...(options.role === undefined ? {} : { role: options.role }),
+	};
 }
 
 /**
@@ -127,7 +134,7 @@ export function seated(agent: AgentDefinition, attention: Attention): SeatedAgen
  * name. The expert in the corner, costing nothing until somebody asks.
  */
 export function passive(agent: AgentDefinition): SeatedAgent {
-	return seated(agent, 'named');
+	return seated(agent, { attention: 'named' });
 }
 
 /**
@@ -137,21 +144,7 @@ export function passive(agent: AgentDefinition): SeatedAgent {
  * meet people needs it.
  */
 export function attentive(agent: AgentDefinition): SeatedAgent {
-	return seated(agent, 'presence');
-}
-
-/**
- * What binding a tool needs to know: what it is called, and what it takes.
- *
- * A shape is the contract, and a description is how one body presents
- * itself. The room binds `summarise` with a description that names the
- * person it writes for, so the description belongs to the body and never to
- * the shape. Two bodies answer one shape when they take the same name and
- * the same parameters.
- */
-export interface ToolShape<TParameters extends TSchema = TSchema> {
-	name: string;
-	parameters: TParameters;
+	return seated(agent, { attention: 'presence' });
 }
 
 /**
@@ -247,6 +240,148 @@ export const SEAT = defineToolShape({
 		name: Type.String({ description: 'An agent name from the reserve.' }),
 	}),
 });
+
+// -- roles ---------------------------------------------------------------------
+
+/**
+ * Write a role: the events its seat answers, and the tool it holds at each.
+ *
+ * A role says what a seat does in the room's own work. The room has two
+ * events, `opened` and `closed`, and a role answers either, both, or
+ * neither. The seat holds one tool for the activation an event causes, and
+ * nothing else: what it does with that tool is the whole of the activation.
+ */
+export function defineRole(role: RoleDefinition): RoleDefinition {
+	assertName(role.name);
+	const answers: RoleDefinition['answers'] = {};
+	for (const [event, shape] of entriesOf(role.answers)) {
+		assertToolName(shape.name);
+		answers[event] = shape;
+	}
+	return { name: role.name, answers };
+}
+
+/**
+ * The role as the journal holds it: the name, and each answer by tool name.
+ * A reader of the record needs the name alone; the runtime holds the shape.
+ */
+export function roleOf(role: RoleDefinition): Role {
+	const answers: Role['answers'] = {};
+	for (const [event, shape] of entriesOf(role.answers)) answers[event] = shape.name;
+	return { name: role.name, answers };
+}
+
+/** The events this role answers, with the shape it answers each with. */
+const entriesOf = (answers: RoleDefinition['answers']): [ExchangeEvent, ToolShape][] =>
+	Object.entries(answers).flatMap(([event, shape]) =>
+		shape === undefined ? [] : [[event as ExchangeEvent, shape]],
+	);
+
+/**
+ * The room's own role: it composes the room at the open of an exchange, and
+ * it writes the one message a person reads at the close. A host seats one
+ * agent in it, and the runtime knows the role by what it answers.
+ */
+export const ASSISTANT = defineRole({
+	name: 'assistant',
+	answers: { opened: SEAT, closed: SUMMARISE },
+});
+
+/**
+ * Whether this agent can answer this role: every shape the role names
+ * resolves to a binder the seating gives the seat.
+ *
+ * The room binds its own three for any seat. A workspace binds its four for
+ * an agent that names one. Every other shape is the agent's to bring, and a
+ * tool answers a shape when it carries that shape, or when it takes the same
+ * name and the same parameters.
+ */
+function assertFits(agent: AgentDefinition, role: RoleDefinition): void {
+	for (const [event, shape] of entriesOf(role.answers)) {
+		const reason = missing(agent, shape);
+		if (reason === undefined) continue;
+		throw new Error(
+			`Agent '${agent.name}' cannot take the role '${role.name}': it answers ` +
+				`'${event}' with '${shape.name}', and ${reason}.`,
+		);
+	}
+}
+
+/**
+ * What a declared tool says about itself. An agent declares a tool through
+ * `defineTool` or through Pi's own, so a role reads the fields both carry.
+ */
+type Declared = { name?: unknown; parameters?: unknown; shape?: unknown };
+
+/** Why the agent cannot answer this shape, or nothing when it can. */
+function missing(agent: AgentDefinition, shape: ToolShape): string | undefined {
+	const binder = binderOf(shape.name);
+	if (binder === 'room') return undefined;
+	if (binder === 'workspace') {
+		return agent.workspace === undefined ? 'the agent names no workspace' : undefined;
+	}
+	const own = agent.tools.find((tool) => (tool as Declared).name === shape.name);
+	if (own === undefined) return 'the agent brings no tool of that name';
+	return fits(own as Declared, shape) ? undefined : 'the tool it brings takes other parameters';
+}
+
+/**
+ * The tool answers the shape. A tool written against the shape carries it,
+ * so one comparison of references says so. A tool that states its own name
+ * and parameters falls back to a comparison of the parameters.
+ */
+const fits = (tool: Declared, shape: ToolShape): boolean =>
+	tool.shape === shape || JSON.stringify(tool.parameters) === JSON.stringify(shape.parameters);
+
+// -- who binds a tool of this name --------------------------------------------
+
+/**
+ * Who answers a tool of this name. A role names a tool, and the name says
+ * which binder brings the body: the room binds its own three, a workspace
+ * binds the four it gives every agent that names one, and an agent brings
+ * every other.
+ */
+export type Binder = 'room' | 'workspace' | 'agent';
+
+/** The names the room binds. A seat holds one of them where its view names it. */
+const ROOM_TOOL_NAMES: ReadonlySet<string> = new Set([SAY.name, SUMMARISE.name, SEAT.name]);
+
+/** Which binder answers a tool of this name. */
+export function binderOf(name: string): Binder {
+	if (ROOM_TOOL_NAMES.has(name)) return 'room';
+	if (BUILTIN_TOOL_NAMES.has(name)) return 'workspace';
+	return 'agent';
+}
+
+/** What a binder other than the agent does with the name it claims. */
+const CLAIMS: Readonly<Record<Exclude<Binder, 'agent'>, string>> = {
+	room: 'the room binds it into every activation that speaks',
+	workspace: 'it is a built-in tool a workspace binds',
+};
+
+/**
+ * An agent brings the tools no other binder claims.
+ *
+ * The room binds its three into every activation that holds one. An agent
+ * that brings one of those names reaches a model with two tools under that
+ * name, so the room's three stay free for every agent.
+ *
+ * A workspace binds its four for an agent that names one. An agent that
+ * names no workspace binds none of the four, so it may take those names.
+ */
+function assertAgentTools(agent: string, tools: readonly unknown[], workspace: boolean): void {
+	for (const tool of tools) {
+		const name = (tool as { name?: unknown }).name;
+		if (typeof name !== 'string') continue;
+		const binder = binderOf(name);
+		if (binder === 'agent') continue;
+		if (binder === 'workspace' && !workspace) continue;
+		throw new Error(
+			`Agent '${agent}' brings a tool named '${name}': ${CLAIMS[binder]}. ` +
+				'Give it another name.',
+		);
+	}
+}
 
 function assertToolName(name: string): void {
 	if (!/^[a-z][a-z0-9-]*$/.test(name)) {

@@ -43,7 +43,7 @@ export interface ActivationHost {
 	view(): Promise<ViewResponse>;
 	/** Renew the lease. The answer says how far the record has moved. */
 	renew(): Promise<LeaseResponse>;
-	/** Build the model over the view, with the hands the view names. */
+	/** Build the model over the view, with the tool the view names. */
 	build(view: ActivationView, activation: Activation): Agent;
 	/** Keep what the model did, in the seat's own downstream session. */
 	persist(agent: Agent): Promise<void>;

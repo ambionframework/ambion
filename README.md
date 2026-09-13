@@ -103,10 +103,10 @@ activation counter can drift from reality. See
 ### 7. The assistant owns synthesis for the person
 
 The assistant is the conversational interface: an ordinary seat with its own
-model session and activation history, but no general `say` tool, workspace,
-or general-purpose authority. It holds two narrow capabilities: `seat`, to
-compose a roster from agents the host placed in reserve, and `summarise`,
-after an exchange closes.
+model session and activation history. It takes the `ASSISTANT` role, which
+binds one tool for each of the room's two events: `seat`, to compose a roster
+from agents the host placed in reserve, and `summarise`, after an exchange
+closes. It holds no general `say` tool and no general-purpose authority.
 
 Seating a specialist is itself an auditable message. When several agent
 messages need consolidation, the summary names the exact sequence range it
