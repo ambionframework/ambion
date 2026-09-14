@@ -1,168 +1,98 @@
-/**
- * The rules the room decides by, checked against the cases the callers
- * actually produce.
- *
- * Dafny proves each contract in `rules.verified.ts`. These tests hold the
- * rules to the one fact a contract cannot state: the shape of the arguments
- * `foldLeases` builds. `heard` reads `until` alone, and that is sound only
- * while every lease keeps `until >= since`.
- */
 import type { Entry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { cameToNothing, foldLeases, pendingWakes } from '../src/room/lease.ts';
-import { atWork, heard } from '../src/room/rules.verified.ts';
 import type { Message } from '../src/types.ts';
 import type { EndReason, LeaseChange } from '../src/wire.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
-/** One lease change on the journal: the body, and the place the entry took. */
-const change = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
+const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
 	kind: 'lease',
-	body,
 	seq,
-});
-const running = (id: string, seq: number): Entry<LeaseChange> =>
-	change(seq, { id, phase: 'running', expiry: 60_000, at });
-const ended = (id: string, seq: number, reason: EndReason = 'released'): Entry<LeaseChange> =>
-	change(seq, { id, phase: 'ended', reason, at });
-
-/**
- * What `heard` said before it read `until` alone. The two agree for every
- * lease `foldLeases` builds, and this is the formula that says so.
- */
-const heardOverSince = (
-	liveOrFailed: boolean,
-	since: number,
-	isEnded: boolean,
-	until: number,
-	heardThrough: number,
-	seq: number,
-): boolean =>
-	liveOrFailed ? atWork(since, isEnded, until, seq) || since >= seq : seq <= heardThrough;
-
-/** Every lease shape `foldLeases` can build, over a small range of seqs. */
-interface Case {
-	liveOrFailed: boolean;
-	since: number;
-	isEnded: boolean;
-	until: number;
-	seq: number;
-}
-
-function cases(): Case[] {
-	const out: Case[] = [];
-	const flags = [true, false];
-	for (let since = 0; since <= 6; since += 1) {
-		// `foldLeases` never builds a lease whose end lands before its first entry.
-		for (let until = since; until <= 6; until += 1) {
-			for (let seq = 0; seq <= 7; seq += 1) {
-				for (const liveOrFailed of flags) {
-					for (const isEnded of flags) out.push({ liveOrFailed, since, isEnded, until, seq });
-				}
-			}
-		}
-	}
-	return out;
-}
-
-describe('heard', () => {
-	it('agrees with the rule it replaced, for every lease that keeps until >= since', () => {
-		const disagreed = cases().filter(
-			({ liveOrFailed, since, isEnded, until, seq }) =>
-				heard(liveOrFailed, isEnded, until, since, seq) !==
-				heardOverSince(liveOrFailed, since, isEnded, until, since, seq),
-		);
-		expect(disagreed).toEqual([]);
-	});
-
-	it('hears an entry that landed before the lease claimed, because its view held it', () => {
-		// since = 4, until = 6, and the entry at 2 landed before the claim
-		expect(heard(true, true, 6, 4, 2)).toBe(true);
-		// the entry past the end reached no activation
-		expect(heard(true, true, 6, 4, 7)).toBe(false);
-	});
-
-	it('hears through the last renewal for a lease that stood down', () => {
-		expect(heard(false, true, 6, 4, 4)).toBe(true);
-		expect(heard(false, true, 6, 4, 5)).toBe(false);
-	});
+	body,
 });
 
-describe('foldLeases', () => {
-	it('holds every lease to until >= since, which is what lets heard read until alone', () => {
+describe('lease rules', () => {
+	it('keeps a checkpoint-carried lease interval through its terminal entry', () => {
 		const leases = foldLeases([
-			running('message:2:solo:1', 2),
-			running('message:2:solo:1', 3),
-			ended('message:2:solo:1', 5),
-			running('message:9:other:1', 9),
+			lease(2, { id: 'message:2:solo:1', phase: 'running', expiresAt: 60_000, at, readThrough: 2 }),
+			lease(3, { id: 'message:2:solo:1', phase: 'running', expiresAt: 60_000, at, readThrough: 3 }),
 		]);
-		for (const lease of leases.values()) {
-			if (lease.until === undefined) continue;
-			expect(lease.until).toBeGreaterThanOrEqual(lease.since);
-		}
-		expect(leases.get('message:2:solo:1')).toMatchObject({ since: 2, until: 5, heardThrough: 3 });
+		const carried = foldLeases(
+			[
+				lease(8, {
+					id: 'message:2:solo:1',
+					phase: 'ended',
+					reason: 'released',
+					at,
+					readThrough: 3,
+				}),
+			],
+			[...leases.values()],
+		);
+		const held = carried.get('message:2:solo:1');
+		expect(held).toMatchObject({ since: 2, until: 8, readThrough: 3 });
+		if (held?.phase !== 'ended') throw new Error('Expected terminal lease.');
+		expect(held.until).toBeGreaterThanOrEqual(held.since);
 	});
 
-	it('keeps until >= since for a lease a checkpoint carried, which ends later', () => {
-		// The checkpoint holds the claim; the end lands after it. `since` comes
-		// off the checkpoint, and `until` off the change, so the fold must still
-		// order them.
-		const held = foldLeases([running('message:2:solo:1', 2), running('message:2:solo:1', 3)]);
-		const carried = [...held.values()];
-		const leases = foldLeases([ended('message:2:solo:1', 5)], carried);
-		const lease = leases.get('message:2:solo:1');
-		expect(lease).toMatchObject({ since: 2, until: 5, heardThrough: 3 });
-		expect(lease?.until).toBeGreaterThanOrEqual(lease?.since ?? 0);
-	});
-});
-
-describe('the two questions a lease answers', () => {
-	const spoken = (seq: number): Message => ({
-		kind: 'said',
-		seq,
-		from: 'priya',
-		text: 'When is the pour?',
-		wakes: ['solo'],
-		at,
-	});
-	const options = { backoff: () => 1_000 };
-
-	/**
-	 * One lease over the message at seq 2: it claimed, renewed at 4, and ended
-	 * at 8. The message at seq 6 landed between the renewal and the end, so
-	 * what the lease answers decides whether that message is still pending.
-	 */
-	const pendingIds = (reason: EndReason) =>
-		pendingWakes(
-			[spoken(2), spoken(6)],
-			foldLeases([
-				running('message:2:solo:1', 2),
-				running('message:2:solo:1', 4),
-				ended('message:2:solo:1', 8, reason),
-			]),
-			new Set(['solo']),
-			options,
-			() => 'message',
-		).map((wake) => wake.id);
-
-	it('counts a refused attempt, and still answers only through the last renewal', () => {
-		// A message never ends an activation `refused` today. The rule holds all
-		// the same: the attempt counts, and the lease answers what it confirmed.
-		const refused = foldLeases([running('c', 2), ended('c', 3, 'refused')]).get('c');
-		expect(refused && cameToNothing(refused)).toBe(true);
-		// seq 2 is answered; seq 6 landed past the last renewal and reached nobody.
-		expect(pendingIds('refused')).toEqual(['message:6:solo:1']);
+	it('retries unread released work and counts failed work', () => {
+		const message: Message = {
+			kind: 'said',
+			seq: 2,
+			at,
+			from: 'priya',
+			text: 'Question',
+			wakes: ['solo'],
+		};
+		const released = foldLeases([
+			lease(3, { id: 'message:2:solo:1', phase: 'ended', reason: 'released', at, readThrough: 0 }),
+		]);
+		expect(
+			pendingWakes([message], released, new Set(['solo']), { backoff: () => 1 }, () => 'message'),
+		).toMatchObject([{ id: 'message:2:solo:2', unsuccessfulAttempts: 1 }]);
+		const failed = foldLeases([
+			lease(3, { id: 'message:2:solo:1', phase: 'ended', reason: 'failed', at, readThrough: 0 }),
+		]).get('message:2:solo:1');
+		expect(failed !== undefined && cameToNothing(failed)).toBe(true);
 	});
 
-	it('leaves every message pending when the lease answered nothing', () => {
-		for (const reason of ['failed', 'expired'] as const) {
-			expect(pendingIds(reason)).toEqual(['message:2:solo:2', 'message:6:solo:2']);
-		}
-	});
-
-	it('answers through the last renewal when the lease stood down', () => {
-		for (const reason of ['released', 'revoked'] as const) {
-			expect(pendingIds(reason)).toEqual(['message:6:solo:1']);
-		}
+	it('applies each terminal reason to its named work while preserving later work', () => {
+		const message = (seq: number): Message => ({
+			kind: 'said',
+			seq,
+			at,
+			from: 'priya',
+			text: 'Question',
+			wakes: ['solo'],
+		});
+		const pending = (reason: EndReason) =>
+			pendingWakes(
+				[message(2), message(6)],
+				foldLeases([
+					lease(2, {
+						id: 'message:2:solo:1',
+						phase: 'running',
+						expiresAt: 60_000,
+						at,
+						readThrough: 0,
+					}),
+					lease(4, {
+						id: 'message:2:solo:1',
+						phase: 'running',
+						expiresAt: 60_000,
+						at,
+						readThrough: 4,
+					}),
+					lease(8, { id: 'message:2:solo:1', phase: 'ended', reason, at, readThrough: 4 }),
+				]),
+				new Set(['solo']),
+				{ backoff: () => 1 },
+				() => 'message',
+			).map((wake) => wake.id);
+		expect(pending('failed')).toEqual(['message:2:solo:2', 'message:6:solo:2']);
+		expect(pending('expired')).toEqual(['message:2:solo:2', 'message:6:solo:2']);
+		expect(pending('refused')).toEqual(['message:6:solo:2']);
+		expect(pending('released')).toEqual(['message:6:solo:1']);
+		expect(pending('revoked')).toEqual(['message:6:solo:1']);
 	});
 });

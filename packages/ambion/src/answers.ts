@@ -52,9 +52,9 @@ export interface Answering {
 	/** One operation on the room's commit queue, with the wakes the room routes. */
 	write(commit: CommitRequest): Promise<Committed<Body<Message>, Body<Message>>>;
 	claim(id: string): Promise<LeaseResponse>;
-	renew(id: string): Promise<LeaseResponse>;
+	renew(id: string, readThrough?: number): Promise<LeaseResponse>;
 	/** End one lease, for whatever reason. Nothing to end is not an error. */
-	end(id: string, reason: EndReason): Promise<boolean>;
+	end(id: string, reason: EndReason, readThrough: number): Promise<boolean>;
 	reconcile(): Promise<void>;
 }
 
@@ -160,7 +160,7 @@ export async function answerLease(room: Answering, lease: LeaseRequest): Promise
 		case 'claim':
 			return room.claim(lease.activation);
 		case 'renew':
-			return room.renew(lease.activation);
+			return room.renew(lease.activation, lease.readThrough);
 		case 'release':
 			return release(room, lease);
 		default:
@@ -172,8 +172,14 @@ async function release(
 	room: Answering,
 	lease: Extract<LeaseRequest, { operation: 'release' }>,
 ): Promise<LeaseResponse> {
-	const ended = await room.end(lease.activation, lease.reason);
+	let ended: boolean;
+	try {
+		ended = await room.end(lease.activation, lease.reason, lease.readThrough);
+	} catch (error) {
+		if (error instanceof RefusedError) return stale(error.message);
+		throw error;
+	}
 	if (!ended) return stale('the lease ended');
 	void room.reconcile();
-	return { ok: { expiry: now(room), lastSeq: room.journal.lastCommitted } };
+	return { ok: { expiresAt: now(room), lastSeq: room.journal.lastCommitted } };
 }

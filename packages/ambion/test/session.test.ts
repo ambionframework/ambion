@@ -710,7 +710,12 @@ describe('startSession', () => {
 		});
 		// the record moves past what the activation read, and then its lease ends
 		await visit.deliver({ text: 'second' });
-		await room.lease({ activation: 'message:4:solo:1', operation: 'release', reason: 'released' });
+		await room.lease({
+			activation: 'message:4:solo:1',
+			operation: 'release',
+			reason: 'released',
+			readThrough: 0,
+		});
 		const late = await room.commit({
 			activation: 'message:4:solo:1',
 			key: 'late',

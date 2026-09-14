@@ -158,7 +158,12 @@ describe('a lease', () => {
 
 		const room = session as unknown as SeatRoom;
 		await expect(
-			room.lease({ activation: 'message:2:solo:1', operation: 'release', reason: 'released' }),
+			room.lease({
+				activation: 'message:2:solo:1',
+				operation: 'release',
+				reason: 'released',
+				readThrough: 0,
+			}),
 		).resolves.toEqual({
 			stale: 'the lease ended',
 		});
@@ -193,7 +198,7 @@ describe('a lease', () => {
 		const renewals = stored.flatMap((entry) => {
 			const lease = entry.data as LeaseChange;
 			const mine = entry.type === 'ambion/lease' && parseId(lease.id)?.seat === 'solo';
-			return mine && lease.phase === 'running' ? [lease.expiry] : [];
+			return mine && lease.phase === 'running' ? [lease.expiresAt] : [];
 		});
 		// the room wrote a claim and renewals, and no change takes the lease past the deadline
 		expect(renewals.length).toBeGreaterThan(1);

@@ -7,15 +7,12 @@
  * - **Its id.** Derived from the record: the message that woke the seat and
  *   the seat's name, or the close it answers and the attempt. Every call it
  *   makes carries it.
- * - **What it has heard.** `readThrough` is the seq this activation can commit
- *   against: the record as it stood when the activation read it, advanced as steers
- *   land in its transcript and by its own says. Rule 5 refuses anything
- *   drafted against a record that moved past it.
+ * - **What it acknowledged.** `readThrough` is the highest contiguous
+ *   position in provider input. A provider request or an accepted ordinary
+ *   say advances it. Rule 5 refuses a draft against a newer record.
  * - **What arrived while it worked.** A message that lands mid-activation is steered
- *   in; the seqs wait in order until the transcript shows they were read. A
- *   steer reaches the model after the request it lands during, never inside
- *   that request's own context: Pi polls its queue once before the first
- *   request, so the activation holds a steer until the model has been asked.
+ *   in. It reaches the provider after the request it lands during. PiContext
+ *   records the structured range only when that later request receives it.
  * - **Whether it left a mark.** `spoke` is the one thing the room asks a
  *   finished activation.
  *
@@ -33,16 +30,16 @@
  * session as an `ambion/activation` entry.
  */
 import type { Agent, AgentEvent, Session as PiSession } from '@earendil-works/pi-agent-core';
-import type { UserMessage } from '@earendil-works/pi-ai';
 import type { Seq, SessionEvent } from '../types.ts';
 import type { ActivationView, EndReason, LeaseResponse, ViewResponse } from '../wire.ts';
+import { PiContext } from './pi.ts';
 
 /** What only the seat side can give an activation: the room's view, and a model over it. */
 export interface ActivationHost {
 	/** What this activation reads, as the room renders it now. */
 	view(): Promise<ViewResponse>;
 	/** Renew the lease. The answer says how far the record has moved. */
-	renew(): Promise<LeaseResponse>;
+	renew(readThrough: Seq): Promise<LeaseResponse>;
 	/** Build the model over the view, with the tool the view names. */
 	build(view: ActivationView, activation: Activation): Agent;
 	/** Keep what the model did, in the seat's own downstream session. */
@@ -54,13 +51,11 @@ export interface ActivationHost {
 
 /** One activation, from the moment the room wakes a seat until it stops. */
 export class Activation {
-	/** How much of the record this activation has provably heard. */
-	private heardThrough: Seq = 0;
-	/** Record seqs steered to the live agent, awaiting their drain (FIFO). */
-	private pending: Seq[] = [];
-	/** The lines steered in before the model was asked. They reach the agent once it is. */
-	private held: string[] = [];
-	private askedModel = false;
+	/** How much record context the provider consumed. */
+	private readonly context = new PiContext();
+	/** The steers held before Pi first polls its queue. */
+	private held: { after: Seq; seq: Seq; line: string }[] = [];
+	private providerStarted = false;
 	private agent: Agent | undefined;
 	private cancelled = false;
 	/** Whether it left a mark on the record. The room's first question. */
@@ -76,33 +71,42 @@ export class Activation {
 
 	/** The seq this activation may commit against: rule 5's `readThrough`. */
 	get readThrough(): Seq {
-		return this.heardThrough;
+		return this.context.readThrough;
 	}
 
-	/** It has now heard the record through here — its own say, or a refusal's news. */
-	heard(seq: Seq): void {
-		this.heardThrough = Math.max(this.heardThrough, seq);
+	/** An accepted ordinary say confirms this activation consumed the record through here. */
+	acknowledgeThrough(seq: Seq): void {
+		this.context.acknowledgeThrough(seq);
+	}
+
+	/** A rejected commit placed this context in Pi's next tool-result input. */
+	toolResultExpected(toolCallId: string, seq: Seq): void {
+		this.context.toolResultExpected(toolCallId, seq);
 	}
 
 	/**
 	 * A message landed while this activation was working. It reaches the model as a
-	 * steer (rule 2), and its seq waits until the transcript shows it arrived.
+	 * steer (rule 2). PiContext records its range without parsing rendered text.
 	 */
-	steer(seq: Seq, line: string): void {
-		this.pending.push(seq);
-		if (this.askedModel) this.agent?.steer(userMessage(`[new] ${line}`, this.host.now()));
-		else this.held.push(line);
+	steer(after: Seq, seq: Seq, line: string): void {
+		const context = { after, seq, line };
+		if (this.providerStarted && this.agent !== undefined) {
+			this.context.steer(this.agent, context, this.host.now());
+		} else {
+			this.held.push(context);
+		}
 	}
 
 	/**
-	 * The model has been asked: Pi's first poll of its queue is behind, so a
-	 * steer queued from here on follows the request instead of joining it.
+	 * A provider request begins after Pi chose its input. A steer queued from
+	 * here follows that request and cannot advance this request's progress.
 	 * The seat side calls this from the stream function it hands Pi.
 	 */
-	asked(): void {
-		this.askedModel = true;
-		for (const line of this.held.splice(0)) {
-			this.agent?.steer(userMessage(`[new] ${line}`, this.host.now()));
+	providerRequestStarted(messages: readonly object[]): void {
+		this.context.providerRequestStarted(messages);
+		this.providerStarted = true;
+		for (const context of this.held.splice(0)) {
+			if (this.agent !== undefined) this.context.steer(this.agent, context, this.host.now());
 		}
 	}
 
@@ -129,21 +133,19 @@ export class Activation {
 		this.agent = undefined;
 	}
 
-	/** One pass. True when the record moved past what it heard, so it must read again. */
+	/** One pass. True when the record moved past acknowledged context. */
 	private async pass(): Promise<boolean> {
 		try {
 			const opened = await this.host.view();
 			if ('stale' in opened || this.cancelled) return false;
 			const view = opened.view;
-			// A fresh view hands the seat the whole record: heard up to here.
-			this.heardThrough = view.spec.through;
-			this.pending = [];
+			// The fresh view becomes acknowledged only when Pi sends it to a provider.
 			this.held = [];
-			this.askedModel = false;
+			this.providerStarted = false;
 			const agent = this.host.build(view, this);
 			this.agent = agent;
 			agent.subscribe((event) => this.note(event));
-			await agent.prompt(userMessage(view.context, this.host.now()));
+			await agent.prompt(this.context.initial(view.spec.through, view.context, this.host.now()));
 			await this.host.persist(agent);
 			const failure = failureOf(agent);
 			if (failure) return this.broke(failure);
@@ -152,32 +154,28 @@ export class Activation {
 			// fixed closed exchange.
 			if (this.cancelled || view.spec.grant.kind !== 'say') return false;
 			// Awaited here, so a renewal that fails is caught below and not returned as a rejection.
-			return await this.moved(agent);
+			return await this.needsRefresh(agent);
 		} catch (error) {
 			return this.broke(error instanceof Error ? error : new Error(String(error)));
 		}
 	}
 
 	/**
-	 * Whether the record moved past what this activation heard. A steer still
-	 * queued on the agent says so: it landed after the run drained its queue.
-	 * So does a renewal whose `lastSeq` is past what was heard: a steer that
-	 * was dropped on the way is not lost, because the message is on the
-	 * record. Nothing awaits between this check and the release, so a steer
-	 * that lands after it wakes the seat afresh.
+	 * Whether the record moved past acknowledged context. A queued steer or a
+	 * newer room position requires a fresh view. A dropped steer stays on the
+	 * record and is delivered again by that view.
 	 */
-	private async moved(agent: Agent): Promise<boolean> {
-		const renewed = await this.host.renew();
+	private async needsRefresh(agent: Agent): Promise<boolean> {
+		const renewed = await this.host.renew(this.readThrough);
 		if ('stale' in renewed) return false;
-		if (!agent.hasQueuedMessages() && renewed.ok.lastSeq <= this.heardThrough) return false;
+		if (!agent.hasQueuedMessages() && renewed.ok.lastSeq <= this.readThrough) return false;
 		agent.clearAllQueues();
 		return true;
 	}
 
 	/**
-	 * A steer has landed in the transcript, so this activation has now heard it, and
-	 * the room hears what its tools did. Steers drain FIFO, so the oldest
-	 * pending seq is the one that landed.
+	 * Tool events are room-visible. Pi context consumption is recorded at the
+	 * provider request boundary by `PiContext`, not by transcript event text.
 	 */
 	private note(event: AgentEvent): void {
 		if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
@@ -187,11 +185,6 @@ export class Activation {
 			}
 			return;
 		}
-		if (event.type !== 'message_start' || event.message.role !== 'user') return;
-		const content = event.message.content;
-		if (typeof content !== 'string' || !content.startsWith('[new] ')) return;
-		const seq = this.pending.shift();
-		if (seq !== undefined) this.heard(seq);
 	}
 
 	/** An activation that never reached the record. The room hears it and moves on. */
@@ -200,10 +193,6 @@ export class Activation {
 		this.host.emit({ type: 'error', agent: this.seat, error });
 		return false;
 	}
-}
-
-function userMessage(text: string, timestamp: number): UserMessage {
-	return { role: 'user', content: text, timestamp };
 }
 
 function failureOf(agent: Agent): Error | undefined {

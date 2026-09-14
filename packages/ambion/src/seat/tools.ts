@@ -69,7 +69,6 @@ export function binding(activation: Activation, room: SeatRoom): Binding {
 		room,
 		landed(response) {
 			if ('committed' in response) {
-				activation.heard(response.committed.seq);
 				activation.spoke = true;
 				return delivered();
 			}
@@ -96,36 +95,47 @@ function sayTool(bound: Binding): AgentTool {
 			'Speak on the record. Omit `to` to address the room; set `to` to a participant name ' +
 			'to address them directly — a directed say to an agent also calls them in. ' +
 			'Ending your turn without calling say is declining to speak.',
-		execute: async (toolCallId, rawParams) => {
-			const params = rawParams as { to?: string; text: string };
-			const to = params.to?.trim() ? params.to.trim() : undefined;
-			const text = params.text.trim();
-			// A message with nothing in it still takes a seq, renders in
-			// every context after it, and stands inside whatever range a
-			// summary covers. Saying nothing is ending the activation.
-			if (text === '') {
-				throw new Error('The message is empty. Say something, or end your turn instead.');
-			}
-			const response = await bound.room.commit({
-				activation: bound.activation.id,
-				key: toolCallId,
-				readThrough: bound.activation.readThrough,
-				intent: { kind: 'said', ...(to === undefined ? {} : { to }), text },
-			});
-			if ('missed' in response) {
-				// Now heard, the seat decides again against the record as it stands.
-				bound.activation.heard(response.missed.at(-1)?.seq ?? 0);
-				throw new Error(
-					refusal(
-						'Not delivered — the room moved while you were speaking. New on the record:',
-						response.missed,
-						'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
-					),
-				);
-			}
-			return bound.landed(response);
-		},
+		execute: async (toolCallId, rawParams) => say(bound, toolCallId, rawParams),
 	};
+}
+
+async function say(
+	bound: Binding,
+	toolCallId: string,
+	rawParams: unknown,
+): Promise<AgentToolResult<Record<string, never>>> {
+	const params = rawParams as { to?: string; text: string };
+	const to = params.to?.trim() ? params.to.trim() : undefined;
+	const text = params.text.trim();
+	// A message with nothing in it still takes a seq, renders in
+	// every context after it, and stands inside whatever range a
+	// summary covers. Saying nothing is ending the activation.
+	if (text === '') {
+		throw new Error('The message is empty. Say something, or end your turn instead.');
+	}
+	const response = await bound.room.commit({
+		activation: bound.activation.id,
+		key: toolCallId,
+		readThrough: bound.activation.readThrough,
+		intent: { kind: 'said', ...(to === undefined ? {} : { to }), text },
+	});
+	if ('missed' in response) {
+		bound.activation.toolResultExpected(
+			toolCallId,
+			response.missed.at(-1)?.seq ?? bound.activation.readThrough,
+		);
+		throw new Error(
+			refusal(
+				'Not delivered — the room moved while you were speaking. New on the record:',
+				response.missed,
+				'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
+			),
+		);
+	}
+	if ('committed' in response && response.committed.kind === 'said') {
+		bound.activation.acknowledgeThrough(response.committed.seq);
+	}
+	return bound.landed(response);
 }
 
 /**

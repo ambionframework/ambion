@@ -85,7 +85,9 @@ changes. This keeps lifecycle state separate from routing policy. See
 Messages that arrive during a provider request queue as steers and inject
 after the request completes; they never restart work mid-turn. When the
 journal has moved past what the activation read, the activation rebuilds
-against a fresh room view. See
+against a fresh room view. Explicit `readThrough` progress records which
+context entered a provider request. Lease renewals extend liveness without
+inferring that new context was read. See
 [`activation.ts`](packages/ambion/src/seat/activation.ts).
 
 ### 6. Quiescence defines an exchange

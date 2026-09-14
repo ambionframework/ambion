@@ -77,7 +77,13 @@ describe('decide', () => {
 	it('ends a lease past its expiry, and closes on the fold that holds the expiry', () => {
 		const state = fold([
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'message:2:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 		]);
 		expect(decide(state, options({ now: T0 + 59_999 }))).toMatchObject({
 			expired: [],
@@ -90,6 +96,7 @@ describe('decide', () => {
 				phase: 'ended',
 				reason: 'expired',
 				at: new Date(T0 + 60_000).toISOString(),
+				readThrough: 0,
 			},
 		]);
 		expect(decision.close).toBeUndefined();
@@ -98,10 +105,16 @@ describe('decide', () => {
 	it('closes an exchange nothing works on, names the assistant when two agents spoke, and drafts', () => {
 		const state = fold([
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'message:2:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
 			said(4, 'product', { activationId: 'message:2:product:1' }),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 4 }),
 		]);
 		const decision = decide(state, options());
 		expect(decision.close).toEqual({
@@ -117,7 +130,7 @@ describe('decide', () => {
 			...opened(),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
 			said(4, 'product', { activationId: 'message:2:product:1' }),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 4 }),
 			close({ owner: 'priya', from: 2, through: 4, wakes: ['assistant'] }),
 		]);
 		expect(decide(closed, options()).sends).toEqual([
@@ -131,10 +144,16 @@ describe('decide', () => {
 		expect(decide(pending, options()).close).toBeUndefined();
 		const drafting = fold([
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 2 }),
 			close({ owner: 'priya', from: 2, through: 2 }),
 			said(3, 'priya'),
-			lease({ id: 'closed:2:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'closed:2:assistant:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 		]);
 		expect(liveWork(drafting, T0).exchange).toBe(false);
 	});
@@ -158,14 +177,21 @@ describe('decide', () => {
 				phase: 'ended',
 				reason: 'failed',
 				at: new Date(when).toISOString(),
+				readThrough: 0,
 			});
 		const owed = [
 			...opened(),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
 			said(4, 'product', { activationId: 'message:2:product:1' }),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 4 }),
 			close({ owner: 'priya', from: 2, through: 4, wakes: ['assistant'] }),
-			lease({ id: 'closed:4:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'closed:4:assistant:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 			failed(1, T0 + 1_000),
 		];
 		const once = fold(owed);
@@ -192,7 +218,13 @@ describe('decide', () => {
 			...owed,
 			failed(2, T0 + 40_000),
 			failed(3, T0 + 100_000),
-			lease({ id: 'closed:4:assistant:4', phase: 'ended', reason: 'abandoned', at }),
+			lease({
+				id: 'closed:4:assistant:4',
+				phase: 'ended',
+				reason: 'abandoned',
+				at,
+				readThrough: 0,
+			}),
 		]);
 		expect(gaveUp.owed).toEqual([]);
 		expect(decide(gaveUp, options({ now: T0 + 1_000_000 })).abandoned).toEqual([]);
@@ -200,12 +232,18 @@ describe('decide', () => {
 
 	it('wakes the seat again after a lease that came to nothing, and stops at the cap', () => {
 		const ended = (id: string, reason: 'expired' | 'failed' | 'released', when: number) =>
-			lease({ id, phase: 'ended', reason, at: new Date(when).toISOString() });
+			lease({ id, phase: 'ended', reason, at: new Date(when).toISOString(), readThrough: 0 });
 		// the seat claimed, and its lease expired without a word: the wake is
 		// pending again under the next attempt's id, after the backoff
 		const expired = fold([
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'message:2:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 			ended('message:2:product:1', 'expired', T0 + 60_000),
 		]);
 		expect(expired.pending).toMatchObject([
@@ -230,7 +268,13 @@ describe('decide', () => {
 		// words at the next attempt
 		const spoke = fold([
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'message:2:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
 			ended('message:2:product:1', 'expired', T0 + 60_000),
 		]);
@@ -239,8 +283,20 @@ describe('decide', () => {
 		const stood = fold([
 			...opened(),
 			said(3, 'priya', { wakes: ['product'] }),
-			lease({ id: 'message:3:product:1', phase: 'running', expiry: T0 + 60_000, at }),
-			ended('message:3:product:1', 'released', T0 + 1_000),
+			lease({
+				id: 'message:3:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
+			lease({
+				id: 'message:3:product:1',
+				phase: 'ended',
+				reason: 'released',
+				at: new Date(T0 + 1_000).toISOString(),
+				readThrough: 3,
+			}),
 		]);
 		expect(stood.pending).toEqual([]);
 		// at the cap the room gives up: it writes the attempt it does not make,
@@ -261,7 +317,10 @@ describe('decide', () => {
 		// the entry answers the wake: nothing works on the exchange, so it closes
 		const gaveUp = fold([
 			...tried,
-			lease({ id: 'message:2:product:4', phase: 'ended', reason: 'abandoned', at }, 2),
+			lease(
+				{ id: 'message:2:product:4', phase: 'ended', reason: 'abandoned', at, readThrough: 0 },
+				2,
+			),
 		]);
 		expect(gaveUp.pending).toEqual([]);
 		expect(liveWork(gaveUp, T0 + 100_000).exchange).toBe(false);
@@ -282,11 +341,23 @@ describe('decide', () => {
 		// activation heard 4, so it is pending for the seat as a first attempt
 		const window = fold([
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'message:2:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }, 3),
+			lease(
+				{ id: 'message:2:product:1', phase: 'running', expiresAt: T0 + 60_000, at, readThrough: 0 },
+				3,
+			),
 			said(4, 'priya'),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }, 4),
+			lease(
+				{ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 3 },
+				4,
+			),
 		]);
 		expect(window.pending).toMatchObject([
 			{ id: 'message:4:product:1', seat: 'product', unsuccessfulAttempts: 0 },
@@ -294,11 +365,23 @@ describe('decide', () => {
 		// a lease that heard 4 before it stood down answers it
 		const heard = fold([
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'message:2:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
 			said(4, 'priya'),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }, 4),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }, 4),
+			lease(
+				{ id: 'message:2:product:1', phase: 'running', expiresAt: T0 + 60_000, at, readThrough: 4 },
+				4,
+			),
+			lease(
+				{ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 4 },
+				4,
+			),
 		]);
 		expect(heard.pending).toEqual([]);
 		// the assistant composing hears no steer: a failed draft leaves the compose
@@ -307,11 +390,29 @@ describe('decide', () => {
 			composition(),
 			arrived(1, 'priya'),
 			said(2, 'priya', { wakes: ['product', 'assistant'] }),
-			lease({ id: 'opened:2:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'opened:2:assistant:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
+			lease({
+				id: 'message:2:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }, 3),
-			lease({ id: 'opened:2:assistant:1', phase: 'ended', reason: 'failed', at }, 3),
+			lease(
+				{ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 3 },
+				3,
+			),
+			lease(
+				{ id: 'opened:2:assistant:1', phase: 'ended', reason: 'failed', at, readThrough: 0 },
+				3,
+			),
 		]);
 		expect(composed.pending.map((wake) => wake.id)).toEqual(['opened:2:assistant:2']);
 	});
@@ -319,7 +420,13 @@ describe('decide', () => {
 	it('writes nothing the second time', () => {
 		const entries = [
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
+			lease({
+				id: 'message:2:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
 			said(4, 'product', { activationId: 'message:2:product:1' }),
 		];
@@ -342,8 +449,14 @@ describe('decide', () => {
 		// pass four: the seat read its own words and stood down, so the exchange closes
 		const stood: Entry[] = [
 			...expired,
-			lease({ id: 'message:2:product:2', phase: 'running', expiry: later + 60_000, at }),
-			lease({ id: 'message:2:product:2', phase: 'ended', reason: 'released', at }),
+			lease({
+				id: 'message:2:product:2',
+				phase: 'running',
+				expiresAt: later + 60_000,
+				at,
+				readThrough: 0,
+			}),
+			lease({ id: 'message:2:product:2', phase: 'ended', reason: 'released', at, readThrough: 4 }),
 		];
 		const fourth = decide(fold(stood), options({ now: later }));
 		expect(fourth).toMatchObject({ expired: [], sends: [] });
@@ -366,7 +479,7 @@ describe('decide', () => {
 	it('closes nothing and wakes nobody once stopped', () => {
 		const state = fold([
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'revoked', at }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'revoked', at, readThrough: 0 }),
 		]);
 		expect(decide(state, options({ stopped: true }))).toEqual({
 			expired: [],
@@ -412,7 +525,7 @@ describe('decide', () => {
 });
 
 describe('liveWork', () => {
-	const live = { expiry: T0 + 60_000, at };
+	const live = { expiresAt: T0 + 60_000, at, readThrough: 0 };
 
 	it('holds the exchange open while an activation a message caused is live', () => {
 		const state = fold([
@@ -445,8 +558,14 @@ describe('liveWork', () => {
 		// the wake the question decided is answered, so nothing else is owed
 		const closed = [
 			...opened(),
-			lease({ id: 'message:2:product:1', phase: 'running', expiry: T0 + 60_000, at }),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			lease({
+				id: 'message:2:product:1',
+				phase: 'running',
+				expiresAt: T0 + 60_000,
+				at,
+				readThrough: 0,
+			}),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 2 }),
 			close({ owner: 'priya', from: 2, through: 2, wakes: ['assistant'] }),
 		];
 		for (const seat of ['assistant', 'product']) {
@@ -473,7 +592,7 @@ describe('liveWork', () => {
 		const owed = [
 			...opened(),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 3 }),
 			close({ owner: 'priya', from: 2, through: 3, wakes: ['assistant'] }),
 		];
 		expect(liveWork(fold(owed), T0)).toMatchObject({ exchange: false, rest: false });
@@ -483,7 +602,7 @@ describe('liveWork', () => {
 		const backoff = fold([
 			...owed,
 			lease({ id: 'closed:3:assistant:1', phase: 'running', ...live }),
-			lease({ id: 'closed:3:assistant:1', phase: 'ended', reason: 'failed', at }),
+			lease({ id: 'closed:3:assistant:1', phase: 'ended', reason: 'failed', at, readThrough: 0 }),
 		]);
 		expect(backoff.owed).toMatchObject([{ unsuccessfulAttempts: 1, notBefore: T0 + 30_000 }]);
 		for (const now of [T0, T0 + 29_999, T0 + 30_000]) {
@@ -498,12 +617,18 @@ describe('liveWork', () => {
 		const abandoned = fold([
 			...opened(),
 			said(3, 'product', { activationId: 'message:2:product:1' }),
-			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at, readThrough: 3 }),
 			close({ owner: 'priya', from: 2, through: 3, wakes: ['assistant'] }),
-			lease({ id: 'closed:3:assistant:1', phase: 'ended', reason: 'failed', at }),
-			lease({ id: 'closed:3:assistant:2', phase: 'ended', reason: 'failed', at }),
-			lease({ id: 'closed:3:assistant:3', phase: 'ended', reason: 'failed', at }),
-			lease({ id: 'closed:3:assistant:4', phase: 'ended', reason: 'abandoned', at }),
+			lease({ id: 'closed:3:assistant:1', phase: 'ended', reason: 'failed', at, readThrough: 0 }),
+			lease({ id: 'closed:3:assistant:2', phase: 'ended', reason: 'failed', at, readThrough: 0 }),
+			lease({ id: 'closed:3:assistant:3', phase: 'ended', reason: 'failed', at, readThrough: 0 }),
+			lease({
+				id: 'closed:3:assistant:4',
+				phase: 'ended',
+				reason: 'abandoned',
+				at,
+				readThrough: 0,
+			}),
 		]);
 		expect(abandoned.due).toEqual([]);
 		expect(liveWork(abandoned, T0 + 1_000_000)).toMatchObject({ seats: new Map(), rest: true });

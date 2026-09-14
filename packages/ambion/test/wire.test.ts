@@ -26,8 +26,22 @@ import { jsonl } from './support/storage.ts';
 const at = '2026-01-01T09:00:00.000Z';
 
 const stored: Record<string, LeaseChange | Close | Composition> = {
-	claim: { id: 'message:2:product:1', seq: 2, phase: 'running', expiry: 60_000, at },
-	end: { id: 'message:2:product:1', seq: 4, phase: 'ended', reason: 'released', at },
+	claim: {
+		id: 'message:2:product:1',
+		seq: 2,
+		phase: 'running',
+		expiresAt: 60_000,
+		at,
+		readThrough: 0,
+	},
+	end: {
+		id: 'message:2:product:1',
+		seq: 4,
+		phase: 'ended',
+		reason: 'released',
+		at,
+		readThrough: 0,
+	},
 	close: { owner: 'priya', from: 2, through: 4, seq: 4, at, wakes: ['assistant'] },
 	composition: {
 		goal: 'Decide the pour date.',
@@ -50,7 +64,7 @@ const wake: Wake = {
 	room: 'site',
 	seat: 'product',
 	activation: 'message:3:product:1',
-	steer: { seq: 3, line: '[priya] And the pump?' },
+	steer: { after: 2, seq: 3, line: '[priya] And the pump?' },
 };
 const view: ActivationView = {
 	spec: {
@@ -96,7 +110,12 @@ const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 		intent: { kind: 'seated', name: 'surveyor' },
 	},
 	claim: { activation: 'message:2:product:1', operation: 'claim' },
-	release: { activation: 'message:2:product:1', operation: 'release', reason: 'released' },
+	release: {
+		activation: 'message:2:product:1',
+		operation: 'release',
+		reason: 'released',
+		readThrough: 0,
+	},
 	viewOf: 'message:2:product:1',
 };
 const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
@@ -109,7 +128,7 @@ const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 		missed: [{ kind: 'said', seq: 3, key: 'k', at, from: 'priya', text: 'And the pump?' }],
 	},
 	refused: { refused: "'nobody' is not in the reserve." },
-	ok: { ok: { expiry: 1767258060000, lastSeq: 3 } },
+	ok: { ok: { expiresAt: 1767258060000, lastSeq: 3 } },
 };
 
 describe('the wire', () => {

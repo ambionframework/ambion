@@ -31,11 +31,21 @@ const entries: Entry[] = [
 		key: 'question',
 		body: { kind: 'said', at, from: 'priya', text: 'Hello.', wakes: ['product'] },
 	},
-	{ kind: 'lease', seq: 5, body: { id, phase: 'running', expiry: now + 60_000, at } },
+	{
+		kind: 'lease',
+		seq: 5,
+		body: { id, phase: 'running', expiresAt: now + 60_000, at, readThrough: 0 },
+	},
 	{
 		kind: 'lease',
 		seq: 6,
-		body: { id, phase: 'running', expiry: now + 90_000, at: new Date(now + 30_000).toISOString() },
+		body: {
+			id,
+			phase: 'running',
+			expiresAt: now + 90_000,
+			at: new Date(now + 30_000).toISOString(),
+			readThrough: 0,
+		},
 	},
 	{
 		kind: 'message',
@@ -43,12 +53,12 @@ const entries: Entry[] = [
 		key: 'answer',
 		body: { kind: 'said', at, from: 'product', text: 'Ready.', activationId: id },
 	},
-	{ kind: 'lease', seq: 8, body: { id, phase: 'ended', reason: 'released', at } },
+	{ kind: 'lease', seq: 8, body: { id, phase: 'ended', reason: 'released', at, readThrough: 0 } },
 	{ kind: 'close', seq: 9, body: close },
 	{
 		kind: 'checkpoint',
 		seq: 10,
-		body: { v: 1, at, composition, floor: 8, closes: [close], leases: [] },
+		body: { v: 2, at, composition, floor: 8, closes: [close], leases: [] },
 	},
 	{
 		kind: 'message',

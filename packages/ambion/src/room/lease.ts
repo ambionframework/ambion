@@ -16,14 +16,11 @@
  * A message reaches a seat two ways: the room names the seats at rest it
  * wakes in `wakes`, and every seat at work hears it as a steer. The journal
  * says which: a lease at work when the message landed holds a change before
- * it and ends, if it ends, after it. A lease answers a message it heard,
- * or that its view held because it was claimed after the message, while
- * it runs and once it ended released, refused or revoked. A lease that
- * stood down answers through the seq its last renewal confirmed, so a
- * message that landed between that renewal and the release is pending
- * for the seat, as a first attempt. A lease that
- * expired or failed answers nothing it heard, whatever it said: its words
- * stay on the record, and the seat reads them at the next attempt. The
+ * it and ends, if it ends, after it. A running lease keeps work claimed. A
+ * released lease settles only context its executor acknowledged. A renewal
+ * extends liveness without advancing that acknowledgment. A lease that
+ * expired or failed settles no work. Its words stay on the record, and the
+ * seat reads them at the next attempt. The
  * failure counts as one attempt, and the message is pending again for
  * that seat after the backoff, under the next attempt's id, until the
  * cap. The fold reports every wake still pending with its attempts; the
@@ -35,8 +32,8 @@ import type { Message, Seq } from '../types.ts';
 import type { EndReason, LeaseChange, LeaseHold } from '../wire.ts';
 import {
 	atWork as atWorkRule,
+	coversAttempt as coverageRule,
 	expired,
-	heard as heardRule,
 	nextAttempt,
 } from './rules.verified.ts';
 
@@ -106,18 +103,18 @@ export function applyLease(
 	if (known?.phase === 'ended') return;
 	const since = known?.since ?? seq;
 	const claimedAt = known?.claimedAt ?? change.at;
-	const heardThrough = change.phase === 'running' ? seq : (known?.heardThrough ?? seq);
+	const readThrough = Math.max(known?.readThrough ?? 0, change.readThrough);
 	leases.set(
 		change.id,
 		change.phase === 'running'
 			? {
 					id: change.id,
 					phase: 'running',
-					expiry: change.expiry,
+					expiresAt: change.expiresAt,
 					at: change.at,
 					claimedAt,
 					since,
-					heardThrough,
+					readThrough,
 				}
 			: {
 					id: change.id,
@@ -127,13 +124,13 @@ export function applyLease(
 					claimedAt,
 					since,
 					until: seq,
-					heardThrough,
+					readThrough,
 				},
 	);
 }
 
 export const isExpired = (lease: LeaseHold, now: number): boolean =>
-	lease.phase === 'running' && expired(lease.expiry ?? 0, now);
+	lease.phase === 'running' && expired(lease.expiresAt, now);
 
 /** A lease that holds: running, and not past its expiry. */
 export const isLive = (lease: LeaseHold, now: number): boolean =>
@@ -213,7 +210,7 @@ export function pendingWakes(
 	const pending: PendingWake[] = [];
 	for (const message of messages) {
 		for (const seat of reached(message, bySeat, roster)) {
-			const taken = (bySeat.get(seat) ?? []).filter((lease) => heard(lease, message.seq));
+			const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
 			const wake = statusOf(message, seat, taken, options, causeOf(seat, message.seq));
 			if (wake !== undefined) pending.push(wake);
 		}
@@ -264,28 +261,24 @@ const steered = (lease: LeaseHold, seq: Seq): boolean =>
 
 /** The lease held a change before the message and ended, if it ended, after it. */
 const atWork = (lease: LeaseHold, seq: Seq): boolean =>
-	atWorkRule(lease.since, lease.until !== undefined, lease.until ?? 0, seq);
+	lease.phase === 'ended'
+		? atWorkRule(lease.since, true, lease.until, seq)
+		: atWorkRule(lease.since, false, 0, seq);
 
 /**
- * The lease heard the message. A lease that runs or came to nothing heard
- * every message through its end, whether it was at work for the message or
- * the message landed before it claimed: its view held the record either
- * way. A lease that stood down heard what its last renewal confirmed: a
- * message that landed between that renewal and the release reached no
- * activation.
- *
- * The rule reads `until` alone, because `foldLeases` holds every lease to
- * `until >= since`: an end lands at or after the first change, and `after`
- * only grows.
+ * A completed lease answers only context its executor explicitly consumed.
+ * A running lease still holds its work, so the room waits for its terminal
+ * result before it schedules the same message again.
  */
-const heard = (lease: LeaseHold, seq: Seq): boolean =>
-	heardRule(
-		lease.phase === 'running' || answersNothing(lease),
-		lease.until !== undefined,
-		lease.until ?? 0,
-		lease.heardThrough,
-		seq,
-	);
+const answered = (lease: LeaseHold, seq: Seq): boolean =>
+	lease.phase === 'running' ||
+	((lease.reason === 'abandoned' || lease.reason === 'revoked') &&
+		parseId(lease.id)?.position === seq) ||
+	(!answersNothing(lease) && lease.readThrough >= seq);
+
+/** A lease covers a message while it works, or through the end of its attempted work. */
+const coversAttempt = (lease: LeaseHold, seq: Seq): boolean =>
+	lease.phase === 'ended' ? coverageRule(true, lease.until, seq) : coverageRule(false, 0, seq);
 
 /**
  * The wake as pending, or nothing when a lease answered it. A wake at the
@@ -299,9 +292,14 @@ function statusOf(
 	options: PendingActivationOptions,
 	cause: Cause,
 ): PendingWake | undefined {
-	// A lease that answered the message settles it, whatever the attempts say.
-	if (taken.some((lease) => !answersNothing(lease))) return undefined;
-	const failed = taken.filter((lease) => cameToNothing(lease));
+	// A running lease keeps the work claimed. A completed lease settles it only
+	// after the executor recorded explicit progress through this message.
+	if (taken.some((lease) => answered(lease, message.seq))) return undefined;
+	const failed = taken.filter(
+		(lease) =>
+			cameToNothing(lease) ||
+			(lease.phase === 'ended' && parseId(lease.id)?.position === message.seq),
+	);
 	return {
 		...pendingActivation(cause, message.seq, seat, failed, options),
 		seq: message.seq,
@@ -339,9 +337,9 @@ export function pendingActivation(
 
 /** Whether the lease ended for a reason in `reasons`. */
 const endedFor = (lease: LeaseHold, reasons: ReadonlySet<EndReason>): boolean =>
-	lease.phase === 'ended' && lease.reason !== undefined && reasons.has(lease.reason);
+	lease.phase === 'ended' && reasons.has(lease.reason);
 
-/** The lease answers nothing it heard; every other lease answers all of it. */
+/** The lease answers no work it attempted. */
 const answersNothing = (lease: LeaseHold): boolean => endedFor(lease, ANSWERS_NOTHING);
 
 /** The attempt came to nothing, so the next one is numbered after it. */

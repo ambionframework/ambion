@@ -13,12 +13,17 @@ The library should express sophisticated collaboration through a small,
 consistent vocabulary. Each abstraction should own its state, invariants,
 and behavior. Extracting files alone does not achieve that objective.
 
-**Items 4–10 and their replacement APIs are proposals.** Items 1 and 2 are
-merged. Item 3 is implemented and under review. Completed items record
-their implementation below. Source references identify the current mechanisms. Behavioral changes and compatibility costs are
-identified separately from changes that preserve the existing contract.
+**Backward compatibility is not a goal.** Changes may replace existing APIs
+and persisted shapes. Remove obsolete structures and migration machinery
+when they complicate the design. Existing persisted state does not constrain
+the implementation.
+
+**Items 5–10 and their replacement APIs are proposals.** Items 1–3 are
+merged. Item 4 is implemented and under review. Completed items record their
+implementation below. Source references identify the current mechanisms.
+Each proposal identifies its behavioral changes.
 The initial review used source, contracts, and representative tests.
-Implementation adds execution checks for items 1–3.
+Implementation adds execution checks for items 1–4.
 
 ## The design to preserve
 
@@ -271,13 +276,63 @@ wire compatibility work, without introducing a general permissions system.
 
 ## 4. Separate liveness from acknowledged context
 
-**Current cost.** The executor tracks consumption through `readThrough`,
+**Implementation.** `seat/pi.ts` tracks the ranges attached to actual Pi
+provider inputs. Initial views and consumed steers establish contiguous
+`readThrough` progress. Freshness refusals associate their context with a
+tool result. An accepted ordinary message advances the author's position.
+
+Renewals and releases carry explicit progress. The fold keeps its maximum
+and separates attempted work from acknowledged completion. Unread work
+remains pending. An unsuccessful attempt advances its identifier, and
+revocation cancels its named work. Abandonment resolves its named work at
+the retry limit.
+
+`LeaseHold.readThrough` is always a number. `expiresAt` names absolute lease
+expiry in lease entries, the projection, and responses. Runtime expiry
+settings remain durations. Checkpoints retain acknowledgment and the lease
+intervals that establish which messages reached a seat.
+While a lease runs, checkpoints preserve the previous floor and retry history.
+
+**Verification.** `context-progress.test.ts` covers explicit acknowledgments,
+monotonic updates, invalid requests, retry identifiers, checkpoint retention,
+and recovery from the current checkpoint shape. `pi-context.test.ts` checks actual Pi
+provider inputs, queued steers, missing ranges, duplicate inputs, tool
+results, and full-view recovery. Existing abort tests retain their original
+single-cut expectations.
+
+**Implementation contract.** The executor reports the highest contiguous
+record position whose context entered a provider request. A successful
+ordinary commit also acknowledges the message that the executor authored.
+A renewal extends liveness and records only explicitly reported progress.
+Completion carries the final acknowledged position.
+
+- Keep acknowledged progress monotonic across repeated or reordered requests.
+- Reject invalid progress before appending a lease change.
+- Give steers structured record ranges. Journal positions include non-message
+  entries, so consecutive message positions need not differ by one.
+- Advance acknowledgment only across consumed ranges with no context gap.
+- Preserve steering after an in-flight provider request completes.
+- Track context from freshness refusals when its tool result enters a
+  provider request. Rendering text does not establish acknowledgment.
+- Keep scheduling coverage separate from terminal acknowledgment. Unread
+  work remains pending after release, and a retry cannot reuse an ended id.
+- Preserve explicit cancellation. Revocation resolves its named work without
+  claiming consumption; abandonment resolves work at the retry limit.
+- Use the new lease and checkpoint shapes directly. Backward compatibility
+  with earlier persisted state is outside this work.
+- Keep provider-specific context tracking inside the seat adapter.
+
+**Regression cases.** Cover renewal during an in-flight request, dropped,
+duplicate and reordered steers, nonconsecutive message positions, completion
+races, refusal context, cancellation before a request, and checkpoint recovery.
+
+**Original cost.** The executor tracks consumption through `readThrough`,
 pending sequence numbers, and recognition of `[new]` strings in provider
 events. The room separately derives `heardThrough` from lease renewals.
 A heartbeat establishes liveness, but does not inherently establish which
 messages the executor consumed.
 
-**Proposed design.** Carry an explicit consumed-through position from the
+**Design.** Carry an explicit consumed-through position from the
 executor, including at activation completion. A timer renewal extends the
 lease without inventing progress. Structured message metadata identifies
 which context the provider adapter consumed.
@@ -307,7 +362,8 @@ cannot advance acknowledgment past a gap or silently discharge pending work.
 executor adapter. Preserve the distinction between retrying a transport
 request and starting a new activation attempt.
 
-**Source.** [Activation](../packages/ambion/src/seat/activation.ts),
+**Source.** [Pi context adapter](../packages/ambion/src/seat/pi.ts),
+[activation](../packages/ambion/src/seat/activation.ts),
 [lease folding](../packages/ambion/src/room/lease.ts), and
 [seat renewal](../packages/ambion/src/seat/seat.ts).
 
@@ -325,7 +381,7 @@ option for application authors. Begin with an internal module or an
 
 Keep custom roles advanced and explicitly limited. Broader handlers need
 explicit eligibility and completion semantics before becoming a general
-extension point. Preserve supported custom behavior during migration.
+extension point. Remove custom behavior that lacks a coherent contract.
 
 **Naming.** Use `AssistantPolicy` for assistant-specific scheduling and
 guidance. The assistant remains an ordinary agent in a seat. Reserve `Role`
@@ -339,8 +395,8 @@ Remove unused abstraction names together with the abstractions they name.
 **Rationale.** A useful default becomes understandable on its own. Custom
 behavior no longer inherits hidden assistant rules through generic names.
 
-**Behavioral change.** Any narrowing of public role support requires a
-migration path. A generic closed-event handler should not silently depend
+**Behavioral change.** Narrow public role support when that makes its
+contract coherent. A generic closed-event handler should not silently depend
 on whether two agent messages require summarization.
 
 **Completion evidence.** Assistant policy can be understood and tested in
@@ -390,7 +446,7 @@ other rooms. Readonly public types then reflect actual ownership.
 for the same agent name without interference. Restart resolves the intended
 definitions or reports the missing binding clearly.
 
-**Scope.** Resolve collisions explicitly during migration. Removing public
+**Scope.** Resolve collisions explicitly. Removing public
 mutable maps requires replacements for legitimate host operations.
 
 **Source.** [Runtime](../packages/ambion/src/host/runtime.ts),
@@ -429,7 +485,7 @@ This is the strongest candidate for an independently reusable sub-library.
 types. SQLite and compatible adapters pass the same ordering, conditional
 append, idempotency, lost-confirmation, and fencing contracts.
 
-**Scope.** Preserve stored data through an adapter or explicit migration.
+**Scope.** Replace storage shapes directly when that simplifies the port.
 Keep generic lease scheduling inside Ambion until its domain independence
 is demonstrated by another use case.
 
@@ -571,8 +627,8 @@ Snapshot reads require no running room. Idle waits and durable completion
 report their respective conditions correctly under storage failure.
 
 **Behavioral change.** Awaitable opening and explicit completion outcomes
-change API contracts. Supply deprecated aliases where behavior remains
-equivalent. Explain any semantic migration separately from renaming.
+change API contracts. Remove obsolete names and document the resulting
+semantics directly.
 
 **Source.** [Public API](../packages/ambion/src/index.ts),
 [session lifecycle](../packages/ambion/src/session.ts), and
@@ -654,7 +710,7 @@ independent journal should not require knowledge of agents or Pi sessions.
 that preserve a working library at each step:
 
 1. Establish the command boundary and activation specification: items 1
-   and 3. Keep the current API during this work.
+   and 3. Update their APIs to express the new contracts.
 2. Correct ownership boundaries: item 6, then the journal and workspace
    extractions in items 7 and 8. These extractions can proceed independently
    where their interfaces permit it.
@@ -666,7 +722,8 @@ that preserve a working library at each step:
 
 Use the proposed names when each internal contract lands. Avoid a separate
 repository-wide rename before the ownership changes stabilize. Rename
-persisted fields and wire operations only with a compatibility strategy.
+persisted fields and wire operations directly when their new names clarify
+the contract. Remove obsolete shapes and adapters.
 
 **Measure simplification by removed rules.** Each change should identify
 which independent state, duplicated decision, or public concept it removes.

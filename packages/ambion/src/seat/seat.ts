@@ -96,7 +96,7 @@ export class SeatActor implements SeatPort {
 			this.enqueue(wake.activation);
 			return;
 		}
-		this.current.activation.steer(wake.steer.seq, wake.steer.line);
+		this.current.activation.steer(wake.steer.after, wake.steer.seq, wake.steer.line);
 	}
 
 	/**
@@ -150,7 +150,7 @@ export class SeatActor implements SeatPort {
 		this.current = current;
 		const claimed = await this.claim(id);
 		if (claimed !== undefined) {
-			const stopRenewing = this.renewUntil(current, claimed.expiry);
+			const stopRenewing = this.renewUntil(current, claimed.expiresAt);
 			try {
 				// The cut ends the wait, and never the run: a run that ignores the
 				// abort finishes on its own, past a seat that took its next wake.
@@ -189,7 +189,7 @@ export class SeatActor implements SeatPort {
 	 * came back. A claim of an id the room already runs is a renewal, so one
 	 * activation starts whichever call reached the room first.
 	 */
-	private async claim(id: string): Promise<{ expiry: number } | undefined> {
+	private async claim(id: string): Promise<{ expiresAt: number } | undefined> {
 		const claimed = await this.calls(() => this.room.lease({ activation: id, operation: 'claim' }));
 		return claimed === undefined || 'stale' in claimed ? undefined : claimed.ok;
 	}
@@ -207,7 +207,14 @@ export class SeatActor implements SeatPort {
 	 */
 	private async release(id: string, activation: Activation): Promise<void> {
 		const { reason } = activation;
-		await this.calls(() => this.room.lease({ activation: id, operation: 'release', reason }));
+		await this.calls(() =>
+			this.room.lease({
+				activation: id,
+				operation: 'release',
+				reason,
+				readThrough: activation.readThrough,
+			}),
+		);
 	}
 
 	/**
@@ -216,8 +223,12 @@ export class SeatActor implements SeatPort {
 	 */
 	private async renew(activation: Activation): Promise<number | 'stale' | 'lost'> {
 		try {
-			const renewed = await this.room.lease({ activation: activation.id, operation: 'renew' });
-			return 'stale' in renewed ? 'stale' : renewed.ok.expiry;
+			const renewed = await this.room.lease({
+				activation: activation.id,
+				operation: 'renew',
+				readThrough: activation.readThrough,
+			});
+			return 'stale' in renewed ? 'stale' : renewed.ok.expiresAt;
 		} catch {
 			return 'lost';
 		}
@@ -262,7 +273,8 @@ export class SeatActor implements SeatPort {
 		const { clock, room, seat, sessions } = this.context;
 		return {
 			view: () => this.room.view(id),
-			renew: () => this.room.lease({ activation: id, operation: 'renew' }),
+			renew: (readThrough: number) =>
+				this.room.lease({ activation: id, operation: 'renew', readThrough }),
 			build: (view: ActivationView, activation: Activation) => this.build(view, activation),
 			persist: (agent: PiAgent) => {
 				this.audit ??= sessions.open(`${room}:${seat}`, room);
@@ -284,7 +296,7 @@ export class SeatActor implements SeatPort {
 		const stream = this.context.stream;
 		return new Agent({
 			streamFn: (model, context, options) => {
-				activation.asked();
+				activation.providerRequestStarted(context.messages);
 				return stream(model, context, options);
 			},
 			initialState: {
