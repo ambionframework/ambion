@@ -598,7 +598,7 @@ ends it, and a test that wanted the exchange's own work done waits on
 opens an exchange inside the backoff gets no composing activation, which
 was already true of a draft due now.
 
-## 9. One retry policy
+## 9. One retry policy — done
 
 New.
 
@@ -621,6 +621,48 @@ a restart loses it.
 `packages/ambion/src/journal/journal.ts`, `byKey`.
 
 **Fix.** `Runtime` names one policy, and every caller reads it.
+
+**What moved.** Two of the five were the same mechanism written twice.
+
+`claim` and `release` in `seat/seat.ts` held one loop each, over the
+literal 2. `calls` is the loop, and `runtime.call.attempts` is the count:
+a call the room answers is done, whatever it answers, and a call that
+throws is sent again. Both read as one line now, and a host can tune the
+number.
+
+`dueWakes` and `retryTimes` in `room/reconcile.ts` each composed the
+backoff and the resend window, one as a predicate and one as a time.
+`dueAt` is the one policy: when the room sends an activation it owes.
+Two waits stand in front of it, and the later one decides. `dueWakes` is
+the activations whose `dueAt` has passed, and `retryTimes` reads the same
+value. `startsNow` is gone from `room/lease.ts`, because the question it
+answered is half of `dueAt`.
+
+**What did not move, and why.** The table named five mechanisms, and they
+are three concepts.
+
+| Mechanism                       | Concept               |
+| ------------------------------- | --------------------- |
+| `journal.ts` `byKey`            | dedupe, by key        |
+| `seat/seat.ts` `queued`         | dedupe, by wake       |
+| `lease.ts` attempts and backoff | retry, on the journal |
+| `session.ts` `sentAt`           | retry, in memory      |
+| `seat/seat.ts` the two loops    | retry, on the wire    |
+
+The two dedupes take different keys at different layers, and neither is a
+retry. The two retries the room runs are one policy now, `dueAt`. The
+wire retry stays its own: an attempt at an activation costs a model call
+and waits 30 seconds, and an attempt at a call costs one message and
+waits for nothing. One number over both would move each when a host tuned
+the other.
+
+**One shift this caused.** `calls` awaits where `claim` awaited before, so
+a lease answer reaches the seat one microtask later. In the golden dump
+one `activation_start` moves after a commit that another seat's activation
+had refused. Nothing orders those two: they belong to two seats working
+at the same time, and `exchange.md` §6 fixes the order at the close, which
+the dump still holds. The record, the wire calls and the leases are
+identical.
 
 ## 10. Collapse the exported names
 

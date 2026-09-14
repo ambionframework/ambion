@@ -109,6 +109,7 @@ function play(stream: StreamFn = scripted(() => quiet())) {
 	const room = new PlayedRoom(clock);
 	const actor = new SeatActor(room, {
 		clock,
+		call: runtime.call,
 		catalog: runtime.catalog,
 		room: 'played',
 		seat: 'product',
