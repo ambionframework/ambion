@@ -13,12 +13,12 @@ The library should express sophisticated collaboration through a small,
 consistent vocabulary. Each abstraction should own its state, invariants,
 and behavior. Extracting files alone does not achieve that objective.
 
-**Items 3–10 and their replacement APIs are proposals.** Item 1 is merged.
-Item 2 is implemented and under review. Both record their implementation below. Source references
-identify the current mechanisms. Behavioral changes and compatibility costs are
+**Items 4–10 and their replacement APIs are proposals.** Items 1 and 2 are
+merged. Item 3 is implemented and under review. Completed items record
+their implementation below. Source references identify the current mechanisms. Behavioral changes and compatibility costs are
 identified separately from changes that preserve the existing contract.
 The initial review used source, contracts, and representative tests.
-Implementation adds execution checks for items 1 and 2.
+Implementation adds execution checks for items 1–3.
 
 ## The design to preserve
 
@@ -184,12 +184,57 @@ exchange. The original messages remain accessible.
 
 ## 3. Give each activation one authoritative specification
 
-**Current cost.** An activation's meaning is distributed across its encoded
+**Implementation.** `room/activation.ts` compiles `ActivationSpec` from the
+recorded cause and current role binding. `ActivationView.spec` carries that
+specification. Views render its inputs, and executor tools use its grant.
+The room recompiles the specification inside the commit decision.
+
+The decision rejects intents outside the grant. Ordinary speech requires a
+valid current record position. Summary publication retains its fixed range
+and duplicate checks. A closed activation bound to `say` reads the current
+record. An obsolete role binding returns a stale view.
+
+`CommitRequest` and `CommitResult` name the commit protocol. `LeaseRequest`
+distinguishes claim, renewal, and release. `PendingActivation` records the
+cause, position, attempt, and `unsuccessfulAttempts` counter explicitly.
+Persisted identifiers, leases, and checkpoints keep their existing formats.
+Transport adapters must upgrade together; the session API is unchanged.
+
+**Verification.** Transition tests cover grant mismatches, unknown intents,
+invalid freshness positions, current context for role-defined speech, and
+obsolete role bindings. The room-port tests reject missing freshness without
+appending, then accept a write with the current position. They also cover
+renewal before claim and repeated claims. Existing wire, lease, checkpoint,
+and Cloudflare tests exercise the updated protocol.
+
+**Implementation contract.** One pure compiler derives `ActivationSpec`
+from the recorded cause, current room state, and role bindings. Its
+specification identifies the seat, attempt, input, and granted tool.
+Views render that specification. Tool binding consumes it. The transition
+recompiles it before accepting a room action.
+
+- Use a discriminated specification with the required input for each case.
+- Reject room intents outside the grant, including custom executor calls.
+- Require a valid current `readThrough` for ordinary speech. A valid older
+  position returns the missed messages; missing or invalid values are refused.
+- Preserve fixed summary bounds, duplicate detection, and journal idempotency.
+- Preserve custom role tools and their bounded room authority.
+- Distinguish claim, renewal, and release requests. Renewal cannot create a
+  lease; a repeated claim for a live lease remains safe.
+- Keep journal, checkpoint, and activation identifier formats unchanged.
+- Update transport clients together. The canonical view and request types
+  replace the previous transport shapes; the session API stays unchanged.
+
+**Regression cases.** Test mismatched intent and grant, missing and invalid
+freshness positions, a later message before commit, custom role tools,
+JSON round trips, repeated requests, and recovery from a checkpoint.
+
+**Original cost.** An activation's meaning is distributed across its encoded
 identifier, role, tool name, optional view fields, and tool-local state.
 The commit boundary checks liveness and some intent details. It does not
 establish that the activation was granted the submitted intent.
 
-**Proposed design.** Compile one discriminated specification for an
+**Design.** Compile one discriminated specification for an
 activation. It identifies the cause, seat, input boundary, and permitted
 room actions. Use that specification to derive views, bind tools, and
 validate requests where they commit.
@@ -218,7 +263,8 @@ and room validation derive their permissions from the same specification.
 **Scope.** This strengthens enforcement for custom executors. It requires
 wire compatibility work, without introducing a general permissions system.
 
-**Source.** [Wire types](../packages/ambion/src/wire.ts),
+**Source.** [Activation compiler](../packages/ambion/src/room/activation.ts),
+[wire types](../packages/ambion/src/wire.ts),
 [commit handling](../packages/ambion/src/answers.ts),
 [activation identifiers](../packages/ambion/src/room/lease.ts), and
 [tool binding](../packages/ambion/src/seat/tools.ts).

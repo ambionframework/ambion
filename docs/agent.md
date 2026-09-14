@@ -395,6 +395,11 @@ author's view. A summary publishes a closed exchange's result with its fixed
 range and recipient. Later messages do not invalidate that input
 ([`assistant.md`](assistant.md) §5).
 
+The room requires `readThrough` for ordinary speech, including custom
+executor calls. It refuses missing, non-integer, negative, or future
+positions. A valid older position returns the messages the executor missed.
+The executor remains responsible for reporting what it actually consumed.
+
 **6. A seat has a status and an attention, and they are different things.**
 Status is runtime: `active` (taking an activation now) or `idle` (at rest).
 Attention is a seating choice, and it is what rule 1 defers to when it says
@@ -768,20 +773,41 @@ two runs over one file write the same seq twice and the file no longer
 reads: a host that runs two rooms over one name needs the SQLite storage,
 or a repository of its own that behaves like it.
 
-**What crosses between a seat and its room is JSON.** The room renders the
-system prompt and the context, and sends the two strings with the model
-id and the tool the activation holds. The seat side resolves the definition
-by name through the runtime's catalog, builds the Pi `Agent`, and reaches
-the room through three calls: `view`, `commit` and `lease`. The room
-reaches a seat through two. `wake` carries the line a running activation
-is steered with when a message caused it. `cut` names an activation whose
-lease the room ended, so the seat side stops it now, wherever the seat
-runs. Every request and response survives a round trip through
-`JSON.stringify` unchanged
-([`wire.ts`](../packages/ambion/src/wire.ts)), so a seat and a room can
-live in two processes. The room answers the three calls from the fold: a
-lease is an entry on the journal, and the seat side releases it when the
-activation ends.
+**One specification defines each activation.** The room compiles
+`ActivationSpec` from the recorded cause and its current role bindings.
+The specification names the seat, attempt, input, and granted tool.
+`ActivationView` carries this specification with the model and rendered
+context. The executor binds its tools from that value.
+
+**The room checks the grant where it commits.** A live lease alone does
+not authorize a room action. The transition derives the specification again
+and refuses intents outside its grant. A custom role tool grants no
+built-in room action. Summarising grants a fixed exchange result; composing
+grants seating from the reserve; ordinary speech requires a current view.
+
+**What crosses between a seat and its room is JSON.** The seat uses `view`,
+`commit`, and `lease`; the room uses `wake` and `cut`. A `CommitRequest`
+receives a `CommitResult`. A `LeaseRequest` names `claim`, `renew`, or
+`release`. Renewal requires an existing live lease. A repeated claim for
+a live activation remains safe.
+
+Every request and response survives a round trip through `JSON.stringify`
+unchanged ([`wire.ts`](../packages/ambion/src/wire.ts)). In-process and
+Cloudflare hosts implement the same calls. Upgrade custom room and seat
+adapters together for these transport shapes. Stored journals, checkpoints,
+and activation identifiers retain their existing formats.
+
+Transport adapters use these replacements:
+
+| Previous name or field                  | Current name or field                                                        |
+| --------------------------------------- | ---------------------------------------------------------------------------- |
+| `Commit` / `CommitResponse`             | `CommitRequest` / `CommitResult`                                             |
+| `ActivationView.activation` / `.seat`   | `.spec.id` / `.spec.seat`                                                    |
+| `ActivationView.lastSeq`                | `.spec.through`                                                              |
+| `ActivationView.tool`                   | `.spec.grant.tool`, when the grant has a tool                                |
+| `ActivationView.closing` / `.composing` | `.spec.closing` / `.spec.opening`, according to the cause                    |
+| `Lease.phase: 'running'`                | `LeaseRequest.operation: 'claim'` initially; `'renew'` for an existing lease |
+| `Lease.phase: 'ended'`                  | `LeaseRequest.operation: 'release'`, with its reason                         |
 
 **A cut is the room's word, and the record is written before it.** The
 room ends every lease the seat holds as `revoked`, and then it cuts. A
