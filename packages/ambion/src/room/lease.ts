@@ -92,38 +92,43 @@ export function foldLeases(
 	held: readonly LeaseHold[] = [],
 ): Map<string, LeaseHold> {
 	const leases = new Map<string, LeaseHold>(held.map((lease) => [lease.id, lease]));
-	for (const { body: change, seq } of changes) {
-		const known = leases.get(change.id);
-		// Ended is terminal: a renewal that lands after the end changes nothing.
-		if (known?.phase === 'ended') continue;
-		const since = known?.since ?? seq;
-		const claimedAt = known?.claimedAt ?? change.at;
-		const heardThrough = change.phase === 'running' ? seq : (known?.heardThrough ?? seq);
-		leases.set(
-			change.id,
-			change.phase === 'running'
-				? {
-						id: change.id,
-						phase: 'running',
-						expiry: change.expiry,
-						at: change.at,
-						claimedAt,
-						since,
-						heardThrough,
-					}
-				: {
-						id: change.id,
-						phase: 'ended',
-						reason: change.reason,
-						at: change.at,
-						claimedAt,
-						since,
-						until: seq,
-						heardThrough,
-					},
-		);
-	}
+	for (const entry of changes) applyLease(leases, entry);
 	return leases;
+}
+
+/** Apply one change to a private lease builder. Callers must not share this map. */
+export function applyLease(
+	leases: Map<string, LeaseHold>,
+	{ body: change, seq }: Entry<LeaseChange>,
+): void {
+	const known = leases.get(change.id);
+	if (known?.phase === 'ended') return;
+	const since = known?.since ?? seq;
+	const claimedAt = known?.claimedAt ?? change.at;
+	const heardThrough = change.phase === 'running' ? seq : (known?.heardThrough ?? seq);
+	leases.set(
+		change.id,
+		change.phase === 'running'
+			? {
+					id: change.id,
+					phase: 'running',
+					expiry: change.expiry,
+					at: change.at,
+					claimedAt,
+					since,
+					heardThrough,
+				}
+			: {
+					id: change.id,
+					phase: 'ended',
+					reason: change.reason,
+					at: change.at,
+					claimedAt,
+					since,
+					until: seq,
+					heardThrough,
+				},
+	);
 }
 
 export const isExpired = (lease: LeaseHold, now: number): boolean =>

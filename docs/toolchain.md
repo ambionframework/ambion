@@ -109,17 +109,17 @@ only. Biome refuses every other import (`noRestrictedImports`, one
 override per layer in `biome.jsonc`), so the layout is a fact the gate
 holds, and a reviewer reads a file knowing what it cannot reach.
 
-| Layer                               | What it holds                                                                                                                                             | May import                            |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                                                                                 | Nothing that does anything            |
-| `host/`                             | What a host owns: the runtime value, a clock, an opener                                                                                                   | The vocabulary                        |
-| `journal/`                          | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                                     | The vocabulary                        |
-| `room/`                             | Every fact and every decision, pure over the journal: the fold, the lease, the exchange, presence, the routing, the assistant's rules, the view, `decide` | The vocabulary, the journal's entries |
-| `answers.ts`                        | What the room answers a seat's three calls with: `view`, `commit`, `lease`, over the twelve things `Answering` names                                      | The vocabulary, `host/`, `room/`      |
-| `tools/`                            | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                                     | The vocabulary, `host/`               |
-| `seat/`                             | The seat side of the wire: one activation, the tools it holds, the actor, the in-process transport                                                        | The vocabulary, `host/`, `tools/`     |
-| `session.ts`                        | The room, which composes them all                                                                                                                         | Everything                            |
-| `index.ts`, `transport.ts`          | The two published entries. They hold no logic: each one names what its reader needs                                                                       | Everything                            |
+| Layer                               | What it holds                                                                                                                        | May import                            |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| `types`, `wire`, `define`, `render` | The vocabulary: the public shapes, the wire, and what a participant reads                                                            | Nothing that does anything            |
+| `host/`                             | What a host owns: the runtime value, a clock, an opener                                                                              | The vocabulary                        |
+| `journal/`                          | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                | The vocabulary                        |
+| `room/`                             | Pure room state and commands: `decide` proposes events, `evolve` applies committed events, and the fold rebuilds the same projection | The vocabulary, the journal's entries |
+| `answers.ts`                        | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses                                     | The vocabulary, `host/`, `room/`      |
+| `tools/`                            | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                | The vocabulary, `host/`               |
+| `seat/`                             | The seat side of the wire: one activation, the tools it holds, the actor, the in-process transport                                   | The vocabulary, `host/`, `tools/`     |
+| `session.ts`                        | The room, which composes them all                                                                                                    | Everything                            |
+| `index.ts`, `transport.ts`          | The two published entries. They hold no logic: each one names what its reader needs                                                  | Everything                            |
 
 **The package has two entries, for two readers.**
 `@ambionframework/ambion` is what a host needs to build a room: the five
@@ -332,10 +332,10 @@ budget a test would hit the wall three times sooner than the code it exercises.
 The wider budget measures a test body from where it actually starts. A test
 that has become a program still fails — the tree's worst test scores 8.
 
-The runtime's routing, `SessionImpl.routing`, and its step,
-`reconcileOnce`, are glue over pure functions in `fold.ts` and
-`reconcile.ts`, one function per fact, and each stays under the budget.
-Everything in the tree scores 10 or below.
+`RoomHost` serializes changes through the journal's queue. Pure functions
+in `room/transition.ts` decide commands and apply committed events.
+`room/reconcile.ts` plans outstanding work from the current projection.
+Each function must stay within its complexity budget.
 
 The budget is a lint rule, so it runs wherever `check:lint` runs — the `check` job on a pull request, and the gate the release
 re-runs before it publishes. There was nothing to add to `ci.yml`.

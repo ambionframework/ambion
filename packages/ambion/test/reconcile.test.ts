@@ -6,7 +6,11 @@ import { describe, expect, it } from 'vitest';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
 import { parseId } from '../src/room/lease.ts';
-import { type DecideOptions, decide, liveWork } from '../src/room/reconcile.ts';
+import {
+	planReconciliation as decide,
+	liveWork,
+	type ReconcileOptions,
+} from '../src/room/reconcile.ts';
 import type { Message } from '../src/types.ts';
 import type { Close, LeaseChange } from '../src/wire.ts';
 
@@ -51,7 +55,7 @@ const close = (body: Omit<Close, 'at'>): Entry => ({
 });
 
 const fold = (entries: Entry[]): RoomState => foldRoom(entries, retry);
-const options = (over: Partial<DecideOptions> = {}): DecideOptions => ({
+const options = (over: Partial<ReconcileOptions> = {}): ReconcileOptions => ({
 	now: T0,
 	resend: 5_000,
 	attempts: retry.attempts,

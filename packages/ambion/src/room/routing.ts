@@ -11,7 +11,8 @@
  * (rule 2), and the steer is not on the message.
  */
 
-import { type Attention, isSpoken, isSummary, type Message } from '../types.ts';
+import type { Body } from '../journal/journal.ts';
+import type { Attention, Message } from '../types.ts';
 import { answering, type RoomState } from './fold.ts';
 
 /** The attention scale, narrowest first. A seat hears what it is wide enough for. */
@@ -27,9 +28,15 @@ const WIDTH: Record<Attention, number> = { none: 0, named: 1, broadcast: 2, pres
  * The scale says so, because what a message reaches is the message's own
  * business and never its author's.
  */
-function reachOf(message: Message): Attention {
-	if (isSummary(message)) return 'none';
-	if (!isSpoken(message)) return 'presence';
+type RoutedMessage = Message | Body<Message>;
+
+function spoken(message: RoutedMessage): message is Extract<RoutedMessage, { kind: 'said' }> {
+	return message.kind === 'said';
+}
+
+function reachOf(message: RoutedMessage): Attention {
+	if (message.kind === 'summary') return 'none';
+	if (!spoken(message)) return 'presence';
 	return message.to === undefined ? 'broadcast' : 'named';
 }
 
@@ -44,7 +51,7 @@ function reachOf(message: Message): Attention {
 export function wakes(
 	seat: { name: string; attention: Attention },
 	target: string | undefined,
-	message: Message,
+	message: RoutedMessage,
 ): boolean {
 	if (seat.name === target) return true;
 	const reach = reachOf(message);
@@ -55,8 +62,8 @@ export function wakes(
 }
 
 /** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
-function targetOf(message: Message): string | undefined {
-	if (isSpoken(message)) return message.to;
+function targetOf(message: RoutedMessage): string | undefined {
+	if (spoken(message)) return message.to;
 	return message.kind === 'seated' ? message.subject : undefined;
 }
 
@@ -71,7 +78,7 @@ function targetOf(message: Message): string | undefined {
  * wakes a seat twice.
  */
 export function routes(
-	message: Message,
+	message: RoutedMessage,
 	state: RoomState,
 	live: ReadonlyMap<string, string[]>,
 ): string[] {
@@ -95,7 +102,7 @@ export function routes(
 }
 
 /** The message opens an exchange, and the room holds agents to compose it from. */
-function opens(message: Message, state: RoomState): boolean {
+function opens(message: RoutedMessage, state: RoomState): boolean {
 	if (state.exchange !== undefined || state.reserve.length === 0) return false;
-	return isSpoken(message) && state.people.has(message.from);
+	return spoken(message) && state.people.has(message.from);
 }
