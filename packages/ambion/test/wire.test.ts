@@ -3,6 +3,7 @@
  * journal, is plain JSON: it survives the wire unchanged.
  */
 import { describe, expect, it } from 'vitest';
+import { createRuntime } from '../src/index.ts';
 import {
 	type ActivationView,
 	assertWire,
@@ -10,14 +11,13 @@ import {
 	type Commit,
 	type CommitResponse,
 	type Composition,
-	createRuntime,
 	type Lease,
 	type LeaseChange,
 	type LeaseResponse,
 	roundTrip,
 	type ViewResponse,
 	type Wake,
-} from '../src/index.ts';
+} from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';

@@ -698,7 +698,7 @@ at the same time, and `exchange.md` §6 fixes the order at the close, which
 the dump still holds. The record, the wire calls and the leases are
 identical.
 
-## 10. Collapse the exported names
+## 10. Collapse the exported names — done
 
 `next.md` §5 asks for this, and it stays last.
 
@@ -712,6 +712,37 @@ modules. A pass before them moves names that are about to leave.
 **Fix.** The main entry exports what a host needs to build a room. Every
 other shape reaches a reader through a named subpath. `Session`,
 `SessionView`, `RunningRoom` and `SeatRoom` are one room from four sides.
+
+**What moved.** The package has two entries, for two readers.
+
+| Entry                               | Names | What its reader does              |
+| ----------------------------------- | ----: | --------------------------------- |
+| `@ambionframework/ambion`           |    82 | Builds a room and runs it         |
+| `@ambionframework/ambion/transport` |    27 | Runs the room and its seats apart |
+
+The wire is the whole of the second: the three calls a seat makes, every
+shape they carry, `SeatActor`, `Transport` and `RunningRoom`. A host that
+never runs a seat elsewhere reads none of it.
+`@ambionframework/cloudflare` is the one such host here, and it reads both.
+
+**The four sides are two pairs.** `Session extends SessionView` is the room
+a host holds, and `RunningRoom extends SeatRoom` is the room a seat calls.
+Each pair already used `extends`, so nothing was duplicated; what the four
+names lacked was a line between the two audiences. The entries draw it.
+
+**What did not move.** The count went from 109 to 109. No name was dropped,
+because none was dead: 34 are unused outside the core today, and each one
+is the type of something a host writes down — the options of a public
+function, the shapes on the roster, the members of `SeatInfo`. A name a
+host cannot write is a worse surface than a name it has not needed yet.
+The item asked where each name lives, and that is what changed.
+
+**What holds it.** `package.test.ts` reads the manifest, the build config
+and both entries. It refuses a subpath the build does not write, a build
+entry the manifest does not name, a wire name on the main entry, and a
+primitive off it. Biome's rule that every package reaches the core through
+its published surface now names the second entry, so nothing else inside
+`packages/ambion/src` is reachable.
 
 **What landed with item 5.** A naming pass took out the duplicates the
 journal split exposed: `LeaseState`, an alias of `LeaseHold` with no

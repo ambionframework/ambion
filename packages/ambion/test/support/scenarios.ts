@@ -10,7 +10,6 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	inProcessTransport,
 	isSpoken,
 	isSummary,
 	type Runtime,
@@ -19,6 +18,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../../src/index.ts';
+import { inProcessTransport } from '../../src/transport.ts';
 import { fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
 import { collect, roomName } from './room.ts';

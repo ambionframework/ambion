@@ -5,7 +5,7 @@
  * messages stay, and a room that folds the rest behaves the same.
  */
 import { describe, expect, it } from 'vitest';
-import type { Composition, Seq } from '../src/index.ts';
+import type { Seq } from '../src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -20,6 +20,7 @@ import {
 } from '../src/index.ts';
 import { RoomJournal } from '../src/journal/journal.ts';
 import { checkpointOf, foldRoom, type RoomState } from '../src/room/fold.ts';
+import type { Composition } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { collect, crash, roomName, storedOf, tick } from './support/room.ts';
 import { byAgent, quiet, says, scripted, summarise, toolNames } from './support/scripted.ts';

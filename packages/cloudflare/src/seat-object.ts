@@ -8,8 +8,10 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import type { SeatRoom, SessionEvent, Wake } from '@ambionframework/ambion';
-import { SeatActor, systemClock } from '@ambionframework/ambion';
+import type { SessionEvent } from '@ambionframework/ambion';
+import { systemClock } from '@ambionframework/ambion';
+import type { SeatRoom, Wake } from '@ambionframework/ambion/transport';
+import { SeatActor } from '@ambionframework/ambion/transport';
 import type { SeatEvent } from './configure.ts';
 import { runtimeFor, seatEvent } from './configure.ts';
 import type { Env } from './room-object.ts';

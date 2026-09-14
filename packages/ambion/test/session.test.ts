@@ -5,7 +5,6 @@ import {
 	defineAgent,
 	defineHuman,
 	InMemorySessionRepo,
-	inProcessTransport,
 	isSpoken,
 	type Message,
 	passive,
@@ -15,6 +14,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { inProcessTransport } from '../src/transport.ts';
 import { andrei, assistant, collect, deferred, enter, roomName } from './support/room.ts';
 import { byAgent, contextText, quiet, scripted, speak } from './support/scripted.ts';
 

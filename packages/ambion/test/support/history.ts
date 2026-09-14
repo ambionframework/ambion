@@ -13,9 +13,10 @@
  * is one message, one attempt at a wake or a draft runs at a time, and
  * nothing is pending once the room drains.
  */
-import type { Clock, LeaseChange, Message, Seq } from '../../src/index.ts';
+import type { Clock, Message, Seq } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
 import { parseId } from '../../src/room/lease.ts';
+import type { LeaseChange } from '../../src/transport.ts';
 
 export type Outcome = 'ok' | 'fail' | 'info';
 
