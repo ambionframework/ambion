@@ -6,7 +6,10 @@ lives, and the smallest change that removes it, and the items sit in order
 of cost. The second part holds design work a branch decided not to do, and
 why it is worth doing. The design contracts in [`../docs/`](../docs) hold
 the open questions about a design; this file holds the work.
-[`next.md`](next.md) holds the five to do first.
+
+Two plans came before this file and both are merged: five changes, and
+ten that carried them. What each decided sits with the thing it governs,
+and what neither reached is an item here.
 
 ## Part one: debt in what is built
 
@@ -33,8 +36,9 @@ contract about which module owns it.
 
 ### 3. `session.ts` holds four jobs
 
-**What.** `session.ts` holds compose, route, hear and the reconcile glue,
-and it is over the 600 lines `next.md` asked for.
+**What.** `session.ts` holds compose, route, hear and the reconcile glue.
+It stands at 1299 lines, where one plan asked for 600 in the file and
+another asked for 400 in a module.
 
 **What moved.** The seat's three calls are `answers.ts`, over `Answering`:
 the room as a value (its name, its journal, the runtime) and nine
@@ -50,8 +54,8 @@ attention scale. `wakes` had been in `seat/seat.ts`, where only
 three `heard` methods) shares two fields with the reconcile loop:
 `sentAt`, which `send` writes and `forget` and `decide` read, and
 `reportedRest`, which four methods write. Two files over one pair of
-mutable fields spreads the state the way `next.md` §1 warned three
-booleans would. They are one concern, and a cut here needs that state to
+mutable fields spreads the state the way three booleans did, before
+`Phase` replaced them. They are one concern, and a cut here needs that state to
 go first: widen `decide` to cover the whole step, where both of them live.
 
 **What a count of lines says, and does not.** A plan of ten changes
