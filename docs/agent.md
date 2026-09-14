@@ -741,13 +741,14 @@ the shorthand for one. The default runtime opens sessions in an in-memory
 [`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
 surface.
 
-**The core holds one storage of its own: SQLite.**
-[`sqliteSessions(sql)`](../packages/ambion/src/host/sqlite.ts) opens every
-session in one database, keyed by id: the room's journal, and each seat's
-audit session beside it. It reaches the database through two calls, `run`
-a statement and `all` its rows, so a host wraps whatever SQLite it holds
-— `node:sqlite` in a process, a Durable Object's own storage on
-Cloudflare — and the core owns the schema and every statement. The core
+**The journal holds one storage of its own: SQLite.**
+[`sqliteSessions(sql)`](../packages/journal/src/sqlite.ts), in
+`@ambionframework/journal`, opens every session in one database, keyed by
+id: the room's journal, and each seat's audit session beside it. It
+reaches the database through two calls, `run` a statement and `all` its
+rows, so a host wraps whatever SQLite it holds — `node:sqlite` in a
+process, a Durable Object's own storage on Cloudflare — and the package
+owns the schema and every statement. The core
 imports no platform module, so the wrapper is the host's.
 
 Two runs may write to one SQLite at once. It reads each entry's seq from
