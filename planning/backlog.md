@@ -122,7 +122,9 @@ two modes:
 | 107  | The say is on the record, stamped with the activation revoked |
 
 **Measured.** 2 failures in 45 runs on the tree before item 9, and 1 in 45
-after it. The rates are the same at these samples. The test's own comments
+after it. The rates are the same at these samples. It also failed CI on a
+change that touched one Markdown file and no code, which is what says the
+race is the test's own. The test's own comments
 say it reasons about the window: "the runner decides the answer".
 
 **Why.** The test waits on two conditions that are weaker than what it
