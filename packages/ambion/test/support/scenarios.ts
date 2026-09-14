@@ -195,8 +195,8 @@ export const seatFromReserve: Scenario = {
 		await session.quiet();
 		const record = await session.messages();
 		expect(record.find((m) => m.kind === 'seated')).toMatchObject({
-			from: 'surveyor',
-			by: 'assistant',
+			from: 'assistant',
+			subject: 'surveyor',
 		});
 		expect(record.filter(isSpoken).map((m) => m.from)).toContain('surveyor');
 		expect(record.find(isSummary)).toBeDefined();

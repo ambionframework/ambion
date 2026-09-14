@@ -126,7 +126,7 @@ describe('a checkpoint', () => {
 			{ kind: 'composition' as const, body: composition, seq: 0 },
 			{
 				kind: 'message' as const,
-				body: { kind: 'arrived', at, from: 'priya', identity: 'A.' },
+				body: { kind: 'arrived', at, from: 'priya', subject: 'priya', identity: 'A.' },
 				seq: 1,
 			},
 			// the first exchange: opened at 2, answered at 3, closed at 6

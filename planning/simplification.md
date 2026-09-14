@@ -515,7 +515,7 @@ defaulted to an in-memory just-bash filesystem, and the core holds no
 filesystem to default to. A host names `memoryBackend()` where it named
 nothing.
 
-## 7. One author on every message
+## 7. One author on every message — done
 
 New.
 
@@ -536,6 +536,40 @@ author and its subject differ. `authorOf` exists for that one case, and
 subject in its own field. Then `authorOf` goes, `isPresence` reads as a
 positive test, and rule 7 in [`../docs/agent.md`](../docs/agent.md) holds
 for every kind.
+
+**What moved.** `PresenceMessage` takes `subject`, the participant the
+message is about, and `from` means what it means on every other kind: who
+wrote it. `by` is gone, and so is `authorOf`. `routes` and `steer` read
+`message.from`, and the fold, the roster and the render read
+`message.subject`.
+
+`from` is optional on a presence message alone, and for one reason: a
+seating the host decided has no author. The host is not a participant, and
+nothing on the record speaks for it. Every reader that wanted the author
+already handled that, because `authorOf` returned `string | undefined`.
+
+`isPresence` tests the four kinds it names. It read as two negatives
+before, so a fourth kind of message would have counted as presence.
+
+**What this found.** Two readers took `from` off a `Message` where they
+meant a person's say: the question that opens an exchange, in
+`room/exchange.ts`, and the question a composing seat reads, in
+`room/view.ts`. Both narrow to `SpokenMessage` now. The first is a type
+predicate on `find`, and the second is a guard.
+
+`renderLine` names the author only where it differs from the subject. A
+person arrives by themselves, and "priya arrived by priya" tells a reader
+nothing.
+
+**The record changed shape.** A presence message carries `subject`, and a
+seating carries the assistant in `from` where it carried the newcomer. The
+golden dump differs in the presence entries and nowhere else: with
+`subject`, `by` and the seating's `from` normalised away, the two dumps are
+identical, so no behaviour moved with the format.
+
+**What did not move.** The three interfaces stay three. A fourth for the
+two presence kinds that name a seat would buy a required `from` on the two
+that name a person, and the item asks for fewer shapes.
 
 ## 8. One question about what is live — done
 

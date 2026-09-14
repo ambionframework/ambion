@@ -221,11 +221,11 @@ function foldRoster(
  */
 function reseat(roster: RosterSeat[], message: Message): void {
 	if (message.kind !== 'seated' && message.kind !== 'unseated') return;
-	const at = roster.findIndex((seat) => seat.name === message.from);
+	const at = roster.findIndex((seat) => seat.name === message.subject);
 	if (at >= 0) roster.splice(at, 1);
 	if (message.kind === 'seated') {
 		roster.push({
-			name: message.from,
+			name: message.subject,
 			identity: message.identity ?? '',
 			attention: message.attention ?? 'broadcast',
 		});

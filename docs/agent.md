@@ -305,11 +305,13 @@ activate exactly the named participant, waking it however narrowly it is
 seated. `to` is a participant handle; directed at a human it addresses the
 reader and wakes nothing.
 
-The routing excludes a message's author, and for every kind the record
-held until [`roster.md`](roster.md) the author is `from`. A seating is the
-one message whose author and subject differ: `by` wrote it, or nobody did
-when the host seated by hand, and `from` is the seat it names. The routing
-excludes the author and wakes the subject ([`roster.md`](roster.md) §3).
+The routing excludes a message's author, and `from` is the author of every
+kind. A presence message names its subject in `subject`: the person who
+arrived, or the seat the room seated. On an arrival the two are one name,
+because a person's presence is theirs to change. A seating the assistant
+decided names the assistant in `from`; a seating the host decided has no
+author, because the host is not a participant. The routing excludes the
+author and wakes the subject ([`roster.md`](roster.md) §3).
 
 **2. Whatever arrives mid-activation is steered in, and working views reset at
 idle.** Replies and deliveries alike, directed or undirected: each arrival

@@ -4,6 +4,7 @@
  */
 import { expect } from 'vitest';
 import {
+	isPresence,
 	isSummary,
 	type LeaseChange,
 	type SessionEvent,
@@ -49,13 +50,11 @@ export async function invariants(
 	// Every author is a name the room seated, admitted, or was composed with.
 	const names = new Set(session.seats().map((seat) => seat.name));
 	for (const message of messages) {
-		if (message.kind === 'arrived' || message.kind === 'seated' || message.kind === 'unseated') {
-			names.add(message.from);
-		}
+		if (isPresence(message)) names.add(message.subject);
 	}
 	for (const message of messages) {
-		expect(names).toContain(message.from);
-		if ('by' in message && message.by !== undefined) expect(names).toContain(message.by);
+		// A seating the host decided has no author, and names nobody.
+		if (message.from !== undefined) expect(names).toContain(message.from);
 	}
 	// Every key names one message.
 	const keys = messages.flatMap((m) => (m.key === undefined ? [] : [m.key]));

@@ -133,19 +133,20 @@ interface PresenceMessage {
   kind: PresenceChange;
   seq: Seq;
   at: string;
+  /** Who wrote it. Absent on a seating the host decided. */
+  from?: string;
   /** The participant whose presence changed: a person, or the agent. */
-  from: string;
+  subject: string;
   /** How the room knows them, on `arrived` and `seated` alone. */
   identity?: string;
-  /** The assistant, when it did the seating. Absent when the host did. */
-  by?: string;
 }
 ```
 
-`from` is the agent whose presence changed, the way `arrived` carries the
-person. `identity` rides on `seated` as it rides on `arrived`, so a later
-reader of the record knows who was in the room. `by` names the assistant
-when the assistant seated the agent.
+`subject` is the agent whose presence changed, the way `arrived` carries
+the person. `identity` rides on `seated` as it rides on `arrived`, so a
+later reader of the record knows who was in the room. `from` names the
+assistant when the assistant seated the agent, and it is absent when the
+host did.
 
 **Every rule of the core applies to a seating unchanged**, and this is the
 reason for the shape:
@@ -166,18 +167,18 @@ reason for the shape:
   `broadcast` is too narrow, so a colleague joining wakes nobody by
   default, for the reason [`presence.md`](presence.md) §5 gives for an
   arrival: a seating has no words in it. A seat at `presence` wakes.
-- **Rule 7.** `from` and `by` are stamped by the runtime from the seating
-  it performed. Nobody claims either.
+- **Rule 7.** `from` and `subject` are stamped by the runtime from the
+  seating it performed. Nobody claims either.
 
-**Two rules of the core change, and both concern who a message names.**
+**One rule of the core changes, and it concerns who a message names.**
 
-**Author and subject are different names.** For every kind the record held
-before this document, the participant a message is about is the one who
-wrote it, so `dispatch` excludes `message.from` from the routing and that
-is the author. A seating is the first message where the two differ: the
-author is `by`, or nobody when the host did the seating, and the subject
-is `from`. So the author is what `dispatch` excludes, and the subject is
-who a seating names (`authorOf` in `types.ts`).
+**Author and subject are two fields.** `from` is the author of every kind,
+so the routing excludes `message.from` and needs nothing else. `subject`
+is who the message is about. On a say and a summary there is no subject to
+name. On an arrival and a departure the two are one name, because a
+person's presence is theirs to change. A seating is the message where they
+differ: the assistant wrote it and the newcomer is its subject, or the
+host wrote it and no participant is its author.
 
 **A named seat wakes, however narrowly it is seated.** Rule 4 already says
 this for a directed say: the one it names wakes, at any attention. A
@@ -226,7 +227,7 @@ deliver.
 **What `seat` does.** It takes a name from the reserve, and it is refused a
 name that is not there. It moves the entry from the reserve to the roster,
 at the attention the entry carries, then commits the `seated` message with
-`by` stamped as the assistant. The message routes as §3 says. The tool
+`from` stamped as the assistant and `subject` as the newcomer. The message routes as §3 says. The tool
 bounds its activation the way `summarise` bounds one:
 the reserve is finite and each name seats once, so once everybody who was
 on call is in the room, or a model keeps naming what is not there, the tool
@@ -302,7 +303,7 @@ session.unseat(inspector);
 **`seat` puts an agent on the roster, from the reserve or from anywhere.**
 The host may seat a value the reserve never held. The room refuses a name
 it already holds, and refuses the room's assistant. The `seated` message
-commits with no `by`, and it wakes the seat it names as §3 says.
+commits with no `from`, and it wakes the seat it names as §3 says.
 
 **`unseat` takes an agent off the roster, and the host alone may call
 it.** It aborts the activation in flight, if any, with Pi's own abort, the
@@ -389,10 +390,10 @@ this document makes loudly:
   it, an unseated one returns to it, and a name in both lists is refused
   (§1, §2);
 - the composing activation reads the reserve and holds `seat` alone, and a
-  seating lands as a message stamped `by` the assistant (§3, §4);
+  seating lands as a message stamped `from` the assistant (§3, §4);
 - a seating wakes the seat it names and nobody at `broadcast`, a seat at
   `presence` wakes too, and a host seating wakes its seat with nobody in
-  `by` (§3, §5);
+  `from` (§3, §5);
 - a seat already at work is steered by the seating and can direct a say at
   the newcomer (§3);
 - the exchange stays open through the composing activation, and the

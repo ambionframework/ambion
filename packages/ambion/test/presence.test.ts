@@ -146,7 +146,7 @@ describe('presence', () => {
 		await session.settled();
 
 		const arrival = (await session.messages())[0];
-		expect(arrival).toMatchObject({ kind: 'arrived', from: 'andrei' });
+		expect(arrival).toMatchObject({ kind: 'arrived', from: 'andrei', subject: 'andrei' });
 		expect(arrival && isSpoken(arrival)).toBe(false);
 		expect(arrival && 'text' in arrival).toBe(false);
 	});

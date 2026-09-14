@@ -91,21 +91,24 @@ export interface PresenceMessage {
 	wakes?: string[];
 	at: string;
 	/**
-	 * The participant whose presence changed: a person, stamped from the visit
-	 * the runtime observed, or the agent the runtime seated or unseated.
+	 * Who wrote it, the way every other kind reads `from`. A person writes
+	 * their own arrival and their own departure. The assistant writes a
+	 * seating it decided. A seating the host decided has no author: the host
+	 * is not a participant, and nothing on the record speaks for it.
 	 */
-	from: string;
+	from?: string;
+	/**
+	 * The participant whose presence changed: a person, stamped from the visit
+	 * the runtime observed, or the agent the runtime seated or unseated. On an
+	 * arrival and a departure it is the author, because a person's presence is
+	 * theirs to change.
+	 */
+	subject: string;
 	/**
 	 * How the room knew them, on `arrived` and `seated`. Replay rebuilds the
 	 * roster from the record, and a name without an identity is not a roster line.
 	 */
 	identity?: string;
-	/**
-	 * The assistant, when it did the seating. Absent when the host did. It is
-	 * the one message whose author and subject differ: `by` wrote it, `from`
-	 * is the seat it names.
-	 */
-	by?: string;
 	/** What wakes the seat, on `seated`. Absent means `broadcast`. */
 	attention?: Attention;
 	/** How the person reads, on `arrived`, when they said so. */
@@ -143,19 +146,15 @@ export function isSummary(message: Message): message is SummaryMessage {
 	return message.kind === 'summary';
 }
 
-export function isPresence(message: Message): message is PresenceMessage {
-	return !isSpoken(message) && !isSummary(message);
-}
+const PRESENCE_KINDS: ReadonlySet<string> = new Set<PresenceChange>([
+	'arrived',
+	'left',
+	'seated',
+	'unseated',
+]);
 
-/**
- * Who wrote a message, or nobody. For a person's message and an agent's say
- * that is `from`. A seating names its subject in `from` and its author in
- * `by`: the assistant when it did the seating, and nobody when the host did.
- */
-export function authorOf(message: Message): string | undefined {
-	if (!isPresence(message)) return message.from;
-	if (message.kind === 'seated' || message.kind === 'unseated') return message.by;
-	return message.from;
+export function isPresence(message: Message): message is PresenceMessage {
+	return PRESENCE_KINDS.has(message.kind);
 }
 
 /** Whether a seat is taking an activation. Runtime state, not a seating choice. */

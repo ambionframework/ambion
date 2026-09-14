@@ -11,7 +11,7 @@
  * (rule 2), and the steer is not on the message.
  */
 
-import { type Attention, authorOf, isSpoken, isSummary, type Message } from '../types.ts';
+import { type Attention, isSpoken, isSummary, type Message } from '../types.ts';
 import { answering, type RoomState } from './fold.ts';
 
 /** The attention scale, narrowest first. A seat hears what it is wide enough for. */
@@ -57,7 +57,7 @@ export function wakes(
 /** The seat a message names: a directed say names who it addresses, a seating names who it seats. */
 function targetOf(message: Message): string | undefined {
 	if (isSpoken(message)) return message.to;
-	return message.kind === 'seated' ? message.from : undefined;
+	return message.kind === 'seated' ? message.subject : undefined;
 }
 
 /**
@@ -75,13 +75,13 @@ export function routes(
 	state: RoomState,
 	live: ReadonlyMap<string, string[]>,
 ): string[] {
-	const author = authorOf(message);
+	const author = message.from;
 	const target = targetOf(message);
 	// The room changes before the message does: a seating's newcomer is on
 	// the roster the routing reads, so the seating wakes it.
 	const roster =
 		message.kind === 'seated'
-			? [...state.roster, { name: message.from, attention: message.attention ?? 'broadcast' }]
+			? [...state.roster, { name: message.subject, attention: message.attention ?? 'broadcast' }]
 			: state.roster;
 	const woken = roster
 		.filter((seat) => seat.name !== author && !live.has(seat.name))

@@ -145,8 +145,9 @@ live('the exchange', () => {
 
 		const messages = await session.messages();
 		const seatings = messages.filter(isPresence).filter((m) => m.kind === 'seated');
-		expect(seatings.map((m) => m.from)).toEqual(['permits']);
-		expect(seatings[0]).toMatchObject({ by: 'assistant', identity: permits.identity });
+		expect(seatings.map((m) => m.subject)).toEqual(['permits']);
+		// `from` is the author on every kind: the assistant decided this seating.
+		expect(seatings[0]).toMatchObject({ from: 'assistant', identity: permits.identity });
 		expect(session.seats().map((seat) => seat.name)).toContain('permits');
 		expect(session.seats().map((seat) => seat.name)).not.toContain('catering');
 		const answer = saidBy(messages, 'permits');

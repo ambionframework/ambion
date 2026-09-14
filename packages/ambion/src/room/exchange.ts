@@ -26,7 +26,7 @@
  * The design contract is `docs/exchange.md`; `docs/assistant.md` says what an
  * assistant makes of one.
  */
-import { type Exchange, isSpoken, type Message } from '../types.ts';
+import { type Exchange, isSpoken, type Message, type SpokenMessage } from '../types.ts';
 import type { Close } from '../wire.ts';
 
 /**
@@ -40,7 +40,8 @@ export function openExchange(
 ): Exchange | undefined {
 	const closedThrough = closes.at(-1)?.through ?? 0;
 	const question = messages.find(
-		(message) => message.seq > closedThrough && isSpoken(message) && isPerson(message.from),
+		(message): message is SpokenMessage =>
+			message.seq > closedThrough && isSpoken(message) && isPerson(message.from),
 	);
 	return question && { owner: question.from, from: question.seq, at: question.at };
 }

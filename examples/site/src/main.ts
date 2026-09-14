@@ -195,7 +195,8 @@ const span = (m: SummaryMessage) => `${m.covers.from}–${m.covers.through}`;
 function line(m: Message): string {
 	if (isSummary(m)) return `[${m.seq}] ∎ ${m.from} → ${m.to} (${span(m)}): ${m.text}`;
 	if (isSpoken(m)) return `[${m.seq}] ${m.from}${m.to ? ` → ${m.to}` : ''}: ${m.text}`;
-	return `[${m.seq}] · ${m.from} ${m.kind}${m.by ? ` by ${m.by}` : ''}`;
+	const by = m.from === undefined || m.from === m.subject ? '' : ` by ${m.from}`;
+	return `[${m.seq}] · ${m.subject} ${m.kind}${by}`;
 }
 
 async function record(): Promise<void> {
