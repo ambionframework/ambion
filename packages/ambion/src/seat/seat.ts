@@ -190,7 +190,7 @@ export class SeatActor implements SeatPort {
 	 * activation starts whichever call reached the room first.
 	 */
 	private async claim(id: string): Promise<{ expiry: number } | undefined> {
-		const claimed = await this.calls(() => this.room.lease({ activation: id, phase: 'running' }));
+		const claimed = await this.calls(() => this.room.lease({ activation: id, operation: 'claim' }));
 		return claimed === undefined || 'stale' in claimed ? undefined : claimed.ok;
 	}
 
@@ -207,7 +207,7 @@ export class SeatActor implements SeatPort {
 	 */
 	private async release(id: string, activation: Activation): Promise<void> {
 		const { reason } = activation;
-		await this.calls(() => this.room.lease({ activation: id, phase: 'ended', reason }));
+		await this.calls(() => this.room.lease({ activation: id, operation: 'release', reason }));
 	}
 
 	/**
@@ -216,7 +216,7 @@ export class SeatActor implements SeatPort {
 	 */
 	private async renew(activation: Activation): Promise<number | 'stale' | 'lost'> {
 		try {
-			const renewed = await this.room.lease({ activation: activation.id, phase: 'running' });
+			const renewed = await this.room.lease({ activation: activation.id, operation: 'renew' });
 			return 'stale' in renewed ? 'stale' : renewed.ok.expiry;
 		} catch {
 			return 'lost';
@@ -262,7 +262,7 @@ export class SeatActor implements SeatPort {
 		const { clock, room, seat, sessions } = this.context;
 		return {
 			view: () => this.room.view(id),
-			renew: () => this.room.lease({ activation: id, phase: 'running' }),
+			renew: () => this.room.lease({ activation: id, operation: 'renew' }),
 			build: (view: ActivationView, activation: Activation) => this.build(view, activation),
 			persist: (agent: PiAgent) => {
 				this.audit ??= sessions.open(`${room}:${seat}`, room);
@@ -279,8 +279,8 @@ export class SeatActor implements SeatPort {
 	 * when the model is asked, so a steer never joins the request it lands during.
 	 */
 	private build(view: ActivationView, activation: Activation): PiAgent {
-		const def = this.context.catalog.get(view.seat);
-		if (def === undefined) throw new Error(`'${view.seat}' is not in the runtime's catalog.`);
+		const def = this.context.catalog.get(view.spec.seat);
+		if (def === undefined) throw new Error(`'${view.spec.seat}' is not in the runtime's catalog.`);
 		const stream = this.context.stream;
 		return new Agent({
 			streamFn: (model, context, options) => {

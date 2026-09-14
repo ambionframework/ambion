@@ -25,9 +25,9 @@ import {
 	visitSession,
 } from '@ambionframework/ambion';
 import type {
-	Commit,
-	CommitResponse,
-	Lease,
+	CommitRequest,
+	CommitResult,
+	LeaseRequest,
 	LeaseResponse,
 	RunningRoom,
 	Transport,
@@ -198,11 +198,11 @@ export class RoomObject extends DurableObject<Env> {
 		return this.seatRoom().view(activation);
 	}
 
-	async commit(commit: Commit): Promise<CommitResponse> {
+	async commit(commit: CommitRequest): Promise<CommitResult> {
 		return this.seatRoom().commit(commit);
 	}
 
-	async lease(lease: Lease): Promise<LeaseResponse> {
+	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
 		return this.seatRoom().lease(lease);
 	}
 

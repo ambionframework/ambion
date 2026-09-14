@@ -11,7 +11,7 @@ import { binderOf, SAY, SEAT, SUMMARISE } from '../define.ts';
 import { refusal } from '../render.ts';
 import { builtinTools, toolContext } from '../tools/workspace.ts';
 import { type AgentDefinition, isAmbionTool, type Seq } from '../types.ts';
-import type { ActivationView, CommitResponse, SeatRoom } from '../wire.ts';
+import type { ActivationView, CommitResult, SeatRoom } from '../wire.ts';
 import type { Activation } from './activation.ts';
 
 /**
@@ -60,7 +60,7 @@ export interface Binding {
 	readonly activation: Activation;
 	readonly room: SeatRoom;
 	/** What a tool makes of the room's answer: a mark on the record, a refusal, or a lease that ended. */
-	landed(response: CommitResponse): AgentToolResult<Record<string, never>>;
+	landed(response: CommitResult): AgentToolResult<Record<string, never>>;
 }
 
 export function binding(activation: Activation, room: SeatRoom): Binding {
@@ -142,17 +142,18 @@ function sayTool(bound: Binding): AgentTool {
  * does not bind is the agent's own.
  */
 export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
-	if (view.tool === undefined) return [];
-	if (view.tool === SAY.name) {
+	const { grant } = view.spec;
+	if (grant.kind === 'none') return [];
+	if (grant.kind === 'say') {
 		return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
 	}
-	if (binderOf(view.tool) !== 'room') return boundTool(view.tool, def);
-	if (view.tool === SUMMARISE.name && view.closing) {
-		const attempt: SummaryAttempt = { ...view.closing, calls: 0 };
+	if (grant.kind === 'custom') return boundTool(grant.tool, def);
+	if (grant.kind === 'summary' && view.spec.cause === 'closed') {
+		const attempt: SummaryAttempt = { ...view.spec.closing, calls: 0 };
 		return [summariseTool(held, attempt)];
 	}
-	if (view.tool === SEAT.name && view.composing) {
-		const composing: Composing = { ...view.composing, seated: 0, calls: 0 };
+	if (grant.kind === 'seat' && view.spec.cause === 'opened') {
+		const composing: Composing = { ...view.spec.opening, seated: 0, calls: 0 };
 		return [seatTool(held, composing)];
 	}
 	return [];

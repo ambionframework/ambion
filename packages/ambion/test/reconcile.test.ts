@@ -170,7 +170,7 @@ describe('decide', () => {
 		];
 		const once = fold(owed);
 		expect(once.owed).toMatchObject([
-			{ person: 'priya', from: 2, through: 4, attempts: 1, notBefore: T0 + 31_000 },
+			{ person: 'priya', from: 2, through: 4, unsuccessfulAttempts: 1, notBefore: T0 + 31_000 },
 		]);
 		expect(decide(once, options({ now: T0 + 30_999 })).sends).toEqual([]);
 		expect(decide(once, options({ now: T0 + 30_999 })).alarmAt).toBe(T0 + 31_000);
@@ -180,7 +180,7 @@ describe('decide', () => {
 		// at the cap the room gives up: it writes the attempt it does not make,
 		// sends nothing, and waits on nothing
 		const capped = fold([...owed, failed(2, T0 + 40_000), failed(3, T0 + 100_000)]);
-		expect(capped.owed).toMatchObject([{ person: 'priya', attempts: 3 }]);
+		expect(capped.owed).toMatchObject([{ person: 'priya', unsuccessfulAttempts: 3 }]);
 		expect(decide(capped, options({ now: T0 + 1_000_000 }))).toMatchObject({
 			abandoned: [{ id: 'closed:4:assistant:4', phase: 'ended', reason: 'abandoned' }],
 			close: undefined,
@@ -209,7 +209,13 @@ describe('decide', () => {
 			ended('message:2:product:1', 'expired', T0 + 60_000),
 		]);
 		expect(expired.pending).toMatchObject([
-			{ id: 'message:2:product:2', seat: 'product', seq: 2, attempts: 1, notBefore: T0 + 90_000 },
+			{
+				id: 'message:2:product:2',
+				seat: 'product',
+				seq: 2,
+				unsuccessfulAttempts: 1,
+				notBefore: T0 + 90_000,
+			},
 		]);
 		expect(liveWork(expired, T0 + 60_000).exchange).toBe(true);
 		expect(decide(expired, options({ now: T0 + 60_000 }))).toMatchObject({
@@ -228,7 +234,7 @@ describe('decide', () => {
 			said(3, 'product', { activationId: 'message:2:product:1' }),
 			ended('message:2:product:1', 'expired', T0 + 60_000),
 		]);
-		expect(spoke.pending).toMatchObject([{ id: 'message:2:product:2', attempts: 1 }]);
+		expect(spoke.pending).toMatchObject([{ id: 'message:2:product:2', unsuccessfulAttempts: 1 }]);
 		// a lease that stood down answers every message it heard, and every one its view held
 		const stood = fold([
 			...opened(),
@@ -246,7 +252,7 @@ describe('decide', () => {
 			ended('message:2:product:3', 'expired', T0 + 100_000),
 		];
 		const capped = fold(tried);
-		expect(capped.pending).toMatchObject([{ id: 'message:2:product:4', attempts: 3 }]);
+		expect(capped.pending).toMatchObject([{ id: 'message:2:product:4', unsuccessfulAttempts: 3 }]);
 		expect(decide(capped, options({ now: T0 + 100_000 }))).toMatchObject({
 			abandoned: [{ id: 'message:2:product:4', phase: 'ended', reason: 'abandoned' }],
 			close: undefined,
@@ -283,7 +289,7 @@ describe('decide', () => {
 			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }, 4),
 		]);
 		expect(window.pending).toMatchObject([
-			{ id: 'message:4:product:1', seat: 'product', attempts: 0 },
+			{ id: 'message:4:product:1', seat: 'product', unsuccessfulAttempts: 0 },
 		]);
 		// a lease that heard 4 before it stood down answers it
 		const heard = fold([
@@ -479,7 +485,7 @@ describe('liveWork', () => {
 			lease({ id: 'closed:3:assistant:1', phase: 'running', ...live }),
 			lease({ id: 'closed:3:assistant:1', phase: 'ended', reason: 'failed', at }),
 		]);
-		expect(backoff.owed).toMatchObject([{ attempts: 1, notBefore: T0 + 30_000 }]);
+		expect(backoff.owed).toMatchObject([{ unsuccessfulAttempts: 1, notBefore: T0 + 30_000 }]);
 		for (const now of [T0, T0 + 29_999, T0 + 30_000]) {
 			expect([...liveWork(backoff, now).seats.keys()]).toEqual(['assistant']);
 			expect(liveWork(backoff, now).rest).toBe(false);

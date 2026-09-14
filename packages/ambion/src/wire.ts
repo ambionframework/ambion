@@ -16,6 +16,38 @@
  */
 import type { Attention, ExchangeEvent, Message, Seq } from './types.ts';
 
+type ActivationIdentity = { readonly id: string; readonly seat: string; readonly attempt: number };
+type ActivationOpening = { readonly person: string; readonly from: Seq; readonly limit: number };
+type ActivationClosing = { readonly person: string; readonly from: Seq; readonly through: Seq };
+
+/** The authority a room grants to a recorded activation. */
+export type ActivationSpec =
+	| (ActivationIdentity & {
+			readonly cause: 'message';
+			readonly through: Seq;
+			readonly grant: { readonly kind: 'say'; readonly tool: 'say' };
+	  })
+	| (ActivationIdentity & {
+			readonly cause: 'opened';
+			readonly through: Seq;
+			readonly opening: ActivationOpening;
+			readonly grant:
+				| { readonly kind: 'seat'; readonly tool: 'seat' }
+				| { readonly kind: 'say'; readonly tool: 'say' }
+				| { readonly kind: 'none' }
+				| { readonly kind: 'custom'; readonly tool: string };
+	  })
+	| (ActivationIdentity & {
+			readonly cause: 'closed';
+			readonly through: Seq;
+			readonly closing: ActivationClosing;
+			readonly grant:
+				| { readonly kind: 'summary'; readonly tool: 'summarise' }
+				| { readonly kind: 'say'; readonly tool: 'say' }
+				| { readonly kind: 'none' }
+				| { readonly kind: 'custom'; readonly tool: string };
+	  });
+
 // -- entries on the journal beside the messages -----------------------------------
 
 /** `Omit` over each member of a union, so a discriminated body keeps its shape. */
@@ -171,25 +203,12 @@ export interface SeatPort {
 // -- a seat reaching its room -------------------------------------------------
 
 export interface ActivationView {
-	activation: string;
-	seat: string;
+	/** The recorded activation and the boundary its input reads through. */
+	spec: ActivationSpec;
 	/** The agent's `provider/model-id`, resolved on the seat side. */
 	model: string;
-	/** The last place on the record: what this view held, and what a commit reads through. */
-	lastSeq: Seq;
 	systemPrompt: string;
 	context: string;
-	/**
-	 * The one tool this activation binds, by name, or nothing where it binds
-	 * none. A message causes an activation that speaks, so it names `say`; an
-	 * event of the exchange causes one that names what the seat's role
-	 * answers with. Three binders answer a name, and `binderOf` says which.
-	 */
-	tool?: string;
-	/** The exchange this activation closes, when a close caused it. */
-	closing?: { person: string; from: Seq; through: Seq };
-	/** The exchange this activation composes the room for, when the open caused it. */
-	composing?: { person: string; from: Seq; limit: number };
 }
 
 /** The request the lease answers is gone: the lease ended, or the room did. */
@@ -205,21 +224,20 @@ export type Intent =
 	| { kind: 'summary'; to: string; text: string; covers: { from: Seq; through: Seq } }
 	| { kind: 'seated'; name: string };
 
-export interface Commit {
+export interface CommitRequest {
 	activation: string;
 	key: string;
 	readThrough?: Seq;
 	intent: Intent;
 }
 
-export type CommitResponse =
+export type CommitResult =
 	{ committed: Message } | { missed: Message[] } | { refused: string } | Stale;
 
-export interface Lease {
-	activation: string;
-	phase: 'running' | 'ended';
-	reason?: EndReason;
-}
+export type LeaseRequest =
+	| { activation: string; operation: 'claim' }
+	| { activation: string; operation: 'renew' }
+	| { activation: string; operation: 'release'; reason: EndReason };
 
 /**
  * The lease holds, with its expiry and the last place on the record. The seat
@@ -231,8 +249,8 @@ export type LeaseResponse = { ok: { expiry: number; lastSeq: Seq } } | Stale;
 
 export interface SeatRoom {
 	view(activation: string): Promise<ViewResponse>;
-	commit(commit: Commit): Promise<CommitResponse>;
-	lease(lease: Lease): Promise<LeaseResponse>;
+	commit(commit: CommitRequest): Promise<CommitResult>;
+	lease(lease: LeaseRequest): Promise<LeaseResponse>;
 }
 
 // -- checks --------------------------------------------------------------------

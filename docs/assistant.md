@@ -184,7 +184,8 @@ can open another exchange while the assistant drafts. It does not change
 that draft's range or cause a freshness conflict.
 
 **The room checks authority at publication.** A summary requires a live
-`closed` activation for the recorded close. Its author must be the close's
+`closed` activation whose specification grants `summarise` for the recorded
+close. Its author must be the close's
 writer, its recipient must be the owner, and its range must match exactly.
 The room refuses a second summary for that exchange. Retrying the same
 journal key returns the original commit through journal idempotency.

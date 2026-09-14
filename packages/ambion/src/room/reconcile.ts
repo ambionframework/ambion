@@ -14,7 +14,7 @@
 import type { Close, LeaseChange } from '../wire.ts';
 import { draftOver } from './assistant.ts';
 import { answering, type RoomState } from './fold.ts';
-import { type Due, isExpired, isLive, parseId, seatOf } from './lease.ts';
+import { isExpired, isLive, type PendingActivation, parseId, seatOf } from './lease.ts';
 import { givesUp } from './rules.verified.ts';
 
 export interface ReconcileOptions {
@@ -150,8 +150,8 @@ function forgotten(state: RoomState, options: ReconcileOptions): string[] {
 }
 
 /** An activation the room owes whose attempts reached the cap. */
-const capped = (owed: Due, options: ReconcileOptions): boolean =>
-	givesUp(owed.attempts, options.attempts);
+const capped = (owed: PendingActivation, options: ReconcileOptions): boolean =>
+	givesUp(owed.unsuccessfulAttempts, options.attempts);
 
 /**
  * The attempt at each activation at the cap, ended before it starts. The
@@ -195,7 +195,7 @@ function closing(state: RoomState, work: LiveWork, now: number): Reconciliation[
 }
 
 /** The activations the room still tries: what it owes, less what it gave up on. */
-const owing = (state: RoomState, options: ReconcileOptions): Due[] =>
+const owing = (state: RoomState, options: ReconcileOptions): PendingActivation[] =>
 	state.due.filter((owed) => !capped(owed, options));
 
 /**
@@ -209,7 +209,7 @@ const owing = (state: RoomState, options: ReconcileOptions): Due[] =>
  *
  * A wake a message decided and a draft a close owes wait the same way.
  */
-function dueAt(owed: Due, options: ReconcileOptions): number {
+function dueAt(owed: PendingActivation, options: ReconcileOptions): number {
 	const backoff = owed.notBefore ?? options.now;
 	if (backoff > options.now) return backoff;
 	const sent = options.sent.get(owed.id);

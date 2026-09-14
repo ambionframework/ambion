@@ -6,7 +6,8 @@
  * mints an id, so a wake is safe to send twice, a retried commit lands once,
  * and a request from an activation whose lease ended is refused because the
  * fold says so. The id carries the cause, so a reader asks the id what the
- * activation is for and never asks the roster.
+ * activation's durable cause, seat, and attempt. `activation.ts` combines
+ * those facts with current bindings to derive its authority.
  *
  * A lease has two phases. `running` is a claim or a renewal, with an
  * expiry; `ended` is terminal, with a reason. The last change for an id wins,
@@ -43,7 +44,7 @@ import {
  * What caused an activation. Three things cause one, and the journal holds
  * all three: a message the room delivered, the question that opened an
  * exchange, and a close that owes a summary. The room schedules them the
- * same way, so `Due` reads the same for each.
+ * same way, so `PendingActivation` reads the same for each.
  *
  * `opened` and `closed` name the exchange's two events. `Kind` keeps
  * `close` for the entry a close writes; a cause reads `closed`, for the
@@ -144,26 +145,32 @@ export const isLive = (lease: LeaseHold, now: number): boolean =>
  * question that opened an exchange, and a close that owes a summary. The
  * room schedules all three the same way, so all three read as this.
  */
-export interface Due {
+export interface PendingActivation {
+	/** The recorded cause of this activation. */
+	cause: Cause;
+	/** The journal position of the cause. */
+	position: Seq;
+	/** The next attempt number. */
+	attempt: number;
 	/** The id of the next attempt. Nothing mints it: the journal derives it. */
 	id: string;
 	/** The seat that takes the activation. */
 	seat: string;
 	/** How many activations took it and came to nothing. */
-	attempts: number;
+	unsuccessfulAttempts: number;
 	/** When the next attempt may start, or undefined when it may start now. */
 	notBefore: number | undefined;
 }
 
 /** A wake on the journal that no lease has answered. */
-export interface PendingWake extends Due {
+export interface PendingWake extends PendingActivation {
 	seq: Seq;
 	/** When the message was written, ISO. */
 	at: string;
 }
 
 /** What the fold needs to schedule an activation the room owes. */
-export interface DueOptions {
+export interface PendingActivationOptions {
 	/** How long the room waits before the next attempt, after `attempt` failed ones. */
 	backoff(attempt: number): number;
 }
@@ -199,7 +206,7 @@ export function pendingWakes(
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
 	roster: ReadonlySet<string>,
-	options: DueOptions,
+	options: PendingActivationOptions,
 	causeOf: CauseOf,
 ): PendingWake[] {
 	const bySeat = leasesBySeat(leases, roster);
@@ -289,14 +296,14 @@ function statusOf(
 	message: Message,
 	seat: string,
 	taken: readonly LeaseHold[],
-	options: DueOptions,
+	options: PendingActivationOptions,
 	cause: Cause,
 ): PendingWake | undefined {
 	// A lease that answered the message settles it, whatever the attempts say.
 	if (taken.some((lease) => !answersNothing(lease))) return undefined;
 	const failed = taken.filter((lease) => cameToNothing(lease));
 	return {
-		...dueFrom(cause, message.seq, seat, failed, options),
+		...pendingActivation(cause, message.seq, seat, failed, options),
 		seq: message.seq,
 		at: message.at,
 	};
@@ -308,21 +315,25 @@ function statusOf(
  * causes fold the same way, so both read this, and the id of every
  * activation the room owes is derived here.
  */
-export function dueFrom(
+export function pendingActivation(
 	cause: Cause,
 	position: Seq,
 	seat: string,
 	failed: readonly LeaseHold[],
-	options: DueOptions,
-): Due {
-	const attempts = failed.length;
-	const attempt = nextAttempt(attempts);
+	options: PendingActivationOptions,
+): PendingActivation {
+	const unsuccessfulAttempts = failed.length;
+	const attempt = nextAttempt(unsuccessfulAttempts);
 	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
 	return {
 		id: activationId(cause, position, seat, attempt),
+		cause,
+		position,
 		seat,
-		attempts,
-		notBefore: attempts === 0 ? undefined : last + options.backoff(attempts),
+		attempt,
+		unsuccessfulAttempts,
+		notBefore:
+			unsuccessfulAttempts === 0 ? undefined : last + options.backoff(unsuccessfulAttempts),
 	};
 }
 

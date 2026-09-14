@@ -136,13 +136,17 @@ describe('the shapes the room binds', () => {
 	 */
 	const agent = defineAgent({ name: 'solo', identity: 'Answers.', instructions: '.', model: 'm' });
 	const view: ActivationView = {
-		activation: 'message:1:solo:1',
-		seat: 'solo',
+		spec: {
+			id: 'message:1:solo:1',
+			seat: 'solo',
+			attempt: 1,
+			cause: 'message',
+			through: 1,
+			grant: { kind: 'say', tool: 'say' },
+		},
 		model: 'm',
-		lastSeq: 1,
 		systemPrompt: '',
 		context: '',
-		tool: 'say',
 	};
 	const held = {} as Parameters<typeof toolsFor>[2];
 
@@ -153,23 +157,63 @@ describe('the shapes the room binds', () => {
 	 */
 	it('leaves the shapes it binds as it found them', () => {
 		const before = JSON.stringify([SAY, SUMMARISE, SEAT]);
-		for (const [name, over] of [
-			['say', {}],
-			['summarise', { closing: { person: 'priya', from: 1, through: 2 } }],
-			['seat', { composing: { person: 'priya', from: 1, limit: 1 } }],
+		for (const spec of [
+			view.spec,
+			{
+				id: 'closed:2:solo:1',
+				seat: 'solo',
+				attempt: 1,
+				cause: 'closed' as const,
+				through: 2,
+				closing: { person: 'priya', from: 1, through: 2 },
+				grant: { kind: 'summary' as const, tool: 'summarise' as const },
+			},
+			{
+				id: 'opened:1:solo:1',
+				seat: 'solo',
+				attempt: 1,
+				cause: 'opened' as const,
+				through: 1,
+				opening: { person: 'priya', from: 1, limit: 1 },
+				grant: { kind: 'seat' as const, tool: 'seat' as const },
+			},
 		] as const) {
-			toolsFor({ ...view, tool: name as string, ...over }, agent, held);
-			toolsFor({ ...view, tool: name as string, ...over }, agent, held);
+			toolsFor({ ...view, spec }, agent, held);
+			toolsFor({ ...view, spec }, agent, held);
 		}
 		expect(JSON.stringify([SAY, SUMMARISE, SEAT])).toBe(before);
 	});
 
 	it.each([
-		['say', {}, SAY],
-		['summarise', { closing: { person: 'priya', from: 1, through: 2 } }, SUMMARISE],
-		['seat', { composing: { person: 'priya', from: 1, limit: 1 } }, SEAT],
-	])('builds %s from the shape it published', (name, over, shape) => {
-		const [bound] = toolsFor({ ...view, tool: name as string, ...over }, agent, held);
+		['say', view.spec, SAY],
+		[
+			'summarise',
+			{
+				id: 'closed:2:solo:1',
+				seat: 'solo',
+				attempt: 1,
+				cause: 'closed' as const,
+				through: 2,
+				closing: { person: 'priya', from: 1, through: 2 },
+				grant: { kind: 'summary' as const, tool: 'summarise' as const },
+			},
+			SUMMARISE,
+		],
+		[
+			'seat',
+			{
+				id: 'opened:1:solo:1',
+				seat: 'solo',
+				attempt: 1,
+				cause: 'opened' as const,
+				through: 1,
+				opening: { person: 'priya', from: 1, limit: 1 },
+				grant: { kind: 'seat' as const, tool: 'seat' as const },
+			},
+			SEAT,
+		],
+	])('builds %s from the shape it published', (name, spec, shape) => {
+		const [bound] = toolsFor({ ...view, spec }, agent, held);
 		expect(bound?.name).toBe(name);
 		expect(bound?.parameters).toBe(shape.parameters);
 	});

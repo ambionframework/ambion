@@ -20,18 +20,19 @@ export type { RunningRoom, Transport } from './host/runtime.ts';
 export type { SeatContext } from './seat/seat.ts';
 export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {
+	ActivationSpec,
 	ActivationView,
 	Checkpoint,
 	Close,
-	Commit,
-	CommitResponse,
+	CommitRequest,
+	CommitResult,
 	Composition,
 	EndReason,
 	Fence,
 	Intent,
-	Lease,
 	LeaseChange,
 	LeaseHold,
+	LeaseRequest,
 	LeaseResponse,
 	Role,
 	Seating,

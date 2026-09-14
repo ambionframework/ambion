@@ -136,7 +136,7 @@ export class Activation {
 			if ('stale' in opened || this.cancelled) return false;
 			const view = opened.view;
 			// A fresh view hands the seat the whole record: heard up to here.
-			this.heardThrough = view.lastSeq;
+			this.heardThrough = view.spec.through;
 			this.pending = [];
 			this.held = [];
 			this.askedModel = false;
@@ -150,7 +150,7 @@ export class Activation {
 			// An aborted activation stays cancelled, and one that does not rebuild
 			// is a single pass whatever landed: a summarising activation answers its
 			// fixed closed exchange.
-			if (this.cancelled || view.tool !== 'say') return false;
+			if (this.cancelled || view.spec.grant.kind !== 'say') return false;
 			// Awaited here, so a renewal that fails is caught below and not returned as a rejection.
 			return await this.moved(agent);
 		} catch (error) {

@@ -15,7 +15,7 @@ import {
 	startSession,
 	visitSession,
 } from '../src/index.ts';
-import { type CommitResponse, inProcessTransport, type Transport } from '../src/transport.ts';
+import { type CommitResult, inProcessTransport, type Transport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { collect, roomName, storedOf } from './support/room.ts';
 import {
@@ -76,7 +76,7 @@ describe('a room in doubt', () => {
 		const opened = await memory.open();
 		const clock = fakeClock();
 		const base = inProcessTransport();
-		const replies: CommitResponse[] = [];
+		const replies: CommitResult[] = [];
 		let retried = false;
 		let confirmed: () => void = () => {};
 		const confirmation = new Promise<void>((resolve) => {

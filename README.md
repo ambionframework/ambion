@@ -52,7 +52,7 @@ in ordering, replay, and routing.
 ### 2. Conversation uses optimistic concurrency
 
 Ordinary speech carries `readThrough`, the last sequence the activation has
-seen. If the record advanced, `RoomJournal.commit()` refuses the draft and
+seen. If the record advanced, the room refuses the draft and
 returns the missed messages, and the activation rebuilds from a fresh room
 view.
 
@@ -123,9 +123,11 @@ persistence, model resolution, seat execution, and workspace storage from
 room semantics.
 
 [`wire.ts`](packages/ambion/src/wire.ts) restricts room/seat traffic to plain
-JSON values and four operations: `wake`, `view`, `commit`, and `lease`. Seats
-run in-process today, but the protocol does not depend on shared object
-identity. It is shaped for process-separated agents later.
+JSON values and five operations: `wake`, `cut`, `view`, `commit`, and `lease`.
+An `ActivationSpec` identifies the input and tool granted to one activation.
+The room uses that specification to render views and validate writes; the
+executor uses it to bind tools. In-process and Cloudflare hosts share this
+contract.
 
 Workspace access follows the same design: an agent gets workspace tools only
 when its definition names a workspace, and each call resolves access through

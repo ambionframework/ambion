@@ -5,7 +5,6 @@
  * seat reads in one process is the view it reads in another.
  */
 
-import { SAY } from '../define.ts';
 import {
 	type PersonView,
 	type RoleView,
@@ -14,16 +13,9 @@ import {
 	renderTurnContext,
 	type SeatSpeaking,
 } from '../render.ts';
-import {
-	type AgentDefinition,
-	type Exchange,
-	isSpoken,
-	type SeatInfo,
-	type Seq,
-} from '../types.ts';
-import type { ActivationView, Role } from '../wire.ts';
+import type { AgentDefinition, SeatInfo, Seq } from '../types.ts';
+import type { ActivationSpec, ActivationView } from '../wire.ts';
 import type { RoomState } from './fold.ts';
-import { parseId } from './lease.ts';
 
 /** What the view is built from: the fold, and what the room holds beside it. */
 export interface RoomFacts {
@@ -62,32 +54,28 @@ export function seatsOf(facts: Pick<RoomFacts, 'name' | 'state' | 'live'>): Seat
 
 /** The view one activation reads: two rendered strings, the model id, and the tool. */
 export function viewOf(
-	id: string,
-	seat: string,
+	spec: ActivationSpec,
 	def: AgentDefinition,
 	facts: RoomFacts,
 ): ActivationView {
 	const state = facts.state;
-	const role = state.roster.find((s) => s.name === seat)?.role;
-	const { tool, closing, composing } = toolOf(id, role, facts);
+	const role = state.roster.find((s) => s.name === spec.seat)?.role;
+	const tool = spec.grant.kind === 'none' ? undefined : spec.grant.tool;
+	const closing = spec.cause === 'closed' ? spec.closing : undefined;
+	const composing = spec.cause === 'opened' ? spec.opening : undefined;
 	const speaking: SeatSpeaking = {
 		def,
 		...(role === undefined ? {} : { role: roleView(role.name, facts) }),
-		...(tool === undefined ? {} : { tool }),
+		tool,
 		closing: closing && { ...closing, preferences: state.people.get(closing.person)?.preferences },
 		composing: composing && { ...composing, reserve: reserved(facts) },
 	};
-	const room = roomView(facts, closing);
+	const room = roomView(facts, spec.grant.kind === 'say' ? undefined : closing);
 	return {
-		activation: id,
-		seat,
+		spec,
 		model: def.model,
-		lastSeq: closing?.through ?? state.lastSeq,
 		systemPrompt: renderSystemPrompt(speaking, room),
 		context: renderTurnContext(speaking, room),
-		...(tool === undefined ? {} : { tool }),
-		...(closing ? { closing } : {}),
-		...(composing ? { composing } : {}),
 	};
 }
 
@@ -95,53 +83,6 @@ export function viewOf(
 function roleView(name: string, facts: RoomFacts): RoleView {
 	const guidance = facts.guidance(name);
 	return { name, ...(guidance === undefined ? {} : { guidance }) };
-}
-
-type Bound = {
-	tool?: string;
-	closing?: ActivationView['closing'];
-	composing?: ActivationView['composing'];
-};
-
-/**
- * What an activation is for, read off its cause, the seat's role and the
- * fold. A message causes an activation that speaks. An event of the
- * exchange causes one that holds what the seat's role answers with, over
- * what the event stands for.
- *
- * A draft id names one close; the tool it holds covers every close its
- * person is owed, so a close that joined the draft after the claim is read
- * too.
- */
-function toolOf(id: string, role: Role | undefined, facts: RoomFacts): Bound {
-	const parsed = parseId(id);
-	if (parsed === undefined || parsed.cause === 'message') return { tool: SAY.name };
-	const tool = role?.answers[parsed.cause];
-	if (tool === undefined) return {};
-	return parsed.cause === 'closed'
-		? closingOver(tool, parsed.position, facts)
-		: composingOver(tool, parsed.position, facts);
-}
-
-/** The exchange this activation closes, and the tool it writes the summary with. */
-function closingOver(tool: string, position: Seq, facts: RoomFacts): Bound {
-	const state = facts.state;
-	const owed = state.owed.find((o) => o.through === position);
-	if (owed === undefined) return {};
-	return { tool, closing: { person: owed.person, from: owed.from, through: owed.through } };
-}
-
-/** The exchange this activation composes the room for, and the tool it seats with. */
-function composingOver(tool: string, position: Seq, facts: RoomFacts): Bound {
-	const state = facts.state;
-	// A composing seat reads the question that opened the exchange, and a
-	// question is something a person said.
-	const question = state.messages.find((m) => m.seq === position);
-	if (question === undefined || !isSpoken(question)) return {};
-	return {
-		tool,
-		composing: { person: question.from, from: question.seq, limit: state.reserve.length },
-	};
 }
 
 /** The reserve as the assistant reads it: a name and an identity per agent. */
@@ -152,7 +93,6 @@ function reserved(facts: RoomFacts): { name: string; identity: string }[] {
 /** What the prose is given of this room, built fresh for each activation. */
 function roomView(facts: RoomFacts, closing?: { from: Seq; through: Seq }): RoomView {
 	const state = facts.state;
-	const exchange: Exchange | undefined = state.exchange;
 	return {
 		name: facts.name,
 		goal: state.composition?.goal,
@@ -165,7 +105,7 @@ function roomView(facts: RoomFacts, closing?: { from: Seq; through: Seq }): Room
 				: state.messages.filter(
 						(message) => message.seq >= closing.from && message.seq <= closing.through,
 					),
-		exchange: exchange && { owner: exchange.owner, from: exchange.from },
+		exchange: state.exchange && { owner: state.exchange.owner, from: state.exchange.from },
 	};
 }
 

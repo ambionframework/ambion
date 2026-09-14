@@ -72,12 +72,12 @@ import {
 } from './types.ts';
 import type {
 	Close,
-	Commit,
-	CommitResponse,
+	CommitRequest,
+	CommitResult,
 	Composition,
 	EndReason,
-	Lease,
 	LeaseChange,
+	LeaseRequest,
 	LeaseResponse,
 	Seating,
 	SeatPort,
@@ -767,11 +767,9 @@ class RoomHost implements Session, RunningRoom {
 	private commitMessage(
 		key: string,
 		command: Extract<RoomCommand, { type: 'deliver' | 'presence' | 'commit' }>,
-		readThrough?: Seq,
 	): Promise<Committed<Body<Message>, Body<Message>>> {
 		return this.journal.commit<Body<Message>>({
 			key,
-			...(readThrough === undefined ? {} : { readThrough }),
 			draft: () => {
 				const event = this.acceptedEvent(decide(this.state(), command, this.now()));
 				if (event === undefined) throw new Error('The room command did not propose a message.');
@@ -954,11 +952,11 @@ class RoomHost implements Session, RunningRoom {
 		return answerView(this, id);
 	}
 
-	commit(commit: Commit): Promise<CommitResponse> {
+	commit(commit: CommitRequest): Promise<CommitResult> {
 		return answerCommit(this, commit);
 	}
 
-	lease(lease: Lease): Promise<LeaseResponse> {
+	lease(lease: LeaseRequest): Promise<LeaseResponse> {
 		return answerLease(this, lease);
 	}
 
@@ -970,12 +968,8 @@ class RoomHost implements Session, RunningRoom {
 	}
 
 	/** One operation on the room's commit queue, with the wakes the room routes. */
-	write(commit: Commit): Promise<Committed<Body<Message>, Body<Message>>> {
-		return this.commitMessage(
-			commit.key,
-			{ type: 'commit', commit },
-			commit.intent.kind === 'summary' ? undefined : commit.readThrough,
-		);
+	write(commit: CommitRequest): Promise<Committed<Body<Message>, Body<Message>>> {
+		return this.commitMessage(commit.key, { type: 'commit', commit });
 	}
 
 	private acceptedEvent<K extends Kind>(decision: RoomDecision<K>) {
@@ -985,14 +979,22 @@ class RoomHost implements Session, RunningRoom {
 		return decision.event;
 	}
 
-	async claim(id: string): Promise<LeaseResponse> {
+	claim(id: string): Promise<LeaseResponse> {
+		return this.hold(id, 'claim');
+	}
+
+	renew(id: string): Promise<LeaseResponse> {
+		return this.hold(id, 'renew');
+	}
+
+	private async hold(id: string, type: 'claim' | 'renew'): Promise<LeaseResponse> {
 		let expiry: number | undefined;
 		const written = await this.journal.write('lease', () => {
 			if (this.gone()) return undefined;
 			const wake = this.runtime.wake;
 			const decision = decide(
 				this.state(),
-				{ type: 'claim', id, expiry: wake.expiry, deadline: wake.deadline },
+				{ type, id, expiry: wake.expiry, deadline: wake.deadline },
 				this.now(),
 			);
 			if ('refusal' in decision) return undefined;
