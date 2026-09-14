@@ -311,7 +311,7 @@ to say so.
 assistant as configuration, and the README's claim about agents as the
 unit of ownership holds in the code.
 
-## 3. Split `session.ts` by phase
+## 3. Split `session.ts` by phase — done
 
 `next.md` §4 asks for this split, and names three faces. This item names
 a different line to cut along.
@@ -341,12 +341,12 @@ runtime. The three calls a seat makes become functions over that value.
 `next.md` §1 names the lifecycle field this needs, and it stays the first
 part of this item.
 
-**What it came to.** — done. `Phase` replaced the three booleans.
-`answers.ts` holds the seat's three calls over `Answering`: the room as a
-value, and nine behaviours. `room/routing.ts` holds the routing, which
-`session.ts` and `seat/seat.ts` had between them. `decide` gained `forget`
-and `checkpoint`, so a pass decides once and applies once. `session.ts` is
-1279 lines, from 1507.
+**What it came to.** `Phase` replaced the three booleans. `answers.ts`
+holds the seat's three calls over `Answering`: the room as a value, and
+nine behaviours. `room/routing.ts` holds the routing, which `session.ts`
+and `seat/seat.ts` had between them. `decide` gained `forget` and
+`checkpoint`, so a pass decides once and applies once. `session.ts` went
+from 1507 lines to 1279.
 
 **What did not move, and why.** `settle` reads the state where it runs,
 because the pass calls it after a write that failed and the record moved.
@@ -354,9 +354,17 @@ A decision taken before the write would be stale there. The room's
 reaction to an entry shares `sentAt` and `reportedRest` with the pass, so
 `backlog.md` §3 holds the reason those stay together.
 
-**What is left.** `next.md` §4 asked for 600 lines, and this stops at 1279. The three largest sections are the room's construction (158), what
-it hears (156) and control (148). Item 8 thins the first, and no item yet
-names a cut for the other two.
+**What is left.** `next.md` §4 asked for 600 lines, and `session.ts` stands
+at 1299 with every item merged. Items 7, 8 and 9 each took names out of it
+and each put a line back, so the file holds the same work in fewer
+concepts and about the same length.
+
+The three largest sections are what the room hears (156), the reconcile
+loop (132) and control (146). No item names a cut for them. The reason is
+the one `backlog.md` §3 records: what the room hears and what the pass
+decides share `sentAt` and `reportedRest`, and a file boundary between
+them would spread mutable state rather than remove it. A cut here needs
+that state to go first, and no item in this plan takes it.
 
 ## 4. One order for the messages and the entries — done
 
@@ -797,6 +805,30 @@ answers and the tool it holds at each. The assistant is the first role,
 and the runtime reads no seat's name to route, to close, or to bind a
 tool.
 
-**The measure.** The core loses about 1500 lines and four vocabularies:
-the wake and the draft, the author and the subject, six tests for what is
-live, and five retry policies. One privileged seat becomes configuration.
+**The measure, as predicted.** The core loses about 1500 lines and four
+vocabularies: the wake and the draft, the author and the subject, six
+tests for what is live, and five retry policies. One privileged seat
+becomes configuration.
+
+**The measure, as it came out.** The four vocabularies went, and the line
+count did not.
+
+| Vocabulary                 | What replaced it                     | Item |
+| -------------------------- | ------------------------------------ | ---- |
+| A wake and a draft         | One activation the room owes         | 1    |
+| One privileged seat        | `defineRole`, and `ASSISTANT` is one | 2    |
+| An author and a subject    | `from` and `subject` on every kind   | 7    |
+| Six tests for what is live | `liveWork`                           | 8    |
+| Five retry policies        | Three concepts, and two named once   | 9    |
+
+The core stood at 6706 lines before item 6 and stands at 6352 after item
+10: 354 fewer, where the plan said about 1500. The two packages took 1557
+lines out of it, and the items after them put about 1200 back. A role is a
+mechanism the core did not have, `answers.ts`, `room/routing.ts` and
+`transport.ts` are files it did not have, and each carries the prose this
+repository asks of a file.
+
+The prediction counted what came out and not what a replacement costs. The
+count of concepts is the measure that held, and it is the one the thesis
+argues for: what a reader has to hold at once, and not how much there is
+to read.
