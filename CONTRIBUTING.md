@@ -4,7 +4,7 @@ Requires Node **>= 22.19** (or >= 23.6) and pnpm 10.
 
 ```sh
 pnpm install
-pnpm check      # build, typecheck, lint, test — the gate CI runs
+pnpm check      # format, build, typecheck, lint, test — the gate CI runs
 pnpm format     # biome --write, then prettier --write
 ```
 

@@ -14,7 +14,7 @@
 		"test": "turbo test",
 		"test:live": "pnpm -r run test:live",
 		"chaos": "AMBION_CHAOS=all AMBION_SEEDS=200 pnpm --filter @ambionframework/ambion exec vitest run test/chaos.test.ts test/hosts.test.ts test/property.test.ts test/consistency.test.ts test/split.test.ts",
-		"check": "turbo run build check:types && pnpm run check:lint && turbo run test",
+		"check": "pnpm run check:format && turbo run build check:types && pnpm run check:lint && turbo run test",
 		"check:lint": "biome lint . --error-on-warnings && knip",
 		"check:format": "prettier . --cache --check",
 		"check:knip": "knip",

@@ -249,13 +249,16 @@ Root commands:
 | `pnpm check:lint`          | `biome lint . --error-on-warnings` then `knip`                               |
 | `pnpm check:format`        | `prettier . --check`                                                         |
 | `pnpm check:lemmascript`   | Verify the files in `LemmaScript-files.txt` with Dafny; needs Dafny on PATH  |
-| `pnpm check`               | build → types → lint → test, in that order                                   |
+| `pnpm check`               | format → build → types → lint → test, in that order                          |
 | `pnpm format`              | `biome check --write` then `prettier --write`                                |
 | `pnpm version:set <x.y.z>` | Set one version across publishable packages                                  |
 | `pnpm publish:packages`    | Publish to GitHub Packages                                                   |
 
 `pnpm check` is what CI runs and what a contributor runs before pushing. There
-is one gate, so nothing drifts apart. The contracts are the one step beside
+is one gate, so nothing drifts apart. It runs the checks in CI's own order,
+and it stops at the first one that fails: a run that prints one summary
+where you expected two failed before it reached the end. Read the exit
+code, and not the output. The contracts are the one step beside
 it: CI runs them in their own job, and a contributor with Dafny runs
 `pnpm check:lemmascript`.
 

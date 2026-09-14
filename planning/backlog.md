@@ -138,17 +138,6 @@ the Room object exposes `exchange()` alone.
 
 **Fix.** Give the Room object a `quiet()` over RPC, and wait on it.
 
-### 8. The local gate and CI disagree
-
-**What.** `pnpm check` omits `check:format`. The CI `check` job runs it.
-`CLAUDE.md` and `CONTRIBUTING.md` both promise "the gate CI runs".
-
-**Why.** A contributor with a green local check can fail CI on formatting.
-
-**Where.** `package.json`, the `check` script.
-
-**Fix.** Add `pnpm run check:format` to `check`.
-
 ### 9. The script contract names a task nobody implements
 
 **What.** `turbo.jsonc` declares `dev`, and `docs/toolchain.md` §6 lists it

@@ -60,7 +60,7 @@ unbuilt concepts (channels, deployment targets) there; deferred work goes in
 
 ```sh
 pnpm install
-pnpm check     # build, typecheck, lint, test — the gate CI runs
+pnpm check     # format, build, typecheck, lint, test — the gate CI runs
 pnpm format    # biome --write, then prettier --write
 pnpm test:live # the room on a real model; needs <PROVIDER>_API_KEY and costs money
 pnpm chaos     # the sweeps on both storages, the handover at every write, the kill at every third write, 200 seeds of the walk and the history
