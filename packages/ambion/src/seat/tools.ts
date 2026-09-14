@@ -10,12 +10,9 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { binderOf, SAY, SEAT, SUMMARISE } from '../define.ts';
 import { refusal } from '../render.ts';
 import { builtinTools, toolContext } from '../tools/workspace.ts';
-import { type AgentDefinition, isAmbionTool, type Message, type Seq } from '../types.ts';
+import { type AgentDefinition, isAmbionTool, type Seq } from '../types.ts';
 import type { ActivationView, CommitResponse, SeatRoom } from '../wire.ts';
 import type { Activation } from './activation.ts';
-
-/** One draft, and one redraft after a race. Then the room keeps moving without it. */
-const ASSISTANT_DRAFTS = 2;
 
 /**
  * How often the assistant may call its tool in one activation. A model that keeps
@@ -151,8 +148,8 @@ export function toolsFor(view: ActivationView, def: AgentDefinition, held: Bindi
 	}
 	if (binderOf(view.tool) !== 'room') return boundTool(view.tool, def);
 	if (view.tool === SUMMARISE.name && view.closing) {
-		const draft: Draft = { ...view.closing, refusals: 0, calls: 0 };
-		return [summariseTool(held, draft)];
+		const attempt: SummaryAttempt = { ...view.closing, calls: 0 };
+		return [summariseTool(held, attempt)];
 	}
 	if (view.tool === SEAT.name && view.composing) {
 		const composing: Composing = { ...view.composing, seated: 0, calls: 0 };
@@ -178,18 +175,16 @@ function boundTool(name: string, def: AgentDefinition): AgentTool[] {
 // -- the assistant's bound ----------------------------------------------------
 
 /**
- * One summarising activation's own state. The range is read off the view when the
- * activation starts, and it widens when a race refuses the draft, so the retry
- * stands for what won. Nothing here outlives the activation.
+ * One summarising activation's own state. The range is read off the closed
+ * exchange when the activation starts. Nothing here outlives the activation.
  */
-interface Draft {
+interface SummaryAttempt {
 	/** The person whose question opened the exchange, and who reads the message. */
-	person: string;
+	readonly person: string;
 	/** The question that opened the exchange. */
-	from: Seq;
-	/** The last seq it stands for. A refusal moves it. */
-	through: Seq;
-	refusals: number;
+	readonly from: Seq;
+	/** The last seq it stands for. */
+	readonly through: Seq;
 	calls: number;
 	/** The message landed: the activation writes once. */
 	written?: true;
@@ -197,13 +192,10 @@ interface Draft {
 
 /**
  * The assistant's one tool at a close, and it reaches the record and nothing
- * else. It commits on the same queue a say commits on, under the same
- * `readThrough`, so a summary drafted against a record that has moved is
- * refused — and the refusal reaches the assistant inside its own activation,
- * carrying what it missed, so the redraft happens now rather than at the next
- * quiescence.
+ * else. It commits against the fixed exchange that caused the activation.
+ * Later record entries do not change that exchange.
  */
-function summariseTool(bound: Binding, closing: Draft): AgentTool {
+function summariseTool(bound: Binding, closing: SummaryAttempt): AgentTool {
 	const person = closing.person;
 	return {
 		...SUMMARISE,
@@ -222,7 +214,6 @@ function summariseTool(bound: Binding, closing: Draft): AgentTool {
 			const response = await bound.room.commit({
 				activation: bound.activation.id,
 				key: toolCallId,
-				readThrough: closing.through,
 				intent: {
 					kind: 'summary',
 					to: person,
@@ -230,7 +221,6 @@ function summariseTool(bound: Binding, closing: Draft): AgentTool {
 					covers: { from: closing.from, through: closing.through },
 				},
 			});
-			if ('missed' in response) throw widen(bound, closing, response.missed);
 			if ('committed' in response) closing.written = true;
 			return bound.landed(response);
 		},
@@ -253,33 +243,10 @@ function standDown(why: string | undefined): AgentToolResult<Record<string, neve
 	};
 }
 
-function stoppingReason(draft: Draft): string | undefined {
+function stoppingReason(draft: SummaryAttempt): string | undefined {
 	if (draft.written) return `${draft.person}'s message is written.`;
-	if (draft.refusals >= ASSISTANT_DRAFTS) {
-		return 'The room is still moving. The range stays whole, and you write it when the room is quiet again.';
-	}
 	if (draft.calls > ASSISTANT_CALLS) return 'You have tried this enough times.';
 	return undefined;
-}
-
-/**
- * A refused draft widens the range it covers. The messages that won the race
- * are now inside it, so the redraft stands for them too and the summary
- * leaves no message between it and what it covers.
- */
-function widen(bound: Binding, draft: Draft, missed: Message[]): Error {
-	draft.through = missed.at(-1)?.seq ?? draft.through;
-	draft.refusals += 1;
-	// The room kept moving past every draft: the range stays owed, and the
-	// lease says why the activation ended.
-	if (draft.refusals >= ASSISTANT_DRAFTS) bound.activation.refused = true;
-	return new Error(
-		refusal(
-			'Not written — the room moved while you were drafting. It is now yours to cover too:',
-			missed,
-			`Write ${draft.person}'s message again, over the range as it now stands.`,
-		),
-	);
 }
 
 // -- composing ---------------------------------------------------------------

@@ -29,7 +29,6 @@ import {
 	collect,
 	deferred,
 	enter,
-	messageBefore,
 	roomName,
 	storedOf,
 	tick,
@@ -443,7 +442,7 @@ describe('a lease judged where its change is written', () => {
 		expect(stored.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual(['released']);
 	});
 
-	it('hands a draft every close its person is owed, when a later close joined it under the claim', async () => {
+	it('keeps a pending summary for each close when another exchange ends during its claim', async () => {
 		const clock = fakeClock();
 		const opened = await memory.open();
 		// the view of the second attempt at the draft is delayed on the wire
@@ -521,8 +520,24 @@ describe('a lease judged where its change is written', () => {
 		const record = await session.messages();
 		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
 		const summaries = record.filter(isSummary);
-		expect(summaries).toHaveLength(1);
-		expect(summaries[0]?.covers.from).toBe(questions[0]?.seq);
-		expect(summaries[0]?.covers.through).toBe(messageBefore(record, summaries[0]?.seq ?? 0));
+		expect(summaries).toHaveLength(2);
+		expect(summaries.map((summary) => summary.covers.from)).toEqual(
+			questions.map((question) => question.seq),
+		);
+		const second = questions[1];
+		expect(second).toBeDefined();
+		if (second === undefined) throw new Error('Expected the second close.');
+		expect(summaries[0]?.covers.through).toBeLessThan(second.seq);
+		expect(summaries[1]?.covers.from).toBe(questions[1]?.seq);
+		const closes = events.filter((event) => event.type === 'exchange_closed');
+		for (const summary of summaries) {
+			const close = closes.find((event) => event.exchange.from === summary.covers.from);
+			expect(close).toBeDefined();
+			if (close === undefined) throw new Error('Expected the recorded close.');
+			expect(summary.covers).toEqual({
+				from: close.exchange.from,
+				through: close.exchange.through,
+			});
+		}
 	});
 });

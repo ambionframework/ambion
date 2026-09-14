@@ -260,7 +260,7 @@ describe('the assistant', () => {
 		// them: one counter gives out every place, so a place is not a number
 		// a reader can find.
 		expect(contexts[0]).toContain(
-			"priya's exchange is over: messages 2 to 4. Write the one message they read for it",
+			"priya's exchange is over: messages 1 to 3. Write the one message they read for it",
 		);
 	});
 
@@ -348,16 +348,16 @@ describe('the assistant', () => {
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
 	});
 
-	it('refuses a draft the room moved past, and redrafts inside the same activation', async () => {
+	it('keeps a draft on its closed exchange while a later question arrives', async () => {
 		const held = deferred();
-		const refusals: string[] = [];
+		const contexts: string[] = [];
 		const session = open({
 			script: byAgent({
 				product: answersEach,
 				assistant: async (context, _name, call) => {
+					contexts.push(contextText(context));
 					if (call === 1) await held.promise;
-					if (call === 2) refusals.push(contextText(context));
-					return call > 2 ? quiet() : summarise(`draft ${call}`);
+					return call === 1 ? summarise('the first answer') : quiet();
 				},
 			}),
 		});
@@ -376,34 +376,36 @@ describe('the assistant', () => {
 		const summary = await written;
 		await quiescent(session);
 
-		const conflicts = events.filter((e) => e.type === 'conflict');
-		expect(conflicts).toHaveLength(1);
-		expect(conflicts[0]).toMatchObject({ author: 'assistant' });
-		// the refusal reached the assistant as a tool result, carrying what it missed
-		expect(refusals[0]).toContain('Not written');
-		expect(refusals[0]).toContain('And the pump?');
-
 		const record = await session.messages();
 		expect(summaries(record)).toHaveLength(1);
-		// the redraft covers what it covered before, plus whatever won the race
-		expect(summary.text).toBe('draft 2');
+		expect(events.filter((e) => e.type === 'conflict')).toEqual([]);
+		expect(summary.text).toBe('the first answer');
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
-		expect(summary.covers.through).toBe(messageBefore(record, summary.seq));
+		const later = record.find((message) => isSpoken(message) && message.text === 'And the pump?');
+		expect(later).toBeDefined();
+		if (later === undefined) throw new Error('Expected the later question.');
+		expect(summary.covers.through).toBeLessThan(later.seq);
+		const closed = events.find(
+			(event) => event.type === 'exchange_closed' && event.exchange.from === summary.covers.from,
+		);
+		expect(closed).toBeDefined();
+		if (closed?.type !== 'exchange_closed') throw new Error('Expected the recorded close.');
+		expect(summary.covers).toEqual({
+			from: closed.exchange.from,
+			through: closed.exchange.through,
+		});
+		expect(contexts[0]).not.toContain('And the pump?');
 	});
 
-	it('stops drafting after the second refusal, and writes when the room is quiet', async () => {
+	it('keeps later messages visible when a result publishes out of order', async () => {
 		const first = deferred();
-		const second = deferred();
 		const drafts: string[] = [];
 		const session = open({
 			script: byAgent({
 				product: answersEach,
-				// an assistant that never gives up: what stops it is the runtime, not the script
-				// an assistant that never gives up: what stops it is the runtime, not the script
 				assistant: async (context, _name, call) => {
 					drafts.push(contextText(context));
 					if (call === 1) await first.promise;
-					if (call === 2) await second.promise;
 					return summarise(`draft ${call}`);
 				},
 			}),
@@ -417,28 +419,20 @@ describe('the assistant', () => {
 
 		// two arrivals move the record under the assistant, and wake nobody
 		const his = await visitSession(session, sam);
-		first.resolve();
-		await tick();
 		await his.leave();
-		second.resolve();
-		const stoodDown = assistantEnded(session);
-		await stoodDown;
-
-		expect(events.filter((e) => e.type === 'conflict')).toHaveLength(2);
-		expect(summaries(await session.messages())).toHaveLength(0);
-		// the activation ended after the second refusal, and did not draft for ever
-		expect(drafts).toHaveLength(3);
-
-		// the range is still owed: the next question joins it, and the draft is due after the backoff
 		const written = nextSummary(session);
-		await visit.deliver({ text: 'And the pump?' });
-		await session.settled();
-		expect(summaries(await session.messages())).toHaveLength(0);
-		await clock.advance(30_000);
+		first.resolve();
 		const summary = await written;
-
-		expect(summary.text).toBe('draft 4');
-		expect(summary.covers.from).toBe((await session.messages()).find((m) => isSpoken(m))?.seq);
+		await quiescent(session);
+		expect(events.filter((e) => e.type === 'conflict')).toEqual([]);
+		expect(drafts.length).toBeGreaterThan(0);
+		const record = await session.messages();
+		const between = record.find((message) => message.kind === 'left' && message.from === 'sam');
+		expect(between).toBeDefined();
+		if (between === undefined)
+			throw new Error('Expected Sam to leave between the close and summary.');
+		expect(summary.covers.through).toBeLessThan(between.seq);
+		expect(renderRecord(record, [], clock.now())).toContain('sam left');
 	});
 
 	it('stands down without writing, and is not owed a summary for it', async () => {
@@ -1149,8 +1143,8 @@ describe('a fold', () => {
 	});
 
 	/**
-	 * A race widens the range a refused draft covers, so one summary can stand
-	 * for another. The fold above each one still names the person it is for.
+	 * A historical broad summary can overlap a newer summary. The fold still
+	 * names each result by its recipient.
 	 */
 	it('keeps two overlapping ranges apart', () => {
 		const record = [
@@ -1282,7 +1276,7 @@ describe('a role a host writes', () => {
 		expect(flagged).toEqual(['two agents, one answer']);
 		// the room wrote no line for a tool it does not bind, so the ask names the
 		// tool and the role's guidance says what to do with it
-		expect(asked[0]).toContain("priya's exchange is over: messages 2 to 4. Call flag,");
+		expect(asked[0]).toContain("priya's exchange is over: messages 1 to 3. Call flag,");
 		expect(asked[0]).not.toContain('Write the one message');
 		// the room lists the role it seated, and the record holds it by tool name
 		expect(session.seats().find((s) => s.name === 'reviewer')).toMatchObject({

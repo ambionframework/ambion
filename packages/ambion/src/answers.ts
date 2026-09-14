@@ -96,12 +96,11 @@ function liveSeatOf(room: Answering, id: string, state: RoomState): string | und
 // -- commit -------------------------------------------------------------------
 
 /**
- * Rule 5 for a say and for a summary: commit under `readThrough`, the seq
- * the author has read. The queue refuses a commit the record moved past,
- * and the loser is handed what it missed. The event names the author, not
- * the seat: a say and a summary are refused the same way. A seating
- * commits under no `readThrough`: it is decided on the question, whatever
- * landed since. A lease that ended is answered `stale`, before and where
+ * A say commits under `readThrough`, the seq the author has read. The queue
+ * refuses a say the record moved past, and the loser is handed what it
+ * missed. A summary commits against its fixed closed exchange, so later
+ * record entries do not refuse it. A seating also commits without
+ * `readThrough`. A lease that ended is answered `stale`, before and where
  * the write happens.
  */
 export async function answerCommit(room: Answering, commit: Commit): Promise<CommitResponse> {
@@ -113,7 +112,7 @@ export async function answerCommit(room: Answering, commit: Commit): Promise<Com
 	// it missed before anything else is checked, so a say at a colleague
 	// who left in the meantime reads the departure. The queue runs the same
 	// check again where the write happens.
-	const missed = unheard(room, commit.readThrough);
+	const missed = commit.intent.kind === 'summary' ? undefined : unheard(room, commit.readThrough);
 	if (missed !== undefined) {
 		room.emit({ type: 'conflict', author: seat, missed });
 		return { missed };

@@ -79,9 +79,8 @@ type Block = { line: Message } | { fold: Message[]; by: SummaryMessage };
  * into another one: the message that stands for a range must survive whatever
  * covers it.
  *
- * Ranges can nest, because a race widens the range a refused draft covers. A
- * message then takes the nearest summary that stands for it — the first one
- * committed after it — so a fold never claims a summary that is not its own.
+ * A summary keeps the fixed range of its closed exchange. A message takes
+ * the summary that covers it. Messages between two ranges stay visible.
  */
 function foldedBy(record: readonly Message[]): Map<Seq, SummaryMessage> {
 	const summaries = record.filter(isSummary);
@@ -518,8 +517,8 @@ const SUMMARISE_PARAGRAPH = [
 	`Ending your turn without calling summarise leaves the range whole, and every reader still`,
 	`sees all of it. Do that when there is nothing to consolidate — when what the room said`,
 	`already reads as one answer, and standing between your person and it would only add a`,
-	`voice. The tool fails if the room moved while you were drafting: it lists what landed,`,
-	`which your message now covers as well, so write it again over the range as it now stands.`,
+	`voice. Later messages do not change the exchange you answer. Write only the`,
+	`fixed range the room gave you.`,
 	``,
 	`What you write is not something you said in the room. Nobody hears it, no agent wakes`,
 	`because of it, and it never carries your person's name — the room stamps it as yours.`,

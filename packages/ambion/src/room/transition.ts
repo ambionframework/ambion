@@ -11,7 +11,7 @@ import {
 	project,
 	type RoomState,
 } from './fold.ts';
-import { isExpired, isLive, seatOf } from './lease.ts';
+import { isExpired, isLive, parseId, seatOf } from './lease.ts';
 import {
 	liveWork,
 	planReconciliation,
@@ -227,8 +227,9 @@ function commit(state: RoomState, request: Commit, now: number): RoomDecision<'m
 	) {
 		return stale('the lease ended');
 	}
+	const { intent } = request;
 	const readThrough = request.readThrough;
-	if (readThrough !== undefined && state.lastSeq > readThrough) {
+	if (intent.kind !== 'summary' && readThrough !== undefined && state.lastSeq > readThrough) {
 		return {
 			refusal: {
 				category: 'missed',
@@ -236,12 +237,45 @@ function commit(state: RoomState, request: Commit, now: number): RoomDecision<'m
 			},
 		};
 	}
-	const { intent } = request;
 	const stamp = { at: iso(now), activationId: request.activation, from: seat };
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
-	if (intent.kind === 'summary') return message(state, { ...intent, ...stamp }, now);
+	if (intent.kind === 'summary')
+		return summary(state, request.activation, seat, intent, stamp, now);
 	const reason = addressRefusal(state, seat, intent.to);
 	return reason === undefined ? message(state, { ...intent, ...stamp }, now) : refused(reason);
+}
+
+function summary(
+	state: RoomState,
+	id: string,
+	seat: string,
+	intent: Extract<Commit['intent'], { kind: 'summary' }>,
+	stamp: { at: string; activationId: string; from: string },
+	now: number,
+): RoomDecision<'message'> {
+	const parsed = parseId(id);
+	const position = parsed?.position;
+	const close = state.closes.find((candidate) => candidate.through === position);
+	if (
+		parsed?.cause !== 'closed' ||
+		close === undefined ||
+		close.wakes?.[0] !== seat ||
+		close.owner !== intent.to ||
+		close.from !== intent.covers.from ||
+		close.through !== intent.covers.through
+	)
+		return refused('This summary does not match its closed exchange.');
+	if (
+		state.messages.some(
+			(message) =>
+				message.kind === 'summary' &&
+				message.to === close.owner &&
+				message.covers.from <= close.from &&
+				message.covers.through >= close.through,
+		)
+	)
+		return refused('This exchange already has a summary.');
+	return message(state, { ...intent, ...stamp }, now);
 }
 
 function seating(
