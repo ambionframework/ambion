@@ -113,19 +113,25 @@ Model<Api>` when a host passes a custom `streamFn`.
 ### 53. One workerd test flakes on a race it cannot see
 
 **What.** `packages/cloudflare/test/seat.test.ts`, "takes the cut the room
-sends over RPC when it revokes a wake", fails about one run in twenty. It
-reads the record once the exchange closes, and expects the seat to have
-said nothing. Sometimes the say is there, stamped with the activation the
-room revoked.
+sends over RPC when it revokes a wake", fails about one run in twenty, in
+two modes:
 
-**Measured.** 2 failures in 45 runs on `main`. The test's own comments say
-it reasons about the window: "the runner decides the answer".
+| Line | What fails                                                    |
+| ---- | ------------------------------------------------------------- |
+| 86   | The cut never reaches the seat inside 20 seconds              |
+| 107  | The say is on the record, stamped with the activation revoked |
 
-**Why.** The exchange closing is a weaker condition than the room reaching
-rest. It says no activation the exchange caused is live, which the cut
-makes true at once, while the seat side may still be finishing. `quiet()`
-is the condition the assertion wants, and the Room object exposes
-`exchange()` alone.
+**Measured.** 2 failures in 45 runs on the tree before item 9, and 1 in 45
+after it. The rates are the same at these samples. The test's own comments
+say it reasons about the window: "the runner decides the answer".
+
+**Why.** The test waits on two conditions that are weaker than what it
+asserts. `seat.cuts()` counts what arrived, and the room sends the cut
+after it writes the end, so a runner that has not scheduled the RPC yet
+leaves the count at 0. The exchange closing says no activation the exchange
+caused is live, which the cut makes true at once, while the seat side may
+still be finishing. `quiet()` is the condition both assertions want, and
+the Room object exposes `exchange()` alone.
 
 **Where.** `packages/cloudflare/test/seat.test.ts`;
 `packages/cloudflare/src/room-object.ts`, which has no `quiet`.
