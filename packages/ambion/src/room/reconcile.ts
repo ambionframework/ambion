@@ -17,7 +17,7 @@ import { answering, type RoomState } from './fold.ts';
 import { type Due, isExpired, isLive, parseId, seatOf } from './lease.ts';
 import { givesUp } from './rules.verified.ts';
 
-export interface DecideOptions {
+export interface ReconcileOptions {
 	now: number;
 	/** How long an unanswered wake waits before the room sends it again. */
 	resend: number;
@@ -41,7 +41,7 @@ interface Send {
 
 type Ended = Extract<LeaseChange, { phase: 'ended' }>;
 
-export interface Decision {
+export interface Reconciliation {
 	/** Leases that ran past their expiry, ended here. */
 	expired: Ended[];
 	/** The attempts the room does not make: the activations at the cap, written off here. */
@@ -120,7 +120,7 @@ function holdsExchange(id: string): boolean {
 	return cause === 'message' || cause === 'opened';
 }
 
-export function decide(state: RoomState, options: DecideOptions): Decision {
+export function planReconciliation(state: RoomState, options: ReconcileOptions): Reconciliation {
 	const work = liveWork(state, options.now);
 	const expired = expiries(state, options.now);
 	const abandoned = options.stopped ? [] : abandonments(state, options);
@@ -144,13 +144,13 @@ export function decide(state: RoomState, options: DecideOptions): Decision {
  * it forgets is one it would send again, so the room holds what it sent for
  * exactly as long as the fold owes the activation.
  */
-function forgotten(state: RoomState, options: DecideOptions): string[] {
+function forgotten(state: RoomState, options: ReconcileOptions): string[] {
 	const due = new Set(state.due.map((owed) => owed.id));
 	return [...options.sent.keys()].filter((id) => !due.has(id));
 }
 
 /** An activation the room owes whose attempts reached the cap. */
-const capped = (owed: Due, options: DecideOptions): boolean =>
+const capped = (owed: Due, options: ReconcileOptions): boolean =>
 	givesUp(owed.attempts, options.attempts);
 
 /**
@@ -158,14 +158,14 @@ const capped = (owed: Due, options: DecideOptions): boolean =>
  * entry answers the wake or the close it stood for, so the room stops trying
  * and every reader sees that it did.
  */
-function abandonments(state: RoomState, options: DecideOptions): Ended[] {
+function abandonments(state: RoomState, options: ReconcileOptions): Ended[] {
 	const at = new Date(options.now).toISOString();
 	return state.due
 		.filter((owed) => capped(owed, options))
 		.map((owed) => ({ id: owed.id, phase: 'ended' as const, reason: 'abandoned' as const, at }));
 }
 
-function expiries(state: RoomState, now: number): Decision['expired'] {
+function expiries(state: RoomState, now: number): Reconciliation['expired'] {
 	const at = new Date(now).toISOString();
 	return [...state.leases.values()]
 		.filter((lease) => isExpired(lease, now))
@@ -177,7 +177,7 @@ function expiries(state: RoomState, now: number): Decision['expired'] {
  * answers `closed`, when the exchange owes a summary. A room with no such
  * seat closes the exchange and owes nothing.
  */
-function closing(state: RoomState, work: LiveWork, now: number): Decision['close'] {
+function closing(state: RoomState, work: LiveWork, now: number): Reconciliation['close'] {
 	const exchange = state.exchange;
 	if (exchange === undefined || work.exchange) return undefined;
 	const writer = answering(state.roster, 'closed')?.name;
@@ -195,7 +195,7 @@ function closing(state: RoomState, work: LiveWork, now: number): Decision['close
 }
 
 /** The activations the room still tries: what it owes, less what it gave up on. */
-const owing = (state: RoomState, options: DecideOptions): Due[] =>
+const owing = (state: RoomState, options: ReconcileOptions): Due[] =>
 	state.due.filter((owed) => !capped(owed, options));
 
 /**
@@ -209,7 +209,7 @@ const owing = (state: RoomState, options: DecideOptions): Due[] =>
  *
  * A wake a message decided and a draft a close owes wait the same way.
  */
-function dueAt(owed: Due, options: DecideOptions): number {
+function dueAt(owed: Due, options: ReconcileOptions): number {
 	const backoff = owed.notBefore ?? options.now;
 	if (backoff > options.now) return backoff;
 	const sent = options.sent.get(owed.id);
@@ -217,7 +217,7 @@ function dueAt(owed: Due, options: DecideOptions): number {
 }
 
 /** Every wake the room sends now: an activation it owes that waits on nothing. */
-function dueWakes(state: RoomState, options: DecideOptions): Send[] {
+function dueWakes(state: RoomState, options: ReconcileOptions): Send[] {
 	return owing(state, options)
 		.filter((owed) => dueAt(owed, options) <= options.now)
 		.map((owed) => ({ id: owed.id, seat: owed.seat }));
@@ -229,14 +229,14 @@ function dueWakes(state: RoomState, options: DecideOptions): Send[] {
  * The room reads this on the pass that writes nothing and sends nothing, so
  * every activation left is one that waits.
  */
-function retryTimes(state: RoomState, options: DecideOptions): number[] {
+function retryTimes(state: RoomState, options: ReconcileOptions): number[] {
 	return owing(state, options).map((owed) => {
 		const at = dueAt(owed, options);
 		return at > options.now ? at : options.now + options.resend;
 	});
 }
 
-function nextAlarm(state: RoomState, options: DecideOptions): number | undefined {
+function nextAlarm(state: RoomState, options: ReconcileOptions): number | undefined {
 	const expiries = [...state.leases.values()]
 		.filter((lease) => isLive(lease, options.now))
 		.map((lease) => lease.expiry ?? 0);

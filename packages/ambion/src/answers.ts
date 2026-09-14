@@ -1,34 +1,13 @@
-/**
- * What the room answers a seat with. A seat reaches its room through three
- * calls — `view` reads what an activation is given, `commit` puts one
- * message on the record, and `lease` claims, renews or releases the
- * activation — and this file holds all three.
- *
- * Every call is a function over `Answering`: what the room holds that an
- * answer reads. Three members are the room as a value — its name, its
- * journal and the runtime it runs in — and nine are behaviours the room
- * owns. The interface is the coupling, written down: a seat's call reaches
- * twelve things, and the room holds the rest where it always did.
- *
- * Nothing here keeps state. What an answer knows, it reads off the fold or
- * off the journal, so two answers in flight read one record.
- */
+/** The seat protocol translates room decisions into view, commit, and lease responses. */
 
 import type { Committed } from '@ambionframework/journal';
 import type { Runtime } from './host/runtime.ts';
 import { type Body, placed, type RoomJournal } from './journal/journal.ts';
 import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
+import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import type {
-	AgentDefinition,
-	Message,
-	PresenceMessage,
-	Seq,
-	SessionEvent,
-	SpokenMessage,
-	SummaryMessage,
-} from './types.ts';
+import type { AgentDefinition, Message, Seq, SessionEvent } from './types.ts';
 import type {
 	Commit,
 	CommitResponse,
@@ -39,19 +18,14 @@ import type {
 	ViewResponse,
 } from './wire.ts';
 
-/** A seat asked for something the room refuses, and the seat reads why. */
-class RefusedError extends Error {}
-
-/** The lease the request came from is gone, and the answer says so. */
-class StaleError extends Error {}
+/** A command the room refused, with the wire category that answers it. */
+export class RefusedError extends Error {
+	constructor(readonly refusal: Refusal) {
+		super('reason' in refusal ? refusal.reason : 'The record moved.');
+	}
+}
 
 const stale = (why: string): Stale => ({ stale: why });
-
-/** A message before the journal stamps its seq, its key and its wakes. */
-type Drafted =
-	| Omit<SpokenMessage, 'seq' | 'key' | 'wakes'>
-	| Omit<SummaryMessage, 'seq' | 'key' | 'wakes'>
-	| Omit<PresenceMessage, 'seq' | 'key' | 'wakes'>;
 
 /**
  * What a seat's three calls need of the room. The room holds every one of
@@ -75,18 +49,14 @@ export interface Answering {
 	definition(seat: string): AgentDefinition | undefined;
 	emit(event: SessionEvent): void;
 	/** One operation on the room's commit queue, with the wakes the room routes. */
-	write<T extends Message>(
-		key: string,
-		readThrough: Seq | undefined,
-		draft: (state: RoomState) => Omit<Body<T>, 'wakes'>,
-	): Promise<Committed<Body<T>, Body<Message>>>;
+	write(commit: Commit): Promise<Committed<Body<Message>, Body<Message>>>;
+	claim(id: string): Promise<LeaseResponse>;
 	/** End one lease, for whatever reason. Nothing to end is not an error. */
 	end(id: string, reason: EndReason): Promise<boolean>;
 	reconcile(): Promise<void>;
 }
 
 const now = (room: Answering): number => room.runtime.clock.now();
-const iso = (room: Answering): string => new Date(now(room)).toISOString();
 const onRoster = (state: RoomState, name: string): boolean =>
 	state.roster.some((seat) => seat.name === name);
 
@@ -149,21 +119,20 @@ export async function answerCommit(room: Answering, commit: Commit): Promise<Com
 		return { missed };
 	}
 	try {
-		return landed(room, seat, await write(room, commit, seat));
+		return landed(room, seat, await room.write(commit));
 	} catch (error) {
-		if (error instanceof StaleError) return stale(error.message);
-		if (error instanceof RefusedError) return { refused: error.message };
+		if (error instanceof RefusedError) return refused(room, seat, error.refusal);
 		throw error;
 	}
 }
 
-const write = (room: Answering, commit: Commit, seat: string) =>
-	room.write<Message>(commit.key, commit.readThrough, (state) => {
-		if (liveSeatOf(room, commit.activation, state) === undefined) {
-			throw new StaleError('the lease ended');
-		}
-		return draft(room, commit, seat, state);
-	});
+function refused(room: Answering, seat: string, refusal: Refusal): CommitResponse {
+	if (refusal.category === 'missed') {
+		room.emit({ type: 'conflict', author: seat, missed: refusal.missed });
+		return { missed: refusal.missed };
+	}
+	return refusal.category === 'stale' ? stale(refusal.reason) : { refused: refusal.reason };
+}
 
 /** What the queue did with the commit, as the seat reads it. */
 function landed(
@@ -185,76 +154,6 @@ function unheard(room: Answering, readThrough: Seq | undefined): Message[] | und
 	return room.journal.messages(readThrough);
 }
 
-/** The message a seat's intent becomes, with everything the room stamps. */
-function draft(room: Answering, commit: Commit, seat: string, state: RoomState): Drafted {
-	const intent = commit.intent;
-	const stamp = { at: iso(room), activationId: commit.activation };
-	if (intent.kind === 'said') {
-		assertAddressable(seat, intent.to, state);
-		return {
-			kind: 'said',
-			...stamp,
-			from: seat,
-			...(intent.to === undefined ? {} : { to: intent.to }),
-			text: intent.text,
-		};
-	}
-	if (intent.kind === 'summary') {
-		return {
-			kind: 'summary',
-			...stamp,
-			from: seat,
-			to: intent.to,
-			text: intent.text,
-			covers: intent.covers,
-		};
-	}
-	return seating(intent.name, seat, stamp, state);
-}
-
-/** The seating one name from the reserve becomes, or the refusal a seat reads. */
-function seating(
-	name: string,
-	seat: string,
-	stamp: { at: string; activationId: string },
-	state: RoomState,
-): Drafted {
-	const held = state.reserve.find((s) => s.name === name);
-	if (held === undefined) {
-		const names = state.reserve.map((s) => s.name);
-		throw new RefusedError(
-			`'${name}' is not in the reserve. ` +
-				(names.length ? `Seat one of: ${names.join(', ')}.` : 'The reserve is empty.'),
-		);
-	}
-	// The roster folds the seating where it lands, before it routes: every
-	// seat the seating reaches reads a roster that already agrees with it.
-	return {
-		kind: 'seated',
-		...stamp,
-		from: seat,
-		subject: held.name,
-		identity: held.identity,
-		attention: held.attention,
-	};
-}
-
-function assertAddressable(seat: string, to: string | undefined, state: RoomState): void {
-	if (to === undefined) return;
-	const target = state.roster.find((s) => s.name === to);
-	if (!state.people.has(to) && target === undefined) {
-		throw new RefusedError(`Unknown participant '${to}'. Address someone from the roster.`);
-	}
-	if (to === seat) throw new RefusedError('You cannot address yourself.');
-	// A seat at the narrow end wakes for nothing said, so addressing it
-	// would leave a message nobody reads. Say it to the room instead.
-	if (target?.attention === 'none') {
-		throw new RefusedError(
-			`'${to}' wakes for nothing said. Say it to the room, or to somebody else.`,
-		);
-	}
-}
-
 // -- lease --------------------------------------------------------------------
 
 /**
@@ -269,38 +168,8 @@ export async function answerLease(room: Answering, lease: Lease): Promise<LeaseR
 	if (seat === undefined || !onRoster(room.state(), seat)) {
 		return stale('the seat is not on the roster');
 	}
-	return lease.phase === 'running' ? claim(room, lease.activation) : release(room, lease);
+	return lease.phase === 'running' ? room.claim(lease.activation) : release(room, lease);
 }
-
-/**
- * A claim, or a renewal: the lease runs until `expiry`, unless it had
- * ended. A fresh claim is taken only for an activation the fold says is
- * due: the next attempt at a pending wake, or at an owed draft. Anything
- * else was answered already, and a second run of it would answer twice.
- * The clock is read where the change is written: a renewal that waited on
- * the queue is judged against the lease as it stands then. No lease runs
- * past the deadline: the expiry a claim or a renewal takes is capped
- * there, so an activation that runs on expires on the room's alarm.
- */
-async function claim(room: Answering, id: string): Promise<LeaseResponse> {
-	let expiry = 0;
-	const written = await room.journal.write('lease', () => {
-		const state = room.state();
-		const known = state.leases.get(id);
-		const at = now(room);
-		if (known === undefined && (room.gone() || !due(state).has(id))) return undefined;
-		if (known !== undefined && !isLive(known, at)) return undefined;
-		const claimedAt = known === undefined ? at : Date.parse(known.claimedAt);
-		const wake = room.runtime.wake;
-		expiry = Math.min(at + wake.expiry, claimedAt + wake.deadline);
-		return { id, phase: 'running', expiry, at: iso(room) };
-	});
-	if (!written) return stale('the lease ended');
-	return { ok: { expiry, lastSeq: room.journal.lastCommitted } };
-}
-
-/** The ids the fold says may claim a fresh lease now. */
-const due = (state: RoomState): Set<string> => new Set(state.due.map((owed) => owed.id));
 
 async function release(room: Answering, lease: Lease): Promise<LeaseResponse> {
 	const ended = await room.end(lease.activation, lease.reason ?? 'released');

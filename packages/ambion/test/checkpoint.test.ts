@@ -223,6 +223,37 @@ describe('a checkpoint', () => {
 });
 
 describe('a checkpoint the room folds', () => {
+	it('refreshes the host projection when compaction keeps the same entry count', async () => {
+		const opened = await memory.open();
+		const clock = fakeClock();
+		const runtime = createRuntime({ sessions: opened.sessions, clock });
+		const session = startSession({ name: roomName('checkpoint-cache'), agents: [], runtime });
+		try {
+			await session.messages();
+			const journal = journalOf(session);
+			const host = session as Session & { state(): RoomState };
+			const checkpoint = checkpointOf(fold(journal), clock.now());
+			if (checkpoint === undefined) throw new Error('The room has no composition.');
+			await journal.write('checkpoint', checkpoint);
+			const before = host.state();
+			const length = journal.entries.length;
+
+			// Administrative entries can arrive without a caller reading the projection.
+			await journal.write('composition', { ...checkpoint.composition, goal: 'A new goal.' });
+			const replacement = checkpointOf(fold(journal), clock.now());
+			if (replacement === undefined) throw new Error('The replacement has no composition.');
+			await journal.write('checkpoint', replacement);
+
+			expect(journal.entries).toHaveLength(length);
+			expect(host.state()).toEqual(fold(journal));
+			expect(host.state().composition?.goal).toBe('A new goal.');
+			expect(before.composition?.goal).toBeUndefined();
+		} finally {
+			await stopSession(session);
+			await opened.dispose();
+		}
+	});
+
 	it('holds a lease it carries, so a later end starts no second activation', async () => {
 		const opened = await memory.open();
 		try {

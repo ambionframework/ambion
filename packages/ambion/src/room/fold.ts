@@ -29,11 +29,11 @@ import type {
 } from '../wire.ts';
 import { openExchange } from './exchange.ts';
 import {
+	applyLease,
 	type CauseOf,
 	cameToNothing,
 	type Due,
 	dueFrom,
-	foldLeases,
 	isLive,
 	type PendingWake,
 	parseId,
@@ -105,57 +105,71 @@ export interface FoldOptions {
 	backoff(attempt: number): number;
 }
 
-/**
- * The entries, sorted by kind. The latest composition stands. A checkpoint
- * carries the composition, the closes and the leases in place of every entry
- * before it, and the floor below which no wake is pending; the messages
- * are kept whatever it says.
- */
-function sorted(entries: readonly Entry[]) {
-	const messages: Message[] = [];
-	let read = older();
-	for (const entry of entries) {
-		if (entry.kind === 'message') messages.push(placed(entry));
-		else read = folded(read, entry);
+/** The facts beside the derived projection. It contains no journal history. */
+interface BaseFacts {
+	messages: Message[];
+	closes: Close[];
+	leases: Map<string, LeaseHold>;
+	composition: Composition | undefined;
+	floor: Seq;
+}
+
+/** The private base facts held by a projection for incremental evolution. */
+export const baseOf = (state: RoomState): BaseFacts => ({
+	messages: [...state.messages],
+	closes: [...state.closes],
+	leases: new Map(state.leases),
+	composition: state.composition,
+	floor: state.floor,
+});
+
+/** The empty room facts before the first committed event. */
+const older = (): BaseFacts => ({
+	messages: [],
+	closes: [],
+	leases: new Map(),
+	composition: undefined,
+	floor: 0,
+});
+
+/** Applies one committed event to the room facts. */
+export function applyEvent(read: BaseFacts, entry: Entry): void {
+	if (entry.kind === 'message') {
+		read.messages.push(placed(entry));
+		return;
 	}
-	return { messages, ...read };
+	if (entry.kind === 'close') {
+		read.closes.push(entry.body);
+		return;
+	}
+	if (entry.kind === 'lease') {
+		applyLease(read.leases, entry);
+		return;
+	}
+	if (entry.kind === 'composition') {
+		read.composition = { ...entry.body, seq: entry.seq };
+		return;
+	}
+	if (entry.kind === 'checkpoint') {
+		read.closes.splice(0, read.closes.length, ...entry.body.closes);
+		read.leases.clear();
+		for (const lease of entry.body.leases) read.leases.set(lease.id, { ...lease });
+		read.composition = entry.body.composition;
+		read.floor = entry.body.floor;
+	}
 }
-
-/** One entry onto what the fold has read. A checkpoint replaces all of it; a run says nothing here. */
-function folded(read: Read, entry: Entry): Read {
-	if (entry.kind === 'checkpoint') return carried(entry.body);
-	if (entry.kind === 'close') read.closes.push(entry.body);
-	else if (entry.kind === 'lease') read.changes.push(entry);
-	else if (entry.kind === 'composition') read.composition = { ...entry.body, seq: entry.seq };
-	return read;
-}
-
-/** What the entries beside the messages fold to, before the messages join them. */
-type Read = ReturnType<typeof older>;
-
-/** What a fold has read so far, before any of it landed. */
-const older = () => ({
-	closes: [] as Close[],
-	changes: [] as Extract<Entry, { kind: 'lease' }>[],
-	held: [] as LeaseHold[],
-	composition: undefined as Composition | undefined,
-	floor: 0 as Seq,
-});
-
-/** What a checkpoint carries, in place of everything before it. */
-const carried = (checkpoint: Checkpoint): Read => ({
-	closes: [...checkpoint.closes],
-	changes: [],
-	held: [...checkpoint.leases],
-	composition: checkpoint.composition,
-	floor: checkpoint.floor,
-});
 
 export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
-	const { messages, closes, changes, held, composition, floor } = sorted(entries);
+	const read = older();
+	for (const entry of entries) applyEvent(read, entry);
+	return project(read, options);
+}
+
+/** Derives all room views from the base facts. */
+export function project(read: BaseFacts, options: FoldOptions): RoomState {
+	const { messages, closes, leases, composition, floor } = read;
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
-	const leases = foldLeases(changes, held);
 	const isPerson = (name: string) => people.has(name);
 	const exchange = openExchange(messages, closes, isPerson);
 	// Every wake on a message below the floor was answered when the
@@ -168,7 +182,7 @@ export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomS
 		causeOf(answering(roster, 'opened')?.name, opensOf(exchange, closes)),
 	);
 	const owed = foldOwed(closes, messages, leases, options);
-	return {
+	const state: RoomState = {
 		composition,
 		roster,
 		reserve:
@@ -184,6 +198,7 @@ export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomS
 		lastSeq: messages.at(-1)?.seq ?? 0,
 		floor,
 	};
+	return state;
 }
 
 /** Every question that opened an exchange: the one still open, and every one a close ended. */
