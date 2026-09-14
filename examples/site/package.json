@@ -17,7 +17,7 @@
 		"@ambionframework/ambion": "workspace:*",
 		"@ambionframework/journal": "workspace:*",
 		"@ambionframework/workspace": "workspace:*",
-		"typebox": "^1.3.18"
+		"typebox": "^1.3.30"
 	},
 	"devDependencies": {
 		"typescript": "^7.0.2",
