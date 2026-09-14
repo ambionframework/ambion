@@ -341,6 +341,24 @@ runtime. The three calls a seat makes become functions over that value.
 `next.md` §1 names the lifecycle field this needs, and it stays the first
 part of this item.
 
+**What it came to.** — done. `Phase` replaced the three booleans.
+`answers.ts` holds the seat's three calls over `Answering`: the room as a
+value, and nine behaviours. `room/routing.ts` holds the routing, which
+`session.ts` and `seat/seat.ts` had between them. `decide` gained `forget`
+and `checkpoint`, so a pass decides once and applies once. `session.ts` is
+1279 lines, from 1507.
+
+**What did not move, and why.** `settle` reads the state where it runs,
+because the pass calls it after a write that failed and the record moved.
+A decision taken before the write would be stale there. The room's
+reaction to an entry shares `sentAt` and `idleReported` with the pass, so
+`backlog.md` §3 holds the reason those stay together.
+
+**What is left.** `next.md` §4 asked for 600 lines, and this stops at
+1279. The three largest sections are the room's construction (158), what
+it hears (156) and control (148). Item 8 thins the first, and no item yet
+names a cut for the other two.
+
 ## 4. One order for the messages and the entries — done
 
 New. It carried a trade-off, and the text names what it cost.

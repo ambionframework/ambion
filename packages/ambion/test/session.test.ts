@@ -10,6 +10,7 @@ import {
 	type Message,
 	passive,
 	readSession,
+	type Session,
 	startSession,
 	stopSession,
 	visitSession,
@@ -732,5 +733,47 @@ describe('startSession', () => {
 				streamFn: scripted(() => quiet()),
 			}),
 		).toThrow(/one name names one participant/);
+	});
+});
+
+/**
+ * The room keeps when it last sent each wake, so it sends one again only
+ * after the resend window. `decide` says which of those the fold no longer
+ * owes, and the pass drops them: the cache is bounded by what the room
+ * still waits on, and never by how long the room has run.
+ *
+ * Nothing else reads a forgotten id — `decide` looks up only what the fold
+ * says is due — so this is the one place the bound is visible.
+ */
+describe('what the room waits on', () => {
+	const sentBy = (session: Session): Map<string, number> =>
+		(session as unknown as { sentAt: Map<string, number> }).sentAt;
+
+	it('drops a wake the fold stopped owing, and holds one it still owes', async () => {
+		const held = deferred();
+		const session = startSession({
+			name: roomName('waits'),
+			assistant,
+			agents: [defineAgent({ name: 'solo', identity: 'S.', instructions: 'x', model: 'm/solo' })],
+			streamFn: scripted(
+				byAgent({
+					solo: async (_c, _n, call) => {
+						if (call === 1) await held.promise;
+						return quiet();
+					},
+				}),
+			),
+		});
+		const visit = await enter(session);
+		await visit.deliver({ text: 'go' });
+		// the wake is sent and the activation holds it: the room still waits
+		await session.reconcile();
+		expect([...sentBy(session).keys()]).toEqual(['message:4:solo:1']);
+
+		held.resolve();
+		await session.quiet();
+		// the activation released, so the fold owes nothing and the room holds nothing
+		expect([...sentBy(session).keys()]).toEqual([]);
+		await stopSession(session);
 	});
 });

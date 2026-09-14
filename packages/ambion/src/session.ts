@@ -1022,12 +1022,13 @@ class SessionImpl implements Session, RunningRoom {
 	private async reconcileOnce(): Promise<void> {
 		await this.journal.ready;
 		for (let pass = 0; pass < PASSES && !this.gone(); pass += 1) {
-			this.forget(this.state());
 			const decision = decide(this.state(), {
 				now: this.now(),
 				resend: this.runtime.wake.resend,
 				attempts: this.runtime.retry.attempts,
-				sentAt: (id) => this.sentAt.get(id),
+				sent: this.sentAt,
+				sinceCheckpoint: this.journal.sinceCheckpoint,
+				checkpointEvery: this.runtime.checkpoint.entries,
 				stopped: this.gone(),
 			});
 			let changed: boolean;
@@ -1042,7 +1043,7 @@ class SessionImpl implements Session, RunningRoom {
 			// Whoever waits hears it once the room has nothing more to write: a
 			// pass that expired a lease is followed by the pass that closes.
 			if (!changed) {
-				await this.checkpoint();
+				if (decision.checkpoint) await this.checkpoint();
 				this.settle();
 				this.arm(decision.alarmAt);
 				return;
@@ -1052,16 +1053,10 @@ class SessionImpl implements Session, RunningRoom {
 		if (!this.gone()) this.arm(this.now() + this.runtime.wake.resend);
 	}
 
-	/** A wake the fold no longer says is due is not one this room waits on. */
-	private forget(state: RoomState): void {
-		const due = new Set(state.due.map((owed) => owed.id));
-		for (const id of this.sentAt.keys()) {
-			if (!due.has(id)) this.sentAt.delete(id);
-		}
-	}
-
 	/** Write what the decision wrote, send what it sent. True when anything changed. */
 	private async apply(decision: Decision): Promise<boolean> {
+		// A wake the fold no longer says is due is not one this room waits on.
+		for (const id of decision.forget) this.sentAt.delete(id);
 		let changed = false;
 		// The decision says how each lease ends: expired first, then given up on.
 		for (const end of [...decision.expired, ...decision.abandoned]) {
@@ -1119,9 +1114,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * next pass tries again.
 	 */
 	private async checkpoint(): Promise<void> {
-		// Nothing joins the queue until the entries are there: the room settles at
-		// the speed it always did, and the builder checks the count again.
-		if (this.gone() || this.journal.sinceCheckpoint < this.runtime.checkpoint.entries) return;
+		if (this.gone()) return;
 		await this.journal
 			.write('checkpoint', () => {
 				if (this.journal.sinceCheckpoint < this.runtime.checkpoint.entries) return undefined;
