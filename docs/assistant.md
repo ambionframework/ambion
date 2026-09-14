@@ -841,8 +841,8 @@ document makes loudly:
 - The assistant, when it keeps drafting into a room that keeps moving, is stopped by
   the runtime, and writes at the next quiescence. §5, §14.
 - An activation that stands down without writing is owed nothing for it. §14.
-- An activation that fails outright leaves the summary owed until the next
-  quiet room. §16.
+- An activation that fails outright leaves the summary owed, and the room
+  drafts again when the backoff passes. §16.
 - The person whose question opened the exchange owns it, and a second
   person speaking into it gets nothing. §6.
 - A person who left before the room settled is still written for, the way
@@ -862,8 +862,9 @@ document makes loudly:
 - A fold names the person its summary was written for, and two overlapping
   ranges stay apart. §5, §8.
 - An empty say is refused, so nothing empty stands inside a range. §4.
-- A room with a summary owed is quiet, because owing one is not working on
-  one; and a stopped room never reports that it went quiet. §5, §16.
+- A room with a summary owed is not quiet, because the person it owes has no
+  message yet; a room that gave up on one is quiet, because it owes nobody;
+  and a stopped room never reports that it went quiet. §5, §16.
 - `startSession` refuses an assistant whose name an agent holds, and
   `visitSession` refuses a person who takes the assistant's name. §14.
 - A role names the shape its seat answers each event with, and `seated`

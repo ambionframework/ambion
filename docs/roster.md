@@ -260,9 +260,10 @@ room reconciles once after every commit, every lease change, every alarm
 and every wake: if nothing is working, the exchange closes, and if a
 summary is owed and the assistant is idle, the room wakes it.
 
-**A question that lands while the assistant drafts a summary gets no
-composing activation.** The seat is live, so the routing leaves the
-assistant out of the question's `wakes`. A queued compose would land into a
+**A question that lands while the assistant owes a summary gets no
+composing activation.** The seat is live from the close that owes the draft
+until the room writes it or gives up on it, a backoff between two attempts
+included, so the routing leaves the assistant out of the question's `wakes`. A queued compose would land into a
 room that may have settled. The roster stands as it is for that exchange,
 and the next question composes again: one seat, one activation. A question
 that opens its exchange only once the last one closed gets no composing

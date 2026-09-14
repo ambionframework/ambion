@@ -537,19 +537,18 @@ subject in its own field. Then `authorOf` goes, `isPresence` reads as a
 positive test, and rule 7 in [`../docs/agent.md`](../docs/agent.md) holds
 for every kind.
 
-## 8. One question about what is live — part done
+## 8. One question about what is live — done
 
-New. [`backlog.md`](backlog.md) §43 records one fault this causes, and the
-part that is left waits on a decision about it.
+New. The one fault this caused was `backlog.md` §43, and this item fixes it.
 
 **What.** Six functions answer one question: `settled`, `quiet`, `idle`,
 `working`, `liveSeats` and `stilled`. `RoomLog.settled` answers a
 seventh. `idleReported` guards the `quiet` event, and two arrays hold the
 callers that wait.
 
-**Why.** [`backlog.md`](backlog.md) §43 records that a draft inside its
-backoff lets the room report quiet. One fact with six spellings admits
-faults of that kind.
+**Why.** A draft inside its backoff let the room report quiet, although
+the assistant still owed that person a message. One fact with six
+spellings admits faults of that kind.
 
 **Where.** `packages/ambion/src/session.ts`, `settled`, `quiet`, `idle`,
 `live`, `stilled`, `settle`, `idleReported`;
@@ -580,11 +579,24 @@ already there.
 whether a reconcile is in flight, which no fold reports. `RoomLog.settled`
 stays too, and it names a third thing: every write asked for has landed.
 
-**What is left.** The two lines `liveSeats` reads over `state.due` are
-still two, and [`backlog.md`](backlog.md) §43 holds the decision they
-wait on. A pending wake holds its seat through its backoff, and an owed
-draft does not. `reconcile.test.ts` pins today's behaviour, so the fix
-starts there.
+**What the one list fixed.** `liveSeats` read two lines over one list: a
+pending wake held its seat through its backoff, and an owed draft did
+not. It reads `state.due` now, so every activation the room owes holds
+its seat from the close that owes it until the room writes it or gives up
+on it.
+
+`SessionEvent.quiet` said "no seat is taking an activation, and the
+assistant owes nobody a message", and the second half is true now. A
+room that owes a summary is busy for the whole backoff.
+[`docs/assistant.md`](../docs/assistant.md) §5 already stated it that
+way; the code matches it.
+
+Ten tests stated the old behaviour. A room that owes a draft is not
+quiet, so a test that waited for one attempt waits on the activation that
+ends it, and a test that wanted the exchange's own work done waits on
+`settled()`. The cost is the one `backlog.md` §43 named: a question that
+opens an exchange inside the backoff gets no composing activation, which
+was already true of a draft due now.
 
 ## 9. One retry policy
 

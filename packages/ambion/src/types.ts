@@ -267,6 +267,9 @@ export type SessionEvent =
 	 * Nothing is running: no seat is taking an activation, and the assistant owes
 	 * nobody a message. The room's own last word on a stretch of work.
 	 *
+	 * A draft between two attempts holds its seat for the whole backoff, so a
+	 * room that owes a summary is not quiet until it writes one or gives up.
+	 *
 	 * There is no event for the seats stopping. A host that wants the exchange is
 	 * told by `exchange_closed`, which says whose it was and what it covered;
 	 * a host that wants to act in the window before a summary lands waits on

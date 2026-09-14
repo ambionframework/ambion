@@ -64,8 +64,11 @@ export interface Decision {
 }
 
 /**
- * The seats holding a live lease, a pending wake, or a draft that is due,
- * by name, with the ids that make them live.
+ * The seats holding a live lease or an activation the room owes, by name,
+ * with the ids that make them live. An activation holds its seat from the
+ * moment the room owes it until the room answers it or gives up on it. A
+ * backoff between two attempts is part of that stretch, so a seat waiting
+ * out one is live.
  */
 function liveSeats(state: RoomState, now: number): Map<string, string[]> {
 	const live = new Map<string, string[]>();
@@ -76,9 +79,7 @@ function liveSeats(state: RoomState, now: number): Map<string, string[]> {
 	for (const lease of state.leases.values()) {
 		if (isLive(lease, now)) add(seatOf(lease.id), lease.id);
 	}
-	for (const wake of state.pending) add(wake.seat, wake.id);
-	// A draft in its backoff holds nobody: the room is at rest until it is due.
-	for (const owed of state.owed) if (startsNow(owed, now)) add(owed.seat, owed.id);
+	for (const owed of state.due) add(owed.seat, owed.id);
 	return live;
 }
 

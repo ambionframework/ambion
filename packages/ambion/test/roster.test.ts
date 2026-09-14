@@ -630,24 +630,28 @@ describe('a failed draft', () => {
 		const assistantActs = () => activated(events).filter((n) => n === 'assistant').length;
 
 		const visit = await visitSession(session, priya);
-		// two answers, a close, and a draft that fails: priya is owed, and the room waits
+		// two answers, a close, and a draft that fails: priya is owed, and the room waits.
+		// A room that owes a draft is not quiet, so each attempt is the wait here.
+		const first = assistantEnded(session);
 		await visit.deliver({ to: product, text: 'First?' });
-		await session.quiet();
+		await first;
 		expect(assistantActs()).toBe(1);
 
 		// a question that wakes nobody is not the backoff passing
 		await visit.deliver({ text: 'Anyone?' });
-		await session.quiet();
+		await session.settled();
 		expect(assistantActs()).toBe(1);
 		await clock.advance(29_999);
 		expect(assistantActs()).toBe(1);
 
 		// the backoff passes on the room's own alarm: the draft is due again, and fails again
+		const second = assistantEnded(session);
 		await clock.advance(1);
-		await session.quiet();
+		await second;
 		expect(assistantActs()).toBe(2);
+		const third = assistantEnded(session);
 		await clock.advance(60_000);
-		await session.quiet();
+		await third;
 		expect(assistantActs()).toBe(3);
 
 		// three attempts are the cap: the range stays whole, and the room stops trying

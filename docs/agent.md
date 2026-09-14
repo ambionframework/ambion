@@ -584,9 +584,11 @@ controls:
   activation.
   The assistant writing about an exchange is not the room still working on it, so
   the room is never held busy while it writes.
-- **`quiet()`** is the second moment — no agent at all is taking an activation —
-  for a host that wants the one message a person reads
-  ([`assistant.md`](assistant.md) §14). The two differ because the assistant is a seat
+- **`quiet()`** is the second moment — no agent at all is taking an activation,
+  and the room owes none — for a host that wants the one message a person reads
+  ([`assistant.md`](assistant.md) §14). A draft waiting out its backoff holds
+  its seat, so the room stays busy until it writes the summary or gives up on
+  it. The two differ because the assistant is a seat
   like any other, and its activation counts. That difference keeps an
   exchange's end fixed. [`exchange.md`](exchange.md)
   §6 fixes the order of the events at the close.
