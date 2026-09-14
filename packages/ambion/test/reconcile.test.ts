@@ -467,17 +467,35 @@ describe('liveWork', () => {
 			close({ owner: 'priya', from: 2, through: 3, wakes: ['assistant'] }),
 		];
 		expect(liveWork(fold(owed), T0)).toMatchObject({ exchange: false, rest: false });
-		// The first attempt failed, so the draft waits out its backoff. The room
-		// owes a summary and works on nothing, so it is at rest until the draft
-		// is due again. `docs/assistant.md` states this, and `backlog.md` §43
-		// records the cost.
+		// The first attempt failed, so the draft waits out its backoff. The seat
+		// holds it the whole time: the room owes that person a message, and it
+		// tries again when the backoff passes.
 		const backoff = fold([
 			...owed,
 			lease({ id: 'closed:3:assistant:1', phase: 'running', ...live }),
 			lease({ id: 'closed:3:assistant:1', phase: 'ended', reason: 'failed', at }),
 		]);
 		expect(backoff.owed).toMatchObject([{ attempts: 1, notBefore: T0 + 30_000 }]);
-		expect(liveWork(backoff, T0 + 29_999)).toMatchObject({ seats: new Map(), rest: true });
-		expect(liveWork(backoff, T0 + 30_000).rest).toBe(false);
+		for (const now of [T0, T0 + 29_999, T0 + 30_000]) {
+			expect([...liveWork(backoff, now).seats.keys()]).toEqual(['assistant']);
+			expect(liveWork(backoff, now).rest).toBe(false);
+		}
+	});
+
+	it('rests once the room gives up on the draft, because it owes nobody a message', async () => {
+		// The cap ends the attempt the room does not make. Nothing is owed after
+		// it, so no seat is live and the room rests.
+		const abandoned = fold([
+			...opened(),
+			said(3, 'product', { activationId: 'message:2:product:1' }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			close({ owner: 'priya', from: 2, through: 3, wakes: ['assistant'] }),
+			lease({ id: 'closed:3:assistant:1', phase: 'ended', reason: 'failed', at }),
+			lease({ id: 'closed:3:assistant:2', phase: 'ended', reason: 'failed', at }),
+			lease({ id: 'closed:3:assistant:3', phase: 'ended', reason: 'failed', at }),
+			lease({ id: 'closed:3:assistant:4', phase: 'ended', reason: 'abandoned', at }),
+		]);
+		expect(abandoned.due).toEqual([]);
+		expect(liveWork(abandoned, T0 + 1_000_000)).toMatchObject({ seats: new Map(), rest: true });
 	});
 });

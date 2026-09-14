@@ -27,6 +27,7 @@ import {
 } from '../src/index.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
+	assistantEnded,
 	collect,
 	crash,
 	deferred,
@@ -426,12 +427,14 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				streamFn: scripted(script),
 			});
 			const visit = await visitSession(session, priya);
+			const drafted = assistantEnded(session);
 			await visit.deliver({ text: 'First?' });
-			await session.quiet();
+			// a room that owes a draft is not quiet, so the failed attempt is the wait
+			await drafted;
 			// the first draft failed: priya is owed, and the room waits for the backoff
 			expect(await summaries(session)).toHaveLength(0);
 			await visit.deliver({ text: 'Second?' });
-			await session.quiet();
+			await session.settled();
 			expect(await summaries(session)).toHaveLength(0);
 			const record = await session.messages();
 			const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
@@ -443,7 +446,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				runtime: runtime(),
 				streamFn: scripted(writing),
 			});
-			await resumed.quiet();
+			// the resumed room takes on the draft the first run left owed, so it is
+			// not quiet either: it settled, and the backoff has not passed
+			await resumed.settled();
 			expect(await summaries(resumed)).toHaveLength(0);
 			await clock.advance(30_000);
 			await resumed.quiet();

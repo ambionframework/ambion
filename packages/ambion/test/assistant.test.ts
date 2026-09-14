@@ -432,7 +432,7 @@ describe('the assistant', () => {
 		// the range is still owed: the next question joins it, and the draft is due after the backoff
 		const written = nextSummary(session);
 		await visit.deliver({ text: 'And the pump?' });
-		await quiescent(session);
+		await session.settled();
 		expect(summaries(await session.messages())).toHaveLength(0);
 		await clock.advance(30_000);
 		const summary = await written;
@@ -484,17 +484,18 @@ describe('the assistant', () => {
 			}),
 		});
 		const events = collect(session);
+		const drafted = assistantEnded(session);
 
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await quiescent(session);
+		await drafted;
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
 		expect(summaries(await session.messages())).toHaveLength(0);
 
 		// a failed activation leaves the summary owed; an arrival is not the backoff passing
 		const written = nextSummary(session);
 		await visitSession(session, sam);
-		await quiescent(session);
+		await session.settled();
 		expect(summaries(await session.messages())).toHaveLength(0);
 		// the room's own alarm writes it, once the backoff has passed
 		await clock.advance(30_000);
@@ -765,19 +766,38 @@ describe('the assistant', () => {
 		expect(contexts.at(-1)).toContain('The message is empty');
 	});
 
-	it('is quiet with a summary owed, because owing one is not working on one', async () => {
+	it('is not quiet with a summary owed, because that person has no message yet', async () => {
 		const session = open({
 			script: byAgent({ product: twoAnswers, assistant: broken }),
 		});
+		const events = collect(session);
+		const drafted = assistantEnded(session);
 
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await quiescent(session);
+		await drafted;
 
 		// the activation failed, so the summary is owed and the range is still whole
 		expect(summaries(await session.messages())).toHaveLength(0);
-		// and a host asking again is not made to wait for work nobody is doing
-		await expect(session.quiet()).resolves.toBeUndefined();
+		// the exchange is over: no activation it caused is live
+		await expect(session.settled()).resolves.toBeUndefined();
+		// the room is not quiet, because it still owes priya the one message she reads
+		let wentQuiet = false;
+		void session.quiet().then(() => {
+			wentQuiet = true;
+		});
+		await tick();
+		await tick();
+		expect(wentQuiet).toBe(false);
+
+		// every attempt fails, so the room reaches the cap and gives up. It owes
+		// nobody a message after that, and it goes quiet.
+		await clock.advance(30_000);
+		await clock.advance(60_000);
+		await session.quiet();
+		expect(wentQuiet).toBe(true);
+		expect(events.filter((e) => e.type === 'abandoned')).toHaveLength(1);
+		expect(summaries(await session.messages())).toHaveLength(0);
 	});
 
 	it('writes off a draft the host revoked: abort quiets the room, and nothing is owed', async () => {

@@ -108,37 +108,29 @@ Model<Api>` when a host passes a custom `streamFn`.
 
 **Fix.** Build a real `Model` value with Pi's own shape.
 
-### 43. A draft in its backoff lets the room report quiet
-
-**What.** `liveWork` in `room/reconcile.ts` holds a seat live for a
-pending wake whatever its backoff, and holds the assistant live for an
-owed draft only once the backoff has passed. So a draft that failed
-leaves the room reporting `quiet` for the length of the backoff, and
-`quiet()` resolves, although the assistant still owes that person a
-message and drafts again 30 seconds later.
-
-Item 1 made both of them one list, `state.due`, so the asymmetry is now
-two lines over one list. `reconcile.test.ts` pins today's behaviour, and
-`assistant.test.ts` and [`docs/assistant.md`](../docs/assistant.md) state
-it as the contract. A fix changes all three.
-
-**Why.** `SessionEvent.quiet` says what it means: "no seat is taking an
-activation, and the assistant owes nobody a message". The second half is
-untrue in that window, and `quiet()` is what a host waits on when it
-wants the one message a person reads
-([`docs/agent.md`](../docs/agent.md) §5).
-
-**Where.** `packages/ambion/src/room/reconcile.ts`, `liveSeats`, which
-`liveWork` calls.
-
-**Fix.** Hold the assistant live for every owed draft, the way a pending
-wake holds its seat. It is one line in `liveSeats`, and it needs one
-decision first: a live assistant is a seat `routing` will not wake, so a
-question that opens an exchange during that window would not wake the
-assistant to compose. That is already true of a draft that is due now,
-so the change makes the window longer rather than new.
-
 ## Toolchain and project structure
+
+### 53. One workerd test flakes on a race it cannot see
+
+**What.** `packages/cloudflare/test/seat.test.ts`, "takes the cut the room
+sends over RPC when it revokes a wake", fails about one run in twenty. It
+reads the record once the exchange closes, and expects the seat to have
+said nothing. Sometimes the say is there, stamped with the activation the
+room revoked.
+
+**Measured.** 2 failures in 45 runs on `main`. The test's own comments say
+it reasons about the window: "the runner decides the answer".
+
+**Why.** The exchange closing is a weaker condition than the room reaching
+rest. It says no activation the exchange caused is live, which the cut
+makes true at once, while the seat side may still be finishing. `quiet()`
+is the condition the assertion wants, and the Room object exposes
+`exchange()` alone.
+
+**Where.** `packages/cloudflare/test/seat.test.ts`;
+`packages/cloudflare/src/room-object.ts`, which has no `quiet`.
+
+**Fix.** Give the Room object a `quiet()` over RPC, and wait on it.
 
 ### 8. The local gate and CI disagree
 

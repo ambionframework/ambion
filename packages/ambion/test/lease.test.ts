@@ -27,6 +27,7 @@ import { parseId } from '../src/room/lease.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
 	assistant,
+	assistantEnded,
 	collect,
 	deferred,
 	enter,
@@ -259,9 +260,11 @@ describe('a lease', () => {
 			}),
 		);
 		const events = collect(session);
+		const drafted = assistantEnded(session);
 		const visit = await enter(session);
 		await visit.deliver({ text: 'answer me' });
-		await session.quiet();
+		// a room that owes a draft is not quiet, so the failed attempt is the wait
+		await drafted;
 		// the close owes a summary, and the first draft failed
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 		await clock.advance(30_000);
@@ -491,8 +494,10 @@ describe('a lease judged where its change is written', () => {
 		started.push(session);
 		const events = collect(session);
 		const visit = await visitSession(session, priya);
+		const drafted = assistantEnded(session);
 		await visit.deliver({ text: 'First?' });
-		await session.quiet();
+		// a room that owes a draft is not quiet, so the failed attempt is the wait
+		await drafted;
 		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
 
 		// the seat works on the second exchange when the backoff passes and the draft is claimed
