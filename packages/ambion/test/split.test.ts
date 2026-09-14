@@ -18,7 +18,6 @@ import { describe, expect, it } from 'vitest';
 import type { Seq } from '../src/index.ts';
 import {
 	createRuntime,
-	inProcessTransport,
 	resumeSession,
 	type Session,
 	startSession,
@@ -27,6 +26,7 @@ import {
 } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
+import { inProcessTransport } from '../src/transport.ts';
 import {
 	agents,
 	assistant,

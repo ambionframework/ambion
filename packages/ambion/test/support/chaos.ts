@@ -17,7 +17,6 @@ import { expect } from 'vitest';
 import {
 	createRuntime,
 	type HumanDefinition,
-	inProcessTransport,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -30,6 +29,7 @@ import {
 	visitSession,
 } from '../../src/index.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
+import { inProcessTransport } from '../../src/transport.ts';
 import type { Seq } from '../../src/types.ts';
 import type { LeaseChange } from '../../src/wire.ts';
 import {

@@ -11,7 +11,6 @@
 import { describe, expect, it } from 'vitest';
 import {
 	createRuntime,
-	inProcessTransport,
 	type Runtime,
 	resumeSession,
 	type Session,
@@ -22,6 +21,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { foldRoom } from '../src/room/fold.ts';
+import { inProcessTransport } from '../src/transport.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';

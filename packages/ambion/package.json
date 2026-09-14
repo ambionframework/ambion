@@ -22,6 +22,10 @@
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs"
 		},
+		"./transport": {
+			"types": "./dist/transport.d.mts",
+			"import": "./dist/transport.mjs"
+		},
 		"./package.json": "./package.json"
 	},
 	"main": "./dist/index.mjs",

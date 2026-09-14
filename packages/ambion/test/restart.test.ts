@@ -13,7 +13,6 @@ import {
 	defineRole,
 	defineTool,
 	defineToolShape,
-	inProcessTransport,
 	isSpoken,
 	isSummary,
 	type Runtime,
@@ -25,6 +24,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { inProcessTransport } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
 	assistantEnded,

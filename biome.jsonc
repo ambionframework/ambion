@@ -117,7 +117,8 @@
 											"./tools/*",
 											"./seat/*",
 											"./session.ts",
-											"./index.ts"
+											"./index.ts",
+											"./transport.ts"
 										],
 										"message": "The vocabulary imports nothing that does anything."
 									}
@@ -144,7 +145,8 @@
 											"../tools/*",
 											"../seat/*",
 											"../session.ts",
-											"../index.ts"
+											"../index.ts",
+											"../transport.ts"
 										],
 										"message": "A host owns values; it reads no log, folds nothing, and runs no seat."
 									}
@@ -171,7 +173,8 @@
 											"../tools/*",
 											"../seat/*",
 											"../session.ts",
-											"../index.ts"
+											"../index.ts",
+											"../transport.ts"
 										],
 										"message": "The journal names the room's kinds, and nothing that reads them."
 									}
@@ -197,7 +200,8 @@
 											"../tools/*",
 											"../seat/*",
 											"../session.ts",
-											"../index.ts"
+											"../index.ts",
+											"../transport.ts"
 										],
 										"message": "The room's facts and decisions are pure over the log: no host, no tool, no seat."
 									}
@@ -218,7 +222,13 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["./tools/*", "./seat/*", "./session.ts", "./index.ts"],
+										"group": [
+											"./tools/*",
+											"./seat/*",
+											"./session.ts",
+											"./index.ts",
+											"./transport.ts"
+										],
 										"message": "An answer reads the room: no workspace, no seat, and never the session."
 									}
 								]
@@ -243,7 +253,8 @@
 											"../room/*",
 											"../seat/*",
 											"../session.ts",
-											"../index.ts"
+											"../index.ts",
+											"../transport.ts"
 										],
 										"message": "A workspace is what a tool reaches into; it knows no room and no seat."
 									}
@@ -264,7 +275,13 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["../journal/*", "../room/*", "../session.ts", "../index.ts"],
+										"group": [
+											"../journal/*",
+											"../room/*",
+											"../session.ts",
+											"../index.ts",
+											"../transport.ts"
+										],
 										"message": "The seat side reaches its room through the wire alone: no log, no fold, no session."
 									}
 								]
@@ -291,8 +308,10 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["@ambionframework/ambion/*", "**/packages/ambion/src/*"],
-										"message": "Reach the core through `@ambionframework/ambion`, never a file inside it."
+										// `@ambionframework/ambion/transport` is a published entry, and
+										// the manifest names it. Every other path reaches inside the core.
+										"group": ["@ambionframework/ambion/!(transport)", "**/packages/ambion/src/*"],
+										"message": "Reach the core through `@ambionframework/ambion` or its `/transport` entry, never a file inside it."
 									}
 								]
 							}

@@ -119,10 +119,25 @@ holds, and a reviewer reads a file knowing what it cannot reach.
 | `tools/`                            | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                                     | The vocabulary, `host/`               |
 | `seat/`                             | The seat side of the wire: one activation, the tools it holds, the actor, the in-process transport                                                        | The vocabulary, `host/`, `tools/`     |
 | `session.ts`                        | The room, which composes them all                                                                                                                         | Everything                            |
+| `index.ts`, `transport.ts`          | The two published entries. They hold no logic: each one names what its reader needs                                                                       | Everything                            |
+
+**The package has two entries, for two readers.**
+`@ambionframework/ambion` is what a host needs to build a room: the five
+primitives, the session, the runtime, and the shapes a host reads off the
+record. `@ambionframework/ambion/transport` is the wire between a room and
+a seat, for a host that runs the two apart: the three calls, every shape
+they carry, `SeatActor` and `Transport`.
+`@ambionframework/cloudflare` is the one such host in this repository, and
+it reads both.
+
+`Session` and `SessionView` are the room a host holds; `SeatRoom` and
+`RunningRoom` are the room a seat calls. The split is what makes that two
+pairs and not four names for one thing.
 
 Two rules hold across packages: the core imports no platform module
 (`node:sqlite`, `cloudflare:*`), and every other package reaches the core
-through `@ambionframework/ambion`, its published surface.
+through one of those two entries. Biome refuses every other path into
+`packages/ambion/src`.
 
 ---
 

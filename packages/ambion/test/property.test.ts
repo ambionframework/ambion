@@ -12,7 +12,6 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	inProcessTransport,
 	isSummary,
 	passive,
 	type Runtime,
@@ -24,6 +23,7 @@ import {
 	type Visit,
 	visitSession,
 } from '../src/index.ts';
+import { inProcessTransport } from '../src/transport.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';

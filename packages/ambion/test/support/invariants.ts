@@ -6,11 +6,11 @@ import { expect } from 'vitest';
 import {
 	isPresence,
 	isSummary,
-	type LeaseChange,
 	type SessionEvent,
 	type SessionOpener,
 	type SessionView,
 } from '../../src/index.ts';
+import type { LeaseChange } from '../../src/transport.ts';
 import { standing } from './history.ts';
 import { storedOf } from './room.ts';
 

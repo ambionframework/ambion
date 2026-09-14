@@ -11,12 +11,9 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	inProcessTransport,
 	isSpoken,
 	isSummary,
-	type LeaseChange,
 	type Runtime,
-	type SeatRoom,
 	type Session,
 	startSession,
 	stopSession,
@@ -24,6 +21,7 @@ import {
 	visitSession,
 } from '../src/index.ts';
 import { parseId } from '../src/room/lease.ts';
+import { inProcessTransport, type LeaseChange, type SeatRoom } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
 	assistant,

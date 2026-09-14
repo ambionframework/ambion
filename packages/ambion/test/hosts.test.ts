@@ -10,12 +10,12 @@
 import { describe, expect, it } from 'vitest';
 import {
 	createRuntime,
-	inProcessTransport,
 	resumeSession,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
+import { inProcessTransport } from '../src/transport.ts';
 import {
 	agents,
 	assistant,
