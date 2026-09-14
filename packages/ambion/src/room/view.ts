@@ -14,7 +14,13 @@ import {
 	renderTurnContext,
 	type SeatSpeaking,
 } from '../render.ts';
-import type { AgentDefinition, Exchange, SeatInfo, Seq } from '../types.ts';
+import {
+	type AgentDefinition,
+	type Exchange,
+	isSpoken,
+	type SeatInfo,
+	type Seq,
+} from '../types.ts';
 import type { ActivationView, Role } from '../wire.ts';
 import type { RoomState } from './fold.ts';
 import { parseId } from './lease.ts';
@@ -128,8 +134,10 @@ function closingOver(tool: string, position: Seq, facts: RoomFacts): Bound {
 /** The exchange this activation composes the room for, and the tool it seats with. */
 function composingOver(tool: string, position: Seq, facts: RoomFacts): Bound {
 	const state = facts.state;
+	// A composing seat reads the question that opened the exchange, and a
+	// question is something a person said.
 	const question = state.messages.find((m) => m.seq === position);
-	if (question === undefined) return {};
+	if (question === undefined || !isSpoken(question)) return {};
 	return {
 		tool,
 		composing: { person: question.from, from: question.seq, limit: state.reserve.length },

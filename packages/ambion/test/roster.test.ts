@@ -266,8 +266,9 @@ describe('seating', () => {
 		const seating = presence(record).find((m) => m.kind === 'seated') as PresenceMessage;
 		expect(seating).toMatchObject({
 			kind: 'seated',
-			from: 'surveyor',
-			by: 'assistant',
+			// `from` is the author on every kind: the assistant decided this seating.
+			from: 'assistant',
+			subject: 'surveyor',
 			identity: 'Quantity surveyor. Holds the tonnage.',
 		});
 		expect(kinds(record)).toEqual(['arrived', 'said', 'seated', 'said']);
@@ -504,8 +505,9 @@ describe('the host', () => {
 		// the surveyor then said woke the product, as any say does
 		expect(activated(events)[0]).toBe('surveyor');
 		const seating = presence(await session.messages()).find((m) => m.kind === 'seated');
-		expect(seating).toMatchObject({ from: 'surveyor', identity: surveyor.identity });
-		expect(seating?.by).toBeUndefined();
+		expect(seating).toMatchObject({ subject: 'surveyor', identity: surveyor.identity });
+		// The host seated it, so nothing on the record speaks for it.
+		expect(seating?.from).toBeUndefined();
 
 		await session.unseat(surveyor);
 		expect(seatNames(session)).toEqual(['product', 'assistant']);

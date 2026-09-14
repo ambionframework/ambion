@@ -33,9 +33,9 @@ export function foldPeople(messages: readonly Message[]): Map<string, PersonStat
 	const people = new Map<string, PersonState>();
 	for (const message of messages) {
 		if (message.kind === 'arrived') {
-			const known = people.get(message.from);
-			people.set(message.from, {
-				name: message.from,
+			const known = people.get(message.subject);
+			people.set(message.subject, {
+				name: message.subject,
 				identity: message.identity ?? known?.identity ?? '',
 				presence: 'present',
 				since: known?.since,
@@ -43,9 +43,9 @@ export function foldPeople(messages: readonly Message[]): Map<string, PersonStat
 				preferences: message.preferences ?? known?.preferences,
 			});
 		} else if (message.kind === 'left') {
-			const known = people.get(message.from);
+			const known = people.get(message.subject);
 			if (known) {
-				people.set(message.from, {
+				people.set(message.subject, {
 					...known,
 					presence: 'absent',
 					since: message.seq,

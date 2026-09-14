@@ -232,9 +232,9 @@ function seating(
 	return {
 		kind: 'seated',
 		...stamp,
-		from: held.name,
+		from: seat,
+		subject: held.name,
 		identity: held.identity,
-		by: seat,
 		attention: held.attention,
 	};
 }

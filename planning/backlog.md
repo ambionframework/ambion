@@ -304,8 +304,9 @@ better than anybody when its own part is done.
   proxy for the host. The same question holds for a seat that leaves: an
   agent seated at start has no reserve to return to.
 - **What a seat's `leave` is on the record.** An `unseated` with the seat
-  itself in `by` fits the shape; whether a seat that leaves mid-exchange
-  still counts at the close follows the threshold, which reads the record.
+  itself in `from` and in `subject` fits the shape; whether a seat that
+  leaves mid-exchange still counts at the close follows the threshold,
+  which reads the record.
 
 **Where.** `seat` and `unseat` in
 [`session.ts`](../packages/ambion/src/session.ts), the composing activation in

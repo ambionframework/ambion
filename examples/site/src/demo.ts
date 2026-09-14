@@ -133,7 +133,8 @@ const seatsAtStart = session.seats();
 function track(event: SessionEvent, at: string): void {
 	if (event.type === 'message') {
 		lastSeq = event.message.seq;
-		lastFrom = event.message.from;
+		// A seating the host decided has no author, so the room itself caused it.
+		lastFrom = event.message.from ?? '(the room)';
 		return;
 	}
 	if (event.type === 'activation_start') {
@@ -176,7 +177,7 @@ function narrateMessage(m: Message): void {
 		return;
 	}
 	if (isPresence(m) && m.kind === 'seated') {
-		process.stderr.write(`+ ${m.from} seated${m.by ? ` by ${m.by}` : ''}\n`);
+		process.stderr.write(`+ ${m.subject} seated${m.from ? ` by ${m.from}` : ''}\n`);
 		return;
 	}
 	if (isSpoken(m) && !PEOPLE.has(m.from)) {

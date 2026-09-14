@@ -38,7 +38,7 @@ const said = (seq: number, from: string, extra: Partial<Message> = {}): Entry =>
 });
 const arrived = (seq: number, from: string): Entry => ({
 	kind: 'message',
-	body: { kind: 'arrived', at, from, identity: 'A person.' },
+	body: { kind: 'arrived', at, from, subject: from, identity: 'A person.' },
 	seq,
 });
 /** A lease change lands after the message that caused it, or after the close a draft answers. */
@@ -262,7 +262,7 @@ describe('decide', () => {
 		// a seat the host unseated answers nothing: what it was sent is not pending
 		const unseated = fold([
 			...opened(),
-			{ kind: 'message' as const, body: { kind: 'unseated', at, from: 'product' }, seq: 3 },
+			{ kind: 'message' as const, body: { kind: 'unseated', at, subject: 'product' }, seq: 3 },
 		]);
 		expect(unseated.pending).toEqual([]);
 	});

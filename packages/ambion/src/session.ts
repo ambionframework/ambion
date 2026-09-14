@@ -50,7 +50,6 @@ import {
 	type AgentDefinition,
 	type AgentSeat,
 	type Attention,
-	authorOf,
 	type Exchange,
 	type HumanDefinition,
 	isAgent,
@@ -647,6 +646,7 @@ class SessionImpl implements Session, RunningRoom {
 				await this.commitPresence({
 					kind: 'arrived',
 					from: human.name,
+					subject: human.name,
 					identity: human.identity,
 					...(human.preferences === undefined ? {} : { preferences: human.preferences }),
 				});
@@ -697,7 +697,7 @@ class SessionImpl implements Session, RunningRoom {
 		if (visit.gone) return;
 		visit.gone = true;
 		this.visits.delete(visit.human.name);
-		await this.commitPresence({ kind: 'left', from: visit.human.name });
+		await this.commitPresence({ kind: 'left', from: visit.human.name, subject: visit.human.name });
 	}
 
 	private async deliverFrom(
@@ -739,9 +739,10 @@ class SessionImpl implements Session, RunningRoom {
 		const held = state.reserve.find((s) => s.name === given.def.name);
 		const attention = isSeatedAgent(seat) ? seat.attention : (held?.attention ?? 'broadcast');
 		this.know({ def: given.def, attention });
+		// The host seated it, and the host is not a participant: no author.
 		await this.commitPresence({
 			kind: 'seated',
-			from: given.def.name,
+			subject: given.def.name,
 			identity: given.def.identity,
 			attention,
 		});
@@ -760,7 +761,7 @@ class SessionImpl implements Session, RunningRoom {
 			);
 		}
 		await this.revoke((seat) => seat === agent.name);
-		await this.commitPresence({ kind: 'unseated', from: agent.name });
+		await this.commitPresence({ kind: 'unseated', subject: agent.name });
 	}
 
 	// -- commits ----------------------------------------------------------------
@@ -918,7 +919,7 @@ class SessionImpl implements Session, RunningRoom {
 	 * activation, and the lease does not record it.
 	 */
 	private steer(message: Message): void {
-		const author = authorOf(message);
+		const author = message.from;
 		const state = this.state();
 		for (const [seat, ids] of this.live(state)) {
 			if (seat === author || !this.holds(state, ids)) continue;
@@ -1225,7 +1226,7 @@ class SessionImpl implements Session, RunningRoom {
 			if (person.presence !== 'present') continue;
 			const visit = this.visits.get(person.name);
 			if (visit) visit.gone = true;
-			await this.commitPresence({ kind: 'left', from: person.name }, false);
+			await this.commitPresence({ kind: 'left', from: person.name, subject: person.name }, false);
 		}
 	}
 

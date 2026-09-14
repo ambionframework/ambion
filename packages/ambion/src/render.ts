@@ -58,12 +58,17 @@ function plural(n: number, unit: string): string {
  * One line of the record. A presence message has no text, so it reads as an
  * aside; a summary reads like anything else addressed to one person, because
  * that is what it is.
+ *
+ * A presence line names the author only where it differs from the subject. A
+ * person arrives by themselves, and reading "priya arrived by priya" tells a
+ * reader nothing.
  */
 export function renderLine(message: Message): string {
 	if (isSpoken(message) || isSummary(message)) {
 		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}`;
 	}
-	return `· ${message.from} ${message.kind}${message.by ? ` by ${message.by}` : ''}`;
+	const by = message.from === undefined || message.from === message.subject;
+	return `· ${message.subject} ${message.kind}${by ? '' : ` by ${message.from}`}`;
 }
 
 /** One block of the rendered record: a message on its own, or the run one summary stands for. */
