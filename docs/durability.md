@@ -142,10 +142,11 @@ there. The room expires the lease on its alarm, so an activation that
 runs on is one attempt that came to nothing.
 
 **A claim asked twice starts one activation.** A claim of an id the room
-already runs is a renewal, and lands as a renewal. The seat asks
-again once when it never heard back. A release asked twice ends the
-lease once: the second call is answered stale. A release lost twice
-leaves the room to expire the lease on its side.
+already runs is a renewal, and lands as a renewal. The seat sends a call
+again when it never heard back, up to `runtime.call.attempts`. A release
+asked twice ends the lease once: the second call is answered stale. A
+release no attempt got through leaves the room to expire the lease on its
+side.
 
 ## 5. What the room does not promise
 

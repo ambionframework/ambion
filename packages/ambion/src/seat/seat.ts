@@ -23,7 +23,7 @@ import type {
 	StreamFn,
 } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
-import type { RunningRoom, Transport } from '../host/runtime.ts';
+import type { RunningRoom, Runtime, Transport } from '../host/runtime.ts';
 import type {
 	AgentDefinition,
 	Clock,
@@ -40,6 +40,8 @@ import { binding, toolsFor } from './tools.ts';
 /** What a seat actor needs beside the room: the clock, the catalog, and the model call the room chose. */
 export interface SeatContext {
 	readonly clock: Clock;
+	/** How many times the seat sends one call to the room before it gives up. */
+	readonly call: Runtime['call'];
 	/** Every definition the seat side resolves by name. */
 	readonly catalog: ReadonlyMap<string, AgentDefinition>;
 	readonly room: string;
@@ -166,21 +168,30 @@ export class SeatActor implements SeatPort {
 	}
 
 	/**
-	 * The lease, or nothing: the room refused it, or the claim never came
-	 * back twice. A claim the seat never heard back on is asked again once:
-	 * a claim of an id the room already runs is a renewal, so one activation
-	 * starts whichever call reached the room first.
+	 * One call to the room, sent again while it never comes back. A call the
+	 * room answers is done, whatever it answers. A call that throws reached
+	 * nobody, or its answer was lost, so the seat sends it again, up to the
+	 * attempts the runtime names. `undefined` says every attempt was lost.
 	 */
-	private async claim(id: string): Promise<{ expiry: number } | undefined> {
-		for (let attempt = 0; attempt < 2; attempt += 1) {
+	private async calls<T>(send: () => Promise<T>): Promise<T | undefined> {
+		for (let attempt = 0; attempt < this.context.call.attempts; attempt += 1) {
 			try {
-				const claimed = await this.room.lease({ activation: id, phase: 'running' });
-				return 'stale' in claimed ? undefined : claimed.ok;
+				return await send();
 			} catch {
-				// The claim never came back: asked again, once.
+				// The call never came back: sent again.
 			}
 		}
 		return undefined;
+	}
+
+	/**
+	 * The lease, or nothing: the room refused it, or no attempt at the claim
+	 * came back. A claim of an id the room already runs is a renewal, so one
+	 * activation starts whichever call reached the room first.
+	 */
+	private async claim(id: string): Promise<{ expiry: number } | undefined> {
+		const claimed = await this.calls(() => this.room.lease({ activation: id, phase: 'running' }));
+		return claimed === undefined || 'stale' in claimed ? undefined : claimed.ok;
 	}
 
 	/** The next wake that queued, to its end. */
@@ -190,20 +201,13 @@ export class SeatActor implements SeatPort {
 	}
 
 	/**
-	 * The lease is released, however the activation went. A release the seat
-	 * never heard back on is asked again once; a lease that ended answers
-	 * stale, and that is fine. A release lost twice leaves the room to end
-	 * the lease on its side.
+	 * The lease is released, however the activation went. A lease that ended
+	 * answers stale, and that is fine. A release no attempt got through
+	 * leaves the room to end the lease on its side.
 	 */
 	private async release(id: string, activation: Activation): Promise<void> {
-		for (let attempt = 0; attempt < 2; attempt += 1) {
-			try {
-				await this.room.lease({ activation: id, phase: 'ended', reason: activation.reason });
-				return;
-			} catch {
-				// The release never came back: asked again, once.
-			}
-		}
+		const { reason } = activation;
+		await this.calls(() => this.room.lease({ activation: id, phase: 'ended', reason }));
 	}
 
 	/**
@@ -302,6 +306,7 @@ export function inProcessTransport(): Transport {
 		connect(room: RunningRoom, seat, runtime) {
 			return new SeatActor(room, {
 				clock: runtime.clock,
+				call: runtime.call,
 				catalog: runtime.catalog,
 				room: room.name,
 				seat,

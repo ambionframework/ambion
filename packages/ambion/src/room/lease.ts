@@ -157,10 +157,6 @@ export interface PendingWake extends Due {
 	at: string;
 }
 
-/** Whether the next attempt at this may start: its backoff has passed. */
-export const startsNow = (owed: Pick<Due, 'notBefore'>, now: number): boolean =>
-	owed.notBefore === undefined || owed.notBefore <= now;
-
 /** What the fold needs to schedule an activation the room owes. */
 export interface DueOptions {
 	/** How long the room waits before the next attempt, after `attempt` failed ones. */

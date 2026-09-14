@@ -115,6 +115,7 @@ export class SeatObject extends DurableObject<Env> {
 		const runtime = runtimeFor({ sessions: sqlSessions(this.ctx), clock: systemClock() });
 		this.actor = new SeatActor(seatRoom, {
 			clock: runtime.clock,
+			call: runtime.call,
 			catalog: runtime.catalog,
 			room,
 			seat,

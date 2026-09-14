@@ -333,9 +333,11 @@ wake sent twice once. A wake that lands while an activation is releasing
 its lease is no steer: that activation reads nothing more, so the wake
 runs as an activation of its own, after the release. The seat runs one
 activation at a time and every wake that queued behind it in turn. A
-claim or a release the seat never heard back on
-is asked again once: a claim of an id the room already runs is a
-renewal, and a release of a lease that ended is answered stale. When a pass ends,
+claim or a release the seat never heard back on is sent again, up to
+`runtime.call.attempts`: a claim of an id the room already runs is a
+renewal, and a release of a lease that ended is answered stale. One
+policy covers both, because the seat asks the same question of each
+call — did it come back? When a pass ends,
 the activation renews its lease, and the renewal says how far the record
 reaches. An activation that heard less than that reads the room again
 through a fresh view.

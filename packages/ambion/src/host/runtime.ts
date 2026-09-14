@@ -89,6 +89,12 @@ export interface Runtime {
 	readonly wake: { readonly resend: number; readonly expiry: number; readonly deadline: number };
 	/** How many times the room retries a failed summary, and how long it waits before each retry. */
 	readonly retry: { readonly attempts: number; readonly backoff: (attempt: number) => number };
+	/**
+	 * How many times a seat sends one call to the room before it gives up. A
+	 * call the room answers is done, whatever it answers; a call that never
+	 * comes back is sent again, because the wire lost the call or the answer.
+	 */
+	readonly call: { readonly attempts: number };
 	/** How many entries the journal takes past the last checkpoint before the room writes the next one. */
 	readonly checkpoint: { readonly entries: number };
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
@@ -112,6 +118,7 @@ export interface CreateRuntimeOptions {
 	stream?: StreamFn;
 	wake?: Partial<Runtime['wake']>;
 	retry?: Partial<Runtime['retry']>;
+	call?: Partial<Runtime['call']>;
 	checkpoint?: Partial<Runtime['checkpoint']>;
 }
 
@@ -201,6 +208,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		model: options.stream ? stubModel : registryModel,
 		wake: { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake },
 		retry: { attempts: 3, backoff: (attempt) => attempt * 30_000, ...options.retry },
+		call: { attempts: 2, ...options.call },
 		checkpoint: { entries: 256, ...options.checkpoint },
 		evict(name) {
 			const room = running.get(name);
