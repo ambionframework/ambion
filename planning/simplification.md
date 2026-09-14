@@ -354,8 +354,7 @@ A decision taken before the write would be stale there. The room's
 reaction to an entry shares `sentAt` and `idleReported` with the pass, so
 `backlog.md` §3 holds the reason those stay together.
 
-**What is left.** `next.md` §4 asked for 600 lines, and this stops at
-1279. The three largest sections are the room's construction (158), what
+**What is left.** `next.md` §4 asked for 600 lines, and this stops at 1279. The three largest sections are the room's construction (158), what
 it hears (156) and control (148). Item 8 thins the first, and no item yet
 names a cut for the other two.
 

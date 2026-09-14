@@ -144,9 +144,7 @@ describe('decide', () => {
 		expect(decide(state, sent).sends).toEqual([]);
 		expect(decide(state, sent).alarmAt).toBe(T0 + 5_000);
 		const later = options({ now: T0 + 5_000, sent: new Map([['message:2:product:1', T0]]) });
-		expect(decide(state, later).sends).toEqual([
-			{ id: 'message:2:product:1', seat: 'product' },
-		]);
+		expect(decide(state, later).sends).toEqual([{ id: 'message:2:product:1', seat: 'product' }]);
 	});
 
 	it('drafts again after the backoff, and stops at the cap', () => {
