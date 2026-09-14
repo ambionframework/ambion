@@ -49,7 +49,7 @@ attention scale. `wakes` had been in `seat/seat.ts`, where only
 **What does not split.** The room's reaction to an entry (`hear` and the
 three `heard` methods) shares two fields with the reconcile loop:
 `sentAt`, which `send` writes and `forget` and `decide` read, and
-`idleReported`, which four methods write. Two files over one pair of
+`reportedRest`, which four methods write. Two files over one pair of
 mutable fields spreads the state the way `next.md` §1 warned three
 booleans would. They are one concern, and what is left of item 3 is to
 widen `decide` to cover the whole step, where both of them live.
@@ -110,12 +110,17 @@ Model<Api>` when a host passes a custom `streamFn`.
 
 ### 43. A draft in its backoff lets the room report quiet
 
-**What.** `liveSeats` in `room/reconcile.ts` holds a seat live for a
+**What.** `liveWork` in `room/reconcile.ts` holds a seat live for a
 pending wake whatever its backoff, and holds the assistant live for an
 owed draft only once the backoff has passed. So a draft that failed
 leaves the room reporting `quiet` for the length of the backoff, and
 `quiet()` resolves, although the assistant still owes that person a
 message and drafts again 30 seconds later.
+
+Item 1 made both of them one list, `state.due`, so the asymmetry is now
+two lines over one list. `reconcile.test.ts` pins today's behaviour, and
+`assistant.test.ts` and [`docs/assistant.md`](../docs/assistant.md) state
+it as the contract. A fix changes all three.
 
 **Why.** `SessionEvent.quiet` says what it means: "no seat is taking an
 activation, and the assistant owes nobody a message". The second half is
@@ -123,10 +128,11 @@ untrue in that window, and `quiet()` is what a host waits on when it
 wants the one message a person reads
 ([`docs/agent.md`](../docs/agent.md) §5).
 
-**Where.** `packages/ambion/src/room/reconcile.ts`, `liveSeats`.
+**Where.** `packages/ambion/src/room/reconcile.ts`, `liveSeats`, which
+`liveWork` calls.
 
 **Fix.** Hold the assistant live for every owed draft, the way a pending
-wake holds its seat. It is one word in `liveSeats`, and it needs one
+wake holds its seat. It is one line in `liveSeats`, and it needs one
 decision first: a live assistant is a seat `routing` will not wake, so a
 question that opens an exchange during that window would not wake the
 assistant to compose. That is already true of a draft that is due now,

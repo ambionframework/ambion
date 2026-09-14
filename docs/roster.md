@@ -254,7 +254,8 @@ the newcomer wakes inside it, and the summary written at the close covers
 what the newcomer said.
 
 So the room draws one distinction about its assistant: a drafting
-activation is outside `working()`, a composing activation is inside it. The
+activation holds no exchange open, and a composing activation holds one.
+`liveWork` in `room/reconcile.ts` reads the cause of each activation. The
 room reconciles once after every commit, every lease change, every alarm
 and every wake: if nothing is working, the exchange closes, and if a
 summary is owed and the assistant is idle, the room wakes it.

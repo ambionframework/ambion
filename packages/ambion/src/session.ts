@@ -42,7 +42,7 @@ import { renderLine } from './render.ts';
 import { checkpointOf, foldRoom, type RoomState } from './room/fold.ts';
 import { activationId, isExpired, isLive, parseId, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
-import { type Decision, decide, liveSeats, working } from './room/reconcile.ts';
+import { type Decision, decide, type LiveWork, liveWork } from './room/reconcile.ts';
 import { routes } from './room/routing.ts';
 import { seatsOf } from './room/view.ts';
 import { inProcessTransport } from './seat/seat.ts';
@@ -310,7 +310,8 @@ class ReadOnlySession implements SessionView {
 	/** The roster the journal folds, and everybody the record knows. Nothing stands up. */
 	seats(): SeatInfo[] {
 		const state = foldRoom(this.journal.entries, this.runtime.retry);
-		return seatsOf({ name: this.name, state, live: liveSeats(state, this.runtime.clock.now()) });
+		const live = liveWork(state, this.runtime.clock.now()).seats;
+		return seatsOf({ name: this.name, state, live });
 	}
 
 	/** Nothing is running, so nothing happens. The listener is never called. */
@@ -361,8 +362,8 @@ class SessionImpl implements Session, RunningRoom {
 	private phase: Phase = 'starting';
 	/** This run's id: the fence it writes first, and the stamp on every entry it writes. */
 	private readonly run = crypto.randomUUID();
-	/** Whether the room has reported quiet since it was last busy. */
-	private idleReported = true;
+	/** Whether the room has told the host about the rest it is in. */
+	private reportedRest = true;
 
 	static start(options: StartSessionOptions, runtime: Runtime): SessionImpl {
 		return new SessionImpl(options.name, runtime, options, composeFrom(options));
@@ -479,10 +480,22 @@ class SessionImpl implements Session, RunningRoom {
 		this.evict();
 	}
 
-	/** A room with an exchange open or a lease live is busy, and says so when it goes quiet. */
+	/** A room that resumed onto an open exchange or a live seat took on work. */
 	private wake(): void {
 		const state = this.state();
-		if (state.exchange !== undefined || this.live(state).size > 0) this.idleReported = false;
+		if (state.exchange !== undefined || !this.work(state).rest) this.busy();
+	}
+
+	/**
+	 * The room took on work, so the rest that follows is its own to report.
+	 * `settle` says `quiet` once per stretch of work, and this is the edge
+	 * between one stretch and the next.
+	 *
+	 * Three things start a stretch: an exchange opens, an activation starts,
+	 * and a resumed room finds either already there.
+	 */
+	private busy(): void {
+		this.reportedRest = false;
 	}
 
 	// -- what the room holds --------------------------------------------------
@@ -580,7 +593,7 @@ class SessionImpl implements Session, RunningRoom {
 		await this.ready;
 		await this.stilled();
 		// A room that went away while this waited never settles on its own, so nobody waits on it.
-		if (this.gone() || !working(this.state(), this.now())) return;
+		if (this.gone() || !this.work(this.state()).exchange) return;
 		return new Promise((resolve) => this.settledWaiters.push(resolve));
 	}
 
@@ -589,7 +602,7 @@ class SessionImpl implements Session, RunningRoom {
 		if (this.gone()) return;
 		await this.ready;
 		await this.stilled();
-		if (this.gone() || this.idle()) return;
+		if (this.gone() || this.work(this.state()).rest) return;
 		return new Promise((resolve) => this.quietWaiters.push(resolve));
 	}
 
@@ -602,14 +615,14 @@ class SessionImpl implements Session, RunningRoom {
 		} while (awaited !== this.reconciling);
 	}
 
-	/** Nothing at all is live: no lease held, no wake pending, no draft due. */
-	private idle(): boolean {
-		return this.live(this.state()).size === 0;
+	/** What the room is working on: the seats live now, and what holds them. */
+	private work(state: RoomState): LiveWork {
+		return liveWork(state, this.now());
 	}
 
-	/** The seats live now: a lease held, a wake pending, or a draft due. */
+	/** The seats live now, for a caller that reads no more than the names. */
 	live(state: RoomState): Map<string, string[]> {
-		return liveSeats(state, this.now());
+		return this.work(state).seats;
 	}
 
 	// -- people -----------------------------------------------------------------
@@ -863,7 +876,7 @@ class SessionImpl implements Session, RunningRoom {
 		const seat = seatOf(lease.id) ?? '';
 		if (lease.phase === 'running') {
 			if (first) {
-				this.idleReported = false;
+				this.busy();
 				this.emit({ type: 'activation_start', agent: seat });
 			}
 			// A claim that lost its confirmation never armed the expiry: this pass does.
@@ -893,7 +906,7 @@ class SessionImpl implements Session, RunningRoom {
 	private noteExchange(seq: Seq): void {
 		const state = this.state();
 		if (state.exchange?.from !== seq) return;
-		this.idleReported = false;
+		this.busy();
 		this.emit({ type: 'exchange_opened', exchange: state.exchange });
 	}
 
@@ -1096,13 +1109,13 @@ class SessionImpl implements Session, RunningRoom {
 	 * it has not said so since it was last busy. A stopped room never says it.
 	 */
 	private settle(): void {
-		const state = this.state();
-		if (!working(state, this.now())) {
+		const work = this.work(this.state());
+		if (!work.exchange) {
 			for (const resolve of this.settledWaiters.splice(0)) resolve();
 		}
-		if (!this.idle()) return;
-		if (!this.idleReported && !this.gone()) {
-			this.idleReported = true;
+		if (!work.rest) return;
+		if (!this.reportedRest && !this.gone()) {
+			this.reportedRest = true;
 			this.emit({ type: 'quiet' });
 		}
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
