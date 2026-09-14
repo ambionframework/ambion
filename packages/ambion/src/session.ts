@@ -1022,35 +1022,42 @@ class SessionImpl implements Session, RunningRoom {
 	private async reconcileOnce(): Promise<void> {
 		await this.journal.ready;
 		for (let pass = 0; pass < PASSES && !this.gone(); pass += 1) {
-			const decision = decide(this.state(), {
-				now: this.now(),
-				resend: this.runtime.wake.resend,
-				attempts: this.runtime.retry.attempts,
-				sent: this.sentAt,
-				sinceCheckpoint: this.journal.sinceCheckpoint,
-				checkpointEvery: this.runtime.checkpoint.entries,
-				stopped: this.gone(),
-			});
-			let changed: boolean;
-			try {
-				changed = await this.apply(decision);
-			} catch {
-				this.settle();
-				// A write that failed because the room is gone arms nothing.
-				if (!this.gone()) this.arm(this.now() + this.runtime.wake.resend);
-				return;
-			}
-			// Whoever waits hears it once the room has nothing more to write: a
-			// pass that expired a lease is followed by the pass that closes.
-			if (!changed) {
-				if (decision.checkpoint) await this.checkpoint();
-				this.settle();
-				this.arm(decision.alarmAt);
-				return;
-			}
+			if (await this.onePass()) return;
 		}
 		// A pass that kept writing yields, and the room looks again after the resend window.
 		if (!this.gone()) this.arm(this.now() + this.runtime.wake.resend);
+	}
+
+	/**
+	 * One pass: decide, apply, and arm the clock where the room stops. True
+	 * where the room has nothing more to write, and the caller stops looking.
+	 */
+	private async onePass(): Promise<boolean> {
+		const decision = decide(this.state(), {
+			now: this.now(),
+			resend: this.runtime.wake.resend,
+			attempts: this.runtime.retry.attempts,
+			sent: this.sentAt,
+			sinceCheckpoint: this.journal.sinceCheckpoint,
+			checkpointEvery: this.runtime.checkpoint.entries,
+			stopped: this.gone(),
+		});
+		let changed: boolean;
+		try {
+			changed = await this.apply(decision);
+		} catch {
+			this.settle();
+			// A write that failed because the room is gone arms nothing.
+			if (!this.gone()) this.arm(this.now() + this.runtime.wake.resend);
+			return true;
+		}
+		if (changed) return false;
+		// Whoever waits hears it once the room has nothing more to write: a
+		// pass that expired a lease is followed by the pass that closes.
+		if (decision.checkpoint) await this.checkpoint();
+		this.settle();
+		this.arm(decision.alarmAt);
+		return true;
 	}
 
 	/** Write what the decision wrote, send what it sent. True when anything changed. */
