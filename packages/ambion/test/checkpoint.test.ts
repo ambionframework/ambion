@@ -157,9 +157,9 @@ describe('a checkpoint', () => {
 			},
 		];
 		const before = foldRoom(entries, retry);
-		expect(before.owed.map((owed) => [owed.from, owed.through, owed.attempts])).toEqual([
-			[2, 2, 1],
-		]);
+		expect(before.owed.map((owed) => [owed.from, owed.through, owed.unsuccessfulAttempts])).toEqual(
+			[[2, 2, 1]],
+		);
 		const checkpoint = checkpointOf(before, Date.parse(at));
 		if (checkpoint === undefined) throw new Error('Expected a checkpoint.');
 		expect(checkpoint.leases.map((lease) => lease.id)).toContain('closed:2:assistant:1');
@@ -171,7 +171,9 @@ describe('a checkpoint', () => {
 			retry,
 		);
 		expect(after.owed).toEqual(before.owed);
-		expect(after.owed.map((owed) => [owed.from, owed.through, owed.attempts])).toEqual([[2, 2, 1]]);
+		expect(after.owed.map((owed) => [owed.from, owed.through, owed.unsuccessfulAttempts])).toEqual([
+			[2, 2, 1],
+		]);
 		const broad = foldRoom(
 			[
 				...entries.filter((entry) => entry.kind !== 'lease'),

@@ -32,11 +32,11 @@ import {
 	applyLease,
 	type CauseOf,
 	cameToNothing,
-	type Due,
-	dueFrom,
 	isLive,
+	type PendingActivation,
 	type PendingWake,
 	parseId,
+	pendingActivation,
 	pendingWakes,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
@@ -64,7 +64,7 @@ export const answering = (
 ): RosterSeat | undefined => roster.find((seat) => seat.role?.answers[event] !== undefined);
 
 /** A summary one person is owed, and how the room has tried to write it. */
-interface Owed extends Due {
+interface Owed extends PendingActivation {
 	person: string;
 	/** The seat the close named to write it. */
 	writer: string;
@@ -85,7 +85,7 @@ export interface RoomState {
 	readonly pending: PendingWake[];
 	readonly owed: Owed[];
 	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
-	readonly due: Due[];
+	readonly due: PendingActivation[];
 	readonly messages: readonly Message[];
 	readonly lastSeq: Seq;
 	/** No wake on a message before this seq is pending: the latest checkpoint said so. */
@@ -310,14 +310,14 @@ function judged(leases: ReadonlyMap<string, LeaseHold>, close: Close): boolean {
  * closes came to nothing, when the next may start, and the id it claims.
  */
 function withAttempts(
-	owed: Omit<Owed, keyof Due>,
+	owed: Omit<Owed, keyof PendingActivation>,
 	leases: ReadonlyMap<string, LeaseHold>,
 	context: OwedContext,
 ): Owed {
 	const failed = [...leases.values()].filter((lease) => draftedOver(lease, owed.through));
 	return {
 		...owed,
-		...dueFrom('closed', owed.through, owed.writer, failed, context),
+		...pendingActivation('closed', owed.through, owed.writer, failed, context),
 	};
 }
 

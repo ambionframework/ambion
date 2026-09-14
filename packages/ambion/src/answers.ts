@@ -3,16 +3,17 @@
 import type { Committed } from '@ambionframework/journal';
 import type { Runtime } from './host/runtime.ts';
 import { type Body, placed, type RoomJournal } from './journal/journal.ts';
+import { activationSpec } from './room/activation.ts';
 import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import type { AgentDefinition, Message, Seq, SessionEvent } from './types.ts';
+import type { AgentDefinition, Message, SessionEvent } from './types.ts';
 import type {
-	Commit,
-	CommitResponse,
+	CommitRequest,
+	CommitResult,
 	EndReason,
-	Lease,
+	LeaseRequest,
 	LeaseResponse,
 	Stale,
 	ViewResponse,
@@ -49,8 +50,9 @@ export interface Answering {
 	definition(seat: string): AgentDefinition | undefined;
 	emit(event: SessionEvent): void;
 	/** One operation on the room's commit queue, with the wakes the room routes. */
-	write(commit: Commit): Promise<Committed<Body<Message>, Body<Message>>>;
+	write(commit: CommitRequest): Promise<Committed<Body<Message>, Body<Message>>>;
 	claim(id: string): Promise<LeaseResponse>;
+	renew(id: string): Promise<LeaseResponse>;
 	/** End one lease, for whatever reason. Nothing to end is not an error. */
 	end(id: string, reason: EndReason): Promise<boolean>;
 	reconcile(): Promise<void>;
@@ -68,9 +70,11 @@ export async function answerView(room: Answering, id: string): Promise<ViewRespo
 	const state = room.state();
 	const seat = liveSeatOf(room, id, state);
 	if (seat === undefined) return stale('the lease ended');
+	const spec = activationSpec(id, state);
+	if (spec === undefined || spec.seat !== seat) return stale('the activation has no current grant');
 	const def = room.definition(seat);
 	if (def === undefined) return stale('the seat left the roster');
-	return { view: viewOf(id, seat, def, facts(room, state)) };
+	return { view: viewOf(spec, def, facts(room, state)) };
 }
 
 /** What a view is built from: the fold, and what the room holds beside it. */
@@ -103,20 +107,11 @@ function liveSeatOf(room: Answering, id: string, state: RoomState): string | und
  * `readThrough`. A lease that ended is answered `stale`, before and where
  * the write happens.
  */
-export async function answerCommit(room: Answering, commit: Commit): Promise<CommitResponse> {
+export async function answerCommit(room: Answering, commit: CommitRequest): Promise<CommitResult> {
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
 	const seat = liveSeatOf(room, commit.activation, room.state());
 	if (seat === undefined) return stale('the lease ended');
-	// Rule 5 comes first: a seat that has not read the record is told what
-	// it missed before anything else is checked, so a say at a colleague
-	// who left in the meantime reads the departure. The queue runs the same
-	// check again where the write happens.
-	const missed = commit.intent.kind === 'summary' ? undefined : unheard(room, commit.readThrough);
-	if (missed !== undefined) {
-		room.emit({ type: 'conflict', author: seat, missed });
-		return { missed };
-	}
 	try {
 		return landed(room, seat, await room.write(commit));
 	} catch (error) {
@@ -125,7 +120,7 @@ export async function answerCommit(room: Answering, commit: Commit): Promise<Com
 	}
 }
 
-function refused(room: Answering, seat: string, refusal: Refusal): CommitResponse {
+function refused(room: Answering, seat: string, refusal: Refusal): CommitResult {
 	if (refusal.category === 'missed') {
 		room.emit({ type: 'conflict', author: seat, missed: refusal.missed });
 		return { missed: refusal.missed };
@@ -138,19 +133,13 @@ function landed(
 	room: Answering,
 	seat: string,
 	committed: Committed<Body<Message>, Body<Message>>,
-): CommitResponse {
+): CommitResult {
 	if ('missed' in committed) {
 		const missed = committed.missed.map(placed);
 		room.emit({ type: 'conflict', author: seat, missed });
 		return { missed };
 	}
 	return { committed: placed(committed.entry) };
-}
-
-/** What the record holds past what the author read, or nothing when it read everything. */
-function unheard(room: Answering, readThrough: Seq | undefined): Message[] | undefined {
-	if (readThrough === undefined || room.journal.lastCommitted <= readThrough) return undefined;
-	return room.journal.messages(readThrough);
 }
 
 // -- lease --------------------------------------------------------------------
@@ -160,18 +149,30 @@ function unheard(room: Answering, readThrough: Seq | undefined): Message[] | und
  * on the roster; a release is answered from the fold, whatever the room's
  * state, and the room hears how the activation went.
  */
-export async function answerLease(room: Answering, lease: Lease): Promise<LeaseResponse> {
+export async function answerLease(room: Answering, lease: LeaseRequest): Promise<LeaseResponse> {
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
 	const seat = seatOf(lease.activation);
 	if (seat === undefined || !onRoster(room.state(), seat)) {
 		return stale('the seat is not on the roster');
 	}
-	return lease.phase === 'running' ? room.claim(lease.activation) : release(room, lease);
+	switch (lease.operation) {
+		case 'claim':
+			return room.claim(lease.activation);
+		case 'renew':
+			return room.renew(lease.activation);
+		case 'release':
+			return release(room, lease);
+		default:
+			return stale('the lease operation is not known');
+	}
 }
 
-async function release(room: Answering, lease: Lease): Promise<LeaseResponse> {
-	const ended = await room.end(lease.activation, lease.reason ?? 'released');
+async function release(
+	room: Answering,
+	lease: Extract<LeaseRequest, { operation: 'release' }>,
+): Promise<LeaseResponse> {
+	const ended = await room.end(lease.activation, lease.reason);
 	if (!ended) return stale('the lease ended');
 	void room.reconcile();
 	return { ok: { expiry: now(room), lastSeq: room.journal.lastCommitted } };

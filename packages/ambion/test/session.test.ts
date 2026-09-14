@@ -692,19 +692,25 @@ describe('startSession', () => {
 		await visit.deliver({ text: 'first' });
 		const room = runtime.running.get(session.name);
 		if (room === undefined) throw new Error('the room is not running');
-		const claimed = await room.lease({ activation: 'message:4:solo:1', phase: 'running' });
+		expect(await room.lease({ activation: 'message:4:solo:1', operation: 'renew' })).toEqual({
+			stale: 'the lease ended',
+		});
+		const claimed = await room.lease({ activation: 'message:4:solo:1', operation: 'claim' });
 		expect(claimed).toMatchObject({ ok: {} });
+		expect(await room.lease({ activation: 'message:4:solo:1', operation: 'claim' })).toMatchObject({
+			ok: {},
+		});
 		// A renewal writes an entry beside the record, and the record stands
 		// where it stood. The seat reads `lastSeq` against what its view held to
 		// decide whether to read again: a renewal that reported its own landing
 		// as movement would read again, renew again, and never stop.
-		const renewed = await room.lease({ activation: 'message:4:solo:1', phase: 'running' });
+		const renewed = await room.lease({ activation: 'message:4:solo:1', operation: 'renew' });
 		expect(renewed).toMatchObject({
 			ok: { lastSeq: 'ok' in claimed ? claimed.ok.lastSeq : -1 },
 		});
 		// the record moves past what the activation read, and then its lease ends
 		await visit.deliver({ text: 'second' });
-		await room.lease({ activation: 'message:4:solo:1', phase: 'ended', reason: 'released' });
+		await room.lease({ activation: 'message:4:solo:1', operation: 'release', reason: 'released' });
 		const late = await room.commit({
 			activation: 'message:4:solo:1',
 			key: 'late',
@@ -715,6 +721,50 @@ describe('startSession', () => {
 		// so the room reports no conflict for a seat that has nothing to redraft
 		expect(late).toEqual({ stale: 'the lease ended' });
 		expect(events.some((event) => event.type === 'conflict')).toBe(false);
+		await stopSession(session);
+	});
+
+	it('refuses omitted and invalid speech freshness through the room port', async () => {
+		const runtime = createRuntime({
+			transport: { connect: () => ({ wake: async () => {}, cut: async () => {} }) },
+		});
+		const session = startSession({
+			name: roomName('freshness'),
+			assistant,
+			agents: [
+				defineAgent({ name: 'solo', identity: 'S.', instructions: '.', model: 'scripted/solo' }),
+			],
+			runtime,
+			streamFn: scripted(() => quiet()),
+		});
+		const visit = await enter(session);
+		await visit.deliver({ text: 'first' });
+		const room = runtime.running.get(session.name);
+		if (room === undefined) throw new Error('the room is not running');
+		expect(await room.lease({ activation: 'message:4:solo:1', operation: 'claim' })).toMatchObject({
+			ok: {},
+		});
+		const before = await session.messages();
+		for (const readThrough of [undefined, -1, 1.5, 99]) {
+			const reply = await room.commit({
+				activation: 'message:4:solo:1',
+				key: `fresh-${readThrough}`,
+				...(readThrough === undefined ? {} : { readThrough }),
+				intent: { kind: 'said', text: 'x' },
+			});
+			expect(reply).toMatchObject({ refused: expect.any(String) });
+		}
+		expect(await session.messages()).toEqual(before);
+		const opened = await room.view('message:4:solo:1');
+		if ('stale' in opened) throw new Error('Expected a live activation.');
+		expect(
+			await room.commit({
+				activation: 'message:4:solo:1',
+				key: 'fresh-valid',
+				readThrough: opened.view.spec.through,
+				intent: { kind: 'said', text: 'valid' },
+			}),
+		).toMatchObject({ committed: { text: 'valid' } });
 		await stopSession(session);
 	});
 

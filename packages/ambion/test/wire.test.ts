@@ -8,11 +8,11 @@ import {
 	type ActivationView,
 	assertWire,
 	type Close,
-	type Commit,
-	type CommitResponse,
+	type CommitRequest,
+	type CommitResult,
 	type Composition,
-	type Lease,
 	type LeaseChange,
+	type LeaseRequest,
 	type LeaseResponse,
 	roundTrip,
 	type ViewResponse,
@@ -53,16 +53,20 @@ const wake: Wake = {
 	steer: { seq: 3, line: '[priya] And the pump?' },
 };
 const view: ActivationView = {
-	activation: 'closed:4:assistant:1',
-	seat: 'assistant',
+	spec: {
+		id: 'closed:4:assistant:1',
+		seat: 'assistant',
+		attempt: 1,
+		cause: 'closed',
+		through: 4,
+		closing: { person: 'priya', from: 2, through: 4 },
+		grant: { kind: 'summary', tool: 'summarise' },
+	},
 	model: 'scripted/assistant',
-	lastSeq: 4,
 	systemPrompt: 'You are the assistant.',
 	context: 'The record so far.',
-	tool: 'summarise',
-	closing: { person: 'priya', from: 2, through: 4 },
 };
-const requests: Record<string, Commit | Lease | string> = {
+const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 	say: {
 		activation: 'message:2:product:1',
 		key: 'call-1',
@@ -91,11 +95,11 @@ const requests: Record<string, Commit | Lease | string> = {
 		key: 'call-4',
 		intent: { kind: 'seated', name: 'surveyor' },
 	},
-	claim: { activation: 'message:2:product:1', phase: 'running' },
-	release: { activation: 'message:2:product:1', phase: 'ended', reason: 'released' },
+	claim: { activation: 'message:2:product:1', operation: 'claim' },
+	release: { activation: 'message:2:product:1', operation: 'release', reason: 'released' },
 	viewOf: 'message:2:product:1',
 };
-const responses: Record<string, ViewResponse | CommitResponse | LeaseResponse> = {
+const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 	view: { view },
 	stale: { stale: 'the lease ended' },
 	committed: {

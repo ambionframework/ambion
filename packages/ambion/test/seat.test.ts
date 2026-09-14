@@ -8,8 +8,8 @@ import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { type Clock, createRuntime, defineAgent } from '../src/index.ts';
 import {
-	type CommitResponse,
-	type Lease,
+	type CommitResult,
+	type LeaseRequest,
 	type LeaseResponse,
 	SeatActor,
 	type SeatRoom,
@@ -54,26 +54,30 @@ class PlayedRoom implements SeatRoom {
 	async view(activation: string): Promise<ViewResponse> {
 		return {
 			view: {
-				activation,
-				seat: 'product',
+				spec: {
+					id: activation,
+					seat: 'product',
+					attempt: 1,
+					cause: 'message',
+					through: 1,
+					grant: { kind: 'say', tool: 'say' },
+				},
 				model: 'scripted/product',
-				lastSeq: 1,
 				systemPrompt: 'You are the product.',
 				context: 'The record so far.',
-				tool: 'say',
 			},
 		};
 	}
 
-	async commit(): Promise<CommitResponse> {
+	async commit(): Promise<CommitResult> {
 		return { refused: 'nothing lands here' };
 	}
 
-	async lease(lease: Lease): Promise<LeaseResponse> {
+	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
 		const ok = { ok: { expiry: this.clock.now() + 60_000, lastSeq: 1 } };
-		if (lease.phase === 'running') {
+		if (lease.operation === 'claim' || lease.operation === 'renew') {
 			// A lease not yet held is a claim; one held is a renewal.
-			if (!this.holding.has(lease.activation)) {
+			if (lease.operation === 'claim') {
 				this.claimed(lease.activation);
 				return ok;
 			}
@@ -81,7 +85,7 @@ class PlayedRoom implements SeatRoom {
 			if (this.refuseRenewals) return { stale: 'the lease ended' };
 			return this.capRenewals === undefined ? ok : { ok: { expiry: this.capRenewals, lastSeq: 1 } };
 		}
-		if (this.releases.length === 0) {
+		if (lease.operation === 'release' && this.releases.length === 0) {
 			this.releasing.resolve();
 			await this.letGo.promise;
 		}

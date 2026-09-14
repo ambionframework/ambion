@@ -121,7 +121,7 @@ describe('a lease', () => {
 
 	it('expires a lease whose release was lost twice, and answers the late release stale', async () => {
 		// a release the seat never heard back on is asked again once, so both are lost
-		const ended = (l: unknown) => (l as { phase: string }).phase === 'ended';
+		const ended = (l: unknown) => (l as { operation: string }).operation === 'release';
 		const { session, clock } = open(
 			[
 				{ on: 'lease', kind: 'drop', match: ended },
@@ -158,7 +158,7 @@ describe('a lease', () => {
 
 		const room = session as unknown as SeatRoom;
 		await expect(
-			room.lease({ activation: 'message:2:solo:1', phase: 'ended', reason: 'released' }),
+			room.lease({ activation: 'message:2:solo:1', operation: 'release', reason: 'released' }),
 		).resolves.toEqual({
 			stale: 'the lease ended',
 		});
@@ -291,8 +291,8 @@ describe('a lease', () => {
 	it('refuses a commit from an activation whose renewals were lost past the expiry', async () => {
 		const held = deferred();
 		// the claim goes through; the one renewal before the expiry is lost
-		const renewals = (l: unknown) => (l as { phase: string }).phase === 'running';
-		const faults: Fault[] = [{ on: 'lease', kind: 'drop', match: renewals, skip: 1 }];
+		const renewals = (l: unknown) => (l as { operation: string }).operation === 'renew';
+		const faults: Fault[] = [{ on: 'lease', kind: 'drop', match: renewals }];
 		const { session, clock } = open(faults, async (_c, _a, call) => {
 			if (call !== 1) return quiet();
 			await held.promise;
@@ -331,7 +331,7 @@ describe('a lease', () => {
 		// activation: the released lease heard through its renewal, so the
 		// question is pending for the seat, and the seat is woken for it.
 		let visit: Visit | undefined;
-		const releases = (l: unknown) => (l as { phase: string }).phase === 'ended';
+		const releases = (l: unknown) => (l as { operation: string }).operation === 'release';
 		const faults: Fault[] = [
 			{
 				on: 'lease',

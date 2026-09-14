@@ -2,7 +2,8 @@
 
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
 import type { Message, PresenceMessage } from '../types.ts';
-import type { Close, Commit, Composition, EndReason } from '../wire.ts';
+import type { ActivationSpec, Close, CommitRequest, Composition, EndReason } from '../wire.ts';
+import { activationSpec } from './activation.ts';
 import {
 	applyEvent,
 	baseOf,
@@ -11,7 +12,7 @@ import {
 	project,
 	type RoomState,
 } from './fold.ts';
-import { isExpired, isLive, parseId, seatOf } from './lease.ts';
+import { isExpired, isLive, seatOf } from './lease.ts';
 import {
 	liveWork,
 	planReconciliation,
@@ -31,9 +32,10 @@ type PresenceChange = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 type MessageCommand =
 	| { type: 'deliver'; from: string; to?: string; text: string }
 	| { type: 'presence'; change: PresenceChange; route: boolean }
-	| { type: 'commit'; commit: Commit };
+	| { type: 'commit'; commit: CommitRequest };
 type LeaseCommand =
 	| { type: 'claim'; id: string; expiry: number; deadline: number }
+	| { type: 'renew'; id: string; expiry: number; deadline: number }
 	| { type: 'end'; id: string; reason: EndReason };
 type ComposeCommand = { type: 'compose'; composition: Body<Composition> };
 type CloseCommand = { type: 'close'; close: Close };
@@ -102,6 +104,8 @@ export function decide(
 			return commit(state, command.commit, now);
 		case 'claim':
 			return claim(state, command, now);
+		case 'renew':
+			return renew(state, command, now);
 		case 'end':
 			return end(state, command, now);
 		case 'compose':
@@ -216,51 +220,64 @@ function arrivalRefusal(state: RoomState, change: PresenceChange): string | unde
 	return undefined;
 }
 
-function commit(state: RoomState, request: Commit, now: number): RoomDecision<'message'> {
-	const seat = seatOf(request.activation);
-	const held = state.leases.get(request.activation);
-	if (
-		seat === undefined ||
-		held === undefined ||
-		!isLive(held, now) ||
-		!state.roster.some((candidate) => candidate.name === seat)
-	) {
-		return stale('the lease ended');
-	}
+function commit(state: RoomState, request: CommitRequest, now: number): RoomDecision<'message'> {
+	const spec = activationSpec(request.activation, state);
+	const live = liveSpec(state, request.activation, spec, now);
+	if ('refusal' in live) return live;
 	const { intent } = request;
-	const readThrough = request.readThrough;
-	if (intent.kind !== 'summary' && readThrough !== undefined && state.lastSeq > readThrough) {
-		return {
-			refusal: {
-				category: 'missed',
-				missed: state.messages.filter((entry) => entry.seq > readThrough),
-			},
-		};
-	}
-	const stamp = { at: iso(now), activationId: request.activation, from: seat };
+	if (!permits(live, intent.kind)) return refused('This activation cannot submit that intent.');
+	const fresh = speechFreshness(state, request);
+	if (fresh !== undefined) return fresh;
+	const stamp = { at: iso(now), activationId: request.activation, from: live.seat };
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
-	if (intent.kind === 'summary')
-		return summary(state, request.activation, seat, intent, stamp, now);
-	const reason = addressRefusal(state, seat, intent.to);
+	if (intent.kind === 'summary') return summary(state, live, intent, stamp, now);
+	const reason = addressRefusal(state, live.seat, intent.to);
 	return reason === undefined ? message(state, { ...intent, ...stamp }, now) : refused(reason);
+}
+
+function liveSpec(
+	state: RoomState,
+	id: string,
+	spec: ActivationSpec | undefined,
+	now: number,
+): ActivationSpec | { refusal: Refusal } {
+	const held = state.leases.get(id);
+	if (held === undefined || !isLive(held, now)) return stale('the lease ended');
+	if (spec === undefined) return refused('This activation has no room grant.');
+	return state.roster.some((candidate) => candidate.name === spec.seat)
+		? spec
+		: stale('the lease ended');
+}
+
+function speechFreshness(
+	state: RoomState,
+	request: CommitRequest,
+): RoomDecision<'message'> | undefined {
+	if (request.intent.kind !== 'said') return undefined;
+	const { readThrough } = request;
+	if (!validReadThrough(readThrough, state.lastSeq))
+		return refused('A spoken message must state a current record position.');
+	return readThrough < state.lastSeq
+		? {
+				refusal: {
+					category: 'missed',
+					missed: state.messages.filter((entry) => entry.seq > readThrough),
+				},
+			}
+		: undefined;
 }
 
 function summary(
 	state: RoomState,
-	id: string,
-	seat: string,
-	intent: Extract<Commit['intent'], { kind: 'summary' }>,
+	spec: ActivationSpec,
+	intent: Extract<CommitRequest['intent'], { kind: 'summary' }>,
 	stamp: { at: string; activationId: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
-	const parsed = parseId(id);
-	const position = parsed?.position;
-	const close = state.closes.find((candidate) => candidate.through === position);
+	const close = spec.cause === 'closed' ? spec.closing : undefined;
 	if (
-		parsed?.cause !== 'closed' ||
 		close === undefined ||
-		close.wakes?.[0] !== seat ||
-		close.owner !== intent.to ||
+		close.person !== intent.to ||
 		close.from !== intent.covers.from ||
 		close.through !== intent.covers.through
 	)
@@ -269,13 +286,35 @@ function summary(
 		state.messages.some(
 			(message) =>
 				message.kind === 'summary' &&
-				message.to === close.owner &&
+				message.to === close.person &&
 				message.covers.from <= close.from &&
 				message.covers.through >= close.through,
 		)
 	)
 		return refused('This exchange already has a summary.');
 	return message(state, { ...intent, ...stamp }, now);
+}
+
+function permits(spec: ActivationSpec, kind: CommitRequest['intent']['kind']): boolean {
+	switch (kind) {
+		case 'said':
+			return spec.grant.kind === 'say';
+		case 'summary':
+			return spec.grant.kind === 'summary';
+		case 'seated':
+			return spec.grant.kind === 'seat';
+		default:
+			return false;
+	}
+}
+
+function validReadThrough(readThrough: number | undefined, lastSeq: number): readThrough is number {
+	return (
+		typeof readThrough === 'number' &&
+		Number.isSafeInteger(readThrough) &&
+		readThrough >= 0 &&
+		readThrough <= lastSeq
+	);
 }
 
 function seating(
@@ -337,6 +376,15 @@ function claim(
 	return {
 		event: { kind: 'lease', body: { id: command.id, phase: 'running', expiry, at: iso(now) } },
 	};
+}
+
+function renew(
+	state: RoomState,
+	command: Extract<LeaseCommand, { type: 'renew' }>,
+	now: number,
+): RoomDecision<'lease'> {
+	if (!state.leases.has(command.id)) return stale('the lease ended');
+	return claim(state, { ...command, type: 'claim' }, now);
 }
 
 function end(

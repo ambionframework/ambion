@@ -109,7 +109,7 @@ export class SeatObject extends DurableObject<Env> {
 		const seatRoom = this.roomFor(room);
 		if ((await this.ctx.storage.get<Phase>('phase')) === 'running') {
 			// A run that never came back: the object was evicted mid-activation.
-			await seatRoom.lease({ activation, phase: 'ended', reason: 'failed' });
+			await seatRoom.lease({ activation, operation: 'release', reason: 'failed' });
 			await this.clear();
 			return;
 		}

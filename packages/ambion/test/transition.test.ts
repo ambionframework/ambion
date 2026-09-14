@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { defineAgent } from '../src/define.ts';
 import type { Entry, Kind } from '../src/journal/journal.ts';
+import { activationSpec } from '../src/room/activation.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { decide, evolve, type RoomDecision } from '../src/room/transition.ts';
+import { viewOf } from '../src/room/view.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
@@ -176,6 +179,195 @@ describe('room transition', () => {
 				now,
 			),
 		).toMatchObject({ refusal: { category: 'refused' } });
+	});
+
+	it('accepts only the grant and a current safe speech boundary', () => {
+		const lease: Entry = {
+			kind: 'lease',
+			body: { id: 'message:3:product:1', phase: 'running', expiry: now + 100, at },
+			seq: 4,
+		};
+		const state = foldRoom([composition, arrived, said(3), lease], options);
+		const commit = (readThrough: unknown, intent: unknown) =>
+			decide(
+				state,
+				{
+					type: 'commit',
+					commit: {
+						activation: 'message:3:product:1',
+						key: 'custom',
+						...(readThrough === undefined ? {} : { readThrough }),
+						intent,
+					} as never,
+				},
+				now,
+			);
+		for (const readThrough of [undefined, -1, 1.5, Number.NaN, 99]) {
+			expect(commit(readThrough, { kind: 'said', text: 'x' })).toMatchObject({
+				refusal: { category: 'refused' },
+			});
+		}
+		expect(commit(2, { kind: 'said', text: 'x' })).toMatchObject({
+			refusal: { category: 'missed' },
+		});
+		expect(
+			commit(3, { kind: 'summary', to: 'priya', text: 'x', covers: { from: 3, through: 3 } }),
+		).toMatchObject({
+			refusal: { category: 'refused' },
+		});
+		expect(commit(3, { kind: 'seated', name: 'product' })).toMatchObject({
+			refusal: { category: 'refused' },
+		});
+	});
+
+	it('denies built-in intents outside each activation grant', () => {
+		const roles: Entry = {
+			kind: 'composition',
+			seq: 1,
+			body: {
+				agents: [
+					{
+						name: 'assistant',
+						identity: 'A.',
+						attention: 'none',
+						role: { name: 'a', answers: { opened: 'seat', closed: 'summarise' } },
+					},
+					{
+						name: 'custom',
+						identity: 'C.',
+						attention: 'none',
+						role: { name: 'c', answers: { closed: 'inspect' } },
+					},
+				],
+				available: [{ name: 'product', identity: 'P.', attention: 'broadcast' }],
+				at,
+			},
+		};
+		const close = { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] };
+		const state = foldRoom(
+			[
+				roles,
+				said(2),
+				{ kind: 'close', body: close, seq: 3 },
+				{
+					kind: 'lease',
+					body: { id: 'closed:2:assistant:1', phase: 'running', expiry: now + 100, at },
+					seq: 4,
+				},
+				{
+					kind: 'lease',
+					body: { id: 'opened:2:assistant:1', phase: 'running', expiry: now + 100, at },
+					seq: 5,
+				},
+				{
+					kind: 'lease',
+					body: { id: 'closed:2:custom:1', phase: 'running', expiry: now + 100, at },
+					seq: 6,
+				},
+				{ kind: 'close', body: { ...close, wakes: ['custom'] }, seq: 7 },
+			],
+			options,
+		);
+		expect(activationSpec('closed:2:custom:1', state)?.grant.kind).toBe('custom');
+		const denied = (activation: string, intent: unknown) =>
+			decide(
+				state,
+				{
+					type: 'commit',
+					commit: { activation, key: activation, readThrough: 2, intent } as never,
+				},
+				now,
+			);
+		for (const [activation, intent] of [
+			['closed:2:assistant:1', { kind: 'said', text: 'x' }],
+			['closed:2:assistant:1', { kind: 'seated', name: 'product' }],
+			['opened:2:assistant:1', { kind: 'said', text: 'x' }],
+			[
+				'opened:2:assistant:1',
+				{ kind: 'summary', to: 'priya', text: 'x', covers: { from: 2, through: 2 } },
+			],
+			['closed:2:custom:1', { kind: 'said', text: 'x' }],
+			[
+				'closed:2:custom:1',
+				{ kind: 'summary', to: 'priya', text: 'x', covers: { from: 2, through: 2 } },
+			],
+			['closed:2:custom:1', { kind: 'seated', name: 'product' }],
+			['opened:2:assistant:1', { kind: 'unknown' }],
+		] as const)
+			expect(denied(activation, intent)).toMatchObject({ refusal: { category: 'refused' } });
+	});
+
+	it('gives a closed role say the current record, and removes an obsolete grant', () => {
+		const role: Entry = {
+			kind: 'composition',
+			seq: 1,
+			body: {
+				agents: [
+					{
+						name: 'writer',
+						identity: 'W.',
+						attention: 'none',
+						role: { name: 'writer', answers: { closed: 'say' } },
+					},
+				],
+				available: [],
+				at,
+			},
+		};
+		const close = { owner: 'priya', from: 2, through: 2, at, wakes: ['writer'] };
+		const live = foldRoom(
+			[
+				role,
+				said(2),
+				{ kind: 'close', body: close, seq: 3 },
+				{ kind: 'message', body: { kind: 'said', at, from: 'sam', text: 'Later.' }, seq: 4 },
+				{
+					kind: 'lease',
+					body: { id: 'closed:2:writer:1', phase: 'running', expiry: now + 100, at },
+					seq: 5,
+				},
+			],
+			options,
+		);
+		const spec = activationSpec('closed:2:writer:1', live);
+		if (spec === undefined) throw new Error('Expected a role say grant.');
+		expect(spec.through).toBe(4);
+		const view = viewOf(
+			spec,
+			defineAgent({ name: 'writer', identity: 'W.', instructions: '.', model: 'm' }),
+			{
+				name: 'room',
+				now,
+				state: live,
+				live: new Map(),
+				unseen: () => 0,
+				guidance: () => undefined,
+			},
+		);
+		expect(view.context).toContain('Later.');
+		const obsolete = foldRoom(
+			[
+				role,
+				said(2),
+				{ kind: 'close', body: close, seq: 3 },
+				{
+					kind: 'composition',
+					body: {
+						agents: [{ name: 'writer', identity: 'W.', attention: 'none' }],
+						available: [],
+						at,
+					},
+					seq: 4,
+				},
+				{
+					kind: 'lease',
+					body: { id: 'closed:2:writer:1', phase: 'running', expiry: now + 100, at },
+					seq: 5,
+				},
+			],
+			options,
+		);
+		expect(activationSpec('closed:2:writer:1', obsolete)).toBeUndefined();
 	});
 
 	it('accepts only the closed activation and its fixed summary range', () => {
