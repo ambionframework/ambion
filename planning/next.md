@@ -1,4 +1,4 @@
-# Next
+# Next — done
 
 Five changes, in the order to do them. Each one makes the ones after it a
 smaller diff. The aim is one thing: the library should read as simply as
@@ -8,8 +8,13 @@ removes a concept, a boundary that is not real, or a place where the same
 idea is written twice.
 
 Numbers in brackets refer to [`backlog.md`](backlog.md).
-[`simplification.md`](simplification.md) holds ten changes, and its order
-supersedes this one. Every item below appears there.
+
+**Every item here is merged.** A plan of ten changes carried them, in a
+different order, and it is gone now. Two of the five ask for a number
+that the work did not reach, and `backlog.md` §3 holds both: `session.ts`
+stands at 1299 lines where item 4 asked for 400 a module, and the main
+entry names 82 where item 5 asked for what a host needs and nothing
+else. Each name it keeps is the type of something a host writes down.
 
 ## 1. Name the room's lifecycle, in place of three booleans
 

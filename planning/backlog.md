@@ -51,8 +51,16 @@ three `heard` methods) shares two fields with the reconcile loop:
 `sentAt`, which `send` writes and `forget` and `decide` read, and
 `reportedRest`, which four methods write. Two files over one pair of
 mutable fields spreads the state the way `next.md` §1 warned three
-booleans would. They are one concern, and what is left of item 3 is to
-widen `decide` to cover the whole step, where both of them live.
+booleans would. They are one concern, and a cut here needs that state to
+go first: widen `decide` to cover the whole step, where both of them live.
+
+**What a count of lines says, and does not.** A plan of ten changes
+predicted that the core loses about 1500 lines. It lost 354: 6706 before
+the two packages came out, 6352 after every change landed. The packages
+took 1557 lines, and what replaced them put about 1200 back. A role is a
+mechanism the core did not have, and `answers.ts`, `room/routing.ts` and
+`transport.ts` are files it did not have. Count the concepts a reader
+holds at once. A line count measures how much there is to read.
 
 **What `Answering` still gives away.** It hands an answer the whole
 `RoomJournal`, where the three calls read `messages`, `lastCommitted` and
@@ -381,10 +389,10 @@ forbids it by name today), it wants the same fold and the same decision.
 Two writers is the point at which they should become their own module
 rather than two functions beside the assistant's.
 
-[`simplification.md`](simplification.md) §2 makes a second writer
-expressible: a role answers `closed`, and any seat that takes the role
-writes. `foldOwed` already reads the close's own `wakes`, so the fold
-takes more than one writer today. The module is still the open question.
+`defineRole` makes a second writer expressible: a role answers `closed`,
+and any seat that takes the role writes. `foldOwed` already reads the
+close's own `wakes`, so the fold takes more than one writer today. The
+module is still the open question.
 
 ### 21. A credentials boundary for tool calls leaving the workspace
 
@@ -535,9 +543,8 @@ pattern in one place, and a room composes patterns the way it composes
 agents. At the limit, Ambion is the framework that defines the
 collaboration patterns people and agents work in.
 
-**What [`simplification.md`](simplification.md) §2 built.** `defineRole`
-ships, and the assistant is the first role. Two of the three questions
-this entry held are answered:
+**What `defineRole` built.** A host writes a role, and the assistant is
+the first one. Two of the three questions this entry held are answered:
 
 - **A role is a seating choice.** `Seating.role` sits beside `attention`,
   so one agent sits into different roles in two rooms.
@@ -826,8 +833,8 @@ answers it, with one `Owed` per writer. No case asks for it: a room writes
 one message a person reads, so a second writer would write a second one.
 
 **What it needs.** A second role, to say whether two seats in one role is a
-roster a host writes on purpose. Take it up with the question of whether one
-seat takes more than one role, which `simplification.md` item 2 also defers.
+roster a host writes on purpose. Take it up with the question of whether
+one seat takes more than one role, which §25 also defers.
 
 ---
 
