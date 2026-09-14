@@ -7,7 +7,7 @@ person reads and consolidates the room's work when the exchange does not
 already hold one answer. It is shipped. The code lives with the rest of the
 runtime in [`packages/ambion/src`](../packages/ambion/src) —
 the summary a seat commits in
-[`answers.ts`](../packages/ambion/src/answers.ts), the fold a seat reads in
+[`transition.ts`](../packages/ambion/src/room/transition.ts), the fold a seat reads in
 [`render.ts`](../packages/ambion/src/render.ts), the shapes in
 [`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md), [`exchange.md`](exchange.md) and
@@ -50,8 +50,8 @@ per room, seated when the room starts, writing for every person who visits.
 
 **It is a seat.** `startSession` seats it beside the agents, the room
 activates it as it activates every other agent, its turns land in a
-downstream session of its own, and the record's lock refuses it exactly as
-it refuses a say. Two things make it the seat it is, and both are data:
+downstream session of its own, and a live lease authorizes its writes.
+Its role selects these tools:
 
 - It is seated at `none`, the narrow end of the attention scale
   ([`agent.md`](agent.md) rule 6): nothing said in the room wakes it, and
@@ -67,7 +67,7 @@ A seat carries none of that. Which seat is the assistant is on the
 composition; who is owed a message is a fold over the closes, the
 summaries and the leases (`foldOwed` in
 [`fold.ts`](../packages/ambion/src/room/fold.ts)); what it is drafting for
-now is on the id of the activation it holds (`close:<through>:<attempt>`).
+now is on the id of the activation it holds (`closed:<through>:<seat>:<attempt>`).
 No seat carries a field for any of it.
 
 The assistant holds one thing nothing else in the room holds: **what a
@@ -122,17 +122,13 @@ What matters here is what the assistant makes of one:
   never restart on its own, so a summary written at the close is written
   over work that is over.
 
-**A summary stands for one exchange, and never for anything before it.**
-`from` is the question that opened it; `through` is the last seq when the
-summary commits. The room holds `from` while the exchange is open, the same
-way it holds the owner, and `through` is a live read of the record; the
-runtime keeps no cursor beside it.
+**A summary stands for one closed exchange.** The recorded close fixes its
+owner and range. `from` is the question that opened it; `through` is the
+last sequence included when it closed. Every attempt reads this same range.
 
-A person who walks back into a room after two days is not summarised for
-the two days. What they missed is presence's business (§15), and their next
-question opens a range of its own.
-
-The close is a race, and §5 settles it with the lock the room already has.
+A person who returns after two days gets a summary of their next exchange.
+Presence handles what they missed (§15). Later questions open separate
+exchanges, including questions from the same person. §5 defines publication.
 
 [`exchange.md`](exchange.md) §8 records the gap underneath this: nothing
 bounds how long an exchange may run.
@@ -181,87 +177,39 @@ An exchange with no agent message writes nothing.
 
 ---
 
-## 5. A summary commits under the same lock as a say
+## 5. A summary publishes the result of one closed exchange
 
-The assistant takes seconds to write. The room is idle while it works, so a new
-question may land, open the next exchange and wake seats before the summary
-is ready. A summary that committed anyway would sit in the record after
-work it does not cover, and both readers would have to cope with a fold
-that is no longer next to the message doing the folding.
+The close fixes the summary's input, recipient, and writer. A later question
+can open another exchange while the assistant drafts. It does not change
+that draft's range or cause a freshness conflict.
 
-Nothing new is needed. **Rule 5 already refuses a message that was drafted
-against a record that has moved**, and it refuses the assistant exactly as it
-refuses a seat:
+**The room checks authority at publication.** A summary requires a live
+`closed` activation for the recorded close. Its author must be the close's
+writer, its recipient must be the owner, and its range must match exactly.
+The room refuses a second summary for that exchange. Retrying the same
+journal key returns the original commit through journal idempotency.
 
-> **A message commits only against a record its author has read in full.**
+**Ordinary speech still requires a current view.** A `say` must include
+every preceding message in its `readThrough`. A summary answers a fixed
+exchange, so publication does not compare its range with the current record.
+The journal still serializes writes and checks the run fence and lease.
 
-The assistant reads the record to `through` and drafts. At the moment it
-commits, the room checks: if the record has not moved, the summary lands
-with no message between it and the range it covers. If the
-record has moved, the commit is refused, and the host hears the same
-`conflict` event a refused seat raises, naming the assistant and what it missed.
+**Each exchange has its own outcome.** Two closed exchanges for one person
+remain separate obligations. A summary or a silent completion resolves only
+its own exchange. Revocation and abandonment also apply to that exchange.
+A failed or expired activation leaves it owed until retry or abandonment.
+The room retries after thirty seconds times the attempts made, up to three
+attempts. Retries read the original range.
 
-**A refused draft is told, in its own activation.** The assistant writes by calling a tool
-(§14), so the refusal reaches it the way a refused say reaches a seat: as
-the tool's failure, listing what landed. The range widens to hold those
-messages, and the assistant drafts again over it immediately. It gets two
-drafts. After the second refusal the room is moving faster than the assistant
-writes, and the activation ends.
+**Publication can follow later messages.** Rendering folds only messages
+inside `covers`. Intervening messages and other summaries stay visible,
+including when summaries arrive out of exchange order. A summary never
+folds another summary. Existing journals can contain overlapping ranges
+from older releases; the renderer continues to show their summaries.
 
-**A summary the activation could not land drafts again after a delay.**
-An activation that ran out of drafts ends its lease `refused`; one that
-failed outright ends it `failed`; one that stopped renewing ends it
-`expired`. Each is one attempt. The room waits thirty seconds times the
-attempts made, on its own alarm, then wakes the assistant again, up to
-three attempts. The range is a live read, so the retry covers what it
-covered before plus whatever won the race. The two halves of the rule
-divide the work: the assistant redrafts inside its activation while that
-is still useful, and the room's alarm catches an activation that ran out
-of drafts or failed outright.
-
-Two questions asked in quick succession become one summary, which is right:
-they were one conversation. If somebody else's exchange won the race, it
-falls inside the range too, and the person it is written for reads what happened while they
-were waiting. That is the price of the race, it is acceptable, and one
-message still serves.
-
-**A race is the only way two ranges overlap**, and a widened range can hold
-a summary written for somebody else. The rendering says whose each fold is:
-
-```
-── 3 messages, summarised for priya below ──
-── 3 messages, summarised for sam below ──
-[assistant → sam] …
-[assistant → priya] …
-```
-
-Each message takes the nearest summary that stands for it, and a summary is
-never folded into another one. So a fold never claims a message that stands
-for something else, and a reader is never told that the summary under a
-fold covers more than it does.
-
-Three things follow, and each removes a problem the design would otherwise
-have.
-
-**A summary leaves no message behind.** It stands for every message from
-`from` to the last one before it; the places between them hold the room's
-own entries about the draft, and never a message. So `render.ts` replaces
-a block that ends at the message before the summary, and a client folds a
-run that ends at the message it just received. Neither has to reason about
-interleaving.
-
-**`settled()` keeps its meaning.** The exchange can close before its
-summary lands, and the room is never held busy while the assistant writes.
-Quiescence is still simply "no agent is active".
-
-**A failed model call is a refused commit with extra steps.** If the assistant's
-activation errors, no summary is written, the range stays uncompacted and
-fully visible, and the room's alarm is another chance after the backoff.
-The safe direction is the default, and it takes no special case.
-
-The event the room emits on a refusal is `conflict`, and it carries the
-author and what they missed. It names the author because the lock covers
-every kind of message, says and summaries alike.
+**The room can settle before publication.** `settled()` waits for the
+agents working on the exchange. `quiet()` also waits for the assistant's
+outstanding work. A failed attempt keeps the source messages visible.
 
 ---
 
@@ -641,16 +589,11 @@ the two promises name two different moments.
 [`examples/site/src/demo.ts`](../examples/site/src/demo.ts) waits with
 `quiet()`, and it is the only thing the assistant asks of a host.
 
-**What the assistant is handed.** The same context every seat reads — the room's
-goal, the roster, and the record as it renders now — and two things more.
-Its system prompt names whom it writes for and, when they said so, how they
-read. The last line of its context names the range it is closing, where a
-seat is asked to take its turn. It reads the record folded, so what this
-person has already read stands there as the summary that stands for it, and
-what this exchange said stands there in full. That is one renderer for the
-room, and it is what §16's symmetry rests on: the assistant reads exactly
-what the seats read. A refused draft is told what landed, in the failure the
-tool returns, and the range it drafts again over holds those messages too.
+**What the assistant is handed.** Its context contains the room's goal,
+the roster, and messages within the closed exchange's range. Its system
+prompt names the recipient and their reading preferences. The final
+instruction names the fixed range. Later messages do not enter this input,
+even when another exchange opens before publication.
 
 **Preferences reach one seat.** How a person reads renders inside the
 assistant's activation for that person, and nowhere else: not in the roster
@@ -685,8 +628,8 @@ would only add a voice. The threshold in §4 sits underneath as a cost
 floor — below it the room spends no model call at all — and above it the
 judgment is the assistant's, where the rest of the judgment lives.
 
-**The tool bounds an activation.** Two drafts per activation (§5), and a cap
-on how often the tool may be called at all.
+**The tool bounds an activation.** It permits one successful publication
+and caps the total number of tool calls.
 A model that keeps calling a tool that keeps refusing would draft for ever,
 so the tool ends the activation itself. Nothing else here bounds an
 activation — which
@@ -782,11 +725,9 @@ that does finish after the stop commits nothing. The next run over the
 same journal closes the exchange at its first reconcile
 ([`exchange.md`](exchange.md) §5) and writes what it owes then. Accepted.
 
-**A widened range is bounded by a race, and nothing else.** A summary
-covers one exchange, so the only thing that can make a range large is what
-lands while the assistant drafts. That is seconds of room at most. It is the
-right bound to have, and it is the one the design leans
-on now that a range no longer reaches back to a person's last summary.
+**The close bounds the summary input.** Later messages cannot enlarge it.
+An exchange can still run for an unbounded time before it closes; see
+[`exchange.md`](exchange.md) §8.
 
 **A stopped room never reports that it is quiet.** `quiet` says that no
 seat is taking an activation and the assistant owes nobody one. A room that is
@@ -794,9 +735,8 @@ closing is
 neither, so shutdown drains whoever waited on `quiet()` and emits nothing
 afterwards.
 
-**A summary is owed until the third attempt.** A race is handled inside
-the activation. An activation that fails outright, or that runs out of
-drafts, is one attempt, and the room's own alarm wakes the assistant again
+**A summary is owed until the third attempt.** A failed or expired
+activation counts as one attempt. The room's own alarm wakes the assistant again
 after the backoff, whether or not anybody speaks into the room. After
 three attempts the room stops trying, and it writes an entry that says so:
 the attempt it does not make, ended `abandoned`. The host hears an
@@ -821,8 +761,8 @@ The milestone tests live in
 document makes loudly:
 
 - An exchange the room answered twice closes into one message, addressed to
-  the person who asked, leaving no message between it and the range it
-  covers, drafted from that range
+  the person who asked, covering exactly the recorded close and drafted
+  from that fixed range
   and with one tool that reaches the record and nothing else. The
   activation names whom it writes for and how they read. §2, §3, §4, §7,
   §14.
@@ -836,10 +776,9 @@ document makes loudly:
   §8, §11, §14.
 - A question that lands while a seat works on what nobody asked for still
   opens an exchange and owns it. §3.
-- A draft refused because the room moved raises `conflict`, and the assistant
-  redrafts over the widened range inside the same activation. §5.
-- The assistant, when it keeps drafting into a room that keeps moving, is stopped by
-  the runtime, and writes at the next quiescence. §5, §14.
+- A later question leaves an active summary's input and range unchanged. §5.
+- Separate exchanges for the same person each keep their own summary. §5.
+- Publication rejects an incorrect writer, recipient, range, or duplicate. §5.
 - An activation that stands down without writing is owed nothing for it. §14.
 - An activation that fails outright leaves the summary owed, and the room
   drafts again when the backoff passes. §16.

@@ -177,4 +177,100 @@ describe('room transition', () => {
 			),
 		).toMatchObject({ refusal: { category: 'refused' } });
 	});
+
+	it('accepts only the closed activation and its fixed summary range', () => {
+		const close = { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] };
+		const assistantComposition: Entry = {
+			kind: 'composition',
+			seq: 1,
+			body: {
+				agents: [
+					{
+						name: 'assistant',
+						identity: 'Writes results.',
+						attention: 'none',
+						role: { name: 'assistant', answers: { closed: 'summarise' } },
+					},
+					{ name: 'product', identity: 'Answers questions.', attention: 'broadcast' },
+				],
+				available: [],
+				at,
+			},
+		};
+		const lease: Entry = {
+			kind: 'lease',
+			seq: 4,
+			body: { id: 'closed:2:assistant:1', phase: 'running', expiry: now + 100, at },
+		};
+		const forgedLease: Entry = {
+			kind: 'lease',
+			seq: 5,
+			body: { id: 'opened:2:assistant:1', phase: 'running', expiry: now + 100, at },
+		};
+		const wrongWriterLease: Entry = {
+			kind: 'lease',
+			seq: 6,
+			body: { id: 'closed:2:product:1', phase: 'running', expiry: now + 100, at },
+		};
+		const later = said(7, 'sam');
+		const state = foldRoom(
+			[
+				assistantComposition,
+				said(2),
+				{ kind: 'close', body: close, seq: 3 },
+				lease,
+				forgedLease,
+				wrongWriterLease,
+				later,
+			],
+			options,
+		);
+		const commit = (activation: string, to = 'priya', covers = { from: 2, through: 2 }) =>
+			decide(
+				state,
+				{
+					type: 'commit',
+					commit: {
+						activation,
+						key: 'summary',
+						readThrough: 2,
+						intent: { kind: 'summary', to, text: 'The answer.', covers },
+					},
+				},
+				now,
+			);
+		expect(commit('closed:2:assistant:1')).toMatchObject({ event: { kind: 'message' } });
+		expect(commit('opened:2:assistant:1')).toMatchObject({ refusal: { category: 'refused' } });
+		expect(commit('closed:2:product:1')).toMatchObject({ refusal: { category: 'refused' } });
+		expect(commit('closed:2:assistant:1', 'sam')).toMatchObject({
+			refusal: { category: 'refused' },
+		});
+		expect(commit('closed:2:assistant:1', 'priya', { from: 1, through: 2 })).toMatchObject({
+			refusal: { category: 'refused' },
+		});
+		expect(commit('closed:2:assistant:1', 'priya', { from: 2, through: 5 })).toMatchObject({
+			refusal: { category: 'refused' },
+		});
+		const accepted = event(commit('closed:2:assistant:1'), 8);
+		const after = evolve(state, accepted, options);
+		expect(
+			decide(
+				after,
+				{
+					type: 'commit',
+					commit: {
+						activation: 'closed:2:assistant:1',
+						key: 'other-token',
+						intent: {
+							kind: 'summary',
+							to: 'priya',
+							text: 'A duplicate.',
+							covers: { from: 2, through: 2 },
+						},
+					},
+				},
+				now,
+			),
+		).toMatchObject({ refusal: { category: 'refused' } });
+	});
 });

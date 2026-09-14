@@ -10,16 +10,19 @@ import {
 	defineHuman,
 	isPresence,
 	isSpoken,
+	isSummary,
 	type SessionEvent,
 	startSession,
 	visitSession,
 } from '../src/index.ts';
+import { type CommitResponse, inProcessTransport, type Transport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { collect, roomName, storedOf } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
 	quiet,
+	says,
 	scripted,
 	summarise,
 	toolNames,
@@ -69,6 +72,75 @@ async function room(name: string) {
 }
 
 describe('a room in doubt', () => {
+	it('returns one summary when its first commit confirmation is lost', async () => {
+		const opened = await memory.open();
+		const clock = fakeClock();
+		const base = inProcessTransport();
+		const replies: CommitResponse[] = [];
+		let retried = false;
+		let confirmed: () => void = () => {};
+		const confirmation = new Promise<void>((resolve) => {
+			confirmed = resolve;
+		});
+		const transport: Transport = {
+			connect(room, seat, runtime) {
+				const port = base.connect(
+					{
+						name: room.name,
+						stream: room.stream,
+						model: room.model,
+						sessions: room.sessions,
+						emit: (event) => room.emit(event),
+						evict: () => room.evict(),
+						view: (id) => room.view(id),
+						lease: (lease) => room.lease(lease),
+						commit: async (commit) => {
+							if (retried || commit.intent.kind !== 'summary') return room.commit(commit);
+							retried = true;
+							const first = await room.commit(commit);
+							const retry = await room.commit(commit);
+							replies.push(first, retry);
+							confirmed();
+							return retry;
+						},
+					},
+					seat,
+					runtime,
+				);
+				return port;
+			},
+		};
+		const session = startSession({
+			name: roomName('doubt-summary'),
+			runtime: createRuntime({
+				clock,
+				sessions: opened.sessions,
+				transport,
+				agents: [assistant, alpha],
+			}),
+			assistant,
+			agents: [alpha],
+			streamFn: scripted(
+				byAgent({
+					alpha: says(['one', 'two']),
+					assistant: (context) =>
+						toolNames(context).includes('summarise') &&
+						!toolResultTexts(context).includes('delivered')
+							? summarise('The one message.')
+							: quiet(),
+				}),
+			),
+		});
+		const visit = await visitSession(session, priya);
+		await visit.deliver({ text: 'First?', key: 'q1' });
+		await confirmation;
+		const summaries = (await session.messages()).filter(isSummary);
+		expect(retried).toBe(true);
+		expect(summaries).toHaveLength(1);
+		const seqs = replies.flatMap((reply) => ('committed' in reply ? [reply.committed.seq] : []));
+		expect(seqs).toEqual([summaries[0]?.seq, summaries[0]?.seq]);
+	});
+
 	it('hears a delivery that landed and lost its confirmation, and the seats wake for it', async () => {
 		const { faulty, session, events } = await room('doubt-delivery');
 		const visit = await visitSession(session, priya);

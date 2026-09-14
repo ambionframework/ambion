@@ -51,13 +51,13 @@ in ordering, replay, and routing.
 
 ### 2. Conversation uses optimistic concurrency
 
-Every agent write carries `readThrough`, the last sequence the activation has
+Ordinary speech carries `readThrough`, the last sequence the activation has
 seen. If the record advanced, `RoomJournal.commit()` refuses the draft and
 returns the missed messages, and the activation rebuilds from a fresh room
 view.
 
-This is compare-and-swap for conversation: the commit boundary enforces that
-an agent does not speak over context it has not read.
+The commit boundary prevents speech over unread context. Summaries use the
+fixed range of a closed exchange, so later messages do not invalidate them.
 
 ### 3. Silence is a result
 

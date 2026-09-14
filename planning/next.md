@@ -13,12 +13,12 @@ The library should express sophisticated collaboration through a small,
 consistent vocabulary. Each abstraction should own its state, invariants,
 and behavior. Extracting files alone does not achieve that objective.
 
-**Items 2–10 and their replacement APIs are proposals.** Item 1 records its
-implementation below. Source references
+**Items 3–10 and their replacement APIs are proposals.** Item 1 is merged.
+Item 2 is implemented and under review. Both record their implementation below. Source references
 identify the current mechanisms. Behavioral changes and compatibility costs are
 identified separately from changes that preserve the existing contract.
 The initial review used source, contracts, and representative tests.
-Implementation adds execution checks for item 1.
+Implementation adds execution checks for items 1 and 2.
 
 ## The design to preserve
 
@@ -104,12 +104,47 @@ public event-handler framework.
 
 ## 2. Give a closed exchange a fixed result boundary
 
-**Current cost.** An exchange closes over a fixed range, but its summary
-view extends through `state.lastSeq`. Refused drafts widen further.
-Outstanding summaries merge by person, and rendered summary ranges can
-overlap. Each rule adds state and exceptions across several modules.
+**Implementation.** Each recorded close now keeps its own summary obligation.
+The view reads only messages within that close. The transition checks the
+activation cause, writer, recipient, exact range, and prior publication.
+The host preserves conditional storage append and fencing while allowing
+later messages to arrive before the summary publishes.
 
-**Proposed design.** Make a summary the result of one immutable closed
+`SummaryAttempt` holds fixed bounds and a finite tool-call counter.
+`Grouped`, `covering`, `widen`, and the draft-refusal counter are removed.
+Existing broad summaries still satisfy the historical closes they cover.
+The public types and persisted activation encoding remain unchanged.
+
+**Verification.** Transition tests check the activation cause, writer,
+recipient, both range bounds, and duplicate publication. Assistant and lease
+tests exercise later messages and separate summaries for one person.
+Checkpoint tests retain a failed earlier close after a later close resolves.
+Shared scenario checks compare summary ranges with recorded closes.
+
+**Implementation contract.** Identify the exchange by `from`, the opening
+question's journal position. Keep its recorded recipient, writer, and
+`through` fixed when creating a view, retrying, and publishing a summary.
+
+- Track each closed exchange independently, including two for one person.
+- Validate the summary's writer, recipient, exact range, and uniqueness
+  inside the transition decision.
+- Preserve journal idempotency, conditional storage append, and run fencing.
+- Apply whole-record freshness checks to ordinary speech. Summary
+  acceptance checks its fixed exchange inputs.
+- Keep later messages outside the summary's source context and visible in
+  the record after it publishes.
+- Retain the current activation encoding when reading persisted leases.
+  Existing broad summaries still satisfy the historical closes they cover.
+
+**Regression cases.** Cover a later question during drafting, two pending
+exchanges for one person, out-of-order publication, invalid summary
+requests, repeated tokens, failed attempts, and checkpoint recovery.
+
+**Original cost.** Summary views extended beyond the close through
+`state.lastSeq`. Refused drafts widened further, and outstanding summaries
+merged by person. These rules added state and exceptions across modules.
+
+**Design.** Make a summary the result of one immutable closed
 exchange. Bind its input range and recipient to that exchange. Validate
 the writer, range, and uniqueness when publishing. Later messages do not
 invalidate unchanged summary inputs. Conditional storage append and run
@@ -132,6 +167,11 @@ can differ from exchange order without changing what each summary means.
 **Behavioral change.** A later question receives a later result. A summary
 no longer absorbs intervening exchanges. Evaluate this choice against
 multi-person conversations and the existing assistant scenarios.
+
+**Compatibility.** Existing broad summaries continue to satisfy every close
+they cover. A completed lease resolves only its named close. Replaying an
+older journal can therefore restore an earlier obligation that a later
+grouped draft previously resolved without publishing a summary.
 
 **Completion evidence.** A later delivery cannot extend an earlier summary's
 range. A retried publication cannot produce a second result for the same

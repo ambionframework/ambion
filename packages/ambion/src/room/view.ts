@@ -77,12 +77,12 @@ export function viewOf(
 		closing: closing && { ...closing, preferences: state.people.get(closing.person)?.preferences },
 		composing: composing && { ...composing, reserve: reserved(facts) },
 	};
-	const room = roomView(facts);
+	const room = roomView(facts, closing);
 	return {
 		activation: id,
 		seat,
 		model: def.model,
-		lastSeq: state.lastSeq,
+		lastSeq: closing?.through ?? state.lastSeq,
 		systemPrompt: renderSystemPrompt(speaking, room),
 		context: renderTurnContext(speaking, room),
 		...(tool === undefined ? {} : { tool }),
@@ -126,9 +126,9 @@ function toolOf(id: string, role: Role | undefined, facts: RoomFacts): Bound {
 /** The exchange this activation closes, and the tool it writes the summary with. */
 function closingOver(tool: string, position: Seq, facts: RoomFacts): Bound {
 	const state = facts.state;
-	const owed = state.owed.find((o) => o.covering.includes(position));
+	const owed = state.owed.find((o) => o.through === position);
 	if (owed === undefined) return {};
-	return { tool, closing: { person: owed.person, from: owed.from, through: state.lastSeq } };
+	return { tool, closing: { person: owed.person, from: owed.from, through: owed.through } };
 }
 
 /** The exchange this activation composes the room for, and the tool it seats with. */
@@ -150,7 +150,7 @@ function reserved(facts: RoomFacts): { name: string; identity: string }[] {
 }
 
 /** What the prose is given of this room, built fresh for each activation. */
-function roomView(facts: RoomFacts): RoomView {
+function roomView(facts: RoomFacts, closing?: { from: Seq; through: Seq }): RoomView {
 	const state = facts.state;
 	const exchange: Exchange | undefined = state.exchange;
 	return {
@@ -159,7 +159,12 @@ function roomView(facts: RoomFacts): RoomView {
 		now: facts.now,
 		seats: seatsOf(facts),
 		people: peopleViews(facts),
-		record: state.messages,
+		record:
+			closing === undefined
+				? state.messages
+				: state.messages.filter(
+						(message) => message.seq >= closing.from && message.seq <= closing.through,
+					),
 		exchange: exchange && { owner: exchange.owner, from: exchange.from },
 	};
 }

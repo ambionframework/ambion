@@ -67,8 +67,6 @@ export class Activation {
 	spoke = false;
 	/** Whether it ended without reaching the record at all. The room's second. */
 	failed = false;
-	/** Whether the record kept moving past its drafts, so it stood down without writing. */
-	refused = false;
 
 	constructor(
 		readonly id: string,
@@ -117,7 +115,7 @@ export class Activation {
 	/** Why the lease ends, read off how the activation went. */
 	get reason(): EndReason {
 		if (this.failed) return 'failed';
-		return this.refused && !this.spoke ? 'refused' : 'released';
+		return 'released';
 	}
 
 	/**
@@ -150,8 +148,8 @@ export class Activation {
 			const failure = failureOf(agent);
 			if (failure) return this.broke(failure);
 			// An aborted activation stays cancelled, and one that does not rebuild
-			// is a single pass whatever landed: a summarising activation answers a room
-			// that moved with a redraft inside its own tool.
+			// is a single pass whatever landed: a summarising activation answers its
+			// fixed closed exchange.
 			if (this.cancelled || view.tool !== 'say') return false;
 			// Awaited here, so a renewal that fails is caught below and not returned as a rejection.
 			return await this.moved(agent);

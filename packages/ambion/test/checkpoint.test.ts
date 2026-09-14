@@ -98,6 +98,100 @@ async function open(
 }
 
 describe('a checkpoint', () => {
+	it('keeps one failed close owed when a later close stood down', () => {
+		const at = '2026-01-01T09:00:00.000Z';
+		const composition: Composition = {
+			agents: [
+				{
+					name: 'assistant',
+					identity: 'Writes the result.',
+					attention: 'none',
+					role: { name: 'assistant', answers: { closed: 'summarise' } },
+				},
+			],
+			available: [],
+			seq: 1,
+			at,
+		};
+		const entries = [
+			{ kind: 'composition' as const, body: composition, seq: 1 },
+			{
+				kind: 'message' as const,
+				body: { kind: 'said' as const, at, from: 'priya', text: 'First?' },
+				seq: 2,
+			},
+			{
+				kind: 'close' as const,
+				body: { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] },
+				seq: 3,
+			},
+			{
+				kind: 'lease' as const,
+				body: {
+					id: 'closed:2:assistant:1',
+					phase: 'ended' as const,
+					reason: 'failed' as const,
+					at,
+				},
+				seq: 4,
+			},
+			{
+				kind: 'message' as const,
+				body: { kind: 'said' as const, at, from: 'priya', text: 'Second?' },
+				seq: 5,
+			},
+			{
+				kind: 'close' as const,
+				body: { owner: 'priya', from: 5, through: 5, at, wakes: ['assistant'] },
+				seq: 6,
+			},
+			{
+				kind: 'lease' as const,
+				body: {
+					id: 'closed:5:assistant:1',
+					phase: 'ended' as const,
+					reason: 'released' as const,
+					at,
+				},
+				seq: 7,
+			},
+		];
+		const before = foldRoom(entries, retry);
+		expect(before.owed.map((owed) => [owed.from, owed.through, owed.attempts])).toEqual([
+			[2, 2, 1],
+		]);
+		const checkpoint = checkpointOf(before, Date.parse(at));
+		if (checkpoint === undefined) throw new Error('Expected a checkpoint.');
+		expect(checkpoint.leases.map((lease) => lease.id)).toContain('closed:2:assistant:1');
+		const after = foldRoom(
+			[
+				{ kind: 'checkpoint' as const, body: checkpoint, seq: 8 },
+				...entries.filter((entry) => entry.kind === 'message'),
+			],
+			retry,
+		);
+		expect(after.owed).toEqual(before.owed);
+		expect(after.owed.map((owed) => [owed.from, owed.through, owed.attempts])).toEqual([[2, 2, 1]]);
+		const broad = foldRoom(
+			[
+				...entries.filter((entry) => entry.kind !== 'lease'),
+				{
+					kind: 'message' as const,
+					body: {
+						kind: 'summary' as const,
+						at,
+						from: 'assistant',
+						to: 'priya',
+						text: 'Both.',
+						covers: { from: 2, through: 5 },
+					},
+					seq: 8,
+				},
+			],
+			retry,
+		);
+		expect(broad.owed).toEqual([]);
+	});
 	/**
 	 * A wake's cause is derived, so a fold over a checkpoint must derive the
 	 * same one. `causeOf` reads the questions that opened an exchange, and a

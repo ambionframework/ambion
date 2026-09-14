@@ -376,7 +376,7 @@ runtime's prompt pairs this with a rule against rehearsal: a question only
 one participant can answer is asked with one directed `say`, never posed to
 the room first. A `say` is a message the whole room pays for.
 
-**5. No one speaks over the room.** A message commits only against a record
+**5. No one speaks over the room.** Ordinary speech commits only against a record
 its author has read in full. For a seat that is its `say`, checked against
 the view it was handed plus every steer that has landed in its transcript
 since (`readThrough` in `seat/activation.ts`). If the record moved past that, the say
@@ -390,9 +390,10 @@ First to commit wins, and ties are impossible: a commit is one operation
 on the room's commit queue, the check and the write run inside that one
 operation, and nothing observes a message before its write is confirmed
 (`RoomJournal.commit`, over `@ambionframework/journal`). A room with no races pays nothing. The refusal shows on the stream as `conflict`, which
-names the author: an assistant's summary is refused at the same boundary, for
-the same reason. The guarantee is the point: every message on the record
-was written by somebody who had read everything before it.
+names the author. Every ordinary say includes the preceding messages in its
+author's view. A summary publishes a closed exchange's result with its fixed
+range and recipient. Later messages do not invalidate that input
+([`assistant.md`](assistant.md) §5).
 
 **6. A seat has a status and an attention, and they are different things.**
 Status is runtime: `active` (taking an activation now) or `idle` (at rest).

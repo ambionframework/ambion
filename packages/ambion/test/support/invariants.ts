@@ -10,6 +10,7 @@ import {
 	type SessionOpener,
 	type SessionView,
 } from '../../src/index.ts';
+import { parseId } from '../../src/room/lease.ts';
 import type { LeaseChange } from '../../src/transport.ts';
 import { standing } from './history.ts';
 import { storedOf } from './room.ts';
@@ -59,15 +60,7 @@ export async function invariants(
 	// Every key names one message.
 	const keys = messages.flatMap((m) => (m.key === undefined ? [] : [m.key]));
 	expect(new Set(keys).size).toBe(keys.length);
-	for (const summary of messages.filter(isSummary)) {
-		// A summary reaches back over a range that ends before it, and it leaves
-		// no message behind: the places between its `through` and its own are
-		// the entries the room wrote about the draft, and never a message.
-		expect(summary.covers.through).toBeLessThan(summary.seq);
-		expect(summary.covers.from).toBeLessThanOrEqual(summary.covers.through);
-		const skipped = messages.filter((m) => m.seq > summary.covers.through && m.seq < summary.seq);
-		expect(skipped).toEqual([]);
-	}
+	await summariesMatchCloses(messages, events, options.sessions, session.name);
 	expect(errorsIn(events).length).toBeLessThanOrEqual(options.allowErrors ?? 0);
 	expect(count(events, 'activation_start') + (options.inherited ?? 0)).toBe(
 		count(events, 'activation_end'),
@@ -76,6 +69,54 @@ export async function invariants(
 		count(events, 'exchange_closed'),
 	);
 	if (options.sessions) await leased(session, options.sessions);
+}
+
+async function summariesMatchCloses(
+	messages: Awaited<ReturnType<SessionView['messages']>>,
+	events: SessionEvent[],
+	sessions: SessionOpener | undefined,
+	name: string,
+): Promise<void> {
+	const closes = await recordedCloses(events, sessions, name);
+	const results = new Set<number>();
+	for (const summary of messages.filter(isSummary)) {
+		// A summary reaches back over a fixed range that ends before it. Later
+		// messages can stand between that range and its publication.
+		expect(summary.covers.through).toBeLessThan(summary.seq);
+		expect(summary.covers.from).toBeLessThanOrEqual(summary.covers.through);
+		expect(results.has(summary.covers.from)).toBe(false);
+		results.add(summary.covers.from);
+		const close = closes.find((candidate) => candidate.from === summary.covers.from);
+		if (close === undefined) {
+			if (sessions !== undefined) throw new Error('The summary has no recorded close.');
+			continue;
+		}
+		expect(summary.covers.through).toBe(close.through);
+		expect(summary.to).toBe(close.owner);
+		const activation =
+			summary.activationId === undefined ? undefined : parseId(summary.activationId);
+		expect(activation?.cause).toBe('closed');
+		expect(activation?.position).toBe(close.through);
+		if (close.wakes?.[0] !== undefined) {
+			expect(summary.from).toBe(close.wakes[0]);
+			expect(activation?.seat).toBe(close.wakes[0]);
+		}
+	}
+}
+
+type RecordedClose = { owner: string; from: number; through: number; wakes?: string[] };
+
+async function recordedCloses(
+	events: SessionEvent[],
+	sessions: SessionOpener | undefined,
+	name: string,
+): Promise<RecordedClose[]> {
+	if (sessions !== undefined) {
+		return standing(await storedOf(sessions, name))
+			.filter((entry) => entry.type === 'ambion/close')
+			.map((entry) => entry.data as RecordedClose);
+	}
+	return events.flatMap((event) => (event.type === 'exchange_closed' ? [event.exchange] : []));
 }
 
 /** Every message a seat wrote carries an activation id whose lease was running when it landed. */

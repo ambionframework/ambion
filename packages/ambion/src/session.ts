@@ -971,7 +971,11 @@ class RoomHost implements Session, RunningRoom {
 
 	/** One operation on the room's commit queue, with the wakes the room routes. */
 	write(commit: Commit): Promise<Committed<Body<Message>, Body<Message>>> {
-		return this.commitMessage(commit.key, { type: 'commit', commit }, commit.readThrough);
+		return this.commitMessage(
+			commit.key,
+			{ type: 'commit', commit },
+			commit.intent.kind === 'summary' ? undefined : commit.readThrough,
+		);
 	}
 
 	private acceptedEvent<K extends Kind>(decision: RoomDecision<K>) {
