@@ -93,6 +93,11 @@ export interface Runtime {
 	 * How many times a seat sends one call to the room before it gives up. A
 	 * call the room answers is done, whatever it answers; a call that never
 	 * comes back is sent again, because the wire lost the call or the answer.
+	 *
+	 * This is its own policy, beside `retry`. An attempt at an activation
+	 * costs a model call and waits a backoff; an attempt at a call costs one
+	 * message and waits for nothing. One number over both would move each
+	 * when a host tuned the other.
 	 */
 	readonly call: { readonly attempts: number };
 	/** How many entries the journal takes past the last checkpoint before the room writes the next one. */

@@ -4,10 +4,9 @@ An architectural review of the current implementation, dated 2026-09-14.
 These ten opportunities are ranked by conceptual impact. Execution order
 appears at the end.
 
-This plan replaces the previous five-item plan.
-[`simplification.md`](simplification.md) records the earlier ten changes,
-which it marks complete. This review examines what remains after those
-changes. [`backlog.md`](backlog.md) retains the wider debt inventory.
+This plan records the review after the earlier completed plans. This review
+examines the work that remains. [`backlog.md`](backlog.md) retains the wider
+debt inventory.
 
 **The objective is fewer independent rules, with clear ownership.**
 The library should express sophisticated collaboration through a small,

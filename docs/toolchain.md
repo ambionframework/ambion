@@ -134,6 +134,13 @@ it reads both.
 `RunningRoom` are the room a seat calls. The split is what makes that two
 pairs and not four names for one thing.
 
+**An entry keeps a name no consumer reads yet.** About a third of what the
+two entries name is unused outside the core today, and each one is the type
+of something a host writes down: the options of a public function, the
+shapes on the roster, the members of `SeatInfo`. A name a host cannot write
+is a worse surface than a name it has not needed yet. Knip reports an
+unused export inside the core, and it does not judge the entries.
+
 Two rules hold across packages: the core imports no platform module
 (`node:sqlite`, `cloudflare:*`), and every other package reaches the core
 through one of those two entries. Biome refuses every other path into
