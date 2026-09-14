@@ -55,7 +55,9 @@ const options = (over: Partial<DecideOptions> = {}): DecideOptions => ({
 	now: T0,
 	resend: 5_000,
 	attempts: retry.attempts,
-	sentAt: () => undefined,
+	sent: new Map(),
+	sinceCheckpoint: 0,
+	checkpointEvery: 256,
 	stopped: false,
 	...over,
 });
@@ -138,10 +140,11 @@ describe('decide', () => {
 		expect(decide(state, options()).sends).toEqual([
 			{ id: 'message:2:product:1', seat: 'product' },
 		]);
-		const sent = options({ now: T0 + 4_999, sentAt: () => T0 });
+		const sent = options({ now: T0 + 4_999, sent: new Map([['message:2:product:1', T0]]) });
 		expect(decide(state, sent).sends).toEqual([]);
 		expect(decide(state, sent).alarmAt).toBe(T0 + 5_000);
-		expect(decide(state, options({ now: T0 + 5_000, sentAt: () => T0 })).sends).toEqual([
+		const later = options({ now: T0 + 5_000, sent: new Map([['message:2:product:1', T0]]) });
+		expect(decide(state, later).sends).toEqual([
 			{ id: 'message:2:product:1', seat: 'product' },
 		]);
 	});
@@ -346,11 +349,8 @@ describe('decide', () => {
 		expect(fifth).toMatchObject({ expired: [], close: undefined });
 		expect(fifth.sends).toEqual([{ id: 'closed:4:assistant:1', seat: 'assistant' }]);
 		// pass six: nothing
-		const sent = new Set(fifth.sends.map((send) => send.id));
-		const sixth = decide(
-			fold(closed),
-			options({ now: later, sentAt: (id) => (sent.has(id) ? later : undefined) }),
-		);
+		const sent = new Map(fifth.sends.map((send) => [send.id, later]));
+		const sixth = decide(fold(closed), options({ now: later, sent }));
 		expect(sixth).toMatchObject({ expired: [], close: undefined, sends: [] });
 		expect(sixth.alarmAt).toBe(later + 5_000);
 	});
@@ -365,8 +365,41 @@ describe('decide', () => {
 			abandoned: [],
 			close: undefined,
 			sends: [],
+			forget: [],
+			checkpoint: false,
 			alarmAt: undefined,
 		});
+	});
+
+	/**
+	 * The room holds what it sent for as long as the fold owes the activation.
+	 * A wake it forgets is one it would send again, so a decision that kept a
+	 * sent id the fold no longer owes would leave the room waiting on it.
+	 */
+	it('forgets a wake the fold no longer says is due, and keeps one it does', () => {
+		const state = fold(opened());
+		expect(state.due.map((owed) => owed.id)).toEqual(['message:2:product:1']);
+		const sent = new Map([
+			['message:2:product:1', T0],
+			['message:99:gone:1', T0],
+		]);
+		expect(decide(state, options({ sent })).forget).toEqual(['message:99:gone:1']);
+	});
+
+	/** The journal says when a checkpoint is due; the room writes it where it writes nothing else. */
+	it('says a checkpoint is due at the count the runtime set, and not before', () => {
+		const state = fold(opened());
+		expect(decide(state, options({ sinceCheckpoint: 255, checkpointEvery: 256 })).checkpoint).toBe(
+			false,
+		);
+		expect(decide(state, options({ sinceCheckpoint: 256, checkpointEvery: 256 })).checkpoint).toBe(
+			true,
+		);
+		// a stopped room still says so; the room writes nothing once it is gone
+		expect(
+			decide(state, options({ sinceCheckpoint: 256, checkpointEvery: 256, stopped: true }))
+				.checkpoint,
+		).toBe(true);
 	});
 });
 

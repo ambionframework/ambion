@@ -23,8 +23,12 @@ export interface DecideOptions {
 	resend: number;
 	/** How many attempts the room makes at one wake or one draft before it gives up. */
 	attempts: number;
-	/** When each wake was last sent by this room, or undefined when it never was. */
-	sentAt(id: string): number | undefined;
+	/** When this room last sent each wake it waits on. A wake it never sent is absent. */
+	sent: ReadonlyMap<string, number>;
+	/** How many entries the journal has taken since the last checkpoint. */
+	sinceCheckpoint: number;
+	/** How many entries the journal takes before the room writes the next checkpoint. */
+	checkpointEvery: number;
 	/** A stopped room closes nothing and wakes nobody. */
 	stopped: boolean;
 }
@@ -45,6 +49,16 @@ export interface Decision {
 	/** The exchange the room closes, when nothing is live and one is open. */
 	close: Omit<Close, 'seq'> | undefined;
 	sends: Send[];
+	/**
+	 * Wakes this room waited on and no longer does: nothing the fold says is
+	 * due names them. The room drops them from what it has sent.
+	 */
+	forget: string[];
+	/**
+	 * The journal has taken enough entries for a checkpoint. The room writes
+	 * one where the pass writes nothing else, so it stands for a room at rest.
+	 */
+	checkpoint: boolean;
 	/** When the room looks again on its own, or undefined when nothing waits on the clock. */
 	alarmAt: number | undefined;
 }
@@ -100,8 +114,20 @@ export function decide(state: RoomState, options: DecideOptions): Decision {
 		abandoned,
 		close,
 		sends,
+		forget: forgotten(state, options),
+		checkpoint: options.sinceCheckpoint >= options.checkpointEvery,
 		alarmAt: options.stopped ? undefined : nextAlarm(state, options),
 	};
+}
+
+/**
+ * The wakes the room waited on that the fold no longer says are due. A wake
+ * it forgets is one it would send again, so the room holds what it sent for
+ * exactly as long as the fold owes the activation.
+ */
+function forgotten(state: RoomState, options: DecideOptions): string[] {
+	const due = new Set(state.due.map((owed) => owed.id));
+	return [...options.sent.keys()].filter((id) => !due.has(id));
 }
 
 /** An activation the room owes whose attempts reached the cap. */
@@ -164,7 +190,7 @@ function dueWakes(state: RoomState, options: DecideOptions): Send[] {
 
 /** A wake this room never sent, or sent longer ago than the resend window. */
 function unsent(id: string, options: DecideOptions): boolean {
-	const sent = options.sentAt(id);
+	const sent = options.sent.get(id);
 	return sent === undefined || options.now - sent >= options.resend;
 }
 
@@ -174,7 +200,7 @@ function retryTimes(state: RoomState, options: DecideOptions): number[] {
 		.filter((owed) => !capped(owed, options))
 		.map((owed) =>
 			startsNow(owed, options.now)
-				? (options.sentAt(owed.id) ?? options.now) + options.resend
+				? (options.sent.get(owed.id) ?? options.now) + options.resend
 				: (owed.notBefore ?? options.now),
 		);
 }
