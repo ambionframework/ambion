@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
 import { parseId } from '../src/room/lease.ts';
-import { type DecideOptions, decide, liveSeats, working } from '../src/room/reconcile.ts';
+import { type DecideOptions, decide, liveWork } from '../src/room/reconcile.ts';
 import type { Message } from '../src/types.ts';
 import type { Close, LeaseChange } from '../src/wire.ts';
 
@@ -123,7 +123,7 @@ describe('decide', () => {
 
 	it('holds the exchange open while a seat is live or a wake is pending, and lets a draft close none', () => {
 		const pending = fold(opened());
-		expect(working(pending, T0)).toBe(true);
+		expect(liveWork(pending, T0).exchange).toBe(true);
 		expect(decide(pending, options()).close).toBeUndefined();
 		const drafting = fold([
 			...opened(),
@@ -132,7 +132,7 @@ describe('decide', () => {
 			said(3, 'priya'),
 			lease({ id: 'closed:2:assistant:1', phase: 'running', expiry: T0 + 60_000, at }),
 		]);
-		expect(working(drafting, T0)).toBe(false);
+		expect(liveWork(drafting, T0).exchange).toBe(false);
 	});
 
 	it('sends a pending wake it never sent, and again once the resend window passed', () => {
@@ -207,7 +207,7 @@ describe('decide', () => {
 		expect(expired.pending).toMatchObject([
 			{ id: 'message:2:product:2', seat: 'product', seq: 2, attempts: 1, notBefore: T0 + 90_000 },
 		]);
-		expect(working(expired, T0 + 60_000)).toBe(true);
+		expect(liveWork(expired, T0 + 60_000).exchange).toBe(true);
 		expect(decide(expired, options({ now: T0 + 60_000 }))).toMatchObject({
 			close: undefined,
 			sends: [],
@@ -254,7 +254,7 @@ describe('decide', () => {
 			lease({ id: 'message:2:product:4', phase: 'ended', reason: 'abandoned', at }, 2),
 		]);
 		expect(gaveUp.pending).toEqual([]);
-		expect(working(gaveUp, T0 + 100_000)).toBe(false);
+		expect(liveWork(gaveUp, T0 + 100_000).exchange).toBe(false);
 		expect(decide(gaveUp, options({ now: T0 + 100_000 }))).toMatchObject({
 			abandoned: [],
 			close: { through: 2 },
@@ -401,7 +401,7 @@ describe('decide', () => {
 	});
 });
 
-describe('working', () => {
+describe('liveWork', () => {
 	const live = { expiry: T0 + 60_000, at };
 
 	it('holds the exchange open while an activation a message caused is live', () => {
@@ -409,7 +409,7 @@ describe('working', () => {
 			...opened(),
 			lease({ id: 'message:2:product:1', phase: 'running', ...live }),
 		]);
-		expect(working(state, T0)).toBe(true);
+		expect(liveWork(state, T0).exchange).toBe(true);
 	});
 
 	it('holds the exchange open while the activation the open caused is live', () => {
@@ -423,8 +423,8 @@ describe('working', () => {
 			said(2, 'priya', { wakes: ['assistant'] }),
 			lease({ id: 'opened:2:assistant:1', phase: 'running', ...live }),
 		]);
-		expect([...liveSeats(composing, T0).keys()]).toEqual(['assistant']);
-		expect(working(composing, T0)).toBe(true);
+		expect([...liveWork(composing, T0).seats.keys()]).toEqual(['assistant']);
+		expect(liveWork(composing, T0).exchange).toBe(true);
 	});
 
 	it('holds nothing open for an activation a close caused, whichever seat holds it', () => {
@@ -444,7 +444,40 @@ describe('working', () => {
 				...closed,
 				lease({ id: `closed:2:${seat}:1`, phase: 'running', ...live }),
 			]);
-			expect(working(state, T0)).toBe(false);
+			expect(liveWork(state, T0).exchange).toBe(false);
 		}
+	});
+
+	it('is at rest only where no lease is live, no wake is pending and no draft is due', () => {
+		// A pending wake holds the room: it owes the activation nobody took yet.
+		const pending = fold(opened());
+		expect(liveWork(pending, T0)).toMatchObject({ exchange: true, rest: false });
+		// The lease that answers the wake holds it too.
+		const running = fold([
+			...opened(),
+			lease({ id: 'message:2:product:1', ...live, phase: 'running' }),
+		]);
+		expect([...liveWork(running, T0).seats.keys()]).toEqual(['product']);
+		expect(liveWork(running, T0).rest).toBe(false);
+		// The exchange closed, and the draft it owes is due: the room still works.
+		const owed = [
+			...opened(),
+			said(3, 'product', { activationId: 'message:2:product:1' }),
+			lease({ id: 'message:2:product:1', phase: 'ended', reason: 'released', at }),
+			close({ owner: 'priya', from: 2, through: 3, wakes: ['assistant'] }),
+		];
+		expect(liveWork(fold(owed), T0)).toMatchObject({ exchange: false, rest: false });
+		// The first attempt failed, so the draft waits out its backoff. The room
+		// owes a summary and works on nothing, so it is at rest until the draft
+		// is due again. `docs/assistant.md` states this, and `backlog.md` §43
+		// records the cost.
+		const backoff = fold([
+			...owed,
+			lease({ id: 'closed:3:assistant:1', phase: 'running', ...live }),
+			lease({ id: 'closed:3:assistant:1', phase: 'ended', reason: 'failed', at }),
+		]);
+		expect(backoff.owed).toMatchObject([{ attempts: 1, notBefore: T0 + 30_000 }]);
+		expect(liveWork(backoff, T0 + 29_999)).toMatchObject({ seats: new Map(), rest: true });
+		expect(liveWork(backoff, T0 + 30_000).rest).toBe(false);
 	});
 });

@@ -67,7 +67,7 @@ export interface Decision {
  * The seats holding a live lease, a pending wake, or a draft that is due,
  * by name, with the ids that make them live.
  */
-export function liveSeats(state: RoomState, now: number): Map<string, string[]> {
+function liveSeats(state: RoomState, now: number): Map<string, string[]> {
 	const live = new Map<string, string[]>();
 	const add = (seat: string | undefined, id: string) => {
 		if (seat === undefined) return;
@@ -83,17 +83,34 @@ export function liveSeats(state: RoomState, now: number): Map<string, string[]> 
 }
 
 /**
- * Whether the exchange is still being worked on: any activation the
- * exchange's own work caused is live. A message causes one, and the
- * question that opened the exchange causes one. A close is the end of an
- * exchange, so the activation that answers one holds no exchange open —
- * whichever seat holds it.
+ * What the room works on now. One value answers both questions anybody asks
+ * of a room, so the room asks once and the callers read the answer.
+ *
+ * `exchange` is the narrow one: an activation the exchange's own work
+ * caused is live. A message causes one, and the question that opened the
+ * exchange causes one. A close is the end of an exchange, so the activation
+ * that answers one holds no exchange open — whichever seat holds it.
+ *
+ * `rest` is the wide one: no activation of any cause is live.
  */
-export function working(state: RoomState, now: number): boolean {
-	for (const ids of liveSeats(state, now).values()) {
-		if (ids.some(holdsExchange)) return true;
-	}
-	return false;
+export interface LiveWork {
+	/** The seats live now, by name, with the ids that make them live. */
+	readonly seats: Map<string, string[]>;
+	/** An activation the exchange's own work caused is live. */
+	readonly exchange: boolean;
+	/** Nothing at all is live. */
+	readonly rest: boolean;
+}
+
+/** One scan of the folded state and the clock, for every caller that asks. */
+export function liveWork(state: RoomState, now: number): LiveWork {
+	const seats = liveSeats(state, now);
+	const holders = [...seats.values()];
+	return {
+		seats,
+		exchange: holders.some((ids) => ids.some(holdsExchange)),
+		rest: seats.size === 0,
+	};
 }
 
 /** The activation holds an exchange open: a message caused it, or the open did. */
@@ -103,11 +120,12 @@ function holdsExchange(id: string): boolean {
 }
 
 export function decide(state: RoomState, options: DecideOptions): Decision {
+	const work = liveWork(state, options.now);
 	const expired = expiries(state, options.now);
 	const abandoned = options.stopped ? [] : abandonments(state, options);
 	// An expiry or an abandonment changes what is live: the close waits for the fold that holds it.
 	const settled = expired.length === 0 && abandoned.length === 0;
-	const close = options.stopped || !settled ? undefined : closing(state, options.now);
+	const close = options.stopped || !settled ? undefined : closing(state, work, options.now);
 	const sends = options.stopped ? [] : dueWakes(state, options);
 	return {
 		expired,
@@ -158,9 +176,9 @@ function expiries(state: RoomState, now: number): Decision['expired'] {
  * answers `closed`, when the exchange owes a summary. A room with no such
  * seat closes the exchange and owes nothing.
  */
-function closing(state: RoomState, now: number): Decision['close'] {
+function closing(state: RoomState, work: LiveWork, now: number): Decision['close'] {
 	const exchange = state.exchange;
-	if (exchange === undefined || working(state, now)) return undefined;
+	if (exchange === undefined || work.exchange) return undefined;
 	const writer = answering(state.roster, 'closed')?.name;
 	const speaksForItself = (name: string) => !state.people.has(name) && name !== writer;
 	const owed =

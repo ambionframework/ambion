@@ -325,7 +325,7 @@ waiters.
 journal, the definitions, the visits, the ports, the listeners, the run
 identifier, the transport and the runtime. The rest are a cache
 (`fold`, `sentAt`), a lifecycle (`replayed`, `stopped`, `evicted`), an
-event guard (`idleReported`), or a handle on something in flight
+event guard (`reportedRest`), or a handle on something in flight
 (`reconciling`, `cancelAlarm`, and the two arrays of waiters).
 
 `decide` in `reconcile.ts` is already pure. It reads the folded state
@@ -351,7 +351,7 @@ and `checkpoint`, so a pass decides once and applies once. `session.ts` is
 **What did not move, and why.** `settle` reads the state where it runs,
 because the pass calls it after a write that failed and the record moved.
 A decision taken before the write would be stale there. The room's
-reaction to an entry shares `sentAt` and `idleReported` with the pass, so
+reaction to an entry shares `sentAt` and `reportedRest` with the pass, so
 `backlog.md` §3 holds the reason those stay together.
 
 **What is left.** `next.md` §4 asked for 600 lines, and this stops at 1279. The three largest sections are the room's construction (158), what
@@ -537,9 +537,10 @@ subject in its own field. Then `authorOf` goes, `isPresence` reads as a
 positive test, and rule 7 in [`../docs/agent.md`](../docs/agent.md) holds
 for every kind.
 
-## 8. One question about what is live
+## 8. One question about what is live — part done
 
-New. [`backlog.md`](backlog.md) §43 records one fault this causes.
+New. [`backlog.md`](backlog.md) §43 records one fault this causes, and the
+part that is left waits on a decision about it.
 
 **What.** Six functions answer one question: `settled`, `quiet`, `idle`,
 `working`, `liveSeats` and `stilled`. `RoomLog.settled` answers a
@@ -558,6 +559,32 @@ faults of that kind.
 clock. `settled` and `quiet` read it as two tests. `idleReported` becomes
 an edge over one value. Item 1 makes this smaller, because the two lists
 `liveSeats` reads become one.
+
+**What moved.** `liveWork` is the one function, and `LiveWork` is what it
+returns: the seats live now, whether the exchange is still being worked
+on, and whether the room is at rest. One scan answers all three. `idle`
+and `working` are gone, and `liveSeats` is private to the module.
+
+Five callers read the value. `settled()` reads `exchange`, `quiet()`
+reads `rest`, `settle` reads both off one scan where it took two, `wake`
+reads `rest`, and `closing` takes the value `decide` already has. The
+room folded its state twice per settle and read the clock twice; it does
+each once.
+
+`idleReported` is `reportedRest`: whether the room has told the host
+about the rest it is in. `busy()` is the edge, and three callers set it —
+an exchange opens, an activation starts, and a resumed room finds either
+already there.
+
+**What did not move.** `stilled` stays. It answers a different question:
+whether a reconcile is in flight, which no fold reports. `RoomLog.settled`
+stays too, and it names a third thing: every write asked for has landed.
+
+**What is left.** The two lines `liveSeats` reads over `state.due` are
+still two, and [`backlog.md`](backlog.md) §43 holds the decision they
+wait on. A pending wake holds its seat through its backoff, and an owed
+draft does not. `reconcile.test.ts` pins today's behaviour, so the fix
+starts there.
 
 ## 9. One retry policy
 
