@@ -8,7 +8,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineHuman, defineTool, isPresence, isSummary, stopSession } from '../../src/index.ts';
+import { defineHuman, defineTool, isPresence, isSummary } from '../../src/index.ts';
 import { enter, messageBefore } from '../support/room.ts';
 import {
 	activationsOf,
@@ -61,12 +61,12 @@ live('the exchange', () => {
 			'Finance desk.',
 			'shipping on Friday costs nothing extra; a Saturday collection carries a 200 EUR surcharge.',
 		);
-		const { session, runtime, events } = open('exchange', {
+		const { session, runtime, events } = await open('exchange', {
 			goal: 'Ship the batch this week.',
 			agents: [planner, logistics, finance],
 		});
 		const visit = await enter(session, andrei);
-		await visit.deliver({ text: 'Can we ship the batch on Friday?' });
+		await visit.send({ text: 'Can we ship the batch on Friday?' });
 		await untilQuiet(session);
 
 		const messages = await session.messages();
@@ -105,7 +105,7 @@ live('the exchange', () => {
 		await invariants(session, events);
 		const conflicts = events.filter((e) => e.type === 'conflict').length;
 		report('the exchange', await spent(runtime, session), conflicts);
-		await stopSession(session);
+		await session.stop();
 	});
 
 	it('the assistant seats the specialist a question needs, and leaves the rest in reserve', async () => {
@@ -135,12 +135,12 @@ live('the exchange', () => {
 			identity: 'Canteen desk. Knows menus and meal times.',
 			instructions: 'Answer questions about meals with one say. For anything else, end your turn.',
 		});
-		const { session, runtime, events } = open('reserve', {
+		const { session, runtime, events } = await open('reserve', {
 			agents: [frontdesk],
 			available: [permits, catering],
 		});
 		const visit = await enter(session, andrei);
-		await visit.deliver({ text: 'How long does a building permit take for the extension?' });
+		await visit.send({ text: 'How long does a building permit take for the extension?' });
 		await untilQuiet(session);
 
 		const messages = await session.messages();
@@ -155,6 +155,6 @@ live('the exchange', () => {
 		expect(answer[0]?.text).toContain('10 working days');
 		await invariants(session, events);
 		report('the reserve', await spent(runtime, session));
-		await stopSession(session);
+		await session.stop();
 	});
 });

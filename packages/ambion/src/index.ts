@@ -4,11 +4,10 @@
  * `defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
  * gives agents tools, `seated` chooses what wakes a seat — with
  * `passive` and `attentive` for the two points worth naming — and
- * `startSession` brings up a named room the agents work in and people visit.
+ * `startRoom` brings up a named room the agents work in and people visit.
  * A person's question opens an exchange, the room works, and quiescence
- * closes it — the exchange every other feature reads. `stopSession` takes
- * the room down, `readSession` reads a name without starting anything,
- * `visitSession` puts a person in a running room. The room's assistant composes the room at
+ * closes it — the exchange every other feature reads. `readRoom` reads a name without
+ * starting anything. A person visits a running room through `room.visit`. The room's assistant composes the room at
  * the open of an exchange, from the agents held in reserve, and writes the
  * one message a person reads when the exchange closes. The design contracts
  * live in docs/agent.md, docs/exchange.md, docs/presence.md,
@@ -25,14 +24,15 @@ export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from
 export type { CreateRuntimeOptions, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type {
-	ReadSessionOptions,
-	ResumeSessionOptions,
-	Session,
-	SessionView,
-	StartSessionOptions,
+	ExchangeHandle,
+	ReadRoomOptions,
+	ResumeRoomOptions,
+	Room,
+	RoomSnapshot,
+	StartRoomOptions,
 	Visit,
-} from './session.ts';
-export { readSession, resumeSession, startSession, stopSession, visitSession } from './session.ts';
+} from './room.ts';
+export { readRoom, resumeRoom, startRoom } from './room.ts';
 export type {
 	AgentDefinition,
 	AgentSeat,
@@ -50,11 +50,11 @@ export type {
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
+	RoomNotification,
 	SeatedAgent,
 	SeatInfo,
 	SeatStatus,
 	Seq,
-	SessionEvent,
 	SpokenMessage,
 	SummaryMessage,
 	ToolBundle,

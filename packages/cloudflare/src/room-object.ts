@@ -9,21 +9,16 @@ import { DurableObject } from 'cloudflare:workers';
 import type {
 	Attention,
 	Clock,
+	ClosedExchange,
+	Exchange,
 	Message,
+	Room,
 	Runtime,
 	SeatInfo,
 	Seq,
-	Session,
 	Visit,
 } from '@ambionframework/ambion';
-import {
-	defineHuman,
-	resumeSession,
-	seated,
-	startSession,
-	stopSession,
-	visitSession,
-} from '@ambionframework/ambion';
+import { defineHuman, resumeRoom, seated, startRoom } from '@ambionframework/ambion';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -94,7 +89,7 @@ export class RoomObject extends DurableObject<Env> {
 	private readonly runtime: Runtime;
 	protected readonly metadata: MetadataStore<RoomMetadata>;
 	protected readonly storage: JournalOpener;
-	private room: Session | undefined;
+	private room: Room | undefined;
 	private readonly visits = new Map<string, Visit>();
 
 	constructor(ctx: DurableObjectState, env: Env) {
@@ -109,7 +104,7 @@ export class RoomObject extends DurableObject<Env> {
 		ctx.blockConcurrencyWhile(async () => {
 			const { name } = await this.metadata.read();
 			if (name !== undefined)
-				this.room = await resumeSession(name, { runtime: this.runtime, agents: definitions() });
+				this.room = await resumeRoom(name, { runtime: this.runtime, agents: definitions() });
 		});
 	}
 
@@ -117,7 +112,7 @@ export class RoomObject extends DurableObject<Env> {
 	async start(options: StartOptions): Promise<void> {
 		if (this.room !== undefined) throw new Error(`Room '${this.room.name}' is running.`);
 		await this.metadata.change(() => ({ patch: { name: options.name } }));
-		this.room = startSession({
+		this.room = await startRoom({
 			name: options.name,
 			runtime: this.runtime,
 			assistant: definitionOf(options.assistant),
@@ -135,7 +130,7 @@ export class RoomObject extends DurableObject<Env> {
 		await this.visitOf(person.name);
 	}
 
-	/** The handle a person delivers through. A room that came back holds none, and visits again: presence folds. */
+	/** The live visit for a person. A resumed room reconstructs it from durable presence. */
 	private async visitOf(name: string): Promise<Visit> {
 		const known = this.visits.get(name);
 		if (known !== undefined) return known;
@@ -143,19 +138,20 @@ export class RoomObject extends DurableObject<Env> {
 		const person =
 			people !== undefined && Object.hasOwn(people, name) ? (people[name] as Person) : undefined;
 		if (person === undefined) throw new Error(`'${name}' has not visited this room.`);
-		const visit = await visitSession(this.running(), defineHuman(person));
+		const visit = await this.running().visit(defineHuman(person));
 		this.visits.set(name, visit);
 		return visit;
 	}
 
-	async deliver(input: { from: string; to?: string; text: string; key?: string }): Promise<void> {
+	async send(input: { from: string; to?: string; text: string; key?: string }): Promise<Exchange> {
 		const visit = await this.visitOf(input.from);
 		const to = input.to === undefined ? undefined : this.participant(input.to);
-		await visit.deliver({
+		const exchange = await visit.send({
 			text: input.text,
 			...(to ? { to } : {}),
 			...(input.key ? { key: input.key } : {}),
 		});
+		return { owner: exchange.owner, from: exchange.from, at: exchange.at };
 	}
 
 	private participant(name: string) {
@@ -187,7 +183,7 @@ export class RoomObject extends DurableObject<Env> {
 	}
 
 	async stop(): Promise<void> {
-		await stopSession(this.running());
+		await this.running().stop();
 		this.room = undefined;
 		this.visits.clear();
 		await this.metadata.change(() => ({ remove: ['name'] }));
@@ -201,8 +197,23 @@ export class RoomObject extends DurableObject<Env> {
 		return this.running().seats();
 	}
 
-	async exchange() {
-		return this.running().exchange();
+	async exchange(from: Seq) {
+		const exchange = this.running().exchange(from);
+		return exchange === undefined
+			? undefined
+			: { owner: exchange.owner, from: exchange.from, at: exchange.at };
+	}
+
+	async waitForClose(from: Seq): Promise<ClosedExchange> {
+		const exchange = this.running().exchange(from);
+		if (exchange === undefined) throw new Error(`Exchange '${from}' is not on the record.`);
+		return exchange.waitForClose();
+	}
+
+	async response(from: Seq) {
+		const exchange = this.running().exchange(from);
+		if (exchange === undefined) throw new Error(`Exchange '${from}' is not on the record.`);
+		return exchange.response();
 	}
 
 	// -- what a seat asks, in wire types --------------------------------------
@@ -224,7 +235,7 @@ export class RoomObject extends DurableObject<Env> {
 		await this.room?.reconcile();
 	}
 
-	private running(): Session {
+	private running(): Room {
 		if (this.room === undefined) throw new Error('The room is not started.');
 		return this.room;
 	}

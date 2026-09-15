@@ -5,16 +5,9 @@
  */
 import { readdir } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import {
-	createRuntime,
-	isSpoken,
-	readSession,
-	startSession,
-	stopSession,
-	visitSession,
-} from '../src/index.ts';
+import { createRuntime, isSpoken, readRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
-import { andrei, assistant, roomName } from './support/room.ts';
+import { andrei, assistant, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { childStorage, memory, sqlite } from './support/storage.ts';
 
@@ -24,17 +17,27 @@ describe('createRuntime', () => {
 		const [one, two] = await Promise.all([memory.open(), memory.open()]);
 		const first = createRuntime({ storage: one.storage, clock: fakeClock() });
 		const second = createRuntime({ storage: two.storage, clock: fakeClock() });
-		const a = startSession({ name, runtime: first, assistant, streamFn: scripted(() => quiet()) });
-		const b = startSession({ name, runtime: second, assistant, streamFn: scripted(() => quiet()) });
-		await (await visitSession(a, andrei)).deliver({ text: 'in the first' });
-		await (await visitSession(b, andrei)).deliver({ text: 'in the second' });
-		await Promise.all([a.settled(), b.settled()]);
+		const a = await startRoom({
+			name,
+			runtime: first,
+			assistant,
+			streamFn: scripted(() => quiet()),
+		});
+		const b = await startRoom({
+			name,
+			runtime: second,
+			assistant,
+			streamFn: scripted(() => quiet()),
+		});
+		await (await a.visit(andrei)).send({ text: 'in the first' });
+		await (await b.visit(andrei)).send({ text: 'in the second' });
+		await Promise.all([waitForRoom(a, 'settled'), waitForRoom(b, 'settled')]);
 
 		expect((await a.messages()).filter(isSpoken).map((m) => m.text)).toEqual(['in the first']);
 		expect((await b.messages()).filter(isSpoken).map((m) => m.text)).toEqual(['in the second']);
-		expect(readSession(name, { runtime: first })).toBe(a);
-		expect(readSession(name, { runtime: second })).toBe(b);
-		await Promise.all([stopSession(a), stopSession(b)]);
+		expect((await readRoom(name, { runtime: first })).name).toBe(a.name);
+		expect((await readRoom(name, { runtime: second })).name).toBe(b.name);
+		await Promise.all([a.stop(), b.stop()]);
 	});
 
 	it('writes a room durably, where a second runtime reads it', async () => {
@@ -46,16 +49,16 @@ describe('createRuntime', () => {
 				storage: opened.storage,
 				clock: fakeClock(),
 			});
-			const session = startSession({
+			const session = await startRoom({
 				name,
 				runtime: writer,
 				assistant,
 				streamFn: scripted(() => quiet()),
 			});
-			const visit = await visitSession(session, andrei);
-			await visit.deliver({ text: 'kept on disk' });
-			await session.settled();
-			await stopSession(session);
+			const visit = await session.visit(andrei);
+			await visit.send({ text: 'kept on disk' });
+			await waitForRoom(session);
+			await session.stop();
 
 			const files = await readdir(dir, { recursive: true });
 			expect(files.some((file) => String(file).endsWith('.db'))).toBe(true);
@@ -64,9 +67,9 @@ describe('createRuntime', () => {
 				storage: childStorage('sqlite', dir),
 				clock: fakeClock(),
 			});
-			const view = readSession(name, { runtime: reader });
-			expect((await view.messages()).map((m) => m.kind)).toEqual(['arrived', 'said', 'left']);
-			expect((await view.messages()).filter(isSpoken).map((m) => m.text)).toEqual(['kept on disk']);
+			const view = await readRoom(name, { runtime: reader });
+			expect(view.messages.map((m) => m.kind)).toEqual(['arrived', 'said', 'left']);
+			expect(view.messages.filter(isSpoken).map((m) => m.text)).toEqual(['kept on disk']);
 		} finally {
 			await opened.dispose();
 		}

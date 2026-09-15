@@ -8,7 +8,7 @@
  * its own test support.
  */
 
-import { isSpoken, startSession, visitSession } from '@ambionframework/ambion';
+import { isSpoken, startRoom } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
 import { collect, deferred } from '../../ambion/test/support/room.ts';
 import {
@@ -51,7 +51,7 @@ const twoWorkspaces: Scenario = {
 		const destroyed = deferred();
 		const alphaResults: string[] = [];
 		const betaResults: string[] = [];
-		const session = startSession({
+		const session = await startRoom({
 			name,
 			runtime,
 			assistant,
@@ -82,8 +82,8 @@ const twoWorkspaces: Scenario = {
 			),
 		});
 		const events = collect(session);
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'go' });
+		const visit = await session.visit(priya);
+		const exchange = await visit.send({ text: 'go' });
 		// alpha has written; destroy its workspace while its activation runs
 		await new Promise<void>((resolve) => {
 			const off = session.subscribe((event) => {
@@ -94,7 +94,8 @@ const twoWorkspaces: Scenario = {
 		});
 		await memoryDrive.destroy();
 		destroyed.resolve();
-		await session.quiet();
+		await exchange.waitForClose();
+		await exchange.response();
 
 		expect(alphaResults.some((r) => r.includes('no longer available'))).toBe(true);
 		expect(betaResults.some((r) => r.includes('two'))).toBe(true);

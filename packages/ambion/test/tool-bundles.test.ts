@@ -9,13 +9,12 @@ import {
 	type AgentDefinition,
 	defineAgent,
 	defineTool,
-	type Session,
-	startSession,
-	stopSession,
+	type Room,
+	startRoom,
 	type ToolBundle,
 	type ToolContext,
 } from '../src/index.ts';
-import { assistant, enter, roomName as name } from './support/room.ts';
+import { assistant, enter, roomName as name, waitForRoom } from './support/room.ts';
 import { byAgent, callTool, quiet, type Script, scripted } from './support/scripted.ts';
 
 function agent(agentName: string, options: Partial<Parameters<typeof defineAgent>[0]> = {}) {
@@ -29,16 +28,16 @@ function agent(agentName: string, options: Partial<Parameters<typeof defineAgent
 }
 
 /** One room, one delivery, and the seats' scripts; resolves when the room settles. */
-async function run(agents: AgentDefinition[], seats: Record<string, Script>): Promise<Session> {
-	const session = startSession({
+async function run(agents: AgentDefinition[], seats: Record<string, Script>): Promise<Room> {
+	const session = await startRoom({
 		name: name('ordinary-bundles'),
 		assistant,
 		agents,
 		streamFn: scripted(byAgent(seats)),
 	});
 	const visit = await enter(session);
-	await visit.deliver({ text: 'go' });
-	await session.settled();
+	await visit.send({ text: 'go' });
+	await waitForRoom(session);
 	return session;
 }
 
@@ -97,7 +96,7 @@ describe('ordinary tool bundles', () => {
 			worker: (_context, _who, call) => (call <= 2 ? callTool('probe', {}) : quiet()),
 		});
 		expect(seen).toEqual(['worker:Identity of worker.:true', 'worker:Identity of worker.:true']);
-		await stopSession(session);
+		await session.stop();
 	});
 
 	it('adds bundle guidance to message activations', async () => {
@@ -113,6 +112,6 @@ describe('ordinary tool bundles', () => {
 			},
 		});
 		expect(prompts[0]).toContain('Backend guidance: inspect records before writing.');
-		await stopSession(session);
+		await session.stop();
 	});
 });

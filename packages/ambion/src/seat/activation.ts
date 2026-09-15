@@ -30,7 +30,7 @@
  * session as an `ambion/activation` entry.
  */
 import type { Agent, AgentEvent, Session as PiSession } from '@earendil-works/pi-agent-core';
-import type { Seq, SessionEvent } from '../types.ts';
+import type { RoomNotification, Seq } from '../types.ts';
 import type { ActivationView, EndReason, LeaseResponse, ViewResponse } from '../wire.ts';
 import { PiContext } from './pi.ts';
 
@@ -44,7 +44,7 @@ export interface ActivationHost {
 	build(view: ActivationView, activation: Activation): Agent;
 	/** Keep what the model did, in the seat's own downstream session. */
 	persist(agent: Agent): Promise<void>;
-	emit(event: SessionEvent): void;
+	emit(event: RoomNotification): void;
 	/** The room's clock: Pi stamps every message it is handed. */
 	now(): number;
 }

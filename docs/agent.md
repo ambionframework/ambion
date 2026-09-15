@@ -4,13 +4,13 @@ This document is the design contract for Ambion's core, and the core is
 shipped. The whole runtime lives in
 [`packages/ambion/src`](../packages/ambion/src) — definitions in
 [`define.ts`](../packages/ambion/src/define.ts), the room in
-[`session.ts`](../packages/ambion/src/session.ts), the public shapes in
+[`room.ts`](../packages/ambion/src/room.ts), the public shapes in
 [`types.ts`](../packages/ambion/src/types.ts).
 
 Four functions build a room, and one sentence holds the whole of it:
 
 > **`defineAgent` makes an agent, `defineHuman` names a person, `defineTool`
-> gives agents tools, and `startSession` brings up a named room the agents
+> gives agents tools, and `startRoom` brings up a named room the agents
 > work in and people visit — each agent deciding for itself whether to speak,
 > to whom, and which colleague to call in.**
 
@@ -43,11 +43,11 @@ it.
 | Transcript storage, in-memory and durable | Pi         |
 | Tool definition format                    | Pi         |
 | **Participants as values**                | **Ambion** |
-| **The session as a room**                 | **Ambion** |
+| **The room**                              | **Ambion** |
 
 Ambion owns two concerns. A third concern is a design failure: push it into
 a dependency or drop it. The single extension point is Pi's own:
-`startSession` accepts a `streamFn`. A scripted stream makes the room
+`startRoom` accepts a `streamFn`. A scripted stream makes the room
 deterministic — this is how [the tests](../packages/ambion/test/support/scripted.ts)
 run — and a custom stream brings custom providers. Ambion keeps no model
 registry of its own. Without a `streamFn`, models resolve as
@@ -73,7 +73,7 @@ export const researcher = defineAgent({
 });
 ```
 
-That is the entire surface. `name` identifies the agent inside a session and
+That is the entire surface. `name` identifies the agent inside a room and
 on the record. `identity` is the public face: one or two sentences the whole
 room reads, injected into every participant's context as part of the roster.
 `instructions` are private. They are the agent's own voice, appended to the
@@ -134,13 +134,13 @@ one wakes nothing.
 One optional field goes with them: `preferences`, how they read. The room's
 assistant reads it when it writes the one message they read at the close of
 their exchange, and no other seat reads it. The assistant is seated by
-`startSession`, at the narrow end of attention: nothing said reaches it, no
+`startRoom`, at the narrow end of attention: nothing said reaches it, no
 message activates it, and nothing it writes wakes anybody.
 [`assistant.md`](assistant.md) is the contract for it.
 
-A human is outside a room's composition, so `startSession` never takes one.
-The value is what somebody visits as: `visitSession(session, andrei)`
-returns a visit, the visit delivers, and the runtime stamps the record from
+A human is outside a room's composition, so `startRoom` never takes one.
+The value is what somebody visits as: `room.visit(andrei)`
+returns a visit, the visit sends, and the runtime stamps the record from
 it. Who-said-what comes from the runtime's own observation, never from a
 claim inside the content. One person holds one visit, several people visit
 at once, and each one's presence is a fact the agents read.
@@ -149,82 +149,78 @@ a visit puts on the record.
 
 ---
 
-## 5. startSession
+## 5. startRoom
 
 ```ts
-import {
-  readSession,
-  startSession,
-  stopSession,
-  visitSession,
-  passive,
-} from '@ambionframework/ambion';
+import { readRoom, startRoom, passive } from '@ambionframework/ambion';
 
-const session = startSession({
+const room = await startRoom({
   name: 'weekly',
   goal: 'Draft the weekly digest and flag what does not hold.',
+  assistant: editor,
   agents: [researcher, writer, passive(archivist)],
 });
 
-const unsubscribe = session.subscribe((event) => {
+const unsubscribe = room.subscribe((event) => {
   if (event.type === 'message') console.log(`${event.message.from}: ...`);
 });
 
-const visit = await visitSession(session, andrei);
-await visit.deliver({ text: 'Draft the weekly. Anything to flag?' });
-await session.settled();
+const visit = await room.visit(andrei);
+const exchange = await visit.send({ text: 'Draft the weekly. Anything to flag?' });
+const response = await exchange.response();
+if (response) console.log(response.text);
 
-await stopSession(session);
+await room.stop();
 
 // later, in any process, with no agents standing up
-for (const message of await readSession('weekly').messages()) {
+const snapshot = await readRoom('weekly');
+for (const message of snapshot.messages) {
   console.log(`${message.from}: ${message.text}`);
 }
 ```
 
 Three verbs, and each does one thing:
 
-- **`startSession` sets up the context where the agents work.** It takes
+- **`startRoom` sets up the context where the agents work.** It takes
   the room's composition and brings it to life: from here on the seats are
   live and a message activates them.
-- **`stopSession` takes it down**: every activation in flight is aborted, every
+- **`room.stop()` takes it down**: every activation in flight is aborted, every
   visit is closed, the write chain drains, and the handle refuses further
   use.
-- **`readSession` reads a name and starts nothing**: the record, and who
+- **`readRoom` reads a name and starts nothing**: the record, and who
   was in it, with no seat standing up and nothing to bill. You can read a
   room that is idle; you can only speak into a running one.
 
-A person is the fourth verb and lives in [`presence.md`](presence.md):
-`visitSession` puts them in a running room.
+A person visits through `room.visit(person)`, as described in
+[`presence.md`](presence.md).
 
-A session is a named entity that outlives any run of it. Three rules of
+A room is a named entity that outlives any run of it. Three rules of
 identity follow.
 
 **The record belongs to the name.** What was said in `'weekly'` is there
 whenever `'weekly'` is read, for as long as the storage lives, whether or
 not anything is running.
 
-**The run belongs to `startSession`.** The assistant, the agents passed,
+**The run belongs to `startRoom`.** The assistant, the agents passed,
 and the agents held in reserve are the room's composition for this run. A
 name can be started again with a different composition, and the record
 still shows who said what, stamped at the time it landed. A long-lived
-room is many runs over one record, and `readSession` reaches the record
+room is many runs over one record, and `readRoom` reaches the record
 between them. `agents` may be empty: a room that starts with the assistant
 alone seats what a question needs from its reserve
 ([`roster.md`](roster.md) §1).
 
-**One run per name.** `startSession` refuses a name already running in this
+**One run per name.** `startRoom` refuses a name already running in this
 process, and the journal fences a run in another process
 ([`durability.md`](durability.md) §1). Two live rooms over one record
 would each replay it, each append to it, and diverge. A start the record
 refuses frees the name: the handle answers every call with the refusal,
 and the next start takes the name. Names are unique inside a roster too:
-`startSession` refuses a duplicate, and so does `visitSession`, so
+`startRoom` refuses a duplicate, and so does `room.visit`, so
 `say({ to })` always names exactly one participant.
 
-`startSession` is synchronous and the room is usable at once; the replay it
-needs is awaited by the first call that needs it. `stopSession` returns a
-promise, because draining is the point of calling it.
+`startRoom` and `resumeRoom` return ready rooms. `readRoom` returns a ready
+snapshot. No public room method waits for general inactivity.
 
 The record holds one union (`Message` in `types.ts`): what a participant
 said, what a person did, and what one exchange came to.
@@ -297,8 +293,7 @@ idle wakes them again, so it is heard now and never waits for the next
 delivery. With one agent this degenerates to ordinary chat: the room is the
 general case, and the single assistant is its size-one instance.
 
-A message
-may also be directed: `visit.deliver({ to, text })` and `say({ to })`
+A message may also be directed: `visit.send({ to, text })` and `say({ to })`
 activate exactly the named participant, waking it however narrowly it is
 seated. `to` is a participant handle; directed at a human it addresses the
 reader and wakes nothing.
@@ -315,8 +310,7 @@ author and wakes the subject ([`roster.md`](roster.md) §3).
 idle.** Replies and deliveries alike, directed or undirected: each arrival
 is injected into every active agent's running activation at the next safe point,
 so nobody finishes blind and answers stale. "Round" is deliberately a
-soft-edged word: the room has no barrier, only quiet, and quiet is what
-`settled` reports. Mid-flight, each agent may see the conversation in a
+soft-edged word: the room has no barrier between concurrent activations. Mid-flight, each agent may see the conversation in a
 slightly different order than the record. Its working view is its own,
 temporary by design: when the agent goes idle the view is discarded, and
 the next activation reads the record itself. The record is canonical.
@@ -431,19 +425,19 @@ however narrowly it is seated: a directed say names the one it addresses
 and wakes nobody else, which is what makes it a focusing act, and a seating
 names the seat it seats ([`roster.md`](roster.md) §3).
 
-Both are readable from `session.seats()`, so a seat that is `named` and
+Both are readable from `room.seats()`, so a seat that is `named` and
 running is describable, which one enum could not do. Attention belongs to
 the seating, and `defineAgent` knows nothing about it, so the same agent
 can be the quiet corner in one room and the one who meets people in
 another.
 
-**The room designates one assistant.** `startSession({ assistant })` seats
+**The room designates one assistant.** `startRoom({ assistant })` seats
 that agent at attention `none` and records its name in the composition.
 The assistant policy selects reserve agents when an exchange opens and
 consolidates multiple agent messages when it closes.
 
 ```ts
-startSession({
+await startRoom({
   name: 'weekly',
   agents: [researcher, writer],
   assistant: editor,
@@ -456,11 +450,11 @@ model session, and activation history. A room without an assistant closes
 exchanges without selecting reserve agents or producing summaries.
 
 **7. Identity is injected; provenance is stamped.** Every agent's context
-carries the session's goal, the time, and two rosters — the agents, with
+carries the room's goal, the time, and two rosters — the agents, with
 their statuses spelled out so a seat knows a broadcast will never reach the
 colleague seated `passive` in the corner, and the people, with how long
 each one has been reading or gone. On the record, `from` is written by the
-runtime: `say` is stamped with its agent, a delivery is stamped from the
+runtime: `say` is stamped with its agent, a message from a visit is stamped from the
 live visit that made it, and an arrival is stamped from the visit the
 runtime observed opening. No one self-reports who they are.
 
@@ -478,11 +472,11 @@ its working view reset. The record is never rewritten for anyone.
 The observation surface is Pi's `Agent` API lifted one level: the same
 `subscribe(listener)` returning an unsubscribe function, an event per fact,
 and one property a room needs that a single agent does not — every event
-names its seat. The stream carries room-level facts only (`SessionEvent` in
+names its seat. The stream carries room-level facts only (`RoomNotification` in
 `types.ts`):
 
 ```ts
-type SessionEvent =
+type RoomNotification =
   | { type: 'message'; message: Message }
   | { type: 'activation_start'; agent: string }
   | { type: 'conflict'; author: string; missed: Message[] }
@@ -531,10 +525,7 @@ Three events are the room's own:
   record, so the host sees every race the lock caught;
 - `error`, which distinguishes a failed activation from a quiet one.
 
-`settled()` is a promise with no event beside it: it resolves at the
-moment no agent is active, and the window between `settled()` and `quiet`
-is the one place a caller can act while a summary is drafted. **Silence is
-a decision; an error is an event.** A crashed tool or a refused model call
+**Silence is a decision; an error is an event.** A crashed tool or a refused model call
 never masquerades as declining: it reaches the host on the stream, and
 leaves no mark on the record.
 
@@ -546,64 +537,31 @@ tool calls as well as hearing voices.
 
 ### The exchange: the room's own unit of work
 
-A room is a sequence of exchanges. A person's question opens one, quiescence
-closes it, and what lands in between steers the seats already working and
-changes nothing. The two `exchange_*` events above are its edges, and
-`exchange()` reads the open one. [`exchange.md`](exchange.md) specifies the
-shape, the three rules, who owns one, and what reads one.
+A room is a sequence of exchanges. A person's question opens one, and
+quiescence closes it. Messages that land while it is open steer the seats
+already working. [`exchange.md`](exchange.md) specifies the exchange shape,
+its rules, and its completion handle.
 
-Two completion signals, for the two things a host waits on, and two
-controls:
+An exchange handle gives callers durable completion without a room-wide wait:
 
-- **`deliver()`** resolves when the message is durable — its write is
-  confirmed, it is on the record, and activations are dispatched. A write
-  that fails rejects `deliver()`, and the message is nowhere: not on the
-  record, not on the stream, and nobody woke for it. A write that landed
-  and lost its confirmation rejects too, and the room is in doubt: it reads
-  the storage at once, and the message it finds is on the record, on the
-  stream, and the seats it reaches wake for it. It never waits for
-  completion, because activations run in parallel and have no single caller
-  to return to. `deliver({ key })` names the delivery: a repeated key lands
-  once, so a host that never learned whether a delivery landed delivers it
-  again under the same key.
-- **`settled()`** is the exchange's end: a promise that resolves when the
-  seats stop, which is also the moment a host learns that nobody chose to
-  speak. It reports that no seat which speaks for itself is taking an
-  activation.
-  The assistant writing about an exchange is not the room still working on it, so
-  the room is never held busy while it writes.
-- **`quiet()`** is the second moment — no agent at all is taking an activation,
-  and the room owes none — for a host that wants the one message a person reads
-  ([`assistant.md`](assistant.md) §14). A draft waiting out its backoff holds
-  its seat, so the room stays busy until it writes the summary or gives up on
-  it. The two differ because the assistant is a seat
-  like any other, and its activation counts. That difference keeps an
-  exchange's end fixed. [`exchange.md`](exchange.md)
-  §6 fixes the order of the events at the close.
-- **`abort()`** revokes every lease in flight and every wake still
-  pending: the room writes `ended` with reason `revoked` for each one, cuts
-  the seat side with Pi's own abort, and settles. What was said stays, what
-  was mid-flight ends without speaking, and an aborted activation stays
-  cancelled even if a steer was still queued against it. A draft the
-  assistant held is written off with them: the summary is owed no longer.
-  The room is still running afterwards.
-- **`stopSession`** is the one that ends it, and it is `abort()` plus
-  everything else a run holds: the visits close with a `left` for everyone
-  present, the alarm is cancelled, and the handle is spent. It writes no
-  `unseated` and no close: the next run writes its own composition, the
-  roster folds from that ([`roster.md`](roster.md) §5), and an exchange
-  left open closes at the next run's first reconcile.
-- **`resumeSession(name, { runtime, agents })`** brings a name back up over its
-  journal, with the composition the journal holds. The first entry every
-  run writes is its fence, and it voids every earlier run. A run that
-  finds a later run's fence emits `superseded` and drops itself from
-  memory. It writes nothing more ([`durability.md`](durability.md) §1). Every name on the roster
-  resolves through the explicit `agents` binding. The room reconciles at once: a lease the last run left expires, a
-  wake it left pending is sent again, and an exchange it left open closes
-  once nothing works on it. `runtime.evict(name)` is the other half: it
-  drops a running room from memory and writes nothing. The dropped handle
-  writes nothing either: a stop, an abort or a departure on it is a no-op,
-  and whoever waits on `quiet()` or `settled()` is released.
+- **`visit.send()`** waits for the delivery to commit, then returns the exchange
+  handle. A repeated key returns the same handle.
+- **`exchange.waitForClose()`** waits for the durable close and returns its range.
+- **`exchange.response()`** waits for the assistant response, or returns
+  `undefined` when the assistant deliberately stays silent. Failed work rejects.
+
+**`abort()`** revokes every lease in flight and every wake still pending. The
+room writes `ended` with reason `revoked` and cuts the seat side with Pi's abort.
+The room keeps running afterwards.
+
+**`room.stop()`** ends the run. It revokes work, closes visits, cancels the
+alarm, and spends the room handle. A later run writes its own composition and
+closes an exchange that remained open.
+
+**`resumeRoom(name, { runtime, agents })`** brings a name back over its journal.
+It resolves every recorded seat through the supplied bindings. The room
+reconciles at once, so pending work and open exchanges continue after restart.
+A dropped room writes nothing, and its handle accepts no new work.
 
 **A room captures its definitions.** `defineAgent` copies and freezes its
 tool array, tool records, and plain schema records. Functions, workspace
@@ -616,14 +574,13 @@ refuses a missing or repeated binding before it writes its fence.
 A listener learns nothing the pulls cannot tell it — it only learns it
 sooner.
 
-`readSession(name, { runtime })` returns the pull side alone — `messages()`,
-`seats()`, `subscribe()` — and `Session` extends it, so code that only
-reads takes the narrower type and cannot start anything by accident. Its
-`seats()` folds the same entries a running room folds, so a stopped room says
-who was in it and which seat still holds a lease.
+`readRoom(name, { runtime })` returns a plain `RoomSnapshot` with readonly
+`messages`, `seats`, and the current `exchange`. It is a pull read and starts
+no room or subscription, so a caller can inspect a stopped room without
+accidentally creating a run.
 
 One file per concern, in layers an import points down through, and
-`session.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
+`room.ts` is the room that composes them ([`toolchain.md`](toolchain.md)
 §1 names the layers, and Biome holds them): the
 journal in [`journal.ts`](../packages/journal/src/journal.ts), the rules it writes
 by in [`rules.verified.ts`](../packages/journal/src/rules.verified.ts),
@@ -710,8 +667,7 @@ A lease that expires or fails answers no work. Its words remain on the
 record, and the next attempt reads them. Unsuccessful attempts count toward
 `runtime.retry`: three attempts by default, with increasing backoff.
 At the cap, the room records an `abandoned` activation and stops retrying
-its work. Pending activations keep the exchange open and make `settled()`
-wait for resolution.
+its work. Pending activations keep the exchange open until it closes.
 
 **A fold reads the journal's complete history.** Messages and administrative
 entries remain ordered and durable together. A resumed room derives the same
@@ -785,8 +741,8 @@ say the cut, so a seat that still runs the activation stops.
 model call, and the policy for wakes and retries: how long a lease
 lasts between renewals, how long a wake waits before it is sent again, and
 how many drafts the assistant is given
-([`runtime.ts`](../packages/ambion/src/host/runtime.ts)). `startSession`,
-`readSession` and `resumeSession` take one as an option and default to
+([`runtime.ts`](../packages/ambion/src/host/runtime.ts)). `startRoom`,
+`readRoom` and `resumeRoom` take one as an option and default to
 `defaultRuntime`, one value per process. Two runtimes in one process share
 nothing: one name runs in both, and neither reads the other. "One run per
 name" above holds per runtime.
@@ -796,7 +752,7 @@ name" above holds per runtime.
 ## 6. What proves it
 
 The milestone tests live in
-[`packages/ambion/test/session.test.ts`](../packages/ambion/test/session.test.ts),
+[`packages/ambion/test/room.test.ts`](../packages/ambion/test/room.test.ts),
 one per claim this document makes loudly:
 
 - parallel activation with mid-activation steering, and a reply waking the idle

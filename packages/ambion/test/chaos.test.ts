@@ -19,23 +19,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import {
-	createRuntime,
-	isPresence,
-	resumeSession,
-	type Session,
-	stopSession,
-	visitSession,
-} from '../src/index.ts';
+import { createRuntime, isPresence, type Room, resumeRoom } from '../src/index.ts';
 import { agents, priya, type Question, questions, sam, script, TIMING } from './support/cast.ts';
 import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
-import { collect, roomName } from './support/room.ts';
+import { collect, currentExchange, roomName } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { childJournals, childStorage, memory, type Storage, storages } from './support/storage.ts';
 
 const full = process.env.AMBION_CHAOS === 'all';
+const node = process.env.AMBION_NODE ?? process.execPath;
 
 /** The appends an untroubled run takes: the crash points the sweep visits. */
 async function countWrites(storage: Storage): Promise<number> {
@@ -46,7 +40,7 @@ async function countWrites(storage: Storage): Promise<number> {
 		await world.check();
 		// the stop writes too, and no sweep run gets that far before its check
 		const writes = world.writes;
-		await stopSession(world.room);
+		await world.room.stop();
 		return writes;
 	} finally {
 		await opened.dispose();
@@ -67,7 +61,7 @@ describe.each(full ? storages : [memory])('a crash at every write on $name', (st
 					await within(world.run(), 20_000, 'the scenario');
 					expect(world.crashes).toBe(1);
 					await world.check();
-					await stopSession(world.room);
+					await world.room.stop();
 				} catch (error) {
 					throw new Error(`crash ${mode} write ${at}:\n${await world.describe()}`, {
 						cause: error,
@@ -100,7 +94,7 @@ function killAt(dir: string, name: string, at: number, storage: string): Promise
 			'40',
 			storage,
 		];
-		const process_ = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'inherit'] });
+		const process_ = spawn(node, args, { stdio: ['ignore', 'pipe', 'inherit'] });
 		let last = 0;
 		let buffer = '';
 		process_.stdout.on('data', (chunk: Buffer) => {
@@ -123,10 +117,10 @@ function killAt(dir: string, name: string, at: number, storage: string): Promise
  * killed process held expires, and every retry's backoff passes. The
  * clock is the room's own, so the wait is the test's to move.
  */
-async function quietNow(session: Session, clock: FakeClock): Promise<void> {
+async function quietNow(session: Room, clock: FakeClock): Promise<void> {
 	for (let round = 0; round < 12; round += 1) {
 		const settled = await Promise.race([
-			session.quiet().then(() => true),
+			session.messages().then(() => true),
 			new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
 		]);
 		if (settled && idle(session)) return;
@@ -136,11 +130,11 @@ async function quietNow(session: Session, clock: FakeClock): Promise<void> {
 }
 
 /** The scenario from wherever the child got to, each step a no-op where the journal holds it already. */
-async function finish(session: Session, clock: FakeClock): Promise<void> {
+async function finish(session: Room, clock: FakeClock): Promise<void> {
 	const [first, second, third] = questions as [Question, Question, Question];
 	const deliver = async (question: Question) => {
-		const visit = await visitSession(session, question.person);
-		await visit.deliver({
+		const visit = await session.visit(question.person);
+		await visit.send({
 			text: question.text,
 			key: question.key,
 			...(question.to === undefined ? {} : { to: question.to }),
@@ -153,7 +147,7 @@ async function finish(session: Session, clock: FakeClock): Promise<void> {
 		.filter(isPresence)
 		.filter((m) => m.from === priya.name)
 		.at(-1);
-	if (hers?.kind !== 'left') await (await visitSession(session, priya)).leave();
+	if (hers?.kind !== 'left') await (await session.visit(priya)).leave();
 	await deliver(second);
 	await quietNow(session, clock);
 	await deliver(third);
@@ -184,13 +178,13 @@ describe.each(['sqlite'])('a room killed from outside on %s', (storage) => {
 					...TIMING,
 				});
 				const inherited = await liveLeases(journals, name, clock.now());
-				const session = await resumeSession(name, {
+				const session = await resumeRoom(name, {
 					runtime,
 					agents,
 					streamFn: scripted(script),
 				});
 				const events = collect(session);
-				const inheritedExchange = session.exchange() !== undefined;
+				const inheritedExchange = (await currentExchange(session)) !== undefined;
 				await finish(session, clock);
 				const errors = events.flatMap((e) => (e.type === 'error' ? [e.error.message] : []));
 				expect(errors.filter((m) => !/past its lease/.test(m))).toEqual([]);
@@ -201,7 +195,7 @@ describe.each(['sqlite'])('a room killed from outside on %s', (storage) => {
 					inheritedExchange,
 				});
 				await outcome(session, journals);
-				await stopSession(session);
+				await session.stop();
 			} finally {
 				await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
 			}

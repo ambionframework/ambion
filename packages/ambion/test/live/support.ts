@@ -7,7 +7,7 @@
  * through Pi's registry, that a real provider accepts the tools the room
  * gives a seat, that the judgment the prompt asks for holds on a real model,
  * and that a real request can be cancelled. It does not prove the routing;
- * `../session.test.ts` and its neighbours prove that, deterministically.
+ * `../room.test.ts` and its neighbours prove that, deterministically.
  */
 import { memoryJournals } from '@ambionframework/journal';
 import type { Usage } from '@earendil-works/pi-ai';
@@ -19,13 +19,13 @@ import {
 	defineHuman,
 	isSpoken,
 	type Message,
+	type Room,
+	type RoomNotification,
 	type Runtime,
-	type Session,
-	type SessionEvent,
-	type StartSessionOptions,
-	startSession,
+	type StartRoomOptions,
+	startRoom,
 } from '../../src/index.ts';
-import { collect, roomName } from '../support/room.ts';
+import { collect, roomName, waitForRoom } from '../support/room.ts';
 
 /** The model every live seat runs on. The example reads the same variable. */
 export const MODEL = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
@@ -69,12 +69,12 @@ export const person = defineHuman({
 	identity: 'Founder. Asks the questions.',
 });
 
-type RoomOptions = Omit<StartSessionOptions, 'name' | 'assistant' | 'streamFn' | 'runtime'>;
+type RoomOptions = Omit<StartRoomOptions, 'name' | 'assistant' | 'streamFn' | 'runtime'>;
 
 /** A live room of its own, with a fresh native storage for its record and transcripts. */
-export function open(prefix: string, options: RoomOptions) {
+export async function open(prefix: string, options: RoomOptions) {
 	const runtime = createRuntime({ storage: memoryJournals() });
-	const session = startSession({ name: roomName(prefix), assistant, runtime, ...options });
+	const session = await startRoom({ name: roomName(prefix), assistant, runtime, ...options });
 	return { session, runtime, events: collect(session) };
 }
 
@@ -92,9 +92,13 @@ export function within<T>(promise: Promise<T>, ms: number, what: string): Promis
  * waking itself is the gap `docs/agent.md` §7 names, and a live model is the
  * only place it shows.
  */
-export async function untilQuiet(session: Session): Promise<void> {
+export async function untilQuiet(session: Room): Promise<void> {
 	try {
-		await within(session.quiet(), QUIET_MS, `'${session.name}' going quiet`);
+		await within(
+			waitForRoom(session, 'quiet', QUIET_MS),
+			QUIET_MS,
+			`'${session.name}' going quiet`,
+		);
 	} catch (error) {
 		session.abort();
 		throw error;
@@ -102,14 +106,14 @@ export async function untilQuiet(session: Session): Promise<void> {
 }
 
 /** What one participant said, in record order. */
-export const saidBy = (messages: Message[], name: string) =>
+export const saidBy = (messages: readonly Message[], name: string) =>
 	messages.filter(isSpoken).filter((m) => m.from === name);
 
 /** What the seats said: not a person, not the assistant. */
-export const saidByAgents = (messages: Message[], people: string[]) =>
+export const saidByAgents = (messages: readonly Message[], people: string[]) =>
 	messages.filter(isSpoken).filter((m) => !people.includes(m.from) && m.from !== 'assistant');
 
-export const activationsOf = (events: SessionEvent[], name: string) =>
+export const activationsOf = (events: RoomNotification[], name: string) =>
 	events.filter((e) => e.type === 'activation_start' && e.agent === name).length;
 
 export { errorsIn, invariants } from '../support/invariants.ts';
@@ -124,7 +128,7 @@ export interface Spent {
  * What a room spent, read off the seats' own downstream sessions: every
  * activation lands there with the provider's usage on each turn.
  */
-export async function spent(runtime: Runtime, session: Session): Promise<Spent> {
+export async function spent(runtime: Runtime, session: Room): Promise<Spent> {
 	const total: Spent = { activations: 0, tokens: 0, cost: 0 };
 	for (const info of session.seats()) {
 		if (info.kind !== 'agent') continue;

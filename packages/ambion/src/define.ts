@@ -25,7 +25,7 @@ import {
 } from './types.ts';
 
 export interface DefineAgentOptions {
-	/** Identifies the agent inside a session and on the record. */
+	/** Identifies the agent inside a room and on the record. */
 	name: string;
 	/** The agent's public face — injected into every participant's context as part of the roster. */
 	identity: string;

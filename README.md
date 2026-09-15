@@ -138,7 +138,7 @@ journal. See [`docs/workspace.md`](docs/workspace.md).
 ## A minimal sketch
 
 ```ts
-import { defineAgent, defineHuman, startSession, visitSession } from '@ambionframework/ambion';
+import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
 
 const materials = defineAgent({
   name: 'materials',
@@ -161,7 +161,7 @@ const priya = defineHuman({
   preferences: 'Four sentences at most.',
 });
 
-const session = startSession({
+const room = await startRoom({
   name: 'site',
   goal: 'Keep the construction programme, materials, and labour plan consistent.',
   assistant,
@@ -169,15 +169,17 @@ const session = startSession({
   available: [buildingControl, plantHire],
 });
 
-const visit = await visitSession(session, priya);
-await visit.deliver({ text: 'Can I promise the client a Thursday pour?' });
-await session.quiet();
+const visit = await room.visit(priya);
+const exchange = await visit.send({ text: 'Can I promise the client a Thursday pour?' });
+const response = await exchange.response();
+if (response) console.log(response.text);
 ```
 
 The assistant may seat relevant reserve agents; the domain seats work in
 parallel, and conflicting drafts get reconsidered against the newer record.
-`quiet()` waits until the room has no work left, including any assistant
-summary the exchange requires.
+The exchange handle gives callers the durable boundaries: `waitForClose()`
+waits for the exchange close, while `response()` waits for its summary or
+returns `undefined` when no summary is due.
 
 [`examples/site`](examples/site) is the runnable version: independently owned
 agents, dynamically selected specialists, multiple people, workspace-backed

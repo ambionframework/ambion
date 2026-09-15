@@ -5,12 +5,10 @@ import {
 	defineAgent,
 	defineHuman,
 	defineTool,
-	resumeSession,
-	startSession,
-	stopSession,
-	visitSession,
+	resumeRoom,
+	startRoom,
 } from '../src/index.ts';
-import { roomName } from './support/room.ts';
+import { roomName, waitForRoom } from './support/room.ts';
 import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
 import { faultyJournals, memory } from './support/storage.ts';
 
@@ -53,7 +51,7 @@ describe('room bindings', () => {
 			],
 		});
 		const runtime = createRuntime();
-		const one = startSession({
+		const one = await startRoom({
 			name: roomName('binding-one'),
 			runtime,
 			agents: [first],
@@ -62,7 +60,7 @@ describe('room bindings', () => {
 				return call === 1 && toolNames(context).includes('first') ? callTool('first', {}) : quiet();
 			}),
 		});
-		const two = startSession({
+		const two = await startRoom({
 			name: roomName('binding-two'),
 			runtime,
 			agents: [second],
@@ -74,13 +72,13 @@ describe('room bindings', () => {
 			}),
 		});
 		const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
-		await (await visitSession(one, person)).deliver({ text: 'First?' });
-		await (await visitSession(two, person)).deliver({ text: 'Second?' });
-		await Promise.all([one.settled(), two.settled()]);
+		await (await one.visit(person)).send({ text: 'First?' });
+		await (await two.visit(person)).send({ text: 'Second?' });
+		await Promise.all([waitForRoom(one, 'settled'), waitForRoom(two, 'settled')]);
 		expect(calls.sort()).toEqual(['first', 'second']);
 		expect(prompts.some((prompt) => prompt.includes('Use first.'))).toBe(true);
 		expect(prompts.some((prompt) => prompt.includes('Use second.'))).toBe(true);
-		await Promise.all([stopSession(one), stopSession(two)]);
+		await Promise.all([one.stop(), two.stop()]);
 	});
 
 	it('leaves the live host authoritative when resume lacks its bindings', async () => {
@@ -92,26 +90,26 @@ describe('room bindings', () => {
 			model: 'scripted/analyst',
 		});
 		const name = roomName('resume-bindings');
-		const first = startSession({
+		const first = await startRoom({
 			name,
 			runtime: createRuntime({ storage: opened.storage }),
 			agents: [analyst],
 			streamFn: scripted(() => quiet()),
 		});
-		await first.messages();
+		await waitForRoom(first);
 		await expect(
-			resumeSession(name, { runtime: createRuntime({ storage: opened.storage }), agents: [] }),
+			resumeRoom(name, { runtime: createRuntime({ storage: opened.storage }), agents: [] }),
 		).rejects.toThrow(/has no binding/);
 		await (
-			await visitSession(first, defineHuman({ name: 'priya', identity: 'Project manager.' }))
-		).deliver({ text: 'Still mine?' });
-		await first.settled();
+			await first.visit(defineHuman({ name: 'priya', identity: 'Project manager.' }))
+		).send({ text: 'Still mine?' });
+		await waitForRoom(first);
 		expect(
 			(await first.messages()).some(
 				(message) => message.kind === 'said' && message.text === 'Still mine?',
 			),
 		).toBe(true);
-		await stopSession(first);
+		await first.stop();
 		await opened.dispose();
 	});
 
@@ -130,12 +128,12 @@ describe('room bindings', () => {
 			instructions: 'Replace.',
 			model: 'scripted/surveyor',
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('pending-binding'),
 			runtime: createRuntime({ storage: faulty.journals }),
 			streamFn: scripted(() => quiet()),
 		});
-		await session.messages();
+		await waitForRoom(session);
 		faulty.fail(true, 'message');
 		await expect(session.seat(original)).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
@@ -146,15 +144,15 @@ describe('room bindings', () => {
 		await session.unseat(other);
 		await expect(session.seat(original)).rejects.toThrow(/already has another binding/);
 		await session.seat(other);
-		await stopSession(session);
-		const reserved = startSession({
+		await session.stop();
+		const reserved = await startRoom({
 			name: roomName('reserved-binding'),
 			available: [original],
 			streamFn: scripted(() => quiet()),
 		});
-		await reserved.messages();
+		await waitForRoom(reserved);
 		await expect(reserved.seat(other)).rejects.toThrow(/already has another binding/);
-		await stopSession(reserved);
+		await reserved.stop();
 		await opened.dispose();
 	});
 });

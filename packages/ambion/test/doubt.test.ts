@@ -11,13 +11,12 @@ import {
 	isPresence,
 	isSpoken,
 	isSummary,
-	type SessionEvent,
-	startSession,
-	visitSession,
+	type RoomNotification,
+	startRoom,
 } from '../src/index.ts';
 import { type CommitResult, inProcessTransport, type Transport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
-import { collect, roomName, storedOf } from './support/room.ts';
+import { collect, roomName, storedOf, waitForRoom } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -52,7 +51,7 @@ const script = byAgent({
 			: quiet(),
 });
 
-const count = (events: SessionEvent[], type: SessionEvent['type']) =>
+const count = (events: RoomNotification[], type: RoomNotification['type']) =>
 	events.filter((e) => e.type === type).length;
 
 /** A room over a storage that fails on request, with the events it emits. */
@@ -61,7 +60,7 @@ async function room(name: string) {
 	const faulty = faultyJournals(opened.storage);
 	const clock = fakeClock();
 	const runtime = createRuntime({ clock, storage: faulty.journals });
-	const session = startSession({
+	const session = await startRoom({
 		name: roomName(name),
 		runtime,
 		assistant,
@@ -111,7 +110,7 @@ describe('a room in doubt', () => {
 				return port;
 			},
 		};
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('doubt-summary'),
 			runtime: createRuntime({ clock, storage: opened.storage, transport }),
 			assistant,
@@ -127,8 +126,8 @@ describe('a room in doubt', () => {
 				}),
 			),
 		});
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'First?', key: 'q1' });
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'First?', key: 'q1' });
 		await confirmation;
 		const summaries = (await session.messages()).filter(isSummary);
 		expect(retried).toBe(true);
@@ -139,22 +138,22 @@ describe('a room in doubt', () => {
 
 	it('hears a delivery that landed and lost its confirmation, and the seats wake for it', async () => {
 		const { faulty, session, events } = await room('doubt-delivery');
-		const visit = await visitSession(session, priya);
-		await session.settled();
+		const visit = await session.visit(priya);
+		await waitForRoom(session);
 		faulty.fail('after', 'message');
-		await expect(visit.deliver({ text: 'First?', key: 'q1' })).rejects.toThrow(/disk is full/);
+		await expect(visit.send({ text: 'First?', key: 'q1' })).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
-		await session.quiet();
+		await waitForRoom(session);
 		const record = await session.messages();
 		expect(record.filter((m) => m.key === 'q1')).toHaveLength(1);
 		expect(record.filter(isSpoken).filter((m) => m.from === alpha.name)).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'message').map((e) => e.message.key)).toContain('q1');
 		// and a retry under the same key lands nothing new
-		await visit.deliver({ text: 'First?', key: 'q1' });
+		await visit.send({ text: 'First?', key: 'q1' });
 		expect((await session.messages()).filter((m) => m.key === 'q1')).toHaveLength(1);
 	});
 
-	it('opens the next exchange when the close it found had a question queued ahead of it', async () => {
+	it('keeps a question queued before close in the current exchange', async () => {
 		const opened = await memory.open();
 		let failNextClose = false;
 		const journals = tappedJournals(opened.storage, (_id, _n, phase, customType) => {
@@ -165,7 +164,7 @@ describe('a room in doubt', () => {
 		});
 		const clock = fakeClock();
 		const runtime = createRuntime({ clock, storage: journals });
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('doubt-close'),
 			runtime,
 			assistant,
@@ -173,8 +172,8 @@ describe('a room in doubt', () => {
 			streamFn: scripted(script),
 		});
 		const events = collect(session);
-		const visit = await visitSession(session, priya);
-		await session.settled();
+		const visit = await session.visit(priya);
+		await waitForRoom(session);
 		// The second question is delivered the moment alpha's activation ends, so its
 		// commit is queued ahead of the close the reconcile decides, and that close
 		// lands and loses its confirmation.
@@ -186,26 +185,28 @@ describe('a room in doubt', () => {
 				delivered === undefined
 			) {
 				failNextClose = true;
-				delivered = visit.deliver({ text: 'Second?', key: 'q2' });
+				delivered = visit.send({ text: 'Second?', key: 'q2' });
 			}
 		});
-		await visit.deliver({ text: 'First?', key: 'q1' });
-		await session.quiet();
+		await visit.send({ text: 'First?', key: 'q1' });
+		await waitForRoom(session);
 		await delivered;
 		for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
-		await session.quiet();
+		await waitForRoom(session);
 		const stored = await storedOf(opened.journals, session.name);
-		expect(stored.filter((r) => r.kind === 'close')).toHaveLength(2);
-		expect(count(events, 'exchange_opened')).toBe(2);
-		expect(count(events, 'exchange_closed')).toBe(2);
+		const closes = stored.filter((r) => r.kind === 'close');
+		expect(closes).toHaveLength(1);
+		expect(closes[0]?.body).toMatchObject({ from: 4, through: 11 });
+		expect(count(events, 'exchange_opened')).toBe(1);
+		expect(count(events, 'exchange_closed')).toBe(1);
 	});
 
 	it('answers messages() with what the read found, whenever the read was asked for', async () => {
 		const { faulty, session } = await room('doubt-read');
-		const visit = await visitSession(session, priya);
-		await session.settled();
+		const visit = await session.visit(priya);
+		await waitForRoom(session);
 		faulty.fail('after', 'message');
-		const delivery = visit.deliver({ text: 'First?', key: 'q1' });
+		const delivery = visit.send({ text: 'First?', key: 'q1' });
 		const read = session.messages();
 		await expect(delivery).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
@@ -214,14 +215,14 @@ describe('a room in doubt', () => {
 
 	it('writes one arrival for a visit retried after its arrival lost its confirmation', async () => {
 		const { faulty, session } = await room('doubt-visit');
-		await session.messages();
+		await waitForRoom(session);
 		faulty.fail('after', 'message');
-		const first = visitSession(session, priya);
-		const second = first.catch(() => visitSession(session, priya));
+		const first = session.visit(priya);
+		const second = first.catch(() => session.visit(priya));
 		await expect(first).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		await second;
-		await session.quiet();
+		await waitForRoom(session);
 		const arrivals = (await session.messages())
 			.filter(isPresence)
 			.filter((m) => m.kind === 'arrived');

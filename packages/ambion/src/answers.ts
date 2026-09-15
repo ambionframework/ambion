@@ -8,7 +8,7 @@ import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import type { AgentDefinition, Message, SessionEvent } from './types.ts';
+import type { AgentDefinition, Message, RoomNotification } from './types.ts';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -48,7 +48,7 @@ export interface Answering {
 	live(state: RoomState): Map<string, string[]>;
 	/** The definition a seat runs, off the names this room knows. */
 	definition(seat: string): AgentDefinition | undefined;
-	emit(event: SessionEvent): void;
+	emit(event: RoomNotification): void;
 	/** One operation on the room's commit queue, with the wakes the room routes. */
 	write(commit: CommitRequest): Promise<Committed<Body<Message>, Body<Message>>>;
 	claim(id: string): Promise<LeaseResponse>;

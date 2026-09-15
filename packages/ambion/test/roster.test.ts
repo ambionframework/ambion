@@ -10,15 +10,21 @@ import {
 	type Message,
 	type PresenceMessage,
 	passive,
-	type Session,
-	type SessionEvent,
+	type Room,
+	type RoomNotification,
 	seated,
-	startSession,
-	stopSession,
-	visitSession,
+	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
-import { assistantEnded, collect, deferred, roomName as name, tick } from './support/room.ts';
+import {
+	assistantEnded,
+	collect,
+	currentExchange,
+	deferred,
+	roomName as name,
+	tick,
+	waitForRoom,
+} from './support/room.ts';
 import {
 	byAgent,
 	contextText,
@@ -98,20 +104,20 @@ const assistant = defineAgent({
 
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
-const started: Session[] = [];
+const started: Room[] = [];
 
 /** One clock the tests move by hand, and one runtime over it. */
 const clock = fakeClock();
 const runtime = createRuntime({ clock });
 
-type Options = Parameters<typeof startSession>[0];
+type Options = Parameters<typeof startRoom>[0];
 
-function open(options: {
+async function open(options: {
 	script: Script;
 	agents?: Options['agents'];
 	available?: Options['available'];
-}): Session {
-	const session = startSession({
+}): Promise<Room> {
+	const session = await startRoom({
 		name: roomName(),
 		goal: 'Decide the pour date.',
 		assistant,
@@ -125,14 +131,14 @@ function open(options: {
 }
 
 afterEach(async () => {
-	for (const session of started.splice(0)) await stopSession(session);
+	for (const session of started.splice(0)) await session.stop();
 });
 
-const kinds = (record: Message[]) => record.map((m) => m.kind);
-const presence = (record: Message[]) => record.filter(isPresence);
-const activated = (events: SessionEvent[]) =>
+const kinds = (record: readonly Message[]) => record.map((m) => m.kind);
+const presence = (record: readonly Message[]) => record.filter(isPresence);
+const activated = (events: RoomNotification[]) =>
 	events.filter((e) => e.type === 'activation_start').map((e) => e.agent);
-const seatNames = (session: Session) =>
+const seatNames = (session: Room) =>
 	session
 		.seats()
 		.filter((s) => s.kind === 'agent')
@@ -142,57 +148,58 @@ const seatNames = (session: Session) =>
 
 describe('a room that starts with the assistant alone', () => {
 	it('opens and closes an exchange for a question that wakes nobody', async () => {
-		const session = open({ script: byAgent({}) });
+		const session = await open({ script: byAgent({}) });
 		const events = collect(session);
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Is anybody there?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'Is anybody there?' });
+		await waitForRoom(session);
 
 		expect(seatNames(session)).toEqual(['assistant']);
 		expect(activated(events)).toEqual([]);
-		expect(
-			events.map((e) => e.type).filter((t) => t.startsWith('exchange') || t === 'quiet'),
-		).toEqual(['exchange_opened', 'exchange_closed', 'quiet']);
-		expect(session.exchange()).toBeUndefined();
+		expect(events.map((e) => e.type).filter((t) => t.startsWith('exchange'))).toEqual([
+			'exchange_opened',
+			'exchange_closed',
+		]);
+		expect(await currentExchange(session)).toBeUndefined();
 		expect(kinds(await session.messages())).toEqual(['arrived', 'said']);
 	});
 
 	it('closes an exchange nobody woke in a room where every seat is named', async () => {
-		const session = open({ script: byAgent({}), agents: [passive(product)] });
+		const session = await open({ script: byAgent({}), agents: [passive(product)] });
 		const events = collect(session);
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Anyone?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'Anyone?' });
+		await waitForRoom(session);
 
 		expect(activated(events)).toEqual([]);
-		expect(session.exchange()).toBeUndefined();
+		expect(await currentExchange(session)).toBeUndefined();
 	});
 });
 
 describe('the reserve', () => {
 	it('refuses a name in both lists, and a person who visits as one', async () => {
-		expect(() =>
-			startSession({
+		await expect(
+			startRoom({
 				name: roomName(),
 				assistant,
 				agents: [product],
 				available: [product],
 				streamFn: scripted(byAgent({})),
 			}),
-		).toThrow(/Duplicate agent name 'product'/);
+		).rejects.toThrow(/Duplicate agent name 'product'/);
 
-		const session = open({ script: byAgent({}), available: [surveyor] });
+		const session = await open({ script: byAgent({}), available: [surveyor] });
 		await expect(
-			visitSession(session, defineHuman({ name: 'surveyor', identity: 'A person.' })),
-		).rejects.toThrow(/is an agent in this session/);
+			session.visit(defineHuman({ name: 'surveyor', identity: 'A person.' })),
+		).rejects.toThrow(/is an agent in this room/);
 	});
 
 	it('is what the assistant reads at an open, minus who is seated', async () => {
 		const reserves: string[] = [];
 		const tools: string[][] = [];
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: (context) => {
 					if (!holding(context, 'seat')) return quiet();
@@ -205,9 +212,9 @@ describe('the reserve', () => {
 			available: [surveyor, seated(architect, { attention: 'named' })],
 		});
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'How much steel is on site?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'How much steel is on site?' });
+		await waitForRoom(session);
 
 		expect(tools).toEqual([['seat']]);
 		expect(reserves[0]).toContain('The reserve: agents not in the room');
@@ -221,7 +228,7 @@ describe('the reserve', () => {
 
 	it('is never read by a seat, and wakes no assistant when empty', async () => {
 		const contexts: string[] = [];
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				product: (context) => {
 					contexts.push(contextText(context));
@@ -232,9 +239,9 @@ describe('the reserve', () => {
 		});
 		const events = collect(session);
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Anything?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'Anything?' });
+		await waitForRoom(session);
 
 		expect(activated(events)).toEqual(['product']);
 		expect(contexts[0]).not.toContain('The reserve');
@@ -244,7 +251,7 @@ describe('the reserve', () => {
 describe('seating', () => {
 	it('lands as a message stamped by the assistant, and wakes the seat it names', async () => {
 		const surveyorContexts: string[] = [];
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: composes(['surveyor']),
 				surveyor: (context, _name, call) => {
@@ -258,9 +265,9 @@ describe('seating', () => {
 		});
 		const events = collect(session);
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'How much steel is on site?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'How much steel is on site?' });
+		await waitForRoom(session);
 
 		const record = await session.messages();
 		const seating = presence(record).find((m) => m.kind === 'seated') as PresenceMessage;
@@ -282,16 +289,16 @@ describe('seating', () => {
 	});
 
 	it('wakes nobody at broadcast: a seating has no words in it', async () => {
-		const session = open({
+		const session = await open({
 			script: byAgent({ assistant: composes(['surveyor']) }),
 			agents: [product],
 			available: [surveyor],
 		});
 		const events = collect(session);
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'How much steel is on site?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'How much steel is on site?' });
+		await waitForRoom(session);
 
 		expect(kinds(await session.messages())).toEqual(['arrived', 'said', 'seated']);
 		// the product woke once, for the question; the surveyor once, for its seating
@@ -301,7 +308,7 @@ describe('seating', () => {
 	it('wakes a seat at presence, and steers a seat still at work', async () => {
 		const held = deferred();
 		const productContexts: string[] = [];
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: composes(['surveyor']),
 				product: async (context, _name, call) => {
@@ -318,8 +325,8 @@ describe('seating', () => {
 		});
 		const events = collect(session);
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'How much steel is on site?' });
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'How much steel is on site?' });
 		// the assistant seats the surveyor while the product is still reading
 		await new Promise<void>((resolve) => {
 			const off = session.subscribe((event) => {
@@ -329,7 +336,7 @@ describe('seating', () => {
 			});
 		});
 		held.resolve();
-		await session.quiet();
+		await waitForRoom(session);
 
 		// the greeter watches the door, so a colleague joining woke it
 		expect(activated(events)).toContain('greeter');
@@ -340,7 +347,7 @@ describe('seating', () => {
 	});
 
 	it('keeps the exchange open through the composing activation, and the summary covers the newcomer', async () => {
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: composes(['surveyor'], 'Steel: 11.7 tonnes, enough for the pour.'),
 				// the seating and the newcomer's say may both land under its say, so it speaks again when refused
@@ -352,9 +359,9 @@ describe('seating', () => {
 		});
 		const events = collect(session);
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Is there enough steel for the pour?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'Is there enough steel for the pour?' });
+		await waitForRoom(session);
 
 		const record = await session.messages();
 		const summary = record.find((m) => m.kind === 'summary');
@@ -380,7 +387,7 @@ describe('seating', () => {
 	it('is skipped for a question that lands while the assistant drafts', async () => {
 		const held = deferred();
 		const composing: number[] = [];
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: async (context, _name, call) => {
 					if (holding(context, 'seat')) {
@@ -399,27 +406,27 @@ describe('seating', () => {
 			available: [surveyor],
 		});
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'First question?' });
-		await session.settled();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'First question?' });
+		await waitForRoom(session, 'settled');
 		await tick();
 		// the assistant is drafting priya's summary: a second question composes nothing
 		expect(composing).toHaveLength(1);
-		await visit.deliver({ text: 'Second question?' });
-		await session.settled();
+		await visit.send({ text: 'Second question?' });
+		await waitForRoom(session, 'settled');
 		expect(composing).toHaveLength(1);
 		held.resolve();
-		await session.quiet();
+		await waitForRoom(session);
 		// the next question, into a free assistant, composes again
-		await visit.deliver({ text: 'Third question?' });
-		await session.quiet();
+		await visit.send({ text: 'Third question?' });
+		await waitForRoom(session);
 		expect(composing).toHaveLength(2);
 	});
 
 	it('is not steered: what the seats say while the assistant decides never reaches it', async () => {
 		const held = deferred();
 		const contexts: string[] = [];
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: async (context, _name, call) => {
 					if (!holding(context, 'seat')) return quiet();
@@ -437,8 +444,8 @@ describe('seating', () => {
 			available: [surveyor],
 		});
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'How much steel is on site?' });
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'How much steel is on site?' });
 		// the product has answered; the assistant is still deciding
 		await new Promise<void>((resolve) => {
 			const off = session.subscribe((event) => {
@@ -448,7 +455,7 @@ describe('seating', () => {
 			});
 		});
 		held.resolve();
-		await session.quiet();
+		await waitForRoom(session);
 
 		expect(contexts).toHaveLength(2);
 		expect(contexts[1]).not.toContain('[new]');
@@ -459,7 +466,7 @@ describe('seating', () => {
 	it('refuses a name outside the reserve, and ends the activation once the reserve is empty', async () => {
 		const results: string[] = [];
 		const seatings = ['nobody', 'surveyor', 'architect', 'greeter', 'surveyor'];
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: (context, _name, call) => {
 					if (!holding(context, 'seat')) return quiet();
@@ -472,10 +479,10 @@ describe('seating', () => {
 		});
 		const ended = assistantEnded(session);
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Everybody in.' });
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'Everybody in.' });
 		await ended;
-		await session.quiet();
+		await waitForRoom(session);
 
 		expect(results[0]).toContain(
 			"'nobody' is not in the reserve. Seat one of: surveyor, architect, greeter.",
@@ -489,7 +496,7 @@ describe('seating', () => {
 
 describe('the host', () => {
 	it('seats and unseats by hand, and the record says so', async () => {
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				surveyor: (_context, _name, call) => (call === 1 ? speak('11.7 tonnes.') : quiet()),
 			}),
@@ -499,7 +506,7 @@ describe('the host', () => {
 		const events = collect(session);
 
 		await session.seat(surveyor);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(seatNames(session)).toEqual(['product', 'assistant', 'surveyor']);
 		// the seating woke the seat it named, with nobody's name in `by`; what
 		// the surveyor then said woke the product, as any say does
@@ -519,7 +526,7 @@ describe('the host', () => {
 
 	it('returns an unseated agent to the reserve, where the assistant finds it again', async () => {
 		const reserves: string[] = [];
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: (context) => {
 					if (holding(context, 'seat')) reserves.push(contextText(context));
@@ -530,22 +537,22 @@ describe('the host', () => {
 		});
 
 		await session.seat(surveyor);
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'First?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'First?' });
+		await waitForRoom(session);
 		// seated by the host, so the reserve the assistant read was empty of it
 		expect(reserves).toHaveLength(0);
 
 		await session.unseat(surveyor);
-		await visit.deliver({ text: 'Second?' });
-		await session.quiet();
+		await visit.send({ text: 'Second?' });
+		await waitForRoom(session);
 		expect(reserves).toHaveLength(1);
 		expect(reserves[0]).toContain('- surveyor:');
 	});
 
 	it('aborts an activation in flight on unseat, and refuses a say directed at the departed', async () => {
 		const held = deferred();
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				product: async (_context, _name, call) => {
 					if (call === 1) {
@@ -563,15 +570,15 @@ describe('the host', () => {
 		});
 		const events = collect(session);
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'How much steel?' });
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'How much steel?' });
 		await tick();
 		expect(session.seats().find((s) => s.name === 'surveyor')).toMatchObject({ status: 'active' });
 
 		await session.unseat(surveyor);
 		expect(seatNames(session)).toEqual(['product', 'assistant']);
 		held.resolve();
-		await session.quiet();
+		await waitForRoom(session);
 
 		// the surveyor's activation was cut off, and the product's say at it was refused
 		expect(events.some((e) => e.type === 'activation_end' && e.agent === 'surveyor')).toBe(true);
@@ -585,21 +592,21 @@ describe('the host', () => {
 	});
 
 	it('leaves the roster to the next composition at stop, and the next run starts from its own', async () => {
-		const session = open({ script: byAgent({}), agents: [product], available: [surveyor] });
+		const session = await open({ script: byAgent({}), agents: [product], available: [surveyor] });
 		await session.seat(surveyor);
-		await session.quiet();
+		await waitForRoom(session);
 
-		await stopSession(session);
+		await session.stop();
 		started.pop();
 
 		// the record says who was seated, and a read of the stopped room folds it
-		const { readSession } = await import('../src/index.ts');
-		const stopped = readSession(session.name, { runtime });
-		expect(kinds(await stopped.messages())).toEqual(['seated']);
-		expect(seatNames(stopped as Session)).toEqual(['product', 'assistant', 'surveyor']);
+		const { readRoom } = await import('../src/index.ts');
+		const stopped = await readRoom(session.name, { runtime });
+		expect(kinds(stopped.messages)).toEqual(['seated']);
+		expect(stopped.seats.map((seat) => seat.name)).toEqual(['product', 'assistant', 'surveyor']);
 
 		// the next run writes its own composition, and the roster folds from that
-		const again = startSession({
+		const again = await startRoom({
 			name: session.name,
 			assistant,
 			agents: [product],
@@ -608,14 +615,14 @@ describe('the host', () => {
 			streamFn: scripted(byAgent({})),
 		});
 		started.push(again);
-		await again.messages();
+		await waitForRoom(again);
 		expect(seatNames(again)).toEqual(['product', 'assistant']);
 	});
 });
 
 describe('a failed draft', () => {
 	it('drafts again after the backoff, and a fourth failure stops', async () => {
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: (context) => {
 					if (!holding(context, 'summarise')) return quiet();
@@ -631,17 +638,17 @@ describe('a failed draft', () => {
 		const events = collect(session);
 		const assistantActs = () => activated(events).filter((n) => n === 'assistant').length;
 
-		const visit = await visitSession(session, priya);
+		const visit = await session.visit(priya);
 		// two answers, a close, and a draft that fails: priya is owed, and the room waits.
 		// A room that owes a draft is not quiet, so each attempt is the wait here.
 		const first = assistantEnded(session);
-		await visit.deliver({ to: product, text: 'First?' });
+		await visit.send({ to: product, text: 'First?' });
 		await first;
 		expect(assistantActs()).toBe(1);
 
 		// a question that wakes nobody is not the backoff passing
-		await visit.deliver({ text: 'Anyone?' });
-		await session.settled();
+		await visit.send({ text: 'Anyone?' });
+		await waitForRoom(session, 'settled');
 		expect(assistantActs()).toBe(1);
 		await clock.advance(29_999);
 		expect(assistantActs()).toBe(1);
@@ -658,7 +665,7 @@ describe('a failed draft', () => {
 
 		// three attempts are the cap: the range stays whole, and the room stops trying
 		await clock.advance(600_000);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(assistantActs()).toBe(3);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(3);
 		expect((await session.messages()).some((m) => m.kind === 'summary')).toBe(false);
@@ -668,7 +675,7 @@ describe('a failed draft', () => {
 describe('the threshold', () => {
 	it('counts an agent that spoke and was unseated before the close', async () => {
 		const held = deferred();
-		const session = open({
+		const session = await open({
 			script: byAgent({
 				assistant: composes([], 'Both answered.'),
 				product: async (_context, _name, call) => {
@@ -682,8 +689,8 @@ describe('the threshold', () => {
 			available: [architect],
 		});
 
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Enough steel for the pour?' });
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'Enough steel for the pour?' });
 		// the surveyor answers and stops; the product is still reading
 		await new Promise<void>((resolve) => {
 			const off = session.subscribe((event) => {
@@ -694,7 +701,7 @@ describe('the threshold', () => {
 		});
 		await session.unseat(surveyor);
 		held.resolve();
-		await session.quiet();
+		await waitForRoom(session);
 
 		const record = await session.messages();
 		// two agent answers, one of them from a seat no longer in the room: still one message

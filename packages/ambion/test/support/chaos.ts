@@ -22,12 +22,12 @@ import {
 	isSpoken,
 	isSummary,
 	type Message,
+	type Room,
+	type RoomNotification,
 	type Runtime,
-	resumeSession,
-	type Session,
-	type SessionEvent,
-	startSession,
-	visitSession,
+	readRoom,
+	resumeRoom,
+	startRoom,
 } from '../../src/index.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
 import { inProcessTransport } from '../../src/transport.ts';
@@ -46,7 +46,7 @@ import {
 } from './cast.ts';
 import { type FakeClock, fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
-import { storedOf } from './room.ts';
+import { currentExchange, runningLeases, stateOf, storedOf } from './room.ts';
 import { scripted } from './scripted.ts';
 import { type FailMode, type OpenedStorage, tappedJournals } from './storage.ts';
 import { serializing } from './transport.ts';
@@ -58,7 +58,7 @@ import { serializing } from './transport.ts';
  * again after the backoff, so its answer is on the record like every other.
  */
 export async function outcome(
-	session: Session,
+	session: Room,
 	journals: JournalOpener,
 	cast: Cast = steady(),
 ): Promise<void> {
@@ -77,7 +77,7 @@ export async function outcome(
 	expect(record.filter(isSummary).map((m) => m.to)).toEqual(cast.summaries);
 	const closes = (await storedOf(journals, session.name)).filter((r) => r.kind === 'close');
 	expect(closes).toHaveLength(3);
-	expect(session.exchange()).toBeUndefined();
+	expect(await currentExchange(session)).toBeUndefined();
 	expect(session.seats().find((s) => s.name === priya.name)).toMatchObject({ presence: 'absent' });
 	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
 }
@@ -126,7 +126,7 @@ const notCrashed = (error: unknown): boolean => !(error instanceof Crashed);
 export class World {
 	readonly clock: FakeClock = fakeClock();
 	/** The events of the run that holds the room now. A crashed run's events are its own. */
-	events: SessionEvent[] = [];
+	events: RoomNotification[] = [];
 	/** How many times the room crashed. */
 	crashes = 0;
 	/** How many appends the room's journal took, across every run. */
@@ -136,7 +136,7 @@ export class World {
 	/** The cast's failures before the run that holds the room now: its errors are its own. */
 	private failedBefore = 0;
 	private runtime!: Runtime;
-	private session!: Session;
+	private session!: Room;
 	private off: () => void = () => {};
 	private dead = false;
 	private readonly present = new Map<string, HumanDefinition>();
@@ -152,7 +152,7 @@ export class World {
 	}
 
 	/** The room the world holds now. A test reads it after `quiet()`. */
-	get room(): Session {
+	get room(): Room {
 		return this.session;
 	}
 
@@ -189,16 +189,20 @@ export class World {
 	}
 
 	async start(): Promise<void> {
-		this.open();
+		try {
+			await this.open();
+		} catch (error) {
+			if (notCrashed(error) || !this.dead) throw error;
+		}
 		await this.retrying(async () => {
 			await this.session.messages();
 		});
 	}
 
 	/** A room started from the composition: the first run, or a run whose journal never took one. */
-	private open(): void {
+	private async open(): Promise<void> {
 		this.runtime = this.host();
-		this.session = startSession({
+		this.session = await startRoom({
 			name: this.name,
 			runtime: this.runtime,
 			assistant,
@@ -217,23 +221,23 @@ export class World {
 		this.dead = false;
 		this.runtime = this.host();
 		try {
-			this.session = await resumeSession(this.name, {
+			this.session = await resumeRoom(this.name, {
 				runtime: this.runtime,
 				agents,
 				streamFn: scripted(this.cast.script),
 			});
 		} catch (error) {
 			if (!/no composition/.test(String(error))) throw error;
-			this.open();
+			await this.open();
 			await this.session.messages();
 			return;
 		}
 		this.inherited = {
-			activations: await liveLeases(this.opened.journals, this.name, this.clock.now()),
-			exchange: this.session.exchange() !== undefined,
+			activations: runningLeases(this.session),
+			exchange: stateOf(this.session).exchange !== undefined,
 		};
 		this.watch();
-		for (const person of this.present.values()) await visitSession(this.session, person);
+		for (const person of this.present.values()) await this.session.visit(person);
 	}
 
 	/** One host action, retried across a crash under it. */
@@ -253,14 +257,14 @@ export class World {
 	async visit(person: HumanDefinition): Promise<void> {
 		this.present.set(person.name, person);
 		await this.retrying(async () => {
-			await visitSession(this.session, person);
+			await this.session.visit(person);
 		});
 	}
 
-	async deliver(question: Question): Promise<void> {
+	async send(question: Question): Promise<void> {
 		await this.retrying(async () => {
-			const visit = await visitSession(this.session, question.person);
-			await visit.deliver({
+			const visit = await this.session.visit(question.person);
+			await visit.send({
 				text: question.text,
 				key: question.key,
 				...(question.to === undefined ? {} : { to: question.to }),
@@ -270,7 +274,7 @@ export class World {
 
 	async leave(person: HumanDefinition): Promise<void> {
 		await this.retrying(async () => {
-			const visit = await visitSession(this.session, person);
+			const visit = await this.session.visit(person);
 			await visit.leave();
 		});
 		this.present.delete(person.name);
@@ -286,7 +290,7 @@ export class World {
 			await this.ensure();
 			// quiet on its own, or waiting on the clock: a lease to expire, a backoff to pass
 			const settled = await Promise.race([
-				this.session.quiet().then(() => true),
+				this.session.messages().then(() => true),
 				new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
 			]);
 			if (this.dead) continue;
@@ -300,13 +304,13 @@ export class World {
 	async run(): Promise<void> {
 		await this.start();
 		await this.visit(priya);
-		await this.deliver(questions[0] as Question);
+		await this.send(questions[0] as Question);
 		await this.quiet();
 		await this.leave(priya);
 		await this.visit(sam);
-		await this.deliver(questions[1] as Question);
+		await this.send(questions[1] as Question);
 		await this.quiet();
-		await this.deliver(questions[2] as Question);
+		await this.send(questions[2] as Question);
 		await this.quiet();
 	}
 
@@ -331,10 +335,13 @@ export class World {
 	 * replaces the check's failure with its own, and hides what went wrong.
 	 */
 	async describe(): Promise<string> {
+		const snapshot = this.session
+			? undefined
+			: await readRoom(this.name, { runtime: this.runtime });
 		return [
 			`crashes: ${this.crashes}, writes: ${this.writes}`,
 			`messages: ${await read(async () =>
-				(await this.session.messages())
+				(this.session ? await this.session.messages() : (snapshot?.messages ?? []))
 					.map((m: Message) => `#${m.seq} ${m.kind} ${m.from}${m.key ? ` (${m.key})` : ''}`)
 					.join('; '),
 			)}`,
@@ -348,11 +355,11 @@ export class World {
 }
 
 /** Nothing live and nothing open, on the fold the room holds now. */
-export function idle(session: Session): boolean {
+export function idle(session: Room): boolean {
 	const seats = session.seats();
+	const state = (session as Room & { state(): { exchange: unknown } }).state();
 	return (
-		session.exchange() === undefined &&
-		seats.every((s) => s.kind !== 'agent' || s.status === 'idle')
+		state.exchange === undefined && seats.every((s) => s.kind !== 'agent' || s.status === 'idle')
 	);
 }
 

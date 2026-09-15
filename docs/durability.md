@@ -36,8 +36,8 @@ and it holds no second path for the entries it wrote itself.
 holds the record for the process lifetime. SQLite persists the journal. A
 storage that lies about an append breaks every promise below.
 
-**One run per name, fenced by one entry.** `startSession` and
-`resumeSession` refuse a name the runtime already runs. Across runtimes,
+**One run per name, fenced by one entry.** `startRoom` and
+`resumeRoom` refuse a name the runtime already runs. Across runtimes,
 the journal fences. The first entry every run writes is its fence, with a
 fresh run id, and every entry the run writes carries that id. The fence
 is positional: a reader passes the storage in order, and a fence moves
@@ -57,12 +57,13 @@ remain durable for the life of the journal.
 
 ## 2. What a delivery promises
 
-**Acknowledged: on the record once.** `deliver()` resolves once the
-write is confirmed. The message is on the record and on the stream, and
+**Acknowledged: on the record once.** `visit.send()` resolves once the
+write is confirmed and returns the exchange handle associated with the
+committed question. The message is on the record and on the stream, and
 the wake is sent to every seat it reaches. It stays on the record for
 the life of the journal.
 
-**Refused: nowhere.** A delivery the room refuses rejects `deliver()`
+**Refused: nowhere.** A message the room refuses rejects `visit.send()`
 before anything lands. The visit is over, the room is stopped, or the
 recipient is not in the room. Nothing is on the record, nothing is on
 the stream, and nobody woke.
@@ -76,9 +77,9 @@ answer from that run as no answer.
 died with the write in flight, leaves the host without an answer. The
 message is on the record or it is not. The room reads the storage back
 before its next write, so a message that landed is on the record before
-anything lands on top of it. `deliver({ key })` names the delivery's
-idempotency token. A host that never learned whether a delivery landed
-delivers it again under the same token, and the token lands once.
+anything lands on top of it. `visit.send({ key })` names the message's idempotency token. A host that
+never learned whether a question landed sends it again under the same token,
+and the token lands once. The repeated call returns the same exchange handle.
 
 **The token is on the record, and it never expires.** The message the
 token landed carries it back on `messages()`, so a host reads which
@@ -98,8 +99,7 @@ never shows a message before the write that carries it is confirmed.
 backwards. A resumed run replays the whole journal first, so a read after a
 resume holds everything the run before it confirmed.
 
-**Your own writes.** A read after an acknowledged delivery holds that
-delivery.
+**Your own writes.** A read after an acknowledged send holds that message.
 
 **The stream is the push side.** A listener learns nothing the pulls
 cannot tell it. One `message` event per message, in record order, from
@@ -159,7 +159,7 @@ side.
 each append the position its read left. The entry lands next to that position,
 or storage reports that the head moved and writes nothing. A resumed host can
 move the head while another host holds an append. That append is refused before
-the first host acknowledges it. A client may deliver again under the same key.
+the first host acknowledges it. A client may send again under the same key.
 
 **Two live hosts over storage without conditional append.** Such a host
 cannot use that storage for a room journal. The storage contract refuses a
@@ -189,9 +189,10 @@ moved under, so that write is refused rather than acknowledged.
 
 ## 6. What a host must do
 
-- Retry a delivery it never heard back on under the same key.
+- Retry a send it never heard back on under the same key; the journal
+  returns the original exchange handle identity.
 - Resume a name after the process that ran it died, with
-  `resumeSession(name, { runtime, agents })`. The first reconcile expires what
+  `resumeRoom(name, { runtime, agents })`. The first reconcile expires what
   the dead run held.
 - Run one host per name. Evict a room with `runtime.evict(name)` before
   another host takes it. Treat `superseded` the way it treats its own

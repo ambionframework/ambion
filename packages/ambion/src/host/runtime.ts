@@ -3,7 +3,7 @@
  *
  * A room needs a clock, storage, a model call,
  * and a register of running rooms. A `Runtime` holds them as one value.
- * `startSession` and `readSession` take one.
+ * `startRoom` and `readRoom` take one.
  *
  * The clock is an interface so a test can move time by hand, and so a host
  * on a platform with its own alarms maps `alarm` to them. A journal opener
@@ -15,7 +15,7 @@ import { piSessions, type SessionOpener } from '@ambionframework/journal/pi';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
-import type { AgentDefinition, Clock, ModelResolver, SessionEvent } from '../types.ts';
+import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
 import type { SeatPort, SeatRoom } from '../wire.ts';
 
 interface RuntimeState {
@@ -45,7 +45,7 @@ export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): 
 /**
  * A room the runtime holds while it runs, as the transport sees it: the
  * seat's three calls, plus what an in-process seat is handed beside them.
- * `session.ts` implements it.
+ * `room.ts` implements it.
  */
 export interface RunningRoom extends SeatRoom {
 	readonly name: string;
@@ -54,7 +54,7 @@ export interface RunningRoom extends SeatRoom {
 	/** Where the room's sessions open: a seat's audit session opens beside them. */
 	readonly transcripts: SessionOpener;
 	definition(seat: string): AgentDefinition | undefined;
-	emit(event: SessionEvent): void;
+	emit(event: RoomNotification): void;
 	/** Drop the room from memory. The record keeps everything. */
 	evict(): void;
 }

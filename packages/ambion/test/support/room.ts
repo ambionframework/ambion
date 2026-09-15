@@ -3,11 +3,12 @@ import {
 	defineAgent,
 	defineHuman,
 	type Message,
+	type Room,
+	type RoomNotification,
 	type Runtime,
-	type Session,
-	type SessionEvent,
-	visitSession,
 } from '../../src/index.ts';
+import type { RoomState } from '../../src/room/fold.ts';
+import { liveWork } from '../../src/room/reconcile.ts';
 
 /** A trivial assistant: every room seats one, and nothing that uses it tests what it writes. */
 export const assistant = defineAgent({
@@ -29,17 +30,53 @@ export const roomName = (prefix: string) => `${prefix}-${++unique}`;
  * it activates the room; draining it first keeps each test's script counting
  * the activations the test is actually about.
  */
-export async function enter(session: Session, who = andrei) {
-	const visit = await visitSession(session, who);
-	await session.settled();
+export async function enter(session: Room, who = andrei) {
+	const visit = await session.visit(who);
+	await waitForRoom(session, 'settled');
 	return visit;
 }
 
-export const collect = (session: Pick<Session, 'subscribe'>) => {
-	const events: SessionEvent[] = [];
+export const collect = (session: Pick<Room, 'subscribe'>) => {
+	const events: RoomNotification[] = [];
 	session.subscribe((event) => events.push(event));
 	return events;
 };
+
+/** Read the current exchange through the snapshot API for lifecycle tests. */
+export async function currentExchange(room: Room) {
+	return stateOf(room).exchange;
+}
+
+/** Test-only access to the folded state at a notification subscription boundary. */
+export function stateOf(room: Room): RoomState {
+	return (room as Room & { state(): RoomState }).state();
+}
+
+/** Running leases are activations inherited before this run could emit a start. */
+export function runningLeases(room: Room): number {
+	return [...stateOf(room).leases.values()].filter((lease) => lease.phase === 'running').length;
+}
+
+/** Wait for the folded room to reach the completion boundary under test. */
+export async function waitForRoom(
+	room: Room,
+	scope: 'settled' | 'quiet' = 'quiet',
+	timeoutMs = 150_000,
+): Promise<void> {
+	const internal = room as Room & {
+		state(): RoomState;
+		runtime: Runtime;
+	};
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		await room.reconcile();
+		await tick();
+		await room.messages();
+		const work = liveWork(internal.state(), internal.runtime.clock.now());
+		if (scope === 'settled' ? !work.exchange : work.rest) return;
+	}
+	throw new Error(`The room did not reach ${scope}.`);
+}
 
 export function deferred(): { promise: Promise<void>; resolve: () => void } {
 	let resolve: () => void = () => {};
@@ -56,7 +93,7 @@ export const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
  * and the alarm never fires. The record keeps everything, and a resume
  * over it is the test of the design.
  */
-export function crash(runtime: Runtime, session: Session): void {
+export function crash(runtime: Runtime, session: Room): void {
 	runtime.evict(session.name);
 }
 
@@ -74,7 +111,7 @@ export async function storedOf(
  * inside the tool call, so the activation runs on for a moment after the
  * message lands.
  */
-export function assistantEnded(session: Session): Promise<void> {
+export function assistantEnded(session: Room): Promise<void> {
 	return new Promise((resolve) => {
 		const off = session.subscribe((event) => {
 			if (event.type !== 'activation_end' || event.agent !== 'assistant') return;

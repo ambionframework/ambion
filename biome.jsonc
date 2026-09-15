@@ -91,7 +91,7 @@
 		//   answers.ts                    what the room answers a seat's three calls with
 		//   tools/                        the workspace port, and the four tools over it
 		//   seat/                         the seat side of the wire: one activation at a time
-		//   session.ts                    the room, which composes them all
+		//   room.ts                     the room, which composes them all
 		//
 		// `docs/toolchain.md` §1 names the layers; each override below refuses
 		// the imports its layer may not make.
@@ -117,7 +117,7 @@
 											"./room/*",
 											"./tools/*",
 											"./seat/*",
-											"./session.ts",
+											"./room.ts",
 											"./index.ts",
 											"./transport.ts"
 										],
@@ -145,7 +145,7 @@
 											"../room/*",
 											"../tools/*",
 											"../seat/*",
-											"../session.ts",
+											"../room.ts",
 											"../index.ts",
 											"../transport.ts"
 										],
@@ -173,7 +173,7 @@
 											"../room/*",
 											"../tools/*",
 											"../seat/*",
-											"../session.ts",
+											"../room.ts",
 											"../index.ts",
 											"../transport.ts"
 										],
@@ -200,7 +200,7 @@
 											"../host/*",
 											"../tools/*",
 											"../seat/*",
-											"../session.ts",
+											"../room.ts",
 											"../index.ts",
 											"../transport.ts"
 										],
@@ -223,13 +223,7 @@
 							"options": {
 								"patterns": [
 									{
-										"group": [
-											"./tools/*",
-											"./seat/*",
-											"./session.ts",
-											"./index.ts",
-											"./transport.ts"
-										],
+										"group": ["./tools/*", "./seat/*", "./room.ts", "./index.ts", "./transport.ts"],
 										"message": "An answer reads the room: no workspace, no seat, and never the session."
 									}
 								]
@@ -253,7 +247,7 @@
 											"../journal/*",
 											"../room/*",
 											"../seat/*",
-											"../session.ts",
+											"../room.ts",
 											"../index.ts",
 											"../transport.ts"
 										],
@@ -279,7 +273,7 @@
 										"group": [
 											"../journal/*",
 											"../room/*",
-											"../session.ts",
+											"../room.ts",
 											"../index.ts",
 											"../transport.ts"
 										],

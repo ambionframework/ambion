@@ -6,14 +6,7 @@
 
 import { memoryJournals } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
-import {
-	createRuntime,
-	isPresence,
-	readSession,
-	startSession,
-	stopSession,
-	visitSession,
-} from '../../src/index.ts';
+import { createRuntime, isPresence, readRoom, startRoom } from '../../src/index.ts';
 import { collect, roomName } from '../support/room.ts';
 import {
 	agent,
@@ -40,30 +33,30 @@ live('the record', () => {
 		const runtime = createRuntime({ storage: memoryJournals() });
 		const name = roomName('record');
 
-		const first = startSession({ name, assistant, runtime, agents: [memo] });
+		const first = await startRoom({ name, assistant, runtime, agents: [memo] });
 		const firstEvents = collect(first);
-		const told = await visitSession(first, person);
-		await told.deliver({ text: 'The door code for the yard is 4419. Keep it.' });
+		const told = await first.visit(person);
+		await told.send({ text: 'The door code for the yard is 4419. Keep it.' });
 		await untilQuiet(first);
 		await invariants(first, firstEvents);
-		await stopSession(first);
+		await first.stop();
 
-		const second = startSession({ name, assistant, runtime, agents: [memo] });
+		const second = await startRoom({ name, assistant, runtime, agents: [memo] });
 		const secondEvents = collect(second);
-		const asked = await visitSession(second, person);
-		await asked.deliver({ text: 'What is the door code for the yard?' });
+		const asked = await second.visit(person);
+		await asked.send({ text: 'What is the door code for the yard?' });
 		await untilQuiet(second);
 
-		const messages = await readSession(name, { runtime }).messages();
-		const answers = saidBy(messages, 'memo');
+		const messages = (await readRoom(name, { runtime })).messages;
+		const answers = saidBy([...messages], 'memo');
 		expect(answers.at(-1)?.text).toContain('4419');
 		// One record, two runs: the person arrived twice and left once between.
 		expect(messages.filter(isPresence).map((m) => m.kind)).toEqual(['arrived', 'left', 'arrived']);
-		expect(saidBy(messages, person.name)).toHaveLength(2);
+		expect(saidBy([...messages], person.name)).toHaveLength(2);
 		await invariants(second, secondEvents);
 		const total = await spent(runtime, second);
 		expect(total.activations).toBeGreaterThanOrEqual(2);
 		report('the record', total);
-		await stopSession(second);
+		await second.stop();
 	});
 });

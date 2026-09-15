@@ -14,20 +14,18 @@ import {
 	defineHuman,
 	isSummary,
 	passive,
+	type Room,
+	type RoomNotification,
 	type Runtime,
-	resumeSession,
-	type Session,
-	type SessionEvent,
-	startSession,
-	stopSession,
+	resumeRoom,
+	startRoom,
 	type Visit,
-	visitSession,
 } from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
-import { messageBefore, roomName, storedOf } from './support/room.ts';
+import { currentExchange, messageBefore, roomName, storedOf, waitForRoom } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -116,7 +114,7 @@ const OPERATIONS: Operation[] = ['wake', 'cut', 'view', 'commit', 'lease'];
  * found, and the test fails on it.
  */
 const EXPECTED =
-	/the disk is full|visit has ended|one name names one participant|is not seated in this session/;
+	/the disk is full|visit has ended|one name names one participant|is not seated in this room/;
 
 const expected = (error: unknown): undefined => {
 	if (EXPECTED.test(String(error))) return undefined;
@@ -126,14 +124,14 @@ const expected = (error: unknown): undefined => {
 /** One walk: the room, the runtime it runs in, and what the walk did so far. */
 class Walk {
 	/** The events of the run that holds the room now. A crashed run's events are its own. */
-	events: SessionEvent[] = [];
+	events: RoomNotification[] = [];
 	/** What the run that holds the room now inherited: leases live at its resume, and an open exchange. */
 	inherited = { activations: 0, exchange: false };
 	readonly journal: string[] = [];
 	readonly faults: Fault[] = [];
 	readonly clock: FakeClock = fakeClock();
 	readonly visits = new Map<string, Visit>();
-	session!: Session;
+	session!: Room;
 	runtime!: Runtime;
 	crashes = 0;
 	/** The one write the storage fails next, and how. */
@@ -171,7 +169,7 @@ class Walk {
 
 	async start(): Promise<void> {
 		this.runtime = this.host();
-		this.session = startSession({
+		this.session = await startRoom({
 			name: this.name,
 			runtime: this.runtime,
 			assistant,
@@ -197,7 +195,7 @@ class Walk {
 	private async take(step: Step): Promise<void> {
 		if (step === 'visit') return this.visit();
 		if (step === 'leave') return this.leave();
-		if (step === 'deliver') return this.deliver();
+		if (step === 'deliver') return this.send();
 		if (step === 'seat') return this.session.seat(gamma).catch(expected);
 		if (step === 'unseat') return this.session.unseat(gamma).catch(expected);
 		if (step === 'advance') return this.clock.advance(Math.floor(this.random() * 70_000));
@@ -216,7 +214,7 @@ class Walk {
 	private async visit(): Promise<void> {
 		const person = this.pick(people);
 		if (this.visits.has(person.name)) return;
-		const visit = await visitSession(this.session, person).catch(expected);
+		const visit = await this.session.visit(person).catch(expected);
 		if (visit !== undefined) this.visits.set(person.name, visit);
 	}
 
@@ -228,7 +226,7 @@ class Walk {
 		await visit.leave().catch(expected);
 	}
 
-	private async deliver(): Promise<void> {
+	private async send(): Promise<void> {
 		const visit = this.pick([...this.visits.values()]);
 		if (visit === undefined) return;
 		// One delivery in ten repeats the last key: the host never learned whether it landed.
@@ -236,7 +234,7 @@ class Walk {
 		const key = repeated ? this.lastKey : `d${++this.deliveries}`;
 		this.lastKey = key;
 		this.journal.push(`  ${visit.human.name} ${repeated ? 'repeats' : 'delivers'} ${key}`);
-		await visit.deliver({ text: `Question ${key}?`, key: key as string }).catch(expected);
+		await visit.send({ text: `Question ${key}?`, key: key as string }).catch(expected);
 	}
 
 	private fault(): void {
@@ -261,7 +259,7 @@ class Walk {
 		for (let attempt = 0; ; attempt += 1) {
 			this.runtime = this.host();
 			try {
-				this.session = await resumeSession(this.name, {
+				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents: [assistant, alpha, beta, gamma],
 					streamFn: scripted(script),
@@ -272,7 +270,7 @@ class Walk {
 				expected(error);
 			}
 		}
-		this.inherited = { activations, exchange: this.session.exchange() !== undefined };
+		this.inherited = { activations, exchange: (await currentExchange(this.session)) !== undefined };
 		this.watch();
 	}
 
@@ -281,7 +279,7 @@ class Walk {
 		this.faults.length = 0;
 		this.disk = false;
 		for (let i = 0; i < 6; i += 1) await this.clock.advance(61_000);
-		await within(this.session.quiet(), 10_000, 'quiet after the drain');
+		await within(waitForRoom(this.session), 10_000, 'quiet after the drain');
 	}
 }
 
@@ -297,7 +295,7 @@ function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
 const seeds = Number(process.env.AMBION_SEEDS ?? 25);
 
 /** One event in a few characters, for the failure message. */
-function brief(event: SessionEvent): string {
+function brief(event: RoomNotification): string {
 	if (event.type === 'message') return `m${event.message.seq}:${event.message.kind}`;
 	if (event.type === 'activation_start') return `+${event.agent}`;
 	if (event.type === 'activation_end') return `-${event.agent}`;
@@ -331,7 +329,7 @@ describe('the room under a random walk', () => {
 				for (const summary of record.filter(isSummary)) {
 					expect(summary.covers.through).toBe(messageBefore(record, summary.seq));
 				}
-				await stopSession(walk.session);
+				await walk.session.stop();
 			} catch (error) {
 				const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
 				const seats = walk.session

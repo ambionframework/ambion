@@ -16,13 +16,11 @@ import {
 	isSpoken,
 	isSummary,
 	type Message,
-	readSession,
-	type SessionEvent,
+	type RoomNotification,
+	readRoom,
 	type SummaryMessage,
-	startSession,
-	stopSession,
+	startRoom,
 	type Visit,
-	visitSession,
 } from '@ambionframework/ambion';
 import {
 	AGENTS,
@@ -36,7 +34,7 @@ import {
 	ROOM_NAME,
 } from './room.ts';
 
-const session = startSession({
+const room = await startRoom({
 	name: ROOM_NAME,
 	goal: GOAL,
 	assistant: ASSISTANT,
@@ -74,7 +72,7 @@ const show = (line: string) => {
 };
 
 const errored = new Set<string>();
-session.subscribe((event: SessionEvent) => {
+room.subscribe((event: RoomNotification) => {
 	switch (event.type) {
 		case 'activation_start':
 			show(`${dim}· ${event.agent} is reading…${reset}`);
@@ -128,10 +126,6 @@ session.subscribe((event: SessionEvent) => {
 				`${dim}— the exchange is over (${event.exchange.from}–${event.exchange.through}) —${reset}`,
 			);
 			break;
-		// Quiet, not settled: settled is the seats alone, and the assistant writes after it.
-		case 'quiet':
-			show(`${dim}— the room is quiet —${reset}`);
-			break;
 		default:
 			break;
 	}
@@ -172,12 +166,12 @@ const WAKES: Record<Attention, string> = {
 };
 
 function who(): void {
-	const seated = new Set(session.seats().map((seat) => seat.name));
+	const seated = new Set(room.seats().map((seat) => seat.name));
 	for (const agent of AVAILABLE) {
 		if (seated.has(agent.name)) continue;
 		console.log(`  ${paint(agent.name, agent.name)} (on call, in the reserve): ${agent.identity}`);
 	}
-	for (const seat of session.seats()) {
+	for (const seat of room.seats()) {
 		if (seat.kind === 'agent') {
 			const assistant = seat.assistant ? ', the assistant' : '';
 			console.log(
@@ -200,12 +194,12 @@ function line(m: Message): string {
 }
 
 async function record(): Promise<void> {
-	for (const m of await session.messages()) console.log(`  ${line(m)}`);
+	for (const m of await room.messages()) console.log(`  ${line(m)}`);
 }
 
 /** One exchange, one message: what the assistant wrote, and what each stands for. */
 async function summaries(): Promise<void> {
-	const written = (await session.messages()).filter(isSummary);
+	const written = (await room.messages()).filter(isSummary);
 	if (written.length === 0) return console.log('  (the assistant has not written yet)');
 	for (const m of written) {
 		console.log(`  [${m.seq}] ${paint(m.from, m.from)} → ${m.to}, for ${span(m)}:`);
@@ -219,7 +213,7 @@ async function missed(): Promise<void> {
 		console.log('  (you have not stopped reading yet — nothing to catch up on)');
 		return;
 	}
-	for (const m of await session.messages({ since })) console.log(`  ${line(m)}`);
+	for (const m of await room.messages({ since })) console.log(`  ${line(m)}`);
 }
 
 /** The diary is the one document every product writes to; the host reads it off the drive. */
@@ -241,7 +235,7 @@ async function join(name: string): Promise<void> {
 	const person = PEOPLE[name];
 	if (!person) return console.log(`${red}no such person: ${name}${reset}`);
 	if (visits.has(name)) return console.log(`${red}${name} is already here${reset}`);
-	visits.set(name, await visitSession(session, person));
+	visits.set(name, await room.visit(person));
 	speaking = name;
 	rl.setPrompt(`${speaking} › `);
 }
@@ -258,7 +252,7 @@ async function leave(name: string): Promise<void> {
 async function seatByHand(name: string): Promise<void> {
 	const agent = AVAILABLE.find((a) => a.name === name);
 	if (!agent) return console.log(`${red}no such specialist on call: ${name}${reset}`);
-	await session.seat(agent);
+	await room.seat(agent);
 }
 
 async function unseat(name: string): Promise<void> {
@@ -266,12 +260,12 @@ async function unseat(name: string): Promise<void> {
 		.map((seat) => ('agent' in seat ? seat.agent : seat))
 		.find((a) => a.name === name);
 	if (!agent) return console.log(`${red}no such agent: ${name}${reset}`);
-	await session.unseat(agent);
+	await room.unseat(agent);
 }
 
 async function quit(): Promise<void> {
 	for (const name of [...visits.keys()]) await leave(name);
-	await stopSession(session);
+	await room.stop();
 	rl.close();
 	process.exit(0);
 }
@@ -295,7 +289,7 @@ const commands = new Map<string, (arg: string) => void | Promise<void>>(
 			speaking = name;
 			rl.setPrompt(`${speaking} › `);
 		},
-		'/abort': () => session.abort(),
+		'/abort': () => room.abort(),
 		'/quit': quit,
 	}),
 );
@@ -305,11 +299,14 @@ async function say(input: string): Promise<void> {
 	if (!visit)
 		return console.log(`${red}${speaking} is not in the room — /join ${speaking}${reset}`);
 	const directed = /^@([a-z-]+)\s+(.+)$/.exec(input);
-	if (!directed) return visit.deliver({ text: input });
+	if (!directed) {
+		await visit.send({ text: input });
+		return;
+	}
 	const [, name, text] = directed;
-	const target = session.seats().find((s) => s.name === name);
+	const target = room.seats().find((s) => s.name === name);
 	if (!target || !text) return console.log(`${red}no such participant: ${name}${reset}`);
-	await visit.deliver({ to: { name } as never, text });
+	await visit.send({ to: { name } as never, text });
 }
 
 async function handle(line: string): Promise<void> {
@@ -329,10 +326,8 @@ console.log(`\n${ROOM_NAME} is running. Model: ${MODEL} (set AMBION_MODEL to cha
 if (!process.env.ANTHROPIC_API_KEY) {
 	console.log(`${red}ANTHROPIC_API_KEY is not set — the products will fail to answer.${reset}`);
 }
-console.log(
-	`${dim}Reading it takes no run: readSession('${ROOM_NAME}') works from anywhere.${reset}`,
-);
-void readSession(ROOM_NAME);
+console.log(`${dim}Reading it takes no run: readRoom('${ROOM_NAME}') works from anywhere.${reset}`);
+void readRoom(ROOM_NAME);
 help();
 await join('priya');
 rl.setPrompt(`${speaking} › `);

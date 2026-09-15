@@ -5,8 +5,8 @@ Guidance for Claude Code in this repository.
 ## Project
 
 Ambion — a minimalist framework for ambient-aware, always-on agents. Agents wait
-in a session and activate only when a message is delivered to them. Five
-primitives: `defineAgent`, `defineHuman`, `defineTool`, and `startSession`.
+in a room and activate only when a message is delivered to them. Five
+primitives: `defineAgent`, `defineHuman`, `defineTool`, and `startRoom`.
 The room designates one assistant to select reserve agents
 and write the message a person reads when an exchange closes.
 
@@ -14,7 +14,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 
 | Path                  | What                                                                                      |
 | --------------------- | ----------------------------------------------------------------------------------------- |
-| `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `session.ts` composes them      |
+| `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them         |
 | `packages/cli`        | The `ambion` binary                                                                       |
 | `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Private; tested in workerd  |
 | `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                |
@@ -76,14 +76,14 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   just-bash filesystem and shell behind them. The core composes ordinary tools.
   `packages/journal` owns the journal: the queue, the fence and the envelope
   every entry shares. Ambion owns only participants-as-values and
-  the session. A third concern is a
+  the room. A third concern is a
   design failure: push it into a dependency or drop it. `render.ts` formats
   participant context. `assistant.ts` owns assistant policy and guidance.
   Both stay pure and stateless. What the room says to a developer stays with
   the mechanism that says it.
 - The core is laid out in layers (`docs/toolchain.md` §1), and an import
   points down only. Biome refuses the rest; a new file goes in the layer
-  that may reach what it needs, and never above `session.ts`.
+  that may reach what it needs, and never above `room.ts`.
 - No `any`, no non-null assertions, no unused imports or variables.
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
 - A pure rule the journal or the fold decides by lives in the layer's
@@ -92,7 +92,7 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   after every edit.
 - Cognitive complexity: max 10 in source, 15 in tests.
 - Prettier formats (tabs, single quotes, width 100, semicolons); Biome lints.
-- Tests are vitest. A scripted `streamFn` makes a session deterministic.
+- Tests are vitest. A scripted `streamFn` makes a room deterministic.
 
 ## Writing documentation
 
@@ -102,7 +102,7 @@ technical writing: one meaning per word, one instruction per sentence.
 
 Rules that carry the most weight here:
 
-1. **Active voice.** "The session stamps provenance", not "provenance is
+1. **Active voice.** "The room stamps provenance", not "provenance is
    stamped".
 2. **Short sentences.** Max 20 words for an instruction, 25 for a description.
 3. **One topic per paragraph**, max 6 sentences.

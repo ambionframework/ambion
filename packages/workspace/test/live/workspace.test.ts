@@ -5,7 +5,6 @@
  * pick them up and use them against a filesystem it has never seen.
  */
 
-import { stopSession } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import {
 	agent,
@@ -16,7 +15,6 @@ import {
 	report,
 	saidBy,
 	spent,
-	untilQuiet,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
 import { memoryBackend, openWorkspace } from '../../src/index.ts';
@@ -42,10 +40,10 @@ live('the workspace', () => {
 			`,
 			tools: [store.tools()],
 		});
-		const { session, runtime, events } = open('workspace', { agents: [librarian] });
+		const { session, runtime, events } = await open('workspace', { agents: [librarian] });
 		const visit = await enter(session, person);
-		await visit.deliver({ text: 'How many lanterns are in crate-19?' });
-		await untilQuiet(session);
+		const exchange = await visit.send({ text: 'How many lanterns are in crate-19?' });
+		await exchange.response();
 
 		const tools = events.flatMap((e) =>
 			e.type === 'tool_execution_start' && e.agent === 'librarian' ? [e.toolName] : [],
@@ -63,7 +61,7 @@ live('the workspace', () => {
 		expect(journal?.text).toMatch(/checked/i);
 		await invariants(session, events);
 		report('the workspace', await spent(runtime, session));
-		await stopSession(session);
+		await session.stop();
 		await store.destroy();
 	});
 });

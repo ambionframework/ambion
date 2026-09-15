@@ -5,7 +5,7 @@
 
 import type { JournalOpener } from '@ambionframework/journal';
 import { expect } from 'vitest';
-import { isPresence, isSummary, type SessionEvent, type SessionView } from '../../src/index.ts';
+import { isPresence, isSummary, type Room, type RoomNotification } from '../../src/index.ts';
 import { parseId } from '../../src/room/lease.ts';
 import type { LeaseChange } from '../../src/transport.ts';
 import { standing } from './history.ts';
@@ -22,15 +22,15 @@ export interface InvariantOptions {
 	inheritedExchange?: boolean;
 }
 
-export const errorsIn = (events: SessionEvent[]) =>
+export const errorsIn = (events: RoomNotification[]) =>
 	events.flatMap((e) => (e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : []));
 
-const count = (events: SessionEvent[], type: SessionEvent['type']) =>
+const count = (events: RoomNotification[], type: RoomNotification['type']) =>
 	events.filter((e) => e.type === type).length;
 
 export async function invariants(
-	session: SessionView,
-	events: SessionEvent[],
+	session: Room,
+	events: RoomNotification[],
 	options: InvariantOptions = {},
 ): Promise<void> {
 	const messages = await session.messages();
@@ -68,8 +68,8 @@ export async function invariants(
 }
 
 async function summariesMatchCloses(
-	messages: Awaited<ReturnType<SessionView['messages']>>,
-	events: SessionEvent[],
+	messages: Awaited<ReturnType<Room['messages']>>,
+	events: RoomNotification[],
 	journals: JournalOpener | undefined,
 	name: string,
 ): Promise<void> {
@@ -103,7 +103,7 @@ async function summariesMatchCloses(
 type RecordedClose = { owner: string; from: number; through: number; wakes?: string[] };
 
 async function recordedCloses(
-	events: SessionEvent[],
+	events: RoomNotification[],
 	journals: JournalOpener | undefined,
 	name: string,
 ): Promise<RecordedClose[]> {
@@ -116,7 +116,7 @@ async function recordedCloses(
 }
 
 /** Every message a seat wrote carries an activation id whose lease was running when it landed. */
-async function leased(session: SessionView, journals: JournalOpener): Promise<void> {
+async function leased(session: Room, journals: JournalOpener): Promise<void> {
 	// among the entries that stand: one a superseded run wrote past the fence is void
 	const stored = standing(await storedOf(journals, session.name));
 	const running = new Set<string>();

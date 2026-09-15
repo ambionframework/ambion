@@ -13,12 +13,10 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
+	type Room,
 	type Runtime,
-	type Session,
-	startSession,
-	stopSession,
+	startRoom,
 	type Visit,
-	visitSession,
 } from '../src/index.ts';
 import { parseId } from '../src/room/lease.ts';
 import { inProcessTransport, type LeaseChange, type SeatRoom } from '../src/transport.ts';
@@ -27,11 +25,13 @@ import {
 	assistant,
 	assistantEnded,
 	collect,
+	currentExchange,
 	deferred,
 	enter,
 	roomName,
 	storedOf,
 	tick,
+	waitForRoom,
 } from './support/room.ts';
 import {
 	answersEveryQuestion,
@@ -55,23 +55,23 @@ const solo = defineAgent({
 	model: 'scripted/solo',
 });
 
-const started: Session[] = [];
+const started: Room[] = [];
 afterEach(async () => {
-	for (const session of started.splice(0)) await stopSession(session);
+	for (const session of started.splice(0)) await session.stop();
 });
 
-function open(
+async function open(
 	faults: Fault[],
 	script: Script,
 	wake?: { expiry: number; deadline: number },
-): { session: Session; clock: FakeClock; runtime: Runtime } {
+): Promise<{ session: Room; clock: FakeClock; runtime: Runtime }> {
 	const clock = fakeClock();
 	const runtime = createRuntime({
 		clock,
 		transport: faultyTransport(inProcessTransport(), faults, clock),
 		...(wake === undefined ? {} : { wake }),
 	});
-	const session = startSession({
+	const session = await startRoom({
 		name: roomName('lease'),
 		assistant,
 		agents: [solo],
@@ -87,19 +87,19 @@ const starts = (events: ReturnType<typeof collect>) =>
 
 describe('a lease', () => {
 	it('sends a dropped wake again after the resend window, and the seat runs once', async () => {
-		const { session, clock } = open([{ on: 'wake', kind: 'drop' }], (_c, _a, call) =>
+		const { session, clock } = await open([{ on: 'wake', kind: 'drop' }], (_c, _a, call) =>
 			call === 1 ? speak('hi') : quiet(),
 		);
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'say hi' });
+		await visit.send({ text: 'say hi' });
 		await tick();
 		expect(starts(events)).toBe(0);
 
 		await clock.advance(4_999);
 		expect(starts(events)).toBe(0);
 		await clock.advance(1);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(starts(events)).toBe(1);
 		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
@@ -108,13 +108,13 @@ describe('a lease', () => {
 	});
 
 	it('runs one activation for a duplicated wake', async () => {
-		const { session } = open([{ on: 'wake', kind: 'duplicate' }], (_c, _a, call) =>
+		const { session } = await open([{ on: 'wake', kind: 'duplicate' }], (_c, _a, call) =>
 			call === 1 ? speak('hi') : quiet(),
 		);
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'say hi' });
-		await session.quiet();
+		await visit.send({ text: 'say hi' });
+		await waitForRoom(session);
 		expect(starts(events)).toBe(1);
 		expect((await session.messages()).filter(isSpoken)).toHaveLength(2);
 	});
@@ -122,7 +122,7 @@ describe('a lease', () => {
 	it('expires a lease whose release was lost twice, and answers the late release stale', async () => {
 		// a release the seat never heard back on is asked again once, so both are lost
 		const ended = (l: unknown) => (l as { operation: string }).operation === 'release';
-		const { session, clock } = open(
+		const { session, clock } = await open(
 			[
 				{ on: 'lease', kind: 'drop', match: ended },
 				{ on: 'lease', kind: 'drop', match: ended },
@@ -131,13 +131,13 @@ describe('a lease', () => {
 		);
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'say hi' });
+		await visit.send({ text: 'say hi' });
 		await tick();
 		await tick();
 		// the seat spoke, its release was lost, and the room still holds the lease
 		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toContain('solo');
 		expect(events.some((e) => e.type === 'activation_end')).toBe(false);
-		expect(session.exchange()).toBeDefined();
+		expect(await currentExchange(session)).toBeDefined();
 
 		await clock.advance(60_000);
 		expect(events.some((e) => e.type === 'error' && /past its lease/.test(e.error.message))).toBe(
@@ -146,15 +146,15 @@ describe('a lease', () => {
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
 		// the expired lease answers nothing, whatever it said: the seat is woken again
 		// after the backoff, reads its own words on the record, and stands down
-		expect(session.exchange()).toBeDefined();
+		expect(await currentExchange(session)).toBeDefined();
 		await clock.advance(30_000);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(2);
 		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
 			'solo',
 		]);
-		expect(session.exchange()).toBeUndefined();
+		expect(await currentExchange(session)).toBeUndefined();
 
 		const room = session as unknown as SeatRoom;
 		await expect(
@@ -171,7 +171,7 @@ describe('a lease', () => {
 
 	it('expires an activation at its deadline, cuts it, and wakes the seat again after the backoff', async () => {
 		const held = deferred();
-		const { session, clock, runtime } = open(
+		const { session, clock, runtime } = await open(
 			[],
 			async (_c, _a, call) => {
 				if (call !== 1) return quiet();
@@ -182,7 +182,7 @@ describe('a lease', () => {
 		);
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'take your time' });
+		await visit.send({ text: 'take your time' });
 		await tick();
 		expect(starts(events)).toBe(1);
 
@@ -205,26 +205,26 @@ describe('a lease', () => {
 		expect(renewals.every((expiry) => expiry <= clock.now())).toBe(true);
 
 		// the activation came to nothing, so the seat is woken again after the backoff
-		expect(session.exchange()).toBeDefined();
+		expect(await currentExchange(session)).toBeDefined();
 		await clock.advance(30_000);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(starts(events)).toBe(2);
-		expect(session.exchange()).toBeUndefined();
+		expect(await currentExchange(session)).toBeUndefined();
 		held.resolve();
 	});
 
 	it('gives up on a wake at the cap, writes the attempt it does not make, and closes', async () => {
-		const { session, clock, runtime } = open([], () => {
+		const { session, clock, runtime } = await open([], () => {
 			throw new Error('the model failed');
 		});
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'answer me' });
+		await visit.send({ text: 'answer me' });
 		await tick();
 		// the first attempt failed; the second and the third fail after their backoffs
 		await clock.advance(30_000);
 		await clock.advance(60_000);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(3);
 
 		// the room gives up: the attempt it does not make is on the record, once
@@ -240,16 +240,16 @@ describe('a lease', () => {
 
 		// the wake is answered, so the exchange closes and the seat stands idle
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
-		expect(session.exchange()).toBeUndefined();
+		expect(await currentExchange(session)).toBeUndefined();
 		expect(session.seats().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
 		// and the room stays that way: no fourth attempt starts, whatever the clock does
 		await clock.advance(600_000);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(starts(events)).toBe(3);
 	});
 
 	it('gives up on a summary at the cap, and the range stays whole for every reader', async () => {
-		const { session, clock, runtime } = open(
+		const { session, clock, runtime } = await open(
 			[],
 			byAgent({
 				solo: says(['I answered.', 'And again.']),
@@ -262,14 +262,14 @@ describe('a lease', () => {
 		const events = collect(session);
 		const drafted = assistantEnded(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'answer me' });
+		await visit.send({ text: 'answer me' });
 		// a room that owes a draft is not quiet, so the failed attempt is the wait
 		await drafted;
 		// the close owes a summary, and the first draft failed
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 		await clock.advance(30_000);
 		await clock.advance(60_000);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(3);
 
 		// the room gives up on the summary, and says so once
@@ -287,7 +287,7 @@ describe('a lease', () => {
 		// nothing is owed, no summary was written, and the record stands whole
 		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
 		await clock.advance(600_000);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(events.filter((e) => e.type === 'abandoned')).toHaveLength(1);
 	});
 
@@ -296,14 +296,14 @@ describe('a lease', () => {
 		// the claim goes through; the one renewal before the expiry is lost
 		const renewals = (l: unknown) => (l as { operation: string }).operation === 'renew';
 		const faults: Fault[] = [{ on: 'lease', kind: 'drop', match: renewals }];
-		const { session, clock } = open(faults, async (_c, _a, call) => {
+		const { session, clock } = await open(faults, async (_c, _a, call) => {
 			if (call !== 1) return quiet();
 			await held.promise;
 			return speak('too late');
 		});
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'go' });
+		await visit.send({ text: 'go' });
 		await tick();
 		expect(starts(events)).toBe(1);
 
@@ -320,12 +320,12 @@ describe('a lease', () => {
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
 		// a lease that expired without a word answers nothing: the exchange stays
 		// open, and the seat is woken again after the backoff
-		expect(session.exchange()).toMatchObject({ owner: 'andrei' });
+		expect(await currentExchange(session)).toMatchObject({ owner: 'andrei' });
 		expect(starts(events)).toBe(1);
 		await clock.advance(30_000);
-		await session.quiet();
+		await waitForRoom(session);
 		expect(starts(events)).toBe(2);
-		expect(session.exchange()).toBeUndefined();
+		expect(await currentExchange(session)).toBeUndefined();
 	});
 
 	it('answers a question that landed between its last renewal and its release', async () => {
@@ -341,39 +341,42 @@ describe('a lease', () => {
 				kind: 'hold',
 				match: releases,
 				hold: async () => {
-					await visit?.deliver({ text: 'Second?' });
+					await visit?.send({ text: 'Second?' });
 				},
 			},
 		];
-		const { session } = open(faults, byAgent({ solo: answersEveryQuestion(['andrei']) }));
+		const { session } = await open(faults, byAgent({ solo: answersEveryQuestion(['andrei']) }));
 		visit = await enter(session);
-		await visit.deliver({ text: 'First?' });
-		await session.quiet();
+		await visit.send({ text: 'First?' });
+		await waitForRoom(session);
 		expect((await session.messages()).filter(isSpoken).map((m) => m.text)).toEqual([
 			'First?',
 			'solo on First?',
 			'Second?',
 			'solo on Second?',
 		]);
-		expect(session.exchange()).toBeUndefined();
+		expect(await currentExchange(session)).toBeUndefined();
 	});
 
 	it('rebuilds the activation when a wake into it was lost, and reads the message off the record', async () => {
 		const held = deferred();
 		const contexts: string[] = [];
 		// the first wake starts the activation; the second, the steer into it, is lost
-		const { session } = open([{ on: 'wake', kind: 'drop', skip: 1 }], async (context, _a, call) => {
-			contexts.push(contextText(context as Context));
-			if (call === 1) await held.promise;
-			return quiet();
-		});
+		const { session } = await open(
+			[{ on: 'wake', kind: 'drop', skip: 1 }],
+			async (context, _a, call) => {
+				contexts.push(contextText(context as Context));
+				if (call === 1) await held.promise;
+				return quiet();
+			},
+		);
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'first' });
+		await visit.send({ text: 'first' });
 		await tick();
-		await visit.deliver({ text: 'second' });
+		await visit.send({ text: 'second' });
 		held.resolve();
-		await session.quiet();
+		await waitForRoom(session);
 
 		expect(starts(events)).toBe(1);
 		expect(contexts).toHaveLength(2);
@@ -400,7 +403,7 @@ describe('a lease judged where its change is written', () => {
 			return runningRows === 2 ? gate.promise : undefined;
 		});
 		const held = deferred();
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('lease-renewal'),
 			assistant,
 			agents: [solo],
@@ -414,7 +417,7 @@ describe('a lease judged where its change is written', () => {
 		started.push(session);
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'go' });
+		await visit.send({ text: 'go' });
 		await tick();
 		// half the expiry: the renewal is asked for, and its change waits on the storage
 		await clock.advance(30_000);
@@ -428,7 +431,7 @@ describe('a lease judged where its change is written', () => {
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
 
 		held.resolve();
-		await session.quiet();
+		await waitForRoom(session);
 		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
 			'solo',
@@ -465,7 +468,7 @@ describe('a lease judged where its change is written', () => {
 			),
 		});
 		const held = deferred();
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('lease-draft'),
 			assistant,
 			agents: [solo],
@@ -489,15 +492,15 @@ describe('a lease judged where its change is written', () => {
 		});
 		started.push(session);
 		const events = collect(session);
-		const visit = await visitSession(session, priya);
+		const visit = await session.visit(priya);
 		const drafted = assistantEnded(session);
-		await visit.deliver({ text: 'First?' });
+		await visit.send({ text: 'First?' });
 		// a room that owes a draft is not quiet, so the failed attempt is the wait
 		await drafted;
 		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
 
 		// the seat works on the second exchange when the backoff passes and the draft is claimed
-		await visit.deliver({ text: 'Second?' });
+		await visit.send({ text: 'Second?' });
 		await tick();
 		await tick();
 		await clock.advance(30_000);
@@ -512,9 +515,9 @@ describe('a lease judged where its change is written', () => {
 		await tick();
 		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(2);
 		await clock.advance(10_000);
-		await session.quiet();
+		await waitForRoom(session);
 		await clock.advance(200_000);
-		await session.quiet();
+		await waitForRoom(session);
 
 		const record = await session.messages();
 		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');

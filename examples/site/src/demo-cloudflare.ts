@@ -132,7 +132,7 @@ await call('/start', {});
 await call('/visit', { person: 'priya' });
 
 step('priya asks the question she has to answer today');
-await call('/deliver', {
+await call('/send', {
 	from: 'priya',
 	text: 'Can I tell the client Thursday for the Level 3 pour, or not?',
 	key: 'priya-1',

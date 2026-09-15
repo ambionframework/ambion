@@ -41,7 +41,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	const stub = env.ROOM.get(env.ROOM.idFromName(NAME));
 	await stub.start({ name: NAME, assistant: 'assistant', agents: ['slow'] });
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
-	await stub.deliver({ from: 'priya', text: 'Anyone on the pour date?', key: 'q1' });
+	const exchange = await stub.send({ from: 'priya', text: 'Anyone on the pour date?', key: 'q1' });
 
 	// The seat claimed its lease, so its activation runs now. The model call it
 	// waits on is what keeps it running while the room goes away.
@@ -66,6 +66,10 @@ it('serves a seat that was at work when the object went away, and takes its comm
 		return messages.find((message) => isSpoken(message) && message.from === 'slow');
 	});
 	expect(isSpoken(said) && said.text).toBe('The slow answer stands.');
+	const closed = await again.waitForClose(exchange.from);
+	expect(closed).toMatchObject({ owner: 'priya', from: exchange.from });
+	// The serialized identity is enough to recover this handle after the object restart.
+	expect(await again.exchange(exchange.from)).toEqual(exchange);
 
 	// Two runs took the name, and the seat's message was written by the second:
 	// the commit crossed the restart, and the room that came back took it. A

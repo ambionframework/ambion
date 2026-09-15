@@ -1,16 +1,8 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import {
-	createRuntime,
-	defineAgent,
-	defineHuman,
-	defineTool,
-	startSession,
-	stopSession,
-	visitSession,
-} from '../src/index.ts';
-import { deferred, roomName } from './support/room.ts';
+import { createRuntime, defineAgent, defineHuman, defineTool, startRoom } from '../src/index.ts';
+import { deferred, roomName, waitForRoom } from './support/room.ts';
 import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
 import { faultyJournals, gatedJournals, memory, tappedJournals } from './support/storage.ts';
 
@@ -64,13 +56,13 @@ describe('pending seating bindings', () => {
 		const opened = await memory.open();
 		const chosen = agent('analyst', 'chosen', []);
 		const other = agent('analyst', 'other', []);
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('same-turn-binding'),
 			runtime: createRuntime({ storage: opened.storage }),
 			streamFn: scripted(() => quiet()),
 		});
 		try {
-			await session.messages();
+			await waitForRoom(session);
 			const seating = session.seat(chosen);
 			await expect(session.seat(other)).rejects.toThrow(/already being seated/);
 			await seating;
@@ -78,7 +70,7 @@ describe('pending seating bindings', () => {
 				identity: 'analyst',
 			});
 		} finally {
-			await stopSession(session);
+			await session.stop();
 			await opened.dispose();
 		}
 	});
@@ -96,13 +88,13 @@ describe('pending seating bindings', () => {
 		const calls: string[] = [];
 		const chosen = agent('analyst', 'chosen', calls);
 		const other = agent('analyst', 'other', calls);
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('gated-binding'),
 			runtime: createRuntime({ storage: journals }),
 			streamFn: runTool('chosen'),
 		});
 		try {
-			await session.messages();
+			await waitForRoom(session);
 			const seating = session.seat(chosen);
 			await entered.promise;
 			await expect(session.seat(other)).rejects.toThrow(/already being seated/);
@@ -110,14 +102,14 @@ describe('pending seating bindings', () => {
 			gate.resolve();
 			await seating;
 			await (
-				await visitSession(session, defineHuman({ name: 'priya', identity: 'Priya' }))
-			).deliver({ text: 'Go' });
-			await session.settled();
+				await session.visit(defineHuman({ name: 'priya', identity: 'Priya' }))
+			).send({ text: 'Go' });
+			await waitForRoom(session);
 			expect(calls).toEqual(['chosen']);
 		} finally {
 			hold = false;
 			gate.resolve();
-			await stopSession(session);
+			await session.stop();
 			await opened.dispose();
 		}
 	});
@@ -127,25 +119,25 @@ describe('pending seating bindings', () => {
 		const faulty = faultyJournals(opened.storage);
 		const calls: string[] = [];
 		const chosen = agent('analyst', 'chosen', calls);
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('lost-binding'),
 			runtime: createRuntime({ storage: faulty.journals }),
 			streamFn: runTool('chosen'),
 		});
 		try {
-			await session.messages();
+			await waitForRoom(session);
 			faulty.fail('after', 'message');
 			await expect(session.seat(chosen)).rejects.toThrow(/disk is full/);
 			faulty.fail(false);
-			await session.quiet();
+			await waitForRoom(session);
 			await (
-				await visitSession(session, defineHuman({ name: 'priya', identity: 'Priya' }))
-			).deliver({ text: 'Go' });
-			await session.settled();
+				await session.visit(defineHuman({ name: 'priya', identity: 'Priya' }))
+			).send({ text: 'Go' });
+			await waitForRoom(session);
 			expect(calls).toEqual(['chosen']);
 		} finally {
 			faulty.fail(false);
-			await stopSession(session);
+			await session.stop();
 			await opened.dispose();
 		}
 	});
@@ -163,24 +155,24 @@ describe('pending seating bindings', () => {
 		const calls: string[] = [];
 		const chosen = agent('analyst', 'chosen', calls);
 		const other = agent('analyst', 'other', calls);
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('unread-confirmed-binding'),
 			runtime: createRuntime({ storage: journals }),
 			streamFn: runTool('chosen'),
 		});
 		try {
-			await session.messages();
+			await waitForRoom(session);
 			await expect(session.seat(chosen)).rejects.toThrow(/disk is full/);
 			unreadable.fail(false);
 			await expect(session.seat(other)).rejects.toThrow();
 			await (
-				await visitSession(session, defineHuman({ name: 'priya', identity: 'Priya' }))
-			).deliver({ text: 'Go' });
-			await session.settled();
+				await session.visit(defineHuman({ name: 'priya', identity: 'Priya' }))
+			).send({ text: 'Go' });
+			await waitForRoom(session);
 			expect(calls).toEqual(['chosen']);
 		} finally {
 			unreadable.fail(false);
-			await stopSession(session);
+			await session.stop();
 			await opened.dispose();
 		}
 	});
@@ -197,13 +189,13 @@ describe('pending seating bindings', () => {
 		});
 		const original = agent('analyst', 'original', []);
 		const replacement = agent('analyst', 'replacement', []);
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('unread-absent-binding'),
 			runtime: createRuntime({ storage: journals }),
 			streamFn: runTool('replacement'),
 		});
 		try {
-			await session.messages();
+			await waitForRoom(session);
 			await expect(session.seat(original)).rejects.toThrow(/disk is full/);
 			unreadable.fail(false);
 			await session.seat(replacement);
@@ -212,7 +204,7 @@ describe('pending seating bindings', () => {
 			});
 		} finally {
 			unreadable.fail(false);
-			await stopSession(session);
+			await session.stop();
 			await opened.dispose();
 		}
 	});

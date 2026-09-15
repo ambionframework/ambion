@@ -287,7 +287,7 @@ export interface SeatSpeaking {
 
 export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
 	const lines = [...header(seat, room), ``];
-	if (room.goal) lines.push(`This session exists to: ${room.goal}`, ``);
+	if (room.goal) lines.push(`This room exists to: ${room.goal}`, ``);
 	lines.push(...duties(seat, room), ``);
 	lines.push(
 		`Your identity, as the room knows it: ${seat.def.identity}`,
@@ -416,12 +416,12 @@ const AUDIENCE_PARAGRAPH = [
 function header(seat: SeatSpeaking, room: RoomView): string[] {
 	if (seat.tool === SAY.name) {
 		return [
-			`You are '${seat.def.name}', an agent seated in the session '${room.name}' — a shared`,
+			`You are '${seat.def.name}', an agent seated in the room '${room.name}' — a shared`,
 			`room with a record. Every participant sees what is said; nobody sees your tool use.`,
 		];
 	}
 	return [
-		`You are '${seat.def.name}', the assistant in the session '${room.name}' — a shared`,
+		`You are '${seat.def.name}', the assistant in the room '${room.name}' — a shared`,
 		`room with a record.`,
 		assistantPolicy.guidance,
 	];

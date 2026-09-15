@@ -4,11 +4,11 @@
  * to its end and releases the lease, all inside one alarm handler. A wake
  * that arrives while an activation runs is handed to the actor, which
  * steers it in, and a cut is handed to it the same way. The seat's audit
- * session lives in the object's own SQLite.
+ * transcript lives in the object's own SQLite.
  */
 
 import { DurableObject } from 'cloudflare:workers';
-import type { SessionEvent } from '@ambionframework/ambion';
+import type { RoomNotification } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
 import type { SeatRoom, Wake } from '@ambionframework/ambion/transport';
 import { SeatActor } from '@ambionframework/ambion/transport';
@@ -27,7 +27,12 @@ import { seatMetadata, sqlStorage } from './storage.ts';
  *
  * The core writes nothing to stdout, and the decision is a host's to make.
  */
-function seatLine(room: string, seat: string, activation: string, event: SessionEvent): SeatEvent {
+function seatLine(
+	room: string,
+	seat: string,
+	activation: string,
+	event: RoomNotification,
+): SeatEvent {
 	return {
 		ambion: 'seat',
 		room,
