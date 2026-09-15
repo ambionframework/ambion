@@ -1,8 +1,7 @@
 /**
  * The bound a seat holds: the tools the room gives an activation, bound to
- * it and to the room. A seat that speaks for itself holds `say`, the four
- * built-in tools when its agent names a workspace, and the agent's own
- * tools. The assistant holds one tool: `summarise` at a close, `seat` at
+ * it and to the room. A seat that speaks for itself holds `say` and the
+ * agent's composed tools. The assistant holds one tool: `summarise` at a close, `seat` at
  * the open of an exchange. Every one commits through the room's `commit`
  * call and reads the room's answer through `landed`.
  */
@@ -10,7 +9,6 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { SEAT, SUMMARISE, seatToolDescription, summaryToolDescription } from '../assistant.ts';
 import { SAY } from '../define.ts';
 import { refusal } from '../render.ts';
-import { builtinTools, toolContext } from '../tools/workspace.ts';
 import { type AgentDefinition, isAmbionTool, type Seq } from '../types.ts';
 import type { ActivationView, CommitResult, SeatRoom } from '../wire.ts';
 import type { Activation } from './activation.ts';
@@ -26,18 +24,25 @@ const ASSISTANT_CALLS = 4;
 /**
  * One Pi tool from what a seat declared. A `defineTool` tool is handed a
  * `ToolContext` built for the seat's agent on every call, which is how it
- * reaches a workspace; a Pi-native tool passes through as it is, and its
+ * reaches the agent context; a Pi-native tool passes through as it is, and its
  * signature has no room for one.
  */
 function toPiTool(tool: unknown, agent: AgentDefinition): AgentTool {
 	if (isAmbionTool(tool)) {
 		return {
 			name: tool.name,
-			label: tool.name,
+			label: tool.label ?? tool.name,
 			description: tool.description,
 			parameters: tool.parameters,
-			execute: async (_toolCallId, params, signal) => {
-				const result = await tool.execute(params, toolContext(agent, signal));
+			...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
+			...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
+			execute: async (_toolCallId, params, signal, onUpdate) => {
+				const result = await tool.execute(params, {
+					agent: { name: agent.name, identity: agent.identity },
+					signal,
+					callId: _toolCallId,
+					onUpdate,
+				});
 				return typeof result === 'string'
 					? { content: [{ type: 'text', text: result }], details: {} }
 					: result;
@@ -144,8 +149,7 @@ async function say(
  * that answers the name.
  *
  * A message causes an activation that speaks, so the view names `say`, and a
- * seat that speaks also reaches its workspace through the four built-in
- * tools and brings its own. An event of the exchange causes an activation
+ * seat that speaks brings its composed tools. An event of the exchange causes an activation
  * that holds one tool and nothing else: what the seat does with it is the
  * whole of the activation.
  *
@@ -154,7 +158,7 @@ async function say(
 export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
 	switch (view.spec.cause) {
 		case 'message':
-			return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
+			return [sayTool(held), ...def.tools.map((tool) => toPiTool(tool, def))];
 		case 'opened': {
 			const composing: Composing = { ...view.spec.opening, seated: 0, calls: 0 };
 			return [seatTool(held, composing)];

@@ -6,8 +6,8 @@ Guidance for Claude Code in this repository.
 
 Ambion — a minimalist framework for ambient-aware, always-on agents. Agents wait
 in a session and activate only when a message is delivered to them. Five
-primitives: `defineAgent`, `defineHuman`, `defineTool`, `defineWorkspace`,
-`startSession`. The room designates one assistant to select reserve agents
+primitives: `defineAgent`, `defineHuman`, `defineTool`, and `startSession`.
+The room designates one assistant to select reserve agents
 and write the message a person reads when an exchange closes.
 
 pnpm workspace, Node >= 22.19, ESM only, TypeScript.
@@ -18,7 +18,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `packages/cli`        | The `ambion` binary                                                                       |
 | `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Private; tested in workerd  |
 | `packages/journal`    | An append-only journal: one queue, fenced by run, checkpointed                            |
-| `packages/workspace`  | A workspace backend: a virtual Unix filesystem and shell, in memory or over a directory   |
+| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem             |
 | `docs/agent.md`       | Design contract for the core — read before changing the runtime                           |
 | `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`          |
 | `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                            |
@@ -72,8 +72,8 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
 ## Code rules
 
 - Pi (`@earendil-works/pi-agent-core`) owns the model loop, tools, transcript.
-  just-bash owns the virtual filesystem and shell behind a workspace, in
-  `packages/workspace`; the core names the port and holds no filesystem.
+  `packages/workspace` owns the workspace port, resource, tools, and the
+  just-bash filesystem and shell behind them. The core composes ordinary tools.
   `packages/journal` owns the journal: the queue, the fence, the checkpoint and
   the envelope every entry shares. Ambion owns only participants-as-values and
   the session. A third concern is a

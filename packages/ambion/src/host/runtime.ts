@@ -3,7 +3,7 @@
  *
  * A room needs a clock, storage, a model call,
  * and a register of running rooms. A `Runtime` holds them as one value.
- * `startSession`, `readSession`, and `defineWorkspace` take one.
+ * `startSession` and `readSession` take one.
  *
  * The clock is an interface so a test can move time by hand, and so a host
  * on a platform with its own alarms maps `alarm` to them. A journal opener
@@ -20,7 +20,6 @@ import type { SeatPort, SeatRoom } from '../wire.ts';
 
 interface RuntimeState {
 	running: Map<string, RunningRoom>;
-	taken: Set<string>;
 }
 
 const stateFor = new WeakMap<Runtime, RuntimeState>();
@@ -41,17 +40,6 @@ export function registerRoom(runtime: Runtime, room: RunningRoom): void {
 export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): void {
 	const running = state(runtime).running;
 	if (running.get(name) === room) running.delete(name);
-}
-
-export function takeWorkspace(runtime: Runtime, name: string): boolean {
-	const taken = state(runtime).taken;
-	if (taken.has(name)) return false;
-	taken.add(name);
-	return true;
-}
-
-export function releaseWorkspace(runtime: Runtime, name: string): void {
-	state(runtime).taken.delete(name);
 }
 
 /**
@@ -174,7 +162,6 @@ export const stubModel: ModelResolver = (id) =>
 
 export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const running = new Map<string, RunningRoom>();
-	const taken = new Set<string>();
 	const storage = options.storage ?? memoryJournals();
 	const journals = namespaced(storage, 'ambion/room');
 	const transcripts = piSessions(storage);
@@ -196,7 +183,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 			room?.evict();
 		},
 	};
-	stateFor.set(runtime, { running, taken });
+	stateFor.set(runtime, { running });
 	return runtime;
 }
 

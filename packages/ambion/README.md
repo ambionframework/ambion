@@ -8,8 +8,7 @@ room's reserve and consolidates multi-agent work when needed, without gaining
 general-purpose authority over the application.
 
 `defineAgent` makes an agent, `defineHuman` names a person, `defineTool` gives
-agents tools, and `defineWorkspace` names the identity and data boundary those
-tools reach into. The `assistant` option designates the agent that selects
+agents tools. The `assistant` option designates the agent that selects
 specialists and writes summaries through the room's fixed assistant policy.
 `startSession` brings up the room, `visitSession` puts somebody in it,
 `readSession` reads it without starting anything, and `stopSession` takes it

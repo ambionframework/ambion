@@ -7,8 +7,6 @@ import {
 	defineAgent,
 	defineHuman,
 	defineTool,
-	defineWorkspace,
-	destroyWorkspace,
 	isSpoken,
 	type Message,
 	passive,
@@ -18,6 +16,7 @@ import {
 	type SummaryMessage,
 	startSession,
 	stopSession,
+	type ToolBundle,
 	visitSession,
 } from '../src/index.ts';
 import { renderRecord } from '../src/render.ts';
@@ -43,7 +42,6 @@ import {
 	toolNames,
 } from './support/scripted.ts';
 import { gatedJournals, memory } from './support/storage.ts';
-import { fakeBackend } from './support/workspace.ts';
 
 /** The ordinary assistant: it writes once, then ends its activation. */
 const writes =
@@ -1191,7 +1189,7 @@ describe('a room without an assistant', () => {
 });
 
 describe('an assistant that brings its own tools', () => {
-	it('is seated, and its drafting activation still holds summarise alone', async () => {
+	it('keeps bundle guidance and tools out of opening and closing activations', async () => {
 		// `assertAssistant` refused a definition like this. A role is a
 		// seating choice now, so the definition is the host's business: the
 		// close binds one tool, so the tools it brings reach no model.
@@ -1201,15 +1199,18 @@ describe('an assistant that brings its own tools', () => {
 			parameters: Type.Object({}),
 			execute: () => 'booked',
 		});
-		const site = defineWorkspace({ name: roomName(), backend: fakeBackend() });
+		const bundle: ToolBundle = { tools: [book], guidance: 'Book guidance.' };
 		const held: string[][] = [];
+		const prompts: string[] = [];
 		const session = open({
 			script: byAgent({
 				product: insists('Thursday is out.'),
 				colleague: insists('Nor from here.'),
 				assistant: (context, _who, call) => {
 					held.push(toolNames(context));
-					return call === 1 ? summarise('The one message.') : quiet();
+					prompts.push(context.systemPrompt ?? '');
+					if (call <= 3) return seat('colleague');
+					return call === 4 ? summarise('The one message.') : quiet();
 				},
 			}),
 			assistant: defineAgent({
@@ -1217,20 +1218,23 @@ describe('an assistant that brings its own tools', () => {
 				identity: 'Writes the one message a person reads.',
 				instructions: 'summarise',
 				model: 'scripted/assistant',
-				workspace: site,
-				tools: [book],
+				tools: [bundle],
 			}),
-			agents: [product, colleague],
+			agents: [product],
+			available: [colleague],
 		});
 
 		const visit = await visitSession(session, priya);
 		await visit.deliver({ text: 'Can I tell the client Thursday?' });
 		await quiescent(session);
 
-		// one tool on every model call of the drafting activation: no `say`, and
-		// none of the four a workspace binds
-		expect(held).toEqual([['summarise'], ['summarise']]);
-		await destroyWorkspace(site);
+		// The opening activation holds `seat`; the close holds `summarise`.
+		const firstSummary = held.findIndex((tools) => tools[0] === 'summarise');
+		expect(firstSummary).toBeGreaterThan(0);
+		expect(held.every((tools) => tools.length === 1)).toBe(true);
+		expect(held.slice(0, firstSummary).every((tools) => tools[0] === 'seat')).toBe(true);
+		expect(held.slice(firstSummary).every((tools) => tools[0] === 'summarise')).toBe(true);
+		expect(prompts.every((prompt) => !prompt.includes('Book guidance.'))).toBe(true);
 	});
 });
 
