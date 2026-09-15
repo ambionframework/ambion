@@ -53,7 +53,7 @@
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
-		"@earendil-works/pi-agent-core": "^0.84.3",
+		"@earendil-works/pi-agent-core": "^0.85.1",
 		"just-bash": "^3.4.2"
 	}
 }
