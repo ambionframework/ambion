@@ -27,7 +27,7 @@ import {
 	speak,
 } from '../../ambion/test/support/scripted.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
-import { directoryBackend, memoryBackend, openWorkspace, workspaceTools } from '../src/index.ts';
+import { directoryBackend, memoryBackend, openWorkspace } from '../src/index.ts';
 import { MEMORY_LIMIT_BYTES } from '../src/just-bash.ts';
 import type { WorkspaceBackend } from '../src/resource.ts';
 
@@ -71,7 +71,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 describe('the built-in tools', () => {
 	it('write, read and bash reach one filesystem two agents share, rooted at each home', async () => {
 		const site = openWorkspace({ name: name('shared'), backend: memoryBackend() });
-		const tools = workspaceTools(site);
+		const tools = site.tools();
 		const results: Record<string, { tool: string; text: string; failed: boolean }[]> = {};
 		const writerDone = Promise.withResolvers<void>();
 		const session = await run(
@@ -112,7 +112,7 @@ describe('the built-in tools', () => {
 
 	it('accepts Pi alternate edit arguments through the ordinary workspace bundle', async () => {
 		const site = openWorkspace({ name: name('edits'), backend: memoryBackend() });
-		const tools = workspaceTools(site);
+		const tools = site.tools();
 		let final: string | undefined;
 		await run([agent('editor', { tools: [tools] })], {
 			editor: (context, _who, call) => {
@@ -130,7 +130,7 @@ describe('the built-in tools', () => {
 
 	it('serializes two edits in one model batch so both updates land', async () => {
 		const site = openWorkspace({ name: name('edits'), backend: memoryBackend() });
-		const tools = workspaceTools(site);
+		const tools = site.tools();
 		let final: string | undefined;
 		await run([agent('editor', { tools: [tools] })], {
 			editor: (context, _who, call) => {
@@ -160,7 +160,7 @@ describe('the built-in tools', () => {
 
 	it('fail on the next call once the workspace is destroyed, and the activation goes on', async () => {
 		const site = openWorkspace({ name: name('destroyed'), backend: memoryBackend() });
-		const tools = workspaceTools(site);
+		const tools = site.tools();
 		let after: { tool: string; text: string; failed: boolean }[] = [];
 		let custom: string | undefined;
 		const probe = defineTool({
@@ -197,8 +197,9 @@ describe('the workspace resource owner', () => {
 			name: name('empty-tools'),
 			backend: { tools: [], connect: (agent) => inner.connect(agent), destroy: async () => {} },
 		});
-		expect(workspaceTools(workspace).tools).toEqual([]);
-		expect(workspaceTools(workspace).guidance).toBeUndefined();
+		expect(workspace.tools()).toBe(workspace.tools());
+		expect(workspace.tools().tools).toEqual([]);
+		expect(workspace.tools().guidance).toBeUndefined();
 		await workspace.destroy();
 	});
 
@@ -229,7 +230,7 @@ describe('the workspace resource owner', () => {
 				destroy: async () => {},
 			},
 		});
-		const bundle = workspaceTools(workspace);
+		const bundle = workspace.tools();
 		expect(bundle.guidance).toBe('Custom backend guidance.');
 		expect(bundle.tools.map((tool) => (tool as { name: string }).name)).toEqual(['inspect']);
 		const result = await (
@@ -723,7 +724,7 @@ describe('directoryBackend', () => {
 	it('writes through to a real directory it creates, and destroy empties it', async () => {
 		const root = join(await mkdtemp(join(tmpdir(), 'ambion-')), 'site');
 		const site = openWorkspace({ name: name('disk'), backend: directoryBackend(root) });
-		const tools = workspaceTools(site);
+		const tools = site.tools();
 		let read: string | undefined;
 		await run([agent('scribe', { tools: [tools] })], {
 			scribe: (context, _who, call) => {

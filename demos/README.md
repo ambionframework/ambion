@@ -35,6 +35,7 @@ showed.
 | 2026-09-03 | [Who the Question Needs](2026-09-03-who-the-question-needs.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/8cbbe725-691f-449f-828e-479221fc9bde) |
 | 2026-09-11 | [The Room Comes Back](2026-09-11-the-room-comes-back.html)                 | sonnet-5   | [artifact](https://claude.ai/code/artifact/15d2e9e4-5b3b-4275-a8e4-2982912c661f) |
 | 2026-09-11 | [The Room Goes, The Seats Stay](2026-09-11-the-room-goes-the-seats-stay.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/bfcaa808-211d-45f0-bd99-880e9dee38d6) |
+| 2026-09-14 | [The Refactored Room](2026-09-14-workspace-tools.html)                    | sonnet-5   | local report                                                                        |
 
 ## What each run changed
 
@@ -191,23 +192,24 @@ a missing one costs the answer, and the cap on seatings is the reserve
 itself.
 
 **The Room Comes Back.** The run that durable state was built against. The
-same suite and the same three people, and the process dies as the first
+same suite and the same three people, and the runtime is evicted as the first
 answer to Sam's question lands: the runtime that holds the room is dropped
-with six leases running, and nothing is written about the crash. A second
+with six leases running, and nothing is written about the eviction. A second
 runtime resumes the name over the same log. It folds the roster, the
 people, the open exchange and the leases back from the rows, expires the
 six leases on its own alarm 10.8 seconds later, wakes the six seats again,
 closes the exchange, and writes Sam the one message, with the crash inside
 the range it covers. Four questions open four exchanges across the two
 runtimes, and each one is written for. The report shows every lease the
-dead run held, what it had heard, how it ended, and which run wrote its
+evicted runtime held, what it had heard, how it ended, and which run wrote its
 last row.
 
 The record is one SQLite database on disk, and each runtime opens the file
-for itself: the second runtime shares nothing in memory with the first, so
-everything it knows about the room it reads off the log. Every run writes
+for itself: the second runtime reconstructs the room state from the log, while
+this in-process demo keeps the workspace and product state shared in `room.ts`.
+Every run writes
 an `ambion/run` row before anything else and stamps every later entry with
-its own id, so a write from the dead run after the resume counts for
+its own id, so a write from the evicted runtime after the resume counts for
 nothing. Ten checkpoints carry the fold the rows before them made. A lease
 that expired answers nothing, whatever it said, so all six seats took a
 second attempt and read their own first answer in it: the room prefers a
@@ -223,13 +225,24 @@ the room that came back, under the ids the dead run had written. Nothing
 expired, and no wake was sent twice.
 
 A seat's credential is its lease row on the log, not a session with the
-process that wrote it, so a room that comes back over the same storage
+runtime that wrote it, so a room that comes back over the same storage
 serves the activation the dead run started. One fault stood in the way and
 this run found it: the seat object built one stub for the room and kept it
 for the whole activation, and a stub dies with the object it names. The
 commit threw on the dead stub, the release threw after it, and the seat
 wrote nothing at all. The seat takes a stub per call now, and a test in
 workerd holds it there.
+
+**The Refactored Room.** The 14 September run exercises the extracted
+workspace owner and its `tools()` bundle with the refactored site. It recorded
+14 workspace calls across 76 activations, four closed exchanges, and 45 room
+messages. The deliberate runtime eviction left six leases to expire; the
+resumed runtime retried those wakes, with six expected lease-expiry events and
+no abandoned activations or other errors. The report also reads 76 Pi
+activation blocks across seven seat sessions from an independent SQLite
+connection. This is an in-process runtime eviction scenario, so it verifies
+journal resume and lease handling without claiming an operating-system process
+restart or cross-process workspace coordination.
 
 The report also shows what each seat did inside its own object. Those
 events reach no other object, so the seat writes them as structured log

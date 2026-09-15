@@ -24,12 +24,7 @@ import {
 	defineTool,
 	type HumanDefinition,
 } from '@ambionframework/ambion';
-import {
-	memoryBackend,
-	openWorkspace,
-	type SeedWriter,
-	workspaceTools,
-} from '@ambionframework/workspace';
+import { memoryBackend, openWorkspace, type SeedWriter } from '@ambionframework/workspace';
 import { Type } from 'typebox';
 import { DRIVE_SEED } from './drive-seed.ts';
 
@@ -75,7 +70,7 @@ export const SITE_DRIVE = openWorkspace({
 	name: 'kestrel-yard-drive',
 	backend: driveBackend,
 });
-const SITE_TOOLS = workspaceTools(SITE_DRIVE);
+const SITE_TOOLS = SITE_DRIVE.tools();
 
 /** Every document on the drive, as a host reads it: path under `site/`, and text. */
 export async function driveFiles(): Promise<{ path: string; text: string }[]> {

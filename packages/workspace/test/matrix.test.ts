@@ -29,7 +29,7 @@ import {
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
 import { storages } from '../../ambion/test/support/storage.ts';
-import { openWorkspace, workspaceTools } from '../src/index.ts';
+import { openWorkspace } from '../src/index.ts';
 import { backends } from './support/backends.ts';
 
 const twoWorkspaces: Scenario = {
@@ -45,8 +45,8 @@ const twoWorkspaces: Scenario = {
 			name: `${name}-directory`,
 			backend: directoryBackend.backend,
 		});
-		const alpha = agent('alpha', 'Works in memory.', { tools: [workspaceTools(memoryDrive)] });
-		const beta = agent('beta', 'Works on disk.', { tools: [workspaceTools(directoryDrive)] });
+		const alpha = agent('alpha', 'Works in memory.', { tools: [memoryDrive.tools()] });
+		const beta = agent('beta', 'Works on disk.', { tools: [directoryDrive.tools()] });
 		const gamma = agent('gamma', 'Has no workspace.');
 		const destroyed = deferred();
 		const alphaResults: string[] = [];

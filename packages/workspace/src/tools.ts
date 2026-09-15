@@ -10,7 +10,7 @@ import type { Workspace } from './resource.ts';
 type HarnessTool = AgentHarnessTool<ExecutionToolContext>;
 
 /** Bind a Pi harness tool through the owner's whole-operation queue. */
-function bindTool(tool: HarnessTool, workspace: Workspace): AmbionTool {
+function bindTool(tool: HarnessTool, use: Workspace['use']): AmbionTool {
 	return defineTool({
 		name: tool.name,
 		description: tool.description,
@@ -19,7 +19,7 @@ function bindTool(tool: HarnessTool, workspace: Workspace): AmbionTool {
 		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
 		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
 		execute: async (params, context: ToolContext) =>
-			workspace.use(
+			use(
 				context.agent,
 				(env) => tool.execute(context.callId, params, context.signal, context.onUpdate, { env }),
 				context.signal,
@@ -27,12 +27,14 @@ function bindTool(tool: HarnessTool, workspace: Workspace): AmbionTool {
 	});
 }
 
-/** Compose the tools and model guidance provided by a workspace resource. */
-export function workspaceTools(workspace: Workspace): ToolBundle {
+/** Compose backend tools through the owner's whole-operation queue. */
+export function bindTools(
+	tools: readonly HarnessTool[],
+	use: Workspace['use'],
+	guidance?: string,
+): ToolBundle {
 	return Object.freeze({
-		tools: Object.freeze(workspace.toolBundle.tools.map((tool) => bindTool(tool, workspace))),
-		...(workspace.toolBundle.guidance === undefined
-			? {}
-			: { guidance: workspace.toolBundle.guidance }),
+		tools: Object.freeze(tools.map((tool) => bindTool(tool, use))),
+		...(guidance === undefined ? {} : { guidance }),
 	});
 }

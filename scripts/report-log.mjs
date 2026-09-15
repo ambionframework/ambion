@@ -1,77 +1,144 @@
 /**
- * Reading a room's log, for the demo reports.
- *
- * Both reports read the same rows, and the rules for reading them belong to
- * the runtime and not to either page. A lease row carries no `heard` field,
- * and the run that wrote a row is a stamp the fence puts there: a report that
- * folds either one by hand goes stale the next time the shape moves, which is
- * how the first of these pages came to state a rule the room had stopped
- * following.
- *
- * The prose of a report belongs to the change its run was made for, and stays
- * in the script that writes it. Only what the log means lives here.
+ * Readers for the native journal captures used by the demo reports. A capture
+ * is an ordered list of `{ position, entry }` snapshots. The room body stays
+ * nested in `entry.body`; `seq`, `key`, and `run` belong to the journal
+ * envelope.
  */
 
-/** Every row of one kind, in the order it landed. */
+import { foldLeases as foldLeaseChanges, parseId } from '../packages/ambion/src/room/lease.ts';
+
+const object = (value) => value !== null && typeof value === 'object';
+const KINDS = new Set(['message', 'lease', 'close', 'composition', 'run', 'checkpoint']);
+
+/** Return a native envelope, or undefined when a stored snapshot is malformed. */
+const envelopeOf = (row) => {
+	if (!object(row) || !object(row.entry)) return undefined;
+	const entry = row.entry;
+	return typeof entry.kind === 'string' && object(entry.body) ? entry : undefined;
+};
+
+const rowProblems = (row, entry, number, previousPosition) => {
+	const problems = [];
+	if (!Number.isInteger(entry.seq) || entry.seq < 1)
+		problems.push(`journal row ${number} has an invalid entry seq`);
+	if (!KINDS.has(entry.kind)) problems.push(`journal row ${number} has an unsupported entry kind`);
+	if (!Number.isInteger(row.position) || row.position < 0)
+		problems.push(`journal row ${number} has an invalid storage position`);
+	else if (row.position <= previousPosition)
+		problems.push(`journal row ${number} is out of storage order`);
+	return problems;
+};
+
+/** Validate the native envelope before reports derive any metrics from it. */
+export const invalidRows = (log) => {
+	if (!Array.isArray(log)) return ['journal is not an array'];
+	const problems = [];
+	let previousPosition = -1;
+	for (const [index, row] of log.entries()) {
+		const entry = envelopeOf(row);
+		if (entry === undefined) {
+			problems.push(`journal row ${index + 1} has no native entry envelope`);
+			continue;
+		}
+		problems.push(...rowProblems(row, entry, index + 1, previousPosition));
+		if (Number.isInteger(row.position) && row.position >= 0) previousPosition = row.position;
+	}
+	return problems;
+};
+
+/** Every native journal body of one kind, with envelope provenance joined on. */
 export const rowsOf = (log, kind) =>
-	log.filter((row) => row.type === `ambion/${kind}`).map((row) => row.data);
+	(log ?? []).flatMap((row) => {
+		const entry = envelopeOf(row);
+		if (entry?.kind !== kind) return [];
+		return [
+			{
+				...entry.body,
+				seq: entry.seq,
+				...(entry.key === undefined ? {} : { key: entry.key }),
+				...(entry.run === undefined ? {} : { run: entry.run }),
+				position: row.position,
+			},
+		];
+	});
 
-/** The runs that took the name, in the order they took it. */
-export const runsOf = (log) => rowsOf(log, 'run').map((row) => row.run);
+/** Raw lease entries in the shape accepted by the room's pure lease fold. */
+const leaseEntries = (log) =>
+	(log ?? []).flatMap((row) => {
+		const entry = envelopeOf(row);
+		return entry?.kind === 'lease' ? [{ body: entry.body, seq: entry.seq }] : [];
+	});
 
-/**
- * Which run wrote a row, counted from one, or nothing for a row written
- * before runs were fenced. Every entry a fenced run writes carries its id.
- */
+/** The journal run ids, in the order their fence entries landed. */
+export const runsOf = (log) =>
+	rowsOf(log, 'run')
+		.map((row) => row.run)
+		.filter((run) => typeof run === 'string');
+
+/** Which run wrote a body, counted from one, or nothing before the first fence. */
 export const writerOf = (runs, row) => {
-	const at = runs.indexOf(row?.written);
+	const at = runs.indexOf(row?.run);
 	return at < 0 ? undefined : at + 1;
 };
 
+const leaseProvenance = (rows, runs) => {
+	const byId = new Map();
+	for (const row of rows) {
+		const prior = byId.get(row.id);
+		if (!(typeof row.id === 'string' && prior?.ended !== true)) continue;
+		switch (row.phase) {
+			case 'running':
+				if (prior === undefined)
+					byId.set(row.id, { claimedRun: row.run, claimedBy: writerOf(runs, row) });
+				break;
+			case 'ended':
+				byId.set(row.id, {
+					...(prior ?? {}),
+					ended: true,
+					endedRun: row.run,
+					endedBy: writerOf(runs, row),
+				});
+				break;
+		}
+	}
+	return byId;
+};
+
 /**
- * What the rows for one activation fold to. The last row wins. The first says
- * when the lease was claimed, and the last running row says the seq the
- * activation had taken, which is that row's `after`.
+ * Fold native lease changes with the room's own lease implementation, then
+ * join the envelope provenance needed by the report. A malformed activation
+ * id is marked invalid instead of being mistaken for a first attempt.
  */
 export function foldLeases(log) {
 	const rows = rowsOf(log, 'lease');
 	const runs = runsOf(log);
-	const name = (row) => {
-		const at = writerOf(runs, row);
-		return at === undefined ? '—' : `run ${at}`;
-	};
-	return [...new Set(rows.map((row) => row.id))].map((id) => {
-		const mine = rows.filter((row) => row.id === id);
-		const first = mine[0];
-		const last = mine[mine.length - 1];
-		const running = [...mine].reverse().find((row) => row.phase === 'running');
+	const byId = leaseProvenance(rows, runs);
+	const folded = foldLeaseChanges(leaseEntries(log));
+	return [...folded.entries()].map(([id, lease]) => {
+		const provenance = byId.get(id) ?? {};
+		const parsed = parseId(id);
 		return {
-			id,
-			phase: last.phase,
-			reason: last.reason,
-			state: last.phase === 'ended' ? last.reason : 'running',
-			at: last.at,
-			claimedAt: first.at,
-			heardThrough: running?.after ?? first.after,
-			claimedBy: name(first),
-			endedBy: name(last),
-			/** The lease one run claimed and another ended: the crash fell inside it. */
-			crossed: name(first) !== name(last),
+			...lease,
+			readThrough: lease.readThrough,
+			claimedBy: provenance.claimedBy === undefined ? '—' : `run ${provenance.claimedBy}`,
+			endedBy: provenance.endedBy === undefined ? '—' : `run ${provenance.endedBy}`,
+			claimedRun: provenance.claimedRun,
+			endedRun: provenance.endedRun,
+			invalidId: parsed === undefined,
+			attempt: parsed?.attempt,
+			state: lease.phase === 'ended' ? lease.reason : 'running',
+			/** A lease one run claimed and another ended crossed a runtime fence. */
+			crossed:
+				provenance.claimedRun !== undefined &&
+				provenance.endedRun !== undefined &&
+				provenance.claimedRun !== provenance.endedRun,
 		};
 	});
 }
 
-/**
- * Which attempt an id names. Nothing mints an id: a wake is `<seq>:<seat>`
- * and a later attempt adds the number, a draft is `close:<through>:<attempt>`
- * and counts from one. So a trailing number is a retry for a wake, and only a
- * number above one is a retry for a draft.
- */
+/** The attempt encoded by the room's four-part activation id, or undefined. */
 export function attemptOf(id) {
-	const draft = /^close:\d+:(\d+)$/.exec(id);
-	if (draft) return Number(draft[1]);
-	const wake = /^\d+:.+:(\d+)$/.exec(id);
-	return wake ? Number(wake[1]) : 1;
+	return parseId(id)?.attempt;
 }
 
 export const esc = (s) =>

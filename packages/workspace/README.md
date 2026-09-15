@@ -14,13 +14,13 @@ pnpm add @ambionframework/ambion @ambionframework/workspace
 
 ## Use
 
-`workspaceTools(drive)` adds the tools and optional guidance that the backend
-supplies. Each tool reaches the environment the backend built for that agent,
-rooted at `/home/<agent name>`.
+`drive.tools()` adds the tools and optional guidance that the backend supplies.
+Each tool reaches the environment the backend built for that agent, rooted at
+`/home/<agent name>`.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
-import { memoryBackend, openWorkspace, workspaceTools } from '@ambionframework/workspace';
+import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
 
 const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
 
@@ -29,7 +29,7 @@ const surveyor = defineAgent({
   identity: 'Quantity surveyor. Holds the tonnage.',
   instructions: 'Read the pour plan before you answer.',
   model: 'anthropic/claude-sonnet-5',
-  tools: [workspaceTools(drive)],
+  tools: [drive.tools()],
 });
 ```
 
