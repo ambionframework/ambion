@@ -52,7 +52,9 @@ deterministic — this is how [the tests](../packages/ambion/test/support/script
 run — and a custom stream brings custom providers. Ambion keeps no model
 registry of its own. Without a `streamFn`, models resolve as
 `provider/model-id` from Pi's builtin catalog, and API keys come from
-`<PROVIDER>_API_KEY` in the environment.
+`<PROVIDER>_API_KEY` in the environment. The provider definitions and catalog
+module load only when the first default model is resolved or streamed; a
+scripted or custom `streamFn` does not load that catalog.
 
 ---
 

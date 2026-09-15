@@ -25,7 +25,7 @@ describe('PiContext', () => {
 		const requests: object[][] = [];
 		const provider = scripted(() => quiet());
 		const agent = new Agent({
-			initialState: { model: stubModel('scripted/pi-context', 'pi-context') },
+			initialState: { model: await stubModel('scripted/pi-context', 'pi-context') },
 			streamFn: (model, request, options) => {
 				requests.push(request.messages);
 				context.providerRequestStarted(request.messages);
@@ -61,7 +61,7 @@ describe('PiContext', () => {
 		const provider = scripted(() => quiet());
 		let calls = 0;
 		const agent = new Agent({
-			initialState: { model: stubModel('scripted/pi-context', 'pi-context') },
+			initialState: { model: await stubModel('scripted/pi-context', 'pi-context') },
 			streamFn: (model, request, options) => {
 				calls += 1;
 				requests.push(request.messages);

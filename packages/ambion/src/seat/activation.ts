@@ -41,7 +41,7 @@ export interface ActivationHost {
 	/** Renew the lease. The answer says how far the record has moved. */
 	renew(readThrough: Seq): Promise<LeaseResponse>;
 	/** Build the model over the view, with the tool the view names. */
-	build(view: ActivationView, activation: Activation): Agent;
+	build(view: ActivationView, activation: Activation): Promise<Agent>;
 	/** Keep what the model did, in the seat's own downstream session. */
 	persist(agent: Agent): Promise<void>;
 	emit(event: RoomNotification): void;
@@ -142,7 +142,8 @@ export class Activation {
 			// The fresh view becomes acknowledged only when Pi sends it to a provider.
 			this.held = [];
 			this.providerStarted = false;
-			const agent = this.host.build(view, this);
+			const agent = await this.host.build(view, this);
+			if (this.cancelled) return false;
 			this.agent = agent;
 			agent.subscribe((event) => this.note(event));
 			await agent.prompt(this.context.initial(view.spec.through, view.context, this.host.now()));

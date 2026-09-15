@@ -45,7 +45,7 @@ export interface Clock {
 }
 
 /** Resolves an agent's `provider/model-id` to the model Pi's loop runs. */
-export type ModelResolver = (id: string, agent: string) => Model<Api>;
+export type ModelResolver = (id: string, agent: string) => Model<Api> | Promise<Model<Api>>;
 
 /** What a participant said. */
 export interface SpokenMessage {

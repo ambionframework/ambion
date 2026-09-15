@@ -287,7 +287,7 @@ export class SeatActor implements SeatPort {
 	 * definition names, the tools. The stream function tells the activation
 	 * when the model is asked, so a steer never joins the request it lands during.
 	 */
-	private build(view: ActivationView, activation: Activation): PiAgent {
+	private async build(view: ActivationView, activation: Activation): Promise<PiAgent> {
 		const def = this.context.definition;
 		if (view.spec.seat !== def.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
@@ -299,7 +299,7 @@ export class SeatActor implements SeatPort {
 			},
 			initialState: {
 				systemPrompt: view.systemPrompt,
-				model: this.context.model(view.model, def.name),
+				model: await this.context.model(view.model, def.name),
 				thinkingLevel: 'off',
 				tools: toolsFor(view, def, binding(activation, this.room)),
 				messages: [],
