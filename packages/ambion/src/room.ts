@@ -925,14 +925,13 @@ class RoomHost implements Room, RunningRoom {
 
 	/**
 	 * A message on the record: the host hears about it, then what it opened,
-	 * then the room sends the wakes the message carries and steers every seat
-	 * at work. One message, one event, one order.
+	 * steers every active ordinary seat, and asks reconciliation to dispatch
+	 * the pending activations the projection derives. One message, one event,
+	 * one order.
 	 */
 	private heardMessage(message: Message): void {
 		this.emit({ type: 'message', message });
 		this.noteExchange(message.seq);
-		for (const seat of message.wakes ?? [])
-			this.send(activationId('message', message.seq, seat), seat);
 		this.steer(message);
 		this.notifyExchangeWaiters();
 		void this.reconcile();

@@ -286,6 +286,11 @@ room's routing and voice; all of the routing is one file,
 seat at rest the message wakes, so a message and its routing are one write. A seat
 at work is steered once the write is confirmed (rule 2).
 
+Reconciliation selects all new activations from the recorded pending work.
+The host requests it immediately after each message append. Normal operation,
+retry, and restart therefore use the same activation identities and timing
+rules. Assistant selection uses the recorded opening cause.
+
 **1. Every message activates every idle agent, in parallel.** A human's
 delivery, a person arriving, and a colleague's undirected `say` route
 identically. Seats sit out when their attention is too narrow for the
