@@ -21,6 +21,7 @@ import { renderRecord } from '../src/render.ts';
 import { fakeClock } from './support/clock.ts';
 import {
 	assistantEnded,
+	closedExchange,
 	collect,
 	currentExchange,
 	deferred,
@@ -716,10 +717,12 @@ describe('the assistant', () => {
 
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
-		const close = await exchange.waitForClose();
+		const conversation = await exchange.messages();
+		const close = closedExchange(session, exchange.from);
 		const response = await exchange.response();
 		expect(response).toMatchObject({ kind: 'summary', to: priya.name });
 		expect(close).toMatchObject({ owner: priya.name, from: exchange.from });
+		expect(conversation.every((message) => message.kind !== 'summary')).toBe(true);
 		expect(summaries(await session.messages())).toHaveLength(1);
 		const wrote = events.findIndex((e) => e.type === 'message' && e.message.kind === 'summary');
 		const closed = events.findIndex((e) => e.type === 'exchange_closed');
@@ -810,7 +813,7 @@ describe('the assistant', () => {
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
 		// Shutdown while the room still owes a summary: the activation is aborted,
 		// and completion for this unfinished exchange rejects.
-		const waiting = exchange.waitForClose();
+		const waiting = exchange.messages();
 		await session.stop();
 		await expect(waiting).rejects.toThrow(/stopped|interrupted/i);
 		await expect(exchange.response()).rejects.toThrow(/stopped|interrupted/i);

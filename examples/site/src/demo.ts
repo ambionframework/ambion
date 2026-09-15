@@ -269,7 +269,7 @@ const samExchange = await samVisit.send({
 // The delivery opened the exchange, so the room goes quiet only when it
 // closes. A run where every product declines has nothing to crash into: it
 // takes the close instead of waiting for an answer that never comes.
-const crashedAt = await Promise.race([firstAnswer, samExchange.waitForClose().then(() => lastSeq)]);
+const crashedAt = await Promise.race([firstAnswer, samExchange.messages().then(() => lastSeq)]);
 stopWatchingForIt();
 
 step(

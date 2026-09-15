@@ -115,7 +115,7 @@ const visit = await room.visit(andrei);
 const exchange = await visit.send({ text: 'Draft the weekly. Anything to flag?' });
 await exchange.response();
 const directed = await visit.send({ to: lead, text: 'What does this cost us in engineers?' });
-await directed.waitForClose();
+await directed.messages();
 
 await visit.leave();
 ```

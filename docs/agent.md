@@ -546,7 +546,8 @@ An exchange handle gives callers durable completion without a room-wide wait:
 
 - **`visit.send()`** waits for the delivery to commit, then returns the exchange
   handle. A repeated key returns the same handle.
-- **`exchange.waitForClose()`** waits for the durable close and returns its range.
+- **`exchange.messages()`** waits for the durable close and returns the fixed
+  conversation in its inclusive range, excluding summary messages.
 - **`exchange.response()`** waits for the assistant response, or returns
   `undefined` when the assistant deliberately stays silent. Failed work rejects.
 

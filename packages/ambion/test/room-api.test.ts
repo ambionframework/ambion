@@ -13,7 +13,7 @@ import {
 } from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
-import { deferred, roomName, waitForRoom } from './support/room.ts';
+import { closedExchange, deferred, roomName, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak, summarise, toolNames } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
 
@@ -98,18 +98,20 @@ describe('the room API', () => {
 			const exchange = await visit.send({ text: 'Can we ship?', key: 'ship-1' });
 
 			expect(exchange.owner).toBe(priya.name);
-			const close = await exchange.waitForClose();
-			const beforeStop = await room.messages();
-			expect(beforeStop.filter(isSpoken).length).toBeGreaterThanOrEqual(3);
+			const conversation = await exchange.messages();
+			const close = closedExchange(room, exchange.from);
+			expect(conversation.filter(isSpoken).length).toBeGreaterThanOrEqual(3);
+			expect(close).toMatchObject({ owner: priya.name, from: exchange.from });
 			const response = await exchange.response();
 			expect(response).toMatchObject({ kind: 'summary', to: priya.name });
-			expect(close).toMatchObject({ owner: priya.name, from: exchange.from });
+			expect(conversation.every((message) => message.kind !== 'summary')).toBe(true);
 
 			await room.stop();
+			expect(await exchange.messages()).toEqual(conversation);
 			expect(await exchange.response()).toMatchObject({
 				kind: 'summary',
 				to: priya.name,
-				covers: { from: close.from, through: close.through },
+				covers: { from: close?.from, through: close?.through },
 			});
 			expect(await exchange.response()).toEqual(response);
 			const snapshot = await readRoom(room.name, { runtime });
@@ -126,7 +128,9 @@ describe('the room API', () => {
 		const { opened, room } = await world(memory);
 		try {
 			const exchange = await (await room.visit(priya)).send({ text: 'Question?', key: 'none-1' });
-			await expect(exchange.waitForClose()).resolves.toMatchObject({ owner: priya.name });
+			const conversation = await exchange.messages();
+			expect(conversation).toHaveLength(1);
+			expect(closedExchange(room, exchange.from)).toMatchObject({ owner: priya.name });
 			await expect(exchange.response()).resolves.toBeUndefined();
 		} finally {
 			await room.stop();
@@ -145,7 +149,7 @@ describe('the room API', () => {
 			const exchange = await (
 				await room.visit(priya)
 			).send({ text: 'One answer?', key: 'silent-1' });
-			await exchange.waitForClose();
+			await exchange.messages();
 			await expect(exchange.response()).resolves.toBeUndefined();
 		} finally {
 			await room.stop();
@@ -166,13 +170,19 @@ describe('the room API', () => {
 			const first = await (await room.visit(priya)).send({ text: 'First?', key: 'race-1' });
 			const second = await (await room.visit(sam)).send({ text: 'Second?', key: 'race-2' });
 			gate.resolve();
-			const close = await first.waitForClose();
+			const conversation = await first.messages();
+			const close = closedExchange(room, first.from);
 			const secondMessage = (await room.messages()).find((message) => message.key === 'race-2');
 
-			expect(close.from).toBe(first.from);
+			expect(close?.from).toBe(first.from);
 			expect(second.from).toBe(first.from);
 			expect(secondMessage).toBeDefined();
-			expect(close.through).toBeGreaterThanOrEqual(secondMessage?.seq ?? 0);
+			expect(close?.through).toBeGreaterThanOrEqual(secondMessage?.seq ?? 0);
+			expect(conversation.map((message) => message.key)).toContain('race-2');
+			expect(
+				conversation.some((message) => message.kind === 'arrived' && message.from === sam.name),
+			).toBe(true);
+			expect(conversation.every((message) => message.kind !== 'summary')).toBe(true);
 			expect(room.exchange(first.from)).toBeDefined();
 		} finally {
 			await room.stop();
@@ -185,20 +195,22 @@ describe('the room API', () => {
 		try {
 			const visit = await room.visit(priya);
 			const first = await visit.send({ text: 'First?', key: 'replay-1' });
-			const firstClose = await first.waitForClose();
+			const firstConversation = await first.messages();
+			const firstClose = closedExchange(room, first.from);
 			const second = await visit.send({ text: 'Second?', key: 'replay-2' });
-			await second.waitForClose();
+			await second.messages();
 
 			const retry = await visit.send({ text: 'First?', key: 'replay-1' });
 			expect(retry.from).toBe(first.from);
-			expect(await retry.waitForClose()).toEqual(firstClose);
+			expect(await retry.messages()).toEqual(firstConversation);
+			expect(firstClose).toBeDefined();
 		} finally {
 			await room.stop();
 			await opened.dispose();
 		}
 	});
 
-	it('rejects an exchange wait when the room is stopped before close', async () => {
+	it('rejects an exchange conversation wait when the room is stopped before close', async () => {
 		const held = deferred();
 		const { opened, room } = await world(memory, {
 			streamFn: scripted(async (_context, _agent, call) => {
@@ -211,7 +223,7 @@ describe('the room API', () => {
 		await room.stop();
 		held.resolve();
 		await opened.dispose();
-		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|ended/i);
+		await expect(exchange.messages()).rejects.toThrow(/stopped|ended/i);
 		await expect(exchange.response()).rejects.toThrow(/stopped|ended/i);
 	});
 
@@ -231,8 +243,10 @@ describe('the room API', () => {
 		});
 		try {
 			const sent = await (await first.visit(priya)).send({ text: 'Persist?', key: 'resume-1' });
-			const close = await sent.waitForClose();
-			expect(close.from).toBe(sent.from);
+			const conversation = await sent.messages();
+			const close = closedExchange(first, sent.from);
+			expect(close?.from).toBe(sent.from);
+			expect(conversation.at(0)?.seq).toBe(sent.from);
 			await first.stop();
 			const resumed = await resumeRoom(name, {
 				runtime,
@@ -242,7 +256,7 @@ describe('the room API', () => {
 			try {
 				const recovered = resumed.exchange(sent.from);
 				expect(recovered).toBeDefined();
-				expect(await recovered?.waitForClose()).toEqual(close);
+				expect(await recovered?.messages()).toEqual(conversation);
 			} finally {
 				await resumed.stop();
 			}

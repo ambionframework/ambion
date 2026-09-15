@@ -52,6 +52,11 @@ export function stateOf(room: Room): RoomState {
 	return (room as Room & { state(): RoomState }).state();
 }
 
+/** Test-only view of a durable close, kept private to support range assertions. */
+export function closedExchange(room: Room, from: number) {
+	return stateOf(room).closes.find((close) => close.from === from);
+}
+
 /** Running leases are activations inherited before this run could emit a start. */
 export function runningLeases(room: Room): number {
 	return [...stateOf(room).leases.values()].filter((lease) => lease.phase === 'running').length;

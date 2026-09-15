@@ -168,23 +168,24 @@ restart, using the opening message sequence as its stable identity.
 ```ts
 const visit = await room.visit(priya);
 const exchange = await visit.send({ text: 'Can I promise Thursday?' });
-await exchange.waitForClose();
+const conversation = await exchange.messages();
 const response = await exchange.response();
 
 await room.stop();
 const resumed = await resumeRoom('site', { runtime, agents, assistant });
 const sameExchange = resumed.exchange(exchange.from);
 if (sameExchange) {
-  await sameExchange.waitForClose();
+  await sameExchange.messages();
   await sameExchange.response();
 }
 ```
 
-`waitForClose()` resolves only after the close entry is durable and returns
-its fixed `through` range. `response()` waits for the summary for that
-exchange, or returns `undefined` when the exchange deliberately has no
-summary. A failed or abandoned attempt remains visible in the record and is
-handled by the exchange's retry policy.
+`messages()` resolves only after the close entry is durable and returns the
+non-summary messages in the inclusive `[from, through]` range. It excludes
+assistant summaries, including a summary published during a later exchange;
+`response()` owns that optional result and waits for it, or returns `undefined`
+when the exchange deliberately has no summary. A failed or abandoned attempt
+remains visible in the record and is handled by the exchange's retry policy.
 
 The handle is tied to `owner`, `from`, and `at`. Repeating a send with the
 same idempotency key returns the same exchange handle. Concurrent sends into
@@ -273,13 +274,13 @@ The exchange is proved beside the assistant that first reads one, in
   committed before that boundary remains in the exchange (§3);
 - a close for one exchange never closes the next, and a question the
   assistant already woke on composes nothing and closes at once (§3);
-- an exchange handle closes before its optional response is written, and
+- `exchange.messages()` resolves before its optional response is written, and
   `response()` resolves only when that response is durable or deliberately
   absent (§6).
 
 [`restart.test.ts`](../packages/ambion/test/restart.test.ts) proves that a
 stopped room writes no close, that the next run closes the exchange
-before the exchange handle completes, and that a room resumed mid-exchange continues
+before `exchange.messages()` completes, and that a room resumed mid-exchange continues
 it, with a lease the dead run held expiring into the close (§5, §6).
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts) proves that
 a close the storage refuses leaves the exchange open, and that a handle

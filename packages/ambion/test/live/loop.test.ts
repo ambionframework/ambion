@@ -84,7 +84,7 @@ live('the model and the loop', () => {
 			// the failed activation is one attempt, and the room would wake the seat
 			// again after the backoff: the abort writes that wake off
 			session.abort();
-			await within(exchange.waitForClose(), 60_000, 'the exchange closing');
+			await within(exchange.messages(), 60_000, 'the exchange closing');
 
 			const errors = errorsIn(events);
 			expect(errors).toHaveLength(1);

@@ -244,14 +244,15 @@ claim about what the record holds.
 reserve agent while an exchange is open. That activation is part of the
 exchange's work, so the close waits until the decision is durable; the
 newcomer wakes inside the same exchange and its messages remain in the
-range the handle reports. A drafting activation after the close is a
+range that `exchange.messages()` returns. A drafting activation after the close is a
 separate response step and cannot change that range.
 
 So the room draws one distinction about its assistant: composing work
 belongs to the open exchange, while drafting follows its durable close.
 `liveWork` in `room/reconcile.ts` reads the cause of each activation. The
 room reconciles after every commit, lease change, alarm, and wake. The
-exchange handle exposes the resulting close and response milestones.
+exchange handle exposes the resulting conversation through `messages()` and
+the optional response through `response()`.
 
 **A question that lands while the assistant owes a summary gets no
 composing activation.** The seat is live from the close that owes the draft
@@ -342,9 +343,9 @@ working, so the exchange closes. The exchange holds one message, the
 question, and the assistant writes nothing for it, because an exchange the
 agents said nothing into writes nothing ([`assistant.md`](assistant.md)
 §4). The host hears `exchange_opened` and `exchange_closed`, in that order.
-The exchange handle resolves with the closed range and an undefined
-response, and the person can see that nobody was there to answer through
-the record.
+The exchange handle's `messages()` resolves with the closed range's
+non-summary conversation, and `response()` resolves to `undefined`; the
+person can see that nobody was there to answer through the record.
 
 ---
 

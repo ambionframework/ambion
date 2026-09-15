@@ -175,8 +175,11 @@ export interface ExchangeHandle {
 	readonly from: Seq;
 	/** The timestamp of the opening question. */
 	readonly at: string;
-	/** Resolve when the exchange's durable close is recorded; reject if the room stops first. */
-	waitForClose(): Promise<ClosedExchange>;
+	/**
+	 * Resolve with the fixed non-summary conversation after the durable close.
+	 * Reject if the room stops before the exchange closes.
+	 */
+	messages(): Promise<Message[]>;
 	/** Resolve with the durable summary, or `undefined` when no summary is needed; reject when required work fails. */
 	response(): Promise<SummaryMessage | undefined>;
 }
@@ -565,7 +568,7 @@ class RoomHost implements Room, RunningRoom {
 			owner: exchange.owner,
 			from: exchange.from,
 			at,
-			waitForClose: () => this.waitForClose(exchange.from),
+			messages: () => this.exchangeMessages(exchange.from),
 			response: () => this.responseFor(exchange.from),
 		};
 	}
@@ -591,6 +594,14 @@ class RoomHost implements Room, RunningRoom {
 			waiters.push({ resolve, reject });
 			this.closeWaiters.set(from, waiters);
 		});
+	}
+
+	private async exchangeMessages(from: Seq): Promise<Message[]> {
+		const close = await this.waitForClose(from);
+		return this.journal
+			.messages()
+			.filter((message) => message.kind !== 'summary')
+			.filter((message) => message.seq >= close.from && message.seq <= close.through);
 	}
 
 	private async responseFor(from: Seq): Promise<SummaryMessage | undefined> {

@@ -18,12 +18,12 @@ and persisted shapes. Remove obsolete structures and migration machinery
 when they complicate the design. Existing persisted state does not constrain
 the implementation.
 
-**Items 1–9 are implemented and verified.** Item 10 and its replacement APIs
-remain proposals.
-Completed items record their implementation below. Source references identify
-the current mechanisms. Each proposal identifies its behavioral changes.
+**Items 1–10 are implemented and verified.** Item 10 was finalized in PR #107
+(`feat: expose room exchange API`, merged at `841b802`). Completed items record
+their implementation below. Source references identify the current mechanisms.
+Each proposal identifies its behavioral changes.
 The initial review used source, contracts, and representative tests.
-Implementation adds execution checks for items 1–8.
+Implementation adds execution checks for items 1–10.
 
 Earlier completed-item entries below describe checkpointing as it existed at
 that time. Item 9 supersedes those historical references; the current design
@@ -583,10 +583,11 @@ retention.
 
 ## 10. Give the public API one vocabulary and asynchronous lifecycle
 
-The collaboration API now calls its durable domain a room and keeps Pi's
-`Session` terminology inside the Pi adapter. Opening and reading are
-consistently awaitable, and a read returns plain data rather than a live
-object.
+**Implementation.** Finalized in PR #107 (`feat: expose room exchange API`,
+merged at `841b802`). The collaboration API now calls its durable domain a
+room and keeps Pi's `Session` terminology inside the Pi adapter. Opening and
+reading are consistently awaitable, and a read returns plain data rather than
+a live object.
 
 The public surface is:
 
@@ -594,7 +595,7 @@ The public surface is:
 const room = await startRoom({ name, agents, assistant });
 const visit = await room.visit(person);
 const exchange = await visit.send({ text: 'Can we proceed?', key: deliveryId });
-await exchange.waitForClose();
+const conversation = await exchange.messages();
 const response = await exchange.response();
 
 const snapshot = await readRoom(room.name);
@@ -603,9 +604,11 @@ await room.stop();
 
 `resumeRoom` restores a room over its journal and returns a ready `Room`.
 `readRoom` returns a `RoomSnapshot` containing readonly `messages`, `seats`,
-and the current exchange, with no running seats or subscription. The
+and the current exchange, with no execution handles or subscription. Its
+seat statuses and current exchange may reflect work active when it was read.
 `ExchangeHandle` returned by `Visit.send` carries `owner`, `from`, and `at`;
-`waitForClose` resolves at the durable close, and `response` waits for the
+`messages` waits for the durable close and returns the non-summary messages in
+the inclusive `[from, through]` range. `response` waits for the optional
 summary or returns `undefined` when no summary is due. `room.exchange(from)`
 reacquires the same exchange after a restart.
 
@@ -627,6 +630,22 @@ exchange's durable close or deliberate no-summary outcome.
 **Source.** [Public API](../packages/ambion/src/index.ts),
 [room lifecycle](../packages/ambion/src/room.ts), and
 [host adapter](../packages/cloudflare/src/room-object.ts).
+
+## 11. Isolate default provider loading from room and read APIs
+
+**Proposal.** Keep the default provider registry behind an internal boundary
+that is entered only when a model activation needs it. Scripted and custom
+transports, `readRoom`, and other collaboration and inspection paths should
+avoid loading provider SDKs they do not use. A Pi subpath is justified only
+if the dependencies separate cleanly; the first step is an internal lazy
+loading boundary with no new public setup concept.
+
+**Current evidence.** Three fresh Node 22 processes importing the current
+built `@ambionframework/ambion` entry took 257–273 ms and increased RSS by
+about 67–68 MiB per process. The source still statically imports
+`@earendil-works/pi-ai/providers/all` from `host/runtime.ts`, even though
+registry construction itself is lazy. These measurements motivate the
+boundary; they are not a completion claim.
 
 ## Naming principles
 
