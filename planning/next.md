@@ -18,12 +18,12 @@ and persisted shapes. Remove obsolete structures and migration machinery
 when they complicate the design. Existing persisted state does not constrain
 the implementation.
 
-**Items 7–10 and their replacement APIs are proposals.** Items 1–5 are
-merged. Item 6 is implemented and under review. Completed items record their
+**Items 8–10 and their replacement APIs are proposals.** Items 1–6 are
+merged. Item 7 is implemented and verified. Completed items record their
 implementation below. Source references identify the current mechanisms.
 Each proposal identifies its behavioral changes.
 The initial review used source, contracts, and representative tests.
-Implementation adds execution checks for items 1–5.
+Implementation adds execution checks for items 1–7.
 
 ## The design to preserve
 
@@ -464,39 +464,34 @@ mutable maps requires replacements for legitimate host operations.
 
 ## 7. Give the journal its own storage contract
 
-**Current cost.** The extracted journal still requires Pi sessions.
-Its SQLite implementation supports lanes and metadata while refusing
-several other session operations. Conditional append is an optional
-extension discovered at runtime.
+**Implementation.** `JournalStorage` reads ordered stored entries and
+conditionally appends at `expectedPosition`. Each read returns its final
+scanned storage position. `StoragePosition` orders storage. `Seq` orders
+journal envelopes. The journal persists `{ kind, body, seq, key?, run? }`.
 
-**Proposed design.** Give the journal ordered reads and conditional append
-through a narrow storage interface. Make concurrency guarantees explicit.
-Keep Pi compatibility in an adapter. Provider transcript storage and the
-collaboration journal may share a database without sharing an abstraction.
+`memoryJournals()` and `sqliteJournals(sql)` implement the main contract.
+SQLite uses one conditional insert that returns the entry it appended. The
+main package imports no Pi types. `@ambionframework/journal/pi` contains the
+Pi transcript facade over named native journal storage.
 
-Do not silently downgrade conditional append to an unsafe implementation.
-An adapter with weaker guarantees needs an explicit restriction, such as
-exclusive ownership by one writer.
+Runtime now takes one native `storage` opener. It derives `journals` and
+`transcripts` as namespaced views. A room record, Pi audit, and Cloudflare
+host metadata share that backend under separate names.
 
-**Naming.** Keep `Journal`, `Seq`, and `Checkpoint`. Use `JournalEntry` in
-cross-package APIs and `Entry` inside the journal where its scope is clear.
-Use `JournalStorage` for the persistence interface and `openJournal` for
-opening it. Reserve `SessionOpener` for Pi compatibility code.
+**Verification.** The full gate passes on 2026-09-14. It runs 52 journal,
+449 Ambion, 12 Cloudflare, 23 workspace, and 2 CLI tests. Storage tests cover
+conditional append, foreign positions, snapshots, successful rereads, and
+lost confirmation. Pi facade tests retain transcript state over native
+storage. Room and Cloudflare tests retain fencing, idempotency, checkpoints,
+restart, and transcript behavior.
 
-Use `expectedPosition` for storage concurrency and `readThrough` for the
-conversational precondition. They answer different questions.
+**Naming.** `JournalEntry` names the public envelope. `Entry` stays internal
+to the journal. `JournalStorage`, `JournalOpener`, and `StoragePosition` name
+the persistence boundary. `SessionOpener` belongs only to the Pi subpath.
 
-**Rationale.** Storage loses an unrelated session model. Hosts can inspect
-the durability contract without knowing Pi's lanes or transcript API.
-This is the strongest candidate for an independently reusable sub-library.
-
-**Completion evidence.** The journal's main entry imports no Pi session
-types. SQLite and compatible adapters pass the same ordering, conditional
-append, idempotency, lost-confirmation, and fencing contracts.
-
-**Scope.** Replace storage shapes directly when that simplifies the port.
-Keep generic lease scheduling inside Ambion until its domain independence
-is demonstrated by another use case.
+**Scope.** This replaces the former Pi-session journal storage directly.
+Workspace file contents remain on the workspace backend. Generic lease
+scheduling remains in Ambion.
 
 **Source.** [Journal](../packages/journal/src/journal.ts),
 [SQLite storage](../packages/journal/src/sqlite.ts), and

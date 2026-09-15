@@ -470,8 +470,8 @@ runtime observed opening. No one self-reports who they are.
 Each agent's tool calls belong to its own working context; other
 participants see its `say`s only, because the record is all any view
 renders. The tools are still auditable: every activation's full turns land
-in the seat's own downstream Pi session — `<room>:<agent>`, parented to the
-room's, named by `seats().sessionId`, opened by the same opener
+in the seat's own downstream Pi session, named by `seats().sessionId` and
+opened through the runtime's transcript opener
 (`persistTurns` in `seat/activation.ts`) — so what an agent actually did can be replayed long after
 its working view reset. The record is never rewritten for anyone.
 
@@ -618,7 +618,7 @@ refuses a missing or repeated binding before it writes its fence.
 A listener learns nothing the pulls cannot tell it — it only learns it
 sooner.
 
-`readSession(name, { repo })` returns the pull side alone — `messages()`,
+`readSession(name, { runtime })` returns the pull side alone — `messages()`,
 `seats()`, `subscribe()` — and `Session` extends it, so code that only
 reads takes the narrower type and cannot start anything by accident. Its
 `seats()` folds the same entries a running room folds, so a stopped room says
@@ -658,9 +658,9 @@ still pending and the summaries still owed
 the journal, decides, writes what it decided, and sends
 ([`reconcile.ts`](../packages/ambion/src/room/reconcile.ts)). It runs
 after every commit, every lease change, every alarm and every wake, and
-running it twice writes nothing. Four kinds of entry hold it all, in the
-room's one Pi session: `ambion/message`, `ambion/lease`, `ambion/close`
-and `ambion/composition`. Every entry takes its place from one counter, so
+running it twice writes nothing. Four kinds of entry hold it all in the
+room journal: `message`, `lease`, `close`, and `composition`. Every entry
+takes its place from one counter, so
 a seq names one entry of any kind and the messages are not contiguous. The
 room holds one cache beside the journal: when it last sent each wake, which
 a resumed room starts empty.
@@ -729,41 +729,27 @@ over the journal, so a reader that cannot read one ignores it and folds
 the entries instead. A checkpoint is an entry like any other, so the fence
 voids one a superseded run wrote.
 
-Storage is Pi's. The record lives in a Pi session — each message a custom
-entry, replayed in `seq` order on reopen — opened through a `SessionOpener`
-on the room's `Runtime`. `sessionsOver(repo)` makes an opener from Pi's own
-`SessionRepo`; `startSession` and `readSession` still accept a `repo` as
-the shorthand for one. The default runtime opens sessions in an in-memory
-`InMemorySessionRepo`. A name that outlives the process is a durable
-`SessionRepo` implementation; the API stays the same.
-[`index.ts`](../packages/ambion/src/index.ts) re-exports Pi's storage
-surface.
+The record uses `JournalStorage` on the runtime's `storage`. The storage
+reads ordered entries and atomically appends only at an expected position.
+The default runtime uses one in-memory backend. `sqliteJournals(sql)` opens
+named storage in one database. A host wraps its SQLite driver through `Sql`.
 
-**The journal holds one storage of its own: SQLite.**
-[`sqliteSessions(sql)`](../packages/journal/src/sqlite.ts), in
-`@ambionframework/journal`, opens every session in one database, keyed by
-id: the room's journal, and each seat's audit session beside it. It
-reaches the database through two calls, `run` a statement and `all` its
-rows, so a host wraps whatever SQLite it holds — `node:sqlite` in a
-process, a Durable Object's own storage on Cloudflare — and the package
-owns the schema and every statement. The core
-imports no platform module, so the wrapper is the host's.
+The runtime derives its room journals and Pi sessions from that one backend.
+Each view uses its own namespaced name. Pi holds transcripts only. A Pi
+adapter opens its session through the native journal storage and uses its
+atomic append operation.
 
-Two runs may write to one SQLite at once. It reads each entry's seq from
-the database as the row lands, and the primary key refuses a second entry
-at one seq: a writer that raced is refused, and reads again.
+Two runs may write to one SQLite at once. SQLite compares the storage
+position and inserts one next position in one statement. A writer that
+races gets no row and reads again. The journal stamps its separate `seq`
+inside that stored entry.
 
-**A storage may refuse an append the record moved under.** A session that
-can promise it offers `appendAfter`, and the journal hands it the position
-its read left: the entry lands next to that position, or the storage
-writes nothing and says so. A run fenced while its write waited is
-refused before it acknowledges, so the write it held is no loss. The
-SQLite storage offers it in one statement, which takes the seq it
-asserts. A storage that cannot promise it does not offer it, and the journal
-appends the way it always did. Pi's JSONL repository holds the next seq in memory, so
-two runs over one file write the same seq twice and the file no longer
-reads: a host that runs two rooms over one name needs the SQLite storage,
-or a repository of its own that behaves like it.
+**Storage must refuse a moved append.** Every journal storage takes the
+position its read returned. It appends at the next storage position or
+writes nothing and returns `undefined`. A run fenced while its write waits
+is refused before it acknowledges, so the write it held is no loss. SQLite
+does this in one `INSERT ... RETURNING` statement. Pi sessions use the same
+native storage through their namespaced transcript facade.
 
 **One specification defines each activation.** The room compiles
 `ActivationSpec` from the recorded cause and the assistant designation.

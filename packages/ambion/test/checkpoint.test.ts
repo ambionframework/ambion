@@ -82,7 +82,7 @@ async function open(
 	const opened = await storage.open();
 	const clock = fakeClock();
 	const runtime = createRuntime({
-		sessions: opened.sessions,
+		storage: opened.storage,
 		clock,
 		...(checkpoint === undefined ? {} : { checkpoint }),
 	});
@@ -323,7 +323,7 @@ describe('a checkpoint the room folds', () => {
 	it('refreshes the host projection when compaction keeps the same entry count', async () => {
 		const opened = await memory.open();
 		const clock = fakeClock();
-		const runtime = createRuntime({ sessions: opened.sessions, clock });
+		const runtime = createRuntime({ storage: opened.storage, clock });
 		const session = startSession({ name: roomName('checkpoint-cache'), agents: [], runtime });
 		try {
 			await session.messages();
@@ -357,7 +357,7 @@ describe('a checkpoint the room folds', () => {
 			const at = '2026-01-01T09:00:00.000Z';
 			const heard: { id: string; opens: boolean }[] = [];
 			const journal = new RoomJournal(
-				opened.sessions.open(roomName('checkpoint-first')),
+				opened.journals.open(roomName('checkpoint-first')),
 				(entry) => {
 					if (entry.kind === 'lease')
 						heard.push({ id: entry.body.id, opens: opensOf(journal, entry) });
@@ -424,7 +424,7 @@ describe('a checkpoint past the fence', () => {
 		const opened = await memory.open();
 		try {
 			const name = roomName('checkpoint-fence');
-			const piSession = await opened.sessions.open(name);
+			const storage = await opened.journals.open(name);
 			const at = '2026-01-01T09:00:00.000Z';
 			const composition: Composition = {
 				assistant: 'assistant',
@@ -442,16 +442,20 @@ describe('a checkpoint past the fence', () => {
 			};
 			const checkpoint = (floor: Seq) => ({ v: 2, floor, composition, closes: [], leases: [], at });
 			// The storage holds the journal's own three beside the body.
-			const stored = (type: string, seq: Seq, run: string, body: object) =>
-				piSession.appendCustomEntry(type, { ...body, seq, run });
+			let position = 0;
+			const stored = async (kind: string, seq: Seq, run: string, body: object) => {
+				const landed = await storage.append({ kind, body, seq, run }, position);
+				if (landed === undefined) throw new Error('the raw entry lands');
+				position = landed.position;
+			};
 			// run 'a' wrote a checkpoint, run 'b' took the name, and 'a' wrote one more
-			await stored('ambion/run', 1, 'a', { at });
-			await stored('ambion/composition', 2, 'a', composition);
-			await stored('ambion/checkpoint', 3, 'a', checkpoint(7));
-			await stored('ambion/run', 4, 'b', { at });
-			await stored('ambion/checkpoint', 5, 'a', checkpoint(99));
+			await stored('run', 1, 'a', { at });
+			await stored('composition', 2, 'a', composition);
+			await stored('checkpoint', 3, 'a', checkpoint(7));
+			await stored('run', 4, 'b', { at });
+			await stored('checkpoint', 5, 'a', checkpoint(99));
 
-			const journal = new RoomJournal(opened.sessions.open(name));
+			const journal = new RoomJournal(opened.journals.open(name));
 			await journal.ready;
 			// the reader folds the checkpoint that stood, and never the one past the fence
 			expect(fold(journal).floor).toBe(7);
@@ -474,14 +478,12 @@ describe.each(storages)('a room over a checkpoint on $name', (storage) => {
 			const before = { seats: session.seats(), exchange: session.exchange() };
 			const messages = await session.messages();
 			// the room wrote at least one checkpoint on its own
-			const stored = await storedOf(opened.sessions, name);
-			expect(stored.filter((entry) => entry.type === 'ambion/checkpoint').length).toBeGreaterThan(
-				0,
-			);
+			const stored = await storedOf(opened.journals, name);
+			expect(stored.filter((entry) => entry.kind === 'checkpoint').length).toBeGreaterThan(0);
 
 			crash(runtime, session);
 			const second = createRuntime({
-				sessions: opened.sessions,
+				storage: opened.storage,
 				clock: fakeClock(),
 				checkpoint: { entries: 3 },
 			});

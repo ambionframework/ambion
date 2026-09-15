@@ -33,7 +33,7 @@ live('control', () => {
 				that word alone with one say, and write no essay.
 			`,
 		});
-		const { session, repo, events } = open('abort', { agents: [essayist] });
+		const { session, runtime, events } = open('abort', { agents: [essayist] });
 		const visit = await enter(session, person);
 		const started = new Promise<void>((resolve) => {
 			session.subscribe((e) => {
@@ -63,7 +63,7 @@ live('control', () => {
 		expect(said[0]?.text).toMatch(/ready/i);
 		expect(said[0]?.text.length).toBeLessThan(120);
 		await invariants(session, events);
-		report('abort', await spent(repo, session.name));
+		report('abort', await spent(runtime, session));
 		await stopSession(session);
 	});
 });

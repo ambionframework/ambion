@@ -9,7 +9,7 @@ Read it with [`agent.md`](agent.md) §5, which names the mechanisms, and
 ## 1. The journal is the truth
 
 **One record, one writer, one order.** A room's record is one append-only
-journal in a Pi session. One counter gives out every place: a message takes
+journal in journal storage. One counter gives out every place: a message takes
 the next seq, and so does every entry the room writes beside the messages.
 A seq names one entry of any kind, so the messages are not contiguous. The
 fold reads the journal from the start and rebuilds the room from it. That
@@ -18,8 +18,8 @@ pending and every summary still owed. Nothing the room holds
 in memory outlives what the journal says.
 
 **The envelope is the journal's, and the body is the caller's.** The
-storage holds three fields beside every body: `seq`, the place the entry
-took; `key`, what the commit was named; and `run`, who wrote it. The
+storage holds one nested value with `kind`, `body`, `seq`, `key`, and `run`.
+`seq` is the place the entry took. `key` names the commit. `run` names the writer. The
 journal reads those three, and it reads a body only to ask the room
 whether the body is one the room takes. A reader that wants the place of
 an entry reads it off the entry. One fact stands in one field.
@@ -32,10 +32,9 @@ run lost, become an event and a wake exactly as a message this run
 committed does. The room writes down to the journal and hears back up from it,
 and it holds no second path for the entries it wrote itself.
 
-**Durable means the storage's append resolved.** Pi's in-memory repository
-holds the record for the life of the process. Pi's JSONL repository
-writes every entry to a file and calls no `fsync`. A storage that lies
-about an append breaks every promise below.
+**Durable means the storage's append resolved.** The default memory journal
+holds the record for the process lifetime. SQLite persists the journal. A
+storage that lies about an append breaks every promise below.
 
 **One run per name, fenced by one entry.** `startSession` and
 `resumeSession` refuse a name the runtime already runs. Across runtimes,
@@ -165,25 +164,15 @@ side.
 
 ## 5. What the room does not promise
 
-**The writes a superseded run acknowledged past the fence, on a storage
-that takes any append.** A host is paused with a write in flight, and a
-second host resumes the name. The write lands past the fence, void, and
-the first host acknowledges it. The first host learns at its next write.
-Every write it held between the fence and that write is lost, and
-`split.test.ts` pins that it is that one write and no other.
+**An append that read an old head is not acknowledged.** The journal passes
+each append the position its read left. The entry lands next to that position,
+or storage reports that the head moved and writes nothing. A resumed host can
+move the head while another host holds an append. That append is refused before
+the first host acknowledges it. A client may deliver again under the same key.
 
-A storage that offers `appendAfter` loses none of it. The journal hands that
-append the position its read left: the entry lands next to it, or the
-storage says the record moved and writes nothing. The run is refused
-before it acknowledges, and the refusal is definite — nothing landed, so
-a client may deliver again under the same key. The core's SQLite storage
-offers it; Pi's repositories do not.
-
-**Two live hosts over a JSONL file.** Pi's JSONL storage reads its own
-memory and appends to the file, so a run over it never sees another
-run's entries, and the fence does not reach it. Once a paused run comes
-back, Pi refuses to load the file, and no run can open the name again.
-`split.test.ts` pins it. JSONL is a storage for one host.
+**Two live hosts over storage without conditional append.** Such a host
+cannot use that storage for a room journal. The storage contract refuses a
+host that cannot atomically append at the position it read.
 
 **A storage that tears.** A partial line at the end of a JSONL file, a
 lost `fsync`, or entries the storage reorders are not exercised. The
@@ -222,13 +211,10 @@ moved under, so that write is refused rather than acknowledged.
   resumed run makes.
 - Read `messages()` after a resume for what the stream did not carry.
 
-**A host that may run two runs over one name needs a storage that takes
-the seq per append.** The core's SQLite storage does: it reads the next
-seq from the database as each row lands, and its primary key refuses a
-second entry at one seq, so a writer that raced is refused and reads
-again. Pi's JSONL repository holds the next seq in memory, so two runs
-over one file write the same seq twice and the file no longer reads. The
-fence then has nothing to read, and the record is lost.
+**A host that may run two runs over one name needs conditional append.**
+The core's SQLite storage compares the storage position and writes the next
+row in one statement. A writer that raced is refused and reads again. The
+journal stamps its envelope seq before it appends and caches it after success.
 
 ## 7. How it is proved
 

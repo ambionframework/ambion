@@ -12,7 +12,7 @@
 import type { AgentSeat } from '@ambionframework/ambion';
 import { isSeatedAgent } from '@ambionframework/ambion';
 import type { Env, SeatSpec } from '@ambionframework/cloudflare';
-import { configure, RoomObject, SeatObject, sqlSessions } from '@ambionframework/cloudflare';
+import { configure, RoomObject, SeatObject } from '@ambionframework/cloudflare';
 import { AGENTS, ASSISTANT, AVAILABLE, dan, GOAL, priya, ROOM_NAME, sam } from './room.ts';
 
 /** The definition a seat carries, whether the room's list gave it an attention or not. */
@@ -35,18 +35,13 @@ configure({
  * next call to this name builds the room again over the same storage.
  */
 export class DemoRoom extends RoomObject {
-	async journal(): Promise<{ type: string; data: unknown }[]> {
+	async journal() {
 		// The name the object was started with, and not the one this module
 		// holds: a worker that served a second room would read the wrong journal,
 		// and an id nothing wrote opens as an empty session rather than failing.
-		const name = await this.ctx.storage.get<string>('name');
+		const name = (await this.metadata.read()).name;
 		if (name === undefined) throw new Error('The room is not started.');
-		const piSession = await sqlSessions(this.ctx).open(name);
-		const entries = await piSession.findEntries();
-		entries.sort((a, b) => a.seq - b.seq);
-		return entries.flatMap((entry) =>
-			entry.type === 'custom' ? [{ type: entry.customType, data: entry.data }] : [],
-		);
+		return (await (await this.storage.open(JSON.stringify(['ambion/room', name]))).read(0)).entries;
 	}
 
 	async crash(): Promise<void> {

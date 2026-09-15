@@ -38,7 +38,8 @@ import {
 	stopSession,
 	visitSession,
 } from '@ambionframework/ambion';
-import { type Sql, type SqlValue, sqliteSessions } from '@ambionframework/journal';
+import { namespaced, type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
+import { piSessions } from '@ambionframework/journal/pi';
 import {
 	AGENTS,
 	ASSISTANT,
@@ -117,7 +118,11 @@ const driveBefore = await driveFiles();
  */
 const LEASE = { wake: { expiry: 15_000 }, checkpoint: { entries: 24 } };
 const firstDatabase = openDatabase();
-const first = createRuntime({ sessions: sqliteSessions(nodeSql(firstDatabase)), ...LEASE });
+const firstSql = nodeSql(firstDatabase);
+const first = createRuntime({
+	storage: sqliteJournals(firstSql),
+	...LEASE,
+});
 let session: Session = startSession({
 	name: NAME,
 	goal: GOAL,
@@ -280,8 +285,9 @@ step(
 	'a second process resumes the room over the same journal: the wakes still pending are sent again, the leases the dead run held expire, and the exchange closes',
 );
 const secondDatabase = openDatabase();
+const secondSql = nodeSql(secondDatabase);
 const second = createRuntime({
-	sessions: sqliteSessions(nodeSql(secondDatabase)),
+	storage: sqliteJournals(secondSql),
 	...LEASE,
 });
 session = await resumeSession(NAME, {
@@ -339,7 +345,8 @@ const seatSessions: {
 }[] = [];
 /** The record, read back through a third connection: nothing of the run is in it. */
 const readerDatabase = openDatabase();
-const reader = sqliteSessions(nodeSql(readerDatabase));
+const readerStorage = sqliteJournals(nodeSql(readerDatabase));
+const reader = piSessions(readerStorage);
 for (const seat of seats) {
 	if (seat.kind !== 'agent') continue;
 	const id = seat.sessionId;
@@ -366,14 +373,8 @@ for (const seat of seats) {
 	});
 }
 
-/** The room's own journal: every entry beside the messages, in the order they landed. */
-const roomLog: { type: string; data: unknown }[] = [];
-const piRoom = await reader.open(NAME);
-const roomEntries = await piRoom.findEntries();
-roomEntries.sort((a, b) => a.seq - b.seq);
-for (const entry of roomEntries) {
-	if (entry.type === 'custom') roomLog.push({ type: entry.customType, data: entry.data });
-}
+/** The room's own native journal envelope, in storage order. */
+const roomLog = (await (await namespaced(readerStorage, 'ambion/room').open(NAME)).read(0)).entries;
 
 await stopSession(session);
 clearInterval(alive);

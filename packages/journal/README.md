@@ -1,94 +1,64 @@
-# @ambionframework/record
+# @ambionframework/journal
 
-An append-only record over a [Pi](https://github.com/earendil-works) session:
-one serial queue, fenced by run, checkpointed, and honest about a write it is
-in doubt about.
+`@ambionframework/journal` serializes an append-only record. It owns the
+queue, journal envelope, fencing, checkpoints, idempotency, and conditional
+commits. A caller owns entry kinds and body validation.
 
-The _record_ is what a journal holds, and `Journal` is the structure that
-holds it. It knows no room, no seat and no agent.
-
-## Install
-
-```sh
-pnpm add @ambionframework/record
-```
-
-## The envelope
-
-Every entry shares one envelope. `kind` is what the writer called it, and
-`body` is what the writer wrote — the journal never reads a body. Exactly one
-position: `seq` for an entry that took a place on the record, `after` for one
-that sits beside them.
+The main package has no Pi dependency. It stores JSON data through a narrow
+storage contract:
 
 ```ts
-interface Entry<TBody> {
-  kind: string;
-  body: TBody;
-  seq?: number;
-  key?: string;
-  after?: number;
-  run?: string;
+interface JournalStorage {
+  read(after: number): Promise<{
+    entries: readonly { position: number; entry: unknown }[];
+    position: number;
+  }>;
+  append(
+    entry: unknown,
+    expectedPosition: number,
+  ): Promise<{ position: number; entry: unknown } | undefined>;
 }
 ```
 
-The journal holds every entry to that envelope, and it is strict: a kind this
-reader does not know, a body the caller turns down, or a position of the wrong
-sort is no entry at all.
+`append` must atomically compare `expectedPosition` and append at the next
+position. It returns `undefined` when the position moved. A read returns the
+last scanned position. Adapters advance that position across foreign entries.
 
-## The vocabulary
-
-A caller names its own kinds, and the journal reads none of them.
+Journal storage positions order stored bytes. `seq` orders accepted journal
+entries. The journal writes each stored value as a nested envelope:
 
 ```ts
-import { Journal, type Vocabulary } from '@ambionframework/record';
-
-const words: Vocabulary<'note' | 'mark' | 'run' | 'checkpoint'> = {
-  stored: (kind) => `app/${kind}`,
-  kindOf: (customType) => customType.slice('app/'.length),
-  positioned: 'note',
-  run: 'run',
-  checkpoint: 'checkpoint',
-  accepts: (kind, body) => kind !== 'checkpoint' || isCheckpoint(body),
-};
-
-const journal = new Journal(open, words, (entry) => react(entry), runId, lost);
-await journal.commit({ key, readThrough, draft: () => ({ text: 'hello' }) });
+{ kind, body, seq, key?, run? }
 ```
 
-## What it promises
+The nested body keeps JSON fields named `seq`, `key`, and `run` unchanged.
+All journal payloads must be JSON data. Functions, resources, and cyclic
+objects are not journal payloads.
 
-**A key lands once.** A repeated key returns the entry the first commit landed
-and writes nothing, so a caller retries a commit whose outcome it never
-learned.
+```ts
+import { Journal, memoryJournals, type Vocabulary } from '@ambionframework/journal';
 
-**A commit the record moved past is refused.** `readThrough` names the seq the
-author read. The queue refuses the commit and hands back what the author
-missed.
+const words: Vocabulary<'note' | 'run' | 'checkpoint'> = {
+  record: 'note',
+  run: 'run',
+  checkpoint: 'checkpoint',
+  accepts: (kind, body): kind is 'note' | 'run' | 'checkpoint' =>
+    (kind === 'note' || kind === 'run' || kind === 'checkpoint') &&
+    typeof body === 'object' &&
+    body !== null,
+};
 
-**One run per name, fenced by its run entry.** Every entry a run writes carries
-its run id. The fence is positional: a run entry moves it to that run, and an
-entry of another run past it is void. A run that passes its own entry and then
-one of another run has lost the name.
+const journals = memoryJournals();
+const journal = new Journal(journals.open('weekly'), words);
+await journal.commit({ key: 'first', draft: { text: 'Hello.' } });
+```
 
-**A checkpoint replaces every entry before it**, and never a positioned one.
+`sqliteJournals(sql)` provides SQLite storage with native compare-and-append.
+`memoryJournals()` provides independent in-memory journals for one process.
 
-**A write in doubt is settled before anything lands on top of it.** The journal
-reads the storage before every write, and again on the queue behind a write
-that failed.
+The optional `@ambionframework/journal/pi` subpath opens Pi transcript
+sessions over named native journal storage. `piSessions(journals)` gives Pi
+each session a separate name in the same backend. The runtime uses this view
+for seat audits. Workspace files use their separate workspace backend.
 
-## The storage
-
-`sqliteSessions` holds any number of Pi sessions in one SQLite database,
-through two calls a host wraps its driver in. A process over `node:sqlite` and
-a Cloudflare Durable Object over its own storage both reach it the same way.
-
-## The contract
-
-[`docs/durability.md`](https://github.com/ambionframework/ambion/blob/main/docs/durability.md)
-states what the record promises under failure, and how the tiers prove it.
-`rules.verified.ts` holds the rules the journal writes by, with contracts Dafny
-checks.
-
-## License
-
-Apache-2.0
+See `docs/durability.md` for the failure contract.

@@ -2,7 +2,7 @@
 	"name": "@ambionframework/journal",
 	"version": "0.0.0",
 	"type": "module",
-	"description": "An append-only journal over a Pi session: one serial queue, fenced by run, checkpointed, and honest about a write it is in doubt about.",
+	"description": "An append-only journal with ordered storage, conditional append, fencing, checkpoints, and honest lost-write recovery.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {
@@ -22,6 +22,10 @@
 		".": {
 			"types": "./dist/index.d.mts",
 			"import": "./dist/index.mjs"
+		},
+		"./pi": {
+			"types": "./dist/pi.d.mts",
+			"import": "./dist/pi.mjs"
 		},
 		"./package.json": "./package.json"
 	},
@@ -44,12 +48,18 @@
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},
+	"peerDependencies": {
+		"@earendil-works/pi-agent-core": "^0.84.3"
+	},
+	"peerDependenciesMeta": {
+		"@earendil-works/pi-agent-core": {
+			"optional": true
+		}
+	},
 	"devDependencies": {
+		"@earendil-works/pi-agent-core": "^0.84.3",
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2",
 		"vitest": "^4.1.11"
-	},
-	"dependencies": {
-		"@earendil-works/pi-agent-core": "^0.84.3"
 	}
 }

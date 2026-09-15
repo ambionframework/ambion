@@ -103,7 +103,7 @@ export async function finish(
 	events: ReturnType<typeof collect>,
 	runtime: Runtime,
 ): Promise<void> {
-	await invariants(session, events, { sessions: runtime.sessions });
+	await invariants(session, events, { journals: runtime.journals });
 	await stopSession(session);
 }
 
@@ -222,7 +222,7 @@ export async function runScenario(
 	// Every request and response between a seat and the room crosses as JSON.
 	const transport = serializing(inProcessTransport());
 	try {
-		const runtime = createRuntime({ sessions: opened.sessions, clock: fakeClock(), transport });
+		const runtime = createRuntime({ storage: opened.storage, clock: fakeClock(), transport });
 		await scenario.run({ runtime, name: roomName(prefix) });
 		expect(transport.violations).toEqual([]);
 	} finally {

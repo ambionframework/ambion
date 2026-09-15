@@ -89,7 +89,7 @@ describe('a split: two live hosts over one journal', () => {
 		const clock = fakeClock();
 		const host = () =>
 			createRuntime({
-				sessions: opened.sessions,
+				storage: opened.storage,
 				clock,
 				transport: serializing(inProcessTransport()),
 			});

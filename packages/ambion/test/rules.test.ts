@@ -1,4 +1,4 @@
-import type { Entry } from '@ambionframework/journal';
+import type { JournalEntry as Entry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { cameToNothing, foldLeases, pendingWakes } from '../src/room/lease.ts';
 import type { Message } from '../src/types.ts';

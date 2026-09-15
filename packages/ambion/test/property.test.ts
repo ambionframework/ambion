@@ -37,7 +37,7 @@ import {
 	toolNames,
 	toolResultTexts,
 } from './support/scripted.ts';
-import { type FailMode, memory, tappedOpener } from './support/storage.ts';
+import { type FailMode, memory, tappedJournals } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
 /** A small, fast, seedable generator: the walk is the same for the same seed. */
@@ -138,16 +138,19 @@ class Walk {
 	crashes = 0;
 	/** The one write the storage fails next, and how. */
 	private disk: FailMode = false;
-	private readonly sessions: Awaited<ReturnType<typeof memory.open>>['sessions'];
+	private readonly storage: Awaited<ReturnType<typeof memory.open>>['storage'];
+	private readonly journals: Awaited<ReturnType<typeof memory.open>>['journals'];
 	private lastKey: string | undefined;
 	private deliveries = 0;
 
 	constructor(
 		readonly name: string,
 		private readonly random: () => number,
-		sessions: Awaited<ReturnType<typeof memory.open>>['sessions'],
+		storage: Awaited<ReturnType<typeof memory.open>>['storage'],
+		journals: Awaited<ReturnType<typeof memory.open>>['journals'],
 	) {
-		this.sessions = tappedOpener(sessions, (id, _n, phase) => {
+		this.journals = journals;
+		this.storage = tappedJournals(storage, (id, _n, phase) => {
 			if (id !== name || this.disk !== phase) return;
 			this.disk = false;
 			throw new Error('the disk is full');
@@ -160,7 +163,7 @@ class Walk {
 
 	private host(): Runtime {
 		return createRuntime({
-			sessions: this.sessions,
+			storage: this.storage,
 			clock: this.clock,
 			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
 		});
@@ -253,7 +256,7 @@ class Walk {
 		this.crashes += 1;
 		this.runtime.evict(this.name);
 		this.visits.clear();
-		const activations = await liveLeases(this.sessions, this.name, this.clock.now());
+		const activations = await liveLeases(this.journals, this.name, this.clock.now());
 		// A resume writes the fence first, and a host tries again when the storage fails it.
 		for (let attempt = 0; ; attempt += 1) {
 			this.runtime = this.host();
@@ -307,14 +310,19 @@ describe('the room under a random walk', () => {
 		'keeps its shape on seed %i',
 		async (seed) => {
 			const opened = await memory.open();
-			const walk = new Walk(roomName(`property-${seed}`), mulberry32(seed), opened.sessions);
+			const walk = new Walk(
+				roomName(`property-${seed}`),
+				mulberry32(seed),
+				opened.storage,
+				opened.journals,
+			);
 			try {
 				await walk.start();
 				for (let i = 0; i < 20; i += 1) await walk.step(walk.pick(STEPS));
 				await walk.drain();
 				await invariants(walk.session, walk.events, {
 					allowErrors: 100,
-					sessions: opened.sessions,
+					journals: opened.journals,
 					inherited: walk.inherited.activations,
 					inheritedExchange: walk.inherited.exchange,
 				});
@@ -331,9 +339,9 @@ describe('the room under a random walk', () => {
 					.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence]);
 				walk.journal.push(`seats: ${JSON.stringify(seats)}`);
 				walk.journal.push(`events: ${walk.events.map(brief).join(' ')}`);
-				const stored = await storedOf(opened.sessions, walk.name);
+				const stored = await storedOf(opened.journals, walk.name);
 				walk.journal.push(
-					`entries:\n  ${stored.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`).join('\n  ')}`,
+					`entries:\n  ${stored.map((r) => `${r.kind.slice(7)} ${JSON.stringify(r.body)}`).join('\n  ')}`,
 				);
 				throw new Error(`seed ${seed} failed after:\n${walk.journal.join('\n')}\n\n${detail}`, {
 					cause: error,

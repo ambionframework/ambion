@@ -28,7 +28,7 @@ import {
 	toolNames,
 	toolResultTexts,
 } from './support/scripted.ts';
-import { faultyOpener, memory, tappedOpener } from './support/storage.ts';
+import { faultyJournals, memory, tappedJournals } from './support/storage.ts';
 
 const assistant = defineAgent({
 	name: 'assistant',
@@ -58,9 +58,9 @@ const count = (events: SessionEvent[], type: SessionEvent['type']) =>
 /** A room over a storage that fails on request, with the events it emits. */
 async function room(name: string) {
 	const opened = await memory.open();
-	const faulty = faultyOpener(opened.sessions);
+	const faulty = faultyJournals(opened.storage);
 	const clock = fakeClock();
-	const runtime = createRuntime({ clock, sessions: faulty.sessions });
+	const runtime = createRuntime({ clock, storage: faulty.journals });
 	const session = startSession({
 		name: roomName(name),
 		runtime,
@@ -89,7 +89,7 @@ describe('a room in doubt', () => {
 						name: room.name,
 						stream: room.stream,
 						model: room.model,
-						sessions: room.sessions,
+						transcripts: room.transcripts,
 						definition: (seat) => room.definition(seat),
 						emit: (event) => room.emit(event),
 						evict: () => room.evict(),
@@ -113,11 +113,7 @@ describe('a room in doubt', () => {
 		};
 		const session = startSession({
 			name: roomName('doubt-summary'),
-			runtime: createRuntime({
-				clock,
-				sessions: opened.sessions,
-				transport,
-			}),
+			runtime: createRuntime({ clock, storage: opened.storage, transport }),
 			assistant,
 			agents: [alpha],
 			streamFn: scripted(
@@ -145,7 +141,7 @@ describe('a room in doubt', () => {
 		const { faulty, session, events } = await room('doubt-delivery');
 		const visit = await visitSession(session, priya);
 		await session.settled();
-		faulty.fail('after', 'ambion/message');
+		faulty.fail('after', 'message');
 		await expect(visit.deliver({ text: 'First?', key: 'q1' })).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		await session.quiet();
@@ -161,14 +157,14 @@ describe('a room in doubt', () => {
 	it('opens the next exchange when the close it found had a question queued ahead of it', async () => {
 		const opened = await memory.open();
 		let failNextClose = false;
-		const sessions = tappedOpener(opened.sessions, (_id, _n, phase, customType) => {
-			if (failNextClose && phase === 'after' && customType === 'ambion/close') {
+		const journals = tappedJournals(opened.storage, (_id, _n, phase, customType) => {
+			if (failNextClose && phase === 'after' && customType === 'close') {
 				failNextClose = false;
 				throw new Error('the disk is full');
 			}
 		});
 		const clock = fakeClock();
-		const runtime = createRuntime({ clock, sessions });
+		const runtime = createRuntime({ clock, storage: journals });
 		const session = startSession({
 			name: roomName('doubt-close'),
 			runtime,
@@ -198,8 +194,8 @@ describe('a room in doubt', () => {
 		await delivered;
 		for (let i = 0; i < 4; i += 1) await clock.advance(61_000);
 		await session.quiet();
-		const stored = await storedOf(opened.sessions, session.name);
-		expect(stored.filter((r) => r.type === 'ambion/close')).toHaveLength(2);
+		const stored = await storedOf(opened.journals, session.name);
+		expect(stored.filter((r) => r.kind === 'close')).toHaveLength(2);
 		expect(count(events, 'exchange_opened')).toBe(2);
 		expect(count(events, 'exchange_closed')).toBe(2);
 	});
@@ -208,7 +204,7 @@ describe('a room in doubt', () => {
 		const { faulty, session } = await room('doubt-read');
 		const visit = await visitSession(session, priya);
 		await session.settled();
-		faulty.fail('after', 'ambion/message');
+		faulty.fail('after', 'message');
 		const delivery = visit.deliver({ text: 'First?', key: 'q1' });
 		const read = session.messages();
 		await expect(delivery).rejects.toThrow(/disk is full/);
@@ -219,7 +215,7 @@ describe('a room in doubt', () => {
 	it('writes one arrival for a visit retried after its arrival lost its confirmation', async () => {
 		const { faulty, session } = await room('doubt-visit');
 		await session.messages();
-		faulty.fail('after', 'ambion/message');
+		faulty.fail('after', 'message');
 		const first = visitSession(session, priya);
 		const second = first.catch(() => visitSession(session, priya));
 		await expect(first).rejects.toThrow(/disk is full/);

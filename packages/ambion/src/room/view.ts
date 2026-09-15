@@ -12,7 +12,7 @@ import {
 	renderTurnContext,
 	type SeatSpeaking,
 } from '../render.ts';
-import type { AgentDefinition, SeatInfo, Seq } from '../types.ts';
+import { type AgentDefinition, type SeatInfo, type Seq, seatSessionId } from '../types.ts';
 import type { ActivationSpec, ActivationView } from '../wire.ts';
 import type { RoomState } from './fold.ts';
 
@@ -36,7 +36,7 @@ export function seatsOf(facts: Pick<RoomFacts, 'name' | 'state' | 'live'>): Seat
 		status: facts.live.has(seat.name) ? ('active' as const) : ('idle' as const),
 		attention: seat.attention,
 		assistant: seat.name === facts.state.composition?.assistant,
-		sessionId: `${facts.name}:${seat.name}`,
+		sessionId: seatSessionId(facts.name, seat.name),
 	}));
 	for (const person of facts.state.people.values()) {
 		seats.push({

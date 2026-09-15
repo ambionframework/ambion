@@ -119,10 +119,11 @@ stays intact; only its rendered views compact. See
 
 ### 8. Boundaries are small and serializable
 
-The core depends on narrow host interfaces: `Clock`, `SessionOpener`,
-`ModelResolver`, `Transport`, and `WorkspaceBackend`. They isolate time,
-persistence, model resolution, seat execution, and workspace storage from
-room semantics.
+The core depends on narrow host interfaces: `Clock`, `JournalOpener`,
+`ModelResolver`, `Transport`, and `WorkspaceBackend`. One `JournalOpener`
+persists room facts and Pi transcripts through separate names. Together they
+isolate time, persistence, model resolution, seat execution, and workspace
+storage from room semantics.
 
 [`wire.ts`](packages/ambion/src/wire.ts) restricts room/seat traffic to plain
 JSON values and five operations: `wake`, `cut`, `view`, `commit`, and `lease`.

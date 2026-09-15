@@ -4,8 +4,9 @@
  */
 import { env, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
+import { namespaced } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
-import { sqlSessions } from '../src/storage.ts';
+import { sqlStorage } from '../src/storage.ts';
 import { until } from './until.ts';
 
 it('starts, admits a person, and lands one message for two deliveries under one key', async () => {
@@ -61,17 +62,18 @@ it('resumes over its own storage after an abort, and fences the run before it', 
 
 	const runs = await until(async () =>
 		runInDurableObject(again, async (_instance, state) => {
-			const piSession = await sqlSessions(state).open('room-fence');
-			const stored = await piSession.findEntries({ customType: 'ambion/run' });
-			return stored.length > 1 ? stored : undefined;
+			const journal = await namespaced(sqlStorage(state), 'ambion/room').open('room-fence');
+			const stored = (await journal.read(0)).entries.map(
+				(entry) => entry.entry as { kind: string; run?: string },
+			);
+			const runs = stored.filter((entry) => entry.kind === 'run');
+			return runs.length > 1 ? runs : undefined;
 		}),
 	);
 	// two runs, each with a name of its own: the second run's fence stands,
 	// and an entry the first run writes past it is void for every reader
 	// The journal stamps the run beside every body, and a run entry is where the fence reads it.
-	const ids = (runs ?? []).map((entry) =>
-		entry.type === 'custom' ? ((entry.data as { run?: string }).run ?? '') : '',
-	);
+	const ids = (runs ?? []).map((entry) => entry.run ?? '');
 	expect(ids).toHaveLength(2);
 	expect(new Set(ids).size).toBe(2);
 	// the record holds both deliveries: the resume lost nothing

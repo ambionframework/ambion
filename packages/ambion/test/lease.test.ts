@@ -45,7 +45,7 @@ import {
 	summarise,
 	toolNames,
 } from './support/scripted.ts';
-import { gatedOpener, memory } from './support/storage.ts';
+import { gatedJournals, memory } from './support/storage.ts';
 import { type Fault, faultyTransport } from './support/transport.ts';
 
 const solo = defineAgent({
@@ -194,10 +194,10 @@ describe('a lease', () => {
 			true,
 		);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
-		const stored = await storedOf(runtime.sessions, session.name);
+		const stored = await storedOf(runtime.journals, session.name);
 		const renewals = stored.flatMap((entry) => {
-			const lease = entry.data as LeaseChange;
-			const mine = entry.type === 'ambion/lease' && parseId(lease.id)?.seat === 'solo';
+			const lease = entry.body as LeaseChange;
+			const mine = entry.kind === 'lease' && parseId(lease.id)?.seat === 'solo';
 			return mine && lease.phase === 'running' ? [lease.expiresAt] : [];
 		});
 		// the room wrote a claim and renewals, and no change takes the lease past the deadline
@@ -231,14 +231,12 @@ describe('a lease', () => {
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
 			{ type: 'abandoned', agent: 'solo', activation: 'message:4:solo:4' },
 		]);
-		const stored = await storedOf(runtime.sessions, session.name);
+		const stored = await storedOf(runtime.journals, session.name);
 		const gaveUp = stored.filter((entry) => {
-			const lease = entry.data as LeaseChange;
-			return (
-				entry.type === 'ambion/lease' && lease.phase === 'ended' && lease.reason === 'abandoned'
-			);
+			const lease = entry.body as LeaseChange;
+			return entry.kind === 'lease' && lease.phase === 'ended' && lease.reason === 'abandoned';
 		});
-		expect(gaveUp.map((entry) => (entry.data as LeaseChange).id)).toEqual(['message:4:solo:4']);
+		expect(gaveUp.map((entry) => (entry.body as LeaseChange).id)).toEqual(['message:4:solo:4']);
 
 		// the wake is answered, so the exchange closes and the seat stands idle
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
@@ -280,11 +278,11 @@ describe('a lease', () => {
 		const givenUp = (abandoned[0] as { agent: string; activation: string }).activation;
 		expect(abandoned[0]).toMatchObject({ agent: 'assistant' });
 		expect(parseId(givenUp)).toMatchObject({ cause: 'closed', seat: 'assistant', attempt: 4 });
-		const stored = await storedOf(runtime.sessions, session.name);
+		const stored = await storedOf(runtime.journals, session.name);
 		expect(
 			stored
-				.filter((entry) => (entry.data as LeaseChange).id === givenUp)
-				.map((entry) => entry.data),
+				.filter((entry) => (entry.body as LeaseChange).id === givenUp)
+				.map((entry) => entry.body),
 		).toMatchObject([{ phase: 'ended', reason: 'abandoned' }]);
 		// nothing is owed, no summary was written, and the record stands whole
 		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
@@ -393,13 +391,9 @@ describe('a lease judged where its change is written', () => {
 		const gate = deferred();
 		let runningRows = 0;
 		// the claim lands at once; the first renewal is held on the storage
-		const sessions = gatedOpener(base.sessions, (type, data) => {
-			const entry = data as LeaseChange;
-			if (
-				type !== 'ambion/lease' ||
-				entry.phase !== 'running' ||
-				parseId(entry.id)?.seat !== 'solo'
-			) {
+		const journals = gatedJournals(base.storage, (type, data) => {
+			const entry = (data as { body: LeaseChange }).body;
+			if (type !== 'lease' || entry.phase !== 'running' || parseId(entry.id)?.seat !== 'solo') {
 				return undefined;
 			}
 			runningRows += 1;
@@ -410,7 +404,7 @@ describe('a lease judged where its change is written', () => {
 			name: roomName('lease-renewal'),
 			assistant,
 			agents: [solo],
-			runtime: createRuntime({ clock, sessions }),
+			runtime: createRuntime({ clock, storage: journals }),
 			streamFn: scripted(async (_c, _a, call) => {
 				if (call !== 1) return quiet();
 				await held.promise;
@@ -439,9 +433,9 @@ describe('a lease judged where its change is written', () => {
 			'andrei',
 			'solo',
 		]);
-		const stored = (await storedOf(base.sessions, session.name))
-			.filter((r) => r.type === 'ambion/lease')
-			.map((r) => r.data as LeaseChange)
+		const stored = (await storedOf(base.journals, session.name))
+			.filter((r) => r.kind === 'lease')
+			.map((r) => r.body as LeaseChange)
 			.filter((l) => parseId(l.id)?.seat === 'solo');
 		// the claim, the renewal, the check at the run's end, and one release: no expiry
 		expect(stored.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual(['released']);
@@ -453,7 +447,7 @@ describe('a lease judged where its change is written', () => {
 		// the view of the second attempt at the draft is delayed on the wire
 		const runtime = createRuntime({
 			clock,
-			sessions: opened.sessions,
+			storage: opened.storage,
 			transport: faultyTransport(
 				inProcessTransport(),
 				[

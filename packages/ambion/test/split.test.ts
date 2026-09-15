@@ -2,21 +2,20 @@
  * The split the design forbids, as a history: two live hosts over one
  * journal. The first host is paused, in this process by holding its writes
  * and in a process of its own with SIGSTOP, a second host resumes the
- * name, and the first comes back and keeps writing. In memory, the fence
- * holds: the first host's write past the fence is void, it acknowledges
- * that one write and no other, and it is superseded at its next write.
- * On JSONL, Pi refuses to load the file afterwards, so no run can open
- * the name again: the fence needs a storage whose reads see another
- * run's writes, and Pi's JSONL storage reads its own memory.
+ * name, and the first comes back and keeps writing. Conditional appends
+ * refuse the first host's held write when the second host takes the name.
+ * A child that uses JSONL for its transcripts keeps the record in the
+ * durable journal. A second host can resume the name while the child is
+ * stopped, and the child cannot corrupt the record when it continues.
  */
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { JournalEntry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { runningRoom } from '../src/host/runtime.ts';
-import type { Seq } from '../src/index.ts';
 import {
 	createRuntime,
 	resumeSession,
@@ -25,7 +24,7 @@ import {
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
-import type { Entry } from '../src/journal/journal.ts';
+import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import {
@@ -44,36 +43,33 @@ import { type FakeClock, fakeClock } from './support/clock.ts';
 import { History, standing, violations } from './support/history.ts';
 import { collect, roomName, storedOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { gatedOpener, jsonlSessions, memory, sqlite } from './support/storage.ts';
+import { childJournals, childStorage, gatedJournals, memory, sqlite } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
 
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
-/** What the storage holds beside a body: the journal's own three. */
-type Stored = Record<string, unknown> & { seq: Seq; key?: string };
-
 /**
  * The stored entries as the fold reads them: the ones that stand past every
  * fence. The storage holds the journal's own three beside the body, so this
- * splits them off the way the journal does. A body handed over whole folds
- * with no place at all, and every check over the fold goes quiet.
+ * keeps only the room's record kinds. The native envelope already keeps the
+ * body nested beside its seq, key, and run.
  */
-function entriesOf(stored: { type: string; data: unknown }[]): Entry[] {
-	return standing(stored).flatMap((entry) => {
-		const kind = entry.type.slice('ambion/'.length);
-		if (kind !== 'message' && kind !== 'lease' && kind !== 'close' && kind !== 'composition') {
+function entriesOf(stored: readonly JournalEntry[]): RoomEntry[] {
+	return standing(stored).flatMap((entry): RoomEntry[] => {
+		if (
+			entry.kind !== 'message' &&
+			entry.kind !== 'lease' &&
+			entry.kind !== 'close' &&
+			entry.kind !== 'composition'
+		) {
 			return [];
 		}
-		const { seq, key, run: _run, ...body } = entry.data as Stored;
-		return [{ kind, body, seq, ...(key === undefined ? {} : { key }) } as Entry];
+		return [entry as RoomEntry];
 	});
 }
 
-// A storage that refuses an append the record moved under loses nothing:
-// the write the paused host held is refused before it is acknowledged.
 describe.each([memory, sqlite])('a split on $name: two live hosts over one journal', (storage) => {
-	const refuses = storage.name === 'sqlite';
-	it('a paused host that comes back is fenced out, and loses only what the storage lets it', async () => {
+	it('a paused host that comes back is fenced out before its held write lands', async () => {
 		const opened = await storage.open();
 		const clock = fakeClock();
 		const history = new History(clock);
@@ -81,12 +77,12 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		let gate: Promise<void> | undefined;
 		let release = () => {};
 		const first = createRuntime({
-			sessions: gatedOpener(opened.sessions, () => gate),
+			storage: gatedJournals(opened.storage, () => gate),
 			clock,
 			transport: serializing(inProcessTransport()),
 		});
 		const second = createRuntime({
-			sessions: opened.sessions,
+			storage: opened.storage,
 			clock,
 			transport: serializing(inProcessTransport()),
 		});
@@ -118,8 +114,8 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		const his = await visitSession(taken, sam);
 		await history.run('sam', 'deliver', 'q3', () => his.deliver({ text: 'Third?', key: 'q3' }));
 		await taken.quiet();
-		// the first host comes back: its held write lands past the fence, void, and it
-		// acknowledges it; its next write finds the fence and it is superseded
+		// The first host comes back. Its held write sees the newer storage position,
+		// so it is refused before the host acknowledges it.
 		release();
 		await held;
 		await history.run('priya', 'deliver', 'q4', () => hers.deliver({ text: 'Fourth?', key: 'q4' }));
@@ -132,7 +128,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			(record) => record.map((m) => ({ seq: m.seq, key: m.key })),
 		);
 		try {
-			const stored = await storedOf(opened.sessions, name);
+			const stored = await storedOf(opened.journals, name);
 			const folded = foldRoom(entriesOf(stored), RETRY);
 			// The fold read the record. A fold that reads no place answers every
 			// check below with nothing, and the checks say the room is whole.
@@ -143,25 +139,13 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 				stored,
 				state: folded,
 			});
-			// On a storage that takes any append, the fence allows one loss: the write
-			// the first host acknowledged past the fence is off the record, and off
-			// every read after it. On one that refuses an append the record moved
-			// under, the write is refused before it is acknowledged, and nothing is lost.
-			expect(found).toEqual(
-				refuses
-					? []
-					: [
-							'delivery q2 acknowledged, on the record 0 times',
-							'read #9 by sam lacks delivery q2, acknowledged before it was asked',
-						],
-			);
+			expect(found).toEqual([]);
 			expect(history.entries.find((e) => e.key === 'q2' && e.phase !== 'invoke')).toMatchObject({
-				phase: refuses ? 'fail' : 'ok',
+				phase: 'fail',
 			});
 			expect(events.some((e) => e.type === 'superseded')).toBe(true);
 			expect(history.entries.find((e) => e.key === 'q4' && e.phase !== 'invoke')).toMatchObject({
 				phase: 'fail',
-				error: expect.stringMatching(/superseded/),
 			});
 			expect(runningRoom(first, name)).toBeUndefined();
 		} finally {
@@ -171,7 +155,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 	});
 });
 
-describe('a split: two live hosts over one JSONL file', () => {
+describe('a split: two live hosts over one SQLite database', () => {
 	const child = fileURLToPath(new URL('./support/child.ts', import.meta.url));
 
 	/** Every `write N` line the child prints, as it prints it. */
@@ -225,15 +209,15 @@ describe('a split: two live hosts over one JSONL file', () => {
 		throw new Error('the room never went quiet');
 	}
 
-	it('a process stopped mid-activation and continued after a takeover leaves a file no run can open', async () => {
+	it('a process stopped mid-activation keeps a readable journal after a takeover', async () => {
 		const dir = await mkdtemp(join(tmpdir(), 'ambion-split-'));
 		const name = 'split';
 		const paused = stopAt(dir, name, 6);
 		try {
 			await paused.stopped;
-			const sessions = jsonlSessions(dir);
+			const journals = childJournals('sqlite', dir);
 			const clock = fakeClock(Date.now());
-			const runtime = createRuntime({ sessions, clock, ...TIMING });
+			const runtime = createRuntime({ storage: childStorage('sqlite', dir), clock, ...TIMING });
 			const session = await resumeSession(name, { runtime, agents, streamFn: scripted(script) });
 			await quietNow(session, clock);
 			const [, second] = questions;
@@ -241,13 +225,15 @@ describe('a split: two live hosts over one JSONL file', () => {
 			const his = await visitSession(session, sam);
 			await his.deliver({ text: second.text, key: second.key });
 			await quietNow(session, clock);
-			// the stopped process continues where it stood, and its writes land beside the
-			// second host's: Pi's JSONL storage refuses the file from then on, so no run can
-			// ever open the name again
+			const before = await storedOf(journals, name);
+			// The stopped process continues where it stood. Its stale room writes
+			// are refused, and the durable journal remains readable.
 			paused.continue();
 			await Promise.race([paused.exited, new Promise((resolve) => setTimeout(resolve, 3_000))]);
 			paused.kill();
-			await expect(storedOf(jsonlSessions(dir), name)).rejects.toThrow(/non-consecutive seq/);
+			const after = await storedOf(childJournals('sqlite', dir), name);
+			expect(after).toEqual(before);
+			expect(after).toContainEqual(expect.objectContaining({ kind: 'message', key: second.key }));
 			await stopSession(session);
 		} finally {
 			paused.kill();

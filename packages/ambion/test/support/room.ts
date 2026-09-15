@@ -1,4 +1,4 @@
-import type { Session as PiSession } from '@earendil-works/pi-agent-core';
+import type { JournalEntry, JournalOpener } from '@ambionframework/journal';
 import {
 	defineAgent,
 	defineHuman,
@@ -6,7 +6,6 @@ import {
 	type Runtime,
 	type Session,
 	type SessionEvent,
-	type SessionOpener,
 	visitSession,
 } from '../../src/index.ts';
 
@@ -61,17 +60,13 @@ export function crash(runtime: Runtime, session: Session): void {
 	runtime.evict(session.name);
 }
 
-/** Every entry the room wrote beside its messages, as the storage holds it. */
+/** Every native entry the room wrote, in its storage order. */
 export async function storedOf(
-	sessions: SessionOpener,
+	journals: JournalOpener,
 	name: string,
-): Promise<{ type: string; data: unknown }[]> {
-	const piSession: PiSession = await sessions.open(name);
-	const entries = await piSession.findEntries();
-	entries.sort((a, b) => a.seq - b.seq);
-	return entries.flatMap((entry) =>
-		entry.type === 'custom' ? [{ type: entry.customType, data: entry.data }] : [],
-	);
+): Promise<readonly JournalEntry[]> {
+	const storage = await journals.open(name);
+	return (await storage.read(0)).entries.map((entry) => entry.entry as JournalEntry);
 }
 
 /**

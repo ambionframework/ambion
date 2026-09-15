@@ -95,7 +95,7 @@ export interface StartSessionOptions {
   /** What the room is for. One or two sentences, read by every agent. */
   goal?: string;
   streamFn?: StreamFn;
-  repo?: SessionRepo;
+  runtime?: Runtime;
 }
 ```
 
@@ -392,10 +392,9 @@ Three things follow from the anchor being a message on the record.
 of thing in one sequence on one commit path. No message lands between a
 person leaving and a mark being written, because there is no second write.
 
-**Durability is free.** The record persists through Pi's `SessionRepo` and
-`RoomJournal` replays it. Nothing extra is stored, so nothing extra is lost,
-and a durable `SessionRepo` — Pi's `JsonlSessionRepo`, or another — carries
-presence with it.
+**Durability is free.** The record persists through the runtime's native
+journal storage and `RoomJournal` replays it. Nothing extra is stored, so
+nothing extra is lost. A durable `JournalOpener` carries presence with it.
 
 **What you missed includes who was here.** Arrivals and departures come
 back interleaved with what was said, because they are the same record. A

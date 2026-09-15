@@ -1,5 +1,5 @@
 /**
- * An append-only journal over a Pi session.
+ * An append-only journal over ordered conditional storage.
  *
  * One serial queue, fenced by run, checkpointed, and honest about a write
  * it is in doubt about. The *journal* is the structure; the *record* is
@@ -30,14 +30,22 @@ export type {
 	CommitIntent,
 	Committed,
 	Entries,
-	Entry,
-	FencedSession,
+	Entry as JournalEntry,
 	Seq,
 	Vocabulary,
 } from './journal.ts';
 export { Journal } from './journal.ts';
-export type { SessionOpener, Sql, SqlValue } from './sqlite.ts';
-export { SqliteSessionStorage, sqliteSessions } from './sqlite.ts';
+export { memoryJournals } from './memory.ts';
+export type { Sql, SqlValue } from './sqlite.ts';
+export { sqliteJournals } from './sqlite.ts';
+export type {
+	JournalOpener,
+	JournalRead,
+	JournalStorage,
+	StoragePosition,
+	StoredEntry,
+} from './storage.ts';
+export { namespaced } from './storage.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/journal';

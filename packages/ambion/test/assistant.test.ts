@@ -1,4 +1,3 @@
-import type { SessionRepo } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,7 +9,6 @@ import {
 	defineTool,
 	defineWorkspace,
 	destroyWorkspace,
-	InMemorySessionRepo,
 	isSpoken,
 	type Message,
 	passive,
@@ -44,7 +42,7 @@ import {
 	summarise,
 	toolNames,
 } from './support/scripted.ts';
-import { gatedOpener, memory } from './support/storage.ts';
+import { gatedJournals, memory } from './support/storage.ts';
 import { fakeBackend } from './support/workspace.ts';
 
 /** The ordinary assistant: it writes once, then ends its activation. */
@@ -117,7 +115,6 @@ function open(options: {
 	agents?: Parameters<typeof startSession>[0]['agents'];
 	available?: Parameters<typeof startSession>[0]['available'];
 	assistant?: Parameters<typeof startSession>[0]['assistant'];
-	repo?: SessionRepo;
 	runtime?: Runtime;
 }): Session {
 	const session = startSession({
@@ -127,7 +124,6 @@ function open(options: {
 		agents: options.agents ?? [product],
 		...(options.available ? { available: options.available } : {}),
 		streamFn: scripted(options.script),
-		...(options.repo ? { repo: options.repo } : {}),
 		runtime: options.runtime ?? runtime,
 	});
 	started.push(session);
@@ -632,9 +628,10 @@ describe('the assistant', () => {
 	});
 
 	it("keeps the assistant's turns in a downstream session of its own, like any seat", async () => {
-		const repo = new InMemorySessionRepo();
+		const opened = await memory.open();
+		const transcriptRuntime = createRuntime({ storage: opened.storage });
 		const session = open({
-			repo,
+			runtime: transcriptRuntime,
 			script: byAgent({ product: twoAnswers, assistant: writes('The one message.') }),
 		});
 		const written = nextSummary(session);
@@ -645,13 +642,14 @@ describe('the assistant', () => {
 		await written;
 		await ended;
 
-		const metadata = (await repo.list()).find((m) => m.id === `${session.name}:assistant`);
-		expect(metadata).toBeDefined();
 		// The room lists it as the seat it is: an agent seated at none.
 		const seat = session.seats().find((s) => s.name === 'assistant');
 		expect(seat).toMatchObject({ kind: 'agent', assistant: true, attention: 'none' });
-		const piSeat = metadata && (await repo.open(metadata));
-		const entries = (await piSeat?.findEntries()) ?? [];
+		const seatSession = session.seats().find((value) => value.name === 'assistant');
+		if (seatSession?.kind !== 'agent') throw new Error('The assistant seat is absent.');
+		const entries = await (
+			await transcriptRuntime.transcripts.open(seatSession.sessionId)
+		).findEntries();
 		expect(entries.some((e) => e.type === 'custom' && e.customType === 'ambion/activation')).toBe(
 			true,
 		);
@@ -926,8 +924,8 @@ describe('an exchange', () => {
 	) =>
 		createRuntime({
 			clock,
-			sessions: gatedOpener((await memory.open()).sessions, (type, data) =>
-				held(type, data as { text?: string }),
+			storage: gatedJournals((await memory.open()).storage, (type, data) =>
+				held(type ?? '', (data as { body: { text?: string } }).body),
 			),
 		});
 

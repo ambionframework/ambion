@@ -1,23 +1,22 @@
+import type { JournalOpener } from '@ambionframework/journal';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	attentive,
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	InMemorySessionRepo,
 	isSpoken,
 	type Message,
 	passive,
 	readSession,
 	type Session,
-	type SessionOpener,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
 import { andrei, assistant, collect, deferred, roomName as name } from './support/room.ts';
 import { contextText, quiet, scripted } from './support/scripted.ts';
-import { type FaultyOpener, faultyOpener, memory } from './support/storage.ts';
+import { type FaultyJournals, faultyJournals, memory } from './support/storage.ts';
 
 // -- a room that never speaks ------------------------------------------------
 
@@ -186,9 +185,16 @@ describe('presence', () => {
 	});
 
 	it('still addresses somebody who left, and remembers them across a run', async () => {
-		const repo = new InMemorySessionRepo();
+		const opened = await memory.open();
+		const runtime = createRuntime({ storage: opened.storage });
 		const name = roomName();
-		const first = startSession({ name, assistant, agents: [watcher], streamFn: recording, repo });
+		const first = startSession({
+			name,
+			assistant,
+			agents: [watcher],
+			streamFn: recording,
+			runtime,
+		});
 		const visit = await visitSession(first, andrei);
 		await visit.deliver({ text: 'noting that I was here' });
 		await first.settled();
@@ -200,7 +206,7 @@ describe('presence', () => {
 		await stopSession(first);
 
 		const again = track(
-			startSession({ name, assistant, agents: [watcher], streamFn: recording, repo }),
+			startSession({ name, assistant, agents: [watcher], streamFn: recording, runtime }),
 		);
 		await again.messages(); // startSession is synchronous; the replay is awaited here
 		expect(presenceOf(again, 'andrei')).toBe('absent');
@@ -269,15 +275,22 @@ describe('presence', () => {
 	});
 
 	it('reads a name that is not running, and starts nothing', async () => {
-		const repo = new InMemorySessionRepo();
+		const opened = await memory.open();
+		const runtime = createRuntime({ storage: opened.storage });
 		const name = roomName();
-		const session = startSession({ name, assistant, agents: [watcher], streamFn: recording, repo });
+		const session = startSession({
+			name,
+			assistant,
+			agents: [watcher],
+			streamFn: recording,
+			runtime,
+		});
 		const visit = await visitSession(session, andrei);
 		await visit.deliver({ text: 'for later' });
 		await session.settled();
 		await stopSession(session);
 
-		const view = readSession(name, { repo });
+		const view = readSession(name, { runtime });
 		expect((await view.messages()).filter(isSpoken).map((m) => m.text)).toEqual(['for later']);
 		// the roster folds from the record, nothing stands up, and everybody the record knows is absent
 		expect(view.seats().map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence])).toEqual([
@@ -337,9 +350,9 @@ describe('presence', () => {
 // -- a storage that fails ----------------------------------------------------
 
 /** A room over a storage the test can break and mend. */
-async function brittle(): Promise<{ session: Session; fail: FaultyOpener['fail'] }> {
-	const faulty = faultyOpener((await memory.open()).sessions);
-	const runtime = createRuntime({ sessions: faulty.sessions });
+async function brittle(): Promise<{ session: Session; fail: FaultyJournals['fail'] }> {
+	const faulty = faultyJournals((await memory.open()).storage);
+	const runtime = createRuntime({ storage: faulty.journals });
 	const session = startSession({
 		name: roomName(),
 		assistant,
@@ -380,7 +393,7 @@ describe('a storage that fails', () => {
 		const visit = await visitSession(session, andrei);
 		await session.settled();
 		// the close is the one write that fails
-		fail(true, 'ambion/close');
+		fail(true, 'close');
 		await visit.deliver({ text: 'first?' });
 		// the seat is woken; the host waits for the room to be quiet
 		const waiting = session.quiet();
@@ -423,7 +436,7 @@ describe('a storage that fails', () => {
 	});
 
 	it('surfaces a storage it cannot open, and never as an unhandled rejection', async () => {
-		const unreachable: SessionOpener = {
+		const unreachable: JournalOpener = {
 			open: async () => {
 				throw new Error('the storage is unreachable');
 			},
@@ -437,7 +450,7 @@ describe('a storage that fails', () => {
 			assistant,
 			agents: [watcher],
 			streamFn: recording,
-			runtime: createRuntime({ sessions: unreachable }),
+			runtime: createRuntime({ storage: unreachable }),
 		});
 		// the failure waits for the call that needs the journal
 		await expect(session.messages()).rejects.toThrow(/unreachable/);

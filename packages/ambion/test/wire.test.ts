@@ -21,7 +21,7 @@ import {
 import { fakeClock } from './support/clock.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { oneExchange } from './support/scenarios.ts';
-import { jsonl } from './support/storage.ts';
+import { sqlite } from './support/storage.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 
@@ -149,19 +149,19 @@ describe('the wire', () => {
 		expect(() => assertWire({ error: new Error('boom') })).toThrow(/is a Error/);
 	});
 
-	it('replays a JSONL journal whose every entry is plain JSON', async () => {
-		const opened = await jsonl.open();
+	it('replays a SQLite journal whose every entry is plain JSON', async () => {
+		const opened = await sqlite.open();
 		try {
-			const runtime = createRuntime({ sessions: opened.sessions, clock: fakeClock() });
-			const name = roomName('wire-jsonl');
+			const runtime = createRuntime({ storage: opened.storage, clock: fakeClock() });
+			const name = roomName('wire-sqlite');
 			await oneExchange.run({ runtime, name });
-			const written = await storedOf(opened.sessions, name);
-			expect(written.map((entry) => entry.type)).toContain('ambion/close');
-			expect(written.map((entry) => entry.type)).toContain('ambion/composition');
-			expect(written.map((entry) => entry.type)).toContain('ambion/lease');
+			const written = await storedOf(opened.journals, name);
+			expect(written.map((entry) => entry.kind)).toContain('close');
+			expect(written.map((entry) => entry.kind)).toContain('composition');
+			expect(written.map((entry) => entry.kind)).toContain('lease');
 			for (const entry of written) {
-				expect(() => assertWire(entry.data)).not.toThrow();
-				expect(roundTrip(entry.data)).toStrictEqual(entry.data);
+				expect(() => assertWire(entry.body)).not.toThrow();
+				expect(roundTrip(entry.body)).toStrictEqual(entry.body);
 			}
 		} finally {
 			await opened.dispose();

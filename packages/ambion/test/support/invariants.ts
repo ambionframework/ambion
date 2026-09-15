@@ -2,14 +2,10 @@
  * What holds whatever a run did. A room can go many ways; the record it
  * leaves has one shape, and every scenario ends by checking it.
  */
+
+import type { JournalOpener } from '@ambionframework/journal';
 import { expect } from 'vitest';
-import {
-	isPresence,
-	isSummary,
-	type SessionEvent,
-	type SessionOpener,
-	type SessionView,
-} from '../../src/index.ts';
+import { isPresence, isSummary, type SessionEvent, type SessionView } from '../../src/index.ts';
 import { parseId } from '../../src/room/lease.ts';
 import type { LeaseChange } from '../../src/transport.ts';
 import { standing } from './history.ts';
@@ -19,7 +15,7 @@ export interface InvariantOptions {
 	/** How many `error` events the run may hold. A live model may refuse one call. */
 	allowErrors?: number;
 	/** Where the room's journal opens: with it, every seat's message is checked against its lease. */
-	sessions?: SessionOpener;
+	journals?: JournalOpener;
 	/** How many activations a resumed room inherited live: their ends land in this run, their starts did not. */
 	inherited?: number;
 	/** Whether a resumed room inherited an open exchange: its close lands in this run, its open did not. */
@@ -60,7 +56,7 @@ export async function invariants(
 	// Every key names one message.
 	const keys = messages.flatMap((m) => (m.key === undefined ? [] : [m.key]));
 	expect(new Set(keys).size).toBe(keys.length);
-	await summariesMatchCloses(messages, events, options.sessions, session.name);
+	await summariesMatchCloses(messages, events, options.journals, session.name);
 	expect(errorsIn(events).length).toBeLessThanOrEqual(options.allowErrors ?? 0);
 	expect(count(events, 'activation_start') + (options.inherited ?? 0)).toBe(
 		count(events, 'activation_end'),
@@ -68,16 +64,16 @@ export async function invariants(
 	expect(count(events, 'exchange_opened') + (options.inheritedExchange ? 1 : 0)).toBe(
 		count(events, 'exchange_closed'),
 	);
-	if (options.sessions) await leased(session, options.sessions);
+	if (options.journals) await leased(session, options.journals);
 }
 
 async function summariesMatchCloses(
 	messages: Awaited<ReturnType<SessionView['messages']>>,
 	events: SessionEvent[],
-	sessions: SessionOpener | undefined,
+	journals: JournalOpener | undefined,
 	name: string,
 ): Promise<void> {
-	const closes = await recordedCloses(events, sessions, name);
+	const closes = await recordedCloses(events, journals, name);
 	const results = new Set<number>();
 	for (const summary of messages.filter(isSummary)) {
 		// A summary reaches back over a fixed range that ends before it. Later
@@ -88,7 +84,7 @@ async function summariesMatchCloses(
 		results.add(summary.covers.from);
 		const close = closes.find((candidate) => candidate.from === summary.covers.from);
 		if (close === undefined) {
-			if (sessions !== undefined) throw new Error('The summary has no recorded close.');
+			if (journals !== undefined) throw new Error('The summary has no recorded close.');
 			continue;
 		}
 		expect(summary.covers.through).toBe(close.through);
@@ -108,30 +104,30 @@ type RecordedClose = { owner: string; from: number; through: number; wakes?: str
 
 async function recordedCloses(
 	events: SessionEvent[],
-	sessions: SessionOpener | undefined,
+	journals: JournalOpener | undefined,
 	name: string,
 ): Promise<RecordedClose[]> {
-	if (sessions !== undefined) {
-		return standing(await storedOf(sessions, name))
-			.filter((entry) => entry.type === 'ambion/close')
-			.map((entry) => entry.data as RecordedClose);
+	if (journals !== undefined) {
+		return standing(await storedOf(journals, name))
+			.filter((entry) => entry.kind === 'close')
+			.map((entry) => entry.body as RecordedClose);
 	}
 	return events.flatMap((event) => (event.type === 'exchange_closed' ? [event.exchange] : []));
 }
 
 /** Every message a seat wrote carries an activation id whose lease was running when it landed. */
-async function leased(session: SessionView, sessions: SessionOpener): Promise<void> {
+async function leased(session: SessionView, journals: JournalOpener): Promise<void> {
 	// among the entries that stand: one a superseded run wrote past the fence is void
-	const stored = standing(await storedOf(sessions, session.name));
+	const stored = standing(await storedOf(journals, session.name));
 	const running = new Set<string>();
 	for (const entry of stored) {
-		if (entry.type === 'ambion/lease') {
-			const lease = entry.data as LeaseChange;
+		if (entry.kind === 'lease') {
+			const lease = entry.body as LeaseChange;
 			if (lease.phase === 'running') running.add(lease.id);
 			else running.delete(lease.id);
 		}
-		if (entry.type !== 'ambion/message') continue;
-		const message = entry.data as { activationId?: string; from: string };
+		if (entry.kind !== 'message') continue;
+		const message = entry.body as { activationId?: string; from: string };
 		if (message.activationId === undefined) continue;
 		expect(running, `${message.from}'s message under ${message.activationId}`).toContain(
 			message.activationId,

@@ -5,7 +5,6 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	InMemorySessionRepo,
 	isSpoken,
 	type Message,
 	passive,
@@ -18,6 +17,7 @@ import {
 import { inProcessTransport } from '../src/transport.ts';
 import { andrei, assistant, collect, deferred, enter, roomName } from './support/room.ts';
 import { byAgent, contextText, quiet, scripted, speak } from './support/scripted.ts';
+import { memory } from './support/storage.ts';
 
 /** The record's spoken half, which is what most of these tests are about. */
 const spoken = (messages: Message[]) => messages.filter(isSpoken);
@@ -485,7 +485,8 @@ describe('startSession', () => {
 	});
 
 	it("keeps each seat's turns in a downstream Pi session, parented to the room", async () => {
-		const repo = new InMemorySessionRepo();
+		const opened = await memory.open();
+		const runtime = createRuntime({ storage: opened.storage });
 		const solo = defineAgent({
 			name: 'solo',
 			identity: 'Speaks once.',
@@ -497,18 +498,19 @@ describe('startSession', () => {
 			name,
 			assistant,
 			agents: [solo],
-			repo,
+			runtime,
 			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
 		});
 		await (await enter(session)).deliver({ text: 'say hi' });
 		await session.settled();
 
 		const seat = session.seats().find((s) => s.name === 'solo');
-		expect(seat?.kind === 'agent' && seat.sessionId).toBe(`${name}:solo`);
-
-		const metadata = (await repo.list()).find((m) => m.id === `${name}:solo`);
-		expect(metadata?.parentSessionId).toBe(name);
-		const piSeat = await repo.open(metadata as NonNullable<typeof metadata>);
+		if (seat?.kind !== 'agent') throw new Error('The solo seat is absent.');
+		const piSeat = await runtime.transcripts.open(seat.sessionId);
+		expect(await piSeat.getMetadata()).toMatchObject({
+			id: seat.sessionId,
+			parentSessionId: name,
+		});
 		const entries = await piSeat.findEntries();
 		// an activation boundary plus the run's full turns — context, say call, tool result, close
 		expect(entries.some((e) => e.type === 'custom' && e.customType === 'ambion/activation')).toBe(
@@ -549,9 +551,10 @@ describe('startSession', () => {
 	});
 
 	it('refuses a composition that seats a name the record knows as a person', async () => {
-		const repo = new InMemorySessionRepo();
+		const opened = await memory.open();
+		const runtime = createRuntime({ storage: opened.storage });
 		const name = roomName('clash');
-		const first = startSession({ name, assistant, repo, streamFn: scripted(() => quiet()) });
+		const first = startSession({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
 		await visitSession(first, andrei);
 		await stopSession(first);
 
@@ -565,7 +568,7 @@ describe('startSession', () => {
 			name,
 			assistant,
 			agents: [impostor],
-			repo,
+			runtime,
 			streamFn: scripted(() => quiet()),
 		});
 		// the record is replayed by the first call, and that call is refused
@@ -575,9 +578,10 @@ describe('startSession', () => {
 	});
 
 	it('frees the name a refused start took, without a stop', async () => {
-		const repo = new InMemorySessionRepo();
+		const opened = await memory.open();
+		const runtime = createRuntime({ storage: opened.storage });
 		const name = roomName('refused');
-		const first = startSession({ name, assistant, repo, streamFn: scripted(() => quiet()) });
+		const first = startSession({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
 		await visitSession(first, andrei);
 		await stopSession(first);
 
@@ -591,13 +595,13 @@ describe('startSession', () => {
 			name,
 			assistant,
 			agents: [impostor],
-			repo,
+			runtime,
 			streamFn: scripted(() => quiet()),
 		});
 		await expect(refused.messages()).rejects.toThrow(/one name names one participant/);
 		// nothing runs under the name, and the host never stopped the handle it holds:
 		// a composition that stands takes the name and reads the record the first run left
-		const again = startSession({ name, assistant, repo, streamFn: scripted(() => quiet()) });
+		const again = startSession({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
 		expect((await again.messages()).map((m) => m.from)).toEqual(['andrei', 'andrei']);
 		await stopSession(again);
 	});

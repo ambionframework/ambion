@@ -92,7 +92,7 @@ async function world(storage: (typeof storages)[number]): Promise<World> {
 		clock,
 		runtime: (faults = []) =>
 			createRuntime({
-				sessions: opened.sessions,
+				storage: opened.storage,
 				clock,
 				transport: faultyTransport(inProcessTransport(), faults, clock),
 				// Every resume in this file folds over a checkpoint, not the entries it replaced.
@@ -226,8 +226,8 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
 			expect(resumed.exchange()).toBeUndefined();
 			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'idle' });
-			const stored = await storedOf(opened.sessions, name);
-			expect(stored.map((entry) => entry.type)).toContain('ambion/close');
+			const stored = await storedOf(opened.journals, name);
+			expect(stored.map((entry) => entry.kind)).toContain('close');
 			await stopSession(resumed);
 		} finally {
 			await opened.dispose();
@@ -291,7 +291,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await stopSession(session);
 
 			// a fresh runtime knows no definition: the composition and the seating carry them
-			const view = readSession(name, { runtime: createRuntime({ sessions: opened.sessions }) });
+			const view = readSession(name, {
+				runtime: createRuntime({ storage: opened.storage }),
+			});
 			await view.messages();
 			expect(view.seats().map((s) => [s.name, s.identity])).toEqual([
 				['alpha', 'Alpha.'],
@@ -330,8 +332,8 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			// a stop mid-exchange: the lease is revoked, and the stopped room closes nothing
 			await stopSession(one);
 			expect(heard.map((e) => e.type)).not.toContain('exchange_closed');
-			const before = await storedOf(opened.sessions, name);
-			expect(before.map((entry) => entry.type)).not.toContain('ambion/close');
+			const before = await storedOf(opened.journals, name);
+			expect(before.map((entry) => entry.kind)).not.toContain('close');
 
 			// the next run closes it as it starts, and quiet() waits for that close
 			const two = startSession({
@@ -347,11 +349,11 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(events.map((e) => e.type)).toContain('exchange_closed');
 			expect(two.exchange()).toBeUndefined();
 			const question = (await two.messages()).find((m) => m.kind === 'said');
-			const closes = (await storedOf(opened.sessions, name)).filter(
-				(entry) => entry.type === 'ambion/close',
+			const closes = (await storedOf(opened.journals, name)).filter(
+				(entry) => entry.kind === 'close',
 			);
 			expect(closes).toHaveLength(1);
-			expect(closes[0]?.data).toMatchObject({ owner: 'priya', from: question?.seq });
+			expect(closes[0]?.body).toMatchObject({ owner: 'priya', from: question?.seq });
 			await stopSession(two);
 		} finally {
 			await opened.dispose();
@@ -520,7 +522,10 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 					call === 1 ? new Promise<never>(() => {}) : Promise.resolve(quiet()),
 			});
 			const name = roomName(`restart-${storage.name}`);
-			const first = createRuntime({ sessions: opened.sessions, clock });
+			const first = createRuntime({
+				storage: opened.storage,
+				clock,
+			});
 			const session = startSession({
 				name,
 				assistant,
@@ -539,7 +544,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const cuts: string[] = [];
 			const inProcess = inProcessTransport();
 			const second = createRuntime({
-				sessions: opened.sessions,
+				storage: opened.storage,
 				clock,
 				transport: {
 					connect: (room, seat, host) => {
@@ -584,7 +589,10 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			});
 			await session.messages();
 			await stopSession(session);
-			const bare = createRuntime({ sessions: opened.sessions, clock: fakeClock() });
+			const bare = createRuntime({
+				storage: opened.storage,
+				clock: fakeClock(),
+			});
 			await expect(resumeSession(name, { runtime: bare, agents: [] })).rejects.toThrow(
 				/cannot resume: agent 'alpha' has no binding/,
 			);
@@ -609,7 +617,10 @@ describe('a room dropped from memory', () => {
 	 */
 	it('answers with the composition it was given, dropped before it wrote one', async () => {
 		const opened = await memory.open();
-		const runtime = createRuntime({ clock: fakeClock(), sessions: opened.sessions });
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: fakeClock(),
+		});
 		const name = roomName('evicted-early');
 		const session = startSession({
 			name,
@@ -626,7 +637,10 @@ describe('a room dropped from memory', () => {
 	/** A room with one activation held open, over a storage the test can read. */
 	async function dropped() {
 		const opened = await memory.open();
-		const runtime = createRuntime({ clock: fakeClock(), sessions: opened.sessions });
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: fakeClock(),
+		});
 		const held = deferred();
 		const session = startSession({
 			name: roomName('evicted'),
@@ -660,20 +674,23 @@ describe('a room dropped from memory', () => {
 	it('writes nothing for an abort or a departure on the dropped handle', async () => {
 		const { session, visit, opened, held } = await dropped();
 		await tick();
-		const before = (await storedOf(opened.sessions, session.name)).length;
+		const before = (await storedOf(opened.journals, session.name)).length;
 		session.abort();
 		await tick();
 		await tick();
 		await visit.leave();
 		await tick();
-		expect((await storedOf(opened.sessions, session.name)).length).toBe(before);
+		expect((await storedOf(opened.journals, session.name)).length).toBe(before);
 		await expect(visit.deliver({ text: 'still there?' })).rejects.toThrow();
 		held.resolve();
 	});
 
 	it('releases whoever was already waiting on quiet() or settled()', async () => {
 		const opened = await memory.open();
-		const runtime = createRuntime({ clock: fakeClock(), sessions: opened.sessions });
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: fakeClock(),
+		});
 		const held = deferred();
 		const session = startSession({
 			name: roomName('evicted-waiting'),
@@ -702,10 +719,10 @@ describe('a room dropped from memory', () => {
 	it('writes nothing for a stop on the dropped handle', async () => {
 		const { session, opened, held } = await dropped();
 		await tick();
-		const before = (await storedOf(opened.sessions, session.name)).length;
+		const before = (await storedOf(opened.journals, session.name)).length;
 		await stopSession(session);
 		await tick();
-		expect((await storedOf(opened.sessions, session.name)).length).toBe(before);
+		expect((await storedOf(opened.journals, session.name)).length).toBe(before);
 		held.resolve();
 	});
 });

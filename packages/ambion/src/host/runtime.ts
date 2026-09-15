@@ -1,35 +1,21 @@
 /**
  * The runtime: what a host owns and every room in it shares.
  *
- * A room needs a clock, a place to open Pi sessions, a model call, and a
- * register of what is running. Until now each of those was a module-level
- * value, so two hosts in one process shared them whether they wanted to or
- * not. A `Runtime` holds them as one value: `startSession`, `readSession`
- * and `defineWorkspace` take one, and `defaultRuntime` is the value they
- * take when a host passes none.
+ * A room needs a clock, storage, a model call,
+ * and a register of running rooms. A `Runtime` holds them as one value.
+ * `startSession`, `readSession`, and `defineWorkspace` take one.
  *
  * The clock is an interface so a test can move time by hand, and so a host
- * on a platform with its own alarms maps `alarm` to them. The opener is an
- * interface so a host supplies whatever Pi's repository needs to create a
- * session, which an in-memory repository needs nothing for and a JSONL
- * repository needs a working directory for.
+ * on a platform with its own alarms maps `alarm` to them. A journal opener
+ * opens the record. A transcript opener opens Pi audit sessions.
  */
-import type {
-	Session as PiSession,
-	SessionCreateOptions,
-	SessionMetadata,
-	StreamFn,
-} from '@earendil-works/pi-agent-core';
-import { InMemorySessionRepo } from '@earendil-works/pi-agent-core';
+
+import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
+import { piSessions, type SessionOpener } from '@ambionframework/journal/pi';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
-import type {
-	AgentDefinition,
-	Clock,
-	ModelResolver,
-	SessionEvent,
-	SessionOpener,
-} from '../types.ts';
+import type { AgentDefinition, Clock, ModelResolver, SessionEvent } from '../types.ts';
 import type { SeatPort, SeatRoom } from '../wire.ts';
 
 interface RuntimeState {
@@ -78,7 +64,7 @@ export interface RunningRoom extends SeatRoom {
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
 	/** Where the room's sessions open: a seat's audit session opens beside them. */
-	readonly sessions: SessionOpener;
+	readonly transcripts: SessionOpener;
 	definition(seat: string): AgentDefinition | undefined;
 	emit(event: SessionEvent): void;
 	/** Drop the room from memory. The record keeps everything. */
@@ -97,7 +83,10 @@ export interface Transport {
 
 export interface Runtime {
 	readonly clock: Clock;
-	readonly sessions: SessionOpener;
+	/** The host's native storage. The runtime derives its room and Pi views from it. */
+	readonly storage: JournalOpener;
+	readonly journals: JournalOpener;
+	readonly transcripts: SessionOpener;
 	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
 	readonly transport?: Transport;
 	/** The model call every seat in this runtime makes, unless a room overrides it. */
@@ -132,9 +121,8 @@ export interface Runtime {
 export interface CreateRuntimeOptions {
 	clock?: Clock;
 	transport?: Transport;
-	/** Where the rooms' Pi sessions open. `repo` is the shorthand for `sessionsOver(repo)`. */
-	sessions?: SessionOpener;
-	repo?: SessionRepoLike<SessionMetadata, SessionCreateOptions>;
+	/** Where the runtime opens room journals and Pi transcript sessions. */
+	storage?: JournalOpener;
 	/**
 	 * The model call. A scripted stream makes every room deterministic; the
 	 * model then resolves to a stub, because a custom stream never reads it.
@@ -144,39 +132,6 @@ export interface CreateRuntimeOptions {
 	retry?: Partial<Runtime['retry']>;
 	call?: Partial<Runtime['call']>;
 	checkpoint?: Partial<Runtime['checkpoint']>;
-}
-
-/** What `sessionsOver` needs of a Pi repository: list, open, create. */
-export interface SessionRepoLike<
-	TMetadata extends SessionMetadata,
-	TCreate extends SessionCreateOptions,
-> {
-	list(): Promise<TMetadata[]>;
-	open(metadata: TMetadata): Promise<PiSession<TMetadata>>;
-	create(options: TCreate): Promise<PiSession<TMetadata>>;
-}
-
-/**
- * Open an id into its Pi session in `repo`, creating it on the first open.
- * `create` carries what the repository's `create` needs beyond the id: a
- * JSONL repository needs a `cwd`, an in-memory one needs nothing.
- */
-export function sessionsOver<
-	TMetadata extends SessionMetadata,
-	TCreate extends SessionCreateOptions,
->(
-	repo: SessionRepoLike<TMetadata, TCreate>,
-	create?: Omit<TCreate, keyof SessionCreateOptions>,
-): SessionOpener {
-	return {
-		async open(id, parentId) {
-			const known = (await repo.list()).find((metadata) => metadata.id === id);
-			if (known) return repo.open(known);
-			const options = { ...(create ?? {}), id } as TCreate;
-			if (parentId !== undefined) options.parentSessionId = parentId;
-			return repo.create(options);
-		},
-	};
 }
 
 /** The system clock, and one timer that never holds the process open. */
@@ -220,10 +175,14 @@ export const stubModel: ModelResolver = (id) =>
 export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const running = new Map<string, RunningRoom>();
 	const taken = new Set<string>();
-	const sessions = options.sessions ?? sessionsOver(options.repo ?? new InMemorySessionRepo());
+	const storage = options.storage ?? memoryJournals();
+	const journals = namespaced(storage, 'ambion/room');
+	const transcripts = piSessions(storage);
 	const runtime: Runtime = {
 		clock: options.clock ?? systemClock(),
-		sessions,
+		storage,
+		journals,
+		transcripts,
 		...(options.transport === undefined ? {} : { transport: options.transport }),
 		stream: options.stream ?? registryStream,
 		model: options.stream ? stubModel : registryModel,

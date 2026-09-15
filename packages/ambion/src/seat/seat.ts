@@ -17,6 +17,8 @@
  * And the transport that puts every seat in the room's own process. What
  * the actor knows of the room, it learns through three calls (`wire.ts`).
  */
+
+import type { SessionOpener } from '@ambionframework/journal/pi';
 import type {
 	Agent as PiAgent,
 	Session as PiSession,
@@ -24,13 +26,8 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { RunningRoom, Runtime, Transport } from '../host/runtime.ts';
-import type {
-	AgentDefinition,
-	Clock,
-	ModelResolver,
-	SessionEvent,
-	SessionOpener,
-} from '../types.ts';
+import type { AgentDefinition, Clock, ModelResolver, SessionEvent } from '../types.ts';
+import { seatSessionId } from '../types.ts';
 import type { ActivationView, SeatPort, SeatRoom, Wake } from '../wire.ts';
 import { Activation, persistTurns } from './activation.ts';
 import { binding, toolsFor } from './tools.ts';
@@ -46,8 +43,8 @@ export interface SeatContext {
 	readonly definition: AgentDefinition;
 	readonly room: string;
 	readonly seat: string;
-	/** Where the seat's audit session opens, `<room>:<seat>`, beside the room's. */
-	readonly sessions: SessionOpener;
+	/** Where the seat's collision-safe audit session opens beside the room's. */
+	readonly transcripts: SessionOpener;
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
 	/** Where in-process events go. Absent across a process boundary. */
@@ -270,14 +267,14 @@ export class SeatActor implements SeatPort {
 	}
 
 	private host(id: string) {
-		const { clock, room, seat, sessions } = this.context;
+		const { clock, room, seat, transcripts } = this.context;
 		return {
 			view: () => this.room.view(id),
 			renew: (readThrough: number) =>
 				this.room.lease({ activation: id, operation: 'renew', readThrough }),
 			build: (view: ActivationView, activation: Activation) => this.build(view, activation),
 			persist: (agent: PiAgent) => {
-				this.audit ??= sessions.open(`${room}:${seat}`, room);
+				this.audit ??= transcripts.open(seatSessionId(room, seat), room);
 				return persistTurns(this.audit, agent, new Date(clock.now()).toISOString());
 			},
 			emit: (event: SessionEvent) => this.context.emit?.(event),
@@ -326,7 +323,7 @@ export function inProcessTransport(): Transport {
 				definition,
 				room: room.name,
 				seat,
-				sessions: room.sessions,
+				transcripts: room.transcripts,
 				stream: room.stream,
 				model: room.model,
 				emit: (event) => room.emit(event),

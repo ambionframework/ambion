@@ -19,9 +19,15 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * and the live tier needs no build at all.
  */
 export const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
+export const journalPi = fileURLToPath(new URL('../journal/src/pi.ts', import.meta.url));
 
 export default defineConfig({
-	resolve: { alias: { '@ambionframework/journal': journal } },
+	resolve: {
+		alias: [
+			{ find: '@ambionframework/journal/pi', replacement: journalPi },
+			{ find: '@ambionframework/journal', replacement: journal },
+		],
+	},
 	test: {
 		exclude: [...configDefaults.exclude, 'test/live/**'],
 		testTimeout: 20_000,

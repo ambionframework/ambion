@@ -116,7 +116,7 @@ function play(stream: StreamFn = scripted(() => quiet())) {
 		definition: product,
 		room: 'played',
 		seat: 'product',
-		sessions: runtime.sessions,
+		transcripts: runtime.transcripts,
 		stream: runtime.stream,
 		model: runtime.model,
 	});
