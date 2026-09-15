@@ -12,6 +12,7 @@
 import { type Entry, placed } from '../journal/journal.ts';
 import type { Exchange, Message, Seq } from '../types.ts';
 import type { Close, Composition, LeaseHold, Seating } from '../wire.ts';
+import { type MessageDelivery, messageDelivery } from './delivery.ts';
 import { openExchange, summaryCompletion } from './exchange.ts';
 import {
 	applyLease,
@@ -44,6 +45,7 @@ export interface RoomState {
 	readonly exchange: Exchange | undefined;
 	readonly closes: Close[];
 	readonly leases: Map<string, LeaseHold>;
+	readonly deliveries: Map<Seq, MessageDelivery>;
 	readonly pending: PendingWake[];
 	readonly owed: Owed[];
 	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
@@ -66,6 +68,7 @@ interface BaseFacts {
 	closes: Close[];
 	leases: Map<string, LeaseHold>;
 	composition: Composition | undefined;
+	deliveries: Map<Seq, MessageDelivery>;
 }
 
 /** The private base facts held by a projection for incremental evolution. */
@@ -74,6 +77,7 @@ export const baseOf = (state: RoomState): BaseFacts => ({
 	closes: [...state.closes],
 	leases: new Map(state.leases),
 	composition: state.composition,
+	deliveries: new Map(state.deliveries),
 });
 
 /** The empty room facts before the first committed event. */
@@ -82,12 +86,15 @@ const older = (): BaseFacts => ({
 	closes: [],
 	leases: new Map(),
 	composition: undefined,
+	deliveries: new Map(),
 });
 
 /** Applies one committed event to the room facts. */
 export function applyEvent(read: BaseFacts, entry: Entry): void {
 	if (entry.kind === 'message') {
-		read.messages.push(placed(entry));
+		const message = placed(entry);
+		read.deliveries.set(message.seq, messageDelivery(message, read.leases));
+		read.messages.push(message);
 		return;
 	}
 	if (entry.kind === 'close') {
@@ -112,13 +119,14 @@ export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomS
 
 /** Derives all room views from the base facts. */
 export function project(read: BaseFacts, options: FoldOptions): RoomState {
-	const { messages, closes, leases, composition } = read;
+	const { messages, closes, leases, composition, deliveries } = read;
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
 	const isPerson = (name: string) => people.has(name);
 	const exchange = openExchange(messages, closes, isPerson);
 	const pending = pendingWakes(
 		messages,
+		deliveries,
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
@@ -134,6 +142,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		exchange,
 		closes,
 		leases,
+		deliveries,
 		pending,
 		owed,
 		due: [...pending, ...owed],

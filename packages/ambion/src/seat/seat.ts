@@ -89,7 +89,11 @@ export class SeatActor implements SeatPort {
 			return;
 		}
 		if (this.current.id === wake.activation) return;
-		if (wake.steer === undefined || this.current.over) {
+		if (
+			wake.steer === undefined ||
+			this.current.over ||
+			(wake.steer.target !== undefined && wake.steer.target !== this.current.id)
+		) {
 			this.enqueue(wake.activation);
 			return;
 		}

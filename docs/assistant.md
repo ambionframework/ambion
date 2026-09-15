@@ -183,6 +183,8 @@ An exchange with no agent message writes nothing.
 The close fixes the summary's input, recipient, and writer. A later question
 can open another exchange while the assistant drafts. It does not change
 that draft's range or cause a freshness conflict.
+The delivery projection excludes summary activations from implicit steering,
+so later messages cannot enter that draft's model context.
 
 **The room checks authority at publication.** A summary requires a live
 `closed` activation whose specification grants `summarise` for the recorded

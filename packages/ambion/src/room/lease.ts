@@ -30,12 +30,8 @@
 import type { JournalEntry } from '@ambionframework/journal';
 import type { Message, Seq } from '../types.ts';
 import type { EndReason, LeaseChange, LeaseHold } from '../wire.ts';
-import {
-	atWork as atWorkRule,
-	coversAttempt as coverageRule,
-	expired,
-	nextAttempt,
-} from './rules.verified.ts';
+import type { MessageDelivery } from './delivery.ts';
+import { coversAttempt as coverageRule, expired, nextAttempt } from './rules.verified.ts';
 
 /**
  * What caused an activation. Three things cause one, and the journal holds
@@ -200,6 +196,7 @@ export type CauseOf = (seat: string, seq: Seq) => Cause;
  */
 export function pendingWakes(
 	messages: readonly Message[],
+	deliveries: ReadonlyMap<Seq, MessageDelivery>,
 	leases: ReadonlyMap<string, LeaseHold>,
 	roster: ReadonlySet<string>,
 	options: PendingActivationOptions,
@@ -208,7 +205,9 @@ export function pendingWakes(
 	const bySeat = leasesBySeat(leases, roster);
 	const pending: PendingWake[] = [];
 	for (const message of messages) {
-		for (const seat of reached(message, bySeat, roster)) {
+		const delivery = deliveries.get(message.seq);
+		if (delivery === undefined) continue;
+		for (const seat of reached(delivery, roster)) {
 			const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
 			const wake = statusOf(message, seat, taken, options, causeOf(seat, message.seq));
 			if (wake !== undefined) pending.push(wake);
@@ -236,33 +235,14 @@ function leasesBySeat(
 	return bySeat;
 }
 
-/**
- * The seats a message reached: the ones it names, and every seat at work
- * when it landed. A seat composing the room for an exchange hears no steer,
- * so a message reaches that seat by name alone.
- */
-function reached(
-	message: Message,
-	bySeat: ReadonlyMap<string, LeaseHold[]>,
-	roster: ReadonlySet<string>,
-): Set<string> {
-	const seats = new Set((message.wakes ?? []).filter((seat) => roster.has(seat)));
-	for (const [seat, held] of bySeat) {
-		if (seat === message.from) continue;
-		if (held.some((lease) => steered(lease, message.seq))) seats.add(seat);
-	}
-	return seats;
+/** Filter recorded recipients by the roster that exists after replay. */
+function reached(delivery: MessageDelivery, roster: ReadonlySet<string>): Set<string> {
+	return new Set(
+		[...delivery.wakes, ...delivery.steers.map((steer) => steer.seat)].filter((seat) =>
+			roster.has(seat),
+		),
+	);
 }
-
-/** The lease was at work when the message landed, and it takes a steer. */
-const steered = (lease: LeaseHold, seq: Seq): boolean =>
-	atWork(lease, seq) && parseId(lease.id)?.cause !== 'opened';
-
-/** The lease held a change before the message and ended, if it ended, after it. */
-const atWork = (lease: LeaseHold, seq: Seq): boolean =>
-	lease.phase === 'ended'
-		? atWorkRule(lease.since, true, lease.until, seq)
-		: atWorkRule(lease.since, false, 0, seq);
 
 /**
  * A completed lease answers only context its executor explicitly consumed.

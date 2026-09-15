@@ -11,6 +11,9 @@ const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
 	body,
 });
 
+const explicitDeliveries = (messages: Message[]) =>
+	new Map(messages.map((message) => [message.seq, { wakes: message.wakes ?? [], steers: [] }]));
+
 describe('lease rules', () => {
 	it('keeps a lease interval through its terminal entry', () => {
 		const leases = foldLeases([
@@ -48,7 +51,14 @@ describe('lease rules', () => {
 			lease(3, { id: 'message:2:solo:1', phase: 'ended', reason: 'released', at, readThrough: 0 }),
 		]);
 		expect(
-			pendingWakes([message], released, new Set(['solo']), { backoff: () => 1 }, () => 'message'),
+			pendingWakes(
+				[message],
+				explicitDeliveries([message]),
+				released,
+				new Set(['solo']),
+				{ backoff: () => 1 },
+				() => 'message',
+			),
 		).toMatchObject([{ id: 'message:2:solo:2', unsuccessfulAttempts: 1 }]);
 		const failed = foldLeases([
 			lease(3, { id: 'message:2:solo:1', phase: 'ended', reason: 'failed', at, readThrough: 0 }),
@@ -65,30 +75,34 @@ describe('lease rules', () => {
 			text: 'Question',
 			wakes: ['solo'],
 		});
-		const pending = (reason: EndReason) =>
-			pendingWakes(
-				[message(2), message(6)],
-				foldLeases([
-					lease(2, {
-						id: 'message:2:solo:1',
-						phase: 'running',
-						expiresAt: 60_000,
-						at,
-						readThrough: 0,
-					}),
-					lease(4, {
-						id: 'message:2:solo:1',
-						phase: 'running',
-						expiresAt: 60_000,
-						at,
-						readThrough: 4,
-					}),
-					lease(8, { id: 'message:2:solo:1', phase: 'ended', reason, at, readThrough: 4 }),
-				]),
+		const pending = (reason: EndReason) => {
+			const messages = [message(2), message(6)];
+			const leases = foldLeases([
+				lease(2, {
+					id: 'message:2:solo:1',
+					phase: 'running',
+					expiresAt: 60_000,
+					at,
+					readThrough: 0,
+				}),
+				lease(4, {
+					id: 'message:2:solo:1',
+					phase: 'running',
+					expiresAt: 60_000,
+					at,
+					readThrough: 4,
+				}),
+				lease(8, { id: 'message:2:solo:1', phase: 'ended', reason, at, readThrough: 4 }),
+			]);
+			return pendingWakes(
+				messages,
+				explicitDeliveries(messages),
+				leases,
 				new Set(['solo']),
 				{ backoff: () => 1 },
 				() => 'message',
 			).map((wake) => wake.id);
+		};
 		expect(pending('failed')).toEqual(['message:2:solo:2', 'message:6:solo:2']);
 		expect(pending('expired')).toEqual(['message:2:solo:2', 'message:6:solo:2']);
 		expect(pending('refused')).toEqual(['message:6:solo:2']);
