@@ -1,19 +1,24 @@
 # The exchange
 
 This document is the design contract for the exchange: the room's own unit
-of work. It is shipped. The code lives in
+of discussion. The code lives in
 [`exchange.ts`](../packages/ambion/src/room/exchange.ts), and
 [`room.ts`](../packages/ambion/src/room.ts) opens and closes one as
 the room runs. Read [`agent.md`](agent.md) first: an exchange is made of
 the activations that document specifies, and it changes none of the eight
 rules.
 
-One sentence:
+**An exchange is an opening message and the discussion it starts.** The
+opening message establishes its owner. Further messages can steer active
+agents. The room closes the exchange when its required work finishes or
+reaches a terminal state.
 
-> **A person asks something, several agents wake and work it out between
-> them, and the room goes quiet again. That span is the exchange. The
-> person who asked owns it, and what lands while it is open steers the
-> seats already working and changes nothing.**
+One room has one open discussion at a time. Separate simultaneous discussions
+use separate rooms. A close fixes a range; it does not certify answer quality.
+The assistant is optional. Human participants can review the fixed discussion
+through `exchange.messages()`, even after a summary replaces its source messages
+in later agent activations. [Deployment](deployment.md) covers host duties and
+release limits.
 
 ---
 
@@ -23,10 +28,10 @@ Pi has a _turn_: one request to a provider and the tools it calls. Pi has
 a _run_: one `prompt()`, and the turns inside it. Ambion has two spans of
 its own, and they nest:
 
-| Span           | Starts                    | Ends               |
-| -------------- | ------------------------- | ------------------ |
-| **activation** | The room wakes one seat   | That seat stops    |
-| **exchange**   | A person's question lands | No agent is active |
+| Span           | Starts                    | Ends                                |
+| -------------- | ------------------------- | ----------------------------------- |
+| **activation** | The room wakes one seat   | That seat stops                     |
+| **exchange**   | A person's question lands | No required discussion work remains |
 
 An activation is one or more runs, because a message landing mid-activation
 rebuilds the seat's view against the record as it now stands
@@ -242,8 +247,6 @@ several readers take it from the same place:
   that, whatever the assistant does.
 - **A host that measures cost.** It measures per exchange, because that is
   what somebody asked for.
-- **A later compactor.** A room-level compactor stands over a stretch of
-  closed exchanges. None exists today.
 
 An exchange covers itself and nothing else. `from` is the question that
 opened it, and `through` is the last seq when the room went quiet. A

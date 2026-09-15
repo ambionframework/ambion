@@ -2,7 +2,7 @@
 
 This document is the design contract for the roster while a room runs: the
 agents a room starts with, the agents it holds in reserve, and the
-assistant that seats them. It is shipped. The code lives with the rest of
+optional assistant that selects them. The code lives with the rest of
 the runtime in [`packages/ambion/src`](../packages/ambion/src): the seating
 and the reserve in [`room.ts`](../packages/ambion/src/room.ts), the
 composing activation and the `seat` tool in
@@ -13,14 +13,15 @@ composing activation and the `seat` tool in
 [`presence.md`](presence.md) and [`assistant.md`](assistant.md) first. This
 document changes two rules of the core and says which.
 
-One sentence:
+**Membership determines participation and attention within a room.** Hosts
+can change it while the room runs. An optional assistant can select reserve
+agents when a question opens an exchange. The journal records membership
+changes so hosts can recover the roster.
 
-> **A room starts with an assistant, any number of agents seated, and any
-> number held in reserve. When a person's question opens an exchange, the
-> assistant reads the question and the reserve, and seats the agents the
-> question needs. Seating is a message on the record. The seated agent
-> wakes, reads the room as it stands, and takes its turn beside the agents
-> already working.**
+**This page uses the current API.** It accepts definitions in `agents`,
+`available`, and `room.seat(agent)`. The 0.1.0 target fixes definitions for each
+run and changes membership by name. That API change remains pending in the
+[delivery plan](../planning/next.md#3-separate-configuration-from-membership).
 
 ---
 
@@ -38,14 +39,13 @@ const room = await startRoom({
 });
 ```
 
-**`assistant` is the convention, and it is the only participant a room
-needs.** `agents` and `available` are both optional and may both be empty.
-A room that names no agents and a reserve holds the assistant alone until a
-question lands, and then holds whoever that question needed. A room that
-names neither holds the assistant and nothing that can answer; §6 says
-what happens to a question there. The option seats one agent at `none` in
-the assistant designation, and a room that passes none closes every exchange
-and owes no summary ([`assistant.md`](assistant.md) §13).
+**`assistant` is optional.** `agents` and `available` may also be empty.
+A room without an assistant still closes exchanges and owes no summary.
+The host can seat specialists directly. An assistant with a reserve can
+select specialists when a question opens an exchange.
+
+The assistant is seated at attention `none`. Its selection and summary
+executions have distinct room tools; it has no ordinary specialist authority.
 
 **`agents` are seated when the room starts, and they stay seated for the
 run**, as [`agent.md`](agent.md) §5 specifies. Nothing in this document
@@ -64,11 +64,10 @@ and the agents in reserve.
 agent from the reserve onto the roster with that attention. The assistant
 designation remains fixed for the run.
 
-**Neither list knows anything about a workspace.** Each definition names
-its own workspace or none ([`workspace.md`](workspace.md) §3), and the
-room never reads the field. One reserve may hold agents from several
-workspaces beside agents with no workspace, and a room still connects to
-no workspace of its own.
+**Workspace resources belong to the application.** Definitions receive
+workspace access through ordinary tool bundles ([`workspace.md`](workspace.md)).
+Agents can share one workspace when the application intends that sharing.
+Workspace files remain separate from the collaboration journal.
 
 ---
 

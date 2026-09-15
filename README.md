@@ -1,232 +1,98 @@
 # Ambion
 
-**Build applications as independently owned agents collaborating behind one
-human-facing assistant.**
+**Ambion is a collaboration kernel for independently owned agents and the
+people they serve.** It gives domain agents a shared journal, rules for
+participation, and a reliable boundary for contributing to a conversation.
 
-[ambionframework.com](https://ambionframework.com) · [worked demos](demos) ·
-[design contracts](docs)
+[ambionframework.com](https://ambionframework.com) · [documentation](docs/README.md)
 
-Ambion is for applications assembled from multiple domain agents: one for
-scheduling, one for inventory, one for compliance. Each agent keeps its own
-context, model, tools, workspace, and team. One assistant owns the
-human-facing conversation, selects specialists from a host-defined reserve,
-and consolidates their work.
+An agent owns its instructions, model, tools, and domain expertise. A room
+lets those agents work together. An optional assistant selects specialists
+and consolidates their work for a person. Applications own their domain data
+and the resources their tools use.
 
-Routing a prompt is not the hard problem. Collaboration is: agents and people
-must stay ordered, informed, and accountable, without one context holding
-every domain or a person reading a swarm transcript. Ambion provides that
-collaboration layer: a shared record, durable seats, attention-based routing,
-optimistic concurrency, exchanges, and summaries.
+## When to use Ambion
 
-![Collaborating agents working within an exchange: a question opens a bounded sequence on the shared record, agents contribute or stay silent, new messages steer active work, and quiet closes the exchange before optional assistant synthesis.](docs/assets/ambion-exchange.svg)
+**Use Ambion when several domains must contribute to one ongoing application.**
+A question such as “Can we promise a Thursday delivery?” can require several
+agents. Inventory checks stock. Scheduling checks capacity. Compliance checks
+constraints. Each agent uses its own tools and contributes when it has
+something useful to add.
 
-## The architectural bet
+**The agent is the unit of modularity.** Each domain can have its own owner,
+instructions, model, tools, and evaluations. Agents can improve independently.
+Their shared collaboration contract makes their contributions usable together.
 
-**The agent is the modularity boundary.** A context window stops being a
-useful module as unrelated domains accumulate inside it: every new
-instruction, tool, and piece of state can change the behaviour of everything
-already there. A separately owned agent keeps that failure domain contained.
+**Rooms persist across individual questions.** People arrive and leave.
+Specialists join and leave the active membership. Later messages can change
+an answer that is still being prepared. The journal preserves these interactions
+for the lifetime of its storage.
 
-Ambion keeps domains separate and makes collaboration explicit:
+Ambion serves TypeScript application developers. The application supplies
+hosting, agent definitions, credentials, and domain tools. Ambion supplies the
+collaboration semantics.
 
-- A scheduling agent changes without retesting a materials agent's prompt.
-- Each agent keeps its own model session, tools, and workspace authority.
-- Specialists stay in reserve until a question needs them.
-- The assistant stays the stable interface as the agents behind it change.
-- The person reads one coherent result.
+![Independent agents contribute to a shared journal in an ongoing room. New context steers active work. An optional assistant summarizes a closed exchange for later activations, while people can review its original messages.](docs/assets/ambion-exchange.svg)
 
-The application grows by adding coherent, independently owned agents.
-Collaboration across agents and humans is the key infrastructure problem; the
-rest of Ambion follows from taking it seriously.
+## The conceptual model
 
-## Key technical decisions
+| Concept          | Meaning                                                      |
+| ---------------- | ------------------------------------------------------------ |
+| Agent definition | Identity, instructions, model, and tools for one domain      |
+| Room             | Participants collaborating through one ordered journal       |
+| Membership       | An agent's participation and attention within a room         |
+| Visit            | A human's speaking identity and presence lifetime            |
+| Exchange         | An opening message and the discussion it starts              |
+| Activation       | A bounded execution with authority to contribute to the room |
 
-### 1. The record is the source of truth
+Application code mainly works with definitions, rooms, visits, and exchanges.
+Membership changes through room operations. Activation and lease details
+belong to the hosting contract. The API calls an agent membership a
+_seat_.
 
-Speech, arrivals, departures, seating changes, and summaries are all ordered
-messages. [`Journal`](packages/journal/src/journal.ts) serializes writes,
-assigns monotonic sequence numbers, and persists each message before it is
-exposed; idempotency keys make retries safe. Presence is data: it takes part
-in ordering, replay, and routing.
+## How collaboration works
 
-### 2. Conversation uses optimistic concurrency
+**The journal is the source of active collaboration and its history.** It
+records contributions, presence, membership, execution claims, and exchange
+boundaries. Pure rules interpret those facts to determine what may happen
+next. A host recovers unfinished collaboration by replaying the journal.
 
-Ordinary speech carries `readThrough`, the last sequence the activation has
-seen. If the record advanced, the room refuses the draft and
-returns the missed messages, and the activation rebuilds from a fresh room
-view.
+**Agents reason concurrently; the room serializes accepted contributions.**
+Ordinary speech carries `readThrough`, the context the activation consumed.
+If relevant unread context arrived, the room refuses the stale contribution
+and supplies the missing context for reconsideration.
 
-The commit boundary prevents speech over unread context. Summaries use the
-fixed range of a closed exchange, so later messages do not invalidate them.
+**Attention controls idle agents; new context steers active agents.** Membership
+sets which messages activate an idle agent. Active ordinary agents receive new
+context between provider requests. Lease renewal extends execution authority
+without implying that the agent read new context.
 
-### 3. Silence is a result
+**Silence is a valid result.** An agent can finish without calling `say`.
+The runtime adds no acknowledgement to the conversation. Host diagnostics
+separate deliberate silence from failures and exhausted attempts.
 
-A normal activation receives the `say` tool. Calling it appends a message;
-finishing without calling it appends nothing. The runtime never manufactures
-an empty acknowledgement. This makes it cheap to wake every plausibly
-relevant agent and let each decide whether it has something to add.
+**Remaining work determines completion.** One room has one open discussion at
+a time. Pending work and execution leases determine when it closes. A recorded
+close fixes the exchange range. Separate simultaneous discussions use separate
+rooms.
 
-### 4. Attention is not activity
+**The optional assistant has constrained duties.** It selects reserve agents
+when an exchange opens and can summarize a closed discussion. Those executions
+receive `seat` or `summarise`, with no ordinary specialist authority. A summary
+retains its source range even if a later exchange starts.
 
-A seat is `active` or `idle` based on whether it is running. It also holds
-one point on an attention scale:
-
-```text
-none < named < broadcast < presence
-```
-
-The scale sets the widest event that wakes the seat: a named message always
-reaches its addressee; wider seats also hear room speech, then presence
-changes. This keeps lifecycle state separate from routing policy. See
-[`seat.ts`](packages/ambion/src/seat/seat.ts).
-
-### 5. An activation can be steered without breaking a provider turn
-
-Messages that arrive during a provider request queue as steers and inject
-after the request completes; they never restart work mid-turn. When the
-journal has moved past what the activation read, the activation rebuilds
-against a fresh room view. Explicit `readThrough` progress records which
-context entered a provider request. Lease renewals extend liveness without
-inferring that new context was read. See
-[`activation.ts`](packages/ambion/src/seat/activation.ts).
-
-### 6. Quiescence defines an exchange
-
-A human question opens an exchange. When the participating seats stop and no
-work remains, the room closes it. The exchange stores only its owner and
-sequence range; its contents stay derivable from the journal.
-
-Quiescence is the semantic boundary: pending wakes and claimed leases
-together determine liveness, so no coordinator predicts the last word and no
-activation counter can drift from reality. See
-[`exchange.ts`](packages/ambion/src/room/exchange.ts) and
-[`lease.ts`](packages/ambion/src/room/lease.ts).
-
-### 7. The assistant owns synthesis for the person
-
-The assistant is the conversational interface: an ordinary seat with its own
-model session and activation history. The room designates it through the
-`assistant` option. Its policy grants one tool for each exchange event: `seat`, to compose a roster
-from agents the host placed in reserve, and `summarise`, after an exchange
-closes. It holds no general `say` tool and no general-purpose authority.
-
-Seating a specialist is itself an auditable message. When several agent
-messages need consolidation, the summary names the exact sequence range it
-covers, so agent contexts and the human-facing view can share it. The record
-stays intact; only its rendered views compact. See
-[`assistant.ts`](packages/ambion/src/assistant.ts) and
-[`view.ts`](packages/ambion/src/room/view.ts).
-
-### 8. Boundaries are small and serializable
-
-The core depends on narrow host interfaces: `Clock`, `JournalOpener`,
-`ModelResolver`, and `Transport`. One `JournalOpener` persists room facts
-and Pi transcripts through separate names. Together they isolate time,
-persistence, model resolution, and seat execution from room semantics.
-
-[`wire.ts`](packages/ambion/src/wire.ts) restricts room/seat traffic to plain
-JSON values and five operations: `wake`, `cut`, `view`, `commit`, and `lease`.
-An `ActivationSpec` identifies the input and tool granted to one activation.
-The room uses that specification to render views and validate writes; the
-executor uses it to bind tools. In-process and Cloudflare hosts share this
-contract.
-
-`@ambionframework/workspace` owns filesystem resources and provides ordinary
-tool bundles for agents. Its filesystem data stays separate from the runtime
-journal. See [`docs/workspace.md`](docs/workspace.md).
-
-## A minimal sketch
-
-```ts
-import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
-
-const materials = defineAgent({
-  name: 'materials',
-  identity: 'Owns stock levels and deliveries.',
-  instructions: 'State a material constraint if one changes the answer; otherwise stay quiet.',
-  model: 'anthropic/claude-sonnet-4-5',
-  tools: [stockCheck],
-});
-
-const assistant = defineAgent({
-  name: 'assistant',
-  identity: 'Writes the one answer the person reads.',
-  instructions: 'Lead with the decision, then only the facts it turns on.',
-  model: 'anthropic/claude-sonnet-4-5',
-});
-
-const priya = defineHuman({
-  name: 'priya',
-  identity: 'Project manager responsible for the programme.',
-  preferences: 'Four sentences at most.',
-});
-
-const room = await startRoom({
-  name: 'site',
-  goal: 'Keep the construction programme, materials, and labour plan consistent.',
-  assistant,
-  agents: [materials],
-  available: [buildingControl, plantHire],
-});
-
-const visit = await room.visit(priya);
-const exchange = await visit.send({ text: 'Can I promise the client a Thursday pour?' });
-const response = await exchange.response();
-if (response) console.log(response.text);
-```
-
-The assistant may seat relevant reserve agents; the domain seats work in
-parallel, and conflicting drafts get reconsidered against the newer record.
-The exchange handle gives callers the durable results: `messages()` waits for
-the exchange close and returns its non-summary messages, while `response()`
-waits for its summary or returns `undefined` when no summary is due.
-
-[`examples/site`](examples/site) is the runnable version: independently owned
-agents, dynamically selected specialists, multiple people, workspace-backed
-tools, and a full observable record. [`demos/`](demos) holds captured runs
-with every activation shown.
-
-## What is novel here
-
-Ambion combines familiar distributed-systems mechanisms in a conversational
-runtime:
-
-- **Optimistic record concurrency for conversation.** Freshness is a runtime
-  invariant, not model etiquette.
-- **Synthesis as a separate agent responsibility.** Domain reasoning stays
-  independent while one constrained seat consolidates the result.
-- **Symmetric compaction.** Agent context and the human-facing view share the
-  same summary without deleting the record.
-- **Dynamic expertise as recorded state.** Selecting a specialist changes the
-  replayable roster.
-- **Quiescence as completion.** The actual liveness of seats closes work.
-- **Presence in the event model.** Joining and leaving follow the same
-  ordering and routing rules as speech.
-- **Leases bridge the room and seat lifecycle.** Pending wakes plus claimed
-  leases define whether the room still has work.
-
-## Trajectory
-
-The current implementation is an executable kernel for this application
-architecture. Its direction follows from the boundaries already in the code:
-
-1. **More durable hosts, same room semantics.** Storage, transport, clocks,
-   models, and workspaces stay replaceable behind their interfaces.
-2. **Process-separated seats.** The JSON-only wire protocol is the interface
-   for moving an agent out of the room process while it keeps its activation
-   and commit rules.
-3. **Stronger workspace isolation.** Capability assignment stays on the agent
-   definition; backends grow from local storage toward harder execution
-   boundaries.
-4. **Long-lived rooms with bounded model context.** Append-only history and
-   summary-based views stay separate, so retention does not set prompt size.
-
-Domain agents stay independently owned modules; everything they do together
-stays legible in the room's record.
+**Summaries compact later activations; people can review the discussion.**
+Once a closed exchange has a summary, later agent activations read it in place
+of the covered source messages. The journal retains those messages, and
+`exchange.messages()` lets applications show the original discussion to human
+participants. See the [assistant contract](docs/assistant.md#8-summaries-compact-activations-people-can-review-the-discussion).
 
 ## Install
 
-Ambion is published to GitHub Packages, which requires a token even for read
+Use Node **22.19 or later**. Packages use ESM. Model execution uses the Pi
+integration and requires credentials for the chosen provider.
+
+The configured registry is GitHub Packages, which requires a token for read
 access. Create a [classic PAT](https://github.com/settings/tokens/new?scopes=read:packages&description=Ambion)
 with `read:packages`, then add this to your project's `.npmrc`:
 
@@ -240,24 +106,112 @@ export GITHUB_TOKEN=…
 npm install @ambionframework/ambion
 ```
 
-Agents that reach a workspace also need a backend:
+The main library includes the journal dependency. Add
+`@ambionframework/workspace` when agents need its optional filesystem tools.
+See [Contributing](CONTRIBUTING.md) to build and run from source.
 
-```sh
-npm install @ambionframework/workspace
+## A small room
+
+This example uses two specialist definitions and no assistant. Each specialist
+owns its instructions and model choice. Production agents can add domain tools
+through `defineTool` or a tool bundle.
+
+```ts
+import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+
+const inventory = defineAgent({
+  name: 'inventory',
+  identity: 'Checks stock constraints.',
+  instructions: 'Use the supplied stock facts. State a constraint only when it changes the answer.',
+  model: 'anthropic/claude-sonnet-4-5',
+});
+const scheduling = defineAgent({
+  name: 'scheduling',
+  identity: 'Checks delivery capacity.',
+  instructions:
+    'Use the supplied capacity facts. State a constraint only when it changes the answer.',
+  model: 'anthropic/claude-sonnet-4-5',
+});
+const priya = defineHuman({
+  name: 'priya',
+  identity: 'Coordinates customer deliveries.',
+});
+
+const room = await startRoom({
+  name: 'delivery',
+  goal: 'Check delivery promises against stock and capacity.',
+  agents: [inventory, scheduling],
+});
+
+try {
+  const visit = await room.visit(priya);
+  const exchange = await visit.send({
+    text: 'We have 12 units in stock and Thursday capacity for 8. Can we promise 10 for Thursday?',
+  });
+  for (const message of await exchange.messages()) {
+    if (message.kind === 'said') console.log(`${message.from}: ${message.text}`);
+  }
+  await visit.leave();
+} finally {
+  await room.stop();
+}
 ```
 
-The record the room writes to is
-[`@ambionframework/journal`](packages/journal); the core depends on it, so it
-arrives with the install above.
+Supply an `assistant` definition to `startRoom` when the application needs
+specialist selection or synthesis. The `available` option supplies
+reserve agents. `exchange.response()` waits for a summary or a terminal result
+without one. Deliberate absence returns `undefined`; revoked or abandoned
+summary work rejects the response wait. The application can read
+`exchange.messages()` for the discussion in either case.
 
-## Read the contracts
+[`examples/site`](examples/site) demonstrates domain tools, reserve selection,
+multiple people, and a shared workspace.
 
-The design is specified in [`docs/agent.md`](docs/agent.md),
-[`docs/exchange.md`](docs/exchange.md), [`docs/presence.md`](docs/presence.md),
-[`docs/assistant.md`](docs/assistant.md), [`docs/roster.md`](docs/roster.md),
-[`docs/workspace.md`](docs/workspace.md), and [`docs/durability.md`](docs/durability.md),
-which says what the record promises when something fails. Build and
-contribution instructions are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+## Hosting and persistence
+
+**Placement, persistence, and tool resources are separate choices.**
+
+| Model                         | Storage                            | Use and support                                                  |
+| ----------------------------- | ---------------------------------- | ---------------------------------------------------------------- |
+| Embedded Node application     | In-memory journals                 | Development, tests, and ephemeral application lifetimes          |
+| Persistent Node service       | SQLite through the storage adapter | SQLite adapter and recovery tests; application-managed lifecycle |
+| Separate room and agent hosts | Storage chosen by each host        | JSON protocol extension contract                                 |
+| Cloudflare Durable Objects    | Each object's SQLite storage       | Private, tested reference; no published deployment product       |
+
+The host keeps its process alive, supplies definitions again after restart,
+and owns model credentials and tool resources. Persisted history alone does
+not restart an application. The protocol carries collaboration data; execution
+hosts need their own code, credentials, and authorization.
+
+See [Deployment and recovery](docs/deployment.md) for host responsibilities
+and the current evidence for each model.
+
+## Boundaries and limits
+
+- Full history remains in storage and replay. Memory and model input can grow
+  with room history. Ambion does not promise bounded context or indefinite scale.
+- Activation deadlines and retry caps do not impose a total exchange budget.
+  Continuing contributions can keep an exchange open.
+- Tools can act before a contribution commits. Applications own effect
+  idempotency; conversation freshness does not make external effects transactional.
+- `abort()` and `stop()` affect the room. An exchange handle does not provide
+  independent cancellation of its agents.
+- A process crash does not record a person's departure. Hosts reconcile
+  durable presence with their actual connections after recovery.
+- Subscriptions belong to a running host. Reconnecting clients read durable
+  messages and reacquire exchange handles.
+- Workspace files remain separate from collaboration history. Shared workspaces
+  provide no operating-system isolation between agents or distributed directory ownership.
+- Ambient means a room remains available between interactions. Native timers,
+  external event subscriptions, and a scheduler ingress API are future work.
+
+The journal does not own domain transactions or credentials. Browser-only
+execution, a managed service, and turnkey deployment commands are not provided.
+
+## Read more
+
+[Documentation](docs/README.md) maps the design contracts and hosting guidance.
+[Contributing](CONTRIBUTING.md) covers builds and checks.
 
 ## License
 

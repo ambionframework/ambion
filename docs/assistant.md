@@ -1,30 +1,31 @@
 # The assistant
 
-This document is the design contract for the assistant: the constrained agent
-a room seats as its human-facing synthesis layer. Every room seats one by
-convention through the `assistant` option. It reads how each
-person reads and consolidates the room's work when the exchange does not
-already hold one answer. It is shipped. The code lives with the rest of the
-runtime in [`packages/ambion/src`](../packages/ambion/src) —
-the summary a seat commits in
-[`transition.ts`](../packages/ambion/src/room/transition.ts), the fold a seat reads in
-[`render.ts`](../packages/ambion/src/render.ts), the shapes in
-[`types.ts`](../packages/ambion/src/types.ts). Read
-[`agent.md`](agent.md), [`exchange.md`](exchange.md) and
-[`presence.md`](presence.md) first.
+**The optional assistant selects specialists and consolidates their work for
+a person.** A room designates it through the `assistant` option. Its selection
+and summary executions receive the corresponding room tools. Specialist agents
+retain responsibility for domain reasoning and tool use.
 
-One sentence:
+**Summaries compact later activations; people can review the discussion.**
+After a summary publishes for a closed exchange, subsequent activations read
+that summary in place of its covered source messages. Human participants can
+review the original discussion through exchange reads. Sections 8 and 9 explain
+the separate responsibilities of context, history, and domain data.
 
-> **A person asks a question. Agents wake and work it out between them. If
-> their work needs consolidating when the room goes quiet, the assistant writes
-> that person one summary, the way they read. The human-facing view and later
-> agent contexts can use it in place of the working.**
+This document describes the current implementation. The [0.1.0 target](../planning/release-0.1.0.md)
+also rejects domain tools in assistant definitions. That validation change
+remains pending in the [delivery plan](../planning/next.md).
+
+The code lives in [`assistant.ts`](../packages/ambion/src/assistant.ts),
+[`transition.ts`](../packages/ambion/src/room/transition.ts), and
+[`render.ts`](../packages/ambion/src/render.ts). Read [agent.md](agent.md),
+[exchange.md](exchange.md), and [presence.md](presence.md) first.
 
 ---
 
 ## 1. The problem, measured
 
-The run in [`demos/`](../demos) is the evidence for both halves.
+The historical runs in [`demos/`](../demos) measured synthesis and context
+size. Each report records the code and model used for its measurements.
 
 **A person reads a transcript where an answer should be.** Priya asked one
 question: _can I tell the client Thursday for the pour?_ It woke three
@@ -39,14 +40,15 @@ record into a seat's context. Over 25 activations that run built 148,038
 characters of context, and **the record was 77% of it**. The first context
 was 1,259 characters. The last was 10,081. Thirty messages did that.
 
-One message answers both.
+A summary consolidates the result and compacts the context of later
+activations. Human participants can still review the full discussion.
 
 ---
 
 ## 2. The assistant
 
-The assistant is the room's counterpart to the people in it: one assistant
-per room, seated when the room starts, writing for every person who visits.
+A room can designate one assistant at startup. That assistant serves every
+person who visits. A room without one still opens and closes exchanges.
 
 **It is a seat.** `startRoom` seats it beside the agents, the room
 activates it as it activates every other agent, its turns land in a
@@ -294,81 +296,64 @@ summary a message somebody was told.
 
 ---
 
-## 8. The record only grows. What a seat reads does not.
+## 8. Summaries compact activations; people can review the discussion
 
-Two statements, and both hold.
+**The journal retains every source message.** A summary appends after the
+range it covers. `messages()` still returns the underlying messages.
+`exchange.messages()` returns the fixed discussion for a closed exchange.
 
-**The record is append-only.** A summary takes the next place and lands
-after everything it covers. Nothing is deleted, nothing is rewritten, seqs are
-monotonic, and `messages()` returns every message for ever. The past does
-not change under a reader.
+**Later activations read summaries for completed discussions.** Once the
+summary publishes, `renderRecord` replaces its covered range with a count
+and the summary:
 
-**A summarised range leaves the seats' context.** From the next activation,
-the room renders the range as its count and the summary that stands for
-it:
-
-```
-· priya arrived                                               (2 hours ago)
+```text
 ── 11 messages, summarised for priya below ──
-[assistant → priya] Thursday is out: the inspector needs 48h notice and is
-  not booked. Earliest is Saturday 30 Aug. It needs four things: …
-[sam] Rain all Thursday morning. I am not pouring into that.  (12 min ago)
+[assistant → priya] Thursday is unavailable. The inspection needs 48 hours' notice.
 ```
 
-The question folds with the answers, because the range starts at the
-question (§3). Nothing is lost by that: the summary answers what she asked,
-so it carries the question inside it. `renderRecord` reads the fold off the
-record itself — a summary carries the range it stands for — so the renderer
-keeps no state and a seat reads the same room whoever renders it.
+This is the expected activation context. Agents use the summary and their
+domain tools after the exchange closes. Source messages remain in the journal
+for human review and recovery. An exchange without a summary has no range
+replacement; closure alone does not discard its messages from context.
 
-**Storage and context are different questions.** What a room keeps is
-the record. What a seat is handed at an activation is a rendering of it,
-built fresh each time by `render.ts`. This changes only the second, which
-is why it costs the first nothing.
+**Human participants can inspect the original exchange.** A client can present
+the summary first and use `exchange.messages()` to show the full discussion.
+Review does not restore those source messages to later agent activations.
+A person can bring a detail into the active discussion through a new message.
 
-It is also what makes the design pay for the room and for the person at
-once. Without it a seat's context grows with every message for ever. With
-it, an exchange costs the room one message once it is over.
-
-§9 says why that is safe to do, and §16 says what it still costs.
+**Compaction does not guarantee bounded context.** Summaries and uncovered
+messages accumulate. Full history remains in storage and replay. Model input
+and memory can grow with room history.
 
 ---
 
-## 9. The record holds discussion; products hold state
+## 9. Applications own domain data and resources
 
-This is what makes §8 safe, and it is a constraint on how a room is
-built.
+**Domain tools use application-owned data.** An inventory agent checks its
+stock system; a scheduling agent checks capacity. A shared workspace is an
+optional resource with its own lifecycle and persistence contract.
 
-**A product answers out of its own data.** `stock_check()` returns 11.7
-tonnes because that is what the materials tracker holds, whatever anybody
-said on the record. No product in the measured run answered outside its own
-API. So a fact that leaves a seat's context is never lost — the product
-that owns it reads it again, on demand, the next time anybody asks.
+**Applications retain decisions that later domain work needs.** A summary
+can omit details, and later activations do not receive its covered messages.
+Agents use domain tools to retrieve durable application facts. Human
+participants can inspect the original discussion in the journal.
 
-**Anything that must survive an exchange belongs in a product's state.**
-What a summary can genuinely lose is a commitment: _"Sam confirms rebar
-fixing by Friday"_, _"Dan approved the overtime"_. No API holds those
-unless a product wrote them down. In the measured run the task list wrote
-three of them, and one of them carried the entire Saturday contingency into
-T-121's note.
-
-That is the rule the room must keep for compaction to be safe:
-
-> **The record is what was said. Nothing lives only there.** A participant
-> that establishes something durable writes it into the state it owns, in
-> the same turn.
-
-A room that keeps this loses nothing to a summary that it could not also
-have lost to a person who stopped reading. A room that breaks it is storing
-its decisions in a transcript, and was fragile before the assistant existed.
+Applications decide which accepted decisions must also update domain systems.
+A tool can act before an agent's speech commits. The room's freshness check
+does not make that external operation transactional. Applications own effect
+idempotency and recovery.
 
 ---
 
 ## 10. Presentation belongs to the client
 
-A person should not read the working. That is a statement about
-presentation, and it is decided in the client — the record and the wire
-carry everything.
+**Keep the full exchange available for human review.** A client can show a
+summary by default and expand the discussion from `exchange.messages()`.
+This review uses the durable source messages, independently of the compacted
+context supplied to later agent activations.
+
+The client can present the summary as the default answer and keep the
+discussion available on request. The record and the wire carry every message.
 
 The runtime commits messages in order and streams them. What a client does
 with them:
@@ -505,8 +490,7 @@ exchange event gives it work. A room nobody visits never activates it.
 
 ## 14. The shape
 
-One required field on the room, one optional field on a person, and no
-method:
+One optional field on the room and one optional field on a person:
 
 ```ts
 const assistant = defineAgent({
@@ -652,30 +636,12 @@ Each boundary is stated so a later change has to argue with it.
 
 ## 16. Open questions
 
-**What a summary loses, and why that is accepted.** A summarised range
-leaves the seats' context, so a fact the summary drops is gone from every
-later activation. That is accepted, on two conditions the design states
-as requirements.
-
-The first is symmetry. **What never entered a person's context cannot come
-back as a question they ask.** They read the summary; the seats read the
-summary. Neither can be surprised by the other, because they hold the same
-premise — and the seats hold strictly more, since they also have everything
-after it and their own tools. The room is never behind the person it is
-answering.
-
-The second is §9. A fact is re-derivable, because the product that owns it
-reads it again. A commitment is durable, because whoever made it wrote it
-into their own state. **A room that keeps §9 loses nothing to a summary
-that it would not also lose to a person who stopped reading.**
-
-What remains, and is not solved: a person carries context from outside the
-session. Priya reads a delivery note on her desk and asks about a tonnage
-no summary prepared her for. The seats answer anyway, out of their own
-APIs — which is §9 again. The case that would genuinely break is a question
-about something established in a summarised range that no product owns, and
-§9 exists to keep that class empty. Whether a real room keeps §9 is the
-thing to watch.
+**Summaries can omit details needed by a later question.** Human participants
+can review the exchange and bring those details into a new message. Agents
+continue from summaries and application data; they do not receive covered
+source messages in later activations. Summaries must preserve the decisions
+and commitments that the collaboration needs. Full history remains in storage
+and replay, and the release does not promise bounded context or indefinite scale.
 
 **Quiescence is a reason to spend money.** No seat activates when the room
 settles, so rule 1 keeps its letter. But the room makes a model call that
@@ -739,12 +705,12 @@ document makes loudly:
   §14.
 - One answer is left as it was given, in the voice that gave it. §4.
 - A room without a designated assistant closes every exchange and owes
-  no summary. An assistant that brings its own tools is seated, and its
-  drafting activation still holds `summarise` alone. §12, §13.
-- A summary wakes nobody, and the next activation reads the fold and the
-  summary in place of the messages, while the record keeps every one of
-  them. The fold paragraph reaches a seat once the record holds a summary.
-  §8, §11, §14.
+  no summary. Current code accepts assistant domain tools but omits them
+  from assistant executions. The 0.1.0 target rejects those definitions.
+  §12, §13.
+- A summary wakes nobody. Later activations read the summary in place of
+  covered messages. Human participants can review the original discussion
+  through `exchange.messages()`. The journal retains every message. §8, §11, §14.
 - A question that lands while a seat works on what nobody asked for still
   opens an exchange and owns it. §3.
 - A later question leaves an active summary's input and range unchanged. §5.

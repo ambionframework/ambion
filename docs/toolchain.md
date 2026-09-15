@@ -2,8 +2,9 @@
 
 This document is the contract for how the Ambion repository is built, checked,
 and released. It is meant to be read before the code: everything below is
-already implemented, so if a script and this document disagree, that is a bug in
-one of them.
+implemented unless explicitly marked as a release target. The
+[0.1.0 scope](../planning/release-0.1.0.md) defines the target distribution;
+[the delivery plan](../planning/next.md) tracks packaging changes and evidence.
 
 The structure follows [withastro/flue](https://github.com/withastro/flue) —
 pnpm workspaces driven by Turborepo, Biome for linting, Prettier for formatting,
@@ -38,9 +39,9 @@ ambion/
 └── pnpm-workspace.yaml    packages/*, examples/*
 ```
 
-**Rule.** `packages/*` is publishable, except `packages/cloudflare`, which
-is `private` and exists to be run on a platform. `examples/*` is private and
-exists to be run. `examples/site` is the runnable example; the gate type-checks it with
+**Current packaging.** `packages/*` is publishable, except
+`packages/cloudflare`, which is a private reference implementation.
+`examples/*` is private and exists to be run. `examples/site` is the runnable example; the gate type-checks it with
 everything else, so an example that breaks fails the build.
 
 ### Package graph
@@ -54,9 +55,15 @@ everything else, so an example that breaks fails the build.
 
 `@ambionframework/journal` depends on nothing in this repository: its main
 entry holds a journal and knows no room or Pi session. Its optional Pi subpath
-adapts transcript storage. `@ambionframework/workspace` implements a port the
-core names, so its arrow points the other way: the core holds the idea of a
-workspace, and the package holds a filesystem behind it.
+adapts transcript storage. `@ambionframework/workspace` owns optional
+filesystem resources and supplies ordinary tool bundles to agents. Its data stays separate from room history.
+
+**The 0.1.0 package surface remains pending.** The target packages are
+`@ambionframework/ambion`, `@ambionframework/journal`,
+`@ambionframework/pi-journal`, and `@ambionframework/workspace`. The Pi audit
+subpath still lives in the journal package. The CLI remains a version-reporting
+scaffold; the release plan excludes it from the 0.1.0 experience. Current
+scripts still include it. Do not treat this documentation as a packaging change.
 
 Internal dependencies use `workspace:*` and are rewritten to the published
 version by pnpm at pack time. That one edge is what the scaffold exercises:
@@ -503,7 +510,7 @@ re-push to a pull request cancels the run it supersedes.
 
 ### Registry
 
-Both packages publish to **GitHub Packages** (`https://npm.pkg.github.com`)
+Publishable packages use **GitHub Packages** (`https://npm.pkg.github.com`)
 under the `@ambionframework` scope, which must match the repository owner. The
 scope mapping lives in the committed root `.npmrc`; credentials never do
 (`.npmrc.local` is git-ignored, and CI injects `NODE_AUTH_TOKEN`).

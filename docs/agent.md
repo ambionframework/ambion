@@ -1,11 +1,12 @@
 # The Agent
 
-This document is the design contract for Ambion's core, and the core is
-shipped. The whole runtime lives in
-[`packages/ambion/src`](../packages/ambion/src) — definitions in
-[`define.ts`](../packages/ambion/src/define.ts), the room in
-[`room.ts`](../packages/ambion/src/room.ts), the public shapes in
-[`types.ts`](../packages/ambion/src/types.ts).
+**Ambion is a collaboration kernel for independently owned agents and the
+people they serve.** This document describes the current core in
+[`packages/ambion/src`](../packages/ambion/src). An agent owns its domain
+behavior; the room supplies the journal and collaboration rules.
+
+The [documentation index](README.md) distinguishes current contracts from
+pending changes in the [0.1.0 scope](../planning/release-0.1.0.md).
 
 Four functions build a room, and one sentence holds the whole of it:
 
@@ -17,10 +18,10 @@ Four functions build a room, and one sentence holds the whole of it:
 The `assistant` option designates one agent for reserve selection and
 summaries. Section 5 explains its relationship to attention.
 
-Four documents build on this core and are also shipped:
+Four documents build on this core:
 [`exchange.md`](exchange.md) specifies the exchange, the room's own unit of
 work; [`presence.md`](presence.md) puts people in a running room;
-[`assistant.md`](assistant.md) adds the assistant every room seats; and
+[`assistant.md`](assistant.md) specifies the optional assistant; and
 [`workspace.md`](workspace.md) gives an agent's tools a boundary to reach
 into. A fifth, [`roster.md`](roster.md), lets the roster change while the
 room runs: it changes two rules below and says which.
@@ -450,7 +451,7 @@ the seating, and `defineAgent` knows nothing about it, so the same agent
 can be the quiet corner in one room and the one who meets people in
 another.
 
-**The room designates one assistant.** `startRoom({ assistant })` seats
+**The room can designate one assistant.** `startRoom({ assistant })` seats
 that agent at attention `none` and records its name in the composition.
 The assistant policy selects reserve agents when an exchange opens and
 consolidates multiple agent messages when it closes.
@@ -621,7 +622,7 @@ crosses between a seat and its room in
 [`wire.ts`](../packages/ambion/src/wire.ts), what an activation is given
 in [`view.ts`](../packages/ambion/src/room/view.ts), what an
 agent's tools reach into in
-[`workspace.ts`](../packages/ambion/src/tools/workspace.ts), what a host
+[`resource.ts`](../packages/workspace/src/resource.ts), what a host
 owns in [`runtime.ts`](../packages/ambion/src/host/runtime.ts), and what
 any of them reads in [`render.ts`](../packages/ambion/src/render.ts).
 
