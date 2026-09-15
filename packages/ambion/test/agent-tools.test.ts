@@ -12,6 +12,10 @@ const tool = (name: string) =>
 	});
 
 describe('agent tools', () => {
+	it('accepts an ordinary domain tool name with an underscore', () => {
+		expect(() => tool('lookup_order')).not.toThrow();
+	});
+
 	it('keeps the three names a room supplies free for its activation tools', () => {
 		for (const name of ['say', 'seat', 'summarise']) {
 			expect(() =>

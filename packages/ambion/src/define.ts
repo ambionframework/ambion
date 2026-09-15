@@ -163,7 +163,6 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 export function defineTool<TParameters extends TSchema>(
 	options: DefineToolOptions<TParameters>,
 ): AmbionTool<TParameters> {
-	assertToolName(options.name);
 	return {
 		[TOOL_BRAND]: true,
 		name: options.name,
@@ -195,12 +194,6 @@ function assertAgentTools(agent: string, tools: readonly unknown[], workspace: b
 		throw new Error(
 			`Agent '${agent}' brings a tool named '${name}': ${reason}. Give it another name.`,
 		);
-	}
-}
-
-function assertToolName(name: string): void {
-	if (!/^[a-z][a-z0-9-]*$/.test(name)) {
-		throw new Error(`Invalid tool name '${name}': names are lowercase, alphanumeric plus dashes.`);
 	}
 }
 
