@@ -6,15 +6,13 @@
  * Nothing in this file does anything; the files beside it are what happens.
  */
 
-import type { Seq as RecordSeq, SessionOpener } from '@ambionframework/journal';
+import type { Seq as RecordSeq } from '@ambionframework/journal';
 import type { AgentToolResult, ExecutionEnv } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { Static, TSchema } from 'typebox';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
-
-export type { SessionOpener };
 
 /** A question the room is working on. */
 export interface Exchange {
@@ -160,6 +158,11 @@ export function isPresence(message: Message): message is PresenceMessage {
 /** Whether a seat is taking an activation. Runtime state, not a seating choice. */
 export type SeatStatus = 'active' | 'idle';
 
+/** A collision-safe id for the Pi session that one seat owns in one room. */
+export function seatSessionId(room: string, seat: string): string {
+	return JSON.stringify(['ambion/seat-session', room, seat]);
+}
+
 /**
  * What wakes a seat, as the widest kind of message it activates for. One
  * widening scale, not a set of flags: `none` is woken by nothing said in the
@@ -184,7 +187,7 @@ export interface AgentSeatInfo {
 	attention: Attention;
 	/** Whether this ordinary seat is the room's designated assistant. */
 	assistant: boolean;
-	/** The id of the seat's downstream Pi session, `<room>:<agent>`. */
+	/** The id of the seat's downstream Pi session. */
 	sessionId: string;
 }
 

@@ -25,8 +25,9 @@
  * - **Say when it has stopped.** An exchange closed, and nothing live.
  */
 
-import type { Committed } from '@ambionframework/journal';
-import type { SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
+import type { Committed, JournalOpener } from '@ambionframework/journal';
+import type { SessionOpener } from '@ambionframework/journal/pi';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { answerCommit, answerLease, answerView, RefusedError } from './answers.ts';
 import { seated } from './define.ts';
 import {
@@ -36,7 +37,6 @@ import {
 	registerRoom,
 	releaseRoom,
 	runningRoom,
-	sessionsOver,
 	stubModel,
 	type Transport,
 } from './host/runtime.ts';
@@ -70,7 +70,6 @@ import {
 	type SeatInfo,
 	type Seq,
 	type SessionEvent,
-	type SessionOpener,
 } from './types.ts';
 import type {
 	Close,
@@ -144,14 +143,11 @@ export interface StartSessionOptions {
 	 * brings custom providers. Defaults to the runtime's.
 	 */
 	streamFn?: StreamFn;
-	/** Pi's own session repository. Defaults to the runtime's opener. */
-	repo?: SessionRepo;
 	/** The runtime this room runs in. Defaults to `defaultRuntime`. */
 	runtime?: Runtime;
 }
 
 export interface ReadSessionOptions {
-	repo?: SessionRepo;
 	runtime?: Runtime;
 }
 
@@ -279,11 +275,7 @@ export function readSession(name: string, options: ReadSessionOptions = {}): Ses
 	const runtime = options.runtime ?? defaultRuntime;
 	const live = runningRoom(runtime, name);
 	if (live instanceof RoomHost) return live;
-	return new ReadOnlySession(
-		name,
-		options.repo ? sessionsOver(options.repo) : runtime.sessions,
-		runtime,
-	);
+	return new ReadOnlySession(name, runtime.journals, runtime);
 }
 
 /** A read needs the journal, the clock and the retry policy: every identity it reports is on the journal. */
@@ -292,10 +284,10 @@ class ReadOnlySession implements SessionView {
 
 	constructor(
 		readonly name: string,
-		sessions: SessionOpener,
+		journals: JournalOpener,
 		private readonly runtime: Runtime,
 	) {
-		this.journal = new RoomJournal(sessions.open(name));
+		this.journal = new RoomJournal(journals.open(name));
 	}
 
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
@@ -327,7 +319,7 @@ class RoomHost implements Session, RunningRoom {
 	readonly name: string;
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
-	readonly sessions: SessionOpener;
+	readonly transcripts: SessionOpener;
 	readonly runtime: Runtime;
 	/** How this room reaches a seat: what the runtime holds, or every seat as an actor in this process. */
 	private readonly transport: Transport;
@@ -378,16 +370,16 @@ class RoomHost implements Session, RunningRoom {
 	private constructor(
 		name: string,
 		runtime: Runtime,
-		options: { repo?: SessionRepo; streamFn?: StreamFn },
+		options: { streamFn?: StreamFn },
 		cast: CompositionDraft | undefined,
 		bindings: Map<string, AgentDefinition> = new Map(),
 	) {
 		this.name = name;
 		this.runtime = runtime;
 		this.transport = runtime.transport ?? inProcessTransport();
-		this.sessions = options.repo ? sessionsOver(options.repo) : runtime.sessions;
+		this.transcripts = runtime.transcripts;
 		this.journal = new RoomJournal(
-			this.sessions.open(name),
+			runtime.journals.open(name),
 			(entry) => this.hear(entry),
 			this.run,
 			() => this.superseded(),

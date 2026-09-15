@@ -8,13 +8,17 @@
 import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
 import type { LeaseChange } from '@ambionframework/ambion/transport';
+import { namespaced } from '@ambionframework/journal';
+import { piSessions } from '@ambionframework/journal/pi';
 import { expect, it } from 'vitest';
-import { sqlSessions } from '../src/storage.ts';
+import { sqlStorage } from '../src/storage.ts';
 import { until } from './until.ts';
 
 it('wakes, runs the activation on its alarm, and the room sends an untaken wake again', async () => {
 	const room = env.ROOM.get(env.ROOM.idFromName('seat-test'));
-	const seat = env.SEAT.get(env.SEAT.idFromName('seat-test:product'));
+	const seat = env.SEAT.get(
+		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'seat-test', 'product'])),
+	);
 	await room.start({ name: 'seat-test', assistant: 'assistant', agents: ['product'] });
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	await room.deliver({ from: 'priya', text: 'When is the pour?', key: 'q1' });
@@ -36,11 +40,15 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	});
 	const leases = await until(async () =>
 		runInDurableObject(room, async (_instance, state) => {
-			const piSession = await sqlSessions(state).open('seat-test');
-			const stored = await piSession.findEntries({ customType: 'ambion/lease' });
-			const found = stored.map((entry) =>
-				entry.type === 'custom' ? (entry.data as LeaseChange) : undefined,
+			const journal = await namespaced(sqlStorage(state), 'ambion/room').open('seat-test');
+			const stored = (await journal.read(0)).entries.map(
+				(entry) =>
+					entry.entry as {
+						kind: string;
+						body: LeaseChange;
+					},
 			);
+			const found = stored.filter((entry) => entry.kind === 'lease').map((entry) => entry.body);
 			return found.at(-1)?.phase === 'ended' ? found : undefined;
 		}),
 	);
@@ -48,8 +56,10 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	expect(leases.at(-1)).toMatchObject({ id: 'message:4:product:1', reason: 'released' });
 	// the seat's audit session holds the activation's turns, in the seat's own storage
 	const audited = await runInDurableObject(seat, async (_instance, state) => {
-		const piSession = await sqlSessions(state).open('seat-test:product');
-		return (await piSession.findEntries()).map((entry) => entry.type);
+		const piSession = await piSessions(sqlStorage(state)).open(
+			JSON.stringify(['ambion/seat-session', 'seat-test', 'product']),
+		);
+		return (await piSession.findEntries({ order: 'oldestFirst' })).map((entry) => entry.type);
 	});
 	expect(audited[0]).toBe('custom');
 	expect(audited.filter((type) => type === 'message').length).toBeGreaterThanOrEqual(3);
@@ -73,7 +83,9 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 
 it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	const room = env.ROOM.get(env.ROOM.idFromName('cut-test'));
-	const seat = env.SEAT.get(env.SEAT.idFromName('cut-test:product'));
+	const seat = env.SEAT.get(
+		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'cut-test', 'product'])),
+	);
 	await room.start({ name: 'cut-test', assistant: 'assistant', agents: ['product'] });
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	await room.deliver({ from: 'priya', text: 'When is the pour?', key: 'q1' });
@@ -88,11 +100,15 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	// the lease the room revoked ends on the record, so the alarm claims nothing
 	const revoked = await until(async () =>
 		runInDurableObject(room, async (_instance, state) => {
-			const piSession = await sqlSessions(state).open('cut-test');
-			const stored = await piSession.findEntries({ customType: 'ambion/lease' });
-			const leases = stored.flatMap((entry) =>
-				entry.type === 'custom' ? [entry.data as LeaseChange] : [],
+			const journal = await namespaced(sqlStorage(state), 'ambion/room').open('cut-test');
+			const stored = (await journal.read(0)).entries.map(
+				(entry) =>
+					entry.entry as {
+						kind: string;
+						body: LeaseChange;
+					},
 			);
+			const leases = stored.filter((entry) => entry.kind === 'lease').map((entry) => entry.body);
 			return leases.find((lease) => lease.phase === 'ended' && lease.reason === 'revoked');
 		}),
 	);
@@ -106,4 +122,16 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	expect(await until(async () => (await room.exchange()) === undefined)).toBe(true);
 	const messages: Message[] = await room.messages();
 	expect(messages.filter((m) => m.from === 'product')).toEqual([]);
+});
+
+it('keeps the first pending activation when different wakes arrive together', async () => {
+	const seat = env.SEAT.get(
+		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'wake-race', 'product'])),
+	);
+	await seat.hold(true);
+	await Promise.all([
+		seat.wake({ room: 'wake-race', seat: 'product', activation: 'first' }),
+		seat.wake({ room: 'wake-race', seat: 'product', activation: 'second' }),
+	]);
+	expect(await seat.wakes()).toBe(1);
 });

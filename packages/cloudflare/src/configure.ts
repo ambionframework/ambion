@@ -66,7 +66,7 @@ export function seatEvent(event: SeatEvent): void {
 
 /** A runtime over this object's storage and clock, with the worker's model call. */
 export function runtimeFor(
-	options: Pick<CreateRuntimeOptions, 'sessions' | 'clock' | 'transport'>,
+	options: Pick<CreateRuntimeOptions, 'storage' | 'clock' | 'transport'>,
 ): Runtime {
 	if (settings === undefined) {
 		throw new Error('Call configure() at module scope before an object runs.');

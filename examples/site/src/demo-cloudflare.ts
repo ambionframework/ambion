@@ -20,8 +20,8 @@ const WORKER = process.env.AMBION_WORKER ?? 'http://localhost:8787';
 const OUT = process.env.DEMO_OUT ?? 'demo-cloudflare-run.json';
 
 interface StoredEntry {
-	type: string;
-	data: Record<string, unknown>;
+	position: number;
+	entry: unknown;
 }
 /** One event a seat raised inside its own object, read back from the logs. */
 interface SeatEvent {
@@ -109,7 +109,11 @@ async function seatEvents(): Promise<SeatEvent[]> {
 const messages = () => call<Say[]>('/messages');
 /** Every entry of one kind, read as the shape that kind carries on the wire. */
 const entriesOf = <T>(stored: StoredEntry[], kind: string): T[] =>
-	stored.filter((entry) => entry.type === `ambion/${kind}`).map((entry) => entry.data as T);
+	stored.flatMap(({ entry }) => {
+		if (entry === null || typeof entry !== 'object') return [];
+		const journal = entry as { kind?: unknown; body?: unknown };
+		return journal.kind === kind ? [journal.body as T] : [];
+	});
 
 // The worker answers before the room starts, so any response says it is up.
 const up = await fetch(WORKER).then(

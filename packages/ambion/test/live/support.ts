@@ -9,16 +9,17 @@
  * and that a real request can be cancelled. It does not prove the routing;
  * `../session.test.ts` and its neighbours prove that, deterministically.
  */
-import type { SessionRepo } from '@earendil-works/pi-agent-core';
+import { memoryJournals } from '@ambionframework/journal';
 import type { Usage } from '@earendil-works/pi-ai';
 import { describe } from 'vitest';
 import {
+	createRuntime,
 	type DefineAgentOptions,
 	defineAgent,
 	defineHuman,
-	InMemorySessionRepo,
 	isSpoken,
 	type Message,
+	type Runtime,
 	type Session,
 	type SessionEvent,
 	type StartSessionOptions,
@@ -35,7 +36,7 @@ export const KEY_VAR = `${MODEL.slice(0, MODEL.indexOf('/'))
 	.replace(/-/g, '_')}_API_KEY`;
 
 /** `describe` when the key is set; a skipped block when it is not. */
-export const live = describe.skipIf(!process.env[KEY_VAR]);
+export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(!process.env[KEY_VAR]);
 
 /** How long a live room may take to go quiet before the test gives up on it. */
 export const QUIET_MS = 150_000;
@@ -68,13 +69,13 @@ export const person = defineHuman({
 	identity: 'Founder. Asks the questions.',
 });
 
-type RoomOptions = Omit<StartSessionOptions, 'name' | 'assistant' | 'streamFn' | 'repo'>;
+type RoomOptions = Omit<StartSessionOptions, 'name' | 'assistant' | 'streamFn' | 'runtime'>;
 
-/** A live room of its own: a fresh repo, so what it spent is its own too. */
+/** A live room of its own, with a fresh native storage for its record and transcripts. */
 export function open(prefix: string, options: RoomOptions) {
-	const repo = new InMemorySessionRepo();
-	const session = startSession({ name: roomName(prefix), assistant, repo, ...options });
-	return { session, repo, events: collect(session) };
+	const runtime = createRuntime({ storage: memoryJournals() });
+	const session = startSession({ name: roomName(prefix), assistant, runtime, ...options });
+	return { session, runtime, events: collect(session) };
 }
 
 /** A promise that fails after `ms`, naming what did not happen. */
@@ -123,11 +124,11 @@ export interface Spent {
  * What a room spent, read off the seats' own downstream sessions: every
  * activation lands there with the provider's usage on each turn.
  */
-export async function spent(repo: SessionRepo, room: string): Promise<Spent> {
+export async function spent(runtime: Runtime, session: Session): Promise<Spent> {
 	const total: Spent = { activations: 0, tokens: 0, cost: 0 };
-	for (const metadata of await repo.list()) {
-		if (!metadata.id.startsWith(`${room}:`)) continue;
-		const seat = await repo.open(metadata);
+	for (const info of session.seats()) {
+		if (info.kind !== 'agent') continue;
+		const seat = await runtime.transcripts.open(info.sessionId);
 		for (const entry of await seat.findEntries()) add(total, entry);
 	}
 	return total;

@@ -20,6 +20,7 @@ import {
 	type Visit,
 	visitSession,
 } from '../src/index.ts';
+import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import { agents, assistant, colleague, priya, product, sam, troubled } from './support/cast.ts';
@@ -29,7 +30,7 @@ import { type Entry, History, standing, violations } from './support/history.ts'
 import { invariants } from './support/invariants.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { type FailMode, gatedOpener, memory, sqlite, tappedOpener } from './support/storage.ts';
+import { type FailMode, gatedJournals, memory, sqlite, tappedJournals } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
 
 function mulberry32(seed: number): () => number {
@@ -66,14 +67,14 @@ class Cluster {
 	/** Leases live when time jumped past the whole expiry: every one expires, and that is one error. */
 	private jumped = 0;
 	private jumpedBefore = 0;
-	private readonly sessions;
+	private readonly journals;
 
 	constructor(
 		readonly name: string,
 		readonly opened: Awaited<ReturnType<typeof memory.open>>,
 		readonly random: () => number,
 	) {
-		this.sessions = tappedOpener(opened.sessions, (id, _n, phase) => {
+		this.journals = tappedJournals(opened.storage, (id, _n, phase) => {
 			if (id !== name || this.disk !== phase) return;
 			this.disk = false;
 			throw new Error('the disk is full');
@@ -109,7 +110,7 @@ class Cluster {
 		// every run's appends go through its own gate, so a cut holds the old run's write alone;
 		// an armed cut takes the next append: it holds the write, crashes the run and resumes
 		// the name while the write is held, and then lets the write land past the fence
-		const sessions = gatedOpener(this.sessions, () => {
+		const journals = gatedJournals(this.journals, () => {
 			// a takeover's own writes are never cut: the cut would wait for the takeover it stops
 			if (this.cutArmed && !this.takingOver && current === this.current) {
 				this.cutArmed = false;
@@ -122,7 +123,7 @@ class Cluster {
 			return current.gate;
 		});
 		return createRuntime({
-			sessions,
+			storage: journals,
 			clock: this.clock,
 			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
 			// Small on purpose: the history runs over entries a checkpoint replaced.
@@ -228,7 +229,7 @@ class Cluster {
 
 	private async resumed(): Promise<void> {
 		this.epoch += 1;
-		const activations = await liveLeases(this.opened.sessions, this.name, this.clock.now());
+		const activations = await liveLeases(this.opened.journals, this.name, this.clock.now());
 		// A resume writes the fence first, and a host tries again when the storage fails it.
 		for (let attempt = 0; ; attempt += 1) {
 			this.runtime = this.host();
@@ -267,7 +268,7 @@ class Cluster {
 	/** Time jumps, the way a paused process sees it: a lease live across a jump past its expiry ends. */
 	async advance(ms: number): Promise<void> {
 		if (ms >= this.runtime.wake.expiry) {
-			this.jumped += await liveLeases(this.opened.sessions, this.name, this.clock.now());
+			this.jumped += await liveLeases(this.opened.journals, this.name, this.clock.now());
 		}
 		await this.clock.advance(ms);
 	}
@@ -286,23 +287,17 @@ class Cluster {
 	async check(): Promise<void> {
 		await invariants(this.session, this.events, {
 			allowErrors: this.allowance(),
-			sessions: this.opened.sessions,
+			journals: this.opened.journals,
 			inherited: this.inherited.activations,
 			inheritedExchange: this.inherited.exchange,
 		});
-		const stored = await storedOf(this.opened.sessions, this.name);
-		const entries = standing(stored).flatMap((entry) => {
-			const type = entry.type.slice('ambion/'.length);
-			if (type === 'message') return [{ type, message: entry.data } as never];
-			if (type === 'lease') return [{ type, lease: entry.data } as never];
-			if (type === 'close') return [{ type, close: entry.data } as never];
-			if (type === 'composition') return [{ type, composition: entry.data } as never];
-			return [];
-		});
+		const stored = await storedOf(this.opened.journals, this.name);
+		const entries = standing(stored) as readonly RoomEntry[];
 		const state = foldRoom(entries, RETRY);
-		expect(
-			violations(this.history, { record: await this.session.messages(), stored, state }),
-		).toEqual([]);
+		const record = await this.session.messages();
+		expect(state.messages).toEqual(record);
+		expect(record.length).toBeGreaterThan(0);
+		expect(violations(this.history, { record, stored, state })).toEqual([]);
 	}
 }
 
@@ -475,7 +470,7 @@ describe('the room under concurrent clients and a nemesis', () => {
 				await stopSession(cluster.session);
 			} catch (error) {
 				const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
-				const stored = await storedOf(opened.sessions, cluster.name);
+				const stored = await storedOf(opened.journals, cluster.name);
 				const errors = cluster.events.flatMap((e) =>
 					e.type === 'error' ? [`${e.agent}: ${e.error.message}`] : [],
 				);
@@ -488,7 +483,7 @@ describe('the room under concurrent clients and a nemesis', () => {
 					.join(' ');
 				throw new Error(
 					`seed ${seed} failed:\n${cluster.history.describe()}\nerrors on the last run: ${errors.join('; ')} (inherited ${cluster.inherited.activations})\nevents on the last run: ${brief}\nentries:\n  ${stored
-						.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`)
+						.map((r) => `${r.kind} ${JSON.stringify(r.body)}`)
 						.join('\n  ')}\n\n${detail}`,
 					{ cause: error },
 				);

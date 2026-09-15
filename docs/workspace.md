@@ -109,8 +109,8 @@ running (`agent.md` §5). One name has one handle in one runtime, until
 an option and defaults to `defaultRuntime`, so two hosts in one process
 define the same name in their own runtimes.
 
-**The `backend` field takes a `WorkspaceBackend`**, the way a session's
-`repo` option takes a `SessionRepo` (`agent.md` §5). §7 specifies the two
+**The `backend` field takes a `WorkspaceBackend`**. A session takes its
+runtime through the `runtime` option (`agent.md` §5). §7 specifies the two
 functions it needs, `connect` and `destroy`. Nothing here is a class to
 extend: a `WorkspaceBackend` is a plain object holding those two functions,
 and the natural way to build one is a factory function that closes over

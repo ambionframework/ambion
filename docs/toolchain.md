@@ -52,8 +52,9 @@ everything else, so an example that breaks fails the build.
 @ambionframework/workspace   ──depends on──▶  @ambionframework/ambion
 ```
 
-`@ambionframework/journal` depends on nothing in this repository: it holds a
-journal and knows no room. `@ambionframework/workspace` implements a port the
+`@ambionframework/journal` depends on nothing in this repository: its main
+entry holds a journal and knows no room or Pi session. Its optional Pi subpath
+adapts transcript storage. `@ambionframework/workspace` implements a port the
 core names, so its arrow points the other way: the core holds the idea of a
 workspace, and the package holds a filesystem behind it.
 
@@ -346,26 +347,18 @@ Every scenario that reads or writes a record runs on each storage the
 repository holds, through `describe.each(storages)` in
 `test/support/storage.ts`:
 
-| Storage  | What it is                                         | Where it runs              |
-| -------- | -------------------------------------------------- | -------------------------- |
-| `memory` | Pi's `InMemorySessionRepo`                         | Every tier but the kill    |
-| `jsonl`  | Pi's `JsonlSessionRepo` over a temporary directory | Every tier but the history |
-| `sqlite` | The core's own storage over one `node:sqlite`      | Every tier                 |
+| Storage  | What it is                                         | Where it runs           |
+| -------- | -------------------------------------------------- | ----------------------- |
+| `memory` | Journal-owned in-memory storage                    | Every tier but the kill |
+| `sqlite` | One SQLite journal backend for room and Pi storage | Every tier              |
 
-Two tiers take a storage each for a reason.
-
-The **history** tier makes two runs write to one record on purpose. Pi's
-JSONL repository holds the next seq in memory, so two runs over one file
-write the same seq twice and the file no longer reads. The SQLite storage
-reads the next seq from the database as each row lands, and its primary
-key refuses a second entry at one seq, so it is the one durable storage
-that tier can use.
+The **history** tier makes two runs write to one record on purpose. It uses
+SQLite journal storage, which atomically compares the storage position and
+returns the entry it appended.
 
 The **kill** tier runs a room in a process of its own and kills it without
-warning, so it needs a storage that outlives the process: `jsonl` and
-`sqlite`. The kill lands between an entry and whatever the storage writes
-beside it — for SQLite, between the row and the lane's leaf — and the room
-resumes over what the kill left.
+warning, so it needs storage that outlives the process. The kill lands before
+or after one atomic append, and the room resumes from the stored head.
 
 ---
 
@@ -429,8 +422,8 @@ read off the seats' downstream sessions.
 **One harness, two tiers.** The invariants live in
 [`test/support/invariants.ts`](../packages/ambion/test/support/invariants.ts),
 and the live support re-exports them. The scripted tier runs the same
-scenarios on every storage (`matrix.test.ts`): Pi's in-memory repository,
-and Pi's JSONL repository over a temporary directory. It runs them on a
+scenarios on every storage (`matrix.test.ts`): memory and SQLite journal
+backends, each with Pi transcripts through the same backend. It runs them on a
 clock it moves by hand (`test/support/clock.ts`), so a test never waits
 on real time, and over a transport that serializes every request and
 response between a seat and the room (`test/support/transport.ts`), so a

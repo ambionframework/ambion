@@ -5,11 +5,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { sessionsOver } from '../src/host/runtime.ts';
-import { InMemorySessionRepo, type SpokenMessage } from '../src/index.ts';
+import type { SpokenMessage } from '../src/index.ts';
 import { RoomJournal } from '../src/journal/journal.ts';
 import { deferred, roomName } from './support/room.ts';
-import { faultyOpener, memory } from './support/storage.ts';
+import { faultyJournals, gatedJournals, memory } from './support/storage.ts';
 
 const say = (text: string): Omit<SpokenMessage, 'seq' | 'key'> => ({
 	kind: 'said',
@@ -18,7 +17,7 @@ const say = (text: string): Omit<SpokenMessage, 'seq' | 'key'> => ({
 	text,
 });
 
-const open = async () => new RoomJournal((await memory.open()).sessions.open(roomName('journal')));
+const open = async () => new RoomJournal((await memory.open()).journals.open(roomName('journal')));
 
 describe('RoomJournal', () => {
 	it('lands a repeated key once, and hands back the first message', async () => {
@@ -63,19 +62,9 @@ describe('RoomJournal', () => {
 	it('shows a message only once its write resolves, and hears it there', async () => {
 		const opened = await memory.open();
 		const slow = deferred();
-		const sessions = {
-			open: async (id: string) => {
-				const piSession = await opened.sessions.open(id);
-				const append = piSession.appendCustomEntry.bind(piSession);
-				piSession.appendCustomEntry = async (type, data) => {
-					await slow.promise;
-					return append(type, data);
-				};
-				return piSession;
-			},
-		};
+		const journals = gatedJournals(opened.journals, () => slow.promise);
 		const heard: number[] = [];
-		const journal = new RoomJournal(sessions.open(roomName('slow')), (entry) => {
+		const journal = new RoomJournal(journals.open(roomName('slow')), (entry) => {
 			if (entry.kind === 'message') heard.push(entry.seq);
 		});
 		const commit = journal.commit({ key: 'k', draft: say('slow') });
@@ -91,8 +80,8 @@ describe('RoomJournal', () => {
 	});
 
 	it('drops a commit whose write fails, and the next one takes its seq', async () => {
-		const faulty = faultyOpener(sessionsOver(new InMemorySessionRepo()));
-		const journal = new RoomJournal(faulty.sessions.open(roomName('faulty')));
+		const faulty = faultyJournals((await memory.open()).journals);
+		const journal = new RoomJournal(faulty.journals.open(roomName('faulty')));
 		await journal.commit({ key: 'a', draft: say('kept') });
 		faulty.fail(true);
 		await expect(journal.commit({ key: 'b', draft: say('lost') })).rejects.toThrow(/disk is full/);
@@ -111,8 +100,8 @@ describe('RoomJournal', () => {
 
 describe('RoomJournal in doubt', () => {
 	it('finds a write whose confirmation was lost before the next write lands', async () => {
-		const faulty = faultyOpener(sessionsOver(new InMemorySessionRepo()));
-		const journal = new RoomJournal(faulty.sessions.open(roomName('doubt')));
+		const faulty = faultyJournals((await memory.open()).journals);
+		const journal = new RoomJournal(faulty.journals.open(roomName('doubt')));
 		await journal.commit({ key: 'a', draft: say('one') });
 		// the append lands, and the caller hears a failure
 		faulty.fail('after');
@@ -135,20 +124,21 @@ describe('RoomJournal in doubt', () => {
 
 	it('reads past the last entry it saw, so every read costs the entries since the one before', async () => {
 		const reads: number[] = [];
-		const faulty = faultyOpener(sessionsOver(new InMemorySessionRepo()));
-		const sessions = {
-			open: async (id: string, parentId?: string) => {
-				const piSession = await faulty.sessions.open(id, parentId);
-				const find = piSession.findEntries.bind(piSession);
-				piSession.findEntries = async (query) => {
-					const found = await find(query);
-					reads.push(found.length);
-					return found;
+		const faulty = faultyJournals((await memory.open()).journals);
+		const journals = {
+			async open(name: string) {
+				const storage = await faulty.journals.open(name);
+				return {
+					async read(after: number) {
+						const found = await storage.read(after);
+						reads.push(found.entries.length);
+						return found;
+					},
+					append: storage.append.bind(storage),
 				};
-				return piSession;
 			},
 		};
-		const journal = new RoomJournal(sessions.open(roomName('cursor')));
+		const journal = new RoomJournal(journals.open(roomName('cursor')));
 		for (const text of ['one', 'two', 'three', 'four']) await journal.commit({ draft: say(text) });
 		faulty.fail('after');
 		await expect(journal.commit({ draft: say('five') })).rejects.toThrow(/disk is full/);
@@ -163,6 +153,6 @@ describe('RoomJournal in doubt', () => {
 		// the journal reads before every write, and every read returns only what landed since the
 		// one before: the replay, then the entry the last commit appended, then the lost one
 		// found by the read in doubt, then nothing before the next commit, and so on
-		expect(reads).toEqual([0, 0, 1, 1, 1, 1, 1, 0, 1, 1]);
+		expect(reads).toEqual([0, 0, 0, 0, 0, 0, 1, 0, 0, 1]);
 	});
 });

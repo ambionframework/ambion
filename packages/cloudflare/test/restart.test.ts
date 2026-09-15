@@ -10,8 +10,9 @@
 import { env, runInDurableObject } from 'cloudflare:test';
 import { isSpoken } from '@ambionframework/ambion';
 import type { LeaseChange } from '@ambionframework/ambion/transport';
+import { namespaced } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
-import { sqlSessions } from '../src/storage.ts';
+import { sqlStorage } from '../src/storage.ts';
 import { until } from './until.ts';
 
 const NAME = 'room-restart';
@@ -19,15 +20,22 @@ const NAME = 'room-restart';
 /** Every entry of one kind on the room's journal, read through a fresh look at its storage. */
 async function stored<T>(stub: DurableObjectStub, type: string): Promise<T[]> {
 	const found = await runInDurableObject(stub, async (_instance, state) => {
-		const piSession = await sqlSessions(state).open(NAME);
-		return piSession.findEntries({ customType: `ambion/${type}` });
+		const journal = await namespaced(sqlStorage(state), 'ambion/room').open(NAME);
+		return (await journal.read(0)).entries.map((entry) => entry.entry as { kind: string; body: T });
 	});
-	return found.map((entry) => (entry as { data: T }).data);
+	return found.filter((entry) => entry.kind === type).map((entry) => entry.body);
 }
 
 /** The run that wrote each entry of one kind: every entry a fenced run writes carries it. */
-const writers = async (stub: DurableObjectStub, type: string): Promise<(string | undefined)[]> =>
-	(await stored<{ run?: string }>(stub, type)).map((entry) => entry.run);
+const writers = async (stub: DurableObjectStub, type: string): Promise<(string | undefined)[]> => {
+	const found = await runInDurableObject(stub, async (_instance, state) => {
+		const journal = await namespaced(sqlStorage(state), 'ambion/room').open(NAME);
+		return (await journal.read(0)).entries.map(
+			(entry) => entry.entry as { kind: string; run?: string },
+		);
+	});
+	return found.filter((entry) => entry.kind === type).map((entry) => entry.run);
+};
 
 it('serves a seat that was at work when the object went away, and takes its commit after', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName(NAME));

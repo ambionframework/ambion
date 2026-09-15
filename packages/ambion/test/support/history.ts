@@ -13,6 +13,8 @@
  * is one message, one attempt at a wake or a draft runs at a time, and
  * nothing is pending once the room drains.
  */
+
+import type { JournalEntry } from '@ambionframework/journal';
 import type { Clock, Message, Seq } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
 import { parseId } from '../../src/room/lease.ts';
@@ -125,7 +127,7 @@ export interface Checked {
 	/** The record the room holds at the end. */
 	record: readonly Message[];
 	/** Every entry on the storage, in append order. */
-	stored: readonly { type: string; data: unknown }[];
+	stored: readonly JournalEntry[];
 	/** The fold at the end, after the drain. */
 	state: RoomState;
 }
@@ -221,11 +223,11 @@ function prefixBreak(
  * use for them.
  */
 export function standing(stored: Checked['stored']): Checked['stored'] {
-	const kept: { type: string; data: unknown }[] = [];
+	const kept: JournalEntry[] = [];
 	let fence: string | undefined;
 	for (const entry of stored) {
-		const run = (entry.data as { run?: string }).run;
-		if (entry.type === 'ambion/run') {
+		const run = entry.run;
+		if (entry.kind === 'run') {
 			fence = run;
 			continue;
 		}
@@ -239,8 +241,8 @@ export function standing(stored: Checked['stored']): Checked['stored'] {
 function seqs(stored: Checked['stored']): string[] {
 	const seen = new Map<number, number>();
 	for (const entry of standing(stored)) {
-		if (entry.type !== 'ambion/message') continue;
-		const seq = (entry.data as { seq: number }).seq;
+		if (entry.kind !== 'message') continue;
+		const seq = entry.seq;
 		seen.set(seq, (seen.get(seq) ?? 0) + 1);
 	}
 	return [...seen]
@@ -260,8 +262,8 @@ function exclusion(stored: Checked['stored']): string[] {
 	const found: string[] = [];
 	const running = new Map<string, string>();
 	for (const entry of standing(stored)) {
-		if (entry.type !== 'ambion/lease') continue;
-		const lease = entry.data as LeaseChange;
+		if (entry.kind !== 'lease') continue;
+		const lease = entry.body as LeaseChange;
 		const attempt = owedBy(lease.id);
 		if (attempt === undefined) continue;
 		const held = running.get(attempt);

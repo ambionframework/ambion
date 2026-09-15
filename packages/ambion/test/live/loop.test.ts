@@ -42,7 +42,7 @@ const clerk = () =>
 
 live('the model and the loop', () => {
 	it('resolves the model from its id, runs a tool through Pi, and stamps the say', async () => {
-		const { session, repo, events } = open('loop', { agents: [clerk()] });
+		const { session, runtime, events } = open('loop', { agents: [clerk()] });
 		const visit = await enter(session, person);
 		await visit.deliver({ text: 'What is the status of order 7781?' });
 		await untilQuiet(session);
@@ -60,7 +60,7 @@ live('the model and the loop', () => {
 		await invariants(session, events);
 
 		// The seat's downstream session holds the turns, with the provider's usage on them.
-		const total = await spent(repo, session.name);
+		const total = await spent(runtime, session);
 		expect(total.activations).toBeGreaterThanOrEqual(1);
 		expect(total.tokens).toBeGreaterThan(0);
 		expect(total.cost).toBeGreaterThan(0);

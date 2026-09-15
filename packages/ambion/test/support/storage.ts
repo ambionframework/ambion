@@ -1,69 +1,46 @@
 /**
  * The storages every scenario runs on.
  *
- * `memory` is Pi's in-memory repository; `jsonl` is Pi's JSONL repository
- * over a temporary directory, through Pi's own Node filesystem; `sqlite`
- * is the core's own storage over one `node:sqlite` database. A room on
- * JSONL or SQLite writes through, so a second runtime over the same
- * directory or database reads what the first wrote.
+ * Every storage gives room journals and Pi transcripts their own namespace.
+ * Memory keeps both in process. SQLite keeps both in one database. A second
+ * runtime reads either record.
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { type Sql, type SqlValue, sqliteSessions } from '@ambionframework/journal';
-import type { Session as PiSession } from '@earendil-works/pi-agent-core';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
-	InMemorySessionRepo,
-	JsonlSessionRepo,
-	type SessionOpener,
-	sessionsOver,
-} from '../../src/index.ts';
+	type JournalOpener,
+	memoryJournals,
+	namespaced,
+	type Sql,
+	type SqlValue,
+	sqliteJournals,
+} from '@ambionframework/journal';
+import { piSessions, type SessionOpener } from '@ambionframework/journal/pi';
 
 export interface OpenedStorage {
-	readonly sessions: SessionOpener;
-	/** The directory a JSONL storage writes under; absent for memory. */
+	readonly storage: JournalOpener;
+	readonly journals: JournalOpener;
+	readonly transcripts: SessionOpener;
 	readonly dir?: string;
 	dispose(): Promise<void>;
 }
 
 export interface Storage {
-	readonly name: 'memory' | 'jsonl' | 'sqlite';
+	readonly name: 'memory' | 'sqlite';
 	open(): Promise<OpenedStorage>;
 }
 
 export const memory: Storage = {
 	name: 'memory',
 	async open() {
-		return { sessions: sessionsOver(new InMemorySessionRepo()), dispose: async () => {} };
-	},
-};
-
-/**
- * A JSONL opener over one directory. Pi's JSONL repository takes an id of
- * letters, digits, `.`, `_` and `-`, and a seat's audit session is named
- * `<room>:<seat>`; the colon is written as `--` on disk, and only there.
- */
-export function jsonlSessions(dir: string): SessionOpener {
-	const fs = new NodeExecutionEnv({ cwd: dir });
-	const repo = new JsonlSessionRepo({ fs, sessionsRoot: join(dir, 'sessions') });
-	const base = sessionsOver(repo, { cwd: dir });
-	const onDisk = (id: string) => id.replaceAll(':', '--');
-	return {
-		open: (id, parentId) =>
-			base.open(onDisk(id), parentId === undefined ? undefined : onDisk(parentId)),
-	};
-}
-
-export const jsonl: Storage = {
-	name: 'jsonl',
-	async open() {
-		const dir = await mkdtemp(join(tmpdir(), 'ambion-jsonl-'));
+		const storage = memoryJournals();
 		return {
-			sessions: jsonlSessions(dir),
-			dir,
-			dispose: () => rm(dir, { recursive: true, force: true }),
+			storage,
+			journals: namespaced(storage, 'ambion/room'),
+			transcripts: piSessions(storage),
+			dispose: async () => {},
 		};
 	},
 };
@@ -87,8 +64,11 @@ export const sqlite: Storage = {
 	async open() {
 		const dir = await mkdtemp(join(tmpdir(), 'ambion-sqlite-'));
 		const database = new DatabaseSync(join(dir, 'room.db'));
+		const storage = sqliteJournals(nodeSql(database));
 		return {
-			sessions: sqliteSessions(nodeSql(database)),
+			storage,
+			journals: namespaced(storage, 'ambion/room'),
+			transcripts: piSessions(storage),
 			dir,
 			async dispose() {
 				database.close();
@@ -98,12 +78,16 @@ export const sqlite: Storage = {
 	},
 };
 
-export const storages: readonly Storage[] = [memory, jsonl, sqlite];
+export const storages: readonly Storage[] = [memory, sqlite];
 
 /** The storages a room in a process of its own opens over one directory, by name. */
-export function childSessions(name: string, dir: string): SessionOpener {
-	if (name === 'sqlite') return sqliteSessions(nodeSql(new DatabaseSync(join(dir, 'room.db'))));
-	return jsonlSessions(dir);
+export function childStorage(_name: string, dir: string): JournalOpener {
+	return sqliteJournals(nodeSql(new DatabaseSync(join(dir, 'room.db'))));
+}
+
+/** The durable journal a child process opens over a storage directory. */
+export function childJournals(name: string, dir: string): JournalOpener {
+	return namespaced(childStorage(name, dir), 'ambion/room');
 }
 
 // -- a storage that fails ----------------------------------------------------
@@ -122,95 +106,97 @@ export type AppendHook = (
 	customType: string | undefined,
 ) => void;
 
-/** An opener whose every append reports itself to the hook, and fails when the hook throws. */
-export function tappedOpener(sessions: SessionOpener, hook: AppendHook): SessionOpener {
-	const counts = new Map<string, number>();
-	const tapped = (id: string, piSession: PiSession): PiSession =>
-		new Proxy(piSession, {
-			get(target, property, receiver) {
-				// `appendAfter` is an append like the others: a storage that refuses a
-				// moved append takes it, and the tap counts every write either way.
-				const appends =
-					property === 'appendCustomEntry' ||
-					property === 'appendMessage' ||
-					property === 'appendAfter';
-				if (appends && Reflect.get(target, property, receiver) !== undefined) {
-					return async (...args: unknown[]) => {
-						const n = (counts.get(id) ?? 0) + 1;
-						counts.set(id, n);
-						const customType = property === 'appendMessage' ? undefined : String(args[0]);
-						hook(id, n, 'before', customType);
-						const append = Reflect.get(target, property, receiver) as (
-							...a: unknown[]
-						) => Promise<unknown>;
-						const result = await append.apply(target, args);
-						hook(id, n, 'after', customType);
-						return result;
-					};
-				}
-				const value = Reflect.get(target, property, receiver);
-				return typeof value === 'function' ? value.bind(target) : value;
-			},
-		});
-	return { open: async (id, parentId) => tapped(id, await sessions.open(id, parentId)) };
-}
-
 /** When a write fails: before it lands, or after it landed and before the writer hears. */
 export type FailMode = false | 'before' | 'after';
 
-export interface FaultyOpener {
-	readonly sessions: SessionOpener;
-	/**
-	 * Every write fails while `on` is set: `true` and `'before'` lose it, `'after'` lands it and
-	 * loses the confirmation. `only` narrows the failure to one entry type. Reads and opens keep working.
-	 */
-	fail(on: boolean | FailMode, only?: string): void;
+/** The room namespace is the only part of a raw storage that a room fault may break. */
+function roomId(name: string): string | undefined {
+	try {
+		const parsed: unknown = JSON.parse(name);
+		if (
+			Array.isArray(parsed) &&
+			parsed.length === 2 &&
+			parsed[0] === 'ambion/room' &&
+			typeof parsed[1] === 'string'
+		) {
+			return parsed[1];
+		}
+		return undefined;
+	} catch {
+		return name;
+	}
 }
 
-/** An opener whose sessions refuse to write while the test says so. */
-export function faultyOpener(sessions: SessionOpener): FaultyOpener {
-	let failing: FailMode = false;
-	let onlyType: string | undefined;
+/** A journal opener whose appends report around their durable boundary. */
+export function tappedJournals(journals: JournalOpener, hook: AppendHook): JournalOpener {
+	const counts = new Map<string, number>();
 	return {
-		sessions: tappedOpener(sessions, (_id, _n, phase, customType) => {
-			if (failing === phase && (onlyType === undefined || onlyType === customType)) {
-				throw new Error('the disk is full');
-			}
-		}),
-		fail: (on, only) => {
-			failing = on === true ? 'before' : on;
-			onlyType = only;
+		async open(name) {
+			const storage = await journals.open(name);
+			const id = roomId(name);
+			return {
+				read: storage.read.bind(storage),
+				async append(entry, expectedPosition) {
+					if (id === undefined) return storage.append(entry, expectedPosition);
+					const n = (counts.get(id) ?? 0) + 1;
+					counts.set(id, n);
+					const kind =
+						typeof entry === 'object' && entry !== null && 'kind' in entry
+							? String((entry as { kind: unknown }).kind)
+							: undefined;
+					hook(id, n, 'before', kind);
+					const landed = await storage.append(entry, expectedPosition);
+					hook(id, n, 'after', kind);
+					return landed;
+				},
+			};
 		},
 	};
 }
 
-// -- a storage that holds a write ---------------------------------------------
+export interface FaultyJournals {
+	readonly journals: JournalOpener;
+	fail(on: boolean | FailMode, only?: string): void;
+}
 
-/** An opener whose sessions hold one write until the test lets it land. */
-export function gatedOpener(
-	sessions: SessionOpener,
-	held: (customType: string, data: unknown) => Promise<void> | undefined,
-): SessionOpener {
-	const gated = (piSession: PiSession): PiSession =>
-		new Proxy(piSession, {
-			get(target, property, receiver) {
-				// Both appends, because a storage that refuses a moved append takes
-				// the second one and a gate over the first would never hold a write.
-				// A storage without one keeps none: the wrapper must not offer what
-				// the session does not have, because the journal asks before it calls.
-				const appends = property === 'appendCustomEntry' || property === 'appendAfter';
-				if (appends && Reflect.get(target, property, receiver) !== undefined) {
-					return async (customType: string, data: unknown, ...rest: unknown[]) => {
-						await held(customType, data);
-						return (Reflect.get(target, property, receiver) as (...a: unknown[]) => unknown).apply(
-							target,
-							[customType, data, ...rest],
-						);
-					};
-				}
-				const value = Reflect.get(target, property, receiver);
-				return typeof value === 'function' ? value.bind(target) : value;
-			},
-		});
-	return { open: async (id, parentId) => gated(await sessions.open(id, parentId)) };
+/** A journal opener whose writes fail before or after the native append. */
+export function faultyJournals(journals: JournalOpener): FaultyJournals {
+	let failing: FailMode = false;
+	let onlyKind: string | undefined;
+	return {
+		journals: tappedJournals(journals, (_id, _n, phase, kind) => {
+			if (failing === phase && (onlyKind === undefined || onlyKind === kind)) {
+				throw new Error('the disk is full');
+			}
+		}),
+		fail(on, only) {
+			failing = on === true ? 'before' : on;
+			onlyKind = only;
+		},
+	};
+}
+
+/** A journal opener that holds a named append until its test releases it. */
+export function gatedJournals(
+	journals: JournalOpener,
+	held: (kind: string | undefined, entry: unknown) => Promise<void> | undefined,
+): JournalOpener {
+	return {
+		async open(name) {
+			const storage = await journals.open(name);
+			const id = roomId(name);
+			return {
+				read: storage.read.bind(storage),
+				async append(entry, expectedPosition) {
+					if (id === undefined) return storage.append(entry, expectedPosition);
+					const kind =
+						typeof entry === 'object' && entry !== null && 'kind' in entry
+							? String((entry as { kind: unknown }).kind)
+							: undefined;
+					await held(kind, entry);
+					return storage.append(entry, expectedPosition);
+				},
+			};
+		},
+	};
 }

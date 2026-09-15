@@ -61,7 +61,7 @@ live('the exchange', () => {
 			'Finance desk.',
 			'shipping on Friday costs nothing extra; a Saturday collection carries a 200 EUR surcharge.',
 		);
-		const { session, repo, events } = open('exchange', {
+		const { session, runtime, events } = open('exchange', {
 			goal: 'Ship the batch this week.',
 			agents: [planner, logistics, finance],
 		});
@@ -104,7 +104,7 @@ live('the exchange', () => {
 		expect(saidByAgents(messages, [andrei.name]).length).toBeLessThanOrEqual(6);
 		await invariants(session, events);
 		const conflicts = events.filter((e) => e.type === 'conflict').length;
-		report('the exchange', await spent(repo, session.name), conflicts);
+		report('the exchange', await spent(runtime, session), conflicts);
 		await stopSession(session);
 	});
 
@@ -135,7 +135,7 @@ live('the exchange', () => {
 			identity: 'Canteen desk. Knows menus and meal times.',
 			instructions: 'Answer questions about meals with one say. For anything else, end your turn.',
 		});
-		const { session, repo, events } = open('reserve', {
+		const { session, runtime, events } = open('reserve', {
 			agents: [frontdesk],
 			available: [permits, catering],
 		});
@@ -154,7 +154,7 @@ live('the exchange', () => {
 		expect(answer).toHaveLength(1);
 		expect(answer[0]?.text).toContain('10 working days');
 		await invariants(session, events);
-		report('the reserve', await spent(repo, session.name));
+		report('the reserve', await spent(runtime, session));
 		await stopSession(session);
 	});
 });

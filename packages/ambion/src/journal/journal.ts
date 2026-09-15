@@ -13,12 +13,11 @@
  */
 import {
 	type Entries,
-	type Entry as Envelope,
+	type JournalEntry as Envelope,
 	Journal,
 	type Seq,
 	type Vocabulary,
 } from '@ambionframework/journal';
-import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import type { Message } from '../types.ts';
 import {
 	type Checkpoint,
@@ -30,22 +29,8 @@ import {
 	type Without,
 } from '../wire.ts';
 
-/** The six kinds of entry the room writes to its Pi session. */
+/** The six kinds of entry the room writes to its journal. */
 export type Kind = 'message' | 'lease' | 'close' | 'composition' | 'run' | 'checkpoint';
-
-/** What the storage holds each kind under. */
-const STORED: Readonly<Record<Kind, string>> = {
-	message: 'ambion/message',
-	lease: 'ambion/lease',
-	close: 'ambion/close',
-	composition: 'ambion/composition',
-	run: 'ambion/run',
-	checkpoint: 'ambion/checkpoint',
-};
-
-const KINDS: Readonly<Record<string, Kind>> = Object.fromEntries(
-	Object.entries(STORED).map(([kind, stored]) => [stored, kind as Kind]),
-);
 
 /**
  * What a body is before the journal gives it a place. Two of the room's
@@ -75,12 +60,17 @@ export interface Bodies {
  * entry at all, and every other kind is whatever the room wrote.
  */
 const WORDS: Vocabulary<Kind> = {
-	stored: (kind) => STORED[kind],
-	kindOf: (customType) => KINDS[customType],
 	record: 'message',
 	run: 'run',
 	checkpoint: 'checkpoint',
-	accepts: (kind, body) => kind !== 'checkpoint' || isCheckpoint(body),
+	accepts: (kind, body): kind is Kind =>
+		(kind === 'message' ||
+			kind === 'lease' ||
+			kind === 'close' ||
+			kind === 'composition' ||
+			kind === 'run' ||
+			kind === 'checkpoint') &&
+		(kind !== 'checkpoint' || isCheckpoint(body)),
 };
 
 /** One entry on the room's journal: its kind, and the body that kind carries. */
@@ -108,7 +98,7 @@ export class RoomJournal extends Journal<Kind, Bodies, 'message'> {
 	private readonly joined: Message[] = [];
 
 	constructor(
-		open: Promise<PiSession>,
+		open: Promise<import('@ambionframework/journal').JournalStorage>,
 		hear?: (entry: Entry) => void,
 		run?: string,
 		lost?: () => void,

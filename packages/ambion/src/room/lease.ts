@@ -27,7 +27,7 @@
  * room sends it when it is due.
  */
 
-import type { Entry } from '@ambionframework/journal';
+import type { JournalEntry } from '@ambionframework/journal';
 import type { Message, Seq } from '../types.ts';
 import type { EndReason, LeaseChange, LeaseHold } from '../wire.ts';
 import {
@@ -86,7 +86,7 @@ export function parseId(id: string): ParsedId | undefined {
  * the seqs and the times its first changes wrote.
  */
 export function foldLeases(
-	changes: readonly Entry<LeaseChange>[],
+	changes: readonly JournalEntry<LeaseChange>[],
 	held: readonly LeaseHold[] = [],
 ): Map<string, LeaseHold> {
 	const leases = new Map<string, LeaseHold>(held.map((lease) => [lease.id, lease]));
@@ -97,7 +97,7 @@ export function foldLeases(
 /** Apply one change to a private lease builder. Callers must not share this map. */
 export function applyLease(
 	leases: Map<string, LeaseHold>,
-	{ body: change, seq }: Entry<LeaseChange>,
+	{ body: change, seq }: JournalEntry<LeaseChange>,
 ): void {
 	const known = leases.get(change.id);
 	if (known?.phase === 'ended') return;

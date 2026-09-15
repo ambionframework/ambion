@@ -1,3 +1,4 @@
+import type { JournalOpener } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import {
@@ -5,14 +6,13 @@ import {
 	defineAgent,
 	defineHuman,
 	defineTool,
-	type SessionOpener,
 	startSession,
 	stopSession,
 	visitSession,
 } from '../src/index.ts';
 import { deferred, roomName } from './support/room.ts';
 import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
-import { faultyOpener, gatedOpener, memory, tappedOpener } from './support/storage.ts';
+import { faultyJournals, gatedJournals, memory, tappedJournals } from './support/storage.ts';
 
 const agent = (name: string, tool: string, calls: string[]) =>
 	defineAgent({
@@ -38,18 +38,19 @@ const runTool = (tool: string) =>
 		call === 1 && toolNames(context).includes(tool) ? callTool(tool, {}) : quiet(),
 	);
 
-const unreadableOpener = (sessions: SessionOpener) => {
+const unreadableOpener = (storage: JournalOpener) => {
 	let unreadable = false;
 	return {
-		sessions: {
-			open: async (id: string, parentId?: string) => {
-				const session = await sessions.open(id, parentId);
-				const find = session.findEntries.bind(session);
-				session.findEntries = async (query) => {
-					if (unreadable) throw new Error('the storage is unreadable');
-					return find(query);
+		storage: {
+			open: async (name: string) => {
+				const opened = await storage.open(name);
+				return {
+					append: opened.append.bind(opened),
+					read: async (after: number) => {
+						if (unreadable) throw new Error('the storage is unreadable');
+						return opened.read(after);
+					},
 				};
-				return session;
 			},
 		},
 		fail: (value: boolean) => {
@@ -65,7 +66,7 @@ describe('pending seating bindings', () => {
 		const other = agent('analyst', 'other', []);
 		const session = startSession({
 			name: roomName('same-turn-binding'),
-			runtime: createRuntime({ sessions: opened.sessions }),
+			runtime: createRuntime({ storage: opened.storage }),
 			streamFn: scripted(() => quiet()),
 		});
 		try {
@@ -87,8 +88,8 @@ describe('pending seating bindings', () => {
 		const gate = deferred();
 		const entered = deferred();
 		let hold = true;
-		const sessions = gatedOpener(opened.sessions, (type) => {
-			if (!hold || type !== 'ambion/message') return undefined;
+		const journals = gatedJournals(opened.storage, (type) => {
+			if (!hold || type !== 'message') return undefined;
 			entered.resolve();
 			return gate.promise;
 		});
@@ -97,7 +98,7 @@ describe('pending seating bindings', () => {
 		const other = agent('analyst', 'other', calls);
 		const session = startSession({
 			name: roomName('gated-binding'),
-			runtime: createRuntime({ sessions }),
+			runtime: createRuntime({ storage: journals }),
 			streamFn: runTool('chosen'),
 		});
 		try {
@@ -123,17 +124,17 @@ describe('pending seating bindings', () => {
 
 	it('promotes a seating binding when storage loses its confirmation', async () => {
 		const opened = await memory.open();
-		const faulty = faultyOpener(opened.sessions);
+		const faulty = faultyJournals(opened.storage);
 		const calls: string[] = [];
 		const chosen = agent('analyst', 'chosen', calls);
 		const session = startSession({
 			name: roomName('lost-binding'),
-			runtime: createRuntime({ sessions: faulty.sessions }),
+			runtime: createRuntime({ storage: faulty.journals }),
 			streamFn: runTool('chosen'),
 		});
 		try {
 			await session.messages();
-			faulty.fail('after', 'ambion/message');
+			faulty.fail('after', 'message');
 			await expect(session.seat(chosen)).rejects.toThrow(/disk is full/);
 			faulty.fail(false);
 			await session.quiet();
@@ -151,10 +152,10 @@ describe('pending seating bindings', () => {
 
 	it('keeps a confirmed binding through failed recovery reads', async () => {
 		const opened = await memory.open();
-		const unreadable = unreadableOpener(opened.sessions);
+		const unreadable = unreadableOpener(opened.storage);
 		let failAppend = true;
-		const sessions = tappedOpener(unreadable.sessions, (_id, _n, phase, type) => {
-			if (!failAppend || phase !== 'after' || type !== 'ambion/message') return;
+		const journals = tappedJournals(unreadable.storage, (_id, _n, phase, type) => {
+			if (!failAppend || phase !== 'after' || type !== 'message') return;
 			failAppend = false;
 			unreadable.fail(true);
 			throw new Error('the disk is full');
@@ -164,7 +165,7 @@ describe('pending seating bindings', () => {
 		const other = agent('analyst', 'other', calls);
 		const session = startSession({
 			name: roomName('unread-confirmed-binding'),
-			runtime: createRuntime({ sessions }),
+			runtime: createRuntime({ storage: journals }),
 			streamFn: runTool('chosen'),
 		});
 		try {
@@ -186,10 +187,10 @@ describe('pending seating bindings', () => {
 
 	it('releases an absent binding after a later successful recovery read', async () => {
 		const opened = await memory.open();
-		const unreadable = unreadableOpener(opened.sessions);
+		const unreadable = unreadableOpener(opened.storage);
 		let failAppend = true;
-		const sessions = tappedOpener(unreadable.sessions, (_id, _n, phase, type) => {
-			if (!failAppend || phase !== 'before' || type !== 'ambion/message') return;
+		const journals = tappedJournals(unreadable.storage, (_id, _n, phase, type) => {
+			if (!failAppend || phase !== 'before' || type !== 'message') return;
 			failAppend = false;
 			unreadable.fail(true);
 			throw new Error('the disk is full');
@@ -198,7 +199,7 @@ describe('pending seating bindings', () => {
 		const replacement = agent('analyst', 'replacement', []);
 		const session = startSession({
 			name: roomName('unread-absent-binding'),
-			runtime: createRuntime({ sessions }),
+			runtime: createRuntime({ storage: journals }),
 			streamFn: runTool('replacement'),
 		});
 		try {

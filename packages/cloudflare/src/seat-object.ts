@@ -15,9 +15,7 @@ import { SeatActor } from '@ambionframework/ambion/transport';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, runtimeFor, seatEvent } from './configure.ts';
 import type { Env } from './room-object.ts';
-import { sqlSessions } from './storage.ts';
-
-type Phase = 'pending' | 'running';
+import { seatMetadata, sqlStorage } from './storage.ts';
 
 /**
  * What a seat did, flattened for whoever the worker gave the events to.
@@ -44,6 +42,14 @@ function seatLine(room: string, seat: string, activation: string, event: Session
 
 export class SeatObject extends DurableObject<Env> {
 	private actor: SeatActor | undefined;
+	private readonly metadata;
+	private readonly storage;
+
+	constructor(ctx: DurableObjectState, env: Env) {
+		super(ctx, env);
+		this.storage = sqlStorage(ctx);
+		this.metadata = seatMetadata(this.storage);
+	}
 
 	/**
 	 * A wake for the activation the object holds, or for a fresh one when it
@@ -52,20 +58,24 @@ export class SeatObject extends DurableObject<Env> {
 	 * it is ignored, and the room sends it again.
 	 */
 	async wake(wake: Wake): Promise<void> {
-		const held = await this.ctx.storage.get<string>('activation');
-		if (held !== undefined && held !== wake.activation) {
+		const next = await this.metadata.change((current) =>
+			current.activation !== undefined && current.activation !== wake.activation
+				? undefined
+				: {
+						patch: {
+							room: wake.room,
+							seat: wake.seat,
+							activation: wake.activation,
+							phase: current.phase ?? 'pending',
+							wakes: (current.wakes ?? 0) + 1,
+						},
+					},
+		);
+		if (next.activation !== wake.activation) {
 			if (this.actor !== undefined) await this.actor.wake(wake);
 			return;
 		}
-		const wakes = (await this.ctx.storage.get<number>('wakes')) ?? 0;
-		await this.ctx.storage.put({
-			room: wake.room,
-			seat: wake.seat,
-			activation: wake.activation,
-			phase: (await this.ctx.storage.get<Phase>('phase')) ?? 'pending',
-			wakes: wakes + 1,
-		});
-		if (!(await this.ctx.storage.get<boolean>('hold'))) await this.ctx.storage.setAlarm(Date.now());
+		if (!next.hold) await this.ctx.storage.setAlarm(Date.now());
 	}
 
 	/**
@@ -74,8 +84,7 @@ export class SeatObject extends DurableObject<Env> {
 	 * reaches no actor, and the alarm that starts it is refused its claim.
 	 */
 	async cut(activation: string): Promise<void> {
-		const cuts = (await this.ctx.storage.get<number>('cuts')) ?? 0;
-		await this.ctx.storage.put('cuts', cuts + 1);
+		await this.metadata.change((current) => ({ patch: { cuts: (current.cuts ?? 0) + 1 } }));
 		await this.actor?.cut(activation);
 	}
 
@@ -85,43 +94,45 @@ export class SeatObject extends DurableObject<Env> {
 	 * holds. A host drains a seat this way before it moves it.
 	 */
 	async hold(on: boolean): Promise<void> {
-		await this.ctx.storage.put('hold', on);
-		if (!on && (await this.ctx.storage.get<string>('activation')) !== undefined) {
+		const next = await this.metadata.change(() => ({ patch: { hold: on } }));
+		if (!on && next.activation !== undefined) {
 			await this.ctx.storage.setAlarm(Date.now());
 		}
 	}
 
 	/** How many wakes this seat has taken. The tests read it. */
 	async wakes(): Promise<number> {
-		return (await this.ctx.storage.get<number>('wakes')) ?? 0;
+		return (await this.metadata.read()).wakes ?? 0;
 	}
 
 	/** How many cuts the room has sent this seat. The tests read it. */
 	async cuts(): Promise<number> {
-		return (await this.ctx.storage.get<number>('cuts')) ?? 0;
+		return (await this.metadata.read()).cuts ?? 0;
 	}
 
 	override async alarm(): Promise<void> {
-		const activation = await this.ctx.storage.get<string>('activation');
-		const room = await this.ctx.storage.get<string>('room');
-		const seat = await this.ctx.storage.get<string>('seat');
+		const state = await this.metadata.read();
+		const { activation, room, seat } = state;
 		if (activation === undefined || room === undefined || seat === undefined) return;
 		const seatRoom = this.roomFor(room);
-		if ((await this.ctx.storage.get<Phase>('phase')) === 'running') {
+		if (state.phase === 'running') {
 			// A run that never came back: the object was evicted mid-activation.
 			await seatRoom.lease({ activation, operation: 'release', reason: 'failed', readThrough: 0 });
 			await this.clear();
 			return;
 		}
-		await this.ctx.storage.put('phase', 'running');
-		const runtime = runtimeFor({ sessions: sqlSessions(this.ctx), clock: systemClock() });
+		await this.metadata.change(() => ({ patch: { phase: 'running' } }));
+		const runtime = runtimeFor({
+			storage: this.storage,
+			clock: systemClock(),
+		});
 		this.actor = new SeatActor(seatRoom, {
 			clock: runtime.clock,
 			call: runtime.call,
 			definition: definitionOf(seat),
 			room,
 			seat,
-			sessions: runtime.sessions,
+			transcripts: runtime.transcripts,
 			stream: runtime.stream,
 			model: runtime.model,
 			emit: (event) => seatEvent(seatLine(room, seat, activation, event)),
@@ -155,6 +166,6 @@ export class SeatObject extends DurableObject<Env> {
 	}
 
 	private async clear(): Promise<void> {
-		await this.ctx.storage.delete(['activation', 'phase']);
+		await this.metadata.change(() => ({ remove: ['activation', 'phase'] }));
 	}
 }

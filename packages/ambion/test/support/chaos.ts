@@ -13,6 +13,8 @@
  * through it: every delivery on the record once, every answer once, every
  * summary owed written once.
  */
+
+import type { JournalOpener } from '@ambionframework/journal';
 import { expect } from 'vitest';
 import {
 	createRuntime,
@@ -24,13 +26,11 @@ import {
 	resumeSession,
 	type Session,
 	type SessionEvent,
-	type SessionOpener,
 	startSession,
 	visitSession,
 } from '../../src/index.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
 import { inProcessTransport } from '../../src/transport.ts';
-import type { Seq } from '../../src/types.ts';
 import type { LeaseChange } from '../../src/wire.ts';
 import {
 	agents,
@@ -48,7 +48,7 @@ import { type FakeClock, fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
 import { storedOf } from './room.ts';
 import { scripted } from './scripted.ts';
-import { type FailMode, type OpenedStorage, tappedOpener } from './storage.ts';
+import { type FailMode, type OpenedStorage, tappedJournals } from './storage.ts';
 import { serializing } from './transport.ts';
 
 /**
@@ -59,7 +59,7 @@ import { serializing } from './transport.ts';
  */
 export async function outcome(
 	session: Session,
-	sessions: SessionOpener,
+	journals: JournalOpener,
 	cast: Cast = steady(),
 ): Promise<void> {
 	const record = await session.messages();
@@ -75,7 +75,7 @@ export async function outcome(
 		}
 	}
 	expect(record.filter(isSummary).map((m) => m.to)).toEqual(cast.summaries);
-	const closes = (await storedOf(sessions, session.name)).filter((r) => r.type === 'ambion/close');
+	const closes = (await storedOf(journals, session.name)).filter((r) => r.kind === 'close');
 	expect(closes).toHaveLength(3);
 	expect(session.exchange()).toBeUndefined();
 	expect(session.seats().find((s) => s.name === priya.name)).toMatchObject({ presence: 'absent' });
@@ -93,15 +93,14 @@ async function read(of: () => Promise<string>): Promise<string> {
 
 /** The leases running and not expired on the journal at `now`: what a resumed room inherits. */
 export async function liveLeases(
-	sessions: SessionOpener,
+	journals: JournalOpener,
 	name: string,
 	now: number,
 ): Promise<number> {
-	const changes = (await storedOf(sessions, name)).flatMap((entry) => {
-		if (entry.type !== 'ambion/lease') return [];
+	const changes = (await storedOf(journals, name)).flatMap((entry) => {
+		if (entry.kind !== 'lease') return [];
 		// The storage holds the journal's own fields beside the body; the fold reads the place off the entry.
-		const { seq, run: _run, ...body } = entry.data as LeaseChange & { seq: Seq; run?: string };
-		return [{ kind: 'lease', body, seq }];
+		return [{ kind: 'lease', body: entry.body as LeaseChange, seq: entry.seq }];
 	});
 	return [...foldLeases(changes).values()].filter((lease) => isLive(lease, now)).length;
 }
@@ -141,7 +140,7 @@ export class World {
 	private off: () => void = () => {};
 	private dead = false;
 	private readonly present = new Map<string, HumanDefinition>();
-	private readonly sessions: SessionOpener;
+	private readonly journals: JournalOpener;
 
 	constructor(
 		readonly name: string,
@@ -149,7 +148,7 @@ export class World {
 		private readonly crashAt?: CrashPoint,
 		private readonly cast: Cast = steady(),
 	) {
-		this.sessions = tappedOpener(opened.sessions, (id, _n, phase) => this.appended(id, phase));
+		this.journals = tappedJournals(opened.storage, (id, _n, phase) => this.appended(id, phase));
 	}
 
 	/** The room the world holds now. A test reads it after `quiet()`. */
@@ -177,7 +176,7 @@ export class World {
 
 	private host(): Runtime {
 		return createRuntime({
-			sessions: this.sessions,
+			storage: this.journals,
 			clock: this.clock,
 			transport: serializing(inProcessTransport()),
 			// Small on purpose: every crash point lands on both sides of a checkpoint.
@@ -232,7 +231,7 @@ export class World {
 			return;
 		}
 		this.inherited = {
-			activations: await liveLeases(this.opened.sessions, this.name, this.clock.now()),
+			activations: await liveLeases(this.opened.journals, this.name, this.clock.now()),
 			exchange: this.session.exchange() !== undefined,
 		};
 		this.watch();
@@ -319,12 +318,12 @@ export class World {
 		// the errors a run may carry: the lease the dead run held expired, and the cast's own failures
 		expect(errors.filter((m) => !/past its lease|the model is down/.test(m))).toEqual([]);
 		await invariants(this.session, this.events, {
-			sessions: this.opened.sessions,
+			journals: this.opened.journals,
 			allowErrors: this.inherited.activations + this.cast.failures() - this.failedBefore,
 			inherited: this.inherited.activations,
 			inheritedExchange: this.inherited.exchange,
 		});
-		await outcome(this.session, this.opened.sessions, this.cast);
+		await outcome(this.session, this.opened.journals, this.cast);
 	}
 
 	/**
@@ -342,8 +341,8 @@ export class World {
 					.join('; '),
 			)}`,
 			`entries: ${await read(async () =>
-				(await storedOf(this.opened.sessions, this.name))
-					.map((r) => `${r.type.slice(7)} ${JSON.stringify(r.data)}`)
+				(await storedOf(this.opened.journals, this.name))
+					.map((r) => `${r.kind} ${JSON.stringify(r.body)}`)
 					.join('\n  '),
 			)}`,
 		].join('\n');

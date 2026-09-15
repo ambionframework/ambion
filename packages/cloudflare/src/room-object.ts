@@ -34,9 +34,10 @@ import type {
 	ViewResponse,
 } from '@ambionframework/ambion/transport';
 import { runningRoom } from '@ambionframework/ambion/transport';
+import type { JournalOpener } from '@ambionframework/journal';
 import { definitionOf, definitions, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';
-import { sqlSessions } from './storage.ts';
+import { type MetadataStore, type RoomMetadata, roomMetadata, sqlStorage } from './storage.ts';
 
 export interface Env {
 	ROOM: DurableObjectNamespace<RoomObject>;
@@ -81,7 +82,9 @@ function alarmClock(state: DurableObjectState): Clock {
 function rpcTransport(env: Env): Transport {
 	return {
 		connect(room, seat) {
-			const stub = env.SEAT.get(env.SEAT.idFromName(`${room.name}:${seat}`));
+			const stub = env.SEAT.get(
+				env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', room.name, seat])),
+			);
 			return { wake: (wake) => stub.wake(wake), cut: (activation) => stub.cut(activation) };
 		},
 	};
@@ -89,18 +92,22 @@ function rpcTransport(env: Env): Transport {
 
 export class RoomObject extends DurableObject<Env> {
 	private readonly runtime: Runtime;
+	protected readonly metadata: MetadataStore<RoomMetadata>;
+	protected readonly storage: JournalOpener;
 	private room: Session | undefined;
 	private readonly visits = new Map<string, Visit>();
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
+		this.storage = sqlStorage(ctx);
 		this.runtime = runtimeFor({
-			sessions: sqlSessions(ctx),
+			storage: this.storage,
 			clock: alarmClock(ctx),
 			transport: rpcTransport(env),
 		});
+		this.metadata = roomMetadata(this.storage);
 		ctx.blockConcurrencyWhile(async () => {
-			const name = await ctx.storage.get<string>('name');
+			const { name } = await this.metadata.read();
 			if (name !== undefined)
 				this.room = await resumeSession(name, { runtime: this.runtime, agents: definitions() });
 		});
@@ -109,7 +116,7 @@ export class RoomObject extends DurableObject<Env> {
 	/** Start the room from names the worker configured. The composition lands on the journal. */
 	async start(options: StartOptions): Promise<void> {
 		if (this.room !== undefined) throw new Error(`Room '${this.room.name}' is running.`);
-		await this.ctx.storage.put('name', options.name);
+		await this.metadata.change(() => ({ patch: { name: options.name } }));
 		this.room = startSession({
 			name: options.name,
 			runtime: this.runtime,
@@ -122,7 +129,9 @@ export class RoomObject extends DurableObject<Env> {
 	}
 
 	async visit(person: Person): Promise<void> {
-		await this.ctx.storage.put(`person:${person.name}`, person);
+		await this.metadata.change((current) => ({
+			patch: { people: { ...current.people, [person.name]: person } },
+		}));
 		await this.visitOf(person.name);
 	}
 
@@ -130,7 +139,9 @@ export class RoomObject extends DurableObject<Env> {
 	private async visitOf(name: string): Promise<Visit> {
 		const known = this.visits.get(name);
 		if (known !== undefined) return known;
-		const person = await this.ctx.storage.get<Person>(`person:${name}`);
+		const people = (await this.metadata.read()).people;
+		const person =
+			people !== undefined && Object.hasOwn(people, name) ? (people[name] as Person) : undefined;
 		if (person === undefined) throw new Error(`'${name}' has not visited this room.`);
 		const visit = await visitSession(this.running(), defineHuman(person));
 		this.visits.set(name, visit);
@@ -179,7 +190,7 @@ export class RoomObject extends DurableObject<Env> {
 		await stopSession(this.running());
 		this.room = undefined;
 		this.visits.clear();
-		await this.ctx.storage.delete('name');
+		await this.metadata.change(() => ({ remove: ['name'] }));
 	}
 
 	async messages(since?: Seq): Promise<Message[]> {

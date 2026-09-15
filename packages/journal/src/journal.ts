@@ -7,7 +7,7 @@
  * does not take it.
  *
  * It is the one thing a live writer and a read of a stopped one share, so
- * it knows nothing about either: it replays a Pi session into memory and
+ * it knows nothing about either: it replays journal storage into memory and
  * commits one entry at a time on a serial queue. An entry exists when its
  * write is confirmed, and nothing observes it before: the cache updates
  * after the append resolves, and a caller that awaits `commit` holds an
@@ -19,12 +19,9 @@
  * asked for. What each one means belongs to the caller, which names its
  * kinds in a `Vocabulary`.
  *
- * **The envelope is the journal's, and the body is the caller's.** The
- * storage holds three fields beside every body: the place the entry took,
- * the key its commit carried, and the run that wrote it. One counter gives
- * out every place, so a seq names one entry of any kind. A caller drafts
- * the body alone and reads the place off the entry, so no fact stands in
- * two fields.
+ * **The envelope is the journal's, and the body is the caller's.** Storage
+ * holds one nested envelope with kind, body, seq, key, and run. One counter
+ * gives out every seq. The body stays nested, so its fields do not collide.
  *
  * **A key is an idempotency token, and a `readThrough` is a conditional
  * write.** The two checks the queue runs answer different questions. A
@@ -45,7 +42,7 @@
  * write, and again on the queue behind a write that failed. A write whose
  * confirmation was lost is on the record before anything lands on top of
  * it, and a read of the record waits for the queue. The cursor moves to
- * the last entry every read saw, so a read costs the entries since the
+ * the final storage position every read saw, so a read costs the entries since the
  * one before it, whatever the journal's age.
  *
  * Every entry the journal takes reaches the caller the same way, whether
@@ -64,37 +61,11 @@
  *
  * The design contract is `docs/durability.md`.
  */
-import type { Session as PiSession } from '@earendil-works/pi-agent-core';
 import { nextSeq, refused, supersedes, voided } from './rules.verified.ts';
+import type { JournalStorage, StoredEntry } from './storage.ts';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = number;
-
-/** The session as one that refuses a moved append, or nothing when its storage cannot. */
-function fenced(session: PiSession): (PiSession & FencedSession) | undefined {
-	const candidate = session as Partial<FencedSession>;
-	return typeof candidate.appendAfter === 'function'
-		? (session as PiSession & FencedSession)
-		: undefined;
-}
-
-/**
- * A session that refuses an append when the record moved under the writer.
- *
- * A run reads the storage before every write, and the read tells it where
- * the record stood. `appendAfter` takes that position: the entry lands at
- * the next one, or the storage says the record moved and writes nothing.
- * A run that was fenced while its write waited is refused before it can
- * acknowledge, so the write it held is no loss.
- *
- * A storage that cannot promise it does not offer it, and the record
- * appends the way it always did. The fence still voids what such a storage
- * takes.
- */
-export interface FencedSession {
-	/** The entry's id, or nothing when the record moved past `expected`. */
-	appendAfter(customType: string, data: unknown, expected: number): Promise<string | undefined>;
-}
 
 /**
  * One entry on a journal: the one envelope every user shares.
@@ -133,39 +104,25 @@ export type Entries<TKind extends string, TBodies extends Bodies<TKind>> = {
 }[TKind];
 
 /**
- * The caller's entry kinds, as the journal needs them. A kind is a name the
- * caller chose; `stored` is what the storage holds it under.
- *
- * The journal reads no body. It needs four facts: what a kind is stored as
- * and back, which kind makes up the record, which kind fences a run, and
- * which kind replaces every entry before it. `accepts` is the caller's own
- * check on a body, and the journal refuses an entry it turns down.
+ * The caller's entry kinds, as the journal needs them. `accepts` validates a
+ * kind and body before the journal takes it.
  */
 export interface Vocabulary<TKind extends string = string> {
-	/** What the storage holds this kind under. */
-	stored(kind: TKind): string;
-	/** The kind a stored custom type names, or nothing for one this reader skips. */
-	kindOf(customType: string): TKind | undefined;
 	/** The kind that makes up the record a reader reads. Every other kind is about it. */
 	readonly record: TKind;
 	/** The kind that fences a run. */
 	readonly run: TKind;
 	/** The kind that replaces every entry before it. */
 	readonly checkpoint: TKind;
-	/** Whether this body is one the caller reads under this kind. */
-	accepts(kind: TKind, body: unknown): boolean;
+	/** Whether this kind and body are values the caller reads. */
+	accepts(kind: string, body: unknown): kind is TKind;
 }
 
-/**
- * What the storage holds for one entry: the body the caller wrote, and the
- * three fields the journal keeps beside it. A caller that writes a field of
- * its own under one of these three names loses it to the journal, which is
- * why they are named for the journal and never for any domain. The journal
- * writes all three, so such a field never reaches the envelope: a body that
- * names its own `key` does not become an idempotency token, and one that
- * names its own `run` does not stand in for the fence.
- */
+/** The native envelope that journal storage holds. The body stays nested. */
+
 interface Stored {
+	kind?: unknown;
+	body?: unknown;
 	seq?: unknown;
 	key?: unknown;
 	run?: unknown;
@@ -173,16 +130,10 @@ interface Stored {
 }
 
 /** The run that wrote a stored entry: the fence reads it before any envelope. */
-const writerOf = (data: unknown): string | undefined => {
-	const run = (data as Stored).run;
+const writerOf = (entry: unknown): string | undefined => {
+	const run = (entry as Stored).run;
 	return typeof run === 'string' ? run : undefined;
 };
-
-/** The body as the caller wrote it: everything stored but the journal's own three. */
-function bodyOf(data: unknown): Record<string, unknown> {
-	const { seq: _seq, key: _key, run: _run, ...body } = data as Stored;
-	return body;
-}
 
 /**
  * The body a draft yields. A body may be any shape the caller chose, so the
@@ -193,13 +144,13 @@ function drafted<T>(draft: T | (() => T)): T {
 }
 
 /**
- * One body, with the journal's own three beside it, as the storage holds it.
- * `bodyOf` takes the three off a stored entry, and this puts them back, so
- * the two are inverses: a body that carries a field under one of the three
- * names loses it here, and never reaches the envelope.
+ * One body, with the journal's own fields beside it, as the storage holds it.
+ * The envelope nests the body, so body fields never collide with journal
+ * fields.
  */
-const beside = (body: unknown, seq: Seq, key?: string, run?: string): Stored => ({
-	...bodyOf(body),
+const beside = (kind: string, body: unknown, seq: Seq, key?: string, run?: string): Stored => ({
+	kind,
+	body,
 	seq,
 	...(key === undefined ? {} : { key }),
 	...(run === undefined ? {} : { run }),
@@ -214,13 +165,13 @@ const beside = (body: unknown, seq: Seq, key?: string, run?: string): Stored => 
  */
 function envelope<TKind extends string>(
 	words: Vocabulary<TKind>,
-	customType: string,
 	data: unknown,
 ): Entry | undefined {
-	const kind = words.kindOf(customType);
-	if (kind === undefined) return undefined;
+	if (data === null || typeof data !== 'object') return undefined;
 	const stored = data as Stored;
-	const body = bodyOf(data);
+	const kind = stored.kind;
+	if (typeof kind !== 'string') return undefined;
+	const body = stored.body;
 	if (!words.accepts(kind, body)) return undefined;
 	const seq = positionOf(stored.seq);
 	// Every entry takes a place on the record; one without is not an entry.
@@ -274,7 +225,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	readonly entries: Entries<TKind, TBodies>[] = [];
 	/** The entries that make up the record, in order. */
 	readonly record: Entry<TBodies[TRecord]>[] = [];
-	readonly ready: Promise<PiSession>;
+	readonly ready: Promise<JournalStorage>;
 	/** The place the last entry took. The next entry of any kind takes the one after it. */
 	lastSeq = 0;
 	/**
@@ -287,9 +238,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	/** The serial queue. One commit at a time, in the order they were asked for. */
 	private tail: Promise<unknown> = Promise.resolve();
 	private closed = false;
-	/** Pi's id of every entry the cache holds past the cursor: what a read in doubt finds again. */
-	private readonly known = new Set<string>();
-	/** Pi's seq of the last entry a read saw: the next read starts past it. */
+	/** The storage position the last read scanned. */
 	private cursor = 0;
 	/** The replay is over: every entry the journal takes from now on is news, and `hear` takes it. */
 	private replayed = false;
@@ -310,25 +259,25 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	 * the name. `words` names the caller's entry kinds.
 	 */
 	constructor(
-		open: Promise<PiSession>,
+		open: Promise<JournalStorage>,
 		private readonly words: Vocabulary<TKind>,
 		private readonly hear?: (entry: Entries<TKind, TBodies>) => void,
 		private readonly run?: string,
 		private readonly lost?: () => void,
 	) {
 		this.ready = this.replay(open);
-		// A host can hold a session and read nothing from it for hours, so
+		// A host can hold storage and read nothing from it for hours, so
 		// nothing may await `ready` for a long time. Mark the rejection handled
 		// here: a storage that cannot open must surface at the call that needs
 		// the journal, and never as an unhandled rejection that ends the process.
 		void this.ready.catch(() => {});
 	}
 
-	private async replay(open: Promise<PiSession>): Promise<PiSession> {
-		const piSession = await open;
-		await this.read(piSession);
+	private async replay(open: Promise<JournalStorage>): Promise<JournalStorage> {
+		const storage = await open;
+		await this.read(storage);
 		this.replayed = true;
-		return piSession;
+		return storage;
 	}
 
 	/**
@@ -351,24 +300,20 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	 * Cache every entry the storage holds past the cursor that the cache
 	 * lacks, tell `found` about each one after the replay, and move the
 	 * cursor to the last entry seen. Nothing at or before the cursor is
-	 * read again, so the ids kept to tell a found entry from a cached one
-	 * are only those appended since.
+	 * read again. The cursor distinguishes a found entry from one already
+	 * cached.
 	 */
-	private async read(piSession: PiSession): Promise<void> {
-		const afterSeq = this.cursor;
-		// Pi reads a cursor against the order: oldest first, past `afterSeq`.
-		const query = afterSeq === 0 ? {} : { order: 'oldestFirst' as const, cursor: { afterSeq } };
-		const found = (await piSession.findEntries(query)).filter((entry) => entry.seq > afterSeq);
-		// findEntries does not promise append order; Pi's seq does.
-		found.sort((a, b) => a.seq - b.seq);
-		for (const entry of found) {
-			this.cursor = Math.max(this.cursor, entry.seq);
-			if (entry.type !== 'custom') continue;
-			// The fence is positional: a run entry moves it where the entry sits, cached or not.
-			if (entry.customType === this.words.stored(this.words.run)) this.pass(writerOf(entry.data));
-			if (!this.known.has(entry.id)) this.take(entry);
+	private async read(storage: JournalStorage): Promise<void> {
+		const after = this.cursor;
+		const found = await storage.read(after);
+		const entries = found.entries.filter((entry) => entry.position > after);
+		entries.sort((a, b) => a.position - b.position);
+		for (const entry of entries) {
+			this.cursor = entry.position;
+			const known = envelope(this.words, entry.entry) as Entries<TKind, TBodies> | undefined;
+			if (known !== undefined) this.take(known, writerOf(entry.entry));
 		}
-		this.known.clear();
+		this.cursor = Math.max(this.cursor, found.position);
 	}
 
 	/**
@@ -386,11 +331,10 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	}
 
 	/** One entry a read found that the cache lacks: cached unless void. */
-	private take(entry: { id: string; customType: string; data?: unknown }): void {
-		const known = envelope(this.words, entry.customType, entry.data) as
-			Entries<TKind, TBodies> | undefined;
-		if (known === undefined || this.voided(known, writerOf(entry.data))) return;
-		this.cache(known, entry.id);
+	private take(entry: Entries<TKind, TBodies>, written: string | undefined): void {
+		if (entry.kind === this.words.run) this.pass(written);
+		if (this.voided(entry, written)) return;
+		this.cache(entry);
 	}
 
 	/**
@@ -407,8 +351,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	 * One entry into the cache, and the room hears it. Nothing during the
 	 * replay is news, so nothing is heard until the replay is over.
 	 */
-	private cache(entry: Entries<TKind, TBodies>, id: string): void {
-		this.known.add(id);
+	private cache(entry: Entries<TKind, TBodies>): void {
 		this.entries.push(entry);
 		if (entry.kind === this.words.checkpoint) this.compact();
 		else if (entry.kind !== this.words.record) this.sinceCheckpoint += 1;
@@ -448,13 +391,13 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 		draft: TBodies[K] | (() => TBodies[K] | undefined),
 	): Promise<boolean> {
 		const link = this.tail.then(async () => {
-			const piSession = await this.open();
+			const storage = await this.open();
 			const body = drafted(draft);
 			if (body === undefined) return false;
-			const customType = this.words.stored(kind);
-			const stored = beside(body, nextSeq(this.lastSeq), undefined, this.run);
-			const id = await this.append(piSession, customType, stored);
-			this.took(customType, stored, id);
+			const stored = beside(kind, body, nextSeq(this.lastSeq), undefined, this.run);
+			const appended = await this.append(storage, stored);
+			this.cursor = appended.position;
+			this.took(appended);
 			return true;
 		});
 		this.tail = link.catch(() => {});
@@ -488,17 +431,17 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	}
 
 	/**
-	 * The session to write to, or the failure a closed or superseded journal
+	 * The storage to write to, or the failure a closed or superseded journal
 	 * answers every write with. The journal reads the storage first: what
 	 * another run wrote, and what a write in doubt left.
 	 */
-	private async open(): Promise<PiSession> {
+	private async open(): Promise<JournalStorage> {
 		this.refuse();
-		const piSession = await this.ready;
-		await this.read(piSession);
+		const storage = await this.ready;
+		await this.read(storage);
 		// A journal closed or superseded while the read ran writes nothing more.
 		this.refuse();
-		return piSession;
+		return storage;
 	}
 
 	private refuse(): void {
@@ -511,9 +454,9 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	 * three beside it. A failure puts the journal in doubt, whatever the
 	 * storage did with the entry, and queues the read that settles it.
 	 */
-	private async append(piSession: PiSession, type: string, data: unknown): Promise<string> {
+	private async append(storage: JournalStorage, entry: unknown): Promise<StoredEntry> {
 		try {
-			return await this.landed(piSession, type, data);
+			return await this.landed(storage, entry);
 		} catch (error) {
 			// The storage may hold what the cache does not: the read that settles it is queued.
 			this.tail = this.tail.then(() => this.open()).catch(() => {});
@@ -527,12 +470,10 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	 * the record moved under the write and nothing lands. A run fenced while
 	 * its write waited is refused here, so it acknowledges nothing.
 	 */
-	private async landed(piSession: PiSession, type: string, stored: unknown): Promise<string> {
-		const refuses = fenced(piSession);
-		if (refuses === undefined) return piSession.appendCustomEntry(type, stored);
-		const id = await refuses.appendAfter(type, stored, this.cursor);
-		if (id === undefined) throw new Error('The record moved under the write.');
-		return id;
+	private async landed(storage: JournalStorage, entry: unknown): Promise<StoredEntry> {
+		const stored = await storage.append(entry, this.cursor);
+		if (stored === undefined) throw new Error('The record moved under the write.');
+		return stored;
 	}
 
 	/**
@@ -552,17 +493,17 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	private async land<T extends TBodies[TRecord]>(
 		intent: CommitIntent<T>,
 	): Promise<Committed<T, TBodies[TRecord]>> {
-		const piSession = await this.open();
+		const storage = await this.open();
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
 		if (seen !== undefined) return { entry: seen as Entry<T> };
 		if (intent.readThrough !== undefined && refused(this.lastCommitted, intent.readThrough)) {
 			return { missed: this.since(intent.readThrough) };
 		}
 		const body = drafted(intent.draft);
-		const customType = this.words.stored(this.words.record);
-		const stored = beside(body, nextSeq(this.lastSeq), intent.key, this.run);
-		const id = await this.append(piSession, customType, stored);
-		return { entry: this.took(customType, stored, id) as Entry<T> };
+		const stored = beside(this.words.record, body, nextSeq(this.lastSeq), intent.key, this.run);
+		const appended = await this.append(storage, stored);
+		this.cursor = appended.position;
+		return { entry: this.took(appended) as Entry<T> };
 	}
 
 	/**
@@ -573,15 +514,15 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	 * and the next record entry takes a seq this one already took. Say so
 	 * where it happens.
 	 */
-	private took(customType: string, stored: Stored, id: string): Entries<TKind, TBodies> {
-		const entry = envelope(this.words, customType, stored) as Entries<TKind, TBodies> | undefined;
+	private took(stored: StoredEntry): Entries<TKind, TBodies> {
+		const entry = envelope(this.words, stored.entry) as Entries<TKind, TBodies> | undefined;
 		if (entry === undefined) {
 			throw new Error(
-				`The vocabulary turns down '${customType}', which this journal wrote. ` +
+				`The vocabulary turns down '${String((stored.entry as Stored).kind)}', which this journal wrote. ` +
 					"'accepts' must take every body the caller drafts.",
 			);
 		}
-		this.cache(entry, id);
+		this.take(entry, writerOf(stored.entry));
 		return entry;
 	}
 

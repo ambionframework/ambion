@@ -5,10 +5,10 @@ holds each seat, and the log lives in the room object's SQLite storage.
 
 What is built:
 
-- **`sqlSessions(state)`** is a `SessionOpener` over the object's SQLite.
-  The core owns the storage (`sqliteSessions` in `@ambionframework/ambion`):
-  this package wraps `ctx.storage.sql` in the two calls it makes, `run` and
-  `all` (`sqlOver`).
+- **`sqlStorage(state)`** opens one native journal backend over the object's
+  SQLite. The runtime derives room journals and Pi audit sessions from it.
+  Room and seat objects store their durable metadata under their own names.
+  This package only wraps `ctx.storage.sql` in `run` and `all` (`sqlOver`).
 - **`RoomObject`** runs the room. Its constructor resumes the room the
   storage names, over `resumeSession`. It exposes `start`, `visit`,
   `deliver`, `leave`, `seat`, `unseat`, `abort`, `messages`, `seats` and

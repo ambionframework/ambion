@@ -3,9 +3,11 @@
  * run of it, and the next run's seats read the record the last run left. A
  * real model reads that record as prose, and answers from it.
  */
+
+import { memoryJournals } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
 import {
-	InMemorySessionRepo,
+	createRuntime,
 	isPresence,
 	readSession,
 	startSession,
@@ -35,10 +37,10 @@ live('the record', () => {
 				and answer with one say, quoting the code exactly.
 			`,
 		});
-		const repo = new InMemorySessionRepo();
+		const runtime = createRuntime({ storage: memoryJournals() });
 		const name = roomName('record');
 
-		const first = startSession({ name, assistant, repo, agents: [memo] });
+		const first = startSession({ name, assistant, runtime, agents: [memo] });
 		const firstEvents = collect(first);
 		const told = await visitSession(first, person);
 		await told.deliver({ text: 'The door code for the yard is 4419. Keep it.' });
@@ -46,20 +48,20 @@ live('the record', () => {
 		await invariants(first, firstEvents);
 		await stopSession(first);
 
-		const second = startSession({ name, assistant, repo, agents: [memo] });
+		const second = startSession({ name, assistant, runtime, agents: [memo] });
 		const secondEvents = collect(second);
 		const asked = await visitSession(second, person);
 		await asked.deliver({ text: 'What is the door code for the yard?' });
 		await untilQuiet(second);
 
-		const messages = await readSession(name, { repo }).messages();
+		const messages = await readSession(name, { runtime }).messages();
 		const answers = saidBy(messages, 'memo');
 		expect(answers.at(-1)?.text).toContain('4419');
 		// One record, two runs: the person arrived twice and left once between.
 		expect(messages.filter(isPresence).map((m) => m.kind)).toEqual(['arrived', 'left', 'arrived']);
 		expect(saidBy(messages, person.name)).toHaveLength(2);
 		await invariants(second, secondEvents);
-		const total = await spent(repo, name);
+		const total = await spent(runtime, second);
 		expect(total.activations).toBeGreaterThanOrEqual(2);
 		report('the record', total);
 		await stopSession(second);

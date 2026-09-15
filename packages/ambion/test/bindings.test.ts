@@ -12,7 +12,7 @@ import {
 } from '../src/index.ts';
 import { roomName } from './support/room.ts';
 import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
-import { faultyOpener, memory } from './support/storage.ts';
+import { faultyJournals, memory } from './support/storage.ts';
 
 describe('room bindings', () => {
 	it('keeps same-named agents in separate rooms bound to their own tools', async () => {
@@ -94,13 +94,13 @@ describe('room bindings', () => {
 		const name = roomName('resume-bindings');
 		const first = startSession({
 			name,
-			runtime: createRuntime({ sessions: opened.sessions }),
+			runtime: createRuntime({ storage: opened.storage }),
 			agents: [analyst],
 			streamFn: scripted(() => quiet()),
 		});
 		await first.messages();
 		await expect(
-			resumeSession(name, { runtime: createRuntime({ sessions: opened.sessions }), agents: [] }),
+			resumeSession(name, { runtime: createRuntime({ storage: opened.storage }), agents: [] }),
 		).rejects.toThrow(/has no binding/);
 		await (
 			await visitSession(first, defineHuman({ name: 'priya', identity: 'Project manager.' }))
@@ -117,7 +117,7 @@ describe('room bindings', () => {
 
 	it('clears a failed pending seat binding so its intended definition can retry', async () => {
 		const opened = await memory.open();
-		const faulty = faultyOpener(opened.sessions);
+		const faulty = faultyJournals(opened.storage);
 		const original = defineAgent({
 			name: 'surveyor',
 			identity: 'Original surveyor.',
@@ -132,11 +132,11 @@ describe('room bindings', () => {
 		});
 		const session = startSession({
 			name: roomName('pending-binding'),
-			runtime: createRuntime({ sessions: faulty.sessions }),
+			runtime: createRuntime({ storage: faulty.journals }),
 			streamFn: scripted(() => quiet()),
 		});
 		await session.messages();
-		faulty.fail(true, 'ambion/message');
+		faulty.fail(true, 'message');
 		await expect(session.seat(original)).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		await session.seat(other);

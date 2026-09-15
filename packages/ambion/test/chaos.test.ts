@@ -33,7 +33,7 @@ import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
 import { collect, roomName } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
-import { childSessions, memory, type Storage, storages } from './support/storage.ts';
+import { childJournals, childStorage, memory, type Storage, storages } from './support/storage.ts';
 
 const full = process.env.AMBION_CHAOS === 'all';
 
@@ -163,48 +163,49 @@ async function finish(session: Session, clock: FakeClock): Promise<void> {
 
 // A kill lands between an entry and whatever the storage writes beside it,
 // so each storage takes it: a room that resumes reads what the kill left.
-describe.each(full ? ['jsonl', 'sqlite'] : ['jsonl'])(
-	'a room killed from outside on %s',
-	(storage) => {
-		const kills = full ? Array.from({ length: 14 }, (_, i) => 2 + i * 3) : [3, 12];
-		it.each(kills)(
-			'killed at write %i, resumed over its directory, and the scenario ends whole',
-			async (at) => {
-				const dir = await mkdtemp(join(tmpdir(), 'ambion-kill-'));
-				const name = 'killed';
-				try {
-					const reached = await killAt(dir, name, at, storage);
-					// the child died at the kill, and not on its own before it
-					expect(reached).toBeGreaterThanOrEqual(at);
-					const sessions = childSessions(storage, dir);
-					// The room resumes on a clock that stands where the child's ran, and the test moves it:
-					// a lease the child held is live at the resume and expires when the test says so.
-					const clock = fakeClock(Date.now());
-					const runtime = createRuntime({ sessions, clock, ...TIMING });
-					const inherited = await liveLeases(sessions, name, clock.now());
-					const session = await resumeSession(name, {
-						runtime,
-						agents,
-						streamFn: scripted(script),
-					});
-					const events = collect(session);
-					const inheritedExchange = session.exchange() !== undefined;
-					await finish(session, clock);
-					const errors = events.flatMap((e) => (e.type === 'error' ? [e.error.message] : []));
-					expect(errors.filter((m) => !/past its lease/.test(m))).toEqual([]);
-					await invariants(session, events, {
-						sessions,
-						allowErrors: inherited,
-						inherited,
-						inheritedExchange,
-					});
-					await outcome(session, sessions);
-					await stopSession(session);
-				} finally {
-					await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
-				}
-			},
-			60_000,
-		);
-	},
-);
+describe.each(['sqlite'])('a room killed from outside on %s', (storage) => {
+	const kills = full ? Array.from({ length: 14 }, (_, i) => 2 + i * 3) : [3, 12];
+	it.each(kills)(
+		'killed at write %i, resumed over its directory, and the scenario ends whole',
+		async (at) => {
+			const dir = await mkdtemp(join(tmpdir(), 'ambion-kill-'));
+			const name = 'killed';
+			try {
+				const reached = await killAt(dir, name, at, storage);
+				// the child died at the kill, and not on its own before it
+				expect(reached).toBeGreaterThanOrEqual(at);
+				const journals = childJournals(storage, dir);
+				// The room resumes on a clock that stands where the child's ran, and the test moves it:
+				// a lease the child held is live at the resume and expires when the test says so.
+				const clock = fakeClock(Date.now());
+				const runtime = createRuntime({
+					storage: childStorage(storage, dir),
+					clock,
+					...TIMING,
+				});
+				const inherited = await liveLeases(journals, name, clock.now());
+				const session = await resumeSession(name, {
+					runtime,
+					agents,
+					streamFn: scripted(script),
+				});
+				const events = collect(session);
+				const inheritedExchange = session.exchange() !== undefined;
+				await finish(session, clock);
+				const errors = events.flatMap((e) => (e.type === 'error' ? [e.error.message] : []));
+				expect(errors.filter((m) => !/past its lease/.test(m))).toEqual([]);
+				await invariants(session, events, {
+					journals,
+					allowErrors: inherited,
+					inherited,
+					inheritedExchange,
+				});
+				await outcome(session, journals);
+				await stopSession(session);
+			} finally {
+				await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
+			}
+		},
+		60_000,
+	);
+});

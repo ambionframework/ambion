@@ -7,9 +7,9 @@
  * `docs/durability.md` states these promises for a room. Here they are
  * proved for the machinery the room is built on.
  */
-import { InMemorySessionRepo, type Session as PiSession } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
-import { type Entry, Journal, type Vocabulary } from '../src/index.ts';
+import { type Entry, Journal, type Vocabulary } from '../src/journal.ts';
+import { memoryJournals } from '../src/memory.ts';
 
 /**
  * Four kinds: a `note` makes up the record, and the other three sit beside
@@ -39,29 +39,18 @@ interface Bodies {
 	checkpoint: Checkpoint;
 }
 
-const STORED: Record<Kind, string> = {
-	note: 'test/note',
-	mark: 'test/mark',
-	run: 'test/run',
-	checkpoint: 'test/checkpoint',
-};
-const KINDS: Record<string, Kind> = Object.fromEntries(
-	Object.entries(STORED).map(([kind, stored]) => [stored, kind as Kind]),
-);
-
 const WORDS: Vocabulary<Kind> = {
-	stored: (kind) => STORED[kind],
-	kindOf: (customType) => KINDS[customType],
 	record: 'note',
 	run: 'run',
 	checkpoint: 'checkpoint',
 	// A checkpoint of another shape is one this reader does not fold.
-	accepts: (kind, body) =>
-		kind !== 'checkpoint' || (typeof body === 'object' && body !== null && 'v' in body),
+	accepts: (kind, body): kind is Kind =>
+		(kind === 'note' || kind === 'mark' || kind === 'run' || kind === 'checkpoint') &&
+		(kind !== 'checkpoint' || (typeof body === 'object' && body !== null && 'v' in body)),
 };
 
 let names = 0;
-const repo = new InMemorySessionRepo();
+const journals = memoryJournals();
 
 /** One journal over a session of its own, or over one a name already opened. */
 async function open(
@@ -70,17 +59,20 @@ async function open(
 	hear?: (entry: Entry<Bodies[Kind]>) => void,
 	lost?: () => void,
 ): Promise<Journal<Kind, Bodies, 'note'>> {
-	const journal = new Journal<Kind, Bodies, 'note'>(session(id), WORDS, hear, run, lost);
+	const journal = new Journal<Kind, Bodies, 'note'>(journals.open(id), WORDS, hear, run, lost);
 	await journal.ready;
 	return journal;
 }
 
-async function session(id: string): Promise<PiSession> {
-	const known = (await repo.list()).find((metadata) => metadata.id === id);
-	return known ? repo.open(known) : repo.create({ id });
-}
-
 const note = (text: string) => ({ text });
+
+/** Put one arbitrary value beside a journal, as another reader or application can. */
+async function store(id: string, entry: unknown): Promise<void> {
+	const storage = await journals.open(id);
+	const read = await storage.read(0);
+	const appended = await storage.append(entry, read.position);
+	if (appended === undefined) throw new Error('the raw entry lands');
+}
 
 describe('a journal', () => {
 	it('gives every entry the next seq, from one counter', async () => {
@@ -198,10 +190,22 @@ describe('a journal', () => {
 });
 
 describe('the envelope', () => {
+	it('advances the storage cursor over foreign and malformed values without giving them a journal seq', async () => {
+		const id = `journal-storage-position-${++names}`;
+		await store(id, null);
+		await store(id, { kind: 'other', body: { ignored: true }, seq: 400 });
+		await store(id, { kind: 'note', body: note('placed'), seq: 7 });
+		const journal = await open(id);
+		expect(journal.record.map((entry) => [entry.seq, entry.body.text])).toEqual([[7, 'placed']]);
+		// Storage has scanned three positions. The journal sequence belongs only to accepted envelopes.
+		expect(journal.lastSeq).toBe(7);
+		const next = await journal.commit({ draft: note('next') });
+		expect('entry' in next && next.entry.seq).toBe(8);
+	});
+
 	it('skips a stored entry of a kind this reader does not know', async () => {
 		const id = `journal-unknown-${++names}`;
-		const piSession = await session(id);
-		await piSession.appendCustomEntry('other/thing', { seq: 1, text: 'not ours' });
+		await store(id, { kind: 'other', body: { text: 'not ours' }, seq: 1 });
 		const journal = await open(id);
 		expect(journal.entries).toEqual([]);
 		expect(journal.lastSeq).toBe(0);
@@ -209,10 +213,9 @@ describe('the envelope', () => {
 
 	it('skips a body the vocabulary turns down', async () => {
 		const id = `journal-refused-${++names}`;
-		const piSession = await session(id);
 		// a checkpoint of a shape this reader does not fold
-		await piSession.appendCustomEntry(STORED.checkpoint, { seq: 1, shape: 'other' });
-		await piSession.appendCustomEntry(STORED.checkpoint, { seq: 2, v: 1, floor: 0 });
+		await store(id, { kind: 'checkpoint', body: { shape: 'other' }, seq: 1 });
+		await store(id, { kind: 'checkpoint', body: { v: 1, floor: 0 }, seq: 2 });
 		const journal = await open(id);
 		expect(journal.entries.map((entry) => entry.kind)).toEqual(['checkpoint']);
 	});
@@ -235,15 +238,15 @@ describe('the envelope', () => {
 		expect(first.entries).toEqual(second.entries);
 	});
 
-	it('keeps the three names for itself, whatever a body calls them', async () => {
+	it('keeps the envelope beside a body that names its own fields', async () => {
 		const journal = await open(`journal-reserved-${++names}`, 'run-1');
-		// A body that names the journal's own three loses them here. Nothing in
-		// the room writes such a body; the journal holds to it for any caller.
+		// The envelope is nested, so a body may use the same names without
+		// changing its position, idempotency token, or fence.
 		const body = { text: 'mine', seq: 99, key: 'stolen', run: 'ghost' };
 		const landed = await journal.commit({ draft: body as unknown as { text: string } });
 		if (!('entry' in landed)) throw new Error('the commit lands');
-		expect(landed.entry).toEqual({ kind: 'note', body: { text: 'mine' }, seq: 1, run: 'run-1' });
-		// the body's `key` never became a token: an unrelated commit under it lands
+		expect(landed.entry).toEqual({ kind: 'note', body, seq: 1, run: 'run-1' });
+		// The body's `key` is not an idempotency token: an unrelated commit under it lands.
 		const other = await journal.commit({ key: 'stolen', draft: note('other') });
 		expect('entry' in other && other.entry.seq).toBe(2);
 		expect(journal.record).toHaveLength(2);
@@ -251,14 +254,34 @@ describe('the envelope', () => {
 
 	it('skips an entry that took no place on the record', async () => {
 		const id = `journal-position-${++names}`;
-		const piSession = await session(id);
 		// neither took a place: a seq that is not one, and none at all
-		await piSession.appendCustomEntry(STORED.note, { seq: 'first', text: 'no place' });
-		await piSession.appendCustomEntry(STORED.mark, { label: 'nowhere' });
-		await piSession.appendCustomEntry(STORED.note, { seq: 1, text: 'placed' });
+		await store(id, { kind: 'note', body: { text: 'no place' }, seq: 'first' });
+		await store(id, { kind: 'mark', body: { label: 'nowhere' } });
+		await store(id, { kind: 'note', body: { text: 'placed' }, seq: 1 });
 		const journal = await open(id);
 		expect(journal.entries.map((entry) => entry.kind)).toEqual(['note']);
 		expect(journal.record.map((entry) => entry.body.text)).toEqual(['placed']);
+	});
+
+	it('does not replay an entry twice when a reaction throws after its cursor advanced', async () => {
+		const id = `journal-callback-cursor-${++names}`;
+		const storage = await journals.open(id);
+		let throws = true;
+		const heard: string[] = [];
+		const journal = new Journal<Kind, Bodies, 'note'>(Promise.resolve(storage), WORDS, () => {
+			heard.push('note');
+			if (throws) {
+				throws = false;
+				throw new Error('the room reaction failed');
+			}
+		});
+		await journal.ready;
+		await store(id, { kind: 'note', body: note('outside'), seq: 1 });
+		await expect(journal.commit({ draft: note('blocked') })).rejects.toThrow(/reaction failed/);
+		await journal.commit({ draft: note('after') });
+		// The later write starts after the failed callback. Replaying it would duplicate the event.
+		expect(heard).toEqual(['note', 'note']);
+		expect(journal.record.map((entry) => entry.body.text)).toEqual(['outside', 'after']);
 	});
 });
 
@@ -299,16 +322,50 @@ describe('the fence', () => {
 	});
 });
 
+describe('a write in doubt', () => {
+	it('rereads one successful append whose confirmation was lost, then deduplicates its key', async () => {
+		const id = `journal-doubt-${++names}`;
+		const storage = await journals.open(id);
+		let loseConfirmation = true;
+		const uncertain = {
+			read: storage.read.bind(storage),
+			async append(entry: unknown, expectedPosition: number) {
+				const landed = await storage.append(entry, expectedPosition);
+				if (loseConfirmation) {
+					loseConfirmation = false;
+					throw new Error('confirmation lost');
+				}
+				return landed;
+			},
+		};
+		const journal = new Journal<Kind, Bodies, 'note'>(Promise.resolve(uncertain), WORDS);
+		await journal.ready;
+		await expect(journal.commit({ key: 'once', draft: note('landed') })).rejects.toThrow(
+			/confirmation lost/,
+		);
+		await journal.settled();
+		const retry = await journal.commit({ key: 'once', draft: note('duplicate') });
+		expect(retry).toMatchObject({ entry: { seq: 1, body: { text: 'landed' } } });
+		expect((await storage.read(0)).entries).toHaveLength(1);
+	});
+});
+
 describe('the envelope', () => {
 	it('refuses to acknowledge a write its own vocabulary turns down', async () => {
 		// A vocabulary that turns down what the caller drafts: the storage would
 		// hold the entry and the cache never would, so the next note would take a
 		// seq this one already took. The journal says so rather than acknowledging.
-		const strict: Vocabulary<Kind> = { ...WORDS, accepts: (kind) => kind !== 'mark' };
-		const journal = new Journal<Kind, Bodies, 'note'>(session(`journal-strict-${++names}`), strict);
+		const strict: Vocabulary<Kind> = {
+			...WORDS,
+			accepts: (kind): kind is Kind => kind !== 'mark' && WORDS.accepts(kind, undefined),
+		};
+		const journal = new Journal<Kind, Bodies, 'note'>(
+			journals.open(`journal-strict-${++names}`),
+			strict,
+		);
 		await journal.ready;
 		await expect(journal.write('mark', { label: 'turned down' })).rejects.toThrow(
-			/turns down 'test\/mark'/,
+			/turns down 'mark'/,
 		);
 		// nothing joined the cache, and the count the checkpoint reads is untouched
 		expect(journal.entries).toEqual([]);

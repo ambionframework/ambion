@@ -17,23 +17,8 @@
  * docs/assistant.md, docs/workspace.md and docs/roster.md.
  */
 
-// The room writes to a journal: `@ambionframework/journal` holds the queue,
-// the fence, the checkpoint and the SQLite storage. A host that opens a
-// session names the opener.
-export type { SessionOpener } from '@ambionframework/journal';
-export type {
-	ExecutionEnv,
-	SessionMetadata,
-	SessionRepo,
-	SessionStorage,
-} from '@earendil-works/pi-agent-core';
-// Storage is Pi's, re-exported — Ambion adds no storage abstraction of its own.
 // `ExecutionEnv` is what a workspace backend's `connect` returns, and Pi's too.
-export {
-	InMemorySessionRepo,
-	InMemorySessionStorage,
-	JsonlSessionRepo,
-} from '@earendil-works/pi-agent-core';
+export type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 export type {
 	DefineAgentOptions,
 	DefineHumanOptions,
@@ -41,8 +26,8 @@ export type {
 	SeatingOptions,
 } from './define.ts';
 export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from './define.ts';
-export type { CreateRuntimeOptions, Runtime, SessionRepoLike } from './host/runtime.ts';
-export { createRuntime, defaultRuntime, sessionsOver, systemClock } from './host/runtime.ts';
+export type { CreateRuntimeOptions, Runtime } from './host/runtime.ts';
+export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type {
 	ReadSessionOptions,
 	ResumeSessionOptions,
@@ -85,7 +70,7 @@ export type {
 	WorkspaceBackend,
 	WorkspaceHandle,
 } from './types.ts';
-export { isPresence, isSeatedAgent, isSpoken, isSummary } from './types.ts';
+export { isPresence, isSeatedAgent, isSpoken, isSummary, seatSessionId } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

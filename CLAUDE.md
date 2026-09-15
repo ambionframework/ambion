@@ -17,7 +17,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `session.ts` composes them      |
 | `packages/cli`        | The `ambion` binary                                                                       |
 | `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Private; tested in workerd  |
-| `packages/journal`    | An append-only journal over a Pi session: one queue, fenced by run, checkpointed          |
+| `packages/journal`    | An append-only journal: one queue, fenced by run, checkpointed                            |
 | `packages/workspace`  | A workspace backend: a virtual Unix filesystem and shell, in memory or over a directory   |
 | `docs/agent.md`       | Design contract for the core — read before changing the runtime                           |
 | `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`          |

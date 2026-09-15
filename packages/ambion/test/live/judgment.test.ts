@@ -38,7 +38,7 @@ live('judgment', () => {
 				question, end your turn without calling say.
 			`,
 		});
-		const { session, repo, events } = open('declines', { agents: [weather, payroll] });
+		const { session, runtime, events } = open('declines', { agents: [weather, payroll] });
 		const visit = await enter(session, person);
 		await visit.deliver({ text: 'Will it rain on site today?' });
 		await untilQuiet(session);
@@ -52,7 +52,7 @@ live('judgment', () => {
 		expect(saidBy(messages, 'payroll')).toEqual([]);
 		expect(saidByAgents(messages, [person.name])).toHaveLength(1);
 		await invariants(session, events);
-		report('declining', await spent(repo, session.name));
+		report('declining', await spent(runtime, session));
 		await stopSession(session);
 	});
 
@@ -81,7 +81,7 @@ live('judgment', () => {
 				has answered, end your turn without calling say.
 			`,
 		});
-		const { session, repo, events } = open('directed', { agents: [desk, passive(stock)] });
+		const { session, runtime, events } = open('directed', { agents: [desk, passive(stock)] });
 		const visit = await enter(session, person);
 		await visit.deliver({ text: 'How many units of SKU A-100 do we have?' });
 		await untilQuiet(session);
@@ -103,7 +103,7 @@ live('judgment', () => {
 		expect(answer).toHaveLength(1);
 		expect(answer[0]?.text).toContain('42');
 		await invariants(session, events);
-		report('a directed say', await spent(repo, session.name));
+		report('a directed say', await spent(runtime, session));
 		await stopSession(session);
 	});
 });

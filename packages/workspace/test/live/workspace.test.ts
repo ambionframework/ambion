@@ -42,7 +42,7 @@ live('the workspace', () => {
 			`,
 			workspace: store,
 		});
-		const { session, repo, events } = open('workspace', { agents: [librarian] });
+		const { session, runtime, events } = open('workspace', { agents: [librarian] });
 		const visit = await enter(session, person);
 		await visit.deliver({ text: 'How many lanterns are in crate-19?' });
 		await untilQuiet(session);
@@ -62,7 +62,7 @@ live('the workspace', () => {
 		);
 		expect(journal?.text).toMatch(/checked/i);
 		await invariants(session, events);
-		report('the workspace', await spent(repo, session.name));
+		report('the workspace', await spent(runtime, session));
 		await stopSession(session);
 		await destroyWorkspace(store);
 	});
