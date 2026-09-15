@@ -97,32 +97,27 @@ readExchange(state, from) -> exchangeView
 dispatch work, or calculate retry delays. Queries derive eligibility from the
 recorded attempt history and explicit policy.
 
-**Use the same interpretation for execution and observation.** Today,
-[`foldOwed`](../packages/ambion/src/room/fold.ts) and the exchange response
-helpers in [`room.ts`](../packages/ambion/src/room.ts) interpret summary work
-separately. One exchange query should answer both callers.
+**Execution and observation share summary completion.**
+[`summaryCompletion`](../packages/ambion/src/room/exchange.ts) now answers
+both the pending-work fold and exchange response reads.
+[PR #115](https://github.com/ambionframework/ambion/pull/115) centralized this
+interpretation. Its results remain derived from journal facts.
 
-That query distinguishes pending summary work, a published summary, and a
-terminal attempt without a summary. These are derived results. They need no
-additional persisted status.
+**Delivery recipients now derive in journal order.**
+[`delivery.ts`](../packages/ambion/src/room/delivery.ts) reads the leases
+that precede each message and its recorded wakes. The projection retains
+the result for pending-work reads and live steering. It adds no journal
+entries. Retry accounting still reads the attempt history.
 
-**Fold delivery history in journal order.** Current
-[`pendingWakes`](../packages/ambion/src/room/lease.ts) reconstructs recipients
-by combining recorded wakes with historical lease intervals. The host also
-decides which running agents receive steering.
+Attention routes idle agents; active ordinary agents receive new context,
+except their own contributions. Assistant selection and summary executions
+keep fixed context bounds. The host checks lease liveness before transport
+delivery. Replay does not consult the wall clock.
 
-Give these rules one implementation. On replay, a reducer has the state that
-existed immediately before each message. It can derive recipients there and
-retain the resulting pending information in its disposable projection.
-
-Preserve the current distinction: attention routes idle agents; active
-ordinary agents receive new context, except their own contributions.
-Assistant selection and summary executions have their own context bounds.
-Do not accidentally turn attention into a filter on active agents.
-
-This approach can remove repeated historical joins without adding delivery
-entries. Prove equivalence for lease expiry, removal, retries, and steering
-before replacing the existing fold. A smaller function alone is insufficient.
+[`message-delivery.test.ts`](../packages/ambion/test/message-delivery.test.ts)
+checks live context, recovery of unconsumed context, and summary isolation
+on memory and SQLite. Keep these boundaries as activation identity and
+dispatch are consolidated next.
 
 **Keep performance work subordinate to the model.** The current `evolve`
 path copies base collections and rebuilds derived projections. Naming it
@@ -552,7 +547,8 @@ response waits. Checkpointing is already removed. Preserve those decisions.
 
 ### Stage 1: establish the kernel boundary
 
-- Centralize exchange completion, delivery interpretation, and activation identity.
+- Centralize activation identity. Exchange completion and delivery interpretation
+  now share their respective rules across execution and replay.
 - Make normal operation and recovery use one dispatch decision.
 - Isolate mutable host resources from immutable collaboration facts.
 - Protect returned values and validate contributions at commit.

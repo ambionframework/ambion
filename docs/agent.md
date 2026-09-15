@@ -310,7 +310,8 @@ author and wakes the subject ([`roster.md`](roster.md) §3).
 
 **2. Whatever arrives mid-activation is steered in, and working views reset at
 idle.** Replies and deliveries alike, directed or undirected: each arrival
-is injected into every active agent's running activation at the next safe point,
+is injected into every active ordinary agent's running activation at the next
+safe point,
 so nobody finishes blind and answers stale. "Round" is deliberately a
 soft-edged word: the room has no barrier between concurrent activations. Mid-flight, each agent may see the conversation in a
 slightly different order than the record. Its working view is its own,
@@ -318,12 +319,21 @@ temporary by design: when the agent goes idle the view is discarded, and
 the next activation reads the record itself. The record is canonical.
 
 A steer is the room's word to a running activation, and the journal does not
-record it. The journal says who was at work when the message landed: a lease
-that holds a change before the message and ends, if it ends, after it. A
-message such a lease heard is answered when the lease stands down, and
-pending again when the lease expired or failed, so a run that dies while
-the seat works loses nothing: the seat is woken for the message after the
-backoff. A wake to a seat at rest is on the message, so a wake lost on
+record it. The projection derives recipients when it applies each message,
+using the preceding recorded leases and the message's explicit wakes.
+Live steering and pending work read this same disposable delivery projection.
+The host sends a steer only while its recorded target lease remains live.
+
+Assistant selection and summary activations keep their fixed input ranges.
+They receive no implicit steering. A published summary can still reach an
+active ordinary agent as new context.
+
+A released lease answers only messages that its executor acknowledged.
+Messages remain pending when their lease expires or fails, so a run that
+dies before consuming context loses nothing. The seat receives the pending
+work after backoff.
+
+A wake to a seat at rest is on the message, so a wake lost on
 the way is sent again after the resend window, and the seat side runs a
 wake sent twice once. A wake that lands while an activation is releasing
 its lease is no steer: that activation reads nothing more, so the wake

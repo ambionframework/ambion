@@ -44,7 +44,7 @@ import { type Body, type Entry, type Kind, placed, RoomJournal } from './journal
 import { renderLine } from './render.ts';
 import { summaryCompletion } from './room/exchange.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
-import { activationId, isLive, parseId, seatOf } from './room/lease.ts';
+import { activationId, isLive, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
 import {
@@ -1004,35 +1004,25 @@ class RoomHost implements Room, RunningRoom {
 	}
 
 	/**
-	 * Every seat at work hears the message as a steer (rule 2), except its
-	 * author and a seat composing the room: a composing activation decides
-	 * on the question as it was asked, and what the seats say while it
-	 * decides is theirs to say. The steer is the room's word to a running
-	 * activation, and the lease does not record it.
+	 * Send projected ordinary targets when their recorded lease is live now.
+	 * The delivery projection excludes authors and context-bound activations.
 	 */
 	private steer(message: Message): void {
-		const author = message.from;
 		const state = this.state();
+		const delivery = state.deliveries.get(message.seq);
+		if (delivery === undefined) return;
 		const after =
 			state.messages.filter((candidate) => candidate.seq < message.seq).at(-1)?.seq ?? 0;
-		for (const [seat, ids] of this.live(state)) {
-			if (seat === author || !this.holds(state, ids)) continue;
-			if (ids.some((id) => parseId(id)?.cause === 'opened')) continue;
+		for (const steer of delivery.steers) {
+			const lease = state.leases.get(steer.activation);
+			if (lease === undefined || !isLive(lease, this.now())) continue;
+			const seat = steer.seat;
 			this.send(activationId('message', message.seq, seat), seat, {
 				after,
 				seq: message.seq,
 				line: renderLine(message),
 			});
 		}
-	}
-
-	/** Whether any of these ids is a lease held now: a seat with a wake pending is live and at rest. */
-	private holds(state: RoomState, ids: string[]): boolean {
-		const now = this.now();
-		return ids.some((id) => {
-			const lease = state.leases.get(id);
-			return lease !== undefined && isLive(lease, now);
-		});
 	}
 
 	/** One wake over the wire. A wake a message caused carries the line a running activation is steered with. */
