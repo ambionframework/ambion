@@ -1,11 +1,38 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
+import {
+	createRuntime,
+	defineAgent,
+	defineHuman,
+	type ExchangeHandle,
+	type Room,
+	resumeRoom,
+	startRoom,
+} from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
-import { closedExchange, deferred, roomName, storedOf } from './support/room.ts';
-import { contextText, quiet, scripted, speak, summarise, toolNames } from './support/scripted.ts';
-import { faultyJournals, memory } from './support/storage.ts';
+import {
+	assistantEnded,
+	closedExchange,
+	crash,
+	deferred,
+	roomName,
+	stateOf,
+	storedOf,
+	waitForRoom,
+} from './support/room.ts';
+import {
+	byAgent,
+	contextText,
+	quiet,
+	type Script,
+	says,
+	scripted,
+	speak,
+	summarise,
+	toolNames,
+} from './support/scripted.ts';
+import { faultyJournals, memory, storages } from './support/storage.ts';
 
 const assistant = defineAgent({
 	name: 'assistant',
@@ -26,6 +53,130 @@ const beta = defineAgent({
 	model: 'scripted/beta',
 });
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
+
+const outcomes = ['published', 'silent', 'failed'] as const;
+type Outcome = (typeof outcomes)[number];
+
+const summaryFor =
+	(outcome: Outcome): Script =>
+	(_context, _agent, call) => {
+		if (outcome === 'failed') throw new Error('Summary failed.');
+		return outcome === 'published' && call === 1 ? summarise('Recorded result.') : quiet();
+	};
+
+async function expectOutcome(exchange: ExchangeHandle, outcome: Outcome): Promise<void> {
+	if (outcome === 'failed') {
+		await expect(exchange.response()).rejects.toThrow(/interrupted/i);
+	} else if (outcome === 'published') {
+		await expect(exchange.response()).resolves.toMatchObject({ text: 'Recorded result.' });
+	} else {
+		await expect(exchange.response()).resolves.toBeUndefined();
+	}
+}
+
+describe.each(storages)('replayed exchange responses on $name', (storage) => {
+	it.each(outcomes)('retains a %s result without scheduling another summary', async (outcome) => {
+		const opened = await storage.open();
+		const clock = fakeClock();
+		const runtime = () =>
+			createRuntime({
+				clock,
+				storage: opened.storage,
+				retry: { attempts: 1, backoff: () => 0 },
+			});
+		const room = await startRoom({
+			name: roomName('exchange-terminal-replay'),
+			runtime: runtime(),
+			agents: [alpha],
+			assistant,
+			streamFn: scripted(
+				byAgent({ alpha: says(['First fact.', 'Second fact.']), assistant: summaryFor(outcome) }),
+			),
+		});
+		let resumed: Room | undefined;
+		try {
+			const exchange = await (await room.visit(priya)).send({ text: 'Result?' });
+			await waitForRoom(room);
+			expect(closedExchange(room, exchange.from)?.wakes).toEqual([assistant.name]);
+			await expectOutcome(exchange, outcome);
+			await room.stop();
+			let calls = 0;
+			resumed = await resumeRoom(room.name, {
+				runtime: runtime(),
+				agents: [alpha, assistant],
+				streamFn: scripted(() => {
+					calls += 1;
+					return quiet();
+				}),
+			});
+			const recovered = resumed.exchange(exchange.from);
+			if (recovered === undefined) throw new Error('Expected the recorded exchange.');
+			await expectOutcome(recovered, outcome);
+			await clock.advance(120_000);
+			await waitForRoom(resumed);
+			expect(stateOf(resumed).owed).toEqual([]);
+			expect(calls).toBe(0);
+		} finally {
+			await resumed?.stop();
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
+	it('keeps a failed response pending across restart until its retry can publish', async () => {
+		const opened = await storage.open();
+		const clock = fakeClock();
+		const runtime = () =>
+			createRuntime({
+				clock,
+				storage: opened.storage,
+				retry: { attempts: 2, backoff: () => 1_000 },
+			});
+		const firstRuntime = runtime();
+		const room = await startRoom({
+			name: roomName('exchange-pending-replay'),
+			runtime: firstRuntime,
+			agents: [alpha],
+			assistant,
+			streamFn: scripted(
+				byAgent({ alpha: says(['First fact.', 'Second fact.']), assistant: summaryFor('failed') }),
+			),
+		});
+		let resumed: Room | undefined;
+		try {
+			const failed = assistantEnded(room);
+			const exchange = await (await room.visit(priya)).send({ text: 'Result?' });
+			await failed;
+			crash(firstRuntime, room);
+			resumed = await resumeRoom(room.name, {
+				runtime: runtime(),
+				agents: [alpha, assistant],
+				streamFn: scripted(byAgent({ assistant: summaryFor('published') })),
+			});
+			const recovered = resumed.exchange(exchange.from);
+			if (recovered === undefined) throw new Error('Expected the recorded exchange.');
+			let settled = false;
+			const response = recovered.response().then((message) => {
+				settled = true;
+				return message;
+			});
+			await clock.advance(999);
+			expect(settled).toBe(false);
+			expect(stateOf(resumed).owed).toHaveLength(1);
+			await clock.advance(1);
+			await expect(response).resolves.toMatchObject({
+				text: 'Recorded result.',
+				covers: { from: exchange.from, through: closedExchange(resumed, exchange.from)?.through },
+			});
+			await waitForRoom(resumed);
+			expect(stateOf(resumed).owed).toEqual([]);
+		} finally {
+			await resumed?.stop();
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+});
 
 describe('exchange completion handles', () => {
 	it('keeps a close wait pending when the close append fails, then resolves after retry', async () => {
