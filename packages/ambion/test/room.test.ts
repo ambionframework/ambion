@@ -649,6 +649,7 @@ describe('startRoom', () => {
 					const port = inProcess.connect(room, seat, host);
 					return {
 						wake: (wake) => port.wake(wake),
+						steer: (steer) => port.steer(steer),
 						cut: (activation) => {
 							cuts.push(activation);
 							return port.cut(activation);
@@ -687,7 +688,9 @@ describe('startRoom', () => {
 		});
 		// the seats hear no wake, so the test holds the seat's side of the wire itself
 		const runtime = createRuntime({
-			transport: { connect: () => ({ wake: async () => {}, cut: async () => {} }) },
+			transport: {
+				connect: () => ({ wake: async () => {}, steer: async () => {}, cut: async () => {} }),
+			},
 		});
 		const session = await startRoom({
 			name: roomName('stale'),
@@ -740,7 +743,9 @@ describe('startRoom', () => {
 
 	it('refuses omitted and invalid speech freshness through the room port', async () => {
 		const runtime = createRuntime({
-			transport: { connect: () => ({ wake: async () => {}, cut: async () => {} }) },
+			transport: {
+				connect: () => ({ wake: async () => {}, steer: async () => {}, cut: async () => {} }),
+			},
 		});
 		const session = await startRoom({
 			name: roomName('freshness'),

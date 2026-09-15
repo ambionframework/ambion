@@ -7,11 +7,11 @@
 
 import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
-import type { LeaseChange } from '@ambionframework/ambion/transport';
+import type { LeaseChange, Steer } from '@ambionframework/ambion/transport';
 import { namespaced } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/journal/pi';
 import { expect, it } from 'vitest';
-import { sqlStorage } from '../src/storage.ts';
+import { seatMetadata, sqlStorage } from '../src/storage.ts';
 import { until } from './until.ts';
 
 it('wakes, runs the activation on its alarm, and the room sends an untaken wake again', async () => {
@@ -134,3 +134,80 @@ it('keeps the first pending activation when different wakes arrive together', as
 	]);
 	expect(await seat.wakes()).toBe(1);
 });
+
+it('forwards steering to the live actor without recording a wake', async () => {
+	type FakeActor = { last?: Steer; steer(value: Steer): Promise<void> };
+	const seat = env.SEAT.get(
+		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'steer-forward', 'product'])),
+	);
+	const fake: FakeActor = {
+		steer(value) {
+			this.last = value;
+			return Promise.resolve();
+		},
+	};
+	await runInDurableObject(seat, async (instance) => {
+		(instance as unknown as { actor: FakeActor }).actor = fake;
+	});
+	const steer: Steer = {
+		room: 'steer-forward',
+		seat: 'product',
+		activation: 'message:1:product:1',
+		after: 0,
+		message: {
+			kind: 'said',
+			seq: 1,
+			at: '2026-01-01T00:00:00.000Z',
+			from: 'priya',
+			text: 'Context',
+		},
+	};
+	await seat.steer(steer);
+	const forwarded = await runInDurableObject(
+		seat,
+		async (instance) => (instance as unknown as { actor?: FakeActor }).actor?.last,
+	);
+	expect(forwarded).toEqual(steer);
+	expect(await seat.wakes()).toBe(0);
+	expect(
+		await runInDurableObject(seat, async (_instance, state) => state.storage.getAlarm()),
+	).toBeNull();
+	await runInDurableObject(seat, async (instance) => {
+		(instance as unknown as { actor?: FakeActor }).actor = undefined;
+	});
+});
+
+it.each(['idle', 'pending'] as const)(
+	'ignores steering to a %s seat without changing metadata or alarms',
+	async (phase) => {
+		const name = `steer-${phase}`;
+		const seat = env.SEAT.get(
+			env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
+		);
+		if (phase === 'pending') {
+			await seat.hold(true);
+			await seat.wake({ room: name, seat: 'product', activation: 'message:1:product:1' });
+		}
+		const snapshot = () =>
+			runInDurableObject(seat, async (_instance, state) => ({
+				metadata: await seatMetadata(sqlStorage(state)).read(),
+				alarm: await state.storage.getAlarm(),
+			}));
+		const before = await snapshot();
+		await seat.steer({
+			room: name,
+			seat: 'product',
+			activation: 'message:1:product:1',
+			after: 1,
+			message: {
+				kind: 'said',
+				seq: 2,
+				at: '2026-01-01T00:00:00.000Z',
+				from: 'priya',
+				text: 'Later context.',
+			},
+		});
+		expect(await snapshot()).toEqual(before);
+		expect(before.alarm).toBeNull();
+	},
+);

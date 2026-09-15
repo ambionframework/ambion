@@ -50,7 +50,7 @@ export type Cause = 'message' | 'opened' | 'closed';
  * record, the seat that takes it, and which attempt this is. One spelling
  * for every cause, so every reader asks the same four questions of it.
  */
-export const activationId = (cause: Cause, position: Seq, seat: string, attempt = 1): string =>
+const activationId = (cause: Cause, position: Seq, seat: string, attempt: number): string =>
 	`${cause}:${position}:${seat}:${attempt}`;
 
 /** What an id says about the activation it names. */

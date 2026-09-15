@@ -48,13 +48,14 @@ export function serializing(transport: Transport): SerializingTransport {
 			const port = transport.connect(wrapped, seat, runtime);
 			return {
 				wake: (wake) => port.wake(check('wake', wake)),
+				steer: (steer) => port.steer(check('steer', steer)),
 				cut: (activation) => port.cut(check('cut', activation)),
 			};
 		},
 	};
 }
 
-export type Operation = 'wake' | 'cut' | 'view' | 'commit' | 'lease';
+export type Operation = 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'lease';
 
 export interface Fault {
 	on: Operation;
@@ -118,6 +119,7 @@ export function faultyTransport(transport: Transport, faults: Fault[], clock: Cl
 			const port: SeatPort = transport.connect(wrapped, seat, runtime);
 			return {
 				wake: (wake) => through('wake', wake, () => port.wake(wake)).catch(() => {}),
+				steer: (steer) => through('steer', steer, () => port.steer(steer)).catch(() => {}),
 				cut: (activation) => through('cut', activation, () => port.cut(activation)).catch(() => {}),
 			};
 		},

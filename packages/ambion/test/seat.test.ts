@@ -6,6 +6,7 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
+import type { Message } from '../src/index.ts';
 import { type Clock, createRuntime, defineAgent } from '../src/index.ts';
 import {
 	type CommitResult,
@@ -13,6 +14,7 @@ import {
 	type LeaseResponse,
 	SeatActor,
 	type SeatRoom,
+	type Steer,
 	type ViewResponse,
 	type Wake,
 } from '../src/transport.ts';
@@ -124,6 +126,19 @@ function play(stream: StreamFn = scripted(() => quiet())) {
 }
 
 const wakeOf = (activation: string): Wake => ({ room: 'played', seat: 'product', activation });
+const steerOf = (activation: string, seq = 2, text = 'And the pump?'): Steer => ({
+	room: 'played',
+	seat: 'product',
+	activation,
+	after: seq - 1,
+	message: {
+		kind: 'said',
+		seq,
+		at: '2026-01-01T00:00:00.000Z',
+		from: 'priya',
+		text,
+	} satisfies Message,
+});
 
 async function until(done: () => boolean): Promise<void> {
 	for (let i = 0; i < 200 && !done(); i += 1) await tick();
@@ -131,7 +146,7 @@ async function until(done: () => boolean): Promise<void> {
 }
 
 describe('a seat actor', () => {
-	it('queues a delayed steer when its target activation has already finished', async () => {
+	it('ignores a delayed steer when its target activation has already finished', async () => {
 		const started = deferred();
 		const release = deferred();
 		const contexts: string[] = [];
@@ -150,21 +165,13 @@ describe('a seat actor', () => {
 		const later = actor.run('message:3:product:1');
 		try {
 			await started.promise;
-			const steer = {
-				target: 'message:1:product:1',
-				after: 1,
-				seq: 2,
-				line: '[priya] Obsolete context from the earlier activation.',
-			};
-			await actor.wake({ ...wakeOf('message:2:product:1'), steer });
+			await actor.steer(
+				steerOf('message:1:product:1', 2, 'Obsolete context from the earlier activation.'),
+			);
 			release.resolve();
 			await later;
 			expect(contexts.every((context) => !context.includes('Obsolete context'))).toBe(true);
-			expect(room.claims).toEqual([
-				'message:1:product:1',
-				'message:3:product:1',
-				'message:2:product:1',
-			]);
+			expect(room.claims).toEqual(['message:1:product:1', 'message:3:product:1']);
 			expect(room.mostHeld).toBe(1);
 		} finally {
 			release.resolve();
@@ -172,16 +179,34 @@ describe('a seat actor', () => {
 		}
 	});
 
-	it('queues a wake that lands while the activation releases, and steers it into nothing', async () => {
+	it('ignores steering while idle without claiming work', async () => {
+		const { room, actor } = play();
+		await actor.steer(steerOf('message:1:product:1'));
+		await tick();
+		expect(room.claims).toEqual([]);
+	});
+
+	it('ignores steering while its target releases without queuing work', async () => {
+		const { room, actor } = play();
+		const running = actor.run('message:1:product:1');
+		try {
+			await room.releasing.promise;
+			await actor.steer(steerOf('message:1:product:1'));
+		} finally {
+			room.letGo.resolve();
+			await running;
+		}
+		expect(room.claims).toEqual(['message:1:product:1']);
+		expect(room.releases).toEqual(['message:1:product:1']);
+	});
+
+	it('queues a wake that lands while the activation releases', async () => {
 		const { room, actor } = play();
 		void actor.wake(wakeOf('message:1:product:1'));
 		await room.releasing.promise;
 		// the activation is over and its release is in flight: it reads nothing more,
 		// so the message runs as an activation of its own, and none runs beside it
-		await actor.wake({
-			...wakeOf('message:2:product:1'),
-			steer: { after: 1, seq: 2, line: '[priya] And the pump?' },
-		});
+		await actor.wake(wakeOf('message:2:product:1'));
 		room.letGo.resolve();
 		await until(() => room.releases.length === 2);
 		expect(room.claims).toEqual(['message:1:product:1', 'message:2:product:1']);
@@ -198,7 +223,7 @@ describe('a seat actor', () => {
 		expect(room.mostHeld).toBe(1);
 	});
 
-	it('steers a wake a message caused into the activation that runs, and starts none beside it', async () => {
+	it('steers a recorded message into its running activation without starting work', async () => {
 		const gate = deferred();
 		const { room, actor } = play(
 			scripted(async () => {
@@ -209,10 +234,7 @@ describe('a seat actor', () => {
 		room.letGo.resolve();
 		void actor.wake(wakeOf('message:1:product:1'));
 		await until(() => room.claims.length === 1);
-		await actor.wake({
-			...wakeOf('message:2:product:1'),
-			steer: { after: 1, seq: 2, line: '[priya] And the pump?' },
-		});
+		await actor.steer(steerOf('message:1:product:1'));
 		await tick();
 		expect(room.claims).toEqual(['message:1:product:1']);
 		gate.resolve();

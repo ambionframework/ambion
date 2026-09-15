@@ -64,6 +64,11 @@ and domain tools. Ambion supplies the collaboration semantics.
 exchanges.** Membership changes through room operations. Activation and lease
 details belong to the hosting contract.
 
+**A message remains one application operation.** Callers send it without
+checking whether an exchange is open or an agent is working. The kernel records
+it and delivers context according to participation rules. Activation requests
+and steering are execution details; neither introduces another message kind.
+
 ```text
 person enters a room and sends a message
                   |

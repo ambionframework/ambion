@@ -8,7 +8,7 @@ import {
 	seated,
 	startRoom,
 } from '../src/index.ts';
-import { inProcessTransport, type Transport, type Wake } from '../src/transport.ts';
+import { inProcessTransport, type Steer, type Transport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import {
 	assistant,
@@ -39,20 +39,21 @@ const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
 const quietSeats = [seated(alpha, { attention: 'named' }), seated(beta, { attention: 'named' })];
 
 /** Observe the actual transport boundary while the ordinary executor runs. */
-function observedTransport(): { transport: Transport; wakes: Wake[] } {
+function observedTransport(): { transport: Transport; steers: Steer[] } {
 	const transport = inProcessTransport();
-	const wakes: Wake[] = [];
+	const steers: Steer[] = [];
 	return {
-		wakes,
+		steers,
 		transport: {
 			connect(room, seat, runtime) {
 				const port = transport.connect(room, seat, runtime);
 				return {
 					cut: (activation) => port.cut(activation),
-					wake: (wake) => {
-						wakes.push(wake);
-						return port.wake(wake);
+					steer: (steer) => {
+						steers.push(steer);
+						return port.steer(steer);
 					},
+					wake: (wake) => port.wake(wake),
 				};
 			},
 		},
@@ -93,9 +94,9 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			const update = (await room.messages()).at(-1);
 			expect(update?.wakes ?? []).toEqual([]);
 			expect(
-				observed.wakes.filter((wake) => wake.steer?.seq === update?.seq).map((w) => w.seat),
+				observed.steers.filter((steer) => steer.message.seq === update?.seq).map((s) => s.seat),
 			).toEqual(['alpha']);
-			expect(observed.wakes.find((wake) => wake.steer?.seq === update?.seq)?.steer?.target).toBe(
+			expect(observed.steers.find((steer) => steer.message.seq === update?.seq)?.activation).toBe(
 				[...stateOf(room).leases.values()].find((lease) => lease.phase === 'running')?.id,
 			);
 			release.resolve();
@@ -219,9 +220,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			await summaryStarted.promise;
 			await visit.send({ to: beta, text: 'Later question outside the summary.' });
 			await betaStarted.promise;
-			expect(
-				observed.wakes.filter((wake) => wake.seat === assistant.name && wake.steer !== undefined),
-			).toEqual([]);
+			expect(observed.steers.filter((steer) => steer.seat === assistant.name)).toEqual([]);
 			const ended = assistantEnded(room);
 			summaryRelease.resolve();
 			const summary = await first.response();
@@ -231,7 +230,9 @@ describe.each(storages)('message delivery on $name', (storage) => {
 				true,
 			);
 			expect(
-				observed.wakes.filter((wake) => wake.steer?.seq === summary?.seq).map((wake) => wake.seat),
+				observed.steers
+					.filter((steer) => steer.message.seq === summary?.seq)
+					.map((steer) => steer.seat),
 			).toEqual(['beta']);
 			betaRelease.resolve();
 			await waitForRoom(room);

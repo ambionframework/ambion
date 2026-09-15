@@ -79,7 +79,11 @@ function rpcTransport(env: Env): Transport {
 			const stub = env.SEAT.get(
 				env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', room.name, seat])),
 			);
-			return { wake: (wake) => stub.wake(wake), cut: (activation) => stub.cut(activation) };
+			return {
+				wake: (wake) => stub.wake(wake),
+				steer: (steer) => stub.steer(steer),
+				cut: (activation) => stub.cut(activation),
+			};
 		},
 	};
 }

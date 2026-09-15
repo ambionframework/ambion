@@ -2,15 +2,16 @@
  * One seat as one Durable Object. A wake stores the activation id and sets
  * an alarm; the alarm claims the lease, reads the view, runs the activation
  * to its end and releases the lease, all inside one alarm handler. A wake
- * that arrives while an activation runs is handed to the actor, which
- * steers it in, and a cut is handed to it the same way. The seat's audit
- * transcript lives in the object's own SQLite.
+ * that arrives while an activation runs is handed to the actor to queue;
+ * steering is forwarded separately to the exact live activation. A cut is
+ * handed to the actor the same way. The seat's audit transcript lives in the
+ * object's own SQLite.
  */
 
 import { DurableObject } from 'cloudflare:workers';
 import type { RoomNotification } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
-import type { SeatRoom, Wake } from '@ambionframework/ambion/transport';
+import type { SeatRoom, Steer, Wake } from '@ambionframework/ambion/transport';
 import { SeatActor } from '@ambionframework/ambion/transport';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, runtimeFor, seatEvent } from './configure.ts';
@@ -59,8 +60,7 @@ export class SeatObject extends DurableObject<Env> {
 	/**
 	 * A wake for the activation the object holds, or for a fresh one when it
 	 * holds none, sets the alarm. A wake for a different activation while one
-	 * runs goes to the actor, which steers a message in; while one is pending
-	 * it is ignored, and the room sends it again.
+	 * runs is queued by the actor.
 	 */
 	async wake(wake: Wake): Promise<void> {
 		const next = await this.metadata.change((current) =>
@@ -81,6 +81,11 @@ export class SeatObject extends DurableObject<Env> {
 			return;
 		}
 		if (!next.hold) await this.ctx.storage.setAlarm(Date.now());
+	}
+
+	/** Forward steering to a live actor without changing durable wake state. */
+	async steer(steer: Steer): Promise<void> {
+		await this.actor?.steer(steer);
 	}
 
 	/**

@@ -9,10 +9,9 @@
  * The seat reaches the room through three calls: `view` reads what an
  * activation is given, `commit` puts one message on the record, and
  * `lease` claims, renews or releases the activation. The room reaches a
- * seat through two: `wake` names an activation the seat runs, and carries
- * the line a running activation is steered with when a message caused it;
- * `cut` names an activation whose lease the room ended, so the seat side
- * stops it now.
+ * seat through three calls: `wake` starts an activation, `steer` sends
+ * context to one running activation, and `cut` stops an activation whose
+ * lease the room ended.
  */
 import type { Attention, Message, Seq } from './types.ts';
 
@@ -137,26 +136,26 @@ export interface Composition {
 
 // -- the room reaching a seat -------------------------------------------------
 
-/**
- * A wake names the activation the seat runs for it. When a message caused
- * it, `steer` carries the line a running activation is handed instead of a
- * fresh start: the seat side reads it only while an activation runs.
- */
+/** A wake names an activation the seat runs. */
 export interface Wake {
 	room: string;
 	seat: string;
 	activation: string;
-	steer?: {
-		/** The activation that received this message. Older senders can omit it. */
-		target?: string;
-		after: Seq;
-		seq: Seq;
-		line: string;
-	};
+}
+
+/** A message the room sends to one activation that is already running. */
+export interface Steer {
+	room: string;
+	seat: string;
+	/** The exact activation that was at work when the message landed. */
+	activation: string;
+	after: Seq;
+	message: Message;
 }
 
 export interface SeatPort {
 	wake(wake: Wake): Promise<void>;
+	steer(steer: Steer): Promise<void>;
 	/** The room ended this activation's lease: stop it, and run what queued behind it. */
 	cut(activation: string): Promise<void>;
 }

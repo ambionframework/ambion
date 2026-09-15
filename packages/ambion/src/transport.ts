@@ -38,6 +38,7 @@ export type {
 	SeatPort,
 	SeatRoom,
 	Stale,
+	Steer,
 	ViewResponse,
 	Wake,
 } from './wire.ts';

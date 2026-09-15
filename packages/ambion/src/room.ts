@@ -41,10 +41,9 @@ import {
 	type Transport,
 } from './host/runtime.ts';
 import { type Body, type Entry, type Kind, placed, RoomJournal } from './journal/journal.ts';
-import { renderLine } from './render.ts';
 import { summaryCompletion } from './room/exchange.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
-import { activationId, isLive, seatOf } from './room/lease.ts';
+import { isLive, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
 import {
@@ -86,7 +85,6 @@ import type {
 	Seating,
 	SeatPort,
 	ViewResponse,
-	Wake,
 	Without,
 } from './wire.ts';
 
@@ -1017,20 +1015,23 @@ class RoomHost implements Room, RunningRoom {
 			const lease = state.leases.get(steer.activation);
 			if (lease === undefined || !isLive(lease, this.now())) continue;
 			const seat = steer.seat;
-			this.send(activationId('message', message.seq, seat), seat, {
-				target: steer.activation,
-				after,
-				seq: message.seq,
-				line: renderLine(message),
-			});
+			void this.port(seat)
+				.steer({
+					room: this.name,
+					seat,
+					activation: steer.activation,
+					after,
+					message,
+				})
+				.catch(() => {});
 		}
 	}
 
-	/** One wake over the wire. A wake a message caused carries the line a running activation is steered with. */
-	private send(id: string, seat: string, steer?: Wake['steer']): void {
-		if (steer === undefined) this.sentAt.set(id, this.now());
+	/** One activation wake over the wire. */
+	private send(id: string, seat: string): void {
+		this.sentAt.set(id, this.now());
 		void this.port(seat)
-			.wake({ room: this.name, seat, activation: id, ...(steer === undefined ? {} : { steer }) })
+			.wake({ room: this.name, seat, activation: id })
 			.catch(() => {});
 	}
 

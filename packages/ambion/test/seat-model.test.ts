@@ -8,6 +8,7 @@ import {
 	type LeaseResponse,
 	SeatActor,
 	type SeatRoom,
+	type Steer,
 	type ViewResponse,
 } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
@@ -157,12 +158,20 @@ describe('async seat model resolution', () => {
 		const running = actor.run(wake);
 
 		await resolverStarted.promise;
-		await actor.wake({
+		const steer: Steer = {
 			room: 'model-test',
 			seat: product.name,
-			activation: 'message:2:product:1',
-			steer: { after: 1, seq: 2, line: '[priya] Follow up' },
-		});
+			activation: wake,
+			after: 1,
+			message: {
+				kind: 'said',
+				seq: 2,
+				at: '2026-01-01T00:00:00.000Z',
+				from: 'priya',
+				text: 'Follow up',
+			},
+		};
+		await actor.steer(steer);
 		room.lastSeq = 2;
 		modelReady.resolve(model);
 		await running;
