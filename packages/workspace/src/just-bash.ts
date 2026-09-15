@@ -11,9 +11,8 @@
  * `bash` tool can run a script with `js-exec` or `python3`, beside just-bash's
  * coreutils, `jq`, `yq`, `xan` and `sqlite3`. No instance is given a `network`
  * option, so `curl` and every other network command stay absent — the one
- * exception `docs/workspace.md` §1 names, and the boundary this file does not
- * close. `render.ts`'s `WORKSPACE_PARAGRAPH` states this same set to a
- * connected agent, and the two must stay in step.
+ * exception the workspace contract names, and the boundary this file does not
+ * close. The backend's guidance states this same set to a connected agent.
  *
  * `connect` runs one unconditional `mkdir -p` and checks nothing first. Two
  * calls for one agent can overlap, since Pi runs a turn's tool calls in
@@ -28,12 +27,20 @@
 
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join, posix } from 'node:path';
-import type { AgentDefinition, WorkspaceBackend } from '@ambionframework/ambion';
+import {
+	type AgentHarnessTool,
+	createBashTool,
+	createEditTool,
+	createReadTool,
+	createWriteTool,
+	type ExecutionToolContext,
+} from '@earendil-works/pi-agent-core';
 import { Bash, type IFileSystem, InMemoryFs } from 'just-bash';
 import { BashEnv } from './bash-env.ts';
+import type { WorkspaceAgent, WorkspaceBackend } from './resource.ts';
 
 /** Build one agent's environment over the workspace's filesystem. */
-async function connectOver(fs: IFileSystem, agent: AgentDefinition): Promise<BashEnv> {
+async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<BashEnv> {
 	const home = `/home/${agent.name}`;
 	await fs.mkdir(home, { recursive: true });
 	return new BashEnv(
@@ -86,6 +93,23 @@ export interface MemoryWorkspaceBackend extends WorkspaceBackend {
 	readFiles(): Promise<MemoryBackendFile[]>;
 }
 
+/** Default tool guidance for the just-bash backends. */
+const JUST_BASH_GUIDANCE = [
+	`Your workspace gives you four tools: read, write, edit and bash, over a shared virtual`,
+	`filesystem. Your home is /home/<your name>. Other agents connected to this workspace`,
+	`read and write the same files, with no wall between one agent's home and another's.`,
+	``,
+	`bash runs a simulated Unix shell: the common coreutils (ls, cat, grep, sed, awk, find,`,
+	`tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run`,
+	`a script with js-exec (JavaScript) or python3 (Python). bash has no network: curl and`,
+	`every other network command are disabled.`,
+].join('\n');
+
+/** Create the Pi harness tools offered by each just-bash backend instance. */
+function justBashTools(): readonly AgentHarnessTool<ExecutionToolContext>[] {
+	return [createReadTool(), createWriteTool(), createEditTool(), createBashTool()];
+}
+
 /**
  * Every plain file under `dir`, read as text, recursively. A symlink is
  * neither a directory nor a plain file, and is skipped rather than followed:
@@ -109,21 +133,17 @@ async function listFiles(fs: IFileSystem): Promise<MemoryBackendFile[]> {
 }
 
 /**
- * Memoises what `build` returns, retries after a rejection instead of
- * staying poisoned by it, and turns `mark` into a one-way gate: once called,
- * every later `get()` rejects rather than silently rebuilding. Both backends
- * below are one lazily-built resource behind `connect`/`readFiles`, and both
- * need this same shape to make their own `destroy` actually terminal.
+ * Memoises what `build` returns and retries after a rejection instead of
+ * staying poisoned by it. The workspace owner, rather than this cache, owns
+ * lifecycle and prevents use after destruction.
  */
 function lazyResource<T>(build: () => Promise<T>): {
 	get(): Promise<T>;
-	mark(): void;
+	clear(replacement?: T): void;
 } {
 	let ready: Promise<T> | undefined;
-	let destroyed = false;
 	return {
 		get: () => {
-			if (destroyed) return Promise.reject(new Error('This workspace backend is destroyed.'));
 			if (ready === undefined) {
 				ready = build().catch((error) => {
 					ready = undefined; // let the next call retry rather than staying poisoned
@@ -132,20 +152,19 @@ function lazyResource<T>(build: () => Promise<T>): {
 			}
 			return ready;
 		},
-		mark: () => {
-			destroyed = true;
-			ready = undefined;
+		clear: (replacement) => {
+			ready = replacement === undefined ? undefined : Promise.resolve(replacement);
 		},
 	};
 }
 
 /**
- * An in-memory filesystem that lives as long as the handle.
+ * An in-memory filesystem that lives as long as the backend resource.
  * Building it is async when there is a `seed` to run, so `connect` and
  * `readFiles` both await one lazily-built, memoised filesystem rather than
  * the handle building it up front. `destroy` can only ever fail to release
- * memory, never to delete anything, so it marks the resource destroyed
- * immediately: no later `connect` or `readFiles` call resurrects it.
+ * memory. Destroying the owning workspace clears the cache, releasing the
+ * filesystem; the owner prevents any later connection through the handle.
  */
 export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspaceBackend {
 	const resource = lazyResource(async () => {
@@ -163,9 +182,12 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
 	return {
 		connect: async (agent) => connectOver(await resource.get(), agent),
 		async destroy() {
-			resource.mark();
+			resource.clear(inMemory());
 		},
+		dispose: async () => resource.clear(inMemory()),
 		readFiles: async () => listFiles(await resource.get()),
+		tools: justBashTools(),
+		guidance: JUST_BASH_GUIDANCE,
 	};
 }
 
@@ -173,10 +195,8 @@ export function memoryBackend(options: MemoryBackendOptions = {}): MemoryWorkspa
  * A workspace over a real directory. `ReadWriteFs` writes through to disk
  * and needs its root to exist, so the first `connect` creates the root and
  * builds the filesystem; `destroy` removes the root's contents and leaves the
- * root. The resource is marked destroyed only once that deletion actually
- * succeeds — a backend that fails to delete leaves the workspace live and
- * reachable, the same failure `destroyWorkspace` (`workspace.ts` §2) expects
- * to be able to retry.
+ * root. Deletion errors are propagated so the owning `Workspace` remains live
+ * and retryable; lifecycle state belongs only to that owner.
  *
  * This backend is the one part of this package that needs a real disk, and it
  * loads `ReadWriteFs` on the first connect. A bundler for a runtime without a
@@ -193,11 +213,27 @@ export function directoryBackend(root: string): WorkspaceBackend {
 	return {
 		connect: async (agent) => connectOver(await resource.get(), agent),
 		async destroy() {
-			const entries = await readdir(root).catch(() => []);
-			await Promise.all(
+			let entries: string[];
+			try {
+				entries = await readdir(root);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+					resource.clear();
+					return;
+				}
+				throw error;
+			}
+			const removals = await Promise.allSettled(
 				entries.map((entry) => rm(join(root, entry), { recursive: true, force: true })),
 			);
-			resource.mark();
+			const failure = removals.find(
+				(result): result is PromiseRejectedResult => result.status === 'rejected',
+			);
+			if (failure) throw failure.reason;
+			resource.clear();
 		},
+		dispose: async () => resource.clear(),
+		tools: justBashTools(),
+		guidance: JUST_BASH_GUIDANCE,
 	};
 }

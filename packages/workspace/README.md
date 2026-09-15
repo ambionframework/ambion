@@ -3,9 +3,7 @@
 A workspace backend for [Ambion](https://ambionframework.com): a virtual Unix
 filesystem and shell that an agent's tools reach into.
 
-`@ambionframework/ambion` names the identity and data boundary an agent
-connects to, and it holds no filesystem. `WorkspaceBackend` is the port it
-names. This package holds two implementations of that port, over
+This package owns workspace resources and two backends over
 [just-bash](https://github.com/vercel-labs/just-bash).
 
 ## Install
@@ -16,22 +14,22 @@ pnpm add @ambionframework/ambion @ambionframework/workspace
 
 ## Use
 
-An agent that names a workspace holds four more tools on every activation:
-`read`, `write`, `edit` and `bash`. Each one reaches the environment the
-backend built for that agent, rooted at `/home/<agent name>`.
+`workspaceTools(drive)` adds the tools and optional guidance that the backend
+supplies. Each tool reaches the environment the backend built for that agent,
+rooted at `/home/<agent name>`.
 
 ```ts
-import { defineAgent, defineWorkspace } from '@ambionframework/ambion';
-import { memoryBackend } from '@ambionframework/workspace';
+import { defineAgent } from '@ambionframework/ambion';
+import { memoryBackend, openWorkspace, workspaceTools } from '@ambionframework/workspace';
 
-const drive = defineWorkspace({ name: 'team-site', backend: memoryBackend() });
+const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
 
 const surveyor = defineAgent({
   name: 'surveyor',
   identity: 'Quantity surveyor. Holds the tonnage.',
   instructions: 'Read the pour plan before you answer.',
   model: 'anthropic/claude-sonnet-5',
-  workspace: drive,
+  tools: [workspaceTools(drive)],
 });
 ```
 
@@ -44,8 +42,8 @@ workspace's files with no tool call, which is what a real directory gives for
 free.
 
 **`directoryBackend(root)` writes through to a real directory.** It creates
-the root on the first connect. `destroyWorkspace` empties the root and leaves
-it.
+the root when an operation needs it. `drive.destroy()` deletes its contents
+and keeps the root.
 
 Two agents connected to one workspace share every file. The boundary is
 nominal: just-bash is single-user, so one agent's `bash` call reads another's
@@ -60,7 +58,7 @@ and every other network command stay absent.
 ## The contract
 
 [`docs/workspace.md`](https://github.com/ambionframework/ambion/blob/main/docs/workspace.md)
-is the design contract. It specifies the handle, the resolver, the built-in
+is the design contract. It specifies the resource, its lifecycle, backend
 tools and both backends.
 
 ## License

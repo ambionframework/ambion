@@ -1,7 +1,6 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { defineAgent, defineTool, defineWorkspace, destroyWorkspace } from '../src/index.ts';
-import { fakeBackend } from './support/workspace.ts';
+import { defineAgent, defineTool, type ToolBundle } from '../src/index.ts';
 
 const tool = (name: string) =>
 	defineTool({
@@ -14,6 +13,18 @@ const tool = (name: string) =>
 describe('agent tools', () => {
 	it('accepts an ordinary domain tool name with an underscore', () => {
 		expect(() => tool('lookup_order')).not.toThrow();
+	});
+
+	it('allows an ordinary tool named read without a workspace bundle', () => {
+		expect(() =>
+			defineAgent({
+				name: 'reader',
+				identity: 'An agent.',
+				instructions: 'Read.',
+				model: 'scripted/reader',
+				tools: [tool('read')],
+			}),
+		).not.toThrow();
 	});
 
 	it('keeps the three names a room supplies free for its activation tools', () => {
@@ -30,31 +41,17 @@ describe('agent tools', () => {
 		}
 	});
 
-	it('allows a workspace name without a workspace, and reserves it after one is attached', async () => {
+	it('rejects duplicate ordinary names after flattening a bundle', () => {
+		const bundle: ToolBundle = { tools: [tool('read')] };
 		expect(() =>
 			defineAgent({
-				name: 'reader',
+				name: 'workspace-reader',
 				identity: 'An agent.',
 				instructions: 'Read.',
 				model: 'scripted/reader',
-				tools: [tool('read')],
+				tools: [bundle, tool('read')],
 			}),
-		).not.toThrow();
-		const workspace = defineWorkspace({ name: 'tool-names', backend: fakeBackend() });
-		try {
-			expect(() =>
-				defineAgent({
-					name: 'workspace-reader',
-					identity: 'An agent.',
-					instructions: 'Read.',
-					model: 'scripted/reader',
-					workspace,
-					tools: [tool('read')],
-				}),
-			).toThrow(/workspace supplies it for an agent that names one/);
-		} finally {
-			await destroyWorkspace(workspace);
-		}
+		).toThrow(/duplicate tools named 'read'/);
 	});
 
 	it('allows an agent-defined tool with an unrelated name', () => {

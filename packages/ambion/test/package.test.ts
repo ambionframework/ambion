@@ -44,14 +44,8 @@ it('keeps the wire off the entry a host builds a room with', () => {
 		expect(transport).toHaveProperty(name);
 		expect(main).not.toHaveProperty(name);
 	}
-	// And the five primitives stay where a host looks for them.
-	for (const name of [
-		'defineAgent',
-		'defineHuman',
-		'defineTool',
-		'defineWorkspace',
-		'startSession',
-	]) {
+	// The room primitives stay where a host looks for them.
+	for (const name of ['defineAgent', 'defineHuman', 'defineTool', 'startSession']) {
 		expect(main).toHaveProperty(name);
 		expect(transport).not.toHaveProperty(name);
 	}

@@ -25,7 +25,6 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
 	createRuntime,
-	destroyWorkspace,
 	isPresence,
 	isSeatedAgent,
 	isSpoken,
@@ -382,7 +381,7 @@ clearInterval(alive);
 // The drive as the run left it, then the workspace retired: the in-memory
 // filesystem is dropped, and the checked-in seed on disk is untouched.
 const driveAfter = await driveFiles();
-await destroyWorkspace(SITE_DRIVE);
+await SITE_DRIVE.destroy();
 firstDatabase.close();
 secondDatabase.close();
 readerDatabase.close();

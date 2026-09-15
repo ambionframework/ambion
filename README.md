@@ -120,10 +120,9 @@ stays intact; only its rendered views compact. See
 ### 8. Boundaries are small and serializable
 
 The core depends on narrow host interfaces: `Clock`, `JournalOpener`,
-`ModelResolver`, `Transport`, and `WorkspaceBackend`. One `JournalOpener`
-persists room facts and Pi transcripts through separate names. Together they
-isolate time, persistence, model resolution, seat execution, and workspace
-storage from room semantics.
+`ModelResolver`, and `Transport`. One `JournalOpener` persists room facts
+and Pi transcripts through separate names. Together they isolate time,
+persistence, model resolution, and seat execution from room semantics.
 
 [`wire.ts`](packages/ambion/src/wire.ts) restricts room/seat traffic to plain
 JSON values and five operations: `wake`, `cut`, `view`, `commit`, and `lease`.
@@ -132,12 +131,9 @@ The room uses that specification to render views and validate writes; the
 executor uses it to bind tools. In-process and Cloudflare hosts share this
 contract.
 
-Workspace access follows the same design: an agent gets workspace tools only
-when its definition names a workspace, and each call resolves access through
-a backend. The core names the backend as a port and holds no filesystem.
-`@ambionframework/workspace` provides an in-memory backend and one over a
-real directory; stronger isolation can join behind the same interface. See
-[`docs/workspace.md`](docs/workspace.md).
+`@ambionframework/workspace` owns filesystem resources and provides ordinary
+tool bundles for agents. Its filesystem data stays separate from the runtime
+journal. See [`docs/workspace.md`](docs/workspace.md).
 
 ## A minimal sketch
 

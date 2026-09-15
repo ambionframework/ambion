@@ -5,7 +5,7 @@
  * pick them up and use them against a filesystem it has never seen.
  */
 
-import { defineWorkspace, destroyWorkspace, stopSession } from '@ambionframework/ambion';
+import { stopSession } from '@ambionframework/ambion';
 import { expect, it } from 'vitest';
 import {
 	agent,
@@ -19,7 +19,7 @@ import {
 	untilQuiet,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
-import { memoryBackend } from '../../src/index.ts';
+import { memoryBackend, openWorkspace, workspaceTools } from '../../src/index.ts';
 
 live('the workspace', () => {
 	it('a seat reads a file it was told about, writes one back, and answers from what it read', async () => {
@@ -31,7 +31,7 @@ live('the workspace', () => {
 				);
 			},
 		});
-		const store = defineWorkspace({ name: roomName('live-store'), backend });
+		const store = openWorkspace({ name: roomName('live-store'), backend });
 		const librarian = agent('librarian', {
 			identity: 'Keeps the store notes.',
 			instructions: `
@@ -40,7 +40,7 @@ live('the workspace', () => {
 				"checked <crate>", to notes/journal.txt in your home directory. Then
 				answer with one say, in one sentence, quoting the count you read.
 			`,
-			workspace: store,
+			tools: [workspaceTools(store)],
 		});
 		const { session, runtime, events } = open('workspace', { agents: [librarian] });
 		const visit = await enter(session, person);
@@ -64,6 +64,6 @@ live('the workspace', () => {
 		await invariants(session, events);
 		report('the workspace', await spent(runtime, session));
 		await stopSession(session);
-		await destroyWorkspace(store);
+		await store.destroy();
 	});
 });

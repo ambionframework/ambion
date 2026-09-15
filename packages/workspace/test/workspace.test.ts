@@ -5,14 +5,11 @@ import {
 	type AgentDefinition,
 	defineAgent,
 	defineTool,
-	defineWorkspace,
-	destroyWorkspace,
 	isSpoken,
 	type Session,
 	startSession,
 	stopSession,
 	type ToolContext,
-	type WorkspaceBackend,
 } from '@ambionframework/ambion';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import type { Context } from '@earendil-works/pi-ai';
@@ -30,7 +27,11 @@ import {
 	speak,
 } from '../../ambion/test/support/scripted.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
-import { directoryBackend, MEMORY_LIMIT_BYTES, memoryBackend } from '../src/just-bash.ts';
+import { directoryBackend, memoryBackend, openWorkspace, workspaceTools } from '../src/index.ts';
+import { MEMORY_LIMIT_BYTES } from '../src/just-bash.ts';
+import type { WorkspaceBackend } from '../src/resource.ts';
+
+const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });
 
 /** Every tool result the model has been shown so far, oldest first. */
 function toolResults(context: Context): { tool: string; text: string; failed: boolean }[] {
@@ -69,11 +70,12 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 
 describe('the built-in tools', () => {
 	it('write, read and bash reach one filesystem two agents share, rooted at each home', async () => {
-		const site = defineWorkspace({ name: name('shared'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('shared'), backend: memoryBackend() });
+		const tools = workspaceTools(site);
 		const results: Record<string, { tool: string; text: string; failed: boolean }[]> = {};
 		const writerDone = Promise.withResolvers<void>();
 		const session = await run(
-			[agent('writer', { workspace: site }), agent('reader', { workspace: site })],
+			[agent('writer', { tools: [tools] }), agent('reader', { tools: [tools] })],
 			{
 				writer: (context, who, call) => {
 					results[who] = toolResults(context);
@@ -105,16 +107,35 @@ describe('the built-in tools', () => {
 		expect(reader[0]).toMatchObject({ tool: 'read', text: 'slab pour Thu\n', failed: false });
 		expect((await session.messages()).filter(isSpoken).map((m) => m.text)).toContain('written');
 		await stopSession(session);
-		await destroyWorkspace(site);
+		await site.destroy();
 	});
 
-	it('runs two edits to one file in one batch one at a time, so both land', async () => {
-		const site = defineWorkspace({ name: name('edits'), backend: memoryBackend() });
+	it('accepts Pi alternate edit arguments through the ordinary workspace bundle', async () => {
+		const site = openWorkspace({ name: name('edits'), backend: memoryBackend() });
+		const tools = workspaceTools(site);
 		let final: string | undefined;
-		await run([agent('editor', { workspace: site })], {
+		await run([agent('editor', { tools: [tools] })], {
+			editor: (context, _who, call) => {
+				if (call === 1) return callTool('write', { path: 'f.txt', content: 'alpha\n' });
+				if (call === 2)
+					return callTool('edit', { path: 'f.txt', oldText: 'alpha', newText: 'ALPHA' });
+				if (call === 3) return callTool('read', { path: 'f.txt' });
+				final = toolResults(context).at(-1)?.text;
+				return quiet();
+			},
+		});
+		expect(final).toBe('ALPHA\n');
+		await site.destroy();
+	});
+
+	it('serializes two edits in one model batch so both updates land', async () => {
+		const site = openWorkspace({ name: name('edits'), backend: memoryBackend() });
+		const tools = workspaceTools(site);
+		let final: string | undefined;
+		await run([agent('editor', { tools: [tools] })], {
 			editor: (context, _who, call) => {
 				if (call === 1) return callTool('write', { path: 'f.txt', content: 'alpha\nbeta\n' });
-				if (call === 2) {
+				if (call === 2)
 					return fauxAssistantMessage(
 						[
 							fauxToolCall('edit', {
@@ -128,31 +149,31 @@ describe('the built-in tools', () => {
 						],
 						{ stopReason: 'toolUse' },
 					);
-				}
 				if (call === 3) return callTool('read', { path: 'f.txt' });
 				final = toolResults(context).at(-1)?.text;
 				return quiet();
 			},
 		});
 		expect(final).toBe('ALPHA\nBETA\n');
-		await destroyWorkspace(site);
+		await site.destroy();
 	});
 
 	it('fail on the next call once the workspace is destroyed, and the activation goes on', async () => {
-		const site = defineWorkspace({ name: name('destroyed'), backend: memoryBackend() });
+		const site = openWorkspace({ name: name('destroyed'), backend: memoryBackend() });
+		const tools = workspaceTools(site);
 		let after: { tool: string; text: string; failed: boolean }[] = [];
 		let custom: string | undefined;
 		const probe = defineTool({
 			name: 'probe',
 			description: 'Reports whether a workspace is reachable.',
 			parameters: Type.Object({}),
-			execute: async (_params, ctx) => ((await ctx.workspace()) === undefined ? 'none' : 'some'),
+			execute: async (_params, ctx) => site.use(ctx.agent, async () => 'some', ctx.signal),
 		});
-		await run([agent('worker', { workspace: site, tools: [probe] })], {
+		await run([agent('worker', { tools: [tools, probe] })], {
 			worker: async (context, _who, call) => {
 				if (call === 1) return callTool('write', { path: 'a.txt', content: 'x' });
 				if (call === 2) {
-					await destroyWorkspace(site);
+					await site.destroy();
 					return callTool('read', { path: 'a.txt' });
 				}
 				if (call === 3) return callTool('probe', {});
@@ -164,62 +185,295 @@ describe('the built-in tools', () => {
 		});
 		expect(after[0]).toMatchObject({ tool: 'write', failed: false });
 		expect(after[1]).toMatchObject({ tool: 'read', failed: true });
-		expect(after[1]?.text).toMatch(/is destroyed/);
-		expect(custom).toBe('none');
+		expect(after[1]?.text).toMatch(/no longer available/);
+		expect(custom).toMatch(/no longer available/);
+	});
+});
+
+describe('the workspace resource owner', () => {
+	it('keeps an empty backend tool set empty', async () => {
+		const inner = memoryBackend();
+		const workspace = openWorkspace({
+			name: name('empty-tools'),
+			backend: { tools: [], connect: (agent) => inner.connect(agent), destroy: async () => {} },
+		});
+		expect(workspaceTools(workspace).tools).toEqual([]);
+		expect(workspaceTools(workspace).guidance).toBeUndefined();
+		await workspace.destroy();
+	});
+
+	it('preserves backend-owned tools and guidance through the ordinary bundle', async () => {
+		const inner = memoryBackend();
+		const customTool = {
+			name: 'inspect',
+			label: 'Inspect',
+			description: 'Inspect the custom backend.',
+			parameters: Type.Object({}),
+			execute: async (
+				_toolCallId: string,
+				_params: unknown,
+				_signal: AbortSignal | undefined,
+				_onUpdate: unknown,
+				context: { env: ExecutionEnv },
+			) => ({
+				content: [{ type: 'text' as const, text: context.env.cwd }],
+				details: {},
+			}),
+		};
+		const workspace = openWorkspace({
+			name: name('custom-tools'),
+			backend: {
+				tools: [customTool],
+				guidance: 'Custom backend guidance.',
+				connect: (agent) => inner.connect(agent),
+				destroy: async () => {},
+			},
+		});
+		const bundle = workspaceTools(workspace);
+		expect(bundle.guidance).toBe('Custom backend guidance.');
+		expect(bundle.tools.map((tool) => (tool as { name: string }).name)).toEqual(['inspect']);
+		const result = await (
+			bundle.tools[0] as {
+				execute: (
+					params: unknown,
+					context: ToolContext,
+				) => Promise<{ content: { text: string }[] }>;
+			}
+		).execute(
+			{},
+			{
+				agent: workspaceAgent('alpha'),
+				callId: 'custom-call',
+			},
+		);
+		expect(result.content[0]?.text).toBe('/home/alpha');
+		await workspace.destroy();
+	});
+
+	it('serializes complete operations from two agents, so shared edits do not lose updates', async () => {
+		const backend = memoryBackend({
+			seed: async ({ writeFile }) => writeFile('/shared.txt', 'base\n'),
+		});
+		const workspace = openWorkspace({
+			name: name('serialized-edits'),
+			backend,
+		});
+		const append = async (agentName: string, line: string) =>
+			workspace.use(workspaceAgent(agentName), async (env) => {
+				const read = await env.readTextFile('/shared.txt');
+				if (!read.ok) throw new Error(read.error.message);
+				const write = await env.writeFile('/shared.txt', `${read.value}${line}\n`);
+				if (!write.ok) throw new Error(write.error.message);
+			});
+		await Promise.all([append('alpha', 'alpha'), append('beta', 'beta')]);
+		const files = await backend.readFiles();
+		expect(files).toContainEqual({ path: '/shared.txt', text: 'base\nalpha\nbeta\n' });
+		await workspace.destroy();
+	});
+
+	it('revokes pending and queued calls while an active call drains', async () => {
+		const started = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		let cleaned = 0;
+		const inner = memoryBackend();
+		const backend = {
+			tools: [],
+			connect: async (agent: { name: string; identity: string }) => {
+				started.resolve();
+				await release.promise;
+				const env = await inner.connect(agent);
+				env.cleanup = async () => void cleaned++;
+				return env;
+			},
+			destroy: async () => {},
+		};
+		const workspace = openWorkspace({ name: name('revoke'), backend });
+		const active = workspace.use(workspaceAgent('alpha'), () => 'done');
+		await started.promise;
+		const queued = workspace.use(workspaceAgent('beta'), () => 'queued');
+		const destroying = workspace.destroy();
+		release.resolve();
+		await expect(active).rejects.toThrow(/no longer available/i);
+		await expect(queued).rejects.toThrow(/no longer available/i);
+		await destroying;
+		expect(cleaned).toBe(1);
+	});
+
+	it('checks an aborted queued call before connecting it', async () => {
+		const release = Promise.withResolvers<void>();
+		let connects = 0;
+		const inner = memoryBackend();
+		const workspace = openWorkspace({
+			name: name('queued-abort'),
+			backend: {
+				tools: [],
+				connect: async (agent, signal) => {
+					connects += 1;
+					if (connects === 1) await release.promise;
+					if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+					return inner.connect(agent, signal);
+				},
+				destroy: async () => {},
+			},
+		});
+		const active = workspace.use(workspaceAgent('alpha'), () => 'active');
+		const controller = new AbortController();
+		const queued = workspace.use(workspaceAgent('beta'), () => 'queued', controller.signal);
+		controller.abort();
+		release.resolve();
+		await expect(active).resolves.toBe('active');
+		await expect(queued).rejects.toThrow(/abort/i);
+		expect(connects).toBe(1);
+		await workspace.destroy();
+	});
+
+	it('cleans an environment after active work drains before deletion', async () => {
+		let cleaned = 0;
+		let destroyed = 0;
+		const inner = memoryBackend();
+		const workspace = openWorkspace({
+			name: name('cleanup'),
+			backend: {
+				tools: [],
+				connect: async (agent, signal) => {
+					const env = await inner.connect(agent, signal);
+					env.cleanup = async () => void cleaned++;
+					return env;
+				},
+				destroy: async () => void destroyed++,
+			},
+		});
+		await workspace.use(workspaceAgent('alpha'), async (env) => {
+			const result = await env.exec('echo ready');
+			if (!result.ok) throw new Error('command failed');
+		});
+		await workspace.destroy();
+		expect(cleaned).toBe(1);
+		expect(destroyed).toBe(1);
+	});
+
+	it('drains active work, joins concurrent destroy calls, and destroys once', async () => {
+		const release = Promise.withResolvers<void>();
+		const started = Promise.withResolvers<void>();
+		let destroys = 0;
+		const inner = memoryBackend();
+		const workspace = openWorkspace({
+			name: name('destroy-drain'),
+			backend: {
+				tools: [],
+				connect: async (agent) => inner.connect(agent),
+				destroy: async () => {
+					destroys += 1;
+				},
+			},
+		});
+		const active = workspace.use(workspaceAgent('alpha'), async () => {
+			started.resolve();
+			await release.promise;
+		});
+		await started.promise;
+		const first = workspace.destroy();
+		const second = workspace.destroy();
+		await Promise.resolve();
+		expect(destroys).toBe(0);
+		release.resolve();
+		await Promise.all([active, first, second]);
+		expect(destroys).toBe(1);
+		await expect(workspace.use(workspaceAgent('alpha'), () => 'late')).rejects.toThrow(
+			/no longer available/i,
+		);
+	});
+
+	it('joins dispose when destroy has already started', async () => {
+		let destroys = 0;
+		const inner = memoryBackend();
+		const workspace = openWorkspace({
+			name: name('dispose-destroy-race'),
+			backend: {
+				tools: [],
+				connect: (agent) => inner.connect(agent),
+				destroy: async () => void destroys++,
+			},
+		});
+		const destroying = workspace.destroy();
+		await expect(workspace.dispose()).resolves.toBeUndefined();
+		await destroying;
+		expect(destroys).toBe(1);
+	});
+
+	it('keeps a failed deletion retryable, then becomes terminal without resurrection', async () => {
+		let destroys = 0;
+		const inner = memoryBackend();
+		const workspace = openWorkspace({
+			name: name('retry-destroy'),
+			backend: {
+				tools: [],
+				connect: (agent) => inner.connect(agent),
+				destroy: async () => {
+					destroys += 1;
+					if (destroys === 1) throw new Error('disk busy');
+				},
+			},
+		});
+		await expect(workspace.destroy()).rejects.toThrow('disk busy');
+		await expect(workspace.use(workspaceAgent('alpha'), () => 'retry works')).resolves.toBe(
+			'retry works',
+		);
+		await workspace.destroy();
+		await expect(workspace.use(workspaceAgent('alpha'), () => 'resurrected')).rejects.toThrow(
+			/no longer available/i,
+		);
+		expect(destroys).toBe(2);
 	});
 });
 
 // -- ToolContext -------------------------------------------------------------
 
 describe('ToolContext', () => {
-	it('hands a custom tool its workspace, fresh on every call, and undefined without one', async () => {
+	it('passes caller identity to a custom tool that closes over its resource', async () => {
 		const connects: string[] = [];
-		const inner = memoryBackend();
-		const counting: WorkspaceBackend = {
-			connect(who, signal) {
-				connects.push(who.name);
-				return inner.connect(who, signal);
-			},
-			destroy: () => inner.destroy(),
-		};
-		const site = defineWorkspace({ name: name('context'), backend: counting });
+		const backend = memoryBackend();
+		const site = openWorkspace({ name: name('context'), backend });
 		const seen: Record<string, string> = {};
 		const where = defineTool({
 			name: 'where',
 			description: 'Names the workspace and its home.',
 			parameters: Type.Object({}),
 			execute: async (_params, ctx: ToolContext) => {
-				const workspace = await ctx.workspace();
+				const value = await site.use(
+					ctx.agent,
+					async (env) => {
+						connects.push(ctx.agent.name);
+						return `${site.name} at ${env.cwd}`;
+					},
+					ctx.signal,
+				);
 				const signal = ctx.signal instanceof AbortSignal ? 'signal' : 'no signal';
-				if (!workspace) return `nowhere, ${signal}`;
-				return `${workspace.name} at ${workspace.env.cwd}, ${signal}`;
+				return `${value}, ${signal}`;
 			},
 		});
-		await run(
-			[agent('inside', { workspace: site, tools: [where] }), agent('outside', { tools: [where] })],
-			{
-				inside: (context, who, call) => {
-					if (call <= 2) return callTool('where', {});
-					seen[who] = toolResults(context)
-						.map((r) => r.text)
-						.join(' | ');
-					return quiet();
-				},
-				outside: (context, who, call) => {
-					if (call === 1) return callTool('where', {});
-					seen[who] = toolResults(context)
-						.map((r) => r.text)
-						.join(' | ');
-					return quiet();
-				},
+		await run([agent('inside', { tools: [where] }), agent('outside', { tools: [where] })], {
+			inside: (context, who, call) => {
+				if (call <= 2) return callTool('where', {});
+				seen[who] = toolResults(context)
+					.map((r) => r.text)
+					.join(' | ');
+				return quiet();
 			},
-		);
+			outside: (context, who, call) => {
+				if (call === 1) return callTool('where', {});
+				seen[who] = toolResults(context)
+					.map((r) => r.text)
+					.join(' | ');
+				return quiet();
+			},
+		});
 		expect(seen.inside).toBe(
 			`${site.name} at /home/inside, signal | ${site.name} at /home/inside, signal`,
 		);
-		expect(seen.outside).toBe('nowhere, signal');
-		expect(connects).toEqual(['inside', 'inside']); // one connect per call, none cached
-		await destroyWorkspace(site);
+		expect(seen.outside).toBe(`${site.name} at /home/outside, signal`);
+		expect(connects.sort()).toEqual(['inside', 'inside', 'outside'].sort());
+		await site.destroy();
 	});
 });
 
@@ -428,7 +682,7 @@ describe('memoryBackend', () => {
 		expect(attempt).toBe(2);
 	});
 
-	it('stays destroyed: destroy makes connect and readFiles reject, not resurrect', async () => {
+	it('clears the backend on destroy, so later reads do not resurrect old files', async () => {
 		let seedCalls = 0;
 		const backend = memoryBackend({
 			seed: async (write) => {
@@ -439,9 +693,27 @@ describe('memoryBackend', () => {
 		await backend.readFiles();
 		expect(seedCalls).toBe(1);
 		await backend.destroy();
-		await expect(backend.readFiles()).rejects.toThrow(/destroyed/);
-		await expect(backend.connect(agent('alpha'))).rejects.toThrow(/destroyed/);
-		expect(seedCalls).toBe(1); // never re-ran
+		expect(await backend.readFiles()).toEqual([]);
+		expect(await backend.connect(agent('alpha'))).toBeDefined();
+		expect(seedCalls).toBe(1); // destroy clears data; it never re-runs the seed
+	});
+
+	it('disposes in-memory resources without retaining old files or reseeding them', async () => {
+		let seeds = 0;
+		const backend = memoryBackend({
+			seed: async ({ writeFile }) => {
+				seeds += 1;
+				await writeFile('/old.txt', 'old\n');
+			},
+		});
+		const workspace = openWorkspace({ name: name('memory-dispose'), backend });
+		await workspace.use(workspaceAgent('alpha'), async (env) => {
+			const old = await env.readTextFile('/old.txt');
+			if (!old.ok) throw new Error('seed missing');
+		});
+		await workspace.dispose();
+		expect(await backend.readFiles()).toEqual([]);
+		expect(seeds).toBe(1);
 	});
 });
 
@@ -450,9 +722,10 @@ describe('memoryBackend', () => {
 describe('directoryBackend', () => {
 	it('writes through to a real directory it creates, and destroy empties it', async () => {
 		const root = join(await mkdtemp(join(tmpdir(), 'ambion-')), 'site');
-		const site = defineWorkspace({ name: name('disk'), backend: directoryBackend(root) });
+		const site = openWorkspace({ name: name('disk'), backend: directoryBackend(root) });
+		const tools = workspaceTools(site);
 		let read: string | undefined;
-		await run([agent('scribe', { workspace: site })], {
+		await run([agent('scribe', { tools: [tools] })], {
 			scribe: (context, _who, call) => {
 				if (call === 1) return callTool('write', { path: 'journal.md', content: '# day one\n' });
 				if (call === 2) return callTool('bash', { command: 'cat ~/journal.md' });
@@ -462,15 +735,18 @@ describe('directoryBackend', () => {
 		});
 		expect(read).toBe('# day one\n');
 		expect(await readFile(join(root, 'home', 'scribe', 'journal.md'), 'utf8')).toBe('# day one\n');
-		await destroyWorkspace(site);
+		await site.destroy();
 		expect(await readdir(root)).toEqual([]);
 	});
 
 	it('stays destroyed: connect after destroy rejects rather than recreating the root', async () => {
 		const root = join(await mkdtemp(join(tmpdir(), 'ambion-')), 'site');
 		const backend = directoryBackend(root);
-		await backend.connect(agent('alpha'));
-		await backend.destroy();
-		await expect(backend.connect(agent('beta'))).rejects.toThrow(/destroyed/);
+		const site = openWorkspace({ name: name('disk-closed'), backend });
+		await site.use({ name: 'alpha', identity: 'alpha' }, () => undefined);
+		await site.destroy();
+		await expect(site.use({ name: 'beta', identity: 'beta' }, () => undefined)).rejects.toThrow(
+			/no longer available/i,
+		);
 	});
 });

@@ -18,12 +18,12 @@ and persisted shapes. Remove obsolete structures and migration machinery
 when they complicate the design. Existing persisted state does not constrain
 the implementation.
 
-**Items 8–10 and their replacement APIs are proposals.** Items 1–6 are
-merged. Item 7 is implemented and verified. Completed items record their
-implementation below. Source references identify the current mechanisms.
-Each proposal identifies its behavioral changes.
+**Items 9–10 and their replacement APIs are proposals.** Items 1–8 are
+implemented and verified.
+Completed items record their implementation below. Source references identify
+the current mechanisms. Each proposal identifies its behavioral changes.
 The initial review used source, contracts, and representative tests.
-Implementation adds execution checks for items 1–7.
+Implementation adds execution checks for items 1–8.
 
 ## The design to preserve
 
@@ -419,8 +419,8 @@ package is unnecessary until another consumer demonstrates that boundary.
 ## 6. Make definitions immutable and bindings local to a room
 
 **Implementation.** A room captures its definitions by name when it starts.
-Each seat receives its one resolved definition. The runtime holds private
-room and workspace registries only. A resume takes its definitions explicitly
+Each seat receives its one resolved definition. The runtime holds a private
+room registry only. A resume takes its definitions explicitly
 and resolves them before it writes its fence.
 
 `defineAgent` copies and freezes authoring data. It copies arrays and plain
@@ -499,45 +499,52 @@ scheduling remains in Ambion.
 
 ## 8. Finish extracting workspace behavior as a tool bundle
 
-**Current cost.** Core still owns workspace handles, destruction state,
+**Original cost.** Core still owns workspace handles, destruction state,
 reserved names, tool binding, and backend-specific prompt text. The renderer
 documents that its workspace description can become wrong for another
 backend. Both the core handle and backend track destruction.
 
-**Proposed design.** Let the workspace package supply tools and guidance
-together through existing tool composition. Its resource owner manages
-connection lifetime, revocation, deletion, and file-operation coordination.
-Keep authorization checks fresh without requiring a fresh coordination
-identity for every call.
+**Implementation.** Workspace behavior now lives in
+`@ambionframework/workspace`. `openWorkspace` returns the sole owner of one
+backend resource. Its `use(agent, operation, signal)` checks lifecycle and
+cancellation at submission, at the queue head, and after the backend receives
+the fresh agent connection, then runs the whole operation through one serial
+queue and cleans up its fresh environment.
+`workspaceTools` binds exactly the backend's Pi harness tools and carries its
+guidance as an ordinary `ToolBundle`; custom tools close over the workspace
+and call `use` with `ctx.agent`. The core now has only generic bundles and an
+agent-aware `ToolContext`, with no workspace field, filesystem prose, or name
+registry.
 
-The current binding serializes built-ins because fresh environment objects
-defeat Pi's coordination. That workaround does not establish coordination
-between agents sharing files. Put that responsibility at the shared
-resource boundary.
+`destroy` revokes new and queued work, drains active work, and deletes through
+the backend. Concurrent destroys join one promise; a failed deletion restores
+the active, retryable owner. `dispose` drains and releases local resources
+without deleting directory data. The just-bash backends own only storage I/O:
+they supply their tools and guidance, clear released caches, and propagate
+deletion failures. Hosts that share a filesystem pass one opened owner to all
+agents; the owner is process-local and claims no cross-process locking.
 
-**Naming.** `defineWorkspace` currently reserves a name and creates mutable
-lifecycle state. Prefer `openWorkspace` for a resource handle. Reserve
-`define*` for inert definitions. Use `dispose` for releasing local resources
-and `destroy` only for deleting persisted data, where both operations exist.
+**Naming.** `openWorkspace`, `Workspace`, `WorkspaceBackend`, `workspaceTools`,
+`dispose`, and `destroy` are the workspace package surface. `ToolBundle` and
+`ToolContext` are the core's generic composition surface.
 
-Use `workspaceTools` for the tool bundle and `guidance` for its associated
-instructions. Keep backend names specific to storage: `memoryBackend` and
-`directoryBackend` already communicate useful distinctions.
+**Rationale.** Workspace access is ordinary tool composition, while one
+resource owner defines authorization freshness, coordination, revocation, and
+deletion. The backend owns its available tools and guidance, so a backend can
+change them without editing the collaboration core.
 
-**Rationale.** Workspace access becomes ordinary tool composition. The
-backend owns both what it permits and what it tells the agent it permits.
-The core loses filesystem assumptions and duplicate lifecycle ownership.
-
-**Completion evidence.** A backend can change its tools and guidance without
-editing the collaboration core. Shared-file mutations have one explicit
-coordination policy. Failed deletion and revocation have defined outcomes.
+**Verification.** The full gate passes on 2026-09-14: 52 journal, 444 Ambion,
+37 workspace, 12 Cloudflare, and 2 CLI tests. Workspace tests cover lifecycle,
+queue, fresh access, environment cleanup, failed deletion retry, memory
+release, directory deletion, and backend-specific guidance.
 
 **Scope.** Migrate the workspace field and tool context together. Preserve
 per-agent access checks and the existing deletion guarantees.
 
-**Source.** [Core workspace integration](../packages/ambion/src/tools/workspace.ts),
+**Source.** [Workspace owner](../packages/workspace/src/resource.ts),
+[workspace tools](../packages/workspace/src/tools.ts),
 [workspace backends](../packages/workspace/src/just-bash.ts), and
-[workspace prose](../packages/ambion/src/render.ts).
+[generic core types](../packages/ambion/src/types.ts).
 
 ## 9. Use one incremental projection and checkpoint its state
 

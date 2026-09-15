@@ -23,7 +23,6 @@ import {
 	type SeatInfo,
 	type Seq,
 	type SummaryMessage,
-	type WorkspaceHandle,
 } from './types.ts';
 import type { ActivationSpec } from './wire.ts';
 
@@ -275,8 +274,8 @@ export interface SeatSpeaking {
 		name: string;
 		identity: string;
 		instructions: string;
-		/** Set for an agent connected to a workspace: gates WORKSPACE_PARAGRAPH. */
-		workspace?: WorkspaceHandle;
+		/** Guidance composed from ordinary tool bundles. */
+		guidance?: string;
 	};
 	/** The tool this activation binds. */
 	readonly tool: ActivationSpec['grant']['tool'];
@@ -322,10 +321,7 @@ function duties(seat: SeatSpeaking, room: RoomView): string[] {
 		``,
 		...AUDIENCE_PARAGRAPH,
 	];
-	// A workspace binds four tools to every activation of an agent that names
-	// one (docs/workspace.md §5); the paragraph states what they reach so the
-	// agent does not have to probe for it with a call.
-	if (seat.def.workspace) lines.push(``, ...WORKSPACE_PARAGRAPH);
+	if (seat.def.guidance) lines.push(``, seat.def.guidance);
 	// A fold renders once the record holds a summary, so only such a record
 	// tells its seats how to read one.
 	if (room.record.some(isSummary)) lines.push(``, ...SUMMARY_PARAGRAPH);
@@ -399,28 +395,6 @@ function askOf(seat: SeatSpeaking, room: RoomView): string {
 		: '';
 	return `${open}Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
 }
-
-/**
- * What a workspace's four tools reach. `just-bash.ts` in
- * `@ambionframework/workspace` decides this set (`Bash` built with
- * `javascript: true, python: true`, and no `network` option); this paragraph
- * states it in prose, and the two files must stay in step.
- *
- * The two now sit in two packages, and nothing holds them together but this
- * note. A backend that reaches a different set makes this paragraph wrong for
- * its agents. `docs/workspace.md` §12 holds the open question: the prose
- * belongs to the backend, and the room has no way to ask for it yet.
- */
-const WORKSPACE_PARAGRAPH = [
-	`Your workspace gives you four tools: read, write, edit and bash, over a shared virtual`,
-	`filesystem. Your home is /home/<your name>. Other agents connected to this workspace`,
-	`read and write the same files, with no wall between one agent's home and another's.`,
-	``,
-	`bash runs a simulated Unix shell: the common coreutils (ls, cat, grep, sed, awk, find,`,
-	`tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run`,
-	`a script with js-exec (JavaScript) or python3 (Python). bash has no network: curl and`,
-	`every other network command are disabled.`,
-];
 
 /** What a seat does with a presence line that lands while it is working. */
 const AUDIENCE_PARAGRAPH = [

@@ -8,13 +8,7 @@
  * its own test support.
  */
 
-import {
-	defineWorkspace,
-	destroyWorkspace,
-	isSpoken,
-	startSession,
-	visitSession,
-} from '@ambionframework/ambion';
+import { isSpoken, startSession, visitSession } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
 import { collect, deferred } from '../../ambion/test/support/room.ts';
 import {
@@ -35,6 +29,7 @@ import {
 	toolResultTexts,
 } from '../../ambion/test/support/scripted.ts';
 import { storages } from '../../ambion/test/support/storage.ts';
+import { openWorkspace, workspaceTools } from '../src/index.ts';
 import { backends } from './support/backends.ts';
 
 const twoWorkspaces: Scenario = {
@@ -42,18 +37,16 @@ const twoWorkspaces: Scenario = {
 	async run({ runtime, name }) {
 		const [memoryBackend, directoryBackend] = await Promise.all(backends.map((b) => b.open()));
 		if (!memoryBackend || !directoryBackend) throw new Error('two backends are expected');
-		const memoryDrive = defineWorkspace({
+		const memoryDrive = openWorkspace({
 			name: `${name}-memory`,
 			backend: memoryBackend.backend,
-			runtime,
 		});
-		const directoryDrive = defineWorkspace({
+		const directoryDrive = openWorkspace({
 			name: `${name}-directory`,
 			backend: directoryBackend.backend,
-			runtime,
 		});
-		const alpha = agent('alpha', 'Works in memory.', { workspace: memoryDrive });
-		const beta = agent('beta', 'Works on disk.', { workspace: directoryDrive });
+		const alpha = agent('alpha', 'Works in memory.', { tools: [workspaceTools(memoryDrive)] });
+		const beta = agent('beta', 'Works on disk.', { tools: [workspaceTools(directoryDrive)] });
 		const gamma = agent('gamma', 'Has no workspace.');
 		const destroyed = deferred();
 		const alphaResults: string[] = [];
@@ -99,17 +92,17 @@ const twoWorkspaces: Scenario = {
 				resolve();
 			});
 		});
-		await destroyWorkspace(memoryDrive);
+		await memoryDrive.destroy();
 		destroyed.resolve();
 		await session.quiet();
 
-		expect(alphaResults.some((r) => r.includes('destroyed'))).toBe(true);
+		expect(alphaResults.some((r) => r.includes('no longer available'))).toBe(true);
 		expect(betaResults.some((r) => r.includes('two'))).toBe(true);
 		const said = (await session.messages()).filter(isSpoken).map((m) => m.text);
 		expect(said).toContain('alpha done');
 		expect(said).toContain('beta done');
 		await finish(session, events, runtime);
-		await destroyWorkspace(directoryDrive);
+		await directoryDrive.destroy();
 		await Promise.all([memoryBackend.dispose(), directoryBackend.dispose()]);
 	},
 };

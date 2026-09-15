@@ -22,10 +22,14 @@ import {
 	defineAgent,
 	defineHuman,
 	defineTool,
-	defineWorkspace,
 	type HumanDefinition,
 } from '@ambionframework/ambion';
-import { memoryBackend, type SeedWriter } from '@ambionframework/workspace';
+import {
+	memoryBackend,
+	openWorkspace,
+	type SeedWriter,
+	workspaceTools,
+} from '@ambionframework/workspace';
 import { Type } from 'typebox';
 import { DRIVE_SEED } from './drive-seed.ts';
 
@@ -67,10 +71,11 @@ const driveBackend = memoryBackend({ seed: seedDrive });
  * seeded from `drive/` above; every product gets a home in it, and the four
  * built-in tools reach it.
  */
-export const SITE_DRIVE = defineWorkspace({
+export const SITE_DRIVE = openWorkspace({
 	name: 'kestrel-yard-drive',
 	backend: driveBackend,
 });
+const SITE_TOOLS = workspaceTools(SITE_DRIVE);
 
 /** Every document on the drive, as a host reads it: path under `site/`, and text. */
 export async function driveFiles(): Promise<{ path: string; text: string }[]> {
@@ -709,8 +714,7 @@ const shiftsAgent = defineAgent({
 		Before you say a day holds, read the forecast against the plan's limits.
 	`,
 	model: MODEL,
-	tools: [crewHours, certifiedFor, requestOvertime],
-	workspace: SITE_DRIVE,
+	tools: [crewHours, certifiedFor, requestOvertime, SITE_TOOLS],
 });
 
 const tasksAgent = defineAgent({
@@ -738,8 +742,7 @@ const tasksAgent = defineAgent({
 		before a pour, in order.
 	`,
 	model: MODEL,
-	tools: [taskList, blockingChain, updateTask],
-	workspace: SITE_DRIVE,
+	tools: [taskList, blockingChain, updateTask, SITE_TOOLS],
 });
 
 const materialsAgent = defineAgent({
@@ -761,8 +764,7 @@ const materialsAgent = defineAgent({
 		and when the order locks.
 	`,
 	model: MODEL,
-	tools: [stockCheck, deliveryBoard, supplierTerms, moveDelivery],
-	workspace: SITE_DRIVE,
+	tools: [stockCheck, deliveryBoard, supplierTerms, moveDelivery, SITE_TOOLS],
 });
 
 /**
@@ -803,8 +805,7 @@ const inspectionsAgent = defineAgent({
 		before you say what the inspector needs to see.
 	`,
 	model: MODEL,
-	tools: [inspectionSlots, requestInspection],
-	workspace: SITE_DRIVE,
+	tools: [inspectionSlots, requestInspection, SITE_TOOLS],
 });
 
 const plantAgent = defineAgent({
@@ -826,8 +827,7 @@ const plantAgent = defineAgent({
 		read it before you say a hire covers a day.
 	`,
 	model: MODEL,
-	tools: [hireBoard, hireTerms, moveHire],
-	workspace: SITE_DRIVE,
+	tools: [hireBoard, hireTerms, moveHire, SITE_TOOLS],
 });
 
 const temporaryWorksAgent = defineAgent({
@@ -849,8 +849,7 @@ const temporaryWorksAgent = defineAgent({
 		the diary says how far the formwork has got: read both before you speak.
 	`,
 	model: MODEL,
-	tools: [checkStatus, bookCheck],
-	workspace: SITE_DRIVE,
+	tools: [checkStatus, bookCheck, SITE_TOOLS],
 });
 
 /** The reserve. Nothing wakes these seats until the assistant seats one. */

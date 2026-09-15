@@ -5,25 +5,23 @@
  * None of them starts anything or holds any state: a definition is a value,
  * and the same one is the quiet corner in one room and the one who meets
  * people in another. What each refuses is as much of the contract as what it
- * takes — a name the room can address, a workspace tool name kept free.
+ * takes — a name the room can address, and a composition of ordinary tools.
  */
-import type { AgentToolResult } from '@earendil-works/pi-agent-core';
+import type { AgentToolResult, ToolExecutionMode } from '@earendil-works/pi-agent-core';
 import { type Static, type TSchema, Type } from 'typebox';
 import {
 	AGENT_BRAND,
 	type AgentDefinition,
 	type AmbionTool,
 	type Attention,
-	BUILTIN_TOOL_NAMES,
 	HUMAN_BRAND,
 	type HumanDefinition,
 	isAgent,
-	isWorkspace,
 	SEAT_BRAND,
 	type SeatedAgent,
 	TOOL_BRAND,
+	type ToolBundle,
 	type ToolContext,
-	type WorkspaceHandle,
 } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -35,21 +33,25 @@ export interface DefineAgentOptions {
 	instructions: string;
 	/** A Pi model identifier, `provider/model-id`. */
 	model: string;
-	/** The agent's own tools, defined with `defineTool` (or Pi's own — both work unchanged). */
+	/** The agent's own tools or composable bundles of tools and guidance. */
 	tools?: readonly unknown[];
-	/**
-	 * The workspace the agent reaches through its tools, from `defineWorkspace`.
-	 * Naming one binds `read`, `write`, `edit` and `bash` to every activation,
-	 * and gives every tool a `ctx.workspace()` that resolves to it.
-	 */
-	workspace?: WorkspaceHandle;
 }
 
 export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 	assertName(options.name);
-	const tools = Object.freeze(options.tools?.map((tool) => capture(tool)) ?? []);
-	if (options.workspace !== undefined) assertWorkspace(options.name, options.workspace);
-	assertAgentTools(options.name, tools, options.workspace !== undefined);
+	const input = options.tools ?? [];
+	const guidance =
+		input
+			.filter(isToolBundle)
+			.map((bundle) => bundle.guidance?.trim())
+			.filter((text): text is string => Boolean(text))
+			.join('\n\n') || undefined;
+	const tools = Object.freeze(
+		input
+			.flatMap((tool) => (isToolBundle(tool) ? tool.tools : [tool]))
+			.map((tool) => capture(tool)),
+	);
+	assertAgentTools(options.name, tools);
 	return Object.freeze({
 		[AGENT_BRAND]: true as const,
 		name: options.name,
@@ -57,19 +59,8 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 		instructions: options.instructions,
 		model: options.model,
 		tools,
-		...(options.workspace === undefined ? {} : { workspace: options.workspace }),
+		...(guidance === undefined ? {} : { guidance }),
 	});
-}
-
-/**
- * A workspace reaches an agent as a handle `defineWorkspace` wrote. A plain
- * object under the field answers no port, and it fails at the first tool
- * call. The check is where the host names the workspace.
- */
-function assertWorkspace(agent: string, workspace: WorkspaceHandle): void {
-	if (!isWorkspace(workspace)) {
-		throw new Error(`The workspace for '${agent}' must come from defineWorkspace.`);
-	}
 }
 
 export interface DefineHumanOptions {
@@ -143,10 +134,13 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 	name: string;
 	description: string;
 	parameters: TParameters;
+	label?: string;
+	prepareArguments?: (args: unknown) => Static<TParameters>;
+	executionMode?: ToolExecutionMode;
 	/**
 	 * Return a string (or Pi's full content shape when needed). Throw on failure.
-	 * `ctx.workspace()` resolves the calling agent's workspace, and `ctx.signal`
-	 * is the abort signal Pi gives the tool call.
+	 * `ctx.agent` identifies the calling agent and `ctx.signal` is the abort
+	 * signal Pi gives the tool call.
 	 */
 	execute: (
 		params: Static<TParameters>,
@@ -158,7 +152,7 @@ export interface DefineToolOptions<TParameters extends TSchema> {
  * A facade over Pi's tool shape, and no format of Ambion's own: parsed
  * parameters first, a context second, string returns allowed. A tool defined
  * with Pi's `defineTool` works unchanged wherever this one does, and reaches
- * no workspace: its signature has no room for the context.
+ * no context: its signature has no room for one.
  */
 export function defineTool<TParameters extends TSchema>(
 	options: DefineToolOptions<TParameters>,
@@ -168,6 +162,11 @@ export function defineTool<TParameters extends TSchema>(
 		name: options.name,
 		description: options.description,
 		parameters: capture(options.parameters),
+		...(options.label === undefined ? {} : { label: options.label }),
+		...(options.prepareArguments === undefined
+			? {}
+			: { prepareArguments: options.prepareArguments }),
+		...(options.executionMode === undefined ? {} : { executionMode: options.executionMode }),
 		execute: options.execute,
 	});
 }
@@ -175,7 +174,6 @@ export function defineTool<TParameters extends TSchema>(
 /** Copies authoring data while keeping executable and resource values by identity. */
 function capture<T>(value: T, seen = new WeakMap<object, unknown>()): T {
 	if (typeof value !== 'object' || value === null) return value;
-	if (isWorkspace(value)) return value;
 	const prior = seen.get(value);
 	if (prior !== undefined) return prior as T;
 	const prototype = Object.getPrototypeOf(value);
@@ -212,19 +210,24 @@ export const SAY = {
 	}),
 };
 
-function assertAgentTools(agent: string, tools: readonly unknown[], workspace: boolean): void {
+function isToolBundle(value: unknown): value is ToolBundle {
+	return typeof value === 'object' && value !== null && Array.isArray((value as ToolBundle).tools);
+}
+
+function assertAgentTools(agent: string, tools: readonly unknown[]): void {
+	const names = new Set<string>();
 	for (const tool of tools) {
 		const name = (tool as { name?: unknown }).name;
 		if (typeof name !== 'string') continue;
+		if (names.has(name)) {
+			throw new Error(`Agent '${agent}' brings duplicate tools named '${name}'.`);
+		}
+		names.add(name);
 		const roomTool = name === SAY.name || name === 'seat' || name === 'summarise';
-		const workspaceTool = BUILTIN_TOOL_NAMES.has(name);
-		if (!roomTool && (!workspaceTool || !workspace)) continue;
-		const reason = roomTool
-			? 'the room supplies it for an activation'
-			: 'a workspace supplies it for an agent that names one';
-		throw new Error(
-			`Agent '${agent}' brings a tool named '${name}': ${reason}. Give it another name.`,
-		);
+		if (roomTool)
+			throw new Error(
+				`Agent '${agent}' brings a tool named '${name}': the room supplies it for an activation. Give it another name.`,
+			);
 	}
 }
 

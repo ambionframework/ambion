@@ -79,10 +79,9 @@ room reads, injected into every participant's context as part of the roster.
 `instructions` are private. They are the agent's own voice, appended to the
 runtime's system prompt, and they hold all of the agent's judgment —
 including the judgment to say nothing. The runtime's prompt is always
-present; instructions extend it. One more field is optional: `workspace`,
-a handle from `defineWorkspace`, the identity and data boundary the
-agent's tools reach into. [`workspace.md`](workspace.md) is the contract
-for it.
+present; instructions extend it. The optional `tools` field accepts ordinary
+tools and tool bundles. [`workspace.md`](workspace.md) describes the bundle
+that a workspace resource provides.
 
 `defineAgent` returns a plain value. Everything that refers to an agent
 refers to this value. Nothing refers to an agent through a bare string.
@@ -106,13 +105,12 @@ const lookup = defineTool({
 `defineTool` is a facade over Pi's own tool shape: the same
 name-description-parameters-execute, with one convenience. `execute`
 receives the parsed parameters as its first argument and a `ToolContext`
-as its second: `ctx.workspace()` resolves the agent's workspace, and
-`ctx.signal` is the abort signal Pi gives the call. It may return a plain
+as its second. The context identifies the agent, carries `callId`, exposes
+`onUpdate`, and carries Pi's abort signal as `ctx.signal`. It may return a plain
 string or Pi's full content shape. A tool defined with Pi's own
 `defineTool` works unchanged (`toPiTool` in `seat/tools.ts` accepts both), so
-learning Pi's format is the same as learning Ambion's. An agent that names
-a workspace also holds four built-in tools, `read`, `write`, `edit` and
-`bash` ([`workspace.md`](workspace.md) §5).
+learning Pi's format is the same as learning Ambion's. A workspace resource
+adds its tools through an ordinary bundle ([`workspace.md`](workspace.md)).
 
 ---
 
@@ -797,7 +795,7 @@ model call, and the policy for wakes and retries: how long a lease
 lasts between renewals, how long a wake waits before it is sent again, and
 how many drafts the assistant is given
 ([`runtime.ts`](../packages/ambion/src/host/runtime.ts)). `startSession`,
-`readSession`, `resumeSession` and `defineWorkspace` take one as an option and default to
+`readSession` and `resumeSession` take one as an option and default to
 `defaultRuntime`, one value per process. Two runtimes in one process share
 nothing: one name runs in both, and neither reads the other. "One run per
 name" above holds per runtime.
