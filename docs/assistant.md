@@ -209,10 +209,11 @@ including when summaries arrive out of exchange order. A summary never
 folds another summary. Existing journals can contain overlapping ranges
 from older releases; the renderer continues to show their summaries.
 
-**The exchange can close before publication.** `waitForClose()` resolves at
-the durable close. `response()` waits for the assistant's summary or returns
-`undefined` when the assistant deliberately stays silent. A failed attempt
-keeps the source messages visible.
+**The exchange can close before publication.** `messages()` resolves at the
+durable close with the fixed non-summary conversation in the exchange's range.
+`response()` waits for the assistant's summary or returns `undefined` when the
+assistant deliberately stays silent. A failed attempt keeps the source
+messages visible.
 
 ---
 
@@ -550,7 +551,6 @@ separate message kind. A host follows one exchange directly:
 ```ts
 const visit = await room.visit(priya);
 const exchange = await visit.send({ text: 'What changed?' });
-await exchange.waitForClose();
 const response = await exchange.response();
 ```
 
@@ -701,7 +701,7 @@ An exchange can still run for an unbounded time before it closes; see
 
 **A stopped room leaves an unfinished exchange open.** `room.stop()` revokes
 work and writes no close for the unfinished exchange. A later `resumeRoom`
-replays it and lets its exchange handle complete; shutdown does not invent a
+replays it and lets `exchange.messages()` complete; shutdown does not invent a
 summary or a close.
 
 **A summary is owed until the third attempt.** A failed or expired
@@ -766,7 +766,7 @@ document makes loudly:
   §2, §14.
 - A second summary for the same person stands for their second question,
   and never for the exchange before it. §3.
-- An exchange handle closes before its optional summary response resolves. §14.
+- `exchange.messages()` can resolve before its optional summary response resolves. §14.
 - A fold names the person its summary was written for, and two overlapping
   ranges stay apart. §5, §8.
 - An empty say is refused, so nothing empty stands inside a range. §4.

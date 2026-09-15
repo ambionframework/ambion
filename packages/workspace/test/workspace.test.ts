@@ -61,7 +61,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 	});
 	const visit = await enter(session);
 	const exchange = await visit.send({ text: 'go' });
-	await exchange.waitForClose();
+	await exchange.messages();
 	return session;
 }
 

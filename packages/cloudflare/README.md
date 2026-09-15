@@ -12,7 +12,7 @@ What is built:
 - **`RoomObject`** runs the room. Its constructor resumes the room the
   storage names, over `resumeRoom`. It exposes `start`, `visit`,
   `send`, `leave`, `seat`, `unseat`, `abort`, `messages`, `seats`,
-  `exchange`, `waitForClose` and `response` over RPC, and the three calls a seat makes: `view`, `commit`
+  `exchange`, `exchangeMessages` and `response` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its `alarm()` runs `reconcile()`.
 - **`SeatObject`** runs one seat. `wake` stores the activation id and sets
   an alarm; `alarm()` claims the lease, reads the view, runs the activation

@@ -94,7 +94,7 @@ const twoWorkspaces: Scenario = {
 		});
 		await memoryDrive.destroy();
 		destroyed.resolve();
-		await exchange.waitForClose();
+		await exchange.messages();
 		await exchange.response();
 
 		expect(alphaResults.some((r) => r.includes('no longer available'))).toBe(true);

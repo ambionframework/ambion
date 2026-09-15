@@ -66,8 +66,8 @@ it('serves a seat that was at work when the object went away, and takes its comm
 		return messages.find((message) => isSpoken(message) && message.from === 'slow');
 	});
 	expect(isSpoken(said) && said.text).toBe('The slow answer stands.');
-	const closed = await again.waitForClose(exchange.from);
-	expect(closed).toMatchObject({ owner: 'priya', from: exchange.from });
+	const conversation = await again.exchangeMessages(exchange.from);
+	expect(conversation[0]?.seq).toBe(exchange.from);
 	// The serialized identity is enough to recover this handle after the object restart.
 	expect(await again.exchange(exchange.from)).toEqual(exchange);
 

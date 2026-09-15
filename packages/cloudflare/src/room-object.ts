@@ -9,7 +9,6 @@ import { DurableObject } from 'cloudflare:workers';
 import type {
 	Attention,
 	Clock,
-	ClosedExchange,
 	Exchange,
 	Message,
 	Room,
@@ -204,10 +203,10 @@ export class RoomObject extends DurableObject<Env> {
 			: { owner: exchange.owner, from: exchange.from, at: exchange.at };
 	}
 
-	async waitForClose(from: Seq): Promise<ClosedExchange> {
+	async exchangeMessages(from: Seq): Promise<Message[]> {
 		const exchange = this.running().exchange(from);
 		if (exchange === undefined) throw new Error(`Exchange '${from}' is not on the record.`);
-		return exchange.waitForClose();
+		return exchange.messages();
 	}
 
 	async response(from: Seq) {

@@ -13,8 +13,9 @@ specialists and writes summaries through the room's fixed assistant policy.
 `startRoom` brings up the room, `room.visit` puts somebody in it,
 `readRoom` reads a plain snapshot without starting anything, and
 `room.stop()` takes the run down. A visit's `send` returns an exchange handle:
-`waitForClose()` waits for the durable close and `response()` waits for the
-summary or deliberate absence of one.
+`messages()` waits for the durable close and returns the exchange's
+non-summary messages, while `response()` waits for the summary or deliberate
+absence of one.
 
 ```ts
 import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
@@ -47,7 +48,6 @@ room.subscribe((e) => e.type === 'message' && console.log(`${e.message.from} spo
 
 const visit = await room.visit(you);
 const exchange = await visit.send({ text: 'hello' });
-await exchange.waitForClose();
 const response = await exchange.response();
 if (response) console.log(response.text);
 

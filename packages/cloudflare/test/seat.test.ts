@@ -78,7 +78,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 		return messages.filter((m) => m.kind === 'said' && m.from === 'product').length === 2;
 	});
 	expect(answered).toBe(true);
-	await room.waitForClose(secondExchange.from);
+	await room.exchangeMessages(secondExchange.from);
 	expect(await room.exchange(secondExchange.from)).toEqual(secondExchange);
 });
 
@@ -117,7 +117,7 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	await runDurableObjectAlarm(seat);
 	// The revoked exchange still closes durably and remains addressable by its
 	// opening sequence, while the product has no answer to publish.
-	await room.waitForClose(exchange.from);
+	await room.exchangeMessages(exchange.from);
 	expect(await room.exchange(exchange.from)).toEqual(exchange);
 	const messages: Message[] = await room.messages();
 	expect(messages.filter((m) => m.from === 'product')).toEqual([]);

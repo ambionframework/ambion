@@ -660,9 +660,9 @@ describe('a room dropped from memory', () => {
 		return { session, visit, exchange, opened, held };
 	}
 
-	it('rejects an exchange wait after eviction', async () => {
+	it('rejects an exchange messages wait when runtime evicts the room', async () => {
 		const { exchange, held } = await dropped();
-		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|interrupted|evicted/i);
+		await expect(exchange.messages()).rejects.toThrow(/stopped|interrupted|evicted/i);
 		held.resolve();
 	});
 
@@ -680,7 +680,7 @@ describe('a room dropped from memory', () => {
 		held.resolve();
 	});
 
-	it('releases whoever was already waiting on quiet() or settled()', async () => {
+	it('rejects an exchange messages wait after eviction', async () => {
 		const opened = await memory.open();
 		const runtime = createRuntime({
 			storage: opened.storage,
@@ -705,7 +705,7 @@ describe('a room dropped from memory', () => {
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'go' });
 		runtime.evict(session.name);
-		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|interrupted|evicted/i);
+		await expect(exchange.messages()).rejects.toThrow(/stopped|interrupted|evicted/i);
 		held.resolve();
 	});
 

@@ -44,7 +44,7 @@ live('control', () => {
 		// Long enough for the request to be open and streaming; too short for an essay.
 		await settle(2_000);
 		session.abort();
-		await within(exchange.waitForClose(), 15_000, 'the exchange closing after abort');
+		await within(exchange.messages(), 15_000, 'the exchange closing after abort');
 
 		expect(saidBy(await session.messages(), 'essayist')).toEqual([]);
 		expect(errorsIn(events)).toEqual([]);

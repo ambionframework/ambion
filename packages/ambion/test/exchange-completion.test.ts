@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
-import { deferred, roomName, storedOf } from './support/room.ts';
+import { closedExchange, deferred, roomName, storedOf } from './support/room.ts';
 import { contextText, quiet, scripted, speak, summarise, toolNames } from './support/scripted.ts';
 import { faultyJournals, memory } from './support/storage.ts';
 
@@ -45,7 +45,7 @@ describe('exchange completion handles', () => {
 			const visit = await room.visit(priya);
 			faulty.fail('before', 'close');
 			const exchange = await visit.send({ text: 'First?', key: 'close-retry-1' });
-			const waiting = exchange.waitForClose();
+			const waiting = exchange.messages();
 			let closed = false;
 			void waiting.then(
 				() => {
@@ -59,7 +59,8 @@ describe('exchange completion handles', () => {
 			expect(closed).toBe(false);
 			faulty.fail(false);
 			await room.reconcile();
-			await expect(waiting).resolves.toMatchObject({ from: exchange.from });
+			await expect(waiting).resolves.toEqual(expect.any(Array));
+			expect(closedExchange(room, exchange.from)).toMatchObject({ from: exchange.from });
 		} finally {
 			await room.stop();
 			await opened.dispose();
@@ -111,7 +112,7 @@ describe('exchange completion handles', () => {
 		try {
 			const visit = await room.visit(priya);
 			const first = await visit.send({ text: 'First?', key: 'response-isolation-1' });
-			await first.waitForClose();
+			await first.messages();
 			await firstSummaryStarted.promise;
 			const response = first.response();
 			const second = await visit.send({ text: 'Second?', key: 'response-isolation-2' });
@@ -130,6 +131,13 @@ describe('exchange completion handles', () => {
 			await new Promise((resolve) => setImmediate(resolve));
 			expect(secondDone).toBe(false);
 			laterAgentRelease.resolve();
+			const secondConversation = await second.messages();
+			const durableSummary = (await room.messages()).find((message) => message.kind === 'summary');
+			expect(secondConversation.every((message) => message.kind !== 'summary')).toBe(true);
+			expect(durableSummary?.seq).toBeGreaterThan(second.from);
+			expect(durableSummary?.seq).toBeLessThanOrEqual(
+				closedExchange(room, second.from)?.through ?? 0,
+			);
 			await expect(second.response()).resolves.toBeUndefined();
 		} finally {
 			firstSummaryRelease.resolve();

@@ -30,8 +30,9 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 	});
 	expect(exchange).toEqual({ owner: 'priya', from: expect.any(Number), at: expect.any(String) });
 	expect(retry).toEqual(exchange);
-	const closed = await stub.waitForClose(exchange.from);
-	expect(closed).toMatchObject({ owner: 'priya', from: exchange.from, through: exchange.from });
+	const conversation = await stub.exchangeMessages(exchange.from);
+	expect(conversation.map((message) => message.seq)).toEqual([exchange.from]);
+	expect(conversation.every((message) => message.kind !== 'summary')).toBe(true);
 	// There was no agent answer, so the response milestone is deliberately silent.
 	expect(await stub.response(exchange.from)).toBeUndefined();
 
