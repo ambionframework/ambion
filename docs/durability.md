@@ -50,13 +50,10 @@ voids every run whose fence came before it, even when its own run is
 gone, so a live run can lose the name to a dead one. §5 says what a
 superseded run loses, and where the fence does not reach.
 
-**A checkpoint replaces entries, and never a message.** The room writes
-one every `runtime.checkpoint.entries` entries. It carries the composition,
-the closes and the leases a later fold still reads, behind a floor below
-which every wake was answered. The entries it replaces stay on the storage,
-so a reader that ignores the checkpoint folds the same room from them.
-The fence voids a checkpoint a superseded run wrote, like any other
-entry.
+**The journal retains the complete history.** Room state is derived from the
+ordered entries on every run. Messages and administrative entries remain
+available together, so replay has one source of truth and idempotency keys
+remain durable for the life of the journal.
 
 ## 2. What a delivery promises
 
@@ -88,8 +85,8 @@ token landed carries it back on `messages()`, so a host reads which
 delivery a message was and holds the room to the promise above. The
 journal indexes every record entry's token as it takes the entry, on a
 replay as well as on an append, so a host that retries after a crash
-meets the token the storage holds. A checkpoint keeps every record entry,
-so the journal holds no dedup window and no token ages out.
+meets the token the storage holds. Every record entry stays durable, so the
+journal holds no dedup window and no token ages out.
 
 ## 3. What a read promises
 
@@ -127,12 +124,6 @@ claiming context consumption.
 message positions. Structured context metadata identifies ranges submitted
 to the provider. Duplicate or reordered ranges cannot skip missing context.
 A later fresh view recovers messages that steering failed to deliver.
-
-**Checkpoints preserve unread work.** They retain explicit progress and
-lease intervals that establish which messages reached a working seat.
-An unacknowledged message remains pending after checkpoint recovery.
-While work runs, checkpoints preserve their previous floor. A failed attempt
-can therefore recover earlier work and its retry history.
 
 **The room says when it gives up.** At the cap the room writes the
 attempt it does not make, ended `abandoned`, and the host hears an

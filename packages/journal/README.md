@@ -1,8 +1,8 @@
 # @ambionframework/journal
 
 `@ambionframework/journal` serializes an append-only record. It owns the
-queue, journal envelope, fencing, checkpoints, idempotency, and conditional
-commits. A caller owns entry kinds and body validation.
+queue, journal envelope, fencing, idempotency, and conditional commits. A
+caller owns entry kinds and body validation.
 
 The main package has no Pi dependency. It stores JSON data through a narrow
 storage contract:
@@ -38,14 +38,11 @@ objects are not journal payloads.
 ```ts
 import { Journal, memoryJournals, type Vocabulary } from '@ambionframework/journal';
 
-const words: Vocabulary<'note' | 'run' | 'checkpoint'> = {
+const words: Vocabulary<'note' | 'run'> = {
   record: 'note',
   run: 'run',
-  checkpoint: 'checkpoint',
-  accepts: (kind, body): kind is 'note' | 'run' | 'checkpoint' =>
-    (kind === 'note' || kind === 'run' || kind === 'checkpoint') &&
-    typeof body === 'object' &&
-    body !== null,
+  accepts: (kind, body): kind is 'note' | 'run' =>
+    (kind === 'note' || kind === 'run') && typeof body === 'object' && body !== null,
 };
 
 const journals = memoryJournals();

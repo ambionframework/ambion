@@ -713,19 +713,10 @@ At the cap, the room records an `abandoned` activation and stops retrying
 its work. Pending activations keep the exchange open and make `settled()`
 wait for resolution.
 
-**A checkpoint bounds what a fold costs.** Every
-`runtime.checkpoint.entries` entries, 256 by default, the room writes an
-`ambion/checkpoint` entry where it has nothing else to write. The
-checkpoint carries the composition, the closes and the leases a later fold
-still reads, behind a `floor`: no wake on a message below it is pending. A
-fold reads a checkpoint in place of every entry before it, and the journal
-drops those entries from memory. What a fold costs is then the entries
-since the last checkpoint; what a replay costs is every entry the storage
-holds, because a checkpoint trims the cache and never the storage. The
-messages stay, and the storage keeps every entry: a checkpoint is a cache
-over the journal, so a reader that cannot read one ignores it and folds
-the entries instead. A checkpoint is an entry like any other, so the fence
-voids one a superseded run wrote.
+**A fold reads the journal's complete history.** Messages and administrative
+entries remain ordered and durable together. A resumed room derives the same
+state from that record, including lease attempts, pending work, and
+idempotency keys.
 
 The record uses `JournalStorage` on the runtime's `storage`. The storage
 reads ordered entries and atomically appends only at an expected position.

@@ -1,7 +1,7 @@
 /**
  * An append-only journal over ordered conditional storage.
  *
- * One serial queue, fenced by run, checkpointed, and honest about a write
+ * One serial queue, fenced by run, and honest about a write
  * it is in doubt about. The *journal* is the structure; the *record* is
  * what it holds, and the room that writes to one keeps that word for its
  * own content.

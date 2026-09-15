@@ -81,9 +81,8 @@ export function parseId(id: string): ParsedId | undefined {
 }
 
 /**
- * Every lease the changes fold to. `held` is what a checkpoint carried: the
- * changes after it fold onto those, so a lease the checkpoint holds keeps
- * the seqs and the times its first changes wrote.
+ * Every lease the changes fold to. The complete journal remains available,
+ * so a lease's attempt history is reconstructed directly from its changes.
  */
 export function foldLeases(
 	changes: readonly JournalEntry<LeaseChange>[],

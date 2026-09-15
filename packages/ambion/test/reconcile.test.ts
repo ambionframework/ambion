@@ -60,8 +60,6 @@ const options = (over: Partial<ReconcileOptions> = {}): ReconcileOptions => ({
 	resend: 5_000,
 	attempts: retry.attempts,
 	sent: new Map(),
-	sinceCheckpoint: 0,
-	checkpointEvery: 256,
 	stopped: false,
 	...over,
 });
@@ -228,6 +226,46 @@ describe('decide', () => {
 		]);
 		expect(gaveUp.owed).toEqual([]);
 		expect(decide(gaveUp, options({ now: T0 + 1_000_000 })).abandoned).toEqual([]);
+	});
+
+	it('keeps an earlier failed close owed after a later close stands down', () => {
+		const state = fold([
+			...opened(),
+			{
+				kind: 'close',
+				seq: 3,
+				body: { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] },
+			},
+			lease(
+				{
+					id: 'closed:2:assistant:1',
+					phase: 'ended',
+					reason: 'failed',
+					at,
+					readThrough: 0,
+				},
+				4,
+			),
+			said(5, 'priya'),
+			{
+				kind: 'close',
+				seq: 6,
+				body: { owner: 'priya', from: 5, through: 5, at, wakes: ['assistant'] },
+			},
+			lease(
+				{
+					id: 'closed:5:assistant:1',
+					phase: 'ended',
+					reason: 'released',
+					at,
+					readThrough: 0,
+				},
+				7,
+			),
+		]);
+		expect(state.owed.map((owed) => [owed.from, owed.through, owed.unsuccessfulAttempts])).toEqual([
+			[2, 2, 1],
+		]);
 	});
 
 	it('wakes the seat again after a lease that came to nothing, and stops at the cap', () => {
@@ -487,7 +525,6 @@ describe('decide', () => {
 			close: undefined,
 			sends: [],
 			forget: [],
-			checkpoint: false,
 			alarmAt: undefined,
 		});
 	});
@@ -505,22 +542,6 @@ describe('decide', () => {
 			['message:99:gone:1', T0],
 		]);
 		expect(decide(state, options({ sent })).forget).toEqual(['message:99:gone:1']);
-	});
-
-	/** The journal says when a checkpoint is due; the room writes it where it writes nothing else. */
-	it('says a checkpoint is due at the count the runtime set, and not before', () => {
-		const state = fold(opened());
-		expect(decide(state, options({ sinceCheckpoint: 255, checkpointEvery: 256 })).checkpoint).toBe(
-			false,
-		);
-		expect(decide(state, options({ sinceCheckpoint: 256, checkpointEvery: 256 })).checkpoint).toBe(
-			true,
-		);
-		// a stopped room still says so; the room writes nothing once it is gone
-		expect(
-			decide(state, options({ sinceCheckpoint: 256, checkpointEvery: 256, stopped: true }))
-				.checkpoint,
-		).toBe(true);
 	});
 });
 

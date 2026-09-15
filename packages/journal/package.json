@@ -2,7 +2,7 @@
 	"name": "@ambionframework/journal",
 	"version": "0.0.0",
 	"type": "module",
-	"description": "An append-only journal with ordered storage, conditional append, fencing, checkpoints, and honest lost-write recovery.",
+	"description": "An append-only journal with ordered storage, conditional append, fencing, and honest lost-write recovery.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {

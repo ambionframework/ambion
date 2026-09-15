@@ -17,7 +17,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `session.ts` composes them      |
 | `packages/cli`        | The `ambion` binary                                                                       |
 | `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Private; tested in workerd  |
-| `packages/journal`    | An append-only journal: one queue, fenced by run, checkpointed                            |
+| `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                |
 | `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem             |
 | `docs/agent.md`       | Design contract for the core — read before changing the runtime                           |
 | `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`          |
@@ -74,8 +74,8 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
 - Pi (`@earendil-works/pi-agent-core`) owns the model loop, tools, transcript.
   `packages/workspace` owns the workspace port, resource, tools, and the
   just-bash filesystem and shell behind them. The core composes ordinary tools.
-  `packages/journal` owns the journal: the queue, the fence, the checkpoint and
-  the envelope every entry shares. Ambion owns only participants-as-values and
+  `packages/journal` owns the journal: the queue, the fence and the envelope
+  every entry shares. Ambion owns only participants-as-values and
   the session. A third concern is a
   design failure: push it into a dependency or drop it. `render.ts` formats
   participant context. `assistant.ts` owns assistant policy and guidance.

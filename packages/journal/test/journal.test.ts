@@ -1,8 +1,8 @@
 /**
  * The journal's own promises, with no room in sight: one entry at a time on
  * a serial queue, a key that lands once, a commit the record moved past
- * refused with what it missed, a checkpoint that replaces what came before,
- * a fence between runs, and an envelope the journal holds every entry to.
+ * refused with what it missed, a fence between runs, and an envelope the
+ * journal holds every entry to.
  *
  * `docs/durability.md` states these promises for a room. Here they are
  * proved for the machinery the room is built on.
@@ -12,11 +12,11 @@ import { type Entry, Journal, type Vocabulary } from '../src/journal.ts';
 import { memoryJournals } from '../src/memory.ts';
 
 /**
- * Four kinds: a `note` makes up the record, and the other three sit beside
+ * Three kinds: a `note` makes up the record, and the other two sit beside
  * it. No body names a place or a key: the journal keeps those of its own,
  * and a caller that wants one reads it off the entry.
  */
-type Kind = 'note' | 'mark' | 'run' | 'checkpoint';
+type Kind = 'note' | 'mark' | 'run';
 
 interface Note {
 	text: string;
@@ -27,26 +27,17 @@ interface Mark {
 interface Run {
 	run: string;
 }
-interface Checkpoint {
-	v: 1;
-	floor: number;
-}
-
 interface Bodies {
 	note: Note;
 	mark: Mark;
 	run: Run;
-	checkpoint: Checkpoint;
 }
 
 const WORDS: Vocabulary<Kind> = {
 	record: 'note',
 	run: 'run',
-	checkpoint: 'checkpoint',
-	// A checkpoint of another shape is one this reader does not fold.
 	accepts: (kind, body): kind is Kind =>
-		(kind === 'note' || kind === 'mark' || kind === 'run' || kind === 'checkpoint') &&
-		(kind !== 'checkpoint' || (typeof body === 'object' && body !== null && 'v' in body)),
+		(kind === 'note' || kind === 'mark' || kind === 'run') && body !== undefined,
 };
 
 let names = 0;
@@ -127,18 +118,6 @@ describe('a journal', () => {
 		expect(journal.record).toHaveLength(0);
 	});
 
-	it('keeps a token across a checkpoint, so no dedup window opens', async () => {
-		const journal = await open();
-		const first = await journal.commit({ key: 'k', draft: note('once') });
-		await journal.write('checkpoint', { v: 1, floor: 1 });
-		const again = await journal.commit({ key: 'k', draft: note('twice') });
-		if (!('entry' in first) || !('entry' in again)) throw new Error('both commits land');
-		// The checkpoint keeps every record entry, and the token with it.
-		expect(again.entry).toEqual(first.entry);
-		expect(journal.record).toHaveLength(1);
-		expect(journal.lastSeq).toBe(2);
-	});
-
 	it('meets a token the storage holds, so a retry after a restart lands nothing', async () => {
 		const id = `journal-token-${++names}`;
 		const first = await open(id);
@@ -211,15 +190,6 @@ describe('the envelope', () => {
 		expect(journal.lastSeq).toBe(0);
 	});
 
-	it('skips a body the vocabulary turns down', async () => {
-		const id = `journal-refused-${++names}`;
-		// a checkpoint of a shape this reader does not fold
-		await store(id, { kind: 'checkpoint', body: { shape: 'other' }, seq: 1 });
-		await store(id, { kind: 'checkpoint', body: { v: 1, floor: 0 }, seq: 2 });
-		const journal = await open(id);
-		expect(journal.entries.map((entry) => entry.kind)).toEqual(['checkpoint']);
-	});
-
 	it('holds the place, the key and the run beside the body, and a replay reads them back', async () => {
 		const id = `journal-envelope-${++names}`;
 		const first = await open(id, 'run-1');
@@ -282,21 +252,6 @@ describe('the envelope', () => {
 		// The later write starts after the failed callback. Replaying it would duplicate the event.
 		expect(heard).toEqual(['note', 'note']);
 		expect(journal.record.map((entry) => entry.body.text)).toEqual(['outside', 'after']);
-	});
-});
-
-describe('a checkpoint', () => {
-	it('replaces every entry before it, and keeps every record entry', async () => {
-		const journal = await open();
-		await journal.commit({ draft: note('one') });
-		await journal.write('mark', { label: 'a' });
-		await journal.write('mark', { label: 'b' });
-		expect(journal.sinceCheckpoint).toBe(2);
-		await journal.write('checkpoint', { v: 1, floor: 1 });
-		// the marks are gone, the note stays, and the count starts again
-		expect(journal.entries.map((entry) => entry.kind)).toEqual(['note', 'checkpoint']);
-		expect(journal.record.map((entry) => entry.body.text)).toEqual(['one']);
-		expect(journal.sinceCheckpoint).toBe(0);
 	});
 });
 
@@ -367,8 +322,7 @@ describe('the envelope', () => {
 		await expect(journal.write('mark', { label: 'turned down' })).rejects.toThrow(
 			/turns down 'mark'/,
 		);
-		// nothing joined the cache, and the count the checkpoint reads is untouched
+		// nothing joined the cache after the rejected write
 		expect(journal.entries).toEqual([]);
-		expect(journal.sinceCheckpoint).toBe(0);
 	});
 });

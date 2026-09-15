@@ -11,7 +11,7 @@
 
 import { type Entry, placed } from '../journal/journal.ts';
 import { type Exchange, isSummary, type Message, type Seq } from '../types.ts';
-import type { Checkpoint, Close, Composition, EndReason, LeaseHold, Seating } from '../wire.ts';
+import type { Close, Composition, EndReason, LeaseHold, Seating } from '../wire.ts';
 import { openExchange } from './exchange.ts';
 import {
 	applyLease,
@@ -50,8 +50,6 @@ export interface RoomState {
 	readonly due: PendingActivation[];
 	readonly messages: readonly Message[];
 	readonly lastSeq: Seq;
-	/** No wake on a message before this seq is pending: the latest checkpoint said so. */
-	readonly floor: Seq;
 }
 
 /**
@@ -68,7 +66,6 @@ interface BaseFacts {
 	closes: Close[];
 	leases: Map<string, LeaseHold>;
 	composition: Composition | undefined;
-	floor: Seq;
 }
 
 /** The private base facts held by a projection for incremental evolution. */
@@ -77,7 +74,6 @@ export const baseOf = (state: RoomState): BaseFacts => ({
 	closes: [...state.closes],
 	leases: new Map(state.leases),
 	composition: state.composition,
-	floor: state.floor,
 });
 
 /** The empty room facts before the first committed event. */
@@ -86,7 +82,6 @@ const older = (): BaseFacts => ({
 	closes: [],
 	leases: new Map(),
 	composition: undefined,
-	floor: 0,
 });
 
 /** Applies one committed event to the room facts. */
@@ -107,13 +102,6 @@ export function applyEvent(read: BaseFacts, entry: Entry): void {
 		read.composition = { ...entry.body, seq: entry.seq };
 		return;
 	}
-	if (entry.kind === 'checkpoint') {
-		read.closes.splice(0, read.closes.length, ...entry.body.closes);
-		read.leases.clear();
-		for (const lease of entry.body.leases) read.leases.set(lease.id, { ...lease });
-		read.composition = entry.body.composition;
-		read.floor = entry.body.floor;
-	}
 }
 
 export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
@@ -124,15 +112,13 @@ export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomS
 
 /** Derives all room views from the base facts. */
 export function project(read: BaseFacts, options: FoldOptions): RoomState {
-	const { messages, closes, leases, composition, floor } = read;
+	const { messages, closes, leases, composition } = read;
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
 	const isPerson = (name: string) => people.has(name);
 	const exchange = openExchange(messages, closes, isPerson);
-	// Every wake on a message below the floor was answered when the
-	// checkpoint was written, so nothing below it is read for one again.
 	const pending = pendingWakes(
-		messages.filter((message) => message.seq >= floor),
+		messages,
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
@@ -153,7 +139,6 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		due: [...pending, ...owed],
 		messages,
 		lastSeq: messages.at(-1)?.seq ?? 0,
-		floor,
 	};
 	return state;
 }
@@ -284,57 +269,4 @@ function draftedOver(lease: LeaseHold, through: Seq): boolean {
 	const parsed = parseId(lease.id);
 	if (parsed?.cause !== 'closed' || parsed.position !== through) return false;
 	return cameToNothing(lease);
-}
-
-/**
- * The checkpoint that stands for this state: the composition, every close
- * and every lease a later fold still reads, behind the floor. The floor is
- * the earliest seq anything unfinished reaches back to: the open exchange,
- * a wake pending, a draft owed, a lease live. Below it every wake was
- * answered and every close was covered or stood down, so the entries about
- * them can go. The last close stays, whatever the floor: the next exchange
- * opens after it. A room with no composition writes no checkpoint, because
- * a fold that reads one reads no roster.
- */
-export function checkpointOf(state: RoomState, now: number): Checkpoint | undefined {
-	if (state.composition === undefined) return undefined;
-	const floor = floorOf(state);
-	const last = state.closes.at(-1);
-	const closes = state.closes.filter((close) => close.through >= floor || close === last);
-	const kept = new Set(closes.map((close) => close.through));
-	return {
-		v: 2,
-		floor,
-		composition: state.composition,
-		closes,
-		leases: [...state.leases.values()].filter((lease) => reads(lease, floor, kept)),
-		at: new Date(now).toISOString(),
-	};
-}
-
-/** The earliest seq anything the room still owes reaches back to. */
-function floorOf(state: RoomState): Seq {
-	// A running lease can fail after it acknowledged context. Keep its attempt history.
-	if ([...state.leases.values()].some((lease) => lease.phase === 'running')) return state.floor;
-	const seqs = [
-		state.lastSeq + 1,
-		...(state.exchange === undefined ? [] : [state.exchange.from]),
-		...state.pending.map((wake) => wake.seq),
-		...state.owed.map((owed) => owed.from),
-	];
-	return Math.min(...seqs);
-}
-
-/**
- * Whether a later fold still reads this lease. A lease that holds, or that
- * answers a message above the floor, is read for a wake. A draft is read
- * for a close the checkpoint carries: it says the close stood down, and
- * without it the room would draft over that close again.
- */
-function reads(lease: LeaseHold, floor: Seq, kept: ReadonlySet<Seq>): boolean {
-	if (lease.phase === 'running' || lease.readThrough >= floor) return true;
-	const parsed = parseId(lease.id);
-	if (parsed === undefined) return false;
-	if (parsed.cause === 'closed') return kept.has(parsed.position);
-	return parsed.position >= floor || (lease.phase === 'ended' && lease.until >= floor);
 }

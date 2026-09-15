@@ -56,23 +56,18 @@ const entries: Entry[] = [
 	{ kind: 'lease', seq: 8, body: { id, phase: 'ended', reason: 'released', at, readThrough: 0 } },
 	{ kind: 'close', seq: 9, body: close },
 	{
-		kind: 'checkpoint',
-		seq: 10,
-		body: { v: 2, at, composition, floor: 8, closes: [close], leases: [] },
-	},
-	{
 		kind: 'message',
-		seq: 11,
+		seq: 10,
 		key: 'seating',
 		body: { kind: 'seated', at, subject: 'surveyor', identity: 'Surveyor.', attention: 'named' },
 	},
 	{
 		kind: 'message',
-		seq: 12,
+		seq: 11,
 		key: 'departure',
 		body: { kind: 'unseated', at, subject: 'product' },
 	},
-	{ kind: 'composition', seq: 13, body: { ...composition, goal: 'A new goal.' } },
+	{ kind: 'composition', seq: 12, body: { ...composition, goal: 'A new goal.' } },
 ];
 
 /** Freeze input values so accidental mutation fails where it happens. */
@@ -102,5 +97,5 @@ it('evolves every event without changing any earlier projection or committed inp
 	for (const previous of retained) expect(previous.state).toEqual(previous.snapshot);
 	expect(state.composition?.goal).toBe('A new goal.');
 	expect(state.roster.map((seat) => seat.name)).toEqual(['product']);
-	expect(state.leases.size).toBe(0);
+	expect(state.leases.get(id)).toMatchObject({ phase: 'ended', reason: 'released' });
 });

@@ -34,7 +34,6 @@ export interface ConfigureOptions {
 	stream?: CreateRuntimeOptions['stream'];
 	wake?: CreateRuntimeOptions['wake'];
 	retry?: CreateRuntimeOptions['retry'];
-	checkpoint?: CreateRuntimeOptions['checkpoint'];
 	/**
 	 * What to do with an event a seat raised. An activation runs inside the
 	 * seat's own object and its events reach no other, so this is the only way
@@ -75,7 +74,6 @@ export function runtimeFor(
 		...(settings.stream === undefined ? {} : { stream: settings.stream }),
 		...(settings.wake === undefined ? {} : { wake: settings.wake }),
 		...(settings.retry === undefined ? {} : { retry: settings.retry }),
-		...(settings.checkpoint === undefined ? {} : { checkpoint: settings.checkpoint }),
 		...options,
 	});
 }

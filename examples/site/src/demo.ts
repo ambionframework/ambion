@@ -114,10 +114,10 @@ const driveBefore = await driveFiles();
 
 /**
  * A short lease, so the leases the evicted runtime held expire within seconds of the
- * resume, and a low checkpoint threshold, so the resumed room reads one
- * checkpoint in place of the entries before it. A host picks both.
+ * resume. A host picks the lease policy; the journal retains the complete
+ * ordered history so a resumed room derives the same state.
  */
-const LEASE = { wake: { expiry: 15_000 }, checkpoint: { entries: 24 } };
+const LEASE = { wake: { expiry: 15_000 } };
 const firstDatabase = openDatabase();
 const firstSql = nodeSql(firstDatabase);
 const first = createRuntime({

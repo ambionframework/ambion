@@ -95,8 +95,6 @@ async function world(storage: (typeof storages)[number]): Promise<World> {
 				storage: opened.storage,
 				clock,
 				transport: faultyTransport(inProcessTransport(), faults, clock),
-				// Every resume in this file folds over a checkpoint, not the entries it replaced.
-				checkpoint: { entries: 3 },
 			}),
 	};
 }
