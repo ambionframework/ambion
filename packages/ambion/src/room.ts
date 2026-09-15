@@ -86,6 +86,7 @@ import type {
 	Seating,
 	SeatPort,
 	ViewResponse,
+	Wake,
 	Without,
 } from './wire.ts';
 
@@ -1018,6 +1019,7 @@ class RoomHost implements Room, RunningRoom {
 			if (lease === undefined || !isLive(lease, this.now())) continue;
 			const seat = steer.seat;
 			this.send(activationId('message', message.seq, seat), seat, {
+				target: steer.activation,
 				after,
 				seq: message.seq,
 				line: renderLine(message),
@@ -1026,7 +1028,7 @@ class RoomHost implements Room, RunningRoom {
 	}
 
 	/** One wake over the wire. A wake a message caused carries the line a running activation is steered with. */
-	private send(id: string, seat: string, steer?: { after: Seq; seq: Seq; line: string }): void {
+	private send(id: string, seat: string, steer?: Wake['steer']): void {
 		if (steer === undefined) this.sentAt.set(id, this.now());
 		void this.port(seat)
 			.wake({ room: this.name, seat, activation: id, ...(steer === undefined ? {} : { steer }) })

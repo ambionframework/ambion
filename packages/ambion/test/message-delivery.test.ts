@@ -95,6 +95,9 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			expect(
 				observed.wakes.filter((wake) => wake.steer?.seq === update?.seq).map((w) => w.seat),
 			).toEqual(['alpha']);
+			expect(observed.wakes.find((wake) => wake.steer?.seq === update?.seq)?.steer?.target).toBe(
+				[...stateOf(room).leases.values()].find((lease) => lease.phase === 'running')?.id,
+			);
 			release.resolve();
 			await waitForRoom(room);
 			expect(contexts.slice(1).some((text) => text.includes('The requirement has changed.'))).toBe(

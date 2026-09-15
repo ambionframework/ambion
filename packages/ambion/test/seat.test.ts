@@ -18,7 +18,7 @@ import {
 } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { deferred, tick } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { contextText, quiet, scripted } from './support/scripted.ts';
 
 const product = defineAgent({
 	name: 'product',
@@ -131,6 +131,47 @@ async function until(done: () => boolean): Promise<void> {
 }
 
 describe('a seat actor', () => {
+	it('queues a delayed steer when its target activation has already finished', async () => {
+		const started = deferred();
+		const release = deferred();
+		const contexts: string[] = [];
+		const { room, actor } = play(
+			scripted(async (context, _agent, call) => {
+				contexts.push(contextText(context));
+				if (call === 2) {
+					started.resolve();
+					await release.promise;
+				}
+				return quiet();
+			}),
+		);
+		room.letGo.resolve();
+		await actor.run('message:1:product:1');
+		const later = actor.run('message:3:product:1');
+		try {
+			await started.promise;
+			const steer = {
+				target: 'message:1:product:1',
+				after: 1,
+				seq: 2,
+				line: '[priya] Obsolete context from the earlier activation.',
+			};
+			await actor.wake({ ...wakeOf('message:2:product:1'), steer });
+			release.resolve();
+			await later;
+			expect(contexts.every((context) => !context.includes('Obsolete context'))).toBe(true);
+			expect(room.claims).toEqual([
+				'message:1:product:1',
+				'message:3:product:1',
+				'message:2:product:1',
+			]);
+			expect(room.mostHeld).toBe(1);
+		} finally {
+			release.resolve();
+			await actor.cut('message:3:product:1');
+		}
+	});
+
 	it('queues a wake that lands while the activation releases, and steers it into nothing', async () => {
 		const { room, actor } = play();
 		void actor.wake(wakeOf('message:1:product:1'));

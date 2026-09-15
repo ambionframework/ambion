@@ -146,7 +146,13 @@ export interface Wake {
 	room: string;
 	seat: string;
 	activation: string;
-	steer?: { after: Seq; seq: Seq; line: string };
+	steer?: {
+		/** The activation that received this message. Older senders can omit it. */
+		target?: string;
+		after: Seq;
+		seq: Seq;
+		line: string;
+	};
 }
 
 export interface SeatPort {

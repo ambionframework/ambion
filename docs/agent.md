@@ -323,6 +323,8 @@ record it. The projection derives recipients when it applies each message,
 using the preceding recorded leases and the message's explicit wakes.
 Live steering and pending work read this same disposable delivery projection.
 The host sends a steer only while its recorded target lease remains live.
+The receiver checks that target again. If another activation has started,
+the message waits for a fresh claim instead of entering unrelated context.
 
 Assistant selection and summary activations keep their fixed input ranges.
 They receive no implicit steering. A published summary can still reach an
