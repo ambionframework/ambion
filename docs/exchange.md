@@ -187,6 +187,21 @@ assistant summaries, including a summary published during a later exchange;
 when the exchange deliberately has no summary. A failed or abandoned attempt
 remains visible in the record and is handled by the exchange's retry policy.
 
+**Scheduling and response reads share one completion query.**
+`summaryCompletion` in [`exchange.ts`](../packages/ambion/src/room/exchange.ts)
+reads the recorded close, messages, and lease history. It stores no additional
+status. A covering summary takes precedence over its activation's lease state.
+
+| Recorded facts                                                      | Completion | `response()`                       |
+| ------------------------------------------------------------------- | ---------- | ---------------------------------- |
+| A summary covers the owner and range                                | Published  | Returns that summary               |
+| No summary is requested, or its activation releases without writing | Silent     | Returns `undefined`                |
+| Summary work is unclaimed, running, or awaiting retry after failure | Pending    | Waits for more journal facts       |
+| Summary work is revoked or abandoned without a published response   | Failed     | Rejects with an interruption error |
+
+Only pending summary work remains owed by the fold. Reaching the retry cap
+does not itself resolve the response; the recorded abandonment does.
+
 The handle is tied to `owner`, `from`, and `at`. Repeating a send with the
 same idempotency key returns the same exchange handle. Concurrent sends into
 an open exchange steer the same work and do not create another handle; a
@@ -287,6 +302,12 @@ a close the storage refuses leaves the exchange open, and that a handle
 waits for a later durable close (§6).
 
 All in-process, in vitest, on a scripted stream.
+
+[`exchange-completion.test.ts`](../packages/ambion/test/exchange-completion.test.ts)
+also checks response outcomes after replay on memory and SQLite. Completed
+outcomes schedule no new summary. A failed attempt remains pending across
+restart until its retry becomes due. The suite checks that an earlier
+response can publish while a later exchange is still active.
 
 The live run is
 [`demos/2026-08-31-one-exchange-one-message.html`](../demos/2026-08-31-one-exchange-one-message.html):

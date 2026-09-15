@@ -42,6 +42,7 @@ import {
 } from './host/runtime.ts';
 import { type Body, type Entry, type Kind, placed, RoomJournal } from './journal/journal.ts';
 import { renderLine } from './render.ts';
+import { summaryCompletion } from './room/exchange.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
 import { activationId, isLive, parseId, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
@@ -620,31 +621,11 @@ class RoomHost implements Room, RunningRoom {
 	}
 
 	private responseResult(close: ClosedExchange): SummaryMessage | 'pending' | 'silent' | 'failed' {
-		const summary = this.state().messages.find(
-			(message): message is SummaryMessage =>
-				message.kind === 'summary' &&
-				message.to === close.owner &&
-				message.covers.from <= close.from &&
-				message.covers.through >= close.through,
-		);
-		if (summary !== undefined) return summary;
-		const recordedClose = this.state().closes.find((candidate) => candidate.from === close.from);
-		if (recordedClose?.wakes === undefined) return 'silent';
-		return this.summaryStatus(close);
-	}
-
-	private summaryStatus(close: ClosedExchange): 'pending' | 'silent' | 'failed' {
 		const state = this.state();
-		if (state.owed.some((owed) => owed.from === close.from && owed.through === close.through))
-			return 'pending';
-		const drafts = [...state.leases.values()].filter((lease) => {
-			const parsed = parseId(lease.id);
-			return parsed?.cause === 'closed' && parsed.position === close.through;
-		});
-		if (drafts.some((lease) => lease.phase === 'running')) return 'pending';
-		if (drafts.some((lease) => lease.phase === 'ended' && lease.reason === 'released'))
-			return 'silent';
-		return drafts.length === 0 ? 'pending' : 'failed';
+		const recordedClose = state.closes.find((candidate) => candidate.from === close.from);
+		if (recordedClose === undefined) return 'silent';
+		const completion = summaryCompletion(recordedClose, state.messages, state.leases);
+		return completion.status === 'published' ? completion.summary : completion.status;
 	}
 
 	private notifyExchangeWaiters(): void {

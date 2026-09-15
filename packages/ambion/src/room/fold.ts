@@ -10,9 +10,9 @@
  */
 
 import { type Entry, placed } from '../journal/journal.ts';
-import { type Exchange, isSummary, type Message, type Seq } from '../types.ts';
-import type { Close, Composition, EndReason, LeaseHold, Seating } from '../wire.ts';
-import { openExchange } from './exchange.ts';
+import type { Exchange, Message, Seq } from '../types.ts';
+import type { Close, Composition, LeaseHold, Seating } from '../wire.ts';
+import { openExchange, summaryCompletion } from './exchange.ts';
 import {
 	applyLease,
 	type CauseOf,
@@ -185,14 +185,6 @@ function reseat(roster: Seating[], message: Message): void {
 	}
 }
 
-type OwedContext = FoldOptions;
-
-/** The seat a close owes its summary to, or nothing when it owes none. */
-const owes = (close: Close): string | undefined => close.wakes?.[0];
-
-/** A draft that ended this way stood down: the assistant judged the room, the host wrote the draft off, or the room gave up. */
-const STOOD_DOWN: ReadonlySet<EndReason> = new Set(['released', 'revoked', 'abandoned']);
-
 /**
  * The summaries still owed, one per close. A close owes one when it names a
  * seat, no summary covers it, and its own draft did not stand down. The close
@@ -205,47 +197,24 @@ function foldOwed(
 	closes: readonly Close[],
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
-	context: OwedContext,
+	context: FoldOptions,
 ): Owed[] {
-	const summaries = messages.filter(isSummary);
-	return closes
-		.filter((close) => owes(close) !== undefined)
-		.filter(
-			(close) => !summaries.some((summary) => covers(summary, close)) && !judged(leases, close),
-		)
-		.map((close) =>
+	return closes.flatMap((close) => {
+		const completion = summaryCompletion(close, messages, leases);
+		if (completion.status !== 'pending' || completion.writer === undefined) return [];
+		return [
 			withAttempts(
 				{
 					person: close.owner,
-					writer: owes(close) ?? '',
+					writer: completion.writer,
 					from: close.from,
 					through: close.through,
 				},
 				leases,
 				context,
 			),
-		);
-}
-
-const covers = (summary: Message & { kind: 'summary' }, close: Close): boolean =>
-	summary.to === close.owner &&
-	summary.covers.from <= close.from &&
-	summary.covers.through >= close.through;
-
-/**
- * A draft over this close stood down without writing: released, so the
- * assistant judged this exchange; or revoked, so the host wrote the draft
- * off the way `abort()` writes off every wake still pending.
- */
-function judged(leases: ReadonlyMap<string, LeaseHold>, close: Close): boolean {
-	for (const lease of leases.values()) {
-		const parsed = parseId(lease.id);
-		if (parsed?.cause !== 'closed' || parsed.position !== close.through) continue;
-		if (lease.phase === 'ended' && STOOD_DOWN.has(lease.reason)) {
-			return true;
-		}
-	}
-	return false;
+		];
+	});
 }
 
 /**
@@ -255,7 +224,7 @@ function judged(leases: ReadonlyMap<string, LeaseHold>, close: Close): boolean {
 function withAttempts(
 	owed: Omit<Owed, keyof PendingActivation>,
 	leases: ReadonlyMap<string, LeaseHold>,
-	context: OwedContext,
+	context: FoldOptions,
 ): Owed {
 	const failed = [...leases.values()].filter((lease) => draftedOver(lease, owed.through));
 	return {
