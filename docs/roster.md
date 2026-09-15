@@ -289,6 +289,12 @@ reserve, and the room seats less because there is less to seat.
 
 ## 5. What the host may do
 
+**A seating binds one definition for the run.** A host can seat an unbound
+name or the definition the room already bound to that name. The room refuses
+a different definition under that name. A pending seating reserves the name
+until its journal entry lands or fails. The room installs the binding when it
+hears the accepted seating entry, before it wakes the seat.
+
 Two verbs on `Session`, and the assistant's tool is a thin binding over the
 first:
 

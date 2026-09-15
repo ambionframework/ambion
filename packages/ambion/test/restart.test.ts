@@ -94,7 +94,6 @@ async function world(storage: (typeof storages)[number]): Promise<World> {
 			createRuntime({
 				sessions: opened.sessions,
 				clock,
-				agents,
 				transport: faultyTransport(inProcessTransport(), faults, clock),
 				// Every resume in this file folds over a checkpoint, not the entries it replaced.
 				checkpoint: { entries: 3 },
@@ -148,7 +147,11 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			crash(first, session);
 
 			const second = runtime();
-			const resumed = await resumeSession(name, { runtime: second, streamFn: scripted(script) });
+			const resumed = await resumeSession(name, {
+				runtime: second,
+				agents,
+				streamFn: scripted(script),
+			});
 			const events = collect(resumed);
 			// the fold before the crash is the fold after the resume
 			expect(resumed.seats()).toEqual(before.seats);
@@ -208,7 +211,11 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			held.resolve();
 
 			await clock.advance(61_000);
-			const resumed = await resumeSession(name, { runtime: runtime(), streamFn: scripted(script) });
+			const resumed = await resumeSession(name, {
+				runtime: runtime(),
+				agents,
+				streamFn: scripted(script),
+			});
 			const events = collect(resumed);
 			// the resume itself expired the lease: the wake it took is pending again,
 			// so the exchange stays open until the seat is woken after the backoff
@@ -368,6 +375,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 
 			const resumed = await resumeSession(name, {
 				runtime: runtime(),
+				agents,
 				streamFn: scripted(byAgent({})),
 			});
 			// no `left` was written, so both are still present, and visiting again writes nothing
@@ -438,6 +446,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const writing = byAgent({ assistant: writes('Both questions, answered.') });
 			const resumed = await resumeSession(name, {
 				runtime: runtime(),
+				agents,
 				streamFn: scripted(writing),
 			});
 			// the resumed room takes on the draft the first run left owed, so it is
@@ -485,6 +494,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 
 			const resumed = await resumeSession(name, {
 				runtime: runtime(),
+				agents,
 				streamFn: scripted(byAgent({ assistant: writes('Never written.') })),
 			});
 			const events = collect(resumed);
@@ -510,7 +520,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 					call === 1 ? new Promise<never>(() => {}) : Promise.resolve(quiet()),
 			});
 			const name = roomName(`restart-${storage.name}`);
-			const first = createRuntime({ sessions: opened.sessions, clock, agents });
+			const first = createRuntime({ sessions: opened.sessions, clock });
 			const session = startSession({
 				name,
 				assistant,
@@ -531,7 +541,6 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const second = createRuntime({
 				sessions: opened.sessions,
 				clock,
-				agents,
 				transport: {
 					connect: (room, seat, host) => {
 						const port = inProcess.connect(room, seat, host);
@@ -545,7 +554,11 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 					},
 				},
 			});
-			const resumed = await resumeSession(name, { runtime: second, streamFn: scripted(script) });
+			const resumed = await resumeSession(name, {
+				runtime: second,
+				agents,
+				streamFn: scripted(script),
+			});
 			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
 			resumed.abort();
 			await resumed.settled();
@@ -572,11 +585,14 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await session.messages();
 			await stopSession(session);
 			const bare = createRuntime({ sessions: opened.sessions, clock: fakeClock() });
-			await expect(resumeSession(name, { runtime: bare })).rejects.toThrow(
-				/not in the runtime's catalog/,
+			await expect(resumeSession(name, { runtime: bare, agents: [] })).rejects.toThrow(
+				/cannot resume: agent 'alpha' has no binding/,
+			);
+			await expect(resumeSession(name, { runtime: bare, agents: [alpha, alpha] })).rejects.toThrow(
+				/Restart bindings repeat agent 'alpha'/,
 			);
 			await expect(
-				resumeSession(roomName('never-started'), { runtime: runtime() }),
+				resumeSession(roomName('never-started'), { runtime: runtime(), agents: [] }),
 			).rejects.toThrow(/no composition/);
 		} finally {
 			await opened.dispose();

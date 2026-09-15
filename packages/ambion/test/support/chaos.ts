@@ -179,7 +179,6 @@ export class World {
 		return createRuntime({
 			sessions: this.sessions,
 			clock: this.clock,
-			agents,
 			transport: serializing(inProcessTransport()),
 			// Small on purpose: every crash point lands on both sides of a checkpoint.
 			checkpoint: { entries: 4 },
@@ -223,6 +222,7 @@ export class World {
 		try {
 			this.session = await resumeSession(this.name, {
 				runtime: this.runtime,
+				agents,
 				streamFn: scripted(this.cast.script),
 			});
 		} catch (error) {

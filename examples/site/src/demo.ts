@@ -27,6 +27,7 @@ import {
 	createRuntime,
 	destroyWorkspace,
 	isPresence,
+	isSeatedAgent,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -281,10 +282,14 @@ step(
 const secondDatabase = openDatabase();
 const second = createRuntime({
 	sessions: sqliteSessions(nodeSql(secondDatabase)),
-	agents: [...first.catalog.values()],
 	...LEASE,
 });
-session = await resumeSession(NAME, { runtime: second });
+session = await resumeSession(NAME, {
+	runtime: second,
+	agents: [ASSISTANT, ...AGENTS, ...AVAILABLE].map((value) =>
+		isSeatedAgent(value) ? value.agent : value,
+	),
+});
 watch(session);
 // sam is present on the journal, so the visit puts nothing on the record.
 await visitSession(session, sam);

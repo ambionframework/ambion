@@ -18,8 +18,8 @@ and persisted shapes. Remove obsolete structures and migration machinery
 when they complicate the design. Existing persisted state does not constrain
 the implementation.
 
-**Items 6–10 and their replacement APIs are proposals.** Items 1–4 are
-merged. Item 5 is implemented and under review. Completed items record their
+**Items 7–10 and their replacement APIs are proposals.** Items 1–5 are
+merged. Item 6 is implemented and under review. Completed items record their
 implementation below. Source references identify the current mechanisms.
 Each proposal identifies its behavioral changes.
 The initial review used source, contracts, and representative tests.
@@ -418,31 +418,32 @@ package is unnecessary until another consumer demonstrates that boundary.
 
 ## 6. Make definitions immutable and bindings local to a room
 
-**Current cost.** `Runtime` exposes mutable maps for running rooms,
-definitions, and roles. Starting a room writes definitions into the shared
-catalog. The room keeps local definitions, while its executor resolves
-through that shared catalog.
+**Implementation.** A room captures its definitions by name when it starts.
+Each seat receives its one resolved definition. The runtime holds private
+room and workspace registries only. A resume takes its definitions explicitly
+and resolves them before it writes its fence.
 
-Two rooms can register different definitions under the same agent name.
-The later registration can replace the binding used by an earlier room's
-executor. This conflicts with independent agent ownership.
+`defineAgent` copies and freezes authoring data. It copies arrays and plain
+records, including schema records. Functions and resource handles retain
+their identity. A dynamic seating binds a new name when its accepted journal
+entry lands. A later seating may use that binding again. It cannot replace it.
 
-**Proposed design.** Capture immutable bindings when composing a room.
-Resolve restart dependencies deliberately. Keep live registries private.
-Copy caller-owned arrays and mappings when creating definitions, so later
-caller mutation cannot change the room's configuration.
+**Verification.** Core tests cover independent same-name definitions,
+captured caller tool and schema mutation, missing and duplicate restart
+bindings, failed and competing dynamic seating, and recovery after uncertain
+seating writes. Cloudflare tests cover configured binding capture, duplicate
+configured names, remote seats, and Durable Object restart behavior.
 
-**Naming.** Use `RoomBindings` for the resolved definitions a room uses.
-Use `AgentResolver` only for an actual resolution interface. Replace `know`
-with `bindDefinitions` if registration remains explicit. Keep `Runtime`
-for the host-owned resources that execute rooms.
+**Naming.** The binding stays private because no external caller owns it.
+`Runtime` names host resources. `Seating` remains the persisted boundary.
+`SeatedAgent` is the normalized authoring value before a composition lands.
 
 An agent's `name` remains its room-local identity. A catalog identifier,
 if needed for restart, must have a separate, explicit scope. Do not make
 every agent name globally unique to hide the binding problem.
 
-Consolidate `Placed`, `Cast`, `Seating`, and `RosterSeat` where they encode
-the same membership facts. Keep distinct types only for real boundaries:
+Consolidate membership names where they encode the same facts. Keep distinct
+types only for real boundaries:
 an authoring definition can contain functions; persisted membership cannot.
 Name those boundaries explicitly instead of introducing another synonym
 for a seat.

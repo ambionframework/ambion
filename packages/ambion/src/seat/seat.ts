@@ -37,13 +37,13 @@ import { binding, toolsFor } from './tools.ts';
 
 // -- the actor ----------------------------------------------------------------
 
-/** What a seat actor needs beside the room: the clock, the catalog, and the model call the room chose. */
+/** What a seat actor needs beside the room: its definition, the clock, and the model call. */
 export interface SeatContext {
 	readonly clock: Clock;
 	/** How many times the seat sends one call to the room before it gives up. */
 	readonly call: Runtime['call'];
-	/** Every definition the seat side resolves by name. */
-	readonly catalog: ReadonlyMap<string, AgentDefinition>;
+	/** This seat's room-local definition. */
+	readonly definition: AgentDefinition;
 	readonly room: string;
 	readonly seat: string;
 	/** Where the seat's audit session opens, `<room>:<seat>`, beside the room's. */
@@ -291,8 +291,9 @@ export class SeatActor implements SeatPort {
 	 * when the model is asked, so a steer never joins the request it lands during.
 	 */
 	private build(view: ActivationView, activation: Activation): PiAgent {
-		const def = this.context.catalog.get(view.spec.seat);
-		if (def === undefined) throw new Error(`'${view.spec.seat}' is not in the runtime's catalog.`);
+		const def = this.context.definition;
+		if (view.spec.seat !== def.name)
+			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
 		const stream = this.context.stream;
 		return new Agent({
 			streamFn: (model, context, options) => {
@@ -316,10 +317,13 @@ export class SeatActor implements SeatPort {
 export function inProcessTransport(): Transport {
 	return {
 		connect(room: RunningRoom, seat, runtime) {
+			const definition = room.definition(seat);
+			if (definition === undefined)
+				throw new Error(`Session '${room.name}' has no binding for '${seat}'.`);
 			return new SeatActor(room, {
 				clock: runtime.clock,
 				call: runtime.call,
-				catalog: runtime.catalog,
+				definition,
 				room: room.name,
 				seat,
 				sessions: room.sessions,

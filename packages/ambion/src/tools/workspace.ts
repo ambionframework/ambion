@@ -37,7 +37,7 @@ import {
 	createReadTool,
 	createWriteTool,
 } from '@earendil-works/pi-agent-core';
-import { defaultRuntime, type Runtime } from '../host/runtime.ts';
+import { defaultRuntime, type Runtime, releaseWorkspace, takeWorkspace } from '../host/runtime.ts';
 import {
 	type AgentDefinition,
 	isWorkspace,
@@ -81,7 +81,7 @@ export function defineWorkspace(options: DefineWorkspaceOptions): WorkspaceHandl
 	assertWorkspaceName(options.name);
 	assertBackend(options.name, options.backend);
 	const runtime = options.runtime ?? defaultRuntime;
-	if (runtime.taken.has(options.name)) {
+	if (!takeWorkspace(runtime, options.name)) {
 		throw new Error(
 			`Workspace '${options.name}' is already defined: destroy it before defining it again.`,
 		);
@@ -93,7 +93,6 @@ export function defineWorkspace(options: DefineWorkspaceOptions): WorkspaceHandl
 		runtime,
 		destroyed: false,
 	};
-	runtime.taken.add(options.name);
 	return state;
 }
 
@@ -114,7 +113,7 @@ export async function destroyWorkspace(workspace: WorkspaceHandle): Promise<void
 		state.destroyed = false;
 		throw error;
 	}
-	state.runtime.taken.delete(state.name);
+	releaseWorkspace(state.runtime, state.name);
 }
 
 function stateOf(workspace: WorkspaceHandle): WorkspaceState {

@@ -33,7 +33,8 @@ import type {
 	Transport,
 	ViewResponse,
 } from '@ambionframework/ambion/transport';
-import { definitionOf, runtimeFor } from './configure.ts';
+import { runningRoom } from '@ambionframework/ambion/transport';
+import { definitionOf, definitions, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';
 import { sqlSessions } from './storage.ts';
 
@@ -100,7 +101,8 @@ export class RoomObject extends DurableObject<Env> {
 		});
 		ctx.blockConcurrencyWhile(async () => {
 			const name = await ctx.storage.get<string>('name');
-			if (name !== undefined) this.room = await resumeSession(name, { runtime: this.runtime });
+			if (name !== undefined)
+				this.room = await resumeSession(name, { runtime: this.runtime, agents: definitions() });
 		});
 	}
 
@@ -217,7 +219,7 @@ export class RoomObject extends DurableObject<Env> {
 	}
 
 	private seatRoom(): RunningRoom {
-		const room = this.runtime.running.get(this.running().name);
+		const room = runningRoom(this.runtime, this.running().name);
 		if (room === undefined) throw new Error('The room is not running.');
 		return room;
 	}

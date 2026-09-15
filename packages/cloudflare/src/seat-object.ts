@@ -13,7 +13,7 @@ import { systemClock } from '@ambionframework/ambion';
 import type { SeatRoom, Wake } from '@ambionframework/ambion/transport';
 import { SeatActor } from '@ambionframework/ambion/transport';
 import type { SeatEvent } from './configure.ts';
-import { runtimeFor, seatEvent } from './configure.ts';
+import { definitionOf, runtimeFor, seatEvent } from './configure.ts';
 import type { Env } from './room-object.ts';
 import { sqlSessions } from './storage.ts';
 
@@ -118,7 +118,7 @@ export class SeatObject extends DurableObject<Env> {
 		this.actor = new SeatActor(seatRoom, {
 			clock: runtime.clock,
 			call: runtime.call,
-			catalog: runtime.catalog,
+			definition: definitionOf(seat),
 			room,
 			seat,
 			sessions: runtime.sessions,

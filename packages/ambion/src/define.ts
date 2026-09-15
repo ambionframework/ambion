@@ -47,18 +47,18 @@ export interface DefineAgentOptions {
 
 export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 	assertName(options.name);
-	const tools = options.tools ?? [];
+	const tools = Object.freeze(options.tools?.map((tool) => capture(tool)) ?? []);
 	if (options.workspace !== undefined) assertWorkspace(options.name, options.workspace);
 	assertAgentTools(options.name, tools, options.workspace !== undefined);
-	return {
-		[AGENT_BRAND]: true,
+	return Object.freeze({
+		[AGENT_BRAND]: true as const,
 		name: options.name,
 		identity: options.identity,
 		instructions: options.instructions,
 		model: options.model,
 		tools,
 		...(options.workspace === undefined ? {} : { workspace: options.workspace }),
-	};
+	});
 }
 
 /**
@@ -88,12 +88,12 @@ export interface DefineHumanOptions {
 export function defineHuman(options: DefineHumanOptions): HumanDefinition {
 	assertName(options.name);
 	const preferences = options.preferences?.trim() || undefined;
-	return {
-		[HUMAN_BRAND]: true,
+	return Object.freeze({
+		[HUMAN_BRAND]: true as const,
 		name: options.name,
 		identity: options.identity,
 		...(preferences === undefined ? {} : { preferences }),
-	};
+	});
 }
 
 /** The attention a seating chooses. */
@@ -114,11 +114,11 @@ export interface SeatingOptions {
  */
 export function seated(agent: AgentDefinition, options: SeatingOptions = {}): SeatedAgent {
 	if (!isAgent(agent)) throw new Error('Agents must come from defineAgent.');
-	return {
-		[SEAT_BRAND]: true,
+	return Object.freeze({
+		[SEAT_BRAND]: true as const,
 		agent,
 		attention: options.attention ?? 'broadcast',
-	};
+	});
 }
 
 /**
@@ -163,13 +163,44 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 export function defineTool<TParameters extends TSchema>(
 	options: DefineToolOptions<TParameters>,
 ): AmbionTool<TParameters> {
-	return {
-		[TOOL_BRAND]: true,
+	return Object.freeze({
+		[TOOL_BRAND]: true as const,
 		name: options.name,
 		description: options.description,
-		parameters: options.parameters,
+		parameters: capture(options.parameters),
 		execute: options.execute,
-	};
+	});
+}
+
+/** Copies authoring data while keeping executable and resource values by identity. */
+function capture<T>(value: T, seen = new WeakMap<object, unknown>()): T {
+	if (typeof value !== 'object' || value === null) return value;
+	if (isWorkspace(value)) return value;
+	const prior = seen.get(value);
+	if (prior !== undefined) return prior as T;
+	const prototype = Object.getPrototypeOf(value);
+	if (!copyable(value, prototype)) return value;
+	const copy: object = Array.isArray(value) ? [] : Object.create(prototype);
+	seen.set(value, copy);
+	copyProperties(value, copy, seen);
+	return Object.freeze(copy) as T;
+}
+
+const copyable = (value: object, prototype: object | null): boolean =>
+	Array.isArray(value) || prototype === Object.prototype || prototype === null;
+
+function copyProperties(from: object, to: object, seen: WeakMap<object, unknown>): void {
+	for (const key of Reflect.ownKeys(from)) {
+		const descriptor = Object.getOwnPropertyDescriptor(from, key);
+		if (descriptor === undefined) continue;
+		const captured = 'value' in descriptor ? descriptor.value : descriptor.get?.call(from);
+		Object.defineProperty(to, key, {
+			value: capture(captured, seen),
+			writable: false,
+			enumerable: descriptor.enumerable,
+			configurable: false,
+		});
+	}
 }
 
 /** The room tool that an ordinary message activation holds. */

@@ -595,18 +595,24 @@ controls:
   `unseated` and no close: the next run writes its own composition, the
   roster folds from that ([`roster.md`](roster.md) §5), and an exchange
   left open closes at the next run's first reconcile.
-- **`resumeSession(name, { runtime })`** brings a name back up over its
+- **`resumeSession(name, { runtime, agents })`** brings a name back up over its
   journal, with the composition the journal holds. The first entry every
   run writes is its fence, and it voids every earlier run. A run that
   finds a later run's fence emits `superseded` and drops itself from
   memory. It writes nothing more ([`durability.md`](durability.md) §1). Every name on the roster
-  resolves through the runtime's catalog, which `createRuntime({ agents })`
-  fills. The room reconciles at once: a lease the last run left expires, a
+  resolves through the explicit `agents` binding. The room reconciles at once: a lease the last run left expires, a
   wake it left pending is sent again, and an exchange it left open closes
   once nothing works on it. `runtime.evict(name)` is the other half: it
   drops a running room from memory and writes nothing. The dropped handle
   writes nothing either: a stop, an abort or a departure on it is a no-op,
   and whoever waits on `quiet()` or `settled()` is released.
+
+**A room captures its definitions.** `defineAgent` copies and freezes its
+tool array, tool records, and plain schema records. Functions, workspace
+handles, and other nonplain resources keep their identity. A started room
+binds each agent name once for that run. Another room can use the same name
+with another definition. A resume receives its bindings explicitly. It
+refuses a missing or repeated binding before it writes its fence.
 
 `messages()` and `seats()` are the pull side; the stream is the push side.
 A listener learns nothing the pulls cannot tell it — it only learns it
@@ -801,8 +807,7 @@ live lease holds no wire to the seat that took it. The room opens one to
 say the cut, so a seat that still runs the activation stops.
 
 **A host owns a `Runtime`.** It holds the clock, the session opener, the
-model call, the catalog, the rooms that are running, the workspace names
-that are taken, and the policy for wakes and retries: how long a lease
+model call, and the policy for wakes and retries: how long a lease
 lasts between renewals, how long a wake waits before it is sent again, and
 how many drafts the assistant is given
 ([`runtime.ts`](../packages/ambion/src/host/runtime.ts)). `startSession`,

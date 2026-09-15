@@ -1,5 +1,6 @@
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
+import { runningRoom } from '../src/host/runtime.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -690,7 +691,7 @@ describe('startSession', () => {
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.deliver({ text: 'first' });
-		const room = runtime.running.get(session.name);
+		const room = runningRoom(runtime, session.name);
 		if (room === undefined) throw new Error('the room is not running');
 		expect(await room.lease({ activation: 'message:4:solo:1', operation: 'renew' })).toEqual({
 			stale: 'the lease ended',
@@ -744,7 +745,7 @@ describe('startSession', () => {
 		});
 		const visit = await enter(session);
 		await visit.deliver({ text: 'first' });
-		const room = runtime.running.get(session.name);
+		const room = runningRoom(runtime, session.name);
 		if (room === undefined) throw new Error('the room is not running');
 		expect(await room.lease({ activation: 'message:4:solo:1', operation: 'claim' })).toMatchObject({
 			ok: {},

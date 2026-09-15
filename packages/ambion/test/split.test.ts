@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { runningRoom } from '../src/host/runtime.ts';
 import type { Seq } from '../src/index.ts';
 import {
 	createRuntime,
@@ -82,13 +83,11 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		const first = createRuntime({
 			sessions: gatedOpener(opened.sessions, () => gate),
 			clock,
-			agents,
 			transport: serializing(inProcessTransport()),
 		});
 		const second = createRuntime({
 			sessions: opened.sessions,
 			clock,
-			agents,
 			transport: serializing(inProcessTransport()),
 		});
 		const name = roomName('split-pause');
@@ -111,7 +110,11 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			hers.deliver({ text: 'Second?', key: 'q2' }),
 		);
 		// the second host takes the name and serves a question
-		const taken = await resumeSession(name, { runtime: second, streamFn: scripted(script) });
+		const taken = await resumeSession(name, {
+			runtime: second,
+			agents,
+			streamFn: scripted(script),
+		});
 		const his = await visitSession(taken, sam);
 		await history.run('sam', 'deliver', 'q3', () => his.deliver({ text: 'Third?', key: 'q3' }));
 		await taken.quiet();
@@ -160,7 +163,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 				phase: 'fail',
 				error: expect.stringMatching(/superseded/),
 			});
-			expect(first.running.has(name)).toBe(false);
+			expect(runningRoom(first, name)).toBeUndefined();
 		} finally {
 			await stopSession(taken);
 			await opened.dispose();
@@ -230,8 +233,8 @@ describe('a split: two live hosts over one JSONL file', () => {
 			await paused.stopped;
 			const sessions = jsonlSessions(dir);
 			const clock = fakeClock(Date.now());
-			const runtime = createRuntime({ sessions, agents, clock, ...TIMING });
-			const session = await resumeSession(name, { runtime, streamFn: scripted(script) });
+			const runtime = createRuntime({ sessions, clock, ...TIMING });
+			const session = await resumeSession(name, { runtime, agents, streamFn: scripted(script) });
 			await quietNow(session, clock);
 			const [, second] = questions;
 			if (second === undefined) throw new Error('cast');

@@ -162,7 +162,6 @@ class Walk {
 		return createRuntime({
 			sessions: this.sessions,
 			clock: this.clock,
-			agents: [assistant, alpha, beta, gamma],
 			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
 		});
 	}
@@ -261,6 +260,7 @@ class Walk {
 			try {
 				this.session = await resumeSession(this.name, {
 					runtime: this.runtime,
+					agents: [assistant, alpha, beta, gamma],
 					streamFn: scripted(script),
 				});
 				break;
