@@ -29,7 +29,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs            |
 | `examples/site`       | Runnable example                                                                          |
 | `demos/`              | One dated report per merged change — regenerate on the branch, then leave it              |
-| `planning/`           | `next.md`: the current design work; `backlog.md`: the wider deferred debt                 |
+| `planning/`           | `backlog.md`: the wider deferred debt                                                     |
 
 ## Thesis
 

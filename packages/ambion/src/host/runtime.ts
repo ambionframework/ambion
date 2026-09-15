@@ -13,8 +13,7 @@
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
 import { piSessions, type SessionOpener } from '@ambionframework/journal/pi';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { Api, Model } from '@earendil-works/pi-ai';
-import { builtinModels } from '@earendil-works/pi-ai/providers/all';
+import type { Api, Model, Models } from '@earendil-works/pi-ai';
 import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
 import type { SeatPort, SeatRoom } from '../wire.ts';
 
@@ -131,23 +130,26 @@ export function systemClock(): Clock {
 	};
 }
 
-/** Pi's model registry, built once on first use. It loads every provider SDK. */
-let builtinRegistry: ReturnType<typeof builtinModels> | undefined;
-const registry = () => (builtinRegistry ??= builtinModels());
+/** Pi's model registry, built once on the first default model execution. */
+let builtinRegistry: Promise<Models> | undefined;
+const registry = () =>
+	(builtinRegistry ??= import('@earendil-works/pi-ai/providers/all').then(({ builtinModels }) =>
+		builtinModels(),
+	));
 
 /** The default model call: Pi's builtin registry, keyed from the provider's env var. */
-const registryStream: StreamFn = (model, context, streamOptions) => {
+const registryStream: StreamFn = async (model, context, streamOptions) => {
 	const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
 	const resolved =
 		streamOptions?.apiKey || !envKey ? streamOptions : { ...streamOptions, apiKey: envKey };
-	return registry().streamSimple(model, context, resolved);
+	return (await registry()).streamSimple(model, context, resolved);
 };
 
 /** `provider/model-id` through Pi's catalog. */
-const registryModel: ModelResolver = (id, agent) => {
+const registryModel: ModelResolver = async (id, agent) => {
 	const slash = id.indexOf('/');
 	if (slash > 0) {
-		const model = registry().getModel(id.slice(0, slash), id.slice(slash + 1));
+		const model = (await registry()).getModel(id.slice(0, slash), id.slice(slash + 1));
 		if (model) return model;
 	}
 	throw new Error(`Unknown model '${id}' for agent '${agent}': expected 'provider/model-id'.`);
