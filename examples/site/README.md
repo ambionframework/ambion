@@ -2,7 +2,8 @@
 
 A construction management suite where each product is an agent: a time
 tracker, a task list and a materials tracker. Three specialists are on call in
-the reserve, a building control liaison and the plant desk, and the room's
+the reserve, a building control liaison, the plant desk and the temporary works
+coordinator, and the room's
 assistant seats one when a question turns on what it alone holds. Three
 people share the room — a project manager in the site office, a foreman on
 the deck with a phone, and a quantity surveyor at a cost desk. One assistant
