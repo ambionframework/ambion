@@ -26,9 +26,10 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { RunningRoom, Runtime, Transport } from '../host/runtime.ts';
+import { renderLine } from '../render.ts';
 import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
 import { seatSessionId } from '../types.ts';
-import type { ActivationView, SeatPort, SeatRoom, Wake } from '../wire.ts';
+import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../wire.ts';
 import { Activation, persistTurns } from './activation.ts';
 import { binding, toolsFor } from './tools.ts';
 
@@ -78,10 +79,9 @@ export class SeatActor implements SeatPort {
 	) {}
 
 	/**
-	 * A wake starts an activation when none runs. While one runs, a wake a
-	 * message caused is steered into it (rule 2), and any other wake runs
-	 * next. An activation that is over takes no steer: it reads nothing
-	 * more, so what landed runs as an activation of its own.
+	 * A wake starts an activation when none runs. While one runs, a wake for
+	 * another activation queues it to run next. Steering is a separate call
+	 * targeted at the activation that was live when the message landed.
 	 */
 	async wake(wake: Wake): Promise<void> {
 		if (this.current === undefined) {
@@ -89,15 +89,14 @@ export class SeatActor implements SeatPort {
 			return;
 		}
 		if (this.current.id === wake.activation) return;
-		if (
-			wake.steer === undefined ||
-			this.current.over ||
-			(wake.steer.target !== undefined && wake.steer.target !== this.current.id)
-		) {
-			this.enqueue(wake.activation);
-			return;
-		}
-		this.current.activation.steer(wake.steer.after, wake.steer.seq, wake.steer.line);
+		this.enqueue(wake.activation);
+	}
+
+	/** Deliver context only to the activation the journal projection targeted. */
+	async steer(steer: Steer): Promise<void> {
+		const current = this.current;
+		if (current === undefined || current.over || current.id !== steer.activation) return;
+		current.activation.steer(steer.after, steer.message.seq, renderLine(steer.message));
 	}
 
 	/**

@@ -287,6 +287,12 @@ room's routing and voice; all of the routing is one file,
 seat at rest the message wakes, so a message and its routing are one write. A seat
 at work is steered once the write is confirmed (rule 2).
 
+**Applications send messages without choosing an execution mode.** Use
+`visit.send` whether agents are idle, working, or finishing an exchange.
+The room records the message and determines how eligible agents receive it.
+Exchange handles describe discussion and response boundaries; they do not
+select the delivery operation.
+
 Reconciliation selects all new activations from the recorded pending work.
 The host requests it immediately after each message append. Normal operation,
 retry, and restart therefore use the same activation identities and timing
@@ -329,8 +335,10 @@ record it. The projection derives recipients when it applies each message,
 using the preceding recorded leases and the message's explicit wakes.
 Live steering and pending work read this same disposable delivery projection.
 The host sends a steer only while its recorded target lease remains live.
-The receiver checks that target again. If another activation has started,
-the message waits for a fresh claim instead of entering unrelated context.
+The receiver accepts it only while that exact activation can receive context.
+An absent, different, or finishing activation ignores the transport operation.
+Unread messages remain in the journal's pending work. Reconciliation dispatches
+them when the recorded lease ends. Steering never starts or queues an activation.
 
 Assistant selection and summary activations keep their fixed input ranges.
 They receive no implicit steering. A published summary can still reach an
@@ -343,10 +351,9 @@ work after backoff.
 
 A wake to a seat at rest is on the message, so a wake lost on
 the way is sent again after the resend window, and the seat side runs a
-wake sent twice once. A wake that lands while an activation is releasing
-its lease is no steer: that activation reads nothing more, so the wake
-runs as an activation of its own, after the release. The seat runs one
-activation at a time and every wake that queued behind it in turn. A
+wake sent twice once. An activation request that arrives while another
+activation runs waits for that activation to finish. The seat runs one
+activation at a time. Context delivery uses the separate steering operation. A
 claim or a release the seat never heard back on is sent again, up to
 `runtime.call.attempts`: a claim of an id the room already runs is a
 renewal, and a release of a lease that ended is answered stale. One
@@ -729,7 +736,7 @@ and refuses intents outside its grant. Summarising grants a fixed exchange resul
 grants seating from the reserve; ordinary speech requires a current view.
 
 **What crosses between a seat and its room is JSON.** The seat uses `view`,
-`commit`, and `lease`; the room uses `wake` and `cut`. A `CommitRequest`
+`commit`, and `lease`; the room uses `wake`, `steer`, and `cut`. A `CommitRequest`
 receives a `CommitResult`. A `LeaseRequest` names `claim`, `renew`, or
 `release`. Renewal requires an existing live lease. A repeated claim for
 a live activation remains safe.
@@ -741,8 +748,14 @@ Cloudflare hosts implement the same calls.
 Lease renewals can carry `readThrough`; omitting it extends liveness without
 advancing acknowledgment. Releases report final progress. `expiresAt` names
 an absolute time in lease entries, folded state, and responses.
-`runtime.wake.expiry` remains a duration. A steer includes `after`, the
-preceding message position, so the executor can detect missing context.
+`runtime.wake.expiry` remains a duration. A `Wake` names only the activation
+to run. A `Steer` names the existing target activation and carries the recorded
+message. It includes `after`, the preceding message position, so the executor
+can detect missing context. The executor renders the message for its provider.
+
+Transport implementations must implement `SeatPort.steer` separately from
+`wake`. The former `Wake.steer` payload is removed. This changes the hosting
+protocol; the application message API and journal format remain unchanged.
 
 **A cut is the room's word, and the record is written before it.** The
 room ends every lease the seat holds as `revoked`, and then it cuts. A

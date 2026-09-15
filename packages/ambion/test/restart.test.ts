@@ -547,6 +547,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 						const port = inProcess.connect(room, seat, host);
 						return {
 							wake: (wake) => port.wake(wake),
+							steer: (steer) => port.steer(steer),
 							cut: (activation) => {
 								cuts.push(activation);
 								return port.cut(activation);

@@ -140,9 +140,19 @@ ordinary and assistant selection starts, and recovery after lost initial
 sends, on memory and SQLite. Live handling no longer sends an extra ordinary
 activation for assistant selection.
 
-Steering remains a distinct execution operation. Reuse the reducer's delivery
-decision and the protocol's structured message data. Do not invent another
-activation identity merely to carry a rendered steering line.
+**Steering now has its own transport operation.** `Wake` starts recorded work.
+`Steer` carries a recorded message to its exact running activation. The executor
+renders that message. Late steering cannot start work or enter another activation.
+Reconciliation recovers unread messages from the journal after release or failure.
+
+Applications still use one message API. They do not choose an operation based
+on activation or exchange timing. Keep this distinction inside execution and
+hosting contracts.
+
+[`steering-delivery.test.ts`](../packages/ambion/test/steering-delivery.test.ts)
+checks messages that arrive during release, with lost or delayed steering,
+on memory and SQLite. Actor and Cloudflare tests check that steering cannot
+schedule work. The former steering payload on `Wake` is removed.
 
 ### Keep effects outside the commit decision
 
@@ -555,8 +565,8 @@ response waits. Checkpointing is already removed. Preserve those decisions.
 
 - Centralize activation identity. Exchange completion and delivery interpretation
   now share their respective rules across execution and replay.
-- Separate steering from the activation wake envelope. Normal operation and
-  recovery now use one dispatch decision.
+- Normal operation and recovery share dispatch. Steering has a separate
+  transport operation with no fallback activation identity.
 - Isolate mutable host resources from immutable collaboration facts.
 - Protect returned values and validate contributions at commit.
 

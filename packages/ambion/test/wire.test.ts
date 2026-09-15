@@ -15,6 +15,7 @@ import {
 	type LeaseRequest,
 	type LeaseResponse,
 	roundTrip,
+	type Steer,
 	type ViewResponse,
 	type Wake,
 } from '../src/transport.ts';
@@ -64,7 +65,13 @@ const wake: Wake = {
 	room: 'site',
 	seat: 'product',
 	activation: 'message:3:product:1',
-	steer: { after: 2, seq: 3, line: '[priya] And the pump?' },
+};
+const steer: Steer = {
+	room: 'site',
+	seat: 'product',
+	activation: 'message:3:product:1',
+	after: 3,
+	message: { kind: 'said', seq: 5, at, from: 'priya', text: 'And the pump?' },
 };
 const view: ActivationView = {
 	spec: {
@@ -132,7 +139,7 @@ const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 };
 
 describe('the wire', () => {
-	it.each(Object.entries({ ...stored, wake, ...requests, ...responses }))(
+	it.each(Object.entries({ ...stored, wake, steer, ...requests, ...responses }))(
 		'carries %s unchanged',
 		(_name, value) => {
 			expect(() => assertWire(value)).not.toThrow();

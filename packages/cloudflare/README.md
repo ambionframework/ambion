@@ -22,10 +22,10 @@ What is built:
   and `lease`. Its `alarm()` runs `reconcile()`.
 - **`SeatObject`** runs one seat. `wake` stores the activation id and sets
   an alarm; `alarm()` claims the lease, reads the view, runs the activation
-  and whatever queued behind it to their end, and releases the lease. A wake
-  that arrives while an activation runs is handed to the actor, which steers
-  the message in; `cut` is handed to it the same way, and stops the
-  activation the room ended. The seat's audit session lives in its own
+  and whatever queued behind it to their end, and releases the lease.
+  `steer` delivers a recorded message to its exact running activation. It
+  writes no activation metadata and sets no alarm. Unread messages remain
+  recoverable from the room journal. `cut` stops the activation the room ended. The seat's audit session lives in its own
   storage.
 - **`configure`** names the agent definitions the objects resolve by name,
   and the model call they make.

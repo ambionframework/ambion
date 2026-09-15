@@ -38,6 +38,7 @@ function observed(deliver = true): { transport: Transport; sent: Wake[] } {
 				const port = base.connect(room, seat, runtime);
 				return {
 					cut: (activation) => port.cut(activation),
+					steer: (steer) => port.steer(steer),
 					wake: async (wake) => {
 						sent.push(wake);
 						if (deliver) await port.wake(wake);
@@ -48,11 +49,7 @@ function observed(deliver = true): { transport: Transport; sent: Wake[] } {
 	};
 }
 
-const activations = (sent: readonly Wake[]): string[] =>
-	sent
-		.filter((wake) => wake.steer === undefined)
-		.map((wake) => wake.activation)
-		.sort();
+const activations = (sent: readonly Wake[]): string[] => sent.map((wake) => wake.activation).sort();
 
 describe.each(storages)('activation dispatch on $name', (storage) => {
 	it('starts ordinary and selection work promptly with only their recorded causes', async () => {
