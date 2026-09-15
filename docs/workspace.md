@@ -7,7 +7,7 @@ separate from runtime journal storage.
 ## Open one resource
 
 ```ts
-import { openWorkspace, memoryBackend, workspaceTools } from '@ambionframework/workspace';
+import { openWorkspace, memoryBackend } from '@ambionframework/workspace';
 
 const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
 ```
@@ -36,20 +36,19 @@ starts after destruction is refused.
 
 ## Give the resource to an agent
 
-`workspaceTools` returns an ordinary Ambion `ToolBundle`. A backend supplies
+`workspace.tools()` returns an ordinary Ambion `ToolBundle`. A backend supplies
 its tools and optional guidance. The bundle binds each backend tool through
-the resource owner.
+the resource owner and keeps one stable identity.
 
 ```ts
 import { defineAgent, defineTool } from '@ambionframework/ambion';
-import { workspaceTools } from '@ambionframework/workspace';
 
 const surveyor = defineAgent({
   name: 'surveyor',
   identity: 'Quantity surveyor. Holds the tonnage.',
   instructions: 'Read the pour plan before you answer.',
   model: 'anthropic/claude-sonnet-5',
-  tools: [workspaceTools(drive)],
+  tools: [drive.tools()],
 });
 ```
 

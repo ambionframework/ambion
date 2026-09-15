@@ -19,7 +19,7 @@ import {
 	untilQuiet,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
-import { memoryBackend, openWorkspace, workspaceTools } from '../../src/index.ts';
+import { memoryBackend, openWorkspace } from '../../src/index.ts';
 
 live('the workspace', () => {
 	it('a seat reads a file it was told about, writes one back, and answers from what it read', async () => {
@@ -40,7 +40,7 @@ live('the workspace', () => {
 				"checked <crate>", to notes/journal.txt in your home directory. Then
 				answer with one say, in one sentence, quoting the count you read.
 			`,
-			tools: [workspaceTools(store)],
+			tools: [store.tools()],
 		});
 		const { session, runtime, events } = open('workspace', { agents: [librarian] });
 		const visit = await enter(session, person);

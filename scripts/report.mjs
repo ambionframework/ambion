@@ -11,7 +11,7 @@
  * report shares; the run-specific colours are added below it.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { esc, foldLeases, plural, rowsOf as rows } from './report-log.mjs';
+import { attemptOf, esc, foldLeases, invalidRows, plural, rowsOf as rows } from './report-log.mjs';
 
 const [, , inPath, outPath] = process.argv;
 if (!inPath || !outPath) {
@@ -52,6 +52,10 @@ const closed = run.timeline
 	.map((t) => t.event.exchange);
 const conflicts = run.timeline.filter((t) => t.event.type === 'conflict').length;
 const errors = run.timeline.filter((t) => t.event.type === 'error').length;
+const leaseExpiryErrors = run.timeline.filter(
+	(t) => t.event.type === 'error' && t.event.error.message === 'The activation ran past its lease.',
+).length;
+const otherErrors = errors - leaseExpiryErrors;
 
 // -- cost and tokens, off each seat's own session ---------------------------------
 const usageOf = (turns) => {
@@ -82,8 +86,38 @@ for (const s of run.seatSessions) {
 		a.block = i;
 	});
 }
-const totalCost = acts.reduce((s, a) => s + (a.cost ?? 0), 0);
-const totalTokens = acts.reduce((s, a) => s + (a.tokens ?? 0), 0);
+const sessionTotals = run.seatSessions.reduce(
+	(total, session) => {
+		for (const block of session.blocks) {
+			const usage = usageOf(block.turns);
+			total.cost += usage.cost;
+			total.tokens += usage.tokens;
+			total.calls += usage.calls;
+		}
+		return total;
+	},
+	{ cost: 0, tokens: 0, calls: 0 },
+);
+const capturedBlocks = run.seatSessions.reduce(
+	(total, session) => total + session.blocks.length,
+	0,
+);
+const agentsWithCaptures = new Set([
+	...run.seatSessions.map((session) => session.agent),
+	...acts.map((activation) => activation.agent),
+]);
+let unmatchedBlocks = 0;
+let unmatchedActivations = 0;
+for (const agent of agentsWithCaptures) {
+	const blockCount = run.seatSessions
+		.filter((session) => session.agent === agent)
+		.reduce((total, session) => total + session.blocks.length, 0);
+	const activationCount = acts.filter((activation) => activation.agent === agent).length;
+	if (blockCount > activationCount) unmatchedBlocks += blockCount - activationCount;
+	if (activationCount > blockCount) unmatchedActivations += activationCount - blockCount;
+}
+const totalCost = sessionTotals.cost;
+const totalTokens = sessionTotals.tokens;
 const assistantActs = acts.filter((a) => a.agent === ASSISTANT);
 const composing = assistantActs.filter(
 	(a) =>
@@ -132,7 +166,7 @@ function agentCard(seat) {
 	const drive = mine.flatMap((a) => a.tools).filter((t) => WORKSPACE_TOOLS.has(t)).length;
 	const msgs = agentSaid.filter((m) => m.from === name).length;
 	const tools = [...new Set(api.map((c) => c.tool))];
-	const isReserve = RESERVE.has(name) || seatings.some((m) => m.from === name);
+	const isReserve = RESERVE.has(name) || seatings.some((m) => m.subject === name);
 	const isAssistant = name === ASSISTANT;
 	const where = seatWhere(seat, isReserve, isAssistant);
 	const identity = seat.identity;
@@ -156,9 +190,9 @@ const PRESENCE_VERB = { arrived: 'opened the room', left: 'left', unseated: 'uns
 
 function presenceLine(m) {
 	const verb =
-		m.kind === 'seated' ? `seated by ${m.by ? esc(m.by) : 'the host'}` : PRESENCE_VERB[m.kind];
+		m.kind === 'seated' ? `seated by ${m.from ? esc(m.from) : 'the host'}` : PRESENCE_VERB[m.kind];
 	const cls = m.kind === 'left' ? 'away' : m.kind;
-	return `<li class="pres p-${cls}"><span class="seq">${m.seq}</span><div class="body"><span class="dot"></span>${esc(m.from)} ${verb}</div></li>`;
+	return `<li class="pres p-${cls}"><span class="seq">${m.seq}</span><div class="body"><span class="dot"></span>${esc(m.subject)} ${verb}</div></li>`;
 }
 
 function whoLine(m) {
@@ -198,7 +232,7 @@ function exchanges() {
 			const q = record.find((m) => m.seq === x.from);
 			const inside = record.filter((m) => m.seq > x.from && m.seq <= x.through);
 			const summary = summaries.find(
-				(s) => s.covers.from <= x.from && s.covers.through >= x.through,
+				(s) => s.to === x.owner && s.covers.from === x.from && s.covers.through === x.through,
 			);
 			return `<div class="exchange"><div class="xh"><span class="nm">${esc(x.owner)} asked</span><span class="sm">${esc(exchangeMeta(x, inside, summary))}</span></div><p class="q">${esc(q?.text ?? '')}</p><details class="working"><summary>the working the room did — ${inside.length} messages</summary><ul class="record">${inside.map((m) => recordLine(m, 'fold')).join('')}</ul></details>${answerHtml(summary)}</div>`;
 		})
@@ -339,7 +373,7 @@ function diary() {
 
 // -- the findings: composed from the numbers, with the prose written for this run ----
 const seatedBy = seatings
-	.map((m) => `${m.from} at [${m.seq}]${m.by ? ` by ${m.by}` : ''}`)
+	.map((m) => `${m.subject} at [${m.seq}]${m.from ? ` by ${m.from}` : ''}`)
 	.join(', ');
 const firstCtx = (() => {
 	const s = sessionOf(seatActs[0]?.agent);
@@ -357,7 +391,7 @@ const avgWords = summaries.length
 // -- the crash: what the dead run held, and what the resumed run did with it ---------
 const crash = run.crash ?? { at: 0, time: run.ranAt, leaseExpiry: 0 };
 const crashTime = Date.parse(crash.time);
-const log = run.log ?? [];
+const log = run.journal;
 const rowsOf = (kind) => rows(log, kind);
 const leaseRows = rowsOf('lease');
 /** The runs that wrote the log, in order: every row carries the run that wrote it. */
@@ -369,20 +403,30 @@ const heldAtCrash = leases.filter(
 	(l) =>
 		Date.parse(l.claimedAt) <= crashTime && (l.phase === 'running' || Date.parse(l.at) > crashTime),
 );
-const expiredAfter = expiredLeases.length
-	? Math.max(...expiredLeases.map((l) => Date.parse(l.at))) - crashTime
-	: 0;
 const resentActs = acts.filter(
 	(a) => a.trigger <= crash.at && a.trigger > 0 && Date.parse(a.startedAt) > crashTime,
 );
-const retried = leases.filter((l) => /^\d+:[a-z0-9-]+:\d+$/.test(l.id));
+const retried = leases.filter((l) => (attemptOf(l.id) ?? 0) > 1);
+const invalidLeaseIds = leases.filter((l) => l.invalidId);
+const logProblems = invalidRows(log);
 const crashMessage = record.find((m) => m.seq === crash.at);
 const crashExchange = closed.find((x) => x.from <= crash.at && x.through >= crash.at);
 const crashSummary = crashExchange
 	? summaries.find(
-			(s) => s.covers.from <= crashExchange.from && s.covers.through >= crashExchange.through,
+			(s) =>
+				s.to === crashExchange.owner &&
+				s.covers.from === crashExchange.from &&
+				s.covers.through === crashExchange.through,
 		)
 	: undefined;
+const crashRecorded = Number.isInteger(crash.at) && crash.at > 0 && Number.isFinite(crashTime);
+const resumed = runs.length > 1;
+const crossed = leases.filter((lease) => lease.crossed);
+const allHeldExpired =
+	heldAtCrash.length > 0 &&
+	heldAtCrash.every((lease) => lease.phase === 'ended' && lease.reason === 'expired');
+const crashEvidence = crashRecorded && resumed && heldAtCrash.length > 0;
+const recoveryEvidence = crashEvidence && crossed.length > 0 && crashSummary !== undefined;
 const afterCrash = run.timeline.filter((t) => Date.parse(t.at) > crashTime);
 const firstAfter = afterCrash.slice(0, 6).map((t) => {
 	const e = t.event;
@@ -402,10 +446,10 @@ function leaseTable() {
 					? `${l.reason} at +${seconds(Date.parse(l.at) - crashTime)}`
 					: 'still running';
 			const by = l.endedBy;
-			return `<tr><td class="tid">${esc(l.id)}</td><td>${esc(l.claimedAt.slice(11, 23))}</td><td>[${l.heardThrough}]</td><td>${esc(ended)}</td><td>${esc(by)}</td></tr>`;
+			return `<tr><td class="tid">${esc(l.id)}</td><td>${esc(l.claimedAt.slice(11, 23))}</td><td>[${l.readThrough}]</td><td>${esc(ended)}</td><td>${esc(by)}</td></tr>`;
 		})
 		.join('');
-	return `<div class="tw"><table><thead><tr><th>Lease</th><th>Claimed at</th><th>Heard through</th><th>How it ended, after the crash</th><th>Last row written by</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+	return `<div class="tw"><table><thead><tr><th>Lease</th><th>Claimed at</th><th>Read through</th><th>How it ended, after the crash</th><th>Last row written by</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 const ranAt = new Date(run.ranAt);
@@ -415,13 +459,17 @@ const dateLine = ranAt.toLocaleDateString('en-GB', {
 	year: 'numeric',
 });
 
-const seatedByAssistant = seatings.filter((m) => m.by === ASSISTANT);
+const seatedByAssistant = seatings.filter((m) => m.from === ASSISTANT);
 const byQuestion = closed
 	.map((x) => ({
 		x,
 		seated: seatedByAssistant.filter((m) => m.seq > x.from && m.seq <= x.through),
 	}))
 	.filter((q) => q.seated.length);
+
+const crashLead = crashEvidence
+	? `The capture records the runtime drop at message [${crash.at}]: ${plural(heldAtCrash.length, 'lease was', 'leases were')} live across it. ${resumed ? `${plural(resentActs.length, 'wake', 'wakes')} resumed after the second run took the journal name.` : 'No second run is recorded.'} ${allHeldExpired ? `All ${plural(heldAtCrash.length, 'lease', 'leases')} ended as expired.` : 'The captured leases do not all end as expiry, so the report leaves their outcomes explicit below.'}`
+	: 'The capture does not contain enough evidence for a crash-and-resume claim; the recorded rows and activations remain below for inspection.';
 
 const html = `<meta charset="utf-8">
 <title>The Room Comes Back</title>
@@ -441,10 +489,10 @@ ul.plain{margin:.4rem 0 0 1.2rem;padding:0;color:var(--dim);max-width:45rem} ul.
 <main>
 <p class="meta">Ambion demo · ${esc(dateLine)} · ${esc(run.model)} · room &lsquo;${esc(run.name)}&rsquo; · workspace &lsquo;${esc(run.drive.workspace)}&rsquo;</p>
 <h1>The Room Comes Back</h1>
-<p class="lede">The same construction suite and the same three people, and this time the process dies in the middle of a question. As the first answer to ${esc(crashMessage ? (record.find((m) => m.seq === crashExchange?.from)?.from ?? 'sam') : 'sam')}&rsquo;s question landed, at message [${crash.at}], the runtime that held the room was dropped: ${plural(heldAtCrash.length, 'lease', 'leases')} stayed on the log unreleased, and nothing was written about the crash. A second runtime resumed the name over the same log. It folded the roster, the people, the open exchange and the leases back from the rows; it sent the ${plural(resentActs.length, 'wake', 'wakes')} the dead run left unanswered again; the ${plural(heldAtCrash.length, 'lease', 'leases')} the dead run held expired on its own alarm, ${seconds(expiredAfter)} after the crash; the exchange closed; and the assistant wrote ${crashSummary ? `${esc(crashSummary.to)}` : 'nobody'} the one message${crashSummary ? `, covering [${crashSummary.covers.from}]–[${crashSummary.covers.through}], the crash inside it` : ''}. ${questions.length} questions opened ${closed.length} exchanges, and ${summaries.length} were written for, across two runtimes.</p>
-<div class="stats">${stat(questions.length, 'questions asked')}${stat(agentSaid.length, 'agent messages')}${stat(summaries.length, 'summaries written')}${stat(run.reserve.length, 'specialists on call')}${stat(seatings.filter((m) => m.by === ASSISTANT).length, 'seated by the assistant')}${stat(composing.length, 'composing activations')}</div>
-<div class="stats">${stat(seatActs.length, 'seat activations')}${stat(conflicts, 'says the lock refused')}${stat(errors, 'errors the room reported')}${stat(run.toolCalls.length, 'calls into the products&rsquo; APIs')}${stat(n(totalTokens), 'tokens across every turn')}${stat(money(totalCost), 'total model cost')}</div>
-<p class="note">Every line is verbatim from one live run. The people were scripted only in when they arrived, what they asked, and when they left; the crash was scripted to land on the first answer to the second question, and nothing else about it was. Nobody scripted the seatings: ${esc(seatedBy)}.</p>
+<p class="lede">${esc(crashLead)} ${recoveryEvidence ? `The exact closed exchange has a matching summary for ${esc(crashSummary.to)}, covering [${crashSummary.covers.from}]–[${crashSummary.covers.through}].` : 'No exact summary match is present for the crash exchange.'} ${questions.length} questions opened ${closed.length} exchanges, and ${summaries.length} summaries were written.</p>
+<div class="stats">${stat(questions.length, 'questions asked')}${stat(agentSaid.length, 'agent messages')}${stat(summaries.length, 'summaries written')}${stat(run.reserve.length, 'specialists on call')}${stat(seatings.filter((m) => m.from === ASSISTANT).length, 'seated by the assistant')}${stat(composing.length, 'composing activations')}</div>
+<div class="stats">${stat(seatActs.length, 'seat activations')}${stat(conflicts, 'says the lock refused')}${stat(leaseExpiryErrors, 'expected lease-expiry events')}${stat(otherErrors, 'other error events')}${stat(run.toolCalls.length, 'calls into the products&rsquo; APIs')}${stat(n(totalTokens), 'tokens across every turn')}${stat(money(totalCost), 'total model cost')}</div>
+<p class="note">Every line is verbatim from one live run. The people were scripted only in when they arrived, what they asked, and when they left. Nobody scripted the seatings: ${esc(seatedBy || 'none recorded')} ${logProblems.length || invalidLeaseIds.length ? `The capture has ${logProblems.length + invalidLeaseIds.length} invalid journal or activation-id finding${logProblems.length + invalidLeaseIds.length === 1 ? '' : 's'}.` : 'The native journal and activation ids validated successfully.'}</p>
 
 <section>
 <h2>The suite, the specialists on call, and the seat that composes the room</h2>
@@ -470,7 +518,7 @@ ul.plain{margin:.4rem 0 0 1.2rem;padding:0;color:var(--dim);max-width:45rem} ul.
 
 <section>
 <h2>The crash, and what the log held</h2>
-<p class="note">The room holds no fact in memory: the roster, the people, the open exchange, the leases and the wakes still pending are each a fold over the log, and a room that replays the log folds the state the room that wrote it held. The crash landed on <b>[${crash.at}]</b>${crashMessage ? `, ${esc(crashMessage.from)}&rsquo;s answer` : ''}. Every lease the dead run held is below: an activation claims a lease with an expiry of ${seconds(crash.leaseExpiry)} in this run, renews it while it runs, and each running row carries the seq the activation has taken. Nobody released these, so they ran out on the resumed room&rsquo;s alarm, and the room reported each one as an activation that ran past its lease. The last column names the run that wrote the row: ${plural(runs.length, 'run', 'runs')} took this name, and the row each run wrote first is the fence between them.</p>
+<p class="note">The room reconstructs durable state from the native journal: the roster, people, exchange, leases and pending wakes are folds over its entries. ${crashEvidence ? `The capture records the crash at <b>[${crash.at}]</b>${crashMessage ? `, after ${esc(crashMessage.from)}&rsquo;s message` : ''}; the leases live at that boundary are below. Their <code>readThrough</code> values are the acknowledgement positions, and each row&rsquo;s envelope identifies the run that wrote it.` : 'This capture does not record a complete crash boundary; the lease rows below are evidence only, without a crash conclusion.'} ${plural(runs.length, 'run', 'runs')} took the journal name. ${logProblems.length ? `${plural(logProblems.length, 'journal row is', 'journal rows are')} invalid; affected metrics are incomplete.` : ''}</p>
 ${leaseTable()}
 <p class="note" style="margin-top:1.4rem">What the resumed run did first, in order: ${firstAfter.map((t) => `<b>${esc(t)}</b>`).join(' · ')}.${retried.length ? ` ${plural(retried.length, 'activation', 'activations')} ran as a second attempt at a message the dead run&rsquo;s activation heard and held no lease for at the end: ${retried.map((l) => `<code>${esc(l.id)}</code>`).join(', ')}. The id says which message and which attempt, and nothing minted it: the log derives it.` : ' No activation needed a second attempt.'}</p>
 </section>
@@ -483,16 +531,16 @@ ${leaseTable()}
 
 <section>
 <h2>What this change built</h2>
-<p class="note"><b>The log is the truth.</b> The room writes six kinds of entry to its own Pi session: <code>ambion/message</code>, <code>ambion/lease</code>, <code>ambion/close</code>, <code>ambion/composition</code>, <code>ambion/run</code> and <code>ambion/checkpoint</code>. Every fact the room used to hold in memory is now a fold over them: the roster from the composition and the seatings after it, the people from the arrivals and departures, the open exchange from the questions and the closes, the leases from their rows, and the wakes still pending from the messages and the leases together. <code>reconcile()</code> folds, decides, writes what it decided, and sends; it runs after every commit, every lease change, every alarm and every wake, and running it twice writes nothing.</p>
-<p class="note"><b>A run row fences the runs.</b> Every run writes <code>ambion/run</code> before it writes anything else, and stamps every later entry with its own id. A read passes the run rows in order, and an entry of an earlier run that lands after a later run&rsquo;s row is void. That is what makes this crash safe: the dead run&rsquo;s activations were still in the process, and a write from one of them after the resume counts for nothing. A checkpoint carries the fold the rows before it made, so a resumed room reads one row in place of many.</p>
-<p class="note"><b>Every message names every seat it reaches, and every lease says what it heard.</b> <code>wakes</code> on a message names the idle seats its reach wakes and every seat at work, so a message and its routing are one write. A seat at work is steered inside its running activation, and the lease records <code>heard</code>, the seq the activation has taken. A wake is answered by any lease of the seat that heard it and ran to its end. A lease that expired or failed answers nothing, whatever it said: the room wakes the seat again after a backoff, up to three attempts, the same policy the summaries had already. What the dead activation said stays on the record, and the seat reads it at the next attempt: the room prefers a seat that reads its own words twice to a question that nobody answers.</p>
-<p class="note"><b>Nothing mints an id.</b> An activation is named by the message that woke it and the seat, <code>[${crash.at}]:${esc(crashMessage?.from ?? 'seat')}</code>, or by the close it answers and the attempt, <code>close:${crashExchange?.through ?? 0}:1</code>. A wake is safe to send twice, a retried commit lands once under its key, and a request from an activation whose lease ended is refused because the fold says so.</p>
-<p class="note"><b>A host owns a runtime.</b> The clock, the session opener, the transport, the model call and the catalog of definitions live in a <code>Runtime</code> value; two runtimes in one process share nothing, and that is what let this run drop one and resume in another. What crosses between a seat and its room is JSON: the seat reaches the room through <code>view</code>, <code>commit</code> and <code>lease</code>, and the room reaches the seat through <code>wake</code>, so a seat and its room can live in two processes. A second package runs a room as Cloudflare Durable Objects over those calls, tested inside workerd.</p>
-<p class="note"><b>The evidence is a chaos tier.</b> A scenario runs once to count the writes its log takes, then once per write, crashing the room at that write before the entry lands and again after it landed and before the room heard, and a host resumes it and retries under the same key; the same scenario runs in a child process on a JSONL storage and is killed mid-activation; and a seeded walk loses and repeats requests on the wire, fails writes before and after they land, and crashes the room up to three times. Every run must come to the same record. Three faults this branch fixed were found there and nowhere else: a message a live seat heard only through a steer that a crash lost, a write that landed while its confirmation was lost and stayed invisible until the next write, and a visit the storage refused that left the person able to speak without arriving.</p>
+<p class="note"><b>The native journal is the truth.</b> This capture contains <code>message</code>, <code>lease</code>, <code>close</code>, <code>composition</code>, <code>run</code> and <code>checkpoint</code> entries. The room derives its roster, people, exchange, leases and pending work by folding those bodies in journal order; the report keeps the envelope&rsquo;s sequence, storage position and run provenance beside each body.</p>
+<p class="note"><b>A run envelope fences the journal.</b> Each runtime writes a <code>run</code> entry before its later entries and the journal stamps them with that run id. The fold can therefore identify rows from the resumed runtime; checkpoints carry a fold of older state while the raw storage retains the historical entries used for this report.</p>
+<p class="note"><b>Every lease records its read boundary.</b> A message carries the seats it wakes, and an active seat acknowledges context through the lease&rsquo;s <code>readThrough</code>. Expired, failed or refused work remains an explicit outcome; only a valid four-part activation id can contribute a retry count, and malformed ids are reported as invalid evidence.</p>
+<p class="note"><b>The activation id carries its provenance.</b> The room derives ids as <code>message|opened|closed:position:seat:attempt</code>. A repeated commit uses its key, while a request whose lease ended is refused by the folded room state. The report uses the captured id and envelope rows rather than inventing an id from a message.</p>
+<p class="note"><b>A host owns its runtime connections.</b> The in-process demo evicts one runtime while the room&rsquo;s shared business objects and workspace remain represented by the resumed session; independent database connections provide the room and Pi transcript views. A host crossing a process boundary carries the same room calls as JSON, and the Cloudflare package maps those calls to Durable Objects.</p>
+<p class="note"><b>The capture states what it proves.</b> It records ${n(log.length)} native journal rows, ${n(capturedBlocks)} downstream activation blocks and ${n(sessionTotals.calls)} model responses. Those observed counts, the crash boundary, lease outcomes and exact summary range are the evidence on this page; missing or malformed fields remain findings instead of being treated as success.</p>
 </section>
 
 <section>
-<h2>Every activation, and what it decided</h2>
+<h2>Every captured activation, and what it decided</h2>
 <p class="note">One column per message on the record, one lane per seat, and one for the assistant. A filled mark is a seat that woke and left a mark on the record: a say, a seating, or a summary. A hollow mark is one that woke and left none. The two specialist lanes are empty until the seating that woke them. The lock refused ${conflicts} says.</p>
 <div class="band alanes">${lanes()}</div>
 </section>
@@ -520,10 +568,10 @@ ${diary()}
 <section>
 <h2>What the run showed</h2>
 <div class="findings">
-<div class="finding"><h3>A crash mid-exchange lost nothing but the run</h3><p>The runtime was dropped as [${crash.at}] landed, with ${plural(heldAtCrash.length, 'lease', 'leases')} running and no <code>left</code>, no release and no close written. The second runtime folded the same roster, the same people and the same open exchange from the log, and continued it: ${resentActs.length ? `the ${plural(resentActs.length, 'wake', 'wakes')} its expired leases left unanswered ${resentActs.length === 1 ? 'was' : 'were'} sent again and answered, ` : ''}the ${plural(heldAtCrash.length, 'lease', 'leases')} it held expired ${seconds(expiredAfter)} after the crash on the resumed room&rsquo;s own alarm, and the exchange closed into ${crashSummary ? `one message for ${esc(crashSummary.to)} covering [${crashSummary.covers.from}]–[${crashSummary.covers.through}]` : 'no message'}. The people did nothing: sam&rsquo;s visit was put back with no arrival written, because the log said he was present.</p></div>
-<div class="finding"><h3>What the expiry costs, and what it does not</h3><p>An activation cut by the crash holds its lease until the expiry, ${seconds(crash.leaseExpiry)} here and a minute by default, and the exchange stays open until then: that is the one delay a crash adds. What the cut activations had said before the crash stands on the record, and every one of them left the messages it heard pending, so ${retried.length ? `${plural(retried.length, 'seat took', 'seats took')} a second attempt and read their own first answer in it` : 'no seat took a second attempt'}. ${abandoned.length ? `The room wrote off ${plural(abandoned.length, 'activation', 'activations')} that came to nothing on every attempt: ${abandoned.map((l) => `<code>${esc(l.id)}</code>`).join(', ')}.` : 'Every wake the room sent was answered inside the attempts it allows, so the room wrote nothing off.'} The lock refused ${conflicts} says across both runtimes, and the record kept its shape: seqs contiguous, every key once, every summary covering the range before it.</p></div>
-<div class="finding"><h3>The same room, whichever process holds it</h3><p>${plural(seatActs.length, 'seat activation', 'seat activations')} and ${plural(assistantActs.length, 'assistant activation', 'assistant activations')} ran across the two runtimes, ${money(totalCost)} in all, and each seat&rsquo;s own session holds every one of them, complete, whichever runtime ran it. The room&rsquo;s log holds ${n(log.length)} rows beside ${record.length} messages: ${plural(leaseRows.length, 'lease row', 'lease rows')}, ${plural(rowsOf('close').length, 'close', 'closes')}, ${plural(runs.length, 'run row', 'run rows')}, ${plural(rowsOf('checkpoint').length, 'checkpoint', 'checkpoints')}, and one composition. A reader of the log alone can say which activation said what, which wake each lease answered, and where the crash fell.</p></div>
-<div class="finding"><h3>What the assistant did, unchanged</h3><p>It composed the room ${times(composing.length)} and seated ${plural(seatedByAssistant.length, 'specialist', 'specialists')}: ${byQuestion.map((q) => `${q.seated.map((m) => `<b>${esc(m.from)}</b>`).join(' and ')} for ${esc(q.x.owner)}&rsquo;s question at [${q.x.from}]`).join('; ')}. It wrote ${summaries.length} summaries, ${avgWords} words on average, one of them for the exchange the crash fell inside. The first seat activation read ${n(firstCtx)} characters; the last read ${n(lastCtxLen)}, with the earlier exchanges folded into their summaries.</p></div>
+<div class="finding"><h3>${crashEvidence ? 'A recorded crash and its lease outcomes' : 'The capture has no complete crash finding'}</h3><p>${crashEvidence ? `The runtime boundary is evidenced at [${crash.at}] with ${plural(heldAtCrash.length, 'lease', 'leases')} live. ${crossed.length ? `${plural(crossed.length, 'lease crossed', 'leases crossed')} the run fence.` : 'No lease has writer provenance on both sides of a run fence.'} ${crashSummary ? `An exact summary covers [${crashSummary.covers.from}]–[${crashSummary.covers.through}] for ${esc(crashSummary.to)}.` : 'No exact summary for the closed exchange is recorded.'}` : 'The report cannot infer a crash, recovery, or success from the available rows. Inspect the captured journal and timeline below.'}</p></div>
+<div class="finding"><h3>Expiry, refusal, and real errors are separate outcomes</h3><p>${plural(expiredLeases.length, 'lease', 'leases')} ended as expired and ${plural(abandoned.length, 'lease', 'leases')} as abandoned. The room recorded ${plural(conflicts, 'refused say', 'refused says')} as lock conflicts; these are expected refusal outcomes. ${leaseExpiryErrors ? `${plural(leaseExpiryErrors, 'error event is', 'error events are')} the expected lease-expiry notification.` : 'No lease-expiry notification was emitted.'} ${otherErrors ? `${plural(otherErrors, 'other error event requires', 'other error events require')} inspection as failures; the report does not fold them into the crash proof.` : 'No other error events were emitted in the captured timeline.'} ${retried.length ? `${plural(retried.length, 'activation', 'activations')} carry an attempt greater than one.` : 'No valid activation id carries an attempt greater than one.'} ${invalidLeaseIds.length ? `${plural(invalidLeaseIds.length, 'lease id is', 'lease ids are')} malformed and excluded from retry claims.` : ''}</p></div>
+<div class="finding"><h3>What this capture contains</h3><p>${plural(seatActs.length, 'seat activation', 'seat activations')} and ${plural(assistantActs.length, 'assistant activation', 'assistant activations')} were captured, with ${money(totalCost)} in model cost across ${n(sessionTotals.calls)} model responses. The room&rsquo;s log holds ${n(log.length)} native rows beside ${record.length} messages: ${plural(leaseRows.length, 'lease row', 'lease rows')}, ${plural(rowsOf('close').length, 'close', 'closes')}, ${plural(runs.length, 'run row', 'run rows')}, and ${plural(rowsOf('checkpoint').length, 'checkpoint', 'checkpoints')}. ${unmatchedBlocks || unmatchedActivations ? `${unmatchedBlocks} session block${unmatchedBlocks === 1 ? '' : 's'} and ${unmatchedActivations} activation${unmatchedActivations === 1 ? '' : 's'} could not be paired.` : 'Every captured activation has a corresponding session block.'}</p></div>
+<div class="finding"><h3>What the assistant did</h3><p>It composed the room ${times(composing.length)} and seated ${plural(seatedByAssistant.length, 'specialist', 'specialists')}: ${byQuestion.map((q) => `${q.seated.map((m) => `<b>${esc(m.subject)}</b>`).join(' and ')} for ${esc(q.x.owner)}&rsquo;s question at [${q.x.from}]`).join('; ') || 'no assistant seating was recorded'}. It wrote ${summaries.length} summaries, ${avgWords} words on average. The first captured seat context had ${n(firstCtx)} characters; the last had ${n(lastCtxLen)}.</p></div>
 </div>
 </section>
 </main>

@@ -3,19 +3,21 @@
  *
  * The products, the specialists on call, their APIs, the people and the
  * assistant all live in `room.ts`; this file only decides who arrives, what
- * they ask, when they leave, and when the process dies — then writes out
+ * they ask, when they leave, and when the runtime is evicted — then writes out
  * the event timeline, every activation with its outcome, whom the assistant
  * seated and what it wrote, the room's own journal, and each seat's own
  * downstream session.
  *
- * The run crashes once, on purpose: as the first answer to Sam's question
- * lands, the runtime that holds the room is dropped, and a second runtime
- * resumes the name over the same journal. What the dead run held expires, what
- * it left pending is sent again, and the exchange closes into one message.
+ * The run evicts one runtime once, on purpose: as the first answer to Sam's
+ * question lands, that in-process runtime is dropped, and a second runtime
+ * resumes the room over the same journal. What the evicted runtime held
+ * expires, what it left pending is sent again, and the exchange closes into
+ * one message.
  *
- * The record is one SQLite database on disk, and each runtime opens the file
- * for itself. The second runtime shares nothing in memory with the first, so
- * everything it knows about the room it reads off the journal.
+ * The room state is one SQLite database on disk, and each runtime opens the
+ * file for itself. The second runtime reconstructs the room from the journal;
+ * this same-process demo still shares the workspace and product state that
+ * live in `room.ts`.
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm demo   (from examples/site)
  */
@@ -111,7 +113,7 @@ let lastFrom = '(the room opening)';
 const driveBefore = await driveFiles();
 
 /**
- * A short lease, so the leases the dead run held expire within seconds of the
+ * A short lease, so the leases the evicted runtime held expire within seconds of the
  * resume, and a low checkpoint threshold, so the resumed room reads one
  * checkpoint in place of the entries before it. A host picks both.
  */
@@ -230,7 +232,7 @@ watch(session);
 /**
  * The room's alarm never holds the process open: `systemClock` unrefs its
  * timer, so a host decides how long its own process lives. This one lives for
- * the whole run, because the room waits on an alarm while the dead run's
+ * the whole run, because the room waits on an alarm while the evicted runtime's
  * leases run out and nothing else is in flight.
  */
 const alive = setInterval(() => {}, 1000);
@@ -275,13 +277,13 @@ const crashedAt = await Promise.race([firstAnswer, quiescent().then(() => lastSe
 stopWatchingForIt();
 
 step(
-	'the process dies as the first answer to sam lands: the leases it held stay on the journal, and nothing is released',
+	'the runtime is evicted as the first answer to sam lands: the leases it held stay on the journal, and nothing is released',
 );
 first.evict(NAME);
 const crashedAtTime = new Date().toISOString();
 
 step(
-	'a second process resumes the room over the same journal: the wakes still pending are sent again, the leases the dead run held expire, and the exchange closes',
+	'a second runtime resumes the room over the same journal: the wakes still pending are sent again, the leases the evicted run held expire, and the exchange closes',
 );
 const secondDatabase = openDatabase();
 const secondSql = nodeSql(secondDatabase);
@@ -322,10 +324,13 @@ await priyaBack.deliver({
 });
 await quiescent();
 
-const finalRecord: Message[] = await session.messages();
 const missed =
 	priyaBack.since === undefined ? [] : await session.messages({ since: priyaBack.since });
 const sinceOnReturn = priyaBack.since;
+
+// Stop before capture so the room journal and record include the same final presence entries.
+await stopSession(session);
+const finalRecord: Message[] = await session.messages();
 const seats = session.seats();
 /** The seat that writes for people: the roster names its role, and nothing else tells it apart. */
 const assistants = new Set(
@@ -375,7 +380,6 @@ for (const seat of seats) {
 /** The room's own native journal envelope, in storage order. */
 const roomLog = (await (await namespaced(readerStorage, 'ambion/room').open(NAME)).read(0)).entries;
 
-await stopSession(session);
 clearInterval(alive);
 
 // The drive as the run left it, then the workspace retired: the in-memory
@@ -397,7 +401,7 @@ writeFileSync(
 			ranAt: new Date().toISOString(),
 			steps,
 			timeline,
-			record: await session.messages().catch(() => finalRecord),
+			record: finalRecord,
 			crash: { at: crashedAt, time: crashedAtTime, leaseExpiry: LEASE.wake.expiry },
 			journal: roomLog,
 			summaries: finalRecord.filter(isSummary),

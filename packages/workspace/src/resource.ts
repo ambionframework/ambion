@@ -1,8 +1,10 @@
+import type { ToolBundle } from '@ambionframework/ambion';
 import type {
 	AgentHarnessTool,
 	ExecutionEnv,
 	ExecutionToolContext,
 } from '@earendil-works/pi-agent-core';
+import { bindTools } from './tools.ts';
 
 /** The stable identity a backend uses for one calling agent. */
 export interface WorkspaceAgent {
@@ -16,7 +18,7 @@ export interface WorkspaceBackend {
 	destroy(): Promise<void>;
 	/** Release host-local resources without deleting the persisted workspace. */
 	dispose?(): Promise<void>;
-	/** Backend-owned tools to expose through `workspaceTools`. */
+	/** Backend-owned tools to expose through the workspace's `tools()` method. */
 	tools: readonly AgentHarnessTool<ExecutionToolContext>[];
 	guidance?: string;
 }
@@ -24,11 +26,8 @@ export interface WorkspaceBackend {
 /** A workspace resource and its single lifecycle/coordination owner. */
 export interface Workspace {
 	readonly name: string;
-	/** Backend-owned tool composition and optional model guidance. */
-	readonly toolBundle: {
-		readonly tools: readonly AgentHarnessTool<ExecutionToolContext>[];
-		readonly guidance?: string;
-	};
+	/** Return the backend tools and optional model guidance as one stable bundle. */
+	tools(): ToolBundle;
 	use<T>(
 		agent: WorkspaceAgent,
 		operation: (env: ExecutionEnv) => Promise<T> | T,
@@ -174,9 +173,7 @@ export function openWorkspace(options: { name: string; backend: WorkspaceBackend
 		}
 	};
 
-	const toolBundle = Object.freeze({
-		tools: Object.freeze([...options.backend.tools]),
-		...(options.backend.guidance === undefined ? {} : { guidance: options.backend.guidance }),
-	});
-	return Object.freeze({ name: options.name, toolBundle, use, dispose, destroy });
+	const toolBundle = bindTools(options.backend.tools, use, options.backend.guidance);
+	const tools = (): ToolBundle => toolBundle;
+	return Object.freeze({ name: options.name, tools, use, dispose, destroy });
 }

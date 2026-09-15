@@ -510,11 +510,11 @@ backend resource. Its `use(agent, operation, signal)` checks lifecycle and
 cancellation at submission, at the queue head, and after the backend receives
 the fresh agent connection, then runs the whole operation through one serial
 queue and cleans up its fresh environment.
-`workspaceTools` binds exactly the backend's Pi harness tools and carries its
-guidance as an ordinary `ToolBundle`; custom tools close over the workspace
-and call `use` with `ctx.agent`. The core now has only generic bundles and an
-agent-aware `ToolContext`, with no workspace field, filesystem prose, or name
-registry.
+`Workspace.tools()` binds exactly the backend's Pi harness tools and carries
+its guidance as an ordinary `ToolBundle`; custom tools close over the
+workspace and call `use` with `ctx.agent`. The core now has only generic
+bundles and an agent-aware `ToolContext`, with no workspace field, filesystem
+prose, or name registry.
 
 `destroy` revokes new and queued work, drains active work, and deletes through
 the backend. Concurrent destroys join one promise; a failed deletion restores
@@ -524,9 +524,9 @@ they supply their tools and guidance, clear released caches, and propagate
 deletion failures. Hosts that share a filesystem pass one opened owner to all
 agents; the owner is process-local and claims no cross-process locking.
 
-**Naming.** `openWorkspace`, `Workspace`, `WorkspaceBackend`, `workspaceTools`,
-`dispose`, and `destroy` are the workspace package surface. `ToolBundle` and
-`ToolContext` are the core's generic composition surface.
+**Naming.** `openWorkspace`, `Workspace`, `WorkspaceBackend`, `tools`, `dispose`,
+and `destroy` are the workspace package surface. `ToolBundle` and `ToolContext`
+are the core's generic composition surface.
 
 **Rationale.** Workspace access is ordinary tool composition, while one
 resource owner defines authorization freshness, coordination, revocation, and

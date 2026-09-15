@@ -1,8 +1,9 @@
 # Kestrel Yard, Block C
 
 A construction management suite where each product is an agent: a time
-tracker, a task list and a materials tracker. Two specialists are on call in
-the reserve, a building control liaison and the plant desk, and the room's
+tracker, a task list and a materials tracker. Three specialists are on call in
+the reserve, a building control liaison, the plant desk and the temporary works
+coordinator, and the room's
 assistant seats one when a question turns on what it alone holds. Three
 people share the room — a project manager in the site office, a foreman on
 the deck with a phone, and a quantity surveyor at a cost desk. One assistant
@@ -13,11 +14,16 @@ others' internals. It asks them on the record, the way a person does. The
 three products share one workspace: the site drive, an in-memory filesystem
 holding the documents the site works to.
 
+`room.ts` opens the drive once and gives each product the frozen
+`SITE_DRIVE.tools()` bundle. The workspace owner queues whole tool operations,
+checks the calling agent on each use, and exposes `dispose()` and `destroy()`
+as separate lifecycle choices.
+
 ```sh
 cd examples/site
 echo 'ANTHROPIC_API_KEY=…' > .env   # git ignores it; both scripts read it
 pnpm start                          # open it in your terminal
-pnpm demo                           # one run that crashes and comes back, captured as JSON
+pnpm demo                           # one run that evicts a runtime and resumes, captured as JSON
 ```
 
 `AMBION_MODEL` picks the model every product and the assistant run on. It
@@ -25,6 +31,14 @@ defaults to `anthropic/claude-sonnet-5`. Each run seeds a fresh in-memory
 drive from `drive-seed.ts`, so the checked-in documents stay as they are
 between runs and nothing on disk changes. Edit `drive/` and run `pnpm seed`
 to write that module again.
+
+`pnpm demo` deliberately evicts one runtime in the same process when Sam's
+first answer arrives. A second runtime reopens the room over the same SQLite
+journal, while the workspace and product objects remain the shared in-process
+state from `room.ts`. This demonstrates journal resume and lease expiry; it
+does not simulate an operating-system process kill. The capture also reads Pi
+seat sessions through an independent SQLite connection before the workspace is
+destroyed.
 
 ## The same room on Cloudflare
 
@@ -109,7 +123,7 @@ line to today's diary with `bash`, and `/diary` shows what the products have
 left there. Every product has its own home on the drive, and the diary is
 the one file they all write to.
 
-**The assistant seats who the question needs.** `/who` lists two
+**The assistant seats who the question needs.** `/who` lists three
 specialists on call and not in the room. Ask "can I promise Thursday for the
 pour?" and watch `· building-control seated by assistant` land before the
 products answer: the assistant read the question and the reserve, judged
@@ -152,7 +166,7 @@ discussion and the products hold the state.
 | -------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `room.ts`            | The products and the specialists on call, their APIs and state; the drive they share; the people; the assistant |
 | `main.ts`            | The room open in your terminal                                                                                  |
-| `demo.ts`            | One run that crashes and resumes, written out as JSON for a report                                              |
+| `demo.ts`            | One run that evicts a runtime and resumes, written out as JSON for a report                                     |
 | `worker.ts`          | The same room as Cloudflare Durable Objects, with the routes that drive it                                      |
 | `demo-cloudflare.ts` | One run against that worker: the room object is dropped while the seats work                                    |
 | `drive/`             | The site drive as every run starts: the pour plan, the forecast, the inspection rules, the diary                |
