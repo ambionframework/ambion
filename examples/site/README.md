@@ -1,5 +1,10 @@
 # Kestrel Yard, Block C
 
+**Several independently owned domains contribute to one ongoing application.**
+This example uses Ambion's collaboration kernel for a construction programme.
+The journal orders contributions, membership, presence, and execution claims.
+This room chooses to include an assistant; other rooms can omit one.
+
 A construction management suite where each product is an agent: a time
 tracker, a task list and a materials tracker. Three specialists are on call in
 the reserve, a building control liaison, the plant desk and the temporary works
@@ -41,6 +46,11 @@ seat sessions through an independent SQLite connection before the workspace is
 destroyed.
 
 ## The same room on Cloudflare
+
+**This is a local development harness for the private reference implementation.**
+The 0.1.0 release includes no published Cloudflare deployment product. The Node
+directory workspace is not automatically available inside a Durable Object.
+See [Deployment and recovery](../../docs/deployment.md) for host responsibilities.
 
 `worker.ts` runs this room as Durable Objects: one object holds the record
 and the session, one holds each seat. The products, the specialists, the
@@ -155,10 +165,12 @@ money. Nothing in the products knows any of that — how a person reads is the
 `preferences` on their definition in `room.ts`, and the assistant reads it at
 the one activation where it writes for them.
 
-**A summarised range leaves the products' context.** After a summary lands,
-ask a follow-up whose answer was inside the range it stands for. The products
-answer from the summary and from their own APIs, because the record is
-discussion and the products hold the state.
+**Later activations use summaries; people can review the exchange.** Once a
+closed exchange has a summary, agent context replaces its covered messages
+with that summary. Products continue from the summary and their own APIs.
+The journal retains the original discussion, and `exchange.messages()` exposes
+it for human review. The terminal keeps the original lines visible. See the
+[assistant contract](../../docs/assistant.md#8-summaries-compact-activations-people-can-review-the-discussion).
 
 ## The files
 

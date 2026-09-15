@@ -19,18 +19,21 @@ One sentence:
 
 ## 1. Two lifetimes
 
-An agent belongs to the room. It is the room's composition, it is the same
-on every opening, and it waits there between activations — this is the
-whole of an ambient runtime. A person lives on a different clock. They
-arrive, read, steer, and go, several of them at once, on their own
-schedules.
+**Membership and visits have separate lifetimes.** An agent waits between
+activations while it is a room member. Hosts can seat and unseat agents.
+People arrive, read, contribute, and leave through visits.
+
+Ambient means the room remains available between interactions. Native timers,
+external event subscriptions, and scheduler ingress remain future work.
+A process crash does not record departure; hosts reconcile presence with
+actual connections after recovery.
 
 `startRoom` takes agents and never people. **Seating is composition.
 Visiting is presence.** Three things follow, and they are what presence is
 for.
 
-**The roster tells the truth.** An agent reads whether each person is
-reading right now. So a `say` directed at somebody absent is written as a
+**The roster records presence.** An agent reads the presence that the host
+has reported for each person. So a `say` directed at somebody absent is written as a
 note they read later, with no expectation of an answer in the next six
 hours.
 

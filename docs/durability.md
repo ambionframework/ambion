@@ -5,8 +5,10 @@ the wire or a model fails, and how the promise is proved. This page is
 the contract. The chaos tier and the history checker hold the room to it.
 Read it with [`agent.md`](agent.md) §5, which names the mechanisms, and
 [`toolchain.md`](toolchain.md) §8, which says how the tiers run.
+[Deployment and recovery](deployment.md) separates current evidence from
+0.1.0 support targets and describes host responsibilities.
 
-## 1. The journal is the truth
+## 1. The journal is the source of collaboration state
 
 **One record, one writer, one order.** A room's record is one append-only
 journal in journal storage. One counter gives out every place: a message takes
@@ -192,8 +194,8 @@ moved under, so that write is refused rather than acknowledged.
 - Retry a send it never heard back on under the same key; the journal
   returns the original exchange handle identity.
 - Resume a name after the process that ran it died, with
-  `resumeRoom(name, { runtime, agents })`. The first reconcile expires what
-  the dead run held.
+  `resumeRoom(name, { runtime, agents })`. Supply definitions again. Recovery
+  depends on lease expiry and whether executors died or remain active remotely.
 - Run one host per name. Evict a room with `runtime.evict(name)` before
   another host takes it. Treat `superseded` the way it treats its own
   eviction: nothing that run answers from then on is an answer, and the

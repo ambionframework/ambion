@@ -132,7 +132,8 @@ attention; explicit host seating can choose attention.
 
 People have identities and optional response preferences. A visit determines
 who speaks and when that person is present. Preferences shape the assistant's
-response; they do not silently filter specialist evidence.
+response. Summaries shaped for people also compact later activation context.
+The original discussion remains available for human review.
 
 ### F3. Concurrent, current contributions
 
@@ -170,9 +171,12 @@ owner. The summary retains its source range even if a later exchange starts.
 waits for its summary or a terminal result without one. An application can
 always use the discussion when no summary is available.
 
-**Keep source evidence available to specialists.** A human-facing summary does
-not replace the source messages in specialist context. The summary is an
-output with provenance, not a new authority over what happened.
+**Use summaries in later activations and retain the discussion for human
+review.** Once a closed exchange has a summary, agent context uses it in place
+of the covered source messages. Agents continue from the summary and their
+domain tools. Human participants can review the original discussion through
+`exchange.messages()`. The journal retains every source message for review and
+recovery. Closure without a summary does not itself replace source messages.
 
 ### F5. Persistence and recovery
 
@@ -211,8 +215,9 @@ authorization for external services.
 ### F7. Observation and control
 
 **Expose facts for product interfaces and diagnostics for operators.** Read
-messages, participants, and exchange results. Subscribe to live host events
-for contributions, activation activity, conflicts, and failures.
+messages, participants, and exchange results. Let human participants review
+an exchange's original discussion even after its summary compacts agent context.
+Subscribe to live host events for contributions, activation activity, conflicts, and failures.
 
 Support leaving a visit, changing agent membership, aborting room work, and
 stopping a room. Document the room-wide scope of abort and stop. A single

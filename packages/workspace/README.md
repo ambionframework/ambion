@@ -1,7 +1,9 @@
 # @ambionframework/workspace
 
-A workspace backend for [Ambion](https://ambionframework.com): a virtual Unix
-filesystem and shell that an agent's tools reach into.
+Optional filesystem resources and tools for the
+[Ambion collaboration kernel](https://ambionframework.com). Applications own
+these resources and choose which agents share them. Workspace files remain
+separate from the collaboration journal.
 
 This package owns workspace resources and two backends over
 [just-bash](https://github.com/vercel-labs/just-bash).
@@ -11,6 +13,9 @@ This package owns workspace resources and two backends over
 ```sh
 pnpm add @ambionframework/ambion @ambionframework/workspace
 ```
+
+Installing requires a GitHub Packages read token; see the
+[repository README](https://github.com/ambionframework/ambion#install).
 
 ## Use
 
@@ -45,10 +50,10 @@ free.
 the root when an operation needs it. `drive.destroy()` deletes its contents
 and keeps the root.
 
-Two agents connected to one workspace share every file. The boundary is
-nominal: just-bash is single-user, so one agent's `bash` call reads another's
-home. What a workspace offers is a wall between an agent's commands and the
-machine.
+Agents connected to one workspace share every file. just-bash is single-user,
+so one agent can read another agent's home. The default workspace provides no
+operating-system isolation between agents or distributed ownership of a shared
+directory. Hosts own credentials and authorization for external services.
 
 Every instance runs with `javascript: true` and `python: true`, so `bash`
 runs a script with `js-exec` or `python3` beside just-bash's coreutils, `jq`,

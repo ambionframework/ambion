@@ -1,7 +1,13 @@
 # @ambionframework/cloudflare
 
-A room as Cloudflare Durable Objects. One object holds the room, one object
-holds each seat, and the log lives in the room object's SQLite storage.
+**A private reference implementation of Ambion's collaboration protocol.**
+One Durable Object holds the room and one holds each seat. Each object uses
+its own SQLite storage for the journals it owns.
+
+For 0.1.0, this package validates separate room and agent hosts through RPC,
+alarms, serialization, and recovery tests. It is not a published deployment
+product. See [Deployment and recovery](../../docs/deployment.md) for support
+levels and host responsibilities.
 
 What is built:
 

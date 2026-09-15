@@ -1,75 +1,118 @@
 # @ambionframework/ambion
 
-Build applications as independently owned agents collaborating behind one
-human-facing assistant. Domain agents wait in a named room and work through
-one ordered record; each keeps its own model, tools and workspace, and decides
-whether it has anything to add. The assistant selects specialists from the
-room's reserve and consolidates multi-agent work when needed, without gaining
-general-purpose authority over the application.
+**Ambion is a collaboration kernel for independently owned agents and the
+people they serve.** It gives domain agents a shared journal, rules for
+participation, and a reliable boundary for contributing to a conversation.
 
-`defineAgent` makes an agent, `defineHuman` names a person, `defineTool` gives
-agents tools. The `assistant` option designates the agent that selects
-specialists and writes summaries through the room's fixed assistant policy.
-`startRoom` brings up the room, `room.visit` puts somebody in it,
-`readRoom` reads a plain snapshot without starting anything, and
-`room.stop()` takes the run down. A visit's `send` returns an exchange handle:
-`messages()` waits for the durable close and returns the exchange's
-non-summary messages, while `response()` waits for the summary or deliberate
-absence of one.
+An agent owns its instructions, model, tools, and domain expertise. A room
+lets those agents work together. An optional assistant selects specialists
+and consolidates their work for a person. Applications own domain data and
+tool resources.
+
+## Install
+
+Use Node **22.19 or later** and ESM. Installation requires a GitHub Packages
+read token and registry configuration from the
+[repository README](https://github.com/ambionframework/ambion#install).
+
+```sh
+npm install @ambionframework/ambion
+```
+
+The main library includes its journal dependency. Add
+`@ambionframework/workspace` when agents need optional filesystem tools.
+Model execution uses Pi and needs credentials for the chosen provider.
+
+## Use
+
+This example uses the current API. The optional assistant has selection and
+summary duties; the specialist owns domain reasoning.
 
 ```ts
 import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
 
 const you = defineHuman({
   name: 'you',
-  identity: 'The human in the room.',
-  preferences: 'Answer plainly. Four sentences at most.',
+  identity: 'Coordinates customer deliveries.',
+  preferences: 'Lead with the constraint. Four sentences at most.',
 });
-const lead = defineAgent({
-  name: 'lead',
-  identity: 'Answers crisply.',
-  instructions: 'Answer the human concisely. Stay quiet when it is not for you.',
+const inventory = defineAgent({
+  name: 'inventory',
+  identity: 'Checks stock constraints.',
+  instructions: 'Use supplied stock facts. State a constraint only when it changes the answer.',
   model: 'anthropic/claude-sonnet-4-5',
 });
 const assistant = defineAgent({
   name: 'assistant',
-  identity: 'Consolidates the room’s work for the person who asked.',
-  instructions: 'Preserve the decision and the facts it turns on.',
+  identity: 'Selects specialists and consolidates their work.',
+  instructions: 'Preserve the decision and the facts that support it.',
   model: 'anthropic/claude-sonnet-4-5',
 });
 
 const room = await startRoom({
-  name: 'room',
-  goal: 'Answer what the person brings, and nothing else.',
+  name: 'delivery',
+  goal: 'Check delivery promises against stock.',
   assistant,
-  agents: [lead],
+  agents: [inventory],
 });
-room.subscribe((e) => e.type === 'message' && console.log(`${e.message.from} spoke`));
 
-const visit = await room.visit(you);
-const exchange = await visit.send({ text: 'hello' });
-const response = await exchange.response();
-if (response) console.log(response.text);
-
-await room.stop();
+try {
+  const visit = await room.visit(you);
+  const exchange = await visit.send({
+    text: 'We have 12 units in stock. Can we promise an order for 15?',
+  });
+  const response = await exchange.response();
+  if (response) {
+    console.log(response.text);
+  } else {
+    for (const message of await exchange.messages()) {
+      if (message.kind === 'said') console.log(`${message.from}: ${message.text}`);
+    }
+  }
+  await visit.leave();
+} finally {
+  await room.stop();
+}
 ```
 
-The design contract is [`docs/agent.md`](https://github.com/ambionframework/ambion/blob/main/docs/agent.md),
-with presence — who is in a room, and what the agents do about it — in
-[`docs/presence.md`](https://github.com/ambionframework/ambion/blob/main/docs/presence.md),
-the room's human-facing assistant — which consolidates an exchange when one
-agent message does not already serve — in
-[`docs/assistant.md`](https://github.com/ambionframework/ambion/blob/main/docs/assistant.md),
-and the workspace an agent's tools reach into in
-[`docs/workspace.md`](https://github.com/ambionframework/ambion/blob/main/docs/workspace.md);
-a hands-on multi-agent room lives in
-[`examples/site`](https://github.com/ambionframework/ambion/tree/main/examples/site).
+`exchange.messages()` waits for the fixed discussion. `exchange.response()`
+waits for its summary or a terminal result without one. Revoked or abandoned summary work rejects the response wait.
+A room without an
+assistant still closes exchanges and exposes the discussion. A single answer
+can require no summary even when an assistant is present.
 
-```sh
-npm install @ambionframework/ambion
-```
+Use `defineTool` or tool bundles to give specialists domain tools. The current
+`available` option supplies reserve agents for assistant selection. Attention
+controls idle agents; active ordinary agents receive new context. An agent
+can finish silently, and the room refuses speech based on stale context.
 
-Installing needs a token; see the
-[repository README](https://github.com/ambionframework/ambion).
+## Persistence and limits
+
+The journal records active collaboration and its history. Hosts can recover
+pending work from confirmed entries. The default storage is in memory;
+persistent services must supply storage, executable definitions, and recovery
+procedures. Workspace data has its own persistence contract.
+
+Tools can act before speech commits. Applications own effect idempotency.
+Room history and model input can grow, and continuing contributions can keep
+an exchange open. `abort()` and `stop()` affect the room. Subscriptions belong
+to a running host.
+
+**Summaries compact later activations.** Once a closed exchange has a summary,
+agent context uses it in place of the covered source messages. Human
+participants can review the original discussion through `exchange.messages()`.
+The journal retains the complete history.
+
+**0.1.0 remains a release target.** Membership API changes and package
+extraction remain pending. The
+[documentation index](https://github.com/ambionframework/ambion/blob/main/docs/README.md)
+distinguishes current behavior from the release plan.
+
+## Read more
+
+- [Design contracts](https://github.com/ambionframework/ambion/tree/main/docs)
+- [Deployment and recovery](https://github.com/ambionframework/ambion/blob/main/docs/deployment.md)
+- [Multi-agent site example](https://github.com/ambionframework/ambion/tree/main/examples/site)
+- [0.1.0 release scope](https://github.com/ambionframework/ambion/blob/main/planning/release-0.1.0.md)
 
 Apache 2.0.

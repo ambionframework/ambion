@@ -4,18 +4,18 @@ Guidance for Claude Code in this repository.
 
 ## Project
 
-Ambion — a minimalist framework for ambient-aware, always-on agents. Agents wait
-in a room and activate only when a message is delivered to them. Five
-primitives: `defineAgent`, `defineHuman`, `defineTool`, and `startRoom`.
-The room designates one assistant to select reserve agents
-and write the message a person reads when an exchange closes.
+Ambion is a collaboration kernel for independently owned agents and the
+people they serve. Agents own their instructions, models, tools, and domain
+expertise. Rooms provide a shared journal and participation rules. An optional
+assistant selects reserve specialists and consolidates their work for a person.
+Applications own domain data and tool resources.
 
 pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 
 | Path                  | What                                                                                      |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them         |
-| `packages/cli`        | The `ambion` binary                                                                       |
+| `packages/cli`        | Version-reporting CLI scaffold; excluded from the 0.1.0 target                            |
 | `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Private; tested in workerd  |
 | `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                |
 | `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem             |
@@ -33,28 +33,27 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 
 ## Thesis
 
-Every agent that keeps growing arrives at multi-agent collaboration; Ambion
-starts there. Complex software comes from many agents, each expert in one
-domain. The agent is the unit of context engineering, and it is the ownership
-boundary: one team owns one agent whole — its domain, its tools, its
-instructions, its model, its evals. An agent is as good as its context, and context engineering —
-progressive disclosure, tool and response shapes, guardrails, completion
-checks — composes inside one agent, where every technique serves the same
-domain. A single engine and a single context window cannot hold that boundary:
-a change for one domain lands in every domain's context, and a monolithic
-agent settles at a local maximum, where no team can improve its domain without
-degrading another's. Even the monolith arrives there (subagents); Ambion's
-agents are first-class, each with an owner. The platform provides the shared
-capabilities. A room built for collaboration holds the agents.
+**The agent is the unit of modularity.** Each domain can have its own owner,
+model, tools, instructions, and evaluations. The collaboration contract makes
+independent contributions usable together.
 
-Agents are ambient: they wait, and events activate them. A person speaking is
-one event source; timers, tasks and other systems are event sources of the
-same kind, and every one enters as a message. Keep both framings in
-`README.md` and `docs/`.
+**The journal is the source of active collaboration and its history.** Pure
+rules interpret recorded contributions, membership, presence, execution claims,
+and exchange boundaries. Hosts recover pending work through replay.
 
-`README.md` and `docs/` document what is implemented. Do not write about
-unbuilt concepts (channels, deployment targets) there; deferred work goes in
-`planning/next.md`.
+**The assistant is optional and constrained.** Selection and synthesis are its
+roles. A closed exchange's summary replaces its covered source messages in
+later agent activations. Human participants can review the original discussion
+through exchange reads. The journal retains the complete history.
+
+Ambient means a room remains available between interactions. Native timers,
+external event subscriptions, and scheduler ingress remain future work.
+
+[`planning/release-0.1.0.md`](planning/release-0.1.0.md) defines the release
+positioning, scope, and limits. [`planning/next.md`](planning/next.md) owns
+implementation work and completion evidence. `README.md` and `docs/` document
+current capabilities and label pending release changes explicitly. Keep examples
+on the implemented API until the corresponding change lands.
 
 ## Commands
 

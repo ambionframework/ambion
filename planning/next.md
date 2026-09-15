@@ -39,17 +39,17 @@ small changes. Each change must delete an old path before it is complete.
 **Every release capability needs implementation and evidence.** The scope's
 feature identifiers map to the work below.
 
-| Scope                        | Work required before release                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| F1: agent configuration      | Fixed definitions per run, name-based membership, normalized typed tools                         |
-| F2: rooms and presence       | One projection, immutable participant views, presence recovery procedure                         |
-| F3: concurrent contributions | One commit boundary, exact acknowledgement, steering and retry tests                             |
-| F4: exchanges and assistant  | Shared completion query, constrained assistant tools, source-preserving context                  |
-| F5: persistence              | Generic journal cleanup, uncertain-write recovery, separate audit failures, restart evidence     |
-| F6: tools and workspaces     | Tool normalization, resource/adapter split, workspace behavior verification                      |
-| F7: observation and control  | Ordered notifications, reconnect example, explicit cancellation scope                            |
-| F8: deployment models        | Node memory/SQLite examples, JSON protocol conformance, accurate Cloudflare reference status     |
-| F9: distribution             | Package extraction, compatibility checks, packed-consumer tests, installation and migration docs |
+| Scope                        | Work required before release                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| F1: agent configuration      | Fixed definitions per run, name-based membership, normalized typed tools                                |
+| F2: rooms and presence       | One projection, immutable participant views, presence recovery procedure                                |
+| F3: concurrent contributions | One commit boundary, exact acknowledgement, steering and retry tests                                    |
+| F4: exchanges and assistant  | Shared completion query, constrained assistant tools, summary-based activation context and human review |
+| F5: persistence              | Generic journal cleanup, uncertain-write recovery, separate audit failures, restart evidence            |
+| F6: tools and workspaces     | Tool normalization, resource/adapter split, workspace behavior verification                             |
+| F7: observation and control  | Ordered notifications, reconnect example, explicit cancellation scope                                   |
+| F8: deployment models        | Node memory/SQLite examples, JSON protocol conformance, accurate Cloudflare reference status            |
+| F9: distribution             | Package extraction, compatibility checks, packed-consumer tests, installation and migration docs        |
 
 **Retain the work already on main.** Awaited startup and snapshots, exchange
 handles, separate discussion and response waits, and checkpoint removal are
@@ -512,19 +512,23 @@ Capture documented immutable data fields. Keep executable functions and
 resource handles by identity. Do not expand the generic reflection-based
 `capture` helper into an object serialization framework.
 
-### Separate evidence from a human-facing summary
+### Separate activation context from human review
 
-**A summary answers a person; it does not replace shared evidence.** Current
-rendering can hide covered source messages behind summaries. That makes one
-agent's lossy account determine what another agent can know.
+**Summaries replace covered source messages in later activations.** Keep this
+existing behavior for 0.1.0. Once a closed exchange has a summary, agents
+continue from that summary and their domain tools. Closure without a summary
+does not itself replace source messages. Selection reads the opening context;
+summary execution reads its fixed discussion range.
 
-For 0.1.0, preserve source messages in specialist context. Retain the assistant's
-summary as an exchange result. Selection reads the opening context; summary
-execution reads its fixed discussion range.
+**Human participants can review the original exchange.** Keep all source
+messages in the journal and expose the fixed discussion through
+`exchange.messages()`. Clients can expand a summary into that discussion for
+review. This does not restore the source range to later agent activations.
 
-This increases context size for long histories. State that limit explicitly.
-A future retrieval or compaction policy must preserve source access and make
-omissions explicit. Do not make a context-management framework a release gate.
+Verify that rendering and client reads preserve this distinction. Summaries
+and uncovered messages accumulate, so context size can still grow. State that
+limit explicitly. A future retention policy must preserve human review and
+recovery guarantees. Do not make a context-management framework a release gate.
 
 ### Make values safe to retain
 
@@ -689,14 +693,17 @@ the failed ordering assumption.
       distinction between `dispose` and `destroy` while extracting tool binding.
 - [ ] Measure replay time, steady-state projection work, memory use, and model
       input size on the release examples. Record the history sizes used.
-- [ ] Evaluate source-preserving specialist context with silence, conflicting
+- [ ] Verify summary-based activation context with silence, conflicting
       contributions, multiple people, and a summary overlapping later work.
+      Confirm that human participants can still review all source messages
+      through exchange reads after those messages leave agent context.
 - [ ] Verify that summary source ranges and model-visible numbering remain
       understandable after moving rendering. Do not expose sparse journal positions
       as if they were contiguous message numbers.
 
 **Done when:** the examples fit their reported limits and the documentation
-states those limits. Bounded history and automatic compaction remain deferred.
+states those limits. Bounded history and additional automatic compaction
+policies remain deferred.
 
 ### Documentation, examples, and migration
 
@@ -737,7 +744,7 @@ consumer or a measured limitation.
 | Adoption of Pi AgentHarness                                            | Keep Pi Agent for 0.1.0; reconsider when required capabilities justify its session and lifecycle model               |
 | Definition hot-loading and version negotiation                         | Fixed bindings remove the local/durable transaction; unknown definitions need a new run                              |
 | Manual retry of an exhausted summary                                   | A new question remains the current recovery path; a reset operation needs explicit history and attempt semantics     |
-| Bounded replay, history retention, retrieval, compaction, checkpoints  | Measure growth first; any policy must preserve source access and recovery guarantees                                 |
+| Bounded replay, history retention, retrieval, compaction, checkpoints  | Measure growth first; any policy must preserve human review and recovery guarantees                                  |
 | Durable cross-process subscriptions                                    | Reads and exchange lookup cover reconnect; a stream needs cursor, replay, and retention contracts                    |
 | Native timers, external event ingress, business tasks, workflow graphs | Each adds a public mechanism beyond the scoped collaboration contract                                                |
 | Simultaneous independent discussions in one room; exchange budgets     | Both change completion and authority rules; use separate rooms and explicit host control today                       |

@@ -1,8 +1,9 @@
 # The workspace
 
-`@ambionframework/workspace` owns a workspace resource and its filesystem.
-The collaboration core holds ordinary agent tools only. Workspace files are
-separate from runtime journal storage.
+**Applications own domain data and tool resources.** The optional
+`@ambionframework/workspace` package provides a workspace resource and its
+filesystem. Agents receive access through ordinary tool bundles. Workspace
+files remain separate from the collaboration journal.
 
 ## Open one resource
 
@@ -117,8 +118,9 @@ keeps the root directory.
 Both backends use just-bash. They provide a virtual Unix filesystem and shell
 for tools, with JavaScript and Python execution available. Network commands
 are absent. just-bash is single-user: agents sharing one resource can read
-each other's homes. The resource boundary separates those commands from the
-host machine; it does not provide user isolation or cross-process locking.
+each other's homes. The default workspace does not provide operating-system isolation between
+agents or distributed ownership of a shared directory. Hosts own credentials
+and authorization for external services.
 
 Backends perform raw filesystem I/O below the owner. They do not maintain a
 second destruction mark or a second operation queue.

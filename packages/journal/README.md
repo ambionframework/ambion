@@ -58,4 +58,12 @@ sessions over named native journal storage. `piSessions(journals)` gives Pi
 each session a separate name in the same backend. The runtime uses this view
 for seat audits. Workspace files use their separate workspace backend.
 
-See `docs/durability.md` for the failure contract.
+The 0.1.0 target extracts Pi transcript storage into
+`@ambionframework/pi-journal`. That package change remains pending; use the
+current subpath with this checkout. See the
+[documentation index](https://github.com/ambionframework/ambion/blob/main/docs/README.md)
+for current APIs and release targets.
+
+See the [durability contract](https://github.com/ambionframework/ambion/blob/main/docs/durability.md)
+for failure guarantees. The journal stores ordered facts; applications own
+domain data, credentials, and external transactions.

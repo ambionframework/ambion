@@ -1,13 +1,15 @@
 # @ambionframework/cli
 
-The `ambion` binary. Reports its version; `dev`, `deploy` and `init` arrive with
-the runtime.
+**This package is a version-reporting scaffold.** The `ambion` binary reports
+its version. It provides no working `dev`, `deploy`, or `init` command.
 
-```sh
-npx ambion --version
-```
+The [0.1.0 release scope](../../planning/release-0.1.0.md#f9-distribution-and-developer-experience)
+excludes the placeholder CLI from the release experience. Current publishing
+scripts still include this package; that packaging change remains pending in
+[the delivery plan](../../planning/next.md).
 
-Requires Node **>= 22.19** (or >= 23.6). Installing needs a token; see the
-[repository README](https://github.com/ambionframework/ambion).
+Use the [Ambion library](../ambion) and application-managed hosting.
+See [Deployment and recovery](../../docs/deployment.md) for the supported
+models and reference implementation.
 
 Apache 2.0.

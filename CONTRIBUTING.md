@@ -1,6 +1,11 @@
 # Contributing to Ambion
 
-Requires Node **>= 22.19** (or >= 23.6) and pnpm 10.
+Requires Node **>= 22.19** and pnpm 10.
+
+Ambion is a collaboration kernel for independently owned agents and the
+people they serve. Read the [documentation index](docs/README.md) for current
+contracts and the [0.1.0 scope](planning/release-0.1.0.md) for release targets.
+[The delivery plan](planning/next.md) owns pending work and completion evidence.
 
 ```sh
 pnpm install
@@ -21,6 +26,11 @@ checked and released. Read it before changing anything under `.github/`,
 `scripts/`, or the root configs.
 
 ## Releasing
+
+**Complete the release gates before tagging.** The 0.1.0 target includes
+pending API, packaging, and consumer checks in the delivery plan. Current
+publishing scripts still include the CLI scaffold; its release exclusion
+requires a packaging change.
 
 Versions move in lockstep across publishable packages.
 
