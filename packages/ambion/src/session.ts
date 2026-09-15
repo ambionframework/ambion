@@ -910,10 +910,13 @@ class RoomHost implements Session, RunningRoom {
 	private steer(message: Message): void {
 		const author = message.from;
 		const state = this.state();
+		const after =
+			state.messages.filter((candidate) => candidate.seq < message.seq).at(-1)?.seq ?? 0;
 		for (const [seat, ids] of this.live(state)) {
 			if (seat === author || !this.holds(state, ids)) continue;
 			if (ids.some((id) => parseId(id)?.cause === 'opened')) continue;
 			this.send(activationId('message', message.seq, seat), seat, {
+				after,
 				seq: message.seq,
 				line: renderLine(message),
 			});
@@ -930,7 +933,7 @@ class RoomHost implements Session, RunningRoom {
 	}
 
 	/** One wake over the wire. A wake a message caused carries the line a running activation is steered with. */
-	private send(id: string, seat: string, steer?: { seq: Seq; line: string }): void {
+	private send(id: string, seat: string, steer?: { after: Seq; seq: Seq; line: string }): void {
 		if (steer === undefined) this.sentAt.set(id, this.now());
 		void this.port(seat)
 			.wake({ room: this.name, seat, activation: id, ...(steer === undefined ? {} : { steer }) })
@@ -983,29 +986,39 @@ class RoomHost implements Session, RunningRoom {
 		return this.hold(id, 'claim');
 	}
 
-	renew(id: string): Promise<LeaseResponse> {
-		return this.hold(id, 'renew');
+	renew(id: string, readThrough?: Seq): Promise<LeaseResponse> {
+		return this.hold(id, 'renew', readThrough);
 	}
 
-	private async hold(id: string, type: 'claim' | 'renew'): Promise<LeaseResponse> {
-		let expiry: number | undefined;
+	private async hold(
+		id: string,
+		type: 'claim' | 'renew',
+		readThrough?: Seq,
+	): Promise<LeaseResponse> {
+		let expiresAt: number | undefined;
 		const written = await this.journal.write('lease', () => {
 			if (this.gone()) return undefined;
 			const wake = this.runtime.wake;
 			const decision = decide(
 				this.state(),
-				{ type, id, expiry: wake.expiry, deadline: wake.deadline },
+				{
+					type,
+					id,
+					expiry: wake.expiry,
+					deadline: wake.deadline,
+					...(readThrough === undefined ? {} : { readThrough }),
+				},
 				this.now(),
 			);
 			if ('refusal' in decision) return undefined;
 			const event = decision.event;
 			if (event === undefined || event.body.phase !== 'running') return undefined;
-			expiry = event.body.expiry;
+			expiresAt = event.body.expiresAt;
 			return event.body;
 		});
-		return !written || expiry === undefined
+		return !written || expiresAt === undefined
 			? { stale: 'the lease ended' }
-			: { ok: { expiry, lastSeq: this.journal.lastCommitted } };
+			: { ok: { expiresAt, lastSeq: this.journal.lastCommitted } };
 	}
 
 	/**
@@ -1018,10 +1031,10 @@ class RoomHost implements Session, RunningRoom {
 	 * ahead of it keeps the lease, and nothing is written. The change says
 	 * how the activation went, and `heardLease` says so once.
 	 */
-	end(id: string, reason: EndReason): Promise<boolean> {
+	end(id: string, reason: EndReason, readThrough: Seq): Promise<boolean> {
 		return this.journal.write('lease', () => {
 			const event = this.acceptedEvent(
-				decide(this.state(), { type: 'end', id, reason }, this.now()),
+				decide(this.state(), { type: 'end', id, reason, readThrough }, this.now()),
 			);
 			return event?.body;
 		});
@@ -1106,7 +1119,7 @@ class RoomHost implements Session, RunningRoom {
 
 	private applyEvent(event: ReconcileDecision['events'][number]): Promise<boolean> {
 		if (event.kind === 'lease' && event.body.phase === 'ended')
-			return this.end(event.body.id, event.body.reason);
+			return this.end(event.body.id, event.body.reason, event.body.readThrough);
 		return event.kind === 'close' ? this.close(event.body) : Promise.resolve(false);
 	}
 
@@ -1213,7 +1226,7 @@ class RoomHost implements Session, RunningRoom {
 	 * a seat that never hears the cut is refused whatever it writes after it.
 	 */
 	private async cut(seat: string, ids: string[]): Promise<void> {
-		for (const id of ids) await this.end(id, 'revoked');
+		for (const id of ids) await this.end(id, 'revoked', 0);
 		const port = this.port(seat);
 		for (const id of ids) void port.cut(id).catch(() => {});
 	}

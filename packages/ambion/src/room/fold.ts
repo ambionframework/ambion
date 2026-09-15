@@ -32,7 +32,6 @@ import {
 	applyLease,
 	type CauseOf,
 	cameToNothing,
-	isLive,
 	type PendingActivation,
 	type PendingWake,
 	parseId,
@@ -298,7 +297,7 @@ function judged(leases: ReadonlyMap<string, LeaseHold>, close: Close): boolean {
 	for (const lease of leases.values()) {
 		const parsed = parseId(lease.id);
 		if (parsed?.cause !== 'closed' || parsed.position !== close.through) continue;
-		if (lease.phase === 'ended' && lease.reason !== undefined && STOOD_DOWN.has(lease.reason)) {
+		if (lease.phase === 'ended' && STOOD_DOWN.has(lease.reason)) {
 			return true;
 		}
 	}
@@ -340,30 +339,29 @@ function draftedOver(lease: LeaseHold, through: Seq): boolean {
  */
 export function checkpointOf(state: RoomState, now: number): Checkpoint | undefined {
 	if (state.composition === undefined) return undefined;
-	const floor = floorOf(state, now);
+	const floor = floorOf(state);
 	const last = state.closes.at(-1);
 	const closes = state.closes.filter((close) => close.through >= floor || close === last);
 	const kept = new Set(closes.map((close) => close.through));
 	return {
-		v: 1,
+		v: 2,
 		floor,
 		composition: state.composition,
 		closes,
-		leases: [...state.leases.values()].filter((lease) => reads(lease, floor, now, kept)),
+		leases: [...state.leases.values()].filter((lease) => reads(lease, floor, kept)),
 		at: new Date(now).toISOString(),
 	};
 }
 
 /** The earliest seq anything the room still owes reaches back to. */
-function floorOf(state: RoomState, now: number): Seq {
+function floorOf(state: RoomState): Seq {
+	// A running lease can fail after it acknowledged context. Keep its attempt history.
+	if ([...state.leases.values()].some((lease) => lease.phase === 'running')) return state.floor;
 	const seqs = [
 		state.lastSeq + 1,
 		...(state.exchange === undefined ? [] : [state.exchange.from]),
 		...state.pending.map((wake) => wake.seq),
 		...state.owed.map((owed) => owed.from),
-		...[...state.leases.values()]
-			.filter((lease) => isLive(lease, now))
-			.map((lease) => named(lease.id)),
 	];
 	return Math.min(...seqs);
 }
@@ -374,15 +372,10 @@ function floorOf(state: RoomState, now: number): Seq {
  * for a close the checkpoint carries: it says the close stood down, and
  * without it the room would draft over that close again.
  */
-function reads(lease: LeaseHold, floor: Seq, now: number, kept: ReadonlySet<Seq>): boolean {
-	if (isLive(lease, now) || lease.heardThrough >= floor) return true;
+function reads(lease: LeaseHold, floor: Seq, kept: ReadonlySet<Seq>): boolean {
+	if (lease.phase === 'running' || lease.readThrough >= floor) return true;
 	const parsed = parseId(lease.id);
 	if (parsed === undefined) return false;
-	return parsed.cause === 'closed' ? kept.has(parsed.position) : parsed.position >= floor;
-}
-
-/** The seq an activation's id names: the message that woke it, or the close it answers. */
-function named(id: string): Seq {
-	const parsed = parseId(id);
-	return parsed?.position ?? 0;
+	if (parsed.cause === 'closed') return kept.has(parsed.position);
+	return parsed.position >= floor || (lease.phase === 'ended' && lease.until >= floor);
 }

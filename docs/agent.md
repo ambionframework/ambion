@@ -701,27 +701,33 @@ nothing. What landed while an activation worked and whether it left a
 mark belong to the activation and end with it. Rule 5's `readThrough` is
 an activation's fact.
 
-**A message is answered by a lease that heard it.** A message reaches a
-seat two ways: it names the seats at rest it wakes in `wakes`, and every
-seat at work hears it as a steer. A lease heard a message when it was at
-work as the message landed, or when it was claimed after the message, so
-its view held it. The message is answered while such a lease runs and
-once it ended released, refused or revoked. A lease that stood down
-answers through the seq its last renewal confirmed: a message that
-landed between that renewal and the release reached no activation, and
-the seat is woken for it. A lease that expired or
-failed answers nothing it heard, whatever it said: its words stay on the
-record, the seat reads them at the next attempt, and the failure counts
-as one attempt. The room wakes the seat again after the backoff, under
-the next attempt's id. A message no lease answers is pending: the room
-sends the wake again after the resend window, and a seat with a wake
-pending is live, so the exchange stays open and `settled()` waits for the
-claim. `runtime.retry` holds the policy for wakes and summaries alike:
-three attempts thirty seconds apart by default. At the cap the room
-gives up, and it writes what it did: the attempt it does not make, ended
-`abandoned`. That entry answers the wake or the close it stood for, so the
-room stops trying and the host hears an `abandoned` event. A summary the
-assistant could not write ends the same way, and the range stays whole.
+**A completed lease answers context that the executor acknowledged.**
+A message reaches seats named in its `wakes` and seats working when it lands.
+A running lease holds that work while the executor runs. Renewal extends
+the lease and records only explicitly reported `readThrough` progress.
+The journal position of a renewal does not acknowledge context.
+
+`readThrough` is the highest contiguous record position whose context entered
+a provider request. A successful ordinary commit also acknowledges its own
+message. Steers carry the previous message position and their own position.
+The [Pi context adapter](../packages/ambion/src/seat/pi.ts) connects each
+consumed input to that range through structured metadata. A dropped or
+reordered steer cannot advance acknowledgment past missing context.
+Context returned by a freshness refusal counts when its tool result enters
+a provider request.
+
+The executor reports its final position when releasing the lease. Unread
+messages remain pending, including messages arriving between the last
+renewal and release. A fresh view recovers context that steering did not
+deliver. An incomplete attempt cannot reuse an ended activation identifier.
+Revocation cancels its named work without claiming that the executor read it.
+
+A lease that expires or fails answers no work. Its words remain on the
+record, and the next attempt reads them. Unsuccessful attempts count toward
+`runtime.retry`: three attempts by default, with increasing backoff.
+At the cap, the room records an `abandoned` activation and stops retrying
+its work. Pending activations keep the exchange open and make `settled()`
+wait for resolution.
 
 **A checkpoint bounds what a fold costs.** Every
 `runtime.checkpoint.entries` entries, 256 by default, the room writes an
@@ -793,21 +799,13 @@ a live activation remains safe.
 
 Every request and response survives a round trip through `JSON.stringify`
 unchanged ([`wire.ts`](../packages/ambion/src/wire.ts)). In-process and
-Cloudflare hosts implement the same calls. Upgrade custom room and seat
-adapters together for these transport shapes. Stored journals, checkpoints,
-and activation identifiers retain their existing formats.
+Cloudflare hosts implement the same calls.
 
-Transport adapters use these replacements:
-
-| Previous name or field                  | Current name or field                                                        |
-| --------------------------------------- | ---------------------------------------------------------------------------- |
-| `Commit` / `CommitResponse`             | `CommitRequest` / `CommitResult`                                             |
-| `ActivationView.activation` / `.seat`   | `.spec.id` / `.spec.seat`                                                    |
-| `ActivationView.lastSeq`                | `.spec.through`                                                              |
-| `ActivationView.tool`                   | `.spec.grant.tool`, when the grant has a tool                                |
-| `ActivationView.closing` / `.composing` | `.spec.closing` / `.spec.opening`, according to the cause                    |
-| `Lease.phase: 'running'`                | `LeaseRequest.operation: 'claim'` initially; `'renew'` for an existing lease |
-| `Lease.phase: 'ended'`                  | `LeaseRequest.operation: 'release'`, with its reason                         |
+Lease renewals can carry `readThrough`; omitting it extends liveness without
+advancing acknowledgment. Releases report final progress. `expiresAt` names
+an absolute time in lease entries, folded state, and responses.
+`runtime.wake.expiry` remains a duration. A steer includes `after`, the
+preceding message position, so the executor can detect missing context.
 
 **A cut is the room's word, and the record is written before it.** The
 room ends every lease the seat holds as `revoked`, and then it cuts. A

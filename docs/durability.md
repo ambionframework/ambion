@@ -115,10 +115,25 @@ the first message the run saw.
 seat claims a lease under the wake's id and renews it while it works.
 The next attempt claims only after the last one ended.
 
-**A lease answers what it heard.** The journal says which messages a lease
-heard. They are the ones it was at work for, and the ones its view held
-because it was claimed after them. A lease answers them while it runs
-and once it stood down, through the seq its last renewal confirmed.
+**A lease records explicit acknowledged context.** A running lease holds
+work while its executor runs. Completed work requires the executor's
+`readThrough`: the highest contiguous position whose context entered a
+provider request, including its own accepted ordinary messages.
+Renewal advances this position only when the executor reports progress.
+The release records its final position; unread work remains pending.
+Explicit revocation and abandonment resolve their named work without
+claiming context consumption.
+
+**Steering cannot acknowledge a gap.** Each steer names a range between
+message positions. Structured context metadata identifies ranges submitted
+to the provider. Duplicate or reordered ranges cannot skip missing context.
+A later fresh view recovers messages that steering failed to deliver.
+
+**Checkpoints preserve unread work.** They retain explicit progress and
+lease intervals that establish which messages reached a working seat.
+An unacknowledged message remains pending after checkpoint recovery.
+While work runs, checkpoints preserve their previous floor. A failed attempt
+can therefore recover earlier work and its retry history.
 
 **The room says when it gives up.** At the cap the room writes the
 attempt it does not make, ended `abandoned`, and the host hears an

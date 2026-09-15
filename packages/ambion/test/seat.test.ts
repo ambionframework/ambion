@@ -74,7 +74,7 @@ class PlayedRoom implements SeatRoom {
 	}
 
 	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
-		const ok = { ok: { expiry: this.clock.now() + 60_000, lastSeq: 1 } };
+		const ok = { ok: { expiresAt: this.clock.now() + 60_000, lastSeq: 1 } };
 		if (lease.operation === 'claim' || lease.operation === 'renew') {
 			// A lease not yet held is a claim; one held is a renewal.
 			if (lease.operation === 'claim') {
@@ -83,7 +83,9 @@ class PlayedRoom implements SeatRoom {
 			}
 			if (this.loseRenewals) throw new Error('the renewal never reached the room');
 			if (this.refuseRenewals) return { stale: 'the lease ended' };
-			return this.capRenewals === undefined ? ok : { ok: { expiry: this.capRenewals, lastSeq: 1 } };
+			return this.capRenewals === undefined
+				? ok
+				: { ok: { expiresAt: this.capRenewals, lastSeq: 1 } };
 		}
 		if (lease.operation === 'release' && this.releases.length === 0) {
 			this.releasing.resolve();
@@ -138,7 +140,7 @@ describe('a seat actor', () => {
 		// so the message runs as an activation of its own, and none runs beside it
 		await actor.wake({
 			...wakeOf('message:2:product:1'),
-			steer: { seq: 2, line: '[priya] And the pump?' },
+			steer: { after: 1, seq: 2, line: '[priya] And the pump?' },
 		});
 		room.letGo.resolve();
 		await until(() => room.releases.length === 2);
@@ -169,7 +171,7 @@ describe('a seat actor', () => {
 		await until(() => room.claims.length === 1);
 		await actor.wake({
 			...wakeOf('message:2:product:1'),
-			steer: { seq: 2, line: '[priya] And the pump?' },
+			steer: { after: 1, seq: 2, line: '[priya] And the pump?' },
 		});
 		await tick();
 		expect(room.claims).toEqual(['message:1:product:1']);

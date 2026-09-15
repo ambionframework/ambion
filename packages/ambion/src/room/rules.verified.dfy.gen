@@ -22,18 +22,14 @@ lemma atWork_ensures(since: int, ended: bool, until: int, seq_: int)
 {
 }
 
-function heard(liveOrFailed: bool, ended: bool, until: int, heardThrough: int, seq_: int): bool
+function coversAttempt(ended: bool, until: int, seq_: int): bool
 {
-  if liveOrFailed then
-    (!(ended) || (seq_ <= until))
-  else
-    (seq_ <= heardThrough)
+  (!(ended) || (seq_ <= until))
 }
 
-lemma heard_ensures(liveOrFailed: bool, ended: bool, until: int, heardThrough: int, seq_: int)
-  ensures (!(liveOrFailed) ==> (heard(liveOrFailed, ended, until, heardThrough, seq_) <==> (seq_ <= heardThrough)))
-  ensures (liveOrFailed ==> !(ended) ==> heard(liveOrFailed, ended, until, heardThrough, seq_))
-  ensures (liveOrFailed ==> ended ==> (heard(liveOrFailed, ended, until, heardThrough, seq_) <==> (seq_ <= until)))
+lemma coversAttempt_ensures(ended: bool, until: int, seq_: int)
+  ensures (!(ended) ==> coversAttempt(ended, until, seq_))
+  ensures (ended ==> (coversAttempt(ended, until, seq_) <==> (seq_ <= until)))
 {
 }
 

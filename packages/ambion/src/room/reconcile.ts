@@ -162,14 +162,26 @@ function abandonments(state: RoomState, options: ReconcileOptions): Ended[] {
 	const at = new Date(options.now).toISOString();
 	return state.due
 		.filter((owed) => capped(owed, options))
-		.map((owed) => ({ id: owed.id, phase: 'ended' as const, reason: 'abandoned' as const, at }));
+		.map((owed) => ({
+			id: owed.id,
+			phase: 'ended' as const,
+			reason: 'abandoned' as const,
+			at,
+			readThrough: 0,
+		}));
 }
 
 function expiries(state: RoomState, now: number): Reconciliation['expired'] {
 	const at = new Date(now).toISOString();
 	return [...state.leases.values()]
 		.filter((lease) => isExpired(lease, now))
-		.map((lease) => ({ id: lease.id, phase: 'ended' as const, reason: 'expired' as const, at }));
+		.map((lease) => ({
+			id: lease.id,
+			phase: 'ended' as const,
+			reason: 'expired' as const,
+			at,
+			readThrough: lease.readThrough,
+		}));
 }
 
 /**
@@ -237,9 +249,9 @@ function retryTimes(state: RoomState, options: ReconcileOptions): number[] {
 }
 
 function nextAlarm(state: RoomState, options: ReconcileOptions): number | undefined {
-	const expiries = [...state.leases.values()]
-		.filter((lease) => isLive(lease, options.now))
-		.map((lease) => lease.expiry ?? 0);
+	const expiries = [...state.leases.values()].flatMap((lease) =>
+		lease.phase === 'running' && isLive(lease, options.now) ? [lease.expiresAt] : [],
+	);
 	const future = [...expiries, ...retryTimes(state, options)].filter((at) => at > options.now);
 	return future.length === 0 ? undefined : Math.min(...future);
 }

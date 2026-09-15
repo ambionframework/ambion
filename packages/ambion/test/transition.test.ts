@@ -121,10 +121,14 @@ describe('room transition', () => {
 			),
 			5,
 		);
-		expect(renewed.body).toMatchObject({ expiry: now + 25 });
+		expect(renewed.body).toMatchObject({ expiresAt: now + 25 });
 		const live = evolve(held, { ...renewed, seq: 5 }, options);
 		expect(
-			decide(live, { type: 'end', id: 'message:3:product:1', reason: 'expired' }, now + 10),
+			decide(
+				live,
+				{ type: 'end', id: 'message:3:product:1', reason: 'expired', readThrough: 0 },
+				now + 10,
+			),
 		).toEqual({ event: undefined });
 	});
 
@@ -146,7 +150,13 @@ describe('room transition', () => {
 		).toMatchObject({ refusal: { category: 'stale' } });
 		const lease: Entry = {
 			kind: 'lease',
-			body: { id: 'message:3:product:1', phase: 'running', expiry: now + 100, at },
+			body: {
+				id: 'message:3:product:1',
+				phase: 'running',
+				expiresAt: now + 100,
+				at,
+				readThrough: 0,
+			},
 			seq: 4,
 		};
 		const held = foldRoom([composition, arrived, said(3), lease, said(5)], options);
@@ -184,7 +194,13 @@ describe('room transition', () => {
 	it('accepts only the grant and a current safe speech boundary', () => {
 		const lease: Entry = {
 			kind: 'lease',
-			body: { id: 'message:3:product:1', phase: 'running', expiry: now + 100, at },
+			body: {
+				id: 'message:3:product:1',
+				phase: 'running',
+				expiresAt: now + 100,
+				at,
+				readThrough: 0,
+			},
 			seq: 4,
 		};
 		const state = foldRoom([composition, arrived, said(3), lease], options);
@@ -251,17 +267,35 @@ describe('room transition', () => {
 				{ kind: 'close', body: close, seq: 3 },
 				{
 					kind: 'lease',
-					body: { id: 'closed:2:assistant:1', phase: 'running', expiry: now + 100, at },
+					body: {
+						id: 'closed:2:assistant:1',
+						phase: 'running',
+						expiresAt: now + 100,
+						at,
+						readThrough: 0,
+					},
 					seq: 4,
 				},
 				{
 					kind: 'lease',
-					body: { id: 'opened:2:assistant:1', phase: 'running', expiry: now + 100, at },
+					body: {
+						id: 'opened:2:assistant:1',
+						phase: 'running',
+						expiresAt: now + 100,
+						at,
+						readThrough: 0,
+					},
 					seq: 5,
 				},
 				{
 					kind: 'lease',
-					body: { id: 'closed:2:custom:1', phase: 'running', expiry: now + 100, at },
+					body: {
+						id: 'closed:2:custom:1',
+						phase: 'running',
+						expiresAt: now + 100,
+						at,
+						readThrough: 0,
+					},
 					seq: 6,
 				},
 				{ kind: 'close', body: { ...close, wakes: ['custom'] }, seq: 7 },
@@ -323,7 +357,13 @@ describe('room transition', () => {
 				{ kind: 'message', body: { kind: 'said', at, from: 'sam', text: 'Later.' }, seq: 4 },
 				{
 					kind: 'lease',
-					body: { id: 'closed:2:writer:1', phase: 'running', expiry: now + 100, at },
+					body: {
+						id: 'closed:2:writer:1',
+						phase: 'running',
+						expiresAt: now + 100,
+						at,
+						readThrough: 0,
+					},
 					seq: 5,
 				},
 			],
@@ -361,7 +401,13 @@ describe('room transition', () => {
 				},
 				{
 					kind: 'lease',
-					body: { id: 'closed:2:writer:1', phase: 'running', expiry: now + 100, at },
+					body: {
+						id: 'closed:2:writer:1',
+						phase: 'running',
+						expiresAt: now + 100,
+						at,
+						readThrough: 0,
+					},
 					seq: 5,
 				},
 			],
@@ -392,17 +438,35 @@ describe('room transition', () => {
 		const lease: Entry = {
 			kind: 'lease',
 			seq: 4,
-			body: { id: 'closed:2:assistant:1', phase: 'running', expiry: now + 100, at },
+			body: {
+				id: 'closed:2:assistant:1',
+				phase: 'running',
+				expiresAt: now + 100,
+				at,
+				readThrough: 0,
+			},
 		};
 		const forgedLease: Entry = {
 			kind: 'lease',
 			seq: 5,
-			body: { id: 'opened:2:assistant:1', phase: 'running', expiry: now + 100, at },
+			body: {
+				id: 'opened:2:assistant:1',
+				phase: 'running',
+				expiresAt: now + 100,
+				at,
+				readThrough: 0,
+			},
 		};
 		const wrongWriterLease: Entry = {
 			kind: 'lease',
 			seq: 6,
-			body: { id: 'closed:2:product:1', phase: 'running', expiry: now + 100, at },
+			body: {
+				id: 'closed:2:product:1',
+				phase: 'running',
+				expiresAt: now + 100,
+				at,
+				readThrough: 0,
+			},
 		};
 		const later = said(7, 'sam');
 		const state = foldRoom(

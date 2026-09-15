@@ -19,19 +19,11 @@ export function atWork(since: number, ended: boolean, until: number, seq: number
 	return since < seq && (!ended || until >= seq);
 }
 
-//@ contract A lease heard an entry. One that runs or came to nothing heard everything through its end; one that stood down heard through the seq its last renewal confirmed.
-export function heard(
-	liveOrFailed: boolean,
-	ended: boolean,
-	until: number,
-	heardThrough: number,
-	seq: number,
-): boolean {
-	//@ ensures !liveOrFailed ==> (\result <==> seq <= heardThrough)
-	//@ ensures liveOrFailed && !ended ==> \result
-	//@ ensures liveOrFailed && ended ==> (\result <==> seq <= until)
-	if (liveOrFailed) return !ended || seq <= until;
-	return seq <= heardThrough;
+//@ contract A lease covers an entry while it attempts work.
+export function coversAttempt(ended: boolean, until: number, seq: number): boolean {
+	//@ ensures !ended ==> \result
+	//@ ensures ended ==> (\result <==> seq <= until)
+	return !ended || seq <= until;
 }
 
 //@ contract The room gives a wake up once the attempts reach the cap.

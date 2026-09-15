@@ -132,6 +132,7 @@ describe('a checkpoint', () => {
 					phase: 'ended' as const,
 					reason: 'failed' as const,
 					at,
+					readThrough: 0,
 				},
 				seq: 4,
 			},
@@ -152,6 +153,7 @@ describe('a checkpoint', () => {
 					phase: 'ended' as const,
 					reason: 'released' as const,
 					at,
+					readThrough: 0,
 				},
 				seq: 7,
 			},
@@ -379,8 +381,9 @@ describe('a checkpoint the room folds', () => {
 			await journal.write('lease', {
 				id: 'message:2:solo:1',
 				phase: 'running',
-				expiry: 60_000,
+				expiresAt: 60_000,
 				at,
+				readThrough: 0,
 			});
 			// the checkpoint carries the live lease, and the journal drops the entry it replaced
 			const checkpoint = checkpointOf(fold(journal), 0);
@@ -392,6 +395,7 @@ describe('a checkpoint the room folds', () => {
 				phase: 'ended',
 				reason: 'released',
 				at,
+				readThrough: 0,
 			});
 			// the end ends a lease the fold holds: the room reports the
 			// activation ending and never a second one starting
@@ -437,7 +441,7 @@ describe('a checkpoint past the fence', () => {
 				seq: 2,
 				at,
 			};
-			const checkpoint = (floor: Seq) => ({ v: 1, floor, composition, closes: [], leases: [], at });
+			const checkpoint = (floor: Seq) => ({ v: 2, floor, composition, closes: [], leases: [], at });
 			// The storage holds the journal's own three beside the body.
 			const stored = (type: string, seq: Seq, run: string, body: object) =>
 				piSession.appendCustomEntry(type, { ...body, seq, run });

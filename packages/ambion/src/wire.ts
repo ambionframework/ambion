@@ -65,8 +65,8 @@ export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired
  * last entry for an id wins, and an ended lease never runs again.
  */
 export type LeaseChange =
-	| { id: string; phase: 'running'; expiry: number; at: string }
-	| { id: string; phase: 'ended'; reason: EndReason; at: string };
+	| { id: string; phase: 'running'; expiresAt: number; at: string; readThrough: Seq }
+	| { id: string; phase: 'ended'; reason: EndReason; at: string; readThrough: Seq };
 
 /**
  * What the entries for one activation fold to: whether it runs, until when,
@@ -74,23 +74,30 @@ export type LeaseChange =
  * carries these in place of the entries that made them, so the shape crosses
  * the wire.
  */
-export interface LeaseHold {
+type LeaseFact = {
 	id: string;
-	phase: 'running' | 'ended';
-	/** When a running lease expires, in milliseconds since the epoch. */
-	expiry?: number;
-	reason?: EndReason;
 	/** When the last entry was written, ISO. */
 	at: string;
 	/** When the first entry was written, ISO: the activation runs from here to its deadline. */
 	claimedAt: string;
-	/** The last seq when the first entry landed: the activation's view held the record through here. */
+	/** The seq where this activation first attempted work. */
 	since: Seq;
-	/** The last seq when the end landed, for an ended lease. */
-	until?: Seq;
-	/** The last seq when the last running entry landed: the activation confirmed it heard through here. */
-	heardThrough: Seq;
-}
+	/** The highest message position that the executor explicitly consumed. */
+	readThrough: Seq;
+};
+
+export type LeaseHold =
+	| (LeaseFact & {
+			phase: 'running';
+			/** When a running lease expires, in milliseconds since the epoch. */
+			expiresAt: number;
+	  })
+	| (LeaseFact & {
+			phase: 'ended';
+			reason: EndReason;
+			/** The seq when the end landed. */
+			until: Seq;
+	  });
 
 /**
  * A run took the name: the first entry every run writes. The entry fences
@@ -111,7 +118,7 @@ export interface Fence {
  */
 export interface Checkpoint {
 	/** The shape of this entry. A checkpoint of another shape is ignored. */
-	v: 1;
+	v: 2;
 	/** No wake on a message before this seq is pending. */
 	floor: Seq;
 	composition: Composition;
@@ -125,7 +132,7 @@ export function isCheckpoint(body: unknown): body is Checkpoint {
 	if (typeof body !== 'object' || body === null) return false;
 	const candidate = body as Partial<Checkpoint>;
 	return (
-		candidate.v === 1 &&
+		candidate.v === 2 &&
 		typeof candidate.floor === 'number' &&
 		typeof candidate.composition === 'object' &&
 		candidate.composition !== null &&
@@ -191,7 +198,7 @@ export interface Wake {
 	room: string;
 	seat: string;
 	activation: string;
-	steer?: { seq: Seq; line: string };
+	steer?: { after: Seq; seq: Seq; line: string };
 }
 
 export interface SeatPort {
@@ -236,8 +243,8 @@ export type CommitResult =
 
 export type LeaseRequest =
 	| { activation: string; operation: 'claim' }
-	| { activation: string; operation: 'renew' }
-	| { activation: string; operation: 'release'; reason: EndReason };
+	| { activation: string; operation: 'renew'; readThrough?: Seq }
+	| { activation: string; operation: 'release'; reason: EndReason; readThrough: Seq };
 
 /**
  * The lease holds, with its expiry and the last place on the record. The seat
@@ -245,7 +252,7 @@ export type LeaseRequest =
  * An entry beside the record moves neither, so a renewal never reports its
  * own landing as movement.
  */
-export type LeaseResponse = { ok: { expiry: number; lastSeq: Seq } } | Stale;
+export type LeaseResponse = { ok: { expiresAt: number; lastSeq: Seq } } | Stale;
 
 export interface SeatRoom {
 	view(activation: string): Promise<ViewResponse>;

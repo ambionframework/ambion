@@ -2,7 +2,14 @@
 
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
 import type { Message, PresenceMessage } from '../types.ts';
-import type { ActivationSpec, Close, CommitRequest, Composition, EndReason } from '../wire.ts';
+import type {
+	ActivationSpec,
+	Close,
+	CommitRequest,
+	Composition,
+	EndReason,
+	LeaseHold,
+} from '../wire.ts';
 import { activationSpec } from './activation.ts';
 import {
 	applyEvent,
@@ -35,8 +42,8 @@ type MessageCommand =
 	| { type: 'commit'; commit: CommitRequest };
 type LeaseCommand =
 	| { type: 'claim'; id: string; expiry: number; deadline: number }
-	| { type: 'renew'; id: string; expiry: number; deadline: number }
-	| { type: 'end'; id: string; reason: EndReason };
+	| { type: 'renew'; id: string; expiry: number; deadline: number; readThrough?: number }
+	| { type: 'end'; id: string; reason: EndReason; readThrough: number };
 type ComposeCommand = { type: 'compose'; composition: Body<Composition> };
 type CloseCommand = { type: 'close'; close: Close };
 type RunCommand = { type: 'run' };
@@ -367,15 +374,7 @@ function claim(
 	const seat = seatOf(command.id);
 	if (!state.roster.some((candidate) => candidate.name === seat))
 		return stale('the seat is not on the roster');
-	const known = state.leases.get(command.id);
-	if (known === undefined && !state.due.some((due) => due.id === command.id))
-		return stale('the lease ended');
-	if (known !== undefined && !isLive(known, now)) return stale('the lease ended');
-	const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
-	const expiry = Math.min(now + command.expiry, claimedAt + command.deadline);
-	return {
-		event: { kind: 'lease', body: { id: command.id, phase: 'running', expiry, at: iso(now) } },
-	};
+	return runningLease(state, command, now, 0);
 }
 
 function renew(
@@ -383,8 +382,39 @@ function renew(
 	command: Extract<LeaseCommand, { type: 'renew' }>,
 	now: number,
 ): RoomDecision<'lease'> {
+	const invalid = invalidProgress(state, command.readThrough);
+	if (invalid !== undefined) return invalid;
+	const seat = seatOf(command.id);
+	if (!state.roster.some((candidate) => candidate.name === seat))
+		return stale('the seat is not on the roster');
 	if (!state.leases.has(command.id)) return stale('the lease ended');
-	return claim(state, { ...command, type: 'claim' }, now);
+	return runningLease(state, command, now, command.readThrough ?? 0);
+}
+
+function runningLease(
+	state: RoomState,
+	command: Extract<LeaseCommand, { type: 'claim' | 'renew' }>,
+	now: number,
+	readThrough: number,
+): RoomDecision<'lease'> {
+	const known = state.leases.get(command.id);
+	if (known === undefined && !state.due.some((due) => due.id === command.id))
+		return stale('the lease ended');
+	if (known !== undefined && !isLive(known, now)) return stale('the lease ended');
+	const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
+	const expiry = Math.min(now + command.expiry, claimedAt + command.deadline);
+	return {
+		event: {
+			kind: 'lease',
+			body: {
+				id: command.id,
+				phase: 'running',
+				expiresAt: expiry,
+				at: iso(now),
+				readThrough: Math.max(known?.readThrough ?? 0, readThrough),
+			},
+		},
+	};
 }
 
 function end(
@@ -392,17 +422,38 @@ function end(
 	command: Extract<LeaseCommand, { type: 'end' }>,
 	now: number,
 ): RoomDecision<'lease'> {
+	const invalid = invalidProgress(state, command.readThrough);
+	if (invalid !== undefined) return invalid;
 	const known = state.leases.get(command.id);
 	const { reason } = command;
-	if (known === undefined) {
-		if (reason !== 'revoked' && reason !== 'abandoned') return { event: undefined };
-	} else {
-		if (known.phase === 'ended' || reason === 'abandoned') return { event: undefined };
-		if (isExpired(known, now) !== (reason === 'expired')) return { event: undefined };
-	}
+	if (!mayEnd(known, reason, now)) return { event: undefined };
 	return {
-		event: { kind: 'lease', body: { id: command.id, phase: 'ended', reason, at: iso(now) } },
+		event: {
+			kind: 'lease',
+			body: {
+				id: command.id,
+				phase: 'ended',
+				reason,
+				at: iso(now),
+				readThrough: Math.max(known?.readThrough ?? 0, command.readThrough),
+			},
+		},
 	};
+}
+
+function mayEnd(known: LeaseHold | undefined, reason: EndReason, now: number): boolean {
+	if (known === undefined) return reason === 'revoked' || reason === 'abandoned';
+	if (known.phase === 'ended' || reason === 'abandoned') return false;
+	return isExpired(known, now) === (reason === 'expired');
+}
+
+function invalidProgress(
+	state: RoomState,
+	readThrough: number | undefined,
+): { refusal: Refusal } | undefined {
+	return readThrough !== undefined && !validReadThrough(readThrough, state.lastSeq)
+		? refused('The acknowledged context is not on this record.')
+		: undefined;
 }
 
 function compose(state: RoomState, composition: Body<Composition>): RoomDecision<'composition'> {
