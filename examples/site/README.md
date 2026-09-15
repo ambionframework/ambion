@@ -1,7 +1,7 @@
 # Kestrel Yard, Block C
 
 A construction management suite where each product is an agent: a time
-tracker, a task list and a materials tracker. Two specialists are on call in
+tracker, a task list and a materials tracker. Three specialists are on call in
 the reserve, a building control liaison and the plant desk, and the room's
 assistant seats one when a question turns on what it alone holds. Three
 people share the room — a project manager in the site office, a foreman on
@@ -122,7 +122,7 @@ line to today's diary with `bash`, and `/diary` shows what the products have
 left there. Every product has its own home on the drive, and the diary is
 the one file they all write to.
 
-**The assistant seats who the question needs.** `/who` lists two
+**The assistant seats who the question needs.** `/who` lists three
 specialists on call and not in the room. Ask "can I promise Thursday for the
 pour?" and watch `· building-control seated by assistant` land before the
 products answer: the assistant read the question and the reserve, judged
