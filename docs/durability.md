@@ -211,7 +211,7 @@ moved under, so that write is refused rather than acknowledged.
 
 - Retry a delivery it never heard back on under the same key.
 - Resume a name after the process that ran it died, with
-  `resumeSession(name, { runtime })`. The first reconcile expires what
+  `resumeSession(name, { runtime, agents })`. The first reconcile expires what
   the dead run held.
 - Run one host per name. Evict a room with `runtime.evict(name)` before
   another host takes it. Treat `superseded` the way it treats its own

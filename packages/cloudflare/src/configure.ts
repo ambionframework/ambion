@@ -49,7 +49,13 @@ export interface ConfigureOptions {
 let settings: ConfigureOptions | undefined;
 
 export function configure(options: ConfigureOptions): void {
-	settings = options;
+	const agents = Object.freeze([...options.agents]);
+	const names = new Set<string>();
+	for (const agent of agents) {
+		if (names.has(agent.name)) throw new Error(`Worker definitions repeat agent '${agent.name}'.`);
+		names.add(agent.name);
+	}
+	settings = { ...options, agents };
 }
 
 /** Give a seat's event to whatever the worker configured, or to the logs. */
@@ -58,7 +64,7 @@ export function seatEvent(event: SeatEvent): void {
 	take(event);
 }
 
-/** A runtime over this object's storage and clock, with the worker's catalog and model call. */
+/** A runtime over this object's storage and clock, with the worker's model call. */
 export function runtimeFor(
 	options: Pick<CreateRuntimeOptions, 'sessions' | 'clock' | 'transport'>,
 ): Runtime {
@@ -66,7 +72,6 @@ export function runtimeFor(
 		throw new Error('Call configure() at module scope before an object runs.');
 	}
 	return createRuntime({
-		agents: settings.agents,
 		...(settings.stream === undefined ? {} : { stream: settings.stream }),
 		...(settings.wake === undefined ? {} : { wake: settings.wake }),
 		...(settings.retry === undefined ? {} : { retry: settings.retry }),
@@ -79,4 +84,10 @@ export function definitionOf(name: string): AgentDefinition {
 	const def = settings?.agents.find((agent) => agent.name === name);
 	if (def === undefined) throw new Error(`'${name}' is not configured in this worker.`);
 	return def;
+}
+
+export function definitions(): readonly AgentDefinition[] {
+	if (settings === undefined)
+		throw new Error('Call configure() at module scope before an object runs.');
+	return settings.agents;
 }

@@ -17,6 +17,7 @@
  */
 
 export type { RunningRoom, Transport } from './host/runtime.ts';
+export { runningRoom } from './host/runtime.ts';
 export type { SeatContext } from './seat/seat.ts';
 export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {

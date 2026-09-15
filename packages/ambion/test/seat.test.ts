@@ -109,12 +109,11 @@ const deaf: StreamFn = () => createAssistantMessageEventStream();
 function play(stream: StreamFn = scripted(() => quiet())) {
 	const clock = fakeClock();
 	const runtime = createRuntime({ clock, stream });
-	runtime.catalog.set(product.name, product);
 	const room = new PlayedRoom(clock);
 	const actor = new SeatActor(room, {
 		clock,
 		call: runtime.call,
-		catalog: runtime.catalog,
+		definition: product,
 		room: 'played',
 		seat: 'product',
 		sessions: runtime.sessions,

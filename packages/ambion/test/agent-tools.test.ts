@@ -68,4 +68,41 @@ describe('agent tools', () => {
 			}),
 		).not.toThrow();
 	});
+
+	it('captures caller-owned tool arrays, records, and schemas', () => {
+		const parameters = Type.Object({ query: Type.String() });
+		const supplied: {
+			name: string;
+			description: string;
+			parameters: { properties: Record<string, unknown> };
+			execute: () => string;
+		} = {
+			name: 'inspect',
+			description: 'Inspects one thing.',
+			parameters,
+			execute: () => 'first',
+		};
+		const tools: unknown[] = [supplied];
+		const agent = defineAgent({
+			name: 'inspector',
+			identity: 'An inspector.',
+			instructions: 'Inspect.',
+			model: 'scripted/inspector',
+			tools,
+		});
+
+		tools.push(tool('later'));
+		supplied.name = 'changed';
+		supplied.description = 'Changed after capture.';
+		(parameters.properties as Record<string, unknown>).query = Type.Number();
+
+		const captured = agent.tools[0] as typeof supplied;
+		expect(agent.tools).toHaveLength(1);
+		expect(captured).toMatchObject({ name: 'inspect', description: 'Inspects one thing.' });
+		expect(captured).not.toBe(supplied);
+		expect(captured.parameters).not.toBe(parameters);
+		expect(captured.parameters.properties.query).toMatchObject({ type: 'string' });
+		expect(Object.isFrozen(agent)).toBe(true);
+		expect(Object.isFrozen(agent.tools)).toBe(true);
+	});
 });

@@ -84,7 +84,6 @@ async function open(
 	const runtime = createRuntime({
 		sessions: opened.sessions,
 		clock,
-		agents,
 		...(checkpoint === undefined ? {} : { checkpoint }),
 	});
 	const session = startSession({
@@ -484,11 +483,11 @@ describe.each(storages)('a room over a checkpoint on $name', (storage) => {
 			const second = createRuntime({
 				sessions: opened.sessions,
 				clock: fakeClock(),
-				agents,
 				checkpoint: { entries: 3 },
 			});
 			const resumed = await resumeSession(name, {
 				runtime: second,
+				agents,
 				streamFn: scripted(
 					byAgent({ solo: says(['one', 'two']), assistant: drafts('The one message.') }),
 				),

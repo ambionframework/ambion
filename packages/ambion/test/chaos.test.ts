@@ -180,9 +180,13 @@ describe.each(full ? ['jsonl', 'sqlite'] : ['jsonl'])(
 					// The room resumes on a clock that stands where the child's ran, and the test moves it:
 					// a lease the child held is live at the resume and expires when the test says so.
 					const clock = fakeClock(Date.now());
-					const runtime = createRuntime({ sessions, agents, clock, ...TIMING });
+					const runtime = createRuntime({ sessions, clock, ...TIMING });
 					const inherited = await liveLeases(sessions, name, clock.now());
-					const session = await resumeSession(name, { runtime, streamFn: scripted(script) });
+					const session = await resumeSession(name, {
+						runtime,
+						agents,
+						streamFn: scripted(script),
+					});
 					const events = collect(session);
 					const inheritedExchange = session.exchange() !== undefined;
 					await finish(session, clock);

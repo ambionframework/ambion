@@ -32,6 +32,42 @@ import type {
 } from '../types.ts';
 import type { SeatPort, SeatRoom } from '../wire.ts';
 
+interface RuntimeState {
+	running: Map<string, RunningRoom>;
+	taken: Set<string>;
+}
+
+const stateFor = new WeakMap<Runtime, RuntimeState>();
+
+function state(runtime: Runtime): RuntimeState {
+	const found = stateFor.get(runtime);
+	if (found === undefined) throw new Error('Runtime must come from createRuntime.');
+	return found;
+}
+
+export const runningRoom = (runtime: Runtime, name: string): RunningRoom | undefined =>
+	state(runtime).running.get(name);
+
+export function registerRoom(runtime: Runtime, room: RunningRoom): void {
+	state(runtime).running.set(room.name, room);
+}
+
+export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): void {
+	const running = state(runtime).running;
+	if (running.get(name) === room) running.delete(name);
+}
+
+export function takeWorkspace(runtime: Runtime, name: string): boolean {
+	const taken = state(runtime).taken;
+	if (taken.has(name)) return false;
+	taken.add(name);
+	return true;
+}
+
+export function releaseWorkspace(runtime: Runtime, name: string): void {
+	state(runtime).taken.delete(name);
+}
+
 /**
  * A room the runtime holds while it runs, as the transport sees it: the
  * seat's three calls, plus what an in-process seat is handed beside them.
@@ -43,6 +79,7 @@ export interface RunningRoom extends SeatRoom {
 	readonly model: ModelResolver;
 	/** Where the room's sessions open: a seat's audit session opens beside them. */
 	readonly sessions: SessionOpener;
+	definition(seat: string): AgentDefinition | undefined;
 	emit(event: SessionEvent): void;
 	/** Drop the room from memory. The record keeps everything. */
 	evict(): void;
@@ -59,12 +96,6 @@ export interface Transport {
 }
 
 export interface Runtime {
-	/** One run per name: the rooms running in this runtime. */
-	readonly running: Map<string, RunningRoom>;
-	/** One workspace handle per name. */
-	readonly taken: Set<string>;
-	/** Every agent definition a room in this runtime was started with, by name. */
-	readonly catalog: Map<string, AgentDefinition>;
 	readonly clock: Clock;
 	readonly sessions: SessionOpener;
 	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
@@ -101,8 +132,6 @@ export interface Runtime {
 export interface CreateRuntimeOptions {
 	clock?: Clock;
 	transport?: Transport;
-	/** Definitions the catalog starts with. `resumeSession` resolves a room's names through it. */
-	agents?: readonly AgentDefinition[];
 	/** Where the rooms' Pi sessions open. `repo` is the shorthand for `sessionsOver(repo)`. */
 	sessions?: SessionOpener;
 	repo?: SessionRepoLike<SessionMetadata, SessionCreateOptions>;
@@ -190,11 +219,9 @@ export const stubModel: ModelResolver = (id) =>
 
 export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const running = new Map<string, RunningRoom>();
+	const taken = new Set<string>();
 	const sessions = options.sessions ?? sessionsOver(options.repo ?? new InMemorySessionRepo());
-	return {
-		running,
-		taken: new Set(),
-		catalog: new Map((options.agents ?? []).map((def) => [def.name, def])),
+	const runtime: Runtime = {
 		clock: options.clock ?? systemClock(),
 		sessions,
 		...(options.transport === undefined ? {} : { transport: options.transport }),
@@ -210,6 +237,8 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 			room?.evict();
 		},
 	};
+	stateFor.set(runtime, { running, taken });
+	return runtime;
 }
 
 /** What a host gets when it passes no runtime: one process-wide value. */

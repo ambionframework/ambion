@@ -33,6 +33,9 @@ import {
 	defaultRuntime,
 	type RunningRoom,
 	type Runtime,
+	registerRoom,
+	releaseRoom,
+	runningRoom,
 	sessionsOver,
 	stubModel,
 	type Transport,
@@ -55,7 +58,6 @@ import { inProcessTransport } from './seat/seat.ts';
 import {
 	type AgentDefinition,
 	type AgentSeat,
-	type Attention,
 	type Exchange,
 	type HumanDefinition,
 	isAgent,
@@ -64,6 +66,7 @@ import {
 	type ModelResolver,
 	type Participant,
 	type PresenceMessage,
+	type SeatedAgent,
 	type SeatInfo,
 	type Seq,
 	type SessionEvent,
@@ -100,18 +103,12 @@ import type {
  */
 type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 
-/** An agent with the attention it takes when seated. */
-interface Placed {
-	def: AgentDefinition;
-	attention: Attention;
-}
-
 /** What a run starts with, as definitions. The journal holds the same composition, by name. */
-interface Cast {
+interface CompositionDraft {
 	goal: string | undefined;
 	assistant: string | undefined;
-	agents: Placed[];
-	available: Placed[];
+	agents: SeatedAgent[];
+	available: SeatedAgent[];
 }
 
 /** A presence change before the room stamps when it happened. */
@@ -159,6 +156,8 @@ export interface ReadSessionOptions {
 }
 
 export interface ResumeSessionOptions {
+	/** The definitions that resolve the roster and reserve recorded by the prior run. */
+	agents: readonly AgentDefinition[];
 	runtime?: Runtime;
 	/** Override the model call, as `startSession` does. */
 	streamFn?: StreamFn;
@@ -220,7 +219,7 @@ export function startSession(options: StartSessionOptions): Session {
 	const runtime = options.runtime ?? defaultRuntime;
 	assertFree(runtime, options.name);
 	const session = RoomHost.start(options, runtime);
-	runtime.running.set(options.name, session);
+	registerRoom(runtime, session);
 	// A composition the record refuses frees the name: the handle answers
 	// every call with the refusal, and nothing runs under it.
 	session.started().catch(() => free(runtime, session));
@@ -229,19 +228,16 @@ export function startSession(options: StartSessionOptions): Session {
 
 /**
  * Brings a name back up over its journal, with the composition the journal holds.
- * Every name on the roster resolves through the runtime's catalog, and the
+ * Every name on the roster resolves through the explicit bindings, and the
  * first one missing is the error. The room reconciles at once: a lease the
  * last run left expires, a wake it left pending is sent again, and an
  * exchange it left open closes once nothing works on it.
  */
-export async function resumeSession(
-	name: string,
-	options: ResumeSessionOptions = {},
-): Promise<Session> {
+export async function resumeSession(name: string, options: ResumeSessionOptions): Promise<Session> {
 	const runtime = options.runtime ?? defaultRuntime;
 	assertFree(runtime, name);
-	const session = RoomHost.resume(name, runtime, options.streamFn);
-	runtime.running.set(name, session);
+	const session = RoomHost.resume(name, runtime, options.streamFn, bindingsOf(options.agents));
+	registerRoom(runtime, session);
 	try {
 		await session.started();
 	} catch (error) {
@@ -253,11 +249,11 @@ export async function resumeSession(
 
 /** The name comes free, unless another room took it since. */
 function free(runtime: Runtime, session: RoomHost): void {
-	if (runtime.running.get(session.name) === session) runtime.running.delete(session.name);
+	releaseRoom(runtime, session.name, session);
 }
 
 function assertFree(runtime: Runtime, name: string): void {
-	if (runtime.running.has(name)) {
+	if (runningRoom(runtime, name) !== undefined) {
 		throw new Error(`Session '${name}' is already running: stop it before starting it again.`);
 	}
 }
@@ -281,7 +277,7 @@ export function visitSession(session: Session, human: HumanDefinition): Promise<
 /** Reads a name and starts nothing. A running name reads through its live room. */
 export function readSession(name: string, options: ReadSessionOptions = {}): SessionView {
 	const runtime = options.runtime ?? defaultRuntime;
-	const live = runtime.running.get(name);
+	const live = runningRoom(runtime, name);
 	if (live instanceof RoomHost) return live;
 	return new ReadOnlySession(
 		name,
@@ -339,7 +335,11 @@ class RoomHost implements Session, RunningRoom {
 	/** The replay, the composition on the journal, and the first reconcile. Every operation waits here. */
 	readonly ready: Promise<void>;
 	/** Every definition this room can seat, by name. */
-	private readonly defs = new Map<string, AgentDefinition>();
+	private defs = new Map<string, AgentDefinition>();
+	private readonly pendingBindings = new Map<
+		string,
+		{ key: string; definition: AgentDefinition; uncertain: boolean }
+	>();
 	/** The composition this run writes, or nothing for a resumed run. Before the replay, `seats()` folds it alone. */
 	private readonly starting: Without<Composition, 'seq'> | undefined;
 	/** The handles the host delivers through. Presence itself is a fold over the journal. */
@@ -366,15 +366,21 @@ class RoomHost implements Session, RunningRoom {
 		return new RoomHost(options.name, runtime, options, composeFrom(options));
 	}
 
-	static resume(name: string, runtime: Runtime, streamFn: StreamFn | undefined): RoomHost {
-		return new RoomHost(name, runtime, { streamFn }, undefined);
+	static resume(
+		name: string,
+		runtime: Runtime,
+		streamFn: StreamFn | undefined,
+		bindings: Map<string, AgentDefinition>,
+	): RoomHost {
+		return new RoomHost(name, runtime, { streamFn }, undefined, bindings);
 	}
 
 	private constructor(
 		name: string,
 		runtime: Runtime,
 		options: { repo?: SessionRepo; streamFn?: StreamFn },
-		cast: Cast | undefined,
+		cast: CompositionDraft | undefined,
+		bindings: Map<string, AgentDefinition> = new Map(),
 	) {
 		this.name = name;
 		this.runtime = runtime;
@@ -389,7 +395,8 @@ class RoomHost implements Session, RunningRoom {
 		this.stream = options.streamFn ?? runtime.stream;
 		this.model = options.streamFn ? stubModel : runtime.model;
 		this.starting = cast && compositionOf(cast, this.iso());
-		if (cast) this.know(...cast.agents, ...cast.available);
+		if (cast) this.bind(...cast.agents, ...cast.available);
+		else this.defs = bindings;
 		this.ready = this.starting ? this.compose(this.starting) : this.recover();
 		void this.ready.catch(() => {});
 	}
@@ -400,13 +407,26 @@ class RoomHost implements Session, RunningRoom {
 	}
 
 	/**
-	 * A definition the seat side resolves by name: on this room, and on the
-	 * runtime's catalog.
+	 * A definition the room binds by name for this run.
 	 */
-	private know(...placed: Placed[]): void {
-		for (const { def } of placed) {
-			this.defs.set(def.name, def);
-			this.runtime.catalog.set(def.name, def);
+	private bind(...seats: SeatedAgent[]): void {
+		for (const { agent } of seats) {
+			const bound = this.defs.get(agent.name);
+			if (bound !== undefined && bound !== agent) {
+				throw new Error(
+					`Agent '${agent.name}' already has another binding in session '${this.name}'.`,
+				);
+			}
+			this.defs.set(agent.name, agent);
+		}
+	}
+
+	private assertBinding(agent: AgentDefinition): void {
+		const bound = this.defs.get(agent.name);
+		if (bound !== undefined && bound !== agent) {
+			throw new Error(
+				`Agent '${agent.name}' already has another binding in session '${this.name}'.`,
+			);
 		}
 	}
 
@@ -435,7 +455,7 @@ class RoomHost implements Session, RunningRoom {
 		await this.reconcile();
 	}
 
-	/** The composition off the journal, and every name on it through the catalog. */
+	/** The composition off the journal, and every name on it through the supplied bindings. */
 	private async recover(): Promise<void> {
 		await this.journal.ready;
 		this.enter('running');
@@ -449,9 +469,9 @@ class RoomHost implements Session, RunningRoom {
 			...state.composition.available.map((seat) => seat.name),
 		];
 		for (const name of names) {
-			const def = this.runtime.catalog.get(name);
-			if (def === undefined) throw new Error(`'${name}' is not in the runtime's catalog.`);
-			this.defs.set(name, def);
+			if (!this.defs.has(name)) {
+				throw new Error(`Session '${this.name}' cannot resume: agent '${name}' has no binding.`);
+			}
 		}
 		// The fence lands here: from here on, every earlier run's later writes are void.
 		await this.journal.write('run', () => {
@@ -471,7 +491,7 @@ class RoomHost implements Session, RunningRoom {
 		if (this.phase === 'evicted') return;
 		this.emit({ type: 'superseded' });
 		// This run alone: the runtime may hold a newer room under the name by now.
-		if (this.runtime.running.get(this.name) === this) this.runtime.running.delete(this.name);
+		releaseRoom(this.runtime, this.name, this);
 		this.evict();
 	}
 
@@ -719,20 +739,58 @@ class RoomHost implements Session, RunningRoom {
 		this.assertRunning();
 		await this.ready;
 		const given = unwrap(seat);
-		const state = this.state();
-
-		// A bare definition takes the attention its reserve entry carried.
-		const held = state.reserve.find((s) => s.name === given.def.name);
-		const attention = isSeatedAgent(seat) ? seat.attention : (held?.attention ?? 'broadcast');
-		const change: PresenceDraft = {
-			kind: 'seated',
-			subject: given.def.name,
-			identity: given.def.identity,
-			attention,
-		};
+		await this.resolvePendingBinding(given.agent.name);
+		const change = this.seatingChange(seat, given);
 		this.validatePresence(change);
-		this.know({ def: given.def, attention });
-		await this.commitPresence(change);
+		await this.commitSeating(given, change);
+	}
+
+	/** A confirmed recovery removes or promotes a stale pending binding before a new request proceeds. */
+	private async resolvePendingBinding(name: string): Promise<void> {
+		const pending = this.pendingBindings.get(name);
+		if (pending?.uncertain) {
+			try {
+				await this.settlePending(name, pending.key);
+			} catch {
+				// The next operation will try its own recovery read.
+			}
+		}
+		if (this.pendingBindings.has(name)) throw new Error(`Agent '${name}' is already being seated.`);
+	}
+
+	/** A bare definition takes the attention its reserve entry carried. */
+	private seatingChange(seat: AgentSeat, given: SeatedAgent): PresenceDraft {
+		const held = this.state().reserve.find((placed) => placed.name === given.agent.name);
+		return {
+			kind: 'seated',
+			subject: given.agent.name,
+			identity: given.agent.identity,
+			attention: isSeatedAgent(seat) ? seat.attention : (held?.attention ?? 'broadcast'),
+		};
+	}
+
+	private async commitSeating(given: SeatedAgent, change: PresenceDraft): Promise<void> {
+		const key = crypto.randomUUID();
+		if (this.pendingBindings.has(given.agent.name))
+			throw new Error(`Agent '${given.agent.name}' is already being seated.`);
+		this.assertBinding(given.agent);
+		if (!this.defs.has(given.agent.name))
+			this.pendingBindings.set(given.agent.name, {
+				key,
+				definition: given.agent,
+				uncertain: false,
+			});
+		try {
+			await this.commitPresence(change, true, key);
+		} catch (error) {
+			try {
+				await this.settlePending(given.agent.name, key);
+			} catch {
+				const pending = this.pendingBindings.get(given.agent.name);
+				if (pending?.key === key) pending.uncertain = true;
+			}
+			throw error;
+		}
 	}
 
 	/** The host takes an agent off the roster. It keeps the assistant seated. */
@@ -775,8 +833,8 @@ class RoomHost implements Session, RunningRoom {
 	}
 
 	/** A presence change uses a fresh key. */
-	private commitPresence(change: PresenceDraft, route = true) {
-		return this.commitMessage(crypto.randomUUID(), { type: 'presence', change, route });
+	private commitPresence(change: PresenceDraft, route = true, key = crypto.randomUUID()) {
+		return this.commitMessage(key, { type: 'presence', change, route });
 	}
 
 	// -- what the room hears --------------------------------------------------
@@ -789,9 +847,29 @@ class RoomHost implements Session, RunningRoom {
 	 * never a second one for the entries it wrote itself.
 	 */
 	private hear(entry: Entry): void {
-		if (entry.kind === 'message') this.heardMessage(placed(entry));
-		else if (entry.kind === 'close') this.heardClose(entry.body);
+		if (entry.kind === 'message') {
+			const message = placed(entry);
+			if (message.kind === 'seated') this.promoteBinding(entry.key, message.subject);
+			this.heardMessage(message);
+		} else if (entry.kind === 'close') this.heardClose(entry.body);
 		else if (entry.kind === 'lease') this.heardLease(entry.body, this.opens(entry.body.id));
+	}
+
+	private promoteBinding(key: string | undefined, name: string): void {
+		if (key === undefined) return;
+		const pending = this.pendingBindings.get(name);
+		if (pending === undefined) return;
+		if (pending.key !== key) return;
+		this.defs.set(name, pending.definition);
+		this.pendingBindings.delete(name);
+	}
+
+	/** Queue a no-op after the recovery read, then release only an unconfirmed matching binding. */
+	private settlePending(name: string, key: string): Promise<boolean> {
+		return this.journal.write('lease', () => {
+			if (this.pendingBindings.get(name)?.key === key) this.pendingBindings.delete(name);
+			return undefined;
+		});
 	}
 
 	/**
@@ -1242,7 +1320,7 @@ class RoomHost implements Session, RunningRoom {
 		} finally {
 			// The name comes free whatever the storage did. A failed write must
 			// not leave a room that can never be started again.
-			if (this.runtime.running.get(this.name) === this) this.runtime.running.delete(this.name);
+			releaseRoom(this.runtime, this.name, this);
 			// A stopped room never goes quiet on its own, so nobody waits on it.
 			for (const resolve of this.quietWaiters.splice(0)) resolve();
 			for (const resolve of this.settledWaiters.splice(0)) resolve();
@@ -1286,13 +1364,15 @@ class RoomHost implements Session, RunningRoom {
  * the room refuses them. The assistant is a seating like every other: the
  * option seats it at `none`, beside the agents.
  */
-function composeFrom(options: StartSessionOptions): Cast {
+function composeFrom(options: StartSessionOptions): CompositionDraft {
 	const names = new Set<string>();
-	const take = (placed: Placed): Placed => {
-		if (names.has(placed.def.name)) {
-			throw new Error(`Duplicate agent name '${placed.def.name}': one name names one participant.`);
+	const take = (placed: SeatedAgent): SeatedAgent => {
+		if (names.has(placed.agent.name)) {
+			throw new Error(
+				`Duplicate agent name '${placed.agent.name}': one name names one participant.`,
+			);
 		}
-		names.add(placed.def.name);
+		names.add(placed.agent.name);
 		return placed;
 	};
 	const agents = (options.agents ?? []).map((seat) => take(unwrap(seat)));
@@ -1308,24 +1388,29 @@ function composeFrom(options: StartSessionOptions): Cast {
 	};
 }
 
-function unwrap(seat: AgentSeat): Placed {
-	const def = isSeatedAgent(seat) ? seat.agent : seat;
-	if (!isAgent(def)) throw new Error('Agents must come from defineAgent or seated().');
-	if (!isSeatedAgent(seat)) return { def, attention: 'broadcast' };
-	return {
-		def,
-		attention: seat.attention,
-	};
+function bindingsOf(agents: readonly AgentDefinition[]): Map<string, AgentDefinition> {
+	const bindings = new Map<string, AgentDefinition>();
+	for (const agent of agents) {
+		if (bindings.has(agent.name)) throw new Error(`Restart bindings repeat agent '${agent.name}'.`);
+		bindings.set(agent.name, agent);
+	}
+	return bindings;
 }
 
-const seatingOf = (placed: Placed): Seating => ({
-	name: placed.def.name,
-	identity: placed.def.identity,
+function unwrap(seat: AgentSeat): SeatedAgent {
+	if (isSeatedAgent(seat)) return seat;
+	if (!isAgent(seat)) throw new Error('Agents must come from defineAgent or seated().');
+	return seated(seat);
+}
+
+const seatingOf = (placed: SeatedAgent): Seating => ({
+	name: placed.agent.name,
+	identity: placed.agent.identity,
 	attention: placed.attention,
 });
 
 /** The cast as the journal holds it: every seat by name, identity, and attention. */
-function compositionOf(cast: Cast, at: string): Without<Composition, 'seq'> {
+function compositionOf(cast: CompositionDraft, at: string): Without<Composition, 'seq'> {
 	return {
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
 		...(cast.assistant === undefined ? {} : { assistant: cast.assistant }),

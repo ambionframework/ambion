@@ -8,6 +8,7 @@
  * `AMBION_CHAOS=all` widens the handover to a crash at every write.
  */
 import { describe, expect, it } from 'vitest';
+import { runningRoom } from '../src/host/runtime.ts';
 import {
 	createRuntime,
 	resumeSession,
@@ -90,7 +91,6 @@ describe('a split: two live hosts over one journal', () => {
 			createRuntime({
 				sessions: opened.sessions,
 				clock,
-				agents,
 				transport: serializing(inProcessTransport()),
 			});
 		const first = host();
@@ -108,7 +108,11 @@ describe('a split: two live hosts over one journal', () => {
 		await room.quiet();
 		// the second host takes the name while the first is alive and keeps taking questions
 		const second = host();
-		const taken = await resumeSession(name, { runtime: second, streamFn: scripted(script) });
+		const taken = await resumeSession(name, {
+			runtime: second,
+			agents,
+			streamFn: scripted(script),
+		});
 		const his = await visitSession(taken, sam);
 		await his.deliver({ text: 'Second?', key: 'q2' });
 		await taken.quiet();
@@ -117,20 +121,24 @@ describe('a split: two live hosts over one journal', () => {
 		await room.quiet();
 		try {
 			expect(events.some((e) => e.type === 'superseded')).toBe(true);
-			expect(first.running.has(name)).toBe(false);
+			expect(runningRoom(first, name)).toBeUndefined();
 			const record = await taken.messages();
 			expect(record.map((m) => m.key)).toContain('q2');
 			expect(record.map((m) => m.key)).not.toContain('q3');
 			expect(new Set(record.map((m) => m.seq)).size).toBe(record.length);
 			// and a third host reads the same record off the storage, and fences the second out
-			const third = await resumeSession(name, { runtime: host(), streamFn: scripted(script) });
+			const third = await resumeSession(name, {
+				runtime: host(),
+				agents,
+				streamFn: scripted(script),
+			});
 			expect((await third.messages()).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
 			await stopSession(third);
 			// the second host learns at its next write: its stop finds the fence, says so, and frees the name
 			const taken_events = collect(taken);
 			await stopSession(taken);
 			expect(taken_events.some((e) => e.type === 'superseded')).toBe(true);
-			expect(second.running.has(name)).toBe(false);
+			expect(runningRoom(second, name)).toBeUndefined();
 		} finally {
 			await opened.dispose();
 		}

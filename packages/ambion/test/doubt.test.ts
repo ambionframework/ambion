@@ -60,7 +60,7 @@ async function room(name: string) {
 	const opened = await memory.open();
 	const faulty = faultyOpener(opened.sessions);
 	const clock = fakeClock();
-	const runtime = createRuntime({ clock, sessions: faulty.sessions, agents: [assistant, alpha] });
+	const runtime = createRuntime({ clock, sessions: faulty.sessions });
 	const session = startSession({
 		name: roomName(name),
 		runtime,
@@ -90,6 +90,7 @@ describe('a room in doubt', () => {
 						stream: room.stream,
 						model: room.model,
 						sessions: room.sessions,
+						definition: (seat) => room.definition(seat),
 						emit: (event) => room.emit(event),
 						evict: () => room.evict(),
 						view: (id) => room.view(id),
@@ -116,7 +117,6 @@ describe('a room in doubt', () => {
 				clock,
 				sessions: opened.sessions,
 				transport,
-				agents: [assistant, alpha],
 			}),
 			assistant,
 			agents: [alpha],
@@ -168,7 +168,7 @@ describe('a room in doubt', () => {
 			}
 		});
 		const clock = fakeClock();
-		const runtime = createRuntime({ clock, sessions, agents: [assistant, alpha] });
+		const runtime = createRuntime({ clock, sessions });
 		const session = startSession({
 			name: roomName('doubt-close'),
 			runtime,

@@ -124,7 +124,6 @@ class Cluster {
 		return createRuntime({
 			sessions,
 			clock: this.clock,
-			agents,
 			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
 			// Small on purpose: the history runs over entries a checkpoint replaced.
 			checkpoint: { entries: 4 },
@@ -236,6 +235,7 @@ class Cluster {
 			try {
 				this.session = await resumeSession(this.name, {
 					runtime: this.runtime,
+					agents,
 					streamFn: scripted(this.cast.script),
 				});
 				break;

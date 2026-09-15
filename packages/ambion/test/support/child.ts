@@ -8,17 +8,7 @@
  *   node --experimental-transform-types child.ts <dir> <name> <delay-ms> <storage>
  */
 import { createRuntime, startSession, visitSession } from '../../src/index.ts';
-import {
-	agents,
-	assistant,
-	colleague,
-	priya,
-	product,
-	questions,
-	sam,
-	slowly,
-	TIMING,
-} from './cast.ts';
+import { assistant, colleague, priya, product, questions, sam, slowly, TIMING } from './cast.ts';
 import { scripted } from './scripted.ts';
 import { childSessions, tappedOpener } from './storage.ts';
 
@@ -30,7 +20,7 @@ if (dir === undefined || name === undefined) {
 const sessions = tappedOpener(childSessions(storage ?? 'jsonl', dir), (id, n, phase) => {
 	if (id === name && phase === 'after') process.stdout.write(`write ${n}\n`);
 });
-const runtime = createRuntime({ sessions, agents, ...TIMING });
+const runtime = createRuntime({ sessions, ...TIMING });
 const session = startSession({
 	name,
 	runtime,
