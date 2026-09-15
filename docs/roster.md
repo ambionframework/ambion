@@ -310,8 +310,9 @@ way `abort()` does for the whole room. It takes the seat off the roster,
 then commits `unseated`. An agent that came from the reserve returns to it.
 An agent seated at start may be unseated too, and the record says so.
 Unseating is the direction the room cannot take back, so the assistant
-holds no tool for it. [`planning/backlog.md`](../planning/backlog.md) holds the
-argument for giving it one.
+holds no tool for it. The
+[deferred work](../planning/next.md#10-deferred-work-and-the-reason-it-waits)
+records the conditions for reconsidering that authority.
 
 **`stop` leaves the roster to the next composition.** `room.stop`
 revokes every lease in flight and commits `left` for every person present

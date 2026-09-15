@@ -29,7 +29,7 @@ pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 | `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs            |
 | `examples/site`       | Runnable example                                                                          |
 | `demos/`              | One dated report per merged change — regenerate on the branch, then leave it              |
-| `planning/`           | `backlog.md`: the wider deferred debt                                                     |
+| `planning/`           | `release-0.1.0.md`: release scope; `next.md`: remaining and deferred work                 |
 
 ## Thesis
 
@@ -54,7 +54,7 @@ same kind, and every one enters as a message. Keep both framings in
 
 `README.md` and `docs/` document what is implemented. Do not write about
 unbuilt concepts (channels, deployment targets) there; deferred work goes in
-`planning/backlog.md`.
+`planning/next.md`.
 
 ## Commands
 

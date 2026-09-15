@@ -100,8 +100,8 @@ a real disk on top of that, and it loads just-bash's `ReadWriteFs` on the
 first connect: a static import of that name refuses to bundle for any
 target but Node, because just-bash offers it in its Node build alone. A
 room on workerd reaches no workspace today, and
-[`planning/backlog.md`](../planning/backlog.md) §44 holds what a split of
-the Node-only surface still needs.
+[`planning/next.md`](../planning/next.md#package-and-platform-readiness) holds
+the remaining platform boundary checks.
 
 ### The core's layers
 
