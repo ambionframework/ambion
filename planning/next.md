@@ -129,14 +129,16 @@ remain an independent correctness oracle. Do not add checkpoints for 0.1.0.
 
 ### Make one path dispatch work
 
-**Dispatch activations from reconciliation.** Current `heardMessage` sends
-activation IDs directly and then requests reconciliation. Both paths can
-interpret the same recorded cause.
+**Activation dispatch now comes from reconciliation.** After a message
+append, the host delivers notifications and steering, then requests
+reconciliation immediately. Reconciliation reads the activation identities
+and attempts from `state.due` for normal operation, retries, and restart.
+There is no polling delay or second durable queue.
 
-After an append, update the projection and request reconciliation immediately.
-The same activation selection must serve normal operation, retries, and
-restart. Notifications can still be immediate. This change requires no polling
-delay and no second durable queue.
+[`dispatch.test.ts`](../packages/ambion/test/dispatch.test.ts) checks prompt
+ordinary and assistant selection starts, and recovery after lost initial
+sends, on memory and SQLite. Live handling no longer sends an extra ordinary
+activation for assistant selection.
 
 Steering remains a distinct execution operation. Reuse the reducer's delivery
 decision and the protocol's structured message data. Do not invent another
@@ -549,7 +551,8 @@ response waits. Checkpointing is already removed. Preserve those decisions.
 
 - Centralize activation identity. Exchange completion and delivery interpretation
   now share their respective rules across execution and replay.
-- Make normal operation and recovery use one dispatch decision.
+- Separate steering from the activation wake envelope. Normal operation and
+  recovery now use one dispatch decision.
 - Isolate mutable host resources from immutable collaboration facts.
 - Protect returned values and validate contributions at commit.
 
