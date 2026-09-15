@@ -7,7 +7,8 @@
  * call and reads the room's answer through `landed`.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { binderOf, SAY, SEAT, SUMMARISE } from '../define.ts';
+import { SEAT, SUMMARISE, seatToolDescription, summaryToolDescription } from '../assistant.ts';
+import { SAY } from '../define.ts';
 import { refusal } from '../render.ts';
 import { builtinTools, toolContext } from '../tools/workspace.ts';
 import { type AgentDefinition, isAmbionTool, type Seq } from '../types.ts';
@@ -148,39 +149,21 @@ async function say(
  * that holds one tool and nothing else: what the seat does with it is the
  * whole of the activation.
  *
- * The seating proved the name resolves (`defineRole`), so a name the room
- * does not bind is the agent's own.
+ * An ordinary message activation gives the seat its own tools.
  */
 export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
-	const { grant } = view.spec;
-	if (grant.kind === 'none') return [];
-	if (grant.kind === 'say') {
-		return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
+	switch (view.spec.cause) {
+		case 'message':
+			return [sayTool(held), ...builtinTools(def), ...def.tools.map((tool) => toPiTool(tool, def))];
+		case 'opened': {
+			const composing: Composing = { ...view.spec.opening, seated: 0, calls: 0 };
+			return [seatTool(held, composing)];
+		}
+		case 'closed': {
+			const attempt: SummaryAttempt = { ...view.spec.closing, calls: 0 };
+			return [summariseTool(held, attempt)];
+		}
 	}
-	if (grant.kind === 'custom') return boundTool(grant.tool, def);
-	if (grant.kind === 'summary' && view.spec.cause === 'closed') {
-		const attempt: SummaryAttempt = { ...view.spec.closing, calls: 0 };
-		return [summariseTool(held, attempt)];
-	}
-	if (grant.kind === 'seat' && view.spec.cause === 'opened') {
-		const composing: Composing = { ...view.spec.opening, seated: 0, calls: 0 };
-		return [seatTool(held, composing)];
-	}
-	return [];
-}
-
-/**
- * The tool of this name the seating bound, for a role that named one the
- * room does not bind. A workspace binds the four built-in names for an
- * agent that names one, and the agent brings every other name.
- */
-function boundTool(name: string, def: AgentDefinition): AgentTool[] {
-	const bound =
-		binderOf(name) === 'workspace'
-			? builtinTools(def)
-			: def.tools.map((tool) => toPiTool(tool, def));
-	const found = bound.find((tool) => tool.name === name);
-	return found === undefined ? [] : [found];
 }
 
 // -- the assistant's bound ----------------------------------------------------
@@ -211,9 +194,7 @@ function summariseTool(bound: Binding, closing: SummaryAttempt): AgentTool {
 	return {
 		...SUMMARISE,
 		label: SUMMARISE.name,
-		description:
-			`Write the one message ${person} reads for this exchange. Call it once. ` +
-			'Ending your turn without calling it leaves the range whole, for whoever reads it.',
+		description: summaryToolDescription(person),
 		execute: async (toolCallId, rawParams) => {
 			closing.calls += 1;
 			const stop = standDown(stoppingReason(closing));
@@ -291,9 +272,7 @@ function seatTool(bound: Binding, composing: Composing): AgentTool {
 	return {
 		...SEAT,
 		label: SEAT.name,
-		description:
-			'Seat one agent from the reserve. It joins the room at once and reads the question. ' +
-			'Ending your turn without calling it leaves the roster as it stands.',
+		description: seatToolDescription,
 		execute: async (toolCallId, rawParams) => {
 			composing.calls += 1;
 			const stop = standDown(composeStoppingReason(composing));

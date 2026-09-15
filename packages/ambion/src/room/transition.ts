@@ -199,19 +199,18 @@ function presenceRefusal(state: RoomState, change: PresenceChange): string | und
 	if (change.kind === 'seated' && (seat !== undefined || state.people.has(change.subject))) {
 		return `Duplicate agent name '${change.subject}': one name names one participant.`;
 	}
-	if (change.kind === 'unseated') return unseatRefusal(seat, change.subject);
+	if (change.kind === 'unseated') return unseatRefusal(state, seat, change.subject);
 	if (change.kind === 'arrived') return arrivalRefusal(state, change);
 	return undefined;
 }
 
 function unseatRefusal(
+	state: RoomState,
 	seat: RoomState['roster'][number] | undefined,
 	name: string,
 ): string | undefined {
 	if (seat === undefined) return `'${name}' is not seated in this session.`;
-	if (seat.role !== undefined) {
-		return `'${name}' holds the role '${seat.role.name}': a role is a seating choice, so the next composition decides it.`;
-	}
+	if (state.composition?.assistant === name) return `'${name}' is this room's assistant.`;
 	return undefined;
 }
 
@@ -457,6 +456,14 @@ function invalidProgress(
 }
 
 function compose(state: RoomState, composition: Body<Composition>): RoomDecision<'composition'> {
+	const assistant = composition.assistant;
+	if (assistant !== undefined) {
+		const seat = composition.agents.find((candidate) => candidate.name === assistant);
+		if (seat === undefined)
+			return refused(`Assistant '${assistant}' is not seated in this session.`);
+		if (seat.attention !== 'none')
+			return refused(`Assistant '${assistant}' must have attention 'none'.`);
+	}
 	const names = new Set<string>();
 	for (const seat of [...composition.agents, ...composition.available]) {
 		if (names.has(seat.name) || state.people.has(seat.name))

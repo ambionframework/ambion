@@ -85,7 +85,6 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 		state,
 		live: room.live(state),
 		unseen: (since) => room.journal.messages(since).length,
-		guidance: (role) => room.runtime.roles.get(role)?.guidance,
 	};
 }
 

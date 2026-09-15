@@ -11,9 +11,9 @@
  * run got to.
  */
 
+import { assistantPolicy } from '../assistant.ts';
 import type { Close, LeaseChange } from '../wire.ts';
-import { draftOver } from './assistant.ts';
-import { answering, type RoomState } from './fold.ts';
+import type { RoomState } from './fold.ts';
 import { isExpired, isLive, type PendingActivation, parseId, seatOf } from './lease.ts';
 import { givesUp } from './rules.verified.ts';
 
@@ -185,24 +185,28 @@ function expiries(state: RoomState, now: number): Reconciliation['expired'] {
 }
 
 /**
- * The exchange closes when nothing works on it. It names the seat whose role
- * answers `closed`, when the exchange owes a summary. A room with no such
- * seat closes the exchange and owes nothing.
+ * The exchange closes when nothing works on it. It names the assistant when
+ * the exchange owes a summary.
  */
 function closing(state: RoomState, work: LiveWork, now: number): Reconciliation['close'] {
 	const exchange = state.exchange;
 	if (exchange === undefined || work.exchange) return undefined;
-	const writer = answering(state.roster, 'closed')?.name;
-	const speaksForItself = (name: string) => !state.people.has(name) && name !== writer;
-	const owed =
-		writer !== undefined &&
-		draftOver(state.messages, exchange.from, state.lastSeq, speaksForItself) !== undefined;
-	return {
+	const base = {
 		owner: exchange.owner,
 		from: exchange.from,
 		through: state.lastSeq,
 		at: new Date(now).toISOString(),
-		...(owed && writer !== undefined ? { wakes: [writer] } : {}),
+	};
+	const writer = assistantPolicy.closing(
+		state.composition,
+		state.roster,
+		state.messages,
+		state.people,
+		base,
+	);
+	return {
+		...base,
+		...(writer === undefined ? {} : { wakes: [writer] }),
 	};
 }
 

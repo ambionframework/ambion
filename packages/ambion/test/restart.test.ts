@@ -4,22 +4,17 @@
  * the run: the exchange, the roster, the people, the leases and the summary
  * still owed all fold back, on every storage.
  */
-import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	defineRole,
-	defineTool,
-	defineToolShape,
 	isSpoken,
 	isSummary,
 	type Runtime,
 	readSession,
 	resumeSession,
 	type Session,
-	seated,
 	startSession,
 	stopSession,
 	visitSession,
@@ -696,113 +691,5 @@ describe('a room dropped from memory', () => {
 		await tick();
 		expect((await storedOf(opened.sessions, session.name)).length).toBe(before);
 		held.resolve();
-	});
-});
-
-/**
- * A role's guidance is the runtime's, the way `instructions` are. The journal
- * holds the role's name, so a resumed room reads the prose back from the
- * runtime it resumes in. `createRuntime` starts with `ASSISTANT`, so a room
- * that seats one resumes in any runtime.
- */
-describe('a role across a resume', () => {
-	const REVIEW = defineToolShape({ name: 'review', parameters: Type.Object({}) });
-	const reviewer = defineAgent({
-		name: 'reviewer',
-		identity: 'Reads what an exchange came to.',
-		instructions: 'review it',
-		model: 'scripted/reviewer',
-		tools: [defineTool({ shape: REVIEW, description: 'Review it.', execute: () => 'reviewed' })],
-	});
-	const REVIEWER = defineRole({
-		name: 'reviewer',
-		answers: { closed: REVIEW },
-		guidance: 'You read what an exchange came to, and you review it once.',
-	});
-
-	const open = (runtime: Runtime, name: string, prompts: Record<string, string>) =>
-		startSession({
-			name,
-			agents: [alpha, beta, seated(reviewer, { attention: 'none', role: REVIEWER })],
-			runtime,
-			streamFn: scripted(
-				byAgent({
-					alpha: says(['one']),
-					beta: says(['two']),
-					reviewer: (context, who) => {
-						prompts[who] = context.systemPrompt ?? '';
-						return quiet();
-					},
-				}),
-			),
-		});
-
-	it('reads its guidance back from the runtime it resumes in', async () => {
-		const opened = await memory.open();
-		const clock = fakeClock();
-		const held = createRuntime({ sessions: opened.sessions, clock, agents, roles: [REVIEWER] });
-		held.catalog.set(reviewer.name, reviewer);
-		const name = roomName('restart-role');
-		const prompts: Record<string, string> = {};
-		const session = open(held, name, prompts);
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await session.quiet();
-		expect(prompts.reviewer).toContain("You are 'reviewer', the reviewer in the session");
-		expect(prompts.reviewer).toContain('you review it once');
-		crash(held, session);
-
-		// a second runtime, told the same role: the resumed room renders the same prose
-		const next = createRuntime({ sessions: opened.sessions, clock, agents, roles: [REVIEWER] });
-		next.catalog.set(reviewer.name, reviewer);
-		const resumed = await resumeSession(name, {
-			runtime: next,
-			streamFn: scripted(byAgent({})),
-		});
-		expect(resumed.seats().find((s) => s.name === 'reviewer')).toMatchObject({ role: 'reviewer' });
-		await stopSession(resumed);
-	});
-
-	/**
-	 * A seating registers its role on the runtime, the way it registers the
-	 * agent's definition. So the runtime a room started in resumes it, and a
-	 * host that starts and resumes in one runtime tells `createRuntime`
-	 * nothing about the role.
-	 */
-	it('registers the role it seated, so the runtime it started in resumes it', async () => {
-		const opened = await memory.open();
-		const clock = fakeClock();
-		const only = createRuntime({ sessions: opened.sessions, clock, agents });
-		only.catalog.set(reviewer.name, reviewer);
-		expect(only.roles.has('reviewer')).toBe(false);
-		const name = roomName('restart-role-same');
-		const session = open(only, name, {});
-		await session.settled();
-		expect(only.roles.get('reviewer')).toBe(REVIEWER);
-		crash(only, session);
-
-		const resumed = await resumeSession(name, {
-			runtime: only,
-			streamFn: scripted(byAgent({})),
-		});
-		expect(resumed.seats().find((s) => s.name === 'reviewer')).toMatchObject({ role: 'reviewer' });
-		await stopSession(resumed);
-	});
-
-	it('refuses a resume into a runtime that does not hold the role', async () => {
-		const opened = await memory.open();
-		const clock = fakeClock();
-		const held = createRuntime({ sessions: opened.sessions, clock, agents, roles: [REVIEWER] });
-		held.catalog.set(reviewer.name, reviewer);
-		const name = roomName('restart-role-missing');
-		const session = open(held, name, {});
-		await session.settled();
-		crash(held, session);
-
-		const bare = createRuntime({ sessions: opened.sessions, clock, agents });
-		bare.catalog.set(reviewer.name, reviewer);
-		await expect(
-			resumeSession(name, { runtime: bare, streamFn: scripted(byAgent({})) }),
-		).rejects.toThrow(/Role 'reviewer' is not in the runtime's roles/);
 	});
 });

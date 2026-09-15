@@ -28,7 +28,7 @@
 import type { Committed } from '@ambionframework/journal';
 import type { SessionRepo, StreamFn } from '@earendil-works/pi-agent-core';
 import { answerCommit, answerLease, answerView, RefusedError } from './answers.ts';
-import { ASSISTANT, roleOf, seated } from './define.ts';
+import { seated } from './define.ts';
 import {
 	defaultRuntime,
 	type RunningRoom,
@@ -64,7 +64,6 @@ import {
 	type ModelResolver,
 	type Participant,
 	type PresenceMessage,
-	type RoleDefinition,
 	type SeatInfo,
 	type Seq,
 	type SessionEvent,
@@ -101,16 +100,16 @@ import type {
  */
 type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 
-/** An agent with the attention and the role it takes when seated. */
+/** An agent with the attention it takes when seated. */
 interface Placed {
 	def: AgentDefinition;
 	attention: Attention;
-	role?: RoleDefinition;
 }
 
 /** What a run starts with, as definitions. The journal holds the same composition, by name. */
 interface Cast {
 	goal: string | undefined;
+	assistant: string | undefined;
 	agents: Placed[];
 	available: Placed[];
 }
@@ -135,9 +134,7 @@ export interface StartSessionOptions {
 	 * exchange, from the reserve, and writes the one message a person reads
 	 * when their exchange closes, shaped to how that person reads.
 	 *
-	 * The option seats it with the agents, at `none`, in the `ASSISTANT`
-	 * role. It is the same seating as
-	 * `seated(agent, { attention: 'none', role: ASSISTANT })` in `agents`,
+	 * The option seats it with the agents at `none`.
 	 * and it is the convention a room follows. A room without one closes
 	 * every exchange and owes no summary.
 	 */
@@ -404,14 +401,12 @@ class RoomHost implements Session, RunningRoom {
 
 	/**
 	 * A definition the seat side resolves by name: on this room, and on the
-	 * runtime's catalog. A role the seating gives goes to the runtime's roles
-	 * under its own name, so a resumed room reads its guidance back.
+	 * runtime's catalog.
 	 */
 	private know(...placed: Placed[]): void {
-		for (const { def, role } of placed) {
+		for (const { def } of placed) {
 			this.defs.set(def.name, def);
 			this.runtime.catalog.set(def.name, def);
-			if (role !== undefined) this.runtime.roles.set(role.name, role);
 		}
 	}
 
@@ -453,12 +448,6 @@ class RoomHost implements Session, RunningRoom {
 			...state.roster.map((seat) => seat.name),
 			...state.composition.available.map((seat) => seat.name),
 		];
-		for (const seat of state.roster) {
-			const role = seat.role?.name;
-			if (role !== undefined && !this.runtime.roles.has(role)) {
-				throw new Error(`Role '${role}' is not in the runtime's roles: pass it to createRuntime.`);
-			}
-		}
 		for (const name of names) {
 			const def = this.runtime.catalog.get(name);
 			if (def === undefined) throw new Error(`'${name}' is not in the runtime's catalog.`);
@@ -746,7 +735,7 @@ class RoomHost implements Session, RunningRoom {
 		await this.commitPresence(change);
 	}
 
-	/** The host takes an agent off the roster. Never a seat that holds a role. */
+	/** The host takes an agent off the roster. It keeps the assistant seated. */
 	async unseat(agent: AgentDefinition): Promise<void> {
 		this.assertRunning();
 		await this.ready;
@@ -1295,7 +1284,7 @@ class RoomHost implements Session, RunningRoom {
 /**
  * The composition `startSession` was given, checked for duplicates the way
  * the room refuses them. The assistant is a seating like every other: the
- * option seats it at `none`, in the `ASSISTANT` role, beside the agents.
+ * option seats it at `none`, beside the agents.
  */
 function composeFrom(options: StartSessionOptions): Cast {
 	const names = new Set<string>();
@@ -1308,10 +1297,15 @@ function composeFrom(options: StartSessionOptions): Cast {
 	};
 	const agents = (options.agents ?? []).map((seat) => take(unwrap(seat)));
 	if (options.assistant !== undefined) {
-		agents.push(take(unwrap(seated(options.assistant, { attention: 'none', role: ASSISTANT }))));
+		agents.push(take(unwrap(seated(options.assistant, { attention: 'none' }))));
 	}
 	const available = (options.available ?? []).map((seat) => take(unwrap(seat)));
-	return { goal: options.goal?.trim() || undefined, agents, available };
+	return {
+		goal: options.goal?.trim() || undefined,
+		assistant: options.assistant?.name,
+		agents,
+		available,
+	};
 }
 
 function unwrap(seat: AgentSeat): Placed {
@@ -1321,7 +1315,6 @@ function unwrap(seat: AgentSeat): Placed {
 	return {
 		def,
 		attention: seat.attention,
-		...(seat.role === undefined ? {} : { role: seat.role }),
 	};
 }
 
@@ -1329,13 +1322,13 @@ const seatingOf = (placed: Placed): Seating => ({
 	name: placed.def.name,
 	identity: placed.def.identity,
 	attention: placed.attention,
-	...(placed.role === undefined ? {} : { role: roleOf(placed.role) }),
 });
 
-/** The cast as the journal holds it: every seat by name, identity, attention and role. */
+/** The cast as the journal holds it: every seat by name, identity, and attention. */
 function compositionOf(cast: Cast, at: string): Without<Composition, 'seq'> {
 	return {
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
+		...(cast.assistant === undefined ? {} : { assistant: cast.assistant }),
 		agents: cast.agents.map(seatingOf),
 		available: cast.available.map(seatingOf),
 		at,

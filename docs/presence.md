@@ -549,8 +549,8 @@ export type SeatInfo =
       status: SeatStatus;
       attention: Attention;
       sessionId: string;
-      /** Set when this seat is the room's assistant. See assistant.md. */
-      role?: string;
+      /** Whether the room designates this agent as its assistant. */
+      assistant: boolean;
     }
   | {
       kind: 'human';

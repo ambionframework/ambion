@@ -45,13 +45,13 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 	close: { owner: 'priya', from: 2, through: 4, seq: 4, at, wakes: ['assistant'] },
 	composition: {
 		goal: 'Decide the pour date.',
+		assistant: 'assistant',
 		agents: [
 			{ name: 'product', identity: 'The product.', attention: 'broadcast' },
 			{
 				name: 'assistant',
 				identity: 'Writes the one message.',
 				attention: 'none',
-				role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
 			},
 		],
 		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'named' }],

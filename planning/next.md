@@ -18,12 +18,12 @@ and persisted shapes. Remove obsolete structures and migration machinery
 when they complicate the design. Existing persisted state does not constrain
 the implementation.
 
-**Items 5–10 and their replacement APIs are proposals.** Items 1–3 are
-merged. Item 4 is implemented and under review. Completed items record their
+**Items 6–10 and their replacement APIs are proposals.** Items 1–4 are
+merged. Item 5 is implemented and under review. Completed items record their
 implementation below. Source references identify the current mechanisms.
 Each proposal identifies its behavioral changes.
 The initial review used source, contracts, and representative tests.
-Implementation adds execution checks for items 1–4.
+Implementation adds execution checks for items 1–5.
 
 ## The design to preserve
 
@@ -369,44 +369,52 @@ request and starting a new activation attempt.
 
 ## 5. Make assistant behavior one cohesive policy module
 
-**Current cost.** Roles appear generic, but their scheduling inherits
-assistant policy. An `opened` handler depends on a nonempty reserve.
-A `closed` handler depends on the summary threshold. The first matching
-seat handles an event. Tool shapes and binder precedence add more concepts.
+**Implementation.** The room designates its assistant once in the
+composition. It remains an ordinary roster seat at attention `none`.
+One private policy owns reserve eligibility, summary eligibility, guidance,
+and the two tool schemas. The executor owns each activation's mutable
+call limits.
 
-**Proposed design.** Put reserve selection, summary eligibility, assistant
-guidance, and assistant tools together. Preserve the simple `assistant`
-option for application authors. Begin with an internal module or an
-`/assistant` subpath.
+Remove generic roles, role registries, shared tool shapes, and custom event
+grants. An activation has exactly one protocol: a message permits `say`,
+an opening permits `seat`, and a closing permits `summarise`.
+The assistant takes only opening and closing activations.
 
-Keep custom roles advanced and explicitly limited. Broader handlers need
-explicit eligibility and completion semantics before becoming a general
-extension point. Remove custom behavior that lacks a coherent contract.
+The public `assistant` option remains optional. A composition rejects an
+assistant name that does not identify a roster seat at attention `none`.
+The host cannot unseat that assistant during the run. Recovery reads the
+designation directly from the composition.
 
-**Naming.** Use `AssistantPolicy` for assistant-specific scheduling and
-guidance. The assistant remains an ordinary agent in a seat. Reserve `Role`
-for a coherent responsibility whose contract the runtime can enforce.
-Avoid using it as a name for an incomplete event-to-tool mapping.
+**Original cost.** Roles appeared generic, but their scheduling inherited
+assistant policy. An `opened` handler depended on a nonempty reserve.
+A `closed` handler depended on the summary threshold. The first matching
+seat handled an event. Tool shapes and binder precedence added more concepts.
 
-Prefer `resolveTool` to public `binderOf` when callers need a tool. Keep
-`ToolShape` internal unless applications independently share those contracts.
-Remove unused abstraction names together with the abstractions they name.
+**Naming.** Use `assistantPolicy` for the private policy value. Remove
+`defineRole`, `RoleDefinition`, `Role`, `ASSISTANT`, `defineToolShape`,
+`ToolShape`, and `binderOf`. Tool definitions directly state their name,
+parameters, description, and implementation.
 
-**Rationale.** A useful default becomes understandable on its own. Custom
-behavior no longer inherits hidden assistant rules through generic names.
+**Rationale.** The supported behavior becomes understandable on its own.
+One designation replaces event mappings and host registries. Eligibility
+and granted actions share the same assistant contract.
 
-**Behavioral change.** Narrow public role support when that makes its
-contract coherent. A generic closed-event handler should not silently depend
-on whether two agent messages require summarization.
+**Behavioral change.** Custom exchange handlers are removed. The assistant
+protocol has explicit eligibility and completion rules. Future handlers
+need their own coherent domain contract before becoming public APIs.
 
-**Completion evidence.** Assistant policy can be understood and tested in
-one module. Core scheduling does not hard-code summary eligibility for
-every handler of an exchange event.
+**Completion evidence.** Test reserve selection, summary eligibility,
+restricted grants, invalid designations, and protected assistant seating.
+Retain fixed summary boundaries, per-person preferences, retry limits,
+cancellation, checkpoint recovery, and host handover invariants.
 
-**Source.** [Role definitions](../packages/ambion/src/define.ts),
-[routing](../packages/ambion/src/room/routing.ts),
-[closing](../packages/ambion/src/room/reconcile.ts), and
-[assistant policy](../packages/ambion/src/room/assistant.ts).
+**Scope.** Keep the policy private in `src/assistant.ts`. An independent
+package is unnecessary until another consumer demonstrates that boundary.
+
+**Source.** [Assistant policy](../packages/ambion/src/assistant.ts),
+[activation specification](../packages/ambion/src/room/activation.ts),
+[routing](../packages/ambion/src/room/routing.ts), and
+[executor tools](../packages/ambion/src/seat/tools.ts).
 
 ## 6. Make definitions immutable and bindings local to a room
 

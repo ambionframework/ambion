@@ -106,6 +106,101 @@ describe('room transition', () => {
 		});
 	});
 
+	it('accepts only a designated, seated, quiet assistant', () => {
+		const agents = [
+			{ name: 'assistant', identity: 'Writes.', attention: 'none' as const },
+			{ name: 'product', identity: 'Answers.', attention: 'broadcast' as const },
+		];
+		for (const composition of [
+			{ assistant: 'missing', agents, available: [], at },
+			{
+				assistant: 'assistant',
+				agents: [{ ...agents[0], attention: 'broadcast' as const }, agents[1]],
+				available: [],
+				at,
+			},
+			{
+				assistant: 'assistant',
+				agents: [agents[1]],
+				available: [agents[0]],
+				at,
+			},
+		]) {
+			expect(
+				decide(foldRoom([], options), { type: 'compose', composition: composition as never }, now),
+			).toMatchObject({
+				refusal: { category: 'refused' },
+			});
+		}
+		expect(
+			decide(
+				foldRoom([], options),
+				{ type: 'compose', composition: { assistant: 'assistant', agents, available: [], at } },
+				now,
+			),
+		).toMatchObject({ event: { kind: 'composition', body: { assistant: 'assistant' } } });
+		expect(
+			decide(
+				foldRoom([], options),
+				{ type: 'compose', composition: { agents, available: [], at } },
+				now,
+			),
+		).toMatchObject({ event: { kind: 'composition' } });
+	});
+
+	it('gives only the assistant its recorded opening and closing authority', () => {
+		const assistantComposition: Entry = {
+			kind: 'composition',
+			seq: 1,
+			body: {
+				assistant: 'assistant',
+				agents: [
+					{ name: 'assistant', identity: 'Writes.', attention: 'none' },
+					{ name: 'product', identity: 'Answers.', attention: 'broadcast' },
+				],
+				available: [],
+				at,
+			},
+		};
+		const opened = foldRoom(
+			[
+				assistantComposition,
+				arrived,
+				{
+					kind: 'message',
+					seq: 3,
+					body: { kind: 'said', at, from: 'priya', text: 'Question.', wakes: ['assistant'] },
+				},
+			],
+			options,
+		);
+		expect(activationSpec('message:3:assistant:1', opened)).toBeUndefined();
+		expect(activationSpec('message:3:product:1', opened)).toMatchObject({ grant: { kind: 'say' } });
+		expect(activationSpec('opened:3:product:1', opened)).toBeUndefined();
+		expect(activationSpec('opened:3:assistant:1', opened)).toMatchObject({
+			opening: { limit: 0 },
+			grant: { kind: 'seat' },
+		});
+		const closed = foldRoom(
+			[
+				assistantComposition,
+				arrived,
+				{ kind: 'message', seq: 3, body: { kind: 'said', at, from: 'priya', text: 'Question.' } },
+				{
+					kind: 'close',
+					seq: 4,
+					body: { owner: 'priya', from: 3, through: 3, at, wakes: ['assistant'] },
+				},
+			],
+			options,
+		);
+		expect(activationSpec('closed:3:product:1', closed)).toBeUndefined();
+		expect(activationSpec('closed:3:assistant:1', closed)).toMatchObject({
+			grant: { kind: 'summary' },
+			closing: { person: 'priya', from: 3, through: 3 },
+		});
+	});
+
 	it('caps a renewal at its nondefault deadline and ignores its old expiry', () => {
 		const due = foldRoom([composition, arrived, said(3)], options);
 		const claim = event(
@@ -237,22 +332,16 @@ describe('room transition', () => {
 	});
 
 	it('denies built-in intents outside each activation grant', () => {
-		const roles: Entry = {
+		const assistantComposition: Entry = {
 			kind: 'composition',
 			seq: 1,
 			body: {
+				assistant: 'assistant',
 				agents: [
 					{
 						name: 'assistant',
 						identity: 'A.',
 						attention: 'none',
-						role: { name: 'a', answers: { opened: 'seat', closed: 'summarise' } },
-					},
-					{
-						name: 'custom',
-						identity: 'C.',
-						attention: 'none',
-						role: { name: 'c', answers: { closed: 'inspect' } },
 					},
 				],
 				available: [{ name: 'product', identity: 'P.', attention: 'broadcast' }],
@@ -262,7 +351,7 @@ describe('room transition', () => {
 		const close = { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] };
 		const state = foldRoom(
 			[
-				roles,
+				assistantComposition,
 				said(2),
 				{ kind: 'close', body: close, seq: 3 },
 				{
@@ -287,22 +376,9 @@ describe('room transition', () => {
 					},
 					seq: 5,
 				},
-				{
-					kind: 'lease',
-					body: {
-						id: 'closed:2:custom:1',
-						phase: 'running',
-						expiresAt: now + 100,
-						at,
-						readThrough: 0,
-					},
-					seq: 6,
-				},
-				{ kind: 'close', body: { ...close, wakes: ['custom'] }, seq: 7 },
 			],
 			options,
 		);
-		expect(activationSpec('closed:2:custom:1', state)?.grant.kind).toBe('custom');
 		const denied = (activation: string, intent: unknown) =>
 			decide(
 				state,
@@ -320,28 +396,22 @@ describe('room transition', () => {
 				'opened:2:assistant:1',
 				{ kind: 'summary', to: 'priya', text: 'x', covers: { from: 2, through: 2 } },
 			],
-			['closed:2:custom:1', { kind: 'said', text: 'x' }],
-			[
-				'closed:2:custom:1',
-				{ kind: 'summary', to: 'priya', text: 'x', covers: { from: 2, through: 2 } },
-			],
-			['closed:2:custom:1', { kind: 'seated', name: 'product' }],
 			['opened:2:assistant:1', { kind: 'unknown' }],
 		] as const)
 			expect(denied(activation, intent)).toMatchObject({ refusal: { category: 'refused' } });
 	});
 
-	it('gives a closed role say the current record, and removes an obsolete grant', () => {
-		const role: Entry = {
+	it('keeps a closed assistant grant fixed and removes it after redesignation', () => {
+		const writerComposition: Entry = {
 			kind: 'composition',
 			seq: 1,
 			body: {
+				assistant: 'writer',
 				agents: [
 					{
 						name: 'writer',
 						identity: 'W.',
 						attention: 'none',
-						role: { name: 'writer', answers: { closed: 'say' } },
 					},
 				],
 				available: [],
@@ -351,7 +421,7 @@ describe('room transition', () => {
 		const close = { owner: 'priya', from: 2, through: 2, at, wakes: ['writer'] };
 		const live = foldRoom(
 			[
-				role,
+				writerComposition,
 				said(2),
 				{ kind: 'close', body: close, seq: 3 },
 				{ kind: 'message', body: { kind: 'said', at, from: 'sam', text: 'Later.' }, seq: 4 },
@@ -370,8 +440,8 @@ describe('room transition', () => {
 			options,
 		);
 		const spec = activationSpec('closed:2:writer:1', live);
-		if (spec === undefined) throw new Error('Expected a role say grant.');
-		expect(spec.through).toBe(4);
+		if (spec === undefined) throw new Error('Expected an assistant summary grant.');
+		expect(spec.through).toBe(2);
 		const view = viewOf(
 			spec,
 			defineAgent({ name: 'writer', identity: 'W.', instructions: '.', model: 'm' }),
@@ -381,13 +451,12 @@ describe('room transition', () => {
 				state: live,
 				live: new Map(),
 				unseen: () => 0,
-				guidance: () => undefined,
 			},
 		);
-		expect(view.context).toContain('Later.');
+		expect(view.context).not.toContain('Later.');
 		const obsolete = foldRoom(
 			[
-				role,
+				writerComposition,
 				said(2),
 				{ kind: 'close', body: close, seq: 3 },
 				{
@@ -422,12 +491,12 @@ describe('room transition', () => {
 			kind: 'composition',
 			seq: 1,
 			body: {
+				assistant: 'assistant',
 				agents: [
 					{
 						name: 'assistant',
 						identity: 'Writes results.',
 						attention: 'none',
-						role: { name: 'assistant', answers: { closed: 'summarise' } },
 					},
 					{ name: 'product', identity: 'Answers questions.', attention: 'broadcast' },
 				],

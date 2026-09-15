@@ -1,5 +1,4 @@
 import type { SessionRepo } from '@earendil-works/pi-agent-core';
-import type { Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -8,9 +7,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	defineRole,
 	defineTool,
-	defineToolShape,
 	defineWorkspace,
 	destroyWorkspace,
 	InMemorySessionRepo,
@@ -21,7 +18,6 @@ import {
 	type Session,
 	type SessionEvent,
 	type SummaryMessage,
-	seated,
 	startSession,
 	stopSession,
 	visitSession,
@@ -38,7 +34,6 @@ import {
 } from './support/room.ts';
 import {
 	byAgent,
-	callTool,
 	contextText,
 	insists,
 	quiet,
@@ -311,7 +306,7 @@ describe('the assistant', () => {
 		expect(read).toContain('[assistant → priya] Thursday is out; Saturday holds.');
 		expect(read).not.toContain('the inspector needs 48h notice');
 		// the roster names the seat that writes for people, and nobody brings one
-		expect(read).toContain('- assistant (idle, wakes for nothing said, the assistant):');
+		expect(read).toContain('- assistant (idle, wakes for nothing said, assistant):');
 		expect(read).not.toContain('brings');
 		// a record that holds a summary tells its seats how to read a fold; one that does not, does not
 		expect(prompts[0]).not.toContain('summarised for <name> below');
@@ -652,9 +647,9 @@ describe('the assistant', () => {
 
 		const metadata = (await repo.list()).find((m) => m.id === `${session.name}:assistant`);
 		expect(metadata).toBeDefined();
-		// and the room lists it as the seat it is: an agent, seated none, the assistant
+		// The room lists it as the seat it is: an agent seated at none.
 		const seat = session.seats().find((s) => s.name === 'assistant');
-		expect(seat).toMatchObject({ kind: 'agent', role: 'assistant', attention: 'none' });
+		expect(seat).toMatchObject({ kind: 'agent', assistant: true, attention: 'none' });
 		const piSeat = metadata && (await repo.open(metadata));
 		const entries = (await piSeat?.findEntries()) ?? [];
 		expect(entries.some((e) => e.type === 'custom' && e.customType === 'ambion/activation')).toBe(
@@ -687,7 +682,7 @@ describe('the assistant', () => {
 		const seat = session.seats().find((s) => s.name === 'assistant');
 		expect(seat).toMatchObject({
 			kind: 'agent',
-			role: 'assistant',
+			assistant: true,
 			attention: 'none',
 			status: 'idle',
 		});
@@ -839,15 +834,17 @@ describe('the assistant', () => {
 		expect(events.slice(after).map((e) => e.type)).not.toContain('quiet');
 	});
 
-	it('names the assistant on the seat a host reads, and on no person', async () => {
+	it('keeps the designated assistant apart from people', async () => {
 		const session = open({ script: byAgent({}) });
 		await visitSession(session, priya);
 		await session.settled();
 
 		const seats = session.seats();
-		expect(
-			seats.filter((s) => s.kind === 'agent' && s.role === 'assistant').map((s) => s.name),
-		).toEqual(['assistant']);
+		expect(seats.find((s) => s.name === 'assistant')).toMatchObject({
+			kind: 'agent',
+			assistant: true,
+			attention: 'none',
+		});
 		expect(seats.find((s) => s.name === 'priya')).toEqual({
 			kind: 'human',
 			name: 'priya',
@@ -1169,174 +1166,7 @@ describe('a fold', () => {
 	});
 });
 
-describe('a role a host writes', () => {
-	const FLAG = defineToolShape({ name: 'flag', parameters: Type.Object({ note: Type.String() }) });
-
-	/**
-	 * A role's guidance is what its seat reads about the role it took. The
-	 * room names the role and holds no prose of its own for one, so a room
-	 * that seated a second role would read that role's words and never the
-	 * assistant's.
-	 */
-	it('renders its guidance under the line that names it, and nothing where it has none', async () => {
-		const prompts: Record<string, string> = {};
-		/** Keeps the prompt this seat read, then does what the script says. */
-		const reading =
-			(script: Script): Script =>
-			(context: Context, who: string, call: number) => {
-				prompts[who] = context.systemPrompt ?? '';
-				return script(context, who, call);
-			};
-		const session = open({
-			script: byAgent({
-				product: reading(insists('Thursday is out.')),
-				colleague: reading(insists('Nor from here.')),
-				assistant: reading((_c, _w, call) =>
-					call === 1 ? summarise('The one message.') : quiet(),
-				),
-			}),
-			agents: [
-				product,
-				colleague,
-				seated(greeter, {
-					attention: 'presence',
-					role: defineRole({ name: 'greeter', answers: {} }),
-				}),
-			],
-		});
-
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await quiescent(session);
-
-		// the assistant's guidance ships with ASSISTANT, and the room renders it
-		expect(prompts.assistant).toContain("You are 'assistant', the assistant in the session");
-		expect(prompts.assistant).toContain('nothing said in it wakes you');
-		// a seat with no role reads the ordinary opening, and no role's words
-		expect(prompts.colleague).toContain("You are 'colleague', an agent seated in the session");
-		expect(prompts.colleague).not.toContain('nothing said in it wakes you');
-		// the roster names every role, whether or not the role says anything
-		expect(session.seats().find((s) => s.name === 'greeter')).toMatchObject({ role: 'greeter' });
-	});
-
-	/**
-	 * The room binds `say`, `summarise` and `seat`. A role may name a tool
-	 * the agent brings instead, and the seating proved the name resolves, so
-	 * the activation the close causes holds that tool and nothing else.
-	 */
-	it('binds the tool the agent brings, for the event the role answers', async () => {
-		const flagged: string[] = [];
-		const held: string[][] = [];
-		const asked: string[] = [];
-		const flag = defineTool({
-			shape: FLAG,
-			description: 'Flag what the exchange came to.',
-			execute: (params: { note: string }) => {
-				flagged.push(params.note);
-				return 'flagged';
-			},
-		});
-		const reviewer = defineAgent({
-			name: 'reviewer',
-			identity: 'Reads what an exchange came to.',
-			instructions: 'flag it',
-			model: 'scripted/reviewer',
-			tools: [flag],
-		});
-		const session = startSession({
-			name: roomName(),
-			agents: [
-				product,
-				colleague,
-				seated(reviewer, {
-					attention: 'none',
-					role: defineRole({ name: 'reviewer', answers: { closed: FLAG } }),
-				}),
-			],
-			runtime,
-			streamFn: scripted(
-				byAgent({
-					product: insists('Thursday is out.'),
-					colleague: insists('Nor from here.'),
-					reviewer: (context, _who, call) => {
-						held.push(toolNames(context));
-						asked.push(contextText(context));
-						return call === 1 ? callTool('flag', { note: 'two agents, one answer' }) : quiet();
-					},
-				}),
-			),
-		});
-		started.push(session);
-
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await quiescent(session);
-
-		expect(held[0]).toEqual(['flag']);
-		expect(flagged).toEqual(['two agents, one answer']);
-		// the room wrote no line for a tool it does not bind, so the ask names the
-		// tool and the role's guidance says what to do with it
-		expect(asked[0]).toContain("priya's exchange is over: messages 1 to 3. Call flag,");
-		expect(asked[0]).not.toContain('Write the one message');
-		// the room lists the role it seated, and the record holds it by tool name
-		expect(session.seats().find((s) => s.name === 'reviewer')).toMatchObject({
-			role: 'reviewer',
-		});
-	});
-
-	/**
-	 * A workspace binds the four built-in names for an agent that names one,
-	 * so a role may answer an event with one of them. `seated` accepts the
-	 * seating on that rule, and the activation binds what the rule promised.
-	 */
-	it('binds the tool the workspace brings, for a role that names one of the four', async () => {
-		const READ = defineToolShape({
-			name: 'read',
-			parameters: Type.Object({ path: Type.String() }),
-		});
-		const site = defineWorkspace({ name: roomName(), backend: fakeBackend() });
-		const held: string[][] = [];
-		const reader = defineAgent({
-			name: 'reader',
-			identity: 'Reads what an exchange came to.',
-			instructions: 'read it',
-			model: 'scripted/reader',
-			workspace: site,
-		});
-		const session = startSession({
-			name: roomName(),
-			agents: [
-				product,
-				colleague,
-				seated(reader, {
-					attention: 'none',
-					role: defineRole({ name: 'reader', answers: { closed: READ } }),
-				}),
-			],
-			runtime,
-			streamFn: scripted(
-				byAgent({
-					product: insists('Thursday is out.'),
-					colleague: insists('Nor from here.'),
-					reader: (context) => {
-						held.push(toolNames(context));
-						return quiet();
-					},
-				}),
-			),
-		});
-		started.push(session);
-
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await quiescent(session);
-
-		expect(held).toEqual([['read']]);
-		await destroyWorkspace(site);
-	});
-});
-
-describe('a room with nobody in the assistant role', () => {
+describe('a room without an assistant', () => {
 	it('opens and closes an exchange, and owes no summary', async () => {
 		// Nothing holds a room to an assistant. The room closes the exchange
 		// the way it always does, and no close names a seat, so nothing is
@@ -1357,7 +1187,7 @@ describe('a room with nobody in the assistant role', () => {
 		expect(record.filter((m) => m.kind === 'summary')).toEqual([]);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said']);
 		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(1);
-		expect(session.seats().every((s) => s.kind !== 'agent' || s.role === undefined)).toBe(true);
+		expect(session.seats().map((s) => s.name)).toEqual(['product', 'priya']);
 		await stopSession(session);
 	});
 });

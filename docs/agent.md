@@ -14,8 +14,8 @@ Four functions build a room, and one sentence holds the whole of it:
 > work in and people visit — each agent deciding for itself whether to speak,
 > to whom, and which colleague to call in.**
 
-A fifth, `defineRole`, names what a seat does in the room's own work. It is
-a seating choice, so §5 covers it beside attention.
+The `assistant` option designates one agent for reserve selection and
+summaries. Section 5 explains its relationship to attention.
 
 Four documents build on this core and are also shipped:
 [`exchange.md`](exchange.md) specifies the exchange, the room's own unit of
@@ -419,11 +419,10 @@ who sits out — one widening scale, from the narrowest:
   `attentive(concierge)`.
 
 **The scale is the mechanism; the words are shorthand for points on it.**
-`seated(agent, { attention, role })` is the general form, and `passive` and
+`seated(agent, { attention })` is the general form, and `passive` and
 `attentive` are one line each over it — the two points a room names often
 enough to be worth a word. A bare agent takes the default. `none` is where
-a seat in a role sits: the assistant wakes for the room's own events and
-for nothing said.
+the assistant sits: it wakes for exchange events and for nothing said.
 
 The routing is the scale, and reads as one line (`wakes` in `room/routing.ts`):
 every message has a **reach** — `named` for a directed say, `broadcast` for
@@ -438,44 +437,25 @@ Both are readable from `session.seats()`, so a seat that is `named` and
 running is describable, which one enum could not do. Attention belongs to
 the seating, and `defineAgent` knows nothing about it, so the same agent
 can be the quiet corner in one room and the one who meets people in
-another — and the assistant can be given a wider attention the day it is meant to
-take part in the room, while staying the same kind of thing.
+another.
 
-**A seating makes a second choice: the role.** Attention says which
-messages reach a seat. A role says what the seat does in the room's own
-work: the events of an exchange it answers, and the tool it holds at each.
-`defineRole` writes one, and `seated(agent, { role })` gives it to a
-seating.
+**The room designates one assistant.** `startSession({ assistant })` seats
+that agent at attention `none` and records its name in the composition.
+The assistant policy selects reserve agents when an exchange opens and
+consolidates multiple agent messages when it closes.
 
 ```ts
-import { defineRole, seated, startSession, SUMMARISE } from '@ambionframework/ambion';
-
-const reviewer = defineRole({
-  name: 'reviewer',
-  answers: { closed: SUMMARISE },
-  guidance: 'You read what an exchange came to, and you write it once.',
-});
-
 startSession({
   name: 'weekly',
-  agents: [researcher, writer, seated(editor, { attention: 'none', role: reviewer })],
+  agents: [researcher, writer],
+  assistant: editor,
 });
 ```
 
-A role holds three things. `answers` names the tool its seat holds at
-`opened`, at `closed`, or at both; the room binds `say`, `summarise` and
-`seat`, a workspace binds its four, and the agent brings every other name,
-so `seated` refuses an agent that answers none of the shapes the role
-names. `guidance` is what the seat reads about the role it took, rendered
-under the line that names it. `name` is what the roster shows, and what the
-journal holds: a role is the runtime's, the way `instructions` are, so
-`createRuntime` takes the roles a resumed room resolves by name.
-
-`ASSISTANT` is the first role, and the only one the package ships. It
-answers `opened` with `seat` and `closed` with `summarise`
-([`assistant.md`](assistant.md)). The runtime reads no seat's name to
-route, to close, or to bind a tool: it asks the roster which seat answers
-the event.
+An opening activation holds only `seat`; a closing activation holds only
+`summarise`. The assistant remains an ordinary agent with its own definition,
+model session, and activation history. A room without an assistant closes
+exchanges without selecting reserve agents or producing summaries.
 
 **7. Identity is injected; provenance is stamped.** Every agent's context
 carries the session's goal, the time, and two rosters — the agents, with
@@ -655,7 +635,7 @@ id and lease in [`lease.ts`](../packages/ambion/src/room/lease.ts), the rules
 the fold decides by in
 [`rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts), the exchange in
 [`exchange.ts`](../packages/ambion/src/room/exchange.ts), what the assistant
-writes in [`assistant.ts`](../packages/ambion/src/room/assistant.ts), what
+writes in [`assistant.ts`](../packages/ambion/src/assistant.ts), what
 crosses between a seat and its room in
 [`wire.ts`](../packages/ambion/src/wire.ts), what an activation is given
 in [`view.ts`](../packages/ambion/src/room/view.ts), what an
@@ -780,15 +760,14 @@ reads: a host that runs two rooms over one name needs the SQLite storage,
 or a repository of its own that behaves like it.
 
 **One specification defines each activation.** The room compiles
-`ActivationSpec` from the recorded cause and its current role bindings.
+`ActivationSpec` from the recorded cause and the assistant designation.
 The specification names the seat, attempt, input, and granted tool.
 `ActivationView` carries this specification with the model and rendered
 context. The executor binds its tools from that value.
 
 **The room checks the grant where it commits.** A live lease alone does
 not authorize a room action. The transition derives the specification again
-and refuses intents outside its grant. A custom role tool grants no
-built-in room action. Summarising grants a fixed exchange result; composing
+and refuses intents outside its grant. Summarising grants a fixed exchange result; composing
 grants seating from the reserve; ordinary speech requires a current view.
 
 **What crosses between a seat and its room is JSON.** The seat uses `view`,

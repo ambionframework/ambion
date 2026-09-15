@@ -6,7 +6,7 @@ assistant that seats them. It is shipped. The code lives with the rest of
 the runtime in [`packages/ambion/src`](../packages/ambion/src): the seating
 and the reserve in [`session.ts`](../packages/ambion/src/session.ts), the
 composing activation and the `seat` tool in
-[`assistant.ts`](../packages/ambion/src/room/assistant.ts), the routing in
+[`assistant.ts`](../packages/ambion/src/assistant.ts), the routing in
 [`routing.ts`](../packages/ambion/src/room/routing.ts), and the shapes in
 [`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md), [`exchange.md`](exchange.md),
@@ -44,7 +44,7 @@ A room that names no agents and a reserve holds the assistant alone until a
 question lands, and then holds whoever that question needed. A room that
 names neither holds the assistant and nothing that can answer; §6 says
 what happens to a question there. The option seats one agent at `none` in
-the `ASSISTANT` role, and a room that passes none closes every exchange
+the assistant designation, and a room that passes none closes every exchange
 and owes no summary ([`assistant.md`](assistant.md) §13).
 
 **`agents` are seated when the room starts, and they stay seated for the
@@ -52,20 +52,17 @@ run**, as [`agent.md`](agent.md) §5 specifies. Nothing in this document
 unseats one of them but the host (§5).
 
 **`available` is the reserve: agents the room may seat later.** Both lists
-hold `AgentSeat` values, so a reserve entry carries an attention and a role
-the same way a seated one does, and takes `broadcast` and no role when it
-names neither. The room
+hold `AgentSeat` values. A reserve entry carries its attention setting,
+which defaults to `broadcast`. The room
 refuses a name that appears in both lists, or in either list and the
 assistant, the way it refuses any duplicate name. The identity rule in
 `agent.md` §5 reads the same with one more clause: the run belongs to
 `startSession`, and its composition is the assistant, the agents seated,
 and the agents in reserve.
 
-**A seat the room seats while it runs takes no role.** A role is a choice
-the host makes at the composition, so `seat` moves an agent from the
-reserve with the attention that reserve entry names and nothing else
-([`agent.md`](agent.md) §5). A host that wants a role on a seat composes
-the next run with it.
+**A seating retains its reserve attention.** The `seat` tool moves an
+agent from the reserve onto the roster with that attention. The assistant
+designation remains fixed for the run.
 
 **Neither list knows anything about a workspace.** Each definition names
 its own workspace or none ([`workspace.md`](workspace.md) §3), and the

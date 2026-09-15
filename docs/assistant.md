@@ -2,7 +2,7 @@
 
 This document is the design contract for the assistant: the constrained agent
 a session seats as its human-facing synthesis layer. Every room seats one by
-convention, and `ASSISTANT` is the role it takes. It reads how each
+convention through the `assistant` option. It reads how each
 person reads and consolidates the room's work when the exchange does not
 already hold one answer. It is shipped. The code lives with the rest of the
 runtime in [`packages/ambion/src`](../packages/ambion/src) —
@@ -51,7 +51,7 @@ per room, seated when the room starts, writing for every person who visits.
 **It is a seat.** `startSession` seats it beside the agents, the room
 activates it as it activates every other agent, its turns land in a
 downstream session of its own, and a live lease authorizes its writes.
-Its role selects these tools:
+Its policy selects these tools:
 
 - It is seated at `none`, the narrow end of the attention scale
   ([`agent.md`](agent.md) rule 6): nothing said in the room wakes it, and
@@ -439,7 +439,7 @@ be constant. One rule decides whether the assistant is still an assistant:
 
 §11 enforces the waking half in one line, because the guard is on the
 author, whatever it wrote, with the one exception §11 names. The rest the
-role enforces: `ASSISTANT` answers `opened` with `seat` and `closed` with
+activation specification enforces: `opened` grants `seat` and `closed` grants
 `summarise`, and an activation binds one tool. A tool the definition brings
 reaches no model, because the assistant wakes for the room's own events
 alone.
@@ -471,60 +471,30 @@ and what `startSession` refuses.
 
 ---
 
-## 13. It is the convention
+## 13. One explicit assistant
 
-Every room seats an assistant. `startSession` takes `assistant` and seats
-it with the agents, at `none`, in the `ASSISTANT` role. It is the same
-seating as `seated(agent, { attention: 'none', role: ASSISTANT })` in
-`agents`, and the option is the shorthand a room uses.
+**The assistant option designates one agent.** `startSession` seats it at
+attention `none` and records its name in `Composition.assistant`.
+The composition requires that name to identify a roster seat at `none`.
+The host cannot unseat the designated assistant during the run.
 
-**One room, one assistant, by convention.** A room never holds a person
-whose exchange resolves differently from anybody else's: every question
-closes through the same seat, whether the room answered it once or ten
-times, and whoever asked it. There is no second code path for "nobody is
-holding preferences for them."
+**The assistant policy owns eligibility and guidance.** It selects an
+opening activation when a question opens an exchange with agents in reserve.
+It selects a closing activation when multiple agent messages need a summary.
+The policy also owns the two tool schemas and their instructions.
+The executor owns the mutable tool-call limits for each activation.
 
-**The runtime holds no privileged seat.** `reconcile` asks the roster which
-seat answers `closed`, `routing` asks which answers `opened`, and `view`
-asks the seat's role which tool it holds. A room that seats nobody in the
-role closes every exchange and owes no summary: the rules read the roster,
-so they answer that room with nothing and never with a branch.
+**The assistant option is optional.** A room without one closes exchanges
+without owing summaries. A room with one serves every person through the
+same seat. Each person's optional preferences reach their own closing
+activation.
 
-**The runtime holds no prose for the assistant either.** `ASSISTANT`
-carries `guidance`, which is what its seat reads about the role it took,
-and `render.ts` renders it under the line that names the role. The room
-writes the paragraph for each tool it binds — `seat` at the open,
-`summarise` at the close — so a second role that answers with one of them
-reads the same words, and a role that answers with a tool the agent brings
-says what to do with it in its own guidance.
+**A restarted room restores the designation from its composition.** The
+runtime resolves the assistant's agent definition like every other agent.
+The policy requires no role registry or host-supplied event mapping.
 
-**A role's guidance is the runtime's, the way `instructions` are.** The
-journal holds the role's name beside the seating, and a resumed room
-resolves the prose through `runtime.roles`. `createRuntime` starts that
-catalog with `ASSISTANT`, so every room that seats one resumes unchanged; a
-host with a role of its own passes it as `createRuntime({ roles })`, and a
-resume into a runtime that does not hold the role is refused.
-
-**A person's preferences are optional, and the assistant is not.** A person
-who says nothing about how they read is written for in the style the
-assistant's instructions set. The room serves them the same way; only the
-paragraph about how they read is absent from the activation.
-
-**The guarantee is unchanged where the assistant has nothing to add.** §4
-still holds: one clean answer is left as it was given, and a summary is
-written only when the room said more than one thing. Requiring an
-assistant does not mean it always writes — it means somebody is always
-there to judge whether writing would help.
-
-**A restarted room seats it again with the agents.** The assistant is one
-seating on the composition, like every other agent. How each person reads is on the record, with
-their latest arrival, so a person known from a replayed record reads the
-way they last said they do, and a room resumed over its journal writes for a
-person the last run owed, the way they read.
-
-**An agent-only room pays for one idle seat.** A room nobody visits seats
-the assistant, lists it in every roster, and never activates it. That is one
-roster line, in place of one per person.
+**An idle assistant makes no model calls.** It waits until an eligible
+exchange event gives it work. A room nobody visits never activates it.
 
 ---
 
@@ -617,7 +587,7 @@ writes to the record and nothing else — no `to`, because a summary is
 always addressed to the person whose exchange closed. At the open it is
 `seat({ name })`, which moves one agent from the reserve to the roster and
 commits the seating to the record ([`roster.md`](roster.md) §4). No
-activation holds both, and none holds a `say`. The role binds one tool per
+activation holds both, and none holds a `say`. The specification grants one tool per
 event, so §12's rule — never call a tool that changes a product's state —
 stays a fact about what the room hands the seat.
 
@@ -671,8 +641,8 @@ Each boundary is stated so a later change has to argue with it.
   survive into the state it owns. §9.
 - **The assistant holds no authority over the room.** §12 draws the line and
   names what is forbidden.
-- **Every room seats an assistant.** `startSession` refuses a room that
-  omits one. §13.
+- **The assistant is explicit.** The optional `assistant` setting names
+  one seat with the fixed assistant policy. §13.
 - **How a person reads reaches one seat.** The assistant reads a person's
   `preferences` when it writes for them, and no product's context carries
   them. §2, §14.
@@ -768,7 +738,7 @@ document makes loudly:
   activation names whom it writes for and how they read. §2, §3, §4, §7,
   §14.
 - One answer is left as it was given, in the voice that gave it. §4.
-- A room with nobody in the `ASSISTANT` role closes every exchange and owes
+- A room without a designated assistant closes every exchange and owes
   no summary. An assistant that brings its own tools is seated, and its
   drafting activation still holds `summarise` alone. §12, §13.
 - A summary wakes nobody, and the next activation reads the fold and the
@@ -807,8 +777,8 @@ document makes loudly:
   and a stopped room never reports that it went quiet. §5, §16.
 - `startSession` refuses an assistant whose name an agent holds, and
   `visitSession` refuses a person who takes the assistant's name. §14.
-- A role names the shape its seat answers each event with, and `seated`
-  refuses an agent that answers none of them. §12.
+- Each assistant activation grants exactly its prescribed tool. An invalid
+  assistant designation is refused before the composition is committed. §12.
 - The assistant is seated when the room starts, and a room nobody visits
   never activates it. §13.
 
