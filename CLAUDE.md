@@ -5,10 +5,10 @@ Guidance for Claude Code in this repository.
 ## Project
 
 Ambion — a minimalist framework for ambient-aware, always-on agents. Agents wait
-in a session and activate only when a message is delivered to them. Six
+in a session and activate only when a message is delivered to them. Five
 primitives: `defineAgent`, `defineHuman`, `defineTool`, `defineWorkspace`,
-`defineRole`, `startSession`. The room's assistant writes the one message a
-person reads when the room goes quiet, and `ASSISTANT` is the role it takes.
+`startSession`. The room designates one assistant to select reserve agents
+and write the message a person reads when an exchange closes.
 
 pnpm workspace, Node >= 22.19, ESM only, TypeScript.
 
@@ -77,10 +77,10 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   `packages/journal` owns the journal: the queue, the fence, the checkpoint and
   the envelope every entry shares. Ambion owns only participants-as-values and
   the session. A third concern is a
-  design failure: push it into a dependency or drop it. `render.ts` is
-  everything a participant reads — prompts, roster, record, the ask at the end
-  of a turn — and stays pure and stateless so it does not become one. What the
-  room says to a developer stays with the mechanism that says it.
+  design failure: push it into a dependency or drop it. `render.ts` formats
+  participant context. `assistant.ts` owns assistant policy and guidance.
+  Both stay pure and stateless. What the room says to a developer stays with
+  the mechanism that says it.
 - The core is laid out in layers (`docs/toolchain.md` §1), and an import
   points down only. Biome refuses the rest; a new file goes in the layer
   that may reach what it needs, and never above `session.ts`.

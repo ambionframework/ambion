@@ -101,12 +101,12 @@ describe('a checkpoint', () => {
 	it('keeps one failed close owed when a later close stood down', () => {
 		const at = '2026-01-01T09:00:00.000Z';
 		const composition: Composition = {
+			assistant: 'assistant',
 			agents: [
 				{
 					name: 'assistant',
 					identity: 'Writes the result.',
 					attention: 'none',
-					role: { name: 'assistant', answers: { closed: 'summarise' } },
 				},
 			],
 			available: [],
@@ -207,13 +207,13 @@ describe('a checkpoint', () => {
 	it('leaves every wake the same id, whatever it trimmed', () => {
 		const at = '2026-01-01T09:00:00.000Z';
 		const composition: Composition = {
+			assistant: 'assistant',
 			agents: [
 				{ name: 'solo', identity: 'Answers.', attention: 'broadcast' },
 				{
 					name: 'assistant',
 					identity: 'Writes the one message.',
 					attention: 'none',
-					role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
 				},
 			],
 			available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'broadcast' }],
@@ -366,13 +366,13 @@ describe('a checkpoint the room folds', () => {
 			);
 			await journal.ready;
 			await journal.write('composition', {
+				assistant: 'assistant',
 				agents: [
 					{ name: 'solo', identity: 'Answers.', attention: 'broadcast' },
 					{
 						name: 'assistant',
 						identity: 'Writes the one message.',
 						attention: 'none',
-						role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
 					},
 				],
 				available: [],
@@ -428,13 +428,13 @@ describe('a checkpoint past the fence', () => {
 			const piSession = await opened.sessions.open(name);
 			const at = '2026-01-01T09:00:00.000Z';
 			const composition: Composition = {
+				assistant: 'assistant',
 				agents: [
 					{ name: 'solo', identity: 'Answers.', attention: 'broadcast' },
 					{
 						name: 'assistant',
 						identity: 'Writes the one message.',
 						attention: 'none',
-						role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
 					},
 				],
 				available: [],

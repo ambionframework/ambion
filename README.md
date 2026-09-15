@@ -105,8 +105,8 @@ activation counter can drift from reality. See
 ### 7. The assistant owns synthesis for the person
 
 The assistant is the conversational interface: an ordinary seat with its own
-model session and activation history. It takes the `ASSISTANT` role, which
-binds one tool for each of the room's two events: `seat`, to compose a roster
+model session and activation history. The room designates it through the
+`assistant` option. Its policy grants one tool for each exchange event: `seat`, to compose a roster
 from agents the host placed in reserve, and `summarise`, after an exchange
 closes. It holds no general `say` tool and no general-purpose authority.
 
@@ -114,7 +114,7 @@ Seating a specialist is itself an auditable message. When several agent
 messages need consolidation, the summary names the exact sequence range it
 covers, so agent contexts and the human-facing view can share it. The record
 stays intact; only its rendered views compact. See
-[`assistant.ts`](packages/ambion/src/room/assistant.ts) and
+[`assistant.ts`](packages/ambion/src/assistant.ts) and
 [`view.ts`](packages/ambion/src/room/view.ts).
 
 ### 8. Boundaries are small and serializable

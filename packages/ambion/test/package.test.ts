@@ -50,7 +50,6 @@ it('keeps the wire off the entry a host builds a room with', () => {
 		'defineHuman',
 		'defineTool',
 		'defineWorkspace',
-		'defineRole',
 		'startSession',
 	]) {
 		expect(main).toHaveProperty(name);

@@ -513,7 +513,7 @@ describe('the host', () => {
 		expect(seatNames(session)).toEqual(['product', 'assistant']);
 		expect(kinds(await session.messages())).toEqual(['seated', 'said', 'unseated']);
 
-		await expect(session.unseat(assistant)).rejects.toThrow(/holds the role 'assistant'/);
+		await expect(session.unseat(assistant)).rejects.toThrow(/is this room's assistant/);
 		await expect(session.unseat(surveyor)).rejects.toThrow(/is not seated/);
 	});
 

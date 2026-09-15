@@ -34,7 +34,6 @@ export type {
 	LeaseHold,
 	LeaseRequest,
 	LeaseResponse,
-	Role,
 	Seating,
 	SeatPort,
 	SeatRoom,

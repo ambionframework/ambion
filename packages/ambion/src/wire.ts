@@ -14,7 +14,7 @@
  * `cut` names an activation whose lease the room ended, so the seat side
  * stops it now.
  */
-import type { Attention, ExchangeEvent, Message, Seq } from './types.ts';
+import type { Attention, Message, Seq } from './types.ts';
 
 type ActivationIdentity = { readonly id: string; readonly seat: string; readonly attempt: number };
 type ActivationOpening = { readonly person: string; readonly from: Seq; readonly limit: number };
@@ -31,21 +31,13 @@ export type ActivationSpec =
 			readonly cause: 'opened';
 			readonly through: Seq;
 			readonly opening: ActivationOpening;
-			readonly grant:
-				| { readonly kind: 'seat'; readonly tool: 'seat' }
-				| { readonly kind: 'say'; readonly tool: 'say' }
-				| { readonly kind: 'none' }
-				| { readonly kind: 'custom'; readonly tool: string };
+			readonly grant: { readonly kind: 'seat'; readonly tool: 'seat' };
 	  })
 	| (ActivationIdentity & {
 			readonly cause: 'closed';
 			readonly through: Seq;
 			readonly closing: ActivationClosing;
-			readonly grant:
-				| { readonly kind: 'summary'; readonly tool: 'summarise' }
-				| { readonly kind: 'say'; readonly tool: 'say' }
-				| { readonly kind: 'none' }
-				| { readonly kind: 'custom'; readonly tool: string };
+			readonly grant: { readonly kind: 'summary'; readonly tool: 'summarise' };
 	  });
 
 // -- entries on the journal beside the messages -----------------------------------
@@ -147,27 +139,15 @@ export interface Close {
 	from: Seq;
 	through: Seq;
 	at: string;
-	/** The seat whose role answers `closed`, when the exchange owes a summary. */
+	/** The assistant seat that writes a summary when the exchange owes one. */
 	wakes?: string[];
 }
 
-/**
- * A role, as the journal holds it: the name, and the tool the seat holds at
- * each event it answers. The runtime's copy carries the shape, and a reader
- * of the record needs the name alone. It is the same split `identity` and
- * `instructions` take.
- */
-export interface Role {
-	name: string;
-	answers: Partial<Record<ExchangeEvent, string>>;
-}
-
-/** One seat in a composition: its name, how the room knows it, what wakes it, and its role. */
+/** One seat in a composition: its name, how the room knows it, and what wakes it. */
 export interface Seating {
 	name: string;
 	identity: string;
 	attention: Attention;
-	role?: Role;
 }
 
 /**
@@ -176,6 +156,8 @@ export interface Seating {
  */
 export interface Composition {
 	goal?: string;
+	/** The agent that performs the room's assistant work, when the room seats one. */
+	assistant?: string;
 	agents: Seating[];
 	available: Seating[];
 	/**

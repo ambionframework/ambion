@@ -21,13 +21,13 @@ const retry = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 const composition = (): Entry => ({
 	kind: 'composition',
 	body: {
+		assistant: 'assistant',
 		agents: [
 			{ name: 'product', identity: 'The product.', attention: 'broadcast' },
 			{
 				name: 'assistant',
 				identity: 'Writes the one message.',
 				attention: 'none',
-				role: { name: 'assistant', answers: { opened: 'seat', closed: 'summarise' } },
 			},
 		],
 		available: [{ name: 'surveyor', identity: 'Holds the tonnage.', attention: 'broadcast' }],

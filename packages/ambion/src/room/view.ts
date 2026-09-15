@@ -7,7 +7,6 @@
 
 import {
 	type PersonView,
-	type RoleView,
 	type RoomView,
 	renderSystemPrompt,
 	renderTurnContext,
@@ -26,8 +25,6 @@ export interface RoomFacts {
 	readonly live: ReadonlyMap<string, string[]>;
 	/** How many messages landed after this seq. */
 	unseen(since: Seq): number;
-	/** What a role of this name tells its seat, or nothing where it tells it none. */
-	guidance(role: string): string | undefined;
 }
 
 /** The roster and the people, as `seats()` reports them, off one folded state and nothing else. */
@@ -38,8 +35,8 @@ export function seatsOf(facts: Pick<RoomFacts, 'name' | 'state' | 'live'>): Seat
 		identity: seat.identity,
 		status: facts.live.has(seat.name) ? ('active' as const) : ('idle' as const),
 		attention: seat.attention,
+		assistant: seat.name === facts.state.composition?.assistant,
 		sessionId: `${facts.name}:${seat.name}`,
-		...(seat.role === undefined ? {} : { role: seat.role.name }),
 	}));
 	for (const person of facts.state.people.values()) {
 		seats.push({
@@ -59,30 +56,22 @@ export function viewOf(
 	facts: RoomFacts,
 ): ActivationView {
 	const state = facts.state;
-	const role = state.roster.find((s) => s.name === spec.seat)?.role;
-	const tool = spec.grant.kind === 'none' ? undefined : spec.grant.tool;
+	const tool = spec.grant.tool;
 	const closing = spec.cause === 'closed' ? spec.closing : undefined;
 	const composing = spec.cause === 'opened' ? spec.opening : undefined;
 	const speaking: SeatSpeaking = {
 		def,
-		...(role === undefined ? {} : { role: roleView(role.name, facts) }),
 		tool,
 		closing: closing && { ...closing, preferences: state.people.get(closing.person)?.preferences },
 		composing: composing && { ...composing, reserve: reserved(facts) },
 	};
-	const room = roomView(facts, spec.grant.kind === 'say' ? undefined : closing);
+	const room = roomView(facts, closing);
 	return {
 		spec,
 		model: def.model,
 		systemPrompt: renderSystemPrompt(speaking, room),
 		context: renderTurnContext(speaking, room),
 	};
-}
-
-/** The role as the prose reads it: the name off the record, the guidance off the runtime. */
-function roleView(name: string, facts: RoomFacts): RoleView {
-	const guidance = facts.guidance(name);
-	return { name, ...(guidance === undefined ? {} : { guidance }) };
 }
 
 /** The reserve as the assistant reads it: a name and an identity per agent. */

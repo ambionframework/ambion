@@ -179,7 +179,7 @@ function who(): void {
 	}
 	for (const seat of session.seats()) {
 		if (seat.kind === 'agent') {
-			const assistant = seat.role === undefined ? '' : `, the ${seat.role}`;
+			const assistant = seat.assistant ? ', the assistant' : '';
 			console.log(
 				`  ${paint(seat.name, seat.name)} (${seat.status}, wakes ${WAKES[seat.attention]}${assistant}): ${seat.identity}`,
 			);

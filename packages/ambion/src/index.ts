@@ -35,27 +35,12 @@ export {
 	JsonlSessionRepo,
 } from '@earendil-works/pi-agent-core';
 export type {
-	Binder,
 	DefineAgentOptions,
 	DefineHumanOptions,
 	DefineToolOptions,
 	SeatingOptions,
 } from './define.ts';
-export {
-	ASSISTANT,
-	attentive,
-	binderOf,
-	defineAgent,
-	defineHuman,
-	defineRole,
-	defineTool,
-	defineToolShape,
-	passive,
-	SAY,
-	SEAT,
-	SUMMARISE,
-	seated,
-} from './define.ts';
+export { attentive, defineAgent, defineHuman, defineTool, passive, seated } from './define.ts';
 export type { CreateRuntimeOptions, Runtime, SessionRepoLike } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, sessionsOver, systemClock } from './host/runtime.ts';
 export type {
@@ -80,7 +65,6 @@ export type {
 	Clock,
 	ClosedExchange,
 	Exchange,
-	ExchangeEvent,
 	HumanDefinition,
 	HumanSeatInfo,
 	Message,
@@ -89,7 +73,6 @@ export type {
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
-	RoleDefinition,
 	SeatedAgent,
 	SeatInfo,
 	SeatStatus,
@@ -98,7 +81,6 @@ export type {
 	SpokenMessage,
 	SummaryMessage,
 	ToolContext,
-	ToolShape,
 	Workspace,
 	WorkspaceBackend,
 	WorkspaceHandle,

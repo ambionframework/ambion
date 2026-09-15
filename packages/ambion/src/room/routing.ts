@@ -11,9 +11,10 @@
  * (rule 2), and the steer is not on the message.
  */
 
+import { assistantPolicy } from '../assistant.ts';
 import type { Body } from '../journal/journal.ts';
 import type { Attention, Message } from '../types.ts';
-import { answering, type RoomState } from './fold.ts';
+import type { RoomState } from './fold.ts';
 
 /** The attention scale, narrowest first. A seat hears what it is wide enough for. */
 const WIDTH: Record<Attention, number> = { none: 0, named: 1, broadcast: 2, presence: 3 };
@@ -71,8 +72,8 @@ function targetOf(message: RoutedMessage): string | undefined {
  * Who wakes for a message — the same answer for what a person said, what a
  * person did, and what a colleague said. An idle seat wakes when the
  * attention it was seated at reaches the message. The question that opens
- * an exchange also wakes the seat whose role answers `opened`, when the
- * room holds agents in reserve and that seat is idle.
+ * an exchange also wakes the assistant when the room holds agents in reserve
+ * and that seat is idle.
  *
  * `live` names the seats the room is already waiting on, so nothing here
  * wakes a seat twice.
@@ -94,7 +95,7 @@ export function routes(
 		.filter((seat) => seat.name !== author && !live.has(seat.name))
 		.filter((seat) => wakes(seat, target, message))
 		.map((seat) => seat.name);
-	const composer = answering(state.roster, 'opened')?.name;
+	const composer = assistantPolicy.opening(state.composition, state.roster, state.reserve);
 	if (composer !== undefined && opens(message, state) && !live.has(composer)) {
 		woken.push(composer);
 	}
@@ -103,6 +104,6 @@ export function routes(
 
 /** The message opens an exchange, and the room holds agents to compose it from. */
 function opens(message: RoutedMessage, state: RoomState): boolean {
-	if (state.exchange !== undefined || state.reserve.length === 0) return false;
+	if (state.exchange !== undefined) return false;
 	return spoken(message) && state.people.has(message.from);
 }

@@ -23,12 +23,10 @@ import type {
 import { InMemorySessionRepo } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { builtinModels } from '@earendil-works/pi-ai/providers/all';
-import { ASSISTANT } from '../define.ts';
 import type {
 	AgentDefinition,
 	Clock,
 	ModelResolver,
-	RoleDefinition,
 	SessionEvent,
 	SessionOpener,
 } from '../types.ts';
@@ -67,12 +65,6 @@ export interface Runtime {
 	readonly taken: Set<string>;
 	/** Every agent definition a room in this runtime was started with, by name. */
 	readonly catalog: Map<string, AgentDefinition>;
-	/**
-	 * Every role a room in this runtime seated, by name. The journal holds a
-	 * role's name, so a resumed room reads its guidance from here. It starts
-	 * with `ASSISTANT`, which every room seats by convention.
-	 */
-	readonly roles: Map<string, RoleDefinition>;
 	readonly clock: Clock;
 	readonly sessions: SessionOpener;
 	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
@@ -111,8 +103,6 @@ export interface CreateRuntimeOptions {
 	transport?: Transport;
 	/** Definitions the catalog starts with. `resumeSession` resolves a room's names through it. */
 	agents?: readonly AgentDefinition[];
-	/** Roles beside `ASSISTANT`. A room resumed into a role it cannot resolve is refused. */
-	roles?: readonly RoleDefinition[];
 	/** Where the rooms' Pi sessions open. `repo` is the shorthand for `sessionsOver(repo)`. */
 	sessions?: SessionOpener;
 	repo?: SessionRepoLike<SessionMetadata, SessionCreateOptions>;
@@ -205,7 +195,6 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		running,
 		taken: new Set(),
 		catalog: new Map((options.agents ?? []).map((def) => [def.name, def])),
-		roles: new Map([ASSISTANT, ...(options.roles ?? [])].map((role) => [role.name, role])),
 		clock: options.clock ?? systemClock(),
 		sessions,
 		...(options.transport === undefined ? {} : { transport: options.transport }),

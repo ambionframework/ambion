@@ -10,23 +10,8 @@
  */
 
 import { type Entry, placed } from '../journal/journal.ts';
-import {
-	type Attention,
-	type Exchange,
-	type ExchangeEvent,
-	isSummary,
-	type Message,
-	type Seq,
-} from '../types.ts';
-import type {
-	Checkpoint,
-	Close,
-	Composition,
-	EndReason,
-	LeaseHold,
-	Role,
-	Seating,
-} from '../wire.ts';
+import { type Exchange, isSummary, type Message, type Seq } from '../types.ts';
+import type { Checkpoint, Close, Composition, EndReason, LeaseHold, Seating } from '../wire.ts';
 import { openExchange } from './exchange.ts';
 import {
 	applyLease,
@@ -39,28 +24,6 @@ import {
 	pendingWakes,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
-
-/** One agent on the roster: its name, how the room knows it, what wakes it, and its role. */
-export interface RosterSeat {
-	name: string;
-	identity: string;
-	attention: Attention;
-	role?: Role;
-}
-
-/**
- * The seat whose role answers this event, or nothing when no seat on the
- * roster answers it. A room with no such seat answers the event with
- * nothing: it closes an exchange and writes no summary, and it opens one
- * and composes no room.
- *
- * The first seat that answers takes it. Two seats in one role is a roster
- * the room does not need yet, and `planning/backlog.md` holds the question.
- */
-export const answering = (
-	roster: readonly RosterSeat[],
-	event: ExchangeEvent,
-): RosterSeat | undefined => roster.find((seat) => seat.role?.answers[event] !== undefined);
 
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends PendingActivation {
@@ -75,7 +38,7 @@ interface Owed extends PendingActivation {
 
 export interface RoomState {
 	readonly composition: Composition | undefined;
-	readonly roster: RosterSeat[];
+	readonly roster: Seating[];
 	readonly reserve: Seating[];
 	readonly people: Map<string, PersonState>;
 	readonly exchange: Exchange | undefined;
@@ -173,7 +136,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
-		causeOf(answering(roster, 'opened')?.name, opensOf(exchange, closes)),
+		causeOf(composition?.assistant, opensOf(exchange, closes)),
 	);
 	const owed = foldOwed(closes, messages, leases, options);
 	const state: RoomState = {
@@ -201,22 +164,19 @@ const opensOf = (exchange: Exchange | undefined, closes: readonly Close[]): Read
 
 /**
  * Why a seat's wake on this message exists. The question that opened an
- * exchange causes the activation of the seat whose role answers `opened`,
+ * exchange causes the activation of the assistant,
  * and every other wake a message causes. The fold decides it once, and the
  * id carries the answer.
  */
 const causeOf =
-	(composer: string | undefined, opens: ReadonlySet<Seq>): CauseOf =>
+	(assistant: string | undefined, opens: ReadonlySet<Seq>): CauseOf =>
 	(seat, seq) =>
-		seat === composer && opens.has(seq) ? 'opened' : 'message';
+		seat === assistant && opens.has(seq) ? 'opened' : 'message';
 
 /** The latest composition, then every seating and unseating after it, in order. */
-function foldRoster(
-	composition: Composition | undefined,
-	messages: readonly Message[],
-): RosterSeat[] {
+function foldRoster(composition: Composition | undefined, messages: readonly Message[]): Seating[] {
 	if (composition === undefined) return [];
-	const roster: RosterSeat[] = composition.agents.map((seat) => ({ ...seat }));
+	const roster: Seating[] = composition.agents.map((seat) => ({ ...seat }));
 	for (const message of messages) {
 		if (message.seq > composition.seq) reseat(roster, message);
 	}
@@ -225,10 +185,9 @@ function foldRoster(
 
 /**
  * One seating or unseating applied to the roster. Any other message changes
- * nothing. A seat the room seats while it runs takes no role: a role is a
- * choice the host makes at the composition.
+ * nothing.
  */
-function reseat(roster: RosterSeat[], message: Message): void {
+function reseat(roster: Seating[], message: Message): void {
 	if (message.kind !== 'seated' && message.kind !== 'unseated') return;
 	const at = roster.findIndex((seat) => seat.name === message.subject);
 	if (at >= 0) roster.splice(at, 1);

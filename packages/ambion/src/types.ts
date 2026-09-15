@@ -161,14 +161,6 @@ export function isPresence(message: Message): message is PresenceMessage {
 export type SeatStatus = 'active' | 'idle';
 
 /**
- * The exchange's two events. A question opens an exchange, and the room
- * closes it once nothing works on it. A role names the events its seat
- * answers, and `Cause` names the same two where an activation says why it
- * exists.
- */
-export type ExchangeEvent = 'opened' | 'closed';
-
-/**
  * What wakes a seat, as the widest kind of message it activates for. One
  * widening scale, not a set of flags: `none` is woken by nothing said in the
  * room, `named` hears a message addressed to it, `broadcast` also hears
@@ -190,14 +182,10 @@ export interface AgentSeatInfo {
 	identity: string;
 	status: SeatStatus;
 	attention: Attention;
+	/** Whether this ordinary seat is the room's designated assistant. */
+	assistant: boolean;
 	/** The id of the seat's downstream Pi session, `<room>:<agent>`. */
 	sessionId: string;
-	/**
-	 * The role this seat took, by name, when the seating gave it one. A role
-	 * says which of the exchange's events wake the seat, and the tool it
-	 * holds at each. `assistant` is the role a room's writer takes.
-	 */
-	role?: string;
 }
 
 export interface HumanSeatInfo {
@@ -294,32 +282,12 @@ export interface ToolContext {
 	readonly signal?: AbortSignal;
 }
 
-/**
- * What binding a tool needs to know: what it is called, and what it takes.
- *
- * A shape is the contract, and a description is how one body presents
- * itself. The room binds `summarise` with a description that names the
- * person it writes for, so the description belongs to the body and never to
- * the shape. Two bodies answer one shape when they take the same name and
- * the same parameters.
- */
-export interface ToolShape<TParameters extends TSchema = TSchema> {
-	name: string;
-	parameters: TParameters;
-}
-
 /** A tool defined with Ambion's `defineTool` facade. */
 export interface AmbionTool<TParameters extends TSchema = TSchema> {
 	readonly [TOOL_BRAND]: true;
 	readonly name: string;
 	readonly description: string;
 	readonly parameters: TParameters;
-	/**
-	 * The shape this tool answers, for a tool that names one. A role that
-	 * requires the shape reads this, and one comparison of references says
-	 * that this body answers that contract.
-	 */
-	readonly shape?: ToolShape;
 	readonly execute: (
 		params: Static<TParameters>,
 		ctx: ToolContext,
@@ -389,34 +357,10 @@ export interface SeatedAgent {
 	readonly [SEAT_BRAND]: true;
 	readonly agent: AgentDefinition;
 	readonly attention: Attention;
-	/** The role this seating gives the agent, when it gives one. */
-	readonly role?: RoleDefinition;
 }
 
 /** What `startSession` seats: an agent on its own, or one the host seated. */
 export type AgentSeat = AgentDefinition | SeatedAgent;
-
-/**
- * What a role is, as a host writes it: a name, and the tool the seat holds
- * at each of the exchange's events it answers. `defineRole` writes one.
- *
- * A role is a seating choice. One agent takes a role in one room and none
- * in another, so the definition holds no role and the composition does.
- */
-export interface RoleDefinition {
-	name: string;
-	answers: Partial<Record<ExchangeEvent, ToolShape>>;
-	/**
-	 * What the seat reads about the role it took. The room renders it under
-	 * the line that names the role, above the seat's own identity and
-	 * instructions.
-	 *
-	 * It is the runtime's, the way `instructions` are: the journal holds the
-	 * role's name, and a room resolves the prose by that name. A runtime a
-	 * room resumes in needs the role, so `createRuntime` takes one.
-	 */
-	guidance?: string;
-}
 
 /** Who may be addressed by name. */
 export type Participant = AgentDefinition | HumanDefinition;
