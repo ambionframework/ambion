@@ -6,9 +6,8 @@ import {
 	defineAgent,
 	defineTool,
 	isSpoken,
-	type Session,
-	startSession,
-	stopSession,
+	type Room,
+	startRoom,
 	type ToolContext,
 } from '@ambionframework/ambion';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
@@ -52,17 +51,17 @@ function agent(agentName: string, options: Partial<Parameters<typeof defineAgent
 	});
 }
 
-/** One room, one delivery, and the seats' scripts; resolves when the room settles. */
-async function run(agents: AgentDefinition[], seats: Record<string, Script>): Promise<Session> {
-	const session = startSession({
+/** One room, one question, and the seats' scripts; resolves at the exchange close. */
+async function run(agents: AgentDefinition[], seats: Record<string, Script>): Promise<Room> {
+	const session = await startRoom({
 		name: name('workspace'),
 		assistant,
 		agents,
 		streamFn: scripted(byAgent(seats)),
 	});
 	const visit = await enter(session);
-	await visit.deliver({ text: 'go' });
-	await session.settled();
+	const exchange = await visit.send({ text: 'go' });
+	await exchange.waitForClose();
 	return session;
 }
 
@@ -106,7 +105,7 @@ describe('the built-in tools', () => {
 		const reader = results.reader ?? [];
 		expect(reader[0]).toMatchObject({ tool: 'read', text: 'slab pour Thu\n', failed: false });
 		expect((await session.messages()).filter(isSpoken).map((m) => m.text)).toContain('written');
-		await stopSession(session);
+		await session.stop();
 		await site.destroy();
 	});
 

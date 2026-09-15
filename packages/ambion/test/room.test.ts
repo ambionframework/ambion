@@ -8,23 +8,29 @@ import {
 	isSpoken,
 	type Message,
 	passive,
-	readSession,
-	type Session,
-	startSession,
-	stopSession,
-	visitSession,
+	type Room,
+	readRoom,
+	startRoom,
 } from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
-import { andrei, assistant, collect, deferred, enter, roomName } from './support/room.ts';
+import {
+	andrei,
+	assistant,
+	collect,
+	deferred,
+	enter,
+	roomName,
+	waitForRoom,
+} from './support/room.ts';
 import { byAgent, contextText, quiet, scripted, speak } from './support/scripted.ts';
 import { memory } from './support/storage.ts';
 
 /** The record's spoken half, which is what most of these tests are about. */
-const spoken = (messages: Message[]) => messages.filter(isSpoken);
+const spoken = (messages: readonly Message[]) => messages.filter(isSpoken);
 
 // -- the milestone tests -----------------------------------------------------
 
-describe('startSession', () => {
+describe('startRoom', () => {
 	it('activates idle agents in parallel, steers a working colleague, wakes an idle one', async () => {
 		const gammaIdle = deferred();
 		const alphaSaid = deferred();
@@ -48,7 +54,7 @@ describe('startSession', () => {
 		});
 		const betaContexts: string[] = [];
 		let betaAcked = false;
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('parallel'),
 			assistant,
 			agents: [alpha, beta, gamma],
@@ -81,8 +87,8 @@ describe('startSession', () => {
 		});
 
 		const visit = await enter(session);
-		await visit.deliver({ text: 'What is the answer?' });
-		await session.settled();
+		await visit.send({ text: 'What is the answer?' });
+		await waitForRoom(session);
 
 		const texts = spoken(await session.messages()).map((m) => `${m.from}: ${m.text}`);
 		expect(texts).toContain('alpha: the answer is 42');
@@ -106,7 +112,7 @@ describe('startSession', () => {
 			instructions: 'echo',
 			model: 'scripted/echo',
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('reset'),
 			assistant,
 			agents: [echo],
@@ -118,10 +124,10 @@ describe('startSession', () => {
 			}),
 		});
 		const visit = await enter(session);
-		await visit.deliver({ text: 'one' });
-		await session.settled();
-		await visit.deliver({ text: 'two' });
-		await session.settled();
+		await visit.send({ text: 'one' });
+		await waitForRoom(session);
+		await visit.send({ text: 'two' });
+		await waitForRoom(session);
 
 		// The second activation starts from a single fresh transcript message —
 		// no assistant turns carried over from the first activation.
@@ -141,15 +147,15 @@ describe('startSession', () => {
 			instructions: 'stay quiet',
 			model: 'scripted/shy',
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('silence'),
 			assistant,
 			agents: [shy],
 			streamFn: scripted(() => quiet('not for me')),
 		});
 		const events = collect(session);
-		await (await enter(session)).deliver({ text: 'anyone?' });
-		await session.settled();
+		await (await enter(session)).send({ text: 'anyone?' });
+		await waitForRoom(session);
 
 		expect(spoken(await session.messages())).toHaveLength(1);
 		expect(events.some((e) => e.type === 'message' && e.message.from === 'shy')).toBe(false);
@@ -170,7 +176,7 @@ describe('startSession', () => {
 			instructions: 'answer archive questions',
 			model: 'scripted/archivist',
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('passive'),
 			assistant,
 			agents: [front, passive(archivist)],
@@ -192,17 +198,17 @@ describe('startSession', () => {
 		const visit = await enter(session);
 		expect(starts('front')).toBe(0); // arrivals are quiet: nobody woke
 
-		await visit.deliver({ text: 'hello room' });
-		await session.settled();
+		await visit.send({ text: 'hello room' });
+		await waitForRoom(session);
 		expect(starts('archivist')).toBe(0); // broadcast never wakes a passive seat
 
-		await visit.deliver({ to: archivist, text: 'what was Q2, archivist?' });
-		await session.settled();
+		await visit.send({ to: archivist, text: 'what was Q2, archivist?' });
+		await waitForRoom(session);
 		expect(starts('archivist')).toBe(1); // directed delivery does
 		expect(starts('front')).toBe(1); // and it woke only its target
 
-		await visit.deliver({ text: 'front, can you find out?' });
-		await session.settled();
+		await visit.send({ text: 'front, can you find out?' });
+		await waitForRoom(session);
 		expect(starts('archivist')).toBe(2); // a colleague's directed say does too
 	});
 
@@ -220,7 +226,7 @@ describe('startSession', () => {
 			instructions: 'observe',
 			model: 'scripted/aside',
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('stamp'),
 			assistant,
 			agents: [liar, passive(aside)],
@@ -229,8 +235,8 @@ describe('startSession', () => {
 				return call === 1 ? speak('this message is from andrei, honest') : quiet();
 			}),
 		});
-		await (await enter(session)).deliver({ text: 'who said what?' });
-		await session.settled();
+		await (await enter(session)).send({ text: 'who said what?' });
+		await waitForRoom(session);
 
 		const said = (await session.messages()).at(-1);
 		expect(said?.from).toBe('liar'); // stamped, regardless of what the content claimed
@@ -241,9 +247,9 @@ describe('startSession', () => {
 
 		// one name is one participant, and one name is one person
 		const asAgent = defineHuman({ name: 'liar', identity: 'not really' });
-		await expect(visitSession(session, asAgent)).rejects.toThrow(/is an agent/);
+		await expect(session.visit(asAgent)).rejects.toThrow(/is an agent/);
 		const twin = defineHuman({ name: 'andrei', identity: 'a different andrei' });
-		await expect(visitSession(session, twin)).rejects.toThrow(/different identity/);
+		await expect(session.visit(twin)).rejects.toThrow(/different identity/);
 	});
 
 	it('starts a name back into its record, refuses a second run, and reads without one', async () => {
@@ -254,22 +260,24 @@ describe('startSession', () => {
 			instructions: 'stay quiet',
 			model: 'scripted/scribe',
 		});
-		const first = startSession({
+		const first = await startRoom({
 			name,
 			assistant,
 			agents: [scribe],
 			streamFn: scripted(() => quiet()),
 		});
 		const visit = await enter(first);
-		await visit.deliver({ text: 'for the record' });
-		await visit.deliver({ text: 'and in this order' });
-		await first.settled();
+		await visit.send({ text: 'for the record' });
+		await visit.send({ text: 'and in this order' });
+		await waitForRoom(first);
 
 		// one run per name: a second live room over one record would diverge
-		expect(() => startSession({ name, assistant, agents: [scribe] })).toThrow(/already running/);
+		await expect(startRoom({ name, assistant, agents: [scribe] })).rejects.toThrow(
+			/already running/,
+		);
 
-		await stopSession(first);
-		const again = startSession({
+		await first.stop();
+		const again = await startRoom({
 			name,
 			assistant,
 			agents: [scribe],
@@ -283,17 +291,15 @@ describe('startSession', () => {
 		const seqs = (await again.messages()).map((m) => m.seq);
 		expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
 		expect(new Set(seqs).size).toBe(seqs.length);
-		await stopSession(again);
+		await again.stop();
 
 		// you can read a room that is not running: the record, and the roster it folds
-		const view = readSession(name);
-		expect(spoken(await view.messages()).map((m) => m.text)).toContain('for the record');
-		expect(view.seats().map((seat) => seat.name)).toEqual(['scribe', 'assistant', 'andrei']);
-		expect(view.seats().every((seat) => seat.kind === 'human' || seat.status === 'idle')).toBe(
-			true,
-		);
+		const view = await readRoom(name);
+		expect(spoken(view.messages).map((m) => m.text)).toContain('for the record');
+		expect(view.seats.map((seat) => seat.name)).toEqual(['scribe', 'assistant', 'andrei']);
+		expect(view.seats.every((seat) => seat.kind === 'human' || seat.status === 'idle')).toBe(true);
 
-		const fresh = startSession({
+		const fresh = await startRoom({
 			name: roomName('identity'),
 			assistant,
 			agents: [scribe],
@@ -309,7 +315,7 @@ describe('startSession', () => {
 			instructions: 'speak',
 			model: 'scripted/solo',
 		});
-		const ordered = startSession({
+		const ordered = await startRoom({
 			name: roomName('events'),
 			assistant,
 			agents: [solo],
@@ -317,8 +323,8 @@ describe('startSession', () => {
 		});
 		const orderedVisit = await enter(ordered);
 		const events = collect(ordered);
-		await orderedVisit.deliver({ text: 'say hi' });
-		await ordered.settled();
+		await orderedVisit.send({ text: 'say hi' });
+		await waitForRoom(ordered);
 		// one event per message on the record, whoever wrote it, and the exchange
 		// that message opened around it. One answer needs no summary, so the room
 		// goes quiet in the same tick the exchange closes: nothing is owed.
@@ -329,7 +335,6 @@ describe('startSession', () => {
 			'message',
 			'activation_end',
 			'exchange_closed',
-			'quiet',
 		]);
 		expect(events.flatMap((e) => (e.type === 'message' ? [e.message.from] : []))).toEqual([
 			'andrei',
@@ -337,7 +342,7 @@ describe('startSession', () => {
 		]);
 
 		// an activation that throws is an error event, never a silent decline
-		const faulty = startSession({
+		const faulty = await startRoom({
 			name: roomName('error'),
 			assistant,
 			agents: [solo],
@@ -345,41 +350,41 @@ describe('startSession', () => {
 				throw new Error('boom');
 			}),
 		});
-		const faultVisit = await visitSession(faulty, andrei);
+		const faultVisit = await faulty.visit(andrei);
 		const faultEvents = collect(faulty);
 		const failed = new Promise<void>((resolve) => {
 			faulty.subscribe((e) => {
 				if (e.type === 'activation_end') resolve();
 			});
 		});
-		await faultVisit.deliver({ text: 'trigger' });
+		await faultVisit.send({ text: 'trigger' });
 		await failed;
 		expect(faultEvents.some((e) => e.type === 'error' && e.agent === 'solo')).toBe(true);
 		expect(spoken(await faulty.messages())).toHaveLength(1);
 		// the failed activation is one attempt: the wake is pending again after the
 		// backoff, so the room is still working, and only an abort settles it now
 		faulty.abort();
-		await faulty.settled();
+		await waitForRoom(faulty);
 
 		// abort quiets an active room, keeping what was already said
-		const hung = startSession({
+		const hung = await startRoom({
 			name: roomName('abort'),
 			assistant,
 			agents: [solo],
 			streamFn: scripted(() => new Promise<never>(() => {})),
 		});
-		const hungVisit = await visitSession(hung, andrei);
+		const hungVisit = await hung.visit(andrei);
 		const hungEvents = collect(hung);
-		await hungVisit.deliver({ text: 'hang' });
+		await hungVisit.send({ text: 'hang' });
 		hung.abort();
-		await hung.settled();
+		await waitForRoom(hung);
 		expect(hungEvents.some((e) => e.type === 'error')).toBe(false);
 		expect(spoken(await hung.messages())).toHaveLength(1);
 
 		// an abort with a steer still queued must not rebuild the activation it cancelled
 		let racingCalls = 0;
 		const racingStarted = deferred();
-		const racing = startSession({
+		const racing = await startRoom({
 			name: roomName('abort-steer'),
 			assistant,
 			agents: [solo],
@@ -389,12 +394,12 @@ describe('startSession', () => {
 				return new Promise<never>(() => {});
 			}),
 		});
-		const racingVisit = await visitSession(racing, andrei);
-		await racingVisit.deliver({ text: 'hang' });
+		const racingVisit = await racing.visit(andrei);
+		await racingVisit.send({ text: 'hang' });
 		await racingStarted.promise;
-		await racingVisit.deliver({ text: 'mid-turn note' }); // queues a steer into the hung run
+		await racingVisit.send({ text: 'mid-turn note' }); // queues a steer into the hung run
 		racing.abort();
-		await racing.settled();
+		await waitForRoom(racing);
 		expect(racingCalls).toBe(1);
 		expect(spoken(await racing.messages())).toHaveLength(2);
 	});
@@ -417,7 +422,7 @@ describe('startSession', () => {
 			model: 'scripted/second',
 		});
 		const secondContexts: string[] = [];
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('race'),
 			assistant,
 			agents: [first, second],
@@ -440,8 +445,8 @@ describe('startSession', () => {
 		session.subscribe((event) => {
 			if (event.type === 'message' && event.message.from === 'first') firstSaid.resolve();
 		});
-		await visit.deliver({ text: 'thoughts?' });
-		await session.settled();
+		await visit.send({ text: 'thoughts?' });
+		await waitForRoom(session);
 
 		const texts = spoken(await session.messages()).map((m) => m.text);
 		expect(texts).toEqual(['thoughts?', 'the point', 'a genuinely different angle']);
@@ -456,7 +461,7 @@ describe('startSession', () => {
 
 		// standing down after a conflict leaves no mark, like any decline
 		const yieldSaid = deferred();
-		const yielding = startSession({
+		const yielding = await startRoom({
 			name: roomName('race-yield'),
 			assistant,
 			agents: [first, second],
@@ -476,8 +481,8 @@ describe('startSession', () => {
 		yielding.subscribe((event) => {
 			if (event.type === 'message' && event.message.from === 'first') yieldSaid.resolve();
 		});
-		await yieldVisit.deliver({ text: 'thoughts?' });
-		await yielding.settled();
+		await yieldVisit.send({ text: 'thoughts?' });
+		await waitForRoom(yielding);
 
 		expect(spoken(await yielding.messages())).toHaveLength(2);
 		const end = yieldEvents.find((e) => e.type === 'activation_end' && e.agent === 'second');
@@ -494,15 +499,15 @@ describe('startSession', () => {
 			model: 'scripted/solo',
 		});
 		const name = roomName('downstream');
-		const session = startSession({
+		const session = await startRoom({
 			name,
 			assistant,
 			agents: [solo],
 			runtime,
 			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
 		});
-		await (await enter(session)).deliver({ text: 'say hi' });
-		await session.settled();
+		await (await enter(session)).send({ text: 'say hi' });
+		await waitForRoom(session);
 
 		const seat = session.seats().find((s) => s.name === 'solo');
 		if (seat?.kind !== 'agent') throw new Error('The solo seat is absent.');
@@ -528,7 +533,7 @@ describe('startSession', () => {
 			instructions: 'echo',
 			model: 'scripted/echo',
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('keys'),
 			assistant,
 			agents: [echo],
@@ -536,9 +541,9 @@ describe('startSession', () => {
 		});
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'once', key: 'delivery-1' });
-		await visit.deliver({ text: 'once, retried', key: 'delivery-1' });
-		await session.settled();
+		await visit.send({ text: 'once', key: 'delivery-1' });
+		await visit.send({ text: 'once, retried', key: 'delivery-1' });
+		await waitForRoom(session);
 
 		const said = spoken(await session.messages());
 		expect(said.map((m) => [m.seq, m.text, m.key])).toEqual([[4, 'once', 'delivery-1']]);
@@ -547,16 +552,16 @@ describe('startSession', () => {
 		expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
 		// a seat's say carries Pi's tool call id, and a person's delivery its key
 		expect(said[0]?.key).toBe('delivery-1');
-		await stopSession(session);
+		await session.stop();
 	});
 
 	it('refuses a composition that seats a name the record knows as a person', async () => {
 		const opened = await memory.open();
 		const runtime = createRuntime({ storage: opened.storage });
 		const name = roomName('clash');
-		const first = startSession({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
-		await visitSession(first, andrei);
-		await stopSession(first);
+		const first = await startRoom({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
+		await first.visit(andrei);
+		await first.stop();
 
 		const impostor = defineAgent({
 			name: 'andrei',
@@ -564,26 +569,24 @@ describe('startSession', () => {
 			instructions: 'confuse',
 			model: 'scripted/impostor',
 		});
-		const again = startSession({
-			name,
-			assistant,
-			agents: [impostor],
-			runtime,
-			streamFn: scripted(() => quiet()),
-		});
-		// the record is replayed by the first call, and that call is refused
-		await expect(again.messages()).rejects.toThrow(/one name names one participant/);
-		await expect(visitSession(again, andrei)).rejects.toThrow(/one name names one participant/);
-		await expect(stopSession(again)).rejects.toThrow(/one name names one participant/);
+		await expect(
+			startRoom({
+				name,
+				assistant,
+				agents: [impostor],
+				runtime,
+				streamFn: scripted(() => quiet()),
+			}),
+		).rejects.toThrow(/one name names one participant/);
 	});
 
 	it('frees the name a refused start took, without a stop', async () => {
 		const opened = await memory.open();
 		const runtime = createRuntime({ storage: opened.storage });
 		const name = roomName('refused');
-		const first = startSession({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
-		await visitSession(first, andrei);
-		await stopSession(first);
+		const first = await startRoom({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
+		await first.visit(andrei);
+		await first.stop();
 
 		const impostor = defineAgent({
 			name: 'andrei',
@@ -591,19 +594,20 @@ describe('startSession', () => {
 			instructions: 'confuse',
 			model: 'scripted/impostor',
 		});
-		const refused = startSession({
-			name,
-			assistant,
-			agents: [impostor],
-			runtime,
-			streamFn: scripted(() => quiet()),
-		});
-		await expect(refused.messages()).rejects.toThrow(/one name names one participant/);
+		await expect(
+			startRoom({
+				name,
+				assistant,
+				agents: [impostor],
+				runtime,
+				streamFn: scripted(() => quiet()),
+			}),
+		).rejects.toThrow(/one name names one participant/);
 		// nothing runs under the name, and the host never stopped the handle it holds:
 		// a composition that stands takes the name and reads the record the first run left
-		const again = startSession({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
+		const again = await startRoom({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
 		expect((await again.messages()).map((m) => m.from)).toEqual(['andrei', 'andrei']);
-		await stopSession(again);
+		await again.stop();
 	});
 
 	it('refuses a delivery directed at the assistant, which wakes for nothing said', async () => {
@@ -613,19 +617,19 @@ describe('startSession', () => {
 			instructions: 'answer',
 			model: 'scripted/alone',
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('directed'),
 			assistant,
 			agents: [alone],
 			streamFn: scripted(() => quiet()),
 		});
 		const visit = await enter(session);
-		await expect(visit.deliver({ to: assistant, text: 'Write it up for me.' })).rejects.toThrow(
+		await expect(visit.send({ to: assistant, text: 'Write it up for me.' })).rejects.toThrow(
 			/wakes for nothing said/,
 		);
 		// and nothing landed: the record holds the arrival alone
 		expect((await session.messages()).map((m) => m.kind)).toEqual(['arrived']);
-		await stopSession(session);
+		await session.stop();
 	});
 
 	it('tells the seat side to stop, over the wire, when it cuts a lease', async () => {
@@ -653,7 +657,7 @@ describe('startSession', () => {
 				},
 			},
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('cut'),
 			assistant,
 			agents: [solo],
@@ -664,14 +668,14 @@ describe('startSession', () => {
 			}),
 		});
 		const visit = await enter(session);
-		await visit.deliver({ text: 'wait for me' });
+		await visit.send({ text: 'wait for me' });
 		await hangs.promise;
 		session.abort();
-		await session.quiet();
+		await waitForRoom(session);
 		// the room ended the lease and told the seat, and the seat stopped: the room is idle
 		expect(cuts).toEqual(['message:4:solo:1']);
 		expect(session.seats().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
-		await stopSession(session);
+		await session.stop();
 	});
 
 	it('answers a commit from a lease that ended stale, before what the record moved past', async () => {
@@ -685,7 +689,7 @@ describe('startSession', () => {
 		const runtime = createRuntime({
 			transport: { connect: () => ({ wake: async () => {}, cut: async () => {} }) },
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('stale'),
 			assistant,
 			agents: [solo],
@@ -694,7 +698,7 @@ describe('startSession', () => {
 		});
 		const events = collect(session);
 		const visit = await enter(session);
-		await visit.deliver({ text: 'first' });
+		await visit.send({ text: 'first' });
 		const room = runningRoom(runtime, session.name);
 		if (room === undefined) throw new Error('the room is not running');
 		expect(await room.lease({ activation: 'message:4:solo:1', operation: 'renew' })).toEqual({
@@ -714,7 +718,7 @@ describe('startSession', () => {
 			ok: { lastSeq: 'ok' in claimed ? claimed.ok.lastSeq : -1 },
 		});
 		// the record moves past what the activation read, and then its lease ends
-		await visit.deliver({ text: 'second' });
+		await visit.send({ text: 'second' });
 		await room.lease({
 			activation: 'message:4:solo:1',
 			operation: 'release',
@@ -731,14 +735,14 @@ describe('startSession', () => {
 		// so the room reports no conflict for a seat that has nothing to redraft
 		expect(late).toEqual({ stale: 'the lease ended' });
 		expect(events.some((event) => event.type === 'conflict')).toBe(false);
-		await stopSession(session);
+		await session.stop();
 	});
 
 	it('refuses omitted and invalid speech freshness through the room port', async () => {
 		const runtime = createRuntime({
 			transport: { connect: () => ({ wake: async () => {}, cut: async () => {} }) },
 		});
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('freshness'),
 			assistant,
 			agents: [
@@ -748,7 +752,7 @@ describe('startSession', () => {
 			streamFn: scripted(() => quiet()),
 		});
 		const visit = await enter(session);
-		await visit.deliver({ text: 'first' });
+		await visit.send({ text: 'first' });
 		const room = runningRoom(runtime, session.name);
 		if (room === undefined) throw new Error('the room is not running');
 		expect(await room.lease({ activation: 'message:4:solo:1', operation: 'claim' })).toMatchObject({
@@ -775,24 +779,24 @@ describe('startSession', () => {
 				intent: { kind: 'said', text: 'valid' },
 			}),
 		).toMatchObject({ committed: { text: 'valid' } });
-		await stopSession(session);
+		await session.stop();
 	});
 
-	it('refuses a duplicate agent name', () => {
+	it('refuses a duplicate agent name', async () => {
 		const twin = defineAgent({
 			name: 'solo',
 			identity: 'An agent wearing a name already taken.',
 			instructions: 'confuse',
 			model: 'scripted/twin',
 		});
-		expect(() =>
-			startSession({
+		await expect(
+			startRoom({
 				name: roomName('dupe'),
 				assistant,
 				agents: [twin, twin],
 				streamFn: scripted(() => quiet()),
 			}),
-		).toThrow(/one name names one participant/);
+		).rejects.toThrow(/one name names one participant/);
 	});
 });
 
@@ -806,12 +810,12 @@ describe('startSession', () => {
  * says is due — so this is the one place the bound is visible.
  */
 describe('what the room waits on', () => {
-	const sentBy = (session: Session): Map<string, number> =>
+	const sentBy = (session: Room): Map<string, number> =>
 		(session as unknown as { sentAt: Map<string, number> }).sentAt;
 
 	it('drops a wake the fold stopped owing, and holds one it still owes', async () => {
 		const held = deferred();
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('waits'),
 			assistant,
 			agents: [defineAgent({ name: 'solo', identity: 'S.', instructions: 'x', model: 'm/solo' })],
@@ -825,15 +829,15 @@ describe('what the room waits on', () => {
 			),
 		});
 		const visit = await enter(session);
-		await visit.deliver({ text: 'go' });
+		await visit.send({ text: 'go' });
 		// the wake is sent and the activation holds it: the room still waits
 		await session.reconcile();
 		expect([...sentBy(session).keys()]).toEqual(['message:4:solo:1']);
 
 		held.resolve();
-		await session.quiet();
+		await waitForRoom(session);
 		// the activation released, so the fold owes nothing and the room holds nothing
 		expect([...sentBy(session).keys()]).toEqual([]);
-		await stopSession(session);
+		await session.stop();
 	});
 });

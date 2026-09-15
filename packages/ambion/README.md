@@ -10,18 +10,14 @@ general-purpose authority over the application.
 `defineAgent` makes an agent, `defineHuman` names a person, `defineTool` gives
 agents tools. The `assistant` option designates the agent that selects
 specialists and writes summaries through the room's fixed assistant policy.
-`startSession` brings up the room, `visitSession` puts somebody in it,
-`readSession` reads it without starting anything, and `stopSession` takes it
-down.
+`startRoom` brings up the room, `room.visit` puts somebody in it,
+`readRoom` reads a plain snapshot without starting anything, and
+`room.stop()` takes the run down. A visit's `send` returns an exchange handle:
+`waitForClose()` waits for the durable close and `response()` waits for the
+summary or deliberate absence of one.
 
 ```ts
-import {
-  defineAgent,
-  defineHuman,
-  startSession,
-  stopSession,
-  visitSession,
-} from '@ambionframework/ambion';
+import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
 
 const you = defineHuman({
   name: 'you',
@@ -41,23 +37,25 @@ const assistant = defineAgent({
   model: 'anthropic/claude-sonnet-4-5',
 });
 
-const session = startSession({
+const room = await startRoom({
   name: 'room',
   goal: 'Answer what the person brings, and nothing else.',
   assistant,
   agents: [lead],
 });
-session.subscribe((e) => e.type === 'message' && console.log(`${e.message.from} spoke`));
+room.subscribe((e) => e.type === 'message' && console.log(`${e.message.from} spoke`));
 
-const visit = await visitSession(session, you);
-await visit.deliver({ text: 'hello' });
-await session.quiet();
+const visit = await room.visit(you);
+const exchange = await visit.send({ text: 'hello' });
+await exchange.waitForClose();
+const response = await exchange.response();
+if (response) console.log(response.text);
 
-await stopSession(session);
+await room.stop();
 ```
 
 The design contract is [`docs/agent.md`](https://github.com/ambionframework/ambion/blob/main/docs/agent.md),
-with presence — who is in a session, and what the agents do about it — in
+with presence — who is in a room, and what the agents do about it — in
 [`docs/presence.md`](https://github.com/ambionframework/ambion/blob/main/docs/presence.md),
 the room's human-facing assistant — which consolidates an exchange when one
 agent message does not already serve — in

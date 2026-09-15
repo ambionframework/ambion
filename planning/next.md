@@ -97,7 +97,7 @@ Keep `reconcile` as the operation that checks outstanding work.
 
 **Rationale.** Live operation, replay, retries, and host adapters share one
 transition model. A maintainer can identify where every rule is enforced.
-This removes more complexity than another division of the session class.
+This removes more complexity than another division of the room class.
 
 **Completion evidence.** Replaying accepted events produces the same state
 as live execution. Repeated reconciliation creates no duplicate work.
@@ -107,7 +107,7 @@ Existing crash, handover, and fencing guarantees remain intact.
 public event-handler framework.
 
 **Source.** [Transitions](../packages/ambion/src/room/transition.ts),
-[session](../packages/ambion/src/session.ts),
+[room](../packages/ambion/src/room.ts),
 [answers](../packages/ambion/src/answers.ts), and
 [reconciliation](../packages/ambion/src/room/reconcile.ts).
 
@@ -207,7 +207,7 @@ record. An obsolete role binding returns a stale view.
 distinguishes claim, renewal, and release. `PendingActivation` records the
 cause, position, attempt, and `unsuccessfulAttempts` counter explicitly.
 Persisted identifiers, leases, and checkpoints keep their existing formats.
-Transport adapters must upgrade together; the session API is unchanged.
+Transport adapters must upgrade together; the room API is unchanged.
 
 **Verification.** Transition tests cover grant mismatches, unknown intents,
 invalid freshness positions, current context for role-defined speech, and
@@ -463,7 +463,7 @@ definitions or reports the missing binding clearly.
 mutable maps requires replacements for legitimate host operations.
 
 **Source.** [Runtime](../packages/ambion/src/host/runtime.ts),
-[room registration](../packages/ambion/src/session.ts), and
+[room registration](../packages/ambion/src/room.ts), and
 [executor resolution](../packages/ambion/src/seat/seat.ts).
 
 ## 7. Give the journal its own storage contract
@@ -583,62 +583,49 @@ retention.
 
 ## 10. Give the public API one vocabulary and asynchronous lifecycle
 
-**Current cost.** `startSession()` returns before initialization, while
-`resumeSession()` waits. Read-only `seats()` can observe an unreplayed
-journal. A read-only subscription silently does nothing. `quiet()` can
-resolve while an exchange's close write remains unsuccessful.
+The collaboration API now calls its durable domain a room and keeps Pi's
+`Session` terminology inside the Pi adapter. Opening and reading are
+consistently awaitable, and a read returns plain data rather than a live
+object.
 
-The public API calls the collaboration domain a session. Internally, the
-domain is a room, and Pi also supplies sessions. Several interfaces describe
-different capabilities without making their distinction clear in the name.
-
-**Proposed design.** Make opening consistently awaitable. Return ready
-handles. Separate snapshot reads from observation of a running room.
-Distinguish execution inactivity from durable exchange completion, including
-cancellation and failure.
-
-**Naming.** Use `Room` throughout the collaboration API. Keep `Session` in
-the Pi adapter. A proposed public surface is:
+The public surface is:
 
 ```ts
 const room = await startRoom({ name, agents, assistant });
 const visit = await room.visit(person);
-await visit.send({ text: 'Can we proceed?', key: deliveryId });
-await room.waitForIdle();
+const exchange = await visit.send({ text: 'Can we proceed?', key: deliveryId });
+await exchange.waitForClose();
+const response = await exchange.response();
+
 const snapshot = await readRoom(room.name);
 await room.stop();
 ```
 
-This is a proposed naming sketch. `startRoom` starts with a supplied
-composition. `resumeRoom` restores the stored composition. `readRoom`
-returns a snapshot. `waitForIdle` describes execution inactivity and makes
-no claim that a durable result exists.
+`resumeRoom` restores a room over its journal and returns a ready `Room`.
+`readRoom` returns a `RoomSnapshot` containing readonly `messages`, `seats`,
+and the current exchange, with no running seats or subscription. The
+`ExchangeHandle` returned by `Visit.send` carries `owner`, `from`, and `at`;
+`waitForClose` resolves at the durable close, and `response` waits for the
+summary or returns `undefined` when no summary is due. `room.exchange(from)`
+reacquires the same exchange after a restart.
 
-Provide a separate `waitForExchange` result when callers need durable
-completion. Define its outcomes before finalizing the signature. Returning
-the committed message from `visit.send` gives callers its journal position
-and delivery key without another read.
+There is no public room-wide idle, quiet, or settled wait. Callers follow the
+specific exchange they opened, so durable close and optional response are
+explicit milestones. A repeated send with the same idempotency key returns
+the same handle, and concurrent sends into an open exchange steer that same
+exchange. A message committed before its close remains inside its range.
 
-Replace `settled` and `quiet` only after specifying the milestones they
-serve. Preserve access to the interval between exchange closure and summary
-publication through an explicit exchange milestone. Keep `Visit` because
-it owns participant identity and a presence lifetime. Keep `say` for the
-agent's conversational tool.
+`Visit` keeps participant identity and presence lifetime. `say` remains the
+agent's conversational tool. `stop` ends execution; it does not delete the
+record or invent a close for unfinished work.
 
-**Rationale.** Callers learn one noun for the domain and one readiness rule.
-Method names state their effects or the condition they await. A snapshot
-does not imply a live subscription.
-
-**Completion evidence.** Ready handles never expose partial replay.
-Snapshot reads require no running room. Idle waits and durable completion
-report their respective conditions correctly under storage failure.
-
-**Behavioral change.** Awaitable opening and explicit completion outcomes
-change API contracts. Remove obsolete names and document the resulting
-semantics directly.
+**Completion evidence.** Ready handles never expose partial replay. Snapshot
+reads require no running room. Exchange handles preserve owner and opening
+sequence across retries and restarts, and response completion follows the
+exchange's durable close or deliberate no-summary outcome.
 
 **Source.** [Public API](../packages/ambion/src/index.ts),
-[session lifecycle](../packages/ambion/src/session.ts), and
+[room lifecycle](../packages/ambion/src/room.ts), and
 [host adapter](../packages/cloudflare/src/room-object.ts).
 
 ## Naming principles
@@ -669,10 +656,9 @@ The proposed glossary preserves the current participant-visible use of
 `Message`. It distinguishes domain events from transient execution
 notifications. Neither distinction requires persisting diagnostic events.
 
-Map the current `SessionEvent` stream to `RoomNotification`. Keep
-`RoomEvent` for durable domain facts. Replace `SessionView` with separate
-snapshot and observation interfaces when item 10 defines their contracts.
-Do not rename a live handle to `RoomSnapshot` while retaining live behavior.
+Use `RoomNotification` for process-local observations and keep `RoomEvent`
+for durable domain facts. `RoomSnapshot` is plain data and never retains live
+methods or a subscription.
 
 Apply these rules throughout the migration:
 

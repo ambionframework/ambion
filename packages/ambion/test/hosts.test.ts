@@ -9,13 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { runningRoom } from '../src/host/runtime.ts';
-import {
-	createRuntime,
-	resumeSession,
-	startSession,
-	stopSession,
-	visitSession,
-} from '../src/index.ts';
+import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import {
 	agents,
@@ -29,7 +23,7 @@ import {
 } from './support/cast.ts';
 import { World, within } from './support/chaos.ts';
 import { fakeClock } from './support/clock.ts';
-import { collect, roomName } from './support/room.ts';
+import { collect, roomName, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { memory } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
@@ -44,7 +38,7 @@ async function countWrites(): Promise<number> {
 		await world.run();
 		await world.check();
 		const writes = world.writes;
-		await stopSession(world.room);
+		await world.room.stop();
 		return writes;
 	} finally {
 		await opened.dispose();
@@ -66,7 +60,7 @@ describe('a handover under load', () => {
 					await within(world.run(), 20_000, 'the scenario');
 					expect(world.crashes).toBe(1);
 					await world.check();
-					await stopSession(world.room);
+					await world.room.stop();
 				} catch (error) {
 					throw new Error(`crash ${mode} write ${at}:\n${await world.describe()}`, {
 						cause: error,
@@ -95,7 +89,7 @@ describe('a split: two live hosts over one journal', () => {
 			});
 		const first = host();
 		const name = roomName('split');
-		const room = startSession({
+		const room = await startRoom({
 			name,
 			runtime: first,
 			assistant,
@@ -103,22 +97,22 @@ describe('a split: two live hosts over one journal', () => {
 			streamFn: scripted(script),
 		});
 		const events = collect(room);
-		const hers = await visitSession(room, priya);
-		await hers.deliver({ text: 'First?', key: 'q1' });
-		await room.quiet();
+		const hers = await room.visit(priya);
+		await hers.send({ text: 'First?', key: 'q1' });
+		await waitForRoom(room);
 		// the second host takes the name while the first is alive and keeps taking questions
 		const second = host();
-		const taken = await resumeSession(name, {
+		const taken = await resumeRoom(name, {
 			runtime: second,
 			agents,
 			streamFn: scripted(script),
 		});
-		const his = await visitSession(taken, sam);
-		await his.deliver({ text: 'Second?', key: 'q2' });
-		await taken.quiet();
+		const his = await taken.visit(sam);
+		await his.send({ text: 'Second?', key: 'q2' });
+		await waitForRoom(taken);
 		// the first host's next write finds the fence: it is superseded, and writes nothing
-		await expect(hers.deliver({ text: 'Third?', key: 'q3' })).rejects.toThrow(/superseded/);
-		await room.quiet();
+		await expect(hers.send({ text: 'Third?', key: 'q3' })).rejects.toThrow(/superseded/);
+		await waitForRoom(room);
 		try {
 			expect(events.some((e) => e.type === 'superseded')).toBe(true);
 			expect(runningRoom(first, name)).toBeUndefined();
@@ -127,16 +121,16 @@ describe('a split: two live hosts over one journal', () => {
 			expect(record.map((m) => m.key)).not.toContain('q3');
 			expect(new Set(record.map((m) => m.seq)).size).toBe(record.length);
 			// and a third host reads the same record off the storage, and fences the second out
-			const third = await resumeSession(name, {
+			const third = await resumeRoom(name, {
 				runtime: host(),
 				agents,
 				streamFn: scripted(script),
 			});
 			expect((await third.messages()).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
-			await stopSession(third);
+			await third.stop();
 			// the second host learns at its next write: its stop finds the fence, says so, and frees the name
 			const taken_events = collect(taken);
-			await stopSession(taken);
+			await taken.stop();
 			expect(taken_events.some((e) => e.type === 'superseded')).toBe(true);
 			expect(runningRoom(second, name)).toBeUndefined();
 		} finally {

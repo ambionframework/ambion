@@ -12,16 +12,14 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
+	type Room,
 	type Runtime,
-	type Session,
-	startSession,
-	stopSession,
-	visitSession,
+	startRoom,
 } from '../../src/index.ts';
 import { inProcessTransport } from '../../src/transport.ts';
 import { fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
-import { collect, roomName } from './room.ts';
+import { collect, roomName, waitForRoom } from './room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -99,18 +97,18 @@ const twoAnswersEach: Script = (_context, _name, call) =>
 	call % 3 === 0 ? quiet() : speak(`answer ${call}`);
 
 export async function finish(
-	session: Session,
+	session: Room,
 	events: ReturnType<typeof collect>,
 	runtime: Runtime,
 ): Promise<void> {
 	await invariants(session, events, { journals: runtime.journals });
-	await stopSession(session);
+	await session.stop();
 }
 
 export const oneExchange: Scenario = {
 	name: 'one exchange closes into one message',
 	async run({ runtime, name }) {
-		const session = startSession({
+		const session = await startRoom({
 			name,
 			runtime,
 			assistant,
@@ -120,9 +118,9 @@ export const oneExchange: Scenario = {
 			),
 		});
 		const events = collect(session);
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Can I tell the client Thursday?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'Can I tell the client Thursday?' });
+		await waitForRoom(session);
 		const record = await session.messages();
 		expect(record.filter(isSpoken).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
 		const summary = record.find(isSummary);
@@ -134,7 +132,7 @@ export const oneExchange: Scenario = {
 export const twoPeopleTwoExchanges: Scenario = {
 	name: 'two people open two exchanges, and each is written for',
 	async run({ runtime, name }) {
-		const session = startSession({
+		const session = await startRoom({
 			name,
 			runtime,
 			assistant,
@@ -154,12 +152,12 @@ export const twoPeopleTwoExchanges: Scenario = {
 			),
 		});
 		const events = collect(session);
-		const hers = await visitSession(session, priya);
-		const his = await visitSession(session, sam);
-		await hers.deliver({ text: 'First?' });
-		await session.quiet();
-		await his.deliver({ text: 'Second?' });
-		await session.quiet();
+		const hers = await session.visit(priya);
+		const his = await session.visit(sam);
+		await hers.send({ text: 'First?' });
+		await waitForRoom(session);
+		await his.send({ text: 'Second?' });
+		await waitForRoom(session);
 		await hers.leave();
 		const summaries = (await session.messages()).filter(isSummary);
 		expect(summaries.map((m) => [m.to, m.text])).toEqual([
@@ -174,7 +172,7 @@ export const twoPeopleTwoExchanges: Scenario = {
 export const seatFromReserve: Scenario = {
 	name: 'the assistant seats from the reserve, and the newcomer answers',
 	async run({ runtime, name }) {
-		const session = startSession({
+		const session = await startRoom({
 			name,
 			runtime,
 			assistant,
@@ -190,9 +188,9 @@ export const seatFromReserve: Scenario = {
 			),
 		});
 		const events = collect(session);
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'Is there enough steel for the pour?' });
-		await session.quiet();
+		const visit = await session.visit(priya);
+		await visit.send({ text: 'Is there enough steel for the pour?' });
+		await waitForRoom(session);
 		const record = await session.messages();
 		expect(record.find((m) => m.kind === 'seated')).toMatchObject({
 			from: 'assistant',

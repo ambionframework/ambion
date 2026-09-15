@@ -3,7 +3,7 @@
 This document is the design contract for the exchange: the room's own unit
 of work. It is shipped. The code lives in
 [`exchange.ts`](../packages/ambion/src/room/exchange.ts), and
-[`session.ts`](../packages/ambion/src/session.ts) opens and closes one as
+[`room.ts`](../packages/ambion/src/room.ts) opens and closes one as
 the room runs. Read [`agent.md`](agent.md) first: an exchange is made of
 the activations that document specifies, and it changes none of the eight
 rules.
@@ -160,59 +160,57 @@ exchanges reads the closes off the room's Pi session.
 
 ## 6. The edges a host sees
 
-`session.exchange()` reads the open one, or nothing when nobody has asked.
-The stream carries both edges:
+A running room can publish exchange notifications through its subscription,
+but callers that need a durable result use the exchange handle returned by
+`Visit.send`. `room.exchange(from)` reacquires the same handle after a
+restart, using the opening message sequence as its stable identity.
 
 ```ts
-type SessionEvent =
-  | ...
-  | { type: 'exchange_opened'; exchange: Exchange }
-  | { type: 'exchange_closed'; exchange: ClosedExchange }
-  | { type: 'quiet' };
+const visit = await room.visit(priya);
+const exchange = await visit.send({ text: 'Can I promise Thursday?' });
+await exchange.waitForClose();
+const response = await exchange.response();
+
+await room.stop();
+const resumed = await resumeRoom('site', { runtime, agents, assistant });
+const sameExchange = resumed.exchange(exchange.from);
+if (sameExchange) {
+  await sameExchange.waitForClose();
+  await sameExchange.response();
+}
 ```
 
-The room's two completion promises name the two ends of an exchange
-([`agent.md`](agent.md) §5 specifies them beside the other session
-controls):
+`waitForClose()` resolves only after the close entry is durable and returns
+its fixed `through` range. `response()` waits for the summary for that
+exchange, or returns `undefined` when the exchange deliberately has no
+summary. A failed or abandoned attempt remains visible in the record and is
+handled by the exchange's retry policy.
 
-- **`settled()`** resolves when no seat that speaks for itself is taking an
-  activation. That is the exchange's end.
-- **`quiet()`** resolves when no agent at all is taking an activation, and
-  the assistant owes nobody one. That is the moment a host waits for when it
-  wants the one message a person reads.
+The handle is tied to `owner`, `from`, and `at`. Repeating a send with the
+same idempotency key returns the same exchange handle. Concurrent sends into
+an open exchange steer the same work and do not create another handle; a
+later exchange cannot delay or resolve an earlier handle. A message committed
+before the durable close remains in that exchange. A stale close decision is
+rejected or reconsidered against the newer record before it can be written.
 
-Both wait for the room to be up first: a call made right after
-`startSession` answers after the replay, and after the close of an
-exchange the last run left open (§5).
+A stopped run revokes in-flight leases and writes no close for work it did not
+finish. A later `resumeRoom` replays the journal, preserves the open exchange,
+and lets its handle complete. Fencing still applies: work from a superseded
+run is void and cannot publish a close or summary for the current run.
 
-The two differ because the assistant is a seat like any other, and its
-activation counts. The assistant writing about an exchange is not the room
-still working on it, so a drafting activation closes no exchange, and the
-exchange's end stays fixed. The assistant composing the room for an
-exchange is the room working on it, so `settled()` waits for a composing
-activation ([`roster.md`](roster.md) §4). That is the one distinction the
-room draws about its assistant.
+The notification stream carries the durable edges when a host wants live
+observation:
 
-**The order at the close is fixed.** `settled()` resolves, then
-`exchange_closed`, then whatever is written about the exchange, then
-`quiet`. A host that acts between `settled()` and `quiet` acts while a
-summary is drafted, and that window is the one place it can.
+```ts
+type RoomNotification =
+  | { type: 'message'; message: Message }
+  | { type: 'exchange_opened'; exchange: Exchange }
+  | { type: 'exchange_closed'; exchange: ClosedExchange }
+  | { type: 'error'; error: Error };
+```
 
-**An aborted exchange still closes.** `abort()` revokes the leases in
-flight, writes off the wakes still pending, and the room reconciles, so the
-exchange closes with the range it reached. **A stopped room closes
-nothing.** `stopSession` revokes the leases in flight and writes no
-close. A release that lands after the stop must not write into a journal the
-next run has started over. The exchange stays open on the journal, and the
-next run closes it at its first reconcile (§5). A run that dies without
-`stop` leaves the exchange open the same way, with its leases live until
-they expire.
-
-**A close the storage refuses leaves the exchange open.** `settled()` and
-`quiet()` still answer, and the room still says `quiet`; the room looks
-again after the resend window, and writes the close then.
-
----
+The exchange handle is the completion API. There is no room-wide idle,
+quiet, or settled wait: a caller follows the particular exchange it opened.
 
 ## 7. What reads one
 
@@ -271,20 +269,21 @@ The exchange is proved beside the assistant that first reads one, in
 - the person whose question opened the exchange owns it, and a second
   person speaking into it owns nothing (§4);
 - an exchange outlives its owner's visit (§4);
-- an exchange closes at the quiet the room observed, and a question that
-  lands before the close is written opens the next (§3);
-- a quiet observed on one exchange never closes the next, and a question
-  the assistant already woke on composes nothing and closes at once (§3);
-- an exchange closes before anything is written about it, and the room
-  settles before it goes quiet (§6).
+- an exchange closes at the durable boundary it observed, and a message
+  committed before that boundary remains in the exchange (§3);
+- a close for one exchange never closes the next, and a question the
+  assistant already woke on composes nothing and closes at once (§3);
+- an exchange handle closes before its optional response is written, and
+  `response()` resolves only when that response is durable or deliberately
+  absent (§6).
 
 [`restart.test.ts`](../packages/ambion/test/restart.test.ts) proves that a
 stopped room writes no close, that the next run closes the exchange
-before `quiet()` answers, and that a room resumed mid-exchange continues
+before the exchange handle completes, and that a room resumed mid-exchange continues
 it, with a lease the dead run held expiring into the close (§5, §6).
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts) proves that
-a close the storage refuses leaves the exchange open, and that whoever
-waits still hears the room (§6).
+a close the storage refuses leaves the exchange open, and that a handle
+waits for a later durable close (§6).
 
 All in-process, in vitest, on a scripted stream.
 

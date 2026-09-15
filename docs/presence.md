@@ -1,18 +1,18 @@
 # Presence
 
-This document is the design contract for presence: who is in a session, how
+This document is the design contract for presence: who is in a room, how
 the room knows, and what the agents do about it. The code lives with the
 rest of the runtime in [`packages/ambion/src`](../packages/ambion/src) — the
-visit and the roster in [`session.ts`](../packages/ambion/src/session.ts),
+visit and the roster in [`room.ts`](../packages/ambion/src/room.ts),
 the shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md) first: this document assumes its eight rules and
 breaks none of them — presence widens rule 6 and leaves rule 1 exact.
 
 One sentence:
 
-> **`startSession` brings up a room of agents; `visitSession` puts a person
+> **`startRoom` brings up a room of agents; `room.visit` puts a person
 > in it; and arriving is a message like any other — so the room wakes when
-> somebody walks in, and an agent that knows what the session is for can
+> somebody walks in, and an agent that knows what the room is for can
 > tell them what they missed.**
 
 ---
@@ -25,7 +25,7 @@ whole of an ambient runtime. A person lives on a different clock. They
 arrive, read, steer, and go, several of them at once, on their own
 schedules.
 
-`startSession` takes agents and never people. **Seating is composition.
+`startRoom` takes agents and never people. **Seating is composition.
 Visiting is presence.** Three things follow, and they are what presence is
 for.
 
@@ -49,13 +49,13 @@ happened: as a message on the record.
 
 ## 2. The goal a room is started with
 
-`startSession` is specified in [`agent.md`](agent.md) §5: it takes the
-room's composition and brings it to life, `stopSession` takes it down, and
-`readSession` reads a name without starting anything. One of its options is
+`startRoom` is specified in [`agent.md`](agent.md) §5: it takes the
+room's composition and brings it to life, `room.stop` takes it down, and
+`readRoom` reads a name without starting anything. One of its options is
 presence's business.
 
 ```ts
-const session = startSession({
+const room = await startRoom({
   name: 'initiative',
   goal: `
     Ship payments v2 this quarter. Decide scope, sequence the work, and keep
@@ -79,8 +79,7 @@ export type Participant = AgentDefinition | HumanDefinition;
 
 `goal` is what the room is for. An agent knows its own instructions and it
 knows the roster; without a goal it does not know what the room is trying
-to do, and an arrival is then a fact it cannot judge. `goal` is to a
-session what `identity` is to an agent — one or two sentences, public, in
+to do, and an arrival is then a fact it cannot judge. `goal` is to a room what `identity` is to an agent — one or two sentences, public, in
 every participant's context.
 
 `goal` is optional. A room without one still works; its agents simply have
@@ -89,7 +88,7 @@ less to weigh a question against, and the goal line does not render.
 The one option presence reads:
 
 ```ts
-export interface StartSessionOptions {
+export interface StartRoomOptions {
   name: string;
   agents: readonly AgentSeat[];
   /** What the room is for. One or two sentences, read by every agent. */
@@ -104,48 +103,49 @@ different goal and the record is intact under a new purpose.
 
 A room runs whether or not anybody watches it. Agents wait, a colleague's
 directed `say` wakes another colleague, and the record fills up with nobody
-reading it. Somebody who opens the session later reads what happened.
+reading it. Somebody who opens the room later reads what happened.
 
 ---
 
 ## 3. Visiting
 
 ```ts
-const visit = await visitSession(session, andrei);
+const visit = await room.visit(andrei);
 
-await visit.deliver({ text: 'Draft the weekly. Anything to flag?' });
-await visit.deliver({ to: lead, text: 'What does this cost us in engineers?' });
+const exchange = await visit.send({ text: 'Draft the weekly. Anything to flag?' });
+await exchange.response();
+const directed = await visit.send({ to: lead, text: 'What does this cost us in engineers?' });
+await directed.waitForClose();
 
 await visit.leave();
 ```
 
-Delivering belongs to the visit. **You can only speak into a room you are
+Sending belongs to the visit. **You can only speak into a room you are
 in.** Provenance is a property of the handle the host holds, with no
 runtime check on a handle it was passed: a host that delivers as Andrei
 holds a live visit for Andrei, and the visit ends when Andrei leaves.
 
-Reading belongs to the session, and `readSession` reaches it without a run.
-`messages()`, `seats()` and `subscribe()` answer whether or not anybody is
-present, because a host renders an unattended room the same way it renders
-one with three people in it. Reviewing a room touches nothing in it, so
-reading a name takes no visit and starts no agent — a dashboard can watch
-without ever being a visitor.
+Reading belongs to the room, and `readRoom` reaches it without a run. It
+returns a plain snapshot, so a host renders an unattended room the same way
+it renders one with three people in it. Reviewing a room touches nothing in
+it, so reading a name takes no visit and starts no agent — a dashboard can
+inspect without ever being a visitor.
 
 Anybody may visit. There is no guest list: the host authenticates the
 person and vouches for the name and identity it passes, and Ambion never
 sees a credential and keeps no user directory. The name is the person, and
 it is the name a returning visitor is matched on, so a host that gives two
-people one name gives them one seat and one history. `visitSession` refuses
+people one name gives them one seat and one history. `room.visit` refuses
 two things: a name an agent already holds, because two claimants make
-`say({ to })` ambiguous; and a session that is idle, because a visit is
-presence and there is nothing to be present in.
+`say({ to })` ambiguous; and a stopped room, because a visit is presence
+inside a running room.
 
 ---
 
 ## 4. The visit
 
 **One person, one visit.** A name is in the room or it is not, and
-`visitSession` returns the visit that name holds.
+`room.visit` returns the visit that name holds.
 
 ```ts
 export interface Visit {
@@ -154,24 +154,24 @@ export interface Visit {
    *  or `undefined` when the record holds none. It moves when they leave
    *  and holds while they are here. See §8. */
   readonly since: Seq | undefined;
-  deliver(input: { to?: Participant; text: string }): Promise<void>;
+  send(input: { to?: Participant; text: string; key?: string }): Promise<ExchangeHandle>;
   /** Idempotent: a host that closes a socket twice is not an error. */
   leave(): Promise<void>;
 }
 ```
 
-`visitSession` on a name that is already in the room commits nothing and
+`room.visit` on a name that is already in the room commits nothing and
 hands back the same visit. So a host does not have to remember whether it
 opened one, and two tabs of one person do not make two people. The host
 decides when that person is gone; the room takes its word for it.
 
-A second `visitSession` with the same name and a different identity is
+A second `room.visit` with the same name and a different identity is
 refused while the person is present: one name is one identity for as long
 as they are in the room. The alternative is a roster that changes under
 the agents reading it. An absent person may return under a new identity,
 and their next `arrived` carries it.
 
-`deliver` on a visit that left throws, and so does it on a visit whose run
+`send` on a visit that left throws, and so does it on a visit whose run
 was stopped. A handle to a finished visit is a stale handle, and the
 runtime says so. It accepts no message from a person who is gone, and none
 into a room that is.
@@ -229,12 +229,12 @@ Every rule of the core applies to a presence message unchanged, and that is
 the whole reason for this shape.
 
 **Rule 1 holds exactly.** There is one activation mechanism: a message
-delivered into a session activates every idle agent. Arriving delivers a
+delivered into a room activates every idle agent. Arriving delivers a
 message. Nothing is special-cased, and nothing was weakened to let a door
 count.
 
 **Rule 6 decides who wakes for it, and by default that is nobody.** The
-session routes a presence message exactly like any other; each seat's
+the room routes a presence message exactly like any other; each seat's
 attention says whether it is wide enough to be woken by one. A bare agent
 sits at `broadcast` and is too narrow, so opening a room wakes
 nothing. An agent seated `attentive(concierge)` sits at `presence` and
@@ -271,7 +271,7 @@ it missed, which is correct: it reconsiders now that he is here. This is
 also what keeps five agents from all greeting the same arrival. The first
 commits and the rest are told the room moved, which is when rule 3 tells
 them to stand down. An arrival commits on the same queue as a say, under a
-key of its own, and `visitSession` resolves when its write is confirmed.
+key of its own, and `room.visit` resolves when its write is confirmed.
 
 An `arrived` carries the identity the room knew them by, and it is the only
 thing a presence message adds to a name. A run does not inherit its people
@@ -290,7 +290,7 @@ prevent. The kind carries the meaning and the renderer supplies the words.
 the message activates reads a roster that agrees with it. Backwards, a seat
 is woken to be told Andrei left by a roster that still says he is present.
 
-Both kinds come from a deliberate act: `arrived` follows `visitSession()`
+Both kinds come from a deliberate act: `arrived` follows `room.visit()`
 and `left` follows `leave()`. Nothing on the record comes from a clock.
 
 The seq counts from 1, is monotonic, is assigned when the message commits,
@@ -315,7 +315,7 @@ export type PresenceStatus = 'present' | 'absent';
 A presence message marks a change of that status, so two of these four
 cases write nothing at all:
 
-1. A second `visitSession` opens while the person is present — no message,
+1. A second `room.visit` opens while the person is present — no message,
    because their status did not change, and the same visit comes back.
 2. The visit leaves — the person turns absent and `left` commits.
 3. They visit again — the person turns present and `arrived` commits.
@@ -326,7 +326,7 @@ Case 4 needs the room to know the name, and the record is where it knows it
 from. **A room learns every name in its record, and a record does not
 forget.** An agent that reads `andrei (present)` and calls
 `say({ to: 'andrei' })` two seconds after Andrei closed his laptop still
-lands the message. So does an agent in a session reopened next week,
+lands the message. So does an agent in a room reopened next week,
 because replaying the record replays the arrivals.
 
 Presence is a fold over the record (`foldPeople` in
@@ -358,8 +358,9 @@ glance and keeps the message: a seat at `named` hears no broadcast, so it
 hears no arrival either, until somebody names it, while the record keeps
 everything.
 
-Presence does not touch `settled()`. `settled()` reports that no agent is
-active. Whether anybody is watching is a different fact.
+Presence does not create a room-wide completion wait. Completion belongs to
+the exchange handle returned by `visit.send()`. Whether anybody is watching
+is a different fact.
 
 ---
 
@@ -370,8 +371,8 @@ everything else. The cursor a catch-up needs is a message on the record
 itself; the runtime keeps no counter beside it.
 
 ```ts
-const visit = await visitSession(session, andrei);
-const missed = await session.messages({ since: visit.since });
+const visit = await room.visit(andrei);
+const missed = await room.messages({ since: visit.since });
 ```
 
 `visit.since` is the seq of this person's most recent `left` message, and
@@ -400,7 +401,7 @@ nothing extra is lost. A durable `JournalOpener` carries presence with it.
 back interleaved with what was said, because they are the same record. A
 person reads that the room went quiet at 15:00 because everybody left.
 
-**A run that ends properly closes its visits.** `stopSession` commits
+**A run that ends properly closes its visits.** `room.stop` commits
 `left` for everybody still present before it drains, because a deliberate
 shutdown did observe them leaving — the room is going away underneath them.
 So every anchor survives a planned restart exactly, and the next run picks
@@ -431,7 +432,7 @@ this person has been gone. What an agent reads on Andrei's arrival — the
 goal from its system prompt, and then the activation's own message:
 
 ```
-This session exists to: Ship payments v2 this quarter. Decide scope, sequence
+This room exists to: Ship payments v2 this quarter. Decide scope, sequence
 the work, and keep the plan of record current.
 
 The time is 2026-08-27 16:04 UTC.
@@ -462,7 +463,7 @@ Take your turn, planner: say something, or end your turn to stay silent.
 
 Four things beyond the record, each pulling its weight:
 
-- **The goal** comes from `startSession` and is what makes "does this
+- **The goal** comes from `startRoom` and is what makes "does this
   arrival matter" answerable at all.
 - **The time**, absolute at the top and relative on each line, is what a
   persistent ambient room needs and a bare transcript never gives: without
@@ -522,14 +523,14 @@ record. This is rule 2 of the core: working views reset at idle.
 `messages()` returns the record, and takes a cursor:
 
 ```ts
-session.messages(options?: { since?: Seq }): Promise<Message[]>;
+messages(options?: { since?: Seq }): Promise<Message[]>;
 ```
 
 **Presence adds no event of its own.** An arrival and a departure reach the
 stream on the existing `message` event, because that is what they are:
 entries the room committed. The events of the core are the whole stream,
 and a host that renders `message` renders presence for free. The `left`
-messages `stopSession` writes reach it too: they wake nobody, and the host
+messages `room.stop` writes reach it too: they wake nobody, and the host
 still hears the room empty.
 
 That is the point of putting presence on the record itself. A second
@@ -568,23 +569,23 @@ The milestone tests live in
 claim this document makes loudly:
 
 - a room of agents running and settling with nobody present;
-- `visitSession` committing an `arrived` that wakes nobody at the default
+- `room.visit` committing an `arrived` that wakes nobody at the default
   attention;
 - an `attentive` seat woken by that same arrival while a `passive` seat
   and a plain one sit out, against a roster that already shows it;
 - an arrival steering a seat already at work;
 - a presence message carrying no text and stamping `from` off the visit;
-- two people delivering and the record stamping each from their own;
-- a second `visitSession` on one name committing nothing and returning the
+- two people sending and the record stamping each from their own;
+- a second `room.visit` on one name committing nothing and returning the
   same visit, and one `left` when it leaves;
 - a name still on the roster after it left and after the run that knew it
   ended;
-- a stale visit refusing `deliver` while `leave` twice does not;
+- a stale visit refusing `send` while `leave` twice does not;
 - `since` undefined on a first visit, then the seq of the `left`, holding
   while a person reads and moving when they leave again;
 - `messages({ since })` returning both kinds in order;
-- `stopSession` closing its visits without waking anybody;
-- `readSession` reading a stopped name with no agent standing up;
+- `room.stop` closing its visits without waking anybody;
+- `readRoom` reading a stopped name with no agent standing up;
 - the rendered context carrying the goal, the clock, each person's unseen
   count and the divider — with the goal rendering only when set and the
   presence paragraph rendering always.
@@ -592,5 +593,5 @@ claim this document makes loudly:
 All in-process, in vitest, on a scripted stream.
 
 The rules this document shares with the core are proved beside them, in
-[`session.test.ts`](../packages/ambion/test/session.test.ts), which now
+[`room.test.ts`](../packages/ambion/test/room.test.ts), which now
 runs every one of them through a visit.

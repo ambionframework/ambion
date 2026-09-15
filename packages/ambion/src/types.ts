@@ -134,7 +134,7 @@ export interface SummaryMessage {
 	covers: { from: Seq; through: Seq };
 }
 
-/** One entry on a session's record. */
+/** One entry on a room's record. */
 export type Message = SpokenMessage | PresenceMessage | SummaryMessage;
 
 export function isSpoken(message: Message): message is SpokenMessage {
@@ -201,8 +201,8 @@ export interface HumanSeatInfo {
 
 export type SeatInfo = AgentSeatInfo | HumanSeatInfo;
 
-/** The session's event stream: room-level facts, one event per fact. */
-export type SessionEvent =
+/** The room's event stream: one notification per room-level fact. */
+export type RoomNotification =
 	/**
 	 * A message landed on the record. Exactly one of these per message,
 	 * whoever wrote it: what a person delivered, what an agent said, what the
@@ -253,21 +253,7 @@ export type SessionEvent =
 	 * before any summary: the assistant is the first reader of this, not the only
 	 * one.
 	 */
-	| { type: 'exchange_closed'; exchange: ClosedExchange }
-	/**
-	 * Nothing is running: no seat is taking an activation, and the assistant owes
-	 * nobody a message. The room's own last word on a stretch of work.
-	 *
-	 * A draft between two attempts holds its seat for the whole backoff, so a
-	 * room that owes a summary is not quiet until it writes one or gives up.
-	 *
-	 * There is no event for the seats stopping. A host that wants the exchange is
-	 * told by `exchange_closed`, which says whose it was and what it covered;
-	 * a host that wants to act in the window before a summary lands waits on
-	 * `settled()`, because that is a caller's concern rather than something
-	 * that happened to the room.
-	 */
-	| { type: 'quiet' };
+	| { type: 'exchange_closed'; exchange: ClosedExchange };
 
 export const TOOL_BRAND = Symbol.for('ambion.tool');
 export const AGENT_BRAND = Symbol.for('ambion.agent');
@@ -337,7 +323,7 @@ export interface SeatedAgent {
 	readonly attention: Attention;
 }
 
-/** What `startSession` seats: an agent on its own, or one the host seated. */
+/** What `startRoom` seats: an agent on its own, or one the host seated. */
 export type AgentSeat = AgentDefinition | SeatedAgent;
 
 /** Who may be addressed by name. */

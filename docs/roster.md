@@ -1,10 +1,10 @@
 # The roster
 
 This document is the design contract for the roster while a room runs: the
-agents a session starts with, the agents it holds in reserve, and the
+agents a room starts with, the agents it holds in reserve, and the
 assistant that seats them. It is shipped. The code lives with the rest of
 the runtime in [`packages/ambion/src`](../packages/ambion/src): the seating
-and the reserve in [`session.ts`](../packages/ambion/src/session.ts), the
+and the reserve in [`room.ts`](../packages/ambion/src/room.ts), the
 composing activation and the `seat` tool in
 [`assistant.ts`](../packages/ambion/src/assistant.ts), the routing in
 [`routing.ts`](../packages/ambion/src/room/routing.ts), and the shapes in
@@ -26,10 +26,10 @@ One sentence:
 
 ## 1. Composition, at start and after
 
-`startSession` takes the room's composition:
+`startRoom` takes the room's composition:
 
 ```ts
-const session = startSession({
+const room = await startRoom({
   name: 'site',
   goal: 'Run the site office.',
   assistant,
@@ -57,7 +57,7 @@ which defaults to `broadcast`. The room
 refuses a name that appears in both lists, or in either list and the
 assistant, the way it refuses any duplicate name. The identity rule in
 `agent.md` §5 reads the same with one more clause: the run belongs to
-`startSession`, and its composition is the assistant, the agents seated,
+`startRoom`, and its composition is the assistant, the agents seated,
 and the agents in reserve.
 
 **A seating retains its reserve attention.** The `seat` tool moves an
@@ -76,7 +76,7 @@ no workspace of its own.
 
 **The reserve is a list the host wrote.** Every participant reaches a room
 as a value the host passed, and the reserve is no exception. Nothing
-discovers agents: an agent is in the reserve because `startSession` was
+discovers agents: an agent is in the reserve because `startRoom` was
 handed it, and for no other reason.
 
 **The reserve is what `available` holds and the roster does not.** An
@@ -240,29 +240,24 @@ to decline when the point already stands. Every say and every summary still
 commits under the lock; a seating is composition, and composition is not a
 claim about what the record holds.
 
-**A composing activation is the room working.** `settled()` reports that
-no seat that speaks for itself is taking an activation, and the assistant
-writing a summary is left out of that count so a close cannot hold open the
-exchange it is closing ([`exchange.md`](exchange.md) §6). A composing
-activation is different: it is part of the exchange's work, and the count
-includes it. Without this the seats can all decline in seconds, the room
-settles, and the assistant seats a colleague into an exchange that has
-closed. With it, the exchange stays open until the assistant has decided,
-the newcomer wakes inside it, and the summary written at the close covers
-what the newcomer said.
+**A composing activation is the room working.** The assistant may seat a
+reserve agent while an exchange is open. That activation is part of the
+exchange's work, so the close waits until the decision is durable; the
+newcomer wakes inside the same exchange and its messages remain in the
+range the handle reports. A drafting activation after the close is a
+separate response step and cannot change that range.
 
-So the room draws one distinction about its assistant: a drafting
-activation holds no exchange open, and a composing activation holds one.
+So the room draws one distinction about its assistant: composing work
+belongs to the open exchange, while drafting follows its durable close.
 `liveWork` in `room/reconcile.ts` reads the cause of each activation. The
-room reconciles once after every commit, every lease change, every alarm
-and every wake: if nothing is working, the exchange closes, and if a
-summary is owed and the assistant is idle, the room wakes it.
+room reconciles after every commit, lease change, alarm, and wake. The
+exchange handle exposes the resulting close and response milestones.
 
 **A question that lands while the assistant owes a summary gets no
 composing activation.** The seat is live from the close that owes the draft
 until the room writes it or gives up on it, a backoff between two attempts
 included, so the routing leaves the assistant out of the question's `wakes`. A queued compose would land into a
-room that may have settled. The roster stands as it is for that exchange,
+room whose exchange may already have closed. The roster stands as it is for that exchange,
 and the next question composes again: one seat, one activation. A question
 that opens its exchange only once the last one closed gets no composing
 activation either ([`exchange.md`](exchange.md) §3): its wakes were
@@ -295,12 +290,12 @@ a different definition under that name. A pending seating reserves the name
 until its journal entry lands or fails. The room installs the binding when it
 hears the accepted seating entry, before it wakes the seat.
 
-Two verbs on `Session`, and the assistant's tool is a thin binding over the
+Two verbs on `Room`, and the assistant's tool is a thin binding over the
 first:
 
 ```ts
-session.seat(inspector); // or seated(inspector, { attention: 'named' })
-session.unseat(inspector);
+room.seat(inspector); // or seated(inspector, { attention: 'named' })
+room.unseat(inspector);
 ```
 
 **`seat` puts an agent on the roster, from the reserve or from anywhere.**
@@ -317,12 +312,12 @@ Unseating is the direction the room cannot take back, so the assistant
 holds no tool for it. [`planning/backlog.md`](../planning/backlog.md) holds the
 argument for giving it one.
 
-**`stop` leaves the roster to the next composition.** `stopSession`
+**`stop` leaves the roster to the next composition.** `room.stop`
 revokes every lease in flight and commits `left` for every person present
 ([`presence.md`](presence.md) §8). It writes no `unseated`. The
-next `startSession` writes its own composition, the roster folds from
+next `startRoom` writes its own composition, the roster folds from
 that and the seatings after it, and the record says who was seated in
-between. A read of the stopped room (`readSession`) folds the roster the
+between. A read of the stopped room (`readRoom`) folds the roster the
 run left.
 
 **A seat that leaves keeps its downstream session.** Rule 8 puts every
@@ -346,8 +341,9 @@ question is committed, as it does after every lease change: nothing is
 working, so the exchange closes. The exchange holds one message, the
 question, and the assistant writes nothing for it, because an exchange the
 agents said nothing into writes nothing ([`assistant.md`](assistant.md)
-§4). The host hears `exchange_opened`, `exchange_closed` and `quiet`, in
-that order, and the person hears that nobody was there to answer through
+§4). The host hears `exchange_opened` and `exchange_closed`, in that order.
+The exchange handle resolves with the closed range and an undefined
+response, and the person can see that nobody was there to answer through
 the record.
 
 ---
@@ -364,7 +360,7 @@ Each boundary is stated so a later change has to argue with it.
   the host decides what is in it by writing `available`. §2.
 - **A seat never reads the reserve.** §2.
 - **A seating is on the record, and so is the composition.** Every
-  `startSession` writes a composition beside the messages: the assistant,
+  `startRoom` writes a composition beside the messages: the assistant,
   the goal, the agents seated and the agents in reserve, each with its
   name, its identity and its attention. The roster folds from the latest
   composition and the seatings and unseatings after it, so a stopped room

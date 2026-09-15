@@ -11,14 +11,12 @@
 import { describe, expect, it } from 'vitest';
 import {
 	createRuntime,
+	type Room,
+	type RoomNotification,
 	type Runtime,
-	resumeSession,
-	type Session,
-	type SessionEvent,
-	startSession,
-	stopSession,
+	resumeRoom,
+	startRoom,
 	type Visit,
-	visitSession,
 } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -28,7 +26,7 @@ import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
-import { roomName, storedOf } from './support/room.ts';
+import { roomName, runningLeases, stateOf, storedOf, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { type FailMode, gatedJournals, memory, sqlite, tappedJournals } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
@@ -55,10 +53,10 @@ class Cluster {
 	readonly cast = troubled();
 	/** Which run holds the room: a visit taken on an earlier run is over. */
 	epoch = 0;
-	events: SessionEvent[] = [];
+	events: RoomNotification[] = [];
 	inherited = { activations: 0, exchange: false };
 	runtime!: Runtime;
-	session!: Session;
+	session!: Room;
 	private disk: FailMode = false;
 	private failedBefore = 0;
 	/** Room calls the nemesis dropped, counted when taken: every one fails an activation, and that is one error. A dropped wake is sent again, and a dropped cut leaves the record's word to stand, so both fail nothing. */
@@ -144,7 +142,7 @@ class Cluster {
 
 	async start(): Promise<void> {
 		this.runtime = this.host();
-		this.session = startSession({
+		this.session = await startRoom({
 			name: this.name,
 			runtime: this.runtime,
 			assistant,
@@ -227,12 +225,11 @@ class Cluster {
 
 	private async resumed(): Promise<void> {
 		this.epoch += 1;
-		const activations = await liveLeases(this.opened.journals, this.name, this.clock.now());
 		// A resume writes the fence first, and a host tries again when the storage fails it.
 		for (let attempt = 0; ; attempt += 1) {
 			this.runtime = this.host();
 			try {
-				this.session = await resumeSession(this.name, {
+				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents,
 					streamFn: scripted(this.cast.script),
@@ -242,7 +239,10 @@ class Cluster {
 				if (attempt === 2 || !/disk is full/.test(String(error))) throw error;
 			}
 		}
-		this.inherited = { activations, exchange: this.session.exchange() !== undefined };
+		this.inherited = {
+			activations: runningLeases(this.session),
+			exchange: stateOf(this.session).exchange !== undefined,
+		};
 		this.watch();
 	}
 
@@ -279,7 +279,7 @@ class Cluster {
 		await this.resuming;
 		// in steps under the expiry, so an activation in flight renews across them
 		for (let i = 0; i < 14; i += 1) await this.advance(31_000);
-		await within(this.session.quiet(), 10_000, 'quiet after the drain');
+		await within(waitForRoom(this.session), 10_000, 'quiet after the drain');
 	}
 
 	async check(): Promise<void> {
@@ -330,7 +330,7 @@ class Person {
 		if (op === 'visit') return this.arrive();
 		if (op === 'read') return this.read();
 		if (op === 'leave') return this.leave();
-		return this.deliver();
+		return this.send();
 	}
 
 	private current(): Visit | undefined {
@@ -343,18 +343,18 @@ class Person {
 		const { cluster } = this;
 		const epoch = cluster.epoch;
 		const handle = await cluster.act(this.name, 'visit', undefined, () =>
-			visitSession(cluster.session, this.definition),
+			cluster.session.visit(this.definition),
 		);
 		if (handle !== undefined) this.visit = { handle, epoch };
 	}
 
-	private async deliver(): Promise<void> {
+	private async send(): Promise<void> {
 		const visit = this.current();
 		if (visit === undefined) return this.arrive();
 		const key = `${this.name}-${++this.deliveries}`;
 		const { cluster } = this;
 		const landed = await cluster.act(this.name, 'deliver', key, () =>
-			visit.deliver({ text: `${key}?`, key }).then(() => true),
+			visit.send({ text: `${key}?`, key }).then(() => true),
 		);
 		// A delivery the person never heard back on is delivered again under the same key.
 		if (landed === undefined) {
@@ -362,7 +362,7 @@ class Person {
 			const again = this.current();
 			if (again === undefined) return;
 			await cluster.act(this.name, 'deliver', key, () =>
-				again.deliver({ text: `${key}?`, key }).then(() => true),
+				again.send({ text: `${key}?`, key }).then(() => true),
 			);
 		}
 	}
@@ -465,7 +465,7 @@ describe('the room under concurrent clients and a nemesis', () => {
 				);
 				await cluster.drain();
 				await cluster.check();
-				await stopSession(cluster.session);
+				await cluster.session.stop();
 			} catch (error) {
 				const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
 				const stored = await storedOf(opened.journals, cluster.name);

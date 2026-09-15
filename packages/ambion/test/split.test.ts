@@ -16,14 +16,7 @@ import { fileURLToPath } from 'node:url';
 import type { JournalEntry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { runningRoom } from '../src/host/runtime.ts';
-import {
-	createRuntime,
-	resumeSession,
-	type Session,
-	startSession,
-	stopSession,
-	visitSession,
-} from '../src/index.ts';
+import { createRuntime, type Room, resumeRoom, startRoom } from '../src/index.ts';
 import type { Entry as RoomEntry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { inProcessTransport } from '../src/transport.ts';
@@ -41,10 +34,12 @@ import {
 import { idle } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { History, standing, violations } from './support/history.ts';
-import { collect, roomName, storedOf } from './support/room.ts';
+import { collect, roomName, storedOf, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { childJournals, childStorage, gatedJournals, memory, sqlite } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
+
+const node = process.env.AMBION_NODE ?? process.execPath;
 
 const RETRY = { attempts: 3, backoff: (attempt: number) => attempt * 30_000 };
 
@@ -87,7 +82,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			transport: serializing(inProcessTransport()),
 		});
 		const name = roomName('split-pause');
-		const room = startSession({
+		const room = await startRoom({
 			name,
 			runtime: first,
 			assistant,
@@ -95,31 +90,31 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			streamFn: scripted(script),
 		});
 		const events = collect(room);
-		const hers = await visitSession(room, priya);
-		await history.run('priya', 'deliver', 'q1', () => hers.deliver({ text: 'First?', key: 'q1' }));
-		await room.quiet();
+		const hers = await room.visit(priya);
+		await history.run('priya', 'deliver', 'q1', () => hers.send({ text: 'First?', key: 'q1' }));
+		await waitForRoom(room);
 		// paused: a delivery on the first host is in flight and held
 		gate = new Promise((resolve) => {
 			release = resolve;
 		});
 		const held = history.run('priya', 'deliver', 'q2', () =>
-			hers.deliver({ text: 'Second?', key: 'q2' }),
+			hers.send({ text: 'Second?', key: 'q2' }),
 		);
 		// the second host takes the name and serves a question
-		const taken = await resumeSession(name, {
+		const taken = await resumeRoom(name, {
 			runtime: second,
 			agents,
 			streamFn: scripted(script),
 		});
-		const his = await visitSession(taken, sam);
-		await history.run('sam', 'deliver', 'q3', () => his.deliver({ text: 'Third?', key: 'q3' }));
-		await taken.quiet();
+		const his = await taken.visit(sam);
+		await history.run('sam', 'deliver', 'q3', () => his.send({ text: 'Third?', key: 'q3' }));
+		await waitForRoom(taken);
 		// The first host comes back. Its held write sees the newer storage position,
 		// so it is refused before the host acknowledges it.
 		release();
 		await held;
-		await history.run('priya', 'deliver', 'q4', () => hers.deliver({ text: 'Fourth?', key: 'q4' }));
-		await room.quiet();
+		await history.run('priya', 'deliver', 'q4', () => hers.send({ text: 'Fourth?', key: 'q4' }));
+		await waitForRoom(room);
 		await history.run(
 			'sam',
 			'read',
@@ -149,7 +144,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			});
 			expect(runningRoom(first, name)).toBeUndefined();
 		} finally {
-			await stopSession(taken);
+			await taken.stop();
 			await opened.dispose();
 		}
 	});
@@ -175,7 +170,7 @@ describe('a split: two live hosts over one SQLite database', () => {
 	/** Run the child until its journal takes `at` appends, then stop it where it stands. */
 	function stopAt(dir: string, name: string, at: number) {
 		const args = ['--experimental-transform-types', '--no-warnings', child, dir, name, '40'];
-		const process_ = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'inherit'] });
+		const process_ = spawn(node, args, { stdio: ['ignore', 'pipe', 'inherit'] });
 		const exited = new Promise<void>((resolve) => process_.on('exit', () => resolve()));
 		const stopped = new Promise<number>((resolve, reject) => {
 			let sent = false;
@@ -197,10 +192,10 @@ describe('a split: two live hosts over one SQLite database', () => {
 		};
 	}
 
-	async function quietNow(session: Session, clock: FakeClock): Promise<void> {
+	async function quietNow(session: Room, clock: FakeClock): Promise<void> {
 		for (let round = 0; round < 12; round += 1) {
 			const settled = await Promise.race([
-				session.quiet().then(() => true),
+				session.messages().then(() => true),
 				new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
 			]);
 			if (settled && idle(session)) return;
@@ -218,12 +213,12 @@ describe('a split: two live hosts over one SQLite database', () => {
 			const journals = childJournals('sqlite', dir);
 			const clock = fakeClock(Date.now());
 			const runtime = createRuntime({ storage: childStorage('sqlite', dir), clock, ...TIMING });
-			const session = await resumeSession(name, { runtime, agents, streamFn: scripted(script) });
+			const session = await resumeRoom(name, { runtime, agents, streamFn: scripted(script) });
 			await quietNow(session, clock);
 			const [, second] = questions;
 			if (second === undefined) throw new Error('cast');
-			const his = await visitSession(session, sam);
-			await his.deliver({ text: second.text, key: second.key });
+			const his = await session.visit(sam);
+			await his.send({ text: second.text, key: second.key });
 			await quietNow(session, clock);
 			const before = await storedOf(journals, name);
 			// The stopped process continues where it stood. Its stale room writes
@@ -234,7 +229,7 @@ describe('a split: two live hosts over one SQLite database', () => {
 			const after = await storedOf(childJournals('sqlite', dir), name);
 			expect(after).toEqual(before);
 			expect(after).toContainEqual(expect.objectContaining({ kind: 'message', key: second.key }));
-			await stopSession(session);
+			await session.stop();
 		} finally {
 			paused.kill();
 			await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });

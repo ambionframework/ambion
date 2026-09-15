@@ -101,7 +101,9 @@ export function decide(
 		case 'close':
 			return {
 				event:
-					state.exchange?.from === command.close.from
+					state.exchange?.from === command.close.from &&
+					state.lastSeq === command.close.through &&
+					!liveWork(state, now).exchange
 						? { kind: 'close', body: command.close }
 						: undefined,
 			};
@@ -141,7 +143,7 @@ function deliver(
 	const { from, to, text } = command;
 	const target = state.roster.find((seat) => seat.name === to);
 	if (to !== undefined && !state.people.has(to) && target === undefined) {
-		return refused(`Cannot direct a delivery to '${to}': not in this session.`);
+		return refused(`Cannot direct a delivery to '${to}': not in this room.`);
 	}
 	if (target?.attention === 'none') {
 		return refused(`Cannot direct a delivery to '${to}': it wakes for nothing said.`);
@@ -178,7 +180,7 @@ function unseatRefusal(
 	seat: RoomState['roster'][number] | undefined,
 	name: string,
 ): string | undefined {
-	if (seat === undefined) return `'${name}' is not seated in this session.`;
+	if (seat === undefined) return `'${name}' is not seated in this room.`;
 	if (state.composition?.assistant === name) return `'${name}' is this room's assistant.`;
 	return undefined;
 }
@@ -186,11 +188,11 @@ function unseatRefusal(
 function arrivalRefusal(state: RoomState, change: PresenceChange): string | undefined {
 	const name = change.subject;
 	if ([...state.roster, ...state.reserve].some((seat) => seat.name === name)) {
-		return `'${name}' is an agent in this session: one name names one participant.`;
+		return `'${name}' is an agent in this room: one name names one participant.`;
 	}
 	const known = state.people.get(name);
 	if (known?.presence === 'present' && known.identity !== change.identity) {
-		return `'${name}' is already in this session under a different identity: one name is one person.`;
+		return `'${name}' is already in this room under a different identity: one name is one person.`;
 	}
 	return undefined;
 }
@@ -428,8 +430,7 @@ function compose(state: RoomState, composition: Body<Composition>): RoomDecision
 	const assistant = composition.assistant;
 	if (assistant !== undefined) {
 		const seat = composition.agents.find((candidate) => candidate.name === assistant);
-		if (seat === undefined)
-			return refused(`Assistant '${assistant}' is not seated in this session.`);
+		if (seat === undefined) return refused(`Assistant '${assistant}' is not seated in this room.`);
 		if (seat.attention !== 'none')
 			return refused(`Assistant '${assistant}' must have attention 'none'.`);
 	}

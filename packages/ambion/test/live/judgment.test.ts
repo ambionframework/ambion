@@ -6,7 +6,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineTool, passive, stopSession } from '../../src/index.ts';
+import { defineTool, passive } from '../../src/index.ts';
 import { enter } from '../support/room.ts';
 import {
 	activationsOf,
@@ -38,9 +38,9 @@ live('judgment', () => {
 				question, end your turn without calling say.
 			`,
 		});
-		const { session, runtime, events } = open('declines', { agents: [weather, payroll] });
+		const { session, runtime, events } = await open('declines', { agents: [weather, payroll] });
 		const visit = await enter(session, person);
-		await visit.deliver({ text: 'Will it rain on site today?' });
+		await visit.send({ text: 'Will it rain on site today?' });
 		await untilQuiet(session);
 
 		const messages = await session.messages();
@@ -53,7 +53,7 @@ live('judgment', () => {
 		expect(saidByAgents(messages, [person.name])).toHaveLength(1);
 		await invariants(session, events);
 		report('declining', await spent(runtime, session));
-		await stopSession(session);
+		await session.stop();
 	});
 
 	it('a directed say wakes a seat at `named`, and the delivery never did', async () => {
@@ -81,9 +81,9 @@ live('judgment', () => {
 				has answered, end your turn without calling say.
 			`,
 		});
-		const { session, runtime, events } = open('directed', { agents: [desk, passive(stock)] });
+		const { session, runtime, events } = await open('directed', { agents: [desk, passive(stock)] });
 		const visit = await enter(session, person);
-		await visit.deliver({ text: 'How many units of SKU A-100 do we have?' });
+		await visit.send({ text: 'How many units of SKU A-100 do we have?' });
 		await untilQuiet(session);
 
 		const messages = await session.messages();
@@ -104,6 +104,6 @@ live('judgment', () => {
 		expect(answer[0]?.text).toContain('42');
 		await invariants(session, events);
 		report('a directed say', await spent(runtime, session));
-		await stopSession(session);
+		await session.stop();
 	});
 });

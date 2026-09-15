@@ -1,6 +1,6 @@
 /**
  * The same room as a Cloudflare Worker: one Durable Object holds the record
- * and the session, and one holds each seat. The products, the specialists on
+ * and the room, and one holds each seat. The products, the specialists on
  * call, their APIs, the people and the assistant all come from `room.ts`
  * unchanged, so the room a person reaches here is the room `main.ts` opens.
  *
@@ -38,7 +38,7 @@ export class DemoRoom extends RoomObject {
 	async journal() {
 		// The name the object was started with, and not the one this module
 		// holds: a worker that served a second room would read the wrong journal,
-		// and an id nothing wrote opens as an empty session rather than failing.
+		// and an id nothing wrote opens as an empty room rather than failing.
 		const name = (await this.metadata.read()).name;
 		if (name === undefined) throw new Error('The room is not started.');
 		return (await (await this.storage.open(JSON.stringify(['ambion/room', name]))).read(0)).entries;
@@ -92,7 +92,7 @@ type Route = (stub: RoomStub, request: Request, url: URL) => Promise<unknown>;
 
 /**
  * The routes. `start` composes the room, `visit` puts a person in it,
- * `deliver` asks a question, and the reads report what the journal holds.
+ * `send` asks a question, and the reads report what the journal holds.
  * Nothing here is a channel: it is the smallest surface that drives a room.
  */
 const ROUTES: Record<string, Route> = {
@@ -105,10 +105,9 @@ const ROUTES: Record<string, Route> = {
 		await stub.visit(personOf(person));
 		return { visited: person };
 	},
-	'POST /deliver': async (stub, request) => {
+	'POST /send': async (stub, request) => {
 		const body = (await request.json()) as { from: string; text: string; key?: string };
-		await stub.deliver(body);
-		return { delivered: body.text };
+		return stub.send(body);
 	},
 	'POST /stop': async (stub) => {
 		await stub.stop();
@@ -126,7 +125,10 @@ const ROUTES: Record<string, Route> = {
 		await stub.crash().catch(() => {});
 		return { crashed: ROOM_NAME };
 	},
-	'GET /exchange': async (stub) => (await stub.exchange()) ?? null,
+	'GET /exchange': async (stub, _request, url) => {
+		const from = url.searchParams.get('from');
+		return from === null ? null : ((await stub.exchange(Number(from))) ?? null);
+	},
 };
 
 async function route(request: Request, env: DemoEnv): Promise<Response> {

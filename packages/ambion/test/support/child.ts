@@ -7,8 +7,9 @@
  *
  *   node --experimental-transform-types child.ts <dir> <name> <delay-ms> <storage>
  */
-import { createRuntime, startSession, visitSession } from '../../src/index.ts';
+import { createRuntime, startRoom } from '../../src/index.ts';
 import { assistant, colleague, priya, product, questions, sam, slowly, TIMING } from './cast.ts';
+import { waitForRoom } from './room.ts';
 import { scripted } from './scripted.ts';
 import { childStorage, tappedJournals } from './storage.ts';
 
@@ -24,7 +25,7 @@ const runtime = createRuntime({
 	storage: journals,
 	...TIMING,
 });
-const session = startSession({
+const session = await startRoom({
 	name,
 	runtime,
 	assistant,
@@ -34,15 +35,15 @@ const session = startSession({
 
 const [first, second, third] = questions;
 if (first === undefined || second === undefined || third === undefined) throw new Error('cast');
-const hers = await visitSession(session, priya);
-await hers.deliver({ text: first.text, key: first.key });
-await session.quiet();
+const hers = await session.visit(priya);
+await hers.send({ text: first.text, key: first.key });
+await waitForRoom(session);
 await hers.leave();
-const his = await visitSession(session, sam);
-await his.deliver({ text: second.text, key: second.key });
-await session.quiet();
-await his.deliver({ text: third.text, key: third.key, to: third.to });
-await session.quiet();
+const his = await session.visit(sam);
+await his.send({ text: second.text, key: second.key });
+await waitForRoom(session);
+await his.send({ text: third.text, key: third.key, to: third.to });
+await waitForRoom(session);
 process.stdout.write('done\n');
 // The process ends without a stop: what the journal holds is what a crash leaves.
 process.exit(0);

@@ -6,7 +6,7 @@
  * they ask, when they leave, and when the runtime is evicted — then writes out
  * the event timeline, every activation with its outcome, whom the assistant
  * seated and what it wrote, the room's own journal, and each seat's own
- * downstream session.
+ * downstream room.
  *
  * The run evicts one runtime once, on purpose: as the first answer to Sam's
  * question lands, that in-process runtime is dropped, and a second runtime
@@ -32,12 +32,10 @@ import {
 	isSpoken,
 	isSummary,
 	type Message,
-	resumeSession,
-	type Session,
-	type SessionEvent,
-	startSession,
-	stopSession,
-	visitSession,
+	type Room,
+	type RoomNotification,
+	resumeRoom,
+	startRoom,
 } from '@ambionframework/ambion';
 import { namespaced, type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/journal/pi';
@@ -88,7 +86,7 @@ function openDatabase(): DatabaseSync {
 	database.exec('PRAGMA journal_mode = WAL');
 	return database;
 }
-const timeline: { at: string; event: SessionEvent }[] = [];
+const timeline: { at: string; event: RoomNotification }[] = [];
 const steps: { at: string; step: string }[] = [];
 
 interface Activation {
@@ -124,7 +122,7 @@ const first = createRuntime({
 	storage: sqliteJournals(firstSql),
 	...LEASE,
 });
-let session: Session = startSession({
+let room: Room = await startRoom({
 	name: NAME,
 	goal: GOAL,
 	assistant: ASSISTANT,
@@ -134,10 +132,10 @@ let session: Session = startSession({
 });
 
 /** The roster as the run starts, before any question composes it. */
-const seatsAtStart = session.seats();
+const seatsAtStart = room.seats();
 
 /** Bookkeeping: correlate every activation with the message that caused it. */
-function track(event: SessionEvent, at: string): void {
+function track(event: RoomNotification, at: string): void {
 	if (event.type === 'message') {
 		lastSeq = event.message.seq;
 		// A seating the host decided has no author, so the room itself caused it.
@@ -194,7 +192,7 @@ function narrateMessage(m: Message): void {
 }
 
 /** A running commentary, so the run is watchable while it happens. */
-function narrate(event: SessionEvent): void {
+function narrate(event: RoomNotification): void {
 	if (event.type === 'message') narrateMessage(event.message);
 	if (event.type === 'tool_execution_start') process.stderr.write(toolLine(event));
 	if (event.type === 'exchange_closed') {
@@ -208,14 +206,11 @@ function narrate(event: SessionEvent): void {
 }
 
 /**
- * `settled()` is the seats alone, and the assistant writes after it: the room is
- * never held busy while one works. `quiet()` is the room with the summaries
- * in it, which is what a report wants.
+ * An exchange handle waits for its durable close and its assistant response.
  */
-const quiescent = () => session.quiet();
 
 /** Every event, from the run that holds the room now. A resumed room is watched again. */
-function watch(room: Session): void {
+function watch(room: Room): void {
 	room.subscribe((event) => {
 		const at = new Date().toISOString();
 		track(event, at);
@@ -227,7 +222,7 @@ function watch(room: Session): void {
 		);
 	});
 }
-watch(session);
+watch(room);
 
 /**
  * The room's alarm never holds the process open: `systemClock` unrefs its
@@ -243,37 +238,38 @@ const step = (s: string) => {
 };
 
 step('priya opens the room to confirm the pour date for the client');
-const priyaVisit = await visitSession(session, priya);
-await quiescent();
+const priyaVisit = await room.visit(priya);
+const initial = await priyaVisit.send({
+	text: 'Can I tell the client Thursday for the Level 3 pour, or not?',
+});
+await initial.response();
 
 step(
 	'priya asks the question she has to answer today; the assistant composes the room for it, then writes her the answer',
 );
-await priyaVisit.deliver({ text: 'Can I tell the client Thursday for the Level 3 pour, or not?' });
-await quiescent();
+// The response above is the durable result of Priya's exchange.
 
 step('priya leaves for a site walk without giving a new date');
 await priyaVisit.leave();
-await quiescent();
 
 step('sam opens it from the deck with a forecast; the products already seated hold what he needs');
-const samVisit = await visitSession(session, sam);
+const samVisit = await room.visit(sam);
 /** The seq of the first product answer to sam: the message the crash lands on. */
 let stopWatchingForIt = () => {};
 const firstAnswer = new Promise<number>((resolve) => {
-	stopWatchingForIt = session.subscribe((event) => {
+	stopWatchingForIt = room.subscribe((event) => {
 		if (event.type !== 'message' || !isSpoken(event.message)) return;
 		if (PEOPLE.has(event.message.from)) return;
 		resolve(event.message.seq);
 	});
 });
-await samVisit.deliver({
+const samExchange = await samVisit.send({
 	text: 'Rain all Thursday morning. I am not pouring into that. What do you need from me to move it?',
 });
 // The delivery opened the exchange, so the room goes quiet only when it
 // closes. A run where every product declines has nothing to crash into: it
 // takes the close instead of waiting for an answer that never comes.
-const crashedAt = await Promise.race([firstAnswer, quiescent().then(() => lastSeq)]);
+const crashedAt = await Promise.race([firstAnswer, samExchange.waitForClose().then(() => lastSeq)]);
 stopWatchingForIt();
 
 step(
@@ -291,27 +287,25 @@ const second = createRuntime({
 	storage: sqliteJournals(secondSql),
 	...LEASE,
 });
-session = await resumeSession(NAME, {
+room = await resumeRoom(NAME, {
 	runtime: second,
 	agents: [ASSISTANT, ...AGENTS, ...AVAILABLE].map((value) =>
 		isSeatedAgent(value) ? value.agent : value,
 	),
 });
-watch(session);
+watch(room);
 // sam is present on the journal, so the visit puts nothing on the record.
-await visitSession(session, sam);
-await quiescent();
+await room.visit(sam);
 
 step('dan opens it to price the move; the plant desk is on call for exactly this');
-const danVisit = await visitSession(session, dan);
-await danVisit.deliver({
+const danVisit = await room.visit(dan);
+const danExchange = await danVisit.send({
 	text: 'What does moving cost, and is there anything of mine holding this up?',
 });
-await quiescent();
+await danExchange.response();
 
 step('priya comes back to decisions she did not see made');
-const priyaBack = await visitSession(session, priya);
-await quiescent();
+const priyaBack = await room.visit(priya);
 
 // The proof the design asks for: a follow-up whose answer sits inside a range
 // that has left every seat's context. The seats answer it from their summary
@@ -319,26 +313,25 @@ await quiescent();
 step(
 	'priya asks a follow-up about a range the seats now read as one message; the specialists are seated and hear it',
 );
-await priyaBack.deliver({
+const followUp = await priyaBack.send({
 	text: 'Remind me what Saturday needs from me before I ring the client.',
 });
-await quiescent();
+await followUp.response();
 
-const missed =
-	priyaBack.since === undefined ? [] : await session.messages({ since: priyaBack.since });
+const missed = priyaBack.since === undefined ? [] : await room.messages({ since: priyaBack.since });
 const sinceOnReturn = priyaBack.since;
 
 // Stop before capture so the room journal and record include the same final presence entries.
-await stopSession(session);
-const finalRecord: Message[] = await session.messages();
-const seats = session.seats();
+await room.stop();
+const finalRecord: Message[] = await room.messages();
+const seats = room.seats();
 /** The seat that writes for people: the roster names its role, and nothing else tells it apart. */
 const assistants = new Set(
 	seats.flatMap((seat) => (seat.kind === 'agent' && seat.assistant ? [seat.name] : [])),
 );
 
 /**
- * Every downstream session the run wrote: `<room>:<agent>` for a seat, the
+ * Every downstream room the run wrote: `<room>:<agent>` for a seat, the
  * assistant's among them.
  */
 const seatSessions: {

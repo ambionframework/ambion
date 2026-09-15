@@ -26,7 +26,7 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { RunningRoom, Runtime, Transport } from '../host/runtime.ts';
-import type { AgentDefinition, Clock, ModelResolver, SessionEvent } from '../types.ts';
+import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
 import { seatSessionId } from '../types.ts';
 import type { ActivationView, SeatPort, SeatRoom, Wake } from '../wire.ts';
 import { Activation, persistTurns } from './activation.ts';
@@ -48,7 +48,7 @@ export interface SeatContext {
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
 	/** Where in-process events go. Absent across a process boundary. */
-	readonly emit?: (event: SessionEvent) => void;
+	readonly emit?: (event: RoomNotification) => void;
 }
 
 /** One activation the actor holds while it runs. */
@@ -277,7 +277,7 @@ export class SeatActor implements SeatPort {
 				this.audit ??= transcripts.open(seatSessionId(room, seat), room);
 				return persistTurns(this.audit, agent, new Date(clock.now()).toISOString());
 			},
-			emit: (event: SessionEvent) => this.context.emit?.(event),
+			emit: (event: RoomNotification) => this.context.emit?.(event),
 			now: () => clock.now(),
 		};
 	}
@@ -316,7 +316,7 @@ export function inProcessTransport(): Transport {
 		connect(room: RunningRoom, seat, runtime) {
 			const definition = room.definition(seat);
 			if (definition === undefined)
-				throw new Error(`Session '${room.name}' has no binding for '${seat}'.`);
+				throw new Error(`Room '${room.name}' has no binding for '${seat}'.`);
 			return new SeatActor(room, {
 				clock: runtime.clock,
 				call: runtime.call,

@@ -21,7 +21,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	);
 	await room.start({ name: 'seat-test', assistant: 'assistant', agents: ['product'] });
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
-	await room.deliver({ from: 'priya', text: 'When is the pour?', key: 'q1' });
+	await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
 	// At least one wake reached the seat. The room sends a wake nobody has taken
 	// again every 50 ms here, so how many arrive before the alarm runs is the
 	// runner's speed and not the room's behaviour.
@@ -66,7 +66,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 
 	// a seat on hold keeps the next wake and runs nothing: the room's alarm sends it again
 	await seat.hold(true);
-	await room.deliver({ from: 'priya', text: 'And the pump?', key: 'q2' });
+	const secondExchange = await room.send({ from: 'priya', text: 'And the pump?', key: 'q2' });
 	expect(await until(async () => (await seat.wakes()) >= 3)).toBe(true);
 	expect((await room.seats()).find((s) => s.name === 'product')).toMatchObject({
 		status: 'active',
@@ -78,7 +78,8 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 		return messages.filter((m) => m.kind === 'said' && m.from === 'product').length === 2;
 	});
 	expect(answered).toBe(true);
-	expect(await until(async () => (await room.exchange()) === undefined)).toBe(true);
+	await room.waitForClose(secondExchange.from);
+	expect(await room.exchange(secondExchange.from)).toEqual(secondExchange);
 });
 
 it('takes the cut the room sends over RPC when it revokes a wake', async () => {
@@ -88,7 +89,7 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	);
 	await room.start({ name: 'cut-test', assistant: 'assistant', agents: ['product'] });
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
-	await room.deliver({ from: 'priya', text: 'When is the pour?', key: 'q1' });
+	const exchange = await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
 	// At least one wake reached the seat. The room sends a wake nobody has taken
 	// again every 50 ms here, so how many arrive before the alarm runs is the
 	// runner's speed and not the room's behaviour.
@@ -114,12 +115,10 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	);
 	expect(revoked).toMatchObject({ id: 'message:4:product:1', reason: 'revoked' });
 	await runDurableObjectAlarm(seat);
-	// The room reaches rest before the record is read. A lease the seat still
-	// held would hold the exchange open, so anything it was going to say is on
-	// the record once the exchange closes. Reading the record the moment the
-	// alarm returns asks the question before the answer could exist, and the
-	// runner decides the answer.
-	expect(await until(async () => (await room.exchange()) === undefined)).toBe(true);
+	// The revoked exchange still closes durably and remains addressable by its
+	// opening sequence, while the product has no answer to publish.
+	await room.waitForClose(exchange.from);
+	expect(await room.exchange(exchange.from)).toEqual(exchange);
 	const messages: Message[] = await room.messages();
 	expect(messages.filter((m) => m.from === 'product')).toEqual([]);
 });

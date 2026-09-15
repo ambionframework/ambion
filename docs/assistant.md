@@ -1,7 +1,7 @@
 # The assistant
 
 This document is the design contract for the assistant: the constrained agent
-a session seats as its human-facing synthesis layer. Every room seats one by
+a room seats as its human-facing synthesis layer. Every room seats one by
 convention through the `assistant` option. It reads how each
 person reads and consolidates the room's work when the exchange does not
 already hold one answer. It is shipped. The code lives with the rest of the
@@ -48,7 +48,7 @@ One message answers both.
 The assistant is the room's counterpart to the people in it: one assistant
 per room, seated when the room starts, writing for every person who visits.
 
-**It is a seat.** `startSession` seats it beside the agents, the room
+**It is a seat.** `startRoom` seats it beside the agents, the room
 activates it as it activates every other agent, its turns land in a
 downstream session of its own, and a live lease authorizes its writes.
 Its policy selects these tools:
@@ -89,8 +89,8 @@ product's prompt. That is a modelling error. How Priya reads belongs to
 Priya, so it lives on her definition, and the one seat that reads it is the
 assistant, at the moment it writes for her.
 
-**The assistant never decides and never acts as a person.** `deliver` stays
-the person's own act, in their own words. §12 draws that line.
+**The assistant never decides and never acts as a person.** `Visit.send`
+stays the person's own act, in their own words. §12 draws that line.
 
 The name sets the authority. The assistant writes for a person, reminds, and
 says _"she will want the tonnage"_. It never runs the room and it never
@@ -135,16 +135,17 @@ bounds how long an exchange may run.
 
 ---
 
-## 4. One exchange, one message
+## 4. One exchange, one response
 
 The rule the design serves:
 
-> **Every exchange resolves to exactly one message.**
+> **Every exchange resolves to at most one summary response.**
 
-Most of the time the room may already have done that. One product answers,
-once, and that message is the answer. **The assistant does not engage.** The
-person reads what the product said, in that product's own words, and the
-seats keep reading it too.
+Most of the time the room may already have a direct answer. One product
+answers once, and that message remains the answer. **The assistant does not
+engage.** The person reads what the product said, in that product's own
+words, and the seats keep reading it too. `response()` returns `undefined`
+when no summary is due.
 
 It engages when the room did not:
 
@@ -208,16 +209,17 @@ including when summaries arrive out of exchange order. A summary never
 folds another summary. Existing journals can contain overlapping ranges
 from older releases; the renderer continues to show their summaries.
 
-**The room can settle before publication.** `settled()` waits for the
-agents working on the exchange. `quiet()` also waits for the assistant's
-outstanding work. A failed attempt keeps the source messages visible.
+**The exchange can close before publication.** `waitForClose()` resolves at
+the durable close. `response()` waits for the assistant's summary or returns
+`undefined` when the assistant deliberately stays silent. A failed attempt
+keeps the source messages visible.
 
 ---
 
 ## 6. Who owns an exchange
 
 A room holds several people, and one assistant writes for all of them. It
-writes one message per exchange, to one person, and the exchange says whom
+writes at most one summary per exchange, to one person, and the exchange says whom
 ([`exchange.md`](exchange.md) §4):
 
 > **A person's question opens an exchange and owns it. Messages that land
@@ -235,7 +237,7 @@ Priya's exchange steers whoever is working and owns nothing. His own next
 question opens his own exchange, and the assistant writes it for him.
 
 **Nobody addresses the assistant.** It sits at the narrow end of
-attention and wakes for nothing said (§11), so a delivery directed at it
+attention and wakes for nothing said (§11), so a message directed at it
 is a message nobody reads. The room refuses one. A person who wants the
 assistant to write again asks the room, and the close is what wakes it.
 
@@ -248,7 +250,7 @@ keeps failing never retries on its own end (§5). Who is owed is a fold
 over the journal: a close that names the assistant, with no summary covering
 it and no draft that stood down over it. A draft stands down when the
 assistant ends it without writing, and when the host revokes it: `abort()`
-and `stopSession` write the draft off with every wake still pending. A
+and `room.stop` write the draft off with every wake still pending. A
 later close by the same person joins the draft, and one message reaches
 back to the earliest question still owed.
 
@@ -299,7 +301,7 @@ monotonic, and `messages()` returns every message for ever. The past does
 not change under a reader.
 
 **A summarised range leaves the seats' context.** From the next activation,
-the session renders the range as its count and the summary that stands for
+the room renders the range as its count and the summary that stands for
 it:
 
 ```
@@ -316,7 +318,7 @@ so it carries the question inside it. `renderRecord` reads the fold off the
 record itself — a summary carries the range it stands for — so the renderer
 keeps no state and a seat reads the same room whoever renders it.
 
-**Storage and context are different questions.** What a session keeps is
+**Storage and context are different questions.** What a room keeps is
 the record. What a seat is handed at an activation is a rendering of it,
 built fresh each time by `render.ts`. This changes only the second, which
 is why it costs the first nothing.
@@ -362,7 +364,7 @@ its decisions in a transcript, and was fragile before the assistant existed.
 ## 10. Presentation belongs to the client
 
 A person should not read the working. That is a statement about
-presentation, and it is settled in the client — the record and the wire
+presentation, and it is decided in the client — the record and the wire
 carry everything.
 
 The runtime commits messages in order and streams them. What a client does
@@ -467,13 +469,13 @@ reserve, and writes the summary of the exchange, shaped by the
 person's preferences to how they read. It acts by calling a tool, and the
 tools it holds are the runtime's own: they reach the record and the roster
 and nothing else. A tool into a product's state is what this rule forbids,
-and what `startSession` refuses.
+and what `startRoom` refuses.
 
 ---
 
 ## 13. One explicit assistant
 
-**The assistant option designates one agent.** `startSession` seats it at
+**The assistant option designates one agent.** `startRoom` seats it at
 attention `none` and records its name in `Composition.assistant`.
 The composition requires that name to identify a roster seat at `none`.
 The host cannot unseat the designated assistant during the run.
@@ -524,41 +526,38 @@ const priya = defineHuman({
   `,
 });
 
-const session = startSession({ name: 'site', assistant, agents: [materials, tasks] });
+const room = await startRoom({ name: 'site', assistant, agents: [materials, tasks] });
 ```
 
-**A host never asks for a summary.** It is how the session works, and no
-caller drives it. A question opens an exchange, the room works, the room
-settles, and — if the room said more than one thing — the summary is
-written and committed. It arrives on the `message` event that carries every
+**A host never asks for a summary.** It is how the room works, and no
+caller drives it. A question opens an exchange, the room works, and the exchange closes. If
+the room said more than one thing, the summary is written and committed. It arrives on the `message` event that carries every
 message on the record:
 
 ```ts
-session.subscribe((event) => {
+room.subscribe((event) => {
   if (event.type !== 'message') return;
   if (event.message.kind === 'summary') showAnswer(event.message);
   else showThinking(event.message);
 });
 ```
 
-`Visit` is unchanged, and there is no cursor to pass: the exchange names
-its own span. `startSession` takes one required field beyond `agents`,
-`defineHuman` takes one optional field beyond `identity`, the record holds
-one more kind, the assistant's seat is marked as the assistant (`SeatInfo`,
-in [`presence.md`](presence.md) §10), and a host that wants the one message
-waits for `quiet()`. **That is the whole surface.**
+`Visit` returns an exchange handle from `send`, and there is no cursor to
+pass: the exchange names its own span. `startRoom` takes the composition,
+`defineHuman` takes reading preferences, and the record holds summaries as a
+separate message kind. A host follows one exchange directly:
 
-**`settled()` does not wait for the assistant, and `quiet()` does.** `settled()`
-reports that no seat which speaks for itself is taking an activation — the
-assistant writing about an exchange is not the room still working on it, which is
-the meaning §5 needs, and it is why the assistant's own activation closes no
-exchange and cannot retry itself for ever. `quiet()` resolves when no seat is
-taking an activation **and** the assistant owes nobody one, and a `quiet` event says the same
-thing to a listener. That is what a host waits for when it wants the one
-message a person reads. Nothing holds the room busy while the assistant writes:
-the two promises name two different moments.
-[`examples/site/src/demo.ts`](../examples/site/src/demo.ts) waits with
-`quiet()`, and it is the only thing the assistant asks of a host.
+```ts
+const visit = await room.visit(priya);
+const exchange = await visit.send({ text: 'What changed?' });
+await exchange.waitForClose();
+const response = await exchange.response();
+```
+
+`response()` waits for the summary or returns `undefined` when no summary is
+due. A repeated key returns the same handle, and `room.exchange(from)`
+reacquires it after a restart. There is no room-wide idle, quiet, or settled
+wait.
 
 **What the assistant is handed.** Its context contains the room's goal,
 the roster, and messages within the closed exchange's range. Its system
@@ -687,9 +686,9 @@ and the assistant writes for its owner. That is right — the exchange ended,
 and its person still gets what the room reached before it was cut off —
 but the message stands for work somebody stopped. A draft the assistant
 held at the abort is written off with the rest: the summary it stood for
-is owed no longer. `stopSession` is the other case, below.
+is owed no longer. `room.stop` is the other case, below.
 
-**A run that stops mid-exchange writes no summary.** `stopSession` revokes
+**A run that stops mid-exchange writes no summary.** `room.stop` revokes
 the leases in flight and writes no close, so the exchange stays open on
 the journal. It revokes a draft in flight for the same reason, and a draft
 that does finish after the stop commits nothing. The next run over the
@@ -700,11 +699,10 @@ same journal closes the exchange at its first reconcile
 An exchange can still run for an unbounded time before it closes; see
 [`exchange.md`](exchange.md) §8.
 
-**A stopped room never reports that it is quiet.** `quiet` says that no
-seat is taking an activation and the assistant owes nobody one. A room that is
-closing is
-neither, so shutdown drains whoever waited on `quiet()` and emits nothing
-afterwards.
+**A stopped room leaves an unfinished exchange open.** `room.stop()` revokes
+work and writes no close for the unfinished exchange. A later `resumeRoom`
+replays it and lets its exchange handle complete; shutdown does not invent a
+summary or a close.
 
 **A summary is owed until the third attempt.** A failed or expired
 activation counts as one attempt. The room's own alarm wakes the assistant again
@@ -755,7 +753,7 @@ document makes loudly:
   drafts again when the backoff passes. §16.
 - The person whose question opened the exchange owns it, and a second
   person speaking into it gets nothing. §6.
-- A person who left before the room settled is still written for, the way
+- A person who left before the exchange closed is still written for, the way
   they read. §6.
 - Three people are each written for their own way, one activation carrying
   one person's preferences and no other's, and a person who said nothing
@@ -768,15 +766,15 @@ document makes loudly:
   §2, §14.
 - A second summary for the same person stands for their second question,
   and never for the exchange before it. §3.
-- A room goes quiet when the summary lands, and settles before it. §14.
+- An exchange handle closes before its optional summary response resolves. §14.
 - A fold names the person its summary was written for, and two overlapping
   ranges stay apart. §5, §8.
 - An empty say is refused, so nothing empty stands inside a range. §4.
-- A room with a summary owed is not quiet, because the person it owes has no
-  message yet; a room that gave up on one is quiet, because it owes nobody;
-  and a stopped room never reports that it went quiet. §5, §16.
-- `startSession` refuses an assistant whose name an agent holds, and
-  `visitSession` refuses a person who takes the assistant's name. §14.
+- An exchange with a summary owed keeps its response pending until the summary
+  lands or the room deliberately gives up; a stopped room leaves the exchange
+  open for a later resume. §5, §16.
+- `startRoom` refuses an assistant whose name an agent holds, and
+  `room.visit` refuses a person who takes the assistant's name. §14.
 - Each assistant activation grants exactly its prescribed tool. An invalid
   assistant designation is refused before the composition is committed. §12.
 - The assistant is seated when the room starts, and a room nobody visits

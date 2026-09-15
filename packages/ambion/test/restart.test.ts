@@ -11,13 +11,11 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
+	type Room,
 	type Runtime,
-	readSession,
-	resumeSession,
-	type Session,
-	startSession,
-	stopSession,
-	visitSession,
+	readRoom,
+	resumeRoom,
+	startRoom,
 } from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
@@ -25,10 +23,12 @@ import {
 	assistantEnded,
 	collect,
 	crash,
+	currentExchange,
 	deferred,
 	roomName,
 	storedOf,
 	tick,
+	waitForRoom,
 } from './support/room.ts';
 import {
 	byAgent,
@@ -99,10 +99,10 @@ async function world(storage: (typeof storages)[number]): Promise<World> {
 	};
 }
 
-const summaries = async (session: Session) => (await session.messages()).filter(isSummary);
+const summaries = async (session: Room) => (await session.messages()).filter(isSummary);
 
 /** Resolves when this seat's next activation ends. */
-const ended = (session: Session, seat: string) =>
+const ended = (session: Room, seat: string) =>
 	new Promise<void>((resolve) => {
 		const off = session.subscribe((event) => {
 			if (event.type !== 'activation_end' || event.agent !== seat) return;
@@ -129,23 +129,23 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				{ on: 'wake', kind: 'drop', match: (w) => (w as { seat: string }).seat === 'beta' },
 			]);
 			const name = roomName(`restart-${storage.name}`);
-			const session = startSession({
+			const session = await startRoom({
 				name,
 				assistant,
 				agents: [alpha, beta],
 				runtime: first,
 				streamFn: scripted(script),
 			});
-			const visit = await visitSession(session, priya);
-			await visit.deliver({ text: 'Can I tell the client Thursday?' });
+			const visit = await session.visit(priya);
+			await visit.send({ text: 'Can I tell the client Thursday?' });
 			await new Promise((resolve) => setImmediate(resolve));
-			const before = { seats: session.seats(), exchange: session.exchange() };
+			const before = { seats: session.seats(), exchange: await currentExchange(session) };
 			expect(before.seats.find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
 			expect(before.exchange).toMatchObject({ owner: 'priya' });
 			crash(first, session);
 
 			const second = runtime();
-			const resumed = await resumeSession(name, {
+			const resumed = await resumeRoom(name, {
 				runtime: second,
 				agents,
 				streamFn: scripted(script),
@@ -153,7 +153,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const events = collect(resumed);
 			// the fold before the crash is the fold after the resume
 			expect(resumed.seats()).toEqual(before.seats);
-			expect(resumed.exchange()).toEqual(before.exchange);
+			expect(await currentExchange(resumed)).toEqual(before.exchange);
 			// the pending wake is sent again, and beta answers into the same exchange
 			await ended(resumed, 'beta');
 			expect((await resumed.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
@@ -161,23 +161,23 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				'beta',
 				'beta',
 			]);
-			expect(resumed.exchange()).toMatchObject({ owner: 'priya' });
+			expect(await currentExchange(resumed)).toMatchObject({ owner: 'priya' });
 
 			// alpha's lease is held by a run that is gone: it expires, alpha is woken
 			// again after the backoff, and the exchange closes once alpha stands down
 			held.resolve();
 			await clock.advance(60_000);
 			expect(events.some((e) => e.type === 'error' && e.agent === 'alpha')).toBe(true);
-			expect(resumed.exchange()).toMatchObject({ owner: 'priya' });
+			expect(await currentExchange(resumed)).toMatchObject({ owner: 'priya' });
 			await clock.advance(30_000);
-			await resumed.quiet();
+			await waitForRoom(resumed);
 			expect(
 				events.filter((e) => e.type === 'activation_start' && e.agent === 'alpha'),
 			).toHaveLength(1);
 			expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 			expect(await summaries(resumed)).toHaveLength(1);
 			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'idle' });
-			await stopSession(resumed);
+			await resumed.stop();
 		} finally {
 			await opened.dispose();
 		}
@@ -195,21 +195,21 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			});
 			const first = runtime();
 			const name = roomName(`restart-${storage.name}`);
-			const session = startSession({
+			const session = await startRoom({
 				name,
 				assistant,
 				agents: [alpha],
 				runtime: first,
 				streamFn: scripted(script),
 			});
-			const visit = await visitSession(session, priya);
-			await visit.deliver({ text: 'Anyone?' });
+			const visit = await session.visit(priya);
+			await visit.send({ text: 'Anyone?' });
 			await new Promise((resolve) => setImmediate(resolve));
 			crash(first, session);
 			held.resolve();
 
 			await clock.advance(61_000);
-			const resumed = await resumeSession(name, {
+			const resumed = await resumeRoom(name, {
 				runtime: runtime(),
 				agents,
 				streamFn: scripted(script),
@@ -217,16 +217,16 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const events = collect(resumed);
 			// the resume itself expired the lease: the wake it took is pending again,
 			// so the exchange stays open until the seat is woken after the backoff
-			expect(resumed.exchange()).toMatchObject({ owner: 'priya' });
+			expect(await currentExchange(resumed)).toMatchObject({ owner: 'priya' });
 			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(0);
 			await clock.advance(30_000);
-			await resumed.quiet();
+			await waitForRoom(resumed);
 			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
-			expect(resumed.exchange()).toBeUndefined();
+			expect(await currentExchange(resumed)).toBeUndefined();
 			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'idle' });
 			const stored = await storedOf(opened.journals, name);
 			expect(stored.map((entry) => entry.kind)).toContain('close');
-			await stopSession(resumed);
+			await resumed.stop();
 		} finally {
 			await opened.dispose();
 		}
@@ -236,31 +236,31 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		const { opened, runtime } = await world(storage);
 		try {
 			const name = roomName(`restart-${storage.name}`);
-			const one = startSession({
+			const one = await startRoom({
 				name,
 				assistant,
 				agents: [alpha],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
-			await one.messages();
+			await waitForRoom(one);
 			expect(one.seats().map((s) => s.name)).toEqual(['alpha', 'assistant']);
-			await stopSession(one);
+			await one.stop();
 
-			const two = startSession({
+			const two = await startRoom({
 				name,
 				assistant,
 				agents: [beta],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
-			await two.messages();
+			await waitForRoom(two);
 			expect(two.seats().map((s) => s.name)).toEqual(['beta', 'assistant']);
-			await stopSession(two);
+			await two.stop();
 
-			const view = readSession(name, { runtime: runtime() });
-			await view.messages();
-			expect(view.seats().map((s) => s.name)).toEqual(['beta', 'assistant']);
+			const view = await readRoom(name, { runtime: runtime() });
+			view.messages;
+			expect(view.seats.map((s) => s.name)).toEqual(['beta', 'assistant']);
 		} finally {
 			await opened.dispose();
 		}
@@ -270,7 +270,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		const { opened, runtime } = await world(storage);
 		try {
 			const name = roomName(`restart-identity-${storage.name}`);
-			const session = startSession({
+			const session = await startRoom({
 				name,
 				assistant,
 				agents: [alpha],
@@ -283,17 +283,17 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				['alpha', 'Alpha.'],
 				['assistant', assistant.identity],
 			]);
-			await session.messages();
+			await waitForRoom(session, 'settled');
 			await session.seat(beta);
-			await session.quiet();
-			await stopSession(session);
+			await waitForRoom(session);
+			await session.stop();
 
 			// a fresh runtime knows no definition: the composition and the seating carry them
-			const view = readSession(name, {
+			const view = await readRoom(name, {
 				runtime: createRuntime({ storage: opened.storage }),
 			});
-			await view.messages();
-			expect(view.seats().map((s) => [s.name, s.identity])).toEqual([
+			view.messages;
+			expect(view.seats.map((s) => [s.name, s.identity])).toEqual([
 				['alpha', 'Alpha.'],
 				['assistant', assistant.identity],
 				['beta', 'Beta.'],
@@ -308,7 +308,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		try {
 			const name = roomName(`restart-exchange-${storage.name}`);
 			const working = deferred();
-			const one = startSession({
+			const one = await startRoom({
 				name,
 				assistant,
 				agents: [alpha],
@@ -324,35 +324,33 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				),
 			});
 			const heard = collect(one);
-			const visit = await visitSession(one, priya);
-			await visit.deliver({ text: 'Is anybody there?' });
+			const visit = await one.visit(priya);
+			await visit.send({ text: 'Is anybody there?' });
 			await working.promise;
 			// a stop mid-exchange: the lease is revoked, and the stopped room closes nothing
-			await stopSession(one);
+			await one.stop();
 			expect(heard.map((e) => e.type)).not.toContain('exchange_closed');
 			const before = await storedOf(opened.journals, name);
 			expect(before.map((entry) => entry.kind)).not.toContain('close');
 
 			// the next run closes it as it starts, and quiet() waits for that close
-			const two = startSession({
+			const two = await startRoom({
 				name,
 				assistant,
 				agents: [alpha],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
-			const events = collect(two);
-			await two.quiet();
-			// the close is on the stream when quiet() answers, before any other call replays the journal
-			expect(events.map((e) => e.type)).toContain('exchange_closed');
-			expect(two.exchange()).toBeUndefined();
+			await waitForRoom(two);
+			// Startup may durably close before subscribers attach; the journal assertion below is authoritative.
+			expect(await currentExchange(two)).toBeUndefined();
 			const question = (await two.messages()).find((m) => m.kind === 'said');
 			const closes = (await storedOf(opened.journals, name)).filter(
 				(entry) => entry.kind === 'close',
 			);
 			expect(closes).toHaveLength(1);
 			expect(closes[0]?.body).toMatchObject({ owner: 'priya', from: question?.seq });
-			await stopSession(two);
+			await two.stop();
 		} finally {
 			await opened.dispose();
 		}
@@ -363,17 +361,17 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		try {
 			const name = roomName(`restart-${storage.name}`);
 			const first = runtime();
-			const session = startSession({
+			const session = await startRoom({
 				name,
 				assistant,
 				runtime: first,
 				streamFn: scripted(byAgent({})),
 			});
-			await visitSession(session, priya);
-			await visitSession(session, sam);
+			await session.visit(priya);
+			await session.visit(sam);
 			crash(first, session);
 
-			const resumed = await resumeSession(name, {
+			const resumed = await resumeRoom(name, {
 				runtime: runtime(),
 				agents,
 				streamFn: scripted(byAgent({})),
@@ -388,13 +386,13 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				['priya', 'present'],
 				['sam', 'present'],
 			]);
-			const again = await visitSession(resumed, priya);
+			const again = await resumed.visit(priya);
 			expect((await resumed.messages()).map((m) => m.kind)).toEqual(['arrived', 'arrived']);
 
 			const renamed = defineHuman({ name: 'priya', identity: 'A different priya.' });
-			await expect(visitSession(resumed, renamed)).rejects.toThrow(/different identity/);
+			await expect(resumed.visit(renamed)).rejects.toThrow(/different identity/);
 			await again.leave();
-			const back = await visitSession(resumed, renamed);
+			const back = await resumed.visit(renamed);
 			expect(back.human.identity).toBe('A different priya.');
 			expect((await resumed.messages()).map((m) => m.kind)).toEqual([
 				'arrived',
@@ -405,7 +403,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(resumed.seats().find((s) => s.name === 'priya')).toMatchObject({
 				identity: 'A different priya.',
 			});
-			await stopSession(resumed);
+			await resumed.stop();
 		} finally {
 			await opened.dispose();
 		}
@@ -421,22 +419,22 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			});
 			const name = roomName(`restart-${storage.name}`);
 			const first = runtime();
-			const session = startSession({
+			const session = await startRoom({
 				name,
 				assistant,
 				agents: [alpha, beta],
 				runtime: first,
 				streamFn: scripted(script),
 			});
-			const visit = await visitSession(session, priya);
+			const visit = await session.visit(priya);
 			const drafted = assistantEnded(session);
-			await visit.deliver({ text: 'First?' });
+			await visit.send({ text: 'First?' });
 			// a room that owes a draft is not quiet, so the failed attempt is the wait
 			await drafted;
 			// the first draft failed: priya is owed, and the room waits for the backoff
 			expect(await summaries(session)).toHaveLength(0);
-			await visit.deliver({ text: 'Second?' });
-			await session.settled();
+			await visit.send({ text: 'Second?' });
+			await waitForRoom(session, 'settled');
 			expect(await summaries(session)).toHaveLength(0);
 			const record = await session.messages();
 			const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
@@ -444,17 +442,17 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 
 			// the resumed room's assistant writes at the first draft it is given
 			const writing = byAgent({ assistant: writes('Both questions, answered.') });
-			const resumed = await resumeSession(name, {
+			const resumed = await resumeRoom(name, {
 				runtime: runtime(),
 				agents,
 				streamFn: scripted(writing),
 			});
 			// the resumed room takes on the draft the first run left owed, so it is
 			// not quiet either: it settled, and the backoff has not passed
-			await resumed.settled();
+			await waitForRoom(resumed, 'settled');
 			expect(await summaries(resumed)).toHaveLength(0);
 			await clock.advance(30_000);
-			await resumed.quiet();
+			await waitForRoom(resumed);
 			const written = await summaries(resumed);
 			expect(written).toHaveLength(1);
 			expect(written[0]?.covers.from).toBe(questions[0]?.seq);
@@ -463,7 +461,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			if (second === undefined) throw new Error('Expected the later question.');
 			expect(written[0]?.covers.through).toBeLessThan(second.seq);
 			expect(written[0]?.to).toBe('priya');
-			await stopSession(resumed);
+			await resumed.stop();
 		} finally {
 			await opened.dispose();
 		}
@@ -479,32 +477,32 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				return new Promise<never>(() => {});
 			};
 			const name = roomName(`restart-${storage.name}`);
-			const session = startSession({
+			const session = await startRoom({
 				name,
 				assistant,
 				agents: [alpha],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({ alpha: says(['alpha one', 'alpha two']), assistant: hangs })),
 			});
-			const visit = await visitSession(session, priya);
-			await visit.deliver({ text: 'First?' });
+			const visit = await session.visit(priya);
+			await visit.send({ text: 'First?' });
 			await drafting.promise;
 			// the stop revokes the draft in flight: the host wrote the summary off
-			await stopSession(session);
+			await session.stop();
 
-			const resumed = await resumeSession(name, {
+			const resumed = await resumeRoom(name, {
 				runtime: runtime(),
 				agents,
 				streamFn: scripted(byAgent({ assistant: writes('Never written.') })),
 			});
 			const events = collect(resumed);
-			await resumed.quiet();
+			await waitForRoom(resumed);
 			await clock.advance(120_000);
-			await resumed.quiet();
+			await waitForRoom(resumed);
 			expect(await summaries(resumed)).toHaveLength(0);
 			expect(events.filter((e) => e.type === 'activation_start')).toEqual([]);
-			expect(resumed.exchange()).toBeUndefined();
-			await stopSession(resumed);
+			expect(await currentExchange(resumed)).toBeUndefined();
+			await resumed.stop();
 		} finally {
 			await opened.dispose();
 		}
@@ -524,15 +522,15 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				storage: opened.storage,
 				clock,
 			});
-			const session = startSession({
+			const session = await startRoom({
 				name,
 				assistant,
 				agents: [alpha],
 				runtime: first,
 				streamFn: scripted(script),
 			});
-			const visit = await visitSession(session, priya);
-			await visit.deliver({ text: 'Anyone?' });
+			const visit = await session.visit(priya);
+			await visit.send({ text: 'Anyone?' });
 			await tick();
 			expect(session.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
 			crash(first, session);
@@ -557,18 +555,18 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 					},
 				},
 			});
-			const resumed = await resumeSession(name, {
+			const resumed = await resumeRoom(name, {
 				runtime: second,
 				agents,
 				streamFn: scripted(script),
 			});
 			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
 			resumed.abort();
-			await resumed.settled();
+			await waitForRoom(resumed);
 			await tick();
 			// the seat side hears the cut over the wire, and the room opened it to say so
 			expect(cuts).toEqual(['message:4:alpha:1']);
-			await stopSession(resumed);
+			await resumed.stop();
 		} finally {
 			await opened.dispose();
 		}
@@ -578,27 +576,27 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		const { opened, runtime } = await world(storage);
 		try {
 			const name = roomName(`restart-${storage.name}`);
-			const session = startSession({
+			const session = await startRoom({
 				name,
 				assistant,
 				agents: [alpha],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
-			await session.messages();
-			await stopSession(session);
+			await waitForRoom(session);
+			await session.stop();
 			const bare = createRuntime({
 				storage: opened.storage,
 				clock: fakeClock(),
 			});
-			await expect(resumeSession(name, { runtime: bare, agents: [] })).rejects.toThrow(
+			await expect(resumeRoom(name, { runtime: bare, agents: [] })).rejects.toThrow(
 				/cannot resume: agent 'alpha' has no binding/,
 			);
-			await expect(resumeSession(name, { runtime: bare, agents: [alpha, alpha] })).rejects.toThrow(
+			await expect(resumeRoom(name, { runtime: bare, agents: [alpha, alpha] })).rejects.toThrow(
 				/Restart bindings repeat agent 'alpha'/,
 			);
 			await expect(
-				resumeSession(roomName('never-started'), { runtime: runtime(), agents: [] }),
+				resumeRoom(roomName('never-started'), { runtime: runtime(), agents: [] }),
 			).rejects.toThrow(/no composition/);
 		} finally {
 			await opened.dispose();
@@ -620,7 +618,7 @@ describe('a room dropped from memory', () => {
 			clock: fakeClock(),
 		});
 		const name = roomName('evicted-early');
-		const session = startSession({
+		const session = await startRoom({
 			name,
 			assistant,
 			agents: [alpha, beta],
@@ -640,7 +638,7 @@ describe('a room dropped from memory', () => {
 			clock: fakeClock(),
 		});
 		const held = deferred();
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('evicted'),
 			assistant,
 			agents: [alpha],
@@ -655,17 +653,16 @@ describe('a room dropped from memory', () => {
 				}),
 			),
 		});
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'go' });
+		const visit = await session.visit(priya);
+		const exchange = await visit.send({ text: 'go' });
 		await tick();
 		runtime.evict(session.name);
-		return { session, visit, opened, held };
+		return { session, visit, exchange, opened, held };
 	}
 
-	it('answers quiet() and settled() at once', async () => {
-		const { session, held } = await dropped();
-		await expect(session.quiet()).resolves.toBeUndefined();
-		await expect(session.settled()).resolves.toBeUndefined();
+	it('rejects an exchange wait after eviction', async () => {
+		const { exchange, held } = await dropped();
+		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|interrupted|evicted/i);
 		held.resolve();
 	});
 
@@ -679,7 +676,7 @@ describe('a room dropped from memory', () => {
 		await visit.leave();
 		await tick();
 		expect((await storedOf(opened.journals, session.name)).length).toBe(before);
-		await expect(visit.deliver({ text: 'still there?' })).rejects.toThrow();
+		await expect(visit.send({ text: 'still there?' })).rejects.toThrow();
 		held.resolve();
 	});
 
@@ -690,7 +687,7 @@ describe('a room dropped from memory', () => {
 			clock: fakeClock(),
 		});
 		const held = deferred();
-		const session = startSession({
+		const session = await startRoom({
 			name: roomName('evicted-waiting'),
 			assistant,
 			agents: [alpha],
@@ -705,12 +702,10 @@ describe('a room dropped from memory', () => {
 				}),
 			),
 		});
-		const visit = await visitSession(session, priya);
-		await visit.deliver({ text: 'go' });
-		// both wait while the room is up, and the eviction lands before either has parked
-		const waiting = Promise.all([session.quiet(), session.settled()]);
+		const visit = await session.visit(priya);
+		const exchange = await visit.send({ text: 'go' });
 		runtime.evict(session.name);
-		await expect(waiting).resolves.toEqual([undefined, undefined]);
+		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|interrupted|evicted/i);
 		held.resolve();
 	});
 
@@ -718,7 +713,7 @@ describe('a room dropped from memory', () => {
 		const { session, opened, held } = await dropped();
 		await tick();
 		const before = (await storedOf(opened.journals, session.name)).length;
-		await stopSession(session);
+		await session.stop();
 		await tick();
 		expect((await storedOf(opened.journals, session.name)).length).toBe(before);
 		held.resolve();

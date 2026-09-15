@@ -5,7 +5,6 @@
  * a real one has an open HTTP stream to close.
  */
 import { expect, it } from 'vitest';
-import { stopSession } from '../../src/index.ts';
 import { enter } from '../support/room.ts';
 import {
 	agent,
@@ -33,19 +32,19 @@ live('control', () => {
 				that word alone with one say, and write no essay.
 			`,
 		});
-		const { session, runtime, events } = open('abort', { agents: [essayist] });
+		const { session, runtime, events } = await open('abort', { agents: [essayist] });
 		const visit = await enter(session, person);
 		const started = new Promise<void>((resolve) => {
 			session.subscribe((e) => {
 				if (e.type === 'activation_start' && e.agent === 'essayist') resolve();
 			});
 		});
-		await visit.deliver({ text: 'Write me an essay on the history of concrete.' });
+		const exchange = await visit.send({ text: 'Write me an essay on the history of concrete.' });
 		await within(started, 30_000, 'the activation starting');
 		// Long enough for the request to be open and streaming; too short for an essay.
 		await settle(2_000);
 		session.abort();
-		await within(session.settled(), 15_000, 'the room settling after abort');
+		await within(exchange.waitForClose(), 15_000, 'the exchange closing after abort');
 
 		expect(saidBy(await session.messages(), 'essayist')).toEqual([]);
 		expect(errorsIn(events)).toEqual([]);
@@ -54,7 +53,7 @@ live('control', () => {
 		// The room is still running: the next question is answered. The aborted
 		// request left no mark, so the record still asks for the essay, and the
 		// follow-up withdraws it in so many words.
-		await visit.deliver({
+		await visit.send({
 			text: 'Drop the essay, do not write it. Say the word "ready" and nothing else.',
 		});
 		await untilQuiet(session);
@@ -64,6 +63,6 @@ live('control', () => {
 		expect(said[0]?.text.length).toBeLessThan(120);
 		await invariants(session, events);
 		report('abort', await spent(runtime, session));
-		await stopSession(session);
+		await session.stop();
 	});
 });

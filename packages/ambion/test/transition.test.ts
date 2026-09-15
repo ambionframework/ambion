@@ -36,7 +36,7 @@ const event = (decision: RoomDecision<Kind>, seq: number): Entry => {
 };
 
 describe('room transition', () => {
-	it('keeps an observed close range and reconciles each exchange once', () => {
+	it('keeps an observed close from moving the exchange fence', () => {
 		const question: Extract<Entry, { kind: 'message' }> = {
 			kind: 'message',
 			seq: 3,
@@ -59,18 +59,13 @@ describe('room transition', () => {
 			{ kind: 'message', seq: 4, body: { kind: 'said', at, from: 'priya', text: 'Second.' } },
 			options,
 		);
-		const closing = event(decide(later, { type: 'close', close: observed.body }, now), 5);
-		expect(closing.body).toEqual(observed.body);
-		expect(closing.body).toMatchObject({ from: 3, through: 3 });
-		const closed = evolve(later, closing, options);
-		expect(closed.exchange?.from).toBe(4);
-		expect(decide(closed, { type: 'close', close: observed.body }, now)).toEqual({
+		expect(decide(later, { type: 'close', close: observed.body }, now)).toMatchObject({
 			event: undefined,
 		});
-		const next = decide(closed, reconcile, now).events[0];
+		const next = decide(later, reconcile, now).events[0];
 		if (next?.kind !== 'close') throw new Error('Expected the next close.');
-		expect(next.body).toMatchObject({ from: 4, through: 4 });
-		const settled = evolve(closed, { ...next, seq: 6 }, options);
+		expect(next.body).toMatchObject({ from: 3, through: 4 });
+		const settled = evolve(later, { ...next, seq: 5 }, options);
 		expect(decide(settled, reconcile, now).events).toEqual([]);
 	});
 
