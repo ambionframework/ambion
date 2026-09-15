@@ -23,7 +23,6 @@ export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {
 	ActivationSpec,
 	ActivationView,
-	Checkpoint,
 	Close,
 	CommitRequest,
 	CommitResult,

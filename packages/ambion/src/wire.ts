@@ -62,9 +62,8 @@ export type LeaseChange =
 
 /**
  * What the entries for one activation fold to: whether it runs, until when,
- * or why it ended, and where on the journal each fact landed. A checkpoint
- * carries these in place of the entries that made them, so the shape crosses
- * the wire.
+ * or why it ended, and where on the journal each fact landed. The journal
+ * retains these entries, so replay reconstructs the same hold.
  */
 type LeaseFact = {
 	id: string;
@@ -101,38 +100,6 @@ export interface Fence {
 	at: string;
 }
 
-/**
- * The room as it stood, in one entry. A fold reads a checkpoint as the
- * composition, the closes and the leases it carries, and nothing older; a
- * wake on a message below `floor` was answered when the checkpoint was
- * written. A checkpoint is a cache over the journal: the entries it replaces
- * stay on the storage, and a checkpoint the room cannot read is ignored.
- */
-export interface Checkpoint {
-	/** The shape of this entry. A checkpoint of another shape is ignored. */
-	v: 2;
-	/** No wake on a message before this seq is pending. */
-	floor: Seq;
-	composition: Composition;
-	closes: Close[];
-	leases: LeaseHold[];
-	at: string;
-}
-
-/** Whether a body read off the journal is a checkpoint this room can fold. */
-export function isCheckpoint(body: unknown): body is Checkpoint {
-	if (typeof body !== 'object' || body === null) return false;
-	const candidate = body as Partial<Checkpoint>;
-	return (
-		candidate.v === 2 &&
-		typeof candidate.floor === 'number' &&
-		typeof candidate.composition === 'object' &&
-		candidate.composition !== null &&
-		Array.isArray(candidate.closes) &&
-		Array.isArray(candidate.leases)
-	);
-}
-
 /** The room went quiet with an exchange open, and closed it. */
 export interface Close {
 	owner: string;
@@ -162,7 +129,6 @@ export interface Composition {
 	available: Seating[];
 	/**
 	 * Where the composition sits on the record. The roster folds from here,
-	 * so a checkpoint that carries a composition carries this with it, and
 	 * the room writes it from the place the journal gives the entry.
 	 */
 	seq: Seq;

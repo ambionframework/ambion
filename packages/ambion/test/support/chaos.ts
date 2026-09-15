@@ -179,8 +179,6 @@ export class World {
 			storage: this.journals,
 			clock: this.clock,
 			transport: serializing(inProcessTransport()),
-			// Small on purpose: every crash point lands on both sides of a checkpoint.
-			checkpoint: { entries: 4 },
 		});
 	}
 

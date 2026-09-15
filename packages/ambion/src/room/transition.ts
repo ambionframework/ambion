@@ -11,14 +11,7 @@ import type {
 	LeaseHold,
 } from '../wire.ts';
 import { activationSpec } from './activation.ts';
-import {
-	applyEvent,
-	baseOf,
-	checkpointOf,
-	type FoldOptions,
-	project,
-	type RoomState,
-} from './fold.ts';
+import { applyEvent, baseOf, type FoldOptions, project, type RoomState } from './fold.ts';
 import { isExpired, isLive, seatOf } from './lease.ts';
 import {
 	liveWork,
@@ -47,17 +40,10 @@ type LeaseCommand =
 type ComposeCommand = { type: 'compose'; composition: Body<Composition> };
 type CloseCommand = { type: 'close'; close: Close };
 type RunCommand = { type: 'run' };
-type CheckpointCommand = { type: 'checkpoint'; since: number; every: number };
 type ReconcileCommand = { type: 'reconcile'; options: Omit<ReconcileOptions, 'now'> };
 
 export type RoomCommand =
-	| MessageCommand
-	| LeaseCommand
-	| ComposeCommand
-	| CloseCommand
-	| RunCommand
-	| CheckpointCommand
-	| ReconcileCommand;
+	MessageCommand | LeaseCommand | ComposeCommand | CloseCommand | RunCommand | ReconcileCommand;
 
 export type Refusal =
 	{ category: 'stale' | 'refused'; reason: string } | { category: 'missed'; missed: Message[] };
@@ -90,11 +76,6 @@ export function decide(
 ): RoomDecision<'composition'>;
 export function decide(state: RoomState, command: CloseCommand, now: number): RoomDecision<'close'>;
 export function decide(state: RoomState, command: RunCommand, now: number): RoomDecision<'run'>;
-export function decide(
-	state: RoomState,
-	command: CheckpointCommand,
-	now: number,
-): RoomDecision<'checkpoint'>;
 export function decide(state: RoomState, command: ReconcileCommand, now: number): ReconcileDecision;
 /** Decide against the state read inside the journal's write queue. Time is an explicit input. */
 export function decide(
@@ -126,21 +107,9 @@ export function decide(
 			};
 		case 'run':
 			return { event: { kind: 'run', body: { at: iso(now) } } };
-		case 'checkpoint':
-			return checkpoint(state, command, now);
 		case 'reconcile':
 			return reconcile(state, command, now);
 	}
-}
-
-function checkpoint(
-	state: RoomState,
-	command: CheckpointCommand,
-	now: number,
-): RoomDecision<'checkpoint'> {
-	if (command.since < command.every) return { event: undefined };
-	const body = checkpointOf(state, now);
-	return { event: body === undefined ? undefined : { kind: 'checkpoint', body } };
 }
 
 const iso = (now: number): string => new Date(now).toISOString();

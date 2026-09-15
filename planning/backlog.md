@@ -601,12 +601,11 @@ tell that it runs the definition the room seated.
 ### 27. A fold still grows with the room, in three places
 
 **What.** Three costs stand. The messages still grow without
-bound, and every fold reads them all: item 2 holds that. A replay still
-reads every entry the storage holds, because a checkpoint trims the cache
-and never the storage; only the steady-state fold is bounded. And the journal
-keeps every lease id it has seen a change for, so that a change a read finds
-in doubt is not read as the first change of its lease; that set grows with
-the journal.
+bound, and every fold reads them all: item 2 holds that. A replay reads every
+entry the storage holds, and the steady-state fold grows with the same
+history. The journal also keeps every lease id it has seen a change for, so
+that a change a read finds in doubt is not read as the first change of its
+lease; that set grows with the journal.
 
 ### 28. A person present at a crash stays present until the host returns
 

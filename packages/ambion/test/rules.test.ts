@@ -12,7 +12,7 @@ const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
 });
 
 describe('lease rules', () => {
-	it('keeps a checkpoint-carried lease interval through its terminal entry', () => {
+	it('keeps a lease interval through its terminal entry', () => {
 		const leases = foldLeases([
 			lease(2, { id: 'message:2:solo:1', phase: 'running', expiresAt: 60_000, at, readThrough: 2 }),
 			lease(3, { id: 'message:2:solo:1', phase: 'running', expiresAt: 60_000, at, readThrough: 3 }),

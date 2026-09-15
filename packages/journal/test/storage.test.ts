@@ -6,14 +6,13 @@ import { memoryJournals } from '../src/memory.ts';
 import { type Sql, type SqlValue, sqliteJournals } from '../src/sqlite.ts';
 import type { JournalOpener } from '../src/storage.ts';
 
-type Kind = 'note' | 'run' | 'checkpoint';
-type Bodies = { note: { text: string }; run: { owner: string }; checkpoint: { version: 1 } };
+type Kind = 'note' | 'run';
+type Bodies = { note: { text: string }; run: { owner: string } };
 
 const words: Vocabulary<Kind> = {
 	record: 'note',
 	run: 'run',
-	checkpoint: 'checkpoint',
-	accepts: (kind): kind is Kind => kind === 'note' || kind === 'run' || kind === 'checkpoint',
+	accepts: (kind): kind is Kind => kind === 'note' || kind === 'run',
 };
 
 const note = (text: string) => ({ text });
@@ -150,13 +149,12 @@ describe.each(backends)('$name Journal contract', ({ open }) => {
 		}
 	});
 
-	it('keeps keyed entries through a checkpoint and a reopen', async () => {
+	it('keeps keyed entries through a replay and reopen', async () => {
 		const backend = open();
 		try {
-			const first = await journal(backend.opener, 'checkpoint');
+			const first = await journal(backend.opener, 'reopen');
 			await first.commit({ key: 'once', draft: note('before') });
-			await first.write('checkpoint', { version: 1 });
-			const resumed = await journal(backend.opener, 'checkpoint');
+			const resumed = await journal(backend.opener, 'reopen');
 			const retry = await resumed.commit({ key: 'once', draft: note('duplicate') });
 			expect(retry).toMatchObject({ entry: { seq: 1, body: { text: 'before' } } });
 			expect(resumed.record.map((entry) => entry.body.text)).toEqual(['before']);

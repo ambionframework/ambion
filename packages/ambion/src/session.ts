@@ -347,7 +347,7 @@ class RoomHost implements Session, RunningRoom {
 	private cancelAlarm: () => void = () => {};
 	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	private reconciling: Promise<void> = Promise.resolve();
-	private fold: { length: number; through: Seq; state: RoomState } | undefined;
+	private fold: { length: number; state: RoomState } | undefined;
 	private phase: Phase = 'starting';
 	/** This run's id: the fence it writes first, and the stamp on every entry it writes. */
 	private readonly run = crypto.randomUUID();
@@ -519,17 +519,14 @@ class RoomHost implements Session, RunningRoom {
 	/** Every fact about the room, folded over the journal as it stands. */
 	state(): RoomState {
 		const entries = this.journal.entries;
-		const through = entries.at(-1)?.seq ?? 0;
 		const current = this.fold;
-		const anchored = current !== undefined && entries[current.length - 1]?.seq === current.through;
-		if (!anchored) {
-			this.fold = { length: entries.length, through, state: foldRoom(entries, this.runtime.retry) };
+		if (current === undefined) {
+			this.fold = { length: entries.length, state: foldRoom(entries, this.runtime.retry) };
 			return this.fold.state;
 		}
 		for (const entry of entries.slice(current.length))
 			current.state = evolve(current.state, entry, this.runtime.retry);
 		current.length = entries.length;
-		current.through = through;
 		return current.state;
 	}
 
@@ -1136,8 +1133,6 @@ class RoomHost implements Session, RunningRoom {
 					resend: this.runtime.wake.resend,
 					attempts: this.runtime.retry.attempts,
 					sent: this.sentAt,
-					sinceCheckpoint: this.journal.sinceCheckpoint,
-					checkpointEvery: this.runtime.checkpoint.entries,
 					stopped: this.gone(),
 				},
 			},
@@ -1155,7 +1150,6 @@ class RoomHost implements Session, RunningRoom {
 		if (changed) return false;
 		// Whoever waits hears it once the room has nothing more to write: a
 		// pass that expired a lease is followed by the pass that closes.
-		if (decision.effects.checkpoint) await this.checkpoint();
 		this.settle();
 		this.arm(decision.effects.alarmAt);
 		return true;
@@ -1213,38 +1207,6 @@ class RoomHost implements Session, RunningRoom {
 			this.emit({ type: 'quiet' });
 		}
 		for (const resolve of this.quietWaiters.splice(0)) resolve();
-	}
-
-	/**
-	 * A checkpoint when the journal has taken enough entries since the last
-	 * one. The room writes it where it has nothing else to write, so the
-	 * checkpoint stands for a room at rest, and a fold that reads it starts
-	 * there.
-	 *
-	 * The checkpoint is built where it lands, like every other entry: an
-	 * entry that landed between the decision and the write is in the fold the
-	 * checkpoint carries, and the journal drops it as one the checkpoint
-	 * replaced. A write that fails leaves the entries where they are, and the
-	 * next pass tries again.
-	 */
-	private async checkpoint(): Promise<void> {
-		if (this.gone()) return;
-		await this.journal
-			.write('checkpoint', () => {
-				const event = this.acceptedEvent(
-					decide(
-						this.state(),
-						{
-							type: 'checkpoint',
-							since: this.journal.sinceCheckpoint,
-							every: this.runtime.checkpoint.entries,
-						},
-						this.now(),
-					),
-				);
-				return event?.body;
-			})
-			.catch(() => {});
 	}
 
 	private arm(at: number | undefined): void {

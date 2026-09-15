@@ -2,11 +2,10 @@
  * The room's record, as the vocabulary its journal is written in.
  *
  * `@ambionframework/journal` holds the machinery and the envelope: one
- * serial queue, the fence between runs, the checkpoint that replaces every
- * entry before it, the idempotency key, the refusal of a commit the record
+ * serial queue, the fence between runs, the idempotency key, the refusal of a commit the record
  * moved past, and the read that settles a write in doubt. It reads no body.
  *
- * What lives here is the part that is the room's: the six kinds of entry it
+ * What lives here is the part that is the room's: the five kinds of entry it
  * writes, what the storage holds each one under, and what it accepts as a
  * body under each. A message makes up the record a person reads; every other
  * kind sits beside the messages, and takes its place from the same counter.
@@ -19,18 +18,10 @@ import {
 	type Vocabulary,
 } from '@ambionframework/journal';
 import type { Message } from '../types.ts';
-import {
-	type Checkpoint,
-	type Close,
-	type Composition,
-	type Fence,
-	isCheckpoint,
-	type LeaseChange,
-	type Without,
-} from '../wire.ts';
+import type { Close, Composition, Fence, LeaseChange, Without } from '../wire.ts';
 
-/** The six kinds of entry the room writes to its journal. */
-export type Kind = 'message' | 'lease' | 'close' | 'composition' | 'run' | 'checkpoint';
+/** The five kinds of entry the room writes to its journal. */
+export type Kind = 'message' | 'lease' | 'close' | 'composition' | 'run';
 
 /**
  * What a body is before the journal gives it a place. Two of the room's
@@ -51,26 +42,21 @@ export interface Bodies {
 	close: Close;
 	composition: Body<Composition>;
 	run: Fence;
-	checkpoint: Checkpoint;
 }
 
 /**
  * The room's kinds, as the journal needs them. `accepts` is the room's own
- * check on a body: a checkpoint of a shape this room does not read is no
- * entry at all, and every other kind is whatever the room wrote.
+ * check on a body: every kind is whatever the room wrote.
  */
 const WORDS: Vocabulary<Kind> = {
 	record: 'message',
 	run: 'run',
-	checkpoint: 'checkpoint',
-	accepts: (kind, body): kind is Kind =>
-		(kind === 'message' ||
-			kind === 'lease' ||
-			kind === 'close' ||
-			kind === 'composition' ||
-			kind === 'run' ||
-			kind === 'checkpoint') &&
-		(kind !== 'checkpoint' || isCheckpoint(body)),
+	accepts: (kind, _body): kind is Kind =>
+		kind === 'message' ||
+		kind === 'lease' ||
+		kind === 'close' ||
+		kind === 'composition' ||
+		kind === 'run',
 };
 
 /** One entry on the room's journal: its kind, and the body that kind carries. */

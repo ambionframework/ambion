@@ -137,7 +137,7 @@ export class SeatActor implements SeatPort {
 
 	private async take(id: string): Promise<void> {
 		// Held before the claim, so a steer that lands while the claim is in
-		// flight reaches the activation and not the floor.
+		// flight reaches the activation and remains available for the next run.
 		const activation = new Activation(id, this.context.seat, this.host(id));
 		let cut = () => {};
 		const cutOff = new Promise<void>((resolve) => {

@@ -18,12 +18,16 @@ and persisted shapes. Remove obsolete structures and migration machinery
 when they complicate the design. Existing persisted state does not constrain
 the implementation.
 
-**Items 9–10 and their replacement APIs are proposals.** Items 1–8 are
-implemented and verified.
+**Items 1–9 are implemented and verified.** Item 10 and its replacement APIs
+remain proposals.
 Completed items record their implementation below. Source references identify
 the current mechanisms. Each proposal identifies its behavioral changes.
 The initial review used source, contracts, and representative tests.
 Implementation adds execution checks for items 1–8.
+
+Earlier completed-item entries below describe checkpointing as it existed at
+that time. Item 9 supersedes those historical references; the current design
+retains one complete journal history.
 
 ## The design to preserve
 
@@ -546,42 +550,34 @@ per-agent access checks and the existing deletion guarantees.
 [workspace backends](../packages/workspace/src/just-bash.ts), and
 [generic core types](../packages/ambion/src/types.ts).
 
-## 9. Use one incremental projection and checkpoint its state
+## 9. Remove checkpointing and keep one durable record
 
-**Current cost.** `foldRoom()` repeatedly traverses retained messages to
-reconstruct people, roster, exchanges, and outstanding work. Checkpoints
-prune administrative history, but retain all messages and the original
-composition. Reconstruction therefore still grows with conversation history.
+**Implementation.** Checkpoint entries, checkpoint configuration, and journal
+compaction are removed from the room and generic journal. The journal retains
+the complete ordered history, including administrative entries and message
+keys. Live application and replay continue to use the same pure `evolve`
+rules, so lease attempts, pending retries, freshness, fencing, and
+idempotency all derive from one record.
 
-**Proposed design.** Update the projection through the same `evolve`
-function used for replay. Checkpoints capture sufficient current state to
-resume from their position. Historical messages remain queryable, and
-idempotency lookup remains durable.
+**Rationale.** The checkpoint was a second persisted interpretation of room
+state. It retained messages while adding floors, carried leases and close
+exceptions, and still required storage replay to scan the full history. The
+smaller contract keeps historical messages queryable and removes those
+boundaries and migration concerns. Replay and projection cost grow with
+retained history; this makes no bounded-history performance claim. Context
+compaction is a separate future concern.
 
-Apply this separation to rendering. Human display and bounded agent
-context are explicit projections over the record. A concise answer for
-one person should not automatically determine everything specialists retain.
-Retain access to the source messages when a summary omits relevant details.
+**Completion evidence.** No room or native journal API exposes checkpoint
+state or compaction. Replay after restart preserves the existing lease,
+pending retry, acknowledgment, fencing, and idempotency behavior, while
+message history and Pi audit records remain durable.
 
-**Naming.** Use `RoomState` for the authoritative derived state and
-`RoomSnapshot` for a public read. Use `projectRecord` for selecting content
-and `renderRecord` for turning selected content into text. Use
-`checkpointPosition` and `pendingFrom` for distinct checkpoint boundaries
-when both are necessary; avoid an unexplained `floor`.
-
-**Rationale.** One reducer serves live state and recovery. Checkpoints cease
-to be a second interpretation of the journal. Rendering can evolve without
-changing what the room considers true.
-
-**Completion evidence.** Full replay, incremental application, and
-checkpoint-plus-suffix replay agree. Historical messages and idempotency
-tokens remain accessible. Measure projection cost on long histories.
-
-**Scope.** Depends on item 1. Remove redundant caches only after the new
-projection preserves their behavior and performance requirements.
+**Scope.** Rendering and provider context policy remain unchanged. Any future
+bounded context projection must be evaluated separately from journal
+retention.
 
 **Source.** [Room fold](../packages/ambion/src/room/fold.ts),
-[journal compaction](../packages/journal/src/journal.ts),
+[journal](../packages/journal/src/journal.ts),
 [message cache](../packages/ambion/src/journal/journal.ts), and
 [rendering](../packages/ambion/src/render.ts).
 
@@ -728,8 +724,8 @@ that preserve a working library at each step:
 3. Make context acknowledgment explicit through item 4. Preserve provider
    request boundaries and existing fault behavior.
 4. Evaluate fixed summary inputs and assistant policy through items 2 and 5. Use multi-person scenarios to assess the deliberate behavior changes.
-5. Complete incremental projection through item 9. Finalize and migrate
-   the public vocabulary and lifecycle through item 10.
+5. Keep item 9's one durable record. Finalize and migrate the public
+   vocabulary and lifecycle through item 10.
 
 Use the proposed names when each internal contract lands. Avoid a separate
 repository-wide rename before the ownership changes stabilize. Rename

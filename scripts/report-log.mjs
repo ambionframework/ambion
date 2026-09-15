@@ -8,7 +8,7 @@
 import { foldLeases as foldLeaseChanges, parseId } from '../packages/ambion/src/room/lease.ts';
 
 const object = (value) => value !== null && typeof value === 'object';
-const KINDS = new Set(['message', 'lease', 'close', 'composition', 'run', 'checkpoint']);
+const KINDS = new Set(['message', 'lease', 'close', 'composition', 'run']);
 
 /** Return a native envelope, or undefined when a stored snapshot is malformed. */
 const envelopeOf = (row) => {

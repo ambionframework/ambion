@@ -25,10 +25,6 @@ export interface ReconcileOptions {
 	attempts: number;
 	/** When this room last sent each wake it waits on. A wake it never sent is absent. */
 	sent: ReadonlyMap<string, number>;
-	/** How many entries the journal has taken since the last checkpoint. */
-	sinceCheckpoint: number;
-	/** How many entries the journal takes before the room writes the next checkpoint. */
-	checkpointEvery: number;
 	/** A stopped room closes nothing and wakes nobody. */
 	stopped: boolean;
 }
@@ -54,11 +50,6 @@ export interface Reconciliation {
 	 * due names them. The room drops them from what it has sent.
 	 */
 	forget: string[];
-	/**
-	 * The journal has taken enough entries for a checkpoint. The room writes
-	 * one where the pass writes nothing else, so it stands for a room at rest.
-	 */
-	checkpoint: boolean;
 	/** When the room looks again on its own, or undefined when nothing waits on the clock. */
 	alarmAt: number | undefined;
 }
@@ -134,7 +125,6 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
 		close,
 		sends,
 		forget: forgotten(state, options),
-		checkpoint: options.sinceCheckpoint >= options.checkpointEvery,
 		alarmAt: options.stopped ? undefined : nextAlarm(state, options),
 	};
 }

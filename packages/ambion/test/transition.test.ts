@@ -49,8 +49,6 @@ describe('room transition', () => {
 				resend: 5_000,
 				attempts: 3,
 				sent: new Map<string, number>(),
-				sinceCheckpoint: 0,
-				checkpointEvery: 256,
 				stopped: false,
 			},
 		};
@@ -90,7 +88,7 @@ describe('room transition', () => {
 		expect(live.messages[1]?.wakes).toEqual(['product']);
 	});
 
-	it('refuses a stale claim and does not create an empty checkpoint', () => {
+	it('refuses a stale claim without changing the room', () => {
 		const state = foldRoom([composition], options);
 		expect(
 			decide(
@@ -100,9 +98,6 @@ describe('room transition', () => {
 			),
 		).toMatchObject({
 			refusal: { category: 'stale' },
-		});
-		expect(decide(foldRoom([], options), { type: 'checkpoint', since: 1, every: 1 }, now)).toEqual({
-			event: undefined,
 		});
 	});
 

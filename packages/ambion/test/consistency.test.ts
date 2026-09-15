@@ -126,8 +126,6 @@ class Cluster {
 			storage: journals,
 			clock: this.clock,
 			transport: serializing(faultyTransport(inProcessTransport(), this.faults, this.clock)),
-			// Small on purpose: the history runs over entries a checkpoint replaced.
-			checkpoint: { entries: 4 },
 		});
 	}
 

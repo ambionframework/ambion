@@ -35,7 +35,7 @@
  * The key index is the record itself. Every record entry the journal takes
  * carries its key into the index, on the replay as well as on the append,
  * so a caller that retries after a crash meets the token the storage holds
- * and not a memory the crash took. A checkpoint keeps every record entry,
+ * and not a memory the crash took. Every record entry stays durable,
  * so the token never expires and the journal holds no dedup window.
  *
  * The journal reads what the storage holds past its cursor before every
@@ -112,8 +112,6 @@ export interface Vocabulary<TKind extends string = string> {
 	readonly record: TKind;
 	/** The kind that fences a run. */
 	readonly run: TKind;
-	/** The kind that replaces every entry before it. */
-	readonly checkpoint: TKind;
 	/** Whether this kind and body are values the caller reads. */
 	accepts(kind: string, body: unknown): kind is TKind;
 }
@@ -248,8 +246,6 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	private fenced = false;
 	/** A later run's entry was found: this run's writes are over. */
 	private superseded = false;
-	/** How many entries beside the record the cache holds past the last checkpoint. */
-	sinceCheckpoint = 0;
 
 	/**
 	 * `hear` takes every entry the journal takes after the replay: one this run
@@ -278,22 +274,6 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 		await this.read(storage);
 		this.replayed = true;
 		return storage;
-	}
-
-	/**
-	 * Drop everything the latest checkpoint replaced. The checkpoint stays,
-	 * and so does every record entry: a caller reads what the checkpoint
-	 * carries in place of what was dropped. The run entries go with them,
-	 * because the fence is read off the storage and never off the cache.
-	 */
-	private compact(): void {
-		const at = this.entries.findLastIndex((entry) => entry.kind === this.words.checkpoint);
-		if (at < 0) return;
-		const kept = this.entries.slice(0, at).filter((entry) => entry.kind === this.words.record);
-		this.entries.splice(0, at, ...kept);
-		this.sinceCheckpoint = this.entries
-			.slice(kept.length + 1)
-			.filter((entry) => entry.kind !== this.words.record).length;
 	}
 
 	/**
@@ -353,8 +333,6 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	 */
 	private cache(entry: Entries<TKind, TBodies>): void {
 		this.entries.push(entry);
-		if (entry.kind === this.words.checkpoint) this.compact();
-		else if (entry.kind !== this.words.record) this.sinceCheckpoint += 1;
 		this.lastSeq = Math.max(this.lastSeq, entry.seq);
 		if (this.recorded(entry)) {
 			this.record.push(entry);
