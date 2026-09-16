@@ -187,6 +187,12 @@ request cannot silently rejoin a room after navigation. HTTP requests and
 JavaScript handles do not survive a process restart. The default lease expiry
 is 60 seconds, with retry backoff, so lost local work can pause before it continues.
 
+Send and leave routes use `room.visit(person, { arrive: false })`. The kernel
+checks recorded presence; Relay no longer scans participants before those calls.
+An absent leave does nothing. An absent send returns HTTP 409, including a
+delivery retry. After explicit entry, retrying the same key returns the original
+exchange without another spoken message.
+
 **Ctrl+C performs a graceful shutdown.** It stops the hosted rooms and closes
 SQLite after workspace operations finish. Hosting intent stays in the catalog
 so the next server run can restore those rooms. Use the room's Stop control

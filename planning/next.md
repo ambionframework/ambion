@@ -38,8 +38,8 @@ versus presence, and journal commits versus external effects.
 **Start with item 1.** The review reproduced correctness failures there. Item 2
 is the largest product-facing simplification and should follow immediately.
 Do not turn this into another general architecture rewrite before release.
-Keep item 1 reviewable: land lifecycle/sender regression fixes first, then
-consolidate submission and effect publication in a separate slice.
+Keep item 1 reviewable: lifecycle and submission fixes have landed. Finish
+existing-only visits, cancellation, and text validation in bounded slices.
 
 ## 1. Make durable acceptance the public operation boundary
 
@@ -52,16 +52,22 @@ affect reentry. Memory and SQLite fault tests cover lost acknowledgements,
 failed recovery reads, and newer-run fencing. All seven CI checks passed,
 including Node 22/24 and live-model tests.
 
-**Current slice, prepared for review: submission and effect publication.** One
-typed adapter maps room decisions to journal entries or results. Protocol
-refusals remain values through the response boundary. Confirmed entries capture
+[PR #138](https://github.com/ambionframework/ambion/pull/138) landed submission
+and effect publication. One typed adapter maps room decisions to journal entries
+or results. Protocol refusals remain values through the response boundary. Confirmed entries capture
 ordered host effects; a throwing connector cannot change their accepted result.
 The regression tests cover storage recovery, reentrant listeners, and eviction
-during publication. This adds no durable publication queue or public concept.
+during publication. All seven CI checks passed. This adds no durable
+publication queue or public concept.
 
-Awaitable cancellation, existing-only visits, and semantic text validation
-remain follow-ups. Relay still needs its protective coordination until the
-relevant kernel contracts replace it.
+**Current slice, prepared for review: existing-only visits.** `visit(human, { arrive: false })`
+returns a visit or `undefined` for absence after a serialized presence check.
+Relay uses it for sending and leaving, without participant preflight scans.
+
+Awaitable cancellation and semantic text validation remain. Cancellation needs
+an explicit boundary for concurrent sends and newly owed work; awaiting the
+current bounded revocation loop alone is insufficient. Relay retains host
+coordination for lifecycle admission and catalog changes.
 
 ### Change
 
@@ -83,26 +89,24 @@ relevant kernel contracts replace it.
       boundary has been durably applied, not that an uncooperative external tool
       has stopped or undone its effects. Specify ordering against concurrent
       sends and newly owed work; do not invent exchange-local cancellation.
-- [ ] Provide a narrow way to use an already-present human without causing an
+- [x] Provide a narrow way to use an already-present human without causing an
       arrival. Prefer one option on the existing visit operation over a new
-      presence/session hierarchy. It must reject an absent human atomically;
-      explicit entry remains the ordinary joining operation. For 0.1.0, a fresh
+      presence/session hierarchy. Return `undefined` for an absent human inside
+      the journal boundary; explicit entry remains the ordinary joining operation. For 0.1.0, a fresh
       HTTP send after departure still requires explicit re-entry, even if it is
       retrying a lost acknowledgement. Once re-entered, the same key returns the
       original exchange; the retry must not add speech or implicitly restore
       presence. A delivery key is not an identity credential.
-- [ ] Consolidate the bespoke message/lease/close append adapters into one
+- [x] Consolidate the bespoke message/lease/close append adapters into one
       internal submission path using the journal's existing entry/result return.
       Keep expected refusals as data until the public API or protocol boundary;
       remove the decision → `RefusedError` → protocol-result round trip.
       Storage failures remain errors. Do not build a generic command bus.
-- [ ] Apply confirmed entries before the next decision, then drain ordered
-      notification and transport effects outside the write decision. Today the
-      journal's synchronous `hear` callback can construct transport ports during
-      append processing. A throwing connector must not turn a persisted message
-      into an apparent commit failure. Keep recovered writes on the same
+- [x] Apply confirmed entries before the next decision, then drain ordered
+      notification and transport effects outside the write decision. A throwing
+      connector cannot turn a persisted message into an apparent commit failure. Keep recovered writes on the same
       publication path, without adding another durable queue.
-- [ ] Remove Relay's read-presence-then-join workarounds once the contract covers
+- [x] Remove Relay's read-presence-then-join workarounds once the contract covers
       them. Retain host serialization needed for catalog changes, start/stop
       admission, and shutdown. Never hold that queue while waiting for a model.
 
@@ -365,12 +369,14 @@ code/tests. Link implementation details instead of copying interfaces or
 narrating algorithms. Examples should teach usage; historical implementation
 status belongs in version control rather than permanent design guides.
 
+The concise documentation pass landed in PR #138, including corrected scope
+status. The final API audit and release sign-off remain.
+
 - [ ] Audit root/package READMEs, generated examples, and design contracts against
       final APIs; they already use the collaboration-kernel narrative. Typecheck
       actual snippets. Extend existing migration notes with the new read/control
       contracts and participant names; state any real storage/protocol break.
-- [ ] Update stale progress claims in the scope document, including participation
-      described as in progress. Explain accepted versus completed operations,
+- [ ] Explain accepted versus completed operations,
       silent/failed summaries, shared identity presence, room-wide cancellation,
       local diagnostics, deployment ownership, and effect idempotency consistently.
 - [ ] Sign off F1–F9: definitions/tools (F1/F6), presence and concurrent delivery

@@ -222,34 +222,17 @@ async function mutateHuman(
 ) {
 	switch (method) {
 		case 'DELETE':
-			if (
-				room
-					.participants()
-					.some(
-						(seat) =>
-							seat.name === person.name && seat.kind === 'human' && seat.presence === 'present',
-					)
-			)
-				await (await room.visit(person)).leave();
+			await (await room.visit(person, { arrive: false }))?.leave();
 			return { left: person.name };
 		case 'PUT':
 			await room.visit(person);
 			return { joined: person.name };
 		case 'POST': {
-			if (
-				!room
-					.participants()
-					.some(
-						(seat) =>
-							seat.name === person.name && seat.kind === 'human' && seat.presence === 'present',
-					)
-			)
-				fail(409, 'Enter this room before sending.');
+			const visit = await room.visit(person, { arrive: false });
+			if (visit === undefined) fail(409, 'Enter this room before sending.');
 			if (!isDelivery(input))
 				fail(400, 'Supply nonempty key and text, with an optional recipient.');
-			const exchange = await (
-				await room.visit(person)
-			).send({ key: input.key, text: input.text, to: input.to });
+			const exchange = await visit.send({ key: input.key, text: input.text, to: input.to });
 			return { from: exchange.from, owner: exchange.owner, at: exchange.at };
 		}
 		default:

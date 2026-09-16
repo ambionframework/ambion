@@ -77,6 +77,12 @@ identity is rejected while the person is present. `leave` is idempotent and
 concurrent departures share one operation; retry an uncertain departure using
 the same handle. After leaving, `send` rejects. Re-entering creates a new handle.
 
+Use `room.visit(human, { arrive: false })` when an operation requires existing
+presence. It returns `undefined` for an absent person and writes no arrival.
+The journal serializes this check with presence changes and resolves uncertain
+writes first. Identity mismatches and storage failures reject. The default
+`room.visit(human)` explicitly enters the room when the person is absent.
+
 Delivery checks presence again at the journal commit boundary, so a stale handle
 cannot authorize speech. A delivery admitted before a departure may commit
 before it; later deliveries cannot pass the recorded departure.
