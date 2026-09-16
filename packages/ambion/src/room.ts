@@ -25,7 +25,6 @@
  * - **Say when it has stopped.** An exchange closed, and nothing live.
  */
 
-import type { AppendResult } from '@ambionframework/journal';
 import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { answerCommit, answerLease, answerView } from './answers.ts';
@@ -66,7 +65,6 @@ import {
 	type Refusal,
 	type RoomCommand,
 	type RoomDecision,
-	type VisitDecision,
 } from './room/transition.ts';
 import { seatsOf } from './room/view.ts';
 import { inProcessTransport } from './seat/seat.ts';
@@ -147,11 +145,6 @@ export interface ResumeRoomOptions {
 	streamFn?: StreamFn;
 }
 
-export interface VisitOptions {
-	/** Set false to read an existing durable visit without recording an arrival. */
-	readonly arrive?: boolean;
-}
-
 /** A room's durable state at the time it is read, with no live methods or subscriptions. */
 export interface RoomSnapshot {
 	readonly name: string;
@@ -183,9 +176,6 @@ export interface Room {
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): ExchangeHandle | undefined;
-	visit(human: HumanDefinition, options: { arrive: false }): Promise<Visit | undefined>;
-	visit(human: HumanDefinition, options: { arrive?: true }): Promise<Visit>;
-	visit(human: HumanDefinition, options: VisitOptions): Promise<Visit | undefined>;
 	visit(human: HumanDefinition): Promise<Visit>;
 	stop(): Promise<void>;
 	/** Revoke every lease in flight. The room keeps running; `stop` ends it. */
@@ -309,11 +299,7 @@ function notificationFor(event: RoomNotification): RoomNotification {
 /** How many times one pass folds, decides and writes before it yields. */
 const PASSES = 8;
 
-type SubmissionResult<K extends Kind> =
-	| (K extends 'message'
-			? Exclude<VisitDecision, { event: unknown }>
-			: Exclude<RoomDecision<K>, { event: unknown }>)
-	| undefined;
+type SubmissionResult<K extends Kind> = Exclude<RoomDecision<K>, { event: unknown }> | undefined;
 
 const refusalMessage = (refusal: Refusal): string =>
 	'reason' in refusal ? refusal.reason : 'The record moved.';
@@ -335,10 +321,10 @@ class RoomHost implements Room, RunningRoom {
 	private readonly defs: ReadonlyMap<string, AgentDefinition>;
 	/** The handles the host delivers through. Presence itself is a fold over the journal. */
 	private readonly visits = new Map<string, VisitRuntime>();
-	/** Visit admissions awaiting journal confirmation, keyed by human name. */
-	private readonly admissions = new Map<
+	/** Arrivals awaiting durable acknowledgement, keyed by human name. */
+	private readonly arrivals = new Map<
 		string,
-		{ identity: string; promise: Promise<VisitRuntime | undefined> }
+		{ identity: string; promise: Promise<VisitRuntime> }
 	>();
 	private readonly ports = new Map<string, SeatPort>();
 	/** The three room calls exposed to an in-process seat. */
@@ -540,27 +526,7 @@ class RoomHost implements Room, RunningRoom {
 	}
 
 	/** The room's one typed adapter from a decision to the generic journal queue. */
-	private submit<K extends Kind>(
-		kind: K,
-		decision: () => RoomDecision<K>,
-		key?: string,
-	): Promise<
-		AppendResult<
-			Extract<Entry, { kind: K }>,
-			Exclude<RoomDecision<K>, { event: unknown }> | undefined
-		>
-	>;
-	private submit(
-		kind: 'message',
-		decision: () => VisitDecision,
-		key?: string,
-	): Promise<
-		AppendResult<
-			Extract<Entry, { kind: 'message' }>,
-			Exclude<VisitDecision, { event: unknown }> | undefined
-		>
-	>;
-	private submit(kind: Kind, decision: () => RoomDecision<Kind> | VisitDecision, key?: string) {
+	private submit<K extends Kind>(kind: K, decision: () => RoomDecision<K>, key?: string) {
 		return this.journal.append(kind, {
 			...(key === undefined ? {} : { key }),
 			decide: () => {
@@ -748,111 +714,64 @@ class RoomHost implements Room, RunningRoom {
 	// -- people -----------------------------------------------------------------
 
 	/** Puts a person in the room. A second visit while they are here is the same visit. */
-	visit(human: HumanDefinition, options: { arrive: false }): Promise<Visit | undefined>;
-	visit(human: HumanDefinition, options: { arrive?: true }): Promise<Visit>;
-	visit(human: HumanDefinition, options: VisitOptions): Promise<Visit | undefined>;
-	visit(human: HumanDefinition): Promise<Visit>;
-	async visit(human: HumanDefinition, options?: VisitOptions): Promise<Visit | undefined> {
+	async visit(human: HumanDefinition): Promise<Visit> {
 		this.assertRunning();
 		const captured = captureHuman(human);
-		const arrive = options?.arrive !== false;
-		const admitted = await this.acquire(captured, arrive);
-		this.assertRunning();
-		return admitted === undefined ? undefined : this.handle(admitted);
-	}
-
-	private async acquire(
-		captured: HumanDefinition,
-		arrive: boolean,
-	): Promise<VisitRuntime | undefined> {
-		const pending = this.admissions.get(captured.name);
-		if (pending !== undefined) return this.followAdmission(captured, arrive, pending);
-		const admission = this.admit(captured, arrive);
-		this.admissions.set(captured.name, { identity: captured.identity, promise: admission });
+		const pending = this.arrivals.get(captured.name);
+		if (pending !== undefined) {
+			if (pending.identity !== captured.identity)
+				throw new Error(
+					`'${captured.name}' is already entering this room under a different identity: one name is one person.`,
+				);
+			const admitted = await pending.promise;
+			this.assertRunning();
+			return this.handle(admitted);
+		}
+		const arrival = this.arrive(captured);
+		this.arrivals.set(captured.name, { identity: captured.identity, promise: arrival });
 		try {
-			return await admission;
+			const admitted = await arrival;
+			this.assertRunning();
+			return this.handle(admitted);
 		} finally {
-			if (this.admissions.get(captured.name)?.promise === admission)
-				this.admissions.delete(captured.name);
+			if (this.arrivals.get(captured.name)?.promise === arrival)
+				this.arrivals.delete(captured.name);
 		}
 	}
 
-	private async followAdmission(
-		captured: HumanDefinition,
-		arrive: boolean,
-		pending: { identity: string; promise: Promise<VisitRuntime | undefined> },
-	): Promise<VisitRuntime | undefined> {
-		if (pending.identity !== captured.identity)
-			throw new Error(
-				`'${captured.name}' is already entering this room under a different identity: one name is one person.`,
-			);
-		const existing = await pending.promise;
-		if (existing !== undefined || !arrive) return existing;
-		if (this.admissions.get(captured.name) === pending) this.admissions.delete(captured.name);
-		return this.acquire(captured, arrive);
-	}
-
-	/** Complete one serialized visit admission and cache a handle only after its outcome is durable. */
-	private async admit(
-		captured: HumanDefinition,
-		arrive: boolean,
-	): Promise<VisitRuntime | undefined> {
+	/** Complete one arrival and cache the handle only after its presence is durable. */
+	private async arrive(captured: HumanDefinition): Promise<VisitRuntime> {
 		await this.ready;
 		this.assertRunning();
 		await this.journal.settled();
 		this.assertRunning();
-		this.assertHuman(captured);
 		const known = this.visits.get(captured.name);
-		if (known?.departure !== undefined || known?.gone)
-			return this.retryKnown(captured, arrive, known);
-		const submitted = await this.submit('message', () =>
-			decide(
-				this.state(),
-				{
-					type: 'visit',
-					name: captured.name,
-					identity: captured.identity,
-					...(captured.preferences === undefined ? {} : { preferences: captured.preferences }),
-					arrive,
-				},
-				this.now(),
-			),
-		);
-		this.requireSubmission(submitted);
+		if (known?.gone) return this.retryKnown(captured, known);
+		this.assertVisitable(captured);
+		const committed = await this.commitPresence({
+			kind: 'arrived',
+			from: captured.name,
+			subject: captured.name,
+			identity: captured.identity,
+			...(captured.preferences === undefined ? {} : { preferences: captured.preferences }),
+		});
 		this.assertRunning();
-		return this.finishAdmission(captured, arrive, submitted);
-	}
-
-	private async retryKnown(
-		captured: HumanDefinition,
-		arrive: boolean,
-		known: VisitRuntime,
-	): Promise<VisitRuntime | undefined> {
-		if (known.departure !== undefined) await known.departure.catch(() => {});
-		else await this.endVisit(known);
-		return this.admit(captured, arrive);
-	}
-
-	private async finishAdmission(
-		captured: HumanDefinition,
-		arrive: boolean,
-		submitted: Awaited<ReturnType<RoomHost['submit']>>,
-	): Promise<VisitRuntime | undefined> {
 		const current = this.visits.get(captured.name);
-		if (current?.gone) return this.retryKnown(captured, arrive, current);
-		if ('result' in submitted && submitted.result !== undefined && 'absent' in submitted.result) {
-			if (current !== undefined) current.gone = true;
-			this.visits.delete(captured.name);
-			return undefined;
-		}
-		if ('result' in submitted && current !== undefined) return current;
+		if (current?.gone) return this.retryKnown(captured, current);
+		if (committed === undefined && current !== undefined) return current;
 		if (current !== undefined) current.gone = true;
 		const visit: VisitRuntime = { human: captured, gone: false };
 		this.visits.set(captured.name, visit);
 		return visit;
 	}
 
-	private assertHuman(human: HumanDefinition): void {
+	private async retryKnown(captured: HumanDefinition, known: VisitRuntime): Promise<VisitRuntime> {
+		if (known.departure !== undefined) await known.departure.catch(() => {});
+		else await this.endVisit(known);
+		return this.arrive(captured);
+	}
+
+	private assertVisitable(human: HumanDefinition): void {
 		if (this.defs.has(human.name))
 			throw new Error(`'${human.name}' is an agent in this room: one name names one participant.`);
 	}
@@ -1237,7 +1156,7 @@ class RoomHost implements Room, RunningRoom {
 
 	/** One operation on the room's commit queue, with the wakes the room routes. */
 	async write(commit: CommitRequest): Promise<CommitResult | { refusal: Refusal }> {
-		const appended = await this.submit<'message'>(
+		const appended = await this.submit(
 			'message',
 			() => decide(this.state(), { type: 'commit', commit }, this.now()),
 			commit.key,

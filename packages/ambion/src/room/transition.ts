@@ -27,9 +27,7 @@ type PresenceChange = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 type MessageCommand =
 	| { type: 'deliver'; from: string; to?: string; text: string }
 	| { type: 'presence'; change: PresenceChange; route: boolean }
-	| { type: 'visit'; name: string; identity: string; preferences?: string; arrive: boolean }
 	| { type: 'commit'; commit: CommitRequest };
-type NonVisitMessageCommand = Exclude<MessageCommand, { type: 'visit' }>;
 type LeaseCommand =
 	| { type: 'claim'; id: string; expiry: number; deadline: number }
 	| { type: 'renew'; id: string; expiry: number; deadline: number; readThrough?: number }
@@ -50,8 +48,6 @@ export type RoomDecision<K extends Kind> =
 	| { refusal: Refusal }
 	| { unchanged: { kind: 'seated' | 'unseated'; name: string } };
 
-export type VisitDecision = RoomDecision<'message'> | { absent: true };
-
 export type ReconcileDecision = {
 	events: ProposedEvent<'lease' | 'close'>[];
 	effects: Omit<Reconciliation, 'expired' | 'abandoned' | 'close'>;
@@ -66,12 +62,7 @@ export function evolve(state: RoomState, event: RoomEvent, options: FoldOptions)
 
 export function decide(
 	state: RoomState,
-	command: Extract<MessageCommand, { type: 'visit' }>,
-	now: number,
-): VisitDecision;
-export function decide(
-	state: RoomState,
-	command: NonVisitMessageCommand,
+	command: MessageCommand,
 	now: number,
 ): RoomDecision<'message'>;
 export function decide(state: RoomState, command: LeaseCommand, now: number): RoomDecision<'lease'>;
@@ -88,10 +79,8 @@ export function decide(
 	state: RoomState,
 	command: RoomCommand,
 	now: number,
-): RoomDecision<Kind> | VisitDecision | ReconcileDecision {
+): RoomDecision<Kind> | ReconcileDecision {
 	switch (command.type) {
-		case 'visit':
-			return visit(state, command, now);
 		case 'deliver':
 			return deliver(state, command, now);
 		case 'presence':
@@ -120,25 +109,6 @@ export function decide(
 		case 'reconcile':
 			return reconcile(state, command, now);
 	}
-}
-
-function visit(
-	state: RoomState,
-	command: Extract<MessageCommand, { type: 'visit' }>,
-	now: number,
-): VisitDecision {
-	const change: PresenceChange = {
-		kind: 'arrived',
-		from: command.name,
-		subject: command.name,
-		identity: command.identity,
-		...(command.preferences === undefined ? {} : { preferences: command.preferences }),
-	};
-	const reason = arrivalRefusal(state, change);
-	if (reason !== undefined) return refused(reason);
-	if (state.people.get(command.name)?.presence === 'present') return { event: undefined };
-	if (!command.arrive) return { absent: true };
-	return message(state, { ...change, at: iso(now) }, now);
 }
 
 const iso = (now: number): string => new Date(now).toISOString();

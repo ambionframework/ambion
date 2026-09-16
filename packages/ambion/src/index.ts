@@ -18,7 +18,6 @@ export type {
 	RoomSnapshot,
 	StartRoomOptions,
 	Visit,
-	VisitOptions,
 } from './room.ts';
 export { readRoom, resumeRoom, startRoom } from './room.ts';
 export type {

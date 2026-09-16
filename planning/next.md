@@ -39,7 +39,7 @@ versus presence, and journal commits versus external effects.
 is the largest product-facing simplification and should follow immediately.
 Do not turn this into another general architecture rewrite before release.
 Keep item 1 reviewable: lifecycle and submission fixes have landed. Finish
-existing-only visits, cancellation, and text validation in bounded slices.
+idempotent visit recovery, cancellation, and text validation in bounded slices.
 
 ## 1. Make durable acceptance the public operation boundary
 
@@ -54,15 +54,17 @@ including Node 22/24 and live-model tests.
 
 [PR #138](https://github.com/ambionframework/ambion/pull/138) landed submission
 and effect publication. One typed adapter maps room decisions to journal entries
-or results. Protocol refusals remain values through the response boundary. Confirmed entries capture
-ordered host effects; a throwing connector cannot change their accepted result.
+or results. Protocol refusals remain values through the response boundary.
+Confirmed entries capture ordered host effects; a throwing connector cannot change their accepted result.
 The regression tests cover storage recovery, reentrant listeners, and eviction
 during publication. All seven CI checks passed. This adds no durable
 publication queue or public concept.
 
-**Current slice, prepared for review: existing-only visits.** `visit(human, { arrive: false })`
-returns a visit or `undefined` for absence after a serialized presence check.
-Relay uses it for sending and leaving, without participant preflight scans.
+**Current slice, prepared for review: idempotent visit recovery.** `visit(human)`
+ensures presence, `send` contributes through that visit, and `leave` ends it.
+Repeated visits share presence without another arrival. Cached handles must
+pass journal recovery and fencing before the operation succeeds. Relay owns
+serialized navigation checks that reject delayed requests after departure.
 
 Awaitable cancellation and semantic text validation remain. Cancellation needs
 an explicit boundary for concurrent sends and newly owed work; awaiting the
@@ -89,14 +91,10 @@ coordination for lifecycle admission and catalog changes.
       boundary has been durably applied, not that an uncooperative external tool
       has stopped or undone its effects. Specify ordering against concurrent
       sends and newly owed work; do not invent exchange-local cancellation.
-- [x] Provide a narrow way to use an already-present human without causing an
-      arrival. Prefer one option on the existing visit operation over a new
-      presence/session hierarchy. Return `undefined` for an absent human inside
-      the journal boundary; explicit entry remains the ordinary joining operation. For 0.1.0, a fresh
-      HTTP send after departure still requires explicit re-entry, even if it is
-      retrying a lost acknowledgement. Once re-entered, the same key returns the
-      original exchange; the retry must not add speech or implicitly restore
-      presence. A delivery key is not an identity credential.
+- [x] Keep one idempotent `visit(human)` operation. Confirm recorded presence
+      and identity inside the journal boundary, including cached visits. Preserve
+      shared concurrent arrivals, explicit reentry after departure, and ended
+      handle invalidation. Add no presence lookup mode or optional visit result.
 - [x] Consolidate the bespoke message/lease/close append adapters into one
       internal submission path using the journal's existing entry/result return.
       Keep expected refusals as data until the public API or protocol boundary;
@@ -104,11 +102,16 @@ coordination for lifecycle admission and catalog changes.
       Storage failures remain errors. Do not build a generic command bus.
 - [x] Apply confirmed entries before the next decision, then drain ordered
       notification and transport effects outside the write decision. A throwing
-      connector cannot turn a persisted message into an apparent commit failure. Keep recovered writes on the same
-      publication path, without adding another durable queue.
-- [x] Remove Relay's read-presence-then-join workarounds once the contract covers
-      them. Retain host serialization needed for catalog changes, start/stop
-      admission, and shutdown. Never hold that queue while waiting for a model.
+      connector cannot turn a persisted message into an apparent commit failure.
+      Keep recovered writes on the same publication path, without adding another
+      durable queue.
+
+Relay owns request admission and navigation policy. Keep its serialized
+presence checks when a delayed send must not re-enter a departed room. An
+absent departure does nothing. After explicit entry, an exact-key delivery retry
+returns the original exchange. A delivery key is not an identity credential.
+Retain host serialization for catalog changes, start/stop, and shutdown.
+Never hold that queue while waiting for a model.
 
 **Verification:** preserve the memory/SQLite regressions in
 [`lifecycle.test.ts`](../packages/ambion/test/lifecycle.test.ts) and
@@ -118,9 +121,9 @@ reconnect, inherited leases, late steering, notification ordering, and tool
 cancellation evidence.
 Also cover semantic rejection through direct/protocol/tool calls, throwing
 transport connection, and reentrant listeners without commit-queue deadlocks.
-Include committed-send → departure → lost-acknowledgement retry: reject while
-absent, then return the original result after explicit re-entry. Previously ended
-visit handles remain invalid even when the same human enters again.
+At the Relay boundary, cover committed-send → departure → delivery retry:
+reject while absent, then return the original result after explicit reentry.
+Previously ended visit handles remain invalid even when the same human enters again.
 
 **Done when:** no successful presence/control response depends on a host-local
 flag that disagrees with the confirmed journal. Failed commands cannot leave

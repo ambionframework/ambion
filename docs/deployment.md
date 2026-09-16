@@ -68,11 +68,10 @@ cannot recover JavaScript functions, credentials, or external data.
 `resumeRoom` preserves recorded people, identities, and presence. It does not
 restore sockets, authenticated sessions, or `Visit` objects.
 
-After authenticating a reconnecting client, call
-`room.visit(human, { arrive: false })` with its saved definition. It restores
-the local visit if the person remains present. Otherwise, it returns
-`undefined`; the application can require explicit entry with `room.visit(human)`.
-The recorded identity must match. Reconnecting does not update recorded preferences.
+After authenticating a reconnecting client, call `room.visit(human)` with
+its saved definition. If that person remains present, the call restores the
+local visit without writing another `arrived`. The recorded identity must
+match. Reconnecting does not update the person's recorded preferences.
 
 A host decides when a person has actually left. If it confirms that no client
 for a recorded person remains, use the recorded name and identity:
@@ -80,9 +79,8 @@ for a recorded person remains, use the recorded name and identity:
 ```ts
 const visit = await room.visit(
   defineHuman({ name: recordedPerson.name, identity: recordedPerson.identity }),
-  { arrive: false },
 );
-await visit?.leave();
+await visit.leave();
 ```
 
 For a person still recorded as present, this writes one `left` and no

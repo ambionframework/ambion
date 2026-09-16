@@ -72,16 +72,23 @@ for the exact TypeScript signature.
 moves when a later departure lands. A visit does not become usable until its
 `arrived` write is confirmed.
 
-Concurrent visits for one name and identity share the same arrival. A different
-identity is rejected while the person is present. `leave` is idempotent and
-concurrent departures share one operation; retry an uncertain departure using
-the same handle. After leaving, `send` rejects. Re-entering creates a new handle.
+**`visit` ensures presence, `send` contributes through that visit, and `leave`
+ends it.** Calling `visit(human)` repeatedly is idempotent:
 
-Use `room.visit(human, { arrive: false })` when an operation requires existing
-presence. It returns `undefined` for an absent person and writes no arrival.
-The journal serializes this check with presence changes and resolves uncertain
-writes first. Identity mismatches and storage failures reject. The default
-`room.visit(human)` explicitly enters the room when the person is absent.
+| Recorded state                  | Result                                           |
+| ------------------------------- | ------------------------------------------------ |
+| Absent                          | Record one arrival and return a visit            |
+| Present, same identity          | Return the current visit without another arrival |
+| Present, different identity     | Reject                                           |
+| Concurrent calls, same identity | Share the confirmed arrival                      |
+
+`leave()` is idempotent. Concurrent departures share one operation; retry an
+uncertain departure with the same handle. An ended handle rejects `send`.
+Another `visit()` deliberately enters again and returns a new live handle.
+
+A cached handle must pass the journal's recovery and run checks before a visit returns.
+Applications own navigation policy, including rejection of delayed requests
+after departure.
 
 Delivery checks presence again at the journal commit boundary, so a stale handle
 cannot authorize speech. A delivery admitted before a departure may commit
@@ -187,6 +194,8 @@ and visit after a process restart; handles and subscriptions are in-memory.
 [`presence.test.ts`](../packages/ambion/test/presence.test.ts) covers durable
 arrivals and departures, identity and duplicate-visit rules, routing and
 steering, stale handles, cursors, planned stop, replay, and rendered catch-up.
+[`visit-idempotency.test.ts`](../packages/ambion/test/visit-idempotency.test.ts)
+checks repeated visits against storage failures, recovery, and newer-run fences.
 The shared room rules are exercised through visits in
 [`room.test.ts`](../packages/ambion/test/room.test.ts). The reconnect procedure
 and process-boundary evidence are in [`deployment.md`](deployment.md) and its
