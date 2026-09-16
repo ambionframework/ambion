@@ -63,9 +63,7 @@ class PlayedRoom implements SeatRoom {
 					purpose: { kind: 'respond', message: 1 },
 				},
 				through: 1,
-				model: 'scripted/product',
-				systemPrompt: 'You are the product.',
-				context: 'The record so far.',
+				context: { name: 'played', now: 0, participants: [], messages: [] },
 			},
 		};
 	}

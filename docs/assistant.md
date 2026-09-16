@@ -17,7 +17,7 @@ remains pending in the [delivery plan](../planning/next.md).
 
 The code lives in [`assistant.ts`](../packages/ambion/src/assistant.ts),
 [`transition.ts`](../packages/ambion/src/room/transition.ts), and
-[`render.ts`](../packages/ambion/src/render.ts). Read [agent.md](agent.md),
+[`render.ts`](../packages/ambion/src/seat/render.ts). Read [agent.md](agent.md),
 [exchange.md](exchange.md), and [presence.md](presence.md) first.
 
 ---

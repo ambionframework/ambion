@@ -13,7 +13,7 @@
  * context to one running activation, and `cut` stops an activation whose
  * lease the room ended.
  */
-import type { Attention, Message, Seq } from './types.ts';
+import type { AgentSeatInfo, Attention, HumanSeatInfo, Message, Seq } from './types.ts';
 
 /** The work authorized by the room, with the facts that purpose requires. */
 export type ActivationPurpose =
@@ -162,15 +162,36 @@ export interface SeatPort {
 
 // -- a seat reaching its room -------------------------------------------------
 
+/** Public participant facts with each person's recorded reading progress. */
+export type ContextParticipant =
+	| Omit<AgentSeatInfo, 'sessionId'>
+	| (HumanSeatInfo & {
+			readonly changedAt?: string;
+			readonly since?: Seq;
+			readonly unseen: number;
+	  });
+
+/** Collaboration facts selected for one activation. Private executable definitions stay with the executor. */
+export interface CollaborationContext {
+	readonly name: string;
+	readonly now: number;
+	readonly goal?: string;
+	readonly participants: readonly ContextParticipant[];
+	readonly messages: readonly Without<Message, 'preferences'>[];
+	/** The open exchange for an ordinary response. Assistant purposes carry their own reference. */
+	readonly exchange?: { readonly owner: string; readonly from: Seq };
+	/** Only selection reads the reserve. */
+	readonly reserve?: readonly { readonly name: string; readonly identity: string }[];
+	/** Only the recipient's summary reads these preferences. */
+	readonly preferences?: string;
+}
+
 export interface ActivationView {
 	/** The identity and purpose authorized by the room. */
 	spec: ActivationSpec;
 	/** The context boundary represented by this view. Consumption acknowledges it. */
 	through: Seq;
-	/** The agent's `provider/model-id`, resolved on the seat side. */
-	model: string;
-	systemPrompt: string;
-	context: string;
+	context: CollaborationContext;
 }
 
 /** The request the lease answers is gone: the lease ended, or the room did. */

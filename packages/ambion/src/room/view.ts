@@ -1,22 +1,16 @@
-/**
- * What an activation is given, read off the fold and rendered: the seats,
- * the people, the record, the tool the activation holds and what it holds
- * it for. Every function is pure over the facts it is handed, so the view a
- * seat reads in one process is the view it reads in another.
- */
+/** Pure collaboration context derived from the room projection. */
 
-import {
-	type PersonView,
-	type RoomView,
-	renderSystemPrompt,
-	renderTurnContext,
-	type SeatSpeaking,
-} from '../render.ts';
-import { type AgentDefinition, type SeatInfo, type Seq, seatSessionId } from '../types.ts';
-import type { ActivationSpec, ActivationView } from '../wire.ts';
+import { type Message, type SeatInfo, type Seq, seatSessionId } from '../types.ts';
+import type {
+	ActivationPurpose,
+	ActivationSpec,
+	ActivationView,
+	CollaborationContext,
+	ContextParticipant,
+} from '../wire.ts';
 import type { RoomState } from './fold.ts';
 
-/** What the view is built from: the fold, and what the room holds beside it. */
+/** What the view is built from: the fold and current host facts. */
 export interface RoomFacts {
 	readonly name: string;
 	readonly now: number;
@@ -27,94 +21,95 @@ export interface RoomFacts {
 	unseen(since: Seq): number;
 }
 
-/** The roster and the people, as `seats()` reports them, off one folded state and nothing else. */
+/** The roster and people returned by the public participants query. */
 export function seatsOf(facts: Pick<RoomFacts, 'name' | 'state' | 'live'>): SeatInfo[] {
-	const seats: SeatInfo[] = facts.state.roster.map((seat) => ({
-		kind: 'agent' as const,
-		name: seat.name,
-		identity: seat.identity,
-		status: facts.live.has(seat.name) ? ('active' as const) : ('idle' as const),
-		attention: seat.attention,
-		assistant: seat.name === facts.state.composition?.assistant,
-		sessionId: seatSessionId(facts.name, seat.name),
-	}));
-	for (const person of facts.state.people.values()) {
-		seats.push({
-			kind: 'human',
+	return [
+		...agentsOf(facts).map((agent) => ({
+			...agent,
+			sessionId: seatSessionId(facts.name, agent.name),
+		})),
+		...[...facts.state.people.values()].map((person) => ({
+			kind: 'human' as const,
 			name: person.name,
 			identity: person.identity,
 			presence: person.presence,
-		});
-	}
-	return seats;
+		})),
+	];
 }
 
-/** The activation purpose, context boundary, model, and rendered input for one view. */
-export function viewOf(
-	spec: ActivationSpec,
-	def: AgentDefinition,
-	facts: RoomFacts,
-): ActivationView {
+function agentsOf(
+	facts: Pick<RoomFacts, 'state' | 'live'>,
+): Extract<ContextParticipant, { kind: 'agent' }>[] {
+	return facts.state.roster.map((seat) => ({
+		kind: 'agent',
+		name: seat.name,
+		identity: seat.identity,
+		status: facts.live.has(seat.name) ? 'active' : 'idle',
+		attention: seat.attention,
+		assistant: seat.name === facts.state.composition?.assistant,
+	}));
+}
+
+/** Select collaboration facts without reading an executable agent definition. */
+export function viewOf(spec: ActivationSpec, facts: RoomFacts): ActivationView {
 	const state = facts.state;
 	const purpose = spec.purpose;
-	const tool =
-		purpose.kind === 'respond' ? 'say' : purpose.kind === 'select' ? 'seat' : 'summarise';
-	const closing =
+	const goal = state.composition?.goal;
+	const messages =
 		purpose.kind === 'summarize'
-			? { person: purpose.person, from: purpose.exchange, through: purpose.through }
-			: undefined;
-	const composing =
-		purpose.kind === 'select'
-			? { person: purpose.person, from: purpose.exchange, limit: purpose.limit }
-			: undefined;
-	const speaking: SeatSpeaking = {
-		def,
-		tool,
-		closing: closing && { ...closing, preferences: state.people.get(closing.person)?.preferences },
-		composing: composing && { ...composing, reserve: reserved(facts) },
+			? state.messages.filter(
+					(message) => message.seq >= purpose.exchange && message.seq <= purpose.through,
+				)
+			: state.messages;
+	const context: CollaborationContext = {
+		name: facts.name,
+		now: facts.now,
+		...(goal === undefined ? {} : { goal }),
+		participants: [...agentsOf(facts), ...peopleOf(facts)],
+		messages: messages.map(contextMessage),
+		...(purpose.kind !== 'respond' || state.exchange === undefined
+			? {}
+			: { exchange: { owner: state.exchange.owner, from: state.exchange.from } }),
+		...purposeContext(purpose, state),
 	};
-	const room = roomView(facts, closing);
-	return {
+	// In-process executors receive the same detached snapshot as remote executors.
+	return structuredClone({
 		spec,
 		through: purpose.kind === 'summarize' ? purpose.through : state.lastSeq,
-		model: def.model,
-		systemPrompt: renderSystemPrompt(speaking, room),
-		context: renderTurnContext(speaking, room),
-	};
+		context,
+	});
 }
 
-/** The reserve as the assistant reads it: a name and an identity per agent. */
-function reserved(facts: RoomFacts): { name: string; identity: string }[] {
-	return facts.state.reserve.map((seat) => ({ name: seat.name, identity: seat.identity }));
+/** Reading preferences enter context only through the recipient's summary purpose. */
+function contextMessage(message: Message): Message {
+	if (!('preferences' in message)) return message;
+	const publicMessage = { ...message };
+	delete publicMessage.preferences;
+	return publicMessage;
 }
 
-/** What the prose is given of this room, built fresh for each activation. */
-function roomView(facts: RoomFacts, closing?: { from: Seq; through: Seq }): RoomView {
-	const state = facts.state;
-	return {
-		name: facts.name,
-		goal: state.composition?.goal,
-		now: facts.now,
-		seats: seatsOf(facts),
-		people: peopleViews(facts),
-		record:
-			closing === undefined
-				? state.messages
-				: state.messages.filter(
-						(message) => message.seq >= closing.from && message.seq <= closing.through,
-					),
-		exchange: state.exchange && { owner: state.exchange.owner, from: state.exchange.from },
-	};
+/** Only the relevant assistant purpose receives reserve identities or reading preferences. */
+function purposeContext(
+	purpose: ActivationPurpose,
+	state: RoomState,
+): Pick<CollaborationContext, 'reserve' | 'preferences'> {
+	if (purpose.kind === 'select') {
+		return { reserve: state.reserve.map(({ name, identity }) => ({ name, identity })) };
+	}
+	const preferences =
+		purpose.kind === 'summarize' ? state.people.get(purpose.person)?.preferences : undefined;
+	return preferences === undefined ? {} : { preferences };
 }
 
-/** One entry per person the room knows, with their gap and what they missed. */
-function peopleViews(facts: RoomFacts): PersonView[] {
+/** Public human facts and recorded reading progress, without private preferences. */
+function peopleOf(facts: RoomFacts): Extract<ContextParticipant, { kind: 'human' }>[] {
 	return [...facts.state.people.values()].map((person) => ({
+		kind: 'human',
 		name: person.name,
 		identity: person.identity,
 		presence: person.presence,
-		changedAt: person.changedAt,
-		since: person.since,
+		...(person.changedAt === undefined ? {} : { changedAt: person.changedAt }),
+		...(person.since === undefined ? {} : { since: person.since }),
 		unseen: person.since === undefined ? 0 : facts.unseen(person.since),
 	}));
 }

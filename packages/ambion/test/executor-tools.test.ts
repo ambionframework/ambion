@@ -65,9 +65,7 @@ function view(purpose: ActivationView['spec']['purpose']): ActivationView {
 	return {
 		spec: { id: 'activation', seat: 'assistant', attempt: 1, purpose },
 		through: purpose.kind === 'summarize' ? purpose.through : 4,
-		model: assistant.model,
-		systemPrompt: 'Use the room tool.',
-		context: 'The record.',
+		context: { name: 'room', now: 0, participants: [], messages: [] },
 	};
 }
 
@@ -194,22 +192,20 @@ describe('executor tool authority', () => {
 			live: new Map<string, string[]>(),
 			unseen: () => 0,
 		};
-		const product = defineAgent({
-			name: 'product',
-			identity: 'P.',
-			instructions: '.',
-			model: 'scripted/product',
-		});
 		const summary = activationSpec('closed:3:assistant:1', state);
 		const response = activationSpec('message:5:product:1', state);
 		if (summary === undefined || response === undefined)
 			throw new Error('Expected valid authorities.');
 
-		const summaryView = viewOf(summary, assistant, facts);
-		const responseView = viewOf(response, product, facts);
+		const summaryView = viewOf(summary, facts);
+		const responseView = viewOf(response, facts);
 		expect(summaryView.through).toBe(3);
-		expect(summaryView.context).not.toContain('Latest.');
+		expect(summaryView.context.messages).not.toContainEqual(
+			expect.objectContaining({ text: 'Latest.' }),
+		);
 		expect(responseView.through).toBe(6);
-		expect(responseView.context).toContain('Latest.');
+		expect(responseView.context.messages).toContainEqual(
+			expect.objectContaining({ text: 'Latest.' }),
+		);
 	});
 });
