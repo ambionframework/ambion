@@ -17,7 +17,7 @@ What is built:
   This package only wraps `ctx.storage.sql` in `run` and `all` (`sqlOver`).
 - **`RoomObject`** runs the room. Its constructor resumes the room the
   storage names, over `resumeRoom`. It exposes `start`, `visit`,
-  `send`, `leave`, `seat`, `unseat`, `abort`, `messages`, `seats`,
+  `send`, `leave`, `seat`, `unseat`, `abort`, `messages`, `participants`,
   `exchange`, `exchangeMessages` and `response` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its `alarm()` runs `reconcile()`.
 - **`SeatObject`** runs one seat. `wake` stores the activation id and sets
@@ -27,8 +27,17 @@ What is built:
   writes no activation metadata and sets no alarm. Unread messages remain
   recoverable from the room journal. `cut` stops the activation the room ended. The seat's audit session lives in its own
   storage.
-- **`configure`** names the agent definitions the objects resolve by name,
+- **`configure`** names the complete agent catalog the objects resolve by name,
   and the model call they make.
+
+`RoomObject.start` receives ordinary agent names in `agents`, an optional
+assistant name, and an optional `seats` map. The map selects initial members
+and attention. An omitted map seats every supplied ordinary agent at
+`broadcast`; an empty map starts them in the reserve. `seat` and `unseat`
+take names and cannot install a new definition. The room metadata retains the
+catalog names, so automatic resume resolves the same definitions through
+`configure`. Metadata written by older versions has no catalog field and uses
+the complete configured catalog as a compatibility fallback.
 
 The package is private, and nothing deploys it. `pnpm test` runs its three
 tests inside workerd, through `@cloudflare/vitest-pool-workers`, as part of

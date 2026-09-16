@@ -10,15 +10,9 @@
 import type { AgentToolResult, ToolExecutionMode } from '@earendil-works/pi-agent-core';
 import { type Static, type TSchema, Type } from 'typebox';
 import {
-	AGENT_BRAND,
 	type AgentDefinition,
 	type AmbionTool,
-	type Attention,
-	HUMAN_BRAND,
 	type HumanDefinition,
-	isAgent,
-	SEAT_BRAND,
-	type SeatedAgent,
 	TOOL_BRAND,
 	type ToolBundle,
 	type ToolContext,
@@ -53,13 +47,27 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 	);
 	assertAgentTools(options.name, tools);
 	return Object.freeze({
-		[AGENT_BRAND]: true as const,
 		name: options.name,
 		identity: options.identity,
 		instructions: options.instructions,
 		model: options.model,
 		tools,
 		...(guidance === undefined ? {} : { guidance }),
+	});
+}
+
+/** Capture a structural definition at a room boundary without retaining mutable authoring data. */
+export function captureAgent(agent: AgentDefinition): AgentDefinition {
+	assertName(agent.name);
+	const tools = Object.freeze(agent.tools.map((tool) => capture(tool)));
+	assertAgentTools(agent.name, tools);
+	return Object.freeze({
+		name: agent.name,
+		identity: agent.identity,
+		instructions: agent.instructions,
+		model: agent.model,
+		tools,
+		...(agent.guidance === undefined ? {} : { guidance: agent.guidance }),
 	});
 }
 
@@ -80,54 +88,19 @@ export function defineHuman(options: DefineHumanOptions): HumanDefinition {
 	assertName(options.name);
 	const preferences = options.preferences?.trim() || undefined;
 	return Object.freeze({
-		[HUMAN_BRAND]: true as const,
 		name: options.name,
 		identity: options.identity,
 		...(preferences === undefined ? {} : { preferences }),
 	});
 }
 
-/** The attention a seating chooses. */
-export interface SeatingOptions {
-	/** The widest kind of message that wakes the seat. `broadcast` by default. */
-	attention?: Attention;
-}
-
-/**
- * Seat one agent at one point of the attention scale. The
- * general form; `passive` and `attentive` are the two points of attention
- * worth a name of their own, and `broadcast` is what a bare agent in
- * `agents` gets.
- *
- * choice belongs to the seating rather than to the agent, so the same
- * definition is the quiet corner in one room and the one who meets people
- * in another.
- */
-export function seated(agent: AgentDefinition, options: SeatingOptions = {}): SeatedAgent {
-	if (!isAgent(agent)) throw new Error('Agents must come from defineAgent.');
+export function captureHuman(human: HumanDefinition): HumanDefinition {
+	assertName(human.name);
 	return Object.freeze({
-		[SEAT_BRAND]: true as const,
-		agent,
-		attention: options.attention ?? 'broadcast',
+		name: human.name,
+		identity: human.identity,
+		...(human.preferences === undefined ? {} : { preferences: human.preferences }),
 	});
-}
-
-/**
- * Seat an agent at `named`: it hears nothing but a message addressed to it by
- * name. The expert in the corner, costing nothing until somebody asks.
- */
-export function passive(agent: AgentDefinition): SeatedAgent {
-	return seated(agent, { attention: 'named' });
-}
-
-/**
- * Seat an agent at `presence`: besides everything said, it also wakes when
- * somebody arrives or leaves. Most seats should not — an arrival asks
- * nothing, so a seat that answers one is guessing — but a seat whose job is to
- * meet people needs it.
- */
-export function attentive(agent: AgentDefinition): SeatedAgent {
-	return seated(agent, { attention: 'presence' });
 }
 
 export interface DefineToolOptions<TParameters extends TSchema> {

@@ -19,7 +19,12 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	const seat = env.SEAT.get(
 		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'seat-test', 'product'])),
 	);
-	await room.start({ name: 'seat-test', assistant: 'assistant', agents: ['product'] });
+	await room.start({
+		name: 'seat-test',
+		assistant: 'assistant',
+		agents: ['product'],
+		seats: { product: 'broadcast' },
+	});
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
 	// At least one wake reached the seat. The room sends a wake nobody has taken
@@ -68,7 +73,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	await seat.hold(true);
 	const secondExchange = await room.send({ from: 'priya', text: 'And the pump?', key: 'q2' });
 	expect(await until(async () => (await seat.wakes()) >= 3)).toBe(true);
-	expect((await room.seats()).find((s) => s.name === 'product')).toMatchObject({
+	expect((await room.participants()).find((s) => s.name === 'product')).toMatchObject({
 		status: 'active',
 	});
 	// the hold lifts: the seat takes the wake it holds, and the exchange closes
@@ -87,7 +92,12 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	const seat = env.SEAT.get(
 		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'cut-test', 'product'])),
 	);
-	await room.start({ name: 'cut-test', assistant: 'assistant', agents: ['product'] });
+	await room.start({
+		name: 'cut-test',
+		assistant: 'assistant',
+		agents: ['product'],
+		seats: { product: 'broadcast' },
+	});
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	const exchange = await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
 	// At least one wake reached the seat. The room sends a wake nobody has taken

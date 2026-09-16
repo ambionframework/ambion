@@ -63,14 +63,14 @@ pnpm dev:cloudflare                      # workerd on localhost:8787
 
 curl -XPOST localhost:8787/start
 curl -XPOST localhost:8787/visit   -H 'content-type: application/json' -d '{"person":"priya"}'
-curl -XPOST localhost:8787/deliver -H 'content-type: application/json' \
+curl -XPOST localhost:8787/send -H 'content-type: application/json' \
   -d '{"from":"priya","text":"Can I tell the client Thursday for the Level 3 pour, or not?"}'
 curl localhost:8787/messages
 ```
 
 The log lives in the room object's own SQLite, the object's alarm is the
 room's clock, and the room reaches a seat over RPC. Stop the server and
-start it again: `/messages` and `/seats` answer from the log, and the next
+start it again: `/messages` and `/participants` answer from the log, and the next
 question runs in the new process. `.wrangler/` holds that state; delete it
 to start the room over.
 
@@ -95,9 +95,8 @@ API.
 
 ## What to look for
 
-**Opening the room wakes one seat, not all of them.** Each seat is seated
-at one point of an attention scale — the widest kind of message that wakes it.
-The task list is `attentive` (`presence`), so it wakes when somebody arrives
+**Opening the room wakes one seat, not all of them.** The `seats` map gives
+initial membership and attention. The task list uses `presence`, so it wakes when somebody arrives
 and checks what is blocked on them. The other two sit at the default and do
 not: an arrival asks nothing, and three products guessing at what it wants is
 three briefings nobody requested. The assistant sits at the narrow end, where

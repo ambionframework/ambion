@@ -5,7 +5,6 @@ import {
 	defineHuman,
 	type Room,
 	resumeRoom,
-	seated,
 	startRoom,
 } from '../src/index.ts';
 import { inProcessTransport, type Steer, type Transport } from '../src/transport.ts';
@@ -36,7 +35,7 @@ const beta = defineAgent({
 	model: 'scripted/beta',
 });
 const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
-const quietSeats = [seated(alpha, { attention: 'named' }), seated(beta, { attention: 'named' })];
+const quietSeats = { alpha: 'named', beta: 'named' } as const;
 
 /** Observe the actual transport boundary while the ordinary executor runs. */
 function observedTransport(): { transport: Transport; steers: Steer[] } {
@@ -70,7 +69,8 @@ describe.each(storages)('message delivery on $name', (storage) => {
 		const room = await startRoom({
 			name: roomName('delivery-active'),
 			assistant,
-			agents: quietSeats,
+			agents: [alpha, beta],
+			seats: quietSeats,
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
 			streamFn: scripted(
 				byAgent({
@@ -88,9 +88,9 @@ describe.each(storages)('message delivery on $name', (storage) => {
 		const events = collect(room);
 		try {
 			const visit = await room.visit(priya);
-			await visit.send({ to: alpha, text: 'Begin analysis.' });
+			await visit.send({ to: alpha.name, text: 'Begin analysis.' });
 			await started.promise;
-			await visit.send({ to: priya, text: 'The requirement has changed.' });
+			await visit.send({ to: priya.name, text: 'The requirement has changed.' });
 			const update = (await room.messages()).at(-1);
 			expect(update?.wakes ?? []).toEqual([]);
 			expect(
@@ -130,7 +130,8 @@ describe.each(storages)('message delivery on $name', (storage) => {
 		const room = await startRoom({
 			name: roomName('delivery-replay'),
 			assistant,
-			agents: quietSeats,
+			agents: [alpha, beta],
+			seats: quietSeats,
 			runtime: firstRuntime,
 			streamFn: scripted(
 				byAgent({
@@ -145,9 +146,9 @@ describe.each(storages)('message delivery on $name', (storage) => {
 		let resumed: Room | undefined;
 		try {
 			const visit = await room.visit(priya);
-			await visit.send({ to: alpha, text: 'Begin analysis.' });
+			await visit.send({ to: alpha.name, text: 'Begin analysis.' });
 			await started.promise;
-			await visit.send({ to: priya, text: 'Recover this unconsumed context.' });
+			await visit.send({ to: priya.name, text: 'Recover this unconsumed context.' });
 			const update = (await room.messages()).at(-1);
 			expect(update?.wakes ?? []).toEqual([]);
 			crash(firstRuntime, room);
@@ -192,7 +193,8 @@ describe.each(storages)('message delivery on $name', (storage) => {
 		const room = await startRoom({
 			name: roomName('delivery-summary-boundary'),
 			assistant,
-			agents: [alpha, seated(beta, { attention: 'named' })],
+			agents: [alpha, beta],
+			seats: { [alpha.name]: 'broadcast', [beta.name]: 'named' },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
 			streamFn: scripted(
 				byAgent({
@@ -218,7 +220,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			const visit = await room.visit(priya);
 			const first = await visit.send({ text: 'First question.' });
 			await summaryStarted.promise;
-			await visit.send({ to: beta, text: 'Later question outside the summary.' });
+			await visit.send({ to: beta.name, text: 'Later question outside the summary.' });
 			await betaStarted.promise;
 			expect(observed.steers.filter((steer) => steer.seat === assistant.name)).toEqual([]);
 			const ended = assistantEnded(room);

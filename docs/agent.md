@@ -155,13 +155,14 @@ a visit puts on the record.
 ## 5. startRoom
 
 ```ts
-import { readRoom, startRoom, passive } from '@ambionframework/ambion';
+import { readRoom, startRoom } from '@ambionframework/ambion';
 
 const room = await startRoom({
   name: 'weekly',
   goal: 'Draft the weekly digest and flag what does not hold.',
   assistant: editor,
-  agents: [researcher, writer, passive(archivist)],
+  agents: [researcher, writer, archivist],
+  seats: { researcher: 'broadcast', writer: 'broadcast' },
 });
 
 const unsubscribe = room.subscribe((event) => {
@@ -185,8 +186,7 @@ for (const message of snapshot.messages) {
 Three verbs, and each does one thing:
 
 - **`startRoom` sets up the context where the agents work.** It takes
-  the room's composition and brings it to life: from here on the seats are
-  live and a message activates them.
+  the room's definitions and initial membership, then brings it to life.
 - **`room.stop()` takes it down**: every activation in flight is aborted, every
   visit is closed, the write chain drains, and the handle refuses further
   use.
@@ -204,14 +204,14 @@ identity follow.
 whenever `'weekly'` is read, for as long as the storage lives, whether or
 not anything is running.
 
-**The run belongs to `startRoom`.** The assistant, the agents passed,
-and the agents held in reserve are the room's composition for this run. A
+**The run belongs to `startRoom`.** The assistant and every definition passed
+in `agents` form the room's executable catalog for this run. A
 name can be started again with a different composition, and the record
 still shows who said what, stamped at the time it landed. A long-lived
 room is many runs over one record, and `readRoom` reaches the record
-between them. `agents` may be empty: a room that starts with the assistant
-alone seats what a question needs from its reserve
-([`roster.md`](roster.md) §1).
+between them. The `seats` map chooses initial membership. An omitted map
+seats every ordinary definition at `broadcast`; an empty map starts them in
+the reserve ([`roster.md`](roster.md) §1).
 
 **One run per name.** `startRoom` refuses a name already running in this
 process, and the journal fences a run in another process
@@ -429,19 +429,16 @@ who sits out — one widening scale, from the narrowest:
   present and unreachable, waiting for something other than a message. The
   assistant sits here ([`assistant.md`](assistant.md)), woken by the open
   and the close of an exchange and by nothing else.
-- `named` — hears a message addressed to it, seated as `passive(archivist)`.
+- `named` — hears a message addressed to it.
   The expert in the corner: hearing nothing, costing nothing, until someone
   asks.
 - `broadcast` — also hears anything a participant said. The default, and
   what a bare agent in `agents` gets.
-- `presence` — also wakes when somebody arrives or leaves, seated as
-  `attentive(concierge)`.
+- `presence` — also wakes when somebody arrives or leaves.
 
-**The scale is the mechanism; the words are shorthand for points on it.**
-`seated(agent, { attention })` is the general form, and `passive` and
-`attentive` are one line each over it — the two points a room names often
-enough to be worth a word. A bare agent takes the default. `none` is where
-the assistant sits: it wakes for exchange events and for nothing said.
+**The scale is the mechanism; the words name values in the `seats` map.**
+An omitted attention uses `broadcast`. `none` is where the assistant sits:
+it wakes for exchange events and for nothing said.
 
 The routing is the scale, and reads as one line (`wakes` in `room/routing.ts`):
 every message has a **reach** — `named` for a directed say, `broadcast` for
@@ -452,14 +449,14 @@ however narrowly it is seated: a directed say names the one it addresses
 and wakes nobody else, which is what makes it a focusing act, and a seating
 names the seat it seats ([`roster.md`](roster.md) §3).
 
-Both are readable from `room.seats()`, so a seat that is `named` and
+Both are readable from `room.participants()`, so a member that is `named` and
 running is describable, which one enum could not do. Attention belongs to
 the seating, and `defineAgent` knows nothing about it, so the same agent
 can be the quiet corner in one room and the one who meets people in
 another.
 
-**The room can designate one assistant.** `startRoom({ assistant })` seats
-that agent at attention `none` and records its name in the composition.
+**The room can designate one assistant.** `startRoom({ assistant })` supplies
+that separate definition and records its name in the composition.
 The assistant policy selects reserve agents when an exchange opens and
 consolidates multiple agent messages when it closes.
 
@@ -478,8 +475,8 @@ exchanges without selecting reserve agents or producing summaries.
 
 **7. Identity is injected; provenance is stamped.** Every agent's context
 carries the room's goal, the time, and two rosters — the agents, with
-their statuses spelled out so a seat knows a broadcast will never reach the
-colleague seated `passive` in the corner, and the people, with how long
+their statuses spelled out so a seat knows a broadcast will not reach the
+colleague at `named` attention in the corner, and the people, with how long
 each one has been reading or gone. On the record, `from` is written by the
 runtime: `say` is stamped with its agent, a message from a visit is stamped from the
 live visit that made it, and an arrival is stamped from the visit the
@@ -489,7 +486,7 @@ runtime observed opening. No one self-reports who they are.
 Each agent's tool calls belong to its own working context; other
 participants see its `say`s only, because the record is all any view
 renders. The tools are still auditable: every activation's full turns land
-in the seat's own downstream Pi session, named by `seats().sessionId` and
+in the seat's own downstream Pi session, named by `participants().sessionId` and
 opened through the runtime's transcript opener
 (`persistTurns` in `seat/activation.ts`) — so what an agent actually did can be replayed long after
 its working view reset. The record is never rewritten for anyone.
@@ -598,12 +595,12 @@ binds each agent name once for that run. Another room can use the same name
 with another definition. A resume receives its bindings explicitly. It
 refuses a missing or repeated binding before it writes its fence.
 
-`messages()` and `seats()` are the pull side; the stream is the push side.
+`messages()` and `participants()` are the pull side; the stream is the push side.
 A listener learns nothing the pulls cannot tell it — it only learns it
 sooner.
 
 `readRoom(name, { runtime })` returns a plain `RoomSnapshot` with readonly
-`messages`, `seats`, and the current `exchange`. It is a pull read and starts
+`messages`, `participants`, and the current `exchange`. It is a pull read and starts
 no room or subscription, so a caller can inspect a stopped room without
 accidentally creating a run.
 
@@ -846,7 +843,7 @@ the assistant a room seats adds is proved in
 
 The runnable proof is [`examples/site`](../examples/site): a construction
 management suite where each product is an agent — a time tracker, a task
-list seated `attentive` so it meets people at the door, and a materials
+list at `presence` attention so it meets people at the door, and a materials
 tracker — shared by three people who come and go, and one assistant that
 writes for each of them. Every rule above is observable by hand there, and the products
 hold state they change.

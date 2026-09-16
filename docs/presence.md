@@ -64,17 +64,15 @@ const room = await startRoom({
     Ship payments v2 this quarter. Decide scope, sequence the work, and keep
     the plan of record current.
   `,
-  agents: [lead, designer, product, passive(planner)],
+  agents: [lead, designer, product, planner],
+  seats: { lead: 'broadcast', designer: 'broadcast', product: 'broadcast' },
 });
 ```
 
-`agents` holds one kind of thing, in the two ways an agent is seated:
-
-```ts
-export type AgentSeat = AgentDefinition | SeatedAgent;
-```
-
-`Participant` is the narrower thing — who may be addressed by name:
+`agents` holds every ordinary executable definition. The optional `seats` map
+chooses initial members and their attention. Definitions absent from the map
+stay in the reserve. `Participant` is the narrower thing that may be addressed
+by name:
 
 ```ts
 export type Participant = AgentDefinition | HumanDefinition;
@@ -93,7 +91,8 @@ The one option presence reads:
 ```ts
 export interface StartRoomOptions {
   name: string;
-  agents: readonly AgentSeat[];
+  agents: readonly AgentDefinition[];
+  seats?: Readonly<Record<string, Attention>>;
   /** What the room is for. One or two sentences, read by every agent. */
   goal?: string;
   streamFn?: StreamFn;
@@ -240,8 +239,7 @@ count.
 the room routes a presence message exactly like any other; each seat's
 attention says whether it is wide enough to be woken by one. A bare agent
 sits at `broadcast` and is too narrow, so opening a room wakes
-nothing. An agent seated `attentive(concierge)` sits at `presence` and
-wakes.
+nothing. An agent with `presence` attention wakes.
 
 The default is the narrow one because an arrival has no words in it. Every
 other message says what it wants; an arrival says only that somebody is
@@ -250,8 +248,7 @@ three products all guessing hands a person three briefings they never asked
 for the moment they open it. That cost scales with how many people use the
 room, and stays flat with how much work there is. §8 is what actually
 briefs a returning person, and it costs nothing until they ask. A seat
-whose job is to meet people is the case that wants `attentive`, and a room
-needs only that one seat at `presence`.
+whose job is to meet people is the case that wants `presence` attention.
 
 **Rule 2 reaches every seat already at work, whatever its attention.**
 Whatever arrives mid-activation is steered into every active agent, and a
@@ -345,8 +342,8 @@ back a handle and commits nothing, and `leave()` on it writes the `left`.
 
 ## 7. What presence costs
 
-A presence message costs one commit, and no model call unless a seat is
-seated `attentive`. It lands on the record, wakes nobody at the default
+A presence message costs one commit, and no model call unless a seat has
+`presence` attention. It lands on the record, wakes nobody at the default
 attention, and is read at the next activation by whoever the next message
 wakes. A seat already at work pays a steer — one line in an activation it was
 running anyway, and no activation of its own. Rule 5 counts it like any other
@@ -356,8 +353,7 @@ whoever is now reading; that is the lock working, with no exception made.
 Two things bound the rest. **Only a deliberate act writes one.** No timer
 writes to the record, so a person who leaves a tab open all afternoon costs
 the room nothing, and the message count follows the number of times
-somebody opened or closed the room. And **`passive`** removes the
-glance and keeps the message: a seat at `named` hears no broadcast, so it
+somebody opened or closed the room. A seat at `named` hears no broadcast, so it
 hears no arrival either, until somebody names it, while the record keeps
 everything.
 
@@ -540,7 +536,7 @@ That is the point of putting presence on the record itself. A second
 channel for "who is here" would have to be kept in step with the first, and
 the two would disagree the first time one of them dropped an event.
 
-`seats()` answers who is in the room, and `SeatInfo` is a discriminated
+`participants()` answers who is in the room, and `SeatInfo` is a discriminated
 union, because an agent seat and a person do not carry the same fields:
 
 ```ts
@@ -574,8 +570,8 @@ claim this document makes loudly:
 - a room of agents running and settling with nobody present;
 - `room.visit` committing an `arrived` that wakes nobody at the default
   attention;
-- an `attentive` seat woken by that same arrival while a `passive` seat
-  and a plain one sit out, against a roster that already shows it;
+- a `presence` seat woken by that same arrival while a `named` seat and a
+  plain one sit out, against a roster that already shows it;
 - an arrival steering a seat already at work;
 - a presence message carrying no text and stamping `from` off the visit;
 - two people sending and the record stamping each from their own;

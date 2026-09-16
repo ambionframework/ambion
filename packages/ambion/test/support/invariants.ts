@@ -44,8 +44,8 @@ export async function invariants(
 	const emitted = events.flatMap((e) => (e.type === 'message' ? [e.message.seq] : []));
 	const since = emitted[0] ?? Number.POSITIVE_INFINITY;
 	expect(emitted).toEqual(messages.filter((m) => m.seq >= since).map((m) => m.seq));
-	// Every author is a name the room seated, admitted, or was composed with.
-	const names = new Set(session.seats().map((seat) => seat.name));
+	// Every author is a name the room admitted, or was composed with.
+	const names = new Set(session.participants().map((seat) => seat.name));
 	for (const message of messages) {
 		if (isPresence(message)) names.add(message.subject);
 	}

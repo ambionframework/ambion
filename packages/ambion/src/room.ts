@@ -29,7 +29,7 @@ import type { Committed } from '@ambionframework/journal';
 import type { SessionOpener } from '@ambionframework/journal/pi';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { answerCommit, answerLease, answerView, RefusedError } from './answers.ts';
-import { seated } from './define.ts';
+import { captureAgent, captureHuman } from './define.ts';
 import {
 	defaultRuntime,
 	type RunningRoom,
@@ -55,23 +55,19 @@ import {
 } from './room/transition.ts';
 import { seatsOf } from './room/view.ts';
 import { inProcessTransport } from './seat/seat.ts';
-import {
-	type AgentDefinition,
-	type AgentSeat,
-	type ClosedExchange,
-	type Exchange,
-	type HumanDefinition,
-	isAgent,
-	isSeatedAgent,
-	type Message,
-	type ModelResolver,
-	type Participant,
-	type PresenceMessage,
-	type RoomNotification,
-	type SeatedAgent,
-	type SeatInfo,
-	type Seq,
-	type SummaryMessage,
+import type {
+	AgentDefinition,
+	Attention,
+	ClosedExchange,
+	Exchange,
+	HumanDefinition,
+	Message,
+	ModelResolver,
+	PresenceMessage,
+	RoomNotification,
+	SeatInfo,
+	Seq,
+	SummaryMessage,
 } from './types.ts';
 import type {
 	Close,
@@ -82,7 +78,6 @@ import type {
 	LeaseChange,
 	LeaseRequest,
 	LeaseResponse,
-	Seating,
 	SeatPort,
 	ViewResponse,
 	Without,
@@ -107,8 +102,8 @@ type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 interface CompositionDraft {
 	goal: string | undefined;
 	assistant: string | undefined;
-	agents: SeatedAgent[];
-	available: SeatedAgent[];
+	definitions: AgentDefinition[];
+	seats: ReadonlyMap<string, Attention>;
 }
 
 /** A presence change before the room stamps when it happened. */
@@ -117,22 +112,16 @@ type PresenceDraft = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 export interface StartRoomOptions {
 	/** The room's name: the record belongs to it, across every run. */
 	name: string;
-	/** The agents seated when the room starts. May be empty: a room needs its assistant alone. */
-	agents?: readonly AgentSeat[];
-	/**
-	 * The reserve: agents the room does not seat now, and the assistant may
-	 * seat when a question needs them. A reserve entry carries an attention the
-	 * way a seated one does. Empty, or absent, means the assistant is never
-	 * woken at the open of an exchange.
-	 */
-	available?: readonly AgentSeat[];
+	/** All ordinary executable definitions for this run, including agents initially in reserve. */
+	agents?: readonly AgentDefinition[];
+	/** Initial membership and attention. Omit to seat every ordinary agent at broadcast. */
+	seats?: Readonly<Record<string, Attention>>;
 	/**
 	 * The room's assistant: an agent that composes the room at the open of an
 	 * exchange, from the reserve, and writes the one message a person reads
 	 * when their exchange closes, shaped to how that person reads.
 	 *
-	 * The option seats it with the agents at `none`.
-	 * and it is the convention a room follows. A room without one closes
+	 * The option seats it at `none`. A room without one closes
 	 * every exchange and owes no summary.
 	 */
 	assistant?: AgentDefinition;
@@ -164,7 +153,7 @@ export interface ResumeRoomOptions {
 export interface RoomSnapshot {
 	readonly name: string;
 	readonly messages: readonly Message[];
-	readonly seats: readonly SeatInfo[];
+	readonly participants: readonly SeatInfo[];
 	readonly exchange: Exchange | undefined;
 }
 
@@ -187,7 +176,7 @@ export interface ExchangeHandle {
 export interface Room {
 	readonly name: string;
 	messages(options?: { since?: Seq }): Promise<Message[]>;
-	seats(): SeatInfo[];
+	participants(): SeatInfo[];
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): ExchangeHandle | undefined;
@@ -196,15 +185,14 @@ export interface Room {
 	/** Revoke every lease in flight. The room keeps running; `stop` ends it. */
 	abort(): void;
 	/**
-	 * Put an agent on the roster while the room runs, from the reserve or from
-	 * anywhere. The seating lands on the record, and it wakes the seat it names.
+	 * Put a registered agent on the roster while the room runs. The seating lands on the record, and it wakes the seat it names.
 	 */
-	seat(seat: AgentSeat): Promise<void>;
+	seat(name: string, options?: { attention?: Attention }): Promise<void>;
 	/**
 	 * Take an agent off the roster. Its lease in flight is revoked, the
-	 * record says it left, and an agent that came from the reserve returns to it.
+	 * record says it left, and its definition remains in the reserve.
 	 */
-	unseat(agent: AgentDefinition): Promise<void>;
+	unseat(name: string): Promise<void>;
 	/** Fold, decide, write, send. The room runs it on its own; a host on a platform with its own alarms calls it. */
 	reconcile(): Promise<void>;
 }
@@ -220,7 +208,7 @@ export interface Visit {
 	 * token landed carries it back, so a host reads which delivery it was.
 	 * A host that names none gets a token of its own that matches nothing.
 	 */
-	send(input: { to?: Participant; text: string; key?: string }): Promise<ExchangeHandle>;
+	send(input: { to?: string; text: string; key?: string }): Promise<ExchangeHandle>;
 	leave(): Promise<void>;
 }
 
@@ -251,7 +239,7 @@ export async function startRoom(options: StartRoomOptions): Promise<Room> {
 export async function resumeRoom(name: string, options: ResumeRoomOptions): Promise<Room> {
 	const runtime = options.runtime ?? defaultRuntime;
 	assertFree(runtime, name);
-	const room = RoomHost.resume(name, runtime, options.streamFn, bindingsOf(options.agents));
+	const room = RoomHost.resume(name, runtime, options.streamFn, definitionsOf(options.agents));
 	registerRoom(runtime, room);
 	try {
 		await room.started();
@@ -285,7 +273,7 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 	return {
 		name,
 		messages: journal.messages(),
-		seats: seatsOf({ name, state, live: liveSeats }),
+		participants: seatsOf({ name, state, live: liveSeats }),
 		exchange: state.exchange,
 	};
 }
@@ -309,11 +297,7 @@ class RoomHost implements Room, RunningRoom {
 	/** The replay, the composition on the journal, and the first reconcile. Every operation waits here. */
 	readonly ready: Promise<void>;
 	/** Every definition this room can seat, by name. */
-	private defs = new Map<string, AgentDefinition>();
-	private readonly pendingBindings = new Map<
-		string,
-		{ key: string; definition: AgentDefinition; uncertain: boolean }
-	>();
+	private readonly defs: ReadonlyMap<string, AgentDefinition>;
 	/** The handles the host delivers through. Presence itself is a fold over the journal. */
 	private readonly visits = new Map<string, VisitRuntime>();
 	private readonly ports = new Map<string, SeatPort>();
@@ -371,8 +355,7 @@ class RoomHost implements Room, RunningRoom {
 		);
 		this.stream = options.streamFn ?? runtime.stream;
 		this.model = options.streamFn ? stubModel : runtime.model;
-		if (cast) this.bind(...cast.agents, ...cast.available);
-		else this.defs = bindings;
+		this.defs = cast ? new Map(cast.definitions.map((agent) => [agent.name, agent])) : bindings;
 		const starting = cast && compositionOf(cast, this.iso());
 		this.ready = starting ? this.compose(starting) : this.recover();
 		void this.ready.catch(() => {});
@@ -381,28 +364,6 @@ class RoomHost implements Room, RunningRoom {
 	/** Resolves once the room is up. `resumeRoom` waits for it; every operation does. */
 	started(): Promise<void> {
 		return this.ready;
-	}
-
-	/**
-	 * A definition the room binds by name for this run.
-	 */
-	private bind(...seats: SeatedAgent[]): void {
-		for (const { agent } of seats) {
-			const bound = this.defs.get(agent.name);
-			if (bound !== undefined && bound !== agent) {
-				throw new Error(
-					`Agent '${agent.name}' already has another binding in room '${this.name}'.`,
-				);
-			}
-			this.defs.set(agent.name, agent);
-		}
-	}
-
-	private assertBinding(agent: AgentDefinition): void {
-		const bound = this.defs.get(agent.name);
-		if (bound !== undefined && bound !== agent) {
-			throw new Error(`Agent '${agent.name}' already has another binding in room '${this.name}'.`);
-		}
 	}
 
 	/**
@@ -435,24 +396,57 @@ class RoomHost implements Room, RunningRoom {
 		this.enter('running');
 		this.seedHeardLeases();
 		const state = this.state();
-		if (state.composition === undefined) {
-			throw new Error(`Room '${this.name}' has no composition on its record: start it instead.`);
-		}
-		const names = [
-			...state.roster.map((seat) => seat.name),
-			...state.composition.available.map((seat) => seat.name),
-		];
-		for (const name of names) {
-			if (!this.defs.has(name)) {
-				throw new Error(`Room '${this.name}' cannot resume: agent '${name}' has no binding.`);
-			}
-		}
+		this.validateDefinitions(state);
 		// The fence lands here: from here on, every earlier run's later writes are void.
 		await this.journal.write('run', () => {
+			this.validateDefinitions(this.state());
 			const event = this.acceptedEvent(decide(this.state(), { type: 'run' }, this.now()));
 			return event?.body;
 		});
+		await this.journal.write('composition', () => {
+			const current = this.state();
+			this.validateDefinitions(current);
+			const composition = current.composition;
+			if (composition === undefined) return undefined;
+			const roster = new Set(current.roster.map((seat) => seat.name));
+			const catalog = new Map(
+				[...composition.agents, ...composition.available, ...current.roster].map((seat) => [
+					seat.name,
+					seat,
+				]),
+			);
+			for (const agent of this.defs.values())
+				if (!catalog.has(agent.name))
+					catalog.set(agent.name, {
+						name: agent.name,
+						identity: agent.identity,
+						attention: 'broadcast',
+					});
+			const available = [...catalog.values()].filter((seat) => !roster.has(seat.name));
+			const { seq: _seq, at: _at, ...prior } = composition;
+			const body = { ...prior, agents: current.roster, available, at: this.iso() };
+			const event = this.acceptedEvent(
+				decide(current, { type: 'compose', composition: body }, this.now()),
+			);
+			return event?.body;
+		});
 		await this.reconcile();
+	}
+
+	private validateDefinitions(state: RoomState): void {
+		if (state.composition === undefined)
+			throw new Error(`Room '${this.name}' has no composition on its record: start it instead.`);
+		const names = new Set([
+			...state.composition.agents.map((seat) => seat.name),
+			...state.composition.available.map((seat) => seat.name),
+			...state.roster.map((seat) => seat.name),
+		]);
+		for (const name of names)
+			if (!this.defs.has(name))
+				throw new Error(`Room '${this.name}' cannot resume: agent '${name}' has no binding.`);
+		for (const name of this.defs.keys())
+			if (state.people.has(name))
+				throw new Error(`Room '${this.name}' cannot resume: '${name}' is a person in this room.`);
 	}
 
 	/**
@@ -532,7 +526,7 @@ class RoomHost implements Room, RunningRoom {
 	}
 
 	/** The roster and people folded from the durable record. */
-	seats(): SeatInfo[] {
+	participants(): SeatInfo[] {
 		const state = this.state();
 		return seatsOf({ name: this.name, state, live: this.live(state) });
 	}
@@ -544,7 +538,7 @@ class RoomHost implements Room, RunningRoom {
 		return {
 			name: this.name,
 			messages: this.journal.messages(),
-			seats: seatsOf({ name: this.name, state, live: this.live(state) }),
+			participants: seatsOf({ name: this.name, state, live: this.live(state) }),
 			exchange: state.exchange,
 		};
 	}
@@ -664,30 +658,31 @@ class RoomHost implements Room, RunningRoom {
 	/** Puts a person in the room. A second visit while they are here is the same visit. */
 	async visit(human: HumanDefinition): Promise<Visit> {
 		this.assertRunning();
+		const captured = captureHuman(human);
 		await this.ready;
-		this.assertVisitable(human);
-		const known = this.visits.get(human.name);
+		this.assertVisitable(captured);
+		const known = this.visits.get(captured.name);
 		if (known) return this.handle(known);
-		const visit: VisitRuntime = { human, gone: false };
-		this.visits.set(human.name, visit);
+		const visit: VisitRuntime = { human: captured, gone: false };
+		this.visits.set(captured.name, visit);
 		// A person the journal holds as present is here already: the last run wrote
 		// no `left`, and the host's word is what says otherwise. Nothing commits.
 		// An arrival whose confirmation was lost is read back first.
 		await this.journal.settled();
 		// A room that stopped while this waited seats nobody.
 		this.assertRunning();
-		if (this.state().people.get(human.name)?.presence !== 'present') {
+		if (this.state().people.get(captured.name)?.presence !== 'present') {
 			try {
 				await this.commitPresence({
 					kind: 'arrived',
-					from: human.name,
-					subject: human.name,
-					identity: human.identity,
-					...(human.preferences === undefined ? {} : { preferences: human.preferences }),
+					from: captured.name,
+					subject: captured.name,
+					identity: captured.identity,
+					...(captured.preferences === undefined ? {} : { preferences: captured.preferences }),
 				});
 			} catch (error) {
 				// An arrival the storage refused is no visit: the next visit writes it again.
-				this.visits.delete(human.name);
+				this.visits.delete(captured.name);
 				throw error;
 			}
 		}
@@ -734,9 +729,9 @@ class RoomHost implements Room, RunningRoom {
 
 	private async deliverFrom(
 		from: string,
-		input: { to?: Participant; text: string; key?: string },
+		input: { to?: string; text: string; key?: string },
 	): Promise<ExchangeHandle> {
-		const to = input.to?.name;
+		const to = input.to;
 		const key = input.key ?? crypto.randomUUID();
 		const committed = await this.commitMessage(key, {
 			type: 'deliver',
@@ -766,72 +761,30 @@ class RoomHost implements Room, RunningRoom {
 
 	// -- the roster -------------------------------------------------------------
 
-	/** The host puts an agent on the roster. From the reserve when it is there; from anywhere else too. */
-	async seat(seat: AgentSeat): Promise<void> {
+	/** The host seats a registered agent. Executable definitions stay fixed for the run. */
+	async seat(name: string, options: { attention?: Attention } = {}): Promise<void> {
 		this.assertRunning();
 		await this.ready;
-		const given = unwrap(seat);
-		await this.resolvePendingBinding(given.agent.name);
-		const change = this.seatingChange(seat, given);
-		this.validatePresence(change);
-		await this.commitSeating(given, change);
-	}
-
-	/** A confirmed recovery removes or promotes a stale pending binding before a new request proceeds. */
-	private async resolvePendingBinding(name: string): Promise<void> {
-		const pending = this.pendingBindings.get(name);
-		if (pending?.uncertain) {
-			try {
-				await this.settlePending(name, pending.key);
-			} catch {
-				// The next operation will try its own recovery read.
-			}
-		}
-		if (this.pendingBindings.has(name)) throw new Error(`Agent '${name}' is already being seated.`);
-	}
-
-	/** A bare definition takes the attention its reserve entry carried. */
-	private seatingChange(seat: AgentSeat, given: SeatedAgent): PresenceDraft {
-		const held = this.state().reserve.find((placed) => placed.name === given.agent.name);
-		return {
+		const definition = this.defs.get(name);
+		if (definition === undefined) throw new Error(`Unknown agent '${name}'.`);
+		const change: PresenceDraft = {
 			kind: 'seated',
-			subject: given.agent.name,
-			identity: given.agent.identity,
-			attention: isSeatedAgent(seat) ? seat.attention : (held?.attention ?? 'broadcast'),
+			subject: name,
+			identity: definition.identity,
+			attention: options.attention ?? 'broadcast',
 		};
-	}
-
-	private async commitSeating(given: SeatedAgent, change: PresenceDraft): Promise<void> {
-		const key = crypto.randomUUID();
-		if (this.pendingBindings.has(given.agent.name))
-			throw new Error(`Agent '${given.agent.name}' is already being seated.`);
-		this.assertBinding(given.agent);
-		if (!this.defs.has(given.agent.name))
-			this.pendingBindings.set(given.agent.name, {
-				key,
-				definition: given.agent,
-				uncertain: false,
-			});
-		try {
-			await this.commitPresence(change, true, key);
-		} catch (error) {
-			try {
-				await this.settlePending(given.agent.name, key);
-			} catch {
-				const pending = this.pendingBindings.get(given.agent.name);
-				if (pending?.key === key) pending.uncertain = true;
-			}
-			throw error;
-		}
+		this.validatePresence(change);
+		await this.commitPresence(change);
 	}
 
 	/** The host takes an agent off the roster. It keeps the assistant seated. */
-	async unseat(agent: AgentDefinition): Promise<void> {
+	async unseat(name: string): Promise<void> {
 		this.assertRunning();
 		await this.ready;
-		this.validatePresence({ kind: 'unseated', subject: agent.name });
-		await this.revoke((seat) => seat === agent.name);
-		await this.commitPresence({ kind: 'unseated', subject: agent.name });
+		if (!this.defs.has(name)) throw new Error(`Unknown agent '${name}'.`);
+		this.validatePresence({ kind: 'unseated', subject: name });
+		await this.revoke((seat) => seat === name);
+		await this.commitPresence({ kind: 'unseated', subject: name });
 	}
 
 	// -- commits ----------------------------------------------------------------
@@ -881,27 +834,9 @@ class RoomHost implements Room, RunningRoom {
 	private hear(entry: Entry): void {
 		if (entry.kind === 'message') {
 			const message = placed(entry);
-			if (message.kind === 'seated') this.promoteBinding(entry.key, message.subject);
 			this.heardMessage(message);
 		} else if (entry.kind === 'close') this.heardClose(entry.body);
 		else if (entry.kind === 'lease') this.heardLease(entry.body, this.opens(entry.body.id));
-	}
-
-	private promoteBinding(key: string | undefined, name: string): void {
-		if (key === undefined) return;
-		const pending = this.pendingBindings.get(name);
-		if (pending === undefined) return;
-		if (pending.key !== key) return;
-		this.defs.set(name, pending.definition);
-		this.pendingBindings.delete(name);
-	}
-
-	/** Queue a no-op after the recovery read, then release only an unconfirmed matching binding. */
-	private settlePending(name: string, key: string): Promise<boolean> {
-		return this.journal.write('lease', () => {
-			if (this.pendingBindings.get(name)?.key === key) this.pendingBindings.delete(name);
-			return undefined;
-		});
 	}
 
 	/**
@@ -1348,57 +1283,89 @@ class RoomHost implements Room, RunningRoom {
  * option seats it at `none`, beside the agents.
  */
 function composeFrom(options: StartRoomOptions): CompositionDraft {
-	const names = new Set<string>();
-	const take = (placed: SeatedAgent): SeatedAgent => {
-		if (names.has(placed.agent.name)) {
-			throw new Error(
-				`Duplicate agent name '${placed.agent.name}': one name names one participant.`,
-			);
-		}
-		names.add(placed.agent.name);
-		return placed;
-	};
-	const agents = (options.agents ?? []).map((seat) => take(unwrap(seat)));
-	if (options.assistant !== undefined) {
-		agents.push(take(unwrap(seated(options.assistant, { attention: 'none' }))));
-	}
-	const available = (options.available ?? []).map((seat) => take(unwrap(seat)));
+	const definitions = capturedDefinitions(options);
+	const attentions = initialSeats(options, definitions);
 	return {
 		goal: options.goal?.trim() || undefined,
 		assistant: options.assistant?.name,
-		agents,
-		available,
+		definitions,
+		seats: attentions,
 	};
 }
 
-function bindingsOf(agents: readonly AgentDefinition[]): Map<string, AgentDefinition> {
+function capturedDefinitions(options: StartRoomOptions): AgentDefinition[] {
+	const definitions = (options.agents ?? []).map(captureAgent);
+	if (options.assistant !== undefined) definitions.push(captureAgent(options.assistant));
+	const names = new Set<string>();
+	for (const definition of definitions) {
+		if (names.has(definition.name)) throw duplicate(definition.name);
+		names.add(definition.name);
+	}
+	return definitions;
+}
+
+function initialSeats(
+	options: StartRoomOptions,
+	definitions: readonly AgentDefinition[],
+): Map<string, Attention> {
+	const configured = options.seats;
+	const selected = new Set(
+		configured === undefined
+			? (options.agents ?? []).map((agent) => agent.name)
+			: Object.keys(configured),
+	);
+	if (options.assistant !== undefined) selected.add(options.assistant.name);
+	const names = new Set(definitions.map((agent) => agent.name));
+	for (const name of selected) if (!names.has(name)) throw new Error(`Unknown agent '${name}'.`);
+	if (
+		options.assistant !== undefined &&
+		configured?.[options.assistant.name] !== undefined &&
+		configured[options.assistant.name] !== 'none'
+	)
+		throw new Error(`Assistant '${options.assistant.name}' must have attention 'none'.`);
+	return new Map(
+		definitions
+			.filter((agent) => selected.has(agent.name))
+			.map((agent) => [
+				agent.name,
+				agent.name === options.assistant?.name ? 'none' : (configured?.[agent.name] ?? 'broadcast'),
+			]),
+	);
+}
+
+function definitionsOf(agents: readonly AgentDefinition[]): Map<string, AgentDefinition> {
 	const bindings = new Map<string, AgentDefinition>();
 	for (const agent of agents) {
-		if (bindings.has(agent.name)) throw new Error(`Restart bindings repeat agent '${agent.name}'.`);
-		bindings.set(agent.name, agent);
+		const captured = captureAgent(agent);
+		if (bindings.has(captured.name)) throw duplicate(captured.name);
+		bindings.set(captured.name, captured);
 	}
 	return bindings;
 }
 
-function unwrap(seat: AgentSeat): SeatedAgent {
-	if (isSeatedAgent(seat)) return seat;
-	if (!isAgent(seat)) throw new Error('Agents must come from defineAgent or seated().');
-	return seated(seat);
+function duplicate(name: string): Error {
+	return new Error(`Duplicate agent name '${name}': one name names one participant.`);
 }
-
-const seatingOf = (placed: SeatedAgent): Seating => ({
-	name: placed.agent.name,
-	identity: placed.agent.identity,
-	attention: placed.attention,
-});
 
 /** The cast as the journal holds it: every seat by name, identity, and attention. */
 function compositionOf(cast: CompositionDraft, at: string): Without<Composition, 'seq'> {
 	return {
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
 		...(cast.assistant === undefined ? {} : { assistant: cast.assistant }),
-		agents: cast.agents.map(seatingOf),
-		available: cast.available.map(seatingOf),
+		agents: cast.definitions
+			.filter((agent) => cast.seats.has(agent.name))
+			.map((agent) => ({
+				name: agent.name,
+				identity: agent.identity,
+				attention: cast.seats.get(agent.name) ?? 'broadcast',
+			})),
+		available: cast.definitions
+			.filter((agent) => !cast.seats.has(agent.name))
+			.map((agent) => ({
+				name: agent.name,
+				identity: agent.identity,
+				attention: 'broadcast' as const,
+			})),
 		at,
 	};
 }

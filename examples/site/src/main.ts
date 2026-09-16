@@ -25,10 +25,10 @@ import {
 import {
 	AGENTS,
 	ASSISTANT,
-	AVAILABLE,
 	apiLog,
 	driveFiles,
 	GOAL,
+	INITIAL_SEATS,
 	MODEL,
 	PEOPLE,
 	ROOM_NAME,
@@ -39,7 +39,7 @@ const room = await startRoom({
 	goal: GOAL,
 	assistant: ASSISTANT,
 	agents: AGENTS,
-	available: AVAILABLE,
+	seats: INITIAL_SEATS,
 });
 
 /** Who is in the room, by name. A person may be here more than once. */
@@ -166,12 +166,16 @@ const WAKES: Record<Attention, string> = {
 };
 
 function who(): void {
-	const seated = new Set(room.seats().map((seat) => seat.name));
-	for (const agent of AVAILABLE) {
-		if (seated.has(agent.name)) continue;
-		console.log(`  ${paint(agent.name, agent.name)} (on call, in the reserve): ${agent.identity}`);
+	const participants = room.participants();
+	const present = new Set(participants.map((participant) => participant.name));
+	for (const agent of AGENTS) {
+		if (!present.has(agent.name)) {
+			console.log(
+				`  ${paint(agent.name, agent.name)} (on call, in the reserve): ${agent.identity}`,
+			);
+		}
 	}
-	for (const seat of room.seats()) {
+	for (const seat of participants) {
 		if (seat.kind === 'agent') {
 			const assistant = seat.assistant ? ', the assistant' : '';
 			console.log(
@@ -250,17 +254,15 @@ async function leave(name: string): Promise<void> {
 }
 
 async function seatByHand(name: string): Promise<void> {
-	const agent = AVAILABLE.find((a) => a.name === name);
+	const agent = AGENTS.find((candidate) => candidate.name === name);
 	if (!agent) return console.log(`${red}no such specialist on call: ${name}${reset}`);
-	await room.seat(agent);
+	await room.seat(name);
 }
 
 async function unseat(name: string): Promise<void> {
-	const agent = [...AGENTS, ...AVAILABLE]
-		.map((seat) => ('agent' in seat ? seat.agent : seat))
-		.find((a) => a.name === name);
+	const agent = AGENTS.find((candidate) => candidate.name === name);
 	if (!agent) return console.log(`${red}no such agent: ${name}${reset}`);
-	await room.unseat(agent);
+	await room.unseat(name);
 }
 
 async function quit(): Promise<void> {
@@ -304,9 +306,9 @@ async function say(input: string): Promise<void> {
 		return;
 	}
 	const [, name, text] = directed;
-	const target = room.seats().find((s) => s.name === name);
+	const target = room.participants().find((participant) => participant.name === name);
 	if (!target || !text) return console.log(`${red}no such participant: ${name}${reset}`);
-	await visit.send({ to: { name } as never, text });
+	await visit.send({ to: name, text });
 }
 
 async function handle(line: string): Promise<void> {

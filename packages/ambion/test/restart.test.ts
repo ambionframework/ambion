@@ -139,8 +139,13 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const visit = await session.visit(priya);
 			await visit.send({ text: 'Can I tell the client Thursday?' });
 			await new Promise((resolve) => setImmediate(resolve));
-			const before = { seats: session.seats(), exchange: await currentExchange(session) };
-			expect(before.seats.find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
+			const before = {
+				participants: session.participants(),
+				exchange: await currentExchange(session),
+			};
+			expect(before.participants.find((s) => s.name === 'alpha')).toMatchObject({
+				status: 'active',
+			});
 			expect(before.exchange).toMatchObject({ owner: 'priya' });
 			crash(first, session);
 
@@ -152,7 +157,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			});
 			const events = collect(resumed);
 			// the fold before the crash is the fold after the resume
-			expect(resumed.seats()).toEqual(before.seats);
+			expect(resumed.participants()).toEqual(before.participants);
 			expect(await currentExchange(resumed)).toEqual(before.exchange);
 			// the pending wake is sent again, and beta answers into the same exchange
 			await ended(resumed, 'beta');
@@ -176,7 +181,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			).toHaveLength(1);
 			expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 			expect(await summaries(resumed)).toHaveLength(1);
-			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'idle' });
+			expect(resumed.participants().find((s) => s.name === 'alpha')).toMatchObject({
+				status: 'idle',
+			});
 			await resumed.stop();
 		} finally {
 			await opened.dispose();
@@ -223,7 +230,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await waitForRoom(resumed);
 			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
 			expect(await currentExchange(resumed)).toBeUndefined();
-			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'idle' });
+			expect(resumed.participants().find((s) => s.name === 'alpha')).toMatchObject({
+				status: 'idle',
+			});
 			const stored = await storedOf(opened.journals, name);
 			expect(stored.map((entry) => entry.kind)).toContain('close');
 			await resumed.stop();
@@ -244,7 +253,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				streamFn: scripted(byAgent({})),
 			});
 			await waitForRoom(one);
-			expect(one.seats().map((s) => s.name)).toEqual(['alpha', 'assistant']);
+			expect(one.participants().map((s) => s.name)).toEqual(['alpha', 'assistant']);
 			await one.stop();
 
 			const two = await startRoom({
@@ -255,12 +264,12 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				streamFn: scripted(byAgent({})),
 			});
 			await waitForRoom(two);
-			expect(two.seats().map((s) => s.name)).toEqual(['beta', 'assistant']);
+			expect(two.participants().map((s) => s.name)).toEqual(['beta', 'assistant']);
 			await two.stop();
 
 			const view = await readRoom(name, { runtime: runtime() });
 			view.messages;
-			expect(view.seats.map((s) => s.name)).toEqual(['beta', 'assistant']);
+			expect(view.participants.map((s) => s.name)).toEqual(['beta', 'assistant']);
 		} finally {
 			await opened.dispose();
 		}
@@ -273,18 +282,18 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const session = await startRoom({
 				name,
 				assistant,
-				agents: [alpha],
-				available: [beta],
+				agents: [alpha, beta],
+				seats: { [alpha.name]: 'broadcast' },
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
 			// before the replay, the seats fold from the composition the run is about to write
-			expect(session.seats().map((s) => [s.name, s.identity])).toEqual([
+			expect(session.participants().map((s) => [s.name, s.identity])).toEqual([
 				['alpha', 'Alpha.'],
 				['assistant', assistant.identity],
 			]);
 			await waitForRoom(session, 'settled');
-			await session.seat(beta);
+			await session.seat(beta.name);
 			await waitForRoom(session);
 			await session.stop();
 
@@ -293,7 +302,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				runtime: createRuntime({ storage: opened.storage }),
 			});
 			view.messages;
-			expect(view.seats.map((s) => [s.name, s.identity])).toEqual([
+			expect(view.participants.map((s) => [s.name, s.identity])).toEqual([
 				['alpha', 'Alpha.'],
 				['assistant', assistant.identity],
 				['beta', 'Beta.'],
@@ -379,7 +388,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			// no `left` was written, so both are still present, and visiting again writes nothing
 			expect(
 				resumed
-					.seats()
+					.participants()
 					.filter((s) => s.kind === 'human')
 					.map((s) => [s.name, s.presence]),
 			).toEqual([
@@ -400,7 +409,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				'left',
 				'arrived',
 			]);
-			expect(resumed.seats().find((s) => s.name === 'priya')).toMatchObject({
+			expect(resumed.participants().find((s) => s.name === 'priya')).toMatchObject({
 				identity: 'A different priya.',
 			});
 			await resumed.stop();
@@ -532,7 +541,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const visit = await session.visit(priya);
 			await visit.send({ text: 'Anyone?' });
 			await tick();
-			expect(session.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
+			expect(session.participants().find((s) => s.name === 'alpha')).toMatchObject({
+				status: 'active',
+			});
 			crash(first, session);
 
 			// the resumed run inherits the live lease and never wakes alpha, so it
@@ -561,7 +572,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				agents,
 				streamFn: scripted(script),
 			});
-			expect(resumed.seats().find((s) => s.name === 'alpha')).toMatchObject({ status: 'active' });
+			expect(resumed.participants().find((s) => s.name === 'alpha')).toMatchObject({
+				status: 'active',
+			});
 			resumed.abort();
 			await waitForRoom(resumed);
 			await tick();
@@ -594,7 +607,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				/cannot resume: agent 'alpha' has no binding/,
 			);
 			await expect(resumeRoom(name, { runtime: bare, agents: [alpha, alpha] })).rejects.toThrow(
-				/Restart bindings repeat agent 'alpha'/,
+				/Duplicate agent name 'alpha'/,
 			);
 			await expect(
 				resumeRoom(roomName('never-started'), { runtime: runtime(), agents: [] }),
@@ -627,7 +640,7 @@ describe('a room dropped from memory', () => {
 			streamFn: scripted(byAgent({})),
 		});
 		runtime.evict(name);
-		expect(session.seats().map((s) => s.name)).toEqual(['alpha', 'beta', 'assistant']);
+		expect(session.participants().map((s) => s.name)).toEqual(['alpha', 'beta', 'assistant']);
 		await opened.dispose();
 	});
 

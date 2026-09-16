@@ -62,8 +62,8 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		const room = await startRoom({
 			name: roomName('dispatch-causes'),
 			assistant,
-			agents: [alpha],
-			available: [beta],
+			agents: [alpha, beta],
+			seats: { [alpha.name]: 'broadcast' },
 			runtime: createRuntime({ storage: opened.storage, clock, transport: transport.transport }),
 			streamFn: scripted(
 				byAgent({
@@ -106,8 +106,8 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		const room = await startRoom({
 			name: roomName('dispatch-recovery'),
 			assistant,
-			agents: [alpha],
-			available: [beta],
+			agents: [alpha, beta],
+			seats: { [alpha.name]: 'broadcast' },
 			runtime: firstRuntime,
 			streamFn: scripted(() => quiet()),
 		});

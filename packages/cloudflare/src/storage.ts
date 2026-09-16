@@ -137,6 +137,8 @@ function apply<T extends object>(current: T, event: MetadataEvent<T>): T {
 
 export interface RoomMetadata {
 	name?: string;
+	/** Definition names supplied for this room run. Used for automatic resume. */
+	agents?: string[];
 	people?: Record<string, unknown>;
 }
 

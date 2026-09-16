@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, defineHuman, seated, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
 import {
 	inProcessTransport,
 	type LeaseRequest,
@@ -84,7 +84,8 @@ describe.each(storages)('messages across activation completion on $name', (stora
 			const room = await startRoom({
 				name: roomName('steering-release'),
 				assistant,
-				agents: [seated(alpha, { attention: 'named' })],
+				agents: [alpha],
+				seats: { [alpha.name]: 'named' },
 				runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
 				streamFn: scripted(
 					byAgent({
@@ -101,11 +102,11 @@ describe.each(storages)('messages across activation completion on $name', (stora
 			});
 			try {
 				const visit = await room.visit(priya);
-				await visit.send({ to: alpha, text: 'Start analysis.' });
+				await visit.send({ to: alpha.name, text: 'Start analysis.' });
 				await observed.ending.promise;
 				// The caller sends an ordinary message while the executor releases.
 				// Its active recipient is recorded even though idle attention excludes it.
-				await visit.send({ to: priya, text: 'Keep this final correction.' });
+				await visit.send({ to: priya.name, text: 'Keep this final correction.' });
 				const update = (await room.messages()).at(-1);
 				expect(update?.wakes ?? []).toEqual([]);
 				expect(observed.steers).toHaveLength(1);
@@ -147,7 +148,8 @@ describe.each(storages)('messages across activation completion on $name', (stora
 		const room = await startRoom({
 			name: roomName('steering-order'),
 			assistant,
-			agents: [seated(alpha, { attention: 'named' })],
+			agents: [alpha],
+			seats: { [alpha.name]: 'named' },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
 			streamFn: scripted(
 				byAgent({
@@ -164,10 +166,10 @@ describe.each(storages)('messages across activation completion on $name', (stora
 		});
 		try {
 			const visit = await room.visit(priya);
-			await visit.send({ to: alpha, text: 'Start analysis.' });
+			await visit.send({ to: alpha.name, text: 'Start analysis.' });
 			await started.promise;
-			await visit.send({ to: priya, text: 'First correction.' });
-			await visit.send({ to: priya, text: 'Second correction.' });
+			await visit.send({ to: priya.name, text: 'First correction.' });
+			await visit.send({ to: priya.name, text: 'Second correction.' });
 			expect(observed.steers).toHaveLength(2);
 			await observed.deliver[1]?.();
 			await observed.deliver[1]?.();

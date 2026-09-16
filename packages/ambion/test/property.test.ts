@@ -13,7 +13,6 @@ import {
 	defineAgent,
 	defineHuman,
 	isSummary,
-	passive,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -173,8 +172,8 @@ class Walk {
 			name: this.name,
 			runtime: this.runtime,
 			assistant,
-			agents: [alpha, passive(beta)],
-			available: [gamma],
+			agents: [alpha, beta, gamma],
+			seats: { [alpha.name]: 'broadcast', [beta.name]: 'named' },
 			streamFn: scripted(script),
 		});
 		this.watch();
@@ -196,8 +195,8 @@ class Walk {
 		if (step === 'visit') return this.visit();
 		if (step === 'leave') return this.leave();
 		if (step === 'deliver') return this.send();
-		if (step === 'seat') return this.session.seat(gamma).catch(expected);
-		if (step === 'unseat') return this.session.unseat(gamma).catch(expected);
+		if (step === 'seat') return this.session.seat(gamma.name).catch(expected);
+		if (step === 'unseat') return this.session.unseat(gamma.name).catch(expected);
 		if (step === 'advance') return this.clock.advance(Math.floor(this.random() * 70_000));
 		if (step === 'fault') return this.fault();
 		if (step === 'disk') return this.fail();
@@ -333,7 +332,7 @@ describe('the room under a random walk', () => {
 			} catch (error) {
 				const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
 				const seats = walk.session
-					.seats()
+					.participants()
 					.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence]);
 				walk.journal.push(`seats: ${JSON.stringify(seats)}`);
 				walk.journal.push(`events: ${walk.events.map(brief).join(' ')}`);

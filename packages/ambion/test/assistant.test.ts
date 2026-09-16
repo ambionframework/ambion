@@ -2,14 +2,12 @@ import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-	attentive,
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	defineTool,
 	isSpoken,
 	type Message,
-	passive,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -112,7 +110,7 @@ const runtime = createRuntime({ clock });
 async function open(options: {
 	script: Script;
 	agents?: Parameters<typeof startRoom>[0]['agents'];
-	available?: Parameters<typeof startRoom>[0]['available'];
+	seats?: Parameters<typeof startRoom>[0]['seats'];
 	assistant?: Parameters<typeof startRoom>[0]['assistant'];
 	runtime?: Runtime;
 }): Promise<Room> {
@@ -121,7 +119,7 @@ async function open(options: {
 		goal: 'Decide the pour date and keep the plan honest.',
 		assistant: options.assistant ?? assistant,
 		agents: options.agents ?? [product],
-		...(options.available ? { available: options.available } : {}),
+		...(options.seats ? { seats: options.seats } : {}),
 		streamFn: scripted(options.script),
 		runtime: options.runtime ?? runtime,
 	});
@@ -315,7 +313,8 @@ describe('the assistant', () => {
 	it('owns the question that lands while a seat works on what nobody asked for', async () => {
 		const greeting = deferred();
 		const session = await open({
-			agents: [product, attentive(greeter)],
+			agents: [product, greeter],
+			seats: { [product.name]: 'broadcast', [greeter.name]: 'presence' },
 			script: byAgent({
 				product: twoAnswers,
 				greeter: async (_context, _name, call) => {
@@ -428,7 +427,8 @@ describe('the assistant', () => {
 	it('stands down without writing, and is not owed a summary for it', async () => {
 		const calls: string[] = [];
 		const session = await open({
-			agents: [product, attentive(greeter)],
+			agents: [product, greeter],
+			seats: { [product.name]: 'broadcast', [greeter.name]: 'presence' },
 			script: byAgent({
 				product: twoAnswers,
 				assistant: (_context, name) => {
@@ -458,7 +458,8 @@ describe('the assistant', () => {
 
 	it('drafts again after the backoff when its activation fails outright', async () => {
 		const session = await open({
-			agents: [product, attentive(greeter)],
+			agents: [product, greeter],
+			seats: { [product.name]: 'broadcast', [greeter.name]: 'presence' },
 			script: byAgent({
 				product: twoAnswers,
 				assistant: (context, name, call) => {
@@ -642,9 +643,9 @@ describe('the assistant', () => {
 		await ended;
 
 		// The room lists it as the seat it is: an agent seated at none.
-		const seat = session.seats().find((s) => s.name === 'assistant');
+		const seat = session.participants().find((s) => s.name === 'assistant');
 		expect(seat).toMatchObject({ kind: 'agent', assistant: true, attention: 'none' });
-		const seatSession = session.seats().find((value) => value.name === 'assistant');
+		const seatSession = session.participants().find((value) => value.name === 'assistant');
 		if (seatSession?.kind !== 'agent') throw new Error('The assistant seat is absent.');
 		const entries = await (
 			await transcriptRuntime.transcripts.open(seatSession.sessionId)
@@ -676,7 +677,7 @@ describe('the assistant', () => {
 		await waitForRoom(session);
 		await quiescent(session);
 
-		const seat = session.seats().find((s) => s.name === 'assistant');
+		const seat = session.participants().find((s) => s.name === 'assistant');
 		expect(seat).toMatchObject({
 			kind: 'agent',
 			assistant: true,
@@ -825,7 +826,7 @@ describe('the assistant', () => {
 		await session.visit(priya);
 		await waitForRoom(session);
 
-		const seats = session.seats();
+		const seats = session.participants();
 		expect(seats.find((s) => s.name === 'assistant')).toMatchObject({
 			kind: 'agent',
 			assistant: true,
@@ -870,7 +871,8 @@ describe('an exchange', () => {
 
 	it('opens for nobody but a person, and never twice at once', async () => {
 		const session = await open({
-			agents: [product, attentive(greeter)],
+			agents: [product, greeter],
+			seats: { [product.name]: 'broadcast', [greeter.name]: 'presence' },
 			script: byAgent({
 				product: answersEach,
 				// It meets the arrival once; a seat that speaks on every activation
@@ -985,8 +987,8 @@ describe('an exchange', () => {
 		const working = deferred();
 		const session = await open({
 			runtime: await gated((_type, data) => (data.text === 'second?' ? gate.promise : undefined)),
-			agents: [passive(product)],
-			available: [surveyor],
+			agents: [product, surveyor],
+			seats: { [product.name]: 'named' },
 			script: byAgent({
 				product: async () => {
 					await working.promise;
@@ -998,7 +1000,7 @@ describe('an exchange', () => {
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);
-		await visit.send({ to: product, text: 'first?' });
+		await visit.send({ to: product.name, text: 'first?' });
 		await activationEnded(session, 'assistant');
 		// the second question wakes nobody, and it is asked the moment the product stops
 		const asked = askedAsStops(session, 'product', () => visit.send({ text: 'second?' }));
@@ -1025,8 +1027,8 @@ describe('an exchange', () => {
 		const working = deferred();
 		const session = await open({
 			runtime: await gated((_type, data) => (data.text === 'hey' ? gate.promise : undefined)),
-			agents: [passive(product)],
-			available: [surveyor],
+			agents: [product, surveyor],
+			seats: { [product.name]: 'named' },
 			script: byAgent({
 				product: async () => {
 					await working.promise;
@@ -1036,10 +1038,10 @@ describe('an exchange', () => {
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);
-		await visit.send({ to: product, text: 'first?' });
+		await visit.send({ to: product.name, text: 'first?' });
 		await activationEnded(session, 'assistant');
 		// a word into the room is asked the moment the product stops, and lands before the
-		// close; the product is passive, so it wakes for nothing, and only the assistant could
+		// close; the product has named attention, so only the assistant could activate.
 		const asked = askedAsStops(session, 'product', () => visit.send({ text: 'hey' }));
 		working.resolve();
 		const { landed: said } = await asked;
@@ -1056,7 +1058,9 @@ describe('an exchange', () => {
 		expect(openings(events)).toEqual([first?.seq]);
 		expect(ranges(events)).toEqual([[first?.seq, next?.seq]]);
 		expect(record.some((m) => m.kind === 'seated')).toBe(false);
-		expect(session.seats().find((s) => s.name === 'assistant')).toMatchObject({ status: 'idle' });
+		expect(session.participants().find((s) => s.name === 'assistant')).toMatchObject({
+			status: 'idle',
+		});
 		expect(await currentExchange(session)).toBeUndefined();
 	});
 
@@ -1163,7 +1167,7 @@ describe('a room without an assistant', () => {
 		expect(record.filter((m) => m.kind === 'summary')).toEqual([]);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said']);
 		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(1);
-		expect(session.seats().map((s) => s.name)).toEqual(['product', 'priya']);
+		expect(session.participants().map((s) => s.name)).toEqual(['product', 'priya']);
 		await session.stop();
 	});
 });
@@ -1200,8 +1204,8 @@ describe('an assistant that brings its own tools', () => {
 				model: 'scripted/assistant',
 				tools: [bundle],
 			}),
-			agents: [product],
-			available: [colleague],
+			agents: [product, colleague],
+			seats: { [product.name]: 'broadcast' },
 		});
 
 		const visit = await session.visit(priya);

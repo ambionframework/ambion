@@ -82,9 +82,10 @@ assistant still closes exchanges and exposes the discussion. A single answer
 can require no summary even when an assistant is present.
 
 Use `defineTool` or tool bundles to give specialists domain tools. The current
-`available` option supplies reserve agents for assistant selection. Attention
-controls idle agents; active ordinary agents receive new context. An agent
-can finish silently, and the room refuses speech based on stale context.
+`agents` list supplies every ordinary definition. The optional `seats` map
+selects initial members; definitions absent from that map form the reserve.
+Attention controls idle agents; active ordinary agents receive new context.
+An agent can finish silently, and the room refuses speech based on stale context.
 
 ## Persistence and limits
 

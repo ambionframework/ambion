@@ -152,7 +152,9 @@ async function finish(session: Room, clock: FakeClock): Promise<void> {
 	await quietNow(session, clock);
 	await deliver(third);
 	await quietNow(session, clock);
-	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
+	expect(session.participants().find((s) => s.name === sam.name)).toMatchObject({
+		presence: 'present',
+	});
 }
 
 // A kill lands between an entry and whatever the storage writes beside it,

@@ -136,8 +136,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 	const state: RoomState = {
 		composition,
 		roster,
-		reserve:
-			composition?.available.filter((seat) => !roster.some((s) => s.name === seat.name)) ?? [],
+		reserve: reserveOf(composition, roster),
 		people,
 		exchange,
 		closes,
@@ -150,6 +149,17 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		lastSeq: messages.at(-1)?.seq ?? 0,
 	};
 	return state;
+}
+
+function reserveOf(composition: Composition | undefined, roster: readonly Seating[]): Seating[] {
+	if (composition === undefined) return [];
+	const seated = new Set(roster.map((seat) => seat.name));
+	const catalog = new Map(
+		[...composition.agents, ...composition.available].map((seat) => [seat.name, seat]),
+	);
+	return [...catalog.values()]
+		.filter((seat) => seat.name !== composition.assistant && !seated.has(seat.name))
+		.map((seat) => ({ name: seat.name, identity: seat.identity, attention: 'broadcast' }));
 }
 
 /** Every question that opened an exchange: the one still open, and every one a close ended. */

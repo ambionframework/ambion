@@ -113,7 +113,7 @@ describe('room bindings', () => {
 		await opened.dispose();
 	});
 
-	it('clears a failed pending seat binding so its intended definition can retry', async () => {
+	it('keeps the startup definition through a failed membership write', async () => {
 		const opened = await memory.open();
 		const faulty = faultyJournals(opened.storage);
 		const original = defineAgent({
@@ -122,37 +122,30 @@ describe('room bindings', () => {
 			instructions: 'Count.',
 			model: 'scripted/surveyor',
 		});
-		const other = defineAgent({
-			name: 'surveyor',
-			identity: 'Other surveyor.',
-			instructions: 'Replace.',
-			model: 'scripted/surveyor',
-		});
 		const session = await startRoom({
-			name: roomName('pending-binding'),
+			name: roomName('fixed-binding'),
+			agents: [original],
+			seats: {},
 			runtime: createRuntime({ storage: faulty.journals }),
 			streamFn: scripted(() => quiet()),
 		});
-		await waitForRoom(session);
-		faulty.fail(true, 'message');
-		await expect(session.seat(original)).rejects.toThrow(/disk is full/);
-		faulty.fail(false);
-		await session.seat(other);
-		expect(session.seats().find((seat) => seat.name === 'surveyor')).toMatchObject({
-			identity: 'Other surveyor.',
-		});
-		await session.unseat(other);
-		await expect(session.seat(original)).rejects.toThrow(/already has another binding/);
-		await session.seat(other);
-		await session.stop();
-		const reserved = await startRoom({
-			name: roomName('reserved-binding'),
-			available: [original],
-			streamFn: scripted(() => quiet()),
-		});
-		await waitForRoom(reserved);
-		await expect(reserved.seat(other)).rejects.toThrow(/already has another binding/);
-		await reserved.stop();
-		await opened.dispose();
+		try {
+			faulty.fail(true, 'message');
+			await expect(session.seat(original.name)).rejects.toThrow(/disk is full/);
+			faulty.fail(false);
+			await session.seat(original.name);
+			expect(session.participants().find((seat) => seat.name === original.name)).toMatchObject({
+				identity: original.identity,
+			});
+			await session.unseat(original.name);
+			await session.seat(original.name);
+			expect(session.participants().find((seat) => seat.name === original.name)).toMatchObject({
+				identity: original.identity,
+			});
+		} finally {
+			faulty.fail(false);
+			await session.stop();
+			await opened.dispose();
+		}
 	});
 });

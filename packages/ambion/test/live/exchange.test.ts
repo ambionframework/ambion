@@ -136,8 +136,8 @@ live('the exchange', () => {
 			instructions: 'Answer questions about meals with one say. For anything else, end your turn.',
 		});
 		const { session, runtime, events } = await open('reserve', {
-			agents: [frontdesk],
-			available: [permits, catering],
+			agents: [frontdesk, permits, catering],
+			seats: { [frontdesk.name]: 'broadcast' },
 		});
 		const visit = await enter(session, andrei);
 		await visit.send({ text: 'How long does a building permit take for the extension?' });
@@ -148,8 +148,8 @@ live('the exchange', () => {
 		expect(seatings.map((m) => m.subject)).toEqual(['permits']);
 		// `from` is the author on every kind: the assistant decided this seating.
 		expect(seatings[0]).toMatchObject({ from: 'assistant', identity: permits.identity });
-		expect(session.seats().map((seat) => seat.name)).toContain('permits');
-		expect(session.seats().map((seat) => seat.name)).not.toContain('catering');
+		expect(session.participants().map((seat) => seat.name)).toContain('permits');
+		expect(session.participants().map((seat) => seat.name)).not.toContain('catering');
 		const answer = saidBy(messages, 'permits');
 		expect(answer).toHaveLength(1);
 		expect(answer[0]?.text).toContain('10 working days');

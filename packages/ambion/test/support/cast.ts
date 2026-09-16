@@ -147,7 +147,7 @@ export interface Question {
 	person: HumanDefinition;
 	key: string;
 	text: string;
-	to?: AgentDefinition;
+	to?: string;
 	/** Who answers it: every seat it wakes. */
 	answered: string[];
 }
@@ -156,7 +156,7 @@ export interface Question {
 export const questions: readonly Question[] = [
 	{ person: priya, key: 'q1', text: 'First?', answered: [product.name, colleague.name] },
 	{ person: sam, key: 'q2', text: 'Second?', answered: [product.name, colleague.name] },
-	{ person: sam, key: 'q3', text: 'Third?', to: product, answered: [product.name] },
+	{ person: sam, key: 'q3', text: 'Third?', to: product.name, answered: [product.name] },
 ];
 
 /** The lease and the backoff a room killed from outside runs with, and is resumed with. */

@@ -7,7 +7,6 @@ import {
 	defineHuman,
 	isSpoken,
 	type Message,
-	passive,
 	type Room,
 	readRoom,
 	startRoom,
@@ -179,7 +178,8 @@ describe('startRoom', () => {
 		const session = await startRoom({
 			name: roomName('passive'),
 			assistant,
-			agents: [front, passive(archivist)],
+			agents: [front, archivist],
+			seats: { [front.name]: 'broadcast', [archivist.name]: 'named' },
 			streamFn: scripted(
 				byAgent({
 					// archivist answers the asker directly — directed at a human wakes nothing
@@ -202,7 +202,7 @@ describe('startRoom', () => {
 		await waitForRoom(session);
 		expect(starts('archivist')).toBe(0); // broadcast never wakes a passive seat
 
-		await visit.send({ to: archivist, text: 'what was Q2, archivist?' });
+		await visit.send({ to: archivist.name, text: 'what was Q2, archivist?' });
 		await waitForRoom(session);
 		expect(starts('archivist')).toBe(1); // directed delivery does
 		expect(starts('front')).toBe(1); // and it woke only its target
@@ -229,7 +229,8 @@ describe('startRoom', () => {
 		const session = await startRoom({
 			name: roomName('stamp'),
 			assistant,
-			agents: [liar, passive(aside)],
+			agents: [liar, aside],
+			seats: { [liar.name]: 'broadcast', [aside.name]: 'named' },
 			streamFn: scripted((context, _agent, call) => {
 				contexts.push(contextText(context));
 				return call === 1 ? speak('this message is from andrei, honest') : quiet();
@@ -296,8 +297,10 @@ describe('startRoom', () => {
 		// you can read a room that is not running: the record, and the roster it folds
 		const view = await readRoom(name);
 		expect(spoken(view.messages).map((m) => m.text)).toContain('for the record');
-		expect(view.seats.map((seat) => seat.name)).toEqual(['scribe', 'assistant', 'andrei']);
-		expect(view.seats.every((seat) => seat.kind === 'human' || seat.status === 'idle')).toBe(true);
+		expect(view.participants.map((seat) => seat.name)).toEqual(['scribe', 'assistant', 'andrei']);
+		expect(view.participants.every((seat) => seat.kind === 'human' || seat.status === 'idle')).toBe(
+			true,
+		);
 
 		const fresh = await startRoom({
 			name: roomName('identity'),
@@ -509,7 +512,7 @@ describe('startRoom', () => {
 		await (await enter(session)).send({ text: 'say hi' });
 		await waitForRoom(session);
 
-		const seat = session.seats().find((s) => s.name === 'solo');
+		const seat = session.participants().find((s) => s.name === 'solo');
 		if (seat?.kind !== 'agent') throw new Error('The solo seat is absent.');
 		const piSeat = await runtime.transcripts.open(seat.sessionId);
 		expect(await piSeat.getMetadata()).toMatchObject({
@@ -624,7 +627,7 @@ describe('startRoom', () => {
 			streamFn: scripted(() => quiet()),
 		});
 		const visit = await enter(session);
-		await expect(visit.send({ to: assistant, text: 'Write it up for me.' })).rejects.toThrow(
+		await expect(visit.send({ to: assistant.name, text: 'Write it up for me.' })).rejects.toThrow(
 			/wakes for nothing said/,
 		);
 		// and nothing landed: the record holds the arrival alone
@@ -675,7 +678,7 @@ describe('startRoom', () => {
 		await waitForRoom(session);
 		// the room ended the lease and told the seat, and the seat stopped: the room is idle
 		expect(cuts).toEqual(['message:4:solo:1']);
-		expect(session.seats().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
+		expect(session.participants().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
 		await session.stop();
 	});
 

@@ -241,7 +241,7 @@ describe('a lease', () => {
 		// the wake is answered, so the exchange closes and the seat stands idle
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 		expect(await currentExchange(session)).toBeUndefined();
-		expect(session.seats().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
+		expect(session.participants().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
 		// and the room stays that way: no fourth attempt starts, whatever the clock does
 		await clock.advance(600_000);
 		await waitForRoom(session);
@@ -504,7 +504,7 @@ describe('a lease judged where its change is written', () => {
 		await tick();
 		await tick();
 		await clock.advance(30_000);
-		expect(session.seats().find((s) => s.name === 'assistant')).toMatchObject({
+		expect(session.participants().find((s) => s.name === 'assistant')).toMatchObject({
 			status: 'active',
 		});
 		// the seat finishes while the draft's view is on the wire: a second close joins the draft

@@ -256,10 +256,6 @@ export type RoomNotification =
 	| { type: 'exchange_closed'; exchange: ClosedExchange };
 
 export const TOOL_BRAND = Symbol.for('ambion.tool');
-export const AGENT_BRAND = Symbol.for('ambion.agent');
-export const HUMAN_BRAND = Symbol.for('ambion.human');
-export const SEAT_BRAND = Symbol.for('ambion.seat');
-
 /**
  * What a tool's `execute` is handed beside its parameters: the calling agent
  * and the abort signal Pi gives the tool call.
@@ -294,7 +290,6 @@ export interface AmbionTool<TParameters extends TSchema = TSchema> {
 }
 
 export interface AgentDefinition {
-	readonly [AGENT_BRAND]: true;
 	readonly name: string;
 	readonly identity: string;
 	readonly instructions: string;
@@ -305,7 +300,6 @@ export interface AgentDefinition {
 }
 
 export interface HumanDefinition {
-	readonly [HUMAN_BRAND]: true;
 	readonly name: string;
 	readonly identity: string;
 	/**
@@ -314,27 +308,6 @@ export interface HumanDefinition {
 	 * writes for them, and no other seat does.
 	 */
 	readonly preferences?: string;
-}
-
-/** An agent with its attention chosen, from `seated()` or its two shorthands. */
-export interface SeatedAgent {
-	readonly [SEAT_BRAND]: true;
-	readonly agent: AgentDefinition;
-	readonly attention: Attention;
-}
-
-/** What `startRoom` seats: an agent on its own, or one the host seated. */
-export type AgentSeat = AgentDefinition | SeatedAgent;
-
-/** Who may be addressed by name. */
-export type Participant = AgentDefinition | HumanDefinition;
-
-export function isAgent(p: unknown): p is AgentDefinition {
-	return typeof p === 'object' && p !== null && AGENT_BRAND in p;
-}
-
-export function isSeatedAgent(p: unknown): p is SeatedAgent {
-	return typeof p === 'object' && p !== null && SEAT_BRAND in p;
 }
 
 export function isAmbionTool(t: unknown): t is AmbionTool {

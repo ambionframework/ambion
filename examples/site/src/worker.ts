@@ -9,21 +9,12 @@
  *
  * Run it:  ANTHROPIC_API_KEY=… pnpm dev:cloudflare   (from examples/site)
  */
-import type { AgentSeat } from '@ambionframework/ambion';
-import { isSeatedAgent } from '@ambionframework/ambion';
-import type { Env, SeatSpec } from '@ambionframework/cloudflare';
+import type { Env } from '@ambionframework/cloudflare';
 import { configure, RoomObject, SeatObject } from '@ambionframework/cloudflare';
-import { AGENTS, ASSISTANT, AVAILABLE, dan, GOAL, priya, ROOM_NAME, sam } from './room.ts';
-
-/** The definition a seat carries, whether the room's list gave it an attention or not. */
-const definitionOf = (seat: AgentSeat) => (isSeatedAgent(seat) ? seat.agent : seat);
-
-/** The same seat as a name the worker resolves, with the attention it carries. */
-const specOf = (seat: AgentSeat): SeatSpec =>
-	isSeatedAgent(seat) ? { name: seat.agent.name, attention: seat.attention } : seat.name;
+import { AGENTS, ASSISTANT, dan, GOAL, INITIAL_SEATS, priya, ROOM_NAME, sam } from './room.ts';
 
 configure({
-	agents: [ASSISTANT, ...AGENTS, ...AVAILABLE].map(definitionOf),
+	agents: [ASSISTANT, ...AGENTS],
 	// A wake nobody takes is sent again this often. Alarms fire on their own here.
 	wake: { resend: 2_000 },
 });
@@ -57,8 +48,8 @@ const PEOPLE = [priya, sam, dan];
 const COMPOSITION = {
 	name: ROOM_NAME,
 	assistant: ASSISTANT.name,
-	agents: AGENTS.map(specOf),
-	available: AVAILABLE.map(specOf),
+	agents: AGENTS.map((agent) => agent.name),
+	seats: INITIAL_SEATS,
 	goal: GOAL,
 };
 
@@ -98,7 +89,7 @@ type Route = (stub: RoomStub, request: Request, url: URL) => Promise<unknown>;
 const ROUTES: Record<string, Route> = {
 	'POST /start': async (stub) => {
 		await stub.start(COMPOSITION);
-		return { started: ROOM_NAME, seats: await stub.seats() };
+		return { started: ROOM_NAME, participants: await stub.participants() };
 	},
 	'POST /visit': async (stub, request) => {
 		const { person } = (await request.json()) as { person: string };
@@ -117,7 +108,7 @@ const ROUTES: Record<string, Route> = {
 		const since = url.searchParams.get('since');
 		return stub.messages(since === null ? undefined : Number(since));
 	},
-	'GET /seats': async (stub) => stub.seats(),
+	'GET /participants': async (stub) => stub.participants(),
 	'GET /journal': async (stub) => stub.journal(),
 	'POST /crash': async (stub) => {
 		// The object goes away without answering: the call it never finishes is
