@@ -27,7 +27,7 @@
 
 import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { answerCommit, answerLease, answerView, RefusedError } from './answers.ts';
+import { answerCommit, answerLease, answerView } from './answers.ts';
 import { captureAgent, captureHuman } from './define.ts';
 import {
 	defaultRuntime,
@@ -50,6 +50,7 @@ import type {
 	LeaseResponse,
 	SeatPort,
 	SeatRoom,
+	Steer,
 	ViewResponse,
 } from './protocol.ts';
 import { summaryCompletion } from './room/exchange.ts';
@@ -60,6 +61,7 @@ import { type LiveWork, liveWork } from './room/reconcile.ts';
 import {
 	decide,
 	evolve,
+	type Refusal,
 	type ReconcileDecision,
 	type RoomCommand,
 	type RoomDecision,
@@ -297,6 +299,11 @@ function notificationFor(event: RoomNotification): RoomNotification {
 /** How many times one pass folds, decides and writes before it yields. */
 const PASSES = 8;
 
+type SubmissionResult<K extends Kind> = Exclude<RoomDecision<K>, { event: unknown }> | undefined;
+
+const refusalMessage = (refusal: Refusal): string =>
+	'reason' in refusal ? refusal.reason : 'The record moved.';
+
 // -- the room ----------------------------------------------------------------
 
 class RoomHost implements Room, RunningRoom {
@@ -342,6 +349,8 @@ class RoomHost implements Room, RunningRoom {
 	private cancelAlarm: () => void = () => {};
 	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	private reconciling: Promise<void> = Promise.resolve();
+	/** Publications run in journal order after the confirmed entry has been folded. */
+	private publications: Promise<void> = Promise.resolve();
 	/** A stop is one shared operation; a failed one may be retried after its promise clears. */
 	private stopInFlight: Promise<void> | undefined;
 	private fold: { length: number; state: RoomState } | undefined;
@@ -404,20 +413,14 @@ class RoomHost implements Room, RunningRoom {
 		this.enter('running');
 		this.seedHeardLeases();
 		this.acceptedEvent(decide(this.state(), { type: 'compose', composition }, this.now()));
-		await this.journal.append('run', {
-			decide: () => {
-				const event = this.acceptedEvent(decide(this.state(), { type: 'run' }, this.now()));
-				return event === undefined ? { result: undefined } : { body: event.body };
-			},
-		});
-		await this.journal.append('composition', {
-			decide: () => {
-				const event = this.acceptedEvent(
-					decide(this.state(), { type: 'compose', composition }, this.now()),
-				);
-				return event === undefined ? { result: undefined } : { body: event.body };
-			},
-		});
+		this.requireSubmission(
+			await this.submit('run', () => decide(this.state(), { type: 'run' }, this.now())),
+		);
+		this.requireSubmission(
+			await this.submit('composition', () =>
+				decide(this.state(), { type: 'compose', composition }, this.now()),
+			),
+		);
 		await this.reconcile();
 	}
 
@@ -429,25 +432,23 @@ class RoomHost implements Room, RunningRoom {
 		const state = this.state();
 		this.validateDefinitions(state);
 		// The fence lands here: from here on, every earlier run's later writes are void.
-		await this.journal.append('run', {
-			decide: () => {
+		this.requireSubmission(
+			await this.submit('run', () => {
 				this.validateDefinitions(this.state());
-				const event = this.acceptedEvent(decide(this.state(), { type: 'run' }, this.now()));
-				return event === undefined ? { result: undefined } : { body: event.body };
-			},
-		});
-		await this.journal.append('composition', {
-			decide: () => {
+				return decide(this.state(), { type: 'run' }, this.now());
+			}),
+		);
+		this.requireSubmission(
+			await this.submit('composition', () => {
 				const current = this.state();
 				this.validateDefinitions(current);
-				const composition = current.composition;
-				if (composition === undefined) return { result: undefined };
+				const priorComposition = current.composition;
+				if (priorComposition === undefined) return { event: undefined };
 				const roster = new Set(current.roster.map((seat) => seat.name));
 				const catalog = new Map(
-					[...composition.agents, ...composition.available, ...current.roster].map((seat) => [
-						seat.name,
-						seat,
-					]),
+					[...priorComposition.agents, ...priorComposition.available, ...current.roster].map(
+						(seat) => [seat.name, seat],
+					),
 				);
 				for (const agent of this.defs.values())
 					if (!catalog.has(agent.name))
@@ -457,14 +458,11 @@ class RoomHost implements Room, RunningRoom {
 							attention: 'broadcast',
 						});
 				const available = [...catalog.values()].filter((seat) => !roster.has(seat.name));
-				const { seq: _seq, at: _at, ...prior } = composition;
+				const { seq: _seq, at: _at, ...prior } = priorComposition;
 				const body = { ...prior, agents: current.roster, available, at: this.iso() };
-				const event = this.acceptedEvent(
-					decide(current, { type: 'compose', composition: body }, this.now()),
-				);
-				return event === undefined ? { result: undefined } : { body: event.body };
-			},
-		});
+				return decide(current, { type: 'compose', composition: body }, this.now());
+			}),
+		);
 		await this.reconcile();
 	}
 
@@ -525,6 +523,27 @@ class RoomHost implements Room, RunningRoom {
 	/** Take a phase. Eviction is terminal, so nothing follows it. */
 	private enter(phase: Phase): void {
 		if (this.phase !== 'evicted') this.phase = phase;
+	}
+
+	/** The room's one typed adapter from a decision to the generic journal queue. */
+	private submit<K extends Kind>(kind: K, decision: () => RoomDecision<K>, key?: string) {
+		return this.journal.append(kind, {
+			...(key === undefined ? {} : { key }),
+			decide: () => {
+				const result = decision();
+				if ('event' in result)
+					return result.event === undefined ? { result: undefined } : { body: result.event.body };
+				return { result };
+			},
+		});
+	}
+
+	/** Convert a refused internal decision to the existing room API error. */
+	private requireSubmission<K extends Kind>(
+		result: { entry: unknown } | { result: SubmissionResult<K> },
+	): void {
+		if ('result' in result && result.result !== undefined && 'refusal' in result.result)
+			throw new Error(refusalMessage(result.result.refusal));
 	}
 
 	/** The room answers nothing more: the host stopped it, or it was dropped. */
@@ -903,14 +922,12 @@ class RoomHost implements Room, RunningRoom {
 		key: string,
 		command: Extract<RoomCommand, { type: 'deliver' | 'commit' }>,
 	): Promise<Message> {
-		const appended = await this.journal.append('message', {
+		const appended = await this.submit(
+			'message',
+			() => decide(this.state(), command, this.now()),
 			key,
-			decide: () => {
-				const event = this.acceptedEvent(decide(this.state(), command, this.now()));
-				if (event === undefined) throw new Error('The room command did not propose a message.');
-				return { body: event.body };
-			},
-		});
+		);
+		this.requireSubmission(appended);
 		if (!('entry' in appended)) throw new Error('The room command did not append a message.');
 		return placed(appended.entry);
 	}
@@ -928,15 +945,12 @@ class RoomHost implements Room, RunningRoom {
 		route = true,
 		key: string = crypto.randomUUID(),
 	): Promise<Message | undefined> {
-		const appended = await this.journal.append('message', {
+		const appended = await this.submit(
+			'message',
+			() => decide(this.state(), { type: 'presence', change, route }, this.now()),
 			key,
-			decide: () => {
-				const event = this.acceptedEvent(
-					decide(this.state(), { type: 'presence', change, route }, this.now()),
-				);
-				return event === undefined ? { result: undefined } : { body: event.body };
-			},
-		});
+		);
+		this.requireSubmission(appended);
 		return 'entry' in appended ? placed(appended.entry) : undefined;
 	}
 
@@ -950,11 +964,21 @@ class RoomHost implements Room, RunningRoom {
 	 * never a second one for the entries it wrote itself.
 	 */
 	private hear(entry: Entry): void {
-		if (entry.kind === 'message') {
-			const message = placed(entry);
-			this.heardMessage(message);
-		} else if (entry.kind === 'close') this.heardClose(entry.body);
-		else if (entry.kind === 'lease') this.heardLease(entry.body, this.opens(entry.body.id));
+		if (entry.kind === 'message') this.queueMessage(entry);
+		else if (entry.kind === 'close') this.queueClose(entry.body);
+		else if (entry.kind === 'lease') this.queueLease(entry.body, this.opens(entry.body.id));
+	}
+
+	/** Queue one captured publication without making journal confirmation await listeners or transport. */
+	private publish(effect: () => void): void {
+		this.publications = this.publications.then(() => {
+			if (this.phase === 'evicted') return;
+			try {
+				effect();
+			} catch {
+				// External publication is best effort after the durable fact is confirmed.
+			}
+		});
 	}
 
 	/**
@@ -980,12 +1004,32 @@ class RoomHost implements Room, RunningRoom {
 	 * the pending activations the projection derives. One message, one event,
 	 * one order.
 	 */
-	private heardMessage(message: Message): void {
-		this.emit({ type: 'message', message });
-		this.noteExchange(message.seq);
-		this.steer(message);
-		this.notifyExchangeWaiters();
-		void this.reconcile();
+	private queueMessage(entry: Extract<Entry, { kind: 'message' }>): void {
+		const message = copyMessage(placed(entry));
+		const state = this.state();
+		const exchange = state.exchange?.from === message.seq ? { ...state.exchange } : undefined;
+		const delivery = state.deliveries.get(message.seq);
+		const after =
+			state.messages.filter((candidate) => candidate.seq < message.seq).at(-1)?.seq ?? 0;
+		const steers: Steer[] = [];
+		for (const target of delivery?.steers ?? []) {
+			const lease = state.leases.get(target.activation);
+			if (lease === undefined || !isLive(lease, this.now())) continue;
+			steers.push({
+				room: this.name,
+				seat: target.seat,
+				activation: target.activation,
+				after,
+				message: copyMessage(message),
+			});
+		}
+		this.publish(() => {
+			this.emit({ type: 'message', message });
+			if (exchange !== undefined) this.emit({ type: 'exchange_opened', exchange });
+			for (const steer of steers) this.steer(steer);
+			this.notifyExchangeWaiters();
+			void this.reconcile();
+		});
 	}
 
 	/**
@@ -993,20 +1037,21 @@ class RoomHost implements Room, RunningRoom {
 	 * before any closing summary. A question that landed
 	 * ahead of the close opens the next exchange, and the room says so.
 	 */
-	private heardClose(close: Close): void {
+	private queueClose(close: Close): void {
 		const question = this.state().messages.find((m) => m.seq === close.from);
-		this.emit({
-			type: 'exchange_closed',
-			exchange: {
-				owner: close.owner,
-				from: close.from,
-				at: question?.at ?? close.at,
-				through: close.through,
-			},
-		});
+		const exchange: ClosedExchange = {
+			owner: close.owner,
+			from: close.from,
+			at: question?.at ?? close.at,
+			through: close.through,
+		};
 		const next = this.state().exchange;
-		if (next !== undefined) this.noteExchange(next.from);
-		this.notifyExchangeWaiters();
+		const opened = next === undefined ? undefined : { ...next };
+		this.publish(() => {
+			this.emit({ type: 'exchange_closed', exchange });
+			if (opened !== undefined) this.emit({ type: 'exchange_opened', exchange: opened });
+			this.notifyExchangeWaiters();
+		});
 	}
 
 	/**
@@ -1014,81 +1059,70 @@ class RoomHost implements Room, RunningRoom {
 	 * end ends one. A change that ends a lease the journal never held is a
 	 * wake written off, and starts nothing.
 	 */
-	private heardLease(lease: LeaseChange, first: boolean): void {
+	private queueLease(lease: LeaseChange, first: boolean): void {
 		const seat = seatOf(lease.id) ?? '';
 		if (lease.phase === 'running') {
-			if (first) {
-				this.emit({ type: 'activation_start', agent: seat });
-			}
-			// A claim that lost its confirmation never armed the expiry: this pass does.
-			void this.reconcile();
-			this.notifyExchangeWaiters();
+			this.publish(() => {
+				if (first) this.emit({ type: 'activation_start', agent: seat });
+				// A claim that lost its confirmation never armed the expiry: this pass does.
+				void this.reconcile();
+				this.notifyExchangeWaiters();
+			});
 			return;
 		}
-		if (lease.reason === 'revoked')
-			void this.port(seat)
-				.cut(lease.id)
-				.catch(() => {});
+		const revoked = lease.reason === 'revoked';
 		if (first) {
 			// A change that ends a lease the journal never held is an attempt nobody made.
-			if (lease.reason === 'abandoned') {
-				this.emit({ type: 'abandoned', agent: seat, activation: lease.id });
-				void this.reconcile();
-			}
-			this.notifyExchangeWaiters();
+			this.publish(() => {
+				if (revoked) this.cutPort(seat, lease.id);
+				if (lease.reason === 'abandoned') {
+					this.emit({ type: 'abandoned', agent: seat, activation: lease.id });
+					void this.reconcile();
+				}
+				this.notifyExchangeWaiters();
+			});
 			return;
 		}
 		const spoke = this.state().messages.some((m) => m.activationId === lease.id);
-		this.emit({ type: 'activation_end', agent: seat, spoke });
-		this.notifyExchangeWaiters();
-		if (lease.reason === 'expired') {
-			this.emit({
-				type: 'error',
-				agent: seat,
-				error: new Error('The activation ran past its lease.'),
-			});
-		}
-	}
-
-	/** The question at `seq` opened an exchange, and the room says so. */
-	private noteExchange(seq: Seq): void {
-		const state = this.state();
-		if (state.exchange?.from !== seq) return;
-		this.emit({ type: 'exchange_opened', exchange: state.exchange });
+		this.publish(() => {
+			if (revoked) this.cutPort(seat, lease.id);
+			this.emit({ type: 'activation_end', agent: seat, spoke });
+			this.notifyExchangeWaiters();
+			if (lease.reason === 'expired')
+				this.emit({
+					type: 'error',
+					agent: seat,
+					error: new Error('The activation ran past its lease.'),
+				});
+		});
 	}
 
 	/**
 	 * Send projected ordinary targets when their recorded lease is live now.
 	 * The delivery projection excludes authors and context-bound activations.
 	 */
-	private steer(message: Message): void {
-		const state = this.state();
-		const delivery = state.deliveries.get(message.seq);
-		if (delivery === undefined) return;
-		const after =
-			state.messages.filter((candidate) => candidate.seq < message.seq).at(-1)?.seq ?? 0;
-		for (const steer of delivery.steers) {
-			const lease = state.leases.get(steer.activation);
-			if (lease === undefined || !isLive(lease, this.now())) continue;
-			const seat = steer.seat;
-			void this.port(seat)
-				.steer({
-					room: this.name,
-					seat,
-					activation: steer.activation,
-					after,
-					message: copyMessage(message),
-				})
-				.catch(() => {});
-		}
+	private steer(steer: Steer): void {
+		this.dispatch(steer.seat, (port) => port.steer(steer));
 	}
 
 	/** One activation wake over the wire. */
 	private send(id: string, seat: string): void {
 		this.sentAt.set(id, this.now());
-		void this.port(seat)
-			.wake({ room: this.name, seat, activation: id })
-			.catch(() => {});
+		this.dispatch(seat, (port) => port.wake({ room: this.name, seat, activation: id }));
+	}
+
+	private cutPort(seat: string, activation: string): void {
+		this.dispatch(seat, (port) => port.cut(activation));
+	}
+
+	/** Contain synchronous connector faults and asynchronous transport rejection independently. */
+	private dispatch(seat: string, send: (port: SeatPort) => Promise<void>): void {
+		if (this.phase === 'evicted') return;
+		try {
+			void send(this.port(seat)).catch(() => {});
+		} catch {
+			// A synchronous connector failure cannot undo the journal entry.
+		}
 	}
 
 	private port(seat: string): SeatPort {
@@ -1134,29 +1168,19 @@ class RoomHost implements Room, RunningRoom {
 	// -- what an answer reads of the room ---------------------------------------
 
 	/** One operation on the room's commit queue, with the wakes the room routes. */
-	async write(commit: CommitRequest): Promise<CommitResult> {
-		const appended = await this.journal.append<
+	async write(commit: CommitRequest): Promise<CommitResult | { refusal: Refusal }> {
+		const appended = await this.submit(
 			'message',
-			Extract<CommitResult, { unchanged: unknown }>
-		>('message', {
-			key: commit.key,
-			decide: () => {
-				const decision = decide(this.state(), { type: 'commit', commit }, this.now());
-				if ('unchanged' in decision) return { result: decision };
-				const event = this.acceptedEvent(decision);
-				if (event === undefined) throw new Error('The commit did not propose a message.');
-				return { body: event.body };
-			},
-		});
-		return 'entry' in appended
-			? { committed: copyMessage(placed(appended.entry)) }
-			: appended.result;
+			() => decide(this.state(), { type: 'commit', commit }, this.now()),
+			commit.key,
+		);
+		if ('entry' in appended) return { committed: copyMessage(placed(appended.entry)) };
+		if (appended.result === undefined) throw new Error('The commit did not propose a message.');
+		return appended.result;
 	}
 
 	private acceptedEvent<K extends Kind>(decision: RoomDecision<K>) {
-		if ('refusal' in decision) {
-			throw new RefusedError(decision.refusal);
-		}
+		if ('refusal' in decision) throw new Error(refusalMessage(decision.refusal));
 		return 'event' in decision ? decision.event : undefined;
 	}
 
@@ -1173,27 +1197,25 @@ class RoomHost implements Room, RunningRoom {
 		type: 'claim' | 'renew',
 		readThrough?: Seq,
 	): Promise<LeaseResponse> {
-		const written = await this.journal.append('lease', {
-			decide: () => {
-				if (this.gone()) return { result: undefined };
-				const wake = this.runtime.wake;
-				const decision = decide(
-					this.state(),
-					{
-						type,
-						id,
-						expiry: wake.expiry,
-						deadline: wake.deadline,
-						...(readThrough === undefined ? {} : { readThrough }),
-					},
-					this.now(),
-				);
-				if (!('event' in decision)) return { result: undefined };
-				const event = decision.event;
-				if (event === undefined || event.body.phase !== 'running') return { result: undefined };
-				return { body: event.body };
-			},
+		const written = await this.submit('lease', () => {
+			if (this.gone()) return { event: undefined };
+			const wake = this.runtime.wake;
+			const decision = decide(
+				this.state(),
+				{
+					type,
+					id,
+					expiry: wake.expiry,
+					deadline: wake.deadline,
+					...(readThrough === undefined ? {} : { readThrough }),
+				},
+				this.now(),
+			);
+			if (!('event' in decision) || decision.event?.body.phase !== 'running')
+				return { event: undefined };
+			return decision;
 		});
+		this.requireSubmission(written);
 		return 'entry' in written && written.entry.body.phase === 'running'
 			? { ok: { expiresAt: written.entry.body.expiresAt, lastSeq: this.state().lastSeq } }
 			: { stale: 'the lease ended' };
@@ -1209,16 +1231,18 @@ class RoomHost implements Room, RunningRoom {
 	 * ahead of it keeps the lease, and nothing is written. The change says
 	 * how the activation went, and `heardLease` says so once.
 	 */
-	async end(id: string, reason: EndReason, readThrough: Seq): Promise<boolean> {
-		const appended = await this.journal.append('lease', {
-			decide: () => {
-				const event = this.acceptedEvent(
-					decide(this.state(), { type: 'end', id, reason, readThrough }, this.now()),
-				);
-				return event === undefined ? { result: undefined } : { body: event.body };
-			},
-		});
-		return 'entry' in appended;
+	async end(
+		id: string,
+		reason: EndReason,
+		readThrough: Seq,
+	): Promise<boolean | { refusal: Refusal }> {
+		const appended = await this.submit('lease', () =>
+			decide(this.state(), { type: 'end', id, reason, readThrough }, this.now()),
+		);
+		if ('entry' in appended) return true;
+		if (appended.result !== undefined && 'refusal' in appended.result)
+			return { refusal: appended.result.refusal };
+		return false;
 	}
 
 	// -- reconcile ----------------------------------------------------------------
@@ -1297,27 +1321,25 @@ class RoomHost implements Room, RunningRoom {
 
 	private applyEvent(event: ReconcileDecision['events'][number]): Promise<boolean> {
 		if (event.kind === 'lease' && event.body.phase === 'ended')
-			return this.end(event.body.id, event.body.reason, event.body.readThrough);
+			return this.end(event.body.id, event.body.reason, event.body.readThrough).then((result) => {
+				return this.requireEnd(result);
+			});
 		return event.kind === 'close' ? this.close(event.body) : Promise.resolve(false);
 	}
 
 	/**
 	 * The room completed an exchange, so that exchange ends at the record
 	 * as the decision saw it: the close is an entry on the journal, written where the
-	 * fold still says the same exchange is open. `heardClose` says so, and
+	 * fold still says the same exchange is open. The queued close publication says so, and
 	 * opens the next exchange when a question landed after the decision; the
 	 * next pass closes that one at once when nobody works on it.
 	 */
 	private async close(close: Close): Promise<boolean> {
-		const written = await this.journal.append('close', {
-			decide: () => {
-				if (this.gone()) return { result: undefined };
-				const event = this.acceptedEvent(
-					decide(this.state(), { type: 'close', close }, this.now()),
-				);
-				return event === undefined ? { result: undefined } : { body: event.body };
-			},
+		const written = await this.submit('close', () => {
+			if (this.gone()) return { event: undefined };
+			return decide(this.state(), { type: 'close', close }, this.now());
 		});
+		this.requireSubmission(written);
 		if ('entry' in written) return true;
 		const state = this.state();
 		return (
@@ -1369,7 +1391,12 @@ class RoomHost implements Room, RunningRoom {
 	 * a seat that never hears the cut is refused whatever it writes after it.
 	 */
 	private async cut(ids: string[]): Promise<void> {
-		for (const id of ids) await this.end(id, 'revoked', 0);
+		for (const id of ids) this.requireEnd(await this.end(id, 'revoked', 0));
+	}
+
+	private requireEnd(result: boolean | { refusal: Refusal }): boolean {
+		if (typeof result === 'boolean') return result;
+		throw new Error(refusalMessage(result.refusal));
 	}
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */
