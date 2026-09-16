@@ -201,6 +201,9 @@ application can always read the discussion.
 
 [`examples/site`](examples/site) demonstrates domain tools, agent membership,
 multiple people, and a shared workspace.
+[`examples/persistent`](examples/persistent) hosts multiple rooms and people
+in one Node process, with a browser console, a shared local workspace,
+and SQLite restart support.
 
 ## Hosting and persistence
 

@@ -1,0 +1,1777 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Ambion · persistent rooms</title>
+		<style>
+			:root {
+				color-scheme: light;
+				--bg: #f5f7f9;
+				--panel: #ffffff;
+				--panel-2: #eef3f6;
+				--line: #d8e0e7;
+				--line-soft: #e8edf1;
+				--text: #1e2935;
+				--muted: #627283;
+				--dim: #8996a3;
+				--cyan: #167b83;
+				--cyan-soft: #e2f2f2;
+				--amber: #9a641e;
+				--green: #24774b;
+				--red: #b23b49;
+				--shadow: 0 12px 34px #26374612;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				min-height: 100%;
+				background: var(--bg);
+				color: var(--text);
+			}
+			body {
+				font:
+					13px/1.45 ui-monospace,
+					SFMono-Regular,
+					Menlo,
+					Monaco,
+					Consolas,
+					monospace;
+			}
+			button,
+			input,
+			textarea {
+				font: inherit;
+				color: inherit;
+			}
+			button {
+				cursor: pointer;
+			}
+			button:disabled {
+				cursor: wait;
+				opacity: 0.45;
+			}
+			.app {
+				height: 100dvh;
+				display: grid;
+				grid-template-rows: 58px 1fr;
+			}
+			.topbar {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 0 22px;
+				border-bottom: 1px solid var(--line);
+				background: #ffffffee;
+			}
+			.brand {
+				display: flex;
+				align-items: center;
+				gap: 11px;
+				letter-spacing: 0.04em;
+			}
+			.mark {
+				width: 25px;
+				height: 25px;
+				border: 1px solid var(--cyan);
+				border-radius: 7px;
+				position: relative;
+			}
+			.mark::before,
+			.mark::after {
+				content: '';
+				position: absolute;
+				background: var(--cyan);
+			}
+			.mark::before {
+				width: 9px;
+				height: 1px;
+				top: 11px;
+				left: 7px;
+				box-shadow:
+					0 -5px 0 var(--cyan),
+					0 5px 0 var(--cyan);
+			}
+			.mark::after {
+				width: 1px;
+				height: 9px;
+				top: 7px;
+				left: 11px;
+				opacity: 0.65;
+			}
+			.brand strong {
+				font-size: 14px;
+				color: var(--cyan);
+			}
+			.brand span {
+				color: var(--muted);
+			}
+			.top-actions {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.as {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				color: var(--muted);
+				margin-right: 5px;
+			}
+			.gate {
+				position: fixed;
+				z-index: 10;
+				inset: 0;
+				display: grid;
+				place-items: center;
+				padding: 20px;
+				background: #edf2f6ee;
+				backdrop-filter: blur(5px);
+			}
+			.gate.hidden {
+				display: none;
+			}
+			.gate-card {
+				width: min(520px, 100%);
+				border: 1px solid var(--line);
+				border-radius: 9px;
+				background: var(--panel);
+				padding: 28px;
+				box-shadow: var(--shadow);
+			}
+			.gate-card h2 {
+				margin: 0 0 8px;
+				font-size: 18px;
+				font-weight: 500;
+				color: var(--cyan);
+			}
+			.gate-card p {
+				color: var(--muted);
+				margin: 0 0 20px;
+			}
+			.identity-options {
+				display: grid;
+				gap: 8px;
+			}
+			.identity-option {
+				display: grid;
+				gap: 2px;
+				text-align: left;
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				background: var(--panel-2);
+				padding: 11px 13px;
+			}
+			.identity-option:hover {
+				border-color: var(--cyan);
+			}
+			.identity-option strong {
+				color: var(--text);
+				font-weight: 500;
+			}
+			.identity-option span {
+				color: var(--muted);
+				font-size: 11px;
+			}
+			.connection {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				color: var(--muted);
+				margin-right: 14px;
+			}
+			.dot {
+				width: 7px;
+				height: 7px;
+				border-radius: 50%;
+				background: var(--dim);
+			}
+			.connection.online .dot {
+				background: var(--green);
+				box-shadow: 0 0 9px var(--green);
+			}
+			.connection.error .dot {
+				background: var(--red);
+			}
+			.btn {
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				background: var(--panel-2);
+				padding: 7px 11px;
+				color: var(--muted);
+			}
+			.btn:hover {
+				border-color: var(--cyan);
+				color: var(--text);
+			}
+			.btn.primary {
+				border-color: #2b7780;
+				color: var(--cyan);
+				background: var(--cyan-soft);
+			}
+			.btn.warn:hover {
+				border-color: var(--amber);
+				color: var(--amber);
+			}
+			.btn.danger:hover {
+				border-color: var(--red);
+				color: var(--red);
+			}
+			.layout {
+				min-height: 0;
+				display: grid;
+				grid-template-columns: 240px minmax(420px, 1fr) 265px;
+			}
+			.sidebar,
+			.inspector {
+				min-height: 0;
+				background: var(--panel);
+			}
+			.sidebar {
+				border-right: 1px solid var(--line);
+				padding: 19px 13px;
+				overflow: auto;
+			}
+			.inspector {
+				border-left: 1px solid var(--line);
+				padding: 19px 15px;
+				overflow: auto;
+			}
+			.section-label {
+				text-transform: uppercase;
+				letter-spacing: 0.12em;
+				font-size: 10px;
+				color: var(--dim);
+				margin: 0 8px 10px;
+			}
+			.rooms {
+				display: grid;
+				gap: 4px;
+			}
+			.room {
+				width: 100%;
+				text-align: left;
+				display: grid;
+				grid-template-columns: 9px 1fr auto;
+				align-items: center;
+				gap: 8px;
+				padding: 10px 9px;
+				border: 1px solid transparent;
+				border-radius: 6px;
+				background: transparent;
+			}
+			.room:hover {
+				background: var(--panel-2);
+			}
+			.room.selected {
+				border-color: #285a61;
+				background: var(--cyan-soft);
+			}
+			.room .room-dot {
+				width: 7px;
+				height: 7px;
+				border-radius: 50%;
+				background: var(--green);
+			}
+			.room .room-dot.idle {
+				background: var(--dim);
+			}
+			.room-name {
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.room-meta {
+				color: var(--dim);
+				font-size: 10px;
+			}
+			.new-room {
+				margin-top: 20px;
+				border-top: 1px solid var(--line-soft);
+				padding-top: 17px;
+			}
+			.field {
+				display: grid;
+				gap: 6px;
+				margin-bottom: 9px;
+			}
+			.field label {
+				color: var(--muted);
+				font-size: 11px;
+			}
+			.input,
+			.textarea {
+				border: 1px solid var(--line);
+				border-radius: 5px;
+				background: #fbfcfd;
+				padding: 8px 9px;
+				outline: none;
+			}
+			.input:focus,
+			.textarea:focus {
+				border-color: #397b84;
+				box-shadow: 0 0 0 2px #1e555a55;
+			}
+			.new-room .btn {
+				width: 100%;
+				margin-top: 2px;
+			}
+			.workspace {
+				min-width: 0;
+				min-height: 0;
+				display: grid;
+				grid-template-rows: auto 1fr auto;
+				background: var(--bg);
+			}
+			.room-head {
+				display: flex;
+				align-items: flex-start;
+				justify-content: space-between;
+				gap: 18px;
+				padding: 21px 26px 16px;
+				border-bottom: 1px solid var(--line-soft);
+			}
+			.room-head h1 {
+				margin: 0 0 5px;
+				font-size: 17px;
+				font-weight: 500;
+				letter-spacing: 0.01em;
+			}
+			.room-head h1::before {
+				content: '~/';
+				color: var(--dim);
+			}
+			.goal {
+				color: var(--muted);
+				max-width: 640px;
+			}
+			.head-state {
+				text-align: right;
+				color: var(--muted);
+				white-space: nowrap;
+			}
+			.state-label {
+				color: var(--green);
+			}
+			.timeline {
+				min-height: 0;
+				overflow: auto;
+				padding: 22px 26px 28px;
+			}
+			.timeline-inner {
+				max-width: 850px;
+				margin: 0 auto;
+			}
+			.empty {
+				min-height: 340px;
+				display: grid;
+				place-items: center;
+				text-align: center;
+				color: var(--dim);
+				border: 1px dashed var(--line);
+				border-radius: 8px;
+			}
+			.empty strong {
+				display: block;
+				color: var(--muted);
+				font-weight: 500;
+				margin-bottom: 5px;
+			}
+			.message {
+				position: relative;
+				display: grid;
+				grid-template-columns: 78px minmax(0, 1fr);
+				gap: 15px;
+				padding: 0 0 21px;
+			}
+			.message::before {
+				content: '';
+				position: absolute;
+				left: 77px;
+				top: 22px;
+				bottom: 0;
+				border-left: 1px solid var(--line-soft);
+			}
+			.message:last-child::before {
+				display: none;
+			}
+			.message-side {
+				color: var(--dim);
+				font-size: 10px;
+				text-align: right;
+				padding-top: 3px;
+			}
+			.message-side .seq {
+				color: var(--muted);
+				display: block;
+			}
+			.message-card {
+				min-width: 0;
+				border: 1px solid var(--line);
+				border-radius: 7px;
+				background: var(--panel);
+				padding: 12px 14px;
+				box-shadow: var(--shadow);
+			}
+			.message-card.question {
+				border-color: #345d67;
+			}
+			.message-card.summary {
+				border-color: #caa96d;
+				background: #fffaf1;
+			}
+			.message-card.presence {
+				border-style: dashed;
+				background: transparent;
+				box-shadow: none;
+				padding: 8px 12px;
+			}
+			.message-byline {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				color: var(--muted);
+				font-size: 11px;
+				margin-bottom: 7px;
+			}
+			.message-byline .kind {
+				color: var(--cyan);
+				text-transform: uppercase;
+				font-size: 9px;
+				letter-spacing: 0.1em;
+			}
+			.summary .message-byline .kind {
+				color: var(--amber);
+			}
+			.message-text {
+				white-space: pre-wrap;
+				overflow-wrap: anywhere;
+				color: var(--text);
+			}
+			.presence .message-text {
+				color: var(--muted);
+			}
+			.composer {
+				border-top: 1px solid var(--line);
+				padding: 14px 26px 19px;
+				background: var(--panel);
+			}
+			.compose-inner {
+				max-width: 850px;
+				margin: 0 auto;
+				display: grid;
+				grid-template-columns: 1fr auto;
+				gap: 9px;
+				align-items: end;
+			}
+			.compose-box {
+				position: relative;
+			}
+			.compose-box .textarea {
+				width: 100%;
+				min-height: 42px;
+				max-height: 130px;
+				resize: vertical;
+				padding-right: 70px;
+			}
+			.compose-hint {
+				position: absolute;
+				right: 9px;
+				bottom: 8px;
+				color: var(--dim);
+				font-size: 10px;
+				pointer-events: none;
+			}
+			.send {
+				height: 42px;
+				min-width: 78px;
+			}
+			.pending-note {
+				max-width: 850px;
+				margin: 7px auto 0;
+				color: var(--amber);
+				font-size: 10px;
+				min-height: 15px;
+			}
+			.panel {
+				border-bottom: 1px solid var(--line-soft);
+				padding-bottom: 19px;
+				margin-bottom: 19px;
+			}
+			.panel summary {
+				cursor: pointer;
+				color: var(--muted);
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 0.12em;
+			}
+			.panel summary::marker {
+				color: var(--cyan);
+			}
+			.panel:last-child {
+				border-bottom: 0;
+			}
+			.participants {
+				display: grid;
+				gap: 9px;
+			}
+			.participant {
+				display: grid;
+				grid-template-columns: 8px 1fr auto;
+				gap: 8px;
+				align-items: center;
+			}
+			.participant .status {
+				width: 7px;
+				height: 7px;
+				border-radius: 50%;
+				background: var(--dim);
+			}
+			.participant .status.active {
+				background: var(--amber);
+				box-shadow: 0 0 8px var(--amber);
+			}
+			.participant-name {
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+			.participant-kind {
+				color: var(--dim);
+				font-size: 10px;
+			}
+			.activity {
+				display: grid;
+				gap: 8px;
+				color: var(--muted);
+				font-size: 11px;
+			}
+			.activity-line {
+				display: flex;
+				gap: 8px;
+			}
+			.activity-line .bullet {
+				color: var(--cyan);
+			}
+			.toast {
+				position: fixed;
+				left: 50%;
+				bottom: 22px;
+				transform: translate(-50%, 12px);
+				opacity: 0;
+				pointer-events: none;
+				transition: 0.18s ease;
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				background: #ffffff;
+				color: var(--text);
+				padding: 9px 13px;
+				box-shadow: var(--shadow);
+				max-width: min(650px, calc(100vw - 30px));
+			}
+			.toast.show {
+				opacity: 1;
+				transform: translate(-50%, 0);
+			}
+			.toast.error {
+				border-color: #713d47;
+				color: #8e2937;
+			}
+			@media (max-width: 1120px) {
+				.layout {
+					grid-template-columns: 205px minmax(360px, 1fr) 225px;
+				}
+			}
+			@media (max-width: 790px) {
+				.workspace {
+					height: 80dvh;
+				}
+				.app {
+					height: auto;
+					grid-template-rows: auto 1fr;
+				}
+				.topbar {
+					padding: 12px 14px;
+					gap: 10px;
+					align-items: flex-start;
+				}
+				.top-actions {
+					flex-wrap: wrap;
+					justify-content: flex-end;
+				}
+				.connection {
+					margin-right: 0;
+				}
+				.layout {
+					display: grid;
+					grid-template-columns: 1fr;
+					grid-template-rows: auto minmax(580px, 1fr) auto;
+				}
+				.sidebar {
+					border-right: 0;
+					border-bottom: 1px solid var(--line);
+					padding: 12px;
+				}
+				.rooms {
+					display: flex;
+					overflow: auto;
+				}
+				.room {
+					min-width: 150px;
+				}
+				.new-room {
+					display: block;
+					margin-top: 13px;
+					padding-top: 13px;
+				}
+				.inspector {
+					border-left: 0;
+					border-top: 1px solid var(--line);
+					display: grid;
+					grid-template-columns: repeat(2, minmax(0, 1fr));
+					gap: 0 20px;
+				}
+				.inspector .panel {
+					min-width: 0;
+				}
+				.room-head,
+				.timeline,
+				.composer {
+					padding-left: 14px;
+					padding-right: 14px;
+				}
+				.message {
+					grid-template-columns: 54px minmax(0, 1fr);
+					gap: 9px;
+				}
+				.message::before {
+					left: 53px;
+				}
+			}
+			.suggestion {
+				text-align: left;
+				background: none;
+				border: 0;
+				color: var(--muted);
+				padding: 0 0 12px;
+				font-size: 12px;
+				line-height: 1.5;
+			}
+			.suggestion:hover {
+				color: var(--cyan);
+			}
+			.workspace-panel {
+				margin-top: 24px;
+			}
+			#files {
+				display: grid;
+				gap: 5px;
+			}
+			#files button {
+				overflow-wrap: anywhere;
+			}
+			#file-preview {
+				font-size: 11px;
+				white-space: pre-wrap;
+				overflow-wrap: anywhere;
+			}
+			#room-pattern {
+				color: var(--cyan);
+				font-size: 11px;
+				margin-top: 8px;
+			}
+			#new-room {
+				margin-top: 12px;
+			}
+			.toast.error {
+				color: var(--red);
+			}
+			@media (min-width: 791px) and (max-width: 960px) {
+				.layout {
+					grid-template-columns: 205px minmax(0, 1fr);
+				}
+				.inspector {
+					grid-column: 2;
+					border-top: 1px solid var(--line);
+				}
+			}
+			@media (max-width: 790px) {
+				.topbar {
+					flex-wrap: wrap;
+				}
+				.top-actions {
+					justify-content: flex-start;
+				}
+				.head-state {
+					display: none;
+				}
+				.workspace-panel:not([open]) {
+					margin-top: 12px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="app">
+			<header class="topbar">
+				<div class="brand">
+					<div class="mark" aria-hidden="true"></div>
+					<strong>AMBION</strong><span>/ persistent rooms</span>
+				</div>
+				<div class="top-actions">
+					<div class="as">As <strong id="identity-name">choose a person</strong></div>
+					<div id="connection" class="connection"><i class="dot"></i><span>connecting</span></div>
+					<button id="switch-user" class="btn" type="button">Switch user</button>
+					<button id="resume" class="btn" type="button">Resume</button>
+					<button id="stop" class="btn warn" type="button">Stop</button>
+					<button id="abort" class="btn danger" type="button">Abort work</button>
+				</div>
+			</header>
+			<div class="layout">
+				<aside class="sidebar">
+					<div class="section-label">Rooms</div>
+					<div id="rooms" class="rooms"></div>
+					<details class="new-room">
+						<summary>Create a room</summary>
+						<form id="new-room">
+							<div class="field">
+								<label for="room-name">Name</label
+								><input
+									id="room-name"
+									class="input"
+									required
+									maxlength="48"
+									pattern="[a-z][a-z0-9-]{0,47}"
+									placeholder="research"
+								/>
+							</div>
+							<div class="field">
+								<label for="new-room-goal">Goal</label
+								><textarea
+									id="new-room-goal"
+									class="textarea"
+									required
+									maxlength="2000"
+									rows="2"
+									placeholder="What is this room for?"
+								></textarea>
+							</div>
+							<button class="btn primary" type="submit">Create room</button>
+						</form>
+					</details>
+					<details class="panel workspace-panel" open>
+						<summary style="display: flex; justify-content: space-between; align-items: center">
+							Shared workspace
+							<button
+								id="refresh-files"
+								aria-label="Refresh files"
+								class="btn"
+								type="button"
+								style="padding: 2px 6px"
+							>
+								↻
+							</button>
+						</summary>
+						<div id="files" class="activity" style="margin-top: 12px"></div>
+						<pre
+							id="file-preview"
+							class="message-text"
+							style="margin: 12px 0 0; max-height: 180px; overflow: auto; color: var(--muted)"
+						></pre>
+					</details>
+				</aside>
+				<main class="workspace">
+					<section class="room-head">
+						<div>
+							<h1 id="room-title">connecting</h1>
+							<div id="room-goal" class="goal">Loading rooms…</div>
+							<div id="room-pattern" class="goal"></div>
+						</div>
+						<div class="head-state">
+							<div id="room-state" class="state-label">Connecting</div>
+							<div id="room-updated">—</div>
+						</div>
+					</section>
+					<section id="timeline" class="timeline">
+						<div id="timeline-inner" class="timeline-inner"></div>
+					</section>
+					<form id="composer" class="composer">
+						<button id="suggestion" type="button" class="suggestion" hidden></button>
+						<div class="compose-inner">
+							<div class="compose-box">
+								<textarea
+									id="message"
+									class="textarea"
+									rows="1"
+									placeholder="Ask the room…"
+								></textarea
+								><span class="compose-hint">↵ send</span>
+							</div>
+							<button id="send" class="btn primary send" type="submit">Send</button>
+						</div>
+						<div id="pending" class="pending-note"></div>
+					</form>
+				</main>
+				<aside class="inspector">
+					<section class="panel">
+						<div class="section-label" style="margin-left: 0">Participants</div>
+						<div id="participants" class="participants"></div>
+					</section>
+					<details class="panel">
+						<summary>Activity</summary>
+						<div id="activity" class="activity" style="margin-top: 12px"></div>
+					</details>
+				</aside>
+			</div>
+		</div>
+		<div id="toast" class="toast" role="status"></div>
+		<div id="identity-gate" class="gate">
+			<section class="gate-card" aria-labelledby="identity-heading">
+				<h2 id="identity-heading">Choose a user</h2>
+				<p>
+					This browser will act as one predefined person. You can use another tab for a different
+					person.
+				</p>
+				<div id="identity-options" class="identity-options"></div>
+			</section>
+		</div>
+		<script>
+			(() => {
+				'use strict';
+				const ORIGIN_KEY = `ambion-persistent-ui-v1:${location.origin}`;
+				let clientId = '';
+				try {
+					clientId = sessionStorage.getItem(`${ORIGIN_KEY}:client`) || crypto.randomUUID();
+					sessionStorage.setItem(`${ORIGIN_KEY}:client`, clientId);
+				} catch {
+					clientId = crypto.randomUUID();
+				}
+				const STORAGE_KEY = `${ORIGIN_KEY}:${clientId}`;
+
+				const state = {
+					rooms: [],
+					people: [],
+					selected: '',
+					pendingRoom: '',
+					human: '',
+					messages: new Map(),
+					participants: new Map(),
+					drafts: {},
+					outbox: [],
+					expanded: new Set(),
+					workspace: null,
+					refreshing: false,
+					workspaceRefreshing: false,
+					pollAgain: false,
+					pollPromise: null,
+					flushing: false,
+					flushPromise: null,
+					flushController: null,
+					flushGeneration: 0,
+					navigating: false,
+					navigationEpoch: 0,
+					restored: false,
+					lastError: '',
+					toastTimer: 0,
+					timelineKey: '',
+				};
+				const $ = (id) => document.getElementById(id);
+				const escPath = (value) => encodeURIComponent(value);
+				const node = (tag, className, text) => {
+					const item = document.createElement(tag);
+					if (className) item.className = className;
+					if (text !== undefined) item.textContent = text;
+					return item;
+				};
+				const readStore = () => {
+					try {
+						const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+						return saved && typeof saved === 'object' ? saved : {};
+					} catch {
+						return {};
+					}
+				};
+				const saved = readStore();
+				try {
+					const identity = sessionStorage.getItem(`${STORAGE_KEY}:identity`);
+					if (identity) state.human = identity;
+				} catch {
+					/* private browsing can reject storage */
+				}
+				state.selected = typeof saved.selected === 'string' ? saved.selected : '';
+				state.drafts = saved.drafts && typeof saved.drafts === 'object' ? saved.drafts : {};
+				state.outbox = Array.isArray(saved.outbox)
+					? saved.outbox.filter(
+							(item) =>
+								item &&
+								typeof item.room === 'string' &&
+								typeof item.human === 'string' &&
+								typeof item.key === 'string' &&
+								typeof item.text === 'string',
+						)
+					: [];
+				const save = () => {
+					try {
+						localStorage.setItem(
+							STORAGE_KEY,
+							JSON.stringify({
+								selected: state.selected,
+								drafts: state.drafts,
+								outbox: state.outbox,
+							}),
+						);
+						state.lastError = '';
+						return true;
+					} catch (error) {
+						state.lastError = `Browser storage unavailable: ${error instanceof Error ? error.message : String(error)}`;
+						return false;
+					}
+				};
+				const showToast = (message, error = false) => {
+					const toast = $('toast');
+					toast.textContent = message;
+					toast.className = `toast show${error ? ' error' : ''}`;
+					clearTimeout(state.toastTimer);
+					state.toastTimer = setTimeout(() => {
+						toast.className = 'toast';
+					}, 4200);
+				};
+				const api = {
+					async request(path, options = {}) {
+						const response = await fetch(path, {
+							...options,
+							signal: options.signal
+								? AbortSignal.any([options.signal, AbortSignal.timeout(10_000)])
+								: AbortSignal.timeout(10_000),
+							headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+						});
+						const text = await response.text();
+						let body = {};
+						try {
+							body = text ? JSON.parse(text) : {};
+						} catch {
+							body = { error: text };
+						}
+						if (!response.ok) {
+							const error = new Error(body.error || `${response.status} ${response.statusText}`);
+							error.status = response.status;
+							throw error;
+						}
+						return body;
+					},
+					rooms: () => api.request('/rooms'),
+					people: () => api.request('/people'),
+					messages: (room, since) => api.request(`/rooms/${escPath(room)}/messages?since=${since}`),
+					send: (room, human, item, signal) =>
+						api.request(`/rooms/${escPath(room)}/humans/${escPath(human)}`, {
+							method: 'POST',
+							signal,
+							body: JSON.stringify({ key: item.key, text: item.text }),
+						}),
+					join: (room, human) =>
+						api.request(`/rooms/${escPath(room)}/humans/${escPath(human)}`, { method: 'PUT' }),
+					leave: (room, human) =>
+						api.request(`/rooms/${escPath(room)}/humans/${escPath(human)}`, { method: 'DELETE' }),
+					control: (room, action) =>
+						api.request(`/rooms/${escPath(room)}/${action}`, { method: 'POST' }),
+					create: (name, goal) =>
+						api.request('/rooms', { method: 'POST', body: JSON.stringify({ name, goal }) }),
+					workspace: () => api.request('/workspace'),
+					file: (path) => api.request(`/file?path=${encodeURIComponent(path)}`),
+				};
+				const currentRoom = () => state.rooms.find((room) => room.name === state.selected);
+				const roomMessages = () => state.messages.get(state.selected) || [];
+				const setConnection = (kind, label) => {
+					const item = $('connection');
+					item.className = `connection ${kind}`;
+					item.querySelector('span').textContent = label;
+				};
+				const mergeMessages = (room, incoming) => {
+					const prior = state.messages.get(room) || [];
+					const bySeq = new Map(prior.map((message) => [message.seq, message]));
+					incoming.forEach((message) => {
+						if (message && Number.isSafeInteger(message.seq)) bySeq.set(message.seq, message);
+					});
+					state.messages.set(
+						room,
+						[...bySeq.values()].sort((a, b) => a.seq - b.seq),
+					);
+				};
+				const latestSeq = (room) => {
+					const items = state.messages.get(room) || [];
+					return items.at(-1)?.seq || 0;
+				};
+				const statusText = () => {
+					const active = [...(state.participants.get(state.selected) || [])].some(
+						(participant) => participant.kind === 'agent' && participant.status === 'active',
+					);
+					return active ? 'Working' : 'Ready';
+				};
+				const renderRooms = () => {
+					const target = $('rooms');
+					target.replaceChildren();
+					state.rooms.forEach((room) => {
+						const button = node('button', `room${room.name === state.selected ? ' selected' : ''}`);
+						button.type = 'button';
+						button.disabled = state.navigating;
+						const active = room.status === 'running';
+						button.append(node('i', `room-dot${active ? '' : ' idle'}`));
+						button.append(node('span', 'room-name', room.name));
+						button.append(node('span', 'room-meta', String((room.participants || []).length)));
+						button.addEventListener('click', () => void selectRoom(room.name));
+						target.append(button);
+					});
+				};
+				const renderParticipants = () => {
+					const target = $('participants');
+					target.replaceChildren();
+					const participants =
+						state.participants.get(state.selected) || currentRoom()?.participants || [];
+					if (!participants.length) {
+						target.append(node('div', 'participant-kind', 'No participants'));
+						return;
+					}
+					participants.forEach((participant) => {
+						const row = node('div', 'participant');
+						const status = participant.kind === 'agent' ? participant.status : participant.presence;
+						row.append(
+							node('i', `status${status === 'active' || status === 'present' ? ' active' : ''}`),
+						);
+						row.append(node('span', 'participant-name', participant.name));
+						row.append(
+							node('span', 'participant-kind', participant.kind === 'agent' ? status : status),
+						);
+						target.append(row);
+					});
+				};
+				const renderActivity = () => {
+					const target = $('activity');
+					target.replaceChildren();
+					if (state.lastError) {
+						const line = node('div', 'activity-line');
+						line.append(node('span', 'bullet', '!'));
+						line.append(node('span', '', state.lastError));
+						target.append(line);
+					}
+					const room = currentRoom();
+					const activity = room?.activity || [];
+					if (activity.length)
+						activity.slice(-5).forEach((entry) => {
+							const line = node('div', 'activity-line');
+							line.append(node('span', 'bullet', '›'));
+							line.append(
+								node(
+									'span',
+									'',
+									`${entry.agent ? `${entry.agent} · ` : ''}${entry.text || entry.type}`,
+								),
+							);
+							target.append(line);
+						});
+					else {
+						const line = node('div', 'activity-line');
+						line.append(node('span', 'bullet', '·'));
+						line.append(node('span', '', 'No recent activity'));
+						target.append(line);
+					}
+					const queued = state.outbox.filter(
+						(item) => item.room === state.selected && item.human === state.human,
+					);
+					if (queued.length) {
+						const line = node('div', 'activity-line');
+						line.append(node('span', 'bullet', '›'));
+						line.append(
+							node(
+								'span',
+								'',
+								`${queued.length} delivery${queued.length === 1 ? '' : 'ies'} queued`,
+							),
+						);
+						target.append(line);
+					}
+				};
+				const messageKind = (message) =>
+					['said', 'summary'].includes(message.kind) ? message.kind : 'presence';
+				const messageLabel = (message) => {
+					if (message.kind === 'said' || message.kind === 'summary')
+						return message.to ? `${message.from} → ${message.to}` : message.from || 'room';
+					const suffix =
+						{ arrived: 'joined', left: 'left', seated: 'seated' }[message.kind] || 'unseated';
+					return `${message.subject} ${suffix}`;
+				};
+				const messageBody = (message) =>
+					message.text || (message.kind === 'arrived' ? 'presence recorded' : 'presence changed');
+				const messageNode = (message) => {
+					const item = node('article', 'message');
+					const side = node('div', 'message-side');
+					side.append(node('time', '', formatTime(message.at)));
+					const card = node('div', `message-card ${messageKind(message)}`);
+					const byline = node('div', 'message-byline');
+					byline.append(node('span', 'kind', message.kind));
+					byline.append(node('span', '', messageLabel(message)));
+					card.append(byline);
+					card.append(node('div', 'message-text', messageBody(message)));
+					item.append(side, card);
+					return item;
+				};
+				const timelineGroups = (messages) => {
+					const summaries = messages.filter(
+						(message) => message.kind === 'summary' && message.covers,
+					);
+					const groups = summaries.map((summary) => ({
+						summary,
+						source: messages.filter(
+							(message) =>
+								message.seq > summary.covers.from &&
+								message.seq <= summary.covers.through &&
+								message.kind !== 'summary' &&
+								!state.people.some((person) => person.name === message.from),
+						),
+					}));
+					groups.forEach((group) => {
+						group.direct = group.source.filter((message) => message.kind === 'said').length === 1;
+					});
+					const sourceGroup = new Map();
+					const directGroup = new Map();
+					groups.forEach((group) => {
+						group.source.forEach((message) => {
+							sourceGroup.set(message.seq, group);
+							if (group.direct && message.kind === 'said') directGroup.set(message.seq, group);
+						});
+					});
+					return {
+						groups,
+						openingGroup: new Map(groups.map((group) => [group.summary.covers.from, group])),
+						sourceGroup,
+						directGroup,
+						directSummary: new Set(
+							groups.filter((group) => group.direct).map((group) => group.summary.seq),
+						),
+					};
+				};
+				const appendDiscussion = (target, group, added) => {
+					if (group.direct || added.has(group) || !group.source.length) return;
+					added.add(group);
+					const details = node('details', 'discussion');
+					const key = `${state.selected}:${group.summary.covers.from}`;
+					details.open = state.expanded.has(key);
+					details.append(node('summary', '', `Show discussion · ${group.source.length} messages`));
+					details.addEventListener('toggle', () => {
+						if (details.open) state.expanded.add(key);
+						else state.expanded.delete(key);
+					});
+					group.source.forEach((message) => {
+						details.append(messageNode(message));
+					});
+					target.append(details);
+				};
+				const appendTimelineMessage = (target, message, groups, added) => {
+					const direct = groups.directGroup.get(message.seq);
+					if (direct) {
+						target.append(messageNode(message));
+						return;
+					}
+					const group = groups.sourceGroup.get(message.seq);
+					if (group) {
+						appendDiscussion(target, group, added);
+						return;
+					}
+					if (
+						groups.directSummary.has(message.seq) ||
+						(message.kind !== 'said' && message.kind !== 'summary')
+					)
+						return;
+					target.append(messageNode(message));
+					const opening = groups.openingGroup.get(message.seq);
+					if (opening) appendDiscussion(target, opening, added);
+				};
+				const appendTimelineContent = (target, messages, groups) => {
+					const added = new Set();
+					messages.forEach((message) => {
+						appendTimelineMessage(target, message, groups, added);
+					});
+					groups.groups.forEach((group) => {
+						appendDiscussion(target, group, added);
+					});
+				};
+				const appendEmptyTimeline = (target) => {
+					const empty = node('div', 'empty');
+					const wrap = node('div');
+					const selected = Boolean(state.selected);
+					wrap.append(
+						node(
+							'strong',
+							'',
+							selected ? 'What would you like to work on?' : 'One project. A few focused rooms.',
+						),
+					);
+					wrap.append(
+						node(
+							'span',
+							'',
+							selected
+								? 'Describe the outcome. The team will take it from there.'
+								: 'Choose a room on the left to enter the conversation.',
+						),
+					);
+					empty.append(wrap);
+					target.append(empty);
+				};
+				const renderTimeline = () => {
+					const target = $('timeline-inner');
+					const timeline = $('timeline');
+					const messages = roomMessages();
+					const key = `${state.selected}:${messages.length}:${latestSeq(state.selected)}`;
+					if (key === state.timelineKey) return;
+					const oldRoom = state.timelineKey.split(':')[0];
+					const nearBottom =
+						timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 48;
+					state.timelineKey = key;
+					target.replaceChildren();
+					if (!messages.length) {
+						appendEmptyTimeline(target);
+					} else {
+						appendTimelineContent(target, messages, timelineGroups(messages));
+					}
+					if (oldRoom !== state.selected || nearBottom) timeline.scrollTop = timeline.scrollHeight;
+				};
+				const formatTime = (stamp) => {
+					if (!stamp) return '';
+					const date = new Date(stamp);
+					return Number.isNaN(date.valueOf())
+						? ''
+						: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+				};
+				let peopleSignature = '';
+				const personDetail = (person) =>
+					person.role || person.description || person.identity || 'Predefined human identity';
+				const personLabel = (person) =>
+					`${person.name}${personDetail(person) ? ` · ${personDetail(person)}` : ''}`;
+				const renderPeople = () => {
+					const people = state.people;
+					peopleSignature = people
+						.map((person) => `${person.name}:${personDetail(person)}`)
+						.join('|');
+					const person = people.find((candidate) => candidate.name === state.human);
+					const label = person ? personLabel(person) : 'choose a person';
+					$('identity-name').textContent = label;
+				};
+				const renderIdentityGate = () => {
+					const gate = $('identity-gate');
+					gate.classList.toggle('hidden', Boolean(state.human));
+					const target = $('identity-options');
+					if (target.childElementCount === 0 || target.dataset.signature !== peopleSignature) {
+						target.replaceChildren();
+						const people = state.people;
+						people.forEach((person) => {
+							const button = node('button', 'identity-option');
+							button.type = 'button';
+							button.append(
+								node('strong', '', person.name),
+								node('span', '', personDetail(person)),
+							);
+							button.addEventListener('click', () => changeHuman(person.name));
+							target.append(button);
+						});
+						target.dataset.signature = peopleSignature;
+					}
+				};
+				const renderRoomStatus = (room) => {
+					$('room-state').textContent = room?.status === 'stopped' ? 'Stopped' : statusText();
+					$('room-updated').textContent = state.lastError
+						? 'connection error'
+						: `updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+				};
+				const renderHeader = () => {
+					const room = currentRoom();
+					$('room-title').textContent = room?.name || 'no room selected';
+					$('room-goal').textContent =
+						room?.goal || 'Choose a room to enter, or create one for a new conversation.';
+					$('room-pattern').textContent = room?.pattern || '';
+					$('suggestion').hidden = !room?.prompt;
+					$('suggestion').textContent = room?.prompt ? `Try: ${room.prompt}` : '';
+					$('message').placeholder = room ? 'Message the room…' : 'Choose a room…';
+					renderRoomStatus(room);
+				};
+				const renderWorkspace = () => {
+					const target = $('files');
+					target.replaceChildren();
+					const workspace = state.workspace;
+					target.append(node('div', 'participant-kind', 'Files shared by every room'));
+					const files = workspace?.files || [];
+					if (!files.length) {
+						target.append(node('div', 'participant-kind', 'No files listed'));
+						return;
+					}
+					files.forEach((file) => {
+						const button = node('button', 'btn', file.path.replace(/^\/shared\//, ''));
+						button.type = 'button';
+						button.style.textAlign = 'left';
+						button.title = `${file.path} · ${file.size} bytes`;
+						button.addEventListener('click', () => showFile(file.path));
+						target.append(button);
+					});
+				};
+				const renderDraft = () => {
+					$('message').value = state.drafts[`${state.selected}:${state.human}`] || '';
+				};
+				const updateControls = () => {
+					const room = currentRoom();
+					const hasIdentity = Boolean(state.human);
+					const running = room?.status === 'running';
+					$('send').disabled = state.navigating || !hasIdentity || !running;
+					$('switch-user').disabled = state.navigating || !hasIdentity;
+					$('resume').disabled = state.navigating || !hasIdentity || !room || running;
+					$('stop').disabled = state.navigating || !hasIdentity || !room || !running;
+					$('abort').disabled = state.navigating || !hasIdentity || !room || !running;
+					$('room-name').disabled = state.navigating || !hasIdentity;
+					$('new-room-goal').disabled = state.navigating || !hasIdentity;
+					$('new-room').querySelector('button').disabled = state.navigating || !hasIdentity;
+					$('refresh-files').disabled = state.navigating;
+				};
+				const renderPending = () => {
+					const queued = state.outbox.filter(
+						(item) => item.room === state.selected && item.human === state.human,
+					);
+					const blocked = queued.filter((item) => item.blocked);
+					const pending = $('pending');
+					pending.replaceChildren();
+					if (blocked.length) {
+						pending.append(
+							node('span', '', `Delivery rejected: ${blocked[0].error || 'validation failed'}`),
+						);
+						const edit = node('button', '', 'edit message');
+						edit.type = 'button';
+						edit.addEventListener('click', () => {
+							const item = blocked[0];
+							state.outbox = state.outbox.filter((candidate) => candidate !== item);
+							state.drafts[`${item.room}:${item.human}`] = item.text;
+							save();
+							renderDraft();
+							render();
+							$('message').focus();
+						});
+						pending.append(edit);
+					}
+					const waiting = queued.filter((item) => !item.blocked);
+					if (!waiting.length) return;
+					pending.append(
+						node(
+							'span',
+							'',
+							`${waiting.length} delivery${waiting.length === 1 ? '' : 'ies'} queued · `,
+						),
+					);
+					if (currentRoom()?.status === 'stopped') {
+						pending.append(node('span', '', 'room is stopped; resume it to retry.'));
+						return;
+					}
+					pending.append(node('span', '', 'same key and text · '));
+					const retry = node('button', '', 'retry now');
+					retry.type = 'button';
+					retry.addEventListener('click', () => void flushOutbox());
+					pending.append(retry);
+				};
+				const render = () => {
+					renderPeople();
+					renderIdentityGate();
+					renderRooms();
+					renderHeader();
+					renderParticipants();
+					renderActivity();
+					renderTimeline();
+					renderWorkspace();
+					renderPending();
+					updateControls();
+				};
+				const beginRoomTransition = (name) => {
+					state.flushGeneration += 1;
+					state.flushController?.abort();
+					state.selected = name;
+					state.restored = false;
+					state.timelineKey = '';
+					save();
+					renderDraft();
+				};
+				const transitionRoom = async (name, previousName, previousRoom) => {
+					await state.pollPromise;
+					await state.flushPromise;
+					if (previousName && previousRoom?.status === 'running') {
+						await api.leave(previousName, state.human);
+					}
+					const target = state.rooms.find((room) => room.name === name);
+					beginRoomTransition(name);
+					const shouldJoin = target?.status === 'running' || state.pendingRoom === name;
+					if (shouldJoin) {
+						await api.join(name, state.human);
+						state.restored = true;
+					}
+					await poll(true);
+				};
+				const selectRoom = async (name) => {
+					if (state.navigating || state.selected === name || !state.human) return;
+					state.navigating = true;
+					state.navigationEpoch += 1;
+					render();
+					const previousName = state.selected;
+					const previousRoom = currentRoom();
+					try {
+						await transitionRoom(name, previousName, previousRoom);
+					} catch (error) {
+						showToast(error instanceof Error ? error.message : String(error), true);
+					} finally {
+						state.navigating = false;
+						render();
+						void poll(true);
+					}
+				};
+				const refreshWorkspace = async () => {
+					if (state.workspaceRefreshing) return;
+					state.workspaceRefreshing = true;
+					try {
+						state.workspace = await api.workspace();
+						renderWorkspace();
+					} catch (error) {
+						showToast(error instanceof Error ? error.message : String(error), true);
+					} finally {
+						state.workspaceRefreshing = false;
+					}
+				};
+				const showFile = async (path) => {
+					try {
+						const result = await api.file(path);
+						$('file-preview').textContent =
+							`${result.path}${result.truncated ? ' · truncated' : ''}\n\n${result.text}`;
+					} catch (error) {
+						showToast(error instanceof Error ? error.message : String(error), true);
+					}
+				};
+				const isCurrentPoll = (epoch) => state.navigationEpoch === epoch && !state.navigating;
+				const applyIdentityList = (people) => {
+					state.people = people.filter((person) => person && typeof person.name === 'string');
+					if (!state.human || state.people.some((person) => person.name === state.human)) return;
+					state.human = '';
+					state.selected = '';
+					try {
+						sessionStorage.removeItem(`${STORAGE_KEY}:identity`);
+					} catch {}
+				};
+				const reconcileSelection = () => {
+					const selectedExists = state.rooms.some((room) => room.name === state.selected);
+					if (state.selected && !selectedExists && state.selected !== state.pendingRoom)
+						state.selected = '';
+					if (state.pendingRoom && state.rooms.some((room) => room.name === state.pendingRoom))
+						state.pendingRoom = '';
+				};
+				const applyRoomList = (listed, people) => {
+					state.rooms = listed;
+					applyIdentityList(people);
+					reconcileSelection();
+					state.rooms.forEach((room) => {
+						state.participants.set(room.name, room.participants || []);
+					});
+				};
+				const refreshSelectedPresence = async () => {
+					const room = currentRoom();
+					const present = room?.participants?.some(
+						(person) => person.name === state.human && person.presence === 'present',
+					);
+					const shouldJoin =
+						(!state.restored || !present) && state.human && room?.status === 'running';
+					if (shouldJoin) {
+						await api.join(state.selected, state.human);
+						state.restored = true;
+					}
+				};
+				const refreshPollRoom = async (full, epoch) => {
+					if (!state.selected) {
+						if (full) await refreshWorkspace();
+						return;
+					}
+					await refreshSelectedPresence();
+					await refreshSelected(full, epoch);
+					if (!isCurrentPoll(epoch)) return;
+					if (full) await refreshWorkspace();
+				};
+				const pollRooms = async (full, epoch) => {
+					const [listed, people] = await Promise.all([api.rooms(), api.people()]);
+					if (!Array.isArray(listed) || !Array.isArray(people))
+						throw new Error('The rooms response was not a list.');
+					if (!isCurrentPoll(epoch)) return;
+					applyRoomList(listed, people);
+					setConnection('online', 'connected');
+					state.lastError = '';
+					render();
+					await refreshPollRoom(full, epoch);
+					if (isCurrentPoll(epoch) && state.human && currentRoom()?.status === 'running')
+						await flushOutbox();
+				};
+				const reportPollError = (error) => {
+					state.lastError = error instanceof Error ? error.message : String(error);
+					setConnection('error', 'offline');
+					renderHeader();
+					renderActivity();
+					showToast(state.lastError, true);
+				};
+				const finishPoll = () => {
+					state.refreshing = false;
+					if (!state.pollAgain || state.navigating) return;
+					state.pollAgain = false;
+					void poll(true);
+				};
+				const poll = (full = false) => {
+					if (state.refreshing) {
+						if (full) state.pollAgain = true;
+						return;
+					}
+					if (state.navigating) return;
+					state.refreshing = true;
+					const epoch = state.navigationEpoch;
+					const work = (async () => {
+						try {
+							await pollRooms(full, epoch);
+						} catch (error) {
+							reportPollError(error);
+						} finally {
+							finishPoll();
+							if (state.pollPromise === work) state.pollPromise = null;
+						}
+					})();
+					state.pollPromise = work;
+					return work;
+				};
+				const mergeSelected = (room, incoming, since) => {
+					const before = latestSeq(room);
+					mergeMessages(room, incoming);
+					if (latestSeq(room) !== before || since === 0) {
+						save();
+						render();
+					}
+				};
+				const refreshSelected = async (fromZero = false, epoch = state.navigationEpoch) => {
+					const room = state.selected;
+					if (!room) return;
+					const since = fromZero || !state.messages.has(room) ? 0 : latestSeq(room);
+					const incoming = await api.messages(room, since);
+					if (state.selected !== room || state.navigationEpoch !== epoch) return;
+					mergeSelected(room, incoming, since);
+				};
+				const flushCurrent = (generation, item) =>
+					generation === state.flushGeneration &&
+					item.room === state.selected &&
+					item.human === state.human;
+				const handleDeliveryError = (item, error) => {
+					const status = error?.status;
+					if (status === 409) state.restored = false;
+					if (!(status >= 400 && status < 500) || [408, 409, 429].includes(status)) return false;
+					item.blocked = true;
+					item.error = error.message;
+					save();
+					render();
+					return true;
+				};
+				const flushItem = async (item, controller) => {
+					try {
+						await api.send(item.room, item.human, item, controller.signal);
+						state.outbox = state.outbox.filter((candidate) => candidate !== item);
+						save();
+						render();
+						return true;
+					} catch (error) {
+						handleDeliveryError(item, error);
+						return false;
+					}
+				};
+				const flushPending = async (generation, controller) => {
+					const pending = state.outbox.filter(
+						(item) => item.room === state.selected && item.human === state.human && !item.blocked,
+					);
+					for (const item of pending) {
+						if (!flushCurrent(generation, item)) return;
+						if (!(await flushItem(item, controller))) return;
+					}
+				};
+				const flushOutbox = async () => {
+					if (state.flushing) return state.flushPromise;
+					if (
+						state.navigating ||
+						!state.human ||
+						!state.restored ||
+						currentRoom()?.status !== 'running'
+					)
+						return;
+					state.flushing = true;
+					const generation = state.flushGeneration;
+					const controller = new AbortController();
+					state.flushController = controller;
+					const work = (async () => {
+						try {
+							await flushPending(generation, controller);
+						} finally {
+							if (state.flushController === controller) state.flushController = null;
+							state.flushing = false;
+						}
+					})();
+					state.flushPromise = work;
+					try {
+						await work;
+					} finally {
+						if (state.flushPromise === work) state.flushPromise = null;
+					}
+				};
+
+				const canSend = () =>
+					!state.navigating && state.human && currentRoom()?.status === 'running';
+				const queueDelivery = (text) => {
+					const draftKey = `${state.selected}:${state.human}`;
+					const priorDraft = $('message').value;
+					const item = { room: state.selected, human: state.human, key: crypto.randomUUID(), text };
+					state.outbox.push(item);
+					state.drafts[draftKey] = '';
+					if (!save()) {
+						state.outbox = state.outbox.filter((candidate) => candidate !== item);
+						state.drafts[draftKey] = priorDraft;
+						showToast('Could not save this delivery locally; it was kept in the input.', true);
+						return undefined;
+					}
+					$('message').value = '';
+					render();
+					return item;
+				};
+				const sendMessage = async () => {
+					if (!canSend()) return;
+					const text = $('message').value.trim();
+					if (!text) return;
+					const item = queueDelivery(text);
+					if (!item) return;
+					await flushOutbox();
+					if (item.blocked) return;
+					showToast(
+						state.outbox.includes(item)
+							? 'Saved locally; waiting to deliver.'
+							: 'Accepted by room.',
+					);
+				};
+				const runNavigation = async (operation) => {
+					state.navigating = true;
+					state.navigationEpoch += 1;
+					render();
+					try {
+						await state.pollPromise;
+						await state.flushPromise;
+						await operation();
+					} catch (error) {
+						showToast(error instanceof Error ? error.message : String(error), true);
+					} finally {
+						state.navigating = false;
+						render();
+						void poll(true);
+					}
+				};
+				const control = async (action) => {
+					if (!state.selected || !state.human || state.navigating) return;
+					await runNavigation(async () => {
+						await api.control(state.selected, action);
+						if (action === 'stop') state.restored = false;
+						if (action === 'resume') {
+							await api.join(state.selected, state.human);
+							state.restored = true;
+						}
+						showToast(`${action} requested for ${state.selected}.`);
+					});
+				};
+				const changeHuman = (value) => {
+					if (state.navigating || !state.people.some((person) => person.name === value)) return;
+					if (state.human) state.drafts[`${state.selected}:${state.human}`] = $('message').value;
+					state.human = value;
+					state.flushGeneration += 1;
+					state.flushController?.abort();
+					try {
+						sessionStorage.setItem(`${STORAGE_KEY}:identity`, state.human);
+					} catch {
+						state.lastError = 'Could not save this tab identity.';
+					}
+					save();
+					renderDraft();
+					render();
+				};
+				const clearIdentity = () => {
+					state.flushGeneration += 1;
+					state.flushController?.abort();
+					state.human = '';
+					state.selected = '';
+					state.restored = false;
+					state.pendingRoom = '';
+					try {
+						sessionStorage.removeItem(`${STORAGE_KEY}:identity`);
+					} catch {}
+					save();
+					renderDraft();
+				};
+				const switchUser = async () => {
+					if (!state.human || state.navigating) return;
+					await runNavigation(async () => {
+						if (state.selected && currentRoom()?.status === 'running')
+							await api.leave(state.selected, state.human);
+						clearIdentity();
+					});
+				};
+				$('suggestion').addEventListener('click', () => {
+					if (state.navigating) return;
+					const prompt = currentRoom()?.prompt;
+					if (!prompt) return;
+					$('message').value = prompt;
+					state.drafts[`${state.selected}:${state.human}`] = prompt;
+					save();
+					$('message').focus();
+				});
+				$('switch-user').addEventListener('click', () => void switchUser());
+				$('message').addEventListener('input', () => {
+					if (state.human) {
+						state.drafts[`${state.selected}:${state.human}`] = $('message').value;
+						save();
+					}
+				});
+				$('message').addEventListener('keydown', (event) => {
+					if (event.key === 'Enter' && !event.shiftKey) {
+						event.preventDefault();
+						void sendMessage();
+					}
+				});
+				$('composer').addEventListener('submit', (event) => {
+					event.preventDefault();
+					void sendMessage();
+				});
+				$('resume').addEventListener('click', () => void control('resume'));
+				$('stop').addEventListener('click', () => void control('stop'));
+				$('abort').addEventListener('click', () => void control('abort'));
+				$('refresh-files').addEventListener('click', () => void refreshWorkspace());
+				const createRoom = async () => {
+					const name = $('room-name').value.trim();
+					const goal = $('new-room-goal').value.trim();
+					if (!name || !state.human || state.navigating) return;
+					await runNavigation(async () => {
+						await api.create(name, goal);
+						state.pendingRoom = name;
+						await transitionRoom(name, state.selected, currentRoom());
+						$('room-name').value = '';
+						$('new-room-goal').value = '';
+						showToast(`Created room ${name} and joined as ${state.human}.`);
+					});
+				};
+				$('new-room').addEventListener('submit', (event) => {
+					event.preventDefault();
+					void createRoom();
+				});
+				renderDraft();
+				render();
+				void poll(true);
+				setInterval(() => {
+					void poll(false);
+				}, 1000);
+			})();
+		</script>
+	</body>
+</html>

@@ -27,7 +27,7 @@
 		},
 		"test": {
 			"dependsOn": ["build", "^build"],
-			"inputs": ["src/**", "test/**", "vitest*.ts", "tsconfig.json", "package.json"],
+			"inputs": ["src/**", "test/**", "vitest*.ts", "tsconfig.json", "package.json", "index.html"],
 			"outputs": [],
 			"outputLogs": "new-only"
 		}

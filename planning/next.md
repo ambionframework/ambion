@@ -3,7 +3,8 @@
 Delivery plan, 2026-09-16. Updated for executor separation in PR #130,
 Pi transcript extraction in PR #131, room value ownership in PR #132,
 protocol separation in PR #133, workspace resource separation in PR #134,
-and restart/reconnect procedures prepared for review.
+and restart/reconnect procedures merged in PR #135. The persistent Node
+example and live restart validation form the next review slice.
 [release-0.1.0.md](release-0.1.0.md) defines the positioning, capabilities,
 deployment models, and limits. This file owns implementation work and its
 completion evidence, including the remaining work from earlier plans.
@@ -20,17 +21,18 @@ stay synchronized. Executor dependencies and Pi transcript storage now have
 explicit boundaries. PR #132 protects accepted room facts at public reads
 and local delivery.
 PR #133 separates protocol messages from stored event shapes. PR #134
-separates workspace resource ownership from Ambion tool binding. The current
-priority makes host recovery procedures explicit and tests them across restart.
+separates workspace resource ownership from Ambion tool binding. PR #135
+documents and tests host recovery. The current slice adds a single-process
+Node service for multiple rooms and people, plus live restart validation.
 
 **Build on the merged foundations.** Fixed definitions, normalized tools,
 conditional journal appends, activation purpose, structured context, and
 ordinary participation have landed. Preserve their evidence below.
 
-| Order | Change                                 | Main reduction                                                | Scope        |
-| ----- | -------------------------------------- | ------------------------------------------------------------- | ------------ |
-| 1     | Clarify and test host recovery         | One procedure for presence, client progress, and pending work | Section 9    |
-| 2     | Complete package and release contracts | Verify distribution and supported deployment examples         | Sections 8–9 |
+| Order | Change                              | Main reduction                                               | Scope        |
+| ----- | ----------------------------------- | ------------------------------------------------------------ | ------------ |
+| 1     | Finish deployment recovery evidence | Runnable Node service and real-provider process recovery     | Section 9    |
+| 2     | Verify clean packed consumers       | Prove public package composition outside monorepo resolution | Sections 8–9 |
 
 PR #130 narrows executor dependencies. PR #131 extracts Pi transcripts.
 PR #132 detaches collaboration values at ownership boundaries. Sections 5–7
@@ -943,7 +945,7 @@ the intended packages. Importing definitions must retain lazy provider loading.
 
 ### Recovery and host procedures
 
-**Prepared for review: document and test the host recovery contract.**
+**Merged in PR #135: document and test the host recovery contract.**
 [`deployment.md`](../docs/deployment.md#restore-human-presence) describes
 restoring visits, confirming departures, recovering exchange handles, and
 replaying client history. It distinguishes per-client acknowledged cursors
@@ -960,13 +962,30 @@ SQLite. History replay and live notifications merge by sequence without
 losing a message or displaying an overlap twice. Independent review found
 no runtime blocker, and this slice changes no runtime API or behavior.
 
-The process test uses a scripted model and explicit clock. A concise
-application example and real-model restart test remain separate release
-requirements. `pnpm format` and `pnpm check` pass with 629 core tests,
+The process test uses a scripted model and explicit clock. Its gate passed
+`pnpm format` and `pnpm check` with 629 core tests,
 18 workerd tests, 39 workspace tests, 30 journal tests, 20 Pi session tests,
 and six CLI tests. The new recovery coverage accounts for 19 core tests.
 
-- [ ] Provide a persistent Node example that restarts over SQLite, supplies
+**Prepared for review: persistent rooms in one Node process.**
+[`examples/persistent`](../examples/persistent) serves two rooms and multiple
+people through HTTP. It uses one runtime and SQLite database. Clients keep
+delivery keys, exchange IDs, and message cursors. The host accepts messages
+without waiting for model work and restores visits through the ordinary API.
+The single-file browser console lets a client assume a predefined human,
+open existing rooms, and create new rooms. It exposes Stop, Resume, Abort,
+and per-person presence. Room navigation leaves the current room and enters
+the next. Four sample rooms exercise planning, review, revision, and triage.
+Ordinary specialist agents share one global directory workspace across rooms.
+The host persists its catalog and hosting intent separately from room journals.
+
+A real-provider HTTP smoke test killed the host with both rooms active.
+Both rooms recovered after restart. Three retried deliveries appeared once;
+the two people retained their presence without duplicate arrivals. Histories
+stayed separate. The test also checked exchange lookup, exclusive cursors,
+an absent-person departure, and departures after graceful shutdown.
+
+- [x] Provide a persistent Node example that restarts over SQLite, supplies
       definitions again, resumes pending work, and reacquires exchange handles.
 - [x] Define the host procedure for reconciling recorded human presence with
       surviving connections. A crash must not invent a departure or lose attribution.
@@ -994,6 +1013,16 @@ Cloudflare adapter tests.
 
 ### Failure tests and operational evidence
 
+**Prepared for review: real-provider process recovery.** The new live test
+kills Node after one provider contribution is durable and its activation has
+released. A second activation holds a confirmed lease at interruption.
+Fresh Node recovery uses the same SQLite file, system-clock expiry, and
+ordinary reconciliation. The original exchange and contribution sequence
+survive; one question, one arrival, and one recovered answer remain.
+The targeted test passed locally on `anthropic/claude-sonnet-5` in 11.7 seconds.
+It controls the interruption through a transport gate, with five-second
+expiry and zero backoff. Scripted tests retain the deterministic failure gate.
+
 - [ ] Investigate the historical Cloudflare wake/cut races on the current
       code. Wait for the executor state each assertion requires. Observe whether
       an alarm actually ran; increasing timeouts is not a diagnosis.
@@ -1005,7 +1034,7 @@ Cloudflare adapter tests.
       events on failure. Fix the implementation or invariant that is wrong.
 - [ ] Add targeted clock-skew and pause cases for lease expiry and takeover.
       Separate safety assertions from recovery-time expectations.
-- [ ] Run a real-model restart scenario in the live tier. Capture the
+- [x] Run a real-model restart scenario in the live tier. Capture the
       interruption point, committed contributions, resumed work, and final result.
       Scripted recovery tests remain the deterministic gate.
 - [ ] Verify cancellation when tools do not cooperate immediately. Show which

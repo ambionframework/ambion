@@ -528,11 +528,15 @@ widened, with 200 seeds of the walk and of the history.
 `pnpm test:live` runs the tier. Two configurations keep the tiers apart:
 `vitest.config.ts` excludes `test/live` from `pnpm test`, and
 `vitest.live.config.ts` includes nothing else. In the live configuration
-files run one at a time, each test has three minutes, and one retry stands
+files run one at a time, most tests have three minutes, and one retry stands
 for one bad sample. Every test skips when `<PROVIDER>_API_KEY` is not set,
 so the command is safe to run anywhere. `AMBION_MODEL` picks the model,
 `anthropic/claude-sonnet-5` by default, and the example reads the same
 variable.
+
+The core live command builds its workspace dependencies first. The restart
+test launches native Node processes, which resolve those packages through
+their exports. Its two process phases share a 320-second test budget.
 
 The workflow runs on Mondays at 06:00 UTC, on demand with the model as an
 input, and on a pull request that a repository admin opened from a branch
