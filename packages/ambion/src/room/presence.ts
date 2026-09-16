@@ -13,6 +13,10 @@ import type { HumanDefinition, Message, PresenceStatus, Seq } from '../types.ts'
 export interface VisitRuntime {
 	human: HumanDefinition;
 	gone: boolean;
+	/** A departure in progress, shared by every caller of this handle. */
+	departure?: Promise<void>;
+	/** Stable idempotency key for a departure whose acknowledgement was lost. */
+	departureKey?: string;
 }
 
 /** One person the record knows, as the record last saw them. */

@@ -138,6 +138,8 @@ function deliver(
 	now: number,
 ): RoomDecision<'message'> {
 	const { from, to, text } = command;
+	const author = state.people.get(from);
+	if (author?.presence !== 'present') return refused(`'${from}' is not present in this room.`);
 	const target = state.roster.find((seat) => seat.name === to);
 	if (to !== undefined && !state.people.has(to) && target === undefined) {
 		return refused(`Cannot direct a delivery to '${to}': not in this room.`);
@@ -159,6 +161,12 @@ function presence(
 ): RoomDecision<'message'> {
 	const reason = presenceRefusal(state, command.change);
 	if (reason !== undefined) return refused(reason);
+	const known = state.people.get(command.change.subject);
+	if (
+		(command.change.kind === 'arrived' && known?.presence === 'present') ||
+		(command.change.kind === 'left' && known?.presence !== 'present')
+	)
+		return { event: undefined };
 	return message(state, { ...command.change, at: iso(now) }, now, command.route);
 }
 
