@@ -158,7 +158,7 @@ export interface Visit {
    *  or `undefined` when the record holds none. It moves when they leave
    *  and holds while they are here. See §8. */
   readonly since: Seq | undefined;
-  send(input: { to?: Participant; text: string; key?: string }): Promise<ExchangeHandle>;
+  send(input: { to?: string; text: string; key?: string }): Promise<ExchangeHandle>;
   /** Idempotent: a host that closes a socket twice is not an error. */
   leave(): Promise<void>;
 }
@@ -168,6 +168,15 @@ export interface Visit {
 hands back the same visit. So a host does not have to remember whether it
 opened one, and two tabs of one person do not make two people. The host
 decides when that person is gone; the room takes its word for it.
+
+**Completion follows the journal.** Concurrent visits for the same person wait
+for the same arrival operation. No caller receives a usable handle before that
+arrival is confirmed. Concurrent departures likewise wait for the departure to
+finish. A storage failure rejects the operation; it does not make a later retry
+report success while the person is still recorded as present. Retry with the
+same handle so recovery can distinguish a failed write from a lost confirmation.
+Arrival and departure also check current presence inside the journal decision,
+after recovery, so retrying an uncertain write cannot repeat that presence change.
 
 A second `room.visit` with the same name and a different identity is
 refused while the person is present: one name is one identity for as long
@@ -179,6 +188,10 @@ and their next `arrived` carries it.
 was stopped. A handle to a finished visit is a stale handle, and the
 runtime says so. It accepts no message from a person who is gone, and none
 into a room that is.
+Re-entering creates a new visit; it does not revive an ended handle. Delivery
+checks the sender's recorded presence at the commit boundary, so a cached handle
+cannot authorize speech from an absent or unrecorded human. A delivery admitted
+before departure may commit before it; later sends cannot pass that departure.
 
 The runtime holds no clock over a visit. It does not guess that somebody
 stopped reading, and it writes no message that says they did. The room

@@ -314,6 +314,11 @@ class RoomHost implements Room, RunningRoom {
 	private readonly defs: ReadonlyMap<string, AgentDefinition>;
 	/** The handles the host delivers through. Presence itself is a fold over the journal. */
 	private readonly visits = new Map<string, VisitRuntime>();
+	/** Arrivals awaiting durable acknowledgement, keyed by human name. */
+	private readonly arrivals = new Map<
+		string,
+		{ identity: string; promise: Promise<VisitRuntime> }
+	>();
 	private readonly ports = new Map<string, SeatPort>();
 	/** The three room calls exposed to an in-process seat. */
 	readonly calls: SeatRoom = {
@@ -337,6 +342,8 @@ class RoomHost implements Room, RunningRoom {
 	private cancelAlarm: () => void = () => {};
 	/** The reconcile in flight: the entries it writes, and whoever it wakes. A caller that asks waits for it. */
 	private reconciling: Promise<void> = Promise.resolve();
+	/** A stop is one shared operation; a failed one may be retried after its promise clears. */
+	private stopInFlight: Promise<void> | undefined;
 	private fold: { length: number; state: RoomState } | undefined;
 	private phase: Phase = 'starting';
 	/** This run's id: the fence it writes first, and the stamp on every entry it writes. */
@@ -691,34 +698,63 @@ class RoomHost implements Room, RunningRoom {
 	async visit(human: HumanDefinition): Promise<Visit> {
 		this.assertRunning();
 		const captured = captureHuman(human);
+		const pending = this.arrivals.get(captured.name);
+		if (pending !== undefined) {
+			if (pending.identity === captured.identity) return this.handle(await pending.promise);
+			throw new Error(
+				`'${captured.name}' is already entering this room under a different identity: one name is one person.`,
+			);
+		}
+		const arrival = this.arrive(captured);
+		this.arrivals.set(captured.name, { identity: captured.identity, promise: arrival });
+		try {
+			return this.handle(await arrival);
+		} finally {
+			if (this.arrivals.get(captured.name)?.promise === arrival)
+				this.arrivals.delete(captured.name);
+		}
+	}
+
+	/** Complete one arrival and cache the handle only after its message is durable. */
+	private async arrive(captured: HumanDefinition): Promise<VisitRuntime> {
 		await this.ready;
-		this.assertVisitable(captured);
+		this.assertRunning();
+		await this.journal.settled();
+		this.assertRunning();
 		const known = this.visits.get(captured.name);
-		if (known) return this.handle(known);
+		if (known !== undefined && known.departure !== undefined) {
+			await known.departure.catch(() => {});
+			return this.arrive(captured);
+		}
+		if (known?.gone) {
+			await this.endVisit(known);
+			return this.arrive(captured);
+		}
+		this.assertVisitable(captured);
+		const present = this.state().people.get(captured.name)?.presence === 'present';
+		if (present) {
+			if (known !== undefined) return known;
+		} else {
+			this.discardVisit(captured.name, known);
+			await this.commitPresence({
+				kind: 'arrived',
+				from: captured.name,
+				subject: captured.name,
+				identity: captured.identity,
+				...(captured.preferences === undefined ? {} : { preferences: captured.preferences }),
+			});
+			this.assertRunning();
+		}
 		const visit: VisitRuntime = { human: captured, gone: false };
 		this.visits.set(captured.name, visit);
-		// A person the journal holds as present is here already: the last run wrote
-		// no `left`, and the host's word is what says otherwise. Nothing commits.
-		// An arrival whose confirmation was lost is read back first.
-		await this.journal.settled();
-		// A room that stopped while this waited seats nobody.
-		this.assertRunning();
-		if (this.state().people.get(captured.name)?.presence !== 'present') {
-			try {
-				await this.commitPresence({
-					kind: 'arrived',
-					from: captured.name,
-					subject: captured.name,
-					identity: captured.identity,
-					...(captured.preferences === undefined ? {} : { preferences: captured.preferences }),
-				});
-			} catch (error) {
-				// An arrival the storage refused is no visit: the next visit writes it again.
-				this.visits.delete(captured.name);
-				throw error;
-			}
-		}
-		return this.handle(visit);
+		return visit;
+	}
+
+	/** Forget a stale local handle synchronously before admitting a new arrival. */
+	private discardVisit(name: string, visit: VisitRuntime | undefined): void {
+		if (visit === undefined) return;
+		visit.gone = true;
+		this.visits.delete(name);
 	}
 
 	/** One name names one participant, and a present person keeps one identity. */
@@ -753,10 +789,46 @@ class RoomHost implements Room, RunningRoom {
 	}
 
 	private async endVisit(visit: VisitRuntime): Promise<void> {
-		if (visit.gone) return;
+		if (visit.departure !== undefined) return visit.departure;
+		// A terminal room invalidates handles it ended itself. A handle that
+		// started a departure has a stable key and must still retry its write,
+		// even when shutdown also failed while the storage was unavailable.
+		if (
+			visit.gone &&
+			visit.departureKey === undefined &&
+			(this.phase === 'stopped' || this.phase === 'evicted')
+		)
+			return;
+		if (visit.departureKey === undefined) visit.departureKey = crypto.randomUUID();
+		const key = visit.departureKey;
+		// Close this handle's admission immediately. The durable decision below
+		// still checks recorded presence before any speech or departure lands.
 		visit.gone = true;
-		this.visits.delete(visit.human.name);
-		await this.commitPresence({ kind: 'left', from: visit.human.name, subject: visit.human.name });
+		let operation!: Promise<void>;
+		operation = this.leaveVisit(visit, key).catch((error) => {
+			if (visit.departure === operation) visit.departure = undefined;
+			throw error;
+		});
+		visit.departure = operation;
+		return operation;
+	}
+
+	private async leaveVisit(visit: VisitRuntime, key: string): Promise<void> {
+		await this.ready;
+		await this.journal.settled();
+		if (this.state().people.get(visit.human.name)?.presence === 'present') {
+			const current = this.visits.get(visit.human.name);
+			if (current !== undefined && current !== visit) {
+				return;
+			}
+			await this.commitPresence(
+				{ kind: 'left', from: visit.human.name, subject: visit.human.name },
+				true,
+				key,
+			);
+		}
+		visit.gone = true;
+		if (this.visits.get(visit.human.name) === visit) this.visits.delete(visit.human.name);
 	}
 
 	private async deliverFrom(
@@ -829,7 +901,7 @@ class RoomHost implements Room, RunningRoom {
 	 */
 	private async commitMessage(
 		key: string,
-		command: Extract<RoomCommand, { type: 'deliver' | 'presence' | 'commit' }>,
+		command: Extract<RoomCommand, { type: 'deliver' | 'commit' }>,
 	): Promise<Message> {
 		const appended = await this.journal.append('message', {
 			key,
@@ -850,9 +922,22 @@ class RoomHost implements Room, RunningRoom {
 		);
 	}
 
-	/** A presence change uses a fresh key. */
-	private commitPresence(change: PresenceDraft, route = true, key = crypto.randomUUID()) {
-		return this.commitMessage(key, { type: 'presence', change, route });
+	/** A presence change uses its caller's stable key, or a fresh key by default. */
+	private async commitPresence(
+		change: PresenceDraft,
+		route = true,
+		key: string = crypto.randomUUID(),
+	): Promise<Message | undefined> {
+		const appended = await this.journal.append('message', {
+			key,
+			decide: () => {
+				const event = this.acceptedEvent(
+					decide(this.state(), { type: 'presence', change, route }, this.now()),
+				);
+				return event === undefined ? { result: undefined } : { body: event.body };
+			},
+		});
+		return 'entry' in appended ? placed(appended.entry) : undefined;
 	}
 
 	// -- what the room hears --------------------------------------------------
@@ -1289,11 +1374,22 @@ class RoomHost implements Room, RunningRoom {
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */
 	async stop(): Promise<void> {
-		if (this.phase === 'stopped') return;
+		if (this.phase === 'evicted') return;
+		if (this.stopInFlight !== undefined) return this.stopInFlight;
 		// Stopped from here on: a visit that arrives during the shutdown is
 		// refused rather than seated into a room that is going away.
 		this.enter('stopped');
 		this.cancelAlarm();
+		let operation!: Promise<void>;
+		operation = this.stopRun().catch((error) => {
+			if (this.stopInFlight === operation) this.stopInFlight = undefined;
+			throw error;
+		});
+		this.stopInFlight = operation;
+		return operation;
+	}
+
+	private async stopRun(): Promise<void> {
 		try {
 			// A room dropped from memory writes nothing: the next run over the journal takes it up.
 			if (this.phase === 'evicted') return;
@@ -1323,8 +1419,11 @@ class RoomHost implements Room, RunningRoom {
 		for (const person of this.state().people.values()) {
 			if (person.presence !== 'present') continue;
 			const visit = this.visits.get(person.name);
-			if (visit) visit.gone = true;
 			await this.commitPresence({ kind: 'left', from: person.name, subject: person.name }, false);
+			if (visit) {
+				visit.gone = true;
+				if (this.visits.get(person.name) === visit) this.visits.delete(person.name);
+			}
 		}
 	}
 

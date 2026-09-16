@@ -64,6 +64,64 @@ describe('room transition', () => {
 		});
 	});
 
+	it('requires a recorded present human before accepting a delivery', () => {
+		const absent = foldRoom(
+			[
+				composition(),
+				person(),
+				{
+					kind: 'message',
+					seq: 3,
+					body: { kind: 'left', at, from: 'priya', subject: 'priya' },
+				},
+			],
+			options,
+		);
+		const decision = decide(absent, { type: 'deliver', from: 'priya', text: 'Orphan.' }, now);
+		expect(decision).toMatchObject({ refusal: { category: 'refused' } });
+		const unknown = decide(absent, { type: 'deliver', from: 'ghost', text: 'Unknown.' }, now);
+		expect(unknown).toMatchObject({ refusal: { category: 'refused' } });
+	});
+
+	it('turns recovered presence retries into no-ops', () => {
+		const present = foldRoom([composition(), person()], options);
+		expect(
+			decide(
+				present,
+				{
+					type: 'presence',
+					change: { kind: 'arrived', from: 'priya', subject: 'priya', identity: 'Person.' },
+					route: false,
+				},
+				now,
+			),
+		).toEqual({ event: undefined });
+
+		const absent = foldRoom(
+			[
+				composition(),
+				person(),
+				{
+					kind: 'message',
+					seq: 3,
+					body: { kind: 'left', at, from: 'priya', subject: 'priya' },
+				},
+			],
+			options,
+		);
+		expect(
+			decide(
+				absent,
+				{
+					type: 'presence',
+					change: { kind: 'left', from: 'priya', subject: 'priya' },
+					route: false,
+				},
+				now,
+			),
+		).toEqual({ event: undefined });
+	});
+
 	it('grants ordinary response to any seated agent and only summary work to the writer', () => {
 		const open = foldRoom(
 			[composition('writer'), person(), question(), lease('message:3:product:1', 4)],

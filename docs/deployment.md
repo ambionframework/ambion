@@ -98,6 +98,12 @@ graceful end of that run. `runtime.evict(name)` drops local handles and
 observers without writing departures or releasing leases. Neither operation
 is a way to close one client's connection while keeping the room active.
 
+Concurrent `stop()` calls wait for the same shutdown operation. If a durable
+revocation or departure fails, callers observe that failure and may retry the
+stop. Admission remains closed and the runtime releases the room name even on
+failure. If another run resumes the room, its journal fence prevents the old
+run's retry from changing the new run's presence or work.
+
 ### Restore client reads and exchange handles
 
 **Persist identifiers and acknowledged progress in application storage.**

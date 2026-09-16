@@ -62,8 +62,22 @@ public operations publish host-local state before those writes succeed:
   finding; the review did not execute an abort-write-failure reproduction.
 
 The first three were reproduced against source with a gated memory storage
-adapter. They are not yet checked-in regression tests. Relay's per-room queue
-masks some concurrency paths; an embedded library caller has no such protection.
+adapter. The first implementation slice adds regression tests for memory and
+SQLite in [`lifecycle.test.ts`](../packages/ambion/test/lifecycle.test.ts) and
+[`lifecycle-recovery.test.ts`](../packages/ambion/test/lifecycle-recovery.test.ts).
+Relay's per-room queue masks some concurrency paths; an embedded library caller
+has no such protection.
+
+**First slice, prepared for review:** concurrent joins, departures, and stops
+share completion; arrivals publish handles only after confirmation; departure
+retries recover uncertain writes; and delivery decisions require recorded human
+presence. Recovery tests cover lost acknowledgements, reentry, old-handle
+invalidation, stop retry, failed recovery reads, and supersession by a newer run.
+Presence decisions suppress duplicate arrivals and departures after recovery.
+The public API and
+journal format are unchanged. Leave the checklist open until this slice lands.
+Awaitable cancellation, existing-only visits, semantic text validation, and
+submission/effect consolidation remain separate follow-up work.
 
 ### Change
 
