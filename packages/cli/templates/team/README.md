@@ -21,8 +21,10 @@ cp .dev.vars.example .dev.vars
 pnpm dev
 ```
 
-The terminal shows the team, conversation, input, and Worker logs. Enter a
-question to send it. Ctrl-C closes the interface and stops Wrangler.
+The terminal shows a compact team header, a full-width conversation, and
+message input. A status line shows activity. Errors appear below the
+conversation. Enter sends a question. Ctrl-C closes the interface and stops
+Wrangler.
 
 Wrangler serves the Worker on `http://127.0.0.1:8787`. The local Durable
 Object state stays in `.wrangler/`. Remove that directory to start fresh.
@@ -32,7 +34,7 @@ Ambion supports. The default is `anthropic/claude-sonnet-5`.
 
 ## HTTP surface
 
-For HTTP-only testing, run `pnpm dev:worker` instead of `pnpm dev`.
+For Worker logs and HTTP-only testing, run `pnpm dev:worker`.
 Then start the room and join the human participant:
 
 ```sh

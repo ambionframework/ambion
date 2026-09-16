@@ -78,11 +78,12 @@ references `GITHUB_TOKEN`. The normal path installs published dependencies.
 - [x] Launch the project's Wrangler on loopback and wait for the Worker
       to answer a readiness request.
 - [x] Start or resume the configured room and join as the local participant.
-- [x] Show the room name, team members, a scrollable conversation, and a
-      message input. Support keyboard submission and terminal resizing.
+- [x] Show the room and team in a compact header above a full-width,
+      scrollable conversation and message input. Support keyboard submission
+      and terminal resizing.
 - [x] Poll for new messages and exchange state. Show agent names, replies,
       whether the room is working, and errors.
-- [x] Keep Worker logs readable without corrupting the input prompt.
+- [x] Show errors below the conversation. Use `pnpm dev:worker` for Worker logs.
 - [x] Report missing credentials, an occupied port, and startup failures clearly.
 - [x] On exit, stop polling, dispose the OpenTUI renderer, restore the terminal,
       and terminate the Wrangler child process.
