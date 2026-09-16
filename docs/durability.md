@@ -218,6 +218,9 @@ moved under, so that write is refused rather than acknowledged.
 
 ## 6. What a host must do
 
+[Deployment and recovery](deployment.md#restore-human-presence) gives the
+host procedure for presence, client cursors, exchange handles, and leases.
+
 - Retry a send it never heard back on under the same key; the journal
   returns the original exchange handle identity.
 - Resume a name after the process that ran it died, with
@@ -230,7 +233,13 @@ moved under, so that write is refused rather than acknowledged.
   the event says why it wrote nothing.
 - Retry a resume the storage failed: the fence is the first write a
   resumed run makes.
-- Read `messages()` after a resume for what the stream did not carry.
+- Recreate visits from authenticated identities. Preserve recorded presence
+  until the host confirms a departure.
+- Recreate subscriptions before reading `messages({ since })`. Merge overlaps
+  by sequence and advance client cursors after consumption.
+- Reacquire exchange handles with `room.exchange(from)` and recreate pending waits.
+- Preserve unexpired remote leases. Reconnect runners to the current room host;
+  let expired leases follow the normal retry policy.
 
 **A host that may run two runs over one name needs conditional append.**
 The core's SQLite storage compares the storage position and writes the next
@@ -248,7 +257,7 @@ the system clock.
 | ---------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A crash at every write | `chaos.test.ts`       | One scenario, crashed before and after every append it takes, resumed and retried under the same key, ends with the same record every time               |
 | A handover under load  | `hosts.test.ts`       | The same sweep with a model that fails and a seat whose say wakes a peer: the second host wakes the failed seat again, and every answer lands once       |
-| A kill from outside    | `chaos.test.ts`       | The scenario in a child process on JSONL, killed with `SIGKILL` at a write, resumed over the directory                                                   |
+| A kill from outside    | `chaos.test.ts`       | The scenario in a child process over SQLite, killed with `SIGKILL` at a write, resumed over the directory                                                |
 | The random walk        | `property.test.ts`    | Twenty seeded steps of visits, deliveries, seat changes, clock jumps, wire faults, disk faults and crashes; the invariants hold                          |
 | The history            | `consistency.test.ts` | Two people and the host take turns under a nemesis; every action is an invocation and an outcome; §2 to §4 are checked against the record                |
 | The split              | `split.test.ts`       | A paused host comes back after a takeover: in process, the fence holds and it loses the one write it held; under `SIGSTOP` on JSONL, Pi refuses the file |

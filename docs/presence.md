@@ -27,6 +27,8 @@ Ambient means the room remains available between interactions. Native timers,
 external event subscriptions, and scheduler ingress remain future work.
 A process crash does not record departure; hosts reconcile presence with
 actual connections after recovery.
+The [reconnect procedure](deployment.md#restore-human-presence) describes
+restoring visits, multiple clients, and host-confirmed departures.
 
 `startRoom` takes agents and never people. **Seating is composition.
 Visiting is presence.** Three things follow, and they are what presence is
@@ -273,10 +275,9 @@ commits and the rest are told the room moved, which is when rule 3 tells
 them to stand down. An arrival commits on the same queue as a say, under a
 key of its own, and `room.visit` resolves when its write is confirmed.
 
-An `arrived` carries the identity the room knew them by, and it is the only
-thing a presence message adds to a name. A run does not inherit its people
-from the last one, so the record is where the next run learns who has been
-here: without the identity, a replayed name is a name with no roster line.
+An `arrived` records the person's identity and optional reading preferences.
+A resumed run reconstructs people and their presence from those messages. Local visit handles are recreated
+when authenticated clients reconnect.
 
 **Rule 7 holds, and gets stronger.** `from` is stamped by the runtime from
 the live visit. A presence message is the one entry on the record that the

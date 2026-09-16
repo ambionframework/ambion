@@ -11,7 +11,7 @@ still required for release.
 | Model                         | Placement                        | Persistence                  | Current status                                                                        |
 | ----------------------------- | -------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------- |
 | Embedded Node application     | Room and runners in one process  | In-memory journals           | Implemented; storage lasts for the instance's lifetime                                |
-| Persistent Node service       | Application-managed service      | SQLite journals              | Adapters and recovery tests exist; release restart example remains pending            |
+| Persistent Node service       | Application-managed service      | SQLite journals              | SQLite recovery tests include a fresh process after SIGKILL; see evidence below       |
 | Separate room and agent hosts | Calls cross the JSON protocol    | Each host chooses storage    | Extension contract exercised by the Cloudflare reference                              |
 | Cloudflare Durable Objects    | One object per room and per seat | Each object's SQLite storage | Publishable adapter tested in workerd; local CLI support, deployment commands pending |
 
@@ -52,11 +52,154 @@ Unconfirmed transcript data can be lost on process failure.
 Workspace files and application data have separate lifecycles. The journal
 cannot recover JavaScript functions, credentials, or external data.
 
-**Recovery evidence has a defined scope.** The site demo evicts a runtime
-inside one process and resumes over SQLite. Product state and its workspace
-remain in memory. The chaos tests also exercise process failure; see
-[the test matrix](durability.md#7-how-it-is-proved). A clean persistent Node
-restart example and release checks remain pending in the delivery plan.
+### Restore human presence
+
+**Presence records what the host reported.** A crash writes no departure.
+`resumeRoom` preserves recorded people, identities, and presence. It does not
+restore sockets, authenticated sessions, or `Visit` objects.
+
+After authenticating a reconnecting client, call `room.visit(human)` with
+its saved definition. If that person remains present, the call restores the
+local visit without writing another `arrived`. The recorded identity must
+match. Reconnecting does not update the person's recorded preferences.
+
+A host decides when a person has actually left. If it confirms that no client
+for a recorded person remains, use the recorded name and identity:
+
+```ts
+const visit = await room.visit(
+  defineHuman({ name: recordedPerson.name, identity: recordedPerson.identity }),
+);
+await visit.leave();
+```
+
+For a person still recorded as present, this writes one `left` and no
+intermediate arrival. A connection loss alone need not mean departure.
+Apply the application's reconnect policy before marking anyone absent.
+Serialize these decisions with connection changes for that person.
+
+**One person has one presence across clients.** Multiple `visit` calls for
+a present person refer to the same live visit. One `leave()` ends it for
+all those clients. The host tracks tabs or sockets and calls `leave` only
+when its person-level presence policy requires it.
+
+`room.stop()` deliberately revokes work and records departures. It is a
+graceful end of that run. `runtime.evict(name)` drops local handles and
+observers without writing departures or releasing leases. Neither operation
+is a way to close one client's connection while keeping the room active.
+
+### Restore client reads and exchange handles
+
+**Persist identifiers and acknowledged progress in application storage.**
+The room journal stores collaboration facts; the application stores each
+client's delivery and display progress.
+
+| Client value                                         | Purpose                                            |
+| ---------------------------------------------------- | -------------------------------------------------- |
+| Room name                                            | Select the durable room to resume                  |
+| Human definition or authenticated identity lookup    | Restore the correct person's visit                 |
+| Delivery key and exact payload, saved before sending | Retry a send whose acknowledgement was lost        |
+| `exchange.from`, saved after acknowledgement         | Reacquire that exchange after reconnect            |
+| Last consumed message `seq`                          | Read messages that the client has not acknowledged |
+
+`Visit.since` is the sequence of the person's last recorded departure.
+It is shared presence history, not an acknowledged cursor for each device.
+Keep a separate cursor per client. Sequence numbers are journal positions;
+messages can have gaps between their sequence numbers.
+
+**Resume first, then reacquire handles.** Supply the same executable agent
+catalog and reopen the same storage. With the saved client values:
+
+```ts
+const room = await resumeRoom(saved.roomName, { runtime, agents });
+const visit = await room.visit(human);
+const exchange = room.exchange(saved.exchangeFrom);
+if (!exchange) throw new Error('The saved exchange is not in this room.');
+
+const discussion = await exchange.messages();
+const response = await exchange.response(); // A summary, or undefined.
+```
+
+An exchange key is its opening question's `seq`. Another message sent while
+that exchange is open returns the same `from`. To recover an uncertain send,
+retry `visit.send` with the original key and payload. Its returned handle
+identifies the original exchange even if the room has since moved on.
+
+Pending waits belong to one running room. Eviction or detected supersession
+rejects them; recreate waits on a handle from the resumed room. A stopped
+run also rejects waits for unfinished work. Already recorded discussion and
+summary results remain available through a resumed room.
+
+**Subscribe before reading history, and merge by sequence.** Subscriptions
+are local and do not replay past notifications. A message may appear in both
+the replay and the live stream. This example collects both without duplication:
+
+```ts
+import type { Message } from '@ambionframework/ambion';
+
+const messages = new Map<number, Message>();
+const unsubscribe = room.subscribe((event) => {
+  if (event.type === 'message') messages.set(event.message.seq, event.message);
+});
+for (const message of await room.messages({ since: saved.lastConsumedSeq })) {
+  messages.set(message.seq, message);
+}
+const ordered = [...messages.values()].sort((a, b) => a.seq - b.seq);
+```
+
+Continue consuming notifications after the replay. Save a cursor only after
+the client consumes the corresponding ordered messages. Release the
+subscription when that client detaches. Repeat this procedure after another
+host interruption; no subscription or promise survives a process restart.
+
+### Recover inherited leases
+
+**A new room run preserves unexpired activation authority.** A room writer
+fence and an activation lease have different jobs. The fence rejects writes
+from the old room run. The lease authorizes its runner through the current
+room host until it ends or expires.
+
+| What survived                      | Host procedure                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| Room and local runner both died    | Resume the room; the inherited lease expires before the room retries eligible work   |
+| Room died, remote runner survives  | Route its calls to the resumed room; preserve the same activation id and valid lease |
+| A wake had no claim before failure | Let reconciliation deliver the pending wake again                                    |
+| Host deliberately cancels work     | Use `abort()` or `stop()` and accept their cancellation semantics                    |
+
+A surviving remote runner can renew, commit, and release its activation through
+the new room host. A stale connection to the evicted host cannot do this.
+After expiry, old activation calls are refused and retry policy controls
+further work. Reacquiring an exchange handle does not renew or replace a lease.
+
+Recovery does not automatically revoke every inherited lease. That would
+cancel remote work which can still complete. Local recovery can wait for
+expiry; hosts must keep their server or event loop alive and let alarms run.
+Manual-clock tests advance time explicitly. A room lease does not cancel an
+external effect or make a repeated tool call idempotent.
+
+### Recovery evidence
+
+**Deterministic tests exercise the documented procedures.**
+[`reconnect.test.ts`](../packages/ambion/test/reconnect.test.ts) covers human
+presence and exchange handles on memory and SQLite.
+[`inherited-leases.test.ts`](../packages/ambion/test/inherited-leases.test.ts)
+covers surviving remote authority and expiry before local retry.
+[`reconnect-process.test.ts`](../packages/ambion/test/reconnect-process.test.ts)
+kills a Node process at an active lease, then starts a fresh process over the
+same SQLite file and saved client identifiers. The recovered client retries
+its delivery, reads missed messages, and waits for the original exchange.
+
+Run the process scenario without provider credentials:
+
+```sh
+pnpm --filter @ambionframework/ambion exec vitest run test/reconnect-process.test.ts
+```
+
+The process test uses a scripted model and an explicit clock. It verifies
+process and storage recovery; it does not verify a provider's interrupted
+network request. The site demo resumes an evicted runtime inside one process;
+its product state and workspace stay in memory. A concise application example
+and real-model restart evidence remain release work.
 
 ## Separate execution and the Cloudflare reference
 
