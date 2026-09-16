@@ -30,6 +30,19 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  examples/persistent:
+    dependencies:
+      '@ambionframework/ambion':
+        specifier: workspace:*
+        version: link:../../packages/ambion
+      '@ambionframework/journal':
+        specifier: workspace:*
+        version: link:../../packages/journal
+    devDependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
   examples/site:
     dependencies:
       '@ambionframework/ambion':

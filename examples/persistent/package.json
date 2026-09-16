@@ -1,0 +1,19 @@
+{
+	"name": "@ambionframework-examples/persistent",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"description": "One Node process hosts persistent rooms and human participants over HTTP.",
+	"scripts": {
+		"start": "node --env-file-if-exists=.env src/main.ts start",
+		"resume": "node --env-file-if-exists=.env src/main.ts resume",
+		"check:types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/journal": "workspace:*"
+	},
+	"devDependencies": {
+		"typescript": "^7.0.2"
+	}
+}

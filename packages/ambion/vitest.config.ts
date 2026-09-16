@@ -15,8 +15,8 @@ import { configDefaults, defineConfig } from 'vitest/config';
 
 /**
  * The journal resolves to its source, not to its built `dist`. The suite runs
- * against the code in this repository, so a tier never reads a stale build,
- * and the live tier needs no build at all.
+ * against the code in this repository. Native child processes use package
+ * exports; `test:live` builds workspace dependencies before those tests run.
  */
 export const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
 export const piJournal = fileURLToPath(new URL('../pi-journal/src/index.ts', import.meta.url));

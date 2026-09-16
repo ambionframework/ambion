@@ -11,6 +11,9 @@
 		"packages/*": {
 			"project": ["src/**/*.ts"]
 		},
+		"examples/persistent": {
+			"project": ["src/**/*.ts"]
+		},
 		"packages/cloudflare": {
 			"entry": ["test/worker.ts", "test/**/*.test.ts"],
 			"project": ["src/**/*.ts", "test/**/*.ts"],

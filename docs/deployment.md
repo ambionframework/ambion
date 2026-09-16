@@ -34,6 +34,11 @@ provides the journal adapter. `createRuntime` accepts the journal opener, and
 See the [runtime contract](agent.md) and [durability contract](durability.md)
 for the current signatures and failure rules.
 
+The [persistent Node example](../examples/persistent) hosts two rooms and
+multiple people in one process. HTTP clients send keyed messages, read by
+cursor, and reacquire exchanges. One SQLite database stores both room journals.
+Its `start` and `resume` commands supply the same agent definitions.
+
 A host must:
 
 1. Reopen the same durable storage and supply executable agent definitions.
@@ -198,8 +203,26 @@ pnpm --filter @ambionframework/ambion exec vitest run test/reconnect-process.tes
 The process test uses a scripted model and an explicit clock. It verifies
 process and storage recovery; it does not verify a provider's interrupted
 network request. The site demo resumes an evicted runtime inside one process;
-its product state and workspace stay in memory. A concise application example
-and real-model restart evidence remain release work.
+its product state and workspace stay in memory.
+
+**The live tier also crosses a real process boundary.**
+[`restart.test.ts`](../packages/ambion/test/live/restart.test.ts) records a
+real provider contribution and waits for that activation to release. It then
+kills Node while another activation holds a confirmed lease. A fresh process
+opens the same SQLite database, resumes the room, and retries the original
+delivery. System-clock alarms expire the lost lease and recover pending work.
+The test checks the original contribution, exchange ID, single question,
+single human arrival, and recovered agent response.
+
+Run it with the configured provider credential:
+
+```sh
+pnpm --filter @ambionframework/ambion test:live test/live/restart.test.ts
+```
+
+The fixture holds a lease claim response to make the interruption point
+observable. It uses a five-second expiry and zero retry backoff. It does not
+preserve a provider connection across the kill or claim exactly-once model execution.
 
 ## Separate execution and the Cloudflare reference
 
