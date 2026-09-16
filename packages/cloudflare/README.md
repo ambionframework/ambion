@@ -36,8 +36,7 @@ and attention. An omitted map seats every supplied ordinary agent at
 `broadcast`; an empty map starts them in the reserve. `seat` and `unseat`
 take names and cannot install a new definition. The room metadata retains the
 catalog names, so automatic resume resolves the same definitions through
-`configure`. Metadata written by older versions has no catalog field and uses
-the complete configured catalog as a compatibility fallback.
+`configure`. Resume requires catalog names in the room metadata.
 
 The package is private, and nothing deploys it. `pnpm test` runs its three
 tests inside workerd, through `@cloudflare/vitest-pool-workers`, as part of

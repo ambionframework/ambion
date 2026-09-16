@@ -29,7 +29,7 @@ import type {
 } from '@ambionframework/ambion/transport';
 import { runningRoom } from '@ambionframework/ambion/transport';
 import type { JournalOpener } from '@ambionframework/journal';
-import { definitionOf, definitions, runtimeFor } from './configure.ts';
+import { definitionOf, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';
 import { type MetadataStore, type RoomMetadata, roomMetadata, sqlStorage } from './storage.ts';
 
@@ -104,8 +104,11 @@ export class RoomObject extends DurableObject<Env> {
 		ctx.blockConcurrencyWhile(async () => {
 			const { name, agents } = await this.metadata.read();
 			if (name !== undefined) {
-				const catalog = agents === undefined ? definitions() : agents.map(definitionOf);
-				this.room = await resumeRoom(name, { runtime: this.runtime, agents: catalog });
+				if (agents === undefined) throw new Error(`Room '${name}' has no catalog in its metadata.`);
+				this.room = await resumeRoom(name, {
+					runtime: this.runtime,
+					agents: agents.map(definitionOf),
+				});
 			}
 		});
 	}
