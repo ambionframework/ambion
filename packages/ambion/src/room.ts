@@ -33,9 +33,11 @@ import {
 	defaultRuntime,
 	type RunningRoom,
 	type Runtime,
+	registeredRoom,
 	registerRoom,
 	releaseRoom,
 	runningRoom,
+	type SeatContext,
 	stubModel,
 	type Transport,
 } from './host/runtime.ts';
@@ -78,6 +80,7 @@ import type {
 	LeaseRequest,
 	LeaseResponse,
 	SeatPort,
+	SeatRoom,
 	ViewResponse,
 	Without,
 } from './wire.ts';
@@ -256,7 +259,7 @@ function assertFree(runtime: Runtime, name: string): void {
 /** Reads a name and starts nothing. */
 export async function readRoom(name: string, options: ReadRoomOptions = {}): Promise<RoomSnapshot> {
 	const runtime = options.runtime ?? defaultRuntime;
-	const live = runningRoom(runtime, name);
+	const live = registeredRoom(runtime, name);
 	if (live instanceof RoomHost) return live.snapshot();
 	const journal = roomJournal(runtime.journals.open(name));
 	await journal.ready;
@@ -279,9 +282,9 @@ const PASSES = 8;
 
 class RoomHost implements Room, RunningRoom {
 	readonly name: string;
-	readonly stream: StreamFn;
-	readonly model: ModelResolver;
-	readonly transcripts: SessionOpener;
+	private readonly stream: StreamFn;
+	private readonly model: ModelResolver;
+	private readonly transcripts: SessionOpener;
 	readonly runtime: Runtime;
 	/** How this room reaches a seat: what the runtime holds, or every seat as an actor in this process. */
 	private readonly transport: Transport;
@@ -293,6 +296,12 @@ class RoomHost implements Room, RunningRoom {
 	/** The handles the host delivers through. Presence itself is a fold over the journal. */
 	private readonly visits = new Map<string, VisitRuntime>();
 	private readonly ports = new Map<string, SeatPort>();
+	/** The three room calls exposed to an in-process seat. */
+	readonly calls: SeatRoom = {
+		view: (id) => this.view(id),
+		commit: (commit) => this.commit(commit),
+		lease: (lease) => this.lease(lease),
+	};
 	private readonly listeners = new Set<(event: RoomNotification) => void>();
 	private readonly closeWaiters = new Map<
 		Seq,
@@ -464,7 +473,7 @@ class RoomHost implements Room, RunningRoom {
 
 	// -- what the room holds --------------------------------------------------
 
-	private now(): number {
+	now(): number {
 		return this.runtime.clock.now();
 	}
 
@@ -977,10 +986,27 @@ class RoomHost implements Room, RunningRoom {
 	private port(seat: string): SeatPort {
 		let port = this.ports.get(seat);
 		if (port === undefined) {
-			port = this.transport.connect(this, seat, this.runtime);
+			port = this.transport.connect(this.calls, this.seatContext(seat));
 			this.ports.set(seat, port);
 		}
 		return port;
+	}
+
+	private seatContext(seat: string): SeatContext {
+		const definition = this.defs.get(seat);
+		if (definition === undefined)
+			throw new Error(`Room '${this.name}' has no binding for '${seat}'.`);
+		return {
+			clock: this.runtime.clock,
+			call: this.runtime.call,
+			definition,
+			room: this.name,
+			seat,
+			transcripts: this.transcripts,
+			stream: this.stream,
+			model: this.model,
+			emit: (event) => this.emit(event),
+		};
 	}
 
 	// -- what a seat asks -------------------------------------------------------
@@ -998,11 +1024,6 @@ class RoomHost implements Room, RunningRoom {
 	}
 
 	// -- what an answer reads of the room ---------------------------------------
-
-	/** The definition a seat runs, off the names this room knows. */
-	definition(seat: string): AgentDefinition | undefined {
-		return this.defs.get(seat);
-	}
 
 	/** One operation on the room's commit queue, with the wakes the room routes. */
 	async write(commit: CommitRequest): Promise<CommitResult> {

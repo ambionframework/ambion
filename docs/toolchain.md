@@ -124,7 +124,7 @@ holds, and a reviewer reads a file knowing what it cannot reach.
 | `host/`                                       | What a host owns: the runtime value, a clock, an opener                                                                              | The vocabulary                        |
 | `journal/`                                    | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                | The vocabulary                        |
 | `room/`                                       | Pure room state and commands: `decide` proposes events, `evolve` applies committed events, and the fold rebuilds the same projection | The vocabulary, the journal's entries |
-| `answers.ts`                                  | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses                                     | The vocabulary, `host/`, `room/`      |
+| `answers.ts`                                  | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses                                     | The vocabulary, `room/`               |
 | `tools/`                                      | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                | The vocabulary, `host/`               |
 | `seat/`                                       | The Pi executor: context rendering, model execution, tools, transcripts, and in-process transport                                    | The vocabulary, `host/`, `tools/`     |
 | `room.ts`                                     | The room, which composes them all                                                                                                    | Everything                            |
@@ -139,9 +139,10 @@ they carry, `SeatActor` and `Transport`.
 `@ambionframework/cloudflare` is the one such host in this repository, and
 it reads both.
 
-`Room` and `RoomSnapshot` are the room a host holds; `SeatRoom` and
-`RunningRoom` are the room a seat calls. The split is what makes that two
-pairs and not four names for one thing.
+`Room` and `RoomSnapshot` are the live and stored views a host reads.
+`SeatRoom` contains only the executor's three calls. `Transport.connect` receives
+that facade and a separate `SeatContext` with local execution dependencies.
+The runtime keeps lifecycle control outside the transport surface.
 
 **An entry keeps a name no consumer reads yet.** About a third of what the
 two entries name is unused outside the core today, and each one is the type

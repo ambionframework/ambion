@@ -1,6 +1,5 @@
 /** The seat protocol translates room decisions into view, commit, and lease responses. */
 
-import type { Runtime } from './host/runtime.ts';
 import { activationSpec } from './room/activation.ts';
 import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
@@ -36,7 +35,7 @@ const stale = (why: string): Stale => ({ stale: why });
 export interface Answering {
 	// -- the room as a value --
 	readonly name: string;
-	readonly runtime: Runtime;
+	now(): number;
 	// -- what the room does --
 	/** The room answers nothing more: the host stopped it, or it was dropped. */
 	gone(): boolean;
@@ -56,7 +55,6 @@ export interface Answering {
 	reconcile(): Promise<void>;
 }
 
-const now = (room: Answering): number => room.runtime.clock.now();
 const onRoster = (state: RoomState, name: string): boolean =>
 	state.roster.some((seat) => seat.name === name);
 
@@ -77,7 +75,7 @@ export async function answerView(room: Answering, id: string): Promise<ViewRespo
 function facts(room: Answering, state: RoomState): RoomFacts {
 	return {
 		name: room.name,
-		now: now(room),
+		now: room.now(),
 		state,
 		live: room.live(state),
 		unseen: (since) => state.messages.filter((message) => message.seq > since).length,
@@ -87,7 +85,7 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 /** The seat holding a live lease under this id, or nothing. */
 function liveSeatOf(room: Answering, id: string, state: RoomState): string | undefined {
 	const lease = state.leases.get(id);
-	if (lease === undefined || !isLive(lease, now(room))) return undefined;
+	if (lease === undefined || !isLive(lease, room.now())) return undefined;
 	const seat = seatOf(id);
 	return seat !== undefined && onRoster(state, seat) ? seat : undefined;
 }
@@ -169,5 +167,5 @@ async function release(
 	}
 	if (!ended) return stale('the lease ended');
 	void room.reconcile();
-	return { ok: { expiresAt: now(room), lastSeq: room.state().lastSeq } };
+	return { ok: { expiresAt: room.now(), lastSeq: room.state().lastSeq } };
 }

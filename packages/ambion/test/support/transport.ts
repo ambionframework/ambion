@@ -3,7 +3,7 @@
  * plain JSON, and one that loses, repeats or delays them on purpose.
  */
 import type { Clock } from '../../src/index.ts';
-import type { RunningRoom, SeatPort, Transport } from '../../src/transport.ts';
+import type { SeatPort, SeatRoom, Transport } from '../../src/transport.ts';
 import { assertWire, roundTrip } from '../../src/transport.ts';
 
 export interface SerializingTransport extends Transport {
@@ -31,21 +31,14 @@ export function serializing(transport: Transport): SerializingTransport {
 	};
 	return {
 		violations,
-		connect(room, seat, runtime) {
-			const wrapped: RunningRoom = {
-				name: room.name,
-				stream: room.stream,
-				model: room.model,
-				transcripts: room.transcripts,
-				definition: (seat) => room.definition(seat),
-				emit: (event) => room.emit(event),
-				evict: () => room.evict(),
+		connect(room, context) {
+			const wrapped: SeatRoom = {
 				view: async (id) => check('view response', await room.view(check('view', id))),
 				commit: async (commit) =>
 					check('commit response', await room.commit(check('commit', commit))),
 				lease: async (lease) => check('lease response', await room.lease(check('lease', lease))),
 			};
-			const port = transport.connect(wrapped, seat, runtime);
+			const port = transport.connect(wrapped, context);
 			return {
 				wake: (wake) => port.wake(check('wake', wake)),
 				steer: (steer) => port.steer(check('steer', steer)),
@@ -103,20 +96,13 @@ export function faultyTransport(transport: Transport, faults: Fault[], clock: Cl
 		return send();
 	};
 	return {
-		connect(room, seat, runtime) {
-			const wrapped: RunningRoom = {
-				name: room.name,
-				stream: room.stream,
-				model: room.model,
-				transcripts: room.transcripts,
-				definition: (seat) => room.definition(seat),
-				emit: (event) => room.emit(event),
-				evict: () => room.evict(),
+		connect(room, context) {
+			const wrapped: SeatRoom = {
 				view: (id) => through('view', id, () => room.view(id)),
 				commit: (commit) => through('commit', commit, () => room.commit(commit)),
 				lease: (lease) => through('lease', lease, () => room.lease(lease)),
 			};
-			const port: SeatPort = transport.connect(wrapped, seat, runtime);
+			const port: SeatPort = transport.connect(wrapped, context);
 			return {
 				wake: (wake) => through('wake', wake, () => port.wake(wake)).catch(() => {}),
 				steer: (steer) => through('steer', steer, () => port.steer(steer)).catch(() => {}),

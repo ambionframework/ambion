@@ -1,6 +1,6 @@
 /**
- * What every live test shares: the model and the key, the room's assistant,
- * a deadline on the room going quiet, the invariants the record holds
+ * What every live test shares: the model, the key, fresh room storage,
+ * a deadline on the room going quiet, and the invariants the record holds
  * whatever the model said, and what a run cost.
  *
  * A live test proves what a scripted stream cannot: that a model id resolves
@@ -69,24 +69,15 @@ export const person = defineHuman({
 	identity: 'Founder. Asks the questions.',
 });
 
-type RoomOptions = Omit<StartRoomOptions, 'name' | 'summary' | 'streamFn' | 'runtime'>;
+type RoomOptions = Omit<StartRoomOptions, 'name' | 'streamFn' | 'runtime'>;
 
-/** A live room of its own, with a fresh native storage for its record and transcripts. */
+/** A live room with explicit participants and fresh storage for its record and transcripts. */
 export async function open(prefix: string, options: RoomOptions) {
 	const runtime = createRuntime({ storage: memoryJournals() });
 	const session = await startRoom({
 		...options,
 		name: roomName(prefix),
 		runtime,
-		agents: [...(options.agents ?? []), assistant],
-		summary: assistant.name,
-		seats: {
-			...(options.seats ??
-				Object.fromEntries(
-					(options.agents ?? []).map((agent) => [agent.name, 'broadcast' as const]),
-				)),
-			[assistant.name]: 'broadcast',
-		},
 	});
 	return { session, runtime, events: collect(session) };
 }

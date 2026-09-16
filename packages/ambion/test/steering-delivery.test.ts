@@ -30,20 +30,18 @@ function heldReleaseTransport(holdRelease = true) {
 	const base = inProcessTransport();
 	let held = false;
 	const transport: Transport = {
-		connect(room, seat, runtime) {
+		connect(room, context) {
 			const port = base.connect(
 				{
-					name: room.name,
-					stream: room.stream,
-					model: room.model,
-					transcripts: room.transcripts,
-					definition: (name) => room.definition(name),
-					emit: (event) => room.emit(event),
-					evict: () => room.evict(),
 					view: (id) => room.view(id),
 					commit: (request) => room.commit(request),
 					lease: async (request: LeaseRequest) => {
-						if (holdRelease && seat === alpha.name && request.operation === 'release' && !held) {
+						if (
+							holdRelease &&
+							context.seat === alpha.name &&
+							request.operation === 'release' &&
+							!held
+						) {
 							held = true;
 							ending.resolve();
 							await release.promise;
@@ -51,8 +49,7 @@ function heldReleaseTransport(holdRelease = true) {
 						return room.lease(request);
 					},
 				},
-				seat,
-				runtime,
+				context,
 			);
 			return {
 				cut: (activation) => port.cut(activation),

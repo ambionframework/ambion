@@ -146,6 +146,22 @@ Active agents receive new eligible context between provider requests. A steer
 does not acknowledge that context. The next contribution must report what the
 activation consumed.
 
+## Execution boundary
+
+**A transport receives room calls and executor dependencies separately.**
+`Transport.connect(room, context)` receives a plain `SeatRoom` facade with
+`view`, `commit`, and `lease`. It cannot reach room lifecycle methods through
+that facade. The returned `SeatPort` handles `wake`, `steer`, and `cut`.
+
+`SeatContext` supplies one captured agent definition, the room and seat names,
+clock, call retry policy, model services, transcript storage, and notifications.
+The in-process executor uses these values directly. Remote hosts resolve their
+execution dependencies where the agent runs. Only protocol data crosses RPC.
+
+The runtime keeps lifecycle control separately. `runningRoom(runtime, name)`
+returns the same restricted room-call surface. Room decisions use the journal
+projection and an explicit clock value. They do not require model services.
+
 ## History and limits
 
 Composition entries use version 2. The room rejects legacy compositions and

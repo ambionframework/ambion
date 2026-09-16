@@ -4,8 +4,8 @@
  * A seat makes three calls — `view`, `commit` and `lease` — and the room
  * answers them. `SeatRoom` names the three, `SeatPort` names the side the
  * room calls back, and `Transport` is what connects one to the other.
- * `inProcessTransport` is the one every room uses by default: it holds the
- * room directly, and nothing crosses a process. A host that puts the seats
+ * `inProcessTransport` is the default: it receives a room-call facade and
+ * a separate executor context. Nothing crosses a process. A host that puts the seats
  * somewhere else writes its own, and `SeatActor` is the seat side to run
  * there. `@ambionframework/cloudflare` is one such host.
  *
@@ -16,9 +16,8 @@
  * of this. `docs/agent.md` §6 is the design contract for the wire.
  */
 
-export type { RunningRoom, Transport } from './host/runtime.ts';
+export type { SeatContext, Transport } from './host/runtime.ts';
 export { runningRoom } from './host/runtime.ts';
-export type { SeatContext } from './seat/seat.ts';
 export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {
 	ActivationPurpose,

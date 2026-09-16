@@ -202,7 +202,9 @@
 											"../seat/*",
 											"../room.ts",
 											"../index.ts",
-											"../transport.ts"
+											"../transport.ts",
+											"@earendil-works/pi-*",
+											"@ambionframework/journal/pi"
 										],
 										"message": "The room's facts and decisions are pure over the log: no host, no tool, no seat."
 									}
@@ -223,7 +225,16 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["./tools/*", "./seat/*", "./room.ts", "./index.ts", "./transport.ts"],
+										"group": [
+											"./tools/*",
+											"./seat/*",
+											"./host/*",
+											"./room.ts",
+											"./index.ts",
+											"./transport.ts",
+											"@earendil-works/pi-*",
+											"@ambionframework/journal/pi"
+										],
 										"message": "An answer reads the room: no workspace, no seat, and never the session."
 									}
 								]

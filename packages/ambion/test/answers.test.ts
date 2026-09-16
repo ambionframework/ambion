@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { type Answering, answerLease } from '../src/answers.ts';
-import { createRuntime } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import type { LeaseRequest } from '../src/wire.ts';
-import { fakeClock } from './support/clock.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
@@ -37,10 +35,10 @@ const question: Entry = {
 function fakeRoom(state: ReturnType<typeof foldRoom>, ended: string[]): Answering {
 	return {
 		name: 'release-test',
+		now: () => now,
 		gone: () => false,
 		ready: Promise.resolve(),
 		state: () => state,
-		runtime: createRuntime({ clock: fakeClock(now) }),
 		live: () => new Map(),
 		emit: () => {},
 		write: async () => {

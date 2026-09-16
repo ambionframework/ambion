@@ -71,13 +71,13 @@ describe('provider loading', () => {
 			});
 			const room = await startRoom({
 				name: 'lazy-scripted-check',
-				assistant,
-				agents: [worker],
+				agents: [worker, assistant],
+				summary: assistant.name,
 				streamFn,
 			});
 			const visit = await room.visit(defineHuman({ name: 'person', identity: 'tester' }));
 			const exchange = await visit.send({ text: 'hello' });
-			await exchange.messages();
+			await exchange.response();
 			await room.stop();`,
 		);
 		expect(result.code).toBe(0);

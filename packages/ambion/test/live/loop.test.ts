@@ -69,14 +69,15 @@ live('the model and the loop', () => {
 	});
 
 	it('a refused model call reaches the host as an error and leaves no mark', async () => {
+		// Only the clerk runs in this provider-failure probe.
+		const { session, events } = await open('refused', { agents: [clerk()] });
 		const key = process.env[KEY_VAR];
 		process.env[KEY_VAR] = 'not-a-key';
 		try {
-			const { session, events } = await open('refused', { agents: [clerk()] });
 			const visit = await enter(session, person);
 			const ended = new Promise<void>((resolve) => {
 				session.subscribe((e) => {
-					if (e.type === 'activation_end') resolve();
+					if (e.type === 'activation_end' && e.agent === 'clerk') resolve();
 				});
 			});
 			const exchange = await visit.send({ text: 'What is the status of order 7781?' });
@@ -91,9 +92,13 @@ live('the model and the loop', () => {
 			expect(errors[0]).toMatch(/^clerk: /);
 			expect(saidBy(await session.messages(), 'clerk')).toEqual([]);
 			expect(events).toContainEqual({ type: 'activation_end', agent: 'clerk', spoke: false });
-			await session.stop();
 		} finally {
-			process.env[KEY_VAR] = key;
+			try {
+				await session.stop();
+			} finally {
+				if (key === undefined) delete process.env[KEY_VAR];
+				else process.env[KEY_VAR] = key;
+			}
 		}
 	});
 });
