@@ -68,15 +68,17 @@ interface Current {
  * runs; one activation at a time, named by the wake that started it.
  */
 export class SeatActor implements SeatPort {
+	private readonly room: SeatRoom;
+	private readonly context: SeatContext;
 	private current: Current | undefined;
 	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
 	private readonly queued: string[] = [];
 	private audit: Promise<PiSession> | undefined;
 
-	constructor(
-		private readonly room: SeatRoom,
-		private readonly context: SeatContext,
-	) {}
+	constructor(room: SeatRoom, context: SeatContext) {
+		this.room = room;
+		this.context = context;
+	}
 
 	/**
 	 * A wake starts an activation when none runs. While one runs, a wake for

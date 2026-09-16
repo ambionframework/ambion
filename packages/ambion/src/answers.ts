@@ -19,8 +19,11 @@ import type {
 
 /** A command the room refused, with the wire category that answers it. */
 export class RefusedError extends Error {
-	constructor(readonly refusal: Refusal) {
+	readonly refusal: Refusal;
+
+	constructor(refusal: Refusal) {
 		super('reason' in refusal ? refusal.reason : 'The record moved.');
+		this.refusal = refusal;
 	}
 }
 
