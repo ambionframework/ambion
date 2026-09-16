@@ -7,7 +7,7 @@ import type { JournalOpener } from '@ambionframework/journal';
 import { expect } from 'vitest';
 import { decodeActivationId } from '../../src/activation-id.ts';
 import { isPresence, isSummary, type Room, type RoomNotification } from '../../src/index.ts';
-import type { LeaseChange } from '../../src/transport.ts';
+import type { LeaseChange } from '../../src/journal/events.ts';
 import { standing } from './history.ts';
 import { storedOf } from './room.ts';
 

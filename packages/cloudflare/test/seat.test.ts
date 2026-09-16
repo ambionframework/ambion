@@ -7,12 +7,14 @@
 
 import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
-import type { LeaseChange, Steer } from '@ambionframework/ambion/transport';
+import type { Steer } from '@ambionframework/ambion/transport';
 import { namespaced } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it } from 'vitest';
 import { seatMetadata, sqlStorage } from '../src/storage.ts';
 import { until } from './until.ts';
+
+type LeaseObservation = { id: string; phase: 'running' | 'ended'; reason?: string };
 
 it('wakes, runs the activation on its alarm, and the room sends an untaken wake again', async () => {
 	const room = env.ROOM.get(env.ROOM.idFromName('seat-test'));
@@ -50,7 +52,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 				(entry) =>
 					entry.entry as {
 						kind: string;
-						body: LeaseChange;
+						body: LeaseObservation;
 					},
 			);
 			const found = stored
@@ -118,7 +120,7 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 				(entry) =>
 					entry.entry as {
 						kind: string;
-						body: LeaseChange;
+						body: LeaseObservation;
 					},
 			);
 			const leases = stored.filter((entry) => entry.kind === 'lease').map((entry) => entry.body);

@@ -127,17 +127,17 @@ only. Biome refuses every other import (`noRestrictedImports`, one
 override per layer in `biome.jsonc`), so the layout is a fact the gate
 holds, and a reviewer reads a file knowing what it cannot reach.
 
-| Layer                                         | What it holds                                                                                                                        | May import                            |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
-| `types`, `wire`, `define`, `activation-id.ts` | Pure vocabulary, wire values, activation identity, and participant context                                                           | Nothing that does anything            |
-| `host/`                                       | What a host owns: the runtime value, a clock, an opener                                                                              | The vocabulary                        |
-| `journal/`                                    | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                | The vocabulary                        |
-| `room/`                                       | Pure room state and commands: `decide` proposes events, `evolve` applies committed events, and the fold rebuilds the same projection | The vocabulary, the journal's entries |
-| `answers.ts`                                  | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses                                     | The vocabulary, `room/`               |
-| `tools/`                                      | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                | The vocabulary, `host/`               |
-| `seat/`                                       | The Pi executor: context rendering, model execution, tools, transcripts, and in-process transport                                    | The vocabulary, `host/`, `tools/`     |
-| `room.ts`                                     | The room, which composes them all                                                                                                    | Everything                            |
-| `index.ts`, `transport.ts`                    | The two published entries. They hold no logic: each one names what its reader needs                                                  | Everything                            |
+| Layer                                 | What it holds                                                                                     | May import                                |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `types`, `define`, `activation-id.ts` | Shared vocabulary, definitions, and activation identity                                           | Nothing that does anything                |
+| `protocol.ts`                         | Requests, replies, activation context, and JSON checks                                            | Shared vocabulary                         |
+| `host/`                               | What a host owns: the runtime value, a clock, an opener                                           | The vocabulary and protocol               |
+| `journal/`                            | Stored events in `events.ts`, validation, and the room journal adapter                            | The vocabulary                            |
+| `room/`                               | Pure state and commands; `lease.ts` owns projected lease state                                    | The vocabulary, protocol, journal entries |
+| `answers.ts`                          | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses  | The vocabulary, protocol, `room/`         |
+| `seat/`                               | The Pi executor: context rendering, model execution, tools, transcripts, and in-process transport | The vocabulary, protocol, `host/`         |
+| `room.ts`                             | The room, which composes them all                                                                 | Everything                                |
+| `index.ts`, `transport.ts`            | The two published entries. They hold no logic: each one names what its reader needs               | Everything                                |
 
 **The package has two entries, for two readers.**
 `@ambionframework/ambion` is what a host needs to build a room: the five
@@ -152,6 +152,15 @@ it reads both.
 `SeatRoom` contains only the executor's three calls. `Transport.connect` receives
 that facade and a separate `SeatContext` with local execution dependencies.
 The runtime keeps lifecycle control outside the transport surface.
+
+`protocol.ts` imports shared vocabulary and has no journal dependency.
+`journal/events.ts` defines stored event shapes independently of the protocol.
+`room/lease.ts` derives lease state from those events. Biome keeps the journal
+and protocol from importing each other. The transport entry exports protocol
+shapes and execution adapters; storage and projection types stay internal.
+
+The packed CLI consumer compiles a custom transport against the package
+archive. It also checks that internal event and lease types are not exported.
 
 **An entry keeps a name no consumer reads yet.** About a third of what the
 two entries name is unused outside the core today, and each one is the type

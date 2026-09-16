@@ -26,6 +26,7 @@
  */
 
 import { decodeActivationId } from '../activation-id.ts';
+import type { Close } from '../journal/events.ts';
 import {
 	type Exchange,
 	isSpoken,
@@ -34,7 +35,7 @@ import {
 	type SpokenMessage,
 	type SummaryMessage,
 } from '../types.ts';
-import type { Close, LeaseHold } from '../wire.ts';
+import type { LeaseHold } from './lease.ts';
 
 export type SummaryCompletion =
 	| { readonly status: 'published'; readonly summary: SummaryMessage }

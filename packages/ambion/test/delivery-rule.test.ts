@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { messageDelivery } from '../src/room/delivery.ts';
+import type { LeaseHold } from '../src/room/lease.ts';
 import type { Message } from '../src/types.ts';
-import type { LeaseHold } from '../src/wire.ts';
 
 const message = (seq = 10, wakes?: string[]): Message => ({
 	kind: 'said',

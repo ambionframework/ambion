@@ -21,7 +21,7 @@
  *   same way.
  * - **Route.** Who wakes for a message, written with it, and who is steered.
  * - **Answer a seat.** The view an activation reads, the commit it asks for,
- *   and the lease it holds — the three calls in `wire.ts`.
+ *   and the lease it holds — the three calls in `protocol.ts`.
  * - **Say when it has stopped.** An exchange closed, and nothing live.
  */
 
@@ -41,7 +41,17 @@ import {
 	stubModel,
 	type Transport,
 } from './host/runtime.ts';
+import type { Close, Composition, LeaseChange } from './journal/events.ts';
 import { type Entry, type Kind, placed, type RoomJournal, roomJournal } from './journal/journal.ts';
+import type {
+	CommitRequest,
+	CommitResult,
+	LeaseRequest,
+	LeaseResponse,
+	SeatPort,
+	SeatRoom,
+	ViewResponse,
+} from './protocol.ts';
 import { summaryCompletion } from './room/exchange.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
@@ -60,6 +70,7 @@ import type {
 	AgentDefinition,
 	Attention,
 	ClosedExchange,
+	EndReason,
 	Exchange,
 	HumanDefinition,
 	Message,
@@ -69,22 +80,9 @@ import type {
 	SeatInfo,
 	Seq,
 	SummaryMessage,
+	Without,
 } from './types.ts';
 import { copyMessage } from './types.ts';
-import type {
-	Close,
-	CommitRequest,
-	CommitResult,
-	Composition,
-	EndReason,
-	LeaseChange,
-	LeaseRequest,
-	LeaseResponse,
-	SeatPort,
-	SeatRoom,
-	ViewResponse,
-	Without,
-} from './wire.ts';
 
 /**
  * Where the room is in its life. One field answers every question the room

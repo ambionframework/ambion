@@ -1,6 +1,5 @@
 /**
- * What crosses between a seat and its room, and what the journal holds beside
- * a message. Every shape here is plain JSON:
+ * What crosses between a seat and its room. Every shape here is plain JSON:
  * an optional key is written only when it is present, and no value is
  * `undefined`, a `Date`, a `Map`, a `Set`, a class instance or a function. A
  * request and its response survive a round trip through `JSON.stringify`
@@ -13,7 +12,7 @@
  * context to one running activation, and `cut` stops an activation whose
  * lease the room ended.
  */
-import type { AgentSeatInfo, Attention, HumanSeatInfo, Message, Seq } from './types.ts';
+import type { AgentSeatInfo, EndReason, HumanSeatInfo, Message, Seq, Without } from './types.ts';
 
 /** The work authorized by the room, with the facts that purpose requires. */
 export type ActivationPurpose =
@@ -31,102 +30,6 @@ export interface ActivationSpec {
 	readonly seat: string;
 	readonly attempt: number;
 	readonly purpose: ActivationPurpose;
-}
-
-// -- entries on the journal beside the messages -----------------------------------
-
-/** `Omit` over each member of a union, so a discriminated body keeps its shape. */
-export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
-
-/**
- * Why a lease ended: the activation ran to its end, it never reached the
- * record, the record kept moving past its drafts, the room wrote it off,
- * or it stopped renewing.
- */
-export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandoned';
-
-/**
- * One entry about an activation: it holds a lease, or its lease ended. The
- * last entry for an id wins, and an ended lease never runs again.
- */
-export type LeaseChange =
-	| { id: string; phase: 'running'; expiresAt: number; at: string; readThrough: Seq }
-	| { id: string; phase: 'ended'; reason: EndReason; at: string; readThrough: Seq };
-
-/**
- * What the entries for one activation fold to: whether it runs, until when,
- * or why it ended, and where on the journal each fact landed. The journal
- * retains these entries, so replay reconstructs the same hold.
- */
-type LeaseFact = {
-	id: string;
-	/** When the last entry was written, ISO. */
-	at: string;
-	/** When the first entry was written, ISO: the activation runs from here to its deadline. */
-	claimedAt: string;
-	/** The seq where this activation first attempted work. */
-	since: Seq;
-	/** The highest message position that the executor explicitly consumed. */
-	readThrough: Seq;
-};
-
-export type LeaseHold =
-	| (LeaseFact & {
-			phase: 'running';
-			/** When a running lease expires, in milliseconds since the epoch. */
-			expiresAt: number;
-	  })
-	| (LeaseFact & {
-			phase: 'ended';
-			reason: EndReason;
-			/** The seq when the end landed. */
-			until: Seq;
-	  });
-
-/**
- * A run took the name: the first entry every run writes. The entry fences
- * the runs. The journal stamps the run on every entry beside the body, so
- * the fence body says only when the run took the name. An entry of an
- * earlier run that lands after a later run's fence is void.
- */
-export interface Fence {
-	at: string;
-}
-
-/** The room went quiet with an exchange open, and closed it. */
-export interface Close {
-	owner: string;
-	from: Seq;
-	through: Seq;
-	at: string;
-	/** The configured seated agent that writes a summary, when one is owed. */
-	summary?: string;
-}
-
-/** One seat in a composition: its name, how the room knows it, and what wakes it. */
-export interface Seating {
-	name: string;
-	identity: string;
-	attention: Attention;
-}
-
-/**
- * What a run started with. The roster folds from the latest one, and a
- * reader without the definitions reads every identity off it.
- */
-export interface Composition {
-	version: 2;
-	goal?: string;
-	/** The configured agent that writes summaries for human owners. */
-	summary?: string;
-	agents: Seating[];
-	available: Seating[];
-	/**
-	 * Where the composition sits on the record. The roster folds from here,
-	 * the room writes it from the place the journal gives the entry.
-	 */
-	seq: Seq;
-	at: string;
 }
 
 // -- the room reaching a seat -------------------------------------------------

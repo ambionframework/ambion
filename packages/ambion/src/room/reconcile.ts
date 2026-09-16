@@ -12,7 +12,7 @@
  */
 
 import { decodeActivationId } from '../activation-id.ts';
-import type { Close, LeaseChange } from '../wire.ts';
+import type { Close, LeaseChange } from '../journal/events.ts';
 import type { RoomState } from './fold.ts';
 import { isExpired, isLive, type PendingActivation, seatOf } from './lease.ts';
 import { givesUp } from './rules.verified.ts';

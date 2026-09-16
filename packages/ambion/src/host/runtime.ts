@@ -14,8 +14,8 @@ import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework
 import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models } from '@earendil-works/pi-ai';
+import type { SeatPort, SeatRoom } from '../protocol.ts';
 import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
-import type { SeatPort, SeatRoom } from '../wire.ts';
 
 interface RuntimeState {
 	running: Map<string, RunningRoom>;

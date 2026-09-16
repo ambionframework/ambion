@@ -1,6 +1,6 @@
 /** Pure summary assignment from the recorded composition and roster. */
 
-import type { Composition, Seating } from '../wire.ts';
+import type { Composition, Seating } from '../journal/events.ts';
 
 /** Return the configured summary writer when that agent is seated. */
 export function summaryWriter(

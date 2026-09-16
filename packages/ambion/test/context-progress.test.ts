@@ -4,11 +4,11 @@
  * full journal replay.
  */
 import { describe, expect, it } from 'vitest';
+import type { LeaseChange } from '../src/journal/events.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { planReconciliation } from '../src/room/reconcile.ts';
 import { decide, evolve, type RoomDecision } from '../src/room/transition.ts';
-import type { LeaseChange } from '../src/wire.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);

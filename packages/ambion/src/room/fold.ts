@@ -10,14 +10,15 @@
  */
 
 import { decodeActivationId } from '../activation-id.ts';
+import type { Close, Composition, Seating } from '../journal/events.ts';
 import { type Entry, placed } from '../journal/journal.ts';
 import type { Exchange, Message, Seq } from '../types.ts';
-import type { Close, Composition, LeaseHold, Seating } from '../wire.ts';
 import { type MessageDelivery, messageDelivery } from './delivery.ts';
 import { openExchange, summaryCompletion } from './exchange.ts';
 import {
 	applyLease,
 	cameToNothing,
+	type LeaseHold,
 	type PendingActivation,
 	type PendingWake,
 	pendingActivation,

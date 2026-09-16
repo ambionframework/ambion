@@ -12,9 +12,10 @@
  * diffed and tested without starting anything. The room's mechanics hold no
  * sentences, and this file holds no state.
  */
+
+import type { ActivationView, ContextParticipant } from '../protocol.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
 import { isSpoken, isSummary, type Message, type Seq, type SummaryMessage } from '../types.ts';
-import type { ActivationView, ContextParticipant } from '../wire.ts';
 import { SUMMARY_DUTIES } from './summary.ts';
 
 const MINUTE = 60_000;

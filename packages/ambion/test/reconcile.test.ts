@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
+import type { Close, LeaseChange } from '../src/journal/events.ts';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
 import { liveWork, planReconciliation, type ReconcileOptions } from '../src/room/reconcile.ts';
 import type { Message } from '../src/types.ts';
-import type { Close, LeaseChange } from '../src/wire.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const T0 = Date.parse(at);

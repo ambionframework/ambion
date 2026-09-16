@@ -18,30 +18,24 @@
 
 export type { SeatContext, Transport } from './host/runtime.ts';
 export { runningRoom } from './host/runtime.ts';
-export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {
 	ActivationPurpose,
 	ActivationSpec,
 	ActivationView,
-	Close,
 	CollaborationContext,
 	CommitRequest,
 	CommitResult,
-	Composition,
 	ContextParticipant,
-	EndReason,
-	Fence,
 	Intent,
-	LeaseChange,
-	LeaseHold,
 	LeaseRequest,
 	LeaseResponse,
-	Seating,
 	SeatPort,
 	SeatRoom,
 	Stale,
 	Steer,
 	ViewResponse,
 	Wake,
-} from './wire.ts';
-export { assertWire, roundTrip } from './wire.ts';
+} from './protocol.ts';
+export { assertWire, roundTrip } from './protocol.ts';
+export { inProcessTransport, SeatActor } from './seat/seat.ts';
+export type { EndReason } from './types.ts';
