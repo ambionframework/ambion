@@ -398,8 +398,8 @@ lease authority.
 
 **Syntax grants no authority.** The room checks the referenced cause and seat
 eligibility. Claims require pending work or an existing live lease. Renewals,
-views, and contributions require a live lease. The room derives purpose again
-when a contribution reaches its write queue.
+releases, views, and contributions require a live lease. The room derives
+purpose again when a contribution reaches its write queue.
 
 **Summary requests contain text only.** The room supplies the author,
 recipient, and covered range from the validated purpose. It ignores extra
@@ -408,12 +408,13 @@ summary messages keep their existing fields.
 
 **Implementation evidence:**
 
-- `pnpm check`: 657 tests passed, including 550 core tests and 16 workerd tests.
+- `pnpm check`: 660 tests passed, including 553 core tests and 16 workerd tests.
 - `pnpm chaos`: all 710 expanded crash, takeover, replay, and history tests passed.
 - Regression tests reject malformed IDs, invalid roles, missing causes, and expired leases.
 - Summary tests prove room-owned metadata, duplicate refusal, and fixed context boundaries.
 - Executor tests prove purpose-specific tools and compile-time rejection of removed fields.
 - Participant definitions reject names that cannot produce canonical activation IDs.
+- External releases cannot abandon unclaimed work; another seat cannot settle a summary.
 
 **Remaining execution work:** structured context, narrower executor
 interfaces, and separate audit failure remain below. This activation change

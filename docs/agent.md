@@ -762,6 +762,11 @@ receives a `CommitResult`. A `LeaseRequest` names `claim`, `renew`, or
 `release`. Renewal requires an existing live lease. A repeated claim for
 a live activation remains safe.
 
+An external release requires an existing live lease and a valid activation
+purpose. Room control can end unclaimed work directly when it revokes or
+abandons that work. A recorded close names the writer whose lease can settle
+its summary outcome.
+
 Every request and response survives a round trip through `JSON.stringify`
 unchanged ([`wire.ts`](../packages/ambion/src/wire.ts)). In-process and
 Cloudflare hosts implement the same calls.

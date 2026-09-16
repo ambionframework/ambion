@@ -57,9 +57,15 @@ export function summaryCompletion(
 	);
 	if (summary !== undefined) return { status: 'published', summary };
 	if (close.wakes === undefined) return { status: 'silent' };
+	const writer = close.wakes[0];
 	const drafts = [...leases.values()].filter((lease) => {
 		const parsed = decodeActivationId(lease.id);
-		return parsed?.source === 'closed' && parsed.position === close.through;
+		// A terminal lease from another seat cannot settle this close.
+		return (
+			parsed?.source === 'closed' &&
+			parsed.position === close.through &&
+			(writer === undefined || parsed.seat === writer)
+		);
 	});
 	const released = drafts.some((lease) => lease.phase === 'ended' && lease.reason === 'released');
 	const stoodDown =
@@ -68,7 +74,6 @@ export function summaryCompletion(
 			(lease) =>
 				lease.phase === 'ended' && (lease.reason === 'revoked' || lease.reason === 'abandoned'),
 		);
-	const writer = close.wakes[0];
 	if (writer !== undefined && !stoodDown) return { status: 'pending', writer };
 	// Preserve reads of histories with a running draft beside a terminal one.
 	if (drafts.some((lease) => lease.phase === 'running')) return { status: 'pending' };
