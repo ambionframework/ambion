@@ -177,7 +177,7 @@ const conversation = await exchange.messages();
 const response = await exchange.response();
 
 await room.stop();
-const resumed = await resumeRoom('site', { runtime, agents, assistant });
+const resumed = await resumeRoom('site', { runtime, agents });
 const sameExchange = resumed.exchange(exchange.from);
 if (sameExchange) {
   await sameExchange.messages();

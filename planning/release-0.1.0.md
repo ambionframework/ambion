@@ -131,9 +131,10 @@ Support broadcast messages and messages addressed to a participant by name.
 Attention controls what activates an idle agent: direct messages, room speech,
 or presence changes. Keep this policy separate from execution activity.
 
-Hosts can seat and unseat supplied agents. Unseated agents form the reserve
-available for assistant selection. Reserve selection uses the default
-attention; explicit host seating can choose attention.
+Hosts supply all executable definitions in `agents`. The optional `seats` map
+selects initial members and attention. Unseated definitions form the reserve
+for assistant selection. Reserve selection uses `broadcast` attention;
+explicit host seating can choose attention.
 
 People have identities and optional response preferences. A visit determines
 who speaks and when that person is present. Preferences shape the assistant's

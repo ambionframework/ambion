@@ -141,6 +141,7 @@ const room = await startRoom({
   name: 'delivery',
   goal: 'Check delivery promises against stock and capacity.',
   agents: [inventory, scheduling],
+  seats: { inventory: 'broadcast', scheduling: 'broadcast' },
 });
 
 try {
@@ -158,8 +159,9 @@ try {
 ```
 
 Supply an `assistant` definition to `startRoom` when the application needs
-specialist selection or synthesis. The `available` option supplies
-reserve agents. `exchange.response()` waits for a summary or a terminal result
+specialist selection or synthesis. Include every ordinary definition in
+`agents`; leave an agent out of `seats` to keep it in the reserve.
+`exchange.response()` waits for a summary or a terminal result
 without one. Deliberate absence returns `undefined`; revoked or abandoned
 summary work rejects the response wait. The application can read
 `exchange.messages()` for the discussion in either case.

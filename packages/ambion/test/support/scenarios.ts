@@ -164,7 +164,9 @@ export const twoPeopleTwoExchanges: Scenario = {
 			['priya', 'for priya'],
 			['sam', 'for sam'],
 		]);
-		expect(session.seats().find((s) => s.name === 'priya')).toMatchObject({ presence: 'absent' });
+		expect(session.participants().find((s) => s.name === 'priya')).toMatchObject({
+			presence: 'absent',
+		});
 		await finish(session, events, runtime);
 	},
 };
@@ -176,8 +178,8 @@ export const seatFromReserve: Scenario = {
 			name,
 			runtime,
 			assistant,
-			agents: [product],
-			available: [surveyor],
+			agents: [product, surveyor],
+			seats: { [product.name]: 'broadcast' },
 			streamFn: scripted(
 				byAgent({
 					assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),
@@ -198,7 +200,7 @@ export const seatFromReserve: Scenario = {
 		});
 		expect(record.filter(isSpoken).map((m) => m.from)).toContain('surveyor');
 		expect(record.find(isSummary)).toBeDefined();
-		expect(session.seats().map((s) => s.name)).toContain('surveyor');
+		expect(session.participants().map((s) => s.name)).toContain('surveyor');
 		await finish(session, events, runtime);
 	},
 };

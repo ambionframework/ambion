@@ -6,7 +6,7 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { defineTool, passive } from '../../src/index.ts';
+import { defineTool } from '../../src/index.ts';
 import { enter } from '../support/room.ts';
 import {
 	activationsOf,
@@ -81,7 +81,10 @@ live('judgment', () => {
 				has answered, end your turn without calling say.
 			`,
 		});
-		const { session, runtime, events } = await open('directed', { agents: [desk, passive(stock)] });
+		const { session, runtime, events } = await open('directed', {
+			agents: [desk, stock],
+			seats: { [desk.name]: 'broadcast', [stock.name]: 'named' },
+		});
 		const visit = await enter(session, person);
 		await visit.send({ text: 'How many units of SKU A-100 do we have?' });
 		await untilQuiet(session);

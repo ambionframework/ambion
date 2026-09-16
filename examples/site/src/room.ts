@@ -18,7 +18,6 @@
  * `main.ts` opens this interactively. `demo.ts` drives one scripted run of it.
  */
 import {
-	attentive,
 	defineAgent,
 	defineHuman,
 	defineTool,
@@ -763,13 +762,10 @@ const materialsAgent = defineAgent({
 });
 
 /**
- * The task list is `attentive`, which is `presence` on the attention scale: it
- * wakes when somebody arrives or leaves.
- * The other two sit at the default, so opening the room does not wake them —
- * an arrival asks nothing, and three products guessing at what it wants is three
- * briefings nobody requested.
+ * The task list uses `presence`, so it wakes when somebody arrives or leaves.
+ * The other two use the default `broadcast` attention.
  */
-export const AGENTS = [shiftsAgent, attentive(tasksAgent), materialsAgent];
+const BASE_AGENTS = [shiftsAgent, tasksAgent, materialsAgent];
 
 // -- the specialists on call ---------------------------------------------------
 
@@ -847,8 +843,18 @@ const temporaryWorksAgent = defineAgent({
 	tools: [checkStatus, bookCheck, SITE_TOOLS],
 });
 
-/** The reserve. Nothing wakes these seats until the assistant seats one. */
-export const AVAILABLE = [inspectionsAgent, plantAgent, temporaryWorksAgent];
+/** Specialists that start in the reserve. They join when a question needs them. */
+const RESERVE_AGENTS = [inspectionsAgent, plantAgent, temporaryWorksAgent];
+
+/** Every ordinary definition supplied to the room run. Membership starts separately. */
+export const AGENTS = [...BASE_AGENTS, ...RESERVE_AGENTS];
+
+/** The three ordinary agents that participate when the room starts. */
+export const INITIAL_SEATS = {
+	'time-tracker': 'broadcast',
+	'task-management': 'presence',
+	'materials-tracker': 'broadcast',
+} as const;
 
 // -- the people, and the assistant that writes for them -----------------------
 

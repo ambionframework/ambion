@@ -404,9 +404,9 @@ class Host {
 			'cut',
 		] as const);
 		if (op === 'seat') {
-			await cluster.act('host', 'seat', undefined, () => cluster.session.seat(colleague));
+			await cluster.act('host', 'seat', undefined, () => cluster.session.seat(colleague.name));
 		} else if (op === 'unseat') {
-			await cluster.act('host', 'unseat', undefined, () => cluster.session.unseat(colleague));
+			await cluster.act('host', 'unseat', undefined, () => cluster.session.unseat(colleague.name));
 		} else if (op === 'read') {
 			await cluster.act(
 				'host',

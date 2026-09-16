@@ -78,8 +78,12 @@ export async function outcome(
 	const closes = (await storedOf(journals, session.name)).filter((r) => r.kind === 'close');
 	expect(closes).toHaveLength(3);
 	expect(await currentExchange(session)).toBeUndefined();
-	expect(session.seats().find((s) => s.name === priya.name)).toMatchObject({ presence: 'absent' });
-	expect(session.seats().find((s) => s.name === sam.name)).toMatchObject({ presence: 'present' });
+	expect(session.participants().find((s) => s.name === priya.name)).toMatchObject({
+		presence: 'absent',
+	});
+	expect(session.participants().find((s) => s.name === sam.name)).toMatchObject({
+		presence: 'present',
+	});
 }
 
 /** One read for a failure message, or what stopped it. */
@@ -356,7 +360,7 @@ export class World {
 
 /** Nothing live and nothing open, on the fold the room holds now. */
 export function idle(session: Room): boolean {
-	const seats = session.seats();
+	const seats = session.participants();
 	const state = (session as Room & { state(): { exchange: unknown } }).state();
 	return (
 		state.exchange === undefined && seats.every((s) => s.kind !== 'agent' || s.status === 'idle')

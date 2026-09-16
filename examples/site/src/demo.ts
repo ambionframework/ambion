@@ -28,7 +28,6 @@ import { DatabaseSync } from 'node:sqlite';
 import {
 	createRuntime,
 	isPresence,
-	isSeatedAgent,
 	isSpoken,
 	isSummary,
 	type Message,
@@ -42,11 +41,11 @@ import { piSessions } from '@ambionframework/journal/pi';
 import {
 	AGENTS,
 	ASSISTANT,
-	AVAILABLE,
 	apiLog,
 	dan,
 	driveFiles,
 	GOAL,
+	INITIAL_SEATS,
 	inspectionsState,
 	MODEL,
 	materialsState,
@@ -127,12 +126,12 @@ let room: Room = await startRoom({
 	goal: GOAL,
 	assistant: ASSISTANT,
 	agents: AGENTS,
-	available: AVAILABLE,
+	seats: INITIAL_SEATS,
 	runtime: first,
 });
 
 /** The roster as the run starts, before any question composes it. */
-const seatsAtStart = room.seats();
+const seatsAtStart = room.participants();
 
 /** Bookkeeping: correlate every activation with the message that caused it. */
 function track(event: RoomNotification, at: string): void {
@@ -289,9 +288,7 @@ const second = createRuntime({
 });
 room = await resumeRoom(NAME, {
 	runtime: second,
-	agents: [ASSISTANT, ...AGENTS, ...AVAILABLE].map((value) =>
-		isSeatedAgent(value) ? value.agent : value,
-	),
+	agents: [ASSISTANT, ...AGENTS],
 });
 watch(room);
 // sam is present on the journal, so the visit puts nothing on the record.
@@ -324,10 +321,12 @@ const sinceOnReturn = priyaBack.since;
 // Stop before capture so the room journal and record include the same final presence entries.
 await room.stop();
 const finalRecord: Message[] = await room.messages();
-const seats = room.seats();
+const participants = room.participants();
 /** The seat that writes for people: the roster names its role, and nothing else tells it apart. */
 const assistants = new Set(
-	seats.flatMap((seat) => (seat.kind === 'agent' && seat.assistant ? [seat.name] : [])),
+	participants.flatMap((participant) =>
+		participant.kind === 'agent' && participant.assistant ? [participant.name] : [],
+	),
 );
 
 /**
@@ -344,7 +343,7 @@ const seatSessions: {
 const readerDatabase = openDatabase();
 const readerStorage = sqliteJournals(nodeSql(readerDatabase));
 const reader = piSessions(readerStorage);
-for (const seat of seats) {
+for (const seat of participants) {
 	if (seat.kind !== 'agent') continue;
 	const id = seat.sessionId;
 	const piSeat = await reader.open(id);
@@ -401,8 +400,10 @@ writeFileSync(
 			missedOnReturn: missed,
 			sinceOnReturn,
 			seatsAtStart,
-			seats,
-			reserve: AVAILABLE.map((agent) => ({ name: agent.name, identity: agent.identity })),
+			participants,
+			reserve: AGENTS.filter(
+				(agent) => !participants.some((participant) => participant.name === agent.name),
+			).map((agent) => ({ name: agent.name, identity: agent.identity })),
 			seatings: finalRecord.filter(isPresence).filter((m) => m.kind === 'seated'),
 			seatSessions,
 			activations,

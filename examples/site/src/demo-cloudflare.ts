@@ -172,7 +172,7 @@ const stored = await until(async () => {
 	);
 	return ended ? await journal() : undefined;
 });
-const seats = await call<{ kind: string; name: string }[]>('/seats');
+const participants = await call<{ kind: string; name: string }[]>('/participants');
 const events = await seatEvents();
 process.stderr.write(`  ${events.length} seat events read back from the logs\n`);
 
@@ -205,7 +205,7 @@ writeFileSync(
 			journal: stored,
 			runs: entriesOf<{ run: string }>(stored, 'run'),
 			record: await messages(),
-			seats,
+			participants,
 			events,
 		},
 		null,

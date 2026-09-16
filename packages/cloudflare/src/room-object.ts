@@ -17,7 +17,7 @@ import type {
 	Seq,
 	Visit,
 } from '@ambionframework/ambion';
-import { defineHuman, resumeRoom, seated, startRoom } from '@ambionframework/ambion';
+import { defineHuman, resumeRoom, startRoom } from '@ambionframework/ambion';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -29,7 +29,7 @@ import type {
 } from '@ambionframework/ambion/transport';
 import { runningRoom } from '@ambionframework/ambion/transport';
 import type { JournalOpener } from '@ambionframework/journal';
-import { definitionOf, definitions, runtimeFor } from './configure.ts';
+import { definitionOf, runtimeFor } from './configure.ts';
 import type { SeatObject } from './seat-object.ts';
 import { type MetadataStore, type RoomMetadata, roomMetadata, sqlStorage } from './storage.ts';
 
@@ -38,14 +38,11 @@ export interface Env {
 	SEAT: DurableObjectNamespace<SeatObject>;
 }
 
-/** One seat in a composition, by name. */
-export type SeatSpec = string | { name: string; attention: Attention };
-
 export interface StartOptions {
 	name: string;
-	assistant: string;
-	agents?: SeatSpec[];
-	available?: SeatSpec[];
+	assistant?: string;
+	agents?: readonly string[];
+	seats?: Record<string, Attention>;
 	goal?: string;
 }
 
@@ -105,22 +102,35 @@ export class RoomObject extends DurableObject<Env> {
 		});
 		this.metadata = roomMetadata(this.storage);
 		ctx.blockConcurrencyWhile(async () => {
-			const { name } = await this.metadata.read();
-			if (name !== undefined)
-				this.room = await resumeRoom(name, { runtime: this.runtime, agents: definitions() });
+			const { name, agents } = await this.metadata.read();
+			if (name !== undefined) {
+				if (agents === undefined) throw new Error(`Room '${name}' has no catalog in its metadata.`);
+				this.room = await resumeRoom(name, {
+					runtime: this.runtime,
+					agents: agents.map(definitionOf),
+				});
+			}
 		});
 	}
 
 	/** Start the room from names the worker configured. The composition lands on the journal. */
 	async start(options: StartOptions): Promise<void> {
 		if (this.room !== undefined) throw new Error(`Room '${this.room.name}' is running.`);
-		await this.metadata.change(() => ({ patch: { name: options.name } }));
+		await this.metadata.change(() => ({
+			patch: {
+				name: options.name,
+				agents: [
+					...(options.agents ?? []),
+					...(options.assistant === undefined ? [] : [options.assistant]),
+				],
+			},
+		}));
 		this.room = await startRoom({
 			name: options.name,
 			runtime: this.runtime,
-			assistant: definitionOf(options.assistant),
-			agents: (options.agents ?? []).map(placed),
-			available: (options.available ?? []).map(placed),
+			agents: (options.agents ?? []).map(definitionOf),
+			...(options.assistant === undefined ? {} : { assistant: definitionOf(options.assistant) }),
+			...(options.seats === undefined ? {} : { seats: options.seats }),
 			...(options.goal === undefined ? {} : { goal: options.goal }),
 		});
 		await this.room.messages();
@@ -148,23 +158,12 @@ export class RoomObject extends DurableObject<Env> {
 
 	async send(input: { from: string; to?: string; text: string; key?: string }): Promise<Exchange> {
 		const visit = await this.visitOf(input.from);
-		const to = input.to === undefined ? undefined : this.participant(input.to);
 		const exchange = await visit.send({
 			text: input.text,
-			...(to ? { to } : {}),
+			...(input.to === undefined ? {} : { to: input.to }),
 			...(input.key ? { key: input.key } : {}),
 		});
 		return { owner: exchange.owner, from: exchange.from, at: exchange.at };
-	}
-
-	private participant(name: string) {
-		const seat = this.running()
-			.seats()
-			.find((s) => s.name === name);
-		if (seat?.kind === 'human') {
-			return defineHuman({ name: seat.name, identity: seat.identity });
-		}
-		return definitionOf(name);
 	}
 
 	async leave(name: string): Promise<void> {
@@ -173,12 +172,12 @@ export class RoomObject extends DurableObject<Env> {
 		this.visits.delete(name);
 	}
 
-	async seat(spec: SeatSpec): Promise<void> {
-		await this.running().seat(placed(spec));
+	async seat(name: string, options?: { attention?: Attention }): Promise<void> {
+		await this.running().seat(name, options);
 	}
 
 	async unseat(name: string): Promise<void> {
-		await this.running().unseat(definitionOf(name));
+		await this.running().unseat(name);
 	}
 
 	async abort(): Promise<void> {
@@ -196,8 +195,8 @@ export class RoomObject extends DurableObject<Env> {
 		return this.running().messages(since === undefined ? {} : { since });
 	}
 
-	async seats(): Promise<SeatInfo[]> {
-		return this.running().seats();
+	async participants(): Promise<SeatInfo[]> {
+		return this.running().participants();
 	}
 
 	async exchange(from: Seq) {
@@ -248,10 +247,4 @@ export class RoomObject extends DurableObject<Env> {
 		if (room === undefined) throw new Error('The room is not running.');
 		return room;
 	}
-}
-
-function placed(spec: SeatSpec) {
-	return typeof spec === 'string'
-		? definitionOf(spec)
-		: seated(definitionOf(spec.name), { attention: spec.attention });
 }

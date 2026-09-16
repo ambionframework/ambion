@@ -47,8 +47,10 @@ activations. Human participants can still review the full discussion.
 
 ## 2. The assistant
 
-A room can designate one assistant at startup. That assistant serves every
-person who visits. A room without one still opens and closes exchanges.
+A room can designate one assistant at startup. Supply it through the separate
+`assistant` option. Ordinary definitions belong in `agents`; the assistant's
+name cannot duplicate an ordinary definition. A room without one still opens
+and closes exchanges.
 
 **It is a seat.** `startRoom` seats it beside the agents, the room
 activates it as it activates every other agent, its turns land in a
@@ -570,7 +572,7 @@ definition would carry a copy of every person in one prompt.
 runtime's per activation. At the close it is `summarise({ text })`, which
 writes to the record and nothing else — no `to`, because a summary is
 always addressed to the person whose exchange closed. At the open it is
-`seat({ name })`, which moves one agent from the reserve to the roster and
+`seat({ name })`, which moves one supplied agent from the reserve to the roster and
 commits the seating to the record ([`roster.md`](roster.md) §4). No
 activation holds both, and none holds a `say`. The specification grants one tool per
 event, so §12's rule — never call a tool that changes a product's state —
@@ -612,9 +614,10 @@ Each boundary is stated so a later change has to argue with it.
   [`presence.md`](presence.md) §8's business, and its anchor is untouched.
   Arriving opens no exchange, and a summary stands for one exchange (§3),
   so no summary ever reaches back over what somebody missed.
-- **The assistant seats from the reserve, and from nowhere else.** The
-  host decides what may ever be in the room by writing `available`. The
-  assistant defines nothing and unseats nobody.
+- **The assistant seats from the reserve, and from nowhere else.** The host
+  supplies the complete executable catalog in `agents`. Definitions absent
+  from the `seats` map form the reserve. The assistant defines nothing and
+  unseats nobody.
   [`roster.md`](roster.md) §2, §7.
 - **Activation triggers stay as they were, with one addition.** No seat
   wakes because the room went quiet. A seat wakes because the assistant

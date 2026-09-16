@@ -130,7 +130,7 @@ export interface Spent {
  */
 export async function spent(runtime: Runtime, session: Room): Promise<Spent> {
 	const total: Spent = { activations: 0, tokens: 0, cost: 0 };
-	for (const info of session.seats()) {
+	for (const info of session.participants()) {
 		if (info.kind !== 'agent') continue;
 		const seat = await runtime.transcripts.open(info.sessionId);
 		for (const entry of await seat.findEntries()) add(total, entry);

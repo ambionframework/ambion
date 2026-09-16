@@ -1,13 +1,11 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-	attentive,
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSpoken,
 	type Message,
-	passive,
 	type Room,
 	readRoom,
 	startRoom,
@@ -60,7 +58,7 @@ const kinds = async (session: { messages(): Promise<Message[]> }) =>
 	(await session.messages()).map((m) => m.kind);
 
 const presenceOf = (session: Room, name: string) => {
-	const seat = session.seats().find((s) => s.name === name);
+	const seat = session.participants().find((s) => s.name === name);
 	return seat?.kind === 'human' ? seat.presence : undefined;
 };
 
@@ -86,7 +84,7 @@ describe('presence', () => {
 		const session = track(await open());
 		await waitForRoom(session);
 		expect(await session.messages()).toHaveLength(0);
-		expect(session.seats().filter((s) => s.kind === 'human')).toHaveLength(0);
+		expect(session.participants().filter((s) => s.kind === 'human')).toHaveLength(0);
 	});
 
 	it('commits an arrival and wakes nobody, because no seat watches for one by default', async () => {
@@ -113,7 +111,12 @@ describe('presence', () => {
 			instructions: 'wait',
 			model: 'scripted/aside',
 		});
-		const session = track(await open({ agents: [watcher, attentive(greeter), passive(quiet2)] }));
+		const session = track(
+			await open({
+				agents: [watcher, greeter, quiet2],
+				seats: { [watcher.name]: 'broadcast', [greeter.name]: 'presence', [quiet2.name]: 'named' },
+			}),
+		);
 		const seen = collect(session);
 		await session.visit(andrei);
 		await waitForRoom(session);
@@ -216,7 +219,7 @@ describe('presence', () => {
 		);
 		await waitForRoom(again); // startRoom is synchronous; the replay is awaited here
 		expect(presenceOf(again, 'andrei')).toBe('absent');
-		expect(again.seats().find((s) => s.name === 'andrei')?.identity).toBe(andrei.identity);
+		expect(again.participants().find((s) => s.name === 'andrei')?.identity).toBe(andrei.identity);
 	});
 
 	it('refuses a stale visit, and takes leave() twice', async () => {
@@ -299,7 +302,9 @@ describe('presence', () => {
 		const view = await readRoom(name, { runtime });
 		expect(view.messages.filter(isSpoken).map((m) => m.text)).toEqual(['for later']);
 		// the roster folds from the record, nothing stands up, and everybody the record knows is absent
-		expect(view.seats.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence])).toEqual([
+		expect(
+			view.participants.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence]),
+		).toEqual([
 			['watcher', 'idle'],
 			['assistant', 'idle'],
 			['andrei', 'absent'],

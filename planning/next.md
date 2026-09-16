@@ -180,17 +180,18 @@ inside the write queue.
 ## 3. Separate configuration from membership
 
 **Fix executable definitions for each room run. Keep membership dynamic.**
-This is the most consequential proposed restriction for 0.1.0.
+Implemented in this change. Executable definitions are captured once; membership remains journaled.
 
-Today, `room.seat(agent)` can install a new JavaScript definition and commit
-durable membership. The host stages a binding, promotes it after observation,
-and repairs uncertain writes. That transaction crosses two storage models.
+Before this change, `room.seat(agent)` could install a new JavaScript
+definition and commit durable membership. The host staged a binding, promoted
+it after observation, and repaired uncertain writes. That transaction crossed
+two storage models.
 
 Executable functions cannot be recovered from the room journal. A resumed or
 remote host already needs definitions supplied separately. Make that existing
 requirement explicit at room startup.
 
-### Proposed room API
+### Room API
 
 ```ts
 const room = await startRoom({
@@ -223,7 +224,7 @@ is absent, seat every supplied ordinary agent at `broadcast`. An empty map
 starts with those agents in reserve. Reject unknown names immediately.
 
 The reserve becomes the supplied ordinary agents that are currently unseated.
-Remove `available` as a second list of executable definitions. The assistant
+`available` is removed as a second list of executable definitions. The assistant
 can select from the reserve. Newly selected agents use the documented default
 attention; callers can choose attention when seating explicitly.
 
@@ -237,13 +238,14 @@ not require callers to retain an executable object.
 Room validation still establishes whether a name is present and addressable.
 A name, object, or TypeScript brand is not an authorization credential.
 
-**Use `participants()` for the combined room view.** Current `seats()` returns
-humans as well as agents. Rename that method and the snapshot field to
+**Use `participants()` for the combined room view.** The former `seats()`
+method returned humans as well as agents. The room and snapshot now expose
 `participants`. Keep `seat` and `unseat` for agent membership operations.
 
-**Remove the seating construction hierarchy.** Delete `AgentSeat`,
-`SeatedAgent`, `seated`, `passive`, and `attentive`. Retain the attention scale
-and put it directly on membership configuration and operations.
+**The seating construction hierarchy is removed.** `AgentSeat`, `SeatedAgent`,
+`seated`, `passive`, and `attentive` are gone. Attention belongs directly on
+membership configuration and operations. Definition brands and the old
+`Participant` definition union are also removed.
 
 This removes wrapper detection, brand checks, normalization, and multiple
 spellings for the same choice. The added `seats` map describes a real
@@ -258,10 +260,6 @@ depend on a hidden symbol to distinguish a valid participant.
 requires a new room run with an expanded definition set. This plan does not
 add a `bind` API to preserve arbitrary installation during a run.
 
-If installing unknown agents during a run is essential to the product, retain
-the current binding transaction. Merely renaming it does not simplify it.
-The recommendation for 0.1.0 is to accept the restriction.
-
 Resume must validate definitions against durable membership and reserve
 requirements before starting execution. It must not reset membership from the
 new startup defaults. Preserve `readRoom` without executable definitions.
@@ -269,6 +267,22 @@ new startup defaults. Preserve `readRoom` without executable definitions.
 Persist catalog names and public metadata with the room configuration. Keep
 functions and provider bindings outside the journal. Reject duplicate names,
 including collisions with the assistant, before writing the configuration.
+
+**Recovery keeps the existing journal format.** Its `agents` and `available`
+fields remain disjoint public-metadata partitions of one catalog. They do not
+contain executable definitions. Resume preserves membership and attention,
+records additional definitions in reserve, and validates again before fencing
+a competing run. Every unseated ordinary definition returns to reserve.
+
+**Implementation evidence.** `fixed-definitions.test.ts` exercises immutable
+capture, unknown and duplicate names, catalog expansion, human collisions,
+and competing resumes on memory and SQLite. `membership-recovery.test.ts`
+covers concurrent seating, failed appends, lost confirmations, and failed
+recovery reads. Existing assistant selection, steering, retry, unseat, and
+summary tests remain in place. Cloudflare persists its per-room catalog names
+and tests automatic resume without adding unrelated worker definitions.
+
+The next structural work item is the generic journal boundary in section 4.
 
 ## 4. Give the journal one job
 

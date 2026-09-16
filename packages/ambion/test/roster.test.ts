@@ -2,17 +2,16 @@ import type { Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-	attentive,
+	type AgentDefinition,
+	type Attention,
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isPresence,
 	type Message,
 	type PresenceMessage,
-	passive,
 	type Room,
 	type RoomNotification,
-	seated,
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
@@ -110,12 +109,11 @@ const started: Room[] = [];
 const clock = fakeClock();
 const runtime = createRuntime({ clock });
 
-type Options = Parameters<typeof startRoom>[0];
-
 async function open(options: {
 	script: Script;
-	agents?: Options['agents'];
-	available?: Options['available'];
+	agents?: readonly AgentDefinition[];
+	available?: readonly AgentDefinition[];
+	seats?: Readonly<Record<string, Attention>>;
 }): Promise<Room> {
 	const session = await startRoom({
 		name: roomName(),
@@ -123,8 +121,10 @@ async function open(options: {
 		assistant,
 		runtime,
 		streamFn: scripted(options.script),
-		...(options.agents ? { agents: options.agents } : {}),
-		...(options.available ? { available: options.available } : {}),
+		agents: [...(options.agents ?? []), ...(options.available ?? [])],
+		seats:
+			options.seats ??
+			Object.fromEntries((options.agents ?? []).map((agent) => [agent.name, 'broadcast'])),
 	});
 	started.push(session);
 	return session;
@@ -140,7 +140,7 @@ const activated = (events: RoomNotification[]) =>
 	events.filter((e) => e.type === 'activation_start').map((e) => e.agent);
 const seatNames = (session: Room) =>
 	session
-		.seats()
+		.participants()
 		.filter((s) => s.kind === 'agent')
 		.map((s) => s.name);
 
@@ -166,7 +166,11 @@ describe('a room that starts with the assistant alone', () => {
 	});
 
 	it('closes an exchange nobody woke in a room where every seat is named', async () => {
-		const session = await open({ script: byAgent({}), agents: [passive(product)] });
+		const session = await open({
+			script: byAgent({}),
+			agents: [product],
+			seats: { product: 'named' },
+		});
 		const events = collect(session);
 
 		const visit = await session.visit(priya);
@@ -179,13 +183,12 @@ describe('a room that starts with the assistant alone', () => {
 });
 
 describe('the reserve', () => {
-	it('refuses a name in both lists, and a person who visits as one', async () => {
+	it('refuses duplicate definitions and a person who visits with an agent name', async () => {
 		await expect(
 			startRoom({
 				name: roomName(),
 				assistant,
-				agents: [product],
-				available: [product],
+				agents: [product, product],
 				streamFn: scripted(byAgent({})),
 			}),
 		).rejects.toThrow(/Duplicate agent name 'product'/);
@@ -209,7 +212,7 @@ describe('the reserve', () => {
 				},
 			}),
 			agents: [product],
-			available: [surveyor, seated(architect, { attention: 'named' })],
+			available: [surveyor, architect],
 		});
 
 		const visit = await session.visit(priya);
@@ -320,7 +323,8 @@ describe('seating', () => {
 					return call === 2 ? speak('Ask the surveyor for the number.', 'surveyor') : quiet();
 				},
 			}),
-			agents: [product, attentive(greeter)],
+			agents: [product, greeter],
+			seats: { product: 'broadcast', greeter: 'presence' },
 			available: [surveyor],
 		});
 		const events = collect(session);
@@ -505,7 +509,7 @@ describe('the host', () => {
 		});
 		const events = collect(session);
 
-		await session.seat(surveyor);
+		await session.seat(surveyor.name);
 		await waitForRoom(session);
 		expect(seatNames(session)).toEqual(['product', 'assistant', 'surveyor']);
 		// the seating woke the seat it named, with nobody's name in `by`; what
@@ -516,12 +520,12 @@ describe('the host', () => {
 		// The host seated it, so nothing on the record speaks for it.
 		expect(seating?.from).toBeUndefined();
 
-		await session.unseat(surveyor);
+		await session.unseat(surveyor.name);
 		expect(seatNames(session)).toEqual(['product', 'assistant']);
 		expect(kinds(await session.messages())).toEqual(['seated', 'said', 'unseated']);
 
-		await expect(session.unseat(assistant)).rejects.toThrow(/is this room's assistant/);
-		await expect(session.unseat(surveyor)).rejects.toThrow(/is not seated/);
+		await expect(session.unseat(assistant.name)).rejects.toThrow(/is this room's assistant/);
+		await expect(session.unseat(surveyor.name)).rejects.toThrow(/is not seated/);
 	});
 
 	it('returns an unseated agent to the reserve, where the assistant finds it again', async () => {
@@ -536,14 +540,14 @@ describe('the host', () => {
 			available: [surveyor],
 		});
 
-		await session.seat(surveyor);
+		await session.seat(surveyor.name);
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'First?' });
 		await waitForRoom(session);
 		// seated by the host, so the reserve the assistant read was empty of it
 		expect(reserves).toHaveLength(0);
 
-		await session.unseat(surveyor);
+		await session.unseat(surveyor.name);
 		await visit.send({ text: 'Second?' });
 		await waitForRoom(session);
 		expect(reserves).toHaveLength(1);
@@ -573,9 +577,11 @@ describe('the host', () => {
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'How much steel?' });
 		await tick();
-		expect(session.seats().find((s) => s.name === 'surveyor')).toMatchObject({ status: 'active' });
+		expect(session.participants().find((s) => s.name === 'surveyor')).toMatchObject({
+			status: 'active',
+		});
 
-		await session.unseat(surveyor);
+		await session.unseat(surveyor.name);
 		expect(seatNames(session)).toEqual(['product', 'assistant']);
 		held.resolve();
 		await waitForRoom(session);
@@ -593,7 +599,7 @@ describe('the host', () => {
 
 	it('leaves the roster to the next composition at stop, and the next run starts from its own', async () => {
 		const session = await open({ script: byAgent({}), agents: [product], available: [surveyor] });
-		await session.seat(surveyor);
+		await session.seat(surveyor.name);
 		await waitForRoom(session);
 
 		await session.stop();
@@ -603,14 +609,18 @@ describe('the host', () => {
 		const { readRoom } = await import('../src/index.ts');
 		const stopped = await readRoom(session.name, { runtime });
 		expect(kinds(stopped.messages)).toEqual(['seated']);
-		expect(stopped.seats.map((seat) => seat.name)).toEqual(['product', 'assistant', 'surveyor']);
+		expect(stopped.participants.map((seat) => seat.name)).toEqual([
+			'product',
+			'assistant',
+			'surveyor',
+		]);
 
 		// the next run writes its own composition, and the roster folds from that
 		const again = await startRoom({
 			name: session.name,
 			assistant,
-			agents: [product],
-			available: [surveyor],
+			agents: [product, surveyor],
+			seats: { product: 'broadcast' },
 			runtime,
 			streamFn: scripted(byAgent({})),
 		});
@@ -633,7 +643,8 @@ describe('a failed draft', () => {
 				},
 				product: (_context, _name, call) => (call <= 4 ? speak(`answer ${call}`) : quiet()),
 			}),
-			agents: [passive(product)],
+			agents: [product],
+			seats: { product: 'named' },
 		});
 		const events = collect(session);
 		const assistantActs = () => activated(events).filter((n) => n === 'assistant').length;
@@ -642,7 +653,7 @@ describe('a failed draft', () => {
 		// two answers, a close, and a draft that fails: priya is owed, and the room waits.
 		// A room that owes a draft is not quiet, so each attempt is the wait here.
 		const first = assistantEnded(session);
-		await visit.send({ to: product, text: 'First?' });
+		await visit.send({ to: product.name, text: 'First?' });
 		await first;
 		expect(assistantActs()).toBe(1);
 
@@ -699,7 +710,7 @@ describe('the threshold', () => {
 				resolve();
 			});
 		});
-		await session.unseat(surveyor);
+		await session.unseat(surveyor.name);
 		held.resolve();
 		await waitForRoom(session);
 

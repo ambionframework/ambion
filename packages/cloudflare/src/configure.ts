@@ -83,9 +83,3 @@ export function definitionOf(name: string): AgentDefinition {
 	if (def === undefined) throw new Error(`'${name}' is not configured in this worker.`);
 	return def;
 }
-
-export function definitions(): readonly AgentDefinition[] {
-	if (settings === undefined)
-		throw new Error('Call configure() at module scope before an object runs.');
-	return settings.agents;
-}

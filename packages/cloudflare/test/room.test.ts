@@ -42,8 +42,8 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 		['said', 'priya'],
 	]);
 	expect(messages[1]).toMatchObject({ key: 'question-1', text: 'Can I tell the client Thursday?' });
-	const seats = await stub.seats();
-	expect(seats.map((s) => s.name)).toEqual(['assistant', 'priya']);
+	const participants = await stub.participants();
+	expect(participants.map((participant) => participant.name)).toEqual(['assistant', 'priya']);
 	// The closed exchange remains reacquirable by its opening sequence.
 	expect(await stub.exchange(exchange.from)).toEqual(exchange);
 });
@@ -90,4 +90,23 @@ it('resumes over its own storage after an abort, and fences the run before it', 
 	// the record holds both messages: the resume lost nothing
 	const messages: Message[] = await again.messages();
 	expect(messages.filter((m) => m.kind === 'said').map((m) => m.key)).toEqual(['q1', 'q2']);
+});
+
+it('changes membership by name without installing a definition', async () => {
+	const stub = env.ROOM.get(env.ROOM.idFromName('room-roster'));
+	await stub.start({
+		name: 'room-roster',
+		assistant: 'assistant',
+		agents: ['product'],
+		seats: {},
+	});
+	expect((await stub.participants()).map((participant) => participant.name)).toEqual(['assistant']);
+	await stub.seat('product', { attention: 'named' });
+	expect(
+		(await stub.participants()).find((participant) => participant.name === 'product'),
+	).toMatchObject({
+		attention: 'named',
+	});
+	await stub.unseat('product');
+	expect((await stub.participants()).map((participant) => participant.name)).toEqual(['assistant']);
 });
