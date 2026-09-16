@@ -1,7 +1,7 @@
 # Next: the work to ship Ambion 0.1.0
 
-Delivery plan, 2026-09-15. Updated for audit isolation in PR #126, the CLI
-and Cloudflare release work in PR #127, and ordinary participation in PR #128.
+Delivery plan, 2026-09-16. Updated for executor separation in PR #130 and
+the Pi transcript extraction prepared for review.
 [release-0.1.0.md](release-0.1.0.md) defines the positioning, capabilities,
 deployment models, and limits. This file owns implementation work and its
 completion evidence, including the remaining work from earlier plans.
@@ -17,7 +17,7 @@ representations and ownership overlaps that require unrelated mechanisms to
 stay synchronized. The main sources of complexity are:
 
 - The earlier assistant membership and selection model required separate rules.
-- Transports receive broad room and provider interfaces.
+- Executor dependencies now cross an explicit boundary, implemented in PR #130.
 - Provider transcript storage extends into the generic journal package.
 - Some public reads expose mutable facts owned by the room.
 
@@ -32,7 +32,7 @@ landed. Preserve their evidence below. Prioritize these remaining changes:
 
 PR #128 implements shared seating, unseating, closing publication, ordinary
 membership, and explicit history version rejection. Section 5 retains its
-evidence. Next, narrow executor dependencies before extracting transcript storage.
+evidence. PR #130 narrows executor dependencies. Extract transcript storage next.
 
 Implement these changes in bounded slices. Temporary paths must have a named
 removal step. Do not introduce a second permanent participation model.
@@ -551,7 +551,9 @@ Model resolution, private agent instructions, Pi messages, tool adaptation, and
 transcript writing belong with the executor. The room does not need a model
 catalog or a provider stream to decide whether a contribution can commit.
 
-**Current slice: narrow the executor dependencies.**
+**Merged:** [PR #130](https://github.com/ambionframework/ambion/pull/130).
+
+**Executor dependencies use an explicit boundary.**
 `Transport.connect(room, context)` receives a plain `SeatRoom` facade and the
 existing `SeatContext`. The facade exposes only `view`, `commit`, and `lease`.
 The context supplies one captured definition and its local execution services.
@@ -576,8 +578,9 @@ calls, notifications, and stale connections after eviction and resume.
 
 Review preserved live snapshot ordering with pending journal writes; a new
 regression covers memory and SQLite. Luna/High implemented the slice and a
-second Luna/High review found no remaining production blockers. The change
-is prepared for review and is not merged. CI exposed live-test assumptions
+second Luna/High review found no remaining production blockers. All seven CI
+checks pass, including live provider tests and contract verification. CI
+exposed live-test assumptions
 about an implicitly added coordinator. Live fixtures now use explicit agent
 catalogs and summary assignments. Failure attribution and silence assertions
 remain strict. The invalid-credentials probe passes locally against the provider.
@@ -657,16 +660,30 @@ executor. Prompts and tool schemas stay with Pi integration.
 
 ### Extract Pi transcript storage
 
-**Move `journal/pi` into `@ambionframework/pi-journal`.** Its
-[`pi.ts`](../packages/journal/src/pi.ts) implements Pi session storage and
+**Current slice: extract Pi transcript storage.**
+`@ambionframework/pi-journal` replaces the removed `journal/pi` subpath. Its
+[`index.ts`](../packages/pi-journal/src/index.ts) implements Pi session storage and
 depends on Pi's transcript model. It can serve Pi applications without Ambion.
 
-This is a cohesive extraction with an independent purpose. Remove the optional
-Pi peer and transcript types from the generic journal package. The new package
-depends on `journal` and Pi; neither dependency imports it.
+The generic journal has no Pi peer, transcript types, or session implementation.
+The new package depends on `journal` and Pi; neither dependency imports it.
+`SessionOpener` and `piSessions` retain their API. Session operations, storage
+names, and mutation formats are unchanged. Existing transcripts need no migration.
 
-Keep full transcript behavior, including the existing session operations.
-Moving audit storage is not permission to replace it with a lossy event logger.
+**Validation:** the extraction is prepared for review and is not merged.
+`pnpm check` passes with 30 journal tests, 20 Pi session tests, 586 core tests,
+18 workerd tests, 37 workspace tests, and six CLI tests. The Pi tests retain
+memory and SQLite coverage, query conformance, conflict recovery, and lost
+acknowledgement recovery. Core tests retain audit isolation and lazy loading.
+
+Two packed consumers check declarations and execution outside the workspace.
+The generic journal works without Pi. Pi sessions work without the Ambion
+runtime. The removed subpath fails explicitly. Release discovery includes
+the new package. These standalone consumer checks pass locally. The packed CLI smoke
+passes through generated project typechecking and a Wrangler dry run.
+
+Import restrictions preserve the dependency direction. Runtime consumers,
+examples, manifests, aliases, and migration instructions use the new package.
 
 ### Keep workspace ownership intact
 
@@ -801,7 +818,7 @@ PR #128 contains the implementation and integration with the CLI template.
 
 ### Stage 2: isolate execution and extract transcript storage
 
-- Complete the current executor boundary slice and retain its validation.
+- Preserve the executor boundary and validation merged in PR #130.
 - Separate protocol types from stored facts.
 - Extract `pi-journal` while preserving audit failure isolation.
 - Keep workspace resources separate from executor tool binding.

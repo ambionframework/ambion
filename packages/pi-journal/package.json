@@ -1,22 +1,20 @@
 {
-	"name": "@ambionframework/journal",
+	"name": "@ambionframework/pi-journal",
 	"version": "0.1.0-alpha.1",
 	"type": "module",
-	"description": "An append-only journal with ordered storage, conditional append, fencing, and honest lost-write recovery.",
+	"description": "Pi transcript sessions over Ambion journals.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/ambionframework/ambion.git",
-		"directory": "packages/journal"
+		"directory": "packages/pi-journal"
 	},
 	"keywords": [
 		"ambion",
-		"append-only",
-		"durability",
-		"event-log",
-		"fencing",
-		"journal"
+		"pi",
+		"transcript",
+		"session-storage"
 	],
 	"exports": {
 		".": {
@@ -28,8 +26,7 @@
 	"main": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
 	"files": [
-		"dist",
-		"README.md"
+		"dist"
 	],
 	"engines": {
 		"node": ">=22.19.0"
@@ -43,6 +40,10 @@
 		"check:types": "tsc -p tsconfig.check.json --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@ambionframework/journal": "workspace:*",
+		"@earendil-works/pi-agent-core": "^0.84.3"
 	},
 	"devDependencies": {
 		"tsdown": "^0.22.14",

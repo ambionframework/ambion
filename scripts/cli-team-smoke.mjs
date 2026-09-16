@@ -43,7 +43,7 @@ async function packFixture(destination) {
 	await mkdir(archiveDirectory);
 	run('pnpm', ['build'], ROOT);
 	const archives = {};
-	for (const name of ['journal', 'ambion', 'cloudflare', 'cli']) {
+	for (const name of ['journal', 'pi-journal', 'ambion', 'cloudflare', 'cli']) {
 		const directory = join(ROOT, 'packages', name);
 		const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
 		run('pnpm', ['pack', '--pack-destination', archiveDirectory], directory);
@@ -157,6 +157,7 @@ async function installCreatedProject(destination, target, generated, generatedPa
 			'@ambionframework/cloudflare',
 			'@ambionframework/cli',
 			'@ambionframework/journal',
+			'@ambionframework/pi-journal',
 		].map((name) => {
 			const filename = archives[name];
 			if (filename === undefined) throw new Error(`No local archive exists for ${name}.`);

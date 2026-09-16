@@ -18,6 +18,7 @@ pnpm workspace, ESM only, TypeScript. Repository installation needs Node
 | `packages/cli`        | Project creation and local rooms through Wrangler and OpenTUI; ships with the Cloudflare adapter |
 | `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd     |
 | `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                       |
+| `packages/pi-journal` | Full Pi transcript sessions over the generic journal storage contract                            |
 | `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                    |
 | `docs/agent.md`       | Design contract for the core — read before changing the runtime                                  |
 | `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`                 |
@@ -74,7 +75,8 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   `packages/workspace` owns the workspace port, resource, tools, and the
   just-bash filesystem and shell behind them. The core composes ordinary tools.
   `packages/journal` owns the journal: the queue, the fence and the envelope
-  every entry shares. Ambion owns only participants-as-values and
+  every entry shares. `packages/pi-journal` owns Pi session persistence over
+  that storage contract. Ambion owns only participants-as-values and
   the room. A third concern is a
   design failure: push it into a dependency or drop it. `seat/render.ts` formats
   structured collaboration context for Pi. Summary guidance belongs with the

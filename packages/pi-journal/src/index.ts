@@ -1,5 +1,7 @@
 /** Pi transcript storage over named Ambion journals. */
 
+import type { JournalOpener, JournalStorage, StoragePosition } from '@ambionframework/journal';
+import { namespaced } from '@ambionframework/journal';
 import type {
 	BranchBounds,
 	Entry,
@@ -16,11 +18,10 @@ import type {
 	SessionStorage,
 } from '@earendil-works/pi-agent-core';
 import { Session, SessionError } from '@earendil-works/pi-agent-core';
-import type { SessionOpener } from './pi-types.ts';
-import type { JournalOpener, JournalStorage, StoragePosition } from './storage.ts';
-import { namespaced } from './storage.ts';
-
-export type { SessionOpener } from './pi-types.ts';
+/** Opens one Pi transcript session by id. */
+export interface SessionOpener {
+	open(id: string, parentId?: string): Promise<Session>;
+}
 
 type Mutation =
 	| { id: string; kind: 'metadata'; metadata: SessionMetadata }

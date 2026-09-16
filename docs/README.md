@@ -38,7 +38,7 @@ the plan as available exports.
 | Area       | Current code                                                            | 0.1.0 target                                                               |
 | ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Membership | Fixed `agents` definitions, optional `seats`, and name-based operations | Ordinary agents can seat and unseat supplied colleagues                    |
-| Pi audits  | `@ambionframework/journal/pi`                                           | A separate `@ambionframework/pi-journal` package                           |
+| Pi audits  | `@ambionframework/pi-journal`                                           | Preserve full Pi sessions independently of the collaboration runtime       |
 | Summaries  | Optional closing assignment through regular `say`                       | Preserve fixed context and room-stamped provenance                         |
 | History    | Version 2 composition entries                                           | Reject legacy assistant histories explicitly                               |
 | CLI        | Project creation and local OpenTUI rooms                                | CLI and adapter share a prerelease; see [the CLI plan](../planning/cli.md) |

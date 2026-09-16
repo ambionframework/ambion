@@ -9,7 +9,7 @@ import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test'
 import type { Message } from '@ambionframework/ambion';
 import type { LeaseChange, Steer } from '@ambionframework/ambion/transport';
 import { namespaced } from '@ambionframework/journal';
-import { piSessions } from '@ambionframework/journal/pi';
+import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it } from 'vitest';
 import { seatMetadata, sqlStorage } from '../src/storage.ts';
 import { until } from './until.ts';

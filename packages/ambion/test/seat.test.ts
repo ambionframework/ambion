@@ -4,7 +4,7 @@
  * queued behind it runs next.
  */
 
-import type { SessionOpener } from '@ambionframework/journal/pi';
+import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';

@@ -204,7 +204,7 @@
 											"../index.ts",
 											"../transport.ts",
 											"@earendil-works/pi-*",
-											"@ambionframework/journal/pi"
+											"@ambionframework/pi-journal"
 										],
 										"message": "The room's facts and decisions are pure over the log: no host, no tool, no seat."
 									}
@@ -233,7 +233,7 @@
 											"./index.ts",
 											"./transport.ts",
 											"@earendil-works/pi-*",
-											"@ambionframework/journal/pi"
+											"@ambionframework/pi-journal"
 										],
 										"message": "An answer reads the room: no workspace, no seat, and never the session."
 									}
@@ -363,8 +363,39 @@
 							"options": {
 								"patterns": [
 									{
-										"group": ["@ambionframework/*", "**/packages/ambion/**"],
+										"group": [
+											"@ambionframework/*",
+											"@earendil-works/pi-*",
+											"**/packages/ambion/**"
+										],
 										"message": "The record knows no room. Nothing in this repository sits below it."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// Pi transcript storage depends on the generic journal and Pi. It does
+			// not depend on the collaboration runtime.
+			"includes": ["packages/pi-journal/src/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/ambion",
+											"@ambionframework/ambion/*",
+											"**/packages/ambion/**",
+											"**/ambion/**"
+										],
+										"message": "Pi transcript storage knows the journal and Pi, not the room."
 									}
 								]
 							}
