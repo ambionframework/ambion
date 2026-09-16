@@ -38,7 +38,7 @@ A question such as “Can we promise a Thursday delivery?” can require several
 agents. Inventory checks stock. Scheduling checks capacity. Compliance checks
 constraints. Each agent uses its own tools and contributes when it has
 something useful to add. The person receives the resulting discussion and,
-when appropriate, an assistant's summary.
+when appropriate, a summary from the assigned agent.
 
 **Rooms persist across individual questions.** People arrive and leave.
 Specialists join and leave the active membership. Later messages can change
@@ -85,7 +85,7 @@ person enters a room and sends a message
      remaining discussion work reaches completion
                   |
                   v
-       exchange closes; assistant may summarize
+       exchange closes; assigned agent may summarize
 ```
 
 ## Differentiated capabilities
@@ -135,13 +135,14 @@ or presence changes. Keep this policy separate from execution activity.
 Hosts supply all executable definitions in `agents`. The optional `seats` map
 selects initial members and attention. Unseated definitions form the reserve.
 Every participating agent can seat reserve colleagues with `broadcast`
-attention; explicit host seating can choose attention. Startup must provide
-an initial participant or an explicit opening recipient when the roster is empty.
+attention; explicit host seating can choose attention. Empty rooms are valid.
+Agent work requires a seated agent whose attention accepts the message.
+Hosts configure initial membership or seat an agent through the room API.
 
 People have identities and optional response preferences. A visit determines
-who speaks and when that person is present. Preferences shape the assistant's
-response. Summaries shaped for people also compact later activation context.
-The original discussion remains available for human review.
+who speaks and when that person is present. Preferences shape the assigned
+agent's closing response. Summaries shaped for people also compact later
+activation context. The original discussion remains available for human review.
 
 ### F3. Concurrent, current contributions
 
@@ -160,7 +161,7 @@ remain distinguishable from deliberate silence in host diagnostics.
 Domain tools may run before a contribution commits. Conversation freshness
 does not make those external effects transactional.
 
-### F4. Exchanges and an optional assistant
+### F4. Exchanges and optional closing assignments
 
 **Provide durable handles for a discussion and its response.** One room has
 one open discussion at a time, with an owner established by its opening
@@ -174,12 +175,15 @@ certifies the discussion boundary, not the correctness of every answer.
 Agents can seat reserve specialists during ordinary discussion. When the
 closed discussion requires consolidation, one assigned agent can publish a
 summary for the owner through `say`. The room supplies the recipient and
-covered range. The summary retains its source range even if a later exchange starts.
+covered range. The summary retains its source range even if a later exchange
+starts.
 
 **Closing work has explicit publication rules.** Its publication wakes no idle
 agents and does not hold another exchange open. It retains an internal summary
 event for context replacement and response completion. The assigned agent can
 also participate in ordinary discussion under its configured attention.
+Closing execution receives only its room publication tool. Domain tools and
+seating remain available during that agent's ordinary participation.
 
 This participation simplification remains planned. Section 5 of
 [next.md](next.md#simplify-assistant-participation-and-closing-work) owns the
