@@ -172,6 +172,16 @@ asked twice ends the lease once: the second call is answered stale. A
 release no attempt got through leaves the room to expire the lease on its
 side.
 
+**Audit failure does not create failed collaboration work.** The executor
+determines the model outcome separately from transcript persistence. Failed
+audit writes receive one retry with stable entry identities. A write whose
+acknowledgement was lost can be recovered without duplicate transcript entries.
+
+An exhausted audit emits `audit_error`. Successful speech and deliberate
+silence still release their activation normally. A provider failure keeps its
+execution retry policy, even when its audit also fails. Unconfirmed audit
+data can be lost on process failure; no durable audit backlog is promised.
+
 ## 5. What the room does not promise
 
 **An append that read an old head is not acknowledged.** The journal passes

@@ -106,6 +106,9 @@ room.subscribe((event: RoomNotification) => {
 				`${dim}· ${event.author} was refused — the record moved (${event.missed.length} missed)${reset}`,
 			);
 			break;
+		case 'audit_error':
+			show(`${red}! audit for ${event.agent}: ${event.error.message}${reset}`);
+			break;
 		case 'error':
 			errored.add(event.agent);
 			show(`${red}! ${event.agent}: ${event.error.message}${reset}`);

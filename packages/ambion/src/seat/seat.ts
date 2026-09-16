@@ -279,12 +279,27 @@ export class SeatActor implements SeatPort {
 				this.room.lease({ activation: id, operation: 'renew', readThrough }),
 			build: (view: ActivationView, activation: Activation) => this.build(view, activation),
 			persist: (agent: PiAgent) => {
-				this.audit ??= transcripts.open(seatSessionId(room, seat), room);
-				return persistTurns(this.audit, agent, new Date(clock.now()).toISOString());
+				const open = () => this.openAudit(transcripts, seatSessionId(room, seat), room);
+				return persistTurns(open, agent, new Date(clock.now()).toISOString());
 			},
 			emit: (event: RoomNotification) => this.context.emit?.(event),
 			now: () => clock.now(),
 		};
+	}
+
+	private openAudit(transcripts: SessionOpener, id: string, parent: string): Promise<PiSession> {
+		if (this.audit !== undefined) return this.audit;
+		const opening = transcripts.open(id, parent);
+		let retained: Promise<PiSession>;
+		retained = opening.then(
+			(session) => session,
+			(error: unknown) => {
+				if (this.audit === retained) this.audit = undefined;
+				throw error;
+			},
+		);
+		this.audit = retained;
+		return retained;
 	}
 
 	/**

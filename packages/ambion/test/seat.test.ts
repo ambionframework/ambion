@@ -3,6 +3,8 @@
  * one activation at a time, a steer into the one that runs, and whatever
  * queued behind it runs next.
  */
+
+import type { SessionOpener } from '@ambionframework/journal/pi';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
@@ -105,7 +107,7 @@ class PlayedRoom implements SeatRoom {
 /** A model call that never answers and never hears an abort. */
 const deaf: StreamFn = () => createAssistantMessageEventStream();
 
-function play(stream: StreamFn = scripted(() => quiet())) {
+function play(stream: StreamFn = scripted(() => quiet()), transcripts?: SessionOpener) {
 	const clock = fakeClock();
 	const runtime = createRuntime({ clock, stream });
 	const room = new PlayedRoom(clock);
@@ -115,11 +117,11 @@ function play(stream: StreamFn = scripted(() => quiet())) {
 		definition: product,
 		room: 'played',
 		seat: 'product',
-		transcripts: runtime.transcripts,
+		transcripts: transcripts ?? runtime.transcripts,
 		stream: runtime.stream,
 		model: runtime.model,
 	});
-	return { room, actor, clock };
+	return { room, actor, clock, runtime };
 }
 
 const wakeOf = (activation: string): Wake => ({ room: 'played', seat: 'product', activation });
@@ -218,6 +220,26 @@ describe('a seat actor', () => {
 		expect(room.claims).toEqual(['message:1:product:1']);
 		expect(room.releases).toEqual(['message:1:product:1']);
 		expect(room.mostHeld).toBe(1);
+	});
+
+	it('reopens the audit session after its first open fails', async () => {
+		let opens = 0;
+		let base: SessionOpener | undefined;
+		const transcripts: SessionOpener = {
+			async open(id, parent) {
+				opens += 1;
+				if (opens === 1) throw new Error('audit open failed');
+				if (base === undefined) throw new Error('base session opener is absent');
+				return base.open(id, parent);
+			},
+		};
+		const fixture = play(undefined, transcripts);
+		base = fixture.runtime.transcripts;
+		fixture.room.letGo.resolve();
+		await fixture.actor.run('message:1:product:1');
+
+		expect(opens).toBe(2);
+		expect(fixture.room.releases).toEqual(['message:1:product:1']);
 	});
 
 	it('steers a recorded message into its running activation without starting work', async () => {

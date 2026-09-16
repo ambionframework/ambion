@@ -227,6 +227,8 @@ export type RoomNotification =
 	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
 	| { type: 'activation_end'; agent: string; spoke: boolean }
 	| { type: 'error'; agent: string; error: Error }
+	/** Transcript persistence failed independently of the execution outcome. */
+	| { type: 'audit_error'; agent: string; activation: string; error: Error }
 	/**
 	 * The room gave up: every attempt at a wake or a draft came to nothing,
 	 * and the cap is reached. `activation` names the attempt the room did

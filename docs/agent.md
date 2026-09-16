@@ -492,11 +492,20 @@ runtime observed opening. No one self-reports who they are.
 **8. The room hears what you said — and your keystrokes are kept aside.**
 Each agent's tool calls belong to its own working context; other
 participants see its `say`s only, because the record is all any view
-renders. The tools are still auditable: every activation's full turns land
-in the seat's own downstream Pi session, named by `participants().sessionId` and
-opened through the runtime's transcript opener
-(`persistTurns` in `seat/activation.ts`) — so what an agent actually did can be replayed long after
-its working view reset. The record is never rewritten for anyone.
+renders. The executor writes each completed pass to the seat's downstream
+Pi session, named by `participants().sessionId`. The runtime's transcript
+opener supplies that session. Confirmed entries remain available after the
+working view resets. The room record retains accepted contributions.
+
+**Audit persistence has its own failure boundary.** The executor retries a
+failed audit write once with the same entry identities and payloads. If both
+attempts fail, it emits `audit_error` with the agent and activation identity.
+An audit failure cannot change execution success, silence, or provider failure.
+It does not acknowledge context or request another model execution.
+
+Audit data remains incomplete when storage stays unavailable. A process can
+lose unconfirmed transcript data. The room journal remains authoritative for
+accepted contributions and pending collaboration work.
 
 ### Observing the room
 
@@ -515,6 +524,7 @@ type RoomNotification =
   | { type: 'tool_execution_end'; agent: string; toolName: string }
   | { type: 'activation_end'; agent: string; spoke: boolean }
   | { type: 'error'; agent: string; error: Error }
+  | { type: 'audit_error'; agent: string; activation: string; error: Error }
   | { type: 'abandoned'; agent: string; activation: string }
   | { type: 'exchange_opened'; exchange: Exchange }
   | { type: 'exchange_closed'; exchange: ClosedExchange }
