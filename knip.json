@@ -1,8 +1,9 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"ignoreBinaries": ["wrangler"],
 	"workspaces": {
 		".": {
-			"entry": ["scripts/{version,publish,report,report-cloudflare}.mjs"],
+			"entry": ["scripts/{version,publish,report,report-cloudflare,cli-team-smoke}.mjs"],
 			"project": ["scripts/*.mjs"]
 		},
 		"packages/*": {

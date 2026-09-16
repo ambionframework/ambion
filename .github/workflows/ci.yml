@@ -35,7 +35,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run check:format
@@ -56,9 +56,12 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
       - run: pnpm run test
 
   cli:
@@ -71,16 +74,15 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
 
       # The published artifact is `bin/ambion.mjs` plus `dist/`, so the smoke
       # test drives the real bin script rather than the TypeScript sources.
-      # It has no commands yet; what it proves is the chain that will carry
-      # them — the node guard, the bundle, and the runtime resolved across the
-      # workspace, which the help text reads from.
+      # This checks the runtime guard and package resolution. Command tests
+      # run in the workspace suite; cli-team-smoke.mjs checks a packed consumer.
       - name: ambion --version reports the manifest version
         run: |
           version="$(./packages/cli/bin/ambion.mjs --version)"

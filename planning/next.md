@@ -673,18 +673,18 @@ for 0.1.0. Extract further only when a second consumer needs that boundary.
 
 ### Keep the release surface deliberate
 
-| Current name or structure                         | Proposed treatment                        | Reason                                                        |
-| ------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| `AgentSeat`, `SeatedAgent`, three seating helpers | Remove                                    | Membership is plain room configuration                        |
-| `seats()` / `SeatInfo`                            | `participants()` / `ParticipantInfo`      | The returned view includes humans and agents                  |
-| `SeatActor`                                       | `AgentRunner` within Pi integration       | Names execution rather than durable membership                |
-| `ActivationSpec` plus repeated grants             | One canonical activation value            | One discriminator determines authority                        |
-| `wire.ts`                                         | Split protocol values from journal events | Network requests and persisted facts have different contracts |
-| Broad `RunningRoom` / `Answering` interfaces      | Narrow calls and explicit dependencies    | Adapters cannot reach arbitrary host state                    |
-| `Close.wakes[0]` internally                       | `summaryBy`                               | A close designates at most one summary writer                 |
-| `Composition` internally                          | `RoomConfiguration`                       | Names the durable configuration fact directly                 |
-| `journal/pi`                                      | `pi-journal` package                      | Pi storage has a separate consumer and dependency set         |
-| Placeholder CLI                                   | Exclude from 0.1.0 publication            | Help and version output do not establish a useful CLI         |
+| Current name or structure                         | Proposed treatment                        | Reason                                                                |
+| ------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------- |
+| `AgentSeat`, `SeatedAgent`, three seating helpers | Remove                                    | Membership is plain room configuration                                |
+| `seats()` / `SeatInfo`                            | `participants()` / `ParticipantInfo`      | The returned view includes humans and agents                          |
+| `SeatActor`                                       | `AgentRunner` within Pi integration       | Names execution rather than durable membership                        |
+| `ActivationSpec` plus repeated grants             | One canonical activation value            | One discriminator determines authority                                |
+| `wire.ts`                                         | Split protocol values from journal events | Network requests and persisted facts have different contracts         |
+| Broad `RunningRoom` / `Answering` interfaces      | Narrow calls and explicit dependencies    | Adapters cannot reach arbitrary host state                            |
+| `Close.wakes[0]` internally                       | `summaryBy`                               | A close designates at most one summary writer                         |
+| `Composition` internally                          | `RoomConfiguration`                       | Names the durable configuration fact directly                         |
+| `journal/pi`                                      | `pi-journal` package                      | Pi storage has a separate consumer and dependency set                 |
+| Local development CLI                             | Publish with the Cloudflare adapter       | Local project creation and room testing follow [the CLI plan](cli.md) |
 
 **Preserve useful established names.** Keep room, agent, visit, exchange,
 attention, and journal. Do not rename human to person or attention to routing
@@ -692,7 +692,8 @@ merely for stylistic consistency.
 
 Keep transport details behind a hosting subpath. Stop exporting persisted
 lease and composition shapes solely because the transport currently uses
-`wire.ts`. Leave Cloudflare private until its deployment API is ready.
+`wire.ts`. Publish the Cloudflare adapter for the local CLI. Keep deployment
+commands outside this local development milestone.
 
 ## 7. Finish the abstraction at the edges
 
@@ -831,8 +832,11 @@ for investigation; their old reproduction rates are not current evidence.
       settings. Do not imply that the Node workspace is platform-neutral.
 - [ ] Update package exports, build entries, dependency checks, versioning,
       and publication discovery for `pi-journal` and the narrowed hosting surface.
-- [ ] Make the placeholder CLI private and remove promises of `init`, `dev`,
-      or `deploy`. Keep Cloudflare private and label it as a reference implementation.
+- [x] Include the CLI and Cloudflare adapter in lockstep package discovery.
+      Use `ambion new` as the only project-creation path.
+- [x] Publish `0.1.0-alpha.1` under `next` through the release workflow.
+      [The release check](https://github.com/ambionframework/ambion/actions/runs/35059680708)
+      verified registry installation, project types, and the generated Worker bundle.
 - [ ] Declare example coverage in Knip. Remove the unused `dev` task contract.
       Review Turbo dependencies against actual source and built-package tests;
       remove redundant builds only where the test contract permits it.
@@ -870,7 +874,7 @@ the intended packages. Importing definitions must retain lazy provider loading.
 
 **Done when:** the supported deployment examples demonstrate recovery with
 their real storage and topology. Record their evidence separately from the
-private Cloudflare reference tests.
+Cloudflare adapter tests.
 
 ### Failure tests and operational evidence
 
@@ -964,7 +968,7 @@ consumer or a measured limitation.
 | A general executor plugin system                                       | Establish and exercise the internal protocol before making it a public framework                                     |
 | A property-test shrinker                                               | Adopt when a real failing history is expensive to reduce manually                                                    |
 | JSONL torn-tail and multiwriter repair                                 | Room persistence uses memory/SQLite; revisit only if a JSONL adapter is reintroduced                                 |
-| Published Cloudflare deployment and CLI commands                       | The private reference lacks the packaging, configuration, and operational evidence of a supported deployment         |
+| Cloudflare deployment commands                                         | The adapter supports local CLI use; managed deployment needs configuration and operational evidence                  |
 
 ## 11. Disposition of the previous backlog
 

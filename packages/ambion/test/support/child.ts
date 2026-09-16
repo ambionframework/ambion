@@ -5,7 +5,7 @@
  * append the room's journal takes. The parent kills it at the line it chose,
  * then resumes the name over the same directory.
  *
- *   node --experimental-transform-types child.ts <dir> <name> <delay-ms> <storage>
+ *   node child.ts <dir> <name> <delay-ms> <storage>
  */
 import { createRuntime, startRoom } from '../../src/index.ts';
 import { assistant, colleague, priya, product, questions, sam, slowly, TIMING } from './cast.ts';

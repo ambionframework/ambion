@@ -27,8 +27,9 @@ const andrei = defineHuman({
 	name: 'andrei',
 	identity: 'Founder. Decides whether the batch ships.',
 	preferences: `
-		Open with the single word VERDICT in capitals, then a colon, then the
-		decision. Two sentences at most.
+		Use no more than two short sentences. The first must begin with the single
+		word VERDICT in capitals, followed by a colon and the decision; the second
+		must give the key supporting fact. Do not use bullets or headings.
 	`,
 });
 
@@ -65,47 +66,47 @@ live('the exchange', () => {
 			goal: 'Ship the batch this week.',
 			agents: [planner, logistics, finance],
 		});
-		const visit = await enter(session, andrei);
-		await visit.send({ text: 'Can we ship the batch on Friday?' });
-		await untilQuiet(session);
+		try {
+			const visit = await enter(session, andrei);
+			await visit.send({ text: 'Can we ship the batch on Friday?' });
+			await untilQuiet(session);
 
-		const messages = await session.messages();
-		const question = saidBy(messages, andrei.name)[0];
-		expect(question).toBeDefined();
-		// Two facts at least were needed, so the assistant owed a message.
-		expect(saidByAgents(messages, [andrei.name]).length).toBeGreaterThanOrEqual(2);
-		const summaries = messages.filter(isSummary);
-		expect(summaries).toHaveLength(1);
-		const summary = summaries[0];
-		expect(summary).toMatchObject({ from: 'assistant', to: andrei.name });
-		expect(summary?.covers.from).toBe(question?.seq);
-		expect(summary?.covers.through).toBe(messageBefore(messages, summary?.seq ?? 0));
-		expect(summary?.text.trim()).toMatch(/^VERDICT:/);
-		expect(
-			summary?.text
-				.trim()
-				.split(/[.!?](\s|$)/)
-				.filter(Boolean).length,
-		).toBeLessThanOrEqual(4);
+			const messages = await session.messages();
+			const question = saidBy(messages, andrei.name)[0];
+			expect(question).toBeDefined();
+			// Two facts at least were needed, so the assistant owed a message.
+			expect(saidByAgents(messages, [andrei.name]).length).toBeGreaterThanOrEqual(2);
+			const summaries = messages.filter(isSummary);
+			expect(summaries).toHaveLength(1);
+			const summary = summaries[0];
+			expect(summary).toMatchObject({ from: 'assistant', to: andrei.name });
+			expect(summary?.covers.from).toBe(question?.seq);
+			expect(summary?.covers.through).toBe(messageBefore(messages, summary?.seq ?? 0));
+			expect(summary?.text.trim()).toMatch(/^VERDICT:/);
+			const summaryText = summary?.text.trim() ?? '';
+			const sentenceCount = summaryText.split(/[.!?](?=\s|$)\s*/).filter(Boolean).length;
+			expect(sentenceCount, `summary text: ${JSON.stringify(summaryText)}`).toBeLessThanOrEqual(2);
 
-		const opened = events.filter((e) => e.type === 'exchange_opened');
-		const closed = events.filter((e) => e.type === 'exchange_closed');
-		expect(opened).toHaveLength(1);
-		expect(closed).toHaveLength(1);
-		expect(closed[0]).toMatchObject({
-			exchange: { owner: andrei.name, through: summary?.covers.through },
-		});
-		// The room went quiet on judgment: three seats, and a bounded number of glances.
-		const glances = ['planner', 'logistics', 'finance'].reduce(
-			(sum, name) => sum + activationsOf(events, name),
-			0,
-		);
-		expect(glances).toBeLessThanOrEqual(15);
-		expect(saidByAgents(messages, [andrei.name]).length).toBeLessThanOrEqual(6);
-		await invariants(session, events);
-		const conflicts = events.filter((e) => e.type === 'conflict').length;
-		report('the exchange', await spent(runtime, session), conflicts);
-		await session.stop();
+			const opened = events.filter((e) => e.type === 'exchange_opened');
+			const closed = events.filter((e) => e.type === 'exchange_closed');
+			expect(opened).toHaveLength(1);
+			expect(closed).toHaveLength(1);
+			expect(closed[0]).toMatchObject({
+				exchange: { owner: andrei.name, through: summary?.covers.through },
+			});
+			// The room went quiet on judgment: three seats, and a bounded number of glances.
+			const glances = ['planner', 'logistics', 'finance'].reduce(
+				(sum, name) => sum + activationsOf(events, name),
+				0,
+			);
+			expect(glances).toBeLessThanOrEqual(15);
+			expect(saidByAgents(messages, [andrei.name]).length).toBeLessThanOrEqual(6);
+			await invariants(session, events);
+			const conflicts = events.filter((e) => e.type === 'conflict').length;
+			report('the exchange', await spent(runtime, session), conflicts);
+		} finally {
+			await session.stop();
+		}
 	});
 
 	it('the assistant seats the specialist a question needs, and leaves the rest in reserve', async () => {

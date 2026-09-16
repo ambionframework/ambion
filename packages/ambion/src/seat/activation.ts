@@ -56,6 +56,9 @@ export interface ActivationHost {
 
 /** One activation, from the moment the room wakes a seat until it stops. */
 export class Activation {
+	readonly id: string;
+	readonly seat: string;
+	private readonly host: ActivationHost;
 	/** How much record context the provider consumed. */
 	private readonly context = new PiContext();
 	/** The steers held before Pi first polls its queue. */
@@ -68,11 +71,11 @@ export class Activation {
 	/** Whether it ended without reaching the record at all. The room's second. */
 	failed = false;
 
-	constructor(
-		readonly id: string,
-		readonly seat: string,
-		private readonly host: ActivationHost,
-	) {}
+	constructor(id: string, seat: string, host: ActivationHost) {
+		this.id = id;
+		this.seat = seat;
+		this.host = host;
+	}
 
 	/** The seq this activation may commit against: rule 5's `readThrough`. */
 	get readThrough(): Seq {

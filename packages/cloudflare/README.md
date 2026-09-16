@@ -1,13 +1,19 @@
 # @ambionframework/cloudflare
 
-**A private reference implementation of Ambion's collaboration protocol.**
+**Run Ambion rooms and agents on Cloudflare Durable Objects.**
 One Durable Object holds the room and one holds each seat. Each object uses
 its own SQLite storage for the journals it owns.
 
-For 0.1.0, this package validates separate room and agent hosts through RPC,
-alarms, serialization, and recovery tests. It is not a published deployment
-product. See [Deployment and recovery](../../docs/deployment.md) for support
-levels and host responsibilities.
+This package supplies the adapter used by `ambion new` and `ambion dev`.
+It joins the lockstep release on GitHub Packages. RPC, alarms, serialization,
+and recovery tests run inside workerd. Deployment commands remain future work.
+See [Deployment and recovery](../../docs/deployment.md) for host responsibilities.
+
+Create a runnable project with the [CLI](../cli/README.md):
+
+```sh
+ambion new my-team
+```
 
 What is built:
 
@@ -38,8 +44,7 @@ take names and cannot install a new definition. The room metadata retains the
 catalog names, so automatic resume resolves the same definitions through
 `configure`. Resume requires catalog names in the room metadata.
 
-The package is private, and nothing deploys it. `pnpm test` runs its three
-tests inside workerd, through `@cloudflare/vitest-pool-workers`, as part of
+`pnpm test` runs the adapter tests inside workerd, through `@cloudflare/vitest-pool-workers`, as part of
 the repository's `turbo test`. The tests serialize every value that crosses
 between a seat and its room, which is what the design in
 [`docs/agent.md`](../../docs/agent.md) §5 promises. `subscribe` over RPC is
