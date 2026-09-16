@@ -6,7 +6,8 @@
 	"type": "module",
 	"description": "A small Ambion team running on Cloudflare Durable Objects.",
 	"scripts": {
-		"dev": "wrangler dev --ip 127.0.0.1",
+		"dev": "ambion dev",
+		"dev:worker": "wrangler dev --ip 127.0.0.1",
 		"check:types": "tsc --noEmit"
 	},
 	"dependencies": {

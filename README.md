@@ -92,6 +92,10 @@ participants. See the [assistant contract](docs/assistant.md#8-summaries-compact
 Use Node **22.19 or later**. Packages use ESM. Model execution uses the Pi
 integration and requires credentials for the chosen provider.
 
+The [local development CLI](packages/cli/README.md) creates team projects and
+opens their rooms in OpenTUI. Installing the CLI or the repository requires
+Node **26.4 or later**.
+
 The configured registry is GitHub Packages, which requires a token for read
 access. Create a [classic PAT](https://github.com/settings/tokens/new?scopes=read:packages&description=Ambion)
 with `read:packages`, then add this to your project's `.npmrc`:

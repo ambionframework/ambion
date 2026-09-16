@@ -510,18 +510,18 @@ for 0.1.0. Extract further only when a second consumer needs that boundary.
 
 ### Keep the release surface deliberate
 
-| Current name or structure                         | Proposed treatment                        | Reason                                                        |
-| ------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| `AgentSeat`, `SeatedAgent`, three seating helpers | Remove                                    | Membership is plain room configuration                        |
-| `seats()` / `SeatInfo`                            | `participants()` / `ParticipantInfo`      | The returned view includes humans and agents                  |
-| `SeatActor`                                       | `AgentRunner` within Pi integration       | Names execution rather than durable membership                |
-| `ActivationSpec` plus repeated grants             | One canonical activation value            | One discriminator determines authority                        |
-| `wire.ts`                                         | Split protocol values from journal events | Network requests and persisted facts have different contracts |
-| Broad `RunningRoom` / `Answering` interfaces      | Narrow calls and explicit dependencies    | Adapters cannot reach arbitrary host state                    |
-| `Close.wakes[0]` internally                       | `summaryBy`                               | A close designates at most one summary writer                 |
-| `Composition` internally                          | `RoomConfiguration`                       | Names the durable configuration fact directly                 |
-| `journal/pi`                                      | `pi-journal` package                      | Pi storage has a separate consumer and dependency set         |
-| Placeholder CLI                                   | Exclude from 0.1.0 publication            | Help and version output do not establish a useful CLI         |
+| Current name or structure                         | Proposed treatment                        | Reason                                                                |
+| ------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------- |
+| `AgentSeat`, `SeatedAgent`, three seating helpers | Remove                                    | Membership is plain room configuration                                |
+| `seats()` / `SeatInfo`                            | `participants()` / `ParticipantInfo`      | The returned view includes humans and agents                          |
+| `SeatActor`                                       | `AgentRunner` within Pi integration       | Names execution rather than durable membership                        |
+| `ActivationSpec` plus repeated grants             | One canonical activation value            | One discriminator determines authority                                |
+| `wire.ts`                                         | Split protocol values from journal events | Network requests and persisted facts have different contracts         |
+| Broad `RunningRoom` / `Answering` interfaces      | Narrow calls and explicit dependencies    | Adapters cannot reach arbitrary host state                            |
+| `Close.wakes[0]` internally                       | `summaryBy`                               | A close designates at most one summary writer                         |
+| `Composition` internally                          | `RoomConfiguration`                       | Names the durable configuration fact directly                         |
+| `journal/pi`                                      | `pi-journal` package                      | Pi storage has a separate consumer and dependency set                 |
+| Local development CLI                             | Keep publication separate from 0.1.0      | Local project creation and room testing follow [the CLI plan](cli.md) |
 
 **Preserve useful established names.** Keep room, agent, visit, exchange,
 attention, and journal. Do not rename human to person or attention to routing
@@ -663,8 +663,8 @@ for investigation; their old reproduction rates are not current evidence.
       settings. Do not imply that the Node workspace is platform-neutral.
 - [ ] Update package exports, build entries, dependency checks, versioning,
       and publication discovery for `pi-journal` and the narrowed hosting surface.
-- [ ] Make the placeholder CLI private and remove promises of `init`, `dev`,
-      or `deploy`. Keep Cloudflare private and label it as a reference implementation.
+- [ ] Reconcile CLI publication with [the local development plan](cli.md).
+      Keep Cloudflare private until its supported deployment product is ready.
 - [ ] Declare example coverage in Knip. Remove the unused `dev` task contract.
       Review Turbo dependencies against actual source and built-package tests;
       remove redundant builds only where the test contract permits it.

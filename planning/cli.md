@@ -1,6 +1,7 @@
 # CLI: create a project and test agents locally
 
-Plan, 2026-09-15. Stage 1 is implemented. Commands below remain proposed work.
+Implementation, 2026-09-15. The template and `new`/`dev` commands are implemented.
+The local manual development loop has passed acceptance testing.
 
 **Build the smallest local development loop.** Create a project, edit its
 agents, and talk to them together in a terminal room. Use Wrangler and the
@@ -51,47 +52,49 @@ It restores the packaged `gitignore` file as `.gitignore`.
 Standalone installation, typechecking, CLI execution, and Wrangler bundling
 passed. A live Anthropic test received contributions from both agents.
 Invalid message input returned HTTP 400. Room history survived a restart.
-Repository formatting and checks passed. Exchange lookup currently returns
-identity; stage 3 must add the working/completed state needed by its interface.
+Repository formatting and checks passed. Exchange lookup retains its identity
+response; the new status endpoint provides working/completed state for the
+terminal interface.
 
 ### 2. Implement `ambion new`
 
 **Copy the working template into a new directory.**
 
-- [ ] Accept a project directory and refuse to overwrite existing files.
-- [ ] Set the project name and write the template files.
-- [ ] Print dependency installation and provider credential instructions.
+- [x] Accept a project directory and refuse to overwrite existing files.
+- [x] Set the project name and write the template files.
+- [x] Print dependency installation and provider credential instructions.
 
 **Done when:** a generated project outside the repository installs and starts
-without workspace links or manual source changes.
+without workspace links. Until registry publication, validation supplies local
+package archives; use `scripts/prepare-team.mjs` for the repository workflow.
 
 ### 3. Implement `ambion dev`
 
 **Start Wrangler and open the team room with OpenTUI.**
 
-- [ ] Use `@opentui/core` for the CLI's terminal interface. Keep it outside
+- [x] Use `@opentui/core` for the CLI's terminal interface. Keep it outside
       the Worker bundle.
-- [ ] Pin OpenTUI and verify its runtime and native package requirements.
+- [x] Pin OpenTUI and verify its runtime and native package requirements.
       Document the required runtime and launch flags in the setup instructions.
-- [ ] Launch the project's Wrangler on loopback and wait for the Worker
+- [x] Launch the project's Wrangler on loopback and wait for the Worker
       to answer a readiness request.
-- [ ] Start or resume the configured room and join as the local participant.
-- [ ] Show the room name, team members, a scrollable conversation, and a
+- [x] Start or resume the configured room and join as the local participant.
+- [x] Show the room name, team members, a scrollable conversation, and a
       message input. Support keyboard submission and terminal resizing.
-- [ ] Poll for new messages and exchange state. Show agent names, replies,
+- [x] Poll for new messages and exchange state. Show agent names, replies,
       whether the room is working, and errors.
-- [ ] Keep Worker logs readable without corrupting the input prompt.
-- [ ] Report missing credentials, an occupied port, and startup failures clearly.
-- [ ] On exit, stop polling, dispose the OpenTUI renderer, restore the terminal,
+- [x] Keep Worker logs readable without corrupting the input prompt.
+- [x] Report missing credentials, an occupied port, and startup failures clearly.
+- [x] On exit, stop polling, dispose the OpenTUI renderer, restore the terminal,
       and terminate the Wrangler child process.
 
 Reuse the site example's interaction behavior with OpenTUI rendering.
 Keep the HTTP client small and internal to the CLI. Polling is sufficient.
 Live tool-event transport can wait.
 
-OpenTUI currently documents Bun 1.3+ or Node.js 26.4+ with
-`--experimental-ffi`. Resolve this CLI requirement during implementation;
-Ambion's existing Node.js minimum alone does not satisfy it.
+The CLI pins OpenTUI 0.5.11. Install dependencies and run `dev` with Node.js
+26.4+; the launcher supplies `--experimental-ffi`. Native OpenTUI was tested
+on macOS with Node.js 26.8.2. Ambion core retains its Node.js 22.19 minimum.
 See [OpenTUI runtime support](https://opentui.com/docs/getting-started/runtime-support/).
 
 **Done when:** the developer can ask several questions in one terminal session
@@ -101,18 +104,33 @@ and inspect the agents' discussion. Exiting leaves no development server running
 
 **Use the generated project for the acceptance check.**
 
-- [ ] Create a project, install dependencies, and configure a provider key.
-- [ ] Start the terminal room and ask a question that involves both agents.
-- [ ] Verify input, conversation scrolling, resizing, and terminal restoration
+- [x] Create a project, install dependencies, and configure a provider key.
+- [x] Start the terminal room and ask a question that involves both agents.
+- [x] Verify input, conversation scrolling, resizing, and terminal restoration
       in the OpenTUI interface.
-- [ ] Edit one agent's instructions, restart, and observe the changed behavior.
-- [ ] Confirm that local room history survives a restart through Wrangler storage.
-- [ ] Document the local state directory and how to reset it for a fresh test.
-- [ ] Check that invalid credentials produce a visible error and the CLI exits
+- [x] Edit one agent's instructions, restart, and observe the changed behavior.
+- [x] Confirm that local room history survives a restart through Wrangler storage.
+- [x] Document the local state directory and how to reset it for a fresh test.
+- [x] Check that invalid credentials produce a visible error and the CLI exits
       cleanly when interrupted.
 
 **Complete when:** a developer can create, edit, and manually test agents
 without working inside the Ambion repository.
+
+**Acceptance evidence:** Luna/High verified packed installation outside the
+repository, `ambion new`, overwrite refusal, and generated-project typechecking.
+A real terminal session received live replies from both Anthropic agents and
+showed activity. Restarting restored history; changing the planner instructions
+produced the expected changed response. Conversation scrolling, terminal resize events, Ctrl-C, and external SIGTERM
+cleanup passed with no Wrangler or workerd processes left running. Missing credentials
+and occupied ports produced clear errors. A fresh packed terminal run displayed
+`401 authentication_error: invalid x-api-key` in the full-width error area.
+Temporary credentials were removed after live tests.
+
+Run `node scripts/cli-team-smoke.mjs` for the packed-consumer check, or add
+`--live` for an interactive session using `~/.anthropic/dev-key`. The script
+removes its temporary credential file on exit. Stop the room and remove its
+`.wrangler/` directory to reset local history.
 
 ## Later
 
@@ -124,7 +142,7 @@ Publication is a separate release decision under [the delivery plan](next.md).
 ## Starting points
 
 - [OpenTUI documentation](https://opentui.com/docs/)
-- [CLI scaffold](../packages/cli/README.md)
+- [CLI commands](../packages/cli/README.md)
 - [Cloudflare adapter](../packages/cloudflare/README.md)
 - [Terminal and Worker example](../examples/site/README.md)
 - [Cloudflare local development](https://developers.cloudflare.com/workers/local-development/)

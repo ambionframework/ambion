@@ -4,7 +4,7 @@
  */
 export type { ConfigureOptions, SeatEvent } from './configure.ts';
 export { configure } from './configure.ts';
-export type { Env, Person, StartOptions } from './room-object.ts';
+export type { Env, Person, RoomStatus, StartOptions } from './room-object.ts';
 export { RoomObject } from './room-object.ts';
 export { SeatObject } from './seat-object.ts';
 export { sqlOver, sqlStorage } from './storage.ts';

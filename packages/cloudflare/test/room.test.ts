@@ -48,6 +48,18 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 	expect(await stub.exchange(exchange.from)).toEqual(exchange);
 });
 
+it('can ensure a resumed room and report its current state', async () => {
+	const stub = env.ROOM.get(env.ROOM.idFromName('room-status'));
+	const composition = { name: 'room-status', assistant: 'assistant', agents: [] } as const;
+	await stub.ensureStart(composition);
+	await stub.ensureStart(composition);
+	await expect(stub.status()).resolves.toMatchObject({
+		name: 'room-status',
+		exchange: undefined,
+		exchangeState: 'idle',
+	});
+});
+
 it('resumes over its own storage after an abort, and fences the run before it', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName('room-fence'));
 	await stub.start({ name: 'room-fence', assistant: 'assistant', agents: [] });

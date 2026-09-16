@@ -8,6 +8,9 @@ configure({
 	// so a Durable Object can resolve them after it resumes.
 	agents: AGENTS,
 	wake: { resend: 2_000 },
+	// Keep seat failures as one machine-readable line so `ambion dev` can
+	// surface provider/authentication errors in its log pane.
+	onSeatEvent: (event) => console.log(JSON.stringify(event)),
 });
 
 interface TeamEnv extends Env {
@@ -62,7 +65,7 @@ function textOf(value: unknown): string {
 }
 
 async function start(stub: RoomStub): Promise<{ started: string; participants: SeatInfo[] }> {
-	await stub.start(COMPOSITION);
+	await stub.ensureStart(COMPOSITION);
 	return { started: ROOM_NAME, participants: await stub.participants() };
 }
 
@@ -102,21 +105,34 @@ async function exchange(stub: RoomStub, url: URL): Promise<unknown> {
 	return from === undefined ? null : ((await stub.exchange(from)) ?? null);
 }
 
+type Route = (stub: RoomStub, request: Request, url: URL) => Promise<unknown>;
+
+const routes: Record<string, Route> = {
+	'POST /start': async (stub) => start(stub),
+	'POST /join': (stub, request) => join(stub, request),
+	'POST /send': (stub, request) => send(stub, request),
+	'GET /messages': (stub, _request, url) => stub.messages(numberParam(url, 'since')),
+	'GET /exchange': (stub, _request, url) => exchange(stub, url),
+	'GET /status': (stub, _request, url) => stub.status(numberParam(url, 'from')),
+	'GET /health': async () => ({ ok: true, room: ROOM_NAME }),
+};
+
 async function route(request: Request, env: TeamEnv): Promise<Response> {
 	const url = new URL(request.url);
-	const stub = room(env);
-	if (request.method === 'POST' && url.pathname === '/start') return json(await start(stub));
-	if (request.method === 'POST' && url.pathname === '/join') return json(await join(stub, request));
-	if (request.method === 'POST' && url.pathname === '/send') return json(await send(stub, request));
-	if (request.method === 'GET' && url.pathname === '/messages') {
-		return json(await stub.messages(numberParam(url, 'since')));
-	}
-	if (request.method === 'GET' && url.pathname === '/exchange')
-		return json(await exchange(stub, url));
+	const taken = routes[`${request.method} ${url.pathname}`];
+	if (taken !== undefined) return json(await taken(room(env), request, url));
 	return json(
 		{
 			error: 'Route not found.',
-			routes: ['POST /start', 'POST /join', 'POST /send', 'GET /messages', 'GET /exchange'],
+			routes: [
+				'GET /health',
+				'POST /start',
+				'POST /join',
+				'POST /send',
+				'GET /messages',
+				'GET /exchange',
+				'GET /status',
+			],
 		},
 		404,
 	);

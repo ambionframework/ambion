@@ -11,5 +11,5 @@ export default defineConfig({
 	outDir: 'dist',
 	// The user's workspace file imports the runtime from its own node_modules.
 	// Bundling a second copy in here would give the process two runtimes.
-	deps: { neverBundle: ['@ambionframework/ambion'] },
+	deps: { neverBundle: ['@ambionframework/ambion', '@opentui/core'] },
 });

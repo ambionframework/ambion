@@ -17,7 +17,7 @@ import type {
 	Seq,
 	Visit,
 } from '@ambionframework/ambion';
-import { defineHuman, resumeRoom, startRoom } from '@ambionframework/ambion';
+import { defineHuman, readRoom, resumeRoom, startRoom } from '@ambionframework/ambion';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -44,6 +44,13 @@ export interface StartOptions {
 	agents?: readonly string[];
 	seats?: Record<string, Attention>;
 	goal?: string;
+}
+
+export interface RoomStatus {
+	name: string;
+	participants: SeatInfo[];
+	exchange: Exchange | undefined;
+	exchangeState: 'idle' | 'working' | 'completed';
 }
 
 export interface Person {
@@ -90,6 +97,7 @@ export class RoomObject extends DurableObject<Env> {
 	protected readonly metadata: MetadataStore<RoomMetadata>;
 	protected readonly storage: JournalOpener;
 	private room: Room | undefined;
+	private starting: Promise<void> | undefined;
 	private readonly visits = new Map<string, Visit>();
 
 	constructor(ctx: DurableObjectState, env: Env) {
@@ -134,6 +142,17 @@ export class RoomObject extends DurableObject<Env> {
 			...(options.goal === undefined ? {} : { goal: options.goal }),
 		});
 		await this.room.messages();
+	}
+
+	/** Start the configured room when its durable state has no live room. */
+	async ensureStart(options: StartOptions): Promise<void> {
+		if (this.room !== undefined) return;
+		this.starting ??= this.start(options);
+		try {
+			await this.starting;
+		} finally {
+			this.starting = undefined;
+		}
 	}
 
 	async visit(person: Person): Promise<void> {
@@ -197,6 +216,31 @@ export class RoomObject extends DurableObject<Env> {
 
 	async participants(): Promise<SeatInfo[]> {
 		return this.running().participants();
+	}
+
+	/** Read the current room and the state of one exchange without changing it. */
+	async status(from?: Seq): Promise<RoomStatus> {
+		const snapshot = await readRoom(this.running().name, { runtime: this.runtime });
+		const exchange = from === undefined ? snapshot.exchange : this.running().exchange(from);
+		if (from !== undefined && exchange === undefined)
+			throw new Error(`Exchange '${from}' is not on the record.`);
+		const current = snapshot.exchange?.from === from;
+		return {
+			name: snapshot.name,
+			participants: [...snapshot.participants],
+			exchange:
+				exchange === undefined
+					? undefined
+					: { owner: exchange.owner, from: exchange.from, at: exchange.at },
+			exchangeState:
+				from === undefined
+					? snapshot.exchange === undefined
+						? 'idle'
+						: 'working'
+					: current
+						? 'working'
+						: 'completed',
+		};
 	}
 
 	async exchange(from: Seq) {
