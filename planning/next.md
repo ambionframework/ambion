@@ -19,7 +19,6 @@ stay synchronized. The main sources of complexity are:
 - Special assistant membership and selection require separate participation rules.
 - Transports receive broad room and provider interfaces.
 - Provider transcript storage extends into the generic journal package.
-- Audit failures can affect execution outcomes after contributions commit.
 - Some public reads expose mutable facts owned by the room.
 
 **Build on the merged foundations.** Fixed definitions, normalized tools,
@@ -28,10 +27,13 @@ landed. Preserve their evidence below. Prioritize these remaining changes:
 
 | Order | Change                                                  | Main reduction                                                  | Scope                           |
 | ----- | ------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------- |
-| 1     | Share seating during ordinary participation             | Remove exclusive selection authority                            | Small first slice; section 5    |
+| 1     | Separate audit failure from execution                   | Remove transcript storage from collaboration outcomes           | Current change; section 5       |
 | 2     | Use ordinary agents for closing assignments             | Remove special membership, `select`, and `summarise`            | Medium; breaking API; section 5 |
 | 3     | Narrow executor dependencies and extract Pi transcripts | Remove broad interfaces and provider types from generic storage | Medium; sections 5–6            |
 | 4     | Finish state ownership and release contracts            | Remove mutable fact leaks and ambiguous failure guarantees      | Sections 7–9                    |
+
+Shared seating is the first slice of item 2. Complete the removal of special
+assistant participation to realize that item's conceptual reduction.
 
 Implement these changes in bounded slices. Temporary paths must have a named
 removal step. Do not introduce a second permanent participation model.
@@ -512,7 +514,7 @@ avoid a generic role registry or capability configuration system.
    Remove `select`, opening dispatch, and the separate assistant definition.
 4. Narrow executor dependencies after these participation rules stabilize.
 
-**Next implementation item: shared seating.** An ordinary agent receives the
+**After audit isolation: shared seating.** An ordinary agent receives the
 reserve identities and can call `seat` alongside `say` and its domain tools.
 Two agents requesting the same colleague produce one membership event and
 one activation. A retry returns an explicit already-seated result. Neither
@@ -577,14 +579,34 @@ tracking that proves which messages actually entered a provider request.
 Rendering, queuing, or renewing a lease cannot acknowledge unseen messages.
 This complexity protects a real collaboration guarantee.
 
-**An audit failure must not repeat successful reasoning.** Current
-[`Activation.pass`](../packages/ambion/src/seat/activation.ts) can classify
-transcript persistence failure as execution failure after a contribution lands.
+**Audit isolation is prepared for review.** The executor determines the model
+outcome independently of transcript persistence. Successful speech and silence
+complete normally when auditing fails. Genuine provider failures retain their
+execution retry policy.
 
-Determine the execution result before audit persistence. Retry audit writes
-under a stable identity. Report their failure separately. Unconfirmed audit
-data can be lost on process failure; accepted room contributions remain
-recoverable from the room journal.
+Audit writes retry once with stable entry identities and captured payloads.
+Failed session opens can be attempted again. Exhausted writes emit a separate
+`audit_error` containing the agent and activation identity. In-process and
+Cloudflare hosts retain that diagnostic. Unconfirmed audit data can be lost
+on process failure; accepted contributions remain in the room journal.
+
+**Implementation evidence:**
+
+- `pnpm format` and `pnpm check` passed: 686 repository tests, including
+  578 core tests and 17 workerd tests. Unchanged package tests used the cache.
+- `pnpm chaos` passed all 710 expanded recovery tests.
+- The pre-fix silence regression fails on memory and SQLite because audit
+  failure leaves the exchange pending. Both pass with the change.
+- Tests cover speech, silence, closing work, provider failure, context refresh,
+  cuts during blocked audits, notification failures, and session reopening.
+- Lost acknowledgement plus a failed recovery read exercises the audit retry.
+  It preserves captured payloads and stores each transcript entry once.
+- A workerd test verifies remote audit diagnostics and exchange completion.
+- Luna/High implemented the change. Independent Luna/High and parent reviews
+  found no remaining implementation blockers.
+
+Retries are bounded by attempt count. Storage operations still share the
+activation lifetime; this change adds no background or durable audit queue.
 
 Neither leases nor room idempotency provide exactly-once domain tools.
 Applications must make irreversible tool operations idempotent where needed.
@@ -743,6 +765,11 @@ The shared projection and dispatch rules, fixed definitions, normalized tools,
 conditional journal appends, activation purpose, and structured context are
 implemented. Sections 2–5 and 7 retain their behavior and test evidence.
 
+### Current change: isolate audit failures
+
+Separate execution outcomes from transcript writes. Prove bounded audit retries
+and unchanged collaboration completion before changing participation rules.
+
 ### Stage 1: simplify participation
 
 Follow section 5's delivery order: shared seating, closing publication through
@@ -756,7 +783,7 @@ Summary boundaries, recipient preferences, and source review stay intact.
 ### Stage 2: isolate execution and extract transcript storage
 
 - Narrow transport dependencies and separate protocol types from stored facts.
-- Extract `pi-journal` and separate audit failure from execution failure.
+- Extract `pi-journal` while preserving audit failure isolation.
 - Keep workspace resources separate from executor tool binding.
 
 **Evidence:** run the same scripted collaboration in process and through

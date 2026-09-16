@@ -29,7 +29,12 @@
  * has called it that all along: every one lands in the seat's downstream
  * session as an `ambion/activation` entry.
  */
-import type { Agent, AgentEvent, Session as PiSession } from '@earendil-works/pi-agent-core';
+import type {
+	Agent,
+	AgentEvent,
+	AgentMessage,
+	Session as PiSession,
+} from '@earendil-works/pi-agent-core';
 import type { RoomNotification, Seq } from '../types.ts';
 import type { ActivationView, EndReason, LeaseResponse, ViewResponse } from '../wire.ts';
 import { PiContext } from './pi.ts';
@@ -148,9 +153,9 @@ export class Activation {
 			this.agent = agent;
 			agent.subscribe((event) => this.note(event));
 			await agent.prompt(this.context.initial(view.through, context, this.host.now()));
-			await this.host.persist(agent);
-			const failure = failureOf(agent);
-			if (failure) return this.broke(failure);
+			const failure = this.executionFailure(agent);
+			await this.audit(agent);
+			if (failure !== undefined) return false;
 			// An aborted activation stays cancelled, and one that does not rebuild
 			// is a single pass whatever landed: a summarising activation answers its
 			// fixed closed exchange.
@@ -189,7 +194,34 @@ export class Activation {
 		}
 	}
 
-	/** An activation that never reached the record. The room hears it and moves on. */
+	/** Record the provider outcome before audit I/O can delay a lease release. */
+	private executionFailure(agent: Agent): Error | undefined {
+		const failure = failureOf(agent);
+		if (failure === undefined) return undefined;
+		this.failed = true;
+		this.host.emit({ type: 'error', agent: this.seat, error: failure });
+		return failure;
+	}
+
+	/** Audit failure is diagnostic only. It never changes the provider outcome. */
+	private async audit(agent: Agent): Promise<void> {
+		try {
+			await this.host.persist(agent);
+		} catch (error) {
+			try {
+				this.host.emit({
+					type: 'audit_error',
+					agent: this.seat,
+					activation: this.id,
+					error: asError(error),
+				});
+			} catch {
+				// Audit diagnostics must never change the execution outcome.
+			}
+		}
+	}
+
+	/** Record an execution failure and notify the host. */
 	private broke(error: Error): false {
 		this.failed = true;
 		this.host.emit({ type: 'error', agent: this.seat, error });
@@ -207,15 +239,48 @@ function failureOf(agent: Agent): Error | undefined {
 
 /** Every turn a model took, in the downstream session that owns it. */
 export async function persistTurns(
-	open: Promise<PiSession>,
+	open: () => Promise<PiSession>,
 	agent: Agent,
 	at: string,
 ): Promise<void> {
-	const piSeat = await open;
-	await piSeat.appendCustomEntry('ambion/activation', { at });
-	for (const message of agent.state.messages) {
+	const batch = crypto.randomUUID();
+	const messages = agent.state.messages.map((message) => {
 		// Provider messages may carry undefined-valued fields, which Pi's
 		// durability check rejects; a JSON round-trip drops them.
-		await piSeat.appendMessage(JSON.parse(JSON.stringify(message)));
+		return JSON.parse(JSON.stringify(message)) as AgentMessage;
+	});
+	for (let attempt = 0; attempt < AUDIT_ATTEMPTS; attempt += 1) {
+		try {
+			const piSeat = await open();
+			await piSeat.appendEntry(
+				{
+					type: 'custom',
+					id: `${batch}:activation`,
+					customType: 'ambion/activation',
+					data: { at },
+				},
+				'main',
+			);
+			for (const [index, message] of messages.entries()) {
+				await piSeat.appendEntry(
+					{
+						type: 'message',
+						id: `${batch}:message:${index}`,
+						message,
+					},
+					'main',
+				);
+			}
+			return;
+		} catch (error) {
+			if (attempt === AUDIT_ATTEMPTS - 1) throw error;
+		}
 	}
+}
+
+/** Audit gets one retry for a lost or refused write in this activation. */
+const AUDIT_ATTEMPTS = 2;
+
+function asError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
 }
