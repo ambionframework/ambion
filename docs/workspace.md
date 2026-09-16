@@ -39,7 +39,8 @@ starts after destruction is refused.
 
 `workspace.tools()` returns an ordinary Ambion `ToolBundle`. A backend supplies
 its tools and optional guidance. The bundle binds each backend tool through
-the resource owner and keeps one stable identity.
+the resource owner and keeps one stable identity. Pass the bundle in an
+agent's `bundles` field.
 
 ```ts
 import { defineAgent, defineTool } from '@ambionframework/ambion';
@@ -49,12 +50,13 @@ const surveyor = defineAgent({
   identity: 'Quantity surveyor. Holds the tonnage.',
   instructions: 'Read the pour plan before you answer.',
   model: 'anthropic/claude-sonnet-5',
-  tools: [drive.tools()],
+  bundles: [drive.tools()],
 });
 ```
 
-The core flattens tool bundles when it defines the agent. Bundle guidance is
-included for message activations. The assistant's opening and closing
+The core flattens bundles when it defines the agent. Bundle guidance is
+included for message activations. The `tools` field accepts ordinary typed
+Ambion tools. The assistant's opening and closing
 activations retain only their `seat` and `summarise` authority.
 
 Custom tools close over the resource. They select the calling agent and pass

@@ -45,8 +45,8 @@ const twoWorkspaces: Scenario = {
 			name: `${name}-directory`,
 			backend: directoryBackend.backend,
 		});
-		const alpha = agent('alpha', 'Works in memory.', { tools: [memoryDrive.tools()] });
-		const beta = agent('beta', 'Works on disk.', { tools: [directoryDrive.tools()] });
+		const alpha = agent('alpha', 'Works in memory.', { bundles: [memoryDrive.tools()] });
+		const beta = agent('beta', 'Works on disk.', { bundles: [directoryDrive.tools()] });
 		const gamma = agent('gamma', 'Has no workspace.');
 		const destroyed = deferred();
 		const alphaResults: string[] = [];

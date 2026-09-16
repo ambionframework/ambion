@@ -127,7 +127,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			definition.name = 'replacement';
 			definition.identity = 'Changed.';
 			definition.instructions = 'Changed instructions.';
-			tool.execute = () => {
+			tool.invoke = () => {
 				calls.push('replacement');
 				return 'changed';
 			};

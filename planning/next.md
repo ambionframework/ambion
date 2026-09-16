@@ -518,23 +518,29 @@ lease and composition shapes solely because the transport currently uses
 
 ## 7. Finish the abstraction at the edges
 
-### Tools should have one normal form
+### Tools have one normal form
 
-**Remove `unknown[]` from authored tools.** Keep `defineTool` as the default
-typed authoring interface. Native Pi tools require one explicit adapter.
-Provider-specific compatibility belongs in Pi integration.
+**Implemented: tools use one typed execution interface.** `defineTool` keeps
+schema-based inference for author callbacks. `AmbionTool` stores captured
+metadata and exposes `invoke(unknown, ToolContext)`. Invocation validates
+arguments before it calls the typed callback. Native Pi tools enter through
+`fromPiTool`; the executor has no brand check or alternate calling convention.
 
-Use explicit `tools` and `bundles` inputs. Flatten bundles once during
-definition construction. A bundle remains tools plus guidance; it has no
-lifecycle or execution identity. Workspace resources retain their own owner.
+Agents accept explicit `tools` and `bundles` inputs. Definition construction
+flattens bundles once and combines their guidance. Tool arrays contain typed
+values. Raw Pi tools and bundles in `tools` fail type checking. Invalid runtime
+inputs fail at the definition boundary. Workspace resources retain their own
+owner and contribute their tools through `bundles`.
 
-Delete duck typing that treats any object with a `tools` array as a bundle.
-The executor should receive one normalized tool type and need no brand-based
-choice between calling conventions.
+The adapters preserve argument preparation, execution mode, cancellation,
+call identifiers, streamed updates, and structured results. Only documented
+tool data fields are captured. Callback functions keep their identities.
 
-Capture documented immutable data fields. Keep executable functions and
-resource handles by identity. Do not expand the generic reflection-based
-`capture` helper into an object serialization framework.
+**Evidence:** `tool-types.test.ts` checks schema inference, heterogeneous tool
+arrays, rejected input types, and malformed runtime inputs. The Pi adapter
+suite checks invocation, schema validation, argument preparation, and caller
+mutation. Existing bundle, workspace, and fixed-definition tests cover the
+ownership boundaries.
 
 ### Separate activation context from human review
 

@@ -81,11 +81,15 @@ A room without an
 assistant still closes exchanges and exposes the discussion. A single answer
 can require no summary even when an assistant is present.
 
-Use `defineTool` or tool bundles to give specialists domain tools. The current
-`agents` list supplies every ordinary definition. The optional `seats` map
-selects initial members; definitions absent from that map form the reserve.
+Use `defineTool` for an agent's ordinary typed tools. Put reusable tool bundles
+in the separate `bundles` field. The current `agents` list supplies every
+ordinary definition. The optional `seats` map selects initial members;
+definitions absent from that map form the reserve.
 Attention controls idle agents; active ordinary agents receive new context.
 An agent can finish silently, and the room refuses speech based on stale context.
+
+Adapt a native Pi tool with `fromPiTool(nativePiTool)` before you put it in
+`tools` or a bundle. The adapter gives the executor one typed tool shape.
 
 ## Persistence and limits
 

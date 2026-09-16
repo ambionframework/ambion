@@ -38,7 +38,7 @@ live('the workspace', () => {
 				"checked <crate>", to notes/journal.txt in your home directory. Then
 				answer with one say, in one sentence, quoting the count you read.
 			`,
-			tools: [store.tools()],
+			bundles: [store.tools()],
 		});
 		const { session, runtime, events } = await open('workspace', { agents: [librarian] });
 		const visit = await enter(session, person);

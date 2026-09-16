@@ -6,10 +6,11 @@
  * call and reads the room's answer through `landed`.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import type { TSchema } from 'typebox';
 import { SEAT, SUMMARISE, seatToolDescription, summaryToolDescription } from '../assistant.ts';
 import { SAY } from '../define.ts';
 import { refusal } from '../render.ts';
-import { type AgentDefinition, isAmbionTool, type Seq } from '../types.ts';
+import type { AgentDefinition, AmbionTool, Seq } from '../types.ts';
 import type { ActivationView, CommitResult, SeatRoom } from '../wire.ts';
 import type { Activation } from './activation.ts';
 
@@ -22,38 +23,29 @@ import type { Activation } from './activation.ts';
 const ASSISTANT_CALLS = 4;
 
 /**
- * One Pi tool from what a seat declared. A `defineTool` tool is handed a
- * `ToolContext` built for the seat's agent on every call, which is how it
- * reaches the agent context; a Pi-native tool passes through as it is, and its
- * signature has no room for one.
+ * One Pi tool from a normalized tool. The normalized invocation receives the
+ * seat's agent context while Pi receives its own call signature.
  */
-function toPiTool(tool: unknown, agent: AgentDefinition): AgentTool {
-	if (isAmbionTool(tool)) {
-		return {
-			name: tool.name,
-			label: tool.label ?? tool.name,
-			description: tool.description,
-			parameters: tool.parameters,
-			...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
-			...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
-			execute: async (_toolCallId, params, signal, onUpdate) => {
-				const result = await tool.execute(params, {
-					agent: { name: agent.name, identity: agent.identity },
-					signal,
-					callId: _toolCallId,
-					onUpdate,
-				});
-				return typeof result === 'string'
-					? { content: [{ type: 'text', text: result }], details: {} }
-					: result;
-			},
-		};
-	}
-	const raw = tool as AgentTool & { label?: string };
-	if (typeof raw?.name !== 'string' || typeof raw?.execute !== 'function') {
-		throw new Error('Tools must come from defineTool (Ambion or Pi).');
-	}
-	return raw.label ? raw : { ...raw, label: raw.name };
+function toPiTool(tool: AmbionTool, agent: AgentDefinition): AgentTool<TSchema, unknown> {
+	return {
+		name: tool.name,
+		label: tool.label,
+		description: tool.description,
+		parameters: tool.parameters,
+		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
+		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
+		execute: async (toolCallId, params, signal, onUpdate) => {
+			const result = await tool.invoke(params, {
+				agent: { name: agent.name, identity: agent.identity },
+				signal,
+				callId: toolCallId,
+				onUpdate,
+			});
+			return typeof result === 'string'
+				? { content: [{ type: 'text', text: result }], details: {} }
+				: result;
+		},
+	};
 }
 
 /** What a write tool returns when the record took it. */

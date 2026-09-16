@@ -10,7 +10,7 @@
  * import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
  *
  * const drive = openWorkspace({ name: 'team-site', backend: memoryBackend() });
- * const agent = defineAgent({ ..., tools: [drive.tools()] });
+ * const agent = defineAgent({ ..., bundles: [drive.tools()] });
  * ```
  *
  * The design contract is `docs/workspace.md`.

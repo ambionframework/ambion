@@ -53,20 +53,21 @@ function tool(toolName: string, execute: (ctx: ToolContext) => string = () => 'd
 describe('ordinary tool bundles', () => {
 	it('flattens and captures bundle tools and guidance at definition time', () => {
 		const inspect = tool('inspect');
-		const bundle: ToolBundle = { tools: [inspect], guidance: 'Use inspect for this domain.' };
-		const tools: unknown[] = [bundle];
+		const bundle = { tools: [inspect], guidance: 'Use inspect for this domain.' };
+		const bundles = [bundle];
 		const agentDef = defineAgent({
 			name: 'capturer',
 			identity: 'Captures values.',
 			instructions: 'Work.',
 			model: 'scripted/capturer',
-			tools,
+			bundles,
 		});
 
-		tools.push(tool('later'));
-		(bundle.tools as unknown[]).length = 0;
+		bundles.push({ tools: [tool('later')], guidance: 'Later guidance.' });
+		bundle.tools.length = 0;
+		bundle.guidance = 'Changed guidance.';
 		expect(agentDef.tools).toHaveLength(1);
-		expect((agentDef.tools[0] as { name: string }).name).toBe('inspect');
+		expect(agentDef.tools[0]?.name).toBe('inspect');
 		expect(agentDef.guidance).toBe('Use inspect for this domain.');
 		expect(Object.isFrozen(agentDef)).toBe(true);
 		expect(Object.isFrozen(agentDef.tools)).toBe(true);
@@ -81,7 +82,8 @@ describe('ordinary tool bundles', () => {
 				identity: 'Checks names.',
 				instructions: 'Work.',
 				model: 'scripted/duplicate',
-				tools: [bundle, tool('inspect')],
+				tools: [tool('inspect')],
+				bundles: [bundle],
 			}),
 		).toThrow(/duplicate tools named 'inspect'/i);
 	});
@@ -105,7 +107,7 @@ describe('ordinary tool bundles', () => {
 			tools: [tool('inspect')],
 			guidance: 'Backend guidance: inspect records before writing.',
 		};
-		const session = await run([agent('worker', { tools: [bundle] })], {
+		const session = await run([agent('worker', { bundles: [bundle] })], {
 			worker: (context: Context) => {
 				prompts.push(context.systemPrompt ?? '');
 				return quiet();

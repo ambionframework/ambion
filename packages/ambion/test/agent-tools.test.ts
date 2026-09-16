@@ -49,7 +49,8 @@ describe('agent tools', () => {
 				identity: 'An agent.',
 				instructions: 'Read.',
 				model: 'scripted/reader',
-				tools: [bundle, tool('read')],
+				tools: [tool('read')],
+				bundles: [bundle],
 			}),
 		).toThrow(/duplicate tools named 'read'/);
 	});
@@ -68,18 +69,15 @@ describe('agent tools', () => {
 
 	it('captures caller-owned tool arrays, records, and schemas', () => {
 		const parameters = Type.Object({ query: Type.String() });
-		const supplied: {
-			name: string;
-			description: string;
-			parameters: { properties: Record<string, unknown> };
-			execute: () => string;
-		} = {
-			name: 'inspect',
-			description: 'Inspects one thing.',
-			parameters,
-			execute: () => 'first',
+		const supplied = {
+			...defineTool({
+				name: 'inspect',
+				description: 'Inspects one thing.',
+				parameters,
+				execute: () => 'first',
+			}),
 		};
-		const tools: unknown[] = [supplied];
+		const tools = [supplied];
 		const agent = defineAgent({
 			name: 'inspector',
 			identity: 'An inspector.',
@@ -88,17 +86,17 @@ describe('agent tools', () => {
 			tools,
 		});
 
-		tools.push(tool('later'));
+		tools.length = 0;
 		supplied.name = 'changed';
 		supplied.description = 'Changed after capture.';
 		(parameters.properties as Record<string, unknown>).query = Type.Number();
 
-		const captured = agent.tools[0] as typeof supplied;
+		const captured = agent.tools[0];
 		expect(agent.tools).toHaveLength(1);
 		expect(captured).toMatchObject({ name: 'inspect', description: 'Inspects one thing.' });
 		expect(captured).not.toBe(supplied);
-		expect(captured.parameters).not.toBe(parameters);
-		expect(captured.parameters.properties.query).toMatchObject({ type: 'string' });
+		expect(captured?.parameters).not.toBe(parameters);
+		expect(captured?.parameters).toMatchObject({ properties: { query: { type: 'string' } } });
 		expect(Object.isFrozen(agent)).toBe(true);
 		expect(Object.isFrozen(agent.tools)).toBe(true);
 	});
