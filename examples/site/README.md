@@ -151,12 +151,11 @@ That is the exchange, and it is the room's own: it opens the same way whoever
 asks, and a client that could re-render would fold the working between those
 two lines into a thinking state.
 
-**One question, one message back.** Ask "can I promise Thursday for the
-pour?" and watch three products answer it between them. When the exchange closes,
-the assistant writes whoever asked the one message they read instead of the
-working, marked `∎` and carrying the span it stands for. `/summaries` lists
-them. A question the room answers once draws no summary at all: one answer is
-left in the voice that gave it.
+**An optional summary closes the discussion.** Ask “Can I promise Thursday
+for the pour?” and watch the specialists contribute. After the discussion
+closes, the configured summary writer can answer its owner through `say`.
+The room marks the summary with its source range. `/summaries` lists these
+results. The writer may decline; the discussion remains available.
 
 **One assistant writes for each person their own way.** Ask the same question
 as `priya`, then as `sam`, then as `dan`, and compare the three. Priya's opens
@@ -170,7 +169,7 @@ closed exchange has a summary, agent context replaces its covered messages
 with that summary. Products continue from the summary and their own APIs.
 The journal retains the original discussion, and `exchange.messages()` exposes
 it for human review. The terminal keeps the original lines visible. See the
-[assistant contract](../../docs/assistant.md#8-summaries-compact-activations-people-can-review-the-discussion).
+[summary contract](../../docs/summary.md).
 
 ## The files
 
@@ -186,7 +185,7 @@ it for human review. The terminal keeps the original lines visible. See the
 
 The contracts are [`docs/agent.md`](../../docs/agent.md),
 [`docs/presence.md`](../../docs/presence.md),
-[`docs/assistant.md`](../../docs/assistant.md),
+[`docs/summary.md`](../../docs/summary.md),
 [`docs/workspace.md`](../../docs/workspace.md) and
 [`docs/roster.md`](../../docs/roster.md) and
 [`docs/durability.md`](../../docs/durability.md).

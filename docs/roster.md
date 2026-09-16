@@ -23,22 +23,23 @@ An empty map starts every catalog agent in the reserve. `summary` names one
 catalog agent that may receive closing work. It does not create a separate
 membership type.
 
-The host supplies the same catalog on resume. A definition absent from the
-recorded catalog can enter the reserve only in a new version 2 composition.
-Unknown names fail before the room writes a membership entry.
+On resume, supply definitions for every recorded agent name. Additional
+definitions enter the reserve in the new run. Names outside that run's catalog
+cannot be seated.
 
 ## Attention
 
 Attention controls which events wake an idle member.
 
-| Attention   | Idle agent wakes for                   |
-| ----------- | -------------------------------------- |
-| `named`     | A message addressed to the agent       |
-| `broadcast` | Any eligible message                   |
-| `presence`  | Eligible messages and presence changes |
+| Attention   | Idle agent receives                               |
+| ----------- | ------------------------------------------------- |
+| `none`      | No ordinary speech; direct deliveries are refused |
+| `named`     | Speech addressed to the agent                     |
+| `broadcast` | Addressed and undirected speech                   |
+| `presence`  | Speech plus presence and membership changes       |
 
-Omitted attention uses `broadcast`. All agents use the same scale. No agent
-has a reserved attention value or special addressability rule.
+Omitted attention uses `broadcast`. The scale applies to every agent, including
+a configured summary writer. Closing assignments have their own authority.
 
 Attention controls waking. It does not grant authority to commit. The room
 checks the activation, lease, recipient, and consumed context for every write.
@@ -51,8 +52,9 @@ also exposes `room.seat(name)` and `room.unseat(name)` for the host.
 - `seat` accepts a name from the catalog and reserve.
 - `unseat` accepts a currently seated agent, including the calling agent.
 - An unknown name or a human name is refused.
-- A duplicate seating request returns an unchanged result.
-- A duplicate seating request writes no journal entry, wake, or acknowledgement.
+- Agent tool commits return `unchanged` when the requested membership already holds.
+- Host `room.seat` / `room.unseat` calls reject an already-satisfied request.
+- Neither path writes another membership entry for that request.
 
 When an agent leaves, its definition remains available in the reserve. Pending
 work for that seat settles according to the room's recorded lease rules. A
