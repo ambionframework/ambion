@@ -5,7 +5,8 @@
  * envelope.
  */
 
-import { foldLeases as foldLeaseChanges, parseId } from '../packages/ambion/src/room/lease.ts';
+import { decodeActivationId } from '../packages/ambion/src/activation-id.ts';
+import { foldLeases as foldLeaseChanges } from '../packages/ambion/src/room/lease.ts';
 
 const object = (value) => value !== null && typeof value === 'object';
 const KINDS = new Set(['message', 'lease', 'close', 'composition', 'run']);
@@ -116,7 +117,7 @@ export function foldLeases(log) {
 	const folded = foldLeaseChanges(leaseEntries(log));
 	return [...folded.entries()].map(([id, lease]) => {
 		const provenance = byId.get(id) ?? {};
-		const parsed = parseId(id);
+		const parsed = decodeActivationId(id);
 		return {
 			...lease,
 			readThrough: lease.readThrough,
@@ -138,7 +139,7 @@ export function foldLeases(log) {
 
 /** The attempt encoded by the room's four-part activation id, or undefined. */
 export function attemptOf(id) {
-	return parseId(id)?.attempt;
+	return decodeActivationId(id)?.attempt;
 }
 
 export const esc = (s) =>

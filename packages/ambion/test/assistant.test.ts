@@ -15,7 +15,7 @@ import {
 	startRoom,
 	type ToolBundle,
 } from '../src/index.ts';
-import { renderRecord } from '../src/render.ts';
+import { renderRecord } from '../src/seat/render.ts';
 import { fakeClock } from './support/clock.ts';
 import {
 	assistantEnded,

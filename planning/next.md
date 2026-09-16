@@ -1,6 +1,7 @@
 # Next: the work to ship Ambion 0.1.0
 
-Delivery plan, 2026-09-15. Reviewed against `e05bb48` on `origin/main`.
+Delivery plan, 2026-09-15. Reviewed after
+[PR #124](https://github.com/ambionframework/ambion/pull/124).
 [release-0.1.0.md](release-0.1.0.md) defines the positioning, capabilities,
 deployment models, and limits. This file owns implementation work and its
 completion evidence, including the remaining work from earlier plans.
@@ -15,41 +16,42 @@ or verify the release.
 representations and ownership overlaps that require unrelated mechanisms to
 stay synchronized. The main sources of complexity are:
 
-- Executable definitions and durable membership change in one operation.
-- The journal knows about the room's distinction between messages and other facts.
-- Activation authority has several overlapping representations.
-- Room dispatch, recovery, and exchange reads interpret some facts separately.
-- Provider execution and transcript storage extend into unrelated packages.
+- Special assistant membership and selection require separate participation rules.
+- Transports receive broad room and provider interfaces.
+- Provider transcript storage extends into the generic journal package.
+- Audit failures can affect execution outcomes after contributions commit.
+- Some public reads expose mutable facts owned by the room.
 
-**Use 0.1.0 to remove these overlaps.** A smaller exported API is useful, but
-the larger gain comes from having fewer relationships to keep consistent.
+**Build on the merged foundations.** Fixed definitions, normalized tools,
+conditional journal appends, activation purpose, and structured context have
+landed. Preserve their evidence below. Prioritize these remaining changes:
 
-| Order | Change                                             | Main reduction                                       | Scope                |
-| ----- | -------------------------------------------------- | ---------------------------------------------------- | -------------------- |
-| 1     | One collaboration projection and commit path       | Remove competing interpretations and dispatch paths  | Large                |
-| 2     | Separate executable configuration from membership  | Remove binding transactions and seating wrappers     | Medium; breaking API |
-| 3     | Separate the journal, protocol, and Pi integration | Remove domain leakage and broad host interfaces      | Medium–large         |
-| 4     | Finish context, tools, and release contracts       | Remove implicit conversions and ambiguous guarantees | Medium               |
+| Order | Change                                                  | Main reduction                                                  | Scope                           |
+| ----- | ------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------- |
+| 1     | Share seating during ordinary participation             | Remove exclusive selection authority                            | Small first slice; section 5    |
+| 2     | Use ordinary agents for closing assignments             | Remove special membership, `select`, and `summarise`            | Medium; breaking API; section 5 |
+| 3     | Narrow executor dependencies and extract Pi transcripts | Remove broad interfaces and provider types from generic storage | Medium; sections 5–6            |
+| 4     | Finish state ownership and release contracts            | Remove mutable fact leaks and ambiguous failure guarantees      | Sections 7–9                    |
 
-These are four workstreams, not four independent rewrites. Implement them in
-small changes. Each change must delete an old path before it is complete.
+Implement these changes in bounded slices. Temporary paths must have a named
+removal step. Do not introduce a second permanent participation model.
 
 ## 1. Release coverage and current baseline
 
 **Every release capability needs implementation and evidence.** The scope's
 feature identifiers map to the work below.
 
-| Scope                        | Work required before release                                                                            |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
-| F1: agent configuration      | Fixed definitions per run, name-based membership, normalized typed tools                                |
-| F2: rooms and presence       | One projection, immutable participant views, presence recovery procedure                                |
-| F3: concurrent contributions | One commit boundary, exact acknowledgement, steering and retry tests                                    |
-| F4: exchanges and assistant  | Shared completion query, constrained assistant tools, summary-based activation context and human review |
-| F5: persistence              | Generic journal cleanup, uncertain-write recovery, separate audit failures, restart evidence            |
-| F6: tools and workspaces     | Tool normalization, resource/adapter split, workspace behavior verification                             |
-| F7: observation and control  | Ordered notifications, reconnect example, explicit cancellation scope                                   |
-| F8: deployment models        | Node memory/SQLite examples, JSON protocol conformance, accurate Cloudflare reference status            |
-| F9: distribution             | Package extraction, compatibility checks, packed-consumer tests, installation and migration docs        |
+| Scope                        | Work required before release                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| F1: agent configuration      | Fixed definitions per run, name-based membership, normalized typed tools                                       |
+| F2: rooms and presence       | One projection, immutable participant views, presence recovery procedure                                       |
+| F3: concurrent contributions | One commit boundary, exact acknowledgement, steering and retry tests                                           |
+| F4: exchanges and closing    | Shared seating authority, ordinary assistant membership, closing assignments, summary context and human review |
+| F5: persistence              | Generic journal cleanup, uncertain-write recovery, separate audit failures, restart evidence                   |
+| F6: tools and workspaces     | Tool normalization, resource/adapter split, workspace behavior verification                                    |
+| F7: observation and control  | Ordered notifications, reconnect example, explicit cancellation scope                                          |
+| F8: deployment models        | Node memory/SQLite examples, JSON protocol conformance, accurate Cloudflare reference status                   |
+| F9: distribution             | Package extraction, compatibility checks, packed-consumer tests, installation and migration docs               |
 
 **Retain the work already on main.** Awaited startup and snapshots, exchange
 handles, separate discussion and response waits, and checkpoint removal are
@@ -59,9 +61,11 @@ The current storage test harness covers memory and SQLite.
 These are baseline observations, not evidence that the proposed refactors
 pass their release gates. Do not repeat completed changes as new work.
 
-**Keep the assistant's restricted role explicit.** Reject domain tools in its
-definition for 0.1.0. Selection and summary executions receive their room
-tools. Do not silently accept and omit unsupported tools.
+**Simplify assistant participation.** Section 5 plans ordinary agent membership,
+shared seating authority, and one speaking tool. This replaces the earlier
+requirement to reject domain tools on assistant definitions. Closing work
+retains its bounded context and publication rules. These changes remain
+unimplemented; the recorded evidence below describes the existing behavior.
 
 ## 2. One owner for collaboration state
 
@@ -346,7 +350,7 @@ entries produce a diagnostic before they enter the fold. Unknown kinds stay
 outside the vocabulary. Failed validation must not advance the read cursor
 past the malformed entry.
 
-**Review status.** The journal change is prepared for review and merge.
+**Merged:** [PR #122](https://github.com/ambionframework/ambion/pull/122).
 The next structural item is the activation representation in section 5.
 
 **Implementation evidence:**
@@ -370,53 +374,190 @@ async decisions from JavaScript callers, and invalid-history cursor handling.
 
 ### One activation representation
 
-**Use one tagged purpose to determine authority.** Current `ActivationSpec`
-repeats purpose through `cause`, `grant.kind`, `grant.tool`, and optional
-opening or closing data. Encoded IDs repeat some of those fields again.
+**Merged:** [PR #123](https://github.com/ambionframework/ambion/pull/123).
+`ActivationSpec` holds its identity and one tagged `ActivationPurpose`.
+The old `cause`, `grant`, `opening`, and `closing` fields are removed.
 
-Use a discriminated value with the information each purpose requires:
+| Purpose     | Reference        | Additional facts                | Room tool   |
+| ----------- | ---------------- | ------------------------------- | ----------- |
+| `respond`   | Source message   | None                            | `say`       |
+| `select`    | Exchange opening | Person and reserve limit        | `seat`      |
+| `summarize` | Exchange opening | Person and fixed close boundary | `summarise` |
 
-```ts
-type Purpose =
-  | { kind: 'respond'; message: Seq }
-  | { kind: 'select'; exchange: Seq }
-  | { kind: 'summarize'; exchange: Seq };
+**Context progress belongs to the view.** `ActivationView.through` names the
+supplied input boundary. The executor acknowledges it only when the provider
+consumes that input. Summary input keeps its recorded boundary while a later
+exchange runs. Purpose selects both the permitted contribution and room tool.
 
-type Activation = Readonly<{
-  id: string;
-  seat: string;
-  attempt: number;
-  purpose: Purpose;
-}>;
-```
+**One codec owns the durable ID format.** `activation-id.ts` validates and
+encodes the existing `message`, `opened`, and `closed` prefixes. It rejects
+noncanonical IDs and unsafe sequence or attempt numbers. The stored format
+is unchanged. The room resolves a closed ID through its recorded close to
+obtain the exchange's opening position.
 
-This is an internal sketch. An exchange reference uses its opening position.
-Context boundaries come from the validated view and the recorded close.
-The purpose determines permitted contributions and which room tools exist.
+Lease projections retain their recorded IDs. Consumers share the codec when
+they classify recorded attempts. Carrying decoded values through these folds
+remains a possible follow-up; this change adds no identity cache or second
+lease authority.
 
-**Keep deterministic identity, but stop distributing its parser.** Decode and
-validate IDs at journal and protocol boundaries. Inside the kernel, pass the
-canonical activation value. Keep one codec for existing stored IDs.
+**Syntax grants no authority.** The room checks the referenced cause and seat
+eligibility. Claims require pending work or an existing live lease. Renewals,
+releases, views, and contributions require a live lease. The room derives
+purpose again when a contribution reaches its write queue.
 
-The room remains responsible for proving that the referenced cause exists,
-the seat is eligible, and the lease is current. A syntactically valid ID grants
-no authority by itself.
+**Summary requests contain text only.** The room supplies the author,
+recipient, and covered range from the validated purpose. It ignores extra
+client metadata and refuses a second summary for the same exchange. Public
+summary messages keep their existing fields.
 
-Summary submissions should contain the text the executor proposes. The room
-already knows the author, recipient, exchange, and fixed range. Stamp those
-fields there and remove the requirement for the executor to echo them.
+**Implementation evidence:**
+
+- `pnpm check`: 660 tests passed, including 553 core tests and 16 workerd tests.
+- `pnpm chaos`: all 710 expanded crash, takeover, replay, and history tests passed.
+- Regression tests reject malformed IDs, invalid roles, missing causes, and expired leases.
+- Summary tests prove room-owned metadata, duplicate refusal, and fixed context boundaries.
+- Executor tests prove purpose-specific tools and compile-time rejection of removed fields.
+- Participant definitions reject names that cannot produce canonical activation IDs.
+- External releases cannot abandon unclaimed work; another seat cannot settle a summary.
+
+**Subsequent execution work:** PR #124 moved rendering to the executor.
+Participation, narrower interfaces, and separate audit failure remain below.
+
+### Simplify assistant participation and closing work
+
+**Planned; not implemented.** Treat the assistant as an ordinary agent with
+an explicit closing assignment. Give every agent authority to seat supplied
+colleagues. Expose one speaking tool. Keep exchange completion and summary
+coverage as room guarantees.
+
+**Share seating authority.** Ordinary message activations receive reserve
+identities and the `seat` tool. Agents can recruit colleagues when the
+discussion reveals missing expertise. The room validates supplied definitions,
+records the author, and wakes each newly seated agent.
+
+- [ ] Permit seating from every ordinary agent's live activation. Preserve
+      fixed executable definitions, lease validation, and journal attribution.
+- [ ] Return an already-seated result for concurrent requests naming the same
+      colleague. Do not append duplicate membership events or repeat activation.
+      Validate the live activation before accepting this no-op.
+- [ ] Keep consumed-context acknowledgement independent of seating success.
+      Count only new members against seating limits. Bound repeated tool calls.
+      Reject unknown definitions and names belonging to human participants.
+- [ ] Remove the dedicated `select` purpose, selection-only tools, and special
+      opening dispatch after ordinary participation supplies their behavior.
+- [ ] Keep empty rooms valid. To start agent work, the host seats at least one
+      agent whose attention accepts the message. Use existing membership;
+      do not add an opening-recipient API.
+
+Agent-driven unseating is a separate decision. If added, reuse membership
+validation, lease revocation, cancellation, and pending-work settlement.
+Shared seating authority does not establish those removal rules.
+
+**Use `say` for closing publication.** A closing activation receives
+`say({ text })`. The room derives the recipient and source range from the
+recorded closing assignment. Keep the internal summary event and its meaning.
+
+- [ ] Replace the model-facing `summarise` tool with a closing binding of `say`.
+      Keep ordinary speech subject to consumed-context freshness checks.
+- [ ] Preserve the fixed exchange range while later messages arrive. Refuse
+      duplicate publication and writes without the assigned live activation.
+- [ ] Keep closing publication from waking idle agents or holding another
+      exchange open. Preserve existing delivery behavior for active agents.
+- [ ] Preserve summary-based context replacement, original discussion reads,
+      response completion, deliberate silence, retries, and terminal failure.
+- [ ] Keep recipient preferences inside the assigned closing context. Closing
+      publication remains constrained to that exchange and its room tool.
+
+**Remove special assistant membership.** An agent assigned closing work can
+also receive ordinary messages, use its domain tools, and seat colleagues.
+Attention controls ordinary activation. Closing work has its own recorded
+cause, context boundary, and publication authority.
+
+- [ ] Replace the separate assistant definition path with an ordinary agent
+      definition and an optional closing assignment by name.
+- [ ] Remove forced `none` attention, the ordinary-response prohibition, and
+      assistant-only membership restrictions. Define how removal settles any
+      pending closing assignment before allowing it. Settle recorded work
+      explicitly; do not silently reassign its writer.
+- [ ] Preserve one active execution per seat when ordinary work and closing
+      work overlap. Exclude closing execution from discussion completion;
+      keep queued ordinary work visible to that completion query.
+- [ ] Keep at most one assigned writer per close. Record the assignment so
+      restart and response queries agree about outstanding work.
+
+**Keep activation causes without a role framework.** The current code has no
+`Role` type. Its distinction lives in `ActivationPurpose` and assistant policy.
+Retain ordinary message work and exchange-closing work. Remove `select` and
+avoid a generic role registry or capability configuration system.
+
+- [ ] Update activation derivation, context selection, tool binding, routing,
+      and completion together. Remove obsolete assistant-specific branches.
+- [ ] Define an explicit migration or version rejection for recorded assistant
+      compositions and `opened` activation IDs. Do not silently reinterpret
+      old histories or retain a permanent compatibility execution path.
+- [ ] Verify concurrent seating, empty-roster startup, an addressable closing
+      writer, removal during pending work, and closing work overlapping later
+      discussion. Retain summary isolation and recovery tests.
+- [ ] Update examples, public contracts, and migration notes after implementation.
+
+**Delivery order:**
+
+1. Add shared seating to ordinary activations. Keep selection until its
+   replacement is ready. Test concurrent requests and retries after lost
+   acknowledgements against memory, SQLite, and the JSON host boundary.
+2. Bind `say` to closing publication. Preserve the internal summary event,
+   fixed source range, recipient isolation, and response completion.
+3. Move the closing writer into the ordinary agent catalog and membership.
+   Settle startup, removal, overlapping work, and history migration together.
+   Remove `select`, opening dispatch, and the separate assistant definition.
+4. Narrow executor dependencies after these participation rules stabilize.
+
+**Next implementation item: shared seating.** An ordinary agent receives the
+reserve identities and can call `seat` alongside `say` and its domain tools.
+Two agents requesting the same colleague produce one membership event and
+one activation. A retry returns an explicit already-seated result. Neither
+operation acknowledges context that the provider has not consumed.
+
+**Done when:** ordinary agents share seating and speech operations, and only
+closing work retains the extra context and publication constraints. Replay,
+response waits, source review, and summary compaction keep their guarantees.
 
 ### Separate protocol data from provider execution
 
-**Have the room return structured collaboration context.** The protocol should
-carry the permitted purpose, participant facts, selected messages, and their
-context boundary. Pi integration renders these values into prompts.
+**Merged:** [PR #124](https://github.com/ambionframework/ambion/pull/124).
+
+**The protocol carries structured collaboration context.** The view contains
+the permitted purpose, participant facts, selected messages, and their context
+boundary. `seat/render.ts` renders these values with the executor's
+local definition. The view no longer carries a model name or rendered strings.
+
+**One participant list supplies public facts.** Human entries include presence
+and reading progress. Selection alone receives reserve identities. A summary
+alone receives its recipient's reading preferences. Nested data is detached
+from the room projection before an executor receives it.
+Context messages omit stored reading preferences. Audit session IDs remain
+on the public participant query and stay outside collaboration context.
+
+**Rendering stays pure and has one input contract.** The renderer reads the
+activation view and local definition. The former `RoomView`, `PersonView`, and
+`SeatSpeaking` representations are removed. Summary compaction, presence
+dividers, and consumed-context acknowledgement keep their existing behavior.
+
+**Implementation evidence:**
+
+- `pnpm check`: 665 tests passed, including 558 core tests and 16 workerd tests.
+- `pnpm chaos`: all 710 expanded recovery tests passed.
+- All three purposes pass JSON round trips with no undefined fields.
+- Tests cover nested snapshot isolation and reserve, preference, and summary boundaries.
+- A before/after comparison produced identical prompts for response, selection, and summary.
+- Luna/High's adversarial review found no remaining blockers.
 
 Model resolution, private agent instructions, Pi messages, tool adaptation, and
 transcript writing belong with the executor. The room does not need a model
 catalog or a provider stream to decide whether a contribution can commit.
 
-The current [`RunningRoom`](../packages/ambion/src/host/runtime.ts) exposes
+**After participation: narrow the executor dependencies.** The current
+[`RunningRoom`](../packages/ambion/src/host/runtime.ts) exposes
 room calls, model services, transcripts, definitions, notifications, and
 eviction to transports. Replace that broad interface with the existing three
 room calls and separately supplied executor dependencies.
@@ -562,8 +703,8 @@ ownership boundaries.
 **Summaries replace covered source messages in later activations.** Keep this
 existing behavior for 0.1.0. Once a closed exchange has a summary, agents
 continue from that summary and their domain tools. Closure without a summary
-does not itself replace source messages. Selection reads the opening context;
-summary execution reads its fixed discussion range.
+does not itself replace source messages. Summary execution reads its fixed
+range. Until section 5 removes selection, selection reads the opening context.
 
 **Human participants can review the original exchange.** Keep all source
 messages in the journal and expose the fixed discussion through
@@ -596,41 +737,41 @@ place that enforces a room rule.
 room startup, `readRoom`, exchange handles, and separate discussion and
 response waits. Checkpointing is already removed. Preserve those decisions.
 
-### Stage 1: establish the kernel boundary
+### Completed foundations
 
-- Centralize activation identity. Exchange completion and delivery interpretation
-  now share their respective rules across execution and replay.
-- Normal operation and recovery share dispatch. Steering has a separate
-  transport operation with no fallback activation identity.
-- Isolate mutable host resources from immutable collaboration facts.
-- Protect returned values and validate contributions at commit.
+The shared projection and dispatch rules, fixed definitions, normalized tools,
+conditional journal appends, activation purpose, and structured context are
+implemented. Sections 2–5 and 7 retain their behavior and test evidence.
 
-**Evidence:** the same history produces the same membership, pending work,
-exchange boundaries, and responses. Exercise steering, silence, failures,
-removal, and summary work overlapping a later exchange.
+### Stage 1: simplify participation
 
-### Stage 2: simplify configuration and journal writes
+Follow section 5's delivery order: shared seating, closing publication through
+`say`, then ordinary membership with an optional closing assignment. Remove
+selection and special opening dispatch when ordinary participation replaces them.
 
-- Introduce fixed definitions per run and name-based membership operations.
-- Remove binding transactions, seating wrappers, and duplicate definition lists.
-- Replace journal `commit`/`write` distinctions with one conditional operation.
-- Remove room journal inheritance and the duplicate freshness mechanism.
+**Evidence:** concurrent seating records one membership change. Restart,
+writer removal, and overlapping ordinary and closing work preserve completion.
+Summary boundaries, recipient preferences, and source review stay intact.
 
-**Evidence:** duplicate delivery, uncertain append, restart before dispatch,
-and writer replacement preserve the existing durability guarantees. Freshness
-still advances on relevant messages, not lease renewals. Resume preserves
-membership. Unknown definitions fail before execution starts.
+### Stage 2: isolate execution and extract transcript storage
 
-### Stage 3: isolate execution and extract transcript storage
-
-- Move provider rendering and execution dependencies into Pi integration.
 - Narrow transport dependencies and separate protocol types from stored facts.
 - Extract `pi-journal` and separate audit failure from execution failure.
-- Normalize tools and isolate workspace binding.
+- Keep workspace resources separate from executor tool binding.
 
 **Evidence:** run the same scripted collaboration in process and through
 Cloudflare's JSON boundary. Audit failure after a committed answer cannot
 restart reasoning by itself. Context acknowledgement remains exact.
+
+### Stage 3: finish state ownership and recovery
+
+- Isolate mutable host resources from immutable collaboration facts.
+- Protect returned values and validate contributions at commit.
+- Finish the recovery procedures and failure cases in section 9.
+
+**Evidence:** returned values cannot mutate room state. The same recorded
+history produces the same membership, pending work, exchange boundaries,
+and responses. Recheck uncertain appends, removal, retries, and writer takeover.
 
 ### Stage 4: make the release explain itself
 
@@ -780,9 +921,9 @@ consumer or a measured limitation.
 | Deferred work                                                          | Reason and condition for reconsideration                                                                             |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Automatic roster thinning, agent self-removal, attention-only updates  | Define in-flight cancellation and host ownership first; revisit when measured participation costs justify new policy |
-| Preferences that steer specialist work; an addressable assistant       | Preferences currently shape the final response; broader authority needs explicit context and routing rules           |
-| Assistant roster presentation and token cost                           | Measure the single-assistant case; presentation changes alone do not justify a new participation model               |
-| Generic roles, multiple summary writers, room-level writers            | No second required role establishes the conflict or composition rules                                                |
+| Preferences that steer specialist work                                 | Preferences remain scoped to closing work; broader use needs explicit context rules                                  |
+| Assistant roster presentation and token cost                           | Measure after the participation simplification in section 5; additional presentation policy remains deferred         |
+| Generic roles, multiple summary writers, room-level writers            | Section 5 retains one closing assignment; no consumer establishes broader conflict or composition rules              |
 | Credentials broker or sidecar proxy                                    | Hosts and domain tools own credentials for 0.1.0; extract only for an actual shared service requirement              |
 | OS-user, container, or remote workspace backends                       | Stronger isolation needs provisioning, identity, teardown, and failure contracts                                     |
 | Distributed workspace ownership and effect fencing                     | Local resource serialization does not establish cross-host lifecycle ownership                                       |
@@ -804,21 +945,21 @@ consumer or a measured limitation.
 numbers below provide traceability. Their old measurements and diagnoses are
 not carried forward as current facts.
 
-| Previous items                                                            | Disposition                                                                                                     |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 2, 3, 27: folds, history growth, room coupling                            | Sections 2–6 own structural work; section 9 owns measurement; bounded history remains deferred                  |
-| 4: eager provider loading                                                 | Already addressed on main; retain an import regression check                                                    |
-| 6, 7, 9, 10, 11, 12, 44: dependencies, tests, packaging, platform, docs   | Section 9 owns the remaining release tasks; retire stale paths and export claims                                |
-| 13–17: preferences, roster changes, assistant participation               | Deferred in section 10; current assistant constraints remain in scope                                           |
-| 20, 25, 51: roles and multiple writers                                    | Deferred; the current scope has one explicit assistant role                                                     |
-| 21–24: credentials, shell behavior, isolation, Pi foundation              | Fix or verify shell behavior in section 9; keep host credential ownership and Pi Agent; defer broader machinery |
-| 26: runtime-wide name collisions                                          | The current host has room-local definitions; retain collision and remote-binding tests, not the old diagnosis   |
-| 28–30: presence recovery, exhausted summaries, inherited leases           | Host recovery procedures in section 9; manual summary reset deferred                                            |
-| 32, 33, 36: unknown names, shrinking, clock/storage faults                | Test current missing-room and clock behavior; defer shrinkers and obsolete JSONL fault work                     |
-| 37–41: tool effects, remote configuration, runners, workspaces, listeners | Sections 5–6 and 9 establish boundaries and recovery tests; distributed services remain deferred                |
-| 42, 50, 53: crash and Cloudflare test failures                            | Reproduce on current code and resolve with ordering evidence in section 9                                       |
-| 48: model-visible message numbering                                       | Previously completed; preserve its behavior through the rendering refactor                                      |
-| 49: concurrent JSONL room writers                                         | The current room harness uses memory/SQLite; retire the obsolete adapter diagnosis                              |
+| Previous items                                                            | Disposition                                                                                                              |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 2, 3, 27: folds, history growth, room coupling                            | Sections 2–6 own structural work; section 9 owns measurement; bounded history remains deferred                           |
+| 4: eager provider loading                                                 | Already addressed on main; retain an import regression check                                                             |
+| 6, 7, 9, 10, 11, 12, 44: dependencies, tests, packaging, platform, docs   | Section 9 owns the remaining release tasks; retire stale paths and export claims                                         |
+| 13–17: preferences, roster changes, assistant participation               | Section 5 plans shared seating and ordinary assistant membership; broader preferences and removal policy remain deferred |
+| 20, 25, 51: roles and multiple writers                                    | Section 5 removes special membership and selection purpose; generic roles and multiple writers remain deferred           |
+| 21–24: credentials, shell behavior, isolation, Pi foundation              | Fix or verify shell behavior in section 9; keep host credential ownership and Pi Agent; defer broader machinery          |
+| 26: runtime-wide name collisions                                          | The current host has room-local definitions; retain collision and remote-binding tests, not the old diagnosis            |
+| 28–30: presence recovery, exhausted summaries, inherited leases           | Host recovery procedures in section 9; manual summary reset deferred                                                     |
+| 32, 33, 36: unknown names, shrinking, clock/storage faults                | Test current missing-room and clock behavior; defer shrinkers and obsolete JSONL fault work                              |
+| 37–41: tool effects, remote configuration, runners, workspaces, listeners | Sections 5–6 and 9 establish boundaries and recovery tests; distributed services remain deferred                         |
+| 42, 50, 53: crash and Cloudflare test failures                            | Reproduce on current code and resolve with ordering evidence in section 9                                                |
+| 48: model-visible message numbering                                       | Previously completed; preserve its behavior through the rendering refactor                                               |
+| 49: concurrent JSONL room writers                                         | The current room harness uses memory/SQLite; retire the obsolete adapter diagnosis                                       |
 
 **Track completion through evidence.** Mark a task complete only after its
 implementation and relevant checks land. Keep product scope in

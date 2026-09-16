@@ -1,8 +1,8 @@
 /** The recipients a message reaches, derived from journal facts. */
 
+import { decodeActivationId } from '../activation-id.ts';
 import type { Message, Seq } from '../types.ts';
 import type { LeaseHold } from '../wire.ts';
-import { parseId } from './lease.ts';
 import { atWork as atWorkRule } from './rules.verified.ts';
 
 export interface MessageDelivery {
@@ -25,9 +25,9 @@ export function messageDelivery(
 	const wakes = new Set(message.wakes ?? []);
 	const steers = new Map<string, string>();
 	for (const lease of leases.values()) {
-		const parsed = parseId(lease.id);
+		const parsed = decodeActivationId(lease.id);
 		if (
-			parsed?.cause === 'message' &&
+			parsed?.source === 'message' &&
 			parsed.seat !== message.from &&
 			!wakes.has(parsed.seat) &&
 			atWork(lease, message.seq)

@@ -21,12 +21,15 @@ export { runningRoom } from './host/runtime.ts';
 export type { SeatContext } from './seat/seat.ts';
 export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type {
+	ActivationPurpose,
 	ActivationSpec,
 	ActivationView,
 	Close,
+	CollaborationContext,
 	CommitRequest,
 	CommitResult,
 	Composition,
+	ContextParticipant,
 	EndReason,
 	Fence,
 	Intent,

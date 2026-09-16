@@ -16,8 +16,8 @@
  * - **Whether it left a mark.** `spoke` is the one thing the room asks a
  *   finished activation.
  *
- * The room renders what the activation reads and hands it over as a view;
- * the seat side builds the model, the prompt and the tools from it, runs it,
+ * The room supplies structured facts as a view;
+ * the seat side renders the prompt, resolves the model and binds the tools, runs it,
  * and reads again while the room keeps moving underneath.
  *
  * **Three spans, and only two are ours.** Pi has a *turn* — one request to a
@@ -36,12 +36,12 @@ import { PiContext } from './pi.ts';
 
 /** What only the seat side can give an activation: the room's view, and a model over it. */
 export interface ActivationHost {
-	/** What this activation reads, as the room renders it now. */
+	/** What this activation reads, as structured room facts. */
 	view(): Promise<ViewResponse>;
 	/** Renew the lease. The answer says how far the record has moved. */
 	renew(readThrough: Seq): Promise<LeaseResponse>;
-	/** Build the model over the view, with the tool the view names. */
-	build(view: ActivationView, activation: Activation): Promise<Agent>;
+	/** Build the model over the view, with the tool its purpose names. */
+	build(view: ActivationView, activation: Activation): Promise<{ agent: Agent; context: string }>;
 	/** Keep what the model did, in the seat's own downstream session. */
 	persist(agent: Agent): Promise<void>;
 	emit(event: RoomNotification): void;
@@ -142,18 +142,19 @@ export class Activation {
 			// The fresh view becomes acknowledged only when Pi sends it to a provider.
 			this.held = [];
 			this.providerStarted = false;
-			const agent = await this.host.build(view, this);
+			const built = await this.host.build(view, this);
 			if (this.cancelled) return false;
+			const { agent, context } = built;
 			this.agent = agent;
 			agent.subscribe((event) => this.note(event));
-			await agent.prompt(this.context.initial(view.spec.through, view.context, this.host.now()));
+			await agent.prompt(this.context.initial(view.through, context, this.host.now()));
 			await this.host.persist(agent);
 			const failure = failureOf(agent);
 			if (failure) return this.broke(failure);
 			// An aborted activation stays cancelled, and one that does not rebuild
 			// is a single pass whatever landed: a summarising activation answers its
 			// fixed closed exchange.
-			if (this.cancelled || view.spec.grant.kind !== 'say') return false;
+			if (this.cancelled || view.spec.purpose.kind !== 'respond') return false;
 			// Awaited here, so a renewal that fails is caught below and not returned as a rejection.
 			return await this.needsRefresh(agent);
 		} catch (error) {

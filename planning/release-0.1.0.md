@@ -11,9 +11,9 @@ people they serve.** It gives domain agents a shared journal, rules for
 participation, and a reliable boundary for contributing to a conversation.
 
 An agent owns its instructions, model, tools, and domain expertise. A room
-lets those agents work together. An optional assistant selects specialists
-and consolidates their work for a person. Applications own their domain data
-and the resources their tools use.
+lets those agents work together and seat supplied colleagues. An optional
+closing assignment asks one agent to consolidate their work for a person.
+Applications own their domain data and the resources their tools use.
 
 **The agent is the unit of modularity.** A scheduling agent and an inventory
 agent can have different owners, models, tools, and evaluations. Each can
@@ -38,7 +38,7 @@ A question such as “Can we promise a Thursday delivery?” can require several
 agents. Inventory checks stock. Scheduling checks capacity. Compliance checks
 constraints. Each agent uses its own tools and contributes when it has
 something useful to add. The person receives the resulting discussion and,
-when appropriate, an assistant's summary.
+when appropriate, a summary from the assigned agent.
 
 **Rooms persist across individual questions.** People arrive and leave.
 Specialists join and leave the active membership. Later messages can change
@@ -85,7 +85,7 @@ person enters a room and sends a message
      remaining discussion work reaches completion
                   |
                   v
-       exchange closes; assistant may summarize
+       exchange closes; assigned agent may summarize
 ```
 
 ## Differentiated capabilities
@@ -93,16 +93,16 @@ person enters a room and sends a message
 **The distinction comes from the combination of guarantees.** These mechanisms
 are familiar individually. Ambion applies them consistently to collaboration.
 
-| Capability                             | What it gives the application                                                   |
-| -------------------------------------- | ------------------------------------------------------------------------------- |
-| Journal-driven coordination            | Recovery uses the same facts that drive live execution                          |
-| Freshness checked at commit            | An agent must reconsider speech when relevant unread context has arrived        |
-| Attention plus mid-execution steering  | Idle agents activate selectively; active agents receive new context             |
-| Silence as a valid result              | A consulted agent can finish without generating an acknowledgement              |
-| Completion derived from remaining work | An exchange closes without guessing which speaker will be last                  |
-| Constrained assistant duties           | Specialist reasoning remains separate from selection and human-facing synthesis |
-| Recorded membership and presence       | Participation changes remain ordered and recoverable                            |
-| One protocol across hosts              | Process placement can change while collaboration rules stay consistent          |
+| Capability                             | What it gives the application                                            |
+| -------------------------------------- | ------------------------------------------------------------------------ |
+| Journal-driven coordination            | Recovery uses the same facts that drive live execution                   |
+| Freshness checked at commit            | An agent must reconsider speech when relevant unread context has arrived |
+| Attention plus mid-execution steering  | Idle agents activate selectively; active agents receive new context      |
+| Silence as a valid result              | A consulted agent can finish without generating an acknowledgement       |
+| Completion derived from remaining work | An exchange closes without guessing which speaker will be last           |
+| Explicit closing assignment            | An ordinary agent publishes a response for one fixed exchange            |
+| Recorded membership and presence       | Participation changes remain ordered and recoverable                     |
+| One protocol across hosts              | Process placement can change while collaboration rules stay consistent   |
 
 ## Functional scope
 
@@ -117,9 +117,10 @@ The complete set of executable definitions is supplied at startup or resume.
 Membership can change during the run. Installing a previously unknown
 definition requires a new run with an expanded set of definitions.
 
-The assistant is optional and has one explicit role. Its selection and summary
-executions receive the corresponding room tools. It does not receive ordinary
-specialist authority or arbitrary domain tools in 0.1.0.
+An ordinary agent can receive an optional closing assignment. It retains its
+instructions, domain tools, and ordinary participation. Closing execution
+receives bounded context and a room publication tool. No separate agent role
+or generic role registry is required.
 
 ### F2. Shared rooms, participation, and presence
 
@@ -132,14 +133,16 @@ Attention controls what activates an idle agent: direct messages, room speech,
 or presence changes. Keep this policy separate from execution activity.
 
 Hosts supply all executable definitions in `agents`. The optional `seats` map
-selects initial members and attention. Unseated definitions form the reserve
-for assistant selection. Reserve selection uses `broadcast` attention;
-explicit host seating can choose attention.
+selects initial members and attention. Unseated definitions form the reserve.
+Every participating agent can seat reserve colleagues with `broadcast`
+attention; explicit host seating can choose attention. Empty rooms are valid.
+Agent work requires a seated agent whose attention accepts the message.
+Hosts configure initial membership or seat an agent through the room API.
 
 People have identities and optional response preferences. A visit determines
-who speaks and when that person is present. Preferences shape the assistant's
-response. Summaries shaped for people also compact later activation context.
-The original discussion remains available for human review.
+who speaks and when that person is present. Preferences shape the assigned
+agent's closing response. Summaries shaped for people also compact later
+activation context. The original discussion remains available for human review.
 
 ### F3. Concurrent, current contributions
 
@@ -158,7 +161,7 @@ remain distinguishable from deliberate silence in host diagnostics.
 Domain tools may run before a contribution commits. Conversation freshness
 does not make those external effects transactional.
 
-### F4. Exchanges and an optional assistant
+### F4. Exchanges and optional closing assignments
 
 **Provide durable handles for a discussion and its response.** One room has
 one open discussion at a time, with an owner established by its opening
@@ -169,9 +172,22 @@ The exchange closes when its required discussion work has finished or reached
 the applicable terminal state. A recorded close fixes its range. Closing
 certifies the discussion boundary, not the correctness of every answer.
 
-The assistant can select reserve specialists when an exchange opens. When
-the closed discussion requires consolidation, it can write a summary for the
-owner. The summary retains its source range even if a later exchange starts.
+Agents can seat reserve specialists during ordinary discussion. When the
+closed discussion requires consolidation, one assigned agent can publish a
+summary for the owner through `say`. The room supplies the recipient and
+covered range. The summary retains its source range even if a later exchange
+starts.
+
+**Closing work has explicit publication rules.** Its publication wakes no idle
+agents and does not hold another exchange open. It retains an internal summary
+event for context replacement and response completion. The assigned agent can
+also participate in ordinary discussion under its configured attention.
+Closing execution receives only its room publication tool. Domain tools and
+seating remain available during that agent's ordinary participation.
+
+This participation simplification remains planned. Section 5 of
+[next.md](next.md#simplify-assistant-participation-and-closing-work) owns the
+implementation, migration, and verification tasks.
 
 `exchange.messages()` waits for the fixed discussion. `exchange.response()`
 waits for its summary or a terminal result without one. An application can

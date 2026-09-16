@@ -15,9 +15,9 @@
  */
 
 import type { JournalEntry } from '@ambionframework/journal';
+import { decodeActivationId } from '../../src/activation-id.ts';
 import type { Clock, Message, Seq } from '../../src/index.ts';
 import type { RoomState } from '../../src/room/fold.ts';
-import { parseId } from '../../src/room/lease.ts';
 import type { LeaseChange } from '../../src/transport.ts';
 
 export type Outcome = 'ok' | 'fail' | 'info';
@@ -252,9 +252,9 @@ function seqs(stored: Checked['stored']): string[] {
 
 /** What an id is an attempt at, without the attempt number: the cause and where it sits. */
 function owedBy(id: string): string | undefined {
-	const parsed = parseId(id);
+	const parsed = decodeActivationId(id);
 	if (parsed === undefined) return undefined;
-	return `${parsed.cause}:${parsed.position}:${parsed.seat}`;
+	return `${parsed.source}:${parsed.position}:${parsed.seat}`;
 }
 
 /** One activation the room owes runs at a time: the next claims only after the last ended. */

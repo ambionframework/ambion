@@ -77,8 +77,8 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   `packages/journal` owns the journal: the queue, the fence and the envelope
   every entry shares. Ambion owns only participants-as-values and
   the room. A third concern is a
-  design failure: push it into a dependency or drop it. `render.ts` formats
-  participant context. `assistant.ts` owns assistant policy and guidance.
+  design failure: push it into a dependency or drop it. `seat/render.ts` formats
+  structured collaboration context for Pi. `assistant.ts` owns assistant policy and guidance.
   Both stay pure and stateless. What the room says to a developer stays with
   the mechanism that says it.
 - The core is laid out in layers (`docs/toolchain.md` §1), and an import

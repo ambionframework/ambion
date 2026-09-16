@@ -6,7 +6,7 @@ import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import type { AgentDefinition, Message, RoomNotification } from './types.ts';
+import type { Message, RoomNotification } from './types.ts';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -43,8 +43,6 @@ export interface Answering {
 	state(): RoomState;
 	/** The seats live now, by name, with the ids that make them live. */
 	live(state: RoomState): Map<string, string[]>;
-	/** The definition a seat runs, off the names this room knows. */
-	definition(seat: string): AgentDefinition | undefined;
 	emit(event: RoomNotification): void;
 	/** One operation on the room's commit queue, with the wakes the room routes. */
 	write(commit: CommitRequest): Promise<Message>;
@@ -69,9 +67,7 @@ export async function answerView(room: Answering, id: string): Promise<ViewRespo
 	if (seat === undefined) return stale('the lease ended');
 	const spec = activationSpec(id, state);
 	if (spec === undefined || spec.seat !== seat) return stale('the activation has no current grant');
-	const def = room.definition(seat);
-	if (def === undefined) return stale('the seat left the roster');
-	return { view: viewOf(spec, def, facts(room, state)) };
+	return { view: viewOf(spec, facts(room, state)) };
 }
 
 /** What a view is built from: the fold, and what the room holds beside it. */
@@ -127,15 +123,16 @@ function refused(room: Answering, seat: string, refusal: Refusal): CommitResult 
 // -- lease --------------------------------------------------------------------
 
 /**
- * A claim, a renewal or a release. A claim or a renewal needs the seat
- * on the roster; a release is answered from the fold, whatever the room's
- * state, and the room hears how the activation went.
+ * A claim, renewal, or release requires the seat on the roster. A release
+ * requires a live lease and a valid purpose. Room control ends unclaimed
+ * work directly when it revokes or abandons that work.
  */
 export async function answerLease(room: Answering, lease: LeaseRequest): Promise<LeaseResponse> {
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
+	const state = room.state();
 	const seat = seatOf(lease.activation);
-	if (seat === undefined || !onRoster(room.state(), seat)) {
+	if (seat === undefined || !onRoster(state, seat)) {
 		return stale('the seat is not on the roster');
 	}
 	switch (lease.operation) {
@@ -144,7 +141,7 @@ export async function answerLease(room: Answering, lease: LeaseRequest): Promise
 		case 'renew':
 			return room.renew(lease.activation, lease.readThrough);
 		case 'release':
-			return release(room, lease);
+			return release(room, lease, state);
 		default:
 			return stale('the lease operation is not known');
 	}
@@ -153,7 +150,13 @@ export async function answerLease(room: Answering, lease: LeaseRequest): Promise
 async function release(
 	room: Answering,
 	lease: Extract<LeaseRequest, { operation: 'release' }>,
+	state: RoomState,
 ): Promise<LeaseResponse> {
+	if (
+		activationSpec(lease.activation, state) === undefined ||
+		liveSeatOf(room, lease.activation, state) === undefined
+	)
+		return stale('the lease ended');
 	let ended: boolean;
 	try {
 		ended = await room.end(lease.activation, lease.reason, lease.readThrough);

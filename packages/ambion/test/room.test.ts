@@ -783,7 +783,7 @@ describe('startRoom', () => {
 			await room.commit({
 				activation: 'message:4:solo:1',
 				key: 'fresh-valid',
-				readThrough: opened.view.spec.through,
+				readThrough: opened.view.through,
 				intent: { kind: 'said', text: 'valid' },
 			}),
 		).toMatchObject({ committed: { text: 'valid' } });

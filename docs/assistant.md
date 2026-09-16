@@ -17,7 +17,7 @@ remains pending in the [delivery plan](../planning/next.md).
 
 The code lives in [`assistant.ts`](../packages/ambion/src/assistant.ts),
 [`transition.ts`](../packages/ambion/src/room/transition.ts), and
-[`render.ts`](../packages/ambion/src/render.ts). Read [agent.md](agent.md),
+[`render.ts`](../packages/ambion/src/seat/render.ts). Read [agent.md](agent.md),
 [exchange.md](exchange.md), and [presence.md](presence.md) first.
 
 ---
@@ -191,9 +191,9 @@ The delivery projection excludes summary activations from implicit steering,
 so later messages cannot enter that draft's model context.
 
 **The room checks authority at publication.** A summary requires a live
-`closed` activation whose specification grants `summarise` for the recorded
-close. Its author must be the close's
-writer, its recipient must be the owner, and its range must match exactly.
+activation with the `summarize` purpose for the recorded close. Its author
+must be that close's writer. The executor submits text; the room stamps the
+owner as recipient and the close as the covered range.
 The room refuses a second summary for that exchange. Retrying the same
 journal key returns the original commit through journal idempotency.
 
@@ -431,7 +431,7 @@ be constant. One rule decides whether the assistant is still an assistant:
 
 §11 enforces the waking half in one line, because the guard is on the
 author, whatever it wrote, with the one exception §11 names. The rest the
-activation specification enforces: `opened` grants `seat` and `closed` grants
+activation purpose enforces: `select` permits `seat` and `summarize` permits
 `summarise`, and an activation binds one tool. A tool the definition brings
 reaches no model, because the assistant wakes for the room's own events
 alone.
@@ -718,7 +718,7 @@ document makes loudly:
   opens an exchange and owns it. §3.
 - A later question leaves an active summary's input and range unchanged. §5.
 - Separate exchanges for the same person each keep their own summary. §5.
-- Publication rejects an incorrect writer, recipient, range, or duplicate. §5.
+- Publication validates the writer, stamps the recipient and range, and rejects duplicates. §5.
 - An activation that stands down without writing is owed nothing for it. §14.
 - An activation that fails outright leaves the summary owed, and the room
   drafts again when the backoff passes. §16.

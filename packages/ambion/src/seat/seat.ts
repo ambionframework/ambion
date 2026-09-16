@@ -12,7 +12,7 @@
  * seat rather than about the room: every message has a reach, and a seat
  * wakes when its attention is at least that wide. The seat's own actor: it
  * takes a wake, claims the lease, reads the room's view, builds the Pi
- * `Agent` over it with the tools the view names (`tools.ts`), runs it,
+ * `Agent` over it with the tool its purpose permits (`tools.ts`), runs it,
  * renews the lease while it runs, and releases the lease when it stops.
  * And the transport that puts every seat in the room's own process. What
  * the actor knows of the room, it learns through three calls (`wire.ts`).
@@ -26,11 +26,11 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { RunningRoom, Runtime, Transport } from '../host/runtime.ts';
-import { renderLine } from '../render.ts';
 import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
 import { seatSessionId } from '../types.ts';
 import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../wire.ts';
 import { Activation, persistTurns } from './activation.ts';
+import { renderActivation, renderLine } from './render.ts';
 import { binding, toolsFor } from './tools.ts';
 
 // -- the actor ----------------------------------------------------------------
@@ -286,28 +286,33 @@ export class SeatActor implements SeatPort {
 	}
 
 	/**
-	 * The model over the view: the prompt the room rendered, the model the
-	 * definition names, the tools. The stream function tells the activation
+	 * The model over the view: the executor renders the prompt, resolves the
+	 * definition's model, and binds the permitted tools. The stream function tells the activation
 	 * when the model is asked, so a steer never joins the request it lands during.
 	 */
-	private async build(view: ActivationView, activation: Activation): Promise<PiAgent> {
+	private async build(
+		view: ActivationView,
+		activation: Activation,
+	): Promise<{ agent: PiAgent; context: string }> {
 		const def = this.context.definition;
 		if (view.spec.seat !== def.name)
 			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
+		const rendered = renderActivation(view, def);
 		const stream = this.context.stream;
-		return new Agent({
+		const agent = new Agent({
 			streamFn: (model, context, options) => {
 				activation.providerRequestStarted(context.messages);
 				return stream(model, context, options);
 			},
 			initialState: {
-				systemPrompt: view.systemPrompt,
-				model: await this.context.model(view.model, def.name),
+				systemPrompt: rendered.systemPrompt,
+				model: await this.context.model(def.model, def.name),
 				thinkingLevel: 'off',
 				tools: toolsFor(view, def, binding(activation, this.room)),
 				messages: [],
 			},
 		});
+		return { agent, context: rendered.context };
 	}
 }
 

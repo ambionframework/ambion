@@ -7,40 +7,21 @@
  * the record it reads at each activation, and the one line that tells it what
  * this activation is for. All of that is here.
  *
- * Every function is pure. It takes a `RoomView` — a picture of the room, not
- * the room — and returns text, so what a participant reads can be built,
+ * Every function is pure. It takes an activation view, not the room, and
+ * returns text, so what a participant reads can be built,
  * diffed and tested without starting anything. The room's mechanics hold no
  * sentences, and this file holds no state.
  */
-import { assistantAction, assistantDuties, assistantPolicy } from './assistant.ts';
-import { SAY } from './define.ts';
-import type { AgentSeatInfo, Attention } from './types.ts';
-import {
-	isSpoken,
-	isSummary,
-	type Message,
-	type PresenceStatus,
-	type SeatInfo,
-	type Seq,
-	type SummaryMessage,
-} from './types.ts';
-import type { ActivationSpec } from './wire.ts';
+import { assistantAction, assistantDuties, assistantPolicy } from '../assistant.ts';
+import type { AgentDefinition, Attention } from '../types.ts';
+import { isSpoken, isSummary, type Message, type Seq, type SummaryMessage } from '../types.ts';
+import type { ActivationView, ContextParticipant } from '../wire.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** What an agent needs to know about one person, at one activation. */
-export interface PersonView {
-	name: string;
-	identity: string;
-	presence: PresenceStatus;
-	/** When their presence last changed, ISO. Absent before their first visit. */
-	changedAt?: string;
-	/** Where they stopped reading, and how much has landed since. */
-	since: Seq | undefined;
-	unseen: number;
-}
+type HumanContextParticipant = Extract<ContextParticipant, { kind: 'human' }>;
 
 /** A gap a person can read, not a duration a machine can parse. */
 function ago(at: string, now: number): string {
@@ -126,7 +107,7 @@ function blocks(record: readonly Message[]): Block[] {
  */
 export function renderRecord(
 	record: readonly Message[],
-	people: PersonView[],
+	people: readonly HumanContextParticipant[],
 	now: number,
 ): string {
 	if (record.length === 0) return '(the record is empty)';
@@ -154,7 +135,7 @@ function divide(block: Block, dividers: Map<Seq, string[]>): string[] {
 }
 
 /** Seq to the people whose divider sits right after it. */
-function unseenDividers(people: PersonView[]): Map<Seq, string[]> {
+function unseenDividers(people: readonly HumanContextParticipant[]): Map<Seq, string[]> {
 	const dividers = new Map<Seq, string[]>();
 	for (const person of people) {
 		if (person.presence === 'absent' || person.since === undefined || person.unseen === 0) continue;
@@ -173,7 +154,7 @@ const ATTENTION_NOTE: Record<Attention, string> = {
 	presence: 'watches arrivals',
 };
 
-function renderAgents(seats: SeatInfo[]): string {
+function renderAgents(seats: readonly ContextParticipant[]): string {
 	const agents = seats.filter((seat) => seat.kind === 'agent');
 	return agents
 		.map((seat) => `- ${seat.name} (${seatNotes(seat).join(', ')}): ${seat.identity}`)
@@ -181,7 +162,7 @@ function renderAgents(seats: SeatInfo[]): string {
 }
 
 /** How a seat is reading, the way `notes` says how a person is reading. */
-function seatNotes(seat: AgentSeatInfo): string[] {
+function seatNotes(seat: Extract<ContextParticipant, { kind: 'agent' }>): string[] {
 	const parts: string[] = [seat.status];
 	const note = ATTENTION_NOTE[seat.attention];
 	if (note) parts.push(note);
@@ -190,14 +171,14 @@ function seatNotes(seat: AgentSeatInfo): string[] {
 }
 
 /** Who the room knows, how they are reading, and what they have not read. */
-function renderPeople(people: PersonView[], now: number): string {
+function renderPeople(people: readonly HumanContextParticipant[], now: number): string {
 	if (people.length === 0) return 'Nobody has been in this room.';
 	return people
 		.map((person) => `- ${person.name} (${notes(person, now)}): ${person.identity}`)
 		.join('\n');
 }
 
-function notes(person: PersonView, now: number): string {
+function notes(person: HumanContextParticipant, now: number): string {
 	const parts: string[] = [person.presence];
 	if (person.changedAt) parts.push(`since ${ago(person.changedAt, now)}`);
 	if (person.unseen > 0) parts.push(`has not seen the last ${count(person.unseen, 'message')}`);
@@ -223,87 +204,36 @@ export function refusal(opening: string, missed: Message[], advice: string): str
 
 // -- what a participant reads ------------------------------------------------
 
-/**
- * What the prose is given of a room. It is a picture, not the room: every
- * function below reads it and returns text, so what a participant reads can be
- * built, diffed and tested without starting anything.
- */
-export interface RoomView {
-	readonly name: string;
-	/** The room's clock, in milliseconds since the epoch, when the view was built. */
-	readonly now: number;
-	/** What the room is for, or nothing when it was started without one. */
-	readonly goal: string | undefined;
-	readonly seats: SeatInfo[];
-	readonly people: PersonView[];
-	readonly record: readonly Message[];
-	/** The question the room is working on, so a seat knows what it was woken for. */
-	readonly exchange: { owner: string; from: Seq } | undefined;
-}
-
-/** The exchange the assistant is closing: whose it was, how they read, and its range. */
-interface Closing {
-	/** The person whose question opened it, and who reads the message. */
-	readonly person: string;
-	/** How they read, or nothing when they said nothing about it. */
-	readonly preferences: string | undefined;
-	readonly from: Seq;
-	readonly through: Seq;
-}
-
-/** One agent the assistant may seat: a line in the reserve it reads. */
-interface Reserved {
-	readonly name: string;
-	readonly identity: string;
-}
-
-/** The exchange the assistant is composing the room for: whose question, and who is in reserve. */
-interface ComposingView {
-	readonly person: string;
-	readonly from: Seq;
-	readonly reserve: readonly Reserved[];
-}
-
-/**
- * What the prose is given of the seat taking the activation. Every fact is asked
- * for outright rather than left optional: a room that stops holding one must
- * say so, instead of a missing field quietly turning the assistant into a seat.
- */
-export interface SeatSpeaking {
-	readonly def: {
-		name: string;
-		identity: string;
-		instructions: string;
-		/** Guidance composed from ordinary tool bundles. */
-		guidance?: string;
+/** Render the provider prompt and context from one detached activation view. */
+export function renderActivation(
+	view: ActivationView,
+	def: AgentDefinition,
+): { systemPrompt: string; context: string } {
+	return {
+		systemPrompt: renderSystemPrompt(view, def),
+		context: renderTurnContext(view, def),
 	};
-	/** The tool this activation binds. */
-	readonly tool: ActivationSpec['grant']['tool'];
-	/** The exchange this activation is closing, or nothing when something else woke it. */
-	readonly closing: Closing | undefined;
-	/** The exchange this activation composes the room for, or nothing when something else woke it. */
-	readonly composing: ComposingView | undefined;
 }
 
-export function renderSystemPrompt(seat: SeatSpeaking, room: RoomView): string {
-	const lines = [...header(seat, room), ``];
-	if (room.goal) lines.push(`This room exists to: ${room.goal}`, ``);
-	lines.push(...duties(seat, room), ``);
+function renderSystemPrompt(view: ActivationView, def: AgentDefinition): string {
+	const lines = [...header(view, def), ``];
+	if (view.context.goal) lines.push(`This room exists to: ${view.context.goal}`, ``);
+	lines.push(...duties(view, def), ``);
 	lines.push(
-		`Your identity, as the room knows it: ${seat.def.identity}`,
+		`Your identity, as the room knows it: ${def.identity}`,
 		``,
 		`Your instructions:`,
-		seat.def.instructions.trim(),
+		def.instructions.trim(),
 	);
-	if (seat.closing) lines.push(``, ...reader(seat.closing));
+	if (view.spec.purpose.kind === 'summarize') lines.push(``, ...reader(view));
 	return lines.join('\n');
 }
 
-/**
- * What this seat is for, read off the tool the activation binds.
- */
-function duties(seat: SeatSpeaking, room: RoomView): string[] {
-	if (seat.tool !== SAY.name) return [...assistantDuties[seat.tool]];
+/** What this seat is for, read off the activation purpose. */
+function duties(view: ActivationView, def: AgentDefinition): string[] {
+	const purpose = view.spec.purpose.kind;
+	if (purpose === 'select' || purpose === 'summarize')
+		return [...assistantDuties[purpose === 'select' ? 'seat' : 'summarise']];
 	const lines = [
 		`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 		`your turn without saying anything, and no mark is left. Speak only when your reply`,
@@ -321,18 +251,20 @@ function duties(seat: SeatSpeaking, room: RoomView): string[] {
 		``,
 		...AUDIENCE_PARAGRAPH,
 	];
-	if (seat.def.guidance) lines.push(``, seat.def.guidance);
+	if (def.guidance) lines.push(``, def.guidance);
 	// A fold renders once the record holds a summary, so only such a record
 	// tells its seats how to read one.
-	if (room.record.some(isSummary)) lines.push(``, ...SUMMARY_PARAGRAPH);
+	if (view.context.messages.some(isSummary)) lines.push(``, ...SUMMARY_PARAGRAPH);
 	return lines;
 }
 
-export function renderTurnContext(seat: SeatSpeaking, room: RoomView): string {
-	const now = room.now;
-	const people = room.people;
+function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
+	const { context } = view;
+	const people = context.participants.filter(
+		(participant): participant is HumanContextParticipant => participant.kind === 'human',
+	);
 	return [
-		renderClock(now),
+		renderClock(context.now),
 		``,
 		`The agents. Each is seated at one point of a scale — the widest kind of message`,
 		`that wakes it. Unmarked: anything said. "named only": a say addressed to it.`,
@@ -340,21 +272,23 @@ export function renderTurnContext(seat: SeatSpeaking, room: RoomView): string {
 		`nothing reaches it and you cannot address it. "the assistant" writes the one`,
 		`message a person reads when their exchange closes.`,
 		`(active: taking a turn now; idle: at rest.)`,
-		renderAgents(room.seats),
-		...(seat.composing ? [``, ...renderReserve(seat.composing.reserve)] : []),
+		renderAgents(context.participants),
+		...(view.spec.purpose.kind === 'select' && context.reserve !== undefined
+			? [``, ...renderReserve(context.reserve)]
+			: []),
 		``,
 		`The people (present: in the room now; absent: not in the room):`,
-		renderPeople(people, now),
+		renderPeople(people, context.now),
 		``,
-		`The record of '${room.name}' so far:`,
-		renderRecord(room.record, people, now),
+		`The record of '${context.name}' so far:`,
+		renderRecord(context.messages, people, context.now),
 		``,
-		askOf(seat, room),
+		askOf(view, def),
 	].join('\n');
 }
 
 /** The agents the assistant may seat. Only a composing activation reads this list. */
-function renderReserve(reserve: readonly Reserved[]): string[] {
+function renderReserve(reserve: readonly { name: string; identity: string }[]): string[] {
 	return [
 		`The reserve: agents not in the room, which you may seat. Nobody else reads this list.`,
 		...reserve.map((agent) => `- ${agent.name}: ${agent.identity}`),
@@ -373,27 +307,25 @@ const numbered = (record: readonly Message[], seq: Seq): number =>
 	record.filter((message) => message.seq <= seq).length;
 
 /** What this activation is for, in the last line the model reads. */
-function askOf(seat: SeatSpeaking, room: RoomView): string {
-	if (seat.composing) {
-		const asked = numbered(room.record, seat.composing.from);
-		return `${seat.composing.person} asked at message ${asked}. ${action(seat)}`;
+function askOf(view: ActivationView, def: AgentDefinition): string {
+	const { context, spec } = view;
+	const purpose = spec.purpose;
+	if (purpose.kind === 'select') {
+		const asked = numbered(context.messages, purpose.exchange);
+		return `${purpose.person} asked at message ${asked}. ${action(purpose.kind)}`;
 	}
-	const closing = seat.closing;
-	if (closing) {
-		const from = numbered(room.record, closing.from);
+	if (purpose.kind === 'summarize') {
+		const from = numbered(context.messages, purpose.exchange);
 		return (
-			`${closing.person}'s exchange is over: messages ${from} ` +
-			`to ${numbered(room.record, closing.through)}. ${action(seat)}`
+			`${purpose.person}'s exchange is over: messages ${from} ` +
+			`to ${numbered(context.messages, purpose.through)}. ${action(purpose.kind)}`
 		);
 	}
-	// A seat the room woke with no tool has nothing to do in the activation.
-	// See `toolsFor`.
-	if (seat.tool === undefined) return `Nothing is asked of you: read the room, and end your turn.`;
 	// A seat seated during an exchange reads which question it was seated for.
-	const open = room.exchange
-		? `${room.exchange.owner}'s question at message ${numbered(room.record, room.exchange.from)} is open. `
+	const open = context.exchange
+		? `${context.exchange.owner}'s question at message ${numbered(context.messages, context.exchange.from)} is open. `
 		: '';
-	return `${open}Take your turn, ${seat.def.name}: say something, or end your turn to stay silent.`;
+	return `${open}Take your turn, ${def.name}: say something, or end your turn to stay silent.`;
 }
 
 /** What a seat does with a presence line that lands while it is working. */
@@ -413,15 +345,15 @@ const AUDIENCE_PARAGRAPH = [
 /**
  * How a room opens the prompt it hands a seat.
  */
-function header(seat: SeatSpeaking, room: RoomView): string[] {
-	if (seat.tool === SAY.name) {
+function header(view: ActivationView, def: AgentDefinition): string[] {
+	if (view.spec.purpose.kind === 'respond') {
 		return [
-			`You are '${seat.def.name}', an agent seated in the room '${room.name}' — a shared`,
+			`You are '${def.name}', an agent seated in the room '${view.context.name}' — a shared`,
 			`room with a record. Every participant sees what is said; nobody sees your tool use.`,
 		];
 	}
 	return [
-		`You are '${seat.def.name}', the assistant in the room '${room.name}' — a shared`,
+		`You are '${def.name}', the assistant in the room '${view.context.name}' — a shared`,
 		`room with a record.`,
 		assistantPolicy.guidance,
 	];
@@ -431,9 +363,11 @@ function header(seat: SeatSpeaking, room: RoomView): string[] {
  * Who the assistant is writing for, and how they read. How a person reads is
  * theirs, so it reaches the assistant here and no other seat reads it.
  */
-function reader(closing: Closing): string[] {
-	const lines = [`You are writing for ${closing.person}.`];
-	if (closing.preferences) lines.push(`How ${closing.person} reads:`, closing.preferences.trim());
+function reader(view: ActivationView): string[] {
+	if (view.spec.purpose.kind !== 'summarize') return [];
+	const person = view.spec.purpose.person;
+	const lines = [`You are writing for ${person}.`];
+	if (view.context.preferences) lines.push(`How ${person} reads:`, view.context.preferences.trim());
 	return lines;
 }
 
@@ -448,7 +382,7 @@ const SUMMARY_PARAGRAPH = [
 	`room to repeat itself.`,
 ];
 
-function action(seat: SeatSpeaking): string {
-	if (seat.tool === SAY.name) return 'Speak on the record, or end your turn.';
-	return assistantAction(seat.tool);
+function action(purpose: 'respond' | 'select' | 'summarize'): string {
+	if (purpose === 'respond') return 'Speak on the record, or end your turn.';
+	return assistantAction(purpose === 'select' ? 'seat' : 'summarise');
 }

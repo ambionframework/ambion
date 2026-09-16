@@ -43,13 +43,10 @@ class ModelRoom implements SeatRoom {
 					id: activation,
 					seat: product.name,
 					attempt: 1,
-					cause: 'message',
-					through: 1,
-					grant: { kind: 'say', tool: 'say' },
+					purpose: { kind: 'respond', message: 1 },
 				},
-				model: product.model,
-				systemPrompt: 'You are the product.',
-				context: 'The record so far.',
+				through: 1,
+				context: { name: 'model-test', now: 0, participants: [], messages: [] },
 			},
 		};
 	}

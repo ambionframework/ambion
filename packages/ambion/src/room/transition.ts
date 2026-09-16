@@ -12,7 +12,7 @@ import type {
 } from '../wire.ts';
 import { activationSpec } from './activation.ts';
 import { applyEvent, baseOf, type FoldOptions, project, type RoomState } from './fold.ts';
-import { isExpired, isLive, seatOf } from './lease.ts';
+import { isExpired, isLive } from './lease.ts';
 import {
 	liveWork,
 	planReconciliation,
@@ -207,7 +207,7 @@ function commit(state: RoomState, request: CommitRequest, now: number): RoomDeci
 	if (fresh !== undefined) return fresh;
 	const stamp = { at: iso(now), activationId: request.activation, from: live.seat };
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
-	if (intent.kind === 'summary') return summary(state, live, intent, stamp, now);
+	if (intent.kind === 'summary') return summary(state, live, intent.text, stamp, now);
 	const reason = addressRefusal(state, live.seat, intent.to);
 	return reason === undefined ? message(state, { ...intent, ...stamp }, now) : refused(reason);
 }
@@ -247,39 +247,44 @@ function speechFreshness(
 function summary(
 	state: RoomState,
 	spec: ActivationSpec,
-	intent: Extract<CommitRequest['intent'], { kind: 'summary' }>,
+	text: string,
 	stamp: { at: string; activationId: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
-	const close = spec.cause === 'closed' ? spec.closing : undefined;
-	if (
-		close === undefined ||
-		close.person !== intent.to ||
-		close.from !== intent.covers.from ||
-		close.through !== intent.covers.through
-	)
+	const purpose = spec.purpose;
+	if (purpose.kind !== 'summarize')
 		return refused('This summary does not match its closed exchange.');
 	if (
 		state.messages.some(
 			(message) =>
 				message.kind === 'summary' &&
-				message.to === close.person &&
-				message.covers.from <= close.from &&
-				message.covers.through >= close.through,
+				message.to === purpose.person &&
+				message.covers.from <= purpose.exchange &&
+				message.covers.through >= purpose.through,
 		)
 	)
 		return refused('This exchange already has a summary.');
-	return message(state, { ...intent, ...stamp }, now);
+	return message(
+		state,
+		{
+			kind: 'summary',
+			text,
+			to: purpose.person,
+			covers: { from: purpose.exchange, through: purpose.through },
+			...stamp,
+		},
+		now,
+	);
 }
 
 function permits(spec: ActivationSpec, kind: CommitRequest['intent']['kind']): boolean {
 	switch (kind) {
 		case 'said':
-			return spec.grant.kind === 'say';
+			return spec.purpose.kind === 'respond';
 		case 'summary':
-			return spec.grant.kind === 'summary';
+			return spec.purpose.kind === 'summarize';
 		case 'seated':
-			return spec.grant.kind === 'seat';
+			return spec.purpose.kind === 'select';
 		default:
 			return false;
 	}
@@ -341,9 +346,8 @@ function claim(
 	command: Extract<LeaseCommand, { type: 'claim' }>,
 	now: number,
 ): RoomDecision<'lease'> {
-	const seat = seatOf(command.id);
-	if (!state.roster.some((candidate) => candidate.name === seat))
-		return stale('the seat is not on the roster');
+	if (activationSpec(command.id, state) === undefined)
+		return stale('the activation has no room grant');
 	return runningLease(state, command, now, 0);
 }
 
@@ -354,9 +358,8 @@ function renew(
 ): RoomDecision<'lease'> {
 	const invalid = invalidProgress(state, command.readThrough);
 	if (invalid !== undefined) return invalid;
-	const seat = seatOf(command.id);
-	if (!state.roster.some((candidate) => candidate.name === seat))
-		return stale('the seat is not on the roster');
+	if (activationSpec(command.id, state) === undefined)
+		return stale('the activation has no room grant');
 	if (!state.leases.has(command.id)) return stale('the lease ended');
 	return runningLease(state, command, now, command.readThrough ?? 0);
 }
