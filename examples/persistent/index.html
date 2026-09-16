@@ -1565,7 +1565,7 @@
 				const handleDeliveryError = (item, error) => {
 					const status = error?.status;
 					if (status === 409) state.restored = false;
-					if (status < 400 || status >= 500 || [408, 409, 429].includes(status)) return false;
+					if (!(status >= 400 && status < 500) || [408, 409, 429].includes(status)) return false;
 					item.blocked = true;
 					item.error = error.message;
 					save();
@@ -1748,21 +1748,22 @@
 				$('stop').addEventListener('click', () => void control('stop'));
 				$('abort').addEventListener('click', () => void control('abort'));
 				$('refresh-files').addEventListener('click', () => void refreshWorkspace());
-				$('new-room').addEventListener('submit', async (event) => {
-					event.preventDefault();
+				const createRoom = async () => {
 					const name = $('room-name').value.trim();
 					const goal = $('new-room-goal').value.trim();
-					if (!name || !state.human) return;
-					try {
+					if (!name || !state.human || state.navigating) return;
+					await runNavigation(async () => {
 						await api.create(name, goal);
 						state.pendingRoom = name;
-						await selectRoom(name);
+						await transitionRoom(name, state.selected, currentRoom());
 						$('room-name').value = '';
 						$('new-room-goal').value = '';
 						showToast(`Created room ${name} and joined as ${state.human}.`);
-					} catch (error) {
-						showToast(error instanceof Error ? error.message : String(error), true);
-					}
+					});
+				};
+				$('new-room').addEventListener('submit', (event) => {
+					event.preventDefault();
+					void createRoom();
 				});
 				renderDraft();
 				render();
