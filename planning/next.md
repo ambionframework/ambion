@@ -972,6 +972,12 @@ and six CLI tests. The new recovery coverage accounts for 19 core tests.
 people through HTTP. It uses one runtime and SQLite database. Clients keep
 delivery keys, exchange IDs, and message cursors. The host accepts messages
 without waiting for model work and restores visits through the ordinary API.
+The single-file browser console lets a client assume a predefined human,
+open existing rooms, and create new rooms. It exposes Stop, Resume, Abort,
+and per-person presence. Room navigation leaves the current room and enters
+the next. Four sample rooms exercise planning, review, revision, and triage.
+Ordinary specialist agents share one global directory workspace across rooms.
+The host persists its catalog and hosting intent separately from room journals.
 
 A real-provider HTTP smoke test killed the host with both rooms active.
 Both rooms recovered after restart. Three retried deliveries appeared once;

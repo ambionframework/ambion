@@ -3,17 +3,21 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
-	"description": "One Node process hosts persistent rooms and human participants over HTTP.",
+	"description": "A browser room console with persistent journals and local directory workspaces.",
 	"scripts": {
 		"start": "node --env-file-if-exists=.env src/main.ts start",
 		"resume": "node --env-file-if-exists=.env src/main.ts resume",
-		"check:types": "tsc --noEmit"
+		"check:types": "tsc --noEmit",
+		"test": "vitest run"
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
-		"@ambionframework/journal": "workspace:*"
+		"@ambionframework/journal": "workspace:*",
+		"@ambionframework/workspace": "workspace:*"
 	},
 	"devDependencies": {
-		"typescript": "^7.0.2"
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11",
+		"@earendil-works/pi-ai": "^0.84.3"
 	}
 }

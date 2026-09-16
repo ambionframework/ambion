@@ -34,10 +34,15 @@ provides the journal adapter. `createRuntime` accepts the journal opener, and
 See the [runtime contract](agent.md) and [durability contract](durability.md)
 for the current signatures and failure rules.
 
-The [persistent Node example](../examples/persistent) hosts two rooms and
+The [persistent Node example](../examples/persistent) hosts four sample rooms and
 multiple people in one process. HTTP clients send keyed messages, read by
-cursor, and reacquire exchanges. One SQLite database stores both room journals.
+cursor, and reacquire exchanges. One SQLite database stores the room journals.
 Its `start` and `resume` commands supply the same agent definitions.
+Its single-file browser console adds a switch-user flow and room lifecycle
+controls. Selecting a room enters it; selecting another leaves the current
+room. All rooms share one local directory workspace. The assistant coordinates
+product, engineering, writing, and review agents. Stop and Resume preserve
+workspace files and room journals.
 
 A host must:
 
