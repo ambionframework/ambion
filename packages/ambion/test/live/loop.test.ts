@@ -5,8 +5,8 @@
  */
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
-import { createRuntime, defineTool, startRoom } from '../../src/index.ts';
-import { collect, enter, roomName } from '../support/room.ts';
+import { defineTool } from '../../src/index.ts';
+import { enter } from '../support/room.ts';
 import {
 	agent,
 	errorsIn,
@@ -70,15 +70,10 @@ live('the model and the loop', () => {
 
 	it('a refused model call reaches the host as an error and leaves no mark', async () => {
 		// Only the clerk runs in this provider-failure probe.
-		const session = await startRoom({
-			name: roomName('refused'),
-			agents: [clerk()],
-			runtime: createRuntime(),
-		});
+		const { session, events } = await open('refused', { agents: [clerk()] });
 		const key = process.env[KEY_VAR];
 		process.env[KEY_VAR] = 'not-a-key';
 		try {
-			const events = collect(session);
 			const visit = await enter(session, person);
 			const ended = new Promise<void>((resolve) => {
 				session.subscribe((e) => {

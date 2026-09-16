@@ -577,9 +577,10 @@ calls, notifications, and stale connections after eviction and resume.
 Review preserved live snapshot ordering with pending journal writes; a new
 regression covers memory and SQLite. Luna/High implemented the slice and a
 second Luna/High review found no remaining production blockers. The change
-is prepared for review and is not merged. CI exposed a live-test race between
-two agents using deliberately invalid credentials. The failure probe now runs
-only its target agent and retains its error-attribution and no-speech assertions.
+is prepared for review and is not merged. CI exposed live-test assumptions
+about an implicitly added coordinator. Live fixtures now use explicit agent
+catalogs and summary assignments. Failure attribution and silence assertions
+remain strict. The invalid-credentials probe passes locally against the provider.
 
 **Do not add a general executor plugin framework.** Establish a narrow internal
 contract and test it with the in-process and Cloudflare hosts. Pi remains the

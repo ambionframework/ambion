@@ -13,6 +13,7 @@ import { enter, messageBefore } from '../support/room.ts';
 import {
 	activationsOf,
 	agent,
+	assistant,
 	invariants,
 	live,
 	open,
@@ -64,7 +65,8 @@ live('the exchange', () => {
 		);
 		const { session, runtime, events } = await open('exchange', {
 			goal: 'Ship the batch this week.',
-			agents: [planner, logistics, finance],
+			agents: [planner, logistics, finance, assistant],
+			summary: assistant.name,
 		});
 		try {
 			const visit = await enter(session, andrei);
@@ -137,8 +139,9 @@ live('the exchange', () => {
 			instructions: 'Answer questions about meals with one say. For anything else, end your turn.',
 		});
 		const { session, runtime, events } = await open('reserve', {
-			agents: [frontdesk, permits, catering],
-			seats: { [frontdesk.name]: 'broadcast' },
+			agents: [frontdesk, permits, catering, assistant],
+			summary: assistant.name,
+			seats: { [frontdesk.name]: 'broadcast', [assistant.name]: 'broadcast' },
 		});
 		const visit = await enter(session, andrei);
 		await visit.send({ text: 'How long does a building permit take for the extension?' });
