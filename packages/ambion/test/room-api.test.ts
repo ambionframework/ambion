@@ -14,7 +14,7 @@ import {
 import { inProcessTransport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { closedExchange, deferred, roomName, waitForRoom } from './support/room.ts';
-import { contextText, quiet, scripted, speak, summarise, toolNames } from './support/scripted.ts';
+import { contextText, isClosing, quiet, scripted, speak, summarise } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
 
 const assistant = defineAgent({
@@ -44,7 +44,7 @@ const withSummary = () => {
 	const summarised = new Set<string>();
 	return scripted((context, agent) => {
 		if (agent === 'assistant') {
-			if (toolNames(context).includes('summarise') && !summarised.has(agent)) {
+			if (isClosing(context) && !summarised.has(agent)) {
 				summarised.add(agent);
 				return summarise('The result.');
 			}
@@ -88,8 +88,9 @@ async function world(
 describe('the room API', () => {
 	it('opens ready, returns an exchange handle, and reads a durable snapshot', async () => {
 		const { opened, runtime, room } = await world(memory, {
-			assistant,
-			agents: [alpha, beta],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [alpha, beta, assistant],
 			streamFn: withSummary(),
 		});
 		try {
@@ -140,7 +141,9 @@ describe('the room API', () => {
 
 	it('resolves a pending response as undefined when no summary is claimed', async () => {
 		const { opened, room } = await world(memory, {
-			assistant,
+			summary: assistant.name,
+			seats: { [assistant.name]: 'none' },
+			agents: [assistant],
 			streamFn: scripted((_context, agent, call) =>
 				agent === 'assistant' ? quiet() : call === 2 ? speak('One answer.') : quiet(),
 			),

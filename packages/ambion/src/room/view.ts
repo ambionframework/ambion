@@ -46,7 +46,6 @@ function agentsOf(
 		identity: seat.identity,
 		status: facts.live.has(seat.name) ? 'active' : 'idle',
 		attention: seat.attention,
-		assistant: seat.name === facts.state.composition?.assistant,
 	}));
 }
 
@@ -67,6 +66,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts): ActivationView {
 		...(goal === undefined ? {} : { goal }),
 		participants: [...agentsOf(facts), ...peopleOf(facts)],
 		messages: messages.map(contextMessage),
+		reserve: state.reserve.map(({ name, identity }) => ({ name, identity })),
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
 			: { exchange: { owner: state.exchange.owner, from: state.exchange.from } }),
@@ -88,14 +88,11 @@ function contextMessage(message: Message): Message {
 	return publicMessage;
 }
 
-/** Only the relevant assistant purpose receives reserve identities or reading preferences. */
+/** Only the summary purpose receives reading preferences. */
 function purposeContext(
 	purpose: ActivationPurpose,
 	state: RoomState,
-): Pick<CollaborationContext, 'reserve' | 'preferences'> {
-	if (purpose.kind === 'select') {
-		return { reserve: state.reserve.map(({ name, identity }) => ({ name, identity })) };
-	}
+): Pick<CollaborationContext, 'preferences'> {
 	const preferences =
 		purpose.kind === 'summarize' ? state.people.get(purpose.person)?.preferences : undefined;
 	return preferences === undefined ? {} : { preferences };

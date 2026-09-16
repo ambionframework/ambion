@@ -5,9 +5,8 @@ people they serve.** It gives domain agents a shared journal, rules for
 participation, and a reliable boundary for contributing to a conversation.
 
 An agent owns its instructions, model, tools, and domain expertise. A room
-lets those agents work together. An optional assistant selects specialists
-and consolidates their work for a person. Applications own domain data and
-tool resources.
+lets those agents work together. An optional summary records a closed human
+exchange for its owner. Applications own domain data and tool resources.
 
 ## Install
 
@@ -25,8 +24,9 @@ Model execution uses Pi and needs credentials for the chosen provider.
 
 ## Use
 
-This example uses the current API. The optional assistant has selection and
-summary duties; the specialist owns domain reasoning.
+This example uses the current API. Every executable agent belongs in `agents`.
+The optional `summary` field names an ordinary agent that may write a closing
+summary.
 
 ```ts
 import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
@@ -42,9 +42,9 @@ const inventory = defineAgent({
   instructions: 'Use supplied stock facts. State a constraint only when it changes the answer.',
   model: 'anthropic/claude-sonnet-4-5',
 });
-const assistant = defineAgent({
-  name: 'assistant',
-  identity: 'Selects specialists and consolidates their work.',
+const editor = defineAgent({
+  name: 'editor',
+  identity: 'Consolidates the closed exchange.',
   instructions: 'Preserve the decision and the facts that support it.',
   model: 'anthropic/claude-sonnet-4-5',
 });
@@ -52,8 +52,8 @@ const assistant = defineAgent({
 const room = await startRoom({
   name: 'delivery',
   goal: 'Check delivery promises against stock.',
-  assistant,
-  agents: [inventory],
+  summary: 'editor',
+  agents: [inventory, editor],
 });
 
 try {
@@ -76,16 +76,16 @@ try {
 ```
 
 `exchange.messages()` waits for the fixed discussion. `exchange.response()`
-waits for its summary or a terminal result without one. Revoked or abandoned summary work rejects the response wait.
-A room without an
-assistant still closes exchanges and exposes the discussion. A single answer
-can require no summary even when an assistant is present.
+waits for its summary or a terminal result without one. The writer may decline,
+and a room without a configured writer still closes exchanges and exposes the
+discussion. Every closed human exchange is eligible when its writer is seated.
 
 Use `defineTool` for an agent's ordinary typed tools. Put reusable tool bundles
 in the separate `bundles` field. The current `agents` list supplies every
-ordinary definition. The optional `seats` map selects initial members;
-definitions absent from that map form the reserve.
-Attention controls idle agents; active ordinary agents receive new context.
+ordinary definition. The optional `seats` map sets initial members; definitions
+absent from that map form the reserve. If omitted, every agent starts at
+`broadcast`. Any live agent can use `seat` and `unseat`.
+Attention controls idle agents; active agents receive new context.
 An agent can finish silently, and the room refuses speech based on stale context.
 
 Adapt a native Pi tool with `fromPiTool(nativePiTool)` before you put it in

@@ -100,7 +100,7 @@ type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 /** What a run starts with, as definitions. The journal holds the same composition, by name. */
 interface CompositionDraft {
 	goal: string | undefined;
-	assistant: string | undefined;
+	summary: string | undefined;
 	definitions: AgentDefinition[];
 	seats: ReadonlyMap<string, Attention>;
 }
@@ -111,19 +111,12 @@ type PresenceDraft = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 export interface StartRoomOptions {
 	/** The room's name: the record belongs to it, across every run. */
 	name: string;
-	/** All ordinary executable definitions for this run, including agents initially in reserve. */
+	/** All executable definitions for this run, including agents initially in reserve. */
 	agents?: readonly AgentDefinition[];
-	/** Initial membership and attention. Omit to seat every ordinary agent at broadcast. */
+	/** Initial membership and attention. Omit to seat every agent at broadcast. */
 	seats?: Readonly<Record<string, Attention>>;
-	/**
-	 * The room's assistant: an agent that composes the room at the open of an
-	 * exchange, from the reserve, and writes the one message a person reads
-	 * when their exchange closes, shaped to how that person reads.
-	 *
-	 * The option seats it at `none`. A room without one closes
-	 * every exchange and owes no summary.
-	 */
-	assistant?: AgentDefinition;
+	/** The agent that can summarize a closed exchange. It follows ordinary membership rules. */
+	summary?: string;
 	/** What the room is for. Read by every agent; gates the arrival paragraph. */
 	goal?: string;
 	/**
@@ -783,14 +776,14 @@ class RoomHost implements Room, RunningRoom {
 		await this.commitPresence(change);
 	}
 
-	/** The host takes an agent off the roster. It keeps the assistant seated. */
+	/** The host takes an agent off the roster. */
 	async unseat(name: string): Promise<void> {
 		this.assertRunning();
 		await this.ready;
 		if (!this.defs.has(name)) throw new Error(`Unknown agent '${name}'.`);
 		this.validatePresence({ kind: 'unseated', subject: name });
-		await this.revoke((seat) => seat === name);
 		await this.commitPresence({ kind: 'unseated', subject: name });
+		await this.reconcile();
 	}
 
 	// -- commits ----------------------------------------------------------------
@@ -880,8 +873,7 @@ class RoomHost implements Room, RunningRoom {
 
 	/**
 	 * An exchange ended at the range the close names. The host hears it
-	 * before anything is written about it: the assistant is the first reader
-	 * of a closed exchange and not the only one. A question that landed
+	 * before any closing summary. A question that landed
 	 * ahead of the close opens the next exchange, and the room says so.
 	 */
 	private heardClose(close: Close): void {
@@ -916,6 +908,10 @@ class RoomHost implements Room, RunningRoom {
 			this.notifyExchangeWaiters();
 			return;
 		}
+		if (lease.reason === 'revoked')
+			void this.port(seat)
+				.cut(lease.id)
+				.catch(() => {});
 		if (first) {
 			// A change that ends a lease the journal never held is an attempt nobody made.
 			if (lease.reason === 'abandoned') {
@@ -1009,15 +1005,28 @@ class RoomHost implements Room, RunningRoom {
 	}
 
 	/** One operation on the room's commit queue, with the wakes the room routes. */
-	write(commit: CommitRequest): Promise<Message> {
-		return this.commitMessage(commit.key, { type: 'commit', commit });
+	async write(commit: CommitRequest): Promise<CommitResult> {
+		const appended = await this.journal.append<
+			'message',
+			Extract<CommitResult, { unchanged: unknown }>
+		>('message', {
+			key: commit.key,
+			decide: () => {
+				const decision = decide(this.state(), { type: 'commit', commit }, this.now());
+				if ('unchanged' in decision) return { result: decision };
+				const event = this.acceptedEvent(decision);
+				if (event === undefined) throw new Error('The commit did not propose a message.');
+				return { body: event.body };
+			},
+		});
+		return 'entry' in appended ? { committed: placed(appended.entry) } : appended.result;
 	}
 
 	private acceptedEvent<K extends Kind>(decision: RoomDecision<K>) {
 		if ('refusal' in decision) {
 			throw new RefusedError(decision.refusal);
 		}
-		return decision.event;
+		return 'event' in decision ? decision.event : undefined;
 	}
 
 	claim(id: string): Promise<LeaseResponse> {
@@ -1048,7 +1057,7 @@ class RoomHost implements Room, RunningRoom {
 					},
 					this.now(),
 				);
-				if ('refusal' in decision) return { result: undefined };
+				if (!('event' in decision)) return { result: undefined };
 				const event = decision.event;
 				if (event === undefined || event.body.phase !== 'running') return { result: undefined };
 				return { body: event.body };
@@ -1217,7 +1226,7 @@ class RoomHost implements Room, RunningRoom {
 		for (let pass = 0; pass < PASSES; pass += 1) {
 			const picked = [...this.live(this.state())].filter(([seat]) => which(seat));
 			if (picked.length === 0) break;
-			for (const [seat, ids] of picked) await this.cut(seat, ids);
+			for (const [, ids] of picked) await this.cut(ids);
 		}
 		if (!this.gone()) await this.reconcile();
 	}
@@ -1228,10 +1237,8 @@ class RoomHost implements Room, RunningRoom {
 	 * side is told to stop, wherever the seat runs. The room writes first, so
 	 * a seat that never hears the cut is refused whatever it writes after it.
 	 */
-	private async cut(seat: string, ids: string[]): Promise<void> {
+	private async cut(ids: string[]): Promise<void> {
 		for (const id of ids) await this.end(id, 'revoked', 0);
-		const port = this.port(seat);
-		for (const id of ids) void port.cut(id).catch(() => {});
 	}
 
 	/** Closes the run: what is live is revoked, what is present is marked gone, and the name comes free. */
@@ -1292,17 +1299,13 @@ class RoomHost implements Room, RunningRoom {
 	}
 }
 
-/**
- * The composition `startRoom` was given, checked for duplicates the way
- * the room refuses them. The assistant is a seating like every other: the
- * option seats it at `none`, beside the agents.
- */
+/** Capture the fixed definitions and initial membership for this run. */
 function composeFrom(options: StartRoomOptions): CompositionDraft {
 	const definitions = capturedDefinitions(options);
 	const attentions = initialSeats(options, definitions);
 	return {
 		goal: options.goal?.trim() || undefined,
-		assistant: options.assistant?.name,
+		summary: options.summary,
 		definitions,
 		seats: attentions,
 	};
@@ -1310,12 +1313,13 @@ function composeFrom(options: StartRoomOptions): CompositionDraft {
 
 function capturedDefinitions(options: StartRoomOptions): AgentDefinition[] {
 	const definitions = (options.agents ?? []).map(captureAgent);
-	if (options.assistant !== undefined) definitions.push(captureAgent(options.assistant));
 	const names = new Set<string>();
 	for (const definition of definitions) {
 		if (names.has(definition.name)) throw duplicate(definition.name);
 		names.add(definition.name);
 	}
+	if (options.summary !== undefined && !names.has(options.summary))
+		throw new Error(`Unknown summary agent '${options.summary}'.`);
 	return definitions;
 }
 
@@ -1329,22 +1333,12 @@ function initialSeats(
 			? (options.agents ?? []).map((agent) => agent.name)
 			: Object.keys(configured),
 	);
-	if (options.assistant !== undefined) selected.add(options.assistant.name);
 	const names = new Set(definitions.map((agent) => agent.name));
 	for (const name of selected) if (!names.has(name)) throw new Error(`Unknown agent '${name}'.`);
-	if (
-		options.assistant !== undefined &&
-		configured?.[options.assistant.name] !== undefined &&
-		configured[options.assistant.name] !== 'none'
-	)
-		throw new Error(`Assistant '${options.assistant.name}' must have attention 'none'.`);
 	return new Map(
 		definitions
 			.filter((agent) => selected.has(agent.name))
-			.map((agent) => [
-				agent.name,
-				agent.name === options.assistant?.name ? 'none' : (configured?.[agent.name] ?? 'broadcast'),
-			]),
+			.map((agent) => [agent.name, configured?.[agent.name] ?? 'broadcast']),
 	);
 }
 
@@ -1366,7 +1360,8 @@ function duplicate(name: string): Error {
 function compositionOf(cast: CompositionDraft, at: string): Without<Composition, 'seq'> {
 	return {
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
-		...(cast.assistant === undefined ? {} : { assistant: cast.assistant }),
+		version: 2,
+		...(cast.summary === undefined ? {} : { summary: cast.summary }),
 		agents: cast.definitions
 			.filter((agent) => cast.seats.has(agent.name))
 			.map((agent) => ({

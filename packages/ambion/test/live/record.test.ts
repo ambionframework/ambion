@@ -33,7 +33,13 @@ live('the record', () => {
 		const runtime = createRuntime({ storage: memoryJournals() });
 		const name = roomName('record');
 
-		const first = await startRoom({ name, assistant, runtime, agents: [memo] });
+		const first = await startRoom({
+			name,
+			summary: assistant.name,
+			seats: { [memo.name]: 'broadcast', [assistant.name]: 'none' },
+			runtime,
+			agents: [memo, assistant],
+		});
 		const firstEvents = collect(first);
 		const told = await first.visit(person);
 		await told.send({ text: 'The door code for the yard is 4419. Keep it.' });
@@ -41,7 +47,13 @@ live('the record', () => {
 		await invariants(first, firstEvents);
 		await first.stop();
 
-		const second = await startRoom({ name, assistant, runtime, agents: [memo] });
+		const second = await startRoom({
+			name,
+			summary: assistant.name,
+			seats: { [memo.name]: 'broadcast', [assistant.name]: 'none' },
+			runtime,
+			agents: [memo, assistant],
+		});
 		const secondEvents = collect(second);
 		const asked = await second.visit(person);
 		await asked.send({ text: 'What is the door code for the yard?' });

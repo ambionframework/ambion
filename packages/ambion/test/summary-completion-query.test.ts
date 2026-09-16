@@ -3,12 +3,12 @@ import { summaryCompletion } from '../src/room/exchange.ts';
 import type { Message } from '../src/types.ts';
 import type { Close, LeaseHold } from '../src/wire.ts';
 
-const close = (wakes: string[] | null = ['assistant']): Close => ({
+const close = (writer: string | null = 'assistant'): Close => ({
 	owner: 'priya',
 	from: 2,
 	through: 5,
 	at: '2026-01-01T00:00:00.000Z',
-	...(wakes === null ? {} : { wakes }),
+	...(writer === null ? {} : { summary: writer }),
 });
 
 const summary: Message = {
@@ -53,6 +53,14 @@ describe('summary completion query', () => {
 		});
 	});
 
+	it('requires the assigned writer before a message can settle a close', () => {
+		expect(summaryCompletion(close(), [{ ...summary, from: 'another-agent' }], leases())).toEqual({
+			status: 'pending',
+			writer: 'assistant',
+		});
+		expect(summaryCompletion(close(null), [summary], leases())).toEqual({ status: 'silent' });
+	});
+
 	it('matches the close owner and complete covered range', () => {
 		expect(summaryCompletion(close(), [summary], leases())).toEqual({
 			status: 'published',
@@ -89,12 +97,10 @@ describe('summary completion query', () => {
 	});
 
 	it('returns the recorded writer only while its summary remains owed', () => {
-		expect(summaryCompletion(close(['historical-assistant']), [], leases(ended('failed')))).toEqual(
-			{
-				status: 'pending',
-				writer: 'historical-assistant',
-			},
-		);
+		expect(summaryCompletion(close('historical-assistant'), [], leases(ended('failed')))).toEqual({
+			status: 'pending',
+			writer: 'historical-assistant',
+		});
 		expect(summaryCompletion(close(), [], leases(running))).toEqual({
 			status: 'pending',
 			writer: 'assistant',
@@ -109,11 +115,9 @@ describe('summary completion query', () => {
 		});
 	});
 
-	it('preserves response outcomes for a recorded empty writer list', () => {
-		expect(summaryCompletion(close([]), [], leases())).toEqual({ status: 'pending' });
-		expect(summaryCompletion(close([]), [], leases(running))).toEqual({ status: 'pending' });
-		expect(summaryCompletion(close([]), [], leases(ended('failed')))).toEqual({ status: 'failed' });
-		expect(summaryCompletion(close([]), [], leases(ended('released')))).toEqual({
+	it('ignores unrelated summary leases when the close assigns no writer', () => {
+		expect(summaryCompletion(close(null), [], leases(running))).toEqual({ status: 'silent' });
+		expect(summaryCompletion(close(null), [], leases(ended('failed')))).toEqual({
 			status: 'silent',
 		});
 	});
@@ -121,7 +125,6 @@ describe('summary completion query', () => {
 	it('keeps retryable lease endings pending and ignores another close position', () => {
 		expect(summaryCompletion(close(), [], leases(ended('failed'))).status).toBe('pending');
 		expect(summaryCompletion(close(), [], leases(ended('expired'))).status).toBe('pending');
-		expect(summaryCompletion(close(), [], leases(ended('refused'))).status).toBe('pending');
 		expect(
 			summaryCompletion(close(), [], leases({ ...ended('abandoned'), id: 'closed:9:assistant:1' })),
 		).toMatchObject({ status: 'pending' });

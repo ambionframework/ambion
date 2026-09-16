@@ -78,7 +78,6 @@ const leaseEnded = Type.Object(
 		reason: Type.Union([
 			Type.Literal('released'),
 			Type.Literal('failed'),
-			Type.Literal('refused'),
 			Type.Literal('revoked'),
 			Type.Literal('expired'),
 			Type.Literal('abandoned'),
@@ -94,13 +93,20 @@ const schemas: Record<Kind, TSchema> = {
 	message,
 	lease,
 	close: Type.Object(
-		{ owner: Type.String(), from: seq, through: seq, at: Type.String(), wakes },
+		{
+			owner: Type.String(),
+			from: seq,
+			through: seq,
+			at: Type.String(),
+			summary: Type.Optional(Type.String()),
+		},
 		extra,
 	),
 	composition: Type.Object(
 		{
+			version: Type.Literal(2),
 			goal: Type.Optional(Type.String()),
-			assistant: Type.Optional(Type.String()),
+			summary: Type.Optional(Type.String()),
 			agents: Type.Array(seating),
 			available: Type.Array(seating),
 			at: Type.String(),
@@ -113,6 +119,7 @@ const schemas: Record<Kind, TSchema> = {
 /** Validate a room journal body. Unknown entry kinds stay outside this vocabulary. */
 export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 	if (!Object.hasOwn(schemas, kind)) return false;
+	if (kind === 'composition') validateCompositionVersion(body);
 	const schema = schemaFor(kind, body);
 	if (!Check(schema, body)) {
 		const error = Errors(schema, body)[0];
@@ -127,6 +134,21 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 		);
 	validateActivationId(kind, objectBody(body));
 	return true;
+}
+
+function validateCompositionVersion(body: unknown): void {
+	const object = objectBody(body);
+	const version = object?.version;
+	if (object !== undefined && Object.hasOwn(object, 'assistant')) {
+		throw new Error(
+			'Unsupported room composition version (legacy assistant field); expected version 2. Start a new journal or migrate this journal externally.',
+		);
+	}
+	if (version === 2) return;
+	const found = version === undefined ? 'missing' : JSON.stringify(version);
+	throw new Error(
+		`Unsupported room composition version (${found}); expected version 2. Start a new journal or migrate this journal externally.`,
+	);
 }
 
 function validateActivationId(kind: string, body: Record<string, unknown> | undefined): void {

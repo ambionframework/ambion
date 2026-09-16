@@ -1,31 +1,19 @@
-/**
- * The bound a seat holds: the tools the room gives an activation, bound to
- * it and to the room. A seat that speaks for itself holds `say` and the
- * agent's composed tools. The assistant holds one tool: `summarise` at a close, `seat` at
- * the open of an exchange. Every one commits through the room's `commit`
- * call and reads the room's answer through `landed`.
+/** The room tools bound to one activation and the agent's own tools.
+ *
+ * Every ordinary activation can speak, seat an agent, or remove an agent.
+ * A closing activation receives only `say`; the room turns that said intent
+ * into the assigned summary and supplies its recipient and range.
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
-import { SEAT, SUMMARISE, seatToolDescription, summaryToolDescription } from '../assistant.ts';
-import { SAY } from '../define.ts';
-import type { AgentDefinition, AmbionTool } from '../types.ts';
-import type { ActivationView, CommitResult, SeatRoom } from '../wire.ts';
+import { SAY, SEAT, UNSEAT } from '../define.ts';
+import type { AgentDefinition, AmbionTool, Message } from '../types.ts';
+import type { ActivationView, CommitResult, Intent, SeatRoom } from '../wire.ts';
 import type { Activation } from './activation.ts';
 import { refusal } from './render.ts';
+import { summaryToolDescription } from './summary.ts';
 
-/**
- * How often the assistant may call its tool in one activation. A model that keeps
- * calling a tool that keeps refusing would run for ever, and nothing else here
- * bounds an activation — the same gap `agent.md` §7 records for the room, closed where it
- * can be closed.
- */
-const ASSISTANT_CALLS = 4;
-
-/**
- * One Pi tool from a normalized tool. The normalized invocation receives the
- * seat's agent context while Pi receives its own call signature.
- */
+/** A Pi tool from a normalized tool. */
 function toPiTool(tool: AmbionTool, agent: AgentDefinition): AgentTool<TSchema, unknown> {
 	return {
 		name: tool.name,
@@ -48,16 +36,15 @@ function toPiTool(tool: AmbionTool, agent: AgentDefinition): AgentTool<TSchema, 
 	};
 }
 
-/** What a write tool returns when the record took it. */
+/** What a write tool returns when the room accepted or already held it. */
 function delivered(): AgentToolResult<Record<string, never>> {
 	return { content: [{ type: 'text', text: 'delivered' }], details: {} };
 }
 
-/** What every tool the room binds reaches: the activation it belongs to, and the room. */
+/** What every room tool reaches: the activation and the room. */
 export interface Binding {
 	readonly activation: Activation;
 	readonly room: SeatRoom;
-	/** What a tool makes of the room's answer: a mark on the record, a refusal, or a lease that ended. */
 	landed(response: CommitResult): AgentToolResult<Record<string, never>>;
 }
 
@@ -66,34 +53,33 @@ export function binding(activation: Activation, room: SeatRoom): Binding {
 		activation,
 		room,
 		landed(response) {
-			if ('committed' in response) {
-				activation.spoke = true;
-				return delivered();
-			}
-			if ('refused' in response) throw new Error(response.refused);
-			if ('missed' in response) {
-				throw new Error('The room moved. Read what landed, then decide again.');
-			}
-			// The lease ended under this tool: the room is closing, or the seat
-			// ran past its lease. Nothing it writes now lands, so the turn is over.
-			activation.abort();
-			return standDown(`Your turn ended: ${response.stale}.`) as AgentToolResult<
-				Record<string, never>
-			>;
+			return landResponse(activation, response);
 		},
 	};
 }
 
-/** The one tool every seat that speaks for itself holds. */
-function sayTool(bound: Binding): AgentTool {
+function landResponse(
+	activation: Activation,
+	response: CommitResult,
+): AgentToolResult<Record<string, never>> {
+	if ('committed' in response) return delivered();
+	if ('unchanged' in response) return delivered();
+	if ('refused' in response) throw new Error(response.refused);
+	if ('missed' in response) throw new Error('The room moved. Read what landed, then decide again.');
+	activation.abort();
+	return standDown(`Your turn ended: ${response.stale}.`) as AgentToolResult<Record<string, never>>;
+}
+
+/** The tool that speaks for an ordinary activation or publishes its close. */
+function sayTool(bound: Binding, closingPerson?: string): AgentTool {
 	return {
 		...SAY,
 		label: SAY.name,
 		description:
-			'Speak on the record. Omit `to` to address the room; set `to` to a participant name ' +
-			'to address them directly — a directed say to an agent also calls them in. ' +
-			'Ending your turn without calling say is declining to speak.',
-		execute: async (toolCallId, rawParams) => say(bound, toolCallId, rawParams),
+			closingPerson === undefined
+				? 'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly.'
+				: summaryToolDescription(closingPerson),
+		execute: async (toolCallId, rawParams) => say(bound, toolCallId, rawParams, closingPerson),
 	};
 }
 
@@ -101,121 +87,102 @@ async function say(
 	bound: Binding,
 	toolCallId: string,
 	rawParams: unknown,
+	closingPerson?: string,
 ): Promise<AgentToolResult<Record<string, never>>> {
 	const params = rawParams as { to?: string; text: string };
-	const to = params.to?.trim() ? params.to.trim() : undefined;
 	const text = params.text.trim();
-	// A message with nothing in it still takes a seq, renders in
-	// every context after it, and stands inside whatever range a
-	// summary covers. Saying nothing is ending the activation.
-	if (text === '') {
+	if (text === '')
 		throw new Error('The message is empty. Say something, or end your turn instead.');
-	}
+	const to = params.to?.trim() ? params.to.trim() : undefined;
+	const intent: Intent = { kind: 'said', ...(to === undefined ? {} : { to }), text };
 	const response = await bound.room.commit({
 		activation: bound.activation.id,
 		key: toolCallId,
-		readThrough: bound.activation.readThrough,
-		intent: { kind: 'said', ...(to === undefined ? {} : { to }), text },
+		...(closingPerson === undefined ? { readThrough: bound.activation.readThrough } : {}),
+		intent,
 	});
-	if ('missed' in response) {
+	if ('missed' in response) return missedSay(bound, toolCallId, response, closingPerson);
+	if (closingPerson === undefined) acknowledgeSay(bound, response);
+	const result = bound.landed(response);
+	return closingPerson === undefined ? result : { ...result, terminate: true };
+}
+
+function acknowledgeSay(bound: Binding, response: CommitResult): void {
+	if ('committed' in response && response.committed.kind === 'said') {
+		bound.activation.acknowledgeThrough(response.committed.seq);
+	}
+}
+
+function missedSay(
+	bound: Binding,
+	toolCallId: string,
+	response: Extract<CommitResult, { missed: readonly Message[] }>,
+	closingPerson: string | undefined,
+): never {
+	if (closingPerson === undefined) {
 		bound.activation.toolResultExpected(
 			toolCallId,
 			response.missed.at(-1)?.seq ?? bound.activation.readThrough,
 		);
-		throw new Error(
-			refusal(
-				'Not delivered — the room moved while you were speaking. New on the record:',
-				response.missed,
-				'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
-			),
-		);
 	}
-	if ('committed' in response && response.committed.kind === 'said') {
-		bound.activation.acknowledgeThrough(response.committed.seq);
-	}
-	return bound.landed(response);
+	throw new Error(
+		refusal(
+			'Not delivered — the room moved while you were speaking. New on the record:',
+			response.missed,
+			'Speak again only if your reply still adds something the room has not heard; otherwise end your turn.',
+		),
+	);
 }
 
-/**
- * What an activation holds: the one tool its purpose permits, built by the binder
- * that answers the name.
- *
- * A message causes an activation that speaks, so its purpose permits `say`, and a
- * seat that speaks brings its composed tools. An event of the exchange causes an activation
- * that holds one tool and nothing else: what the seat does with it is the
- * whole of the activation.
- *
- * An ordinary message activation gives the seat its own tools.
- */
-export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
-	switch (view.spec.purpose.kind) {
-		case 'respond':
-			return [sayTool(held), ...def.tools.map((tool) => toPiTool(tool, def))];
-		case 'select': {
-			const composing: Composing = { limit: view.spec.purpose.limit, seated: 0, calls: 0 };
-			return [seatTool(held, composing)];
-		}
-		case 'summarize': {
-			const attempt: SummaryAttempt = { person: view.spec.purpose.person, calls: 0 };
-			return [summariseTool(held, attempt)];
-		}
-	}
+/** The tool that seats one supplied agent. */
+function seatTool(bound: Binding): AgentTool {
+	return membershipTool(bound, SEAT, 'seated');
 }
 
-// -- the assistant's bound ----------------------------------------------------
-
-/**
- * One summary activation's local call count and completion state. The room
- * owns the covered range. Nothing here outlives the activation.
- */
-interface SummaryAttempt {
-	/** The person whose question opened the exchange, and who reads the message. */
-	readonly person: string;
-	calls: number;
-	/** The message landed: the activation writes once. */
-	written?: true;
+/** The tool that removes one seated agent. */
+function unseatTool(bound: Binding): AgentTool {
+	return membershipTool(bound, UNSEAT, 'unseated');
 }
 
-/**
- * The assistant's one tool at a close, and it reaches the record and nothing
- * else. It commits against the fixed exchange that caused the activation.
- * Later record entries do not change that exchange.
- */
-function summariseTool(bound: Binding, closing: SummaryAttempt): AgentTool {
-	const person = closing.person;
+function membershipTool(
+	bound: Binding,
+	tool: typeof SEAT | typeof UNSEAT,
+	kind: 'seated' | 'unseated',
+): AgentTool {
 	return {
-		...SUMMARISE,
-		label: SUMMARISE.name,
-		description: summaryToolDescription(person),
+		...tool,
+		label: tool.name,
+		description:
+			kind === 'seated'
+				? 'Seat one agent from the reserve. It joins the room and reads the record.'
+				: 'Remove one seated agent from the room.',
 		execute: async (toolCallId, rawParams) => {
-			closing.calls += 1;
-			const stop = standDown(stoppingReason(closing));
-			if (stop) return stop;
-			const text = (rawParams as { text: string }).text.trim();
-			if (text === '') {
-				throw new Error(`The message is empty. Write what ${person} reads, or end your turn.`);
-			}
+			const name = (rawParams as { name: string }).name.trim();
+			const intent: Intent = { kind, name };
 			const response = await bound.room.commit({
 				activation: bound.activation.id,
 				key: toolCallId,
-				intent: {
-					kind: 'summary',
-					text,
-				},
+				intent,
 			});
-			if ('committed' in response) closing.written = true;
 			return bound.landed(response);
 		},
 	};
 }
 
-/**
- * Why this activation cannot come good, when it cannot. Telling a model to stop is
- * not enough — one that keeps calling the tool would draft for ever — so the
- * result ends the activation itself. `terminate` is Pi's own way for a tool to say
- * that the loop is over, and the reason still reaches the transcript, where
- * rule 8 keeps it.
- */
+/** What an activation holds from its purpose. */
+export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
+	if (view.spec.purpose.kind === 'summarize') {
+		return [sayTool(held, view.spec.purpose.person)];
+	}
+	return [
+		sayTool(held),
+		seatTool(held),
+		unseatTool(held),
+		...def.tools.map((tool) => toPiTool(tool, def)),
+	];
+}
+
+/** Tell the model loop that its activation has ended. */
 function standDown(why: string | undefined): AgentToolResult<Record<string, never>> | undefined {
 	if (why === undefined) return undefined;
 	return {
@@ -223,61 +190,4 @@ function standDown(why: string | undefined): AgentToolResult<Record<string, neve
 		details: {},
 		terminate: true,
 	};
-}
-
-function stoppingReason(draft: SummaryAttempt): string | undefined {
-	if (draft.written) return `${draft.person}'s message is written.`;
-	if (draft.calls > ASSISTANT_CALLS) return 'You have tried this enough times.';
-	return undefined;
-}
-
-// -- composing ---------------------------------------------------------------
-
-/**
- * One selection activation's local tool limits. The room owns membership.
- * Nothing here outlives the activation.
- */
-interface Composing {
-	/** How many the reserve held at the open: the most this activation can seat. */
-	limit: number;
-	seated: number;
-	calls: number;
-}
-
-/**
- * The assistant's tool at the open of an exchange, and it reaches the reserve
- * and the record and nothing else. It commits outside rule 5's lock: the
- * assistant decides on the question, and what the seats said while it decided
- * does not change what the question needs. The room refuses a name that is
- * not in the reserve, and says which names are. The tool bounds its activation
- * the way `summarise` bounds one: the reserve is finite, each name seats once,
- * and a model that keeps calling after the reserve is empty, or keeps naming
- * what is not there, has the activation ended for it.
- */
-function seatTool(bound: Binding, composing: Composing): AgentTool {
-	return {
-		...SEAT,
-		label: SEAT.name,
-		description: seatToolDescription,
-		execute: async (toolCallId, rawParams) => {
-			composing.calls += 1;
-			const stop = standDown(composeStoppingReason(composing));
-			if (stop) return stop;
-			const name = (rawParams as { name: string }).name.trim();
-			const response = await bound.room.commit({
-				activation: bound.activation.id,
-				key: toolCallId,
-				intent: { kind: 'seated', name },
-			});
-			if ('committed' in response) composing.seated += 1;
-			return bound.landed(response);
-		},
-	};
-}
-
-function composeStoppingReason(composing: Composing): string | undefined {
-	if (composing.seated >= composing.limit) return 'Everybody who was on call is in the room.';
-	if (composing.calls > composing.limit + ASSISTANT_CALLS)
-		return 'You have tried this enough times.';
-	return undefined;
 }

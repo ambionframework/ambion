@@ -1,6 +1,6 @@
 /**
  * An exchange closes into one message. `docs/exchange.md` and
- * `docs/assistant.md`: a question opens an exchange, the seats answer in
+ * `docs/summary.md`: a question opens an exchange, the seats answer in
  * parallel under the say lock, the room goes quiet, and the assistant writes
  * for the person in the shape their preferences ask for. On a real model the
  * seats race for real, and the room going quiet at all is the gap
@@ -72,7 +72,7 @@ live('the exchange', () => {
 		const messages = await session.messages();
 		const question = saidBy(messages, andrei.name)[0];
 		expect(question).toBeDefined();
-		// Two facts at least were needed, so the assistant owed a message.
+		// The configured writer receives the closed exchange.
 		expect(saidByAgents(messages, [andrei.name]).length).toBeGreaterThanOrEqual(2);
 		const summaries = messages.filter(isSummary);
 		expect(summaries).toHaveLength(1);

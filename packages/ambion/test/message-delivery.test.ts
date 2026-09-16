@@ -68,9 +68,9 @@ describe.each(storages)('message delivery on $name', (storage) => {
 		const observed = observedTransport();
 		const room = await startRoom({
 			name: roomName('delivery-active'),
-			assistant,
-			agents: [alpha, beta],
-			seats: quietSeats,
+
+			agents: [alpha, beta, assistant],
+			seats: { [assistant.name]: 'none', ...quietSeats },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
 			streamFn: scripted(
 				byAgent({
@@ -129,9 +129,9 @@ describe.each(storages)('message delivery on $name', (storage) => {
 		const firstRuntime = runtime();
 		const room = await startRoom({
 			name: roomName('delivery-replay'),
-			assistant,
-			agents: [alpha, beta],
-			seats: quietSeats,
+
+			agents: [alpha, beta, assistant],
+			seats: { [assistant.name]: 'none', ...quietSeats },
 			runtime: firstRuntime,
 			streamFn: scripted(
 				byAgent({
@@ -192,9 +192,9 @@ describe.each(storages)('message delivery on $name', (storage) => {
 		const observed = observedTransport();
 		const room = await startRoom({
 			name: roomName('delivery-summary-boundary'),
-			assistant,
-			agents: [alpha, beta],
-			seats: { [alpha.name]: 'broadcast', [beta.name]: 'named' },
+			summary: assistant.name,
+			agents: [alpha, beta, assistant],
+			seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
 			streamFn: scripted(
 				byAgent({

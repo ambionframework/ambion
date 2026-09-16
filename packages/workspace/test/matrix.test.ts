@@ -13,7 +13,6 @@ import { describe, expect, it } from 'vitest';
 import { collect, deferred } from '../../ambion/test/support/room.ts';
 import {
 	agent,
-	assistant,
 	finish,
 	priya,
 	runScenario,
@@ -54,7 +53,6 @@ const twoWorkspaces: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			assistant,
 			agents: [alpha, beta, gamma],
 			streamFn: scripted(
 				byAgent({
@@ -75,7 +73,7 @@ const twoWorkspaces: Scenario = {
 						return call === 3 ? speak('beta done') : quiet();
 					},
 					gamma: (context) => {
-						expect(toolNames(context)).toEqual(['say']);
+						expect(toolNames(context)).toEqual(['say', 'seat', 'unseat']);
 						return quiet();
 					},
 				}),

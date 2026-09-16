@@ -47,9 +47,9 @@ const PEOPLE = [priya, sam, dan];
 /** The composition the room starts with: the same one `main.ts` and `demo.ts` use. */
 const COMPOSITION = {
 	name: ROOM_NAME,
-	assistant: ASSISTANT.name,
-	agents: AGENTS.map((agent) => agent.name),
-	seats: INITIAL_SEATS,
+	summary: ASSISTANT.name,
+	agents: [...AGENTS.map((agent) => agent.name), ASSISTANT.name],
+	seats: { [ASSISTANT.name]: 'broadcast', ...INITIAL_SEATS },
 	goal: GOAL,
 };
 

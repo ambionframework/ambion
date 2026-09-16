@@ -7,9 +7,8 @@ participation, and a reliable boundary for contributing to a conversation.
 [ambionframework.com](https://ambionframework.com) · [documentation](docs/README.md)
 
 An agent owns its instructions, model, tools, and domain expertise. A room
-lets those agents work together. An optional assistant selects specialists
-and consolidates their work for a person. Applications own their domain data
-and the resources their tools use.
+lets those agents work together. An optional summary records a closed human
+exchange for its owner. Applications own their domain data and tool resources.
 
 ## When to use Ambion
 
@@ -32,18 +31,18 @@ Ambion serves TypeScript application developers. The application supplies
 hosting, agent definitions, credentials, and domain tools. Ambion supplies the
 collaboration semantics.
 
-![Independent agents contribute to a shared journal in an ongoing room. New context steers active work. An optional assistant summarizes a closed exchange for later activations, while people can review its original messages.](docs/assets/ambion-exchange.svg)
+![Independent agents contribute to a shared journal in an ongoing room. New context steers active work. An optional summary records a closed exchange for later activations, while people can review its original messages.](docs/assets/ambion-exchange.svg)
 
 ## The conceptual model
 
-| Concept          | Meaning                                                      |
-| ---------------- | ------------------------------------------------------------ |
-| Agent definition | Identity, instructions, model, and tools for one domain      |
-| Room             | Participants collaborating through one ordered journal       |
-| Membership       | An agent's participation and attention within a room         |
-| Visit            | A human's speaking identity and presence lifetime            |
-| Exchange         | An opening message and the discussion it starts              |
-| Activation       | A bounded execution with authority to contribute to the room |
+| Concept       | Meaning                                                      |
+| ------------- | ------------------------------------------------------------ |
+| Agent catalog | Definitions for every executable agent in one room run       |
+| Room          | Participants collaborating through one ordered journal       |
+| Membership    | An agent's participation and attention within a room         |
+| Visit         | A human's speaking identity and presence lifetime            |
+| Exchange      | An opening message and the discussion it starts              |
+| Activation    | A bounded execution with authority to contribute to the room |
 
 Application code mainly works with definitions, rooms, visits, and exchanges.
 Membership changes through room operations. Activation and lease details
@@ -76,16 +75,15 @@ a time. Pending work and execution leases determine when it closes. A recorded
 close fixes the exchange range. Separate simultaneous discussions use separate
 rooms.
 
-**The optional assistant has constrained duties.** It selects reserve agents
-when an exchange opens and can summarize a closed discussion. Those executions
-receive `seat` or `summarise`, with no ordinary specialist authority. A summary
-retains its source range even if a later exchange starts.
+**A summary has one constrained duty.** A configured, seated agent receives a
+closing activation for each closed human exchange. It may publish one summary
+through `say`; the room stamps its recipient and source range.
 
 **Summaries compact later activations; people can review the discussion.**
 Once a closed exchange has a summary, later agent activations read it in place
 of the covered source messages. The journal retains those messages, and
 `exchange.messages()` lets applications show the original discussion to human
-participants. See the [assistant contract](docs/assistant.md#8-summaries-compact-activations-people-can-review-the-discussion).
+participants. See the [summary contract](docs/summary.md).
 
 ## Install
 
@@ -112,7 +110,7 @@ See [Contributing](CONTRIBUTING.md) to build and run from source.
 
 ## A small room
 
-This example uses two specialist definitions and no assistant. Each specialist
+This example uses two specialist definitions and no summary writer. Each specialist
 owns its instructions and model choice. Define ordinary typed tools with
 `defineTool` and pass reusable bundles in the separate `bundles` field.
 Pass a workspace's `tools()` result in that field.
@@ -159,15 +157,14 @@ try {
 }
 ```
 
-Supply an `assistant` definition to `startRoom` when the application needs
-specialist selection or synthesis. Include every ordinary definition in
-`agents`; leave an agent out of `seats` to keep it in the reserve.
-`exchange.response()` waits for a summary or a terminal result
-without one. Deliberate absence returns `undefined`; revoked or abandoned
-summary work rejects the response wait. The application can read
-`exchange.messages()` for the discussion in either case.
+Set `summary` to the name of a defined agent when the application needs an
+optional closing summary. Include every executable definition in `agents`; leave
+an agent out of `seats` to keep it in the reserve. If `seats` is omitted, every
+defined agent starts at `broadcast` attention. `exchange.response()` waits for
+a summary or a terminal result without one. A writer may decline, and the
+application can always read the discussion.
 
-[`examples/site`](examples/site) demonstrates domain tools, reserve selection,
+[`examples/site`](examples/site) demonstrates domain tools, agent membership,
 multiple people, and a shared workspace.
 
 ## Hosting and persistence

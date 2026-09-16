@@ -13,8 +13,9 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 	const stub = env.ROOM.get(env.ROOM.idFromName('room-test'));
 	await stub.start({
 		name: 'room-test',
-		assistant: 'assistant',
-		agents: [],
+		summary: 'assistant',
+		seats: { assistant: 'none' },
+		agents: ['assistant'],
 		goal: 'Decide the pour date.',
 	});
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
@@ -50,7 +51,12 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 
 it('resumes over its own storage after an abort, and fences the run before it', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName('room-fence'));
-	await stub.start({ name: 'room-fence', assistant: 'assistant', agents: [] });
+	await stub.start({
+		name: 'room-fence',
+		summary: 'assistant',
+		seats: { assistant: 'none' },
+		agents: ['assistant'],
+	});
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
 	await stub.send({ from: 'priya', text: 'First?', key: 'q1' });
 
@@ -96,9 +102,9 @@ it('changes membership by name without installing a definition', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName('room-roster'));
 	await stub.start({
 		name: 'room-roster',
-		assistant: 'assistant',
-		agents: ['product'],
-		seats: {},
+		summary: 'assistant',
+		agents: ['product', 'assistant'],
+		seats: { assistant: 'none', ...{} },
 	});
 	expect((await stub.participants()).map((participant) => participant.name)).toEqual(['assistant']);
 	await stub.seat('product', { attention: 'named' });

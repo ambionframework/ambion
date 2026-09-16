@@ -55,9 +55,9 @@ const surveyor = defineAgent({
 ```
 
 The core flattens bundles when it defines the agent. Bundle guidance is
-included for message activations. The `tools` field accepts ordinary typed
-Ambion tools. The assistant's opening and closing
-activations retain only their `seat` and `summarise` authority.
+included for every activation. The `tools` field accepts ordinary typed
+Ambion tools. Every activation also receives the room's `say`, `seat`, and
+`unseat` tools.
 
 Custom tools close over the resource. They select the calling agent and pass
 the call signal to `use`.

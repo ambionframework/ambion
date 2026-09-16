@@ -3,7 +3,7 @@ import { type ActivationId, decodeActivationId, encodeActivationId } from '../sr
 
 describe('activation id codec', () => {
 	it('round trips every stored source without changing its spelling', () => {
-		for (const source of ['message', 'opened', 'closed'] as const) {
+		for (const source of ['message', 'closed'] as const) {
 			const value: ActivationId = { source, position: 42, seat: 'site-office', attempt: 3 };
 			const raw = encodeActivationId(value);
 			expect(raw).toBe(`${source}:42:site-office:3`);
@@ -24,6 +24,7 @@ describe('activation id codec', () => {
 		'message:1::1',
 		'message:1:alpha',
 		'unknown:1:alpha:1',
+		'opened:1:alpha:1',
 	])('rejects non-canonical id %s', (raw) => {
 		expect(decodeActivationId(raw)).toBeUndefined();
 	});

@@ -13,7 +13,8 @@ const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		assistant: 'assistant',
+		version: 2,
+		summary: 'assistant',
 		agents: [
 			{ name: 'alpha', identity: 'Alpha.', attention: 'broadcast' },
 			{ name: 'beta', identity: 'Beta.', attention: 'broadcast' },
@@ -96,7 +97,7 @@ const entries: Entry[] = [
 	{
 		kind: 'close',
 		seq: 29,
-		body: { owner: 'priya', from: 3, through: 27, at, wakes: ['assistant'] },
+		body: { owner: 'priya', from: 3, through: 27, at, summary: 'assistant' },
 	},
 	lease(30, 'closed:27:assistant:1', { phase: 'running', expiresAt: 60_000, readThrough: 0 }),
 	{

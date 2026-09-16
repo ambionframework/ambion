@@ -25,6 +25,7 @@ import {
 	byAgent,
 	contextText,
 	insists,
+	isClosing,
 	quiet,
 	type Script,
 	scripted,
@@ -88,7 +89,7 @@ function composes(names: string[], summary: string): Script {
 			const next = names.shift();
 			return next ? seat(next) : quiet();
 		}
-		return holding(context, 'summarise') ? summarise(summary) : quiet();
+		return isClosing(context) ? summarise(summary) : quiet();
 	};
 }
 
@@ -111,8 +112,9 @@ export const oneExchange: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			assistant,
-			agents: [product],
+			summary: assistant.name,
+			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [product, assistant],
 			streamFn: scripted(
 				byAgent({ product: twoAnswersEach, assistant: composes([], 'The one message.') }),
 			),
@@ -135,15 +137,20 @@ export const twoPeopleTwoExchanges: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			assistant,
-			agents: [product, colleague],
+			summary: assistant.name,
+			seats: {
+				[product.name]: 'broadcast',
+				[colleague.name]: 'broadcast',
+				[assistant.name]: 'none',
+			},
+			agents: [product, colleague, assistant],
 			streamFn: scripted(
 				byAgent({
 					product: answersLastQuestion(['priya', 'sam']),
 					colleague: answersLastQuestion(['priya', 'sam']),
 					assistant: (context) => {
 						const person = /(\w+)'s exchange is over/.exec(contextText(context))?.[1] ?? '';
-						if (!holding(context, 'summarise') || toolResultTexts(context).includes('delivered')) {
+						if (!isClosing(context) || toolResultTexts(context).includes('delivered')) {
 							return quiet();
 						}
 						return summarise(`for ${person}`);
@@ -177,9 +184,9 @@ export const seatFromReserve: Scenario = {
 		const session = await startRoom({
 			name,
 			runtime,
-			assistant,
-			agents: [product, surveyor],
-			seats: { [product.name]: 'broadcast' },
+			summary: assistant.name,
+			agents: [product, surveyor, assistant],
+			seats: { [assistant.name]: 'broadcast', ...{ [product.name]: 'broadcast' } },
 			streamFn: scripted(
 				byAgent({
 					assistant: composes(['surveyor'], 'Steel: 11.7 tonnes.'),

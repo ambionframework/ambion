@@ -75,9 +75,9 @@ export interface DefineHumanOptions {
 	identity: string;
 	/**
 	 * How they read: what a message to them leads with, what to cut, and how
-	 * much of one they take. The room's assistant reads it when it writes the
-	 * one message they read at the close of their exchange. What they own is
-	 * `identity`, which every seat reads; this reaches the assistant alone.
+	 * much of one they take. The assigned summary writer reads it when writing
+	 * the one message they read at the close of their exchange. What they own is
+	 * `identity`, which every seat reads; this reaches the writer alone.
 	 */
 	preferences?: string;
 }
@@ -202,12 +202,28 @@ function copyProperties(from: object, to: object, seen: WeakMap<object, unknown>
 	}
 }
 
-/** The room tool that an ordinary message activation holds. */
+/** The room tool that every activation may use to speak. */
 export const SAY = {
 	name: 'say' as const,
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 		text: Type.String(),
+	}),
+};
+
+/** The room tool that seats one supplied agent. */
+export const SEAT = {
+	name: 'seat' as const,
+	parameters: Type.Object({
+		name: Type.String({ description: 'An agent name from the reserve.' }),
+	}),
+};
+
+/** The room tool that removes one seated agent. */
+export const UNSEAT = {
+	name: 'unseat' as const,
+	parameters: Type.Object({
+		name: Type.String({ description: 'A seated agent name.' }),
 	}),
 };
 
@@ -266,7 +282,7 @@ function assertAgentTools(agent: string, tools: readonly AmbionTool[]): void {
 			throw new Error(`Agent '${agent}' brings duplicate tools named '${name}'.`);
 		}
 		names.add(name);
-		const roomTool = name === SAY.name || name === 'seat' || name === 'summarise';
+		const roomTool = name === SAY.name || name === SEAT.name || name === UNSEAT.name;
 		if (roomTool)
 			throw new Error(
 				`Agent '${agent}' brings a tool named '${name}': the room supplies it for an activation. Give it another name.`,

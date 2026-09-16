@@ -1,8 +1,8 @@
 /**
  * The collaboration kernel: define agents and tools, supply a fixed catalog,
  * then seat agents and address participants by name. People visit rooms and
- * their questions open exchanges. The assistant can select agents from the
- * reserve and summarize completed exchanges. The journal preserves the facts
+ * their questions open exchanges. Agents can seat and unseat colleagues.
+ * An optional closing activation summarizes each completed exchange. The journal preserves the facts
  * needed to resume a room; executable definitions are supplied for each run.
  */
 

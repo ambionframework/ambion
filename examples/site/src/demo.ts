@@ -124,9 +124,9 @@ const first = createRuntime({
 let room: Room = await startRoom({
 	name: NAME,
 	goal: GOAL,
-	assistant: ASSISTANT,
-	agents: AGENTS,
-	seats: INITIAL_SEATS,
+	summary: ASSISTANT.name,
+	agents: [...AGENTS, ASSISTANT],
+	seats: { [ASSISTANT.name]: 'broadcast', ...INITIAL_SEATS },
 	runtime: first,
 });
 
@@ -325,12 +325,6 @@ const sinceOnReturn = priyaBack.since;
 await room.stop();
 const finalRecord: Message[] = await room.messages();
 const participants = room.participants();
-/** The seat that writes for people: the roster names its role, and nothing else tells it apart. */
-const assistants = new Set(
-	participants.flatMap((participant) =>
-		participant.kind === 'agent' && participant.assistant ? [participant.name] : [],
-	),
-);
 
 /**
  * Every downstream room the run wrote: `<room>:<agent>` for a seat, the
@@ -338,7 +332,7 @@ const assistants = new Set(
  */
 const seatSessions: {
 	agent: string;
-	kind: 'agent' | 'assistant';
+	kind: 'agent';
 	sessionId: string;
 	blocks: { at: string; turns: unknown[] }[];
 }[] = [];
@@ -364,9 +358,7 @@ for (const seat of participants) {
 	}
 	seatSessions.push({
 		agent: seat.name,
-		// The assistant is a seat like any other; the roster says which seat writes
-		// for people, and that is the only thing that tells them apart.
-		kind: assistants.has(seat.name) ? 'assistant' : 'agent',
+		kind: 'agent',
 		sessionId: id,
 		blocks,
 	});

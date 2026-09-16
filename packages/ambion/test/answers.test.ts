@@ -14,7 +14,8 @@ const composition: Entry = {
 	kind: 'composition',
 	seq: 1,
 	body: {
-		assistant: 'assistant',
+		version: 2,
+		summary: 'assistant',
 		agents: [{ name: 'assistant', identity: 'Writes.', attention: 'none' }],
 		available: [],
 		at,
@@ -24,7 +25,7 @@ const composition: Entry = {
 const close: Entry = {
 	kind: 'close',
 	seq: 3,
-	body: { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] },
+	body: { owner: 'priya', from: 2, through: 2, at, summary: 'assistant' },
 };
 
 const question: Entry = {

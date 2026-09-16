@@ -9,6 +9,7 @@ const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
 const retry = { backoff: (attempt: number) => attempt * 30_000 };
 const composition: Composition = {
+	version: 2,
 	seq: 2,
 	at,
 	agents: [{ name: 'product', identity: 'Product.', attention: 'broadcast' }],

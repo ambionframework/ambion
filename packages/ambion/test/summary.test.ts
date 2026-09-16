@@ -1,6 +1,7 @@
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { AgentDefinition } from '../src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -13,7 +14,6 @@ import {
 	type Runtime,
 	type SummaryMessage,
 	startRoom,
-	type ToolBundle,
 } from '../src/index.ts';
 import { renderRecord } from '../src/seat/render.ts';
 import { fakeClock } from './support/clock.ts';
@@ -32,6 +32,7 @@ import {
 	byAgent,
 	contextText,
 	insists,
+	isClosing,
 	quiet,
 	type Script,
 	scripted,
@@ -111,15 +112,22 @@ async function open(options: {
 	script: Script;
 	agents?: Parameters<typeof startRoom>[0]['agents'];
 	seats?: Parameters<typeof startRoom>[0]['seats'];
-	assistant?: Parameters<typeof startRoom>[0]['assistant'];
+	assistant?: AgentDefinition;
 	runtime?: Runtime;
 }): Promise<Room> {
 	const session = await startRoom({
 		name: roomName(),
 		goal: 'Decide the pour date and keep the plan honest.',
-		assistant: options.assistant ?? assistant,
-		agents: options.agents ?? [product],
-		...(options.seats ? { seats: options.seats } : {}),
+		summary: (options.assistant ?? assistant).name,
+		agents: [...(options.agents ?? [product]), options.assistant ?? assistant],
+		seats: {
+			...(options.seats ??
+				Object.fromEntries(
+					(options.agents ?? [product]).map((agent) => [agent.name, 'broadcast' as const]),
+				)),
+			[(options.assistant ?? assistant).name]:
+				options.seats?.[(options.assistant ?? assistant).name] ?? 'none',
+		},
 		streamFn: scripted(options.script),
 		runtime: options.runtime ?? runtime,
 	});
@@ -179,7 +187,7 @@ const twoAnswersEach: Script = (_context, _name, call) =>
 const writesEach =
 	(text: string): Script =>
 	(_context, _name, call) =>
-		call % 2 === 1 ? summarise(`${text} ${call}`) : quiet();
+		summarise(`${text} ${call}`);
 
 /** A product that is still reading when the room changes under it. */
 function heldUntil(held: Promise<void>): Script {
@@ -194,7 +202,7 @@ function heldUntil(held: Promise<void>): Script {
 	};
 }
 
-describe('the assistant', () => {
+describe('closing summaries', () => {
 	it('writes one message for an exchange the room answered more than once', async () => {
 		const contexts: string[] = [];
 		const prompts: string[] = [];
@@ -230,14 +238,14 @@ describe('the assistant', () => {
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said', 'said', 'summary']);
 
 		// what an assistant is given: the range it covers, and one tool that reaches the record
-		expect(tools).toEqual(['summarise', 'summarise']);
+		expect(tools).toEqual(['say']);
 		expect(contexts[0]).toContain('Can I tell the client Thursday');
 		expect(contexts[0]).toContain('the inspector needs 48h notice');
 		// what its person owns reaches it in the roster, so an assistant holds no copy
 		expect(contexts[0]).toContain('Project manager. Owns the programme.');
 		// and it is addressed as the assistant it is, not as a seat that speaks
-		expect(prompts[0]).toContain("'assistant', the assistant in the room");
-		expect(prompts[0]).toContain('Writing is the summarise tool');
+		expect(prompts[0]).toContain("'assistant', an agent seated in the room");
+		expect(prompts[0]).toContain('using the say tool');
 		expect(prompts[0]).not.toContain('Speaking is the say tool');
 		// it is told whom it writes for, and how that person reads
 		expect(prompts[0]).toContain('You are writing for priya.');
@@ -248,13 +256,13 @@ describe('the assistant', () => {
 		// them: one counter gives out every place, so a place is not a number
 		// a reader can find.
 		expect(contexts[0]).toContain(
-			"priya's exchange is over: messages 1 to 3. Write the one message they read for it",
+			"priya's exchange is over: messages 1 to 3. Write the one message with say",
 		);
 	});
 
-	it('leaves one answer as it was given, in the voice that gave it', async () => {
+	it('lets the writer decline a summary even when only one answer exists', async () => {
 		const session = await open({
-			script: byAgent({ product: oneAnswer, assistant: writes('nobody asked for this') }),
+			script: byAgent({ product: oneAnswer, assistant: () => quiet() }),
 		});
 
 		const visit = await session.visit(priya);
@@ -299,7 +307,7 @@ describe('the assistant', () => {
 		expect(read).toContain('[assistant → priya] Thursday is out; Saturday holds.');
 		expect(read).not.toContain('the inspector needs 48h notice');
 		// the roster names the seat that writes for people, and nobody brings one
-		expect(read).toContain('- assistant (idle, wakes for nothing said, assistant):');
+		expect(read).toContain('- assistant (idle, wakes for nothing said):');
 		expect(read).not.toContain('brings');
 		// a record that holds a summary tells its seats how to read a fold; one that does not, does not
 		expect(prompts[0]).not.toContain('summarised for <name> below');
@@ -644,7 +652,7 @@ describe('the assistant', () => {
 
 		// The room lists it as the seat it is: an agent seated at none.
 		const seat = session.participants().find((s) => s.name === 'assistant');
-		expect(seat).toMatchObject({ kind: 'agent', assistant: true, attention: 'none' });
+		expect(seat).toMatchObject({ kind: 'agent', attention: 'none' });
 		const seatSession = session.participants().find((value) => value.name === 'assistant');
 		if (seatSession?.kind !== 'agent') throw new Error('The assistant seat is absent.');
 		const entries = await (
@@ -680,7 +688,6 @@ describe('the assistant', () => {
 		const seat = session.participants().find((s) => s.name === 'assistant');
 		expect(seat).toMatchObject({
 			kind: 'agent',
-			assistant: true,
 			attention: 'none',
 			status: 'idle',
 		});
@@ -829,7 +836,6 @@ describe('the assistant', () => {
 		const seats = session.participants();
 		expect(seats.find((s) => s.name === 'assistant')).toMatchObject({
 			kind: 'agent',
-			assistant: true,
 			attention: 'none',
 		});
 		expect(seats.find((s) => s.name === 'priya')).toEqual({
@@ -899,7 +905,7 @@ describe('an exchange', () => {
 	});
 
 	/** Resolves when the named seat's next activation ends. */
-	const activationEnded = (session: Room, agent: string) =>
+	const _activationEnded = (session: Room, agent: string) =>
 		new Promise<void>((resolve) => {
 			const off = session.subscribe((event) => {
 				if (event.type !== 'activation_end' || event.agent !== agent) return;
@@ -979,7 +985,9 @@ describe('an exchange', () => {
 		// remains inside the exchange that was already open.
 		expect(ranges(events)).toEqual([[first?.seq, next?.seq]]);
 		expect(openings(events)).toEqual([first?.seq]);
-		expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(2);
+		expect(
+			events.filter((e) => e.type === 'activation_start' && e.agent === 'product'),
+		).toHaveLength(2);
 	});
 
 	it('does not split an exchange when a stale close races with a later question', async () => {
@@ -995,13 +1003,12 @@ describe('an exchange', () => {
 					return quiet();
 				},
 				// composes nobody for the first question; the second gets no composing activation
-				assistant: (_context, _name, call) => (call === 2 ? seat('surveyor') : quiet()),
+				assistant: () => quiet(),
 			}),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);
 		await visit.send({ to: product.name, text: 'first?' });
-		await activationEnded(session, 'assistant');
 		// the second question wakes nobody, and it is asked the moment the product stops
 		const asked = askedAsStops(session, 'product', () => visit.send({ text: 'second?' }));
 		working.resolve();
@@ -1022,7 +1029,7 @@ describe('an exchange', () => {
 		expect(await currentExchange(session)).toBeUndefined();
 	});
 
-	it('does not compose a second time for a question already covered by the open exchange', async () => {
+	it('keeps a broadcast message in the open exchange even when no idle agent wakes', async () => {
 		const gate = deferred();
 		const working = deferred();
 		const session = await open({
@@ -1039,7 +1046,6 @@ describe('an exchange', () => {
 		const events = collect(session);
 		const visit = await session.visit(priya);
 		await visit.send({ to: product.name, text: 'first?' });
-		await activationEnded(session, 'assistant');
 		// a word into the room is asked the moment the product stops, and lands before the
 		// close; the product has named attention, so only the assistant could activate.
 		const asked = askedAsStops(session, 'product', () => visit.send({ text: 'hey' }));
@@ -1146,7 +1152,7 @@ describe('a fold', () => {
 	});
 });
 
-describe('a room without an assistant', () => {
+describe('a room without a summary writer', () => {
 	it('opens and closes an exchange, and owes no summary', async () => {
 		// Nothing holds a room to an assistant. The room closes the exchange
 		// the way it always does, and no close names a seat, so nothing is
@@ -1172,53 +1178,60 @@ describe('a room without an assistant', () => {
 	});
 });
 
-describe('an assistant that brings its own tools', () => {
-	it('keeps bundle guidance and tools out of opening and closing activations', async () => {
-		// `assertAssistant` refused a definition like this. A role is a
-		// seating choice now, so the definition is the host's business: the
-		// close binds one tool, so the tools it brings reach no model.
+describe('a summary writer with domain tools', () => {
+	it('uses ordinary tools while responding and only say while summarizing', async () => {
 		const book = defineTool({
 			name: 'book-inspector',
 			description: 'Book the inspector.',
 			parameters: Type.Object({}),
 			execute: () => 'booked',
 		});
-		const bundle: ToolBundle = { tools: [book], guidance: 'Book guidance.' };
-		const held: string[][] = [];
-		const prompts: string[] = [];
+		const held: { closing: boolean; tools: string[]; prompt: string }[] = [];
+		let seated = false;
+		let published = false;
 		const session = await open({
 			script: byAgent({
 				product: insists('Thursday is out.'),
 				colleague: insists('Nor from here.'),
-				assistant: (context, _who, call) => {
-					held.push(toolNames(context));
-					prompts.push(context.systemPrompt ?? '');
-					if (call <= 3) return seat('colleague');
-					return call === 4 ? summarise('The one message.') : quiet();
+				assistant: (context) => {
+					const closing = isClosing(context);
+					held.push({ closing, tools: toolNames(context), prompt: context.systemPrompt ?? '' });
+					if (!closing && !seated) {
+						seated = true;
+						return seat('colleague');
+					}
+					if (closing && !published) {
+						published = true;
+						return summarise('The one message.');
+					}
+					return quiet();
 				},
 			}),
 			assistant: defineAgent({
 				name: 'assistant',
-				identity: 'Writes the one message a person reads.',
-				instructions: 'summarise',
+				identity: 'Coordinates the answer.',
+				instructions: 'Collaborate.',
 				model: 'scripted/assistant',
-				bundles: [bundle],
+				bundles: [{ tools: [book], guidance: 'Book guidance.' }],
 			}),
 			agents: [product, colleague],
-			seats: { [product.name]: 'broadcast' },
+			seats: { product: 'broadcast', assistant: 'broadcast' },
 		});
-
-		const visit = await session.visit(priya);
-		await visit.send({ text: 'Can I tell the client Thursday?' });
+		await (await session.visit(priya)).send({ text: 'Can I tell the client Thursday?' });
 		await quiescent(session);
-
-		// The opening activation holds `seat`; the close holds `summarise`.
-		const firstSummary = held.findIndex((tools) => tools[0] === 'summarise');
-		expect(firstSummary).toBeGreaterThan(0);
-		expect(held.every((tools) => tools.length === 1)).toBe(true);
-		expect(held.slice(0, firstSummary).every((tools) => tools[0] === 'seat')).toBe(true);
-		expect(held.slice(firstSummary).every((tools) => tools[0] === 'summarise')).toBe(true);
-		expect(prompts.every((prompt) => !prompt.includes('Book guidance.'))).toBe(true);
+		const ordinary = held.filter((view) => !view.closing);
+		const closing = held.filter((view) => view.closing);
+		expect(ordinary.length).toBeGreaterThan(0);
+		expect(closing.length).toBeGreaterThan(0);
+		for (const view of ordinary) {
+			expect(view.tools).toEqual(['say', 'seat', 'unseat', 'book-inspector']);
+			expect(view.prompt).toContain('Book guidance.');
+		}
+		for (const view of closing) {
+			expect(view.tools).toEqual(['say']);
+			expect(view.prompt).not.toContain('Book guidance.');
+		}
+		expect(summaries(await session.messages())).toHaveLength(1);
 	});
 });
 
@@ -1231,5 +1244,62 @@ describe('defineHuman', () => {
 		expect(
 			defineHuman({ name: 'eve', identity: 'Eve.', preferences: '   ' }).preferences,
 		).toBeUndefined();
+	});
+});
+
+describe('ordinary and closing work on one agent', () => {
+	it('keeps a later exchange open while its writer finishes the earlier summary', async () => {
+		const closingStarted = deferred();
+		const finishClosing = deferred();
+		const closingContexts: string[] = [];
+		const answered = new Set<string>();
+		const session = await open({
+			agents: [],
+			seats: { assistant: 'broadcast' },
+			script: byAgent({
+				assistant: async (context) => {
+					const record = contextText(context);
+					if (isClosing(context)) {
+						closingContexts.push(record);
+						if (closingContexts.length === 1) {
+							closingStarted.resolve();
+							await finishClosing.promise;
+						}
+						return summarise(`Summary ${closingContexts.length}.`);
+					}
+					const question = record.includes('Second question?')
+						? 'Second question?'
+						: 'First question?';
+					if (answered.has(question)) return quiet();
+					answered.add(question);
+					return speak(`Answer to ${question}`);
+				},
+			}),
+		});
+		const visit = await session.visit(priya);
+		const first = await visit.send({ text: 'First question?' });
+		await closingStarted.promise;
+		const second = await visit.send({ text: 'Second question?' });
+		await session.reconcile();
+		expect(await currentExchange(session)).toMatchObject({ from: second.from });
+		let settled = false;
+		const discussion = second.messages().then((messages) => {
+			settled = true;
+			return messages;
+		});
+		await tick();
+		expect(settled).toBe(false);
+		finishClosing.resolve();
+		expect(
+			(await discussion).some(
+				(message) => isSpoken(message) && message.text === 'Answer to Second question?',
+			),
+		).toBe(true);
+		expect(await first.response()).toMatchObject({ kind: 'summary', text: 'Summary 1.' });
+		expect(await second.response()).toMatchObject({ kind: 'summary', text: 'Summary 2.' });
+		await quiescent(session);
+		expect(closingContexts).toHaveLength(2);
+		expect(closingContexts[0]).not.toContain('Second question?');
+		expect(closingContexts[1]).not.toContain('First question?');
 	});
 });

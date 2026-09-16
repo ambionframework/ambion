@@ -52,7 +52,7 @@ function observed(deliver = true): { transport: Transport; sent: Wake[] } {
 const activations = (sent: readonly Wake[]): string[] => sent.map((wake) => wake.activation).sort();
 
 describe.each(storages)('activation dispatch on $name', (storage) => {
-	it('starts ordinary and selection work promptly with only their recorded causes', async () => {
+	it('starts ordinary work promptly with only their recorded causes', async () => {
 		const opened = await storage.open();
 		const clock = fakeClock();
 		const before = clock.now();
@@ -61,9 +61,9 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		const transport = observed();
 		const room = await startRoom({
 			name: roomName('dispatch-causes'),
-			assistant,
-			agents: [alpha, beta],
-			seats: { [alpha.name]: 'broadcast' },
+
+			agents: [alpha, beta, assistant],
+			seats: { [assistant.name]: 'broadcast', ...{ [alpha.name]: 'broadcast' } },
 			runtime: createRuntime({ storage: opened.storage, clock, transport: transport.transport }),
 			streamFn: scripted(
 				byAgent({
@@ -86,7 +86,7 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 			expect(clock.now()).toBe(before);
 			expect(activations(transport.sent)).toEqual([
 				`message:${exchange.from}:alpha:1`,
-				`opened:${exchange.from}:assistant:1`,
+				`message:${exchange.from}:assistant:1`,
 			]);
 		} finally {
 			await room.stop();
@@ -105,9 +105,9 @@ describe.each(storages)('activation dispatch on $name', (storage) => {
 		});
 		const room = await startRoom({
 			name: roomName('dispatch-recovery'),
-			assistant,
-			agents: [alpha, beta],
-			seats: { [alpha.name]: 'broadcast' },
+
+			agents: [alpha, beta, assistant],
+			seats: { [assistant.name]: 'broadcast', ...{ [alpha.name]: 'broadcast' } },
 			runtime: firstRuntime,
 			streamFn: scripted(() => quiet()),
 		});

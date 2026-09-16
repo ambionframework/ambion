@@ -145,8 +145,13 @@ class Cluster {
 		this.session = await startRoom({
 			name: this.name,
 			runtime: this.runtime,
-			assistant,
-			agents: [product, colleague],
+			summary: assistant.name,
+			seats: {
+				[product.name]: 'broadcast',
+				[colleague.name]: 'broadcast',
+				[assistant.name]: 'none',
+			},
+			agents: [product, colleague, assistant],
 			streamFn: scripted(this.cast.script),
 		});
 		this.watch();

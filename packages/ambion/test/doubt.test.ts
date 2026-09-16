@@ -20,11 +20,11 @@ import { collect, roomName, storedOf, waitForRoom } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
+	isClosing,
 	quiet,
 	says,
 	scripted,
 	summarise,
-	toolNames,
 	toolResultTexts,
 } from './support/scripted.ts';
 import { faultyJournals, memory, tappedJournals } from './support/storage.ts';
@@ -46,7 +46,7 @@ const priya = defineHuman({ name: 'priya', identity: 'PM.' });
 const script = byAgent({
 	alpha: answersLastQuestion(['priya']),
 	assistant: (context) =>
-		toolNames(context).includes('summarise') && !toolResultTexts(context).includes('delivered')
+		isClosing(context) && !toolResultTexts(context).includes('delivered')
 			? summarise('The one message.')
 			: quiet(),
 });
@@ -63,8 +63,9 @@ async function room(name: string) {
 	const session = await startRoom({
 		name: roomName(name),
 		runtime,
-		assistant,
-		agents: [alpha],
+		summary: assistant.name,
+		seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+		agents: [alpha, assistant],
 		streamFn: scripted(script),
 	});
 	return { opened, faulty, clock, session, events: collect(session) };
@@ -95,7 +96,7 @@ describe('a room in doubt', () => {
 						view: (id) => room.view(id),
 						lease: (lease) => room.lease(lease),
 						commit: async (commit) => {
-							if (retried || commit.intent.kind !== 'summary') return room.commit(commit);
+							if (retried || !commit.activation.startsWith('closed:')) return room.commit(commit);
 							retried = true;
 							const first = await room.commit(commit);
 							const retry = await room.commit(commit);
@@ -113,14 +114,14 @@ describe('a room in doubt', () => {
 		const session = await startRoom({
 			name: roomName('doubt-summary'),
 			runtime: createRuntime({ clock, storage: opened.storage, transport }),
-			assistant,
-			agents: [alpha],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [alpha, assistant],
 			streamFn: scripted(
 				byAgent({
 					alpha: says(['one', 'two']),
 					assistant: (context) =>
-						toolNames(context).includes('summarise') &&
-						!toolResultTexts(context).includes('delivered')
+						isClosing(context) && !toolResultTexts(context).includes('delivered')
 							? summarise('The one message.')
 							: quiet(),
 				}),
@@ -167,8 +168,9 @@ describe('a room in doubt', () => {
 		const session = await startRoom({
 			name: roomName('doubt-close'),
 			runtime,
-			assistant,
-			agents: [alpha],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [alpha, assistant],
 			streamFn: scripted(script),
 		});
 		const events = collect(session);

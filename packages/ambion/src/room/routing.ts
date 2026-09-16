@@ -11,9 +11,9 @@
  * (rule 2), and the steer is not on the message.
  */
 
-import { assistantPolicy } from '../assistant.ts';
 import type { Body } from '../journal/journal.ts';
 import type { Attention, Message } from '../types.ts';
+import { activationSpec } from './activation.ts';
 import type { RoomState } from './fold.ts';
 
 /** The attention scale, narrowest first. A seat hears what it is wide enough for. */
@@ -71,9 +71,7 @@ function targetOf(message: RoutedMessage): string | undefined {
 /**
  * Who wakes for a message — the same answer for what a person said, what a
  * person did, and what a colleague said. An idle seat wakes when the
- * attention it was seated at reaches the message. The question that opens
- * an exchange also wakes the assistant when the room holds agents in reserve
- * and that seat is idle.
+ * attention it was seated at reaches the message.
  *
  * `live` names the seats the room is already waiting on, so nothing here
  * wakes a seat twice.
@@ -92,18 +90,13 @@ export function routes(
 			? [...state.roster, { name: message.subject, attention: message.attention ?? 'broadcast' }]
 			: state.roster;
 	const woken = roster
-		.filter((seat) => seat.name !== author && !live.has(seat.name))
+		.filter((seat) => seat.name !== author && !holdsOrdinary(state, live.get(seat.name)))
 		.filter((seat) => wakes(seat, target, message))
 		.map((seat) => seat.name);
-	const composer = assistantPolicy.opening(state.composition, state.roster, state.reserve);
-	if (composer !== undefined && opens(message, state) && !live.has(composer)) {
-		woken.push(composer);
-	}
 	return [...new Set(woken)];
 }
 
-/** The message opens an exchange, and the room holds agents to compose it from. */
-function opens(message: RoutedMessage, state: RoomState): boolean {
-	if (state.exchange !== undefined) return false;
-	return spoken(message) && state.people.has(message.from);
+/** Closing work does not block a new ordinary activation for the same seat. */
+function holdsOrdinary(state: RoomState, ids: readonly string[] | undefined): boolean {
+	return ids?.some((id) => activationSpec(id, state)?.purpose.kind === 'respond') ?? false;
 }

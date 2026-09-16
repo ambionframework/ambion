@@ -31,8 +31,12 @@ function agent(agentName: string, options: Partial<Parameters<typeof defineAgent
 async function run(agents: AgentDefinition[], seats: Record<string, Script>): Promise<Room> {
 	const session = await startRoom({
 		name: name('ordinary-bundles'),
-		assistant,
-		agents,
+		summary: assistant.name,
+		seats: {
+			...Object.fromEntries(agents.map((agent) => [agent.name, 'broadcast' as const])),
+			[assistant.name]: 'none',
+		},
+		agents: [...agents, assistant],
 		streamFn: scripted(byAgent(seats)),
 	});
 	const visit = await enter(session);

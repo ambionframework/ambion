@@ -30,13 +30,14 @@ What is built:
 - **`configure`** names the complete agent catalog the objects resolve by name,
   and the model call they make.
 
-`RoomObject.start` receives ordinary agent names in `agents`, an optional
-assistant name, and an optional `seats` map. The map selects initial members
-and attention. An omitted map seats every supplied ordinary agent at
-`broadcast`; an empty map starts them in the reserve. `seat` and `unseat`
-take names and cannot install a new definition. The room metadata retains the
-catalog names, so automatic resume resolves the same definitions through
-`configure`. Resume requires catalog names in the room metadata.
+`RoomObject.start` receives the complete agent catalog in `agents`, an optional
+`summary` name, and an optional `seats` map. The map sets initial members and
+attention. An omitted map seats every supplied agent at `broadcast`; an empty
+map starts them in the reserve. `seat` and `unseat` take names and cannot
+install a new definition. The room metadata retains the catalog names, so
+automatic resume resolves the same definitions through `configure`. Resume
+requires catalog names in the room metadata. Every seat uses the same room
+tools, including `say`, `seat`, and `unseat`.
 
 The package is private, and nothing deploys it. `pnpm test` runs its three
 tests inside workerd, through `@cloudflare/vitest-pool-workers`, as part of

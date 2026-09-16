@@ -12,10 +12,10 @@
  * diffed and tested without starting anything. The room's mechanics hold no
  * sentences, and this file holds no state.
  */
-import { assistantAction, assistantDuties, assistantPolicy } from '../assistant.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
 import { isSpoken, isSummary, type Message, type Seq, type SummaryMessage } from '../types.ts';
 import type { ActivationView, ContextParticipant } from '../wire.ts';
+import { SUMMARY_DUTIES } from './summary.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -100,7 +100,7 @@ function blocks(record: readonly Message[]): Block[] {
  * room stopped reading. The divider is what lets an agent tell somebody the
  * one thing they missed without re-reading the whole room to them.
  *
- * A range the assistant has summarised renders as its count and the person it was
+ * A closing seat's summary renders as its count and the person it was
  * written for, and the summary that stands for it renders below. The record
  * keeps every message; what a seat reads is a rendering of it, built fresh at
  * each activation.
@@ -166,7 +166,6 @@ function seatNotes(seat: Extract<ContextParticipant, { kind: 'agent' }>): string
 	const parts: string[] = [seat.status];
 	const note = ATTENTION_NOTE[seat.attention];
 	if (note) parts.push(note);
-	if (seat.assistant) parts.push('assistant');
 	return parts;
 }
 
@@ -232,8 +231,7 @@ function renderSystemPrompt(view: ActivationView, def: AgentDefinition): string 
 /** What this seat is for, read off the activation purpose. */
 function duties(view: ActivationView, def: AgentDefinition): string[] {
 	const purpose = view.spec.purpose.kind;
-	if (purpose === 'select' || purpose === 'summarize')
-		return [...assistantDuties[purpose === 'select' ? 'seat' : 'summarise']];
+	if (purpose === 'summarize') return [...SUMMARY_DUTIES];
 	const lines = [
 		`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 		`your turn without saying anything, and no mark is left. Speak only when your reply`,
@@ -269,13 +267,13 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 		`The agents. Each is seated at one point of a scale — the widest kind of message`,
 		`that wakes it. Unmarked: anything said. "named only": a say addressed to it.`,
 		`"watches arrivals": also somebody arriving or leaving. "wakes for nothing said":`,
-		`nothing reaches it and you cannot address it. "the assistant" writes the one`,
+		`nothing reaches it and you cannot address it. A closing assignment writes the one`,
 		`message a person reads when their exchange closes.`,
 		`(active: taking a turn now; idle: at rest.)`,
 		renderAgents(context.participants),
-		...(view.spec.purpose.kind === 'select' && context.reserve !== undefined
-			? [``, ...renderReserve(context.reserve)]
-			: []),
+		...(view.spec.purpose.kind === 'summarize' || context.reserve === undefined
+			? []
+			: [``, ...renderReserve(context.reserve)]),
 		``,
 		`The people (present: in the room now; absent: not in the room):`,
 		renderPeople(people, context.now),
@@ -287,10 +285,10 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 	].join('\n');
 }
 
-/** The agents the assistant may seat. Only a composing activation reads this list. */
+/** The agents that are available to seat. Every ordinary activation may read this list. */
 function renderReserve(reserve: readonly { name: string; identity: string }[]): string[] {
 	return [
-		`The reserve: agents not in the room, which you may seat. Nobody else reads this list.`,
+		`The reserve: agents not in the room. You may seat a colleague when the question needs them.`,
 		...reserve.map((agent) => `- ${agent.name}: ${agent.identity}`),
 	];
 }
@@ -310,10 +308,6 @@ const numbered = (record: readonly Message[], seq: Seq): number =>
 function askOf(view: ActivationView, def: AgentDefinition): string {
 	const { context, spec } = view;
 	const purpose = spec.purpose;
-	if (purpose.kind === 'select') {
-		const asked = numbered(context.messages, purpose.exchange);
-		return `${purpose.person} asked at message ${asked}. ${action(purpose.kind)}`;
-	}
 	if (purpose.kind === 'summarize') {
 		const from = numbered(context.messages, purpose.exchange);
 		return (
@@ -325,7 +319,7 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	const open = context.exchange
 		? `${context.exchange.owner}'s question at message ${numbered(context.messages, context.exchange.from)} is open. `
 		: '';
-	return `${open}Take your turn, ${def.name}: say something, or end your turn to stay silent.`;
+	return `${open}Take your turn, ${def.name}: say something, seat or unseat a colleague, use your tools, or end your turn.`;
 }
 
 /** What a seat does with a presence line that lands while it is working. */
@@ -346,22 +340,15 @@ const AUDIENCE_PARAGRAPH = [
  * How a room opens the prompt it hands a seat.
  */
 function header(view: ActivationView, def: AgentDefinition): string[] {
-	if (view.spec.purpose.kind === 'respond') {
-		return [
-			`You are '${def.name}', an agent seated in the room '${view.context.name}' — a shared`,
-			`room with a record. Every participant sees what is said; nobody sees your tool use.`,
-		];
-	}
 	return [
-		`You are '${def.name}', the assistant in the room '${view.context.name}' — a shared`,
-		`room with a record.`,
-		assistantPolicy.guidance,
+		`You are '${def.name}', an agent seated in the room '${view.context.name}' — a shared`,
+		`room with a record. Every participant sees what is said; nobody sees your tool use.`,
 	];
 }
 
 /**
- * Who the assistant is writing for, and how they read. How a person reads is
- * theirs, so it reaches the assistant here and no other seat reads it.
+ * Who the closing seat is writing for, and how they read. How a person reads is
+ * theirs, so it reaches that seat here and no other seat reads it.
  */
 function reader(view: ActivationView): string[] {
 	if (view.spec.purpose.kind !== 'summarize') return [];
@@ -375,14 +362,15 @@ function reader(view: ActivationView): string[] {
 const SUMMARY_PARAGRAPH = [
 	`Part of the record may read as "── N messages, summarised for <name> below ──". Those`,
 	`messages are still on the record; what stands for them is the summary further down,`,
-	`written by the assistant for that person, and you read it in place of them. The line names who`,
+	`written for that person, and you read it in place of them. The line names who`,
 	`it was written for, because two people's summaries may cover the same stretch. Treat a`,
 	`summary as what happened. It asks you for nothing and it addresses one person, not you.`,
 	`If you need a fact it left out, read it again from your own tools rather than asking the`,
 	`room to repeat itself.`,
 ];
 
-function action(purpose: 'respond' | 'select' | 'summarize'): string {
-	if (purpose === 'respond') return 'Speak on the record, or end your turn.';
-	return assistantAction(purpose === 'select' ? 'seat' : 'summarise');
+function action(purpose: 'respond' | 'summarize'): string {
+	return purpose === 'respond'
+		? 'Speak, seat or unseat a colleague, use your tools, or end your turn.'
+		: 'Write the one message with say, or end your turn.';
 }

@@ -8,25 +8,38 @@ import { viewOf } from '../src/room/view.ts';
 const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
 const options = { backoff: () => 0 };
-const composition: Entry = {
+
+const composition = (summary?: string): Entry => ({
 	kind: 'composition',
+	seq: 1,
 	body: {
-		agents: [{ name: 'product', identity: 'Product.', attention: 'broadcast' }],
-		available: [],
+		version: 2,
+		...(summary === undefined ? {} : { summary }),
+		agents: [
+			{ name: 'product', identity: 'Product.', attention: 'broadcast' },
+			{ name: 'writer', identity: 'Writer.', attention: 'broadcast' },
+		],
+		available: [{ name: 'reserve', identity: 'Reserve.', attention: 'broadcast' }],
 		at,
 	},
-	seq: 1,
-};
-const arrived: Entry = {
-	kind: 'message',
-	body: { kind: 'arrived', at, from: 'priya', subject: 'priya', identity: 'Priya.' },
-	seq: 2,
-};
+});
 
-const said = (seq: number, from = 'priya'): Entry => ({
+const person = (seq = 2, name = 'priya'): Entry => ({
 	kind: 'message',
-	body: { kind: 'said', at, from, text: 'Question.', wakes: ['product'] },
 	seq,
+	body: { kind: 'arrived', at, from: name, subject: name, identity: 'Person.' },
+});
+
+const question = (seq = 3, from = 'priya'): Entry => ({
+	kind: 'message',
+	seq,
+	body: { kind: 'said', at, from, text: 'Question.' },
+});
+
+const lease = (id: string, seq: number): Entry => ({
+	kind: 'lease',
+	seq,
+	body: { id, phase: 'running', expiresAt: now + 60_000, at, readThrough: 0 },
 });
 
 const event = (decision: RoomDecision<Kind>, seq: number): Entry => {
@@ -35,642 +48,376 @@ const event = (decision: RoomDecision<Kind>, seq: number): Entry => {
 };
 
 describe('room transition', () => {
-	it('keeps an observed close from moving the exchange fence', () => {
-		const question: Extract<Entry, { kind: 'message' }> = {
-			kind: 'message',
-			seq: 3,
-			body: { kind: 'said', at, from: 'priya', text: 'First.' },
-		};
-		const state = foldRoom([composition, arrived, question], options);
-		const reconcile = {
-			type: 'reconcile' as const,
-			options: {
-				resend: 5_000,
-				attempts: 3,
-				sent: new Map<string, number>(),
-				stopped: false,
-			},
-		};
-		const observed = decide(state, reconcile, now).events[0];
-		if (observed?.kind !== 'close') throw new Error('Expected an observed close.');
-		const later = evolve(
-			state,
-			{ kind: 'message', seq: 4, body: { kind: 'said', at, from: 'priya', text: 'Second.' } },
-			options,
-		);
-		expect(decide(later, { type: 'close', close: observed.body }, now)).toMatchObject({
-			event: undefined,
-		});
-		const next = decide(later, reconcile, now).events[0];
-		if (next?.kind !== 'close') throw new Error('Expected the next close.');
-		expect(next.body).toMatchObject({ from: 3, through: 4 });
-		const settled = evolve(later, { ...next, seq: 5 }, options);
-		expect(decide(settled, reconcile, now).events).toEqual([]);
-	});
-
-	it('matches replay, retains the prior projection, and routes a delivery', () => {
-		const before = foldRoom([composition, arrived], options);
-		const decision = decide(before, { type: 'deliver', from: 'priya', text: 'Hello.' }, now);
-		if (!('event' in decision) || decision.event === undefined)
-			throw new Error('Expected a delivery.');
-		const committed: Entry = { ...decision.event, seq: 3 };
-		const live = evolve(before, committed, options);
-		const replayed = foldRoom([composition, arrived, committed], options);
-		expect(live).toEqual(replayed);
-		expect(before.messages).toHaveLength(1);
-		expect(live.messages).toHaveLength(2);
-		expect(live.messages[1]?.wakes).toEqual(['product']);
-	});
-
-	it('refuses a stale claim without changing the room', () => {
-		const state = foldRoom([composition], options);
+	it('accepts version 2 compositions and rejects old histories explicitly', () => {
+		const empty = foldRoom([], options);
 		expect(
 			decide(
-				state,
-				{ type: 'claim', id: 'message:2:product:1', expiry: 60_000, deadline: 600_000 },
+				empty,
+				{ type: 'compose', composition: { version: 1, agents: [], available: [], at } as never },
 				now,
 			),
+		).toMatchObject({ refusal: { category: 'refused' } });
+		expect(
+			decide(empty, { type: 'compose', composition: composition().body as never }, now),
 		).toMatchObject({
-			refusal: { category: 'stale' },
+			event: { kind: 'composition', body: { version: 2 } },
 		});
 	});
 
-	it('checks activation authority before leases and summary publication', () => {
-		const assistantComposition: Entry = {
-			kind: 'composition',
-			seq: 1,
-			body: {
-				assistant: 'assistant',
-				agents: [
-					{ name: 'assistant', identity: 'Writes.', attention: 'none' },
-					{ name: 'product', identity: 'Answers.', attention: 'broadcast' },
-				],
-				available: [],
-				at,
-			},
-		};
-		const close: Entry = {
-			kind: 'close',
-			seq: 3,
-			body: { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] },
-		};
-		const state = foldRoom(
-			[
-				assistantComposition,
-				said(2),
-				close,
-				{
-					kind: 'lease',
-					seq: 4,
-					body: {
-						id: 'closed:2:assistant:1',
-						phase: 'running',
-						expiresAt: now + 100,
-						at,
-						readThrough: 0,
-					},
-				},
-				{
-					kind: 'lease',
-					seq: 5,
-					body: {
-						id: 'closed:2:product:1',
-						phase: 'running',
-						expiresAt: now + 100,
-						at,
-						readThrough: 0,
-					},
-				},
-			],
+	it('grants ordinary response to any seated agent and only summary work to the writer', () => {
+		const open = foldRoom(
+			[composition('writer'), person(), question(), lease('message:3:product:1', 4)],
 			options,
 		);
-		const lease = (operation: 'claim' | 'renew', activation: string, atNow = now) =>
-			decide(
-				state,
-				{
-					type: operation,
-					id: activation,
-					expiry: 100,
-					deadline: 1_000,
-					...(operation === 'renew' ? { readThrough: 0 } : {}),
-				},
-				atNow,
-			);
-		for (const id of ['closed:2:product:1', 'message:99:product:1', 'closed:99:assistant:1']) {
-			expect(lease('claim', id)).toMatchObject({ refusal: { category: 'stale' } });
-			expect(lease('renew', id)).toMatchObject({ refusal: { category: 'stale' } });
-		}
-		expect(lease('renew', 'closed:2:assistant:1', now + 200)).toMatchObject({
-			refusal: { category: 'stale' },
-		});
-	});
+		const response = activationSpec('message:3:product:1', open);
+		expect(response).toMatchObject({ purpose: { kind: 'respond', message: 3 } });
+		expect(activationSpec('opened:3:product:1', open)).toBeUndefined();
 
-	it('accepts only a designated, seated, quiet assistant', () => {
-		const agents = [
-			{ name: 'assistant', identity: 'Writes.', attention: 'none' as const },
-			{ name: 'product', identity: 'Answers.', attention: 'broadcast' as const },
-		];
-		for (const composition of [
-			{ assistant: 'missing', agents, available: [], at },
-			{
-				assistant: 'assistant',
-				agents: [{ ...agents[0], attention: 'broadcast' as const }, agents[1]],
-				available: [],
-				at,
-			},
-			{
-				assistant: 'assistant',
-				agents: [agents[1]],
-				available: [agents[0]],
-				at,
-			},
-		]) {
-			expect(
-				decide(foldRoom([], options), { type: 'compose', composition: composition as never }, now),
-			).toMatchObject({
-				refusal: { category: 'refused' },
-			});
-		}
-		expect(
-			decide(
-				foldRoom([], options),
-				{ type: 'compose', composition: { assistant: 'assistant', agents, available: [], at } },
-				now,
-			),
-		).toMatchObject({ event: { kind: 'composition', body: { assistant: 'assistant' } } });
-		expect(
-			decide(
-				foldRoom([], options),
-				{ type: 'compose', composition: { agents, available: [], at } },
-				now,
-			),
-		).toMatchObject({ event: { kind: 'composition' } });
-	});
-
-	it('gives only the assistant its recorded opening and closing authority', () => {
-		const assistantComposition: Entry = {
-			kind: 'composition',
-			seq: 1,
-			body: {
-				assistant: 'assistant',
-				agents: [
-					{ name: 'assistant', identity: 'Writes.', attention: 'none' },
-					{ name: 'product', identity: 'Answers.', attention: 'broadcast' },
-				],
-				available: [],
-				at,
-			},
-		};
-		const opened = foldRoom(
-			[
-				assistantComposition,
-				arrived,
-				{
-					kind: 'message',
-					seq: 3,
-					body: { kind: 'said', at, from: 'priya', text: 'Question.', wakes: ['assistant'] },
-				},
-			],
-			options,
-		);
-		expect(activationSpec('message:3:assistant:1', opened)).toBeUndefined();
-		expect(activationSpec('message:3:product:1', opened)).toMatchObject({
-			purpose: { kind: 'respond', message: 3 },
-		});
-		expect(activationSpec('opened:3:product:1', opened)).toBeUndefined();
-		expect(activationSpec('opened:3:assistant:1', opened)).toMatchObject({
-			purpose: { kind: 'select', exchange: 3, person: 'priya', limit: 0 },
-		});
 		const closed = foldRoom(
 			[
-				assistantComposition,
-				arrived,
-				{ kind: 'message', seq: 3, body: { kind: 'said', at, from: 'priya', text: 'Question.' } },
+				composition('writer'),
+				person(),
+				question(),
 				{
 					kind: 'close',
 					seq: 4,
-					body: { owner: 'priya', from: 3, through: 3, at, wakes: ['assistant'] },
+					body: { owner: 'priya', from: 3, through: 3, at, summary: 'writer' },
 				},
+				lease('closed:3:writer:1', 5),
 			],
 			options,
 		);
-		expect(activationSpec('closed:3:product:1', closed)).toBeUndefined();
-		expect(activationSpec('closed:3:assistant:1', closed)).toMatchObject({
+		expect(activationSpec('closed:3:writer:1', closed)).toMatchObject({
 			purpose: { kind: 'summarize', exchange: 3, person: 'priya', through: 3 },
 		});
+		expect(activationSpec('closed:3:product:1', closed)).toBeUndefined();
 	});
 
-	it('caps a renewal at its nondefault deadline and ignores its old expiry', () => {
-		const due = foldRoom([composition, arrived, said(3)], options);
-		const claim = event(
-			decide(due, { type: 'claim', id: 'message:3:product:1', expiry: 10, deadline: 25 }, now),
-			4,
-		);
-		const held = evolve(due, { ...claim, seq: 4 }, options);
-		const renewed = event(
-			decide(
-				held,
-				{ type: 'claim', id: 'message:3:product:1', expiry: 100, deadline: 25 },
-				now + 9,
-			),
-			5,
-		);
-		expect(renewed.body).toMatchObject({ expiresAt: now + 25 });
-		const live = evolve(held, { ...renewed, seq: 5 }, options);
-		expect(
-			decide(
-				live,
-				{ type: 'end', id: 'message:3:product:1', reason: 'expired', readThrough: 0 },
-				now + 10,
-			),
-		).toEqual({ event: undefined });
-	});
-
-	it('classifies stale, missed, and refused commits', () => {
-		const state = foldRoom([composition, arrived, said(3)], options);
-		expect(
-			decide(
-				state,
-				{
-					type: 'commit',
-					commit: {
-						activation: 'message:3:product:1',
-						key: 'a',
-						intent: { kind: 'said', text: 'x' },
-					},
-				},
-				now,
-			),
-		).toMatchObject({ refusal: { category: 'stale' } });
-		const lease: Entry = {
-			kind: 'lease',
-			body: {
-				id: 'message:3:product:1',
-				phase: 'running',
-				expiresAt: now + 100,
-				at,
-				readThrough: 0,
-			},
-			seq: 4,
-		};
-		const held = foldRoom([composition, arrived, said(3), lease, said(5)], options);
-		expect(
-			decide(
-				held,
-				{
-					type: 'commit',
-					commit: {
-						activation: 'message:3:product:1',
-						key: 'b',
-						readThrough: 3,
-						intent: { kind: 'said', text: 'x' },
-					},
-				},
-				now,
-			),
-		).toMatchObject({ refusal: { category: 'missed' } });
-		expect(
-			decide(
-				foldRoom([composition, arrived, said(3), lease], options),
-				{
-					type: 'commit',
-					commit: {
-						activation: 'message:3:product:1',
-						key: 'c',
-						intent: { kind: 'said', to: 'product', text: 'x' },
-					},
-				},
-				now,
-			),
-		).toMatchObject({ refusal: { category: 'refused' } });
-	});
-
-	it('accepts only the grant and a current safe speech boundary', () => {
-		const lease: Entry = {
-			kind: 'lease',
-			body: {
-				id: 'message:3:product:1',
-				phase: 'running',
-				expiresAt: now + 100,
-				at,
-				readThrough: 0,
-			},
-			seq: 4,
-		};
-		const state = foldRoom([composition, arrived, said(3), lease], options);
-		const commit = (readThrough: unknown, intent: unknown) =>
-			decide(
-				state,
-				{
-					type: 'commit',
-					commit: {
-						activation: 'message:3:product:1',
-						key: 'custom',
-						...(readThrough === undefined ? {} : { readThrough }),
-						intent,
-					} as never,
-				},
-				now,
-			);
-		for (const readThrough of [undefined, -1, 1.5, Number.NaN, 99]) {
-			expect(commit(readThrough, { kind: 'said', text: 'x' })).toMatchObject({
-				refusal: { category: 'refused' },
-			});
-		}
-		expect(commit(2, { kind: 'said', text: 'x' })).toMatchObject({
-			refusal: { category: 'missed' },
-		});
-		expect(
-			commit(3, { kind: 'summary', to: 'priya', text: 'x', covers: { from: 3, through: 3 } }),
-		).toMatchObject({
-			refusal: { category: 'refused' },
-		});
-		expect(commit(3, { kind: 'seated', name: 'product' })).toMatchObject({
-			refusal: { category: 'refused' },
-		});
-	});
-
-	it('denies built-in intents outside each activation grant', () => {
-		const assistantComposition: Entry = {
-			kind: 'composition',
-			seq: 1,
-			body: {
-				assistant: 'assistant',
-				agents: [
-					{
-						name: 'assistant',
-						identity: 'A.',
-						attention: 'none',
-					},
-				],
-				available: [{ name: 'product', identity: 'P.', attention: 'broadcast' }],
-				at,
-			},
-		};
-		const close = { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] };
+	it('normalizes a closing said into a room-owned summary and skips freshness', () => {
 		const state = foldRoom(
 			[
-				assistantComposition,
-				said(2),
-				{ kind: 'close', body: close, seq: 3 },
+				composition('writer'),
+				person(),
+				question(),
 				{
-					kind: 'lease',
-					body: {
-						id: 'closed:2:assistant:1',
-						phase: 'running',
-						expiresAt: now + 100,
-						at,
-						readThrough: 0,
-					},
+					kind: 'close',
 					seq: 4,
+					body: { owner: 'priya', from: 3, through: 3, at, summary: 'writer' },
 				},
-				{
-					kind: 'lease',
-					body: {
-						id: 'opened:2:assistant:1',
-						phase: 'running',
-						expiresAt: now + 100,
-						at,
-						readThrough: 0,
-					},
-					seq: 5,
-				},
+				lease('closed:3:writer:1', 5),
 			],
 			options,
 		);
-		const denied = (activation: string, intent: unknown) =>
-			decide(
-				state,
-				{
-					type: 'commit',
-					commit: { activation, key: activation, readThrough: 2, intent } as never,
+		const result = decide(
+			state,
+			{
+				type: 'commit',
+				commit: {
+					activation: 'closed:3:writer:1',
+					key: 'summary',
+					intent: { kind: 'said', text: 'Done.' },
 				},
-				now,
-			);
-		for (const [activation, intent] of [
-			['closed:2:assistant:1', { kind: 'said', text: 'x' }],
-			['closed:2:assistant:1', { kind: 'seated', name: 'product' }],
-			['opened:2:assistant:1', { kind: 'said', text: 'x' }],
-			[
-				'opened:2:assistant:1',
-				{ kind: 'summary', to: 'priya', text: 'x', covers: { from: 2, through: 2 } },
-			],
-			['opened:2:assistant:1', { kind: 'unknown' }],
-		] as const)
-			expect(denied(activation, intent)).toMatchObject({ refusal: { category: 'refused' } });
-	});
-
-	it('keeps a closed assistant grant fixed and removes it after redesignation', () => {
-		const writerComposition: Entry = {
-			kind: 'composition',
-			seq: 1,
-			body: {
-				assistant: 'writer',
-				agents: [
-					{
-						name: 'writer',
-						identity: 'W.',
-						attention: 'none',
-					},
-				],
-				available: [],
-				at,
 			},
-		};
-		const close = { owner: 'priya', from: 2, through: 2, at, wakes: ['writer'] };
-		const live = foldRoom(
-			[
-				writerComposition,
-				said(2),
-				{ kind: 'close', body: close, seq: 3 },
-				{ kind: 'message', body: { kind: 'said', at, from: 'sam', text: 'Later.' }, seq: 4 },
-				{
-					kind: 'lease',
-					body: {
-						id: 'closed:2:writer:1',
-						phase: 'running',
-						expiresAt: now + 100,
-						at,
-						readThrough: 0,
-					},
-					seq: 5,
-				},
-			],
-			options,
-		);
-		const spec = activationSpec('closed:2:writer:1', live);
-		if (spec === undefined) throw new Error('Expected an assistant summary grant.');
-		expect(spec.purpose).toMatchObject({ kind: 'summarize', exchange: 2, through: 2 });
-		const view = viewOf(spec, {
-			name: 'room',
 			now,
-			state: live,
-			live: new Map(),
-			unseen: () => 0,
-		});
-		expect(view.context.messages).not.toContainEqual(expect.objectContaining({ text: 'Later.' }));
-		const obsolete = foldRoom(
-			[
-				writerComposition,
-				said(2),
-				{ kind: 'close', body: close, seq: 3 },
-				{
-					kind: 'composition',
-					body: {
-						agents: [{ name: 'writer', identity: 'W.', attention: 'none' }],
-						available: [],
-						at,
-					},
-					seq: 4,
-				},
-				{
-					kind: 'lease',
-					body: {
-						id: 'closed:2:writer:1',
-						phase: 'running',
-						expiresAt: now + 100,
-						at,
-						readThrough: 0,
-					},
-					seq: 5,
-				},
-			],
-			options,
 		);
-		expect(activationSpec('closed:2:writer:1', obsolete)).toBeUndefined();
+		expect(result).toMatchObject({
+			event: {
+				kind: 'message',
+				body: {
+					kind: 'summary',
+					from: 'writer',
+					to: 'priya',
+					text: 'Done.',
+					covers: { from: 3, through: 3 },
+					activationId: 'closed:3:writer:1',
+				},
+			},
+		});
+		const addressed = decide(
+			state,
+			{
+				type: 'commit',
+				commit: {
+					activation: 'closed:3:writer:1',
+					key: 'other',
+					intent: { kind: 'said', to: 'sam', text: 'No.' },
+				},
+			},
+			now,
+		);
+		expect(addressed).toMatchObject({ refusal: { category: 'refused' } });
 	});
 
-	it('accepts only the closed activation and its fixed summary range', () => {
-		const close = { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] };
-		const assistantComposition: Entry = {
-			kind: 'composition',
-			seq: 1,
-			body: {
-				assistant: 'assistant',
-				agents: [
-					{
-						name: 'assistant',
-						identity: 'Writes results.',
-						attention: 'none',
-					},
-					{ name: 'product', identity: 'Answers questions.', attention: 'broadcast' },
-				],
-				available: [],
-				at,
-			},
-		};
-		const lease: Entry = {
-			kind: 'lease',
-			seq: 4,
-			body: {
-				id: 'closed:2:assistant:1',
-				phase: 'running',
-				expiresAt: now + 100,
-				at,
-				readThrough: 0,
-			},
-		};
-		const forgedLease: Entry = {
-			kind: 'lease',
-			seq: 5,
-			body: {
-				id: 'opened:2:assistant:1',
-				phase: 'running',
-				expiresAt: now + 100,
-				at,
-				readThrough: 0,
-			},
-		};
-		const wrongWriterLease: Entry = {
-			kind: 'lease',
-			seq: 6,
-			body: {
-				id: 'closed:2:product:1',
-				phase: 'running',
-				expiresAt: now + 100,
-				at,
-				readThrough: 0,
-			},
-		};
-		const later = said(7, 'sam');
+	it('requires current context for ordinary speech and refuses unknown recipients', () => {
 		const state = foldRoom(
-			[
-				assistantComposition,
-				said(2),
-				{ kind: 'close', body: close, seq: 3 },
-				lease,
-				forgedLease,
-				wrongWriterLease,
-				later,
-			],
+			[composition(), person(), question(), lease('message:3:product:1', 4)],
 			options,
 		);
-		const commit = (activation: string) =>
+		const commit = (readThrough: number | undefined, to?: string) =>
 			decide(
 				state,
 				{
 					type: 'commit',
 					commit: {
-						activation,
-						key: 'summary',
-						readThrough: 2,
-						intent: { kind: 'summary', text: 'The answer.' },
+						activation: 'message:3:product:1',
+						key: 'say',
+						...(readThrough === undefined ? {} : { readThrough }),
+						intent: { kind: 'said', ...(to === undefined ? {} : { to }), text: 'Answer.' },
 					},
 				},
 				now,
 			);
-		expect(commit('closed:2:assistant:1')).toMatchObject({ event: { kind: 'message' } });
-		expect(commit('opened:2:assistant:1')).toMatchObject({ refusal: { category: 'refused' } });
-		expect(commit('closed:2:product:1')).toMatchObject({ refusal: { category: 'refused' } });
-		expect(commit('closed:99:assistant:1')).toMatchObject({ refusal: { category: 'stale' } });
-		const forged = event(
-			decide(
-				state,
-				{
-					type: 'commit',
-					commit: {
-						activation: 'closed:2:assistant:1',
-						key: 'forged',
-						intent: {
-							kind: 'summary',
-							text: 'The answer.',
-							to: 'sam',
-							covers: { from: 9, through: 99 },
-							from: 'mallory',
-							activationId: 'mallory',
-						} as never,
-					},
-				},
-				now,
-			),
-			8,
+		expect(commit(undefined)).toMatchObject({ refusal: { category: 'refused' } });
+		expect(commit(0)).toMatchObject({ refusal: { category: 'missed' } });
+		expect(commit(3, 'nobody')).toMatchObject({ refusal: { category: 'refused' } });
+		expect(commit(3)).toMatchObject({ event: { body: { kind: 'said', from: 'product' } } });
+	});
+
+	it('returns durable membership no-ops without writing another event', () => {
+		const seated = foldRoom(
+			[composition(), person(), question(), lease('message:3:product:1', 4)],
+			options,
 		);
-		expect(forged.body).toEqual({
-			kind: 'summary',
-			at,
-			from: 'assistant',
-			activationId: 'closed:2:assistant:1',
-			text: 'The answer.',
-			to: 'priya',
-			covers: { from: 2, through: 2 },
-		});
-		const after = evolve(state, forged, options);
+		const alreadySeated = decide(
+			seated,
+			{
+				type: 'commit',
+				commit: {
+					activation: 'message:3:product:1',
+					key: 'seat',
+					intent: { kind: 'seated', name: 'product' },
+				},
+			},
+			now,
+		);
+		expect(alreadySeated).toEqual({ unchanged: { kind: 'seated', name: 'product' } });
+
+		const reserve = foldRoom(
+			[composition(), person(), question(), lease('message:3:product:1', 4)],
+			options,
+		);
+		const alreadyUnseated = decide(
+			reserve,
+			{
+				type: 'commit',
+				commit: {
+					activation: 'message:3:product:1',
+					key: 'unseat',
+					intent: { kind: 'unseated', name: 'reserve' },
+				},
+			},
+			now,
+		);
+		expect(alreadyUnseated).toEqual({ unchanged: { kind: 'unseated', name: 'reserve' } });
+	});
+
+	it('allows the summary writer to unseat itself and removes its authority after the event', () => {
+		const state = foldRoom(
+			[composition('writer'), person(), question(), lease('message:3:writer:1', 4)],
+			options,
+		);
+		const decision = decide(
+			state,
+			{
+				type: 'commit',
+				commit: {
+					activation: 'message:3:writer:1',
+					key: 'leave',
+					intent: { kind: 'unseated', name: 'writer' },
+				},
+			},
+			now,
+		);
+		expect(decision).toMatchObject({ event: { body: { kind: 'unseated', subject: 'writer' } } });
+		const after = evolve(
+			evolve(state, event(decision, 5), options),
+			{
+				kind: 'message',
+				seq: 6,
+				body: {
+					kind: 'seated',
+					at,
+					subject: 'writer',
+					identity: 'Writer.',
+					attention: 'broadcast',
+				},
+			},
+			options,
+		);
+		expect(activationSpec('message:3:writer:1', after)).toBeUndefined();
+	});
+
+	it('does not allow a forged intent to override a summary grant', () => {
+		const state = foldRoom(
+			[
+				composition('writer'),
+				person(),
+				question(),
+				{
+					kind: 'close',
+					seq: 4,
+					body: { owner: 'priya', from: 3, through: 3, at, summary: 'writer' },
+				},
+				lease('closed:3:writer:1', 5),
+			],
+			options,
+		);
+		const result = decide(
+			state,
+			{
+				type: 'commit',
+				commit: {
+					activation: 'closed:3:writer:1',
+					key: 'seat',
+					intent: { kind: 'seated', name: 'reserve' },
+				},
+			},
+			now,
+		);
+		expect(result).toMatchObject({ refusal: { category: 'refused' } });
+	});
+
+	it('keeps live lease expiry and release decisions independent of message commits', () => {
+		const state = foldRoom(
+			[composition(), person(), question(), lease('message:3:product:1', 4)],
+			options,
+		);
+		const expired = decide(
+			state,
+			{ type: 'end', id: 'message:3:product:1', reason: 'expired', readThrough: 0 },
+			now,
+		);
+		expect(expired).toEqual({ event: undefined });
+		const ended = decide(
+			state,
+			{ type: 'end', id: 'message:3:product:1', reason: 'released', readThrough: 0 },
+			now,
+		);
+		expect(ended).toMatchObject({ event: { body: { phase: 'ended', reason: 'released' } } });
+	});
+
+	it('allows one active execution per seat across ordinary and closing work', () => {
+		const state = foldRoom(
+			[
+				composition('writer'),
+				person(),
+				question(),
+				{
+					kind: 'close',
+					seq: 4,
+					body: { owner: 'priya', from: 3, through: 3, at, summary: 'writer' },
+				},
+				lease('closed:3:writer:1', 5),
+				{
+					kind: 'message',
+					seq: 6,
+					body: { kind: 'said', at, from: 'priya', text: 'Next.', wakes: ['writer'] },
+				},
+			],
+			options,
+		);
+		const claim = decide(
+			state,
+			{ type: 'claim', id: 'message:6:writer:1', expiry: 100, deadline: 1_000 },
+			now,
+		);
+		expect(claim).toMatchObject({ refusal: { category: 'stale' } });
+		const released = evolve(
+			state,
+			{
+				kind: 'lease',
+				seq: 7,
+				body: { id: 'closed:3:writer:1', phase: 'ended', reason: 'released', at, readThrough: 3 },
+			},
+			options,
+		);
 		expect(
 			decide(
-				after,
-				{
-					type: 'commit',
-					commit: {
-						activation: 'closed:2:assistant:1',
-						key: 'other-token',
-						intent: {
-							kind: 'summary',
-							text: 'A duplicate.',
-						},
-					},
-				},
+				released,
+				{ type: 'claim', id: 'message:6:writer:1', expiry: 100, deadline: 1_000 },
 				now,
 			),
-		).toMatchObject({ refusal: { category: 'refused' } });
+		).toMatchObject({
+			event: { body: { id: 'message:6:writer:1', phase: 'running' } },
+		});
+	});
+
+	it('preserves the detached summary view range and reserve identities', () => {
+		const state = foldRoom(
+			[
+				composition('writer'),
+				person(),
+				question(),
+				{
+					kind: 'close',
+					seq: 4,
+					body: { owner: 'priya', from: 3, through: 3, at, summary: 'writer' },
+				},
+				lease('closed:3:writer:1', 5),
+			],
+			options,
+		);
+		const spec = activationSpec('closed:3:writer:1', state);
+		if (spec === undefined) throw new Error('Expected summary grant.');
+		const view = viewOf(spec, { name: 'room', now, state, live: new Map(), unseen: () => 0 });
+		expect(view.through).toBe(3);
+		expect(view.context.reserve).toEqual([{ name: 'reserve', identity: 'Reserve.' }]);
+		expect(view.context.messages.map((message) => message.seq)).toEqual([3]);
+	});
+
+	it('starts a new summary assignment after reseating before close, and never revives one ended after close', () => {
+		const beforeClose = foldRoom(
+			[
+				composition('writer'),
+				person(),
+				question(),
+				{ kind: 'message', seq: 4, body: { kind: 'unseated', at, subject: 'writer' } },
+				{
+					kind: 'message',
+					seq: 5,
+					body: {
+						kind: 'seated',
+						at,
+						subject: 'writer',
+						identity: 'Writer.',
+						attention: 'broadcast',
+					},
+				},
+				{
+					kind: 'close',
+					seq: 6,
+					body: { owner: 'priya', from: 3, through: 5, at, summary: 'writer' },
+				},
+			],
+			options,
+		);
+		expect(beforeClose.owed).toMatchObject([{ writer: 'writer', through: 5 }]);
+
+		const afterClose = foldRoom(
+			[
+				composition('writer'),
+				person(),
+				question(),
+				{
+					kind: 'close',
+					seq: 4,
+					body: { owner: 'priya', from: 3, through: 3, at, summary: 'writer' },
+				},
+				{ kind: 'message', seq: 5, body: { kind: 'unseated', at, subject: 'writer' } },
+				{
+					kind: 'message',
+					seq: 6,
+					body: {
+						kind: 'seated',
+						at,
+						subject: 'writer',
+						identity: 'Writer.',
+						attention: 'broadcast',
+					},
+				},
+			],
+			options,
+		);
+		expect(afterClose.owed).toEqual([]);
 	});
 });

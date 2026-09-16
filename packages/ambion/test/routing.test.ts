@@ -7,7 +7,8 @@
  * `presence.test.ts`; this file holds the rule itself.
  */
 import { describe, expect, it } from 'vitest';
-import { wakes } from '../src/room/routing.ts';
+import type { RoomState } from '../src/room/fold.ts';
+import { routes, wakes } from '../src/room/routing.ts';
 import type { Attention, Message } from '../src/types.ts';
 
 describe('what a message reaches', () => {
@@ -46,5 +47,38 @@ describe('what a message reaches', () => {
 		for (const attention of ['none', 'named', 'broadcast', 'presence'] as const) {
 			expect(wakes(seat('product', attention), 'priya', summary)).toBe(false);
 		}
+	});
+
+	it('wakes a seat occupied by closing work for a later ordinary exchange', () => {
+		const state = {
+			roster: [{ name: 'writer', identity: 'Writer.', attention: 'broadcast' }],
+			messages: [],
+			closes: [{ owner: 'priya', from: 1, through: 3, at, summary: 'writer' }],
+		} as unknown as RoomState;
+		expect(
+			routes({ ...said(), seq: 4 }, state, new Map([['writer', ['closed:3:writer:1']]])),
+		).toEqual(['writer']);
+	});
+
+	it('ignores a stale ordinary lease after removal and reseating', () => {
+		const state = {
+			roster: [{ name: 'writer', identity: 'Writer.', attention: 'broadcast' }],
+			messages: [
+				{ ...said(), seq: 2 },
+				{ kind: 'unseated', seq: 3, at, subject: 'writer' },
+				{
+					kind: 'seated',
+					seq: 4,
+					at,
+					subject: 'writer',
+					identity: 'Writer.',
+					attention: 'broadcast',
+				},
+			],
+			closes: [],
+		} as unknown as RoomState;
+		expect(
+			routes({ ...said(), seq: 5 }, state, new Map([['writer', ['message:2:writer:1']]])),
+		).toEqual(['writer']);
 	});
 });

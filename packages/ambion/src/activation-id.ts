@@ -3,7 +3,7 @@
 import type { Seq } from './types.ts';
 
 /** The journal fact that gives an activation its identity. */
-export type ActivationSource = 'message' | 'opened' | 'closed';
+export type ActivationSource = 'message' | 'closed';
 
 /** The fields encoded in an activation id. */
 export interface ActivationId {
@@ -13,9 +13,9 @@ export interface ActivationId {
 	readonly attempt: number;
 }
 
-const SOURCES: ReadonlySet<string> = new Set<ActivationSource>(['message', 'opened', 'closed']);
+const SOURCES: ReadonlySet<string> = new Set<ActivationSource>(['message', 'closed']);
 const SEAT = /^[a-z][a-z0-9-]*$/;
-const ID = /^(message|opened|closed):([1-9]\d*):([a-z][a-z0-9-]*):([1-9]\d*)$/;
+const ID = /^(message|closed):([1-9]\d*):([a-z][a-z0-9-]*):([1-9]\d*)$/;
 
 /** Encode one activation id in the durable format. */
 export function encodeActivationId(value: ActivationId): string {

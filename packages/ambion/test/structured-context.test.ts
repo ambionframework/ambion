@@ -16,10 +16,11 @@ const entries: Entry[] = [
 		kind: 'composition',
 		seq: 1,
 		body: {
+			version: 2,
 			goal: 'Ship payments v2.',
-			assistant: 'assistant',
+			summary: 'worker',
 			agents: [
-				{ name: 'assistant', identity: 'Writes decisions.', attention: 'none' },
+				{ name: 'worker', identity: 'Writes decisions.', attention: 'broadcast' },
 				{ name: 'product', identity: 'Owns product facts.', attention: 'broadcast' },
 			],
 			available: [{ name: 'surveyor', identity: 'Checks tonnage.', attention: 'broadcast' }],
@@ -42,7 +43,7 @@ const entries: Entry[] = [
 	{
 		kind: 'close',
 		seq: 4,
-		body: { owner: 'priya', from: 3, through: 3, at, wakes: ['assistant'] },
+		body: { owner: 'priya', from: 3, through: 3, at, summary: 'worker' },
 	},
 	{
 		kind: 'message',
@@ -65,13 +66,7 @@ const entries: Entry[] = [
 
 const facts = () => {
 	const state = foldRoom(entries, { backoff: () => 0 });
-	return {
-		name: 'payments',
-		now,
-		state,
-		live: new Map<string, string[]>(),
-		unseen: () => 0,
-	};
+	return { name: 'payments', now, state, live: new Map<string, string[]>(), unseen: () => 0 };
 };
 
 const spec = {
@@ -81,15 +76,9 @@ const spec = {
 		attempt: 1,
 		purpose: { kind: 'respond', message: 5 },
 	},
-	select: {
-		id: 'opened:3:assistant:1',
-		seat: 'assistant',
-		attempt: 1,
-		purpose: { kind: 'select', exchange: 3, person: 'priya', limit: 1 },
-	},
 	summarize: {
-		id: 'closed:3:assistant:1',
-		seat: 'assistant',
+		id: 'closed:3:worker:1',
+		seat: 'worker',
 		attempt: 1,
 		purpose: { kind: 'summarize', exchange: 3, person: 'priya', through: 3 },
 	},
@@ -102,11 +91,11 @@ const product = defineAgent({
 	model: 'scripted/product',
 });
 
-const assistant = defineAgent({
-	name: 'assistant',
+const worker = defineAgent({
+	name: 'worker',
 	identity: 'Writes decisions.',
-	instructions: 'PRIVATE ASSISTANT INSTRUCTIONS.',
-	model: 'scripted/assistant',
+	instructions: 'PRIVATE WORKER INSTRUCTIONS.',
+	model: 'scripted/worker',
 });
 
 describe('structured activation context', () => {
@@ -123,12 +112,13 @@ describe('structured activation context', () => {
 		}
 	});
 
-	it('detaches nested messages and participants from the folded room state', () => {
+	it('detaches nested messages, participants, and reserve from room state', () => {
 		const roomFacts = facts();
 		const first = viewOf(spec.respond, roomFacts);
 		const mutable = first.context as unknown as {
 			messages: Message[];
 			participants: ContextParticipant[];
+			reserve: { name: string; identity: string }[];
 		};
 		const message = mutable.messages.find((item) => item.kind === 'said' && item.text === 'Later.');
 		if (message === undefined || message.kind !== 'said')
@@ -139,6 +129,9 @@ describe('structured activation context', () => {
 		const person = mutable.participants.find((item) => item.kind === 'human');
 		if (person === undefined || person.kind !== 'human') throw new Error('Expected a person.');
 		person.identity = 'Changed outside the room.';
+		const reserve = mutable.reserve[0];
+		if (reserve === undefined) throw new Error('Expected a reserve agent.');
+		reserve.identity = 'Changed outside the room.';
 
 		const again = viewOf(spec.respond, roomFacts);
 		expect(again.context.messages).toContainEqual(expect.objectContaining({ text: 'Question.' }));
@@ -151,26 +144,19 @@ describe('structured activation context', () => {
 		expect(again.context.participants).toContainEqual(
 			expect.objectContaining({ name: 'priya', identity: 'Project manager.' }),
 		);
+		expect(again.context.reserve).toEqual([{ name: 'surveyor', identity: 'Checks tonnage.' }]);
 	});
 
-	it('scopes reserve and preferences to their authorized assistant purposes', () => {
+	it('shares reserve identities with responses and scopes preferences to the summary writer', () => {
 		const response = viewOf(spec.respond, facts()).context;
-		const selection = viewOf(spec.select, facts()).context;
 		const summary = viewOf(spec.summarize, facts()).context;
 
-		expect(response).not.toHaveProperty('reserve');
-		expect(response).not.toHaveProperty('preferences');
+		expect(response.reserve).toEqual([{ name: 'surveyor', identity: 'Checks tonnage.' }]);
 		expect(JSON.stringify(response)).not.toContain('Lead with blockers.');
 		expect(JSON.stringify(response)).not.toContain('SECRET SAM PREFERENCE.');
-		expect(selection.reserve).toEqual([{ name: 'surveyor', identity: 'Checks tonnage.' }]);
-		expect(selection).not.toHaveProperty('preferences');
-		expect(JSON.stringify(selection)).not.toContain('Lead with blockers.');
-		expect(JSON.stringify(selection)).not.toContain('SECRET SAM PREFERENCE.');
+		expect(summary.reserve).toEqual([{ name: 'surveyor', identity: 'Checks tonnage.' }]);
 		expect(summary.preferences).toBe('Lead with blockers.');
 		expect(JSON.stringify(summary)).not.toContain('SECRET SAM PREFERENCE.');
-		expect(summary).not.toHaveProperty('reserve');
-		// A later exchange must not enter a fixed summary context.
-		expect(summary).not.toHaveProperty('exchange');
 	});
 
 	it('keeps summary messages fixed at the recorded close boundary', () => {
@@ -183,14 +169,20 @@ describe('structured activation context', () => {
 		);
 	});
 
-	it('renders the same selected facts at the executor boundary', () => {
+	it('renders ordinary and closing prompts with the same ordinary identity', () => {
 		const response = renderActivation(viewOf(spec.respond, facts()), product);
-		const summary = renderActivation(viewOf(spec.summarize, facts()), assistant);
+		const summary = renderActivation(viewOf(spec.summarize, facts()), worker);
 
 		expect(response.systemPrompt).toContain('PRIVATE PRODUCT INSTRUCTIONS.');
 		expect(response.context).toContain('Later.');
+		expect(response.context).toContain('The reserve: agents not in the room.');
+		expect(response.context).toContain('Take your turn, product:');
+		expect(summary.systemPrompt).toContain('PRIVATE WORKER INSTRUCTIONS.');
+		expect(summary.systemPrompt).not.toContain('assistant in the room');
+		expect(summary.systemPrompt).toContain('The exchange is over. Write the one message');
 		expect(summary.systemPrompt).toContain('Lead with blockers.');
-		expect(summary.context).toContain('Question.');
+		expect(summary.context).not.toContain('The reserve:');
+		expect(summary.context).toContain("priya's exchange is over: messages");
 		expect(summary.context).not.toContain('Later.');
 	});
 });

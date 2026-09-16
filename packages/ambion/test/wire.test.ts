@@ -43,10 +43,11 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 		at,
 		readThrough: 0,
 	},
-	close: { owner: 'priya', from: 2, through: 4, seq: 4, at, wakes: ['assistant'] },
+	close: { owner: 'priya', from: 2, through: 4, seq: 4, at, summary: 'assistant' },
 	composition: {
+		version: 2,
 		goal: 'Decide the pour date.',
-		assistant: 'assistant',
+		summary: 'assistant',
 		agents: [
 			{ name: 'product', identity: 'The product.', attention: 'broadcast' },
 			{
@@ -81,7 +82,7 @@ const view: ActivationView = {
 		purpose: { kind: 'summarize', exchange: 2, person: 'priya', through: 4 },
 	},
 	through: 4,
-	context: { name: 'site', now: Date.parse(at), participants: [], messages: [] },
+	context: { name: 'site', now: Date.parse(at), participants: [], messages: [], reserve: [] },
 };
 const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 	say: {
@@ -101,12 +102,12 @@ const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 		key: 'call-3',
 		readThrough: 4,
 		intent: {
-			kind: 'summary',
+			kind: 'said',
 			text: 'Thursday is out.',
 		},
 	},
 	seating: {
-		activation: 'opened:2:assistant:1',
+		activation: 'message:2:assistant:1',
 		key: 'call-4',
 		intent: { kind: 'seated', name: 'surveyor' },
 	},
@@ -125,16 +126,6 @@ const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 		view: {
 			...view,
 			spec: { ...view.spec, purpose: { kind: 'respond', message: 4 } },
-			through: 4,
-		},
-	},
-	selectView: {
-		view: {
-			...view,
-			spec: {
-				...view.spec,
-				purpose: { kind: 'select', exchange: 2, person: 'priya', limit: 1 },
-			},
 			through: 4,
 		},
 	},

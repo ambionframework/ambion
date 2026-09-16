@@ -39,7 +39,12 @@ const writers = async (stub: DurableObjectStub, type: string): Promise<(string |
 
 it('serves a seat that was at work when the object went away, and takes its commit after', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName(NAME));
-	await stub.start({ name: NAME, assistant: 'assistant', agents: ['slow'] });
+	await stub.start({
+		name: NAME,
+		summary: 'assistant',
+		seats: { slow: 'broadcast', assistant: 'none' },
+		agents: ['slow', 'assistant'],
+	});
 	await stub.visit({ name: 'priya', identity: 'Project manager.' });
 	const exchange = await stub.send({ from: 'priya', text: 'Anyone on the pour date?', key: 'q1' });
 

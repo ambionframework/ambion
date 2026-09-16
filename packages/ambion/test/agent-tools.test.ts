@@ -47,7 +47,7 @@ describe('agent tools', () => {
 	});
 
 	it('keeps the three names a room supplies free for its activation tools', () => {
-		for (const name of ['say', 'seat', 'summarise']) {
+		for (const name of ['say', 'seat', 'unseat']) {
 			expect(() =>
 				defineAgent({
 					name: `agent-${name}`,

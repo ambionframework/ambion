@@ -3,9 +3,9 @@
  * again. The room goes from idle, to active, and back to idle, and one person
  * owns what happens in between.
  *
- * This is the room's own unit of work, not the assistant's. An assistant is the first
- * thing that reads it — it writes one message per exchange — and it is not the
- * last: a client folds the working under the question it answered, and a host
+ * This is the room's own unit of work. A configured writer may read it and
+ * write one message per exchange, but it is not the last reader: a client
+ * folds the working under the question it answered, and a host
  * measures what an exchange cost. So the rule lives here, on its own, and every reader takes it from the
  * same place.
  *
@@ -22,8 +22,7 @@
  * An exchange is a fold over the journal: the first person's question after the
  * last close is the open one. A room resumed mid-exchange continues it.
  *
- * The design contract is `docs/exchange.md`; `docs/assistant.md` says what an
- * assistant makes of one.
+ * The design contract is `docs/exchange.md`.
  */
 
 import { decodeActivationId } from '../activation-id.ts';
@@ -44,27 +43,33 @@ export type SummaryCompletion =
 
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
-	close: Pick<Close, 'owner' | 'from' | 'through' | 'wakes'>,
+	close: Pick<Close, 'owner' | 'from' | 'through' | 'summary'>,
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
 ): SummaryCompletion {
 	const summary = messages.find(
 		(message): message is SummaryMessage =>
 			isSummary(message) &&
+			message.from === close.summary &&
 			message.to === close.owner &&
 			message.covers.from <= close.from &&
 			message.covers.through >= close.through,
 	);
 	if (summary !== undefined) return { status: 'published', summary };
-	if (close.wakes === undefined) return { status: 'silent' };
-	const writer = close.wakes[0];
+	const writer = close.summary;
+	if (writer === undefined) return { status: 'silent' };
+	if (
+		messages.some(
+			(message) =>
+				message.kind === 'unseated' && message.subject === writer && message.seq > close.through,
+		)
+	)
+		return { status: 'failed' };
 	const drafts = [...leases.values()].filter((lease) => {
 		const parsed = decodeActivationId(lease.id);
 		// A terminal lease from another seat cannot settle this close.
 		return (
-			parsed?.source === 'closed' &&
-			parsed.position === close.through &&
-			(writer === undefined || parsed.seat === writer)
+			parsed?.source === 'closed' && parsed.position === close.through && parsed.seat === writer
 		);
 	});
 	const released = drafts.some((lease) => lease.phase === 'ended' && lease.reason === 'released');
@@ -74,7 +79,7 @@ export function summaryCompletion(
 			(lease) =>
 				lease.phase === 'ended' && (lease.reason === 'revoked' || lease.reason === 'abandoned'),
 		);
-	if (writer !== undefined && !stoodDown) return { status: 'pending', writer };
+	if (!stoodDown) return { status: 'pending', writer };
 	// Preserve reads of histories with a running draft beside a terminal one.
 	if (drafts.some((lease) => lease.phase === 'running')) return { status: 'pending' };
 	if (released) return { status: 'silent' };
