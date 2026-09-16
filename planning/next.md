@@ -1,7 +1,7 @@
 # Next: the work to ship Ambion 0.1.0
 
-Delivery plan, 2026-09-15. Reviewed after main commit
-`662e427` and the merged audit-failure isolation work in PR #126.
+Delivery plan, 2026-09-15. Updated for audit isolation in PR #126, the CLI
+and Cloudflare release work in PR #127, and ordinary participation in PR #128.
 [release-0.1.0.md](release-0.1.0.md) defines the positioning, capabilities,
 deployment models, and limits. This file owns implementation work and its
 completion evidence, including the remaining work from earlier plans.
@@ -25,15 +25,14 @@ stay synchronized. The main sources of complexity are:
 conditional journal appends, activation purpose, and structured context have
 landed. Preserve their evidence below. Prioritize these remaining changes:
 
-| Order | Change                                                  | Main reduction                                                  | Scope                          |
-| ----- | ------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------ |
-| 1     | Use ordinary agents for closing assignments             | Remove special membership, selection, and summary-only tools    | Prepared for review; section 5 |
-| 2     | Narrow executor dependencies and extract Pi transcripts | Remove broad interfaces and provider types from generic storage | Medium; sections 5–6           |
-| 3     | Finish state ownership and release contracts            | Remove mutable fact leaks and ambiguous failure guarantees      | Sections 7–9                   |
+| Order | Change                                                  | Main reduction                                                  | Scope                |
+| ----- | ------------------------------------------------------- | --------------------------------------------------------------- | -------------------- |
+| 1     | Narrow executor dependencies and extract Pi transcripts | Remove broad interfaces and provider types from generic storage | Medium; sections 5–6 |
+| 2     | Finish state ownership and release contracts            | Remove mutable fact leaks and ambiguous failure guarantees      | Sections 7–9         |
 
-The current participation slice covers shared seating, unseating, closing
-publication, ordinary membership, and history migration. Keep its completion
-evidence together before starting the executor extraction.
+PR #128 implements shared seating, unseating, closing publication, ordinary
+membership, and explicit history version rejection. Section 5 retains its
+evidence. Next, narrow executor dependencies before extracting transcript storage.
 
 Implement these changes in bounded slices. Temporary paths must have a named
 removal step. Do not introduce a second permanent participation model.
@@ -63,9 +62,9 @@ The current storage test harness covers memory and SQLite.
 These are baseline observations, not evidence that the proposed refactors
 pass their release gates. Do not repeat completed changes as new work.
 
-**Simplify participation.** Section 5 is in progress. It gives every agent
-ordinary membership, shared seating authority, and one speaking tool. Closing
-work retains its bounded context and publication rules until the refactor lands.
+**Participation is uniform.** PR #128 gives every agent ordinary membership,
+shared seating authority, and one speaking tool. Closing work retains its
+bounded context and publication rules. Section 5 records the implementation.
 
 ## 2. One owner for collaboration state
 
@@ -423,7 +422,8 @@ Participation, narrower interfaces, and separate audit failure remain below.
 
 ### Simplify participation and closing work
 
-**Prepared for review; not merged.** Treat the former assistant as an ordinary
+**Implemented in [PR #128](https://github.com/ambionframework/ambion/pull/128).**
+Treat the former assistant as an ordinary
 agent with an explicit closing assignment. Every agent has authority to seat
 supplied colleagues and one speaking tool. Exchange completion and summary
 coverage remain room guarantees.
@@ -506,7 +506,11 @@ no-op membership results, and version 2 history rejection are covered by the
 focused room, transition, summary, host, and replay tests. Focused checks pass
 with memory and SQLite coverage. `pnpm format` and `pnpm check` pass,
 including 580 core tests, 37 workspace tests, and 17 Cloudflare tests.
-Expanded chaos passes 728 tests. This change is prepared for review and is not merged.
+Expanded chaos passes 728 tests. All seven PR checks pass, including the live
+provider suite and contract verification. PR #127's generated CLI team is
+updated to the same agent catalog and summary assignment. The integrated gate
+also passes with 18 Cloudflare tests and six CLI tests. The packed CLI consumer
+smoke passes, including the generated worker's Wrangler build.
 
 ### Separate protocol data from provider execution
 
@@ -662,18 +666,18 @@ for 0.1.0. Extract further only when a second consumer needs that boundary.
 
 ### Keep the release surface deliberate
 
-| Current name or structure                         | Proposed treatment                        | Reason                                                        |
-| ------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| `AgentSeat`, `SeatedAgent`, three seating helpers | Remove                                    | Membership is plain room configuration                        |
-| `seats()` / `SeatInfo`                            | `participants()` / `ParticipantInfo`      | The returned view includes humans and agents                  |
-| `SeatActor`                                       | `AgentRunner` within Pi integration       | Names execution rather than durable membership                |
-| `ActivationSpec` plus repeated grants             | One canonical activation value            | One discriminator determines authority                        |
-| `wire.ts`                                         | Split protocol values from journal events | Network requests and persisted facts have different contracts |
-| Broad `RunningRoom` / `Answering` interfaces      | Narrow calls and explicit dependencies    | Adapters cannot reach arbitrary host state                    |
-| `Close.wakes[0]` internally                       | `summaryBy`                               | A close designates at most one summary writer                 |
-| `Composition` internally                          | `RoomConfiguration`                       | Names the durable configuration fact directly                 |
-| `journal/pi`                                      | `pi-journal` package                      | Pi storage has a separate consumer and dependency set         |
-| Placeholder CLI                                   | Exclude from 0.1.0 publication            | Help and version output do not establish a useful CLI         |
+| Current name or structure                         | Proposed treatment                        | Reason                                                                |
+| ------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------- |
+| `AgentSeat`, `SeatedAgent`, three seating helpers | Remove                                    | Membership is plain room configuration                                |
+| `seats()` / `SeatInfo`                            | `participants()` / `ParticipantInfo`      | The returned view includes humans and agents                          |
+| `SeatActor`                                       | `AgentRunner` within Pi integration       | Names execution rather than durable membership                        |
+| `ActivationSpec` plus repeated grants             | One canonical activation value            | One discriminator determines authority                                |
+| `wire.ts`                                         | Split protocol values from journal events | Network requests and persisted facts have different contracts         |
+| Broad `RunningRoom` / `Answering` interfaces      | Narrow calls and explicit dependencies    | Adapters cannot reach arbitrary host state                            |
+| `Close.wakes[0]` internally                       | `summaryBy`                               | A close designates at most one summary writer                         |
+| `Composition` internally                          | `RoomConfiguration`                       | Names the durable configuration fact directly                         |
+| `journal/pi`                                      | `pi-journal` package                      | Pi storage has a separate consumer and dependency set                 |
+| Local development CLI                             | Publish with the Cloudflare adapter       | Local project creation and room testing follow [the CLI plan](cli.md) |
 
 **Preserve useful established names.** Keep room, agent, visit, exchange,
 attention, and journal. Do not rename human to person or attention to routing
@@ -681,7 +685,8 @@ merely for stylistic consistency.
 
 Keep transport details behind a hosting subpath. Stop exporting persisted
 lease and composition shapes solely because the transport currently uses
-`wire.ts`. Leave Cloudflare private until its deployment API is ready.
+`wire.ts`. Publish the Cloudflare adapter for the local CLI. Keep deployment
+commands outside this local development milestone.
 
 ## 7. Finish the abstraction at the edges
 
@@ -760,18 +765,18 @@ Merged in [PR #126](https://github.com/ambionframework/ambion/pull/126) and
 present on main at `662e427`. Execution outcomes are separate from transcript
 writes; bounded audit retries preserve collaboration completion.
 
-### Current change: simplify participation
+### Completed: simplify participation
 
-Follow section 5's delivery order: shared seating, closing publication through
-`say`, then ordinary membership with an optional closing assignment. Remove
-selection and special opening dispatch when ordinary participation replaces them.
+PR #128 implements shared seating, closing publication through `say`, and
+ordinary membership with an optional closing assignment. Selection and
+special opening dispatch are removed.
 
 **Evidence:** concurrent seating records one membership change. Restart,
 writer removal, and overlapping ordinary and closing work preserve completion.
 Summary boundaries, recipient preferences, and source review stay intact.
 
 **Validation:** see section 5 for the current checks and regression coverage.
-This refactor is prepared for review and is not merged.
+PR #128 contains the implementation and integration with the CLI template.
 
 ### Stage 2: isolate execution and extract transcript storage
 
@@ -824,8 +829,11 @@ for investigation; their old reproduction rates are not current evidence.
       settings. Do not imply that the Node workspace is platform-neutral.
 - [ ] Update package exports, build entries, dependency checks, versioning,
       and publication discovery for `pi-journal` and the narrowed hosting surface.
-- [ ] Make the placeholder CLI private and remove promises of `init`, `dev`,
-      or `deploy`. Keep Cloudflare private and label it as a reference implementation.
+- [x] Include the CLI and Cloudflare adapter in lockstep package discovery.
+      Use `ambion new` as the only project-creation path.
+- [x] Publish `0.1.0-alpha.1` under `next` through the release workflow.
+      [The release check](https://github.com/ambionframework/ambion/actions/runs/35059680708)
+      verified registry installation, project types, and the generated Worker bundle.
 - [ ] Declare example coverage in Knip. Remove the unused `dev` task contract.
       Review Turbo dependencies against actual source and built-package tests;
       remove redundant builds only where the test contract permits it.
@@ -863,7 +871,7 @@ the intended packages. Importing definitions must retain lazy provider loading.
 
 **Done when:** the supported deployment examples demonstrate recovery with
 their real storage and topology. Record their evidence separately from the
-private Cloudflare reference tests.
+Cloudflare adapter tests.
 
 ### Failure tests and operational evidence
 
@@ -957,7 +965,7 @@ consumer or a measured limitation.
 | A general executor plugin system                                       | Establish and exercise the internal protocol before making it a public framework                                     |
 | A property-test shrinker                                               | Adopt when a real failing history is expensive to reduce manually                                                    |
 | JSONL torn-tail and multiwriter repair                                 | Room persistence uses memory/SQLite; revisit only if a JSONL adapter is reintroduced                                 |
-| Published Cloudflare deployment and CLI commands                       | The private reference lacks the packaging, configuration, and operational evidence of a supported deployment         |
+| Cloudflare deployment commands                                         | The adapter supports local CLI use; managed deployment needs configuration and operational evidence                  |
 
 ## 11. Disposition of the previous backlog
 

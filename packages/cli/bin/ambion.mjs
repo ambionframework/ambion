@@ -42,9 +42,77 @@ if (!supported()) {
 	process.exit(1);
 }
 
-// Dynamic import keeps this file parseable on Node versions that would choke on
-// the bundle's syntax — the exit above always wins there.
-import('../dist/ambion.mjs').catch((error) => {
+function supportsOpenTui() {
+	if (process.versions.bun) return true;
+	const match = /^(\d+)\.(\d+)/.exec(process.versions.node);
+	if (!match) return false;
+	const major = parseInt(match[1], 10);
+	const minor = parseInt(match[2], 10);
+	return major > 26 || (major === 26 && minor >= 4);
+}
+
+async function launch() {
+	// OpenTUI uses Node's experimental FFI. Relaunch only for `dev`, so help,
+	// version, and project creation keep the regular Ambion runtime floor.
+	if (
+		process.argv[2] === 'dev' &&
+		!process.versions.bun &&
+		!process.execArgv.includes('--experimental-ffi')
+	)
+		return relaunchForOpenTui();
+	await import('../dist/ambion.mjs');
+}
+
+async function relaunchForOpenTui() {
+	if (!supportsOpenTui()) {
+		console.error(
+			'\nambion dev needs Node.js 26.4 or newer with --experimental-ffi (or Bun 1.3 or newer).\n',
+		);
+		return process.exit(1);
+	}
+	const { spawn } = await import('node:child_process');
+	const child = spawn(
+		process.execPath,
+		[...process.execArgv, '--experimental-ffi', process.argv[1], ...process.argv.slice(2)],
+		{ stdio: 'inherit', env: process.env },
+	);
+	const result = await waitForChild(child);
+	if (result.signal === 'SIGINT') process.exitCode = 130;
+	else if (result.signal === 'SIGTERM') process.exitCode = 143;
+	else process.exitCode = result.code ?? 1;
+}
+
+function waitForChild(child) {
+	const forward = (signal) => {
+		if (child.exitCode === null && child.signalCode === null) {
+			try {
+				child.kill(signal);
+			} catch {}
+		}
+	};
+	process.on('SIGINT', forward);
+	process.on('SIGTERM', forward);
+	return new Promise((resolve, reject) => {
+		const cleanup = () => {
+			process.removeListener('SIGINT', forward);
+			process.removeListener('SIGTERM', forward);
+			child.removeListener('error', onError);
+			child.removeListener('exit', onExit);
+		};
+		const onError = (error) => {
+			cleanup();
+			reject(error);
+		};
+		const onExit = (code, signal) => {
+			cleanup();
+			resolve({ code, signal });
+		};
+		child.once('error', onError);
+		child.once('exit', onExit);
+	});
+}
+
+launch().catch((error) => {
 	console.error(error);
 	process.exit(1);
 });

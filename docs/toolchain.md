@@ -20,7 +20,7 @@ ambion/
 ├── packages/
 │   ├── ambion/            @ambionframework/ambion   — the runtime library
 │   ├── cli/               @ambionframework/cli      — the `ambion` binary
-│   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
+│   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects
 │   ├── journal/           @ambionframework/journal   — the journal a room writes to
 │   └── workspace/         @ambionframework/workspace — a filesystem behind a workspace
 ├── examples/
@@ -39,8 +39,8 @@ ambion/
 └── pnpm-workspace.yaml    packages/*, examples/*
 ```
 
-**Current packaging.** `packages/*` is publishable, except
-`packages/cloudflare`, which is a private reference implementation.
+**Current packaging.** All packages in `packages/*` are publishable.
+The Cloudflare adapter supplies the CLI's generated Worker.
 `examples/*` is private and exists to be run. `examples/site` is the runnable example; the gate type-checks it with
 everything else, so an example that breaks fails the build.
 
@@ -61,12 +61,12 @@ filesystem resources and supplies ordinary tool bundles to agents. Its data stay
 **The 0.1.0 package surface remains pending.** The target packages are
 `@ambionframework/ambion`, `@ambionframework/journal`,
 `@ambionframework/pi-journal`, and `@ambionframework/workspace`. The Pi audit
-subpath still lives in the journal package. The CLI remains a version-reporting
-scaffold; the release plan excludes it from the 0.1.0 experience. Current
-scripts still include it. Do not treat this documentation as a packaging change.
+subpath still lives in the journal package. The CLI provides local project
+creation and an OpenTUI room client. The CLI and Cloudflare adapter join the
+lockstep prerelease. The 0.1.0 release gates still apply to the stable release.
 
 Internal dependencies use `workspace:*` and are rewritten to the published
-version by pnpm at pack time. That one edge is what the scaffold exercises:
+version by pnpm at pack time. The CLI smoke checks exercise this dependency:
 the CLI's help text reads a constant out of the runtime package, so the smoke
 test fails if turbo builds them out of order, if the `exports` map is wrong, or
 if the workspace protocol does not resolve.
@@ -76,8 +76,9 @@ if the workspace protocol does not resolve.
 `@ambionframework/ambion` is the runtime; [`agent.md`](agent.md),
 [`presence.md`](presence.md), [`summary.md`](summary.md) and
 [`workspace.md`](workspace.md) are its contracts.
-`@ambionframework/cli` is the `ambion` binary; it currently reports its
-version and nothing else.
+`@ambionframework/cli` is the `ambion` binary. It creates team projects and
+opens their local rooms through Wrangler and OpenTUI. The CLI keeps OpenTUI
+outside its bundle so the installed package can load its native assets.
 `@ambionframework/cloudflare` runs a room as Durable Objects: one object
 holds the room over the core's SQLite storage on `ctx.storage.sql`, one
 holds each seat and runs one activation inside one alarm, and RPC is the
@@ -172,10 +173,15 @@ through one of those two entries. Biome refuses every other path into
 
 ### Version floor
 
-Node **>= 22.19**. The floor tracks Node's own type stripping: it is on by
+The core library requires Node **>= 22.19**. This floor tracks Node's own type stripping: it is on by
 default from 22.18 and from 23.6, so 23.0–23.5 is explicitly excluded.
 `packages/cli/bin/ambion.mjs` enforces the floor at runtime, before any modern
 syntax is parsed.
+
+Repository installation and `ambion dev` require Node **>= 26.4** because
+OpenTUI declares that dependency requirement. The CLI adds `--experimental-ffi`
+when it starts `dev`. Help, version output, and project creation keep the
+regular runtime guard and do not load the native renderer.
 
 ---
 
@@ -375,9 +381,12 @@ Three jobs, on push to `main`, on every pull request, and on demand.
 
 | Job       | What it proves                                                      |
 | --------- | ------------------------------------------------------------------- |
-| **check** | Formatting, types, lint, the complexity budget, and Knip on Node 22 |
+| **check** | Formatting, types, lint, the complexity budget, and Knip on Node 26 |
 | **test**  | The suite passes on Node 22 **and** 24                              |
 | **cli**   | The published artifact actually works                               |
+
+All jobs install workspace dependencies with Node 26 for OpenTUI. The test
+matrix then switches to Node 22 or 24 to check runtime compatibility.
 
 The `cli` job is the one that matters most and the one a unit test cannot
 replace. It builds, then drives `packages/cli/bin/ambion.mjs` — the exact file
@@ -392,9 +401,10 @@ that ships — to:
    release does, so a broken `files` list fails on a pull request, well
    before publish.
 
-The CLI has no commands yet. What these steps prove is the path every
-invocation travels: the Node floor guard in `bin/ambion.mjs`, the tsdown
-bundle, and cross-package resolution.
+These checks cover the Node floor guard in `bin/ambion.mjs`, the tsdown
+bundle, and cross-package resolution. The CLI tests also cover project
+creation and local development. See [the CLI plan](../planning/cli.md) for
+the packed-consumer and terminal acceptance checks.
 
 Concurrency is per-ref with `cancel-in-progress`, so a re-push supersedes the
 run it replaced. Permissions are `contents: read` and nothing else.
@@ -582,10 +592,15 @@ Order of operations, all before anything leaves the machine:
 install → check:types → check:lint → build → test
         → versions agree → tag matches package version
         → pack → attest provenance → publish the attested tarballs
+        → install the published CLI → ambion new → install and check the project
 ```
 
 Permissions are `contents: read`, `packages: write`, plus `id-token: write` and
 `attestations: write` for the signature.
+
+After publication, the workflow installs the exact CLI version from the registry.
+It creates a project with `ambion new`, installs its dependencies, and checks
+its types and Worker bundle. This check uses no local package archives.
 
 A tag can be cut from a commit CI never saw, so the release re-runs the full
 gate itself. The tag-match step means

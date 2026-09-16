@@ -9,26 +9,27 @@ people they serve. Agents own their instructions, models, tools, and domain
 expertise. Rooms provide a shared journal and participation rules.
 Applications own domain data and tool resources.
 
-pnpm workspace, Node >= 22.19, ESM only, TypeScript.
+pnpm workspace, ESM only, TypeScript. Repository installation needs Node
+26.4 or newer for OpenTUI. The core runtime supports Node >= 22.19.
 
-| Path                  | What                                                                                      |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them         |
-| `packages/cli`        | Version-reporting CLI scaffold; excluded from the 0.1.0 target                            |
-| `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Private; tested in workerd  |
-| `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                |
-| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem             |
-| `docs/agent.md`       | Design contract for the core — read before changing the runtime                           |
-| `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`          |
-| `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                            |
-| `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                |
-| `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`      |
-| `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`      |
-| `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md` |
-| `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs            |
-| `examples/site`       | Runnable example                                                                          |
-| `demos/`              | One dated report per merged change — regenerate on the branch, then leave it              |
-| `planning/`           | `release-0.1.0.md`: release scope; `next.md`: remaining and deferred work                 |
+| Path                  | What                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them                |
+| `packages/cli`        | Project creation and local rooms through Wrangler and OpenTUI; ships with the Cloudflare adapter |
+| `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd     |
+| `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                       |
+| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                    |
+| `docs/agent.md`       | Design contract for the core — read before changing the runtime                                  |
+| `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`                 |
+| `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                                   |
+| `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                       |
+| `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`             |
+| `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`             |
+| `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`        |
+| `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                   |
+| `examples/site`       | Runnable example                                                                                 |
+| `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                     |
+| `planning/`           | `release-0.1.0.md`: release scope; `next.md`: remaining and deferred work                        |
 
 ## Thesis
 

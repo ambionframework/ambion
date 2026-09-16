@@ -258,12 +258,12 @@ subscription service is outside this release.
 same collaboration rules serve the following models, with explicit support
 levels for 0.1.0.
 
-| Model                         | Room and execution placement                                      | Persistence                                 | 0.1.0 support                                                                      |
-| ----------------------------- | ----------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Embedded Node application     | Room and agent runners in one process                             | In-memory journals                          | Supported for development, tests, and ephemeral application lifetimes              |
-| Persistent Node service       | Room and agent runners in an application-managed service          | SQLite journals through the storage adapter | Supported, with documented restart and recovery procedures                         |
-| Separate room and agent hosts | Room calls and executor calls cross the JSON protocol             | Storage chosen by each host                 | Extension contract, validated by the Cloudflare reference implementation           |
-| Cloudflare Durable Objects    | One object per room and one per seat; RPC and alarms connect them | Each object's SQLite storage                | Private, tested reference implementation; no published deployment product in 0.1.0 |
+| Model                         | Room and execution placement                                      | Persistence                                 | 0.1.0 support                                                                 |
+| ----------------------------- | ----------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| Embedded Node application     | Room and agent runners in one process                             | In-memory journals                          | Supported for development, tests, and ephemeral application lifetimes         |
+| Persistent Node service       | Room and agent runners in an application-managed service          | SQLite journals through the storage adapter | Supported, with documented restart and recovery procedures                    |
+| Separate room and agent hosts | Room calls and executor calls cross the JSON protocol             | Storage chosen by each host                 | Extension contract, validated by the Cloudflare reference implementation      |
+| Cloudflare Durable Objects    | One object per room and one per seat; RPC and alarms connect them | Each object's SQLite storage                | Publishable adapter used by the local CLI; deployment commands remain pending |
 
 **The embedded model requires no remote coordination service.** The host
 supplies model credentials and keeps the process alive while work runs.
@@ -305,7 +305,9 @@ Pi integration. A provider-neutral plugin ecosystem is outside this release.
 
 Keep the configured GitHub Packages distribution and document its read-token
 requirement. A registry change requires an explicit distribution decision.
-Do not publish a placeholder CLI as part of the release experience.
+Publish the implemented local CLI and Cloudflare adapter together.
+`ambion new` is the only project-creation command. Deployment commands remain
+separate from this local development release.
 
 ## Boundaries and limits
 

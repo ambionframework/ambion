@@ -40,7 +40,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 26
           cache: pnpm
           registry-url: https://npm.pkg.github.com
           scope: '@ambionframework'
@@ -102,3 +102,26 @@ jobs:
             args+=(--dry-run)
           fi
           node scripts/publish.mjs "${args[@]}"
+
+      # Exercise the public install path after a real publish. This deliberately
+      # creates a consumer outside the checkout and resolves every dependency
+      # from GitHub Packages rather than from local workspace files.
+      - name: Verify published consumer
+        if: steps.mode.outputs.publishing == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./packages/cli/package.json').version")"
+          consumer="$(mktemp -d)"
+          cleanup() {
+            rm -rf -- "$consumer"
+          }
+          trap cleanup EXIT
+          cd "$consumer"
+          npm exec --yes --package="@ambionframework/cli@$version" -- ambion new team
+          cd team
+          pnpm install --ignore-scripts
+          pnpm check:types
+          pnpm exec wrangler deploy --dry-run

@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/cli",
-	"version": "0.0.0",
+	"version": "0.1.0-alpha.1",
 	"type": "module",
 	"description": "Command line interface for the Ambion agent framework.",
 	"license": "Apache-2.0",
@@ -20,7 +20,8 @@
 	},
 	"files": [
 		"bin/ambion.mjs",
-		"dist"
+		"dist",
+		"templates"
 	],
 	"engines": {
 		"node": ">=22.19.0"
@@ -35,7 +36,8 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"@ambionframework/ambion": "workspace:*"
+		"@ambionframework/ambion": "workspace:*",
+		"@opentui/core": "0.5.11"
 	},
 	"devDependencies": {
 		"tsdown": "^0.22.14",

@@ -8,12 +8,12 @@ still required for release.
 
 ## Deployment models
 
-| Model                         | Placement                        | Persistence                  | Current status                                                             |
-| ----------------------------- | -------------------------------- | ---------------------------- | -------------------------------------------------------------------------- |
-| Embedded Node application     | Room and runners in one process  | In-memory journals           | Implemented; storage lasts for the instance's lifetime                     |
-| Persistent Node service       | Application-managed service      | SQLite journals              | Adapters and recovery tests exist; release restart example remains pending |
-| Separate room and agent hosts | Calls cross the JSON protocol    | Each host chooses storage    | Extension contract exercised by the Cloudflare reference                   |
-| Cloudflare Durable Objects    | One object per room and per seat | Each object's SQLite storage | Private reference tested in workerd; no published deployment product       |
+| Model                         | Placement                        | Persistence                  | Current status                                                                        |
+| ----------------------------- | -------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------- |
+| Embedded Node application     | Room and runners in one process  | In-memory journals           | Implemented; storage lasts for the instance's lifetime                                |
+| Persistent Node service       | Application-managed service      | SQLite journals              | Adapters and recovery tests exist; release restart example remains pending            |
+| Separate room and agent hosts | Calls cross the JSON protocol    | Each host chooses storage    | Extension contract exercised by the Cloudflare reference                              |
+| Cloudflare Durable Objects    | One object per room and per seat | Each object's SQLite storage | Publishable adapter tested in workerd; local CLI support, deployment commands pending |
 
 ## Embedded Node
 

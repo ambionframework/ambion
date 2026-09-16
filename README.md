@@ -90,6 +90,10 @@ participants. See the [summary contract](docs/summary.md).
 Use Node **22.19 or later**. Packages use ESM. Model execution uses the Pi
 integration and requires credentials for the chosen provider.
 
+The [local development CLI](packages/cli/README.md) creates team projects and
+opens their rooms in OpenTUI. Installing the CLI or the repository requires
+Node **26.4 or later**.
+
 The configured registry is GitHub Packages, which requires a token for read
 access. Create a [classic PAT](https://github.com/settings/tokens/new?scopes=read:packages&description=Ambion)
 with `read:packages`, then add this to your project's `.npmrc`:
@@ -107,6 +111,37 @@ npm install @ambionframework/ambion
 The main library includes the journal dependency. Add
 `@ambionframework/workspace` when agents need its optional filesystem tools.
 See [Contributing](CONTRIBUTING.md) to build and run from source.
+
+## Try the local CLI
+
+**Create a team with `ambion new` and talk to it with `ambion dev`.** Use
+Node **26.4 or later**, pnpm 10, and an interactive terminal.
+
+Configure GitHub Packages in your user `~/.npmrc` with the registry and token
+lines from [Install](#install). Set `GITHUB_TOKEN` to a classic token with
+`read:packages`. Install the CLI prerelease from `next`:
+
+```sh
+npm install --global @ambionframework/cli@next
+ambion new my-team
+cd my-team
+pnpm install
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars and set ANTHROPIC_API_KEY.
+ambion dev
+```
+
+The OpenTUI room contains a planner, a reviewer, and your local participant.
+Enter sends a question. Scroll with the mouse wheel. Ctrl-C closes the room
+and stops Wrangler.
+
+Edit instructions in `src/room.ts`, then restart `ambion dev`.
+History remains in `.wrangler/`. Use `ambion dev --port 8788` if port 8787
+is occupied.
+
+The generated project configures the registry and uses published packages,
+including the Cloudflare adapter. See the [CLI README](packages/cli/README.md)
+for model settings, HTTP testing, and resetting local history.
 
 ## A small room
 
@@ -171,12 +206,12 @@ multiple people, and a shared workspace.
 
 **Placement, persistence, and tool resources are separate choices.**
 
-| Model                         | Storage                            | Use and support                                                  |
-| ----------------------------- | ---------------------------------- | ---------------------------------------------------------------- |
-| Embedded Node application     | In-memory journals                 | Development, tests, and ephemeral application lifetimes          |
-| Persistent Node service       | SQLite through the storage adapter | SQLite adapter and recovery tests; application-managed lifecycle |
-| Separate room and agent hosts | Storage chosen by each host        | JSON protocol extension contract                                 |
-| Cloudflare Durable Objects    | Each object's SQLite storage       | Private, tested reference; no published deployment product       |
+| Model                         | Storage                            | Use and support                                                    |
+| ----------------------------- | ---------------------------------- | ------------------------------------------------------------------ |
+| Embedded Node application     | In-memory journals                 | Development, tests, and ephemeral application lifetimes            |
+| Persistent Node service       | SQLite through the storage adapter | SQLite adapter and recovery tests; application-managed lifecycle   |
+| Separate room and agent hosts | Storage chosen by each host        | JSON protocol extension contract                                   |
+| Cloudflare Durable Objects    | Each object's SQLite storage       | Publishable adapter for local CLI use; deployment commands pending |
 
 The host keeps its process alive, supplies definitions again after restart,
 and owns model credentials and tool resources. Persisted history alone does

@@ -35,13 +35,13 @@ messages. Human participants can review those messages through
 current examples with this checkout. Do not treat proposed package names in
 the plan as available exports.
 
-| Area       | Current code                                                            | 0.1.0 target                                                      |
-| ---------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Membership | Fixed `agents` definitions, optional `seats`, and name-based operations | Ordinary agents can seat and unseat supplied colleagues           |
-| Pi audits  | `@ambionframework/journal/pi`                                           | A separate `@ambionframework/pi-journal` package                  |
-| Summaries  | Refactor in progress                                                    | Optional closing assignment through the regular `say` tool        |
-| History    | Version 2 composition entries                                           | Reject legacy assistant histories without silent reinterpretation |
-| CLI        | Version-reporting scaffold                                              | Exclude the placeholder CLI from the release experience           |
+| Area       | Current code                                                            | 0.1.0 target                                                               |
+| ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Membership | Fixed `agents` definitions, optional `seats`, and name-based operations | Ordinary agents can seat and unseat supplied colleagues                    |
+| Pi audits  | `@ambionframework/journal/pi`                                           | A separate `@ambionframework/pi-journal` package                           |
+| Summaries  | Optional closing assignment through regular `say`                       | Preserve fixed context and room-stamped provenance                         |
+| History    | Version 2 composition entries                                           | Reject legacy assistant histories explicitly                               |
+| CLI        | Project creation and local OpenTUI rooms                                | CLI and adapter share a prerelease; see [the CLI plan](../planning/cli.md) |
 
 These differences are tracked in the delivery plan. Dated [demo reports](../demos)
 remain historical evidence for the versions they ran.

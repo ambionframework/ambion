@@ -174,7 +174,7 @@ describe('a split: two live hosts over one SQLite database', () => {
 
 	/** Run the child until its journal takes `at` appends, then stop it where it stands. */
 	function stopAt(dir: string, name: string, at: number) {
-		const args = ['--experimental-transform-types', '--no-warnings', child, dir, name, '40'];
+		const args = ['--no-warnings', child, dir, name, '40'];
 		const process_ = spawn(node, args, { stdio: ['ignore', 'pipe', 'inherit'] });
 		const exited = new Promise<void>((resolve) => process_.on('exit', () => resolve()));
 		const stopped = new Promise<number>((resolve, reject) => {

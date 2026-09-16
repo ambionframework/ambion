@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/workspace",
-	"version": "0.0.0",
+	"version": "0.1.0-alpha.1",
 	"type": "module",
 	"description": "A workspace backend for Ambion: a virtual Unix filesystem and shell, in memory or over a directory.",
 	"license": "Apache-2.0",

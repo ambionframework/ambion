@@ -85,15 +85,7 @@ const child = fileURLToPath(new URL('./support/child.ts', import.meta.url));
  */
 function killAt(dir: string, name: string, at: number, storage: string): Promise<number> {
 	return new Promise((resolve, reject) => {
-		const args = [
-			'--experimental-transform-types',
-			'--no-warnings',
-			child,
-			dir,
-			name,
-			'40',
-			storage,
-		];
+		const args = ['--no-warnings', child, dir, name, '40', storage];
 		const process_ = spawn(node, args, { stdio: ['ignore', 'pipe', 'inherit'] });
 		let last = 0;
 		let buffer = '';
