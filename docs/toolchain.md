@@ -22,6 +22,7 @@ ambion/
 │   ├── cli/               @ambionframework/cli      — the `ambion` binary
 │   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects
 │   ├── journal/           @ambionframework/journal   — the journal a room writes to
+│   ├── pi-journal/        @ambionframework/pi-journal — Pi sessions over journal storage
 │   └── workspace/         @ambionframework/workspace — a filesystem behind a workspace
 ├── examples/
 │   └── site/              the runnable example: a multi-agent room, on Node and on workerd
@@ -47,22 +48,24 @@ everything else, so an example that breaks fails the build.
 ### Package graph
 
 ```
-@ambionframework/ambion      ──depends on──▶  @ambionframework/journal
+@ambionframework/ambion      ──depends on──▶  @ambionframework/journal, pi-journal
+@ambionframework/pi-journal  ──depends on──▶  @ambionframework/journal, Pi
 @ambionframework/cli         ──depends on──▶  @ambionframework/ambion
 @ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion, journal
 @ambionframework/workspace   ──depends on──▶  @ambionframework/ambion
 ```
 
 `@ambionframework/journal` depends on nothing in this repository: its main
-entry holds a journal and knows no room or Pi session. Its optional Pi subpath
-adapts transcript storage. `@ambionframework/workspace` owns optional
-filesystem resources and supplies ordinary tool bundles to agents. Its data stays separate from room history.
+entry holds a journal and knows no room or Pi session.
+`@ambionframework/pi-journal` adapts full Pi session storage through the
+journal package's public storage contract. `@ambionframework/workspace` owns
+optional filesystem resources and supplies ordinary tool bundles to agents.
+Its data stays separate from room history.
 
-**The 0.1.0 package surface remains pending.** The target packages are
+**The library packages have separate ownership.** They are
 `@ambionframework/ambion`, `@ambionframework/journal`,
-`@ambionframework/pi-journal`, and `@ambionframework/workspace`. The Pi audit
-subpath still lives in the journal package. The CLI provides local project
-creation and an OpenTUI room client. The CLI and Cloudflare adapter join the
+`@ambionframework/pi-journal`, and `@ambionframework/workspace`. The CLI
+provides local project creation and an OpenTUI room client. The CLI and Cloudflare adapter join the
 lockstep prerelease. The 0.1.0 release gates still apply to the stable release.
 
 Internal dependencies use `workspace:*` and are rewritten to the published
@@ -70,6 +73,12 @@ version by pnpm at pack time. The CLI smoke checks exercise this dependency:
 the CLI's help text reads a constant out of the runtime package, so the smoke
 test fails if turbo builds them out of order, if the `exports` map is wrong, or
 if the workspace protocol does not resolve.
+
+**Check packed journal consumers.** After `pnpm build`, run
+`node scripts/journal-smoke.mjs`. It installs archives outside the workspace.
+The generic consumer checks declarations and execution with no Pi dependency.
+The Pi consumer checks session persistence with no collaboration runtime.
+Run this check before publishing the journal packages.
 
 ### What the packages do
 
@@ -99,8 +108,8 @@ proves the two hold the same documents.
 
 **The core's `src` imports no `node:` module.** The filesystem left with
 `@ambionframework/workspace`, and the core reads the clock and the random
-identifier off globals that workerd supplies. What the core still holds of
-a platform is its JSONL storage, through Pi.
+identifier off globals that workerd supplies. Pi session persistence uses the
+platform-neutral journal storage contract.
 
 **`@ambionframework/workspace` needs `nodejs_compat`.** It imports
 `node:fs/promises`, `node:path` and `node:crypto`. `directoryBackend` needs

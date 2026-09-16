@@ -1,11 +1,16 @@
 /** Pi sessions preserve their full public record over named Ambion journals. */
 import { DatabaseSync } from 'node:sqlite';
+import {
+	type JournalOpener,
+	type JournalStorage,
+	memoryJournals,
+	type Sql,
+	type SqlValue,
+	sqliteJournals,
+} from '@ambionframework/journal';
 import { InMemorySessionRepo } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
-import { memoryJournals } from '../src/memory.ts';
-import { piSessions } from '../src/pi.ts';
-import { type Sql, type SqlValue, sqliteJournals } from '../src/sqlite.ts';
-import type { JournalOpener, JournalStorage } from '../src/storage.ts';
+import { piSessions } from '../src/index.ts';
 
 const sqlOver = (database: DatabaseSync): Sql => ({
 	run: (query, ...params) => {

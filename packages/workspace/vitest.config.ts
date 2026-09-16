@@ -19,13 +19,13 @@ import { configDefaults, defineConfig } from 'vitest/config';
 export const core = fileURLToPath(new URL('../ambion/src/index.ts', import.meta.url));
 /** The core's source names the journal; one module, the way the core's own suite reads it. */
 export const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
-export const journalPi = fileURLToPath(new URL('../journal/src/pi.ts', import.meta.url));
+export const piJournal = fileURLToPath(new URL('../pi-journal/src/index.ts', import.meta.url));
 
 export default defineConfig({
 	resolve: {
 		alias: [
 			{ find: '@ambionframework/ambion', replacement: core },
-			{ find: '@ambionframework/journal/pi', replacement: journalPi },
+			{ find: '@ambionframework/pi-journal', replacement: piJournal },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],
 	},

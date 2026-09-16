@@ -1,5 +1,5 @@
 import { type JournalOpener, type JournalStorage, memoryJournals } from '@ambionframework/journal';
-import { piSessions } from '@ambionframework/journal/pi';
+import { piSessions } from '@ambionframework/pi-journal';
 import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { Activation, type ActivationHost, persistTurns } from '../src/seat/activation.ts';

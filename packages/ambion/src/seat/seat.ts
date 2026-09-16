@@ -18,7 +18,7 @@
  * the actor knows of the room, it learns through three calls (`wire.ts`).
  */
 
-import type { SessionOpener } from '@ambionframework/journal/pi';
+import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { Agent as PiAgent, Session as PiSession } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { SeatContext, Transport } from '../host/runtime.ts';

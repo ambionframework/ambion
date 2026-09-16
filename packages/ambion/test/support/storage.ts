@@ -17,7 +17,7 @@ import {
 	type SqlValue,
 	sqliteJournals,
 } from '@ambionframework/journal';
-import { piSessions, type SessionOpener } from '@ambionframework/journal/pi';
+import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
 
 export interface OpenedStorage {
 	readonly storage: JournalOpener;

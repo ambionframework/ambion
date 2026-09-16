@@ -3,7 +3,9 @@
 	"ignoreBinaries": ["wrangler"],
 	"workspaces": {
 		".": {
-			"entry": ["scripts/{version,publish,report,report-cloudflare,cli-team-smoke}.mjs"],
+			"entry": [
+				"scripts/{version,publish,report,report-cloudflare,cli-team-smoke,journal-smoke}.mjs"
+			],
 			"project": ["scripts/*.mjs"]
 		},
 		"packages/*": {

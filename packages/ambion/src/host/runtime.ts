@@ -11,7 +11,7 @@
  */
 
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
-import { piSessions, type SessionOpener } from '@ambionframework/journal/pi';
+import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models } from '@earendil-works/pi-ai';
 import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';

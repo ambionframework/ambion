@@ -37,7 +37,7 @@ import {
 	startRoom,
 } from '@ambionframework/ambion';
 import { namespaced, type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
-import { piSessions } from '@ambionframework/journal/pi';
+import { piSessions } from '@ambionframework/pi-journal';
 import {
 	AGENTS,
 	ASSISTANT,

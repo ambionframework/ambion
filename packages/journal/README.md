@@ -4,7 +4,7 @@
 queue, envelope, fencing, idempotency, and conditional appends. A caller
 owns entry kinds and body validation.
 
-The main package has no Pi dependency. It stores JSON data through a narrow
+The package has no Pi dependency. It stores JSON data through a narrow
 storage contract:
 
 ```ts
@@ -69,16 +69,13 @@ and generic `readThrough` are removed. The stored envelope is unchanged.
 `sqliteJournals(sql)` provides SQLite storage with native compare-and-append.
 `memoryJournals()` provides independent in-memory journals for one process.
 
-The optional `@ambionframework/journal/pi` subpath opens Pi transcript
-sessions over named native journal storage. `piSessions(journals)` gives Pi
-each session a separate name in the same backend. The runtime uses this view
-for seat audits. Workspace files use their separate workspace backend.
+Pi transcript storage lives in
+[`@ambionframework/pi-journal`](https://github.com/ambionframework/ambion/tree/main/packages/pi-journal).
+It uses the same storage backends and keeps each session in a separate journal.
 
-The 0.1.0 target extracts Pi transcript storage into
-`@ambionframework/pi-journal`. That package change remains pending; use the
-current subpath with this checkout. See the
-[documentation index](https://github.com/ambionframework/ambion/blob/main/docs/README.md)
-for current APIs and release targets.
+**Migration:** replace imports from `@ambionframework/journal/pi` with
+`@ambionframework/pi-journal`. Add the new package to your dependencies.
+The old subpath is removed. Stored transcripts keep their format and names.
 
 See the [durability contract](https://github.com/ambionframework/ambion/blob/main/docs/durability.md)
 for failure guarantees. The journal stores ordered facts; applications own

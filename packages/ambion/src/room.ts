@@ -25,7 +25,7 @@
  * - **Say when it has stopped.** An exchange closed, and nothing live.
  */
 
-import type { SessionOpener } from '@ambionframework/journal/pi';
+import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { answerCommit, answerLease, answerView, RefusedError } from './answers.ts';
 import { captureAgent, captureHuman } from './define.ts';
