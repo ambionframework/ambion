@@ -26,9 +26,9 @@ import {
 	speak,
 } from '../../ambion/test/support/scripted.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
+import type { WorkspaceBackend } from '../src/index.ts';
 import { directoryBackend, memoryBackend, openWorkspace } from '../src/index.ts';
 import { MEMORY_LIMIT_BYTES } from '../src/just-bash.ts';
-import type { WorkspaceBackend } from '../src/resource.ts';
 
 const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });
 
@@ -243,6 +243,47 @@ describe('the workspace resource owner', () => {
 		if (typeof result === 'string') throw new Error('The backend must return a structured result.');
 		expect(result.content[0]).toMatchObject({ type: 'text', text: '/home/alpha' });
 		await workspace.destroy();
+	});
+
+	it('shares queue and revocation between direct use and bound tools', async () => {
+		const started = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		let toolCalls = 0;
+		const inner = memoryBackend();
+		const workspace = openWorkspace({
+			name: name('shared-owner'),
+			backend: {
+				tools: [
+					{
+						name: 'inspect',
+						label: 'Inspect',
+						description: 'Inspect the workspace.',
+						parameters: Type.Object({}),
+						execute: async () => {
+							toolCalls += 1;
+							return { content: [{ type: 'text' as const, text: 'called' }], details: {} };
+						},
+					},
+				],
+				connect: (caller, signal) => inner.connect(caller, signal),
+				destroy: async () => {},
+			},
+		});
+		const active = workspace.use(workspaceAgent('alpha'), async () => {
+			started.resolve();
+			await release.promise;
+		});
+		await started.promise;
+		const bound = workspace.tools().tools[0];
+		if (bound === undefined) throw new Error('The bound tool is missing.');
+		const queued = bound.invoke({}, { agent: workspaceAgent('beta'), callId: 'queued' });
+		const destroying = workspace.destroy();
+		expect(toolCalls).toBe(0);
+		release.resolve();
+		await active;
+		await destroying;
+		await expect(queued).rejects.toThrow(/no longer available/i);
+		expect(toolCalls).toBe(0);
 	});
 
 	it('serializes complete operations from two agents, so shared edits do not lose updates', async () => {

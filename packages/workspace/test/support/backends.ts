@@ -6,8 +6,8 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { WorkspaceBackend } from '../../src/index.ts';
 import { directoryBackend, memoryBackend } from '../../src/index.ts';
-import type { WorkspaceBackend } from '../../src/resource.ts';
 
 export interface Backend {
 	readonly name: 'memory' | 'directory';

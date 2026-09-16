@@ -1,8 +1,9 @@
 # Next: the work to ship Ambion 0.1.0
 
 Delivery plan, 2026-09-16. Updated for executor separation in PR #130,
-Pi transcript extraction in PR #131, room value ownership in PR #132, and
-the protocol and event separation prepared for review.
+Pi transcript extraction in PR #131, room value ownership in PR #132,
+protocol separation in PR #133, and workspace resource separation prepared
+for review.
 [release-0.1.0.md](release-0.1.0.md) defines the positioning, capabilities,
 deployment models, and limits. This file owns implementation work and its
 completion evidence, including the remaining work from earlier plans.
@@ -18,7 +19,8 @@ representations and ownership overlaps that require unrelated mechanisms to
 stay synchronized. Executor dependencies and Pi transcript storage now have
 explicit boundaries. PR #132 protects accepted room facts at public reads
 and local delivery.
-The next priority is to separate transport messages from stored event shapes.
+PR #133 separates protocol messages from stored event shapes. The current
+priority separates workspace resource ownership from Ambion tool binding.
 
 **Build on the merged foundations.** Fixed definitions, normalized tools,
 conditional journal appends, activation purpose, structured context, and
@@ -26,13 +28,12 @@ ordinary participation have landed. Preserve their evidence below.
 
 | Order | Change                                  | Main reduction                                           | Scope        |
 | ----- | --------------------------------------- | -------------------------------------------------------- | ------------ |
-| 1     | Separate protocol from stored events    | Reduce transport exports and give stored facts one owner | Sections 5–6 |
-| 2     | Separate workspace resources from tools | Keep resource ownership independent of executor binding  | Section 6    |
-| 3     | Complete recovery and release contracts | Resolve failure guarantees and verify packaged consumers | Sections 8–9 |
+| 1     | Separate workspace resources from tools | Keep resource ownership independent of tool binding      | Section 6    |
+| 2     | Complete recovery and release contracts | Resolve failure guarantees and verify packaged consumers | Sections 8–9 |
 
 PR #130 narrows executor dependencies. PR #131 extracts Pi transcripts.
 PR #132 detaches collaboration values at ownership boundaries. Sections 5–7
-retain their validation. Protocol separation narrows the next public boundary.
+retain their validation. PR #133 narrows the transport boundary.
 
 Implement these changes in bounded slices. Temporary paths must have a named
 removal step. Do not introduce a second permanent participation model.
@@ -686,7 +687,9 @@ examples, manifests, aliases, and migration instructions use the new package.
 
 ### Separate protocol values from stored events
 
-**Prepared for review: narrow the transport contract.** `protocol.ts` contains
+**Merged:** [PR #133](https://github.com/ambionframework/ambion/pull/133).
+
+**The transport contract contains execution protocol values.** `protocol.ts` contains
 requests, replies, activation context, and JSON checks. `journal/events.ts`
 contains stored event shapes. `room/lease.ts` owns the projected lease state.
 Lease end reasons remain shared by protocol and journal events.
@@ -706,24 +709,35 @@ retains its runtime API and verifies stored facts through test-local observation
 and six CLI tests. The packed consumer compiles an external transport and
 rejects imports of all six internal types. Generated project typechecking
 and the Wrangler dry run pass. Import probes verify both forbidden dependency
-directions. Luna/High's independent review found no blockers.
+directions. Luna/High's independent review found no blockers. All seven CI
+checks pass, including live provider tests.
 
 ### Keep workspace ownership intact
 
-**Separate the workspace resource from its Ambion tool adapter internally.**
-[`resource.ts`](../packages/workspace/src/resource.ts) currently imports the
-Ambion bundle type and constructs its tools. The resource's job is connecting,
-serializing complete operations, and managing disposal.
+**Prepared for review: one resource owner with an Ambion adapter.**
+`resource.ts` owns connection, complete-operation serialization, and lifecycle.
+It accepts a `ResourceBackend` with `connect`, `destroy`, and optional `dispose`.
+`workspace.ts` adds a stable tool bundle through `tools.ts`. Tool calls and
+direct operations use the same owner and queue.
 
-Move Ambion tool binding into a small integration module. Keep the existing
-convenient workspace facade. The resource and execution environment must be
-usable without loading the collaboration runtime.
+The root `openWorkspace`, `Workspace`, and `WorkspaceBackend` remain compatible.
+The additive `/resource` entry exposes `openResource`, its types, and the
+existing backends without loading the collaboration runtime. Resource
+declarations do not depend on Ambion tool types. The package retains the
+Ambion dependency for its root adapter.
 
-Expose the resource through a separate package subpath if needed to enforce
-that import boundary. This does not require another package or lifecycle API.
+This adds no package, generic resource framework, or second lifecycle.
+Pi harness tools and execution environments retain their existing contracts.
+Further extraction requires a second consumer with a concrete need.
 
-Do not extract a general resource framework or a separate just-bash package
-for 0.1.0. Extract further only when a second consumer needs that boundary.
+**Validation:** 39 workspace tests pass. Existing lifecycle tests retain
+facade coverage. Added tests cover a backend without tools and shared queue
+revocation across direct operations and bound tools. Typechecks and the build
+pass. The packed consumer compiles both public entries and exercises memory
+and directory resources while rejecting Ambion imports. The root facade,
+generated CLI project typecheck, and Wrangler dry run pass. Independent
+Luna/High review found no blockers. `pnpm format` and `pnpm check` pass.
+Import probes reject Ambion and adapter imports from resource and backend modules.
 
 ### Keep the release surface deliberate
 
@@ -858,7 +872,7 @@ PR #128 contains the implementation and integration with the CLI template.
 ### Stage 2: isolate execution and extract transcript storage
 
 - Preserve the executor boundary and validation merged in PR #130.
-- Separate protocol types from stored facts.
+- Preserve protocol and stored-event separation merged in PR #133.
 - Preserve Pi transcript extraction and audit isolation merged in PR #131.
 - Keep workspace resources separate from executor tool binding.
 
@@ -981,8 +995,9 @@ the failed ordering assumption.
 - [ ] Reproduce `/dev/null` behavior on both just-bash backends. Ensure
       discarded output does not create a growing ordinary file. Prefer a narrow
       adapter or upstream fix; document any remaining shell limitations.
-- [ ] Retain whole-operation serialization, cleanup after failures, and the
+- [x] Retain whole-operation serialization, cleanup after failures, and the
       distinction between `dispose` and `destroy` while extracting tool binding.
+      Section 6 records the implementation and validation prepared for review.
 - [ ] Measure replay time, steady-state projection work, memory use, and model
       input size on the release examples. Record the history sizes used.
 - [ ] Verify summary-based activation context with silence, conflicting

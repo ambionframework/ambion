@@ -328,6 +328,39 @@
 			}
 		},
 		{
+			// Resource ownership and backends do not load the Ambion tool adapter.
+			"includes": [
+				"packages/workspace/src/resource.ts",
+				"packages/workspace/src/resource-entry.ts",
+				"packages/workspace/src/backend.ts",
+				"packages/workspace/src/just-bash.ts",
+				"packages/workspace/src/bash-env.ts"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/*",
+											"**/ambion/**",
+											"./index.ts",
+											"./workspace.ts",
+											"./tools.ts"
+										],
+										"message": "Resources and backends are independent of the Ambion tool adapter."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
 			// The workspace package's tests reach the core's test support by
 			// relative path: it is not published, so no specifier names it. The
 			// core's own source is a different matter — `vitest.config.ts` and

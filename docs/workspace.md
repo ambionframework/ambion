@@ -85,6 +85,32 @@ const readPlan = defineTool({
 `ToolContext` contains `agent`, `signal`, `callId`, and `onUpdate`. It holds
 no workspace or resource field.
 
+## Use a resource without the room runtime
+
+`@ambionframework/workspace/resource` exports `openResource` and the same
+memory and directory backends. This entry loads no Ambion runtime.
+
+```ts
+import { memoryBackend, openResource } from '@ambionframework/workspace/resource';
+
+const drive = openResource({ name: 'team-site', backend: memoryBackend() });
+await drive.use({ name: 'surveyor', identity: 'Quantity surveyor.' }, async (env) => {
+  const result = await env.writeFile('notes.txt', 'Checked the plan.');
+  if (!result.ok) throw result.error;
+});
+await drive.dispose();
+```
+
+`WorkspaceResource` exposes `name`, `use`, `dispose`, and `destroy`.
+Its `ResourceBackend` needs `connect` and `destroy`; `dispose` is optional.
+A custom resource backend does not need tools or model guidance.
+
+The root `openWorkspace` function creates this same owner and binds the
+backend tools to its `use` method. `WorkspaceBackend` adds Pi harness tools
+and optional guidance to the resource backend contract. `Workspace` adds
+`tools()` to the resource surface. Direct operations and tool calls share
+one queue and one lifecycle. Existing root imports and tool bundles are unchanged.
+
 ## Destroy a resource
 
 ```ts
