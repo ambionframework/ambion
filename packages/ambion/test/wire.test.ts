@@ -78,11 +78,9 @@ const view: ActivationView = {
 		id: 'closed:4:assistant:1',
 		seat: 'assistant',
 		attempt: 1,
-		cause: 'closed',
-		through: 4,
-		closing: { person: 'priya', from: 2, through: 4 },
-		grant: { kind: 'summary', tool: 'summarise' },
+		purpose: { kind: 'summarize', exchange: 2, person: 'priya', through: 4 },
 	},
+	through: 4,
 	model: 'scripted/assistant',
 	systemPrompt: 'You are the assistant.',
 	context: 'The record so far.',
@@ -106,9 +104,7 @@ const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 		readThrough: 4,
 		intent: {
 			kind: 'summary',
-			to: 'priya',
 			text: 'Thursday is out.',
-			covers: { from: 2, through: 4 },
 		},
 	},
 	seating: {
@@ -127,6 +123,23 @@ const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 };
 const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 	view: { view },
+	respondView: {
+		view: {
+			...view,
+			spec: { ...view.spec, purpose: { kind: 'respond', message: 4 } },
+			through: 4,
+		},
+	},
+	selectView: {
+		view: {
+			...view,
+			spec: {
+				...view.spec,
+				purpose: { kind: 'select', exchange: 2, person: 'priya', limit: 1 },
+			},
+			through: 4,
+		},
+	},
 	stale: { stale: 'the lease ended' },
 	committed: {
 		committed: { kind: 'said', seq: 3, key: 'call-1', at, from: 'product', text: 'No.' },

@@ -24,7 +24,6 @@ import {
 	type Seq,
 	type SummaryMessage,
 } from './types.ts';
-import type { ActivationSpec } from './wire.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -278,7 +277,7 @@ export interface SeatSpeaking {
 		guidance?: string;
 	};
 	/** The tool this activation binds. */
-	readonly tool: ActivationSpec['grant']['tool'];
+	readonly tool: typeof SAY.name | keyof typeof assistantDuties;
 	/** The exchange this activation is closing, or nothing when something else woke it. */
 	readonly closing: Closing | undefined;
 	/** The exchange this activation composes the room for, or nothing when something else woke it. */

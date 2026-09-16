@@ -7,6 +7,7 @@
  */
 import type { Context } from '@earendil-works/pi-ai';
 import { afterEach, describe, expect, it } from 'vitest';
+import { decodeActivationId } from '../src/activation-id.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -18,7 +19,6 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import { parseId } from '../src/room/lease.ts';
 import { inProcessTransport, type LeaseChange, type SeatRoom } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
@@ -197,7 +197,7 @@ describe('a lease', () => {
 		const stored = await storedOf(runtime.journals, session.name);
 		const renewals = stored.flatMap((entry) => {
 			const lease = entry.body as LeaseChange;
-			const mine = entry.kind === 'lease' && parseId(lease.id)?.seat === 'solo';
+			const mine = entry.kind === 'lease' && decodeActivationId(lease.id)?.seat === 'solo';
 			return mine && lease.phase === 'running' ? [lease.expiresAt] : [];
 		});
 		// the room wrote a claim and renewals, and no change takes the lease past the deadline
@@ -277,7 +277,11 @@ describe('a lease', () => {
 		expect(abandoned).toHaveLength(1);
 		const givenUp = (abandoned[0] as { agent: string; activation: string }).activation;
 		expect(abandoned[0]).toMatchObject({ agent: 'assistant' });
-		expect(parseId(givenUp)).toMatchObject({ cause: 'closed', seat: 'assistant', attempt: 4 });
+		expect(decodeActivationId(givenUp)).toMatchObject({
+			source: 'closed',
+			seat: 'assistant',
+			attempt: 4,
+		});
 		const stored = await storedOf(runtime.journals, session.name);
 		expect(
 			stored
@@ -396,7 +400,11 @@ describe('a lease judged where its change is written', () => {
 		// the claim lands at once; the first renewal is held on the storage
 		const journals = gatedJournals(base.storage, (type, data) => {
 			const entry = (data as { body: LeaseChange }).body;
-			if (type !== 'lease' || entry.phase !== 'running' || parseId(entry.id)?.seat !== 'solo') {
+			if (
+				type !== 'lease' ||
+				entry.phase !== 'running' ||
+				decodeActivationId(entry.id)?.seat !== 'solo'
+			) {
 				return undefined;
 			}
 			runningRows += 1;
@@ -439,7 +447,7 @@ describe('a lease judged where its change is written', () => {
 		const stored = (await storedOf(base.journals, session.name))
 			.filter((r) => r.kind === 'lease')
 			.map((r) => r.body as LeaseChange)
-			.filter((l) => parseId(l.id)?.seat === 'solo');
+			.filter((l) => decodeActivationId(l.id)?.seat === 'solo');
 		// the claim, the renewal, the check at the run's end, and one release: no expiry
 		expect(stored.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual(['released']);
 	});
@@ -459,8 +467,8 @@ describe('a lease judged where its change is written', () => {
 						kind: 'delay',
 						ms: 10_000,
 						match: (id) => {
-							const parsed = typeof id === 'string' ? parseId(id) : undefined;
-							return parsed?.cause === 'closed' && parsed.attempt === 2;
+							const parsed = typeof id === 'string' ? decodeActivationId(id) : undefined;
+							return parsed?.source === 'closed' && parsed.attempt === 2;
 						},
 					},
 				],

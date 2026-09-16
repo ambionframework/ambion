@@ -3,9 +3,9 @@
  * write and send. A decision applied and decided again writes nothing.
  */
 import { describe, expect, it } from 'vitest';
+import { decodeActivationId } from '../src/activation-id.ts';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
-import { parseId } from '../src/room/lease.ts';
 import {
 	planReconciliation as decide,
 	liveWork,
@@ -46,8 +46,12 @@ const arrived = (seq: number, from: string): Entry => ({
 	seq,
 });
 /** A lease change lands after the message that caused it, or after the close a draft answers. */
-const causeOf = (id: string): number => parseId(id)?.position ?? 0;
-const lease = (body: LeaseChange, seq = causeOf(body.id)): Entry => ({ kind: 'lease', body, seq });
+const sourcePosition = (id: string): number => decodeActivationId(id)?.position ?? 0;
+const lease = (body: LeaseChange, seq = sourcePosition(body.id)): Entry => ({
+	kind: 'lease',
+	body,
+	seq,
+});
 const close = (body: Omit<Close, 'at'>): Entry => ({
 	kind: 'close',
 	body: { ...body, at },

@@ -729,22 +729,43 @@ is refused before it acknowledges, so the write it held is no loss. SQLite
 does this in one `INSERT ... RETURNING` statement. Pi sessions use the same
 native storage through their namespaced transcript facade.
 
-**One specification defines each activation.** The room compiles
-`ActivationSpec` from the recorded cause and the assistant designation.
-The specification names the seat, attempt, input, and granted tool.
-`ActivationView` carries this specification with the model and rendered
-context. The executor binds its tools from that value.
+**One purpose defines each activation.** The room derives `ActivationSpec`
+from its recorded cause and current composition. The specification contains
+its identity and one tagged purpose: `respond`, `select`, or `summarize`.
+Each purpose carries only the facts its work needs. The executor selects
+room tools from that purpose.
 
-**The room checks the grant where it commits.** A live lease alone does
-not authorize a room action. The transition derives the specification again
-and refuses intents outside its grant. Summarising grants a fixed exchange result; composing
-grants seating from the reserve; ordinary speech requires a current view.
+**Context progress belongs to the view.** `ActivationView.through` names the
+context boundary supplied to the executor. It advances acknowledgement only
+after the provider consumes that input. Summary views retain the recorded
+close boundary when later messages arrive.
+
+**The room checks purpose where it commits.** A live lease alone does not
+authorize a room action. The transition derives the purpose again from room
+facts. Selection permits seating; summary permits publication for one closed
+exchange; response permits speech against a current view.
+
+**The executor proposes summary text.** The room supplies its author,
+recipient, and covered range from the validated activation and recorded close.
+The executor cannot redirect a summary or extend its range through request
+fields. Public summary messages still expose their recipient and range.
+
+Transport implementations must read `spec.purpose` and `view.through`.
+The former specification fields `cause`, `grant`, `opening`, `closing`, and
+`through` are removed. Summary intents contain only `kind` and `text`.
+These changes affect the hosting protocol. Application messages and stored
+activation IDs keep their existing format.
 
 **What crosses between a seat and its room is JSON.** The seat uses `view`,
 `commit`, and `lease`; the room uses `wake`, `steer`, and `cut`. A `CommitRequest`
 receives a `CommitResult`. A `LeaseRequest` names `claim`, `renew`, or
 `release`. Renewal requires an existing live lease. A repeated claim for
 a live activation remains safe.
+
+An external release requires an existing live lease and a valid activation
+purpose. Room control can end unclaimed work directly when it revokes or
+abandons that work. A recorded close names the writer whose lease can settle
+its summary outcome.
 
 Every request and response survives a round trip through `JSON.stringify`
 unchanged ([`wire.ts`](../packages/ambion/src/wire.ts)). In-process and

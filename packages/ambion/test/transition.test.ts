@@ -96,6 +96,76 @@ describe('room transition', () => {
 		});
 	});
 
+	it('checks activation authority before leases and summary publication', () => {
+		const assistantComposition: Entry = {
+			kind: 'composition',
+			seq: 1,
+			body: {
+				assistant: 'assistant',
+				agents: [
+					{ name: 'assistant', identity: 'Writes.', attention: 'none' },
+					{ name: 'product', identity: 'Answers.', attention: 'broadcast' },
+				],
+				available: [],
+				at,
+			},
+		};
+		const close: Entry = {
+			kind: 'close',
+			seq: 3,
+			body: { owner: 'priya', from: 2, through: 2, at, wakes: ['assistant'] },
+		};
+		const state = foldRoom(
+			[
+				assistantComposition,
+				said(2),
+				close,
+				{
+					kind: 'lease',
+					seq: 4,
+					body: {
+						id: 'closed:2:assistant:1',
+						phase: 'running',
+						expiresAt: now + 100,
+						at,
+						readThrough: 0,
+					},
+				},
+				{
+					kind: 'lease',
+					seq: 5,
+					body: {
+						id: 'closed:2:product:1',
+						phase: 'running',
+						expiresAt: now + 100,
+						at,
+						readThrough: 0,
+					},
+				},
+			],
+			options,
+		);
+		const lease = (operation: 'claim' | 'renew', activation: string, atNow = now) =>
+			decide(
+				state,
+				{
+					type: operation,
+					id: activation,
+					expiry: 100,
+					deadline: 1_000,
+					...(operation === 'renew' ? { readThrough: 0 } : {}),
+				},
+				atNow,
+			);
+		for (const id of ['closed:2:product:1', 'message:99:product:1', 'closed:99:assistant:1']) {
+			expect(lease('claim', id)).toMatchObject({ refusal: { category: 'stale' } });
+			expect(lease('renew', id)).toMatchObject({ refusal: { category: 'stale' } });
+		}
+		expect(lease('renew', 'closed:2:assistant:1', now + 200)).toMatchObject({
+			refusal: { category: 'stale' },
+		});
+	});
+
 	it('accepts only a designated, seated, quiet assistant', () => {
 		const agents = [
 			{ name: 'assistant', identity: 'Writes.', attention: 'none' as const },
@@ -165,11 +235,12 @@ describe('room transition', () => {
 			options,
 		);
 		expect(activationSpec('message:3:assistant:1', opened)).toBeUndefined();
-		expect(activationSpec('message:3:product:1', opened)).toMatchObject({ grant: { kind: 'say' } });
+		expect(activationSpec('message:3:product:1', opened)).toMatchObject({
+			purpose: { kind: 'respond', message: 3 },
+		});
 		expect(activationSpec('opened:3:product:1', opened)).toBeUndefined();
 		expect(activationSpec('opened:3:assistant:1', opened)).toMatchObject({
-			opening: { limit: 0 },
-			grant: { kind: 'seat' },
+			purpose: { kind: 'select', exchange: 3, person: 'priya', limit: 0 },
 		});
 		const closed = foldRoom(
 			[
@@ -186,8 +257,7 @@ describe('room transition', () => {
 		);
 		expect(activationSpec('closed:3:product:1', closed)).toBeUndefined();
 		expect(activationSpec('closed:3:assistant:1', closed)).toMatchObject({
-			grant: { kind: 'summary' },
-			closing: { person: 'priya', from: 3, through: 3 },
+			purpose: { kind: 'summarize', exchange: 3, person: 'priya', through: 3 },
 		});
 	});
 
@@ -431,7 +501,7 @@ describe('room transition', () => {
 		);
 		const spec = activationSpec('closed:2:writer:1', live);
 		if (spec === undefined) throw new Error('Expected an assistant summary grant.');
-		expect(spec.through).toBe(2);
+		expect(spec.purpose).toMatchObject({ kind: 'summarize', exchange: 2, through: 2 });
 		const view = viewOf(
 			spec,
 			defineAgent({ name: 'writer', identity: 'W.', instructions: '.', model: 'm' }),
@@ -540,7 +610,7 @@ describe('room transition', () => {
 			],
 			options,
 		);
-		const commit = (activation: string, to = 'priya', covers = { from: 2, through: 2 }) =>
+		const commit = (activation: string) =>
 			decide(
 				state,
 				{
@@ -549,7 +619,7 @@ describe('room transition', () => {
 						activation,
 						key: 'summary',
 						readThrough: 2,
-						intent: { kind: 'summary', to, text: 'The answer.', covers },
+						intent: { kind: 'summary', text: 'The answer.' },
 					},
 				},
 				now,
@@ -557,17 +627,39 @@ describe('room transition', () => {
 		expect(commit('closed:2:assistant:1')).toMatchObject({ event: { kind: 'message' } });
 		expect(commit('opened:2:assistant:1')).toMatchObject({ refusal: { category: 'refused' } });
 		expect(commit('closed:2:product:1')).toMatchObject({ refusal: { category: 'refused' } });
-		expect(commit('closed:2:assistant:1', 'sam')).toMatchObject({
-			refusal: { category: 'refused' },
+		expect(commit('closed:99:assistant:1')).toMatchObject({ refusal: { category: 'stale' } });
+		const forged = event(
+			decide(
+				state,
+				{
+					type: 'commit',
+					commit: {
+						activation: 'closed:2:assistant:1',
+						key: 'forged',
+						intent: {
+							kind: 'summary',
+							text: 'The answer.',
+							to: 'sam',
+							covers: { from: 9, through: 99 },
+							from: 'mallory',
+							activationId: 'mallory',
+						} as never,
+					},
+				},
+				now,
+			),
+			8,
+		);
+		expect(forged.body).toEqual({
+			kind: 'summary',
+			at,
+			from: 'assistant',
+			activationId: 'closed:2:assistant:1',
+			text: 'The answer.',
+			to: 'priya',
+			covers: { from: 2, through: 2 },
 		});
-		expect(commit('closed:2:assistant:1', 'priya', { from: 1, through: 2 })).toMatchObject({
-			refusal: { category: 'refused' },
-		});
-		expect(commit('closed:2:assistant:1', 'priya', { from: 2, through: 5 })).toMatchObject({
-			refusal: { category: 'refused' },
-		});
-		const accepted = event(commit('closed:2:assistant:1'), 8);
-		const after = evolve(state, accepted, options);
+		const after = evolve(state, forged, options);
 		expect(
 			decide(
 				after,
@@ -578,9 +670,7 @@ describe('room transition', () => {
 						key: 'other-token',
 						intent: {
 							kind: 'summary',
-							to: 'priya',
 							text: 'A duplicate.',
-							covers: { from: 2, through: 2 },
 						},
 					},
 				},

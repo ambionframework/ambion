@@ -11,10 +11,11 @@
  * run got to.
  */
 
+import { decodeActivationId } from '../activation-id.ts';
 import { assistantPolicy } from '../assistant.ts';
 import type { Close, LeaseChange } from '../wire.ts';
 import type { RoomState } from './fold.ts';
-import { isExpired, isLive, type PendingActivation, parseId, seatOf } from './lease.ts';
+import { isExpired, isLive, type PendingActivation, seatOf } from './lease.ts';
 import { givesUp } from './rules.verified.ts';
 
 export interface ReconcileOptions {
@@ -107,8 +108,8 @@ export function liveWork(state: RoomState, now: number): LiveWork {
 
 /** The activation holds an exchange open: a message caused it, or the open did. */
 function holdsExchange(id: string): boolean {
-	const cause = parseId(id)?.cause;
-	return cause === 'message' || cause === 'opened';
+	const source = decodeActivationId(id)?.source;
+	return source === 'message' || source === 'opened';
 }
 
 export function planReconciliation(state: RoomState, options: ReconcileOptions): Reconciliation {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { decodeActivationId } from '../src/activation-id.ts';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { evolve } from '../src/room/transition.ts';
@@ -116,13 +117,6 @@ const entries: Entry[] = [
 type HistoricalLease = { id: string; since: number; until: number | undefined };
 type OracleDelivery = { recipients: Set<string>; steers: Set<string> };
 
-const parsed = (id: string): { cause: string; position: number; seat: string } | undefined => {
-	const match = /^(message|opened|closed):(\d+):([a-z][a-z0-9-]*):\d+$/.exec(id);
-	return match === null
-		? undefined
-		: { cause: match[1] ?? '', position: Number(match[2]), seat: match[3] ?? '' };
-};
-
 function historicalLeases(history: readonly Entry[]): Map<string, HistoricalLease> {
 	const leases = new Map<string, HistoricalLease>();
 	for (const entry of history) {
@@ -158,9 +152,9 @@ function historicalDeliveries(
 		const explicit = new Set(body.wakes ?? []);
 		const steers = new Set<string>();
 		for (const held of leases.values()) {
-			const id = parsed(held.id);
+			const id = decodeActivationId(held.id);
 			if (
-				id?.cause === 'message' &&
+				id?.source === 'message' &&
 				id.seat !== body.from &&
 				!explicit.has(id.seat) &&
 				held.since < entry.seq &&

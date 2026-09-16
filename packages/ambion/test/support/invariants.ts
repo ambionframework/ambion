@@ -5,8 +5,8 @@
 
 import type { JournalOpener } from '@ambionframework/journal';
 import { expect } from 'vitest';
+import { decodeActivationId } from '../../src/activation-id.ts';
 import { isPresence, isSummary, type Room, type RoomNotification } from '../../src/index.ts';
-import { parseId } from '../../src/room/lease.ts';
 import type { LeaseChange } from '../../src/transport.ts';
 import { standing } from './history.ts';
 import { storedOf } from './room.ts';
@@ -90,8 +90,8 @@ async function summariesMatchCloses(
 		expect(summary.covers.through).toBe(close.through);
 		expect(summary.to).toBe(close.owner);
 		const activation =
-			summary.activationId === undefined ? undefined : parseId(summary.activationId);
-		expect(activation?.cause).toBe('closed');
+			summary.activationId === undefined ? undefined : decodeActivationId(summary.activationId);
+		expect(activation?.source).toBe('closed');
 		expect(activation?.position).toBe(close.through);
 		if (close.wakes?.[0] !== undefined) {
 			expect(summary.from).toBe(close.wakes[0]);

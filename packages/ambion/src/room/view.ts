@@ -49,16 +49,24 @@ export function seatsOf(facts: Pick<RoomFacts, 'name' | 'state' | 'live'>): Seat
 	return seats;
 }
 
-/** The view one activation reads: two rendered strings, the model id, and the tool. */
+/** The activation purpose, context boundary, model, and rendered input for one view. */
 export function viewOf(
 	spec: ActivationSpec,
 	def: AgentDefinition,
 	facts: RoomFacts,
 ): ActivationView {
 	const state = facts.state;
-	const tool = spec.grant.tool;
-	const closing = spec.cause === 'closed' ? spec.closing : undefined;
-	const composing = spec.cause === 'opened' ? spec.opening : undefined;
+	const purpose = spec.purpose;
+	const tool =
+		purpose.kind === 'respond' ? 'say' : purpose.kind === 'select' ? 'seat' : 'summarise';
+	const closing =
+		purpose.kind === 'summarize'
+			? { person: purpose.person, from: purpose.exchange, through: purpose.through }
+			: undefined;
+	const composing =
+		purpose.kind === 'select'
+			? { person: purpose.person, from: purpose.exchange, limit: purpose.limit }
+			: undefined;
 	const speaking: SeatSpeaking = {
 		def,
 		tool,
@@ -68,6 +76,7 @@ export function viewOf(
 	const room = roomView(facts, closing);
 	return {
 		spec,
+		through: purpose.kind === 'summarize' ? purpose.through : state.lastSeq,
 		model: def.model,
 		systemPrompt: renderSystemPrompt(speaking, room),
 		context: renderTurnContext(speaking, room),

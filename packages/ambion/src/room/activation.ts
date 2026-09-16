@@ -1,29 +1,27 @@
 /** The authority one recorded activation grants to its seat. */
 
+import { decodeActivationId } from '../activation-id.ts';
 import { assistantSeat } from '../assistant.ts';
 import type { Seq } from '../types.ts';
 import type { ActivationSpec } from '../wire.ts';
 import type { RoomState } from './fold.ts';
-import { parseId } from './lease.ts';
 
-/** Compile the recorded cause and current composition into one activation authority. */
+/** Compile a stored activation id into one room authority. */
 export function activationSpec(id: string, state: RoomState): ActivationSpec | undefined {
-	const parsed = parseId(id);
+	const parsed = decodeActivationId(id);
 	if (parsed === undefined) return undefined;
 	const seated = state.roster.find((candidate) => candidate.name === parsed.seat);
 	if (seated === undefined) return undefined;
 	const identity = { id, seat: parsed.seat, attempt: parsed.attempt };
-	if (parsed.cause === 'message') {
+	if (parsed.source === 'message') {
 		if (parsed.seat === assistantSeat(state.composition, state.roster)) return undefined;
 		if (!state.messages.some((message) => message.seq === parsed.position)) return undefined;
 		return {
 			...identity,
-			cause: 'message',
-			through: state.lastSeq,
-			grant: { kind: 'say', tool: 'say' },
+			purpose: { kind: 'respond', message: parsed.position },
 		};
 	}
-	return parsed.cause === 'opened'
+	return parsed.source === 'opened'
 		? opened(identity, parsed.position, state)
 		: closed(identity, parsed.position, state);
 }
@@ -42,10 +40,12 @@ function opened(
 	if (assistantSeat(state.composition, state.roster) !== identity.seat) return undefined;
 	return {
 		...identity,
-		cause: 'opened',
-		through: state.lastSeq,
-		opening: { person: question.from, from: question.seq, limit: state.reserve.length },
-		grant: { kind: 'seat', tool: 'seat' },
+		purpose: {
+			kind: 'select',
+			exchange: question.seq,
+			person: question.from,
+			limit: state.reserve.length,
+		},
 	};
 }
 
@@ -61,9 +61,11 @@ function closed(
 	if (assistantSeat(state.composition, state.roster) !== identity.seat) return undefined;
 	return {
 		...identity,
-		cause: 'closed',
-		through: close.through,
-		closing: { person: close.owner, from: close.from, through: close.through },
-		grant: { kind: 'summary', tool: 'summarise' },
+		purpose: {
+			kind: 'summarize',
+			exchange: close.from,
+			person: close.owner,
+			through: close.through,
+		},
 	};
 }

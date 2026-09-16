@@ -346,7 +346,7 @@ entries produce a diagnostic before they enter the fold. Unknown kinds stay
 outside the vocabulary. Failed validation must not advance the read cursor
 past the malformed entry.
 
-**Review status.** The journal change is prepared for review and merge.
+**Merged:** [PR #122](https://github.com/ambionframework/ambion/pull/122).
 The next structural item is the activation representation in section 5.
 
 **Implementation evidence:**
@@ -370,41 +370,55 @@ async decisions from JavaScript callers, and invalid-history cursor handling.
 
 ### One activation representation
 
-**Use one tagged purpose to determine authority.** Current `ActivationSpec`
-repeats purpose through `cause`, `grant.kind`, `grant.tool`, and optional
-opening or closing data. Encoded IDs repeat some of those fields again.
+**One tagged purpose determines authority.** The activation change is prepared
+for review. `ActivationSpec` holds its identity and an `ActivationPurpose`.
+The old `cause`, `grant`, `opening`, and `closing` fields are removed.
 
-Use a discriminated value with the information each purpose requires:
+| Purpose     | Reference        | Additional facts                | Room tool   |
+| ----------- | ---------------- | ------------------------------- | ----------- |
+| `respond`   | Source message   | None                            | `say`       |
+| `select`    | Exchange opening | Person and reserve limit        | `seat`      |
+| `summarize` | Exchange opening | Person and fixed close boundary | `summarise` |
 
-```ts
-type Purpose =
-  | { kind: 'respond'; message: Seq }
-  | { kind: 'select'; exchange: Seq }
-  | { kind: 'summarize'; exchange: Seq };
+**Context progress belongs to the view.** `ActivationView.through` names the
+supplied input boundary. The executor acknowledges it only when the provider
+consumes that input. Summary input keeps its recorded boundary while a later
+exchange runs. Purpose selects both the permitted contribution and room tool.
 
-type Activation = Readonly<{
-  id: string;
-  seat: string;
-  attempt: number;
-  purpose: Purpose;
-}>;
-```
+**One codec owns the durable ID format.** `activation-id.ts` validates and
+encodes the existing `message`, `opened`, and `closed` prefixes. It rejects
+noncanonical IDs and unsafe sequence or attempt numbers. The stored format
+is unchanged. The room resolves a closed ID through its recorded close to
+obtain the exchange's opening position.
 
-This is an internal sketch. An exchange reference uses its opening position.
-Context boundaries come from the validated view and the recorded close.
-The purpose determines permitted contributions and which room tools exist.
+Lease projections retain their recorded IDs. Consumers share the codec when
+they classify recorded attempts. Carrying decoded values through these folds
+remains a possible follow-up; this change adds no identity cache or second
+lease authority.
 
-**Keep deterministic identity, but stop distributing its parser.** Decode and
-validate IDs at journal and protocol boundaries. Inside the kernel, pass the
-canonical activation value. Keep one codec for existing stored IDs.
+**Syntax grants no authority.** The room checks the referenced cause and seat
+eligibility. Claims require pending work or an existing live lease. Renewals,
+releases, views, and contributions require a live lease. The room derives
+purpose again when a contribution reaches its write queue.
 
-The room remains responsible for proving that the referenced cause exists,
-the seat is eligible, and the lease is current. A syntactically valid ID grants
-no authority by itself.
+**Summary requests contain text only.** The room supplies the author,
+recipient, and covered range from the validated purpose. It ignores extra
+client metadata and refuses a second summary for the same exchange. Public
+summary messages keep their existing fields.
 
-Summary submissions should contain the text the executor proposes. The room
-already knows the author, recipient, exchange, and fixed range. Stamp those
-fields there and remove the requirement for the executor to echo them.
+**Implementation evidence:**
+
+- `pnpm check`: 660 tests passed, including 553 core tests and 16 workerd tests.
+- `pnpm chaos`: all 710 expanded crash, takeover, replay, and history tests passed.
+- Regression tests reject malformed IDs, invalid roles, missing causes, and expired leases.
+- Summary tests prove room-owned metadata, duplicate refusal, and fixed context boundaries.
+- Executor tests prove purpose-specific tools and compile-time rejection of removed fields.
+- Participant definitions reject names that cannot produce canonical activation IDs.
+- External releases cannot abandon unclaimed work; another seat cannot settle a summary.
+
+**Remaining execution work:** structured context, narrower executor
+interfaces, and separate audit failure remain below. This activation change
+does not move rendering or transcript ownership.
 
 ### Separate protocol data from provider execution
 

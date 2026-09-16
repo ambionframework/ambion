@@ -327,8 +327,9 @@ function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
 	return typeof value === 'object' && value !== null;
 }
 
-function assertName(name: string): void {
-	if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+function assertName(name: unknown): asserts name is string {
+	const match = typeof name === 'string' ? /^[a-z][a-z0-9-]*$/.exec(name) : undefined;
+	if (typeof name !== 'string' || match?.[0] !== name) {
 		throw new Error(
 			`Invalid participant name '${name}': names are lowercase, alphanumeric plus dashes.`,
 		);

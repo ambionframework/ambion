@@ -101,6 +101,14 @@ describe('summary completion query', () => {
 		});
 	});
 
+	it('ignores a terminal draft from another seat', () => {
+		const otherSeat = { ...ended('abandoned'), id: 'closed:5:other-seat:1' };
+		expect(summaryCompletion(close(), [], leases(otherSeat))).toEqual({
+			status: 'pending',
+			writer: 'assistant',
+		});
+	});
+
 	it('preserves response outcomes for a recorded empty writer list', () => {
 		expect(summaryCompletion(close([]), [], leases())).toEqual({ status: 'pending' });
 		expect(summaryCompletion(close([]), [], leases(running))).toEqual({ status: 'pending' });
