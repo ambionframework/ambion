@@ -857,7 +857,6 @@
 					pendingRoom: '',
 					human: '',
 					messages: new Map(),
-					participants: new Map(),
 					drafts: {},
 					outbox: [],
 					expanded: new Set(),
@@ -964,7 +963,8 @@
 					},
 					rooms: () => api.request('/rooms'),
 					people: () => api.request('/people'),
-					messages: (room, since) => api.request(`/rooms/${escPath(room)}/messages?since=${since}`),
+					read: (room, since) =>
+						api.request(`/rooms/${escPath(room)}${since === undefined ? '' : `?since=${since}`}`),
 					send: (room, human, item, signal) =>
 						api.request(`/rooms/${escPath(room)}/humans/${escPath(human)}`, {
 							method: 'POST',
@@ -1005,7 +1005,7 @@
 					return items.at(-1)?.seq || 0;
 				};
 				const statusText = () => {
-					const active = [...(state.participants.get(state.selected) || [])].some(
+					const active = (currentRoom()?.participants || []).some(
 						(participant) => participant.kind === 'agent' && participant.status === 'active',
 					);
 					return active ? 'Working' : 'Ready';
@@ -1028,8 +1028,7 @@
 				const renderParticipants = () => {
 					const target = $('participants');
 					target.replaceChildren();
-					const participants =
-						state.participants.get(state.selected) || currentRoom()?.participants || [];
+					const participants = currentRoom()?.participants || [];
 					if (!participants.length) {
 						target.append(node('div', 'participant-kind', 'No participants'));
 						return;
@@ -1118,21 +1117,29 @@
 					return item;
 				};
 				const timelineGroups = (messages) => {
-					const summaries = messages.filter(
-						(message) => message.kind === 'summary' && message.covers,
+					const exchanges = currentRoom()?.exchanges || [];
+					const humanNames = new Set(
+						(currentRoom()?.participants || [])
+							.filter((participant) => participant.kind === 'human')
+							.map((participant) => participant.name),
 					);
-					const groups = summaries.map((summary) => ({
-						summary,
-						source: messages.filter(
-							(message) =>
-								message.seq > summary.covers.from &&
-								message.seq <= summary.covers.through &&
-								message.kind !== 'summary' &&
-								!state.people.some((person) => person.name === message.from),
-						),
-					}));
+					const groups = exchanges
+						.filter((exchange) => exchange.status === 'closed')
+						.map((exchange) => ({
+							exchange,
+							summary:
+								exchange.summary?.status === 'published' ? exchange.summary.summary : undefined,
+							outcome: exchange.summary?.status || 'silent',
+							source: messages.filter(
+								(message) =>
+									message.seq > exchange.from &&
+									message.seq <= exchange.through &&
+									message.kind === 'said' &&
+									!humanNames.has(message.from),
+							),
+						}));
 					groups.forEach((group) => {
-						group.direct = group.source.filter((message) => message.kind === 'said').length === 1;
+						group.direct = group.source.length === 1;
 					});
 					const sourceGroup = new Map();
 					const directGroup = new Map();
@@ -1144,21 +1151,34 @@
 					});
 					return {
 						groups,
-						openingGroup: new Map(groups.map((group) => [group.summary.covers.from, group])),
+						openingGroup: new Map(groups.map((group) => [group.exchange.from, group])),
 						sourceGroup,
 						directGroup,
-						directSummary: new Set(
-							groups.filter((group) => group.direct).map((group) => group.summary.seq),
+						summaryGroup: new Map(
+							groups.filter((group) => group.summary).map((group) => [group.summary.seq, group]),
 						),
 					};
 				};
-				const appendDiscussion = (target, group, added) => {
-					if (group.direct || added.has(group) || !group.source.length) return;
-					added.add(group);
+				const appendDiscussionSummary = (target, group) => {
+					if (group.summary) target.append(messageNode(group.summary));
+				};
+				const discussionOutcome = (group) => {
+					if (group.outcome === 'published') return '';
+					if (group.outcome === 'pending') return ' · Summary pending';
+					if (group.outcome === 'failed') return ' · Summary failed';
+					return ' · No summary';
+				};
+				const appendDiscussionDetails = (target, group) => {
 					const details = node('details', 'discussion');
-					const key = `${state.selected}:${group.summary.covers.from}`;
+					const key = `${state.selected}:${group.exchange.from}`;
 					details.open = state.expanded.has(key);
-					details.append(node('summary', '', `Show discussion · ${group.source.length} messages`));
+					details.append(
+						node(
+							'summary',
+							'',
+							`Show discussion · ${group.source.length} messages${discussionOutcome(group)}`,
+						),
+					);
 					details.addEventListener('toggle', () => {
 						if (details.open) state.expanded.add(key);
 						else state.expanded.delete(key);
@@ -1167,6 +1187,16 @@
 						details.append(messageNode(message));
 					});
 					target.append(details);
+					appendDiscussionSummary(target, group);
+				};
+				const appendDiscussion = (target, group, added) => {
+					if (group.direct || added.has(group)) return;
+					added.add(group);
+					if (!group.source.length) {
+						appendDiscussionSummary(target, group);
+						return;
+					}
+					appendDiscussionDetails(target, group);
 				};
 				const appendTimelineMessage = (target, message, groups, added) => {
 					const direct = groups.directGroup.get(message.seq);
@@ -1179,11 +1209,7 @@
 						appendDiscussion(target, group, added);
 						return;
 					}
-					if (
-						groups.directSummary.has(message.seq) ||
-						(message.kind !== 'said' && message.kind !== 'summary')
-					)
-						return;
+					if (groups.summaryGroup.has(message.seq) || message.kind !== 'said') return;
 					target.append(messageNode(message));
 					const opening = groups.openingGroup.get(message.seq);
 					if (opening) appendDiscussion(target, opening, added);
@@ -1224,7 +1250,7 @@
 					const target = $('timeline-inner');
 					const timeline = $('timeline');
 					const messages = roomMessages();
-					const key = `${state.selected}:${messages.length}:${latestSeq(state.selected)}`;
+					const key = `${state.selected}:${messages.length}:${latestSeq(state.selected)}:${snapshotKey(currentRoom())}`;
 					if (key === state.timelineKey) return;
 					const oldRoom = state.timelineKey.split(':')[0];
 					const nearBottom =
@@ -1518,9 +1544,6 @@
 					state.rooms = listed;
 					applyIdentityList(people);
 					reconcileSelection();
-					state.rooms.forEach((room) => {
-						state.participants.set(room.name, room.participants || []);
-					});
 				};
 				const observeSelectedPresence = () => {
 					const room = currentRoom();
@@ -1538,7 +1561,6 @@
 						if (full) await refreshWorkspace();
 						return;
 					}
-					observeSelectedPresence();
 					await refreshSelected(full, epoch);
 					if (!isCurrentPoll(epoch)) return;
 					if (full) await refreshWorkspace();
@@ -1551,7 +1573,6 @@
 					applyRoomList(listed, people);
 					setConnection('online', 'connected');
 					state.lastError = '';
-					render();
 					await refreshPollRoom(full, epoch);
 					if (
 						isCurrentPoll(epoch) &&
@@ -1560,6 +1581,7 @@
 						currentRoom()?.status === 'running'
 					)
 						await flushOutbox();
+					if (isCurrentPoll(epoch)) render();
 				};
 				const reportPollError = (error) => {
 					state.lastError = error instanceof Error ? error.message : String(error);
@@ -1595,21 +1617,46 @@
 					state.pollPromise = work;
 					return work;
 				};
+				const snapshotKey = (snapshot) =>
+					JSON.stringify([
+						snapshot?.initialized,
+						snapshot?.goal,
+						snapshot?.status,
+						snapshot?.watermark,
+						snapshot?.participants,
+						snapshot?.exchanges,
+						snapshot?.exchange,
+						snapshot?.activity,
+					]);
 				const mergeSelected = (room, incoming, since) => {
 					const before = latestSeq(room);
 					mergeMessages(room, incoming);
-					if (latestSeq(room) !== before || since === 0) {
+					return latestSeq(room) !== before || since === 0;
+				};
+				const selectedReadSince = (room, fromZero) =>
+					fromZero || !state.messages.has(room) ? 0 : latestSeq(room);
+				const isCurrentSelectedRead = (room, epoch) =>
+					state.selected === room && state.navigationEpoch === epoch;
+				const commitSelectedRead = (room, incoming, since) => {
+					const prior = currentRoom();
+					const { messages, ...metadata } = incoming;
+					state.rooms = state.rooms.map((candidate) =>
+						candidate.name === room ? metadata : candidate,
+					);
+					const changed = mergeSelected(room, messages, since);
+					if (changed || snapshotKey(prior) !== snapshotKey(metadata)) {
 						save();
 						render();
 					}
+					observeSelectedPresence();
 				};
 				const refreshSelected = async (fromZero = false, epoch = state.navigationEpoch) => {
 					const room = state.selected;
 					if (!room) return;
-					const since = fromZero || !state.messages.has(room) ? 0 : latestSeq(room);
-					const incoming = await api.messages(room, since);
-					if (state.selected !== room || state.navigationEpoch !== epoch) return;
-					mergeSelected(room, incoming, since);
+					const since = selectedReadSince(room, fromZero);
+					const incoming = await api.read(room, since);
+					if (!isCurrentSelectedRead(room, epoch)) return;
+					commitSelectedRead(room, incoming, since);
 				};
 				const flushCurrent = (generation, item) =>
 					generation === state.flushGeneration &&

@@ -40,6 +40,43 @@ export interface ClosedExchange extends Exchange {
 	readonly through: Seq;
 }
 
+/** The durable outcome of the optional summary assignment for a closed exchange. */
+export type SummaryOutcome =
+	| { readonly status: 'pending'; readonly writer?: string }
+	| { readonly status: 'published'; readonly summary: SummaryMessage }
+	| { readonly status: 'silent' }
+	| { readonly status: 'failed' };
+
+/** A detached exchange view that can be read without starting a room. */
+export type ExchangeView =
+	| (Exchange & { readonly status: 'open' })
+	| (ClosedExchange & { readonly status: 'closed'; readonly summary: SummaryOutcome });
+
+interface RoomSnapshotFields {
+	readonly name: string;
+	readonly messages: readonly Message[];
+	readonly participants: readonly SeatInfo[];
+	readonly exchanges: readonly ExchangeView[];
+	readonly exchange: Extract<ExchangeView, { readonly status: 'open' }> | undefined;
+	/** The accepted journal sequence observed by this read. */
+	readonly watermark: Seq;
+}
+
+/** A detached room read. Missing records have no room facts. */
+export type RoomSnapshot =
+	| (RoomSnapshotFields & {
+			readonly initialized: false;
+			readonly goal?: undefined;
+			readonly messages: readonly [];
+			readonly participants: readonly [];
+			readonly exchanges: readonly [];
+			readonly exchange: undefined;
+	  })
+	| (RoomSnapshotFields & {
+			readonly initialized: true;
+			readonly goal?: string;
+	  });
+
 // -- what a host provides -----------------------------------------------------
 
 /** The one clock a room reads, and the one alarm it sets. */

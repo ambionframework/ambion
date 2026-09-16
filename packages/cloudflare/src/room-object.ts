@@ -1,8 +1,8 @@
 /**
  * The room as one Durable Object. The journal lives in the object's SQLite, the
  * alarm is the room's clock, and a seat is reached over RPC to the seat
- * object named `<room>:<seat>`. The constructor resumes the room the
- * storage names, so an evicted room comes back where it stopped.
+ * object named `<room>:<seat>`. The constructor resumes an initialized room
+ * unless durable metadata records an explicit stop.
  */
 
 import { DurableObject } from 'cloudflare:workers';
@@ -10,8 +10,11 @@ import type {
 	Attention,
 	Clock,
 	Exchange,
+	ExchangeView,
 	Message,
+	ReadRoomOptions,
 	Room,
+	RoomSnapshot,
 	Runtime,
 	SeatInfo,
 	Seq,
@@ -49,8 +52,12 @@ export interface StartOptions {
 
 export interface RoomStatus {
 	name: string;
+	initialized: boolean;
+	goal?: string;
 	participants: SeatInfo[];
-	exchange: Exchange | undefined;
+	exchanges: readonly ExchangeView[];
+	exchange: ExchangeView | undefined;
+	watermark: Seq;
 	exchangeState: 'idle' | 'working' | 'completed';
 }
 
@@ -112,9 +119,11 @@ export class RoomObject extends DurableObject<Env> {
 		});
 		this.metadata = roomMetadata(this.storage);
 		ctx.blockConcurrencyWhile(async () => {
-			const { name, agents } = await this.metadata.read();
-			if (name !== undefined) {
+			const { name, agents, stopped } = await this.metadata.read();
+			if (name !== undefined && stopped !== true) {
 				if (agents === undefined) throw new Error(`Room '${name}' has no catalog in its metadata.`);
+				const recorded = await readRoom(name, { runtime: this.runtime, messages: false });
+				if (!recorded.initialized) return;
 				this.room = await resumeRoom(name, {
 					runtime: this.runtime,
 					agents: agents.map(definitionOf),
@@ -130,6 +139,7 @@ export class RoomObject extends DurableObject<Env> {
 			patch: {
 				name: options.name,
 				agents: [...(options.agents ?? [])],
+				stopped: false,
 			},
 		}));
 		this.room = await startRoom({
@@ -203,59 +213,75 @@ export class RoomObject extends DurableObject<Env> {
 	}
 
 	async stop(): Promise<void> {
-		await this.running().stop();
+		const room = this.running();
+		await room.stop();
+		await this.metadata.change(() => ({ patch: { stopped: true } }));
 		this.room = undefined;
 		this.visits.clear();
-		await this.metadata.change(() => ({ remove: ['name'] }));
 	}
 
 	async messages(since?: Seq): Promise<Message[]> {
-		return this.running().messages(since === undefined ? {} : { since });
+		const snapshot = await this.read(since === undefined ? {} : { messages: { since } });
+		return [...snapshot.messages];
 	}
 
 	async participants(): Promise<SeatInfo[]> {
-		return this.running().participants();
+		const snapshot = await this.read({ messages: false });
+		return [...snapshot.participants];
+	}
+
+	/** Read a detached coherent projection, including stopped records. */
+	async read(options: Pick<ReadRoomOptions, 'messages'> = {}): Promise<RoomSnapshot> {
+		const name = (await this.metadata.read()).name;
+		if (name === undefined) throw new Error('The room is not started.');
+		return readRoom(name, { ...options, runtime: this.runtime });
 	}
 
 	/** Read the current room and the state of one exchange without changing it. */
 	async status(from?: Seq): Promise<RoomStatus> {
-		const snapshot = await readRoom(this.running().name, { runtime: this.runtime });
-		const exchange = from === undefined ? snapshot.exchange : this.running().exchange(from);
+		const snapshot = await this.read({ messages: false });
+		const exchange =
+			from === undefined
+				? snapshot.exchange
+				: snapshot.exchanges.find((item) => item.from === from);
 		if (from !== undefined && exchange === undefined)
 			throw new Error(`Exchange '${from}' is not on the record.`);
-		const current = snapshot.exchange?.from === from;
 		return {
 			name: snapshot.name,
+			initialized: snapshot.initialized,
+			...(snapshot.goal === undefined ? {} : { goal: snapshot.goal }),
 			participants: [...snapshot.participants],
-			exchange:
-				exchange === undefined
-					? undefined
-					: { owner: exchange.owner, from: exchange.from, at: exchange.at },
+			exchanges: [...snapshot.exchanges],
+			exchange,
+			watermark: snapshot.watermark,
 			exchangeState:
 				from === undefined
 					? snapshot.exchange === undefined
 						? 'idle'
 						: 'working'
-					: current
+					: exchange?.status === 'open'
 						? 'working'
 						: 'completed',
 		};
 	}
 
 	async exchange(from: Seq) {
-		const exchange = this.running().exchange(from);
+		const snapshot = await this.read({ messages: false });
+		const exchange = snapshot.exchanges.find((item) => item.from === from);
 		return exchange === undefined
 			? undefined
 			: { owner: exchange.owner, from: exchange.from, at: exchange.at };
 	}
 
 	async exchangeMessages(from: Seq): Promise<Message[]> {
+		// This convenience waits for a live close. Use read() for a stopped record.
 		const exchange = this.running().exchange(from);
 		if (exchange === undefined) throw new Error(`Exchange '${from}' is not on the record.`);
 		return exchange.messages();
 	}
 
 	async response(from: Seq) {
+		// This convenience waits for a live summary. Use read() for a stopped record.
 		const exchange = this.running().exchange(from);
 		if (exchange === undefined) throw new Error(`Exchange '${from}' is not on the record.`);
 		return exchange.response();

@@ -9,6 +9,54 @@ import { expect, it } from 'vitest';
 import { sqlStorage } from '../src/storage.ts';
 import { until } from './until.ts';
 
+async function seedStoppedOpen(stub: DurableObjectStub, name: string): Promise<void> {
+	await runInDurableObject(stub, async (instance, state) => {
+		type MetadataObject = {
+			metadata: { change: (change: () => { patch: Record<string, unknown> }) => Promise<unknown> };
+		};
+		const object = instance as unknown as MetadataObject;
+		await object.metadata.change(() => ({ patch: { name, agents: [], stopped: true } }));
+		const journal = await namespaced(sqlStorage(state), 'ambion/room').open(name);
+		let position = (await journal.read(0)).position;
+		const entries = [
+			{ kind: 'run', body: { at: '2026-01-01T00:00:00.000Z' }, seq: 1, run: 'seeded-run' },
+			{
+				kind: 'composition',
+				body: { version: 2, agents: [], available: [], at: '2026-01-01T00:00:00.000Z' },
+				seq: 2,
+				run: 'seeded-run',
+			},
+			{
+				kind: 'message',
+				body: {
+					kind: 'arrived',
+					at: '2026-01-01T00:00:01.000Z',
+					from: 'priya',
+					subject: 'priya',
+					identity: 'Project manager.',
+				},
+				seq: 3,
+				run: 'seeded-run',
+			},
+			{
+				kind: 'message',
+				body: { kind: 'said', at: '2026-01-01T00:00:02.000Z', from: 'priya', text: 'Still open?' },
+				seq: 4,
+				run: 'seeded-run',
+			},
+		];
+		for (const entry of entries) {
+			const landed = await journal.append(entry, position);
+			if (landed === undefined)
+				throw new Error('The seeded record moved while it was being written.');
+			position = landed.position;
+		}
+	});
+	await runInDurableObject(stub, async (_instance, state) => {
+		state.abort('reconstruct stopped record');
+	}).catch(() => {});
+}
+
 it('starts, admits a person, and returns one plain exchange for repeated sends', async () => {
 	const stub = env.ROOM.get(env.ROOM.idFromName('room-test'));
 	await stub.start({
@@ -58,6 +106,95 @@ it('can ensure a resumed room and report its current state', async () => {
 		name: 'room-status',
 		exchange: undefined,
 		exchangeState: 'idle',
+	});
+});
+
+it('keeps a stopped record readable without resuming the room', async () => {
+	const stub = env.ROOM.get(env.ROOM.idFromName('room-stopped-status'));
+	await stub.start({
+		name: 'room-stopped-status',
+		agents: [],
+	});
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	const exchange = await stub.send({
+		from: 'priya',
+		text: 'A durable question?',
+		key: 'stopped-1',
+	});
+	await stub.exchangeMessages(exchange.from);
+	await stub.response(exchange.from);
+	await stub.stop();
+	const read = await stub.read();
+	expect(read).toMatchObject({
+		name: 'room-stopped-status',
+		initialized: true,
+		exchange: undefined,
+		exchanges: [{ status: 'closed', from: exchange.from, summary: { status: 'silent' } }],
+	});
+	expect(await stub.messages()).toEqual(read.messages);
+	expect(await stub.participants()).toEqual(read.participants);
+	expect(await stub.exchange(exchange.from)).toEqual(exchange);
+});
+
+it('reads a stopped open exchange and reconstructs it after eviction', async () => {
+	const stub = env.ROOM.get(env.ROOM.idFromName('room-stopped-open'));
+	await seedStoppedOpen(stub, 'room-stopped-open');
+	const again = env.ROOM.get(env.ROOM.idFromName('room-stopped-open'));
+	const stopped = await again.read({ messages: false });
+	expect(stopped.exchange).toMatchObject({ status: 'open', from: 4 });
+	expect(stopped.watermark).toBe(4);
+	expect((await again.read()).messages).toHaveLength(2);
+});
+
+it('retains the stopped handle when saving stop metadata fails', async () => {
+	const stub = env.ROOM.get(env.ROOM.idFromName('room-stop-retry'));
+	await stub.start({ name: 'room-stop-retry', agents: [] });
+	await runInDurableObject(stub, async (instance) => {
+		type MutableObject = {
+			metadata: { change: (...args: never[]) => Promise<unknown> };
+			stop(): Promise<void>;
+		};
+		const object = instance as unknown as MutableObject;
+		const original = object.metadata.change.bind(object.metadata);
+		let fail = true;
+		object.metadata.change = (...args) => {
+			if (fail) {
+				fail = false;
+				return Promise.reject(new Error('metadata write failed'));
+			}
+			return original(...args);
+		};
+		await expect(object.stop()).rejects.toThrow('metadata write failed');
+		await object.stop();
+	});
+	const again = env.ROOM.get(env.ROOM.idFromName('room-stop-retry'));
+	await expect(again.read({ messages: false })).resolves.toMatchObject({ initialized: true });
+});
+
+it('leaves an uninitialized named record for an explicit start retry', async () => {
+	const name = 'room-uninitialized-retry';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await runInDurableObject(stub, async (instance) => {
+		type MetadataObject = {
+			metadata: { change: (change: () => { patch: Record<string, unknown> }) => Promise<unknown> };
+		};
+		const object = instance as unknown as MetadataObject;
+		await object.metadata.change(() => ({
+			patch: { name, agents: ['assistant'], stopped: false },
+		}));
+	});
+	await runInDurableObject(stub, async (_instance, state) => {
+		state.abort('reconstruct uninitialized object');
+	}).catch(() => {});
+	const again = env.ROOM.get(env.ROOM.idFromName(name));
+	await expect(again.read({ messages: false })).resolves.toMatchObject({
+		name,
+		initialized: false,
+	});
+	await again.start({ name, agents: [] });
+	await expect(again.read({ messages: false })).resolves.toMatchObject({
+		name,
+		initialized: true,
 	});
 });
 

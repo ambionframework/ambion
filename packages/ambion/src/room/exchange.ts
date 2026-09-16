@@ -28,26 +28,25 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { Close } from '../journal/events.ts';
 import {
+	type ClosedExchange,
+	copyMessage,
 	type Exchange,
+	type ExchangeView,
 	isSpoken,
 	isSummary,
 	type Message,
 	type SpokenMessage,
 	type SummaryMessage,
+	type SummaryOutcome,
 } from '../types.ts';
 import type { LeaseHold } from './lease.ts';
-
-export type SummaryCompletion =
-	| { readonly status: 'published'; readonly summary: SummaryMessage }
-	| { readonly status: 'pending'; readonly writer?: string }
-	| { readonly status: 'silent' | 'failed' };
 
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
 	close: Pick<Close, 'owner' | 'from' | 'through' | 'summary'>,
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
-): SummaryCompletion {
+): SummaryOutcome {
 	const summary = messages.find(
 		(message): message is SummaryMessage =>
 			isSummary(message) &&
@@ -85,6 +84,58 @@ export function summaryCompletion(
 	if (drafts.some((lease) => lease.phase === 'running')) return { status: 'pending' };
 	if (released) return { status: 'silent' };
 	return drafts.length === 0 ? { status: 'pending' } : { status: 'failed' };
+}
+
+/** Build one detached closed exchange view from the recorded close. */
+function closedExchangeView(
+	close: Close,
+	messages: readonly Message[],
+	leases: ReadonlyMap<string, LeaseHold>,
+): Extract<ExchangeView, { status: 'closed' }> {
+	return {
+		...closedExchange(close, messages),
+		status: 'closed',
+		summary: summaryOutcome(close, messages, leases),
+	};
+}
+
+/** Select the detached closed handle shared by waits and read views. */
+export function closedExchange(
+	close: Pick<Close, 'owner' | 'from' | 'through' | 'at'>,
+	messages: readonly Message[],
+): ClosedExchange {
+	return {
+		owner: close.owner,
+		from: close.from,
+		through: close.through,
+		at: messages.find((message) => message.seq === close.from)?.at ?? close.at,
+	};
+}
+
+/** Build detached exchange views in journal order, including the current open exchange. */
+export function exchangeViews(
+	closes: readonly Close[],
+	messages: readonly Message[],
+	open: Exchange | undefined,
+	leases: ReadonlyMap<string, LeaseHold>,
+): ExchangeView[] {
+	const closed = closes.map((close) => closedExchangeView(close, messages, leases));
+	return open === undefined ? closed : [...closed, { status: 'open', ...open }];
+}
+
+function summaryOutcome(
+	close: Close,
+	messages: readonly Message[],
+	leases: ReadonlyMap<string, LeaseHold>,
+): SummaryOutcome {
+	const completion = summaryCompletion(close, messages, leases);
+	if (completion.status === 'published')
+		return { status: 'published', summary: copyMessage(completion.summary) };
+	if (completion.status === 'pending')
+		return completion.writer === undefined
+			? { status: 'pending' }
+			: { status: 'pending', writer: completion.writer };
+	return { status: completion.status };
 }
 
 /**

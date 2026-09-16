@@ -11,7 +11,7 @@ interface Delivery {
 }
 interface BrowserApp {
 	state: {
-		rooms: { name: string; status: string; participants: unknown[] }[];
+		rooms: BrowserRoom[];
 		human: string;
 		selected: string;
 		entryState: 'restoring' | 'entered' | 'required';
@@ -19,13 +19,24 @@ interface BrowserApp {
 		navigating: boolean;
 		outbox: Delivery[];
 		pollPromise: Promise<void> | null;
+		messages: Map<string, unknown[]>;
 	};
 	flushOutbox(): Promise<void>;
 	restoreSelection(): Promise<void>;
 	reenterRoom(): Promise<void>;
 	poll(full?: boolean): Promise<void> | undefined;
+	renderTimeline(): void;
 	createRoom(): Promise<void>;
 	switchUser(): Promise<void>;
+}
+
+interface BrowserRoom {
+	name: string;
+	status: string;
+	participants: unknown[];
+	messages?: unknown[];
+	exchanges?: unknown[];
+	[key: string]: unknown;
 }
 
 interface MockQuery {
@@ -42,6 +53,7 @@ interface MockElement {
 	type: string;
 	disabled: boolean;
 	title: string;
+	open?: boolean;
 	childElementCount: number;
 	children: MockElement[];
 	classList: { toggle(...args: unknown[]): void };
@@ -82,9 +94,9 @@ function browser(fetch_: typeof fetch, runStartup = false) {
 	const source = runStartup
 		? script.replace(
 				/\n\t\t\t\}\)\(\);\s*$/,
-				'\nreturn {state, flushOutbox, restoreSelection, reenterRoom, poll, createRoom, switchUser}; })();',
+				'\nreturn {state, flushOutbox, restoreSelection, reenterRoom, poll, renderTimeline, createRoom, switchUser}; })();',
 			)
-		: `${script.slice(0, boot)}\nreturn {state, flushOutbox, restoreSelection, reenterRoom, poll, createRoom, switchUser}; })();`;
+		: `${script.slice(0, boot)}\nreturn {state, flushOutbox, restoreSelection, reenterRoom, poll, renderTimeline, createRoom, switchUser}; })();`;
 	const app = runInNewContext(source, {
 		document: { getElementById, createElement: element },
 		location: { origin: 'http://localhost:3000' },
@@ -151,6 +163,34 @@ const deliveryRoom = (present: boolean) => [
 		participants: present ? [{ name: 'alice', presence: 'present' }] : [],
 	},
 ];
+const recordedRoom = (exchanges: unknown[], messages: unknown[] = [], watermark = 0) => ({
+	name: 'delivery',
+	initialized: true,
+	goal: 'Keep work moving.',
+	status: 'running',
+	watermark,
+	participants: [{ kind: 'human', name: 'alice', presence: 'present' }],
+	exchanges,
+	exchange: exchanges.find((exchange) => (exchange as { status?: string }).status === 'open'),
+	messages,
+});
+const said = (seq: number, from: string, text: string) => ({
+	kind: 'said',
+	seq,
+	from,
+	text,
+	at: `2026-09-16T00:00:0${seq}.000Z`,
+});
+const textOf = (element: MockElement): string =>
+	element.textContent || element.children.map((child) => textOf(child)).join('');
+const closed = (from: number, through: number, summary: unknown) => ({
+	status: 'closed',
+	owner: 'alice',
+	from,
+	through,
+	at: '2026-09-16T00:00:00.000Z',
+	summary,
+});
 
 describe('browser delivery and navigation', () => {
 	it('keeps polling read-only after another tab ends the shared presence', async () => {
@@ -158,7 +198,7 @@ describe('browser delivery and navigation', () => {
 			if (url === '/rooms')
 				return response([{ name: 'delivery', status: 'running', participants: [] }]);
 			if (url === '/people') return response([{ name: 'alice' }]);
-			return response([]);
+			return response({ ...recordedRoom([]), participants: [] });
 		});
 		const { app } = browser(fetch_);
 		await app.state.pollPromise;
@@ -174,7 +214,7 @@ describe('browser delivery and navigation', () => {
 			if (url === '/people') return response([{ name: 'alice' }]);
 			if (url === '/rooms/delivery/humans/alice' && init?.method === 'PUT')
 				return response({ joined: 'alice' });
-			return response([]);
+			return response(recordedRoom([]));
 		});
 		const { app } = browser(fetch_);
 		Object.assign(app.state, { entryState: 'restoring' });
@@ -191,7 +231,7 @@ describe('browser delivery and navigation', () => {
 			if (url === '/people') return response([{ name: 'alice' }]);
 			if (url === '/rooms/delivery/humans/alice' && init?.method === 'PUT')
 				return response({ joined: 'alice' });
-			return response([]);
+			return response(recordedRoom([]));
 		});
 		const { app } = browser(fetch_, true);
 		app.state.human = 'alice';
@@ -212,7 +252,7 @@ describe('browser delivery and navigation', () => {
 			}
 			if (url === '/rooms/delivery/humans/alice' && init?.method === 'POST')
 				return response({ from: 4 });
-			return response([]);
+			return response(recordedRoom([]));
 		});
 		const { app } = browser(fetch_);
 		Object.assign(app.state, { entryState: 'required' });
@@ -242,7 +282,7 @@ describe('browser delivery and navigation', () => {
 			if (url === '/people') return response([{ name: 'alice' }]);
 			if (url === '/rooms/delivery/humans/alice' && init?.method === 'POST')
 				return response({ error: 'Enter this room before sending.' }, 409);
-			return response([]);
+			return response(recordedRoom([]));
 		});
 		const { app } = browser(fetch_);
 		Object.assign(app.state, { entryState: 'entered' });
@@ -262,7 +302,7 @@ describe('browser delivery and navigation', () => {
 			if (url === '/rooms')
 				return response([{ name: 'delivery', status: 'running', participants: [] }]);
 			if (url === '/people') return response([{ name: 'alice' }]);
-			return response([]);
+			return response({ ...recordedRoom([]), participants: [] });
 		});
 		const { app, getElementById } = browser(fetch_);
 		await app.poll();
@@ -277,7 +317,7 @@ describe('browser delivery and navigation', () => {
 			if (url === '/people') return response([{ name: 'alice' }]);
 			if (url === '/rooms/delivery/humans/alice' && init?.method === 'PUT')
 				throw new TypeError('Failed to fetch');
-			return response([]);
+			return response(recordedRoom([]));
 		});
 		const { app } = browser(fetch_);
 		app.state.entryState = 'restoring';
@@ -294,7 +334,7 @@ describe('browser delivery and navigation', () => {
 				return response([{ name: 'delivery', status: 'running', participants: [] }]);
 			if (url === '/people') return response([{ name: 'alice' }]);
 			if (url === '/rooms/delivery/humans/alice' && init?.method === 'PUT') return joined.promise;
-			return response([]);
+			return response(recordedRoom([]));
 		});
 		const { app } = browser(fetch_);
 		await app.poll();
@@ -314,7 +354,11 @@ describe('browser delivery and navigation', () => {
 					{ name: 'delivery', status: running ? 'running' : 'stopped', participants: [] },
 				]);
 			if (url === '/people') return response([{ name: 'alice' }]);
-			return response([]);
+			return response({
+				...recordedRoom([]),
+				status: running ? 'running' : 'stopped',
+				participants: [],
+			});
 		});
 		const { app, getElementById } = browser(fetch_);
 		app.state.entryState = 'restoring';
@@ -328,6 +372,147 @@ describe('browser delivery and navigation', () => {
 		expect(
 			getElementById('pending').children.some((child) => child.textContent === 're-enter'),
 		).toBe(true);
+	});
+
+	it('groups a closed exchange without a summary', async () => {
+		const { app, getElementById } = browser(vi.fn<typeof fetch>());
+		app.state.rooms = [
+			recordedRoom(
+				[closed(1, 3, { status: 'silent' })],
+				[
+					said(1, 'alice', 'Question'),
+					said(2, 'assistant', 'First reply'),
+					said(3, 'assistant', 'Second reply'),
+				],
+				3,
+			),
+		];
+		app.state.messages.set('delivery', app.state.rooms[0]?.messages || []);
+		app.renderTimeline();
+		const timeline = getElementById('timeline-inner');
+		expect(timeline.children.map((child) => child.className)).toEqual(['message', 'discussion']);
+		expect(timeline.children[1]?.children[0]?.textContent).toContain('No summary');
+		expect(timeline.children[1]?.open).toBe(false);
+	});
+
+	it('shows one agent reply directly without its summary card', async () => {
+		const summary = { kind: 'summary', seq: 3, from: 'assistant', text: 'Summary', at: '' };
+		const { app, getElementById } = browser(vi.fn<typeof fetch>());
+		app.state.rooms = [
+			recordedRoom(
+				[closed(1, 2, { status: 'published', summary })],
+				[said(1, 'alice', 'Question'), said(2, 'assistant', 'Answer')],
+				2,
+			),
+		];
+		app.state.messages.set('delivery', app.state.rooms[0]?.messages || []);
+		app.renderTimeline();
+		expect(getElementById('timeline-inner').children.map((child) => child.className)).toEqual([
+			'message',
+			'message',
+		]);
+	});
+
+	it('shows a published summary when a closed exchange has no agent reply', async () => {
+		const summary = { kind: 'summary', seq: 2, from: 'assistant', text: 'The answer.', at: '' };
+		const { app, getElementById } = browser(vi.fn<typeof fetch>());
+		app.state.rooms = [
+			recordedRoom(
+				[closed(1, 1, { status: 'published', summary })],
+				[said(1, 'alice', 'Question')],
+				2,
+			),
+		];
+		app.state.messages.set('delivery', app.state.rooms[0]?.messages || []);
+		app.renderTimeline();
+		const timeline = getElementById('timeline-inner');
+		expect(timeline.children.map((child) => child.className)).toEqual(['message', 'message']);
+		expect(textOf(timeline.children[1] as MockElement)).toContain('The answer.');
+	});
+
+	it('renders a late summary beside a newer open exchange', async () => {
+		const summary = { kind: 'summary', seq: 5, from: 'assistant', text: 'Closed answer.', at: '' };
+		const { app, getElementById } = browser(vi.fn<typeof fetch>());
+		app.state.rooms = [
+			recordedRoom(
+				[
+					closed(1, 3, { status: 'published', summary }),
+					{ status: 'open', owner: 'alice', from: 6, at: '2026-09-16T00:00:06.000Z' },
+				],
+				[
+					said(1, 'alice', 'Old question'),
+					said(2, 'assistant', 'Old reply'),
+					said(3, 'assistant', 'Old followup'),
+					said(6, 'alice', 'New question'),
+				],
+				6,
+			),
+		];
+		app.state.messages.set('delivery', app.state.rooms[0]?.messages || []);
+		app.renderTimeline();
+		const timeline = getElementById('timeline-inner');
+		expect(timeline.children.some((child) => textOf(child).includes('Closed answer.'))).toBe(true);
+		expect(textOf(timeline.children.at(-1) as MockElement)).toContain('New question');
+	});
+
+	it('invalidates the timeline when only an exchange closes', async () => {
+		const { app, getElementById } = browser(vi.fn<typeof fetch>());
+		const messages = [
+			said(1, 'alice', 'Question'),
+			said(2, 'assistant', 'Answer'),
+			said(3, 'assistant', 'Followup'),
+		];
+		app.state.rooms = [
+			recordedRoom([{ status: 'open', owner: 'alice', from: 1, at: '' }], messages, 3),
+		];
+		app.state.messages.set('delivery', messages);
+		app.renderTimeline();
+		expect(getElementById('timeline-inner').children).toHaveLength(3);
+		app.state.rooms[0] = recordedRoom([closed(1, 3, { status: 'silent' })], messages, 3);
+		app.renderTimeline();
+		expect(getElementById('timeline-inner').children.map((child) => child.className)).toEqual([
+			'message',
+			'discussion',
+		]);
+	});
+
+	it('clears a stale open exchange after the coherent selected read', async () => {
+		const messages = [
+			said(1, 'alice', 'Question'),
+			said(2, 'assistant', 'Answer'),
+			said(3, 'assistant', 'Followup'),
+		];
+		const open = { status: 'open', owner: 'alice', from: 1, at: '' };
+		let selectedReads = 0;
+		const fetch_ = vi.fn<typeof fetch>(async (url) => {
+			if (url === '/rooms')
+				return response([
+					{
+						...recordedRoom([open], [], 3),
+						exchange: open,
+					},
+				]);
+			if (url === '/people') return response([{ name: 'alice' }]);
+			if (String(url).startsWith('/rooms/delivery?')) {
+				selectedReads += 1;
+				if (selectedReads === 1) return response(recordedRoom([open], messages, 3));
+				const closedRoom = recordedRoom([closed(1, 3, { status: 'silent' })], [], 3);
+				delete closedRoom.exchange;
+				return response(closedRoom);
+			}
+			return response({});
+		});
+		const { app, getElementById } = browser(fetch_);
+		await app.poll();
+		expect(app.state.rooms[0]?.exchange).toEqual(open);
+		expect(app.state.messages.get('delivery')).toEqual(messages);
+		await app.poll();
+		const timeline = getElementById('timeline-inner');
+		expect(selectedReads).toBe(2);
+		expect(app.state.rooms[0]?.exchange).toBeUndefined();
+		expect(app.state.messages.get('delivery')).toEqual(messages);
+		expect(timeline.children.map((child) => child.className)).toEqual(['message', 'discussion']);
+		expect(textOf(timeline)).toContain('Followup');
 	});
 
 	it.each([
@@ -379,7 +564,9 @@ describe('browser delivery and navigation', () => {
 					},
 				]);
 			if (url === '/people') return response([{ name: 'alice' }]);
-			return response([]);
+			if (String(url).startsWith('/rooms/new-room?'))
+				return response({ ...recordedRoom([]), name: 'new-room' });
+			return response(recordedRoom([]));
 		});
 		const { app, getElementById } = browser(fetch_);
 		getElementById('room-name').value = 'new-room';

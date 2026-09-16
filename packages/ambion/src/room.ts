@@ -53,10 +53,11 @@ import type {
 	Steer,
 	ViewResponse,
 } from './protocol.ts';
-import { summaryCompletion } from './room/exchange.ts';
+import { closedExchange, summaryCompletion } from './room/exchange.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
+import { type MessageSelection, readView } from './room/read.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
 import {
 	decide,
@@ -79,12 +80,15 @@ import type {
 	ModelResolver,
 	PresenceMessage,
 	RoomNotification,
+	RoomSnapshot,
 	SeatInfo,
 	Seq,
 	SummaryMessage,
 	Without,
 } from './types.ts';
 import { copyMessage } from './types.ts';
+
+export type { RoomSnapshot } from './types.ts';
 
 /**
  * Where the room is in its life. One field answers every question the room
@@ -135,6 +139,7 @@ export interface StartRoomOptions {
 
 export interface ReadRoomOptions {
 	runtime?: Runtime;
+	messages?: MessageSelection;
 }
 
 export interface ResumeRoomOptions {
@@ -143,14 +148,6 @@ export interface ResumeRoomOptions {
 	runtime?: Runtime;
 	/** Override the model call, as `startRoom` does. */
 	streamFn?: StreamFn;
-}
-
-/** A room's durable state at the time it is read, with no live methods or subscriptions. */
-export interface RoomSnapshot {
-	readonly name: string;
-	readonly messages: readonly Message[];
-	readonly participants: readonly SeatInfo[];
-	readonly exchange: Exchange | undefined;
 }
 
 export interface ExchangeHandle {
@@ -261,17 +258,17 @@ function assertFree(runtime: Runtime, name: string): void {
 export async function readRoom(name: string, options: ReadRoomOptions = {}): Promise<RoomSnapshot> {
 	const runtime = options.runtime ?? defaultRuntime;
 	const live = registeredRoom(runtime, name);
-	if (live instanceof RoomHost) return live.snapshot();
+	if (live instanceof RoomHost) return live.snapshot(options);
 	const journal = roomJournal(runtime.journals.open(name));
 	await journal.ready;
-	const state = foldRoom(journal.entries, runtime.retry);
-	const liveSeats = liveWork(state, runtime.clock.now()).seats;
-	return {
+	await journal.settled();
+	return readView(
 		name,
-		messages: state.messages.map(copyMessage),
-		participants: seatsOf({ name, state, live: liveSeats }),
-		exchange: state.exchange === undefined ? undefined : { ...state.exchange },
-	};
+		foldRoom(journal.entries, runtime.retry),
+		runtime.clock.now(),
+		journal.lastSeq,
+		options.messages,
+	);
 }
 
 const _stale = (why: string) => ({ stale: why });
@@ -589,16 +586,16 @@ class RoomHost implements Room, RunningRoom {
 		return seatsOf({ name: this.name, state, live: this.live(state) });
 	}
 
-	async snapshot(): Promise<RoomSnapshot> {
+	async snapshot(options: ReadRoomOptions = {}): Promise<RoomSnapshot> {
 		await this.ready;
 		await this.journal.settled();
-		const state = this.state();
-		return {
-			name: this.name,
-			messages: state.messages.map(copyMessage),
-			participants: seatsOf({ name: this.name, state, live: this.live(state) }),
-			exchange: state.exchange === undefined ? undefined : { ...state.exchange },
-		};
+		return readView(
+			this.name,
+			this.state(),
+			this.runtime.clock.now(),
+			this.journal.lastSeq,
+			options.messages,
+		);
 	}
 
 	exchange(from: Seq): ExchangeHandle | undefined {
@@ -626,14 +623,10 @@ class RoomHost implements Room, RunningRoom {
 	}
 
 	private closedFor(from: Seq): ClosedExchange | undefined {
-		const close = this.state().closes.find((candidate) => candidate.from === from);
+		const state = this.state();
+		const close = state.closes.find((candidate) => candidate.from === from);
 		if (close === undefined) return undefined;
-		return {
-			owner: close.owner,
-			from: close.from,
-			through: close.through,
-			at: this.state().messages.find((message) => message.seq === from)?.at ?? close.at,
-		};
+		return closedExchange(close, state.messages);
 	}
 
 	private async waitForClose(from: Seq): Promise<ClosedExchange> {
