@@ -61,8 +61,8 @@ import { type LiveWork, liveWork } from './room/reconcile.ts';
 import {
 	decide,
 	evolve,
-	type Refusal,
 	type ReconcileDecision,
+	type Refusal,
 	type RoomCommand,
 	type RoomDecision,
 } from './room/transition.ts';
@@ -719,74 +719,61 @@ class RoomHost implements Room, RunningRoom {
 		const captured = captureHuman(human);
 		const pending = this.arrivals.get(captured.name);
 		if (pending !== undefined) {
-			if (pending.identity === captured.identity) return this.handle(await pending.promise);
-			throw new Error(
-				`'${captured.name}' is already entering this room under a different identity: one name is one person.`,
-			);
+			if (pending.identity !== captured.identity)
+				throw new Error(
+					`'${captured.name}' is already entering this room under a different identity: one name is one person.`,
+				);
+			const admitted = await pending.promise;
+			this.assertRunning();
+			return this.handle(admitted);
 		}
 		const arrival = this.arrive(captured);
 		this.arrivals.set(captured.name, { identity: captured.identity, promise: arrival });
 		try {
-			return this.handle(await arrival);
+			const admitted = await arrival;
+			this.assertRunning();
+			return this.handle(admitted);
 		} finally {
 			if (this.arrivals.get(captured.name)?.promise === arrival)
 				this.arrivals.delete(captured.name);
 		}
 	}
 
-	/** Complete one arrival and cache the handle only after its message is durable. */
+	/** Complete one arrival and cache the handle only after its presence is durable. */
 	private async arrive(captured: HumanDefinition): Promise<VisitRuntime> {
 		await this.ready;
 		this.assertRunning();
 		await this.journal.settled();
 		this.assertRunning();
 		const known = this.visits.get(captured.name);
-		if (known !== undefined && known.departure !== undefined) {
-			await known.departure.catch(() => {});
-			return this.arrive(captured);
-		}
-		if (known?.gone) {
-			await this.endVisit(known);
-			return this.arrive(captured);
-		}
+		if (known?.gone) return this.retryKnown(captured, known);
 		this.assertVisitable(captured);
-		const present = this.state().people.get(captured.name)?.presence === 'present';
-		if (present) {
-			if (known !== undefined) return known;
-		} else {
-			this.discardVisit(captured.name, known);
-			await this.commitPresence({
-				kind: 'arrived',
-				from: captured.name,
-				subject: captured.name,
-				identity: captured.identity,
-				...(captured.preferences === undefined ? {} : { preferences: captured.preferences }),
-			});
-			this.assertRunning();
-		}
+		const committed = await this.commitPresence({
+			kind: 'arrived',
+			from: captured.name,
+			subject: captured.name,
+			identity: captured.identity,
+			...(captured.preferences === undefined ? {} : { preferences: captured.preferences }),
+		});
+		this.assertRunning();
+		const current = this.visits.get(captured.name);
+		if (current?.gone) return this.retryKnown(captured, current);
+		if (committed === undefined && current !== undefined) return current;
+		if (current !== undefined) current.gone = true;
 		const visit: VisitRuntime = { human: captured, gone: false };
 		this.visits.set(captured.name, visit);
 		return visit;
 	}
 
-	/** Forget a stale local handle synchronously before admitting a new arrival. */
-	private discardVisit(name: string, visit: VisitRuntime | undefined): void {
-		if (visit === undefined) return;
-		visit.gone = true;
-		this.visits.delete(name);
+	private async retryKnown(captured: HumanDefinition, known: VisitRuntime): Promise<VisitRuntime> {
+		if (known.departure !== undefined) await known.departure.catch(() => {});
+		else await this.endVisit(known);
+		return this.arrive(captured);
 	}
 
-	/** One name names one participant, and a present person keeps one identity. */
 	private assertVisitable(human: HumanDefinition): void {
-		if (this.defs.has(human.name)) {
+		if (this.defs.has(human.name))
 			throw new Error(`'${human.name}' is an agent in this room: one name names one participant.`);
-		}
-		this.validatePresence({
-			kind: 'arrived',
-			from: human.name,
-			subject: human.name,
-			identity: human.identity,
-		});
 	}
 
 	private handle(visit: VisitRuntime): Visit {

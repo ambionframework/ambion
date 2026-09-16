@@ -213,6 +213,31 @@ describe('persistent browser host', () => {
 		);
 	});
 
+	it('requires reentry before retrying an accepted delivery after departure', async () => {
+		const directory = await freshDirectory();
+		const { base } = await launch('start', joinPath(directory, 'demo'));
+		const path = '/rooms/design/humans/alice';
+		const delivery = { key: 'departed-retry', text: 'Keep this delivery.' };
+		await request(base, path, { method: 'PUT' });
+		const first = await request(base, path, json('POST', delivery));
+		expect(first.response.status).toBe(202);
+		await request(base, path, { method: 'DELETE' });
+		const absent = await request(base, path, json('POST', delivery));
+		expect(absent.response.status).toBe(409);
+		const history = await request(base, '/rooms/design/messages');
+		expect((history.body as { kind: string }[]).filter((m) => m.kind === 'arrived')).toHaveLength(
+			1,
+		);
+		await request(base, path, { method: 'PUT' });
+		const retry = await request(base, path, json('POST', delivery));
+		expect(retry.response.status).toBe(202);
+		expect(retry.body).toEqual(first.body);
+		const after = await request(base, '/rooms/design/messages');
+		expect((after.body as { key?: string }[]).filter((m) => m.key === delivery.key)).toHaveLength(
+			1,
+		);
+	});
+
 	it('stops, reads history, and stays stopped across a host restart until resumed', async () => {
 		const parent = await freshDirectory();
 		const directory = joinPath(parent, 'demo');
