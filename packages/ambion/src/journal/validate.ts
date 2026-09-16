@@ -1,0 +1,174 @@
+import { type TSchema, Type } from 'typebox';
+import { Check, Errors } from 'typebox/value';
+import type { Kind } from './journal.ts';
+
+const extra = { additionalProperties: true } as const;
+const seq = Type.Integer({ minimum: 0 });
+const attention = Type.Union([
+	Type.Literal('none'),
+	Type.Literal('named'),
+	Type.Literal('broadcast'),
+	Type.Literal('presence'),
+]);
+const wakes = Type.Optional(Type.Array(Type.String()));
+const activationId = Type.Optional(Type.String());
+const commonMessage = { activationId, wakes, at: Type.String() };
+const seating = Type.Object({ name: Type.String(), identity: Type.String(), attention }, extra);
+const covers = Type.Object({ from: seq, through: seq }, extra);
+
+const messageSchemas: Record<string, TSchema> = {
+	said: Type.Object(
+		{
+			...commonMessage,
+			kind: Type.Literal('said'),
+			from: Type.String(),
+			to: Type.Optional(Type.String()),
+			text: Type.String(),
+		},
+		extra,
+	),
+	arrived: presenceSchema('arrived'),
+	left: presenceSchema('left'),
+	seated: presenceSchema('seated'),
+	unseated: presenceSchema('unseated'),
+	summary: Type.Object(
+		{
+			...commonMessage,
+			kind: Type.Literal('summary'),
+			from: Type.String(),
+			to: Type.String(),
+			text: Type.String(),
+			covers,
+		},
+		extra,
+	),
+};
+const message = Type.Union(Object.values(messageSchemas));
+
+function presenceSchema(kind: string): TSchema {
+	return Type.Object(
+		{
+			...commonMessage,
+			kind: Type.Literal(kind),
+			from: Type.Optional(Type.String()),
+			subject: Type.String(),
+			identity: Type.Optional(Type.String()),
+			attention: Type.Optional(attention),
+			preferences: Type.Optional(Type.String()),
+		},
+		extra,
+	);
+}
+
+const leaseRunning = Type.Object(
+	{
+		id: Type.String(),
+		phase: Type.Literal('running'),
+		expiresAt: Type.Number(),
+		at: Type.String(),
+		readThrough: seq,
+	},
+	extra,
+);
+const leaseEnded = Type.Object(
+	{
+		id: Type.String(),
+		phase: Type.Literal('ended'),
+		reason: Type.Union([
+			Type.Literal('released'),
+			Type.Literal('failed'),
+			Type.Literal('refused'),
+			Type.Literal('revoked'),
+			Type.Literal('expired'),
+			Type.Literal('abandoned'),
+		]),
+		at: Type.String(),
+		readThrough: seq,
+	},
+	extra,
+);
+const lease = Type.Union([leaseRunning, leaseEnded]);
+
+const schemas: Record<Kind, TSchema> = {
+	message,
+	lease,
+	close: Type.Object(
+		{ owner: Type.String(), from: seq, through: seq, at: Type.String(), wakes },
+		extra,
+	),
+	composition: Type.Object(
+		{
+			goal: Type.Optional(Type.String()),
+			assistant: Type.Optional(Type.String()),
+			agents: Type.Array(seating),
+			available: Type.Array(seating),
+			at: Type.String(),
+		},
+		extra,
+	),
+	run: Type.Object({ at: Type.String() }, extra),
+};
+
+/** Validate a room journal body. Unknown entry kinds stay outside this vocabulary. */
+export function validateRoomBody(kind: string, body: unknown): kind is Kind {
+	if (!Object.hasOwn(schemas, kind)) return false;
+	const schema = schemaFor(kind, body);
+	if (!Check(schema, body)) {
+		const error = Errors(schema, body)[0];
+		const path = error === undefined ? 'body' : instancePath(error);
+		const reason = error?.message ?? 'does not match the stored shape';
+		throw new Error(`Invalid room journal body for kind '${kind}' at ${path}: ${reason}.`);
+	}
+	const at = objectBody(body)?.at;
+	if (typeof at === 'string' && !Number.isFinite(Date.parse(at)))
+		throw new Error(
+			`Invalid room journal body for kind '${kind}' at body.at: expected a timestamp.`,
+		);
+	return true;
+}
+
+function schemaFor(kind: string, body: unknown): TSchema {
+	const topLevel = schemas[kind as Kind];
+	const object = objectBody(body);
+	return messageSchemaFor(kind, object) ?? leaseSchemaFor(kind, object) ?? topLevel;
+}
+
+function messageSchemaFor(
+	kind: string,
+	body: Record<string, unknown> | undefined,
+): TSchema | undefined {
+	if (kind !== 'message' || typeof body?.kind !== 'string') return undefined;
+	if (!Object.hasOwn(messageSchemas, body.kind)) return undefined;
+	return messageSchemas[body.kind];
+}
+
+function leaseSchemaFor(
+	kind: string,
+	body: Record<string, unknown> | undefined,
+): TSchema | undefined {
+	if (kind !== 'lease') return undefined;
+	if (body?.phase === 'running') return leaseRunning;
+	if (body?.phase === 'ended') return leaseEnded;
+	return undefined;
+}
+
+function objectBody(value: unknown): Record<string, unknown> | undefined {
+	return value !== null && typeof value === 'object' && !Array.isArray(value)
+		? (value as Record<string, unknown>)
+		: undefined;
+}
+
+function instancePath(error: { instancePath: string; keyword: string; params: object }): string {
+	const path = error.instancePath === '' ? 'body' : pointerPath(error.instancePath);
+	if (error.keyword !== 'required') return path;
+	const requiredProperties = (error.params as { requiredProperties?: unknown }).requiredProperties;
+	const field = Array.isArray(requiredProperties) ? requiredProperties[0] : undefined;
+	return typeof field === 'string' ? `${path}.${field}` : path;
+}
+
+function pointerPath(pointer: string): string {
+	return pointer
+		.split('/')
+		.slice(1)
+		.reduce((path, part) => (/^\d+$/.test(part) ? `${path}[${part}]` : `${path}.${part}`), 'body');
+}

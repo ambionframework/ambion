@@ -414,7 +414,8 @@ rule 3's bar, now with the hearing enforced.
 First to commit wins, and ties are impossible: a commit is one operation
 on the room's commit queue, the check and the write run inside that one
 operation, and nothing observes a message before its write is confirmed
-(`RoomJournal.commit`, over `@ambionframework/journal`). A room with no races pays nothing. The refusal shows on the stream as `conflict`, which
+(`Journal.append`, with the room decision inside its queue).
+The refusal shows on the stream as `conflict`, which
 names the author. Every ordinary say includes the preceding messages in its
 author's view. A summary publishes a closed exchange's result with its fixed
 range and recipient. Later messages do not invalidate that input
