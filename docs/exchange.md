@@ -145,21 +145,18 @@ An exchange is a fold over the journal. The open exchange is the first
 question a person asked after the last close's `through`
 (`openExchange` in [`exchange.ts`](../packages/ambion/src/room/exchange.ts)). A
 close is an entry on the journal beside the messages: `{ owner, from, through,
-at, summary? }`. It takes no seq; `through` orders it. `summary` names the
-configured writer when the exchange owes a summary. `messages()` returns the
-messages alone, and their seqs stay `1..n`.
+at, summary? }`. The journal envelope supplies its sequence. `through` fixes
+the source range. `summary` names the configured writer when a summary is
+owed. Message sequence numbers can have gaps occupied by administrative entries.
 
-A room resumed over its journal continues a mid-exchange room. The question is
-still open, the seats the last run left live hold their leases until they
-expire, and the wakes it left pending are sent again. A lease that expires
-answers the wake it held: the exchange closes once nothing is live, and the
-writer receives what it owes ([`summary.md`](summary.md)). A run that
-starts over a journal with an exchange open finds nothing live at its first
-reconcile, closes the exchange, and its host hears `exchange_closed` for
-it.
+A resumed room reconstructs the open exchange and pending work. Unexpired
+leases remain valid; unclaimed work can be delivered again. Expiry and retry
+rules determine the next attempt when a runner died. The room closes the
+exchange when its discussion work reaches a terminal state. A configured
+summary writer then receives any closing work still owed.
 
-Every closed exchange is on the journal, so a host that wants a history of
-exchanges reads the closes off the room's Pi session.
+The [recovery procedure](deployment.md#recover-inherited-leases) separates
+local runner loss from a surviving remote runner.
 
 ---
 
@@ -169,6 +166,9 @@ A running room can publish exchange notifications through its subscription,
 but callers that need a durable result use the exchange handle returned by
 `Visit.send`. `room.exchange(from)` reacquires the same handle after a
 restart, using the opening message sequence as its stable identity.
+Persist `from` in the client's application state. Pending waits and
+subscriptions belong to the old run and must be recreated after interruption.
+See [client recovery](deployment.md#restore-client-reads-and-exchange-handles).
 
 ```ts
 const visit = await room.visit(priya);

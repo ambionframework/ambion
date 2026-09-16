@@ -2,8 +2,8 @@
 
 Delivery plan, 2026-09-16. Updated for executor separation in PR #130,
 Pi transcript extraction in PR #131, room value ownership in PR #132,
-protocol separation in PR #133, and workspace resource separation prepared
-for review.
+protocol separation in PR #133, workspace resource separation in PR #134,
+and restart/reconnect procedures prepared for review.
 [release-0.1.0.md](release-0.1.0.md) defines the positioning, capabilities,
 deployment models, and limits. This file owns implementation work and its
 completion evidence, including the remaining work from earlier plans.
@@ -19,17 +19,18 @@ representations and ownership overlaps that require unrelated mechanisms to
 stay synchronized. Executor dependencies and Pi transcript storage now have
 explicit boundaries. PR #132 protects accepted room facts at public reads
 and local delivery.
-PR #133 separates protocol messages from stored event shapes. The current
-priority separates workspace resource ownership from Ambion tool binding.
+PR #133 separates protocol messages from stored event shapes. PR #134
+separates workspace resource ownership from Ambion tool binding. The current
+priority makes host recovery procedures explicit and tests them across restart.
 
 **Build on the merged foundations.** Fixed definitions, normalized tools,
 conditional journal appends, activation purpose, structured context, and
 ordinary participation have landed. Preserve their evidence below.
 
-| Order | Change                                  | Main reduction                                           | Scope        |
-| ----- | --------------------------------------- | -------------------------------------------------------- | ------------ |
-| 1     | Separate workspace resources from tools | Keep resource ownership independent of tool binding      | Section 6    |
-| 2     | Complete recovery and release contracts | Resolve failure guarantees and verify packaged consumers | Sections 8–9 |
+| Order | Change                                 | Main reduction                                                | Scope        |
+| ----- | -------------------------------------- | ------------------------------------------------------------- | ------------ |
+| 1     | Clarify and test host recovery         | One procedure for presence, client progress, and pending work | Section 9    |
+| 2     | Complete package and release contracts | Verify distribution and supported deployment examples         | Sections 8–9 |
 
 PR #130 narrows executor dependencies. PR #131 extracts Pi transcripts.
 PR #132 detaches collaboration values at ownership boundaries. Sections 5–7
@@ -714,7 +715,9 @@ checks pass, including live provider tests.
 
 ### Keep workspace ownership intact
 
-**Prepared for review: one resource owner with an Ambion adapter.**
+**Merged:** [PR #134](https://github.com/ambionframework/ambion/pull/134).
+
+**One resource owner has an Ambion adapter.**
 `resource.ts` owns connection, complete-operation serialization, and lifecycle.
 It accepts a `ResourceBackend` with `connect`, `destroy`, and optional `dispose`.
 `workspace.ts` adds a stable tool bundle through `tools.ts`. Tool calls and
@@ -738,6 +741,7 @@ and directory resources while rejecting Ambion imports. The root facade,
 generated CLI project typecheck, and Wrangler dry run pass. Independent
 Luna/High review found no blockers. `pnpm format` and `pnpm check` pass.
 Import probes reject Ambion and adapter imports from resource and backend modules.
+All seven CI checks pass, including live provider tests.
 
 ### Keep the release surface deliberate
 
@@ -874,7 +878,7 @@ PR #128 contains the implementation and integration with the CLI template.
 - Preserve the executor boundary and validation merged in PR #130.
 - Preserve protocol and stored-event separation merged in PR #133.
 - Preserve Pi transcript extraction and audit isolation merged in PR #131.
-- Keep workspace resources separate from executor tool binding.
+- Preserve workspace resource and tool separation merged in PR #134.
 
 **Evidence:** run the same scripted collaboration in process and through
 Cloudflare's JSON boundary. Audit failure after a committed answer cannot
@@ -939,11 +943,34 @@ the intended packages. Importing definitions must retain lazy provider loading.
 
 ### Recovery and host procedures
 
+**Prepared for review: document and test the host recovery contract.**
+[`deployment.md`](../docs/deployment.md#restore-human-presence) describes
+restoring visits, confirming departures, recovering exchange handles, and
+replaying client history. It distinguishes per-client acknowledged cursors
+from `Visit.since`, which records the person's last departure.
+
+Recovery preserves an unexpired lease for a surviving remote runner. A lost
+local runner waits for expiry before retry. Calls must reach the current room
+host. No recovery mode, scheduler state, or presence timeout is added.
+
+**Evidence:** 14 reconnect tests and four inherited-lease tests exercise
+public APIs on memory and SQLite. A process test saves client identifiers,
+kills Node with an active lease, and recovers through a fresh process over
+SQLite. History replay and live notifications merge by sequence without
+losing a message or displaying an overlap twice. Independent review found
+no runtime blocker, and this slice changes no runtime API or behavior.
+
+The process test uses a scripted model and explicit clock. A concise
+application example and real-model restart test remain separate release
+requirements. `pnpm format` and `pnpm check` pass with 629 core tests,
+18 workerd tests, 39 workspace tests, 30 journal tests, 20 Pi session tests,
+and six CLI tests. The new recovery coverage accounts for 19 core tests.
+
 - [ ] Provide a persistent Node example that restarts over SQLite, supplies
       definitions again, resumes pending work, and reacquires exchange handles.
-- [ ] Define the host procedure for reconciling recorded human presence with
+- [x] Define the host procedure for reconciling recorded human presence with
       surviving connections. A crash must not invent a departure or lose attribution.
-- [ ] Specify how local and separated hosts treat inherited leases. Preserve
+- [x] Specify how local and separated hosts treat inherited leases. Preserve
       authority for a remote runner that may still be alive. Avoid a generic
       “revoke everything” shortcut that changes retry semantics.
 - [ ] Test two rooms using the same agent name with different definitions.
@@ -952,7 +979,7 @@ the intended packages. Importing definitions must retain lazy provider loading.
 - [ ] Test reads and resume attempts for an unknown room name. Define the
       missing-room result and prevent accidental composition or audit creation.
       Do not add another storage operation unless current adapters require it.
-- [ ] Demonstrate reconnect through message reads and exchange lookup. Verify
+- [x] Demonstrate reconnect through message reads and exchange lookup. Verify
       interruption behavior for waiters when a host stops or is superseded.
 - [ ] Test one runner owner per room and seat, including duplicate wakes,
       takeover, and delayed cancellation. Keep transcript identity stable across
@@ -997,7 +1024,7 @@ the failed ordering assumption.
       adapter or upstream fix; document any remaining shell limitations.
 - [x] Retain whole-operation serialization, cleanup after failures, and the
       distinction between `dispose` and `destroy` while extracting tool binding.
-      Section 6 records the implementation and validation prepared for review.
+      Section 6 records the implementation and validation merged in PR #134.
 - [ ] Measure replay time, steady-state projection work, memory use, and model
       input size on the release examples. Record the history sizes used.
 - [ ] Verify summary-based activation context with silence, conflicting
