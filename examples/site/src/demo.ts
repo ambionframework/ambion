@@ -199,6 +199,9 @@ function narrate(event: RoomNotification): void {
 		process.stderr.write(`  — ${owner}'s exchange closed (${from}–${through})\n`);
 	}
 	if (event.type === 'error') process.stderr.write(`! ${event.agent}: ${event.error.message}\n`);
+	if (event.type === 'audit_error') {
+		process.stderr.write(`! audit for ${event.agent}: ${event.error.message}\n`);
+	}
 	if (event.type === 'abandoned') {
 		process.stderr.write(`! the room gave up on ${event.agent} (${event.activation})\n`);
 	}
@@ -215,7 +218,7 @@ function watch(room: Room): void {
 		track(event, at);
 		narrate(event);
 		timeline.push(
-			event.type === 'error'
+			'error' in event
 				? { at, event: { ...event, error: { message: event.error.message } } as never }
 				: { at, event },
 		);

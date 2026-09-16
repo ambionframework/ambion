@@ -38,10 +38,10 @@ function seatLine(
 		ambion: 'seat',
 		room,
 		seat,
-		activation,
+		activation: 'activation' in event ? event.activation : activation,
 		event: event.type,
 		...('toolName' in event ? { tool: event.toolName } : {}),
-		...(event.type === 'error' ? { error: event.error.message } : {}),
+		...('error' in event ? { error: event.error.message } : {}),
 		at: new Date().toISOString(),
 	};
 }
