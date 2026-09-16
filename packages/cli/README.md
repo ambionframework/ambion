@@ -20,7 +20,7 @@ access token with `read:packages`. Add these lines to your user `~/.npmrc`:
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-Install the prerelease from the `next` tag after publication:
+Install the prerelease from the `next` tag:
 
 ```sh
 npm install --global @ambionframework/cli@next

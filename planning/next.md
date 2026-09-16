@@ -807,8 +807,9 @@ for investigation; their old reproduction rates are not current evidence.
       and publication discovery for `pi-journal` and the narrowed hosting surface.
 - [x] Include the CLI and Cloudflare adapter in lockstep package discovery.
       Use `ambion new` as the only project-creation path.
-- [ ] Publish the prerelease through the release workflow.
-      Verify registry installation of a generated project.
+- [x] Publish `0.1.0-alpha.1` under `next` through the release workflow.
+      [The release check](https://github.com/ambionframework/ambion/actions/runs/35059680708)
+      verified registry installation, project types, and the generated Worker bundle.
 - [ ] Declare example coverage in Knip. Remove the unused `dev` task contract.
       Review Turbo dependencies against actual source and built-package tests;
       remove redundant builds only where the test contract permits it.

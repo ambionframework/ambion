@@ -38,7 +38,7 @@ After editing agent definitions, restart `ambion dev` to test the changes.
 - [x] Use a pinned Wrangler dependency and the existing room and seat
       Durable Objects. Keep the template free of application resource storage.
 - [x] Make the CLI and adapter dependencies installable outside the monorepo.
-- [ ] Publish matching versions of the CLI, runtime, journal, and adapter.
+- [x] Publish matching versions of the CLI, runtime, journal, and adapter.
 
 **Done when:** the template runs with `wrangler dev`. A developer can send
 one message over HTTP and read both agents' contributions.
@@ -137,8 +137,11 @@ removes its temporary credential file on exit. Stop the room and remove its
 evaluations, deployment commands, remote authentication, multiple terminal
 clients, WebSockets, live tool activity, and production operations follow later.
 The CLI and Cloudflare adapter ship together in a lockstep prerelease.
-Registry publication and installation verification remain pending until the
-release workflow succeeds. See [the delivery plan](next.md).
+Version `0.1.0-alpha.1` is published to GitHub Packages under `next`.
+The [release workflow](https://github.com/ambionframework/ambion/actions/runs/35059680708)
+installed the published CLI, created a project with `ambion new`, and verified
+its registry dependencies, types, and Worker bundle.
+See [the delivery plan](next.md).
 
 ## Starting points
 

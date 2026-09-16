@@ -121,7 +121,7 @@ Node **26.4 or later**, pnpm 10, and an interactive terminal.
 
 Configure GitHub Packages in your user `~/.npmrc` with the registry and token
 lines from [Install](#install). Set `GITHUB_TOKEN` to a classic token with
-`read:packages`. After prerelease publication, install the CLI from `next`:
+`read:packages`. Install the CLI prerelease from `next`:
 
 ```sh
 npm install --global @ambionframework/cli@next
