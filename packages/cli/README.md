@@ -2,7 +2,8 @@
 
 **Create a team project and test its agents locally.** `ambion new` creates
 an editable project. `ambion dev` runs its Worker through Wrangler and opens
-an OpenTUI room with the team, conversation, message input, and Worker logs.
+an OpenTUI room with a compact team header, a full-width conversation, and
+message input.
 
 ## Requirements
 
@@ -71,15 +72,15 @@ ambion dev ../another-team # open another team project
 ```
 
 Enter sends a message. Scroll the conversation with the mouse wheel.
-Worker errors appear below the conversation and in the logs. Ctrl-C closes
-the interface and stops its development server.
+One status line shows when the team is working. Errors appear below the
+conversation. Ctrl-C closes the interface and stops its development server.
 
 Edit agent instructions in `src/room.ts`, then restart `dev`.
 History remains in `.wrangler/`. Stop `dev` and remove that directory to
 start with an empty room.
 
-For HTTP-only testing, run `pnpm dev:worker`. The generated README documents
-the `/start`, `/join`, `/send`, `/messages`, and `/status` routes.
+For Worker logs and HTTP-only testing, run `pnpm dev:worker`. The generated
+README documents the `/start`, `/join`, `/send`, `/messages`, and `/status` routes.
 
 ## Work from a repository checkout
 
