@@ -1,47 +1,38 @@
 /**
- * The journal: every entry a writer committed, in the order it landed.
+ * The journal: every entry a writer appended, in the order it landed.
  *
- * The *record* is what the journal holds, and the *journal* is the
- * append-only structure that holds it. `Entry` and `Journal` are the two
- * words; `Record` is TypeScript's own name for a map type, so the class
- * does not take it.
+ * The journal is the append-only structure that holds every accepted entry.
  *
  * It is the one thing a live writer and a read of a stopped one share, so
  * it knows nothing about either: it replays journal storage into memory and
- * commits one entry at a time on a serial queue. An entry exists when its
- * write is confirmed, and nothing observes it before: the cache updates
- * after the append resolves, and a caller that awaits `commit` holds an
- * entry that is on the record.
+ * appends one entry at a time on a serial queue. An entry exists when its
+ * append is confirmed, and nothing observes it before: the cache updates
+ * after the append resolves, and a caller that awaits `append` holds an
+ * entry that is in the journal.
  *
- * **The record holds two kinds of entry, and it reads neither.** A
- * *record* entry makes up the record a reader reads; every other kind sits
- * beside it. Both join the same queue, so they land in the order they were
- * asked for. What each one means belongs to the caller, which names its
- * kinds in a `Vocabulary`.
+ * **The journal reads no entry meaning.** Every kind joins the same queue, so
+ * entries land in the order in which callers ask for them. What each one
+ * means belongs to the caller, which names its kinds in a `Vocabulary`.
  *
  * **The envelope is the journal's, and the body is the caller's.** Storage
  * holds one nested envelope with kind, body, seq, key, and run. One counter
  * gives out every seq. The body stays nested, so its fields do not collide.
  *
- * **A key is an idempotency token, and a `readThrough` is a conditional
- * write.** The two checks the queue runs answer different questions. A
- * repeated key returns the entry the first commit landed and writes
- * nothing, which is what lets a caller retry a commit whose outcome it
- * never learned. A `readThrough` names the seq the author has read: the
- * queue refuses the commit when the record moved past that, and hands back
- * what the author missed — optimistic concurrency, enforced where the write
- * happens. A commit may name both, and either check alone can stop it.
+ * **A key is an idempotency token.** A repeated key returns the entry the
+ * first append landed and writes nothing, which lets a caller retry an
+ * append whose outcome it never learned. A key belongs to every kind. A
+ * retry under the same kind returns the original entry; another kind throws
+ * a key-collision error.
  *
- * The key index is the record itself. Every record entry the journal takes
- * carries its key into the index, on the replay as well as on the append,
- * so a caller that retries after a crash meets the token the storage holds
- * and not a memory the crash took. Every record entry stays durable,
- * so the token never expires and the journal holds no dedup window.
+ * The key index covers every entry. Every keyed entry the journal takes
+ * carries its key into the index, on replay and append, so a caller that
+ * retries after a crash meets the token storage holds. Every entry stays
+ * durable, so the token never expires and the journal holds no dedup window.
  *
  * The journal reads what the storage holds past its cursor before every
- * write, and again on the queue behind a write that failed. A write whose
- * confirmation was lost is on the record before anything lands on top of
- * it, and a read of the record waits for the queue. The cursor moves to
+ * append, and again on the queue behind an append that failed. An append
+ * whose confirmation was lost is in the journal before anything lands on
+ * top of it, and a read of the journal waits for the queue. The cursor moves to
  * the final storage position every read saw, so a read costs the entries since the
  * one before it, whatever the journal's age.
  *
@@ -56,15 +47,15 @@
  * a run entry moves the fence to that run, and an entry of another run past
  * it is void, so the journal skips it. A journal that passes its own entry and
  * then one of another run is superseded: it tells the caller, and every
- * write from then on fails. A journal with no run of its own writes nothing
+ * append from then on fails. A journal with no run of its own writes nothing
  * about runs, and reads the fence like any other reader.
  *
  * The design contract is `docs/durability.md`.
  */
-import { nextSeq, refused, supersedes, voided } from './rules.verified.ts';
+import { keyConflict, nextSeq, supersedes, voided } from './rules.verified.ts';
 import type { JournalStorage, StoredEntry } from './storage.ts';
 
-/** A position on the record: monotonic, assigned at commit, never reused. */
+/** A journal sequence: monotonic, assigned at append, never reused. */
 export type Seq = number;
 
 /**
@@ -108,8 +99,6 @@ export type Entries<TKind extends string, TBodies extends Bodies<TKind>> = {
  * kind and body before the journal takes it.
  */
 export interface Vocabulary<TKind extends string = string> {
-	/** The kind that makes up the record a reader reads. Every other kind is about it. */
-	readonly record: TKind;
 	/** The kind that fences a run. */
 	readonly run: TKind;
 	/** Whether this kind and body are values the caller reads. */
@@ -134,14 +123,6 @@ const writerOf = (entry: unknown): string | undefined => {
 };
 
 /**
- * The body a draft yields. A body may be any shape the caller chose, so the
- * branch reads the draft's own form rather than narrowing on it.
- */
-function drafted<T>(draft: T | (() => T)): T {
-	return typeof draft === 'function' ? (draft as () => T)() : draft;
-}
-
-/**
  * One body, with the journal's own fields beside it, as the storage holds it.
  * The envelope nests the body, so body fields never collide with journal
  * fields.
@@ -156,10 +137,9 @@ const beside = (kind: string, body: unknown, seq: Seq, key?: string, run?: strin
 
 /**
  * The envelope a stored entry folds to, or nothing when it is not one this
- * journal takes. Strict on purpose: a kind this reader does not know, a body
- * the caller turns down, or no place on the record is no entry at all, and
- * the journal skips it rather than caching something it cannot hold to its
- * contract.
+ * journal takes. An unknown kind is foreign storage and is skipped. A known
+ * kind with an invalid body is malformed storage and throws. This distinction
+ * keeps a reader extensible and keeps malformed history visible.
  */
 function envelope<TKind extends string>(
 	words: Vocabulary<TKind>,
@@ -188,52 +168,32 @@ function positionOf(value: unknown): Seq | undefined {
 	return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
 
-/** What a caller commits: the body, and the two checks the queue runs. */
-export interface CommitIntent<TBody> {
-	/**
-	 * The idempotency token for this commit. The caller chooses it, and the
-	 * journal reads it for one question: did this commit land before? A
-	 * repeated token appends nothing and answers with the entry that landed.
-	 * A caller with nothing to retry under names a token of its own that
-	 * matches nothing.
-	 */
-	key?: string;
-	/** The seq the author has read. The queue refuses the commit when the record moved past it. */
-	readThrough?: Seq;
-	/**
-	 * The body, or a function that builds it where the write happens. The
-	 * journal keeps the place of its own, so a draft never names one.
-	 */
-	draft: TBody | (() => TBody);
+/** A synchronous proposal made after the queue has recovered storage. */
+export type AppendDecision<TBody, TResult> = { body: TBody } | { result: TResult };
+
+/** What one conditional append returns. */
+export type AppendResult<TEntry, TResult> = { entry: TEntry } | { result: TResult };
+
+export interface AppendIntent<TBody, TResult> {
+	/** The permanent idempotency token for this append, when one is needed. */
+	readonly key?: string;
+	/** Build a body or a caller result after recovery, inside the write queue. */
+	readonly decide: () => AppendDecision<TBody, TResult>;
 }
 
-/**
- * The entry the commit stands for, or the record moved under it. A commit
- * whose key had landed before answers with the entry that first landed, so
- * a caller reads one shape whether its own write appended or a retry
- * deduplicated.
- */
-export type Committed<TBody, TAll = TBody> =
-	| { entry: Entry<TBody> }
-	/** Every record entry the journal took past what the author read. */
-	| { missed: readonly Entry<TAll>[] };
+type KindEntry<TKind extends string, TBodies extends Bodies<TKind>, K extends TKind> = Entries<
+	K,
+	TBodies
+>;
 
-export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecord extends TKind> {
+export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	/** Every entry, replayed then appended, in the order the writes were confirmed. */
 	readonly entries: Entries<TKind, TBodies>[] = [];
-	/** The entries that make up the record, in order. */
-	readonly record: Entry<TBodies[TRecord]>[] = [];
 	readonly ready: Promise<JournalStorage>;
 	/** The place the last entry took. The next entry of any kind takes the one after it. */
 	lastSeq = 0;
-	/**
-	 * The place the last record entry took. Rule 5 reads this: what an author
-	 * read is a place on the record, and an entry beside the record moves
-	 * neither what they read nor what they missed.
-	 */
-	lastCommitted = 0;
-	private readonly byKey = new Map<string, Entry<TBodies[TRecord]>>();
-	/** The serial queue. One commit at a time, in the order they were asked for. */
+	private readonly byKey = new Map<string, Entries<TKind, TBodies>>();
+	/** The serial queue. One append at a time, in request order. */
 	private tail: Promise<unknown> = Promise.resolve();
 	private closed = false;
 	/** The storage position the last read scanned. */
@@ -289,8 +249,10 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 		const entries = found.entries.filter((entry) => entry.position > after);
 		entries.sort((a, b) => a.position - b.position);
 		for (const entry of entries) {
-			this.cursor = entry.position;
 			const known = envelope(this.words, entry.entry) as Entries<TKind, TBodies> | undefined;
+			// Validation must finish before the cursor moves. A malformed known
+			// entry therefore fails every later read at the same position.
+			this.cursor = entry.position;
 			if (known !== undefined) this.take(known, writerOf(entry.entry));
 		}
 		this.cursor = Math.max(this.cursor, found.position);
@@ -334,66 +296,23 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	private cache(entry: Entries<TKind, TBodies>): void {
 		this.entries.push(entry);
 		this.lastSeq = Math.max(this.lastSeq, entry.seq);
-		if (this.recorded(entry)) {
-			this.record.push(entry);
-			this.lastCommitted = entry.seq;
-			if (entry.key !== undefined) this.byKey.set(entry.key, entry);
-		}
+		if (entry.key !== undefined) this.byKey.set(entry.key, entry);
 		if (this.replayed) this.hear?.(entry);
 	}
 
 	/**
-	 * Whether this entry makes up the record. The kind says so, and this
-	 * states the narrowing that follows: the type-checker cannot read it off
-	 * a mapped union on its own.
+	 * Append one kind through the queue. Recovery, key lookup and the fence
+	 * run before `decide`. A body appends; a result returns without writing.
+	 * A repeated key returns the original entry. A key used by another kind
+	 * throws before the decision runs, because its body cannot be typed as K.
 	 */
-	private recorded(
-		entry: Entries<TKind, TBodies>,
-	): entry is Entries<TKind, TBodies> & Entry<TBodies[TRecord]> {
-		return entry.kind === this.words.record;
-	}
-
-	/**
-	 * Write one entry of a kind beside the record. It takes the next place
-	 * like any other entry; it joins the same queue, so it and the entries
-	 * around it land in the order they were asked. The draft is built
-	 * where the write happens, and a builder that returns nothing writes
-	 * nothing: the check it ran found the entry no longer needed.
-	 *
-	 * A record entry is `commit`'s alone. This takes every other kind, so a
-	 * caller cannot put an entry on the record without the two checks the
-	 * commit queue runs for it.
-	 */
-	write<K extends Exclude<TKind, TRecord>>(
+	append<K extends TKind, TResult = never>(
 		kind: K,
-		draft: TBodies[K] | (() => TBodies[K] | undefined),
-	): Promise<boolean> {
-		const link = this.tail.then(async () => {
-			const storage = await this.open();
-			const body = drafted(draft);
-			if (body === undefined) return false;
-			const stored = beside(kind, body, nextSeq(this.lastSeq), undefined, this.run);
-			const appended = await this.append(storage, stored);
-			this.cursor = appended.position;
-			this.took(appended);
-			return true;
-		});
-		this.tail = link.catch(() => {});
-		return link;
-	}
-
-	/**
-	 * Commit one record entry. The check, the append and the cache update
-	 * run inside one link of the queue, and `hear` runs there too, before the
-	 * next commit starts: what a caller does with a fresh entry happens
-	 * before anything else lands on top of it.
-	 */
-	commit<T extends TBodies[TRecord]>(
-		intent: CommitIntent<T>,
-	): Promise<Committed<T, TBodies[TRecord]>> {
-		const link = this.tail.then(() => this.land(intent));
-		// One write that fails must not stop the next one. The queue keeps its
-		// order; the caller of the failed write sees its failure.
+		intent: AppendIntent<TBodies[K], TResult>,
+	): Promise<AppendResult<KindEntry<TKind, TBodies, K>, TResult>> {
+		const link = this.tail.then(() => this.land(kind, intent));
+		// One append that fails must not stop the next one. The queue keeps its
+		// order; the caller of the failed append sees its failure.
 		this.tail = link.catch(() => {});
 		return link;
 	}
@@ -432,7 +351,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 	 * three beside it. A failure puts the journal in doubt, whatever the
 	 * storage did with the entry, and queues the read that settles it.
 	 */
-	private async append(storage: JournalStorage, entry: unknown): Promise<StoredEntry> {
+	private async persist(storage: JournalStorage, entry: unknown): Promise<StoredEntry> {
 		try {
 			return await this.landed(storage, entry);
 		} catch (error) {
@@ -468,20 +387,34 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 		} while (awaited !== this.tail);
 	}
 
-	private async land<T extends TBodies[TRecord]>(
-		intent: CommitIntent<T>,
-	): Promise<Committed<T, TBodies[TRecord]>> {
+	private async land<K extends TKind, TResult>(
+		kind: K,
+		intent: AppendIntent<TBodies[K], TResult>,
+	): Promise<AppendResult<KindEntry<TKind, TBodies, K>, TResult>> {
 		const storage = await this.open();
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
-		if (seen !== undefined) return { entry: seen as Entry<T> };
-		if (intent.readThrough !== undefined && refused(this.lastCommitted, intent.readThrough)) {
-			return { missed: this.since(intent.readThrough) };
+		if (seen !== undefined) {
+			if (keyConflict(seen.kind === kind, kind === this.words.run, seen.run === this.run)) {
+				throw new Error(
+					`The key '${intent.key}' already names a '${seen.kind}' entry at seq ${seen.seq}.`,
+				);
+			}
+			return { entry: seen as KindEntry<TKind, TBodies, K> };
 		}
-		const body = drafted(intent.draft);
-		const stored = beside(this.words.record, body, nextSeq(this.lastSeq), intent.key, this.run);
-		const appended = await this.append(storage, stored);
+		const proposal = intent.decide();
+		if ('result' in proposal) return proposal;
+		if (!('body' in proposal)) {
+			throw new Error('The append decision must return a body or a result.');
+		}
+		const stored = beside(kind, proposal.body, nextSeq(this.lastSeq), intent.key, this.run);
+		// Validate before storage sees the envelope. A bad proposal cannot
+		// poison the journal and cannot consume a storage position.
+		if (envelope(this.words, stored) === undefined) {
+			throw new Error(`The vocabulary rejects the proposed '${kind}' entry.`);
+		}
+		const appended = await this.persist(storage, stored);
 		this.cursor = appended.position;
-		return { entry: this.took(appended) as Entry<T> };
+		return { entry: this.took(appended) as KindEntry<TKind, TBodies, K> };
 	}
 
 	/**
@@ -502,11 +435,5 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>, TRecor
 		}
 		this.take(entry, writerOf(stored.entry));
 		return entry;
-	}
-
-	/** Every record entry past a place. */
-	since(cursor: Seq | undefined): Entry<TBodies[TRecord]>[] {
-		if (cursor === undefined) return [...this.record];
-		return this.record.filter((entry) => entry.seq > cursor);
 	}
 }

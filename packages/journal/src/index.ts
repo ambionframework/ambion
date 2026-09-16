@@ -2,23 +2,19 @@
  * An append-only journal over ordered conditional storage.
  *
  * One serial queue, fenced by run, and honest about a write
- * it is in doubt about. The *journal* is the structure; the *record* is
- * what it holds, and the room that writes to one keeps that word for its
- * own content.
+ * it is in doubt about. The journal stores every accepted entry.
  *
- * A journal takes two kinds of entry, and reads neither. A *record* entry
- * makes up the record a reader reads; every other kind sits beside it. One
- * counter gives out every place, so a seq names one entry of any kind. What
- * each one means belongs to the caller, which names its kinds in a
- * `Vocabulary`.
+ * A journal reads no entry meaning. One counter gives out every place, so a
+ * seq names one entry of any kind. What each one means belongs to the caller,
+ * which names its kinds in a `Vocabulary`.
  *
  * The journal holds three fields beside every body: the place the entry
- * took, the key its commit carried, and the run that wrote it. A caller
+ * took, the key its append carried, and the run that wrote it. A caller
  * drafts the body alone, and reads those three off the entry.
  *
  * ```ts
  * const journal = new Journal(open, words, (entry) => react(entry), runId, () => lost());
- * await journal.commit({ key, readThrough, draft: () => ({ text: 'hello' }) });
+ * await journal.append('note', { key, decide: () => ({ body: { text: 'hello' } }) });
  * ```
  *
  * What it promises under failure, and how the tiers prove it, is
@@ -26,9 +22,10 @@
  */
 
 export type {
+	AppendDecision,
+	AppendIntent,
+	AppendResult,
 	Bodies,
-	CommitIntent,
-	Committed,
 	Entries,
 	Entry as JournalEntry,
 	Seq,

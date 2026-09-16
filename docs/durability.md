@@ -26,6 +26,23 @@ journal reads those three, and it reads a body only to ask the room
 whether the body is one the room takes. A reader that wants the place of
 an entry reads it off the entry. One fact stands in one field.
 
+**One append operation handles every entry kind.** The journal reads recovery
+entries before it evaluates the caller's synchronous decision. That decision
+proposes a body or returns a result without writing. A repeated key returns
+its original entry before the decision runs. Keys cover all accepted kinds;
+reusing a key for another kind fails explicitly.
+
+**The room owns message freshness.** Its projection contains the messages and
+last message position. The room checks consumed context inside the append
+decision. A lease renewal advances the journal sequence without changing
+message freshness. The journal keeps no separate message cache or freshness
+rule.
+
+**The room validates stored bodies before replay.** A malformed body under a
+recognized kind stops the read with a diagnostic. An unknown kind remains
+outside the room vocabulary. These checks preserve the existing envelope and
+storage layout.
+
 **The room reacts to the journal, and to nothing else.** The journal tells the room
 about every entry it takes, and the room has one reaction per entry. An
 entry this run appended and an entry a read found reach the room the same

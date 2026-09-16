@@ -13,21 +13,6 @@ lemma nextSeq_ensures(lastSeq: int)
 {
 }
 
-function refused(lastSeq: int, readThrough: int): bool
-  requires (lastSeq >= 0)
-  requires (readThrough >= 0)
-{
-  (lastSeq > readThrough)
-}
-
-lemma refused_ensures(lastSeq: int, readThrough: int)
-  requires (lastSeq >= 0)
-  requires (readThrough >= 0)
-  ensures (refused(lastSeq, readThrough) <==> (lastSeq > readThrough))
-  ensures (!(refused(lastSeq, readThrough)) ==> (readThrough >= lastSeq))
-{
-}
-
 function voided(fenced: bool, stamped: bool, sameRun: bool): bool
 {
   ((fenced && stamped) && !(sameRun))
@@ -51,5 +36,18 @@ lemma supersedes_ensures(ownEntryLanded: bool, sameRun: bool)
   ensures (supersedes(ownEntryLanded, sameRun) <==> (ownEntryLanded && !(sameRun)))
   ensures (sameRun ==> !(supersedes(ownEntryLanded, sameRun)))
   ensures (!(ownEntryLanded) ==> !(supersedes(ownEntryLanded, sameRun)))
+{
+}
+
+function keyConflict(sameKind: bool, fence: bool, sameRun: bool): bool
+{
+  (!(sameKind) || (fence && !(sameRun)))
+}
+
+lemma keyConflict_ensures(sameKind: bool, fence: bool, sameRun: bool)
+  ensures (keyConflict(sameKind, fence, sameRun) <==> (!(sameKind) || (fence && !(sameRun))))
+  ensures (!(sameKind) ==> keyConflict(sameKind, fence, sameRun))
+  ensures (fence ==> !(sameRun) ==> keyConflict(sameKind, fence, sameRun))
+  ensures (sameKind ==> sameRun ==> !(keyConflict(sameKind, fence, sameRun)))
 {
 }

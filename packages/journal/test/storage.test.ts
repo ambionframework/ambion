@@ -10,7 +10,6 @@ type Kind = 'note' | 'run';
 type Bodies = { note: { text: string }; run: { owner: string } };
 
 const words: Vocabulary<Kind> = {
-	record: 'note',
 	run: 'run',
 	accepts: (kind): kind is Kind => kind === 'note' || kind === 'run',
 };
@@ -22,8 +21,8 @@ async function journal(
 	name: string,
 	run?: string,
 	lost?: () => void,
-): Promise<Journal<Kind, Bodies, 'note'>> {
-	const opened = new Journal<Kind, Bodies, 'note'>(opener.open(name), words, undefined, run, lost);
+): Promise<Journal<Kind, Bodies>> {
+	const opened = new Journal<Kind, Bodies>(opener.open(name), words, undefined, run, lost);
 	await opened.ready;
 	return opened;
 }
@@ -116,13 +115,16 @@ describe.each(backends)('$name Journal contract', ({ open }) => {
 					return landed;
 				},
 			};
-			const writer = new Journal<Kind, Bodies, 'note'>(Promise.resolve(uncertain), words);
+			const writer = new Journal<Kind, Bodies>(Promise.resolve(uncertain), words);
 			await writer.ready;
-			await expect(writer.commit({ key: 'once', draft: note('landed') })).rejects.toThrow(
-				/confirmation lost/,
-			);
+			await expect(
+				writer.append('note', { key: 'once', decide: () => ({ body: note('landed') }) }),
+			).rejects.toThrow(/confirmation lost/);
 			await writer.settled();
-			const retry = await writer.commit({ key: 'once', draft: note('duplicate') });
+			const retry = await writer.append('note', {
+				key: 'once',
+				decide: () => ({ body: note('duplicate') }),
+			});
 			expect(retry).toMatchObject({ entry: { seq: 1, body: { text: 'landed' } } });
 			expect((await storage.read(0)).entries).toHaveLength(1);
 		} finally {
@@ -137,13 +139,19 @@ describe.each(backends)('$name Journal contract', ({ open }) => {
 			const first = await journal(backend.opener, 'fence', 'first', () => {
 				lost += 1;
 			});
-			await first.write('run', { owner: 'first' });
-			await first.commit({ draft: note('before') });
+			await first.append('run', { decide: () => ({ body: { owner: 'first' } }) });
+			await first.append('note', { decide: () => ({ body: note('before') }) });
 			const second = await journal(backend.opener, 'fence', 'second');
-			await second.write('run', { owner: 'second' });
-			await expect(first.commit({ draft: note('after') })).rejects.toThrow(/superseded/);
+			await second.append('run', { decide: () => ({ body: { owner: 'second' } }) });
+			await expect(
+				first.append('note', { decide: () => ({ body: note('after') }) }),
+			).rejects.toThrow(/superseded/);
 			expect(lost).toBe(1);
-			expect(second.record.map((entry) => entry.body.text)).toEqual(['before']);
+			expect(
+				second.entries
+					.filter((entry) => entry.kind === 'note')
+					.map((entry) => (entry.kind === 'note' ? entry.body.text : undefined)),
+			).toEqual(['before']);
 		} finally {
 			backend.dispose();
 		}
@@ -153,11 +161,16 @@ describe.each(backends)('$name Journal contract', ({ open }) => {
 		const backend = open();
 		try {
 			const first = await journal(backend.opener, 'reopen');
-			await first.commit({ key: 'once', draft: note('before') });
+			await first.append('note', { key: 'once', decide: () => ({ body: note('before') }) });
 			const resumed = await journal(backend.opener, 'reopen');
-			const retry = await resumed.commit({ key: 'once', draft: note('duplicate') });
+			const retry = await resumed.append('note', {
+				key: 'once',
+				decide: () => ({ body: note('duplicate') }),
+			});
 			expect(retry).toMatchObject({ entry: { seq: 1, body: { text: 'before' } } });
-			expect(resumed.record.map((entry) => entry.body.text)).toEqual(['before']);
+			expect(
+				resumed.entries.map((entry) => (entry.kind === 'note' ? entry.body.text : undefined)),
+			).toEqual(['before']);
 		} finally {
 			backend.dispose();
 		}

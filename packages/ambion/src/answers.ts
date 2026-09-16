@@ -1,8 +1,6 @@
 /** The seat protocol translates room decisions into view, commit, and lease responses. */
 
-import type { Committed } from '@ambionframework/journal';
 import type { Runtime } from './host/runtime.ts';
-import { type Body, placed, type RoomJournal } from './journal/journal.ts';
 import { activationSpec } from './room/activation.ts';
 import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
@@ -35,7 +33,6 @@ const stale = (why: string): Stale => ({ stale: why });
 export interface Answering {
 	// -- the room as a value --
 	readonly name: string;
-	readonly journal: RoomJournal;
 	readonly runtime: Runtime;
 	// -- what the room does --
 	/** The room answers nothing more: the host stopped it, or it was dropped. */
@@ -50,7 +47,7 @@ export interface Answering {
 	definition(seat: string): AgentDefinition | undefined;
 	emit(event: RoomNotification): void;
 	/** One operation on the room's commit queue, with the wakes the room routes. */
-	write(commit: CommitRequest): Promise<Committed<Body<Message>, Body<Message>>>;
+	write(commit: CommitRequest): Promise<Message>;
 	claim(id: string): Promise<LeaseResponse>;
 	renew(id: string, readThrough?: number): Promise<LeaseResponse>;
 	/** End one lease, for whatever reason. Nothing to end is not an error. */
@@ -84,7 +81,7 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 		now: now(room),
 		state,
 		live: room.live(state),
-		unseen: (since) => room.journal.messages(since).length,
+		unseen: (since) => state.messages.filter((message) => message.seq > since).length,
 	};
 }
 
@@ -112,7 +109,7 @@ export async function answerCommit(room: Answering, commit: CommitRequest): Prom
 	const seat = liveSeatOf(room, commit.activation, room.state());
 	if (seat === undefined) return stale('the lease ended');
 	try {
-		return landed(room, seat, await room.write(commit));
+		return { committed: await room.write(commit) };
 	} catch (error) {
 		if (error instanceof RefusedError) return refused(room, seat, error.refusal);
 		throw error;
@@ -125,20 +122,6 @@ function refused(room: Answering, seat: string, refusal: Refusal): CommitResult 
 		return { missed: refusal.missed };
 	}
 	return refusal.category === 'stale' ? stale(refusal.reason) : { refused: refusal.reason };
-}
-
-/** What the queue did with the commit, as the seat reads it. */
-function landed(
-	room: Answering,
-	seat: string,
-	committed: Committed<Body<Message>, Body<Message>>,
-): CommitResult {
-	if ('missed' in committed) {
-		const missed = committed.missed.map(placed);
-		room.emit({ type: 'conflict', author: seat, missed });
-		return { missed };
-	}
-	return { committed: placed(committed.entry) };
 }
 
 // -- lease --------------------------------------------------------------------
@@ -180,5 +163,5 @@ async function release(
 	}
 	if (!ended) return stale('the lease ended');
 	void room.reconcile();
-	return { ok: { expiresAt: now(room), lastSeq: room.journal.lastCommitted } };
+	return { ok: { expiresAt: now(room), lastSeq: room.state().lastSeq } };
 }

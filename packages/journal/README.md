@@ -1,8 +1,8 @@
 # @ambionframework/journal
 
-`@ambionframework/journal` serializes an append-only record. It owns the
-queue, journal envelope, fencing, idempotency, and conditional commits. A
-caller owns entry kinds and body validation.
+`@ambionframework/journal` serializes an append-only journal. It owns the
+queue, envelope, fencing, idempotency, and conditional appends. A caller
+owns entry kinds and body validation.
 
 The main package has no Pi dependency. It stores JSON data through a narrow
 storage contract:
@@ -39,7 +39,6 @@ objects are not journal payloads.
 import { Journal, memoryJournals, type Vocabulary } from '@ambionframework/journal';
 
 const words: Vocabulary<'note' | 'run'> = {
-  record: 'note',
   run: 'run',
   accepts: (kind, body): kind is 'note' | 'run' =>
     (kind === 'note' || kind === 'run') && typeof body === 'object' && body !== null,
@@ -47,8 +46,25 @@ const words: Vocabulary<'note' | 'run'> = {
 
 const journals = memoryJournals();
 const journal = new Journal(journals.open('weekly'), words);
-await journal.commit({ key: 'first', draft: { text: 'Hello.' } });
+await journal.append('note', {
+  key: 'first',
+  decide: () => ({ body: { text: 'Hello.' } }),
+});
 ```
+
+**One decision runs inside the queue, after recovery.** Return `{ body }` to
+append, or `{ result }` to return a value without writing. The journal returns
+`{ entry }` after storage confirms an append. Decisions must be synchronous.
+
+**A key identifies one durable entry across all kinds.** A retry returns that
+entry before the decision runs. Reusing its key for another kind fails. A
+fence key also belongs to its original writer. A new writer must append its
+own fence under the vocabulary's `run` kind.
+
+**Migration:** `append` replaces `commit` and `write`. Remove the vocabulary's
+`record` field and the third `Journal` type parameter. The caller derives
+message views and freshness from entries. `record`, `since`, `lastCommitted`,
+and generic `readThrough` are removed. The stored envelope is unchanged.
 
 `sqliteJournals(sql)` provides SQLite storage with native compare-and-append.
 `memoryJournals()` provides independent in-memory journals for one process.

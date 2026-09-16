@@ -289,34 +289,28 @@ The next structural work item is the generic journal boundary in section 4.
 **Keep ordered storage, fencing, and idempotency in the journal package.**
 Move every distinction about collaboration into Ambion.
 
-The current [`Journal`](../packages/journal/src/journal.ts) has a designated
-`record` kind. It exposes `commit` for that kind and `write` for other kinds.
-It also tracks `lastCommitted` and implements message freshness through
-`readThrough`.
-
-Ambion already checks freshness in its transition function. Its message commit
-path does not pass `readThrough` into the generic journal. Two mechanisms
-describe a rule that needs one owner.
-
-**Use one conditional append operation for every domain entry.** The caller
-supplies an optional key and a synchronous decision evaluated after recovery.
-The decision can propose an entry or return a result without writing.
+**The implementation uses one conditional append operation.**
+[`Journal.append`](../packages/journal/src/journal.ts) accepts a kind, an
+optional key, and a synchronous decision evaluated after recovery. The
+decision proposes a body or returns a result without writing.
 
 The journal owns sequence allocation, serialized writes, conditional storage
 append, duplicate-key lookup, recovery, and writer fencing. It does not know
-which entries an agent must have read.
+which entries an agent must have read. The writer fence remains explicit.
 
-Remove the `record` designation, `TRecord`, `record` cache, generic
-`readThrough` check, and separate domain `write` path. Keep the writer fence
-explicit; its distinction is required by storage ownership.
+The refactor removes `record`, `TRecord`, the message cache, `lastCommitted`,
+generic `readThrough`, and the separate `commit` and `write` operations.
+Idempotency keys cover every accepted kind. Reusing a key across kinds fails
+before the decision runs.
 
-**Replace `RoomJournal` inheritance with composition.** The room's projection
-owns its message view and last message position. The journal owns entries.
-The current third collection of joined messages then has no separate owner.
+**The room composes the journal with its vocabulary.** The `roomJournal`
+factory replaces inheritance. The room projection owns messages and the last
+message position. The separate joined-message cache is removed. Seat answers
+read this projection directly; their interface no longer exposes a journal.
 
-Keep envelope metadata in one representation internally. A public message can
-still expose `seq` directly. Build that immutable view at a defined boundary.
-Do not force users to learn the storage envelope.
+Keep envelope metadata in one representation internally. A public message
+continues to expose `seq` directly. Protection of returned nested values
+remains outstanding in section 7.
 
 ### Storage layout
 
@@ -347,9 +341,30 @@ existing entries at the reader boundary. For any unavoidable schema change,
 provide an explicit version and migration policy. Do not silently reinterpret
 old histories under a new meaning.
 
-Validate stored bodies at that boundary. Current room vocabulary validation
-checks the kind while ignoring the body. Recognized malformed entries must
-produce a clear diagnostic; they must not enter the fold through a type cast.
+**The room validates stored bodies at this boundary.** Recognized malformed
+entries produce a diagnostic before they enter the fold. Unknown kinds stay
+outside the vocabulary. Failed validation must not advance the read cursor
+past the malformed entry.
+
+**Review status.** The journal change is prepared for review and merge.
+The next structural item is the activation representation in section 5.
+
+**Implementation evidence:**
+
+- `pnpm check` passes: 629 package tests and two report tests, with builds,
+  type checks, lint, formatting, and dependency checks.
+- `pnpm chaos` passes all 710 expanded recovery cases on memory and SQLite.
+- Journal tests cover conditional decisions, permanent keys, writer fences,
+  uncertain appends, callback failures, and storage positions distinct from sequences.
+- Room tests verify that recovery updates the projection before decisions,
+  and lease entries do not advance message freshness.
+- Twenty validation cases cover stored variants, malformed nested fields,
+  timestamps, unknown kinds, and replay. Prototype names remain unknown kinds.
+- The obsolete generic freshness proof is removed. The key ownership rule
+  has generated Dafny contracts. CI verifies the formal contracts.
+
+The adversarial review also covers keys reused across entry kinds or writers,
+async decisions from JavaScript callers, and invalid-history cursor handling.
 
 ## 5. Make execution a narrow boundary
 
@@ -406,9 +421,9 @@ room calls, model services, transcripts, definitions, notifications, and
 eviction to transports. Replace that broad interface with the existing three
 room calls and separately supplied executor dependencies.
 
-Keep the five operations: `view`, `commit`, `lease`, `wake`, and `cut`.
-Make starting and steering explicit variants of the `wake` payload. Avoid
-optional fields whose meaning changes according to an actor's local state.
+Keep the six operations: `view`, `commit`, `lease`, `wake`, `steer`, and `cut`.
+Starting and steering already use separate operations. Preserve their exact
+activation identity while narrowing the protocol dependencies.
 
 **Do not add a general executor plugin framework.** Establish a narrow internal
 contract and test it with the in-process and Cloudflare hosts. Pi remains the

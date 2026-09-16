@@ -13,15 +13,6 @@ export function nextSeq(lastSeq: number): number {
 	return lastSeq + 1;
 }
 
-//@ contract A commit that read through a seq is refused once the record moved past it.
-export function refused(lastSeq: number, readThrough: number): boolean {
-	//@ requires lastSeq >= 0
-	//@ requires readThrough >= 0
-	//@ ensures \result <==> lastSeq > readThrough
-	//@ ensures !\result ==> readThrough >= lastSeq
-	return lastSeq > readThrough;
-}
-
 //@ contract An entry is void when a fence stands, the entry names its writer, and the writer is another run.
 export function voided(fenced: boolean, stamped: boolean, sameRun: boolean): boolean {
 	//@ ensures \result ==> fenced
@@ -38,4 +29,13 @@ export function supersedes(ownEntryLanded: boolean, sameRun: boolean): boolean {
 	//@ ensures sameRun ==> !\result
 	//@ ensures !ownEntryLanded ==> !\result
 	return ownEntryLanded && !sameRun;
+}
+
+//@ contract A key belongs to one entry kind. A fence key also belongs to one writer.
+export function keyConflict(sameKind: boolean, fence: boolean, sameRun: boolean): boolean {
+	//@ ensures \result <==> !sameKind || (fence && !sameRun)
+	//@ ensures !sameKind ==> \result
+	//@ ensures fence && !sameRun ==> \result
+	//@ ensures sameKind && sameRun ==> !\result
+	return !sameKind || (fence && !sameRun);
 }
