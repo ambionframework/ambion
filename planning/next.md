@@ -1,10 +1,11 @@
 # Next: simplify Ambion for 0.1.0
 
-Reviewed against main `0c98c73`, 2026-09-16, using the
-[Relay demo](../examples/persistent/README.md) as the representative application.
-Three independent Astra/High reviews covered kernel correctness, application
-APIs, and package/executor boundaries. This is a plan, not an implementation or
-release certification. [release-0.1.0.md](release-0.1.0.md) remains the scope.
+Reviewed against main `7a60a03`, 2026-09-16, after
+[PR #139](https://github.com/ambionframework/ambion/pull/139) merged.
+The [Relay demo](../examples/persistent/README.md) is the reference consumer.
+Two follow-up Astra/High reviews and isolated SQLite/browser reproductions
+revisited the earlier subsystem review. Findings below distinguish reproduced
+failures from proposed contracts. [release-0.1.0.md](release-0.1.0.md) owns scope.
 
 ## Direction
 
@@ -25,111 +26,112 @@ alone is not success. Do not collapse distinctions that carry different authorit
 or lifetime: discussion versus summary, definition versus membership, connection
 versus presence, and journal commits versus external effects.
 
+## State ownership and assumptions
+
+**The journal remains the source of active collaboration.** Pure queries derive
+presence, membership, discussion boundaries, and execution obligations from it.
+A scheduler or another durable status store would duplicate that authority.
+
+| State                                                | Owner               | Recovery                                                             |
+| ---------------------------------------------------- | ------------------- | -------------------------------------------------------------------- |
+| Selected human/room, drafts, pending HTTP deliveries | Browser application | Restore saved intent; retry delivery keys; refresh views             |
+| Room discovery and desired running/stopped state     | Relay catalog       | Reopen selected rooms; retain provisional creation parameters        |
+| Presence, membership, speech, closes, leases         | Room journal        | Replay recorded facts; resume pending obligations                    |
+| Handles, admission queues, timers, subscriptions     | Host process        | Reconstruct services; retain failed cleanup ownership until resolved |
+| Model transcripts                                    | Pi journal          | Restore execution audit independently of collaboration               |
+| Shared domain files                                  | Workspace resource  | Reopen the directory; serialize individual operations                |
+
+**Commands and reads have different effects.** Entry ensures presence through
+idempotent `visit`; sending contributes through that visit. Departure ends shared
+presence. Polling should observe those facts. A selected room is browser intent;
+it does not prove that the human remains present.
+
+**A summary is an optional result of a closed discussion.** Its absence cannot
+identify an open discussion. Both states must be readable from journal facts.
+
+**Successful control requires completed durable work.** An empty host handle
+slot does not prove that stop recorded departure and revoked execution authority.
+Creation likewise spans a catalog write and a journal append. Recovery must
+inspect their separate outcomes.
+
+**Shared files remain application state.** All Relay rooms use one workspace
+owner. Its queue orders individual operations. Multiple tool calls and journal
+entries do not form one transaction, and rooms retain separate conversation context.
+
 ## Priorities
 
-| Order | Work                                                     | What becomes simpler                                                                      | Size                     |
-| ----- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------ |
-| 1     | Make presence and control acknowledge durable completion | Callers can trust join, leave, stop, and cancellation without protective room-wide queues | Small–medium             |
-| 2     | Provide one coherent room and exchange read model        | Relay and Cloudflare stop reconstructing completion and copying history for status        | Medium                   |
-| 3     | Finish host/executor ownership and participant naming    | The room no longer constructs Pi execution; participant views contain collaboration facts | Medium                   |
-| 4     | Reduce repeated projection work where measured           | One replayable interpretation supports cheap ordinary reads and updates                   | Bounded by measurements  |
-| 5     | Close release evidence and consumer gaps                 | Supported configurations are proven from shipped packages                                 | Small independent slices |
+| Order | Work                                                              | What becomes simpler                                                                      | Size                  |
+| ----- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------- |
+| 1     | Repair Relay stop retries and separate polling from entry         | Commands retain cleanup ownership; observation cannot undo departure                      | Small slices          |
+| 2     | Provide coherent room/exchange reads and recover partial creation | Clients use recorded completion; catalog initialization stops competing with the journal  | Medium, staged        |
+| 3     | Finish cancellation and contribution validation                   | Direct callers can trust control completion and contribution rules                        | Bounded slices        |
+| 4     | Finish host/executor ownership and participant naming             | The room no longer constructs Pi execution; participant views contain collaboration facts | Medium                |
+| 5     | Reduce repeated projection work where measured                    | Ordinary reads and updates reuse one replayable interpretation                            | Measurement dependent |
+| 6     | Close release evidence and consumer gaps                          | Supported configurations are proven from shipped packages                                 | Independent slices    |
 
-**Start with item 1.** The review reproduced correctness failures there. Item 2
-is the largest product-facing simplification and should follow immediately.
-Do not turn this into another general architecture rewrite before release.
-Keep item 1 reviewable: lifecycle and submission fixes have landed. Finish
-idempotent visit recovery, cancellation, and text validation in bounded slices.
+**Current stack starts with failed-stop recovery in Relay.** The implementation
+retains cleanup ownership and supports retry after restart. Review remains open.
+Follow with explicit browser entry policy.
+Then prioritize item 2 as the largest architectural simplification. Cancellation
+needs a precise contract, but it does not block exposing existing journal facts.
 
-## 1. Make durable acceptance the public operation boundary
+## 1. Keep commands and observation coherent in Relay
 
-### Status and remaining problem
+### Findings
 
-[PR #137](https://github.com/ambionframework/ambion/pull/137) landed durable
-join/leave/stop acknowledgement and sender-presence validation. Concurrent
-callers share completion; retries resolve uncertain writes; ended handles cannot
-affect reentry. Memory and SQLite fault tests cover lost acknowledgements,
-failed recovery reads, and newer-run fencing. All seven CI checks passed,
-including Node 22/24 and live-model tests.
+**Failed stop loses its retry owner.** `stopEntry` clears `entry.room` in
+`finally`, including when a departure append fails. The kernel permits retrying
+that handle. Relay discards it and the next stop reports success without retrying.
 
-[PR #138](https://github.com/ambionframework/ambion/pull/138) landed submission
-and effect publication. One typed adapter maps room decisions to journal entries
-or results. Protocol refusals remain values through the response boundary.
-Confirmed entries capture ordered host effects; a throwing connector cannot change their accepted result.
-The regression tests cover storage recovery, reentrant listeners, and eviction
-during publication. All seven CI checks passed. This adds no durable
-publication queue or public concept.
+An isolated SQLite reproduction injected one failure before departure committed.
+The first stop rejected. The second returned `stopped`, with the human still
+present and zero departure entries. No model calls occurred.
 
-**Current slice, prepared for review: idempotent visit recovery.** `visit(human)`
-ensures presence, `send` contributes through that visit, and `leave` ends it.
-Repeated visits share presence without another arrival. Cached handles must
-pass journal recovery and fencing before the operation succeeds. Relay owns
-serialized navigation checks that reject delayed requests after departure.
-
-Awaitable cancellation and semantic text validation remain. Cancellation needs
-an explicit boundary for concurrent sends and newly owed work; awaiting the
-current bounded revocation loop alone is insufficient. Relay retains host
-coordination for lifecycle admission and catalog changes.
+**Polling can undo a shared departure.** The browser's `refreshSelectedPresence`
+calls join whenever its selected room reports the human absent. A browser-script
+reproduction with an already restored selection issued `PUT .../humans/alice`
+during polling. A departure in another tab can therefore cause automatic reentry.
+The kernel's shared-presence contract is correct; Relay must choose entry policy.
 
 ### Change
 
-- [x] Make concurrent join, departure, and stop calls share their in-flight
-      operation where appropriate. Do not return usable visit handles or report
-      terminal success before their durable operation is confirmed. Resolve
-      uncertain writes through the existing journal recovery contract. Close
-      admission immediately when needed, but let concurrent callers observe the
-      same completion/failure and let a retry finish outstanding durable work.
-- [x] Validate the human sender's recorded presence in the delivery decision,
-      inside the serial commit boundary. A handle's local `gone` flag is not
-      sufficient authority. Preserve exact-key retries of already committed
-      deliveries through a valid visit without creating another message.
-- [ ] Put semantic contribution validation in those decisions for both human
-      and agent speech. Currently Relay and the `say` tool reject blank text,
-      but direct API/protocol calls can bypass that rule. HTTP shape/size limits
-      and client-generated delivery keys remain application policy.
-- [ ] Make `abort()` awaitable. Its completion means the defined cancellation
-      boundary has been durably applied, not that an uncooperative external tool
-      has stopped or undone its effects. Specify ordering against concurrent
-      sends and newly owed work; do not invent exchange-local cancellation.
-- [x] Keep one idempotent `visit(human)` operation. Confirm recorded presence
-      and identity inside the journal boundary, including cached visits. Preserve
-      shared concurrent arrivals, explicit reentry after departure, and ended
-      handle invalidation. Add no presence lookup mode or optional visit result.
-- [x] Consolidate the bespoke message/lease/close append adapters into one
-      internal submission path using the journal's existing entry/result return.
-      Keep expected refusals as data until the public API or protocol boundary;
-      remove the decision → `RefusedError` → protocol-result round trip.
-      Storage failures remain errors. Do not build a generic command bus.
-- [x] Apply confirmed entries before the next decision, then drain ordered
-      notification and transport effects outside the write decision. A throwing
-      connector cannot turn a persisted message into an apparent commit failure.
-      Keep recovered writes on the same publication path, without adding another
-      durable queue.
+- [x] Retain ownership of a failed stop until its durable cleanup succeeds.
+      Prevent ordinary admission through a stopped or failed handle. Repeated
+      stop requests must retry cleanup and report its actual result.
+- [x] Define resume and shutdown behavior while cleanup remains unresolved.
+      Separate desired hosting state from running state and failed cleanup.
+      Do not let handle existence alone determine either admission or success.
+      Save stopped hosting intent after cleanup. An unacknowledged stop can
+      resume after restart and remains retryable.
+- [ ] Keep polling read-only. Enter on room selection or deliberate restoration
+      after reload. If a later snapshot reports absence, require deliberate
+      reentry before sending again. Show that state in the composer.
+- [ ] Pause queued delivery after a presence rejection. Retain its original key
+      and text; retry after explicit entry. A rejected late send must not cause
+      polling to recreate presence and flush the message automatically.
 
-Relay owns request admission and navigation policy. Keep its serialized
-presence checks when a delayed send must not re-enter a departed room. An
-absent departure does nothing. After explicit entry, an exact-key delivery retry
-returns the original exchange. A delivery key is not an identity credential.
-Retain host serialization for catalog changes, start/stop, and shutdown.
-Never hold that queue while waiting for a model.
+Keep one idempotent `visit(human)` operation. It ensures presence; `send`
+contributes through that visit; `leave` ends it. Add no lookup mode or per-tab
+presence token. Relay owns serialized checks for navigation, catalog changes,
+and lifecycle admission. Never hold that queue while waiting for a model.
 
-**Verification:** preserve the memory/SQLite regressions in
-[`lifecycle.test.ts`](../packages/ambion/test/lifecycle.test.ts) and
-[`lifecycle-recovery.test.ts`](../packages/ambion/test/lifecycle-recovery.test.ts).
-Add abort/send and failed-revocation cases for awaitable cancellation. Retain
-reconnect, inherited leases, late steering, notification ordering, and tool
-cancellation evidence.
-Also cover semantic rejection through direct/protocol/tool calls, throwing
-transport connection, and reentrant listeners without commit-queue deadlocks.
-At the Relay boundary, cover committed-send → departure → delivery retry:
-reject while absent, then return the original result after explicit reentry.
-Previously ended visit handles remain invalid even when the same human enters again.
+**Verification:** inject stop failures before append and after commit; retry
+through HTTP; test concurrent stop, resume, and shutdown. Preserve newer-run
+fencing. Exercise two tabs sharing one human, deliberate reload restoration,
+late sends, and polling after departure. Assert absence and original delivery
+keys, not only HTTP status or local flags.
+After committed send → departure, the same-key retry must reject while absent.
+After explicit reentry, it returns the original exchange without another message.
+The ended visit handle remains invalid.
 
-**Done when:** no successful presence/control response depends on a host-local
-flag that disagrees with the confirmed journal. Failed commands cannot leave
-orphan human speech. Ordinary API callers need no extra queue to get that safety.
+**Done when:** a successful stop confirms durable cleanup, and background reads
+cannot recreate presence. Both behaviors use the existing kernel contracts.
 
 ## 2. Make room and exchange state directly readable
+
+**Deliver in stages:** expose recorded initialization and metadata, then repair
+partial creation. Add exchange views and selective reads next. Migrate Relay and
+Cloudflare onto those queries. Keep each stage independently reviewable.
 
 ### Findings
 
@@ -164,7 +166,9 @@ Consequently:
 - [ ] Extend the existing room-read surface with coherent metadata, participant
       and exchange views, and optional messages after an exclusive cursor. Return
       a journal watermark for the committed facts observed, including non-message
-      changes. Do not introduce a second counter or a generic patch/feed protocol.
+      changes. Use `Journal.lastSeq`, the accepted journal sequence. Preserve
+      `RoomState.lastSeq`, the message cursor used for close boundaries. Do not
+      introduce a second counter or a generic patch/feed protocol.
 - [ ] Specify cursor scope, full initial read, overlap handling, invalid/future
       cursor behavior, and old exchanges whose summary changes after a newer
       exchange opens. A first implementation may return complete selected
@@ -177,11 +181,13 @@ Consequently:
       stopped rooms; host-local tool activity remains diagnostic data.
 - [ ] Distinguish a missing room from an initialized empty room, and expose
       recorded public metadata such as the goal. Reads must not compose a room,
-      start execution, or create audit sessions. Use existing storage operations
+      start execution, or create audit sessions. Preserve an open exchange in
+      stopped storage until a recorded close exists. Use existing storage operations
       unless an actual adapter limitation requires more.
 - [ ] Replace Relay's summary-based grouping and Cloudflare's completion inference
       with that view. Keep collapse controls, a direct single reply, human prompts,
-      and final-answer presentation in the UI. Closure does not certify quality.
+      and final-answer presentation in the UI. Invalidate rendering on metadata
+      changes as well as messages. Closure does not certify quality.
 
 **Verification:** no summary configured, writer declines, writer removed,
 exhausted/failed summary, silence, one reply, multiple humans, a late summary
@@ -198,9 +204,14 @@ copy every conversation. The journal remains the only durable authority.
 
 ### Simplify Relay's catalog after the read contract exists
 
-Relay correctly owns room discovery and desired running/stopped state. Its
-`goal` and `started` fields also duplicate journal facts. A crash after composition
-commits but before `started` is saved deserves an explicit recovery case.
+Relay correctly owns discovery and desired running/stopped state. Its `started`
+flag competes with journal initialization. An isolated SQLite reproduction failed
+the catalog save after composition succeeded. Creation rejected, but the room
+remained usable. After unseating `builder`, restarting restored its initial seat
+because the catalog selected `startRoom`. No model calls occurred.
+
+The recorded goal belongs to the journal after initialization. Relay still needs
+provisional creation parameters before that commit.
 
 - [ ] Use the recorded metadata/existence result to recover partially completed
       creation and choose start versus resume. Delete duplicate catalog facts
@@ -210,12 +221,35 @@ commits but before `started` is saved deserves an explicit recovery case.
 - [ ] Keep hosting intent, credentials, identity selection, HTTP authorization,
       file previews, and shutdown resource ownership in the application.
 
+**Verification:** fail before composition and after composition but before the
+catalog save. Restart and verify initialization recovery, the recorded goal,
+and retained membership changes. Recovery reads must not execute agents.
+Resuming must not apply initial seats over recorded membership.
+
 No kernel catalog, room supervisor, HTTP framework, or browser SDK is needed.
 Outbox persistence, stale HTTP-response suppression, and navigation intent are
 real client concerns and remain in Relay. Shared files do not imply shared
 conversation context or cross-room atomicity.
 
-## 3. Finish ownership boundaries and names
+## 3. Complete control and contribution contracts
+
+- [ ] Make `abort()` awaitable with a defined boundary for concurrent sends and
+      newly owed work. The current bounded revocation loop does not establish
+      that boundary merely by returning its promise.
+- [ ] Specify whether cancellation includes closing work caused by the cancelled
+      discussion. Order admission, revocation, and closure through the journal.
+      Completion confirms durable authority changes. External tool termination
+      and reversal of file or remote effects remain separate concerns.
+- [ ] Reject blank human and agent contributions inside collaboration decisions.
+      Relay and `say` already reject them, but direct API/protocol calls can
+      bypass that rule. Keep HTTP shape/size limits in the application.
+
+**Verification:** concurrent sends, newly owed summary work, failed and uncertain
+revocation, retry, newer-run fencing, and uncooperative tools. Exercise semantic
+validation through direct, protocol, and tool paths. Preserve the lifecycle and
+submission regression suites from PRs #137–#139.
+
+## 4. Finish ownership boundaries and names
 
 ### Compose execution outside the room
 
@@ -283,7 +317,7 @@ A future independently distributed Pi executor or workspace adapter needs an
 actual consumer and a dependency/installation benefit. File separation alone
 does not justify another package. No new public package is required by this plan.
 
-## 4. Remove repeated work without adding a second state model
+## 5. Remove repeated work without adding a second state model
 
 [`evolve`](../packages/ambion/src/room/transition.ts) copies base collections and
 calls `project`; [`project`](../packages/ambion/src/room/fold.ts) refolds people,
@@ -312,7 +346,7 @@ than cosmetic schema normalization.
 remove measured repeated work and retain a replay oracle. Unbounded history and
 context remain explicit 0.1.0 limits; this is not a retention-system project.
 
-## 5. Release gates still required
+## 6. Release gates still required
 
 ### Package and platform readiness
 
@@ -389,6 +423,13 @@ status. The final API audit and release sign-off remain.
 
 ## Already delivered: preserve, do not schedule again
 
+- PRs [#137](https://github.com/ambionframework/ambion/pull/137),
+  [#138](https://github.com/ambionframework/ambion/pull/138), and
+  [#139](https://github.com/ambionframework/ambion/pull/139) landed durable
+  presence/stop acknowledgement, typed submission with ordered publication,
+  and journal-validated idempotent visits. Each passed all seven CI checks.
+  Preserve storage recovery, concurrent operation, sender-presence, reentrant
+  listener, connector failure, and run-fencing coverage.
 - Fixed definitions and name-based membership; typed normalized tools; separate
   activation and steering; structured executor context; conditional journal
   appends; detached public values; separate protocol and stored event shapes.
