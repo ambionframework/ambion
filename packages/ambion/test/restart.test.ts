@@ -567,8 +567,8 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				storage: opened.storage,
 				clock,
 				transport: {
-					connect: (room, seat, host) => {
-						const port = inProcess.connect(room, seat, host);
+					connect: (room, context) => {
+						const port = inProcess.connect(room, context);
 						return {
 							wake: (wake) => port.wake(wake),
 							steer: (steer) => port.steer(steer),

@@ -44,8 +44,8 @@ function observedTransport(): { transport: Transport; steers: Steer[] } {
 	return {
 		steers,
 		transport: {
-			connect(room, seat, runtime) {
-				const port = transport.connect(room, seat, runtime);
+			connect(room, context) {
+				const port = transport.connect(room, context);
 				return {
 					cut: (activation) => port.cut(activation),
 					steer: (steer) => {

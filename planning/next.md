@@ -551,15 +551,33 @@ Model resolution, private agent instructions, Pi messages, tool adaptation, and
 transcript writing belong with the executor. The room does not need a model
 catalog or a provider stream to decide whether a contribution can commit.
 
-**After participation: narrow the executor dependencies.** The current
-[`RunningRoom`](../packages/ambion/src/host/runtime.ts) exposes
-room calls, model services, transcripts, definitions, notifications, and
-eviction to transports. Replace that broad interface with the existing three
-room calls and separately supplied executor dependencies.
+**Current slice: narrow the executor dependencies.**
+`Transport.connect(room, context)` receives a plain `SeatRoom` facade and the
+existing `SeatContext`. The facade exposes only `view`, `commit`, and `lease`.
+The context supplies one captured definition and its local execution services.
+The returned port retains `wake`, `steer`, and `cut` with exact activation ids.
 
-Keep the six operations: `view`, `commit`, `lease`, `wake`, `steer`, and `cut`.
-Starting and steering already use separate operations. Preserve their exact
-activation identity while narrowing the protocol dependencies.
+The runtime registry keeps lifecycle control separately. Its public lookup
+returns only room calls. The protocol answer layer receives `now()` and no
+longer requires the provider-bearing runtime. In-process and Cloudflare
+transports use the same call surface; remote execution supplies dependencies
+locally.
+
+**Scope:** retain the public room API, journal format, activation behavior,
+provider loading, audit isolation, and context acknowledgement. The transport
+adapter signature changes. Pi transcript extraction and splitting protocol
+values from stored facts remain separate work.
+
+**Validation:** `pnpm format` and `pnpm check` pass, including 586 core tests,
+18 workerd tests, 37 workspace tests, and six CLI tests. Expanded recovery
+passes all 728 tests. The packed CLI consumer smoke passes with a Wrangler
+build. Independent tests cover the actual facade, room-local overrides, JSON
+calls, notifications, and stale connections after eviction and resume.
+
+Review preserved live snapshot ordering with pending journal writes; a new
+regression covers memory and SQLite. Luna/High implemented the slice and a
+second Luna/High review found no remaining production blockers. The change
+is prepared for review and is not merged.
 
 **Do not add a general executor plugin framework.** Establish a narrow internal
 contract and test it with the in-process and Cloudflare hosts. Pi remains the
@@ -780,7 +798,8 @@ PR #128 contains the implementation and integration with the CLI template.
 
 ### Stage 2: isolate execution and extract transcript storage
 
-- Narrow transport dependencies and separate protocol types from stored facts.
+- Complete the current executor boundary slice and retain its validation.
+- Separate protocol types from stored facts.
 - Extract `pi-journal` while preserving audit failure isolation.
 - Keep workspace resources separate from executor tool binding.
 

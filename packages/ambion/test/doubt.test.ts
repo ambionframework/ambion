@@ -83,16 +83,9 @@ describe('a room in doubt', () => {
 			confirmed = resolve;
 		});
 		const transport: Transport = {
-			connect(room, seat, runtime) {
+			connect(room, context) {
 				const port = base.connect(
 					{
-						name: room.name,
-						stream: room.stream,
-						model: room.model,
-						transcripts: room.transcripts,
-						definition: (seat) => room.definition(seat),
-						emit: (event) => room.emit(event),
-						evict: () => room.evict(),
 						view: (id) => room.view(id),
 						lease: (lease) => room.lease(lease),
 						commit: async (commit) => {
@@ -105,8 +98,7 @@ describe('a room in doubt', () => {
 							return retry;
 						},
 					},
-					seat,
-					runtime,
+					context,
 				);
 				return port;
 			},

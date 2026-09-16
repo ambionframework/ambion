@@ -34,8 +34,8 @@ function observed(deliver = true): { transport: Transport; sent: Wake[] } {
 	return {
 		sent,
 		transport: {
-			connect(room, seat, runtime) {
-				const port = base.connect(room, seat, runtime);
+			connect(room, context) {
+				const port = base.connect(room, context);
 				return {
 					cut: (activation) => port.cut(activation),
 					steer: (steer) => port.steer(steer),

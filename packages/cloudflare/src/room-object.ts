@@ -23,7 +23,8 @@ import type {
 	CommitResult,
 	LeaseRequest,
 	LeaseResponse,
-	RunningRoom,
+	SeatContext,
+	SeatRoom,
 	Transport,
 	ViewResponse,
 } from '@ambionframework/ambion/transport';
@@ -79,9 +80,10 @@ function alarmClock(state: DurableObjectState): Clock {
 /** The room reaches a seat over RPC to the seat object named for it. */
 function rpcTransport(env: Env): Transport {
 	return {
-		connect(room, seat) {
+		connect(_room, context: SeatContext) {
+			const { room: roomName, seat } = context;
 			const stub = env.SEAT.get(
-				env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', room.name, seat])),
+				env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', roomName, seat])),
 			);
 			return {
 				wake: (wake) => stub.wake(wake),
@@ -283,7 +285,7 @@ export class RoomObject extends DurableObject<Env> {
 		return this.room;
 	}
 
-	private seatRoom(): RunningRoom {
+	private seatRoom(): SeatRoom {
 		const room = runningRoom(this.runtime, this.running().name);
 		if (room === undefined) throw new Error('The room is not running.');
 		return room;

@@ -19,38 +19,16 @@
  */
 
 import type { SessionOpener } from '@ambionframework/journal/pi';
-import type {
-	Agent as PiAgent,
-	Session as PiSession,
-	StreamFn,
-} from '@earendil-works/pi-agent-core';
+import type { Agent as PiAgent, Session as PiSession } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
-import type { RunningRoom, Runtime, Transport } from '../host/runtime.ts';
-import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
-import { seatSessionId } from '../types.ts';
+import type { SeatContext, Transport } from '../host/runtime.ts';
+import { type RoomNotification, seatSessionId } from '../types.ts';
 import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../wire.ts';
 import { Activation, persistTurns } from './activation.ts';
 import { renderActivation, renderLine } from './render.ts';
 import { binding, toolsFor } from './tools.ts';
 
 // -- the actor ----------------------------------------------------------------
-
-/** What a seat actor needs beside the room: its definition, the clock, and the model call. */
-export interface SeatContext {
-	readonly clock: Clock;
-	/** How many times the seat sends one call to the room before it gives up. */
-	readonly call: Runtime['call'];
-	/** This seat's room-local definition. */
-	readonly definition: AgentDefinition;
-	readonly room: string;
-	readonly seat: string;
-	/** Where the seat's collision-safe audit session opens beside the room's. */
-	readonly transcripts: SessionOpener;
-	readonly stream: StreamFn;
-	readonly model: ModelResolver;
-	/** Where in-process events go. Absent across a process boundary. */
-	readonly emit?: (event: RoomNotification) => void;
-}
 
 /** One activation the actor holds while it runs. */
 interface Current {
@@ -335,24 +313,11 @@ export class SeatActor implements SeatPort {
 
 // -- the transport ------------------------------------------------------------
 
-/** Every seat is an actor in this process, holding the room directly. */
+/** Run each seat locally through the room-call facade and its executor context. */
 export function inProcessTransport(): Transport {
 	return {
-		connect(room: RunningRoom, seat, runtime) {
-			const definition = room.definition(seat);
-			if (definition === undefined)
-				throw new Error(`Room '${room.name}' has no binding for '${seat}'.`);
-			return new SeatActor(room, {
-				clock: runtime.clock,
-				call: runtime.call,
-				definition,
-				room: room.name,
-				seat,
-				transcripts: room.transcripts,
-				stream: room.stream,
-				model: room.model,
-				emit: (event) => room.emit(event),
-			});
+		connect(room, context) {
+			return new SeatActor(room, context);
 		},
 	};
 }

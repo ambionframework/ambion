@@ -29,7 +29,11 @@ function state(runtime: Runtime): RuntimeState {
 	return found;
 }
 
-export const runningRoom = (runtime: Runtime, name: string): RunningRoom | undefined =>
+export const runningRoom = (runtime: Runtime, name: string): SeatRoom | undefined =>
+	state(runtime).running.get(name)?.calls;
+
+/** The host's lifecycle record, for the room facade's own live fast paths. */
+export const registeredRoom = (runtime: Runtime, name: string): RunningRoom | undefined =>
 	state(runtime).running.get(name);
 
 export function registerRoom(runtime: Runtime, room: RunningRoom): void {
@@ -41,19 +45,23 @@ export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): 
 	if (running.get(name) === room) running.delete(name);
 }
 
-/**
- * A room the runtime holds while it runs, as the transport sees it: the
- * seat's three calls, plus what an in-process seat is handed beside them.
- * `room.ts` implements it.
- */
-export interface RunningRoom extends SeatRoom {
-	readonly name: string;
+/** The dependencies that one in-process seat needs for one captured definition. */
+export interface SeatContext {
+	readonly clock: Clock;
+	readonly call: { readonly attempts: number };
+	readonly definition: AgentDefinition;
+	readonly room: string;
+	readonly seat: string;
+	readonly transcripts: SessionOpener;
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
-	/** Where the room's sessions open: a seat's audit session opens beside them. */
-	readonly transcripts: SessionOpener;
-	definition(seat: string): AgentDefinition | undefined;
-	emit(event: RoomNotification): void;
+	readonly emit?: (event: RoomNotification) => void;
+}
+
+/** A room the runtime keeps in its lifecycle registry. */
+export interface RunningRoom {
+	readonly name: string;
+	readonly calls: SeatRoom;
 	/** Drop the room from memory. The record keeps everything. */
 	evict(): void;
 }
@@ -65,7 +73,7 @@ export interface RunningRoom extends SeatRoom {
  * back through the same boundary.
  */
 export interface Transport {
-	connect(room: RunningRoom, seat: string, runtime: Runtime): SeatPort;
+	connect(room: SeatRoom, context: SeatContext): SeatPort;
 }
 
 export interface Runtime {

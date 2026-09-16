@@ -675,8 +675,8 @@ describe('startRoom', () => {
 		const inProcess = inProcessTransport();
 		const runtime = createRuntime({
 			transport: {
-				connect: (room, seat, host) => {
-					const port = inProcess.connect(room, seat, host);
+				connect: (room, context) => {
+					const port = inProcess.connect(room, context);
 					return {
 						wake: (wake) => port.wake(wake),
 						steer: (steer) => port.steer(steer),
