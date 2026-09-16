@@ -377,7 +377,7 @@ refuses an empty text for the same reason: a message with nothing in it
 still takes a seq, renders in every context after it, and wakes whoever
 hears it.
 
-The runtime's prompt (`renderSystemPrompt` in `render.ts`) sets the
+The runtime's prompt (`renderActivation` in `seat/render.ts`) sets the
 bar for every seat: a reply must add something the record does not already
 hold — new information, a decision moved forward, or a genuinely different
 perspective — and a point already made, even in other words, is met with
@@ -636,7 +636,7 @@ in [`view.ts`](../packages/ambion/src/room/view.ts), what an
 agent's tools reach into in
 [`resource.ts`](../packages/workspace/src/resource.ts), what a host
 owns in [`runtime.ts`](../packages/ambion/src/host/runtime.ts), and what
-any of them reads in [`render.ts`](../packages/ambion/src/render.ts).
+any of them reads in [`render.ts`](../packages/ambion/src/seat/render.ts).
 
 **The journal is the truth, and the room moves by reconciling.** Every fact
 about the room is a fold over the journal and the clock: the roster, the
@@ -740,6 +740,18 @@ context boundary supplied to the executor. It advances acknowledgement only
 after the provider consumes that input. Summary views retain the recorded
 close boundary when later messages arrive.
 
+**The room supplies structured collaboration context.** `ActivationView.context`
+contains the room name, goal, clock, participants, messages, and current exchange.
+Selection also receives reserve identities. A summary receives only its
+recipient's reading preferences and messages within its recorded range.
+Each view is a detached snapshot, including nested message data.
+
+**The Pi executor renders its input.** It combines these facts with its local
+agent definition in `seat/render.ts`. Model selection, private instructions,
+and tool guidance stay with the executor. The protocol carries no model name
+or rendered prompt. Summary compaction and presence dividers retain their
+existing rendered behavior.
+
 **The room checks purpose where it commits.** A live lease alone does not
 authorize a room action. The transition derives the purpose again from room
 facts. Selection permits seating; summary permits publication for one closed
@@ -755,6 +767,10 @@ The former specification fields `cause`, `grant`, `opening`, `closing`, and
 `through` are removed. Summary intents contain only `kind` and `text`.
 These changes affect the hosting protocol. Application messages and stored
 activation IDs keep their existing format.
+
+`ActivationView.context` now contains collaboration data. The former `model`
+and `systemPrompt` fields are removed. Custom executors must render the context
+and resolve their own definition's model. The supplied `SeatActor` does both.
 
 **What crosses between a seat and its room is JSON.** The seat uses `view`,
 `commit`, and `lease`; the room uses `wake`, `steer`, and `cut`. A `CommitRequest`

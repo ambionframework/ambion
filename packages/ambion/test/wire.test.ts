@@ -81,9 +81,7 @@ const view: ActivationView = {
 		purpose: { kind: 'summarize', exchange: 2, person: 'priya', through: 4 },
 	},
 	through: 4,
-	model: 'scripted/assistant',
-	systemPrompt: 'You are the assistant.',
-	context: 'The record so far.',
+	context: { name: 'site', now: Date.parse(at), participants: [], messages: [] },
 };
 const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 	say: {

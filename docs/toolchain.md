@@ -117,17 +117,17 @@ only. Biome refuses every other import (`noRestrictedImports`, one
 override per layer in `biome.jsonc`), so the layout is a fact the gate
 holds, and a reviewer reads a file knowing what it cannot reach.
 
-| Layer                                                                | What it holds                                                                                                                        | May import                            |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
-| `types`, `wire`, `define`, `assistant`, `render`, `activation-id.ts` | Pure vocabulary and assistant policy: public shapes, wire values, activation identity, eligibility, and participant context          | Nothing that does anything            |
-| `host/`                                                              | What a host owns: the runtime value, a clock, an opener                                                                              | The vocabulary                        |
-| `journal/`                                                           | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                | The vocabulary                        |
-| `room/`                                                              | Pure room state and commands: `decide` proposes events, `evolve` applies committed events, and the fold rebuilds the same projection | The vocabulary, the journal's entries |
-| `answers.ts`                                                         | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses                                     | The vocabulary, `host/`, `room/`      |
-| `tools/`                                                             | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                | The vocabulary, `host/`               |
-| `seat/`                                                              | The seat side of the wire: one activation, the tools it holds, the actor, the in-process transport                                   | The vocabulary, `host/`, `tools/`     |
-| `room.ts`                                                            | The room, which composes them all                                                                                                    | Everything                            |
-| `index.ts`, `transport.ts`                                           | The two published entries. They hold no logic: each one names what its reader needs                                                  | Everything                            |
+| Layer                                                      | What it holds                                                                                                                        | May import                            |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| `types`, `wire`, `define`, `assistant`, `activation-id.ts` | Pure vocabulary and assistant policy: public shapes, wire values, activation identity, eligibility, and participant context          | Nothing that does anything            |
+| `host/`                                                    | What a host owns: the runtime value, a clock, an opener                                                                              | The vocabulary                        |
+| `journal/`                                                 | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                | The vocabulary                        |
+| `room/`                                                    | Pure room state and commands: `decide` proposes events, `evolve` applies committed events, and the fold rebuilds the same projection | The vocabulary, the journal's entries |
+| `answers.ts`                                               | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses                                     | The vocabulary, `host/`, `room/`      |
+| `tools/`                                                   | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                | The vocabulary, `host/`               |
+| `seat/`                                                    | The Pi executor: context rendering, model execution, tools, transcripts, and in-process transport                                    | The vocabulary, `host/`, `tools/`     |
+| `room.ts`                                                  | The room, which composes them all                                                                                                    | Everything                            |
+| `index.ts`, `transport.ts`                                 | The two published entries. They hold no logic: each one names what its reader needs                                                  | Everything                            |
 
 **The package has two entries, for two readers.**
 `@ambionframework/ambion` is what a host needs to build a room: the five

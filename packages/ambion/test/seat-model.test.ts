@@ -46,9 +46,7 @@ class ModelRoom implements SeatRoom {
 					purpose: { kind: 'respond', message: 1 },
 				},
 				through: 1,
-				model: product.model,
-				systemPrompt: 'You are the product.',
-				context: 'The record so far.',
+				context: { name: 'model-test', now: 0, participants: [], messages: [] },
 			},
 		};
 	}

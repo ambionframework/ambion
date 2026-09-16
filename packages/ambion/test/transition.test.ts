@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { defineAgent } from '../src/define.ts';
 import type { Entry, Kind } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -502,18 +501,14 @@ describe('room transition', () => {
 		const spec = activationSpec('closed:2:writer:1', live);
 		if (spec === undefined) throw new Error('Expected an assistant summary grant.');
 		expect(spec.purpose).toMatchObject({ kind: 'summarize', exchange: 2, through: 2 });
-		const view = viewOf(
-			spec,
-			defineAgent({ name: 'writer', identity: 'W.', instructions: '.', model: 'm' }),
-			{
-				name: 'room',
-				now,
-				state: live,
-				live: new Map(),
-				unseen: () => 0,
-			},
-		);
-		expect(view.context).not.toContain('Later.');
+		const view = viewOf(spec, {
+			name: 'room',
+			now,
+			state: live,
+			live: new Map(),
+			unseen: () => 0,
+		});
+		expect(view.context.messages).not.toContainEqual(expect.objectContaining({ text: 'Later.' }));
 		const obsolete = foldRoom(
 			[
 				writerComposition,

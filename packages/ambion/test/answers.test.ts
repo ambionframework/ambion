@@ -41,7 +41,6 @@ function fakeRoom(state: ReturnType<typeof foldRoom>, ended: string[]): Answerin
 		state: () => state,
 		runtime: createRuntime({ clock: fakeClock(now) }),
 		live: () => new Map(),
-		definition: () => undefined,
 		emit: () => {},
 		write: async () => {
 			throw new Error('Unexpected message write.');

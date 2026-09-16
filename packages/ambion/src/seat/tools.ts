@@ -9,10 +9,10 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
 import { SEAT, SUMMARISE, seatToolDescription, summaryToolDescription } from '../assistant.ts';
 import { SAY } from '../define.ts';
-import { refusal } from '../render.ts';
 import type { AgentDefinition, AmbionTool } from '../types.ts';
 import type { ActivationView, CommitResult, SeatRoom } from '../wire.ts';
 import type { Activation } from './activation.ts';
+import { refusal } from './render.ts';
 
 /**
  * How often the assistant may call its tool in one activation. A model that keeps
@@ -137,10 +137,10 @@ async function say(
 }
 
 /**
- * What an activation holds: the one tool its view names, built by the binder
+ * What an activation holds: the one tool its purpose permits, built by the binder
  * that answers the name.
  *
- * A message causes an activation that speaks, so the view names `say`, and a
+ * A message causes an activation that speaks, so its purpose permits `say`, and a
  * seat that speaks brings its composed tools. An event of the exchange causes an activation
  * that holds one tool and nothing else: what the seat does with it is the
  * whole of the activation.

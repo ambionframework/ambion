@@ -6,7 +6,7 @@ import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import type { AgentDefinition, Message, RoomNotification } from './types.ts';
+import type { Message, RoomNotification } from './types.ts';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -43,8 +43,6 @@ export interface Answering {
 	state(): RoomState;
 	/** The seats live now, by name, with the ids that make them live. */
 	live(state: RoomState): Map<string, string[]>;
-	/** The definition a seat runs, off the names this room knows. */
-	definition(seat: string): AgentDefinition | undefined;
 	emit(event: RoomNotification): void;
 	/** One operation on the room's commit queue, with the wakes the room routes. */
 	write(commit: CommitRequest): Promise<Message>;
@@ -69,9 +67,7 @@ export async function answerView(room: Answering, id: string): Promise<ViewRespo
 	if (seat === undefined) return stale('the lease ended');
 	const spec = activationSpec(id, state);
 	if (spec === undefined || spec.seat !== seat) return stale('the activation has no current grant');
-	const def = room.definition(seat);
-	if (def === undefined) return stale('the seat left the roster');
-	return { view: viewOf(spec, def, facts(room, state)) };
+	return { view: viewOf(spec, facts(room, state)) };
 }
 
 /** What a view is built from: the fold, and what the room holds beside it. */

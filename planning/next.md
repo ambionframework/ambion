@@ -372,8 +372,8 @@ async decisions from JavaScript callers, and invalid-history cursor handling.
 
 ### One activation representation
 
-**One tagged purpose determines authority.** The activation change is prepared
-for review. `ActivationSpec` holds its identity and an `ActivationPurpose`.
+**Merged:** [PR #123](https://github.com/ambionframework/ambion/pull/123).
+`ActivationSpec` holds its identity and one tagged `ActivationPurpose`.
 The old `cause`, `grant`, `opening`, and `closing` fields are removed.
 
 | Purpose     | Reference        | Additional facts                | Room tool   |
@@ -498,15 +498,38 @@ response waits, source review, and summary compaction keep their guarantees.
 
 ### Separate protocol data from provider execution
 
-**Have the room return structured collaboration context.** The protocol should
-carry the permitted purpose, participant facts, selected messages, and their
-context boundary. Pi integration renders these values into prompts.
+**Structured collaboration context is prepared for review.** The protocol
+carries the permitted purpose, participant facts, selected messages, and their
+context boundary. `seat/render.ts` renders these values with the executor's
+local definition. The view no longer carries a model name or rendered strings.
+
+**One participant list supplies public facts.** Human entries include presence
+and reading progress. Selection alone receives reserve identities. A summary
+alone receives its recipient's reading preferences. Nested data is detached
+from the room projection before an executor receives it.
+Context messages omit stored reading preferences. Audit session IDs remain
+on the public participant query and stay outside collaboration context.
+
+**Rendering stays pure and has one input contract.** The renderer reads the
+activation view and local definition. The former `RoomView`, `PersonView`, and
+`SeatSpeaking` representations are removed. Summary compaction, presence
+dividers, and consumed-context acknowledgement keep their existing behavior.
+
+**Implementation evidence:**
+
+- `pnpm check`: 665 tests passed, including 558 core tests and 16 workerd tests.
+- `pnpm chaos`: all 710 expanded recovery tests passed.
+- All three purposes pass JSON round trips with no undefined fields.
+- Tests cover nested snapshot isolation and reserve, preference, and summary boundaries.
+- A before/after comparison produced identical prompts for response, selection, and summary.
+- Luna/High's adversarial review found no remaining blockers.
 
 Model resolution, private agent instructions, Pi messages, tool adaptation, and
 transcript writing belong with the executor. The room does not need a model
 catalog or a provider stream to decide whether a contribution can commit.
 
-The current [`RunningRoom`](../packages/ambion/src/host/runtime.ts) exposes
+**Next: narrow the executor dependencies.** The current
+[`RunningRoom`](../packages/ambion/src/host/runtime.ts) exposes
 room calls, model services, transcripts, definitions, notifications, and
 eviction to transports. Replace that broad interface with the existing three
 room calls and separately supplied executor dependencies.
