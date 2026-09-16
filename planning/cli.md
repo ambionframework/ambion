@@ -1,6 +1,6 @@
 # CLI: create a project and test agents locally
 
-Proposal, 2026-09-15. Commands below are proposed work.
+Plan, 2026-09-15. Stage 1 is implemented. Commands below remain proposed work.
 
 **Build the smallest local development loop.** Create a project, edit its
 agents, and talk to them together in a terminal room. Use Wrangler and the
@@ -28,19 +28,31 @@ After editing agent definitions, restart `ambion dev` to test the changes.
 
 **Reuse the existing Cloudflare adapter and site example.**
 
-- [ ] Add two simple agents with different instructions and one configured model.
-- [ ] Define one room and one local human participant.
-- [ ] Include a Worker entry point with only the routes needed to start the
-      room, join it, send messages, and read messages and exchange state.
-- [ ] Include `package.json`, `wrangler.jsonc`, `.gitignore`, a credential
+- [x] Add two simple agents with different instructions and one configured model.
+- [x] Define one room and one local human participant.
+- [x] Include a Worker entry point with only the routes needed to start the
+      room, join it, send messages, read messages, and look up exchanges.
+- [x] Include `package.json`, `wrangler.jsonc`, `.gitignore`, a credential
       example, and short setup instructions.
-- [ ] Use a pinned Wrangler dependency and the existing room and seat
+- [x] Use a pinned Wrangler dependency and the existing room and seat
       Durable Objects. Keep the template free of application resource storage.
-- [ ] Make the CLI and adapter dependencies installable outside the monorepo.
+- [x] Make the CLI and adapter dependencies installable outside the monorepo.
       Local package archives are sufficient for the initial development check.
 
 **Done when:** the template runs with `wrangler dev`. A developer can send
 one message over HTTP and read both agents' contributions.
+
+**Evidence:** [the team template](../packages/cli/templates/team/README.md)
+installs outside the repository through
+[`scripts/prepare-team.mjs`](../scripts/prepare-team.mjs). The helper extracts
+the template from the packed CLI and sets its dependencies to local archives.
+It restores the packaged `gitignore` file as `.gitignore`.
+
+Standalone installation, typechecking, CLI execution, and Wrangler bundling
+passed. A live Anthropic test received contributions from both agents.
+Invalid message input returned HTTP 400. Room history survived a restart.
+Repository formatting and checks passed. Exchange lookup currently returns
+identity; stage 3 must add the working/completed state needed by its interface.
 
 ### 2. Implement `ambion new`
 

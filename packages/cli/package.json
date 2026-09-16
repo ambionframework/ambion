@@ -20,7 +20,8 @@
 	},
 	"files": [
 		"bin/ambion.mjs",
-		"dist"
+		"dist",
+		"templates"
 	],
 	"engines": {
 		"node": ">=22.19.0"

@@ -2,7 +2,7 @@
 	"$schema": "https://unpkg.com/knip@6/schema.json",
 	"workspaces": {
 		".": {
-			"entry": ["scripts/{version,publish,report,report-cloudflare}.mjs"],
+			"entry": ["scripts/{version,publish,report,report-cloudflare,prepare-team}.mjs"],
 			"project": ["scripts/*.mjs"]
 		},
 		"packages/*": {
