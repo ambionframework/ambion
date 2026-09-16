@@ -866,13 +866,14 @@
 					workspaceRefreshing: false,
 					pollAgain: false,
 					pollPromise: null,
+					entryState: 'restoring',
+					bootPromise: null,
 					flushing: false,
 					flushPromise: null,
 					flushController: null,
 					flushGeneration: 0,
 					navigating: false,
 					navigationEpoch: 0,
-					restored: false,
 					lastError: '',
 					toastTimer: 0,
 					timelineKey: '',
@@ -1279,7 +1280,12 @@
 					}
 				};
 				const renderRoomStatus = (room) => {
-					$('room-state').textContent = room?.status === 'stopped' ? 'Stopped' : statusText();
+					$('room-state').textContent =
+						room?.status === 'stopped'
+							? 'Stopped'
+							: room?.status === 'stopping'
+								? 'Stopping'
+								: statusText();
 					$('room-updated').textContent = state.lastError
 						? 'connection error'
 						: `updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -1321,58 +1327,100 @@
 					const room = currentRoom();
 					const hasIdentity = Boolean(state.human);
 					const running = room?.status === 'running';
-					$('send').disabled = state.navigating || !hasIdentity || !running;
+					const stopping = room?.status === 'stopping';
+					$('send').disabled =
+						state.navigating || !hasIdentity || !running || state.entryState !== 'entered';
 					$('switch-user').disabled = state.navigating || !hasIdentity;
 					$('resume').disabled = state.navigating || !hasIdentity || !room || running;
-					$('stop').disabled = state.navigating || !hasIdentity || !room || !running;
+					$('stop').disabled = state.navigating || !hasIdentity || !room || (!running && !stopping);
 					$('abort').disabled = state.navigating || !hasIdentity || !room || !running;
 					$('room-name').disabled = state.navigating || !hasIdentity;
 					$('new-room-goal').disabled = state.navigating || !hasIdentity;
 					$('new-room').querySelector('button').disabled = state.navigating || !hasIdentity;
 					$('refresh-files').disabled = state.navigating;
 				};
-				const renderPending = () => {
-					const queued = state.outbox.filter(
-						(item) => item.room === state.selected && item.human === state.human,
+				const appendReentry = (pending) => {
+					pending.append(node('span', '', 'Enter this room to send or retry. '));
+					const reenter = node('button', '', 're-enter');
+					reenter.type = 'button';
+					reenter.disabled = state.navigating;
+					reenter.addEventListener('click', () => void reenterRoom());
+					pending.append(reenter);
+				};
+				const editBlockedDelivery = (item) => {
+					state.outbox = state.outbox.filter((candidate) => candidate !== item);
+					state.drafts[`${item.room}:${item.human}`] = item.text;
+					save();
+					renderDraft();
+					render();
+					$('message').focus();
+				};
+				const appendBlockedDelivery = (pending, item) => {
+					if (!item) return;
+					pending.append(
+						node('span', '', `Delivery rejected: ${item.error || 'validation failed'}`),
 					);
-					const blocked = queued.filter((item) => item.blocked);
-					const pending = $('pending');
-					pending.replaceChildren();
-					if (blocked.length) {
-						pending.append(
-							node('span', '', `Delivery rejected: ${blocked[0].error || 'validation failed'}`),
-						);
-						const edit = node('button', '', 'edit message');
-						edit.type = 'button';
-						edit.addEventListener('click', () => {
-							const item = blocked[0];
-							state.outbox = state.outbox.filter((candidate) => candidate !== item);
-							state.drafts[`${item.room}:${item.human}`] = item.text;
-							save();
-							renderDraft();
-							render();
-							$('message').focus();
-						});
-						pending.append(edit);
-					}
-					const waiting = queued.filter((item) => !item.blocked);
-					if (!waiting.length) return;
+					const edit = node('button', '', 'edit message');
+					edit.type = 'button';
+					edit.addEventListener('click', () => editBlockedDelivery(item));
+					pending.append(edit);
+				};
+				const appendRequiredReentry = (pending) => {
+					if (state.entryState !== 'required' || currentRoom()?.status !== 'running') return;
+					appendReentry(pending);
+				};
+				const appendWaitingCount = (pending, waiting) => {
 					pending.append(
 						node(
 							'span',
 							'',
-							`${waiting.length} delivery${waiting.length === 1 ? '' : 'ies'} queued · `,
+							`${waiting.length} ${waiting.length === 1 ? 'delivery' : 'deliveries'} queued · `,
 						),
 					);
-					if (currentRoom()?.status === 'stopped') {
-						pending.append(node('span', '', 'room is stopped; resume it to retry.'));
-						return;
-					}
+				};
+				const appendStoppedNotice = (pending) => {
+					const status = currentRoom()?.status;
+					if (!['stopped', 'stopping'].includes(status)) return false;
+					pending.append(
+						node(
+							'span',
+							'',
+							status === 'stopping'
+								? 'room is stopping; resume it to retry.'
+								: 'room is stopped; resume it to retry.',
+						),
+					);
+					return true;
+				};
+				const appendRetry = (pending) => {
 					pending.append(node('span', '', 'same key and text · '));
 					const retry = node('button', '', 'retry now');
 					retry.type = 'button';
 					retry.addEventListener('click', () => void flushOutbox());
 					pending.append(retry);
+				};
+				const renderPending = () => {
+					const queued = state.outbox.filter(
+						(item) => item.room === state.selected && item.human === state.human,
+					);
+					const pending = $('pending');
+					pending.replaceChildren();
+					appendBlockedDelivery(
+						pending,
+						queued.find((item) => item.blocked),
+					);
+					const waiting = queued.filter((item) => !item.blocked);
+					if (!waiting.length) {
+						appendRequiredReentry(pending);
+						return;
+					}
+					appendWaitingCount(pending, waiting);
+					if (appendStoppedNotice(pending)) return;
+					if (state.entryState !== 'entered') {
+						appendReentry(pending);
+						return;
+					}
+					appendRetry(pending);
 				};
 				const render = () => {
 					renderPeople();
@@ -1390,7 +1438,7 @@
 					state.flushGeneration += 1;
 					state.flushController?.abort();
 					state.selected = name;
-					state.restored = false;
+					state.entryState = 'required';
 					state.timelineKey = '';
 					save();
 					renderDraft();
@@ -1405,8 +1453,9 @@
 					beginRoomTransition(name);
 					const shouldJoin = target?.status === 'running' || state.pendingRoom === name;
 					if (shouldJoin) {
+						state.entryState = 'required';
 						await api.join(name, state.human);
-						state.restored = true;
+						state.entryState = 'entered';
 					}
 					await poll(true);
 				};
@@ -1473,16 +1522,15 @@
 						state.participants.set(room.name, room.participants || []);
 					});
 				};
-				const refreshSelectedPresence = async () => {
+				const observeSelectedPresence = () => {
 					const room = currentRoom();
 					const present = room?.participants?.some(
 						(person) => person.name === state.human && person.presence === 'present',
 					);
-					const shouldJoin =
-						(!state.restored || !present) && state.human && room?.status === 'running';
-					if (shouldJoin) {
-						await api.join(state.selected, state.human);
-						state.restored = true;
+					if (state.entryState === 'entered' && !present) {
+						state.entryState = 'required';
+						renderPending();
+						updateControls();
 					}
 				};
 				const refreshPollRoom = async (full, epoch) => {
@@ -1490,7 +1538,7 @@
 						if (full) await refreshWorkspace();
 						return;
 					}
-					await refreshSelectedPresence();
+					observeSelectedPresence();
 					await refreshSelected(full, epoch);
 					if (!isCurrentPoll(epoch)) return;
 					if (full) await refreshWorkspace();
@@ -1505,7 +1553,12 @@
 					state.lastError = '';
 					render();
 					await refreshPollRoom(full, epoch);
-					if (isCurrentPoll(epoch) && state.human && currentRoom()?.status === 'running')
+					if (
+						isCurrentPoll(epoch) &&
+						state.human &&
+						state.entryState === 'entered' &&
+						currentRoom()?.status === 'running'
+					)
 						await flushOutbox();
 				};
 				const reportPollError = (error) => {
@@ -1564,7 +1617,11 @@
 					item.human === state.human;
 				const handleDeliveryError = (item, error) => {
 					const status = error?.status;
-					if (status === 409) state.restored = false;
+					if (status === 409) {
+						state.entryState = 'required';
+						save();
+						render();
+					}
 					if (!(status >= 400 && status < 500) || [408, 409, 429].includes(status)) return false;
 					item.blocked = true;
 					item.error = error.message;
@@ -1598,7 +1655,7 @@
 					if (
 						state.navigating ||
 						!state.human ||
-						!state.restored ||
+						state.entryState !== 'entered' ||
 						currentRoom()?.status !== 'running'
 					)
 						return;
@@ -1623,7 +1680,10 @@
 				};
 
 				const canSend = () =>
-					!state.navigating && state.human && currentRoom()?.status === 'running';
+					!state.navigating &&
+					state.human &&
+					state.entryState === 'entered' &&
+					currentRoom()?.status === 'running';
 				const queueDelivery = (text) => {
 					const draftKey = `${state.selected}:${state.human}`;
 					const priorDraft = $('message').value;
@@ -1654,6 +1714,26 @@
 							: 'Accepted by room.',
 					);
 				};
+				const restoreSelection = async () => {
+					if (
+						state.navigating ||
+						state.entryState !== 'restoring' ||
+						!state.human ||
+						!state.selected
+					)
+						return;
+					if (currentRoom()?.status !== 'running') {
+						state.entryState = 'required';
+						render();
+						return;
+					}
+					await runNavigation(async () => {
+						state.entryState = 'required';
+						await api.join(state.selected, state.human);
+						state.entryState = 'entered';
+					});
+					if (state.entryState === 'entered') await flushOutbox();
+				};
 				const runNavigation = async (operation) => {
 					state.navigating = true;
 					state.navigationEpoch += 1;
@@ -1670,14 +1750,33 @@
 						void poll(true);
 					}
 				};
+				const reenterRoom = async () => {
+					if (
+						state.navigating ||
+						!state.human ||
+						!state.selected ||
+						currentRoom()?.status !== 'running'
+					)
+						return;
+					await runNavigation(async () => {
+						state.entryState = 'required';
+						await api.join(state.selected, state.human);
+						state.entryState = 'entered';
+					});
+					if (state.entryState !== 'entered') return;
+					await state.pollPromise;
+					await flushOutbox();
+					showToast(`Re-entered ${state.selected}.`);
+				};
 				const control = async (action) => {
 					if (!state.selected || !state.human || state.navigating) return;
 					await runNavigation(async () => {
 						await api.control(state.selected, action);
-						if (action === 'stop') state.restored = false;
+						if (action === 'stop') state.entryState = 'required';
 						if (action === 'resume') {
+							state.entryState = 'required';
 							await api.join(state.selected, state.human);
-							state.restored = true;
+							state.entryState = 'entered';
 						}
 						showToast(`${action} requested for ${state.selected}.`);
 					});
@@ -1696,13 +1795,14 @@
 					save();
 					renderDraft();
 					render();
+					if (state.entryState === 'restoring') void restoreSelection();
 				};
 				const clearIdentity = () => {
 					state.flushGeneration += 1;
 					state.flushController?.abort();
 					state.human = '';
 					state.selected = '';
-					state.restored = false;
+					state.entryState = 'restoring';
 					state.pendingRoom = '';
 					try {
 						sessionStorage.removeItem(`${STORAGE_KEY}:identity`);
@@ -1767,7 +1867,10 @@
 				});
 				renderDraft();
 				render();
-				void poll(true);
+				state.bootPromise = (async () => {
+					await poll(true);
+					await restoreSelection();
+				})();
 				setInterval(() => {
 					void poll(false);
 				}, 1000);
