@@ -70,6 +70,7 @@ import type {
 	Seq,
 	SummaryMessage,
 } from './types.ts';
+import { copyMessage } from './types.ts';
 import type {
 	Close,
 	CommitRequest,
@@ -267,13 +268,33 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 	const liveSeats = liveWork(state, runtime.clock.now()).seats;
 	return {
 		name,
-		messages: [...state.messages],
+		messages: state.messages.map(copyMessage),
 		participants: seatsOf({ name, state, live: liveSeats }),
-		exchange: state.exchange,
+		exchange: state.exchange === undefined ? undefined : { ...state.exchange },
 	};
 }
 
 const _stale = (why: string) => ({ stale: why });
+
+/** Copy mutable notification values for one listener. */
+function notificationFor(event: RoomNotification): RoomNotification {
+	switch (event.type) {
+		case 'message':
+			return { ...event, message: copyMessage(event.message) };
+		case 'conflict':
+			return { ...event, missed: event.missed.map(copyMessage) };
+		case 'exchange_opened':
+			return { ...event, exchange: { ...event.exchange } };
+		case 'exchange_closed':
+			return { ...event, exchange: { ...event.exchange } };
+		case 'error':
+		case 'audit_error':
+			// Execution diagnostics retain their original Error object and cause.
+			return { ...event };
+		default:
+			return { ...event };
+	}
+}
 
 /** How many times one pass folds, decides and writes before it yields. */
 const PASSES = 8;
@@ -520,7 +541,7 @@ class RoomHost implements Room, RunningRoom {
 	emit(event: RoomNotification): void {
 		for (const listener of this.listeners) {
 			try {
-				listener(event);
+				listener(notificationFor(event));
 			} catch {
 				// A listener's failure is the listener's problem, never the room's.
 			}
@@ -529,11 +550,13 @@ class RoomHost implements Room, RunningRoom {
 
 	/** The record, once every write asked for has landed or failed and every doubt is settled. */
 	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
+		const since = options.since;
 		await this.ready;
 		await this.journal.settled();
 		const messages = this.state().messages;
-		const since = options.since;
-		return since === undefined ? [...messages] : messages.filter((m) => m.seq > since);
+		return since === undefined
+			? messages.map(copyMessage)
+			: messages.filter((m) => m.seq > since).map(copyMessage);
 	}
 
 	/** The roster and people folded from the durable record. */
@@ -548,9 +571,9 @@ class RoomHost implements Room, RunningRoom {
 		const state = this.state();
 		return {
 			name: this.name,
-			messages: [...state.messages],
+			messages: state.messages.map(copyMessage),
 			participants: seatsOf({ name: this.name, state, live: this.live(state) }),
-			exchange: state.exchange,
+			exchange: state.exchange === undefined ? undefined : { ...state.exchange },
 		};
 	}
 
@@ -605,7 +628,8 @@ class RoomHost implements Room, RunningRoom {
 		const close = await this.waitForClose(from);
 		return this.state()
 			.messages.filter((message) => message.kind !== 'summary')
-			.filter((message) => message.seq >= close.from && message.seq <= close.through);
+			.filter((message) => message.seq >= close.from && message.seq <= close.through)
+			.map(copyMessage);
 	}
 
 	private async responseFor(from: Seq): Promise<SummaryMessage | undefined> {
@@ -613,7 +637,7 @@ class RoomHost implements Room, RunningRoom {
 		for (;;) {
 			const result = this.responseResult(close);
 			if (result === 'silent') return undefined;
-			if (result !== 'pending' && result !== 'failed') return result;
+			if (result !== 'pending' && result !== 'failed') return copyMessage(result);
 			if (result === 'failed') throw new Error(`Exchange '${from}' summary work was interrupted.`);
 			if (this.gone())
 				throw new Error(`Exchange '${from}' summary work was stopped or interrupted.`);
@@ -771,6 +795,7 @@ class RoomHost implements Room, RunningRoom {
 
 	/** The host seats a registered agent. Executable definitions stay fixed for the run. */
 	async seat(name: string, options: { attention?: Attention } = {}): Promise<void> {
+		const attention = options.attention ?? 'broadcast';
 		this.assertRunning();
 		await this.ready;
 		const definition = this.defs.get(name);
@@ -779,7 +804,7 @@ class RoomHost implements Room, RunningRoom {
 			kind: 'seated',
 			subject: name,
 			identity: definition.identity,
-			attention: options.attention ?? 'broadcast',
+			attention,
 		};
 		this.validatePresence(change);
 		await this.commitPresence(change);
@@ -969,7 +994,7 @@ class RoomHost implements Room, RunningRoom {
 					seat,
 					activation: steer.activation,
 					after,
-					message,
+					message: copyMessage(message),
 				})
 				.catch(() => {});
 		}
@@ -1040,7 +1065,9 @@ class RoomHost implements Room, RunningRoom {
 				return { body: event.body };
 			},
 		});
-		return 'entry' in appended ? { committed: placed(appended.entry) } : appended.result;
+		return 'entry' in appended
+			? { committed: copyMessage(placed(appended.entry)) }
+			: appended.result;
 	}
 
 	private acceptedEvent<K extends Kind>(decision: RoomDecision<K>) {

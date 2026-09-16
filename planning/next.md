@@ -1,7 +1,7 @@
 # Next: the work to ship Ambion 0.1.0
 
-Delivery plan, 2026-09-16. Updated for executor separation in PR #130 and
-the Pi transcript extraction prepared for review.
+Delivery plan, 2026-09-16. Updated for executor separation in PR #130,
+Pi transcript extraction in PR #131, and room value ownership.
 [release-0.1.0.md](release-0.1.0.md) defines the positioning, capabilities,
 deployment models, and limits. This file owns implementation work and its
 completion evidence, including the remaining work from earlier plans.
@@ -14,25 +14,23 @@ or verify the release.
 
 **Align the implementation with the collaboration kernel scope.** Remove
 representations and ownership overlaps that require unrelated mechanisms to
-stay synchronized. The main sources of complexity are:
-
-- The earlier assistant membership and selection model required separate rules.
-- Executor dependencies now cross an explicit boundary, implemented in PR #130.
-- Provider transcript storage extends into the generic journal package.
-- Some public reads expose mutable facts owned by the room.
+stay synchronized. Executor dependencies and Pi transcript storage now have
+explicit boundaries. The next priority is to keep accepted room facts under
+one owner. Public reads and local delivery must not expose mutable state.
 
 **Build on the merged foundations.** Fixed definitions, normalized tools,
-conditional journal appends, activation purpose, and structured context have
-landed. Preserve their evidence below. Prioritize these remaining changes:
+conditional journal appends, activation purpose, structured context, and
+ordinary participation have landed. Preserve their evidence below.
 
-| Order | Change                                                  | Main reduction                                                  | Scope                |
-| ----- | ------------------------------------------------------- | --------------------------------------------------------------- | -------------------- |
-| 1     | Narrow executor dependencies and extract Pi transcripts | Remove broad interfaces and provider types from generic storage | Medium; sections 5–6 |
-| 2     | Finish state ownership and release contracts            | Remove mutable fact leaks and ambiguous failure guarantees      | Sections 7–9         |
+| Order | Change                                      | Main reduction                                                  | Scope        |
+| ----- | ------------------------------------------- | --------------------------------------------------------------- | ------------ |
+| 1     | Protect room values at ownership boundaries | Eliminate state changes outside journal commits                 | Section 7    |
+| 2     | Finish protocol and workspace boundaries    | Separate recorded facts, transport data, and resource ownership | Sections 5–6 |
+| 3     | Complete recovery and release contracts     | Resolve failure guarantees and verify packaged consumers        | Sections 8–9 |
 
-PR #128 implements shared seating, unseating, closing publication, ordinary
-membership, and explicit history version rejection. Section 5 retains its
-evidence. PR #130 narrows executor dependencies. Extract transcript storage next.
+PR #130 narrows executor dependencies. PR #131 extracts Pi transcripts.
+Section 5 and section 6 retain their validation. Room value ownership takes
+priority because shared object references can change behavior without a commit.
 
 Implement these changes in bounded slices. Temporary paths must have a named
 removal step. Do not introduce a second permanent participation model.
@@ -660,7 +658,7 @@ executor. Prompts and tool schemas stay with Pi integration.
 
 ### Extract Pi transcript storage
 
-**Current slice: extract Pi transcript storage.**
+**Merged:** [PR #131](https://github.com/ambionframework/ambion/pull/131).
 `@ambionframework/pi-journal` replaces the removed `journal/pi` subpath. Its
 [`index.ts`](../packages/pi-journal/src/index.ts) implements Pi session storage and
 depends on Pi's transcript model. It can serve Pi applications without Ambion.
@@ -670,7 +668,7 @@ The new package depends on `journal` and Pi; neither dependency imports it.
 `SessionOpener` and `piSessions` retain their API. Session operations, storage
 names, and mutation formats are unchanged. Existing transcripts need no migration.
 
-**Validation:** the extraction is prepared for review and is not merged.
+**Validation:** all seven CI checks pass, including live provider tests.
 `pnpm check` passes with 30 journal tests, 20 Pi session tests, 586 core tests,
 18 workerd tests, 37 workspace tests, and six CLI tests. The Pi tests retain
 memory and SQLite coverage, query conformance, conflict recovery, and lost
@@ -772,10 +770,24 @@ recovery guarantees. Do not make a context-management framework a release gate.
 
 ### Make values safe to retain
 
-**Protect facts at ownership boundaries.** Current message reads copy the
-array while sharing mutable message objects. Freeze owned JSON values or
-return owned immutable snapshots. Include nested ranges, recipient arrays,
-and notification payloads.
+**Current slice: protect facts at ownership boundaries.** Room reads,
+exchange results, protocol replies, notifications, and steering now detach
+collaboration values. Copies include nested source ranges and routing arrays.
+Commit and lease requests, read filters, and seating options are captured
+before asynchronous work. Each notification listener and steering recipient
+receives its own value. Error notifications preserve the original exception.
+
+The change adds no public type, lifecycle state, or storage format. Internal
+projections stay shallow. Existing public signatures let callers edit their
+own copies without changing the room or another consumer.
+
+**Validation:** this slice is prepared for review and is not merged.
+Ten public ownership regressions fail on the previous code across memory and
+SQLite. All 24 ownership tests pass after the fix. They cover reads, summaries,
+open exchanges, listener isolation, commit replies, missed context, steering,
+and request capture. They compare live values with independent journal replay.
+`pnpm check` passes, including 610 core tests and 18 workerd tests. Expanded
+recovery passes all 728 tests.
 
 Keep mutable maps and journal counters private. `ReadonlyMap` is a type-level
 promise, and freezing a `Map` does not disable its mutating methods. Pure
@@ -820,7 +832,7 @@ PR #128 contains the implementation and integration with the CLI template.
 
 - Preserve the executor boundary and validation merged in PR #130.
 - Separate protocol types from stored facts.
-- Extract `pi-journal` while preserving audit failure isolation.
+- Preserve Pi transcript extraction and audit isolation merged in PR #131.
 - Keep workspace resources separate from executor tool binding.
 
 **Evidence:** run the same scripted collaboration in process and through
