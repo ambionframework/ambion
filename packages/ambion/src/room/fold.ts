@@ -9,6 +9,7 @@
  * stopped.
  */
 
+import { decodeActivationId } from '../activation-id.ts';
 import { type Entry, placed } from '../journal/journal.ts';
 import type { Exchange, Message, Seq } from '../types.ts';
 import type { Close, Composition, LeaseHold, Seating } from '../wire.ts';
@@ -16,13 +17,12 @@ import { type MessageDelivery, messageDelivery } from './delivery.ts';
 import { openExchange, summaryCompletion } from './exchange.ts';
 import {
 	applyLease,
-	type CauseOf,
 	cameToNothing,
 	type PendingActivation,
 	type PendingWake,
-	parseId,
 	pendingActivation,
 	pendingWakes,
+	type SourceOf,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
 
@@ -130,7 +130,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
-		causeOf(composition?.assistant, opensOf(exchange, closes)),
+		sourceOf(composition?.assistant, opensOf(exchange, closes)),
 	);
 	const owed = foldOwed(closes, messages, leases, options);
 	const state: RoomState = {
@@ -172,8 +172,8 @@ const opensOf = (exchange: Exchange | undefined, closes: readonly Close[]): Read
  * and every other wake a message causes. The fold decides it once, and the
  * id carries the answer.
  */
-const causeOf =
-	(assistant: string | undefined, opens: ReadonlySet<Seq>): CauseOf =>
+const sourceOf =
+	(assistant: string | undefined, opens: ReadonlySet<Seq>): SourceOf =>
 	(seat, seq) =>
 		seat === assistant && opens.has(seq) ? 'opened' : 'message';
 
@@ -254,7 +254,7 @@ function withAttempts(
 
 /** A draft over this close that came to nothing. */
 function draftedOver(lease: LeaseHold, through: Seq): boolean {
-	const parsed = parseId(lease.id);
-	if (parsed?.cause !== 'closed' || parsed.position !== through) return false;
+	const parsed = decodeActivationId(lease.id);
+	if (parsed?.source !== 'closed' || parsed.position !== through) return false;
 	return cameToNothing(lease);
 }

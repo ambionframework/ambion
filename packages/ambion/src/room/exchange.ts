@@ -25,6 +25,8 @@
  * The design contract is `docs/exchange.md`; `docs/assistant.md` says what an
  * assistant makes of one.
  */
+
+import { decodeActivationId } from '../activation-id.ts';
 import {
 	type Exchange,
 	isSpoken,
@@ -34,7 +36,6 @@ import {
 	type SummaryMessage,
 } from '../types.ts';
 import type { Close, LeaseHold } from '../wire.ts';
-import { parseId } from './lease.ts';
 
 export type SummaryCompletion =
 	| { readonly status: 'published'; readonly summary: SummaryMessage }
@@ -57,8 +58,8 @@ export function summaryCompletion(
 	if (summary !== undefined) return { status: 'published', summary };
 	if (close.wakes === undefined) return { status: 'silent' };
 	const drafts = [...leases.values()].filter((lease) => {
-		const parsed = parseId(lease.id);
-		return parsed?.cause === 'closed' && parsed.position === close.through;
+		const parsed = decodeActivationId(lease.id);
+		return parsed?.source === 'closed' && parsed.position === close.through;
 	});
 	const released = drafts.some((lease) => lease.phase === 'ended' && lease.reason === 'released');
 	const stoodDown =

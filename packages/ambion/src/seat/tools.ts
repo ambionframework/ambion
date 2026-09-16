@@ -10,7 +10,7 @@ import type { TSchema } from 'typebox';
 import { SEAT, SUMMARISE, seatToolDescription, summaryToolDescription } from '../assistant.ts';
 import { SAY } from '../define.ts';
 import { refusal } from '../render.ts';
-import type { AgentDefinition, AmbionTool, Seq } from '../types.ts';
+import type { AgentDefinition, AmbionTool } from '../types.ts';
 import type { ActivationView, CommitResult, SeatRoom } from '../wire.ts';
 import type { Activation } from './activation.ts';
 
@@ -148,15 +148,15 @@ async function say(
  * An ordinary message activation gives the seat its own tools.
  */
 export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
-	switch (view.spec.cause) {
-		case 'message':
+	switch (view.spec.purpose.kind) {
+		case 'respond':
 			return [sayTool(held), ...def.tools.map((tool) => toPiTool(tool, def))];
-		case 'opened': {
-			const composing: Composing = { ...view.spec.opening, seated: 0, calls: 0 };
+		case 'select': {
+			const composing: Composing = { limit: view.spec.purpose.limit, seated: 0, calls: 0 };
 			return [seatTool(held, composing)];
 		}
-		case 'closed': {
-			const attempt: SummaryAttempt = { ...view.spec.closing, calls: 0 };
+		case 'summarize': {
+			const attempt: SummaryAttempt = { person: view.spec.purpose.person, calls: 0 };
 			return [summariseTool(held, attempt)];
 		}
 	}
@@ -165,16 +165,12 @@ export function toolsFor(view: ActivationView, def: AgentDefinition, held: Bindi
 // -- the assistant's bound ----------------------------------------------------
 
 /**
- * One summarising activation's own state. The range is read off the closed
- * exchange when the activation starts. Nothing here outlives the activation.
+ * One summary activation's local call count and completion state. The room
+ * owns the covered range. Nothing here outlives the activation.
  */
 interface SummaryAttempt {
 	/** The person whose question opened the exchange, and who reads the message. */
 	readonly person: string;
-	/** The question that opened the exchange. */
-	readonly from: Seq;
-	/** The last seq it stands for. */
-	readonly through: Seq;
 	calls: number;
 	/** The message landed: the activation writes once. */
 	written?: true;
@@ -204,9 +200,7 @@ function summariseTool(bound: Binding, closing: SummaryAttempt): AgentTool {
 				key: toolCallId,
 				intent: {
 					kind: 'summary',
-					to: person,
 					text,
-					covers: { from: closing.from, through: closing.through },
 				},
 			});
 			if ('committed' in response) closing.written = true;
@@ -240,14 +234,10 @@ function stoppingReason(draft: SummaryAttempt): string | undefined {
 // -- composing ---------------------------------------------------------------
 
 /**
- * One composing activation's own state: whose question opened the exchange,
- * and how many colleagues it has seated. Nothing here outlives the activation.
+ * One selection activation's local tool limits. The room owns membership.
+ * Nothing here outlives the activation.
  */
 interface Composing {
-	/** The person whose question opened the exchange. */
-	person: string;
-	/** The seq of that question. */
-	from: Seq;
 	/** How many the reserve held at the open: the most this activation can seat. */
 	limit: number;
 	seated: number;

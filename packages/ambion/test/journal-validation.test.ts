@@ -15,7 +15,7 @@ describe('room journal body validation', () => {
 				from: 'alpha',
 				to: 'beta',
 				text: 'hello',
-				activationId: 'message:1',
+				activationId: 'message:1:alpha:1',
 				wakes: ['beta'],
 			}),
 		).toBe(true);
@@ -77,6 +77,27 @@ describe('room journal body validation', () => {
 			}),
 		).toBe(true);
 		expect(validateRoomBody('run', { at: '2026-01-01T00:00:00.000Z' })).toBe(true);
+	});
+
+	it('rejects malformed activation ids after validating the stored body shape', () => {
+		expect(() =>
+			validateRoomBody('lease', {
+				id: 'message:1:alpha:0',
+				phase: 'running',
+				expiresAt: 1735689600000,
+				at: '2026-01-01T00:00:00.000Z',
+				readThrough: 0,
+			}),
+		).toThrow(/kind 'lease'.*body\.id/);
+		expect(() =>
+			validateRoomBody('message', {
+				kind: 'said',
+				at: '2026-01-01T00:00:00.000Z',
+				from: 'alpha',
+				text: 'hello',
+				activationId: 'message:1',
+			}),
+		).toThrow(/kind 'message'.*body\.activationId/);
 	});
 
 	it('skips an unknown kind without inspecting its body', () => {

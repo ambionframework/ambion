@@ -1,5 +1,6 @@
 import { type TSchema, Type } from 'typebox';
 import { Check, Errors } from 'typebox/value';
+import { decodeActivationId } from '../activation-id.ts';
 import type { Kind } from './journal.ts';
 
 const extra = { additionalProperties: true } as const;
@@ -124,7 +125,18 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 		throw new Error(
 			`Invalid room journal body for kind '${kind}' at body.at: expected a timestamp.`,
 		);
+	validateActivationId(kind, objectBody(body));
 	return true;
+}
+
+function validateActivationId(kind: string, body: Record<string, unknown> | undefined): void {
+	const path = kind === 'lease' ? 'body.id' : kind === 'message' ? 'body.activationId' : undefined;
+	if (path === undefined || body === undefined) return;
+	const id = body[path.slice('body.'.length)];
+	if (id === undefined || decodeActivationId(id) !== undefined) return;
+	throw new Error(
+		`Invalid room journal body for kind '${kind}' at ${path}: expected an activation id.`,
+	);
 }
 
 function schemaFor(kind: string, body: unknown): TSchema {

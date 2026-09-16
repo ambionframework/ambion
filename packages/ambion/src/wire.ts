@@ -15,29 +15,29 @@
  */
 import type { Attention, Message, Seq } from './types.ts';
 
-type ActivationIdentity = { readonly id: string; readonly seat: string; readonly attempt: number };
-type ActivationOpening = { readonly person: string; readonly from: Seq; readonly limit: number };
-type ActivationClosing = { readonly person: string; readonly from: Seq; readonly through: Seq };
+/** The work authorized by the room, with the facts that purpose requires. */
+export type ActivationPurpose =
+	| { readonly kind: 'respond'; readonly message: Seq }
+	| {
+			readonly kind: 'select';
+			readonly exchange: Seq;
+			readonly person: string;
+			readonly limit: number;
+	  }
+	| {
+			readonly kind: 'summarize';
+			readonly exchange: Seq;
+			readonly person: string;
+			readonly through: Seq;
+	  };
 
-/** The authority a room grants to a recorded activation. */
-export type ActivationSpec =
-	| (ActivationIdentity & {
-			readonly cause: 'message';
-			readonly through: Seq;
-			readonly grant: { readonly kind: 'say'; readonly tool: 'say' };
-	  })
-	| (ActivationIdentity & {
-			readonly cause: 'opened';
-			readonly through: Seq;
-			readonly opening: ActivationOpening;
-			readonly grant: { readonly kind: 'seat'; readonly tool: 'seat' };
-	  })
-	| (ActivationIdentity & {
-			readonly cause: 'closed';
-			readonly through: Seq;
-			readonly closing: ActivationClosing;
-			readonly grant: { readonly kind: 'summary'; readonly tool: 'summarise' };
-	  });
+/** The authority one recorded activation grants to its seat. */
+export interface ActivationSpec {
+	readonly id: string;
+	readonly seat: string;
+	readonly attempt: number;
+	readonly purpose: ActivationPurpose;
+}
 
 // -- entries on the journal beside the messages -----------------------------------
 
@@ -163,8 +163,10 @@ export interface SeatPort {
 // -- a seat reaching its room -------------------------------------------------
 
 export interface ActivationView {
-	/** The recorded activation and the boundary its input reads through. */
+	/** The identity and purpose authorized by the room. */
 	spec: ActivationSpec;
+	/** The context boundary represented by this view. Consumption acknowledges it. */
+	through: Seq;
 	/** The agent's `provider/model-id`, resolved on the seat side. */
 	model: string;
 	systemPrompt: string;
@@ -181,7 +183,7 @@ export type ViewResponse = { view: ActivationView } | Stale;
 /** What a seat asks the room to put on the record. The room stamps everything else. */
 export type Intent =
 	| { kind: 'said'; to?: string; text: string }
-	| { kind: 'summary'; to: string; text: string; covers: { from: Seq; through: Seq } }
+	| { kind: 'summary'; text: string }
 	| { kind: 'seated'; name: string };
 
 export interface CommitRequest {

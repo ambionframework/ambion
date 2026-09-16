@@ -7,7 +7,7 @@
  * and a request from an activation whose lease ended is refused because the
  * fold says so. The id carries the cause, so a reader asks the id what the
  * activation's durable cause, seat, and attempt. `activation.ts` combines
- * those facts with current bindings to derive its authority.
+ * those facts with the current composition to derive its authority.
  *
  * A lease has two phases. `running` is a claim or a renewal, with an
  * expiry; `ended` is terminal, with a reason. The last change for an id wins,
@@ -28,53 +28,11 @@
  */
 
 import type { JournalEntry } from '@ambionframework/journal';
+import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
 import type { Message, Seq } from '../types.ts';
 import type { EndReason, LeaseChange, LeaseHold } from '../wire.ts';
 import type { MessageDelivery } from './delivery.ts';
 import { coversAttempt as coverageRule, expired, nextAttempt } from './rules.verified.ts';
-
-/**
- * What caused an activation. Three things cause one, and the journal holds
- * all three: a message the room delivered, the question that opened an
- * exchange, and a close that owes a summary. The room schedules them the
- * same way, so `PendingActivation` reads the same for each.
- *
- * `opened` and `closed` name the exchange's two events. `Kind` keeps
- * `close` for the entry a close writes; a cause reads `closed`, for the
- * exchange that closed.
- */
-export type Cause = 'message' | 'opened' | 'closed';
-
-/**
- * The id of one activation: what caused it, where the cause sits on the
- * record, the seat that takes it, and which attempt this is. One spelling
- * for every cause, so every reader asks the same four questions of it.
- */
-const activationId = (cause: Cause, position: Seq, seat: string, attempt: number): string =>
-	`${cause}:${position}:${seat}:${attempt}`;
-
-/** What an id says about the activation it names. */
-export interface ParsedId {
-	cause: Cause;
-	/** Where the cause sits: the message that woke the seat, or the close's `through`. */
-	position: Seq;
-	seat: string;
-	attempt: number;
-}
-
-const ID = /^(message|opened|closed):(\d+):([a-z][a-z0-9-]*):(\d+)$/;
-
-/** What an id says caused the activation, or nothing for an id the room did not derive. */
-export function parseId(id: string): ParsedId | undefined {
-	const parts = ID.exec(id);
-	if (parts === null) return undefined;
-	return {
-		cause: parts[1] as Cause,
-		position: Number(parts[2]),
-		seat: parts[3] ?? '',
-		attempt: Number(parts[4]),
-	};
-}
 
 /**
  * Every lease the changes fold to. The complete journal remains available,
@@ -138,9 +96,9 @@ export const isLive = (lease: LeaseHold, now: number): boolean =>
  * room schedules all three the same way, so all three read as this.
  */
 export interface PendingActivation {
-	/** The recorded cause of this activation. */
-	cause: Cause;
-	/** The journal position of the cause. */
+	/** The journal fact that gives this activation its identity. */
+	source: ActivationSource;
+	/** The journal position of the source fact. */
 	position: Seq;
 	/** The next attempt number. */
 	attempt: number;
@@ -187,7 +145,7 @@ const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set<EndReason>([...ANSWERS_N
  * Why a seat's wake on this message exists. The fold decides it once, and
  * the id carries the answer to every reader after it.
  */
-export type CauseOf = (seat: string, seq: Seq) => Cause;
+export type SourceOf = (seat: string, seq: Seq) => ActivationSource;
 
 /**
  * Every wake a message decided that no lease has answered, for a seat still
@@ -200,7 +158,7 @@ export function pendingWakes(
 	leases: ReadonlyMap<string, LeaseHold>,
 	roster: ReadonlySet<string>,
 	options: PendingActivationOptions,
-	causeOf: CauseOf,
+	sourceOf: SourceOf,
 ): PendingWake[] {
 	const bySeat = leasesBySeat(leases, roster);
 	const pending: PendingWake[] = [];
@@ -209,7 +167,7 @@ export function pendingWakes(
 		if (delivery === undefined) continue;
 		for (const seat of reached(delivery, roster)) {
 			const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
-			const wake = statusOf(message, seat, taken, options, causeOf(seat, message.seq));
+			const wake = statusOf(message, seat, taken, options, sourceOf(seat, message.seq));
 			if (wake !== undefined) pending.push(wake);
 		}
 	}
@@ -227,8 +185,8 @@ function leasesBySeat(
 ): Map<string, LeaseHold[]> {
 	const bySeat = new Map<string, LeaseHold[]>();
 	for (const lease of leases.values()) {
-		const parsed = parseId(lease.id);
-		if (parsed === undefined || parsed.cause === 'closed') continue;
+		const parsed = decodeActivationId(lease.id);
+		if (parsed === undefined || parsed.source === 'closed') continue;
 		if (!roster.has(parsed.seat)) continue;
 		bySeat.set(parsed.seat, [...(bySeat.get(parsed.seat) ?? []), lease]);
 	}
@@ -252,7 +210,7 @@ function reached(delivery: MessageDelivery, roster: ReadonlySet<string>): Set<st
 const answered = (lease: LeaseHold, seq: Seq): boolean =>
 	lease.phase === 'running' ||
 	((lease.reason === 'abandoned' || lease.reason === 'revoked') &&
-		parseId(lease.id)?.position === seq) ||
+		decodeActivationId(lease.id)?.position === seq) ||
 	(!answersNothing(lease) && lease.readThrough >= seq);
 
 /** A lease covers a message while it works, or through the end of its attempted work. */
@@ -269,7 +227,7 @@ function statusOf(
 	seat: string,
 	taken: readonly LeaseHold[],
 	options: PendingActivationOptions,
-	cause: Cause,
+	source: ActivationSource,
 ): PendingWake | undefined {
 	// A running lease keeps the work claimed. A completed lease settles it only
 	// after the executor recorded explicit progress through this message.
@@ -277,10 +235,10 @@ function statusOf(
 	const failed = taken.filter(
 		(lease) =>
 			cameToNothing(lease) ||
-			(lease.phase === 'ended' && parseId(lease.id)?.position === message.seq),
+			(lease.phase === 'ended' && decodeActivationId(lease.id)?.position === message.seq),
 	);
 	return {
-		...pendingActivation(cause, message.seq, seat, failed, options),
+		...pendingActivation(source, message.seq, seat, failed, options),
 		seq: message.seq,
 		at: message.at,
 	};
@@ -293,7 +251,7 @@ function statusOf(
  * activation the room owes is derived here.
  */
 export function pendingActivation(
-	cause: Cause,
+	source: ActivationSource,
 	position: Seq,
 	seat: string,
 	failed: readonly LeaseHold[],
@@ -303,8 +261,8 @@ export function pendingActivation(
 	const attempt = nextAttempt(unsuccessfulAttempts);
 	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
 	return {
-		id: activationId(cause, position, seat, attempt),
-		cause,
+		id: encodeActivationId({ source, position, seat, attempt }),
+		source,
 		position,
 		seat,
 		attempt,
@@ -325,4 +283,4 @@ const answersNothing = (lease: LeaseHold): boolean => endedFor(lease, ANSWERS_NO
 export const cameToNothing = (lease: LeaseHold): boolean => endedFor(lease, CAME_TO_NOTHING);
 
 /** The seat an id names, or nothing for an id the room did not derive. */
-export const seatOf = (id: string): string | undefined => parseId(id)?.seat;
+export const seatOf = (id: string): string | undefined => decodeActivationId(id)?.seat;

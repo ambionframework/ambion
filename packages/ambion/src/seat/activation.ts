@@ -146,14 +146,14 @@ export class Activation {
 			if (this.cancelled) return false;
 			this.agent = agent;
 			agent.subscribe((event) => this.note(event));
-			await agent.prompt(this.context.initial(view.spec.through, view.context, this.host.now()));
+			await agent.prompt(this.context.initial(view.through, view.context, this.host.now()));
 			await this.host.persist(agent);
 			const failure = failureOf(agent);
 			if (failure) return this.broke(failure);
 			// An aborted activation stays cancelled, and one that does not rebuild
 			// is a single pass whatever landed: a summarising activation answers its
 			// fixed closed exchange.
-			if (this.cancelled || view.spec.grant.kind !== 'say') return false;
+			if (this.cancelled || view.spec.purpose.kind !== 'respond') return false;
 			// Awaited here, so a renewal that fails is caught below and not returned as a rejection.
 			return await this.needsRefresh(agent);
 		} catch (error) {

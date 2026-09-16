@@ -85,6 +85,7 @@
 		// The core is laid out in layers, and an import points down only:
 		//
 		//   types, wire, define, render   the vocabulary: shapes, and what a participant reads
+		//   activation-id.ts               the vocabulary's durable activation identity codec
 		//   host/                         what a host owns: the runtime value
 		//   journal/                      the room's kinds, over @ambionframework/journal
 		//   room/                         every fact and every decision, pure over the journal
@@ -97,6 +98,7 @@
 		// the imports its layer may not make.
 		{
 			"includes": [
+				"packages/ambion/src/activation-id.ts",
 				"packages/ambion/src/types.ts",
 				"packages/ambion/src/wire.ts",
 				"packages/ambion/src/define.ts",

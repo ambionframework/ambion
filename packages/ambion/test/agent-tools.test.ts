@@ -1,6 +1,6 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { defineAgent, defineTool, type ToolBundle } from '../src/index.ts';
+import { defineAgent, defineHuman, defineTool, type ToolBundle } from '../src/index.ts';
 
 const tool = (name: string) =>
 	defineTool({
@@ -11,6 +11,25 @@ const tool = (name: string) =>
 	});
 
 describe('agent tools', () => {
+	it.each(['reader\n', 'reader\r\n', 12, undefined])(
+		'rejects participant names that are not exact lowercase identifiers: %j',
+		(name) => {
+			const agent = {
+				name: 'reader',
+				identity: 'An agent.',
+				instructions: 'Read.',
+				model: 'scripted/reader',
+			};
+			const human = { name: 'priya', identity: 'A person.' };
+			expect(() => Reflect.apply(defineAgent, undefined, [{ ...agent, name }])).toThrow(
+				/Invalid participant name/,
+			);
+			expect(() => Reflect.apply(defineHuman, undefined, [{ ...human, name }])).toThrow(
+				/Invalid participant name/,
+			);
+		},
+	);
+
 	it('accepts an ordinary domain tool name with an underscore', () => {
 		expect(() => tool('lookup_order')).not.toThrow();
 	});
