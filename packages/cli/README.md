@@ -1,57 +1,55 @@
 # @ambionframework/cli
 
-**Create a team project and test its agents locally.** `ambion new` writes
+**Create a team project and test its agents locally.** `ambion new` creates
 an editable project. `ambion dev` runs its Worker through Wrangler and opens
 an OpenTUI room with the team, conversation, message input, and Worker logs.
 
 ## Requirements
 
-Use Node **26.4 or newer** and pnpm 10 to install the CLI and run `dev`.
-OpenTUI needs Node's experimental FFI. The `ambion` launcher adds the required
-flag for `dev`. The room and its agents run separately in local workerd.
+Use Node **26.4 or newer**, pnpm 10, and an interactive terminal.
+The launcher enables the experimental FFI that OpenTUI requires.
+The room and its agents run separately in local workerd.
 
-## Start from this checkout
+## Install the CLI
 
-**Use local archives while the Cloudflare adapter remains private.** The
-helper builds the packages, copies the team template, and configures local
-dependencies. Choose a new directory outside the repository. Its parent must
-already exist.
+The packages use GitHub Packages. Set `GITHUB_TOKEN` to a classic personal
+access token with `read:packages`. Add these lines to your user `~/.npmrc`:
+
+```ini
+@ambionframework:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Install the prerelease from the `next` tag after publication:
 
 ```sh
-# Run from the Ambion repository root.
-pnpm install --frozen-lockfile
-node scripts/prepare-team.mjs ../my-team
-cd ../my-team
+npm install --global @ambionframework/cli@next
+```
+
+## Create and start a team
+
+**Use `ambion new` for every project.** It creates the template, sets the
+project name, and selects matching Ambion dependency versions.
+
+```sh
+ambion new my-team
+cd my-team
 pnpm install
 cp .dev.vars.example .dev.vars
 # Edit .dev.vars and set ANTHROPIC_API_KEY.
-pnpm exec ambion dev
+ambion dev
 ```
 
-The project contains the `planner` and `reviewer` agents and the `human`
-participant. Ask the team a question, such as “Plan a small documentation site
-and review the risks.” Both agents can contribute to the conversation.
+The generated `.npmrc` configures GitHub Packages. It references
+`GITHUB_TOKEN` without storing a token. Keep that variable available when you
+install dependencies. No local package archives are needed.
 
-The helper uses the same template as `ambion new`. It also supplies local
-package archives and dependency overrides. Registry publication remains a
-separate release decision.
+The team contains the `planner` and `reviewer` agents and the `human`
+participant. Ask a question, such as “Plan a small documentation site and
+review the risks.” Both agents can contribute.
 
-## Create a project with `ambion new`
-
-With an installed CLI, run:
-
-```sh
-pnpm exec ambion new ../another-team
-```
-
-The command copies the template and prints the setup steps. The project name
-uses 1–63 lowercase letters, numbers, or dashes. It cannot start or end with a
-dash. `new` refuses to overwrite a directory that contains files. It sets the
-package and Worker names from the directory name.
-
-**The generated manifest uses package versions from the registry.** Until
-publication, those dependencies need local archives before `pnpm install`.
-Use the checkout helper above for a project that you can install immediately.
+The project name uses 1–63 lowercase letters, numbers, or dashes. It cannot
+start or end with a dash. `new` refuses to overwrite existing files.
 
 ## Configure the model
 
@@ -59,42 +57,46 @@ Set `ANTHROPIC_API_KEY` in the project's `.dev.vars`. The default model is
 `anthropic/claude-sonnet-5`. Set `AMBION_MODEL` to another supported
 `provider/model-id` and supply that provider's key in the same file.
 
-The CLI reads local credentials from `.dev.vars`. It does not load
-`~/.anthropic` automatically. The generated `.gitignore` excludes `.dev.vars`
-and local Wrangler state.
+The CLI reads credentials from `.dev.vars`. It does not load `~/.anthropic`
+automatically. The generated `.gitignore` excludes `.dev.vars` and local
+Wrangler state.
 
 ## Test the team
 
 ```sh
-pnpm exec ambion dev                 # current project, port 8787
-pnpm exec ambion dev --port 8788      # use another local port
-pnpm exec ambion dev ../another-team # open another team project
+ambion dev                 # current project, port 8787
+ambion dev --port 8788     # use another local port
+ambion dev ../another-team # open another team project
 ```
 
-Enter a message to ask the team a question. The interface shows each agent's
-contribution and whether the room is working. Scroll the conversation with the
-mouse wheel. Worker errors appear below the conversation and in the logs.
-Ctrl-C closes the interface and stops its development server.
+Enter sends a message. Scroll the conversation with the mouse wheel.
+Worker errors appear below the conversation and in the logs. Ctrl-C closes
+the interface and stops its development server.
 
-Edit the agents in `src/room.ts`, then restart `dev` to test the changes.
-The room resumes from its local `.wrangler/` storage. Stop `dev` and remove
-that directory to start with an empty room.
+Edit agent instructions in `src/room.ts`, then restart `dev`.
+History remains in `.wrangler/`. Stop `dev` and remove that directory to
+start with an empty room.
 
-For HTTP-only testing, run `pnpm dev:worker`. Follow the generated README
-for the `/start`, `/join`, `/send`, `/messages`, and `/status` routes.
+For HTTP-only testing, run `pnpm dev:worker`. The generated README documents
+the `/start`, `/join`, `/send`, `/messages`, and `/status` routes.
 
-## Verify the CLI from the repository
+## Work from a repository checkout
 
-Run `node scripts/cli-team-smoke.mjs` from the repository root. It checks the
-packed CLI and a generated project outside the repository.
+Build the CLI, then invoke its launcher. Project creation still uses `new`.
+The generated project installs the corresponding published package versions.
 
-Add `--live` to open an interactive room using `~/.anthropic/dev-key`.
-This test makes live model requests. It removes the temporary credential file
-on exit, including when `--keep` retains the test project.
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+node packages/cli/bin/ambion.mjs new ../my-team
+```
 
-The first version serves one local human and one room on loopback. It has no
-deployment command. See [the CLI plan](../../planning/cli.md) for scope and
-acceptance evidence, and [deployment and recovery](../../docs/deployment.md)
-for the host contracts.
+Run `node scripts/cli-team-smoke.mjs` to check an unpublished build. This test
+packs local dependencies and exercises the actual `ambion new` command. Its
+package fixtures are internal to the test.
+
+The first version supports one local human and one room on loopback.
+Deployment commands remain future work. See [the CLI plan](../../planning/cli.md)
+and [deployment and recovery](../../docs/deployment.md) for scope.
 
 Apache 2.0.

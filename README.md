@@ -116,36 +116,34 @@ See [Contributing](CONTRIBUTING.md) to build and run from source.
 
 ## Try the local CLI
 
-**Create a team and talk to its agents in your terminal.** Use Node **26.4
-or later**, pnpm 10, and an interactive terminal.
+**Create a team with `ambion new` and talk to it with `ambion dev`.** Use
+Node **26.4 or later**, pnpm 10, and an interactive terminal.
 
-The Cloudflare adapter is private. From this checkout, prepare a project with
-local package archives. The helper builds the packages and creates the project.
-Choose a new directory outside the repository whose parent already exists.
+Configure GitHub Packages in your user `~/.npmrc` with the registry and token
+lines from [Install](#install). Set `GITHUB_TOKEN` to a classic token with
+`read:packages`. After prerelease publication, install the CLI from `next`:
 
 ```sh
-# Run from the Ambion repository root.
-pnpm install --frozen-lockfile
-node scripts/prepare-team.mjs ../my-team
-cd ../my-team
+npm install --global @ambionframework/cli@next
+ambion new my-team
+cd my-team
 pnpm install
 cp .dev.vars.example .dev.vars
 # Edit .dev.vars and set ANTHROPIC_API_KEY.
-pnpm exec ambion dev
+ambion dev
 ```
 
 The OpenTUI room contains a planner, a reviewer, and your local participant.
-Type a question, then press Enter. Scroll with the mouse wheel. Press Ctrl-C
-to close the room and stop Wrangler.
+Enter sends a question. Scroll with the mouse wheel. Ctrl-C closes the room
+and stops Wrangler.
 
-Edit the agent instructions in `src/room.ts`, then restart `pnpm exec ambion dev`.
-Conversation history remains in `.wrangler/`. Use `--port 8788` if port 8787
+Edit instructions in `src/room.ts`, then restart `ambion dev`.
+History remains in `.wrangler/`. Use `ambion dev --port 8788` if port 8787
 is occupied.
 
-The CLI also provides `ambion new <directory>` to copy the team template.
-Its generated dependencies require local archives until publication.
-See the [CLI README](packages/cli/README.md) for command usage, model settings,
-HTTP testing, and resetting local history.
+The generated project configures the registry and uses published packages,
+including the Cloudflare adapter. See the [CLI README](packages/cli/README.md)
+for model settings, HTTP testing, and resetting local history.
 
 ## A small room
 
@@ -211,12 +209,12 @@ multiple people, and a shared workspace.
 
 **Placement, persistence, and tool resources are separate choices.**
 
-| Model                         | Storage                            | Use and support                                                  |
-| ----------------------------- | ---------------------------------- | ---------------------------------------------------------------- |
-| Embedded Node application     | In-memory journals                 | Development, tests, and ephemeral application lifetimes          |
-| Persistent Node service       | SQLite through the storage adapter | SQLite adapter and recovery tests; application-managed lifecycle |
-| Separate room and agent hosts | Storage chosen by each host        | JSON protocol extension contract                                 |
-| Cloudflare Durable Objects    | Each object's SQLite storage       | Private, tested reference; no published deployment product       |
+| Model                         | Storage                            | Use and support                                                    |
+| ----------------------------- | ---------------------------------- | ------------------------------------------------------------------ |
+| Embedded Node application     | In-memory journals                 | Development, tests, and ephemeral application lifetimes            |
+| Persistent Node service       | SQLite through the storage adapter | SQLite adapter and recovery tests; application-managed lifecycle   |
+| Separate room and agent hosts | Storage chosen by each host        | JSON protocol extension contract                                   |
+| Cloudflare Durable Objects    | Each object's SQLite storage       | Publishable adapter for local CLI use; deployment commands pending |
 
 The host keeps its process alive, supplies definitions again after restart,
 and owns model credentials and tool resources. Persisted history alone does

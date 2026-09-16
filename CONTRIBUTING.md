@@ -29,9 +29,10 @@ checked and released. Read it before changing anything under `.github/`,
 ## Releasing
 
 **Complete the release gates before tagging.** The 0.1.0 target includes
-pending API, packaging, and consumer checks in the delivery plan. Current
-publishing scripts still include the local-development CLI; its release exclusion
-requires a packaging change.
+pending API, packaging, and consumer checks in the delivery plan.
+The prerelease includes the local development CLI and Cloudflare adapter.
+Create projects with `ambion new`; the release workflow publishes matching
+package versions.
 
 Versions move in lockstep across publishable packages.
 

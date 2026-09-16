@@ -75,6 +75,21 @@ async function rewriteWrangler(target: string, name: string): Promise<void> {
 	await writeFile(path, `${JSON.stringify(config, null, '\t')}\n`);
 }
 
+async function restoreDotfiles(target: string): Promise<void> {
+	for (const [sourceName, targetName] of [
+		['gitignore', '.gitignore'],
+		['npmrc', '.npmrc'],
+	] as const) {
+		const source = resolve(target, sourceName);
+		try {
+			await writeFile(resolve(target, targetName), await readFile(source));
+			await unlink(source);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+		}
+	}
+}
+
 /** Create a team project from the packaged template. */
 export async function createProject(directory: string, version: string): Promise<string> {
 	if (directory.trim() === '') throw new ProjectError('A project directory is required.');
@@ -89,14 +104,7 @@ export async function createProject(directory: string, version: string): Promise
 			errorOnExist: true,
 		});
 	}
-	const gitignore = resolve(target, 'gitignore');
-	try {
-		await access(gitignore);
-		await writeFile(resolve(target, '.gitignore'), await readFile(gitignore));
-		await unlink(gitignore);
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-	}
+	await restoreDotfiles(target);
 	await rewritePackage(target, name, version);
 	await rewriteWrangler(target, name);
 	return target;

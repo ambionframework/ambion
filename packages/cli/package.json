@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/cli",
-	"version": "0.0.0",
+	"version": "0.1.0-alpha.1",
 	"type": "module",
 	"description": "Command line interface for the Ambion agent framework.",
 	"license": "Apache-2.0",

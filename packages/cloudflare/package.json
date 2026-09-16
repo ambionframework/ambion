@@ -1,7 +1,6 @@
 {
 	"name": "@ambionframework/cloudflare",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0-alpha.1",
 	"type": "module",
 	"description": "A room as Cloudflare Durable Objects: one object per room, one per seat.",
 	"license": "Apache-2.0",
@@ -36,5 +35,15 @@
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2",
 		"vitest": "^4.1.11"
+	},
+	"homepage": "https://ambionframework.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/ambionframework/ambion.git",
+		"directory": "packages/cloudflare"
+	},
+	"publishConfig": {
+		"registry": "https://npm.pkg.github.com",
+		"access": "public"
 	}
 }

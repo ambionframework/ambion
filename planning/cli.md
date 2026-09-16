@@ -38,16 +38,15 @@ After editing agent definitions, restart `ambion dev` to test the changes.
 - [x] Use a pinned Wrangler dependency and the existing room and seat
       Durable Objects. Keep the template free of application resource storage.
 - [x] Make the CLI and adapter dependencies installable outside the monorepo.
-      Local package archives are sufficient for the initial development check.
+- [ ] Publish matching versions of the CLI, runtime, journal, and adapter.
 
 **Done when:** the template runs with `wrangler dev`. A developer can send
 one message over HTTP and read both agents' contributions.
 
-**Evidence:** [the team template](../packages/cli/templates/team/README.md)
-installs outside the repository through
-[`scripts/prepare-team.mjs`](../scripts/prepare-team.mjs). The helper extracts
-the template from the packed CLI and sets its dependencies to local archives.
-It restores the packaged `gitignore` file as `.gitignore`.
+**Evidence:** The packed-consumer test invokes the packaged `ambion new`
+command outside the repository. It verifies the generated template, registry
+configuration, dependency versions, and overwrite protection. Local archives
+are test fixtures only. There is no separate project-creation script.
 
 Standalone installation, typechecking, CLI execution, and Wrangler bundling
 passed. A live Anthropic test received contributions from both agents.
@@ -65,8 +64,8 @@ terminal interface.
 - [x] Print dependency installation and provider credential instructions.
 
 **Done when:** a generated project outside the repository installs and starts
-without workspace links. Until registry publication, validation supplies local
-package archives; use `scripts/prepare-team.mjs` for the repository workflow.
+without workspace links. The generated `.npmrc` selects GitHub Packages and
+references `GITHUB_TOKEN`. The normal path installs published dependencies.
 
 ### 3. Implement `ambion dev`
 
@@ -137,7 +136,9 @@ removes its temporary credential file on exit. Stop the room and remove its
 **Keep this milestone to two commands and one local room.** Automated
 evaluations, deployment commands, remote authentication, multiple terminal
 clients, WebSockets, live tool activity, and production operations follow later.
-Publication is a separate release decision under [the delivery plan](next.md).
+The CLI and Cloudflare adapter ship together in a lockstep prerelease.
+Registry publication and installation verification remain pending until the
+release workflow succeeds. See [the delivery plan](next.md).
 
 ## Starting points
 

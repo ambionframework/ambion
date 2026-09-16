@@ -35,12 +35,12 @@ messages. Human participants can review those messages through
 current examples with this checkout. Do not treat proposed package names in
 the plan as available exports.
 
-| Area       | Current code                                                            | 0.1.0 target                                                    |
-| ---------- | ----------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Membership | Fixed `agents` definitions, optional `seats`, and name-based operations | Fixed definitions per run, with membership addressed by name    |
-| Pi audits  | `@ambionframework/journal/pi`                                           | A separate `@ambionframework/pi-journal` package                |
-| Assistant  | Domain tools can be supplied but are omitted from assistant executions  | Reject domain tools in assistant definitions                    |
-| CLI        | Project creation and local OpenTUI rooms                                | Publication is separate; see [the CLI plan](../planning/cli.md) |
+| Area       | Current code                                                            | 0.1.0 target                                                               |
+| ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Membership | Fixed `agents` definitions, optional `seats`, and name-based operations | Fixed definitions per run, with membership addressed by name               |
+| Pi audits  | `@ambionframework/journal/pi`                                           | A separate `@ambionframework/pi-journal` package                           |
+| Assistant  | Domain tools can be supplied but are omitted from assistant executions  | Reject domain tools in assistant definitions                               |
+| CLI        | Project creation and local OpenTUI rooms                                | CLI and adapter share a prerelease; see [the CLI plan](../planning/cli.md) |
 
 These differences are tracked in the delivery plan. Dated [demo reports](../demos)
 remain historical evidence for the versions they ran.

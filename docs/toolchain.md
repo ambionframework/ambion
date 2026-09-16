@@ -20,7 +20,7 @@ ambion/
 ├── packages/
 │   ├── ambion/            @ambionframework/ambion   — the runtime library
 │   ├── cli/               @ambionframework/cli      — the `ambion` binary
-│   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects, private
+│   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects
 │   ├── journal/           @ambionframework/journal   — the journal a room writes to
 │   └── workspace/         @ambionframework/workspace — a filesystem behind a workspace
 ├── examples/
@@ -39,8 +39,8 @@ ambion/
 └── pnpm-workspace.yaml    packages/*, examples/*
 ```
 
-**Current packaging.** `packages/*` is publishable, except
-`packages/cloudflare`, which is a private reference implementation.
+**Current packaging.** All packages in `packages/*` are publishable.
+The Cloudflare adapter supplies the CLI's generated Worker.
 `examples/*` is private and exists to be run. `examples/site` is the runnable example; the gate type-checks it with
 everything else, so an example that breaks fails the build.
 
@@ -62,8 +62,8 @@ filesystem resources and supplies ordinary tool bundles to agents. Its data stay
 `@ambionframework/ambion`, `@ambionframework/journal`,
 `@ambionframework/pi-journal`, and `@ambionframework/workspace`. The Pi audit
 subpath still lives in the journal package. The CLI provides local project
-creation and an OpenTUI room client; its publication remains a separate decision. Current
-scripts still include it. Do not treat this documentation as a packaging change.
+creation and an OpenTUI room client. The CLI and Cloudflare adapter join the
+lockstep prerelease. The 0.1.0 release gates still apply to the stable release.
 
 Internal dependencies use `workspace:*` and are rewritten to the published
 version by pnpm at pack time. The CLI smoke checks exercise this dependency:
@@ -592,10 +592,15 @@ Order of operations, all before anything leaves the machine:
 install → check:types → check:lint → build → test
         → versions agree → tag matches package version
         → pack → attest provenance → publish the attested tarballs
+        → install the published CLI → ambion new → install and check the project
 ```
 
 Permissions are `contents: read`, `packages: write`, plus `id-token: write` and
 `attestations: write` for the signature.
+
+After publication, the workflow installs the exact CLI version from the registry.
+It creates a project with `ambion new`, installs its dependencies, and checks
+its types and Worker bundle. This check uses no local package archives.
 
 A tag can be cut from a commit CI never saw, so the release re-runs the full
 gate itself. The tag-match step means

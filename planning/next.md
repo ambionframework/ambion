@@ -662,7 +662,7 @@ for 0.1.0. Extract further only when a second consumer needs that boundary.
 | `Close.wakes[0]` internally                       | `summaryBy`                               | A close designates at most one summary writer                         |
 | `Composition` internally                          | `RoomConfiguration`                       | Names the durable configuration fact directly                         |
 | `journal/pi`                                      | `pi-journal` package                      | Pi storage has a separate consumer and dependency set                 |
-| Local development CLI                             | Keep publication separate from 0.1.0      | Local project creation and room testing follow [the CLI plan](cli.md) |
+| Local development CLI                             | Publish with the Cloudflare adapter       | Local project creation and room testing follow [the CLI plan](cli.md) |
 
 **Preserve useful established names.** Keep room, agent, visit, exchange,
 attention, and journal. Do not rename human to person or attention to routing
@@ -670,7 +670,8 @@ merely for stylistic consistency.
 
 Keep transport details behind a hosting subpath. Stop exporting persisted
 lease and composition shapes solely because the transport currently uses
-`wire.ts`. Leave Cloudflare private until its deployment API is ready.
+`wire.ts`. Publish the Cloudflare adapter for the local CLI. Keep deployment
+commands outside this local development milestone.
 
 ## 7. Finish the abstraction at the edges
 
@@ -804,8 +805,10 @@ for investigation; their old reproduction rates are not current evidence.
       settings. Do not imply that the Node workspace is platform-neutral.
 - [ ] Update package exports, build entries, dependency checks, versioning,
       and publication discovery for `pi-journal` and the narrowed hosting surface.
-- [ ] Reconcile CLI publication with [the local development plan](cli.md).
-      Keep Cloudflare private until its supported deployment product is ready.
+- [x] Include the CLI and Cloudflare adapter in lockstep package discovery.
+      Use `ambion new` as the only project-creation path.
+- [ ] Publish the prerelease through the release workflow.
+      Verify registry installation of a generated project.
 - [ ] Declare example coverage in Knip. Remove the unused `dev` task contract.
       Review Turbo dependencies against actual source and built-package tests;
       remove redundant builds only where the test contract permits it.
@@ -843,7 +846,7 @@ the intended packages. Importing definitions must retain lazy provider loading.
 
 **Done when:** the supported deployment examples demonstrate recovery with
 their real storage and topology. Record their evidence separately from the
-private Cloudflare reference tests.
+Cloudflare adapter tests.
 
 ### Failure tests and operational evidence
 
@@ -937,7 +940,7 @@ consumer or a measured limitation.
 | A general executor plugin system                                       | Establish and exercise the internal protocol before making it a public framework                                     |
 | A property-test shrinker                                               | Adopt when a real failing history is expensive to reduce manually                                                    |
 | JSONL torn-tail and multiwriter repair                                 | Room persistence uses memory/SQLite; revisit only if a JSONL adapter is reintroduced                                 |
-| Published Cloudflare deployment and CLI commands                       | The private reference lacks the packaging, configuration, and operational evidence of a supported deployment         |
+| Cloudflare deployment commands                                         | The adapter supports local CLI use; managed deployment needs configuration and operational evidence                  |
 
 ## 11. Disposition of the previous backlog
 

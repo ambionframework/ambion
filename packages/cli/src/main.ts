@@ -40,6 +40,7 @@ async function main(argv: readonly string[]): Promise<void> {
 				`Created ${target}.`,
 				'',
 				`Next: cd ${target}`,
+				'      # set GITHUB_TOKEN to a GitHub Packages read:packages token',
 				'      pnpm install',
 				'      cp .dev.vars.example .dev.vars',
 				'      # set ANTHROPIC_API_KEY in .dev.vars',

@@ -1,6 +1,6 @@
 {
 	"name": "@ambionframework/ambion",
-	"version": "0.0.0",
+	"version": "0.1.0-alpha.1",
 	"type": "module",
 	"description": "A minimalist framework for ambient-aware, always-on agents.",
 	"license": "Apache-2.0",
