@@ -1,13 +1,13 @@
 /** Pure collaboration context derived from the room projection. */
 
-import { type Message, type SeatInfo, type Seq, seatSessionId } from '../types.ts';
 import type {
 	ActivationPurpose,
 	ActivationSpec,
 	ActivationView,
 	CollaborationContext,
 	ContextParticipant,
-} from '../wire.ts';
+} from '../protocol.ts';
+import { type Message, type SeatInfo, type Seq, seatSessionId } from '../types.ts';
 import type { RoomState } from './fold.ts';
 
 /** What the view is built from: the fold and current host facts. */

@@ -179,6 +179,16 @@ The runtime keeps lifecycle control separately. `runningRoom(runtime, name)`
 returns the same restricted room-call surface. Room decisions use the journal
 projection and an explicit clock value. They do not require model services.
 
+**The transport entry exports the execution protocol.** It includes requests,
+responses, activation context, and delivery operations. Journal events and
+projected lease state stay internal. Protocol data and stored events retain
+their existing JSON shapes.
+
+**Migration:** `/transport` no longer exports `Close`, `Composition`, `Fence`,
+`Seating`, `LeaseChange`, or `LeaseHold`. Hosts use room reads and exchange
+handles for collaboration history. Executors use `ActivationView`,
+`CommitResult`, and `LeaseResponse`. `EndReason` remains part of lease requests.
+
 ## History and limits
 
 Composition entries use version 2. The room rejects legacy compositions and

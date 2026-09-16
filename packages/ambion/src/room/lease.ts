@@ -29,10 +29,36 @@
 
 import type { JournalEntry } from '@ambionframework/journal';
 import { type ActivationSource, decodeActivationId, encodeActivationId } from '../activation-id.ts';
-import type { Message, Seq } from '../types.ts';
-import type { EndReason, LeaseChange, LeaseHold } from '../wire.ts';
+import type { LeaseChange } from '../journal/events.ts';
+import type { EndReason, Message, Seq } from '../types.ts';
 import type { MessageDelivery } from './delivery.ts';
 import { coversAttempt as coverageRule, expired, nextAttempt } from './rules.verified.ts';
+
+/** What the lease entries for one activation fold to. */
+type LeaseFact = {
+	id: string;
+	/** When the last entry was written, ISO. */
+	at: string;
+	/** When the first entry was written, ISO. */
+	claimedAt: string;
+	/** The seq where this activation first attempted work. */
+	since: Seq;
+	/** The highest message position that the executor explicitly consumed. */
+	readThrough: Seq;
+};
+
+export type LeaseHold =
+	| (LeaseFact & {
+			phase: 'running';
+			/** When a running lease expires, in milliseconds since the epoch. */
+			expiresAt: number;
+	  })
+	| (LeaseFact & {
+			phase: 'ended';
+			reason: EndReason;
+			/** The seq when the end landed. */
+			until: Seq;
+	  });
 
 /**
  * Every lease the changes fold to. The complete journal remains available,

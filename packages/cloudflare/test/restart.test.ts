@@ -9,13 +9,14 @@
  */
 import { env, runInDurableObject } from 'cloudflare:test';
 import { isSpoken } from '@ambionframework/ambion';
-import type { LeaseChange } from '@ambionframework/ambion/transport';
 import { namespaced } from '@ambionframework/journal';
 import { expect, it } from 'vitest';
 import { sqlStorage } from '../src/storage.ts';
 import { until } from './until.ts';
 
 const NAME = 'room-restart';
+
+type LeaseObservation = { id: string; phase: 'running' | 'ended'; reason?: string };
 
 /** Every entry of one kind on the room's journal, read through a fresh look at its storage. */
 async function stored<T>(stub: DurableObjectStub, type: string): Promise<T[]> {
@@ -50,7 +51,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 
 	// The seat claimed its lease, so its activation runs now. The model call it
 	// waits on is what keeps it running while the room goes away.
-	const claim = await until(async () => (await stored<LeaseChange>(stub, 'lease')).at(0));
+	const claim = await until(async () => (await stored<LeaseObservation>(stub, 'lease')).at(0));
 	expect(claim.id).toBe('message:4:slow:1');
 	const claimedBy = (await writers(stub, 'lease')).at(0);
 	const firstRun = (await writers(stub, 'run')).at(0);
@@ -101,7 +102,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 	// assistant's draft takes a lease of its own after it, and this test says
 	// nothing about that one.
 	const leases = await until(async () => {
-		const held = await stored<LeaseChange>(again, 'lease');
+		const held = await stored<LeaseObservation>(again, 'lease');
 		const mine = held.filter((entry) => entry.id === claim.id);
 		return mine.at(-1)?.phase === 'ended' ? held : undefined;
 	});

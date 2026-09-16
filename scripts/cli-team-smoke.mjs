@@ -102,6 +102,57 @@ async function packFixture(destination) {
 		join(destination, 'src', 'index.ts'),
 		"import { PACKAGE_NAME } from '@ambionframework/ambion';\nimport type { Env } from '@ambionframework/cloudflare';\n\nconst name: string = PACKAGE_NAME;\nconst env: Env | undefined = undefined;\nvoid name;\nvoid env;\n",
 	);
+	await writeFile(
+		join(destination, 'src', 'transport.ts'),
+		`import {
+  assertWire,
+  inProcessTransport,
+  roundTrip,
+  type EndReason,
+  type SeatContext,
+  type SeatRoom,
+  type Transport,
+} from '@ambionframework/ambion/transport';
+
+// @ts-expect-error Persisted exchange events are internal.
+import type { Close } from '@ambionframework/ambion/transport';
+// @ts-expect-error Stored configuration is internal.
+import type { Composition } from '@ambionframework/ambion/transport';
+// @ts-expect-error Run fences are internal.
+import type { Fence } from '@ambionframework/ambion/transport';
+// @ts-expect-error Stored lease events are internal.
+import type { LeaseChange } from '@ambionframework/ambion/transport';
+// @ts-expect-error Projected lease state is internal.
+import type { LeaseHold } from '@ambionframework/ambion/transport';
+// @ts-expect-error Stored membership is internal.
+import type { Seating } from '@ambionframework/ambion/transport';
+
+const local = inProcessTransport();
+export const transport: Transport = {
+  connect(room: SeatRoom, context: SeatContext) {
+    const calls: SeatRoom = {
+      view: async (activation) => roundTrip(await room.view(activation)),
+      commit: async (request) => {
+        assertWire(request);
+        return roundTrip(await room.commit(roundTrip(request)));
+      },
+      lease: async (request) => roundTrip(await room.lease(roundTrip(request))),
+    };
+    const port = local.connect(calls, context);
+    return {
+      wake: (wake) => port.wake(roundTrip(wake)),
+      steer: (steer) => port.steer(roundTrip(steer)),
+      cut: (activation) => port.cut(activation),
+    };
+  },
+};
+
+export function release(room: SeatRoom, activation: string, readThrough: number) {
+  const reason: EndReason = 'released';
+  return room.lease({ activation, operation: 'release', reason, readThrough });
+}
+`,
+	);
 	return archives;
 }
 

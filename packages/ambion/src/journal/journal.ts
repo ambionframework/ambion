@@ -16,8 +16,8 @@ import {
 	type JournalStorage,
 	type Vocabulary,
 } from '@ambionframework/journal';
-import type { Message } from '../types.ts';
-import type { Close, Composition, Fence, LeaseChange, Without } from '../wire.ts';
+import type { Message, Without } from '../types.ts';
+import type { Close, Composition, Fence, LeaseChange } from './events.ts';
 import { validateRoomBody } from './validate.ts';
 
 /** The five kinds of entry the room writes to its journal. */

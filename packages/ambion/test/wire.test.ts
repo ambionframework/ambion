@@ -4,14 +4,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createRuntime } from '../src/index.ts';
+import type { Close, Composition, LeaseChange } from '../src/journal/events.ts';
 import {
 	type ActivationView,
 	assertWire,
-	type Close,
 	type CommitRequest,
 	type CommitResult,
-	type Composition,
-	type LeaseChange,
 	type LeaseRequest,
 	type LeaseResponse,
 	roundTrip,

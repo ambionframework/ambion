@@ -33,8 +33,8 @@ import type {
 	AgentMessage,
 	Session as PiSession,
 } from '@earendil-works/pi-agent-core';
-import type { RoomNotification, Seq } from '../types.ts';
-import type { ActivationView, EndReason, LeaseResponse, ViewResponse } from '../wire.ts';
+import type { ActivationView, LeaseResponse, ViewResponse } from '../protocol.ts';
+import type { EndReason, RoomNotification, Seq } from '../types.ts';
 import { PiContext } from './pi.ts';
 
 /** What only the seat side can give an activation: the room's view, and a model over it. */

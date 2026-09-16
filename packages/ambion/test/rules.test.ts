@@ -1,8 +1,8 @@
 import type { JournalEntry as Entry } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
+import type { LeaseChange } from '../src/journal/events.ts';
 import { cameToNothing, foldLeases, pendingWakes } from '../src/room/lease.ts';
-import type { Message } from '../src/types.ts';
-import type { EndReason, LeaseChange } from '../src/wire.ts';
+import type { EndReason, Message } from '../src/types.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({

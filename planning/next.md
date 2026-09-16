@@ -1,7 +1,8 @@
 # Next: the work to ship Ambion 0.1.0
 
 Delivery plan, 2026-09-16. Updated for executor separation in PR #130,
-Pi transcript extraction in PR #131, and room value ownership.
+Pi transcript extraction in PR #131, room value ownership in PR #132, and
+the protocol and event separation prepared for review.
 [release-0.1.0.md](release-0.1.0.md) defines the positioning, capabilities,
 deployment models, and limits. This file owns implementation work and its
 completion evidence, including the remaining work from earlier plans.
@@ -15,22 +16,23 @@ or verify the release.
 **Align the implementation with the collaboration kernel scope.** Remove
 representations and ownership overlaps that require unrelated mechanisms to
 stay synchronized. Executor dependencies and Pi transcript storage now have
-explicit boundaries. The next priority is to keep accepted room facts under
-one owner. Public reads and local delivery must not expose mutable state.
+explicit boundaries. PR #132 protects accepted room facts at public reads
+and local delivery.
+The next priority is to separate transport messages from stored event shapes.
 
 **Build on the merged foundations.** Fixed definitions, normalized tools,
 conditional journal appends, activation purpose, structured context, and
 ordinary participation have landed. Preserve their evidence below.
 
-| Order | Change                                      | Main reduction                                                  | Scope        |
-| ----- | ------------------------------------------- | --------------------------------------------------------------- | ------------ |
-| 1     | Protect room values at ownership boundaries | Eliminate state changes outside journal commits                 | Section 7    |
-| 2     | Finish protocol and workspace boundaries    | Separate recorded facts, transport data, and resource ownership | Sections 5–6 |
-| 3     | Complete recovery and release contracts     | Resolve failure guarantees and verify packaged consumers        | Sections 8–9 |
+| Order | Change                                  | Main reduction                                           | Scope        |
+| ----- | --------------------------------------- | -------------------------------------------------------- | ------------ |
+| 1     | Separate protocol from stored events    | Reduce transport exports and give stored facts one owner | Sections 5–6 |
+| 2     | Separate workspace resources from tools | Keep resource ownership independent of executor binding  | Section 6    |
+| 3     | Complete recovery and release contracts | Resolve failure guarantees and verify packaged consumers | Sections 8–9 |
 
 PR #130 narrows executor dependencies. PR #131 extracts Pi transcripts.
-Section 5 and section 6 retain their validation. Room value ownership takes
-priority because shared object references can change behavior without a commit.
+PR #132 detaches collaboration values at ownership boundaries. Sections 5–7
+retain their validation. Protocol separation narrows the next public boundary.
 
 Implement these changes in bounded slices. Temporary paths must have a named
 removal step. Do not introduce a second permanent participation model.
@@ -282,7 +284,7 @@ recovery reads. Existing steering, retry, unseat, and summary tests remain in
 place. Cloudflare persists its per-room catalog names
 and tests automatic resume without adding unrelated worker definitions.
 
-The next structural work item is the generic journal boundary in section 4.
+Section 4 records the completed generic journal boundary.
 
 ## 4. Give the journal one job
 
@@ -309,8 +311,7 @@ message position. The separate joined-message cache is removed. Seat answers
 read this projection directly; their interface no longer exposes a journal.
 
 Keep envelope metadata in one representation internally. A public message
-continues to expose `seq` directly. Protection of returned nested values
-remains outstanding in section 7.
+continues to expose `seq` directly. Section 7 records protection of returned nested values.
 
 ### Storage layout
 
@@ -347,7 +348,7 @@ outside the vocabulary. Failed validation must not advance the read cursor
 past the malformed entry.
 
 **Merged:** [PR #122](https://github.com/ambionframework/ambion/pull/122).
-The next structural item is the activation representation in section 5.
+Section 5 records the activation representation changes.
 
 **Implementation evidence:**
 
@@ -565,8 +566,8 @@ locally.
 
 **Scope:** retain the public room API, journal format, activation behavior,
 provider loading, audit isolation, and context acknowledgement. The transport
-adapter signature changes. Pi transcript extraction and splitting protocol
-values from stored facts remain separate work.
+adapter signature changes. Section 6 records Pi transcript extraction and
+the subsequent separation of protocol values from stored facts.
 
 **Validation:** `pnpm format` and `pnpm check` pass, including 586 core tests,
 18 workerd tests, 37 workspace tests, and six CLI tests. Expanded recovery
@@ -683,6 +684,30 @@ passes through generated project typechecking and a Wrangler dry run.
 Import restrictions preserve the dependency direction. Runtime consumers,
 examples, manifests, aliases, and migration instructions use the new package.
 
+### Separate protocol values from stored events
+
+**Prepared for review: narrow the transport contract.** `protocol.ts` contains
+requests, replies, activation context, and JSON checks. `journal/events.ts`
+contains stored event shapes. `room/lease.ts` owns the projected lease state.
+Lease end reasons remain shared by protocol and journal events.
+
+The transport entry stops exporting `Close`, `Composition`, `Fence`,
+`Seating`, `LeaseChange`, and `LeaseHold`. Executors continue to use the same
+`SeatRoom` calls and `SeatPort` delivery operations. Hosts read collaboration
+history through room snapshots and exchange handles. No new package or
+storage-schema subpath is introduced.
+
+The journal format, history version, and protocol JSON shapes are unchanged.
+Import restrictions keep the journal and protocol independent. Cloudflare
+retains its runtime API and verifies stored facts through test-local observations.
+
+**Validation:** `pnpm format` and `pnpm check` pass with 610 core tests,
+18 workerd tests, 30 journal tests, 20 Pi session tests, 37 workspace tests,
+and six CLI tests. The packed consumer compiles an external transport and
+rejects imports of all six internal types. Generated project typechecking
+and the Wrangler dry run pass. Import probes verify both forbidden dependency
+directions. Luna/High's independent review found no blockers.
+
 ### Keep workspace ownership intact
 
 **Separate the workspace resource from its Ambion tool adapter internally.**
@@ -702,7 +727,7 @@ for 0.1.0. Extract further only when a second consumer needs that boundary.
 
 ### Keep the release surface deliberate
 
-| Current name or structure                         | Proposed treatment                        | Reason                                                                |
+| Previous or current structure                     | Proposed treatment                        | Reason                                                                |
 | ------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------- |
 | `AgentSeat`, `SeatedAgent`, three seating helpers | Remove                                    | Membership is plain room configuration                                |
 | `seats()` / `SeatInfo`                            | `participants()` / `ParticipantInfo`      | The returned view includes humans and agents                          |
@@ -719,9 +744,9 @@ for 0.1.0. Extract further only when a second consumer needs that boundary.
 attention, and journal. Do not rename human to person or attention to routing
 merely for stylistic consistency.
 
-Keep transport details behind a hosting subpath. Stop exporting persisted
-lease and composition shapes solely because the transport currently uses
-`wire.ts`. Publish the Cloudflare adapter for the local CLI. Keep deployment
+Keep transport details behind the existing `/transport` subpath. The current
+slice removes persisted event and lease projection exports from that surface.
+The published Cloudflare adapter supports the local CLI. Keep deployment
 commands outside this local development milestone.
 
 ## 7. Finish the abstraction at the edges
@@ -770,7 +795,9 @@ recovery guarantees. Do not make a context-management framework a release gate.
 
 ### Make values safe to retain
 
-**Current slice: protect facts at ownership boundaries.** Room reads,
+**Merged:** [PR #132](https://github.com/ambionframework/ambion/pull/132).
+
+**Protect facts at ownership boundaries.** Room reads,
 exchange results, protocol replies, notifications, and steering now detach
 collaboration values. Copies include nested source ranges and routing arrays.
 Commit and lease requests, read filters, and seating options are captured
@@ -781,7 +808,7 @@ The change adds no public type, lifecycle state, or storage format. Internal
 projections stay shallow. Existing public signatures let callers edit their
 own copies without changing the room or another consumer.
 
-**Validation:** this slice is prepared for review and is not merged.
+**Validation:** all seven CI checks pass, including live provider tests.
 Ten public ownership regressions fail on the previous code across memory and
 SQLite. All 24 ownership tests pass after the fix. They cover reads, summaries,
 open exchanges, listener isolation, commit replies, missed context, steering,

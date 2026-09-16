@@ -2,7 +2,7 @@
 
 import { decodeActivationId } from '../activation-id.ts';
 import type { Message, Seq } from '../types.ts';
-import type { LeaseHold } from '../wire.ts';
+import type { LeaseHold } from './lease.ts';
 import { atWork as atWorkRule } from './rules.verified.ts';
 
 export interface MessageDelivery {

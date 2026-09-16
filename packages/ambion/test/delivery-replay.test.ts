@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { decodeActivationId } from '../src/activation-id.ts';
+import type { LeaseChange } from '../src/journal/events.ts';
 import type { Body, Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { evolve } from '../src/room/transition.ts';
-import type { Message } from '../src/types.ts';
-import type { EndReason, LeaseChange } from '../src/wire.ts';
+import type { EndReason, Message } from '../src/types.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const retry = { backoff: (attempt: number) => attempt * 1_000 };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type Runtime, runningRoom } from '../src/host/runtime.ts';
 import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
-import type { Intent } from '../src/wire.ts';
+import type { Intent } from '../src/protocol.ts';
 import { fakeClock } from './support/clock.ts';
 import { crash, roomName, stateOf } from './support/room.ts';
 import { storages } from './support/storage.ts';

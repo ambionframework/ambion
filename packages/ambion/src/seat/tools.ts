@@ -7,8 +7,8 @@
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
 import { SAY, SEAT, UNSEAT } from '../define.ts';
+import type { ActivationView, CommitResult, Intent, SeatRoom } from '../protocol.ts';
 import type { AgentDefinition, AmbionTool, Message } from '../types.ts';
-import type { ActivationView, CommitResult, Intent, SeatRoom } from '../wire.ts';
 import type { Activation } from './activation.ts';
 import { refusal } from './render.ts';
 import { summaryToolDescription } from './summary.ts';

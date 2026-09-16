@@ -18,6 +18,12 @@ import type { TSchema } from 'typebox';
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
 
+/** `Omit` over each member of a union, so a discriminated body keeps its shape. */
+export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+/** Why a lease ended. */
+export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandoned';
+
 /** A question the room is working on. */
 export interface Exchange {
 	/** The person whose question opened it, and who owns what follows. */

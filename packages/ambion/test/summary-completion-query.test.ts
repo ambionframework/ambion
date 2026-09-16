@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { Close } from '../src/journal/events.ts';
 import { summaryCompletion } from '../src/room/exchange.ts';
+import type { LeaseHold } from '../src/room/lease.ts';
 import type { Message } from '../src/types.ts';
-import type { Close, LeaseHold } from '../src/wire.ts';
 
 const close = (writer: string | null = 'assistant'): Close => ({
 	owner: 'priya',

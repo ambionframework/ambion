@@ -15,15 +15,15 @@
  * `Agent` over it with the tool its purpose permits (`tools.ts`), runs it,
  * renews the lease while it runs, and releases the lease when it stops.
  * And the transport that puts every seat in the room's own process. What
- * the actor knows of the room, it learns through three calls (`wire.ts`).
+ * the actor knows of the room, it learns through three calls (`protocol.ts`).
  */
 
 import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { Agent as PiAgent, Session as PiSession } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { SeatContext, Transport } from '../host/runtime.ts';
+import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../protocol.ts';
 import { type RoomNotification, seatSessionId } from '../types.ts';
-import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../wire.ts';
 import { Activation, persistTurns } from './activation.ts';
 import { renderActivation, renderLine } from './render.ts';
 import { binding, toolsFor } from './tools.ts';

@@ -1,8 +1,8 @@
 /** The authority one recorded activation grants to its seat. */
 
 import { decodeActivationId } from '../activation-id.ts';
+import type { ActivationSpec } from '../protocol.ts';
 import type { Seq } from '../types.ts';
-import type { ActivationSpec } from '../wire.ts';
 import type { RoomState } from './fold.ts';
 
 /** Compile a stored activation id into one room authority. */

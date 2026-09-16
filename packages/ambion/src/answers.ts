@@ -1,20 +1,19 @@
 /** The seat protocol translates room decisions into view, commit, and lease responses. */
 
+import type {
+	CommitRequest,
+	CommitResult,
+	LeaseRequest,
+	LeaseResponse,
+	Stale,
+	ViewResponse,
+} from './protocol.ts';
 import { activationSpec } from './room/activation.ts';
 import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import { copyMessage, type RoomNotification } from './types.ts';
-import type {
-	CommitRequest,
-	CommitResult,
-	EndReason,
-	LeaseRequest,
-	LeaseResponse,
-	Stale,
-	ViewResponse,
-} from './wire.ts';
+import { copyMessage, type EndReason, type RoomNotification } from './types.ts';
 
 /** A command the room refused, with the wire category that answers it. */
 export class RefusedError extends Error {

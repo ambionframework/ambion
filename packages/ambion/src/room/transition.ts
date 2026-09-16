@@ -1,19 +1,13 @@
 /** Pure commands and committed events for a room. */
 
 import { decodeActivationId } from '../activation-id.ts';
+import type { Close, Composition } from '../journal/events.ts';
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
-import type { Message, PresenceMessage } from '../types.ts';
-import type {
-	ActivationSpec,
-	Close,
-	CommitRequest,
-	Composition,
-	EndReason,
-	LeaseHold,
-} from '../wire.ts';
+import type { ActivationSpec, CommitRequest } from '../protocol.ts';
+import type { EndReason, Message, PresenceMessage } from '../types.ts';
 import { activationSpec } from './activation.ts';
 import { applyEvent, baseOf, type FoldOptions, project, type RoomState } from './fold.ts';
-import { isExpired, isLive } from './lease.ts';
+import { isExpired, isLive, type LeaseHold } from './lease.ts';
 import {
 	liveWork,
 	planReconciliation,

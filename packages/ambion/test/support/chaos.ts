@@ -29,9 +29,9 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../../src/index.ts';
+import type { LeaseChange } from '../../src/journal/events.ts';
 import { foldLeases, isLive } from '../../src/room/lease.ts';
 import { inProcessTransport } from '../../src/transport.ts';
-import type { LeaseChange } from '../../src/wire.ts';
 import {
 	agents,
 	assistant,

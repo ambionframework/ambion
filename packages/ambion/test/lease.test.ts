@@ -19,7 +19,8 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import { inProcessTransport, type LeaseChange, type SeatRoom } from '../src/transport.ts';
+import type { LeaseChange } from '../src/journal/events.ts';
+import { inProcessTransport, type SeatRoom } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
 	assistant,
