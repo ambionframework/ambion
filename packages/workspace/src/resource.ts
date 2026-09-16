@@ -1,10 +1,4 @@
-import type { ToolBundle } from '@ambionframework/ambion';
-import type {
-	AgentHarnessTool,
-	ExecutionEnv,
-	ExecutionToolContext,
-} from '@earendil-works/pi-agent-core';
-import { bindTools } from './tools.ts';
+import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 
 /** The stable identity a backend uses for one calling agent. */
 export interface WorkspaceAgent {
@@ -12,22 +6,17 @@ export interface WorkspaceAgent {
 	readonly identity: string;
 }
 
-/** Storage operations beneath one workspace owner. */
-export interface WorkspaceBackend {
+/** Storage operations beneath one workspace resource owner. */
+export interface ResourceBackend {
 	connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<ExecutionEnv>;
 	destroy(): Promise<void>;
 	/** Release host-local resources without deleting the persisted workspace. */
 	dispose?(): Promise<void>;
-	/** Backend-owned tools to expose through the workspace's `tools()` method. */
-	tools: readonly AgentHarnessTool<ExecutionToolContext>[];
-	guidance?: string;
 }
 
-/** A workspace resource and its single lifecycle/coordination owner. */
-export interface Workspace {
+/** A workspace resource and its single lifecycle and coordination owner. */
+export interface WorkspaceResource {
 	readonly name: string;
-	/** Return the backend tools and optional model guidance as one stable bundle. */
-	tools(): ToolBundle;
 	use<T>(
 		agent: WorkspaceAgent,
 		operation: (env: ExecutionEnv) => Promise<T> | T,
@@ -46,7 +35,10 @@ const CLOSED = 'Workspace is no longer available.';
  * including connection and callback work, so every agent sharing it observes
  * one explicit ordering policy.
  */
-export function openWorkspace(options: { name: string; backend: WorkspaceBackend }): Workspace {
+export function openResource(options: {
+	name: string;
+	backend: ResourceBackend;
+}): WorkspaceResource {
 	if (!/^[a-z][a-z0-9-]*$/.test(options.name)) {
 		throw new Error(
 			`Invalid workspace name '${options.name}': names are lowercase, alphanumeric plus dashes.`,
@@ -173,7 +165,5 @@ export function openWorkspace(options: { name: string; backend: WorkspaceBackend
 		}
 	};
 
-	const toolBundle = bindTools(options.backend.tools, use, options.backend.guidance);
-	const tools = (): ToolBundle => toolBundle;
-	return Object.freeze({ name: options.name, tools, use, dispose, destroy });
+	return Object.freeze({ name: options.name, use, dispose, destroy });
 }

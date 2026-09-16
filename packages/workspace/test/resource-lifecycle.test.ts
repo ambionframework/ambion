@@ -2,8 +2,9 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { WorkspaceAgent, WorkspaceBackend } from '../src/index.ts';
 import { directoryBackend, memoryBackend, openWorkspace } from '../src/index.ts';
-import type { WorkspaceAgent, WorkspaceBackend } from '../src/resource.ts';
+import { openResource, type ResourceBackend } from '../src/resource.ts';
 
 const agent = (name: string): WorkspaceAgent => ({ name, identity: `${name}-identity` });
 
@@ -106,5 +107,17 @@ describe('workspace lifecycle', () => {
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}
+	});
+	it('keeps lifecycle ownership separate from Ambion tools', async () => {
+		const inner = memoryBackend();
+		const backend: ResourceBackend = {
+			connect: (agent, signal) => inner.connect(agent, signal),
+			destroy: async () => {},
+		};
+		const resource = openResource({ name: 'resource-only', backend });
+
+		expect(resource).not.toHaveProperty('tools');
+		await expect(resource.use(agent('alpha'), (env) => env.cwd)).resolves.toBe('/home/alpha');
+		await resource.destroy();
 	});
 });

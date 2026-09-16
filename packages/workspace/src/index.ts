@@ -16,6 +16,7 @@
  * The design contract is `docs/workspace.md`.
  */
 
+export type { WorkspaceBackend } from './backend.ts';
 export type {
 	MemoryBackendFile,
 	MemoryBackendOptions,
@@ -23,8 +24,9 @@ export type {
 	SeedWriter,
 } from './just-bash.ts';
 export { directoryBackend, memoryBackend } from './just-bash.ts';
-export type { Workspace, WorkspaceAgent, WorkspaceBackend } from './resource.ts';
-export { openWorkspace } from './resource.ts';
+export type { WorkspaceAgent } from './resource.ts';
+export type { Workspace } from './workspace.ts';
+export { openWorkspace } from './workspace.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/workspace';

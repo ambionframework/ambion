@@ -62,6 +62,18 @@ journal package's public storage contract. `@ambionframework/workspace` owns
 optional filesystem resources and supplies ordinary tool bundles to agents.
 Its data stays separate from room history.
 
+The workspace root entry adds Ambion tool binding to a resource owner.
+Its `/resource` entry exports the owner and backends without loading Ambion.
+`resource.ts` owns the queue and lifecycle. `workspace.ts` composes it with
+`tools.ts`. Backend types describe Pi tools independently of the Ambion adapter.
+Biome rejects adapter imports from resources and backends. Both entries
+remain in one package; the package retains its Ambion dependency for the root adapter.
+
+`node scripts/cli-team-smoke.mjs` checks both packed workspace entries.
+It compiles the resource and facade types, then exercises memory and directory
+resources while a module hook rejects Ambion imports. It also checks the
+root facade and generated CLI project outside the repository.
+
 **The library packages have separate ownership.** They are
 `@ambionframework/ambion`, `@ambionframework/journal`,
 `@ambionframework/pi-journal`, and `@ambionframework/workspace`. The CLI

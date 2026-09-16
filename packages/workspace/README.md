@@ -38,6 +38,26 @@ const surveyor = defineAgent({
 });
 ```
 
+## Use the resource directly
+
+The `/resource` entry provides file access and lifecycle operations without
+loading the Ambion runtime:
+
+```ts
+import { memoryBackend, openResource } from '@ambionframework/workspace/resource';
+
+const drive = openResource({ name: 'team-site', backend: memoryBackend() });
+await drive.use({ name: 'surveyor', identity: 'Quantity surveyor.' }, async (env) => {
+  const result = await env.writeFile('notes.txt', 'Checked the plan.');
+  if (!result.ok) throw result.error;
+});
+await drive.dispose();
+```
+
+This handle has `use`, `dispose`, and `destroy`. The root `openWorkspace`
+function adds the Ambion tool bundle over the same resource implementation.
+Both paths use the lifecycle contract below.
+
 ## The two backends
 
 **`memoryBackend(options)` keeps the files in memory**, for as long as the

@@ -36,8 +36,9 @@ import {
 	type ExecutionToolContext,
 } from '@earendil-works/pi-agent-core';
 import { Bash, type IFileSystem, InMemoryFs } from 'just-bash';
+import type { WorkspaceBackend } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
-import type { WorkspaceAgent, WorkspaceBackend } from './resource.ts';
+import type { WorkspaceAgent } from './resource.ts';
 
 /** Build one agent's environment over the workspace's filesystem. */
 async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<BashEnv> {

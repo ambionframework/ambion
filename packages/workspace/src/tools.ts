@@ -5,12 +5,12 @@ import {
 	type ToolContext,
 } from '@ambionframework/ambion';
 import type { AgentHarnessTool, ExecutionToolContext } from '@earendil-works/pi-agent-core';
-import type { Workspace } from './resource.ts';
+import type { WorkspaceResource } from './resource.ts';
 
 type HarnessTool = AgentHarnessTool<ExecutionToolContext>;
 
 /** Bind a Pi harness tool through the owner's whole-operation queue. */
-function bindTool(tool: HarnessTool, use: Workspace['use']): AmbionTool {
+function bindTool(tool: HarnessTool, use: WorkspaceResource['use']): AmbionTool {
 	return defineTool({
 		name: tool.name,
 		description: tool.description,
@@ -30,7 +30,7 @@ function bindTool(tool: HarnessTool, use: Workspace['use']): AmbionTool {
 /** Compose backend tools through the owner's whole-operation queue. */
 export function bindTools(
 	tools: readonly HarnessTool[],
-	use: Workspace['use'],
+	use: WorkspaceResource['use'],
 	guidance?: string,
 ): ToolBundle {
 	return Object.freeze({

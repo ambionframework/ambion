@@ -43,7 +43,7 @@ async function packFixture(destination) {
 	await mkdir(archiveDirectory);
 	run('pnpm', ['build'], ROOT);
 	const archives = {};
-	for (const name of ['journal', 'pi-journal', 'ambion', 'cloudflare', 'cli']) {
+	for (const name of ['journal', 'pi-journal', 'ambion', 'workspace', 'cloudflare', 'cli']) {
 		const directory = join(ROOT, 'packages', name);
 		const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
 		run('pnpm', ['pack', '--pack-destination', archiveDirectory], directory);
@@ -153,7 +153,90 @@ export function release(room: SeatRoom, activation: string, readThrough: number)
 }
 `,
 	);
+	await workspaceFixture(destination);
 	return archives;
+}
+
+/** Exercise the resource entry and the existing facade from packed declarations and code. */
+async function workspaceFixture(destination) {
+	await writeFile(
+		join(destination, 'src', 'workspace.ts'),
+		`import { openWorkspace, memoryBackend, type Workspace, type WorkspaceBackend } from '@ambionframework/workspace';
+import { openResource, type ResourceBackend, type WorkspaceResource } from '@ambionframework/workspace/resource';
+import type { ToolBundle } from '@ambionframework/ambion';
+
+const backend: WorkspaceBackend = memoryBackend();
+const workspace: Workspace = openWorkspace({ name: 'facade', backend });
+const tools: ToolBundle = workspace.tools();
+const plainBackend: ResourceBackend = {
+  connect: (agent, signal) => backend.connect(agent, signal),
+  destroy: () => backend.destroy(),
+};
+const resource: WorkspaceResource = openResource({ name: 'plain', backend: plainBackend });
+// @ts-expect-error A resource has no Ambion tool adapter.
+resource.tools();
+void tools;
+`,
+	);
+	await writeFile(
+		join(destination, 'workspace.mjs'),
+		`import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const hooks = registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === '@ambionframework/ambion' || specifier.startsWith('@ambionframework/ambion/')) {
+      throw new Error('Resource loaded the collaboration runtime');
+    }
+    return nextResolve(specifier, context);
+  },
+});
+await assert.rejects(import('@ambionframework/ambion'), /Resource loaded/);
+const { openResource, memoryBackend, directoryBackend } = await import('@ambionframework/workspace/resource');
+const agent = { name: 'writer', identity: 'Writes files' };
+const memory = openResource({ name: 'memory', backend: memoryBackend() });
+assert.equal('tools' in memory, false);
+await memory.use(agent, async (env) => {
+  const written = await env.writeFile('note.txt', 'shared data');
+  assert.equal(written.ok, true);
+});
+await memory.use(agent, async (env) => {
+  const read = await env.readTextFile('note.txt');
+  assert.equal(read.ok, true);
+  assert.equal(read.value, 'shared data');
+});
+await memory.destroy();
+await assert.rejects(memory.use(agent, () => {}), /no longer available/i);
+
+const root = await mkdtemp(join(tmpdir(), 'ambion-packed-resource-'));
+try {
+  const directory = openResource({ name: 'directory', backend: directoryBackend(root) });
+  await directory.use(agent, async (env) => {
+    const written = await env.writeFile('note.txt', 'persisted data');
+    assert.equal(written.ok, true);
+  });
+  await directory.dispose();
+  assert.equal(await readFile(join(root, 'home/writer/note.txt'), 'utf8'), 'persisted data');
+  await assert.rejects(directory.use(agent, () => {}), /no longer available/i);
+  const reopened = openResource({ name: 'directory', backend: directoryBackend(root) });
+  await reopened.destroy();
+  await assert.rejects(readFile(join(root, 'home/writer/note.txt')), { code: 'ENOENT' });
+} finally {
+  await rm(root, { recursive: true, force: true });
+}
+hooks.deregister();
+
+const { openWorkspace, memoryBackend: facadeBackend } = await import('@ambionframework/workspace');
+const workspace = openWorkspace({ name: 'facade', backend: facadeBackend() });
+assert.equal(workspace.tools(), workspace.tools());
+assert.deepEqual(workspace.tools().tools.map((tool) => tool.name), ['read', 'write', 'edit', 'bash']);
+await workspace.dispose();
+console.log('Packed workspace resource and facade passed.');
+`,
+	);
 }
 
 async function installAndCheck(destination, archives) {
@@ -171,6 +254,7 @@ async function installAndCheck(destination, archives) {
 	}
 	run('pnpm', ['install', '--ignore-scripts', '--frozen-lockfile=false'], destination);
 	run('pnpm', ['check:types'], destination);
+	run(process.execPath, ['workspace.mjs'], destination);
 	const version = capture('pnpm', ['exec', 'ambion', '--version'], destination);
 	if (version.status !== 0 || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\n?$/.test(version.output))
 		throw new Error(`The packed CLI did not report a version: ${version.output}`);
