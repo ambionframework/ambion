@@ -1,9 +1,37 @@
-# Persistent rooms in the browser
+# Relay: persistent rooms in the browser
 
 **One Node process hosts the room console and its API.**
 [`index.html`](index.html) is a standalone SPA with inline CSS and JavaScript.
 It has no frontend dependencies or build step. The layout follows `ambion dev`:
 conversation, participant activity, and a message composer.
+
+## Mental model
+
+**HTTP records intent; journals preserve collaboration; files preserve artifacts.**
+The browser is a view into durable rooms hosted by one Node process. Each room
+has its own participants, conversation, and ongoing work. All rooms share one
+directory-backed workspace, but do not automatically share conversations.
+
+A prompt has two phases: acceptance, then asynchronous results:
+
+1. The browser saves the message and a delivery key locally, then posts it as
+   the selected human. The API records it and returns `202 Accepted` with an
+   exchange reference, without waiting for an agent's answer.
+2. An ordinary message wakes the broadcast assistant, which answers or involves
+   specialists. Agents collaborate through room messages and read or edit shared
+   files. A follow-up steers the open exchange through the same message API.
+3. The browser polls room status and new journal messages about once a second.
+   After discussion finishes, an optional closing activation can publish a
+   summary. The UI collapses the covered discussion when that summary arrives;
+   the original messages remain in the journal.
+
+An **activation** is one agent doing work. An **exchange** is a human prompt and
+the resulting collaboration. Each room has at most one open exchange; separate
+rooms can work concurrently. Leaving a room does not stop its agents.
+
+For example, triage can write `/shared/customer_response_draft.md`, and launch
+can review that file in a separate conversation. The global workspace panel
+reads those same files, independently of the selected room.
 
 ## Run
 
@@ -36,6 +64,7 @@ picker. Selecting a room enters it. Selecting another room leaves the current
 room before entering the next. Switch user leaves the current room and opens the
 identity picker. A reload restores the selected identity and room visit.
 Presence belongs to the person across clients; leaving ends their shared visit.
+Closing a tab does not automatically record a departure.
 
 ## The sample team
 
@@ -81,10 +110,14 @@ The same message API handles both new questions and steering.
 | ----------- | ------------------------------------------------------------------------ |
 | Create room | Save its name and goal, start its team, and join as the selected person  |
 | Stop        | Revoke room work and record human departures; preserve history and files |
-| Resume      | Restore the recorded team and pending work for that room                 |
+| Resume      | Host the existing room again from its journal                            |
 | Abort work  | Request cancellation while the room remains available                    |
 | Select room | Leave the current room and enter the selected room                       |
 | Switch user | Leave the current room and choose another predefined identity            |
+
+Stop cancels work rather than pausing a model call. Resume does not undo that
+cancellation. Abort requests cancellation without ending human visits or stopping
+the room; its HTTP acknowledgement does not mean cancellation has finished.
 
 The timeline keeps human prompts and final summaries visible. The discussion
 expands while agents work and collapses when the summary arrives. You can
@@ -92,6 +125,7 @@ expand it again to inspect the exchange. An exchange with one agent reply
 shows that reply directly, without a summary card or disclosure. Room details show presence and
 recent model and tool execution events. Activity is local to this host run;
 durable messages remain available after restart and while a room is stopped.
+The single-reply rule only changes presentation; a closing activation may still run.
 
 ## What persists
 
@@ -115,8 +149,12 @@ one workspace resource.
 
 The host catalog records room names, goals, initialization, and whether the
 host should run them. Collaboration state remains in each room journal.
+That journal includes membership, presence, exchanges, and work records as well
+as visible messages; there is no separate application task database.
 A deliberately stopped room stays stopped when the server restarts. The
 server restores previously running rooms with the same definitions.
+Definitions and credentials come from code and host configuration. Live handles,
+timers, provider connections, and the recent activity feed are not restored.
 
 Workspace tools use one `directoryBackend`. The shared owner serializes tool
 operations across rooms. Multi-step edits still require agent coordination.
@@ -129,6 +167,10 @@ The browser lists up to 500 directory entries and previews text files up to
 the room, human, key, and exact message. A retry uses the same key. Drafts and
 deliveries are scoped to each room and human. History loads from sequence zero
 on page load, then polls for later messages and merges by sequence.
+Same-tab reload restores the identity, selected room, drafts, and outbox; server
+work continues while the page reloads. Retrying the same delivery key avoids a
+duplicate human message after a lost acknowledgement. This does not make tool
+effects exactly once: SQLite records and file changes are not one transaction.
 
 ## Restart and reconnect
 
