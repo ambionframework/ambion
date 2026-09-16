@@ -43,51 +43,35 @@ consolidate submission and effect publication in a separate slice.
 
 ## 1. Make durable acceptance the public operation boundary
 
-### Findings
+### Status and remaining problem
 
-[`RoomHost`](../packages/ambion/src/room.ts) serializes journal writes, but some
-public operations publish host-local state before those writes succeed:
+[PR #137](https://github.com/ambionframework/ambion/pull/137) landed durable
+join/leave/stop acknowledgement and sender-presence validation. Concurrent
+callers share completion; retries resolve uncertain writes; ended handles cannot
+affect reentry. Memory and SQLite fault tests cover lost acknowledgements,
+failed recovery reads, and newer-run fencing. All seven CI checks passed,
+including Node 22/24 and live-model tests.
 
-- `visit()` caches a visit before awaiting its arrival. In an executed review
-  reproduction, a second concurrent visit returned while that arrival was
-  blocked. Rejecting the arrival and sending through the second handle committed
-  a message from an unrecorded human, then rejected because it had no exchange.
-- `endVisit()` marks its handle gone before committing departure. Rejecting that
-  write and retrying the same `leave()` resolved successfully while the journal
-  still reported the human present.
-- `stop()` changes phase before completing revocation and departures. With a
-  departure append blocked, a second `stop()` resolved while the first was still
-  pending and the human was still present.
-- `abort(): void` discards the asynchronous revocation result. This is a source
-  finding; the review did not execute an abort-write-failure reproduction.
+**Current slice, prepared for review: submission and effect publication.** One
+typed adapter maps room decisions to journal entries or results. Protocol
+refusals remain values through the response boundary. Confirmed entries capture
+ordered host effects; a throwing connector cannot change their accepted result.
+The regression tests cover storage recovery, reentrant listeners, and eviction
+during publication. This adds no durable publication queue or public concept.
 
-The first three were reproduced against source with a gated memory storage
-adapter. The first implementation slice adds regression tests for memory and
-SQLite in [`lifecycle.test.ts`](../packages/ambion/test/lifecycle.test.ts) and
-[`lifecycle-recovery.test.ts`](../packages/ambion/test/lifecycle-recovery.test.ts).
-Relay's per-room queue masks some concurrency paths; an embedded library caller
-has no such protection.
-
-**First slice, prepared for review:** concurrent joins, departures, and stops
-share completion; arrivals publish handles only after confirmation; departure
-retries recover uncertain writes; and delivery decisions require recorded human
-presence. Recovery tests cover lost acknowledgements, reentry, old-handle
-invalidation, stop retry, failed recovery reads, and supersession by a newer run.
-Presence decisions suppress duplicate arrivals and departures after recovery.
-The public API and
-journal format are unchanged. Leave the checklist open until this slice lands.
-Awaitable cancellation, existing-only visits, semantic text validation, and
-submission/effect consolidation remain separate follow-up work.
+Awaitable cancellation, existing-only visits, and semantic text validation
+remain follow-ups. Relay still needs its protective coordination until the
+relevant kernel contracts replace it.
 
 ### Change
 
-- [ ] Make concurrent join, departure, and stop calls share their in-flight
+- [x] Make concurrent join, departure, and stop calls share their in-flight
       operation where appropriate. Do not return usable visit handles or report
       terminal success before their durable operation is confirmed. Resolve
       uncertain writes through the existing journal recovery contract. Close
       admission immediately when needed, but let concurrent callers observe the
       same completion/failure and let a retry finish outstanding durable work.
-- [ ] Validate the human sender's recorded presence in the delivery decision,
+- [x] Validate the human sender's recorded presence in the delivery decision,
       inside the serial commit boundary. A handle's local `gone` flag is not
       sufficient authority. Preserve exact-key retries of already committed
       deliveries through a valid visit without creating another message.
@@ -122,11 +106,12 @@ submission/effect consolidation remain separate follow-up work.
       them. Retain host serialization needed for catalog changes, start/stop
       admission, and shutdown. Never hold that queue while waiting for a model.
 
-**Verification:** reproduce all three failures first, then pass equivalent
-memory and SQLite fault tests, including failure before append and lost
-confirmation after append. Cover join/join, join/stop, send/leave, leave/retry,
-stop/stop, abort/send, and failed revocation. Retain reconnect, inherited-lease,
-late steering, notification ordering, and tool cancellation evidence.
+**Verification:** preserve the memory/SQLite regressions in
+[`lifecycle.test.ts`](../packages/ambion/test/lifecycle.test.ts) and
+[`lifecycle-recovery.test.ts`](../packages/ambion/test/lifecycle-recovery.test.ts).
+Add abort/send and failed-revocation cases for awaitable cancellation. Retain
+reconnect, inherited leases, late steering, notification ordering, and tool
+cancellation evidence.
 Also cover semantic rejection through direct/protocol/tool calls, throwing
 transport connection, and reentrant listeners without commit-queue deadlocks.
 Include committed-send → departure → lost-acknowledgement retry: reject while
@@ -373,6 +358,12 @@ context remain explicit 0.1.0 limits; this is not a retention-system project.
       limits; a historical passing count does not certify the final release.
 
 ### Documentation and scope sign-off
+
+Keep one explanation for each contract. Documentation should preserve purpose,
+product requirements, invariants, tradeoffs, operational duties, and a map to
+code/tests. Link implementation details instead of copying interfaces or
+narrating algorithms. Examples should teach usage; historical implementation
+status belongs in version control rather than permanent design guides.
 
 - [ ] Audit root/package READMEs, generated examples, and design contracts against
       final APIs; they already use the collaboration-kernel narrative. Typecheck

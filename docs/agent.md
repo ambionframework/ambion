@@ -35,9 +35,10 @@ Pi provider model. `tools` and `bundles` supply the agent's domain tools.
 `summary` is an optional name from `agents`. It assigns closing work to that
 ordinary agent. There is no separate assistant definition, role, or tool set.
 
-Definitions are values. The room captures them at startup and resume. A
-restart requires the host to supply the same definitions again. Adding a
-definition requires a new run with a new composition.
+Definitions are values, captured for one run. On resume, the host supplies
+executable definitions for every recorded agent name. The new run may use
+updated definitions and add definitions to the reserve; live runs keep their
+captured catalog.
 
 ## Tools
 
@@ -81,20 +82,9 @@ removes a member and returns the definition to the reserve. A live activation
 may call the same operations for another agent or itself. The room refuses an
 unknown name and a name that belongs to a human visitor.
 
-Two concurrent requests to seat the same already-seated agent return the same
-unchanged result. They write no journal entry, wake, or acknowledgement.
-
-Attention controls which events wake an idle member.
-
-| Attention   | Idle agent wakes for                   |
-| ----------- | -------------------------------------- |
-| `named`     | A message addressed to the agent       |
-| `broadcast` | Any eligible message                   |
-| `presence`  | Eligible messages and presence changes |
-
-Omitted attention uses `broadcast`. Attention does not grant contribution
-authority. The room checks the activation, lease, recipient, and consumed
-context before every commit.
+See [Roster](roster.md) for membership, attention, and duplicate-operation
+semantics. Attention selects work; it does not authorize contributions. The
+room checks execution authority and consumed context at the commit boundary.
 
 ## People and exchanges
 

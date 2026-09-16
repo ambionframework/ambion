@@ -1,699 +1,223 @@
 # Ambion toolchain specification
 
-This document is the contract for how the Ambion repository is built, checked,
-and released. It is meant to be read before the code: everything below is
-implemented unless explicitly marked as a release target. The
-[0.1.0 scope](../planning/release-0.1.0.md) defines the target distribution;
-[the delivery plan](../planning/next.md) tracks packaging changes and evidence.
-
-The structure follows [withastro/flue](https://github.com/withastro/flue) —
-pnpm workspaces driven by Turborepo, Biome for linting, Prettier for formatting,
-Knip for dead-code detection, tsdown for bundling, Vitest for tests — with two
-deliberate departures noted in [§10](#10-departures-from-flue).
-
----
+This is the repository guide for building, checking, testing, and releasing
+Ambion. The code is a pnpm workspace coordinated by Turborepo. Package and
+platform plans live in the [0.1.0 scope](../planning/release-0.1.0.md) and
+[delivery plan](../planning/next.md); they are not API references.
 
 ## 1. Repository layout
 
-```
-ambion/
-├── packages/
-│   ├── ambion/            @ambionframework/ambion   — the runtime library
-│   ├── cli/               @ambionframework/cli      — the `ambion` binary
-│   ├── cloudflare/        @ambionframework/cloudflare — a room as Durable Objects
-│   ├── journal/           @ambionframework/journal   — the journal a room writes to
-│   ├── pi-journal/        @ambionframework/pi-journal — Pi sessions over journal storage
-│   └── workspace/         @ambionframework/workspace — a filesystem behind a workspace
-├── examples/
-│   └── site/              the runnable example: a multi-agent room, on Node and on workerd
-├── scripts/
-│   ├── packages.mjs       shared, side-effect-free: finds the publishable packages
-│   ├── version.mjs        set/verify the single version across them
-│   └── publish.mjs        idempotent publish to GitHub Packages
-├── docs/toolchain.md      this document
-├── .github/workflows/     ci.yml, live.yml, release.yml
-├── turbo.jsonc            task graph
-├── tsconfig.base.json     the one set of compiler options
-├── biome.jsonc            lint rules (formatter disabled)
-├── prettier.config.js     formatting
-├── knip.json              unused code/dependency detection
-└── pnpm-workspace.yaml    packages/*, examples/*
+```text
+packages/
+  ambion/       runtime library
+  cli/          ambion binary and project generator
+  cloudflare/   Durable Object adapter
+  journal/      append-only journal storage
+  pi-journal/   Pi session persistence over journal storage
+  workspace/    filesystem resource and tool bundles
+examples/site/        domain collaboration example
+examples/persistent/  Relay: persistent rooms, browser UI, shared workspace
+scripts/        package discovery, versioning, publishing, reports
+docs/           design and operational contracts
+.github/        CI, live, and release workflows
 ```
 
-**Current packaging.** All packages in `packages/*` are publishable.
-The Cloudflare adapter supplies the CLI's generated Worker.
-`examples/*` is private and exists to be run. `examples/site` is the runnable example; the gate type-checks it with
-everything else, so an example that breaks fails the build.
+The six `packages/*` entries are publishable and share a lockstep version.
+Examples are private. The package graph is:
 
-### Package graph
-
-```
-@ambionframework/ambion      ──depends on──▶  @ambionframework/journal, pi-journal
-@ambionframework/pi-journal  ──depends on──▶  @ambionframework/journal, Pi
-@ambionframework/cli         ──depends on──▶  @ambionframework/ambion
-@ambionframework/cloudflare  ──depends on──▶  @ambionframework/ambion, journal
-@ambionframework/workspace   ──depends on──▶  @ambionframework/ambion
+```text
+ambion ──▶ journal, pi-journal
+pi-journal ──▶ journal
+cli ──▶ ambion
+cloudflare ──▶ ambion, journal
+workspace ──▶ ambion
 ```
 
-`@ambionframework/journal` depends on nothing in this repository: its main
-entry holds a journal and knows no room or Pi session.
-`@ambionframework/pi-journal` adapts full Pi session storage through the
-journal package's public storage contract. `@ambionframework/workspace` owns
-optional filesystem resources and supplies ordinary tool bundles to agents.
-Its data stays separate from room history.
+Internal dependencies use `workspace:*`; pnpm rewrites them to the release
+version while packing. The CLI and packed-consumer smoke checks exercise the
+built exports, so a broken dependency order or export map fails before release.
+See [`scripts/cli-team-smoke.mjs`](../scripts/cli-team-smoke.mjs) and
+[`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) for detailed
+consumer checks.
 
-The workspace root entry adds Ambion tool binding to a resource owner.
-Its `/resource` entry exports the owner and backends without loading Ambion.
-`resource.ts` owns the queue and lifecycle. `workspace.ts` composes it with
-`tools.ts`. Backend types describe Pi tools independently of the Ambion adapter.
-Biome rejects adapter imports from resources and backends. Both entries
-remain in one package; the package retains its Ambion dependency for the root adapter.
+The core has two published entries: `@ambionframework/ambion` for hosts and
+`@ambionframework/ambion/transport` for a room and seat separated by a wire.
+The core imports no platform modules. Workspace filesystem code owns Node
+dependencies; Cloudflare code owns Durable Object integration.
 
-`node scripts/cli-team-smoke.mjs` checks both packed workspace entries.
-It compiles the resource and facade types, then exercises memory and directory
-resources while a module hook rejects Ambion imports. It also checks the
-root facade and generated CLI project outside the repository.
-
-**The library packages have separate ownership.** They are
-`@ambionframework/ambion`, `@ambionframework/journal`,
-`@ambionframework/pi-journal`, and `@ambionframework/workspace`. The CLI
-provides local project creation and an OpenTUI room client. The CLI and Cloudflare adapter join the
-lockstep prerelease. The 0.1.0 release gates still apply to the stable release.
-
-Internal dependencies use `workspace:*` and are rewritten to the published
-version by pnpm at pack time. The CLI smoke checks exercise this dependency:
-the CLI's help text reads a constant out of the runtime package, so the smoke
-test fails if turbo builds them out of order, if the `exports` map is wrong, or
-if the workspace protocol does not resolve.
-
-**Check packed journal consumers.** After `pnpm build`, run
-`node scripts/journal-smoke.mjs`. It installs archives outside the workspace.
-The generic consumer checks declarations and execution with no Pi dependency.
-The Pi consumer checks session persistence with no collaboration runtime.
-Run this check before publishing the journal packages.
-
-### What the packages do
-
-`@ambionframework/ambion` is the runtime; [`agent.md`](agent.md),
-[`presence.md`](presence.md), [`summary.md`](summary.md) and
-[`workspace.md`](workspace.md) are its contracts.
-`@ambionframework/cli` is the `ambion` binary. It creates team projects and
-opens their local rooms through Wrangler and OpenTUI. The CLI keeps OpenTUI
-outside its bundle so the installed package can load its native assets.
-`@ambionframework/cloudflare` runs a room as Durable Objects: one object
-holds the room over the core's SQLite storage on `ctx.storage.sql`, one
-holds each seat and runs one activation inside one alarm, and RPC is the
-wire. It publishes nothing and deploys nowhere; its tests run inside
-workerd, which is the only place the objects it declares exist.
-
-`examples/site` opens the same room three ways: `pnpm start` in a
-terminal, `pnpm demo` as one run that crashes and resumes, and
-`pnpm dev:cloudflare` as Durable Objects under wrangler's local workerd.
-`pnpm demo:cloudflare` drives that worker and drops the room object while
-the seats work, which the run on Node cannot stage: one process holds the
-room and every seat there. The two demos write two reports, and
-`demos/README.md` says what each one proves.
-The products, the specialists, the people, and the optional summary writer come from one
-`room.ts` in all three. The room reads no file at run time: `pnpm seed`
-writes `drive/` into `src/drive-seed.ts`, and the example's `test` task
-proves the two hold the same documents.
-
-**The core's `src` imports no `node:` module.** The filesystem left with
-`@ambionframework/workspace`, and the core reads the clock and the random
-identifier off globals that workerd supplies. Pi session persistence uses the
-platform-neutral journal storage contract.
-
-**`@ambionframework/workspace` needs `nodejs_compat`.** It imports
-`node:fs/promises`, `node:path` and `node:crypto`. `directoryBackend` needs
-a real disk on top of that, and it loads just-bash's `ReadWriteFs` on the
-first connect: a static import of that name refuses to bundle for any
-target but Node, because just-bash offers it in its Node build alone. A
-room on workerd reaches no workspace today, and
-[`planning/next.md`](../planning/next.md#package-and-platform-readiness) holds
-the remaining platform boundary checks.
-
-### The core's layers
-
-`packages/ambion/src` is laid out in layers, and an import points down
-only. Biome refuses every other import (`noRestrictedImports`, one
-override per layer in `biome.jsonc`), so the layout is a fact the gate
-holds, and a reviewer reads a file knowing what it cannot reach.
-
-| Layer                                 | What it holds                                                                                     | May import                                |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `types`, `define`, `activation-id.ts` | Shared vocabulary, definitions, and activation identity                                           | Nothing that does anything                |
-| `protocol.ts`                         | Requests, replies, activation context, and JSON checks                                            | Shared vocabulary                         |
-| `host/`                               | What a host owns: the runtime value, a clock, an opener                                           | The vocabulary and protocol               |
-| `journal/`                            | Stored events in `events.ts`, validation, and the room journal adapter                            | The vocabulary                            |
-| `room/`                               | Pure state and commands; `lease.ts` owns projected lease state                                    | The vocabulary, protocol, journal entries |
-| `answers.ts`                          | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses  | The vocabulary, protocol, `room/`         |
-| `seat/`                               | The Pi executor: context rendering, model execution, tools, transcripts, and in-process transport | The vocabulary, protocol, `host/`         |
-| `room.ts`                             | The room, which composes them all                                                                 | Everything                                |
-| `index.ts`, `transport.ts`            | The two published entries. They hold no logic: each one names what its reader needs               | Everything                                |
-
-**The package has two entries, for two readers.**
-`@ambionframework/ambion` is what a host needs to build a room: the five
-primitives, the room, the runtime, and the shapes a host reads off the
-record. `@ambionframework/ambion/transport` is the wire between a room and
-a seat, for a host that runs the two apart: the three calls, every shape
-they carry, `SeatActor` and `Transport`.
-`@ambionframework/cloudflare` is the one such host in this repository, and
-it reads both.
-
-`Room` and `RoomSnapshot` are the live and stored views a host reads.
-`SeatRoom` contains only the executor's three calls. `Transport.connect` receives
-that facade and a separate `SeatContext` with local execution dependencies.
-The runtime keeps lifecycle control outside the transport surface.
-
-`protocol.ts` imports shared vocabulary and has no journal dependency.
-`journal/events.ts` defines stored event shapes independently of the protocol.
-`room/lease.ts` derives lease state from those events. Biome keeps the journal
-and protocol from importing each other. The transport entry exports protocol
-shapes and execution adapters; storage and projection types stay internal.
-
-The packed CLI consumer compiles a custom transport against the package
-archive. It also checks that internal event and lease types are not exported.
-
-**An entry keeps a name no consumer reads yet.** About a third of what the
-two entries name is unused outside the core today, and each one is the type
-of something a host writes down: the options of a public function, the
-shapes on the roster, the members of `SeatInfo`. A name a host cannot write
-is a worse surface than a name it has not needed yet. Knip reports an
-unused export inside the core, and it does not judge the entries.
-
-Two rules hold across packages: the core imports no platform module
-(`node:sqlite`, `cloudflare:*`), and every other package reaches the core
-through one of those two entries. Biome refuses every other path into
-`packages/ambion/src`.
-
----
+The core source is layered downward: shared types and definitions, protocol,
+host, journal adapter, pure room state and decisions, seat execution, and the
+top-level room composition. `biome.jsonc` enforces the layer boundaries.
 
 ## 2. Toolchain choices
 
-| Concern         | Tool                  | Why this one                                                         |
-| --------------- | --------------------- | -------------------------------------------------------------------- |
-| Package manager | **pnpm 10**           | Workspace protocol, strict `node_modules`, `--frozen-lockfile` in CI |
-| Task runner     | **Turborepo 2**       | Declares the build→typecheck→test order once; content-hash caching   |
-| Language        | **TypeScript 7**      | `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`         |
-| Contracts       | **LemmaScript 0.6**   | Checks pure coordinator rules with Dafny                             |
-| Bundler         | **tsdown** (rolldown) | ESM-only output plus `.d.mts`, one config per package                |
-| Tests           | **Vitest 4**          | Runs TypeScript sources directly; no build step for the inner loop   |
-| Lint            | **Biome 2**           | Fast; formatter switched off so it never fights Prettier             |
-| Format          | **Prettier 3**        | Tabs, single quotes, width 100, trailing commas                      |
-| Dead code       | **Knip 6**            | Catches unused exports and undeclared dependencies                   |
+| Concern                | Tool                                                     |
+| ---------------------- | -------------------------------------------------------- |
+| Workspace and installs | pnpm 10 (`--frozen-lockfile` in CI)                      |
+| Task graph             | Turborepo 2                                              |
+| Language               | TypeScript 7, strict settings                            |
+| Contracts              | LemmaScript 0.6 with Dafny backend                       |
+| Bundling               | tsdown, ESM output and `.d.mts` declarations             |
+| Tests                  | Vitest 4                                                 |
+| Lint                   | Biome 2; its formatter is disabled                       |
+| Formatting             | Prettier 3; 100-column, tabs in code, spaces in Markdown |
+| Dead code              | Knip 6                                                   |
 
-### Version floor
-
-The core library requires Node **>= 22.19**. This floor tracks Node's own type stripping: it is on by
-default from 22.18 and from 23.6, so 23.0–23.5 is explicitly excluded.
-`packages/cli/bin/ambion.mjs` enforces the floor at runtime, before any modern
-syntax is parsed.
-
-Repository installation and `ambion dev` require Node **>= 26.4** because
-OpenTUI declares that dependency requirement. The CLI adds `--experimental-ffi`
-when it starts `dev`. Help, version output, and project creation keep the
-regular runtime guard and do not load the native renderer.
-
----
+The core and published packages require Node `>=22.19`. The OpenTUI `ambion
+dev` client additionally needs Node `>=26.4` (or Bun `>=1.3`). CI installs with
+Node 26 and runs the compatibility test matrix on Node 22 and 24.
 
 ## 3. Supply chain
 
-The registry is the softest part of any JavaScript toolchain, so the defaults are
-tightened in four places.
+`pnpm-workspace.yaml` deliberately sets `minimumReleaseAge: 1440` (24 hours)
+and an empty `onlyBuiltDependencies` allowlist. Do not bypass either setting
+without a reviewed reason. CI uses `--frozen-lockfile`, and workflow checkouts
+set `persist-credentials: false`.
 
-**Quarantine new releases.** `pnpm-workspace.yaml` sets `minimumReleaseAge: 1440`
-— refuse any version published in the last 24 hours. Account-compromise attacks
-on npm are typically caught and yanked within hours, so a short quarantine turns
-"we shipped the malicious release" into "we never resolved it".
-
-One consequence worth knowing: a dependency floor pinned to a same-day release
-cannot resolve, because no satisfying version is old enough. That is the gate
-working as designed. The fix is to widen the floor (this is why `@types/node`
-is `^26.2.0` and not `^26.3.0`); adding the package to
-`minimumReleaseAgeExclude` defeats the gate.
-
-**Block install scripts.** pnpm 10 refuses to run `preinstall`/`install`/
-`postinstall` unless a package is allowlisted. `onlyBuiltDependencies` is the
-deliberate exception set and is currently **empty** — nothing in the tree needs
-one. Adding an entry means accepting that package's arbitrary code execution at
-install time, so it should be a reviewed change.
-
-**Do not leave credentials lying around.** Every `actions/checkout` step sets
-`persist-credentials: false`, so the job token is not written into `.git/config`
-where a later step or a compromised dependency could read it. No workflow here
-pushes, so nothing needs it.
-
-**Sign what you ship.** The release packs once and attests those exact tarballs
-with `actions/attest-build-provenance` before publishing them (see
-[§9](#9-release-and-publishing)). Consumers verify with:
-
-```sh
-gh attestation verify ambionframework-ambion-0.1.0.tgz --repo ambionframework/ambion
-```
-
-Two supporting settings: `engine-strict=true` fails the install immediately
-on an unsupported Node; and CI always installs with `--frozen-lockfile`, so a
-lockfile that disagrees with the manifests is a build failure.
-
----
+Releases use GitHub Packages at `https://npm.pkg.github.com` under the
+`@ambionframework` scope. Credentials come from `NODE_AUTH_TOKEN` or the
+workflow's `GITHUB_TOKEN`; never commit them. The release workflow packs once,
+attests those exact tarballs, then publishes them.
 
 ## 4. TypeScript configuration
 
-One file — `tsconfig.base.json` — holds every compiler option. Each package
-extends it and adds only `include`. There is no second opinion about strictness
-anywhere in the tree.
-
-Notable settings and what they buy:
-
-- `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride` — the runtime
-  indexes into maps and arrays constantly; unchecked access would hide real
-  holes.
-- `verbatimModuleSyntax` — type imports are always written `import type`, so
-  the emitted ESM is exactly what the source says.
-- `moduleResolution: Bundler` with `allowImportingTsExtensions` — source files
-  import each other as `./runtime.ts`. tsdown resolves these at build time.
-- `noEmit` — `tsc` is a checker here. tsdown emits.
-
----
+`tsconfig.base.json` is the single compiler configuration. Packages extend it
+and add their include paths. The important constraints are `strict`,
+`noUncheckedIndexedAccess`, `noImplicitOverride`, `verbatimModuleSyntax`,
+`moduleResolution: Bundler`, and `noEmit`. tsdown emits the distributable code.
+Source imports use explicit `.ts` extensions and `import type` where required.
 
 ## 5. Task graph (`turbo.jsonc`)
 
-```
-build       dependsOn: ^build            outputs: dist/**
-check:types dependsOn: build, ^build     (needs upstream .d.mts)
-test        dependsOn: build, ^build     inputs: src, test, vitest configs, tsconfig, package.json
-dev         persistent, never cached
+```text
+build        depends on upstream build; emits dist/**
+check:types  waits for package and upstream builds
+test         waits for package and upstream builds; no cached outputs
+dev          persistent and uncached
 ```
 
-`check:types` and `test` wait on upstream builds because the CLI type-checks
-against the runtime's _emitted_ declarations. That is the same
-resolution a published consumer gets, so a broken `exports` map fails here,
-before release. `test` names its inputs, so a change outside them, a
-document or a demo report, reads the cached result.
-
----
+Type checking and tests consume emitted dependency declarations, matching the
+published-consumer path. The graph is defined in [`turbo.jsonc`](../turbo.jsonc).
 
 ## 6. Script contract
 
-Every publishable package implements the same four scripts. A new package that
-implements them is picked up by the root commands with no further wiring.
+Use these commands at the repository root:
 
-| Script        | Meaning                  |
-| ------------- | ------------------------ |
-| `build`       | Emit `dist/`             |
-| `check:types` | `tsc --noEmit`           |
-| `test`        | `vitest run`             |
-| `dev`         | Long-running; not cached |
+| Command                    | Purpose                                           |
+| -------------------------- | ------------------------------------------------- |
+| `pnpm build`               | Build every package through Turborepo             |
+| `pnpm check:types`         | Type-check packages after their builds            |
+| `pnpm test`                | Run report checks and the scripted Vitest suites  |
+| `pnpm check:format`        | Verify Prettier formatting                        |
+| `pnpm check:lint`          | Run Biome with warnings as errors, then Knip      |
+| `pnpm check:lemmascript`   | Verify listed contracts with Dafny                |
+| `pnpm check`               | Format → build/types → lint → report checks/tests |
+| `pnpm format`              | Apply Biome then Prettier                         |
+| `pnpm test:live`           | Run provider-backed live suites                   |
+| `pnpm chaos`               | Run widened failure sweeps (`AMBION_SEEDS=200`)   |
+| `pnpm version:set <x.y.z>` | Set all publishable package versions              |
+| `pnpm publish:packages`    | Pack or publish release artifacts                 |
 
-Root commands:
-
-| Command                    | Runs                                                                         |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| `pnpm build`               | `turbo build`                                                                |
-| `pnpm test`                | `turbo test`                                                                 |
-| `pnpm test:live`           | The live tier, on a real model ([§8](#the-live-tier-githubworkflowsliveyml)) |
-| `pnpm check:types`         | `turbo run check:types`                                                      |
-| `pnpm check:lint`          | `biome lint . --error-on-warnings` then `knip`                               |
-| `pnpm check:format`        | `prettier . --check`                                                         |
-| `pnpm check:lemmascript`   | Verify the files in `LemmaScript-files.txt` with Dafny; needs Dafny on PATH  |
-| `pnpm check`               | format → build → types → lint → test, in that order                          |
-| `pnpm format`              | `biome check --write` then `prettier --write`                                |
-| `pnpm version:set <x.y.z>` | Set one version across publishable packages                                  |
-| `pnpm publish:packages`    | Publish to GitHub Packages                                                   |
-
-`pnpm check` is what CI runs and what a contributor runs before pushing. There
-is one gate, so nothing drifts apart. It runs the checks in CI's own order,
-and it stops at the first one that fails: a run that prints one summary
-where you expected two failed before it reached the end. Read the exit
-code, and not the output. The contracts are the one step beside
-it: CI runs them in their own job, and a contributor with Dafny runs
-`pnpm check:lemmascript`.
-
-LemmaScript contracts stay in their TypeScript source, in the
-`rules.verified.ts` file of each layer that has pure rules. The generated
-`.dfy.gen` file records the translation. The `.dfy` file holds the proof
-source. Commit all three files, and regenerate them with
-`npx lsc gen --backend=dafny <file>` after every edit to the source. The
-reusable CI workflow regenerates the artifacts before it runs Dafny, so a
-stale generated file fails the gate. `LemmaScript-files.txt` at the root
-lists the files CI verifies.
-
-Local verification needs Dafny 4.11 or later on `PATH`. The repository installs
-the `lsc` command from its pinned `lemmascript` development dependency. CI pins
-the reusable LemmaScript workflow to a commit and installs Dafny in that job.
-
----
+LemmaScript source, generated `.dfy.gen`, and proof `.dfy` files are kept
+together. After changing a contract, regenerate with
+`npx lsc gen --backend=dafny <file>`. `LemmaScript-files.txt` lists what CI
+verifies; local verification needs Dafny on `PATH`.
 
 ## 7. Lint and format split
 
-Biome lints; its formatter is **disabled**. Prettier formats. Two tools with one
-job each, so `pnpm format` is never a fight.
+Biome lints and Prettier formats. The key repository rules are no explicit
+`any`, Node imports use the `node:` protocol, library source does not log to
+stdout, and cognitive complexity is capped at 10 (15 for tests). Knip is part
+of the lint gate. A deliberate lint exception should be a local ignore with a
+reason.
 
-Rules worth knowing:
+The room serializes writes through the journal. Pure command decisions and
+projections live under `packages/ambion/src/room/`; reconciliation derives
+pending work from the projection. The complexity rule protects these
+boundaries as well as ordinary functions.
 
-- `noExplicitAny: error` repo-wide. The runtime's public surface uses `unknown`
-  for message bodies and narrows at the edge.
-- `noConsole` is **error inside `packages/ambion/src/**`** and off elsewhere.
-  The library will never write to stdout on its host's behalf; a host passes a
-  logger in. The CLI and the examples are console programs and are exempt.
-- `useNodejsImportProtocol: error` — `node:fs`, never `fs`.
-- `noExcessiveCognitiveComplexity: error`, budget **10** — **15** under
-  `**/test/**`. Biome ships this rule at `info` with a threshold of 15, which
-  is a number nothing checks; here it fails the build like every other rule.
-- Knip runs as part of `check:lint`, so an unused export fails the build rather
-  than accumulating.
-- `--error-on-warnings` does real work. Biome exits `0` on warnings by
-  default, which makes a lint step that reports problems and passes anyway —
-  exactly how warning backlogs start. Every configured rule is `error`, and
-  Biome's own default-warn rules block too. A deliberate exception is a one-line
-  `biome-ignore` with a reason; the tree currently has none.
-
-### The complexity budget
-
-Two numbers, and one standard behind them. Biome charges a nested
-function for the nesting it sits in, so a branch inside `describe` → `it`
-scores three where the same branch in a plain function scores one; on one
-budget a test would hit the wall three times sooner than the code it exercises.
-The wider budget measures a test body from where it actually starts. A test
-that has become a program still fails — the tree's worst test scores 8.
-
-`RoomHost` serializes changes through the journal's queue. Pure functions
-in `room/transition.ts` decide commands and apply committed events.
-`room/reconcile.ts` plans outstanding work from the current projection.
-Each function must stay within its complexity budget.
-
-The budget is a lint rule, so it runs wherever `check:lint` runs — the `check` job on a pull request, and the gate the release
-re-runs before it publishes. There was nothing to add to `ci.yml`.
-
-### Three storages, one suite
-
-Every scenario that reads or writes a record runs on each storage the
-repository holds, through `describe.each(storages)` in
-`test/support/storage.ts`:
-
-| Storage  | What it is                                         | Where it runs           |
-| -------- | -------------------------------------------------- | ----------------------- |
-| `memory` | Journal-owned in-memory storage                    | Every tier but the kill |
-| `sqlite` | One SQLite journal backend for room and Pi storage | Every tier              |
-
-The **history** tier makes two runs write to one record on purpose. It uses
-SQLite journal storage, which atomically compares the storage position and
-returns the entry it appended.
-
-The **kill** tier runs a room in a process of its own and kills it without
-warning, so it needs storage that outlives the process. The kill lands before
-or after one atomic append, and the room resumes from the stored head.
-
----
+The scripted matrix runs scenarios over memory and SQLite journal storage. The
+history and kill scenarios intentionally use storage that survives a process;
+the fake clock makes lease and retry cases deterministic.
 
 ## 8. Continuous integration (`.github/workflows/ci.yml`)
 
-Three jobs, on push to `main`, on every pull request, and on demand.
+CI runs on pushes to `main`, pull requests, and manual dispatch. It has three
+repository jobs plus the LemmaScript reusable workflow:
 
-| Job       | What it proves                                                      |
-| --------- | ------------------------------------------------------------------- |
-| **check** | Formatting, types, lint, the complexity budget, and Knip on Node 26 |
-| **test**  | The suite passes on Node 22 **and** 24                              |
-| **cli**   | The published artifact actually works                               |
+| Job     | Checks                                                      |
+| ------- | ----------------------------------------------------------- |
+| `check` | format, types, lint, and Knip on Node 26                    |
+| `test`  | scripted tests on Node 22 and 24                            |
+| `cli`   | build, CLI version/help/error behavior, and package packing |
 
-All jobs install workspace dependencies with Node 26 for OpenTUI. The test
-matrix then switches to Node 22 or 24 to check runtime compatibility.
+The CLI job drives `packages/cli/bin/ambion.mjs`, verifies versions, rejects an
+unknown command, and packs all packages. This checks the artifact users will
+run, including package resolution and `files` lists.
 
-The `cli` job is the one that matters most and the one a unit test cannot
-replace. It builds, then drives `packages/cli/bin/ambion.mjs` — the exact file
-that ships — to:
+The live workflow runs the same scenarios on a real provider. It is scheduled
+weekly, available by dispatch, and runs for an in-repository pull request from
+a repository admin. It requires `ANTHROPIC_API_KEY`, uses `AMBION_MODEL` (the
+default is `anthropic/claude-sonnet-5`), and cancels a superseded run. Run it
+locally with:
 
-1. print `--version` and assert it matches the manifest;
-2. print `--help` and assert it contains `@ambionframework/ambion`, which the
-   help text can only know by resolving the built runtime package;
-3. run an unknown command and assert a non-zero exit, so "does nothing yet"
-   never quietly becomes "succeeds at anything";
-4. confirm versions agree, then `pnpm pack` every package — the same packing the
-   release does, so a broken `files` list fails on a pull request, well
-   before publish.
+```sh
+pnpm test:live
+```
 
-These checks cover the Node floor guard in `bin/ambion.mjs`, the tsdown
-bundle, and cross-package resolution. The CLI tests also cover project
-creation and local development. See [the CLI plan](../planning/cli.md) for
-the packed-consumer and terminal acceptance checks.
-
-Concurrency is per-ref with `cancel-in-progress`, so a re-push supersedes the
-run it replaced. Permissions are `contents: read` and nothing else.
-
-### The live tier (`.github/workflows/live.yml`)
-
-The scripted suite proves the room's rules on a scripted stream, with no key
-and no network. The live tier runs the same room on a real model, with a
-real key, and proves what a scripted stream cannot. It lives in
-[`packages/ambion/test/live`](../packages/ambion/test/live), one file per
-claim:
-
-| File               | What it proves                                                                                                                            |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `loop.test.ts`     | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error` |
-| `judgment.test.ts` | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                              |
-| `exchange.test.ts` | Three seats race under the lock, the room goes quiet, the summary writer uses `say`, and an agent seats a specialist from the reserve     |
-| `record.test.ts`   | A second run of a name reads the record the first run left, and answers from it                                                           |
-| `control.test.ts`  | `abort()` ends a request in flight without a mark, and the room keeps running                                                             |
-
-`@ambionframework/workspace` runs a live tier of its own, over the same
-support, and `workspace.test.ts` there proves that the four built-in tools
-reach a workspace on a real provider. `pnpm test:live` runs both.
-
-Every test holds the record to the same invariants whatever the model said:
-seqs in order and each its own, one `message` event per message, every
-author on the
-roster, every summary covering the range before it, no `error` event, and
-every activation ended. Every test ends with one line of what it spent,
-read off the seats' downstream sessions.
-
-**One harness, two tiers.** The invariants live in
-[`test/support/invariants.ts`](../packages/ambion/test/support/invariants.ts),
-and the live support re-exports them. The scripted tier runs the same
-scenarios on every storage (`matrix.test.ts`): memory and SQLite journal
-backends, each with Pi transcripts through the same backend. It runs them on a
-clock it moves by hand (`test/support/clock.ts`), so a test never waits
-on real time, and over a transport that serializes every request and
-response between a seat and the room (`test/support/transport.ts`), so a
-value that would not survive the wire fails the scenario, and under a
-random walk that loses and repeats them (`property.test.ts`, `AMBION_SEEDS`
-widens it). The live tier runs the room on a real model and holds it to the
-same invariants.
-
-**The chaos tests are the evidence that the journal is the truth.** They live in
-[`test/chaos.test.ts`](../packages/ambion/test/chaos.test.ts) over the
-harness in
-[`test/support/chaos.ts`](../packages/ambion/test/support/chaos.ts), and
-`pnpm test` runs them:
-
-- **A crash at every write.** One scenario runs once to count the appends
-  its journal takes, then once per append, crashing the room at that append:
-  before the entry lands, and again after it landed and before the room
-  heard. The world resumes the name in a fresh runtime, puts back the
-  people who were present, and retries the host action that failed under
-  the same key. Every run must come to the same record: every delivery on
-  it once, every answer once, every summary owed written once. A seat
-  whose lease the dead run held is woken again after the backoff, and
-  answers then.
-- **A handover under load** (`hosts.test.ts`). A cast under trouble runs
-  the same sweep: the product's model is down the first time it takes a
-  question, the colleague's answers are questions to the product, and the
-  room crashes at every third write. The second host wakes the failed
-  seat again after the backoff, and a seat's say a peer heard as a steer
-  before the crash is answered on the next run. The same file pins the
-  split the design forbids, two live hosts over one journal: both write the
-  same seqs, and the test turns when a fence lands.
-- **A kill from outside.** The same scenario runs in a child process on a
-  JSONL storage, on the system clock, with short leases. The test sends
-  `SIGKILL` at a write, resumes over the directory, finishes the scenario,
-  and checks the same record.
-- **The random walk** (`property.test.ts`) loses and repeats requests on
-  the wire, fails a write before or after it lands, and crashes the room
-  up to three times.
-- **The history** (`consistency.test.ts`). Two people and the host take
-  turns against whichever run holds the room, under a nemesis that
-  crashes the run, fails the storage, faults the wire and jumps the
-  clock. Every action is recorded as an invocation and an outcome, and
-  the checker in `test/support/history.ts` holds the history to the
-  record: what [`durability.md`](durability.md) §2 to §4 promise.
-- **The split** (`split.test.ts`). A paused host comes back after a
-  second host resumed the name, in process and as a process under
-  `SIGSTOP`. The tests pin what [`durability.md`](durability.md) §5
-  says happens, and turn when a fence lands.
-
-`AMBION_CHAOS=all` widens the sweep to JSONL, the handover to every
-write, and the kill to every third write; `pnpm chaos` runs all of them
-widened, with 200 seeds of the walk and of the history.
-
-`pnpm test:live` runs the tier. Two configurations keep the tiers apart:
-`vitest.config.ts` excludes `test/live` from `pnpm test`, and
-`vitest.live.config.ts` includes nothing else. In the live configuration
-files run one at a time, most tests have three minutes, and one retry stands
-for one bad sample. Every test skips when `<PROVIDER>_API_KEY` is not set,
-so the command is safe to run anywhere. `AMBION_MODEL` picks the model,
-`anthropic/claude-sonnet-5` by default, and the example reads the same
-variable.
-
-The core live command builds its workspace dependencies first. The restart
-test launches native Node processes, which resolve those packages through
-their exports. Its two process phases share a 320-second test budget.
-
-The workflow runs on Mondays at 06:00 UTC, on demand with the model as an
-input, and on a pull request that a repository admin opened from a branch
-in this repository. A first job, `gate`, decides: a schedule or a dispatch
-always runs; a pull request runs when the GitHub API reports `admin` for
-its author and the head branch is in this repository. A pull request from
-a fork never runs, because a fork carries no secrets. Anybody else's pull
-request skips the tier, and the scripted gate in `ci.yml` still runs on it.
-The `live` job needs the `ANTHROPIC_API_KEY` secret and fails when it is
-missing, because a run where every test skipped would report nothing. A
-re-push to a pull request cancels the run it supersedes.
-
----
+The scripted suite and live tier share invariants. The scripted tier also runs
+the failure matrix, process kill, random walk, consistency history, and split
+host checks. See [`test/support/invariants.ts`](../packages/ambion/test/support/invariants.ts)
+and [`durability.md`](durability.md) for the claims those tests enforce.
 
 ## 9. Release and publishing
 
-### Registry
-
-Publishable packages use **GitHub Packages** (`https://npm.pkg.github.com`)
-under the `@ambionframework` scope, which must match the repository owner. The
-scope mapping lives in the committed root `.npmrc`; credentials never do
-(`.npmrc.local` is git-ignored, and CI injects `NODE_AUTH_TOKEN`).
-
-Each package carries:
-
-```json
-"publishConfig": { "registry": "https://npm.pkg.github.com", "access": "public" }
-```
-
-### Versioning
-
-Lockstep. The CLI and the runtime are cut from one commit and share one version
-number. `scripts/version.mjs`:
-
-- `node scripts/version.mjs 0.1.0` rewrites only the `version` line in each
-  publishable manifest, so key order and formatting survive review;
-- `node scripts/version.mjs --check` fails if the versions have drifted. CI and
-  the release workflow both call it.
-
-### Publishing
-
-`scripts/publish.mjs` packs and publishes in two separable steps, because CI
-signs the tarballs in between:
+All publishable packages use GitHub Packages and the `@ambionframework` scope.
+Versions are lockstep:
 
 ```sh
-node scripts/publish.mjs --pack-only    # pnpm pack every package into dist-release/
-node scripts/publish.mjs --skip-pack    # publish those exact files
+node scripts/version.mjs 0.1.0   # set versions
+node scripts/version.mjs --check # verify agreement
 ```
 
-`pnpm pack` rewrites `workspace:*` to the real version, so the tarball is the
-finished artifact. On a dry run the attestation step is skipped: an attestation
-is a permanent public claim that these bytes were released, and on a dry run
-they were not.
-
-`scripts/report.mjs` writes a demo report from the JSON that
-`examples/site`'s `pnpm demo` captured, with `scripts/report.css` as the
-house style every report shares:
+Pack once and publish those exact archives:
 
 ```sh
-node scripts/report.mjs demo-run.json demos/YYYY-MM-DD-<slug>.html
+node scripts/publish.mjs --pack-only  # writes dist-release/*.tgz
+node scripts/publish.mjs --skip-pack  # publishes the existing archives
 ```
 
-Both release scripts are plain CLIs over `scripts/packages.mjs`, which has no top-level
-side effects. That separation prevents a real failure — a module that is
-both a library and a command runs its command when someone imports it, and
-parses the _importer's_ argv while doing so.
+The publisher is idempotent: it skips an existing `name@version`, supports
+`--dry-run` and `--tag`, and can resume after a partial failure. It refuses
+version disagreement or a missing token. `pnpm pack` rewrites workspace
+dependencies to their release version.
 
-The registry comes from each package's `publishConfig.registry`, so the
-manifests npm actually reads are the only place it is written down; a package
-that disagrees fails the run by name. Attesting the packed tarballs and then
-publishing those same files means the signed bytes and the published bytes are
-the same bytes; a second `npm pack` at publish time would break that.
+The release workflow runs the full gate before publishing:
 
-The script is **idempotent**: it queries the registry for each `name@version` and
-skips what is already there. A release that fails halfway is finished by
-re-running it. It refuses to run when versions disagree, and
-refuses to publish without a token. `--dry-run` and `--tag` are supported.
-
-### The release workflow (`.github/workflows/release.yml`)
-
-Triggered by pushing a `v*` tag, or manually (defaulting to a dry run).
-Permissions are `contents: read` + `packages: write`, and the built-in
-`GITHUB_TOKEN` is the credential — no long-lived secret to rotate.
-
-Order of operations, all before anything leaves the machine:
-
-```
+```text
 install → check:types → check:lint → build → test
-        → versions agree → tag matches package version
-        → pack → attest provenance → publish the attested tarballs
-        → install the published CLI → ambion new → install and check the project
+        → version agreement → tag/version agreement
+        → pack → attest → publish → packed consumer check
 ```
 
-Permissions are `contents: read`, `packages: write`, plus `id-token: write` and
-`attestations: write` for the signature.
+Tag pushes publish; manual dispatch defaults to a dry run. A real publish
+verifies the public install path by installing the exact CLI version, running
+`ambion new`, then type-checking and dry-running the generated Worker bundle.
 
-After publication, the workflow installs the exact CLI version from the registry.
-It creates a project with `ambion new`, installs its dependencies, and checks
-its types and Worker bundle. This check uses no local package archives.
-
-A tag can be cut from a commit CI never saw, so the release re-runs the full
-gate itself. The tag-match step means
-`v0.1.0` cannot publish `0.0.9`.
-
-### Consuming a published package
-
-GitHub Packages requires authentication even for reads:
+Consumers of the current GitHub Packages registry need authentication:
 
 ```ini
-# .npmrc
 @ambionframework:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-A classic PAT with `read:packages` is enough to install; in GitHub Actions the
-built-in `GITHUB_TOKEN` already has it. The token is referenced by environment
-variable, never inlined, so the file stays committable. The README carries the
-full walkthrough.
-
-This is the toolchain's biggest open question, and repository visibility does
-not resolve it. GitHub Packages gates the npm registry independently of the
-repo, and GitHub documents the gate:
-"You need an access token to publish, install, and delete private, internal, and
-public packages", and of the registries only the Container registry "allow[s]
-anonymous access and can be pulled without authentication".
-
-The registry's responses say the same thing. A package published from a public
-repository answers an anonymous request with `401` and
-`{"error":"authentication token not provided"}`, while a name that does not
-exist under the same owner answers `404` and names that owner — so the package
-resolves first, and the 401 is purely an auth gate on a package the registry
-knows:
-
-```sh
-# published from a public repo → 401 authentication token not provided
-curl -s -w ' %{http_code}\n' https://npm.pkg.github.com/@github%2frelative-time-element
-# same owner, no such package → 404 does not exist under owner "github"
-curl -s -w ' %{http_code}\n' https://npm.pkg.github.com/@github%2fno-such-package
-```
-
-Every consumer therefore needs a token, which is workable for a private or
-invited audience and a poor fit for a public install path. Moving the stable
-line to npmjs.com — keeping GitHub Packages for prereleases — is the expected
-next step. `publishConfig.access` is already `public`, so the manifests are
-correct for that move.
-
----
+Use an environment variable or CI secret, never an inline token. The stable
+public-install registry remains a distribution decision tracked in planning.
 
 ## 10. Departures from Flue
 
-Two, both intentional:
-
-1. **CI is fuller.** Flue's public workflows cover contributor approval and PR
-   redirection; its build gate lives elsewhere. Ambion needs its own, so
-   `ci.yml` and `release.yml` are written here from scratch.
-2. **Lockstep versioning with a hand-rolled release script.** Flue versions
-   per package with a changelog tool. With two packages that must agree,
-   a 90-line idempotent script is easier to audit than a release manager. This is
-   the piece most likely to be replaced (Changesets) once the package count
-   grows.
+Ambion keeps the pnpm, Turborepo, Biome, Prettier, Knip, tsdown, and Vitest
+shape but supplies its own CI/release workflows and lockstep versioning script.
+The release scripts are intentionally small, side-effect-free when imported,
+and operate on one packed artifact set so the attested and published bytes
+match.

@@ -15,16 +15,6 @@ import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
 import { copyMessage, type EndReason, type RoomNotification } from './types.ts';
 
-/** A command the room refused, with the wire category that answers it. */
-export class RefusedError extends Error {
-	readonly refusal: Refusal;
-
-	constructor(refusal: Refusal) {
-		super('reason' in refusal ? refusal.reason : 'The record moved.');
-		this.refusal = refusal;
-	}
-}
-
 const stale = (why: string): Stale => ({ stale: why });
 
 /**
@@ -46,11 +36,11 @@ export interface Answering {
 	live(state: RoomState): Map<string, string[]>;
 	emit(event: RoomNotification): void;
 	/** One operation on the room's commit queue, with the wakes the room routes. */
-	write(commit: CommitRequest): Promise<CommitResult>;
+	write(commit: CommitRequest): Promise<CommitResult | { refusal: Refusal }>;
 	claim(id: string): Promise<LeaseResponse>;
 	renew(id: string, readThrough?: number): Promise<LeaseResponse>;
 	/** End one lease, for whatever reason. Nothing to end is not an error. */
-	end(id: string, reason: EndReason, readThrough: number): Promise<boolean>;
+	end(id: string, reason: EndReason, readThrough: number): Promise<boolean | { refusal: Refusal }>;
 	reconcile(): Promise<void>;
 }
 
@@ -105,12 +95,8 @@ export async function answerCommit(room: Answering, commit: CommitRequest): Prom
 	await room.ready;
 	const seat = liveSeatOf(room, captured.activation, room.state());
 	if (seat === undefined) return stale('the lease ended');
-	try {
-		return await room.write(captured);
-	} catch (error) {
-		if (error instanceof RefusedError) return refused(room, seat, error.refusal);
-		throw error;
-	}
+	const result = await room.write(captured);
+	return 'refusal' in result ? refused(room, seat, result.refusal) : result;
 }
 
 function refused(room: Answering, seat: string, refusal: Refusal): CommitResult {
@@ -160,12 +146,10 @@ async function release(
 		liveSeatOf(room, lease.activation, state) === undefined
 	)
 		return stale('the lease ended');
-	let ended: boolean;
-	try {
-		ended = await room.end(lease.activation, lease.reason, lease.readThrough);
-	} catch (error) {
-		if (error instanceof RefusedError) return stale(error.message);
-		throw error;
+	const ended = await room.end(lease.activation, lease.reason, lease.readThrough);
+	if (typeof ended !== 'boolean') {
+		const refusal = ended.refusal;
+		return stale('reason' in refusal ? refusal.reason : 'the lease ended');
 	}
 	if (!ended) return stale('the lease ended');
 	void room.reconcile();

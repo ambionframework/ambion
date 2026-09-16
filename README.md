@@ -112,36 +112,13 @@ The main library includes the journal dependency. Add
 `@ambionframework/workspace` when agents need its optional filesystem tools.
 See [Contributing](CONTRIBUTING.md) to build and run from source.
 
-## Try the local CLI
+## Try a working application
 
-**Create a team with `ambion new` and talk to it with `ambion dev`.** Use
-Node **26.4 or later**, pnpm 10, and an interactive terminal.
-
-Configure GitHub Packages in your user `~/.npmrc` with the registry and token
-lines from [Install](#install). Set `GITHUB_TOKEN` to a classic token with
-`read:packages`. Install the CLI prerelease from `next`:
-
-```sh
-npm install --global @ambionframework/cli@next
-ambion new my-team
-cd my-team
-pnpm install
-cp .dev.vars.example .dev.vars
-# Edit .dev.vars and set ANTHROPIC_API_KEY.
-ambion dev
-```
-
-The OpenTUI room contains a planner, a reviewer, and your local participant.
-Enter sends a question. Scroll with the mouse wheel. Ctrl-C closes the room
-and stops Wrangler.
-
-Edit instructions in `src/room.ts`, then restart `ambion dev`.
-History remains in `.wrangler/`. Use `ambion dev --port 8788` if port 8787
-is occupied.
-
-The generated project configures the registry and uses published packages,
-including the Cloudflare adapter. See the [CLI README](packages/cli/README.md)
-for model settings, HTTP testing, and resetting local history.
+- [Relay](examples/persistent/README.md): multiple persistent rooms and people,
+  a browser UI, and a shared local workspace in one Node process.
+- [Local CLI](packages/cli/README.md): `ambion new` creates a team project;
+  `ambion dev` opens its rooms in the terminal.
+- [Site example](examples/site): domain tools and agent collaboration.
 
 ## A small room
 
@@ -198,12 +175,6 @@ an agent out of `seats` to keep it in the reserve. If `seats` is omitted, every
 defined agent starts at `broadcast` attention. `exchange.response()` waits for
 a summary or a terminal result without one. A writer may decline, and the
 application can always read the discussion.
-
-[`examples/site`](examples/site) demonstrates domain tools, agent membership,
-multiple people, and a shared workspace.
-[`examples/persistent`](examples/persistent) hosts multiple rooms and people
-in one Node process, with a browser console, a shared local workspace,
-and SQLite restart support.
 
 ## Hosting and persistence
 

@@ -10,21 +10,22 @@ contracts and the [0.1.0 scope](planning/release-0.1.0.md) for release targets.
 
 ```sh
 pnpm install
-pnpm check      # format, build, typecheck, lint, test — the gate CI runs
+pnpm check      # format check, build, typecheck, lint, test
 pnpm format     # biome --write, then prettier --write
 ```
 
-Run both before pushing; CI runs the same commands, so a green local check is a
-green build.
+Run `pnpm format` after edits, then `pnpm check` before pushing. CI also verifies
+contracts, tests Node 22/24, and checks packed CLI artifacts; local checks do not
+replace that platform coverage.
 
 `pnpm test:live` runs the room on a real model. It needs the key for the
 provider in `AMBION_MODEL` (`ANTHROPIC_API_KEY` by default), it costs money,
-and `pnpm check` never runs it. CI runs it weekly and on demand
-([`docs/toolchain.md`](docs/toolchain.md) §8).
+and `pnpm check` never runs it. CI runs it weekly, on demand, and for same-repository
+PRs opened by a repository admin; see [the workflow](.github/workflows/live.yml).
 
-[`docs/toolchain.md`](docs/toolchain.md) specifies how the repository is built,
-checked and released. Read it before changing anything under `.github/`,
-`scripts/`, or the root configs.
+[Toolchain decisions](docs/toolchain.md) explain the package boundaries, test
+tiers, and release process. Keep design rationale there; scripts and workflows
+are the authority for exact commands.
 
 ## Releasing
 

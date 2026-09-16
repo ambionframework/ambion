@@ -184,10 +184,6 @@ also participate in ordinary discussion under its configured attention.
 Closing execution uses only the regular `say` tool. Ordinary activations use
 `say`, `seat`, `unseat`, and their domain tools.
 
-This participation simplification is in progress. Section 5 of
-[next.md](next.md#simplify-participation-and-closing-work) owns the
-implementation, migration, and verification tasks.
-
 `exchange.messages()` waits for the fixed discussion. `exchange.response()`
 waits for its summary or a terminal result without one. An application can
 always use the discussion when no summary is available.
