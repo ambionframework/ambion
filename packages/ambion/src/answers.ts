@@ -5,7 +5,7 @@ import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import type { RoomNotification } from './types.ts';
+import { copyMessage, type RoomNotification } from './types.ts';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -101,12 +101,13 @@ function liveSeatOf(room: Answering, id: string, state: RoomState): string | und
  * the write happens.
  */
 export async function answerCommit(room: Answering, commit: CommitRequest): Promise<CommitResult> {
+	const captured = structuredClone(commit);
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
-	const seat = liveSeatOf(room, commit.activation, room.state());
+	const seat = liveSeatOf(room, captured.activation, room.state());
 	if (seat === undefined) return stale('the lease ended');
 	try {
-		return await room.write(commit);
+		return await room.write(captured);
 	} catch (error) {
 		if (error instanceof RefusedError) return refused(room, seat, error.refusal);
 		throw error;
@@ -115,8 +116,9 @@ export async function answerCommit(room: Answering, commit: CommitRequest): Prom
 
 function refused(room: Answering, seat: string, refusal: Refusal): CommitResult {
 	if (refusal.category === 'missed') {
-		room.emit({ type: 'conflict', author: seat, missed: refusal.missed });
-		return { missed: refusal.missed };
+		const missed = refusal.missed.map(copyMessage);
+		room.emit({ type: 'conflict', author: seat, missed });
+		return { missed };
 	}
 	return refusal.category === 'stale' ? stale(refusal.reason) : { refused: refusal.reason };
 }
@@ -129,20 +131,21 @@ function refused(room: Answering, seat: string, refusal: Refusal): CommitResult 
  * work directly when it revokes or abandons that work.
  */
 export async function answerLease(room: Answering, lease: LeaseRequest): Promise<LeaseResponse> {
+	const captured = structuredClone(lease);
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
 	const state = room.state();
-	const seat = seatOf(lease.activation);
+	const seat = seatOf(captured.activation);
 	if (seat === undefined || !onRoster(state, seat)) {
 		return stale('the seat is not on the roster');
 	}
-	switch (lease.operation) {
+	switch (captured.operation) {
 		case 'claim':
-			return room.claim(lease.activation);
+			return room.claim(captured.activation);
 		case 'renew':
-			return room.renew(lease.activation, lease.readThrough);
+			return room.renew(captured.activation, captured.readThrough);
 		case 'release':
-			return release(room, lease, state);
+			return release(room, captured, state);
 		default:
 			return stale('the lease operation is not known');
 	}

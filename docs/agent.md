@@ -130,6 +130,23 @@ An agent may finish without calling `say`. The room records the lease outcome.
 Model failure, retry exhaustion, deliberate silence, and an accepted message
 remain distinct outcomes.
 
+## Value ownership
+
+**Room reads return detached values.** Messages, participant lists, snapshots,
+exchange discussions, and summary responses belong to their caller. Changing
+these values cannot change the room's journal, projection, or later reads.
+Nested routing lists and summary ranges follow the same rule.
+
+**Each listener receives its own notification value.** Collaboration facts
+inside that notification are detached from the room and other listeners.
+Error notifications retain the original `Error` object, including its cause
+and provider-specific fields. Errors describe execution; they are not room facts.
+
+**In-process transports have the same ownership boundary as remote calls.**
+The room captures commit and lease requests before awaiting work. Results and
+steering messages carry detached collaboration facts. A caller's later edits
+cannot change the submitted request or another executor's context.
+
 ## Activation and context
 
 An activation is a bounded execution with one room grant. Its purpose is either

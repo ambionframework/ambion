@@ -137,6 +137,11 @@ export interface SummaryMessage {
 /** One entry on a room's record. */
 export type Message = SpokenMessage | PresenceMessage | SummaryMessage;
 
+/** Copy a recorded message before it crosses an ownership boundary. */
+export function copyMessage<T extends Message>(message: T): T {
+	return structuredClone(message);
+}
+
 export function isSpoken(message: Message): message is SpokenMessage {
 	return message.kind === 'said';
 }
