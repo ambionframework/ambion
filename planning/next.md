@@ -39,17 +39,17 @@ small changes. Each change must delete an old path before it is complete.
 **Every release capability needs implementation and evidence.** The scope's
 feature identifiers map to the work below.
 
-| Scope                        | Work required before release                                                                            |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
-| F1: agent configuration      | Fixed definitions per run, name-based membership, normalized typed tools                                |
-| F2: rooms and presence       | One projection, immutable participant views, presence recovery procedure                                |
-| F3: concurrent contributions | One commit boundary, exact acknowledgement, steering and retry tests                                    |
-| F4: exchanges and assistant  | Shared completion query, constrained assistant tools, summary-based activation context and human review |
-| F5: persistence              | Generic journal cleanup, uncertain-write recovery, separate audit failures, restart evidence            |
-| F6: tools and workspaces     | Tool normalization, resource/adapter split, workspace behavior verification                             |
-| F7: observation and control  | Ordered notifications, reconnect example, explicit cancellation scope                                   |
-| F8: deployment models        | Node memory/SQLite examples, JSON protocol conformance, accurate Cloudflare reference status            |
-| F9: distribution             | Package extraction, compatibility checks, packed-consumer tests, installation and migration docs        |
+| Scope                        | Work required before release                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| F1: agent configuration      | Fixed definitions per run, name-based membership, normalized typed tools                                       |
+| F2: rooms and presence       | One projection, immutable participant views, presence recovery procedure                                       |
+| F3: concurrent contributions | One commit boundary, exact acknowledgement, steering and retry tests                                           |
+| F4: exchanges and assistant  | Shared seating authority, ordinary assistant membership, closing assignments, summary context and human review |
+| F5: persistence              | Generic journal cleanup, uncertain-write recovery, separate audit failures, restart evidence                   |
+| F6: tools and workspaces     | Tool normalization, resource/adapter split, workspace behavior verification                                    |
+| F7: observation and control  | Ordered notifications, reconnect example, explicit cancellation scope                                          |
+| F8: deployment models        | Node memory/SQLite examples, JSON protocol conformance, accurate Cloudflare reference status                   |
+| F9: distribution             | Package extraction, compatibility checks, packed-consumer tests, installation and migration docs               |
 
 **Retain the work already on main.** Awaited startup and snapshots, exchange
 handles, separate discussion and response waits, and checkpoint removal are
@@ -59,9 +59,11 @@ The current storage test harness covers memory and SQLite.
 These are baseline observations, not evidence that the proposed refactors
 pass their release gates. Do not repeat completed changes as new work.
 
-**Keep the assistant's restricted role explicit.** Reject domain tools in its
-definition for 0.1.0. Selection and summary executions receive their room
-tools. Do not silently accept and omit unsupported tools.
+**Simplify assistant participation.** Section 5 plans ordinary agent membership,
+shared seating authority, and one speaking tool. This replaces the earlier
+requirement to reject domain tools on assistant definitions. Closing work
+retains its bounded context and publication rules. These changes remain
+unimplemented; the recorded evidence below describes the existing behavior.
 
 ## 2. One owner for collaboration state
 
@@ -419,6 +421,80 @@ summary messages keep their existing fields.
 **Remaining execution work:** structured context, narrower executor
 interfaces, and separate audit failure remain below. This activation change
 does not move rendering or transcript ownership.
+
+### Simplify assistant participation and closing work
+
+**Planned; not implemented.** Treat the assistant as an ordinary agent with
+an explicit closing assignment. Give every agent authority to seat supplied
+colleagues. Expose one speaking tool. Keep exchange completion and summary
+coverage as room guarantees.
+
+**Share seating authority.** Ordinary message activations receive reserve
+identities and the `seat` tool. Agents can recruit colleagues when the
+discussion reveals missing expertise. The room validates supplied definitions,
+records the author, and wakes each newly seated agent.
+
+- [ ] Permit seating from every ordinary agent's live activation. Preserve
+      fixed executable definitions, lease validation, and journal attribution.
+- [ ] Return an already-seated result for concurrent requests naming the same
+      colleague. Do not append duplicate membership events or repeat activation.
+- [ ] Remove the dedicated `select` purpose, selection-only tools, and special
+      opening dispatch after ordinary participation supplies their behavior.
+- [ ] Define initial participation for an empty roster. Require an initial
+      participant or an explicit opening recipient before removing selection.
+
+Agent-driven unseating is a separate decision. If added, reuse membership
+validation, lease revocation, cancellation, and pending-work settlement.
+Shared seating authority does not establish those removal rules.
+
+**Use `say` for closing publication.** A closing activation receives
+`say({ text })`. The room derives the recipient and source range from the
+recorded closing assignment. Keep the internal summary event and its meaning.
+
+- [ ] Replace the model-facing `summarise` tool with a closing binding of `say`.
+      Keep ordinary speech subject to consumed-context freshness checks.
+- [ ] Preserve the fixed exchange range while later messages arrive. Refuse
+      duplicate publication and writes without the assigned live activation.
+- [ ] Keep closing publication from waking idle agents or holding another
+      exchange open. Preserve existing delivery behavior for active agents.
+- [ ] Preserve summary-based context replacement, original discussion reads,
+      response completion, deliberate silence, retries, and terminal failure.
+- [ ] Keep recipient preferences inside the assigned closing context. Closing
+      publication remains constrained to that exchange and its room tool.
+
+**Remove special assistant membership.** An agent assigned closing work can
+also receive ordinary messages, use its domain tools, and seat colleagues.
+Attention controls ordinary activation. Closing work has its own recorded
+cause, context boundary, and publication authority.
+
+- [ ] Replace the separate assistant definition path with an ordinary agent
+      definition and an optional closing assignment by name.
+- [ ] Remove forced `none` attention, the ordinary-response prohibition, and
+      assistant-only membership restrictions. Define how removal settles any
+      pending closing assignment before allowing it.
+- [ ] Preserve one active execution per seat when ordinary work and closing
+      work overlap. Closing work must not delay discussion closure.
+- [ ] Keep at most one assigned writer per close. Record the assignment so
+      restart and response queries agree about outstanding work.
+
+**Keep activation causes without a role framework.** The current code has no
+`Role` type. Its distinction lives in `ActivationPurpose` and assistant policy.
+Retain ordinary message work and exchange-closing work. Remove `select` and
+avoid a generic role registry or capability configuration system.
+
+- [ ] Update activation derivation, context selection, tool binding, routing,
+      and completion together. Remove obsolete assistant-specific branches.
+- [ ] Define compatibility for recorded assistant compositions and `opened`
+      activation IDs. Preserve their original recovery meaning or provide an
+      explicit migration; do not silently reinterpret old histories.
+- [ ] Verify concurrent seating, empty-roster startup, an addressable closing
+      writer, removal during pending work, and closing work overlapping later
+      discussion. Retain summary isolation and recovery tests.
+- [ ] Update examples, public contracts, and migration notes after implementation.
+
+**Done when:** ordinary agents share seating and speech operations, and only
+closing work retains the extra context and publication constraints. Replay,
+response waits, source review, and summary compaction keep their guarantees.
 
 ### Separate protocol data from provider execution
 
@@ -794,9 +870,9 @@ consumer or a measured limitation.
 | Deferred work                                                          | Reason and condition for reconsideration                                                                             |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Automatic roster thinning, agent self-removal, attention-only updates  | Define in-flight cancellation and host ownership first; revisit when measured participation costs justify new policy |
-| Preferences that steer specialist work; an addressable assistant       | Preferences currently shape the final response; broader authority needs explicit context and routing rules           |
-| Assistant roster presentation and token cost                           | Measure the single-assistant case; presentation changes alone do not justify a new participation model               |
-| Generic roles, multiple summary writers, room-level writers            | No second required role establishes the conflict or composition rules                                                |
+| Preferences that steer specialist work                                 | Preferences remain scoped to closing work; broader use needs explicit context rules                                  |
+| Assistant roster presentation and token cost                           | Measure after the participation simplification in section 5; additional presentation policy remains deferred         |
+| Generic roles, multiple summary writers, room-level writers            | Section 5 retains one closing assignment; no consumer establishes broader conflict or composition rules              |
 | Credentials broker or sidecar proxy                                    | Hosts and domain tools own credentials for 0.1.0; extract only for an actual shared service requirement              |
 | OS-user, container, or remote workspace backends                       | Stronger isolation needs provisioning, identity, teardown, and failure contracts                                     |
 | Distributed workspace ownership and effect fencing                     | Local resource serialization does not establish cross-host lifecycle ownership                                       |
@@ -818,21 +894,21 @@ consumer or a measured limitation.
 numbers below provide traceability. Their old measurements and diagnoses are
 not carried forward as current facts.
 
-| Previous items                                                            | Disposition                                                                                                     |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 2, 3, 27: folds, history growth, room coupling                            | Sections 2–6 own structural work; section 9 owns measurement; bounded history remains deferred                  |
-| 4: eager provider loading                                                 | Already addressed on main; retain an import regression check                                                    |
-| 6, 7, 9, 10, 11, 12, 44: dependencies, tests, packaging, platform, docs   | Section 9 owns the remaining release tasks; retire stale paths and export claims                                |
-| 13–17: preferences, roster changes, assistant participation               | Deferred in section 10; current assistant constraints remain in scope                                           |
-| 20, 25, 51: roles and multiple writers                                    | Deferred; the current scope has one explicit assistant role                                                     |
-| 21–24: credentials, shell behavior, isolation, Pi foundation              | Fix or verify shell behavior in section 9; keep host credential ownership and Pi Agent; defer broader machinery |
-| 26: runtime-wide name collisions                                          | The current host has room-local definitions; retain collision and remote-binding tests, not the old diagnosis   |
-| 28–30: presence recovery, exhausted summaries, inherited leases           | Host recovery procedures in section 9; manual summary reset deferred                                            |
-| 32, 33, 36: unknown names, shrinking, clock/storage faults                | Test current missing-room and clock behavior; defer shrinkers and obsolete JSONL fault work                     |
-| 37–41: tool effects, remote configuration, runners, workspaces, listeners | Sections 5–6 and 9 establish boundaries and recovery tests; distributed services remain deferred                |
-| 42, 50, 53: crash and Cloudflare test failures                            | Reproduce on current code and resolve with ordering evidence in section 9                                       |
-| 48: model-visible message numbering                                       | Previously completed; preserve its behavior through the rendering refactor                                      |
-| 49: concurrent JSONL room writers                                         | The current room harness uses memory/SQLite; retire the obsolete adapter diagnosis                              |
+| Previous items                                                            | Disposition                                                                                                              |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 2, 3, 27: folds, history growth, room coupling                            | Sections 2–6 own structural work; section 9 owns measurement; bounded history remains deferred                           |
+| 4: eager provider loading                                                 | Already addressed on main; retain an import regression check                                                             |
+| 6, 7, 9, 10, 11, 12, 44: dependencies, tests, packaging, platform, docs   | Section 9 owns the remaining release tasks; retire stale paths and export claims                                         |
+| 13–17: preferences, roster changes, assistant participation               | Section 5 plans shared seating and ordinary assistant membership; broader preferences and removal policy remain deferred |
+| 20, 25, 51: roles and multiple writers                                    | Section 5 removes special membership and selection purpose; generic roles and multiple writers remain deferred           |
+| 21–24: credentials, shell behavior, isolation, Pi foundation              | Fix or verify shell behavior in section 9; keep host credential ownership and Pi Agent; defer broader machinery          |
+| 26: runtime-wide name collisions                                          | The current host has room-local definitions; retain collision and remote-binding tests, not the old diagnosis            |
+| 28–30: presence recovery, exhausted summaries, inherited leases           | Host recovery procedures in section 9; manual summary reset deferred                                                     |
+| 32, 33, 36: unknown names, shrinking, clock/storage faults                | Test current missing-room and clock behavior; defer shrinkers and obsolete JSONL fault work                              |
+| 37–41: tool effects, remote configuration, runners, workspaces, listeners | Sections 5–6 and 9 establish boundaries and recovery tests; distributed services remain deferred                         |
+| 42, 50, 53: crash and Cloudflare test failures                            | Reproduce on current code and resolve with ordering evidence in section 9                                                |
+| 48: model-visible message numbering                                       | Previously completed; preserve its behavior through the rendering refactor                                               |
+| 49: concurrent JSONL room writers                                         | The current room harness uses memory/SQLite; retire the obsolete adapter diagnosis                                       |
 
 **Track completion through evidence.** Mark a task complete only after its
 implementation and relevant checks land. Keep product scope in
