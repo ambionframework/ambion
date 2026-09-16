@@ -114,6 +114,39 @@ The main library includes the journal dependency. Add
 `@ambionframework/workspace` when agents need its optional filesystem tools.
 See [Contributing](CONTRIBUTING.md) to build and run from source.
 
+## Try the local CLI
+
+**Create a team and talk to its agents in your terminal.** Use Node **26.4
+or later**, pnpm 10, and an interactive terminal.
+
+The Cloudflare adapter is private. From this checkout, prepare a project with
+local package archives. The helper builds the packages and creates the project.
+Choose a new directory outside the repository whose parent already exists.
+
+```sh
+# Run from the Ambion repository root.
+pnpm install --frozen-lockfile
+node scripts/prepare-team.mjs ../my-team
+cd ../my-team
+pnpm install
+cp .dev.vars.example .dev.vars
+# Edit .dev.vars and set ANTHROPIC_API_KEY.
+pnpm exec ambion dev
+```
+
+The OpenTUI room contains a planner, a reviewer, and your local participant.
+Type a question, then press Enter. Scroll with the mouse wheel. Press Ctrl-C
+to close the room and stop Wrangler.
+
+Edit the agent instructions in `src/room.ts`, then restart `pnpm exec ambion dev`.
+Conversation history remains in `.wrangler/`. Use `--port 8788` if port 8787
+is occupied.
+
+The CLI also provides `ambion new <directory>` to copy the team template.
+Its generated dependencies require local archives until publication.
+See the [CLI README](packages/cli/README.md) for command usage, model settings,
+HTTP testing, and resetting local history.
+
 ## A small room
 
 This example uses two specialist definitions and no assistant. Each specialist
