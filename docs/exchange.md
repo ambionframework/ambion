@@ -15,10 +15,10 @@ reaches a terminal state.
 
 One room has one open discussion at a time. Separate simultaneous discussions
 use separate rooms. A close fixes a range; it does not certify answer quality.
-The assistant is optional. Human participants can review the fixed discussion
-through `exchange.messages()`, even after a summary replaces its source messages
-in later agent activations. [Deployment](deployment.md) covers host duties and
-release limits.
+Summary publication is optional. Human participants can review the fixed
+discussion through `exchange.messages()`, even after a summary replaces its
+source messages in later agent activations. [Deployment](deployment.md) covers
+host duties and release limits.
 
 ---
 
@@ -145,15 +145,15 @@ An exchange is a fold over the journal. The open exchange is the first
 question a person asked after the last close's `through`
 (`openExchange` in [`exchange.ts`](../packages/ambion/src/room/exchange.ts)). A
 close is an entry on the journal beside the messages: `{ owner, from, through,
-at, wakes? }`. It takes no seq; `through` orders it. `wakes` names the
-assistant when the exchange owes a summary. `messages()` returns the
+at, summary? }`. It takes no seq; `through` orders it. `summary` names the
+configured writer when the exchange owes a summary. `messages()` returns the
 messages alone, and their seqs stay `1..n`.
 
 A room resumed over its journal continues a mid-exchange room. The question is
 still open, the seats the last run left live hold their leases until they
 expire, and the wakes it left pending are sent again. A lease that expires
 answers the wake it held: the exchange closes once nothing is live, and the
-assistant writes what it owes ([`agent.md`](agent.md) §5). A run that
+writer receives what it owes ([`summary.md`](summary.md)). A run that
 starts over a journal with an exchange open finds nothing live at its first
 reconcile, closes the exchange, and its host hears `exchange_closed` for
 it.
@@ -187,10 +187,11 @@ if (sameExchange) {
 
 `messages()` resolves only after the close entry is durable and returns the
 non-summary messages in the inclusive `[from, through]` range. It excludes
-assistant summaries, including a summary published during a later exchange;
+summaries, including a summary published during a later exchange;
 `response()` owns that optional result and waits for it, or returns `undefined`
-when the exchange deliberately has no summary. A failed or abandoned attempt
-remains visible in the record and is handled by the exchange's retry policy.
+when no summary is assigned or the writer declines. A failed or abandoned
+attempt remains visible in the record and is handled by the exchange's retry
+policy.
 
 **Scheduling and response reads share one completion query.**
 `summaryCompletion` in [`exchange.ts`](../packages/ambion/src/room/exchange.ts)
@@ -238,13 +239,13 @@ quiet, or settled wait: a caller follows the particular exchange it opened.
 The exchange belongs to the room itself, ahead of any one feature, because
 several readers take it from the same place:
 
-- **The assistant.** A closed exchange wakes the assistant for its owner,
-  and the one message it writes stands for that exchange.
-  [`assistant.md`](assistant.md) is the contract for it. An exchange opens
-  and closes whether or not the assistant writes anything for it.
+- **The summary writer.** A configured writer receives a closing activation
+  when it is seated. It may write one message through `say`. An exchange opens
+  and closes whether or not the writer publishes a summary. See
+  [`summary.md`](summary.md).
 - **A client.** It folds the working under the question it answered and
   shows the exchange as a thinking state. The two events are enough for
-  that, whatever the assistant does.
+  that, whatever the writer does.
 - **A host that measures cost.** It measures per exchange, because that is
   what somebody asked for.
 
@@ -268,16 +269,15 @@ live run seated three more agents than the run before, and the lock's
 refusals went from 14 to 45, each one a model turn that reached the record
 with nothing. It is written down because a room that waits for months will
 meet it eventually, and because anything built on quiescence assumes it does
-not happen. [`assistant.md`](assistant.md) is
-built on it: the assistant writes when the room goes quiet, so a room that
-never goes quiet never gets its one message.
+not happen. The summary writer receives an activation only after the room
+records the close.
 
 ---
 
 ## 9. What proves it
 
-The exchange is proved beside the assistant that first reads one, in
-[`assistant.test.ts`](../packages/ambion/test/assistant.test.ts):
+The exchange is proved in
+[`exchange-completion.test.ts`](../packages/ambion/test/exchange-completion.test.ts):
 
 - a question opens an exchange and quiescence closes it, holding the range
   it covered (§3);
@@ -291,7 +291,7 @@ The exchange is proved beside the assistant that first reads one, in
 - an exchange closes at the durable boundary it observed, and a message
   committed before that boundary remains in the exchange (§3);
 - a close for one exchange never closes the next, and a question the
-  assistant already woke on composes nothing and closes at once (§3);
+  no remaining work closes at once (§3);
 - `exchange.messages()` resolves before its optional response is written, and
   `response()` resolves only when that response is durable or deliberately
   absent (§6).

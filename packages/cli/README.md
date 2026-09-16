@@ -45,8 +45,9 @@ The generated `.npmrc` configures GitHub Packages. It references
 install dependencies. No local package archives are needed.
 
 The team contains the `planner` and `reviewer` agents and the `human`
-participant. Ask a question, such as “Plan a small documentation site and
-review the risks.” Both agents can contribute.
+participant. Both agents can contribute to each question. The planner is also
+the optional summary writer, so it may write the short closing message the
+human reads.
 
 The project name uses 1–63 lowercase letters, numbers, or dashes. It cannot
 start or end with a dash. `new` refuses to overwrite existing files.

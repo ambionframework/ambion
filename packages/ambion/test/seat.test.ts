@@ -65,7 +65,7 @@ class PlayedRoom implements SeatRoom {
 					purpose: { kind: 'respond', message: 1 },
 				},
 				through: 1,
-				context: { name: 'played', now: 0, participants: [], messages: [] },
+				context: { name: 'played', now: 0, participants: [], messages: [], reserve: [] },
 			},
 		};
 	}

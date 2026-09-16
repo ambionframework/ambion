@@ -1,7 +1,8 @@
 # Ambion team
 
 This project runs two editable agents in one local room. The planner makes a
-plan. The reviewer checks it. A local human sends the questions.
+plan, the reviewer checks it, and the planner may write the short closing
+message the human reads. A local human sends the questions.
 
 ## Start the room
 

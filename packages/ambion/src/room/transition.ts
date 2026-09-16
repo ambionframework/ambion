@@ -1,5 +1,6 @@
 /** Pure commands and committed events for a room. */
 
+import { decodeActivationId } from '../activation-id.ts';
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
 import type { Message, PresenceMessage } from '../types.ts';
 import type {
@@ -49,7 +50,9 @@ export type Refusal =
 	{ category: 'stale' | 'refused'; reason: string } | { category: 'missed'; missed: Message[] };
 
 export type RoomDecision<K extends Kind> =
-	{ event: ProposedEvent<K> | undefined } | { refusal: Refusal };
+	| { event: ProposedEvent<K> | undefined }
+	| { refusal: Refusal }
+	| { unchanged: { kind: 'seated' | 'unseated'; name: string } };
 
 export type ReconcileDecision = {
 	events: ProposedEvent<'lease' | 'close'>[];
@@ -170,18 +173,16 @@ function presenceRefusal(state: RoomState, change: PresenceChange): string | und
 	if (change.kind === 'seated' && (seat !== undefined || state.people.has(change.subject))) {
 		return `Duplicate agent name '${change.subject}': one name names one participant.`;
 	}
-	if (change.kind === 'unseated') return unseatRefusal(state, seat, change.subject);
+	if (change.kind === 'unseated') return unseatRefusal(seat, change.subject);
 	if (change.kind === 'arrived') return arrivalRefusal(state, change);
 	return undefined;
 }
 
 function unseatRefusal(
-	state: RoomState,
 	seat: RoomState['roster'][number] | undefined,
 	name: string,
 ): string | undefined {
 	if (seat === undefined) return `'${name}' is not seated in this room.`;
-	if (state.composition?.assistant === name) return `'${name}' is this room's assistant.`;
 	return undefined;
 }
 
@@ -203,13 +204,66 @@ function commit(state: RoomState, request: CommitRequest, now: number): RoomDeci
 	if ('refusal' in live) return live;
 	const { intent } = request;
 	if (!permits(live, intent.kind)) return refused('This activation cannot submit that intent.');
+	const purpose = live.purpose;
+	if (intent.kind === 'said' && purpose.kind === 'summarize')
+		return closingCommit(state, request, live, purpose, now);
+	return ordinaryCommit(state, request, live, now);
+}
+
+function closingCommit(
+	state: RoomState,
+	request: CommitRequest,
+	live: ActivationSpec,
+	purpose: Extract<ActivationSpec['purpose'], { kind: 'summarize' }>,
+	now: number,
+): RoomDecision<'message'> {
+	const intent = request.intent;
+	if (intent.kind !== 'said') return refused('This activation cannot submit that intent.');
+	if (intent.to !== undefined && intent.to !== purpose.person)
+		return refused('A closing response must address the exchange owner.');
+	if (state.messages.some((entry) => isCoveringSummary(entry, purpose)))
+		return refused('This exchange already has a summary.');
+	return message(
+		state,
+		{
+			kind: 'summary',
+			text: intent.text,
+			to: purpose.person,
+			covers: { from: purpose.exchange, through: purpose.through },
+			at: iso(now),
+			activationId: request.activation,
+			from: live.seat,
+		},
+		now,
+	);
+}
+
+function ordinaryCommit(
+	state: RoomState,
+	request: CommitRequest,
+	live: ActivationSpec,
+	now: number,
+): RoomDecision<'message'> {
+	const { intent } = request;
 	const fresh = speechFreshness(state, request);
 	if (fresh !== undefined) return fresh;
 	const stamp = { at: iso(now), activationId: request.activation, from: live.seat };
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
-	if (intent.kind === 'summary') return summary(state, live, intent.text, stamp, now);
+	if (intent.kind === 'unseated') return unseating(state, intent.name, stamp, now);
 	const reason = addressRefusal(state, live.seat, intent.to);
 	return reason === undefined ? message(state, { ...intent, ...stamp }, now) : refused(reason);
+}
+
+function isCoveringSummary(
+	message: Message,
+	purpose: Extract<ActivationSpec['purpose'], { kind: 'summarize' }>,
+): boolean {
+	return (
+		message.kind === 'summary' &&
+		message.to === purpose.person &&
+		message.covers.from <= purpose.exchange &&
+		message.covers.through >= purpose.through
+	);
 }
 
 function liveSpec(
@@ -244,47 +298,13 @@ function speechFreshness(
 		: undefined;
 }
 
-function summary(
-	state: RoomState,
-	spec: ActivationSpec,
-	text: string,
-	stamp: { at: string; activationId: string; from: string },
-	now: number,
-): RoomDecision<'message'> {
-	const purpose = spec.purpose;
-	if (purpose.kind !== 'summarize')
-		return refused('This summary does not match its closed exchange.');
-	if (
-		state.messages.some(
-			(message) =>
-				message.kind === 'summary' &&
-				message.to === purpose.person &&
-				message.covers.from <= purpose.exchange &&
-				message.covers.through >= purpose.through,
-		)
-	)
-		return refused('This exchange already has a summary.');
-	return message(
-		state,
-		{
-			kind: 'summary',
-			text,
-			to: purpose.person,
-			covers: { from: purpose.exchange, through: purpose.through },
-			...stamp,
-		},
-		now,
-	);
-}
-
 function permits(spec: ActivationSpec, kind: CommitRequest['intent']['kind']): boolean {
 	switch (kind) {
 		case 'said':
-			return spec.purpose.kind === 'respond';
-		case 'summary':
-			return spec.purpose.kind === 'summarize';
+			return spec.purpose.kind === 'respond' || spec.purpose.kind === 'summarize';
 		case 'seated':
-			return spec.purpose.kind === 'select';
+		case 'unseated':
+			return spec.purpose.kind === 'respond';
 		default:
 			return false;
 	}
@@ -305,6 +325,9 @@ function seating(
 	stamp: { at: string; activationId: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
+	if (state.roster.some((seat) => seat.name === name)) {
+		return { unchanged: { kind: 'seated', name } };
+	}
 	const held = state.reserve.find((candidate) => candidate.name === name);
 	if (held === undefined) {
 		const names = state.reserve.map((candidate) => candidate.name);
@@ -324,6 +347,20 @@ function seating(
 		},
 		now,
 	);
+}
+
+function unseating(
+	state: RoomState,
+	name: string,
+	stamp: { at: string; activationId: string; from: string },
+	now: number,
+): RoomDecision<'message'> {
+	if (!state.roster.some((seat) => seat.name === name)) {
+		return state.reserve.some((seat) => seat.name === name)
+			? { unchanged: { kind: 'unseated', name } }
+			: refused(`'${name}' is not an agent in this room.`);
+	}
+	return message(state, { kind: 'unseated', subject: name, ...stamp }, now);
 }
 
 function addressRefusal(
@@ -373,6 +410,15 @@ function runningLease(
 	const known = state.leases.get(command.id);
 	if (known === undefined && !state.due.some((due) => due.id === command.id))
 		return stale('the lease ended');
+	const seat = decodeActivationId(command.id)?.seat;
+	if (
+		known === undefined &&
+		seat !== undefined &&
+		[...state.leases.values()].some(
+			(lease) => lease.id !== command.id && seatOfLease(lease.id) === seat && isLive(lease, now),
+		)
+	)
+		return stale('another activation already holds this seat');
 	if (known !== undefined && !isLive(known, now)) return stale('the lease ended');
 	const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
 	const expiry = Math.min(now + command.expiry, claimedAt + command.deadline);
@@ -389,6 +435,8 @@ function runningLease(
 		},
 	};
 }
+
+const seatOfLease = (id: string): string | undefined => decodeActivationId(id)?.seat;
 
 function end(
 	state: RoomState,
@@ -417,6 +465,7 @@ function end(
 function mayEnd(known: LeaseHold | undefined, reason: EndReason, now: number): boolean {
 	if (known === undefined) return reason === 'revoked' || reason === 'abandoned';
 	if (known.phase === 'ended' || reason === 'abandoned') return false;
+	if (reason === 'revoked') return true;
 	return isExpired(known, now) === (reason === 'expired');
 }
 
@@ -430,13 +479,14 @@ function invalidProgress(
 }
 
 function compose(state: RoomState, composition: Body<Composition>): RoomDecision<'composition'> {
-	const assistant = composition.assistant;
-	if (assistant !== undefined) {
-		const seat = composition.agents.find((candidate) => candidate.name === assistant);
-		if (seat === undefined) return refused(`Assistant '${assistant}' is not seated in this room.`);
-		if (seat.attention !== 'none')
-			return refused(`Assistant '${assistant}' must have attention 'none'.`);
-	}
+	if (composition.version !== 2) return refused('This room requires composition version 2.');
+	if (
+		composition.summary !== undefined &&
+		![...composition.agents, ...composition.available].some(
+			(seat) => seat.name === composition.summary,
+		)
+	)
+		return refused(`Summary writer '${composition.summary}' is not defined in this room.`);
 	const names = new Set<string>();
 	for (const seat of [...composition.agents, ...composition.available]) {
 		if (names.has(seat.name) || state.people.has(seat.name))
@@ -453,6 +503,7 @@ function reconcile(state: RoomState, command: ReconcileCommand, now: number): Re
 	});
 	return {
 		events: [
+			...effects.revoked.map((body) => ({ kind: 'lease' as const, body })),
 			...[...expired, ...abandoned].map((body) => ({ kind: 'lease' as const, body })),
 			...(close === undefined ? [] : [{ kind: 'close' as const, body: close }]),
 		],

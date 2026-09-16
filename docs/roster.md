@@ -1,106 +1,70 @@
 # Roster
 
-**A room fixes executable definitions for one run and changes membership by name.**
-Each definition supplies an agent's identity, instructions, model, and tools.
-The room captures these fields when it starts.
+**A room receives one executable definition for each agent name.** The
+definition stays with the host. The journal records the identity and current
+membership, so replay does not need executable values.
 
 ## Configuration
 
-Supply every ordinary definition at startup or resume. Use `seats` to choose
-initial membership and attention.
+Pass every definition in `agents`. Use `seats` for initial membership and
+attention.
 
 ```ts
 const room = await startRoom({
   name: 'site',
-  agents: [timeTracker, inspector, quantitySurveyor],
-  seats: {
-    timeTracker: 'broadcast',
-    quantitySurveyor: 'named',
-  },
-  assistant,
+  agents: [inspector, surveyor, editor],
+  summary: 'editor',
+  seats: { inspector: 'broadcast' },
 });
 ```
 
-If `seats` is absent, every supplied ordinary agent starts at
-`broadcast`. An empty map starts every ordinary agent in the reserve.
-The assistant is a separate optional definition. It does not belong in
-`agents`, and its name cannot duplicate an ordinary agent.
+If `seats` is omitted, every catalog agent starts as a member at `broadcast`.
+An empty map starts every catalog agent in the reserve. `summary` names one
+catalog agent that may receive closing work. It does not create a separate
+membership type.
 
-An agent in `agents` but absent from `seats` remains available for assistant
-selection. The room seats a selected agent with `broadcast` attention.
-The assistant can select only a supplied definition.
-
-## Membership operations
-
-**Use names for membership changes.** The room already has each definition,
-so seating cannot install executable code during a run.
-
-```ts
-await room.seat('inspector');
-await room.seat('quantitySurveyor', { attention: 'named' });
-await room.unseat('inspector');
-```
-
-`seat` rejects an unknown name, the assistant name, and a name that is
-already a member. `unseat` rejects a name that is not a current agent member.
-A newly seated agent uses `broadcast` when no attention is supplied.
-
-An unseated ordinary agent returns to the reserve. Installing a new executable
-definition requires a new room run with an expanded definition set.
+The host supplies the same catalog on resume. A definition absent from the
+recorded catalog can enter the reserve only in a new version 2 composition.
+Unknown names fail before the room writes a membership entry.
 
 ## Attention
 
-Attention controls which events wake an idle agent.
+Attention controls which events wake an idle member.
 
-| Attention   | Idle agent wakes for                        |
-| ----------- | ------------------------------------------- |
-| `none`      | no message or presence event                |
-| `named`     | a message addressed to the agent            |
-| `broadcast` | every eligible room message                 |
-| `presence`  | eligible room messages and presence changes |
+| Attention   | Idle agent wakes for                   |
+| ----------- | -------------------------------------- |
+| `named`     | A message addressed to the agent       |
+| `broadcast` | Any eligible message                   |
+| `presence`  | Eligible messages and presence changes |
 
-A directed message wakes its named recipient when that recipient is an
-addressable member. A member at `none` cannot receive a directed message.
-Attention does not grant permission to contribute. The room validates
-the activation lease and the consumed context at commit.
+Omitted attention uses `broadcast`. All agents use the same scale. No agent
+has a reserved attention value or special addressability rule.
 
-## Reading participants
+Attention controls waking. It does not grant authority to commit. The room
+checks the activation, lease, recipient, and consumed context for every write.
 
-**Call `participants()` for the combined room view.** It returns agent members
-and human visitors with their status, identity, and attention where applicable.
-Reserve agents do not appear in this view.
+## Membership operations
 
-```ts
-for (const participant of room.participants()) {
-  console.log(participant.name, participant.kind);
-}
-```
+An agent activation can use `seat({ name })` and `unseat({ name })`. The room
+also exposes `room.seat(name)` and `room.unseat(name)` for the host.
 
-The room snapshot also exposes `participants`. These values are immutable
-views. They do not grant authority and do not contain executable definitions.
+- `seat` accepts a name from the catalog and reserve.
+- `unseat` accepts a currently seated agent, including the calling agent.
+- An unknown name or a human name is refused.
+- A duplicate seating request returns an unchanged result.
+- A duplicate seating request writes no journal entry, wake, or acknowledgement.
 
-## Resume
+When an agent leaves, its definition remains available in the reserve. Pending
+work for that seat settles according to the room's recorded lease rules. A
+later seating creates new work only when the journal derives it.
 
-A resumed room receives the complete definition set again.
+## Views and resume
 
-```ts
-const room = await resumeRoom('site', {
-  runtime,
-  agents: [assistant, timeTracker, inspector, quantitySurveyor],
-});
-```
+`room.participants()` returns current agents and human visitors. Reserve agents
+do not appear. Views contain identity, membership status, and attention. They
+do not contain executable definitions or authority.
 
-Resume validates the recorded catalog and roster before execution starts.
-It preserves recorded membership and attention. Extra supplied definitions
-join the reserve. Startup `seats` do not reset a resumed room.
-
-The journal records membership changes and presence. A host can rebuild the
-roster by replaying those entries. Definition functions and provider bindings
-stay with the host.
-
-## Scope and limits
-
-A room has one roster for its run. A process restart does not restore JavaScript
-functions from the journal. Supply definitions again and resume the same room.
-A name identifies a participant inside the room; it is not an authorization
-credential.
+`resumeRoom` receives the complete catalog again. It preserves recorded
+membership and attention. Startup seating options do not reset a resumed room.
+Version 2 composition entries reject legacy assistant histories. Start a new
+journal or perform migration outside Ambion.

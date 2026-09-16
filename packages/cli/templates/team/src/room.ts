@@ -35,6 +35,9 @@ export const AGENTS = [planner, reviewer];
 
 export const COMPOSITION = {
 	name: ROOM_NAME,
+	// The planner is an ordinary room member. When an exchange closes, it may
+	// write the short message the human reads using the same say tool.
+	summary: planner.name,
 	agents: AGENTS.map((agent) => agent.name),
 	seats: {
 		planner: 'broadcast',

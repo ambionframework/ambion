@@ -74,8 +74,11 @@ export const speak = (text: string, to?: string) => callTool('say', to ? { to, t
 export const quiet = (thought = 'nothing to add') =>
 	fauxAssistantMessage(thought, { stopReason: 'stop' });
 
-/** The assistant writes by calling its own tool. It has no say, because it says nothing. */
-export const summarise = (text: string) => callTool('summarise', { text });
+// Closing publications use the same model tool as ordinary speech.
+export const summarise = (text: string) => speak(text);
+
+export const isClosing = (context: Context) =>
+	context.systemPrompt?.includes('The exchange is over.') ?? false;
 
 export const seat = (name: string) => callTool('seat', { name });
 

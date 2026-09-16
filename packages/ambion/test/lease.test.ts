@@ -37,13 +37,13 @@ import {
 	answersEveryQuestion,
 	byAgent,
 	contextText,
+	isClosing,
 	quiet,
 	type Script,
 	says,
 	scripted,
 	speak,
 	summarise,
-	toolNames,
 } from './support/scripted.ts';
 import { gatedJournals, memory } from './support/storage.ts';
 import { type Fault, faultyTransport } from './support/transport.ts';
@@ -64,6 +64,7 @@ async function open(
 	faults: Fault[],
 	script: Script,
 	wake?: { expiry: number; deadline: number },
+	summary = false,
 ): Promise<{ session: Room; clock: FakeClock; runtime: Runtime }> {
 	const clock = fakeClock();
 	const runtime = createRuntime({
@@ -73,8 +74,9 @@ async function open(
 	});
 	const session = await startRoom({
 		name: roomName('lease'),
-		assistant,
-		agents: [solo],
+		...(summary ? { summary: assistant.name } : {}),
+		seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+		agents: [solo, assistant],
 		runtime,
 		streamFn: scripted(script),
 	});
@@ -254,10 +256,12 @@ describe('a lease', () => {
 			byAgent({
 				solo: says(['I answered.', 'And again.']),
 				assistant: (context) => {
-					if (!toolNames(context).includes('summarise')) return quiet();
+					if (!isClosing(context)) return quiet();
 					throw new Error('the model failed');
 				},
 			}),
+			undefined,
+			true,
 		);
 		const events = collect(session);
 		const drafted = assistantEnded(session);
@@ -413,8 +417,8 @@ describe('a lease judged where its change is written', () => {
 		const held = deferred();
 		const session = await startRoom({
 			name: roomName('lease-renewal'),
-			assistant,
-			agents: [solo],
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
 			runtime: createRuntime({ clock, storage: journals }),
 			streamFn: scripted(async (_c, _a, call) => {
 				if (call !== 1) return quiet();
@@ -478,8 +482,9 @@ describe('a lease judged where its change is written', () => {
 		const held = deferred();
 		const session = await startRoom({
 			name: roomName('lease-draft'),
-			assistant,
-			agents: [solo],
+			summary: assistant.name,
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
 			runtime,
 			streamFn: scripted(
 				byAgent({
@@ -491,7 +496,7 @@ describe('a lease judged where its change is written', () => {
 						return says(['a3', 'a4'])(context, name, call);
 					},
 					assistant: (context, _name, call) => {
-						if (!toolNames(context).includes('summarise')) return quiet();
+						if (!isClosing(context)) return quiet();
 						if (call === 1) throw new Error('the model failed');
 						return summarise('The one message.');
 					},

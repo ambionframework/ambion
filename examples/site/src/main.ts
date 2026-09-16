@@ -37,9 +37,9 @@ import {
 const room = await startRoom({
 	name: ROOM_NAME,
 	goal: GOAL,
-	assistant: ASSISTANT,
-	agents: AGENTS,
-	seats: INITIAL_SEATS,
+	summary: ASSISTANT.name,
+	agents: [...AGENTS, ASSISTANT],
+	seats: { [ASSISTANT.name]: 'broadcast', ...INITIAL_SEATS },
 });
 
 /** Who is in the room, by name. A person may be here more than once. */
@@ -180,9 +180,9 @@ function who(): void {
 	}
 	for (const seat of participants) {
 		if (seat.kind === 'agent') {
-			const assistant = seat.assistant ? ', the assistant' : '';
+			const summary = seat.name === ASSISTANT.name ? ', summary writer' : '';
 			console.log(
-				`  ${paint(seat.name, seat.name)} (${seat.status}, wakes ${WAKES[seat.attention]}${assistant}): ${seat.identity}`,
+				`  ${paint(seat.name, seat.name)} (${seat.status}, wakes ${WAKES[seat.attention]}${summary}): ${seat.identity}`,
 			);
 		} else {
 			console.log(`  ${paint(seat.name, seat.name)} (${seat.presence}): ${seat.identity}`);

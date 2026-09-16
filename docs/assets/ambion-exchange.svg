@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="820" viewBox="0 0 1440 820" role="img" aria-labelledby="title desc">
   <title id="title">Independent agents collaborating through a shared journal</title>
-  <desc id="desc">A persistent room records collaboration in one ordered journal. A question opens an exchange. Independent agents contribute or remain silent, and new messages steer active work. The exchange closes when no required discussion work remains. An optional assistant can summarize it. Later activations use the summary in place of covered messages; human participants can review the original discussion.</desc>
+  <desc id="desc">A persistent room records collaboration in one ordered journal. A question opens an exchange. Independent agents contribute or remain silent, and new messages steer active work. The exchange closes when no required discussion work remains. A configured agent may write an optional summary. Later activations use the summary in place of covered messages; human participants can review the original discussion.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 10 5 0 10Z" fill="#6c7371"/>
@@ -106,7 +106,7 @@
   <path d="M630 477V332Q630 320 618 320H578" fill="none" stroke="#3f5bb5" stroke-width="2.5" marker-end="url(#arrow-blue)"/>
   <text x="642" y="326" class="sans" fill="#3f5bb5" font-size="13" font-weight="700">steers Inventory between provider requests</text>
 
-  <!-- Person and assistant roles -->
+  <!-- Person and summary writer -->
   <g filter="url(#shadow)">
     <rect x="72" y="174" width="244" height="126" rx="16" fill="#232a2b"/>
     <rect x="904" y="696" width="464" height="82" rx="16" fill="#232a2b"/>
@@ -116,7 +116,7 @@
   <text x="96" y="270" class="mono" fill="#f1ead6" font-size="12">exchange owner</text>
   <path d="M194 300V331Q194 340 205 340H278V477" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <text x="932" y="729" class="sans" fill="#fff" font-size="19" font-weight="700">Optional assistant</text>
+  <text x="932" y="729" class="sans" fill="#fff" font-size="19" font-weight="700">Optional summary</text>
   <text x="932" y="756" class="sans" fill="#cfd2cf" font-size="14">summarizes after close · no general say</text>
   <path d="M1084 606V670Q1084 682 1096 682H1136V696" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>
   <path d="M1320 696V500H1270" fill="none" stroke="#6c7371" stroke-width="2" marker-end="url(#arrow)"/>

@@ -106,8 +106,9 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 		let summaryCalls = 0;
 		const room = await startRoom({
 			name: roomName('audit-closing'),
-			agents: [product],
-			assistant,
+			agents: [product, assistant],
+			summary: assistant.name,
+			seats: { [product.name]: 'broadcast', [assistant.name]: 'none' },
 			runtime: createRuntime({ clock, storage: auditOutage(opened.storage) }),
 			streamFn: scripted(
 				byAgent({

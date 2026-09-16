@@ -51,14 +51,9 @@ describe('lease rules', () => {
 			lease(3, { id: 'message:2:solo:1', phase: 'ended', reason: 'released', at, readThrough: 0 }),
 		]);
 		expect(
-			pendingWakes(
-				[message],
-				explicitDeliveries([message]),
-				released,
-				new Set(['solo']),
-				{ backoff: () => 1 },
-				() => 'message',
-			),
+			pendingWakes([message], explicitDeliveries([message]), released, new Set(['solo']), {
+				backoff: () => 1,
+			}),
 		).toMatchObject([{ id: 'message:2:solo:2', unsuccessfulAttempts: 1 }]);
 		const failed = foldLeases([
 			lease(3, { id: 'message:2:solo:1', phase: 'ended', reason: 'failed', at, readThrough: 0 }),
@@ -94,18 +89,12 @@ describe('lease rules', () => {
 				}),
 				lease(8, { id: 'message:2:solo:1', phase: 'ended', reason, at, readThrough: 4 }),
 			]);
-			return pendingWakes(
-				messages,
-				explicitDeliveries(messages),
-				leases,
-				new Set(['solo']),
-				{ backoff: () => 1 },
-				() => 'message',
-			).map((wake) => wake.id);
+			return pendingWakes(messages, explicitDeliveries(messages), leases, new Set(['solo']), {
+				backoff: () => 1,
+			}).map((wake) => wake.id);
 		};
 		expect(pending('failed')).toEqual(['message:2:solo:2', 'message:6:solo:2']);
 		expect(pending('expired')).toEqual(['message:2:solo:2', 'message:6:solo:2']);
-		expect(pending('refused')).toEqual(['message:6:solo:2']);
 		expect(pending('released')).toEqual(['message:6:solo:1']);
 		expect(pending('revoked')).toEqual(['message:6:solo:1']);
 	});

@@ -85,8 +85,13 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 		const room = await startRoom({
 			name,
 			runtime: first,
-			assistant,
-			agents: [product, colleague],
+			summary: assistant.name,
+			seats: {
+				[product.name]: 'broadcast',
+				[colleague.name]: 'broadcast',
+				[assistant.name]: 'none',
+			},
+			agents: [product, colleague, assistant],
 			streamFn: scripted(script),
 		});
 		const events = collect(room);

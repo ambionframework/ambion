@@ -6,8 +6,7 @@ Guidance for Claude Code in this repository.
 
 Ambion is a collaboration kernel for independently owned agents and the
 people they serve. Agents own their instructions, models, tools, and domain
-expertise. Rooms provide a shared journal and participation rules. An optional
-assistant selects reserve specialists and consolidates their work for a person.
+expertise. Rooms provide a shared journal and participation rules.
 Applications own domain data and tool resources.
 
 pnpm workspace, ESM only, TypeScript. Repository installation needs Node
@@ -23,7 +22,7 @@ pnpm workspace, ESM only, TypeScript. Repository installation needs Node
 | `docs/agent.md`       | Design contract for the core — read before changing the runtime                                  |
 | `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`                 |
 | `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                                   |
-| `docs/assistant.md`   | Design contract for the assistant, the room's counterpart to the people in it                    |
+| `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                       |
 | `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`             |
 | `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`             |
 | `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`        |
@@ -42,9 +41,9 @@ independent contributions usable together.
 rules interpret recorded contributions, membership, presence, execution claims,
 and exchange boundaries. Hosts recover pending work through replay.
 
-**The assistant is optional and constrained.** Selection and synthesis are its
-roles. A closed exchange's summary replaces its covered source messages in
-later agent activations. Human participants can review the original discussion
+**Summaries are optional and constrained.** A configured, seated agent may
+write one summary for a closed human exchange. The summary replaces its source
+messages in later agent activations. Human participants can review the source
 through exchange reads. The journal retains the complete history.
 
 Ambient means a room remains available between interactions. Native timers,
@@ -78,7 +77,8 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   every entry shares. Ambion owns only participants-as-values and
   the room. A third concern is a
   design failure: push it into a dependency or drop it. `seat/render.ts` formats
-  structured collaboration context for Pi. `assistant.ts` owns assistant policy and guidance.
+  structured collaboration context for Pi. Summary guidance belongs with the
+  seat executor; the room owns summary assignment and provenance.
   Both stay pure and stateless. What the room says to a developer stays with
   the mechanism that says it.
 - The core is laid out in layers (`docs/toolchain.md` §1), and an import

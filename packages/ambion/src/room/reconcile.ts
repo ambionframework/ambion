@@ -12,11 +12,11 @@
  */
 
 import { decodeActivationId } from '../activation-id.ts';
-import { assistantPolicy } from '../assistant.ts';
 import type { Close, LeaseChange } from '../wire.ts';
 import type { RoomState } from './fold.ts';
 import { isExpired, isLive, type PendingActivation, seatOf } from './lease.ts';
 import { givesUp } from './rules.verified.ts';
+import { summaryWriter } from './summary.ts';
 
 export interface ReconcileOptions {
 	now: number;
@@ -39,6 +39,8 @@ interface Send {
 type Ended = Extract<LeaseChange, { phase: 'ended' }>;
 
 export interface Reconciliation {
+	/** Running leases made stale by a seat's durable removal. */
+	revoked: Ended[];
 	/** Leases that ran past their expiry, ended here. */
 	expired: Ended[];
 	/** The attempts the room does not make: the activations at the cap, written off here. */
@@ -80,9 +82,9 @@ function liveSeats(state: RoomState, now: number): Map<string, string[]> {
  * of a room, so the room asks once and the callers read the answer.
  *
  * `exchange` is the narrow one: an activation the exchange's own work
- * caused is live. A message causes one, and the question that opened the
- * exchange causes one. A close is the end of an exchange, so the activation
- * that answers one holds no exchange open — whichever seat holds it.
+ * caused is live. A message causes one. A close is the end of an exchange, so
+ * the activation that answers one holds no exchange open — whichever seat
+ * holds it.
  *
  * `rest` is the wide one: no activation of any cause is live.
  */
@@ -106,21 +108,24 @@ export function liveWork(state: RoomState, now: number): LiveWork {
 	};
 }
 
-/** The activation holds an exchange open: a message caused it, or the open did. */
+/** The activation holds an exchange open when a message caused it. */
 function holdsExchange(id: string): boolean {
 	const source = decodeActivationId(id)?.source;
-	return source === 'message' || source === 'opened';
+	return source === 'message';
 }
 
 export function planReconciliation(state: RoomState, options: ReconcileOptions): Reconciliation {
 	const work = liveWork(state, options.now);
-	const expired = expiries(state, options.now);
+	const revoked = revocations(state, options.now);
+	const revokedIds = new Set(revoked.map((lease) => lease.id));
+	const expired = expiries(state, options.now, revokedIds);
 	const abandoned = options.stopped ? [] : abandonments(state, options);
 	// An expiry or an abandonment changes what is live: the close waits for the fold that holds it.
-	const settled = expired.length === 0 && abandoned.length === 0;
+	const settled = revoked.length === 0 && expired.length === 0 && abandoned.length === 0;
 	const close = options.stopped || !settled ? undefined : closing(state, work, options.now);
 	const sends = options.stopped ? [] : dueWakes(state, options);
 	return {
+		revoked,
 		expired,
 		abandoned,
 		close,
@@ -128,6 +133,35 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
 		forget: forgotten(state, options),
 		alarmAt: options.stopped ? undefined : nextAlarm(state, options),
 	};
+}
+
+/**
+ * A running lease from before a removal is stale forever.  This check is
+ * journal-derived so a resumed room repairs a crash between the removal
+ * message and the asynchronous cut of the old seat.
+ */
+function revocations(state: RoomState, now: number): Ended[] {
+	const at = new Date(now).toISOString();
+	return [...state.leases.values()]
+		.filter((lease) => lease.phase === 'running')
+		.filter((lease) => {
+			const parsed = decodeActivationId(lease.id);
+			if (parsed === undefined || !state.roster.some((seat) => seat.name === parsed.seat))
+				return true;
+			return state.messages.some(
+				(message) =>
+					message.kind === 'unseated' &&
+					message.subject === parsed.seat &&
+					message.seq > parsed.position,
+			);
+		})
+		.map((lease) => ({
+			id: lease.id,
+			phase: 'ended' as const,
+			reason: 'revoked' as const,
+			at,
+			readThrough: lease.readThrough,
+		}));
 }
 
 /**
@@ -162,10 +196,14 @@ function abandonments(state: RoomState, options: ReconcileOptions): Ended[] {
 		}));
 }
 
-function expiries(state: RoomState, now: number): Reconciliation['expired'] {
+function expiries(
+	state: RoomState,
+	now: number,
+	revoked: ReadonlySet<string> = new Set(),
+): Reconciliation['expired'] {
 	const at = new Date(now).toISOString();
 	return [...state.leases.values()]
-		.filter((lease) => isExpired(lease, now))
+		.filter((lease) => !revoked.has(lease.id) && isExpired(lease, now))
 		.map((lease) => ({
 			id: lease.id,
 			phase: 'ended' as const,
@@ -176,8 +214,8 @@ function expiries(state: RoomState, now: number): Reconciliation['expired'] {
 }
 
 /**
- * The exchange closes when nothing works on it. It names the assistant when
- * the exchange owes a summary.
+ * The exchange closes when nothing works on it. It names the configured
+ * summary writer when the exchange owes a summary.
  */
 function closing(state: RoomState, work: LiveWork, now: number): Reconciliation['close'] {
 	const exchange = state.exchange;
@@ -188,16 +226,12 @@ function closing(state: RoomState, work: LiveWork, now: number): Reconciliation[
 		through: state.lastSeq,
 		at: new Date(now).toISOString(),
 	};
-	const writer = assistantPolicy.closing(
-		state.composition,
-		state.roster,
-		state.messages,
-		state.people,
-		base,
-	);
+	const writer = state.people.has(exchange.owner)
+		? summaryWriter(state.composition, state.roster)
+		: undefined;
 	return {
 		...base,
-		...(writer === undefined ? {} : { wakes: [writer] }),
+		...(writer === undefined ? {} : { summary: writer }),
 	};
 }
 

@@ -40,7 +40,7 @@ export interface Env {
 
 export interface StartOptions {
 	name: string;
-	assistant?: string;
+	summary?: string;
 	agents?: readonly string[];
 	seats?: Record<string, Attention>;
 	goal?: string;
@@ -127,17 +127,14 @@ export class RoomObject extends DurableObject<Env> {
 		await this.metadata.change(() => ({
 			patch: {
 				name: options.name,
-				agents: [
-					...(options.agents ?? []),
-					...(options.assistant === undefined ? [] : [options.assistant]),
-				],
+				agents: [...(options.agents ?? [])],
 			},
 		}));
 		this.room = await startRoom({
 			name: options.name,
 			runtime: this.runtime,
 			agents: (options.agents ?? []).map(definitionOf),
-			...(options.assistant === undefined ? {} : { assistant: definitionOf(options.assistant) }),
+			...(options.summary === undefined ? {} : { summary: options.summary }),
 			...(options.seats === undefined ? {} : { seats: options.seats }),
 			...(options.goal === undefined ? {} : { goal: options.goal }),
 		});

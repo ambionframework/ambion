@@ -221,8 +221,8 @@ interface Presence {
 export type Message = Spoken | Presence | Summary;
 ```
 
-`Summary` is the third kind, and it belongs to [`assistant.md`](assistant.md): the
-assistant writes it, nobody speaks it, and it opens and closes no visit.
+`Summary` is the third kind, and it belongs to [`summary.md`](summary.md): a
+closing activation writes it, nobody speaks it, and it opens and closes no visit.
 `Presence` gains two more changes, `seated` and `unseated`, for an agent
 that joins or leaves the roster while the room runs. They route as this
 section says, and [`roster.md`](roster.md) §3 specifies them.
@@ -499,7 +499,7 @@ because it is about routing.
 > reaches you as a [new] line mid-turn, and wakes you outright if your seat
 > watches for it. It is never a request — nobody asked you anything by
 > opening the room — so it never means start something new, and you
-> never greet, never say that you noticed, and never summarise the record
+> never greet, never say that you noticed, and never write a summary
 > back to the room. Use it to aim what you were already going to say: pitch
 > it at whoever is actually reading now, say the part that needs them while
 > they are still there, and drop what only mattered to somebody who has
@@ -548,8 +548,6 @@ export type SeatInfo =
       status: SeatStatus;
       attention: Attention;
       sessionId: string;
-      /** Whether the room designates this agent as its assistant. */
-      assistant: boolean;
     }
   | {
       kind: 'human';

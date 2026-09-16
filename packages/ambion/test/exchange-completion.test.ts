@@ -24,13 +24,13 @@ import {
 import {
 	byAgent,
 	contextText,
+	isClosing,
 	quiet,
 	type Script,
 	says,
 	scripted,
 	speak,
 	summarise,
-	toolNames,
 } from './support/scripted.ts';
 import { faultyJournals, memory, storages } from './support/storage.ts';
 
@@ -87,8 +87,9 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 		const room = await startRoom({
 			name: roomName('exchange-terminal-replay'),
 			runtime: runtime(),
-			agents: [alpha],
-			assistant,
+			agents: [alpha, assistant],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			streamFn: scripted(
 				byAgent({ alpha: says(['First fact.', 'Second fact.']), assistant: summaryFor(outcome) }),
 			),
@@ -97,7 +98,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 		try {
 			const exchange = await (await room.visit(priya)).send({ text: 'Result?' });
 			await waitForRoom(room);
-			expect(closedExchange(room, exchange.from)?.wakes).toEqual([assistant.name]);
+			expect(closedExchange(room, exchange.from)?.summary).toEqual(assistant.name);
 			await expectOutcome(exchange, outcome);
 			await room.stop();
 			let calls = 0;
@@ -136,8 +137,9 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 		const room = await startRoom({
 			name: roomName('exchange-pending-replay'),
 			runtime: firstRuntime,
-			agents: [alpha],
-			assistant,
+			agents: [alpha, assistant],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			streamFn: scripted(
 				byAgent({ alpha: says(['First fact.', 'Second fact.']), assistant: summaryFor('failed') }),
 			),
@@ -227,7 +229,7 @@ describe('exchange completion handles', () => {
 		const specialists = new Map<string, number>();
 		const summarised = new Set<string>();
 		const summaryReply = async (context: Context) => {
-			if (!toolNames(context).includes('summarise') || summarised.has('first')) return quiet();
+			if (!isClosing(context) || summarised.has('first')) return quiet();
 			summarised.add('first');
 			firstSummaryStarted.resolve();
 			await firstSummaryRelease.promise;
@@ -254,8 +256,9 @@ describe('exchange completion handles', () => {
 				storage: opened.storage,
 				transport: inProcessTransport(),
 			}),
-			agents: [alpha, beta],
-			assistant,
+			agents: [alpha, beta, assistant],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
 			streamFn: scripted((context, agent) =>
 				agent === assistant.name ? summaryReply(context) : specialistReply(context, agent),
 			),
@@ -312,11 +315,12 @@ describe('exchange completion handles', () => {
 				transport: inProcessTransport(),
 				retry: { attempts: 1, backoff: () => 0 },
 			}),
-			agents: [alpha, beta],
-			assistant,
+			agents: [alpha, beta, assistant],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
 			streamFn: scripted(async (context, agent) => {
 				if (agent === assistant.name) {
-					if (!toolNames(context).includes('summarise')) return quiet();
+					if (!isClosing(context)) return quiet();
 					summaryStarted.resolve();
 					await summaryRelease.promise;
 					throw new Error('summary failed');

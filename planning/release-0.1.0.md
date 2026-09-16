@@ -12,8 +12,8 @@ participation, and a reliable boundary for contributing to a conversation.
 
 An agent owns its instructions, model, tools, and domain expertise. A room
 lets those agents work together and seat supplied colleagues. An optional
-closing assignment asks one agent to consolidate their work for a person.
-Applications own their domain data and the resources their tools use.
+summary lets one configured agent consolidate a closed human exchange.
+Applications own their domain data and tool resources.
 
 **The agent is the unit of modularity.** A scheduling agent and an inventory
 agent can have different owners, models, tools, and evaluations. Each can
@@ -117,10 +117,10 @@ The complete set of executable definitions is supplied at startup or resume.
 Membership can change during the run. Installing a previously unknown
 definition requires a new run with an expanded set of definitions.
 
-An ordinary agent can receive an optional closing assignment. It retains its
-instructions, domain tools, and ordinary participation. Closing execution
-receives bounded context and a room publication tool. No separate agent role
-or generic role registry is required.
+An ordinary agent can receive an optional closing assignment by name. It keeps
+its instructions, domain tools, and ordinary membership. Closing execution
+receives bounded context and the regular `say` tool. No separate agent role or
+generic role registry is required.
 
 ### F2. Shared rooms, participation, and presence
 
@@ -133,11 +133,10 @@ Attention controls what activates an idle agent: direct messages, room speech,
 or presence changes. Keep this policy separate from execution activity.
 
 Hosts supply all executable definitions in `agents`. The optional `seats` map
-selects initial members and attention. Unseated definitions form the reserve.
-Every participating agent can seat reserve colleagues with `broadcast`
-attention; explicit host seating can choose attention. Empty rooms are valid.
-Agent work requires a seated agent whose attention accepts the message.
-Hosts configure initial membership or seat an agent through the room API.
+sets initial members and attention. If omitted, every definition starts at
+`broadcast`; an empty map places every definition in the reserve. Every
+participating agent can seat or unseat catalog colleagues. Empty rooms are
+valid. Agent work requires a seated agent whose attention accepts the message.
 
 People have identities and optional response preferences. A visit determines
 who speaks and when that person is present. Preferences shape the assigned
@@ -172,21 +171,21 @@ The exchange closes when its required discussion work has finished or reached
 the applicable terminal state. A recorded close fixes its range. Closing
 certifies the discussion boundary, not the correctness of every answer.
 
-Agents can seat reserve specialists during ordinary discussion. When the
-closed discussion requires consolidation, one assigned agent can publish a
-summary for the owner through `say`. The room supplies the recipient and
-covered range. The summary retains its source range even if a later exchange
-starts.
+Agents can seat reserve specialists during ordinary discussion. Every closed
+human exchange is eligible for a summary when `summary` names a seated agent.
+That assigned agent can publish one summary for the owner through `say`. The
+room supplies the recipient and covered range. The summary retains its source
+range even if a later exchange starts. The writer may decline.
 
 **Closing work has explicit publication rules.** Its publication wakes no idle
 agents and does not hold another exchange open. It retains an internal summary
 event for context replacement and response completion. The assigned agent can
 also participate in ordinary discussion under its configured attention.
-Closing execution receives only its room publication tool. Domain tools and
-seating remain available during that agent's ordinary participation.
+Closing execution uses only the regular `say` tool. Ordinary activations use
+`say`, `seat`, `unseat`, and their domain tools.
 
-This participation simplification remains planned. Section 5 of
-[next.md](next.md#simplify-assistant-participation-and-closing-work) owns the
+This participation simplification is in progress. Section 5 of
+[next.md](next.md#simplify-participation-and-closing-work) owns the
 implementation, migration, and verification tasks.
 
 `exchange.messages()` waits for the fixed discussion. `exchange.response()`
@@ -213,6 +212,10 @@ writer cannot continue committing as the current room owner.
 Read a stored room without starting agents. Reacquire an exchange by its
 opening position. Keep room history and Pi audit transcripts in separate
 named journals, even when they share one database.
+
+Composition entries use version 2. The room rejects legacy assistant
+compositions and opening activation ids. Start a new journal or migrate old
+history outside Ambion before resuming it.
 
 An audit persistence failure must not, by itself, repeat successful model
 execution. Confirmed audit data remains available; unconfirmed audit data may

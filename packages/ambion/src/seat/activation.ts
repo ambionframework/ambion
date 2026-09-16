@@ -13,8 +13,6 @@
  * - **What arrived while it worked.** A message that lands mid-activation is steered
  *   in. It reaches the provider after the request it lands during. PiContext
  *   records the structured range only when that later request receives it.
- * - **Whether it left a mark.** `spoke` is the one thing the room asks a
- *   finished activation.
  *
  * The room supplies structured facts as a view;
  * the seat side renders the prompt, resolves the model and binds the tools, runs it,
@@ -66,8 +64,6 @@ export class Activation {
 	private providerStarted = false;
 	private agent: Agent | undefined;
 	private cancelled = false;
-	/** Whether it left a mark on the record. The room's first question. */
-	spoke = false;
 	/** Whether it ended without reaching the record at all. The room's second. */
 	failed = false;
 

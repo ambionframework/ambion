@@ -83,9 +83,9 @@ describe.each(storages)('messages across activation completion on $name', (stora
 			const contexts: string[] = [];
 			const room = await startRoom({
 				name: roomName('steering-release'),
-				assistant,
-				agents: [alpha],
-				seats: { [alpha.name]: 'named' },
+
+				agents: [alpha, assistant],
+				seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
 				runtime: createRuntime({ storage: opened.storage, clock, transport: observed.transport }),
 				streamFn: scripted(
 					byAgent({
@@ -147,9 +147,9 @@ describe.each(storages)('messages across activation completion on $name', (stora
 		const contexts: string[] = [];
 		const room = await startRoom({
 			name: roomName('steering-order'),
-			assistant,
-			agents: [alpha],
-			seats: { [alpha.name]: 'named' },
+
+			agents: [alpha, assistant],
+			seats: { [assistant.name]: 'none', [alpha.name]: 'named' },
 			runtime: createRuntime({ storage: opened.storage, transport: observed.transport }),
 			streamFn: scripted(
 				byAgent({

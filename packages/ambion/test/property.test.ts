@@ -28,10 +28,10 @@ import { currentExchange, messageBefore, roomName, storedOf, waitForRoom } from 
 import {
 	answersLastQuestion,
 	byAgent,
+	isClosing,
 	quiet,
 	scripted,
 	summarise,
-	toolNames,
 	toolResultTexts,
 } from './support/scripted.ts';
 import { type FailMode, memory, tappedJournals } from './support/storage.ts';
@@ -88,7 +88,7 @@ const script = byAgent({
 	beta: answersLastQuestion(names),
 	gamma: answersLastQuestion(names),
 	assistant: (context) =>
-		toolNames(context).includes('summarise') && !toolResultTexts(context).includes('delivered')
+		isClosing(context) && !toolResultTexts(context).includes('delivered')
 			? summarise('The one message.')
 			: quiet(),
 });
@@ -171,9 +171,9 @@ class Walk {
 		this.session = await startRoom({
 			name: this.name,
 			runtime: this.runtime,
-			assistant,
-			agents: [alpha, beta, gamma],
-			seats: { [alpha.name]: 'broadcast', [beta.name]: 'named' },
+			summary: assistant.name,
+			agents: [alpha, beta, gamma, assistant],
+			seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
 			streamFn: scripted(script),
 		});
 		this.watch();

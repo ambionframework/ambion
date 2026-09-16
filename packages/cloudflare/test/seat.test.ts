@@ -21,9 +21,9 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	);
 	await room.start({
 		name: 'seat-test',
-		assistant: 'assistant',
-		agents: ['product'],
-		seats: { product: 'broadcast' },
+		summary: 'assistant',
+		agents: ['product', 'assistant'],
+		seats: { assistant: 'none', product: 'broadcast' },
 	});
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });
@@ -53,7 +53,9 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 						body: LeaseChange;
 					},
 			);
-			const found = stored.filter((entry) => entry.kind === 'lease').map((entry) => entry.body);
+			const found = stored
+				.filter((entry) => entry.kind === 'lease' && entry.body.id === 'message:4:product:1')
+				.map((entry) => entry.body);
 			return found.at(-1)?.phase === 'ended' ? found : undefined;
 		}),
 	);
@@ -94,9 +96,9 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	);
 	await room.start({
 		name: 'cut-test',
-		assistant: 'assistant',
-		agents: ['product'],
-		seats: { product: 'broadcast' },
+		summary: 'assistant',
+		agents: ['product', 'assistant'],
+		seats: { assistant: 'none', product: 'broadcast' },
 	});
 	await room.visit({ name: 'priya', identity: 'Project manager.' });
 	const exchange = await room.send({ from: 'priya', text: 'When is the pour?', key: 'q1' });

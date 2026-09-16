@@ -28,8 +28,9 @@ const runtime = createRuntime({
 const session = await startRoom({
 	name,
 	runtime,
-	assistant,
-	agents: [product, colleague],
+	summary: assistant.name,
+	seats: { [product.name]: 'broadcast', [colleague.name]: 'broadcast', [assistant.name]: 'none' },
+	agents: [product, colleague, assistant],
 	streamFn: scripted(slowly(Number(delay ?? 40))),
 });
 

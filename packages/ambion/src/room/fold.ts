@@ -22,7 +22,6 @@ import {
 	type PendingWake,
 	pendingActivation,
 	pendingWakes,
-	type SourceOf,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
 
@@ -130,7 +129,6 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
-		sourceOf(composition?.assistant, opensOf(exchange, closes)),
 	);
 	const owed = foldOwed(closes, messages, leases, options);
 	const state: RoomState = {
@@ -158,24 +156,9 @@ function reserveOf(composition: Composition | undefined, roster: readonly Seatin
 		[...composition.agents, ...composition.available].map((seat) => [seat.name, seat]),
 	);
 	return [...catalog.values()]
-		.filter((seat) => seat.name !== composition.assistant && !seated.has(seat.name))
+		.filter((seat) => !seated.has(seat.name))
 		.map((seat) => ({ name: seat.name, identity: seat.identity, attention: 'broadcast' }));
 }
-
-/** Every question that opened an exchange: the one still open, and every one a close ended. */
-const opensOf = (exchange: Exchange | undefined, closes: readonly Close[]): ReadonlySet<Seq> =>
-	new Set([...(exchange === undefined ? [] : [exchange.from]), ...closes.map((c) => c.from)]);
-
-/**
- * Why a seat's wake on this message exists. The question that opened an
- * exchange causes the activation of the assistant,
- * and every other wake a message causes. The fold decides it once, and the
- * id carries the answer.
- */
-const sourceOf =
-	(assistant: string | undefined, opens: ReadonlySet<Seq>): SourceOf =>
-	(seat, seq) =>
-		seat === assistant && opens.has(seq) ? 'opened' : 'message';
 
 /** The latest composition, then every seating and unseating after it, in order. */
 function foldRoster(composition: Composition | undefined, messages: readonly Message[]): Seating[] {

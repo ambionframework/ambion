@@ -20,13 +20,15 @@ describe('createRuntime', () => {
 		const a = await startRoom({
 			name,
 			runtime: first,
-			assistant,
+			seats: { [assistant.name]: 'none' },
+			agents: [assistant],
 			streamFn: scripted(() => quiet()),
 		});
 		const b = await startRoom({
 			name,
 			runtime: second,
-			assistant,
+			seats: { [assistant.name]: 'none' },
+			agents: [assistant],
 			streamFn: scripted(() => quiet()),
 		});
 		await (await a.visit(andrei)).send({ text: 'in the first' });
@@ -52,7 +54,8 @@ describe('createRuntime', () => {
 			const session = await startRoom({
 				name,
 				runtime: writer,
-				assistant,
+				seats: { [assistant.name]: 'none' },
+				agents: [assistant],
 				streamFn: scripted(() => quiet()),
 			});
 			const visit = await session.visit(andrei);

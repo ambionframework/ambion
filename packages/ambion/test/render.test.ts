@@ -2,8 +2,8 @@
  * What a participant reads of one message. `renderLine` is pure, so every
  * test here hands it a value.
  *
- * What the whole record reads like inside a running room is
- * `assistant.test.ts`; this file holds the one line.
+ * What the whole record reads like inside a running room is covered by the
+ * context tests; this file holds the one line.
  */
 import { describe, expect, it } from 'vitest';
 import { renderLine } from '../src/seat/render.ts';
@@ -23,12 +23,12 @@ describe('one line of the record', () => {
 			kind: 'summary',
 			seq: 6,
 			at,
-			from: 'assistant',
+			from: 'writer',
 			to: 'priya',
 			text: 'Saturday.',
 			covers: { from: 2, through: 4 },
 		};
-		expect(renderLine(summary)).toBe('[assistant → priya] Saturday.');
+		expect(renderLine(summary)).toBe('[writer → priya] Saturday.');
 	});
 
 	it('names a presence author only where it differs from the subject', () => {
@@ -38,16 +38,16 @@ describe('one line of the record', () => {
 		expect(renderLine(arrived)).toBe('· priya arrived');
 		expect(renderLine({ ...arrived, kind: 'left' })).toBe('· priya left');
 
-		// The assistant seated the surveyor, so the line names both.
+		// An ordinary seat seated the surveyor, so the line names both.
 		const seated: Message = {
 			kind: 'seated',
 			seq: 8,
 			at,
-			from: 'assistant',
+			from: 'product',
 			subject: 'surveyor',
 			identity: 'Holds the tonnage.',
 		};
-		expect(renderLine(seated)).toBe('· surveyor seated by assistant');
+		expect(renderLine(seated)).toBe('· surveyor seated by product');
 
 		// The host seated it, and the host is not a participant: no author.
 		const byHost: Message = { kind: 'seated', seq: 8, at, subject: 'surveyor' };

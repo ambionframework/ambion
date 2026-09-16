@@ -36,6 +36,32 @@ const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
 const silent = () => scripted(() => quiet());
 
 describe.each(storages)('fixed definitions on $name', (storage) => {
+	it('keeps a configured summary writer in reserve until it is seated', async () => {
+		const opened = await storage.open();
+		const runtime = createRuntime({ storage: opened.storage });
+		const room = await startRoom({
+			name: roomName('reserve-writer'),
+			agents: [alpha, beta],
+			seats: { alpha: 'broadcast' },
+			summary: 'beta',
+			runtime,
+			streamFn: silent(),
+		});
+		try {
+			const visit = await room.visit(priya);
+			const first = await visit.send({ text: 'No writer seated yet.' });
+			await expect(first.response()).resolves.toBeUndefined();
+			expect(stateOf(room).closes.at(-1)?.summary).toBeUndefined();
+			await room.seat('beta', { attention: 'none' });
+			const second = await visit.send({ text: 'The writer is seated now.' });
+			await second.response();
+			expect(stateOf(room).closes.at(-1)?.summary).toBe('beta');
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
 	it('separates the catalog from membership and returns every unseated agent to reserve', async () => {
 		const opened = await storage.open();
 		const room = await startRoom({
@@ -294,7 +320,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		try {
 			for (const options of [
 				{ agents: [alpha, alpha] },
-				{ agents: [alpha], assistant: alpha },
+				{ agents: [alpha], summary: 'missing' },
 				{ agents: [alpha], seats: { missing: 'broadcast' as const } },
 			]) {
 				const name = roomName('catalog-invalid');

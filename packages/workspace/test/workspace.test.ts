@@ -16,7 +16,7 @@ import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Bash, InMemoryFs } from 'just-bash';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { assistant, enter, roomName as name } from '../../ambion/test/support/room.ts';
+import { enter, roomName as name } from '../../ambion/test/support/room.ts';
 import {
 	byAgent,
 	callTool,
@@ -55,7 +55,6 @@ function agent(agentName: string, options: Partial<Parameters<typeof defineAgent
 async function run(agents: AgentDefinition[], seats: Record<string, Script>): Promise<Room> {
 	const session = await startRoom({
 		name: name('workspace'),
-		assistant,
 		agents,
 		streamFn: scripted(byAgent(seats)),
 	});

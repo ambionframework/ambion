@@ -46,7 +46,7 @@ class ModelRoom implements SeatRoom {
 					purpose: { kind: 'respond', message: 1 },
 				},
 				through: 1,
-				context: { name: 'model-test', now: 0, participants: [], messages: [] },
+				context: { name: 'model-test', now: 0, participants: [], messages: [], reserve: [] },
 			},
 		};
 	}

@@ -17,7 +17,7 @@ function activationView(): ActivationView {
 			purpose: { kind: 'respond', message: 0 },
 		},
 		through: 0,
-		context: { name: 'room', now: 0, participants: [], messages: [] },
+		context: { name: 'room', now: 0, participants: [], messages: [], reserve: [] },
 	};
 }
 

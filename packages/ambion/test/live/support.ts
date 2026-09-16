@@ -69,12 +69,25 @@ export const person = defineHuman({
 	identity: 'Founder. Asks the questions.',
 });
 
-type RoomOptions = Omit<StartRoomOptions, 'name' | 'assistant' | 'streamFn' | 'runtime'>;
+type RoomOptions = Omit<StartRoomOptions, 'name' | 'summary' | 'streamFn' | 'runtime'>;
 
 /** A live room of its own, with a fresh native storage for its record and transcripts. */
 export async function open(prefix: string, options: RoomOptions) {
 	const runtime = createRuntime({ storage: memoryJournals() });
-	const session = await startRoom({ name: roomName(prefix), assistant, runtime, ...options });
+	const session = await startRoom({
+		...options,
+		name: roomName(prefix),
+		runtime,
+		agents: [...(options.agents ?? []), assistant],
+		summary: assistant.name,
+		seats: {
+			...(options.seats ??
+				Object.fromEntries(
+					(options.agents ?? []).map((agent) => [agent.name, 'broadcast' as const]),
+				)),
+			[assistant.name]: 'broadcast',
+		},
+	});
 	return { session, runtime, events: collect(session) };
 }
 
@@ -109,9 +122,9 @@ export async function untilQuiet(session: Room): Promise<void> {
 export const saidBy = (messages: readonly Message[], name: string) =>
 	messages.filter(isSpoken).filter((m) => m.from === name);
 
-/** What the seats said: not a person, not the assistant. */
+/** What agents contributed through ordinary speech. */
 export const saidByAgents = (messages: readonly Message[], people: string[]) =>
-	messages.filter(isSpoken).filter((m) => !people.includes(m.from) && m.from !== 'assistant');
+	messages.filter(isSpoken).filter((m) => !people.includes(m.from));
 
 export const activationsOf = (events: RoomNotification[], name: string) =>
 	events.filter((e) => e.type === 'activation_start' && e.agent === name).length;

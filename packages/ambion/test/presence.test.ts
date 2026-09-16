@@ -48,8 +48,8 @@ const roomName = () => name('presence');
 const open = (overrides: Partial<Parameters<typeof startRoom>[0]> = {}) =>
 	startRoom({
 		name: roomName(),
-		assistant,
-		agents: [watcher],
+		seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
+		agents: [watcher, assistant],
 		streamFn: recording,
 		...overrides,
 	});
@@ -199,8 +199,8 @@ describe('presence', () => {
 		const name = roomName();
 		const first = await startRoom({
 			name,
-			assistant,
-			agents: [watcher],
+			seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [watcher, assistant],
 			streamFn: recording,
 			runtime,
 		});
@@ -215,7 +215,13 @@ describe('presence', () => {
 		await first.stop();
 
 		const again = track(
-			await startRoom({ name, assistant, agents: [watcher], streamFn: recording, runtime }),
+			await startRoom({
+				name,
+				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [watcher, assistant],
+				streamFn: recording,
+				runtime,
+			}),
 		);
 		await waitForRoom(again); // startRoom is synchronous; the replay is awaited here
 		expect(presenceOf(again, 'andrei')).toBe('absent');
@@ -289,8 +295,8 @@ describe('presence', () => {
 		const name = roomName();
 		const session = await startRoom({
 			name,
-			assistant,
-			agents: [watcher],
+			seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [watcher, assistant],
 			streamFn: recording,
 			runtime,
 		});
@@ -366,8 +372,8 @@ async function brittle(): Promise<{ session: Room; fail: FaultyJournals['fail'] 
 	const runtime = createRuntime({ storage: faulty.journals });
 	const session = await startRoom({
 		name: roomName(),
-		assistant,
-		agents: [watcher],
+		seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
+		agents: [watcher, assistant],
 		streamFn: recording,
 		runtime,
 	});
@@ -437,8 +443,8 @@ describe('a storage that fails', () => {
 		const again = track(
 			await startRoom({
 				name: session.name,
-				assistant,
-				agents: [watcher],
+				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [watcher, assistant],
 				streamFn: recording,
 				runtime: createRuntime(),
 			}),
@@ -459,8 +465,8 @@ describe('a storage that fails', () => {
 		await expect(
 			startRoom({
 				name: roomName(),
-				assistant,
-				agents: [watcher],
+				seats: { [watcher.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [watcher, assistant],
 				streamFn: recording,
 				runtime: createRuntime({ storage: unreachable }),
 			}),

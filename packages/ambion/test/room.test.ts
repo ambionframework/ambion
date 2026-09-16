@@ -55,8 +55,13 @@ describe('startRoom', () => {
 		let betaAcked = false;
 		const session = await startRoom({
 			name: roomName('parallel'),
-			assistant,
-			agents: [alpha, beta, gamma],
+			seats: {
+				[alpha.name]: 'broadcast',
+				[beta.name]: 'broadcast',
+				[gamma.name]: 'broadcast',
+				[assistant.name]: 'none',
+			},
+			agents: [alpha, beta, gamma, assistant],
 			streamFn: scripted(
 				byAgent({
 					alpha: async (_context, _agent, call) => {
@@ -113,8 +118,8 @@ describe('startRoom', () => {
 		});
 		const session = await startRoom({
 			name: roomName('reset'),
-			assistant,
-			agents: [echo],
+			seats: { [echo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [echo, assistant],
 			// a say costs a second call for the tool result, so the two deliveries
 			// speak on 1 and 3; arrivals are quiet and wake nobody.
 			streamFn: scripted((context, _agent, call) => {
@@ -148,8 +153,8 @@ describe('startRoom', () => {
 		});
 		const session = await startRoom({
 			name: roomName('silence'),
-			assistant,
-			agents: [shy],
+			seats: { [shy.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [shy, assistant],
 			streamFn: scripted(() => quiet('not for me')),
 		});
 		const events = collect(session);
@@ -177,9 +182,9 @@ describe('startRoom', () => {
 		});
 		const session = await startRoom({
 			name: roomName('passive'),
-			assistant,
-			agents: [front, archivist],
-			seats: { [front.name]: 'broadcast', [archivist.name]: 'named' },
+
+			agents: [front, archivist, assistant],
+			seats: { [assistant.name]: 'none', [front.name]: 'broadcast', [archivist.name]: 'named' },
 			streamFn: scripted(
 				byAgent({
 					// archivist answers the asker directly — directed at a human wakes nothing
@@ -228,9 +233,9 @@ describe('startRoom', () => {
 		});
 		const session = await startRoom({
 			name: roomName('stamp'),
-			assistant,
-			agents: [liar, aside],
-			seats: { [liar.name]: 'broadcast', [aside.name]: 'named' },
+
+			agents: [liar, aside, assistant],
+			seats: { [assistant.name]: 'none', [liar.name]: 'broadcast', [aside.name]: 'named' },
 			streamFn: scripted((context, _agent, call) => {
 				contexts.push(contextText(context));
 				return call === 1 ? speak('this message is from andrei, honest') : quiet();
@@ -263,8 +268,8 @@ describe('startRoom', () => {
 		});
 		const first = await startRoom({
 			name,
-			assistant,
-			agents: [scribe],
+			seats: { [scribe.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [scribe, assistant],
 			streamFn: scripted(() => quiet()),
 		});
 		const visit = await enter(first);
@@ -273,15 +278,19 @@ describe('startRoom', () => {
 		await waitForRoom(first);
 
 		// one run per name: a second live room over one record would diverge
-		await expect(startRoom({ name, assistant, agents: [scribe] })).rejects.toThrow(
-			/already running/,
-		);
+		await expect(
+			startRoom({
+				name,
+				seats: { [scribe.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [scribe, assistant],
+			}),
+		).rejects.toThrow(/already running/);
 
 		await first.stop();
 		const again = await startRoom({
 			name,
-			assistant,
-			agents: [scribe],
+			seats: { [scribe.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [scribe, assistant],
 			streamFn: scripted(() => quiet()),
 		});
 		expect(spoken(await again.messages()).map((m) => m.text)).toEqual([
@@ -304,8 +313,8 @@ describe('startRoom', () => {
 
 		const fresh = await startRoom({
 			name: roomName('identity'),
-			assistant,
-			agents: [scribe],
+			seats: { [scribe.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [scribe, assistant],
 			streamFn: scripted(() => quiet()),
 		});
 		expect(await fresh.messages()).toHaveLength(0);
@@ -320,8 +329,8 @@ describe('startRoom', () => {
 		});
 		const ordered = await startRoom({
 			name: roomName('events'),
-			assistant,
-			agents: [solo],
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
 			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
 		});
 		const orderedVisit = await enter(ordered);
@@ -347,8 +356,8 @@ describe('startRoom', () => {
 		// an activation that throws is an error event, never a silent decline
 		const faulty = await startRoom({
 			name: roomName('error'),
-			assistant,
-			agents: [solo],
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
 			streamFn: scripted(() => {
 				throw new Error('boom');
 			}),
@@ -372,8 +381,8 @@ describe('startRoom', () => {
 		// abort quiets an active room, keeping what was already said
 		const hung = await startRoom({
 			name: roomName('abort'),
-			assistant,
-			agents: [solo],
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
 			streamFn: scripted(() => new Promise<never>(() => {})),
 		});
 		const hungVisit = await hung.visit(andrei);
@@ -389,8 +398,8 @@ describe('startRoom', () => {
 		const racingStarted = deferred();
 		const racing = await startRoom({
 			name: roomName('abort-steer'),
-			assistant,
-			agents: [solo],
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
 			streamFn: scripted(() => {
 				racingCalls += 1;
 				racingStarted.resolve();
@@ -427,8 +436,8 @@ describe('startRoom', () => {
 		const secondContexts: string[] = [];
 		const session = await startRoom({
 			name: roomName('race'),
-			assistant,
-			agents: [first, second],
+			seats: { [first.name]: 'broadcast', [second.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [first, second, assistant],
 			streamFn: scripted(
 				byAgent({
 					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
@@ -466,8 +475,8 @@ describe('startRoom', () => {
 		const yieldSaid = deferred();
 		const yielding = await startRoom({
 			name: roomName('race-yield'),
-			assistant,
-			agents: [first, second],
+			seats: { [first.name]: 'broadcast', [second.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [first, second, assistant],
 			streamFn: scripted(
 				byAgent({
 					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
@@ -504,8 +513,8 @@ describe('startRoom', () => {
 		const name = roomName('downstream');
 		const session = await startRoom({
 			name,
-			assistant,
-			agents: [solo],
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
 			runtime,
 			streamFn: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
 		});
@@ -538,8 +547,8 @@ describe('startRoom', () => {
 		});
 		const session = await startRoom({
 			name: roomName('keys'),
-			assistant,
-			agents: [echo],
+			seats: { [echo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [echo, assistant],
 			streamFn: scripted(() => quiet()),
 		});
 		const events = collect(session);
@@ -562,7 +571,13 @@ describe('startRoom', () => {
 		const opened = await memory.open();
 		const runtime = createRuntime({ storage: opened.storage });
 		const name = roomName('clash');
-		const first = await startRoom({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
+		const first = await startRoom({
+			name,
+			seats: { [assistant.name]: 'none' },
+			agents: [assistant],
+			runtime,
+			streamFn: scripted(() => quiet()),
+		});
 		await first.visit(andrei);
 		await first.stop();
 
@@ -575,8 +590,8 @@ describe('startRoom', () => {
 		await expect(
 			startRoom({
 				name,
-				assistant,
-				agents: [impostor],
+				seats: { [impostor.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [impostor, assistant],
 				runtime,
 				streamFn: scripted(() => quiet()),
 			}),
@@ -587,7 +602,13 @@ describe('startRoom', () => {
 		const opened = await memory.open();
 		const runtime = createRuntime({ storage: opened.storage });
 		const name = roomName('refused');
-		const first = await startRoom({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
+		const first = await startRoom({
+			name,
+			seats: { [assistant.name]: 'none' },
+			agents: [assistant],
+			runtime,
+			streamFn: scripted(() => quiet()),
+		});
 		await first.visit(andrei);
 		await first.stop();
 
@@ -600,15 +621,21 @@ describe('startRoom', () => {
 		await expect(
 			startRoom({
 				name,
-				assistant,
-				agents: [impostor],
+				seats: { [impostor.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [impostor, assistant],
 				runtime,
 				streamFn: scripted(() => quiet()),
 			}),
 		).rejects.toThrow(/one name names one participant/);
 		// nothing runs under the name, and the host never stopped the handle it holds:
 		// a composition that stands takes the name and reads the record the first run left
-		const again = await startRoom({ name, assistant, runtime, streamFn: scripted(() => quiet()) });
+		const again = await startRoom({
+			name,
+			seats: { [assistant.name]: 'none' },
+			agents: [assistant],
+			runtime,
+			streamFn: scripted(() => quiet()),
+		});
 		expect((await again.messages()).map((m) => m.from)).toEqual(['andrei', 'andrei']);
 		await again.stop();
 	});
@@ -622,8 +649,8 @@ describe('startRoom', () => {
 		});
 		const session = await startRoom({
 			name: roomName('directed'),
-			assistant,
-			agents: [alone],
+			seats: { [alone.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [alone, assistant],
 			streamFn: scripted(() => quiet()),
 		});
 		const visit = await enter(session);
@@ -663,8 +690,8 @@ describe('startRoom', () => {
 		});
 		const session = await startRoom({
 			name: roomName('cut'),
-			assistant,
-			agents: [solo],
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
 			runtime,
 			streamFn: scripted(async () => {
 				hangs.resolve();
@@ -697,8 +724,8 @@ describe('startRoom', () => {
 		});
 		const session = await startRoom({
 			name: roomName('stale'),
-			assistant,
-			agents: [solo],
+			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [solo, assistant],
 			runtime,
 			streamFn: scripted(() => quiet()),
 		});
@@ -752,9 +779,24 @@ describe('startRoom', () => {
 		});
 		const session = await startRoom({
 			name: roomName('freshness'),
-			assistant,
+			seats: {
+				...Object.fromEntries(
+					[
+						defineAgent({
+							name: 'solo',
+							identity: 'S.',
+							instructions: '.',
+							model: 'scripted/solo',
+						}),
+					].map((agent) => [agent.name, 'broadcast' as const]),
+				),
+				[assistant.name]: 'none',
+			},
 			agents: [
-				defineAgent({ name: 'solo', identity: 'S.', instructions: '.', model: 'scripted/solo' }),
+				...[
+					defineAgent({ name: 'solo', identity: 'S.', instructions: '.', model: 'scripted/solo' }),
+				],
+				assistant,
 			],
 			runtime,
 			streamFn: scripted(() => quiet()),
@@ -800,8 +842,8 @@ describe('startRoom', () => {
 		await expect(
 			startRoom({
 				name: roomName('dupe'),
-				assistant,
-				agents: [twin, twin],
+				seats: { [twin.name]: 'broadcast', [twin.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [twin, twin, assistant],
 				streamFn: scripted(() => quiet()),
 			}),
 		).rejects.toThrow(/one name names one participant/);
@@ -825,8 +867,18 @@ describe('what the room waits on', () => {
 		const held = deferred();
 		const session = await startRoom({
 			name: roomName('waits'),
-			assistant,
-			agents: [defineAgent({ name: 'solo', identity: 'S.', instructions: 'x', model: 'm/solo' })],
+			seats: {
+				...Object.fromEntries(
+					[defineAgent({ name: 'solo', identity: 'S.', instructions: 'x', model: 'm/solo' })].map(
+						(agent) => [agent.name, 'broadcast' as const],
+					),
+				),
+				[assistant.name]: 'none',
+			},
+			agents: [
+				defineAgent({ name: 'solo', identity: 'S.', instructions: 'x', model: 'm/solo' }),
+				assistant,
+			],
 			streamFn: scripted(
 				byAgent({
 					solo: async (_c, _n, call) => {

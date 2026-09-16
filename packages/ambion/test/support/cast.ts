@@ -14,10 +14,10 @@ import {
 	answersEveryQuestion,
 	answersLastQuestion,
 	byAgent,
+	isClosing,
 	quiet,
 	type Script,
 	summarise,
-	toolNames,
 	toolResultTexts,
 	unanswered,
 } from './scripted.ts';
@@ -51,7 +51,7 @@ export const agents: readonly AgentDefinition[] = [assistant, product, colleague
 const people = [priya.name, sam.name];
 
 const assistantScript: Script = (context) =>
-	toolNames(context).includes('summarise') && !toolResultTexts(context).includes('delivered')
+	isClosing(context) && !toolResultTexts(context).includes('delivered')
 		? summarise('The one message.')
 		: quiet();
 
@@ -88,7 +88,7 @@ export const steady = (): Cast => ({
 	script,
 	answers: (question) =>
 		question.answered.map((seat) => ({ seat, text: `${seat} on ${question.text}` })),
-	summaries: [priya.name, sam.name],
+	summaries: [priya.name, sam.name, sam.name],
 	failures: () => 0,
 });
 
@@ -128,7 +128,7 @@ export function troubled(): Cast {
 					? [own, { seat: product.name, text: `${product.name} on ${own.text}` }]
 					: [own];
 			}),
-		summaries: [priya.name, sam.name],
+		summaries: [priya.name, sam.name, sam.name],
 		failures: () => failed,
 	};
 }

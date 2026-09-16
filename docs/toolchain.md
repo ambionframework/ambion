@@ -74,7 +74,7 @@ if the workspace protocol does not resolve.
 ### What the packages do
 
 `@ambionframework/ambion` is the runtime; [`agent.md`](agent.md),
-[`presence.md`](presence.md), [`assistant.md`](assistant.md) and
+[`presence.md`](presence.md), [`summary.md`](summary.md) and
 [`workspace.md`](workspace.md) are its contracts.
 `@ambionframework/cli` is the `ambion` binary. It creates team projects and
 opens their local rooms through Wrangler and OpenTUI. The CLI keeps OpenTUI
@@ -92,7 +92,7 @@ terminal, `pnpm demo` as one run that crashes and resumes, and
 the seats work, which the run on Node cannot stage: one process holds the
 room and every seat there. The two demos write two reports, and
 `demos/README.md` says what each one proves.
-The products, the specialists, the people and the assistant come from one
+The products, the specialists, the people, and the optional summary writer come from one
 `room.ts` in all three. The room reads no file at run time: `pnpm seed`
 writes `drive/` into `src/drive-seed.ts`, and the example's `test` task
 proves the two hold the same documents.
@@ -118,17 +118,17 @@ only. Biome refuses every other import (`noRestrictedImports`, one
 override per layer in `biome.jsonc`), so the layout is a fact the gate
 holds, and a reviewer reads a file knowing what it cannot reach.
 
-| Layer                                                      | What it holds                                                                                                                        | May import                            |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
-| `types`, `wire`, `define`, `assistant`, `activation-id.ts` | Pure vocabulary and assistant policy: public shapes, wire values, activation identity, eligibility, and participant context          | Nothing that does anything            |
-| `host/`                                                    | What a host owns: the runtime value, a clock, an opener                                                                              | The vocabulary                        |
-| `journal/`                                                 | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                | The vocabulary                        |
-| `room/`                                                    | Pure room state and commands: `decide` proposes events, `evolve` applies committed events, and the fold rebuilds the same projection | The vocabulary, the journal's entries |
-| `answers.ts`                                               | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses                                     | The vocabulary, `host/`, `room/`      |
-| `tools/`                                                   | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                | The vocabulary, `host/`               |
-| `seat/`                                                    | The Pi executor: context rendering, model execution, tools, transcripts, and in-process transport                                    | The vocabulary, `host/`, `tools/`     |
-| `room.ts`                                                  | The room, which composes them all                                                                                                    | Everything                            |
-| `index.ts`, `transport.ts`                                 | The two published entries. They hold no logic: each one names what its reader needs                                                  | Everything                            |
+| Layer                                         | What it holds                                                                                                                        | May import                            |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+| `types`, `wire`, `define`, `activation-id.ts` | Pure vocabulary, wire values, activation identity, and participant context                                                           | Nothing that does anything            |
+| `host/`                                       | What a host owns: the runtime value, a clock, an opener                                                                              | The vocabulary                        |
+| `journal/`                                    | The room's six kinds, over `@ambionframework/journal`. No queue and no fence: the package holds those                                | The vocabulary                        |
+| `room/`                                       | Pure room state and commands: `decide` proposes events, `evolve` applies committed events, and the fold rebuilds the same projection | The vocabulary, the journal's entries |
+| `answers.ts`                                  | The seat protocol: `view`, `commit`, and `lease`. It translates room results into wire responses                                     | The vocabulary, `host/`, `room/`      |
+| `tools/`                                      | The workspace port, and the four tools over it. No filesystem: `@ambionframework/workspace` holds one                                | The vocabulary, `host/`               |
+| `seat/`                                       | The Pi executor: context rendering, model execution, tools, transcripts, and in-process transport                                    | The vocabulary, `host/`, `tools/`     |
+| `room.ts`                                     | The room, which composes them all                                                                                                    | Everything                            |
+| `index.ts`, `transport.ts`                    | The two published entries. They hold no logic: each one names what its reader needs                                                  | Everything                            |
 
 **The package has two entries, for two readers.**
 `@ambionframework/ambion` is what a host needs to build a room: the five
@@ -417,13 +417,13 @@ real key, and proves what a scripted stream cannot. It lives in
 [`packages/ambion/test/live`](../packages/ambion/test/live), one file per
 claim:
 
-| File               | What it proves                                                                                                                               |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loop.test.ts`     | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error`    |
-| `judgment.test.ts` | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                                 |
-| `exchange.test.ts` | Three seats race under the lock, the room goes quiet, the assistant writes in the person's shape, and it seats a specialist from the reserve |
-| `record.test.ts`   | A second run of a name reads the record the first run left, and answers from it                                                              |
-| `control.test.ts`  | `abort()` ends a request in flight without a mark, and the room keeps running                                                                |
+| File               | What it proves                                                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `loop.test.ts`     | A model id resolves through Pi's catalog, the key comes from the environment, a tool runs through Pi's loop, a refused call is an `error` |
+| `judgment.test.ts` | A seat with nothing to add declines, and a directed say wakes a seat at `named` that the delivery never woke                              |
+| `exchange.test.ts` | Three seats race under the lock, the room goes quiet, the summary writer uses `say`, and an agent seats a specialist from the reserve     |
+| `record.test.ts`   | A second run of a name reads the record the first run left, and answers from it                                                           |
+| `control.test.ts`  | `abort()` ends a request in flight without a mark, and the room keeps running                                                             |
 
 `@ambionframework/workspace` runs a live tier of its own, over the same
 support, and `workspace.test.ts` there proves that the four built-in tools

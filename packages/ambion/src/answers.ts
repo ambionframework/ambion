@@ -6,7 +6,7 @@ import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import type { Message, RoomNotification } from './types.ts';
+import type { RoomNotification } from './types.ts';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -48,7 +48,7 @@ export interface Answering {
 	live(state: RoomState): Map<string, string[]>;
 	emit(event: RoomNotification): void;
 	/** One operation on the room's commit queue, with the wakes the room routes. */
-	write(commit: CommitRequest): Promise<Message>;
+	write(commit: CommitRequest): Promise<CommitResult>;
 	claim(id: string): Promise<LeaseResponse>;
 	renew(id: string, readThrough?: number): Promise<LeaseResponse>;
 	/** End one lease, for whatever reason. Nothing to end is not an error. */
@@ -108,7 +108,7 @@ export async function answerCommit(room: Answering, commit: CommitRequest): Prom
 	const seat = liveSeatOf(room, commit.activation, room.state());
 	if (seat === undefined) return stale('the lease ended');
 	try {
-		return { committed: await room.write(commit) };
+		return await room.write(commit);
 	} catch (error) {
 		if (error instanceof RefusedError) return refused(room, seat, error.refusal);
 		throw error;

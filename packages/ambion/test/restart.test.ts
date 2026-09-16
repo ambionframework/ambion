@@ -32,12 +32,12 @@ import {
 } from './support/room.ts';
 import {
 	byAgent,
+	isClosing,
 	quiet,
 	type Script,
 	says,
 	scripted,
 	summarise,
-	toolNames,
 } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
 import { faultyTransport } from './support/transport.ts';
@@ -72,7 +72,7 @@ const agents = [assistant, alpha, beta];
 const writes =
 	(text: string, failures = 0): Script =>
 	(context, _name, call) => {
-		if (!toolNames(context).includes('summarise')) return quiet();
+		if (!isClosing(context)) return quiet();
 		if (call <= failures) throw new Error('the model failed');
 		return call === failures + 1 ? summarise(text) : quiet();
 	};
@@ -131,8 +131,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const name = roomName(`restart-${storage.name}`);
 			const session = await startRoom({
 				name,
-				assistant,
-				agents: [alpha, beta],
+				summary: assistant.name,
+				seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [alpha, beta, assistant],
 				runtime: first,
 				streamFn: scripted(script),
 			});
@@ -204,8 +205,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const name = roomName(`restart-${storage.name}`);
 			const session = await startRoom({
 				name,
-				assistant,
-				agents: [alpha],
+				summary: assistant.name,
+				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [alpha, assistant],
 				runtime: first,
 				streamFn: scripted(script),
 			});
@@ -228,7 +230,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(0);
 			await clock.advance(30_000);
 			await waitForRoom(resumed);
-			expect(events.filter((e) => e.type === 'activation_start')).toHaveLength(1);
+			expect(
+				events.filter((e) => e.type === 'activation_start' && e.agent === 'alpha'),
+			).toHaveLength(1);
 			expect(await currentExchange(resumed)).toBeUndefined();
 			expect(resumed.participants().find((s) => s.name === 'alpha')).toMatchObject({
 				status: 'idle',
@@ -247,8 +251,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const name = roomName(`restart-${storage.name}`);
 			const one = await startRoom({
 				name,
-				assistant,
-				agents: [alpha],
+				summary: assistant.name,
+				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [alpha, assistant],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
@@ -258,8 +263,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 
 			const two = await startRoom({
 				name,
-				assistant,
-				agents: [beta],
+				summary: assistant.name,
+				seats: { [beta.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [beta, assistant],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
@@ -281,9 +287,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const name = roomName(`restart-identity-${storage.name}`);
 			const session = await startRoom({
 				name,
-				assistant,
-				agents: [alpha, beta],
-				seats: { [alpha.name]: 'broadcast' },
+				summary: assistant.name,
+				agents: [alpha, beta, assistant],
+				seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast' },
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
@@ -319,8 +325,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const working = deferred();
 			const one = await startRoom({
 				name,
-				assistant,
-				agents: [alpha],
+				summary: assistant.name,
+				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [alpha, assistant],
 				runtime: runtime(),
 				streamFn: scripted(
 					byAgent({
@@ -345,8 +352,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			// the next run closes it as it starts, and quiet() waits for that close
 			const two = await startRoom({
 				name,
-				assistant,
-				agents: [alpha],
+				summary: assistant.name,
+				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [alpha, assistant],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
@@ -372,7 +380,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const first = runtime();
 			const session = await startRoom({
 				name,
-				assistant,
+				summary: assistant.name,
+				seats: { [assistant.name]: 'none' },
+				agents: [assistant],
 				runtime: first,
 				streamFn: scripted(byAgent({})),
 			});
@@ -424,14 +434,15 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const script = byAgent({
 				alpha: says(['alpha one', 'alpha two', 'alpha three']),
 				beta: says(['beta one']),
-				assistant: writes('Both questions, answered.', 1),
+				assistant: writes('Both questions, answered.', 2),
 			});
 			const name = roomName(`restart-${storage.name}`);
 			const first = runtime();
 			const session = await startRoom({
 				name,
-				assistant,
-				agents: [alpha, beta],
+				summary: assistant.name,
+				seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [alpha, beta, assistant],
 				runtime: first,
 				streamFn: scripted(script),
 			});
@@ -481,15 +492,16 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 		try {
 			const drafting = deferred();
 			const hangs: Script = (context) => {
-				if (!toolNames(context).includes('summarise')) return quiet();
+				if (!isClosing(context)) return quiet();
 				drafting.resolve();
 				return new Promise<never>(() => {});
 			};
 			const name = roomName(`restart-${storage.name}`);
 			const session = await startRoom({
 				name,
-				assistant,
-				agents: [alpha],
+				summary: assistant.name,
+				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [alpha, assistant],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({ alpha: says(['alpha one', 'alpha two']), assistant: hangs })),
 			});
@@ -533,8 +545,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			});
 			const session = await startRoom({
 				name,
-				assistant,
-				agents: [alpha],
+				summary: assistant.name,
+				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [alpha, assistant],
 				runtime: first,
 				streamFn: scripted(script),
 			});
@@ -592,8 +605,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const name = roomName(`restart-${storage.name}`);
 			const session = await startRoom({
 				name,
-				assistant,
-				agents: [alpha],
+				summary: assistant.name,
+				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+				agents: [alpha, assistant],
 				runtime: runtime(),
 				streamFn: scripted(byAgent({})),
 			});
@@ -634,8 +648,9 @@ describe('a room dropped from memory', () => {
 		const name = roomName('evicted-early');
 		const session = await startRoom({
 			name,
-			assistant,
-			agents: [alpha, beta],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [alpha, beta, assistant],
 			runtime,
 			streamFn: scripted(byAgent({})),
 		});
@@ -654,8 +669,9 @@ describe('a room dropped from memory', () => {
 		const held = deferred();
 		const session = await startRoom({
 			name: roomName('evicted'),
-			assistant,
-			agents: [alpha],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [alpha, assistant],
 			runtime,
 			streamFn: scripted(
 				byAgent({
@@ -703,8 +719,9 @@ describe('a room dropped from memory', () => {
 		const held = deferred();
 		const session = await startRoom({
 			name: roomName('evicted-waiting'),
-			assistant,
-			agents: [alpha],
+			summary: assistant.name,
+			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
+			agents: [alpha, assistant],
 			runtime,
 			streamFn: scripted(
 				byAgent({

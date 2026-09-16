@@ -90,10 +90,9 @@ export const isLive = (lease: LeaseHold, now: number): boolean =>
 	lease.phase === 'running' && !isExpired(lease, now);
 
 /**
- * An activation the room owes a seat, and has not had. Three things on the
- * journal cause one: a message that woke a seat and no lease answered, the
- * question that opened an exchange, and a close that owes a summary. The
- * room schedules all three the same way, so all three read as this.
+ * An activation the room owes a seat, and has not had. A message that woke a
+ * seat and a close that owes a summary cause one. The room schedules both the
+ * same way, so both read as this.
  */
 export interface PendingActivation {
 	/** The journal fact that gives this activation its identity. */
@@ -133,21 +132,6 @@ export interface PendingActivationOptions {
 const ANSWERS_NOTHING: ReadonlySet<EndReason> = new Set<EndReason>(['failed', 'expired']);
 
 /**
- * A lease that ended this way took the activation and came to nothing, so
- * the next attempt is numbered after it. It holds `refused` beside the two
- * above: an assistant that ran out of drafts made an attempt, and the range
- * it owes stays owed. A message never ends an activation `refused`, so the
- * two sets differ over the assistant's drafts alone.
- */
-const CAME_TO_NOTHING: ReadonlySet<EndReason> = new Set<EndReason>([...ANSWERS_NOTHING, 'refused']);
-
-/**
- * Why a seat's wake on this message exists. The fold decides it once, and
- * the id carries the answer to every reader after it.
- */
-export type SourceOf = (seat: string, seq: Seq) => ActivationSource;
-
-/**
  * Every wake a message decided that no lease has answered, for a seat still
  * on the roster. A seat that left the roster answers no wake: what it was
  * sent is not pending.
@@ -158,21 +142,40 @@ export function pendingWakes(
 	leases: ReadonlyMap<string, LeaseHold>,
 	roster: ReadonlySet<string>,
 	options: PendingActivationOptions,
-	sourceOf: SourceOf,
 ): PendingWake[] {
 	const bySeat = leasesBySeat(leases, roster);
 	const pending: PendingWake[] = [];
 	for (const message of messages) {
 		const delivery = deliveries.get(message.seq);
 		if (delivery === undefined) continue;
-		for (const seat of reached(delivery, roster)) {
-			const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
-			const wake = statusOf(message, seat, taken, options, sourceOf(seat, message.seq));
-			if (wake !== undefined) pending.push(wake);
-		}
+		pending.push(...pendingForMessage(message, messages, delivery, bySeat, roster, options));
 	}
 	return pending;
 }
+
+function pendingForMessage(
+	message: Message,
+	messages: readonly Message[],
+	delivery: MessageDelivery,
+	bySeat: ReadonlyMap<string, LeaseHold[]>,
+	roster: ReadonlySet<string>,
+	options: PendingActivationOptions,
+): PendingWake[] {
+	const pending: PendingWake[] = [];
+	for (const seat of reached(delivery, roster)) {
+		if (removedAfter(messages, seat, message.seq)) continue;
+		const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
+		const wake = statusOf(message, seat, taken, options);
+		if (wake !== undefined) pending.push(wake);
+	}
+	return pending;
+}
+
+/** Whether a delivery predates a durable removal of this seat. */
+const removedAfter = (messages: readonly Message[], seat: string, seq: Seq): boolean =>
+	messages.some(
+		(message) => message.kind === 'unseated' && message.subject === seat && message.seq > seq,
+	);
 
 /**
  * Every lease a wake claimed, by seat, for the seats on the roster. A
@@ -227,7 +230,6 @@ function statusOf(
 	seat: string,
 	taken: readonly LeaseHold[],
 	options: PendingActivationOptions,
-	source: ActivationSource,
 ): PendingWake | undefined {
 	// A running lease keeps the work claimed. A completed lease settles it only
 	// after the executor recorded explicit progress through this message.
@@ -238,7 +240,7 @@ function statusOf(
 			(lease.phase === 'ended' && decodeActivationId(lease.id)?.position === message.seq),
 	);
 	return {
-		...pendingActivation(source, message.seq, seat, failed, options),
+		...pendingActivation('message', message.seq, seat, failed, options),
 		seq: message.seq,
 		at: message.at,
 	};
@@ -280,7 +282,7 @@ const endedFor = (lease: LeaseHold, reasons: ReadonlySet<EndReason>): boolean =>
 const answersNothing = (lease: LeaseHold): boolean => endedFor(lease, ANSWERS_NOTHING);
 
 /** The attempt came to nothing, so the next one is numbered after it. */
-export const cameToNothing = (lease: LeaseHold): boolean => endedFor(lease, CAME_TO_NOTHING);
+export const cameToNothing = answersNothing;
 
 /** The seat an id names, or nothing for an id the room did not derive. */
 export const seatOf = (id: string): string | undefined => decodeActivationId(id)?.seat;

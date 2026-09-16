@@ -5,6 +5,7 @@ import { roomName } from './support/room.ts';
 import { memory } from './support/storage.ts';
 
 const seating = { name: 'alpha', identity: 'Researcher', attention: 'broadcast' };
+const at = '2026-01-01T00:00:00.000Z';
 
 describe('room journal body validation', () => {
 	it('accepts every stored message union member and its optional fields', () => {
@@ -64,13 +65,14 @@ describe('room journal body validation', () => {
 				from: 1,
 				through: 5,
 				at: '2026-01-01T00:00:00.000Z',
-				wakes: ['assistant'],
+				summary: 'assistant',
 			}),
 		).toBe(true);
 		expect(
 			validateRoomBody('composition', {
+				version: 2,
 				goal: 'Draft the weekly.',
-				assistant: 'assistant',
+				summary: 'assistant',
 				agents: [seating],
 				available: [{ name: 'beta', identity: 'Reviewer', attention: 'broadcast' }],
 				at: '2026-01-01T00:00:00.000Z',
@@ -98,6 +100,18 @@ describe('room journal body validation', () => {
 				activationId: 'message:1',
 			}),
 		).toThrow(/kind 'message'.*body\.activationId/);
+	});
+
+	it('rejects old or missing composition versions with an explicit migration boundary', () => {
+		for (const body of [
+			{ agents: [], available: [], at },
+			{ version: 1, agents: [], available: [], at },
+			{ version: 2, assistant: 'legacy', agents: [], available: [], at },
+		]) {
+			expect(() => validateRoomBody('composition', body)).toThrow(
+				/unsupported room composition version.*version 2.*new journal.*externally/i,
+			);
+		}
 	});
 
 	it('skips an unknown kind without inspecting its body', () => {
@@ -175,7 +189,7 @@ describe('room journal body validation', () => {
 		['close', { owner: 'a', from: 1, through: 2.5, at: 'now' }, 'body.through'],
 		[
 			'composition',
-			{ agents: [{ ...seating, attention: 'sometimes' }], available: [], at: 'now' },
+			{ version: 2, agents: [{ ...seating, attention: 'sometimes' }], available: [], at: 'now' },
 			'body.agents[0].attention',
 		],
 		['run', { at: 7 }, 'body.at'],

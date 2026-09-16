@@ -19,12 +19,6 @@ import type { AgentSeatInfo, Attention, HumanSeatInfo, Message, Seq } from './ty
 export type ActivationPurpose =
 	| { readonly kind: 'respond'; readonly message: Seq }
 	| {
-			readonly kind: 'select';
-			readonly exchange: Seq;
-			readonly person: string;
-			readonly limit: number;
-	  }
-	| {
 			readonly kind: 'summarize';
 			readonly exchange: Seq;
 			readonly person: string;
@@ -49,7 +43,7 @@ export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> :
  * record, the record kept moving past its drafts, the room wrote it off,
  * or it stopped renewing.
  */
-export type EndReason = 'released' | 'failed' | 'refused' | 'revoked' | 'expired' | 'abandoned';
+export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandoned';
 
 /**
  * One entry about an activation: it holds a lease, or its lease ended. The
@@ -105,8 +99,8 @@ export interface Close {
 	from: Seq;
 	through: Seq;
 	at: string;
-	/** The assistant seat that writes a summary when the exchange owes one. */
-	wakes?: string[];
+	/** The configured seated agent that writes a summary, when one is owed. */
+	summary?: string;
 }
 
 /** One seat in a composition: its name, how the room knows it, and what wakes it. */
@@ -121,9 +115,10 @@ export interface Seating {
  * reader without the definitions reads every identity off it.
  */
 export interface Composition {
+	version: 2;
 	goal?: string;
-	/** The agent that performs the room's assistant work, when the room seats one. */
-	assistant?: string;
+	/** The configured agent that writes summaries for human owners. */
+	summary?: string;
 	agents: Seating[];
 	available: Seating[];
 	/**
@@ -178,11 +173,11 @@ export interface CollaborationContext {
 	readonly goal?: string;
 	readonly participants: readonly ContextParticipant[];
 	readonly messages: readonly Without<Message, 'preferences'>[];
-	/** The open exchange for an ordinary response. Assistant purposes carry their own reference. */
+	/** The open exchange for an ordinary response. */
 	readonly exchange?: { readonly owner: string; readonly from: Seq };
-	/** Only selection reads the reserve. */
-	readonly reserve?: readonly { readonly name: string; readonly identity: string }[];
-	/** Only the recipient's summary reads these preferences. */
+	/** Reserve identities are available to every responding agent. */
+	readonly reserve: readonly { readonly name: string; readonly identity: string }[];
+	/** Only the summary writer reads the owner's preferences. */
 	readonly preferences?: string;
 }
 
@@ -204,8 +199,8 @@ export type ViewResponse = { view: ActivationView } | Stale;
 /** What a seat asks the room to put on the record. The room stamps everything else. */
 export type Intent =
 	| { kind: 'said'; to?: string; text: string }
-	| { kind: 'summary'; text: string }
-	| { kind: 'seated'; name: string };
+	| { kind: 'seated'; name: string }
+	| { kind: 'unseated'; name: string };
 
 export interface CommitRequest {
 	activation: string;
@@ -215,7 +210,11 @@ export interface CommitRequest {
 }
 
 export type CommitResult =
-	{ committed: Message } | { missed: Message[] } | { refused: string } | Stale;
+	| { committed: Message }
+	| { unchanged: { kind: 'seated' | 'unseated'; name: string } }
+	| { missed: Message[] }
+	| { refused: string }
+	| Stale;
 
 export type LeaseRequest =
 	| { activation: string; operation: 'claim' }
