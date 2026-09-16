@@ -19,9 +19,9 @@ Installing requires a GitHub Packages read token; see the
 
 ## Use
 
-`drive.tools()` adds the tools and optional guidance that the backend supplies.
-Each tool reaches the environment the backend built for that agent, rooted at
-`/home/<agent name>`.
+`drive.tools()` returns the tools and optional guidance that the backend
+supplies. Pass it in `bundles`; each tool reaches the environment the backend
+built for that agent, rooted at `/home/<agent name>`.
 
 ```ts
 import { defineAgent } from '@ambionframework/ambion';
@@ -34,7 +34,7 @@ const surveyor = defineAgent({
   identity: 'Quantity surveyor. Holds the tonnage.',
   instructions: 'Read the pour plan before you answer.',
   model: 'anthropic/claude-sonnet-5',
-  tools: [drive.tools()],
+  bundles: [drive.tools()],
 });
 ```
 

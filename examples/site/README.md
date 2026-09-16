@@ -20,7 +20,8 @@ three products share one workspace: the site drive, an in-memory filesystem
 holding the documents the site works to.
 
 `room.ts` opens the drive once and gives each product the frozen
-`SITE_DRIVE.tools()` bundle. The workspace owner queues whole tool operations,
+`SITE_DRIVE.tools()` bundle through its `bundles` field. The workspace owner
+queues whole tool operations,
 checks the calling agent on each use, and exposes `dispose()` and `destroy()`
 as separate lifecycle choices.
 

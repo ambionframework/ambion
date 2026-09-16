@@ -74,7 +74,7 @@ describe('the built-in tools', () => {
 		const results: Record<string, { tool: string; text: string; failed: boolean }[]> = {};
 		const writerDone = Promise.withResolvers<void>();
 		const session = await run(
-			[agent('writer', { tools: [tools] }), agent('reader', { tools: [tools] })],
+			[agent('writer', { bundles: [tools] }), agent('reader', { bundles: [tools] })],
 			{
 				writer: (context, who, call) => {
 					results[who] = toolResults(context);
@@ -113,7 +113,7 @@ describe('the built-in tools', () => {
 		const site = openWorkspace({ name: name('edits'), backend: memoryBackend() });
 		const tools = site.tools();
 		let final: string | undefined;
-		await run([agent('editor', { tools: [tools] })], {
+		await run([agent('editor', { bundles: [tools] })], {
 			editor: (context, _who, call) => {
 				if (call === 1) return callTool('write', { path: 'f.txt', content: 'alpha\n' });
 				if (call === 2)
@@ -131,7 +131,7 @@ describe('the built-in tools', () => {
 		const site = openWorkspace({ name: name('edits'), backend: memoryBackend() });
 		const tools = site.tools();
 		let final: string | undefined;
-		await run([agent('editor', { tools: [tools] })], {
+		await run([agent('editor', { bundles: [tools] })], {
 			editor: (context, _who, call) => {
 				if (call === 1) return callTool('write', { path: 'f.txt', content: 'alpha\nbeta\n' });
 				if (call === 2)
@@ -168,7 +168,7 @@ describe('the built-in tools', () => {
 			parameters: Type.Object({}),
 			execute: async (_params, ctx) => site.use(ctx.agent, async () => 'some', ctx.signal),
 		});
-		await run([agent('worker', { tools: [tools, probe] })], {
+		await run([agent('worker', { tools: [probe], bundles: [tools] })], {
 			worker: async (context, _who, call) => {
 				if (call === 1) return callTool('write', { path: 'a.txt', content: 'x' });
 				if (call === 2) {
@@ -231,22 +231,18 @@ describe('the workspace resource owner', () => {
 		});
 		const bundle = workspace.tools();
 		expect(bundle.guidance).toBe('Custom backend guidance.');
-		expect(bundle.tools.map((tool) => (tool as { name: string }).name)).toEqual(['inspect']);
-		const result = await (
-			bundle.tools[0] as {
-				execute: (
-					params: unknown,
-					context: ToolContext,
-				) => Promise<{ content: { text: string }[] }>;
-			}
-		).execute(
+		expect(bundle.tools.map((tool) => tool.name)).toEqual(['inspect']);
+		const tool = bundle.tools[0];
+		if (tool === undefined) throw new Error('The backend tool is missing.');
+		const result = await tool.invoke(
 			{},
 			{
 				agent: workspaceAgent('alpha'),
 				callId: 'custom-call',
 			},
 		);
-		expect(result.content[0]?.text).toBe('/home/alpha');
+		if (typeof result === 'string') throw new Error('The backend must return a structured result.');
+		expect(result.content[0]).toMatchObject({ type: 'text', text: '/home/alpha' });
 		await workspace.destroy();
 	});
 
@@ -725,7 +721,7 @@ describe('directoryBackend', () => {
 		const site = openWorkspace({ name: name('disk'), backend: directoryBackend(root) });
 		const tools = site.tools();
 		let read: string | undefined;
-		await run([agent('scribe', { tools: [tools] })], {
+		await run([agent('scribe', { bundles: [tools] })], {
 			scribe: (context, _who, call) => {
 				if (call === 1) return callTool('write', { path: 'journal.md', content: '# day one\n' });
 				if (call === 2) return callTool('bash', { command: 'cat ~/journal.md' });

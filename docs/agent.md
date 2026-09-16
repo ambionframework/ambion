@@ -42,7 +42,7 @@ it.
 | Tool-call loop, abort, retries            | Pi         |
 | Steering a running turn                   | Pi         |
 | Transcript storage, in-memory and durable | Pi         |
-| Tool definition format                    | Pi         |
+| Typed tool authoring and normalized form  | Ambion     |
 | **Participants as values**                | **Ambion** |
 | **The room**                              | **Ambion** |
 
@@ -72,7 +72,7 @@ export const researcher = defineAgent({
     is wrong or unverified; otherwise stay quiet.
   `,
   model: 'anthropic/claude-sonnet-4-5',
-  tools: [lookup], // optional
+  tools: [lookup], // optional ordinary Ambion tools
 });
 ```
 
@@ -83,11 +83,12 @@ room reads, injected into every participant's context as part of the roster.
 runtime's system prompt, and they hold all of the agent's judgment —
 including the judgment to say nothing. The runtime's prompt is always
 present; instructions extend it. The optional `tools` field accepts ordinary
-tools and tool bundles. [`workspace.md`](workspace.md) describes the bundle
-that a workspace resource provides.
+Ambion tools. Put reusable tool bundles in the separate `bundles` field.
+[`workspace.md`](workspace.md) describes the bundle that a workspace resource
+provides.
 
-`defineAgent` returns a plain value. Everything that refers to an agent
-refers to this value. Nothing refers to an agent through a bare string.
+`defineAgent` returns a plain definition value. Room configuration supplies
+these values, while membership operations address agent seats by name.
 
 ---
 
@@ -105,15 +106,20 @@ const lookup = defineTool({
 });
 ```
 
-`defineTool` is a facade over Pi's own tool shape: the same
-name-description-parameters-execute, with one convenience. `execute`
-receives the parsed parameters as its first argument and a `ToolContext`
-as its second. The context identifies the agent, carries `callId`, exposes
-`onUpdate`, and carries Pi's abort signal as `ctx.signal`. It may return a plain
-string or Pi's full content shape. A tool defined with Pi's own
-`defineTool` works unchanged (`toPiTool` in `seat/tools.ts` accepts both), so
-learning Pi's format is the same as learning Ambion's. A workspace resource
-adds its tools through an ordinary bundle ([`workspace.md`](workspace.md)).
+`defineTool` is the typed authoring interface. It takes a parameter schema and
+an execute callback. The callback receives parsed parameters as its first
+argument and a `ToolContext` as its second. The context identifies the agent,
+carries `callId`, exposes `onUpdate`, and carries Pi's abort signal as
+`ctx.signal`. The result may be a plain string or Pi's full content shape.
+Execution calls every normalized tool through `invoke(rawParams, context)`;
+that boundary validates arguments before it calls the typed callback.
+Heterogeneous tools can share one definition while each callback keeps its
+schema inference.
+
+Pi-native tools need an explicit `fromPiTool(nativePiTool)` adapter before they
+enter an agent definition. The adapter gives the executor one normalized
+typed tool shape. A workspace resource returns an ordinary bundle; pass it in
+`bundles` ([`workspace.md`](workspace.md)).
 
 ---
 
@@ -588,12 +594,13 @@ It resolves every recorded seat through the supplied bindings. The room
 reconciles at once, so pending work and open exchanges continue after restart.
 A dropped room writes nothing, and its handle accepts no new work.
 
-**A room captures its definitions.** `defineAgent` copies and freezes its
-tool array, tool records, and plain schema records. Functions, workspace
-handles, and other nonplain resources keep their identity. A started room
-binds each agent name once for that run. Another room can use the same name
-with another definition. A resume receives its bindings explicitly. It
-refuses a missing or repeated binding before it writes its fence.
+**A room captures its definitions.** `defineAgent` flattens its bundles and
+copies and freezes its ordinary tool records and plain schema records.
+Functions, workspace handles, and other nonplain resources keep their
+identity. A started room binds each agent name once for that run. Another room
+can use the same name with another definition. A resume receives its bindings
+explicitly. It refuses a missing or repeated binding before it writes its
+fence.
 
 `messages()` and `participants()` are the pull side; the stream is the push side.
 A listener learns nothing the pulls cannot tell it — it only learns it

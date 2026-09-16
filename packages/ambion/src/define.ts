@@ -7,15 +7,15 @@
  * people in another. What each refuses is as much of the contract as what it
  * takes — a name the room can address, and a composition of ordinary tools.
  */
-import type { AgentToolResult, ToolExecutionMode } from '@earendil-works/pi-agent-core';
-import { type Static, type TSchema, Type } from 'typebox';
-import {
-	type AgentDefinition,
-	type AmbionTool,
-	type HumanDefinition,
-	TOOL_BRAND,
-	type ToolBundle,
-	type ToolContext,
+import type { AgentTool, AgentToolResult, ToolExecutionMode } from '@earendil-works/pi-agent-core';
+import { IsSchema, type Static, type TSchema, Type } from 'typebox';
+import { Check } from 'typebox/value';
+import type {
+	AgentDefinition,
+	AmbionTool,
+	HumanDefinition,
+	ToolBundle,
+	ToolContext,
 } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -27,24 +27,17 @@ export interface DefineAgentOptions {
 	instructions: string;
 	/** A Pi model identifier, `provider/model-id`. */
 	model: string;
-	/** The agent's own tools or composable bundles of tools and guidance. */
-	tools?: readonly unknown[];
+	/** The agent's own normalized tools. */
+	tools?: readonly AmbionTool[];
+	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
+	bundles?: readonly ToolBundle[];
 }
 
 export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 	assertName(options.name);
-	const input = options.tools ?? [];
-	const guidance =
-		input
-			.filter(isToolBundle)
-			.map((bundle) => bundle.guidance?.trim())
-			.filter((text): text is string => Boolean(text))
-			.join('\n\n') || undefined;
-	const tools = Object.freeze(
-		input
-			.flatMap((tool) => (isToolBundle(tool) ? tool.tools : [tool]))
-			.map((tool) => capture(tool)),
-	);
+	const input = flattenTools(options.tools, options.bundles);
+	const guidance = guidanceOf(options.bundles);
+	const tools = Object.freeze(input.map((tool) => captureTool(tool)));
 	assertAgentTools(options.name, tools);
 	return Object.freeze({
 		name: options.name,
@@ -59,7 +52,12 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 /** Capture a structural definition at a room boundary without retaining mutable authoring data. */
 export function captureAgent(agent: AgentDefinition): AgentDefinition {
 	assertName(agent.name);
-	const tools = Object.freeze(agent.tools.map((tool) => capture(tool)));
+	const tools = Object.freeze(
+		agent.tools.map((tool) => {
+			assertTool(tool);
+			return captureTool(tool);
+		}),
+	);
 	assertAgentTools(agent.name, tools);
 	return Object.freeze({
 		name: agent.name,
@@ -122,25 +120,55 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 }
 
 /**
- * A facade over Pi's tool shape, and no format of Ambion's own: parsed
- * parameters first, a context second, string returns allowed. A tool defined
- * with Pi's `defineTool` works unchanged wherever this one does, and reaches
- * no context: its signature has no room for one.
+ * Define one typed tool. The callback receives parsed parameters and the
+ * calling agent context. Native Pi tools use `fromPiTool` at this boundary.
  */
 export function defineTool<TParameters extends TSchema>(
 	options: DefineToolOptions<TParameters>,
-): AmbionTool<TParameters> {
+): AmbionTool {
+	assertDefineToolOptions(options);
+	const parameters = capture(options.parameters);
+	const name = options.name;
+	const execute = options.execute;
 	return Object.freeze({
-		[TOOL_BRAND]: true as const,
-		name: options.name,
+		name,
 		description: options.description,
-		parameters: capture(options.parameters),
-		...(options.label === undefined ? {} : { label: options.label }),
+		parameters,
+		label: options.label ?? name,
 		...(options.prepareArguments === undefined
 			? {}
 			: { prepareArguments: options.prepareArguments }),
 		...(options.executionMode === undefined ? {} : { executionMode: options.executionMode }),
-		execute: options.execute,
+		invoke: (params: unknown, context: ToolContext) => {
+			if (!Check(parameters, params)) {
+				throw new Error(`Invalid arguments for tool '${name}'.`);
+			}
+			return execute(params, context);
+		},
+	});
+}
+
+/** Adapt one native Pi tool to the normalized Ambion calling convention. */
+export function fromPiTool<TParameters extends TSchema, TDetails>(
+	tool: AgentTool<TParameters, TDetails>,
+): AmbionTool {
+	assertDefineToolOptions(tool);
+	const execute = tool.execute;
+	return defineTool<TSchema>({
+		name: tool.name,
+		description: tool.description,
+		parameters: tool.parameters,
+		label: tool.label,
+		prepareArguments: tool.prepareArguments,
+		executionMode: tool.executionMode,
+		execute: (params, context) =>
+			execute(
+				context.callId,
+				// defineTool validates the captured schema. Pi can use a different TypeBox version.
+				params as Parameters<AgentTool<TParameters, TDetails>['execute']>[1],
+				context.signal,
+				context.onUpdate,
+			),
 	});
 }
 
@@ -183,15 +211,57 @@ export const SAY = {
 	}),
 };
 
-function isToolBundle(value: unknown): value is ToolBundle {
-	return typeof value === 'object' && value !== null && Array.isArray((value as ToolBundle).tools);
+function flattenTools(
+	tools: readonly AmbionTool[] | undefined,
+	bundles: readonly ToolBundle[] | undefined,
+): AmbionTool[] {
+	const flattened: AmbionTool[] = [];
+	appendTools(tools === undefined ? [] : tools, flattened, 'tools');
+	if (bundles !== undefined) {
+		if (!Array.isArray(bundles)) throw new Error('Agent bundles must be an array.');
+		for (const bundle of bundles) {
+			if (!isRecord(bundle) || !Array.isArray(bundle.tools)) {
+				throw new Error('Agent bundles must contain a tools array.');
+			}
+			appendTools(bundle.tools, flattened, 'bundle');
+		}
+	}
+	return flattened;
 }
 
-function assertAgentTools(agent: string, tools: readonly unknown[]): void {
+function appendTools(tools: readonly AmbionTool[], into: AmbionTool[], source: string): void {
+	if (!Array.isArray(tools)) throw new Error(`Agent ${source} must be an array.`);
+	for (const tool of tools) {
+		assertTool(tool);
+		into.push(tool);
+	}
+}
+
+function captureTool(tool: AmbionTool): AmbionTool {
+	return Object.freeze({
+		name: tool.name,
+		description: tool.description,
+		parameters: capture(tool.parameters),
+		label: tool.label,
+		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
+		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
+		invoke: tool.invoke,
+	});
+}
+
+function guidanceOf(bundles: readonly ToolBundle[] | undefined): string | undefined {
+	if (bundles === undefined) return undefined;
+	const guidance = bundles
+		.map((bundle) => (typeof bundle.guidance === 'string' ? bundle.guidance.trim() : ''))
+		.filter((text): text is string => text.length > 0)
+		.join('\n\n');
+	return guidance || undefined;
+}
+
+function assertAgentTools(agent: string, tools: readonly AmbionTool[]): void {
 	const names = new Set<string>();
 	for (const tool of tools) {
-		const name = (tool as { name?: unknown }).name;
-		if (typeof name !== 'string') continue;
+		const name = tool.name;
 		if (names.has(name)) {
 			throw new Error(`Agent '${agent}' brings duplicate tools named '${name}'.`);
 		}
@@ -202,6 +272,59 @@ function assertAgentTools(agent: string, tools: readonly unknown[]): void {
 				`Agent '${agent}' brings a tool named '${name}': the room supplies it for an activation. Give it another name.`,
 			);
 	}
+}
+
+function assertTool(value: unknown): asserts value is AmbionTool {
+	if (!isRecord(value)) throw new Error('Tools must be normalized Ambion tools.');
+	if (
+		typeof value.name !== 'string' ||
+		typeof value.description !== 'string' ||
+		typeof value.label !== 'string' ||
+		!isToolSchema(value.parameters) ||
+		typeof value.invoke !== 'function'
+	) {
+		throw new Error('Tools must be normalized Ambion tools.');
+	}
+	if (value.prepareArguments !== undefined && typeof value.prepareArguments !== 'function') {
+		throw new Error('Tool prepareArguments must be a function.');
+	}
+	if (!isExecutionMode(value.executionMode)) {
+		throw new Error('Tool executionMode must be sequential or parallel.');
+	}
+}
+
+function assertDefineToolOptions(value: unknown): void {
+	if (!isRecord(value)) throw new Error('Tool options must be an object.');
+	if (
+		typeof value.name !== 'string' ||
+		value.name.length === 0 ||
+		typeof value.description !== 'string' ||
+		!isToolSchema(value.parameters) ||
+		typeof value.execute !== 'function'
+	) {
+		throw new Error('Tool options are malformed.');
+	}
+	if (value.label !== undefined && typeof value.label !== 'string') {
+		throw new Error('Tool label must be a string.');
+	}
+	if (value.prepareArguments !== undefined && typeof value.prepareArguments !== 'function') {
+		throw new Error('Tool prepareArguments must be a function.');
+	}
+	if (!isExecutionMode(value.executionMode)) {
+		throw new Error('Tool executionMode must be sequential or parallel.');
+	}
+}
+
+function isToolSchema(value: unknown): value is TSchema {
+	return typeof value === 'boolean' || IsSchema(value);
+}
+
+function isExecutionMode(value: unknown): value is ToolExecutionMode | undefined {
+	return value === undefined || value === 'sequential' || value === 'parallel';
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+	return typeof value === 'object' && value !== null;
 }
 
 function assertName(name: string): void {

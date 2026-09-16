@@ -69,7 +69,7 @@ export const SITE_DRIVE = openWorkspace({
 	name: 'kestrel-yard-drive',
 	backend: driveBackend,
 });
-const SITE_TOOLS = SITE_DRIVE.tools();
+const SITE_BUNDLE = SITE_DRIVE.tools();
 
 /** Every document on the drive, as a host reads it: path under `site/`, and text. */
 export async function driveFiles(): Promise<{ path: string; text: string }[]> {
@@ -708,7 +708,8 @@ const shiftsAgent = defineAgent({
 		Before you say a day holds, read the forecast against the plan's limits.
 	`,
 	model: MODEL,
-	tools: [crewHours, certifiedFor, requestOvertime, SITE_TOOLS],
+	tools: [crewHours, certifiedFor, requestOvertime],
+	bundles: [SITE_BUNDLE],
 });
 
 const tasksAgent = defineAgent({
@@ -736,7 +737,8 @@ const tasksAgent = defineAgent({
 		before a pour, in order.
 	`,
 	model: MODEL,
-	tools: [taskList, blockingChain, updateTask, SITE_TOOLS],
+	tools: [taskList, blockingChain, updateTask],
+	bundles: [SITE_BUNDLE],
 });
 
 const materialsAgent = defineAgent({
@@ -758,7 +760,8 @@ const materialsAgent = defineAgent({
 		and when the order locks.
 	`,
 	model: MODEL,
-	tools: [stockCheck, deliveryBoard, supplierTerms, moveDelivery, SITE_TOOLS],
+	tools: [stockCheck, deliveryBoard, supplierTerms, moveDelivery],
+	bundles: [SITE_BUNDLE],
 });
 
 /**
@@ -796,7 +799,8 @@ const inspectionsAgent = defineAgent({
 		before you say what the inspector needs to see.
 	`,
 	model: MODEL,
-	tools: [inspectionSlots, requestInspection, SITE_TOOLS],
+	tools: [inspectionSlots, requestInspection],
+	bundles: [SITE_BUNDLE],
 });
 
 const plantAgent = defineAgent({
@@ -818,7 +822,8 @@ const plantAgent = defineAgent({
 		read it before you say a hire covers a day.
 	`,
 	model: MODEL,
-	tools: [hireBoard, hireTerms, moveHire, SITE_TOOLS],
+	tools: [hireBoard, hireTerms, moveHire],
+	bundles: [SITE_BUNDLE],
 });
 
 const temporaryWorksAgent = defineAgent({
@@ -840,7 +845,8 @@ const temporaryWorksAgent = defineAgent({
 		the diary says how far the formwork has got: read both before you speak.
 	`,
 	model: MODEL,
-	tools: [checkStatus, bookCheck, SITE_TOOLS],
+	tools: [checkStatus, bookCheck],
+	bundles: [SITE_BUNDLE],
 });
 
 /** Specialists that start in the reserve. They join when a question needs them. */

@@ -13,7 +13,7 @@ import type {
 	ToolExecutionMode,
 } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
-import type { Static, TSchema } from 'typebox';
+import type { TSchema } from 'typebox';
 
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
@@ -255,7 +255,6 @@ export type RoomNotification =
 	 */
 	| { type: 'exchange_closed'; exchange: ClosedExchange };
 
-export const TOOL_BRAND = Symbol.for('ambion.tool');
 /**
  * What a tool's `execute` is handed beside its parameters: the calling agent
  * and the abort signal Pi gives the tool call.
@@ -265,26 +264,25 @@ export interface ToolContext {
 	readonly agent: { readonly name: string; readonly identity: string };
 	readonly signal?: AbortSignal;
 	readonly callId: string;
-	readonly onUpdate?: AgentToolUpdateCallback;
+	readonly onUpdate?: AgentToolUpdateCallback<unknown>;
 }
 
 /** A composable set of tools and the guidance that explains their use. */
 export interface ToolBundle {
-	readonly tools: readonly unknown[];
+	readonly tools: readonly AmbionTool[];
 	readonly guidance?: string;
 }
 
-/** A tool defined with Ambion's `defineTool` facade. */
-export interface AmbionTool<TParameters extends TSchema = TSchema> {
-	readonly [TOOL_BRAND]: true;
+/** One normalized tool definition used by the room executor. */
+export interface AmbionTool {
 	readonly name: string;
 	readonly description: string;
-	readonly parameters: TParameters;
-	readonly label?: string;
-	readonly prepareArguments?: (args: unknown) => Static<TParameters>;
+	readonly parameters: TSchema;
+	readonly label: string;
+	readonly prepareArguments?: (args: unknown) => unknown;
 	readonly executionMode?: ToolExecutionMode;
-	readonly execute: (
-		params: Static<TParameters>,
+	readonly invoke: (
+		params: unknown,
 		ctx: ToolContext,
 	) => Promise<string | AgentToolResult<unknown>> | string | AgentToolResult<unknown>;
 }
@@ -294,7 +292,7 @@ export interface AgentDefinition {
 	readonly identity: string;
 	readonly instructions: string;
 	readonly model: string;
-	readonly tools: readonly unknown[];
+	readonly tools: readonly AmbionTool[];
 	/** Guidance composed from the agent's tool bundles. */
 	readonly guidance?: string;
 }
@@ -308,8 +306,4 @@ export interface HumanDefinition {
 	 * writes for them, and no other seat does.
 	 */
 	readonly preferences?: string;
-}
-
-export function isAmbionTool(t: unknown): t is AmbionTool {
-	return typeof t === 'object' && t !== null && TOOL_BRAND in t;
 }

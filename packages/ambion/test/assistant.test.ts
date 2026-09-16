@@ -1202,7 +1202,7 @@ describe('an assistant that brings its own tools', () => {
 				identity: 'Writes the one message a person reads.',
 				instructions: 'summarise',
 				model: 'scripted/assistant',
-				tools: [bundle],
+				bundles: [bundle],
 			}),
 			agents: [product, colleague],
 			seats: { [product.name]: 'broadcast' },

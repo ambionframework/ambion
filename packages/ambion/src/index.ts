@@ -7,7 +7,7 @@
  */
 
 export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
-export { defineAgent, defineHuman, defineTool } from './define.ts';
+export { defineAgent, defineHuman, defineTool, fromPiTool } from './define.ts';
 export type { CreateRuntimeOptions, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type {

@@ -113,8 +113,9 @@ See [Contributing](CONTRIBUTING.md) to build and run from source.
 ## A small room
 
 This example uses two specialist definitions and no assistant. Each specialist
-owns its instructions and model choice. Production agents can add domain tools
-through `defineTool` or a tool bundle.
+owns its instructions and model choice. Define ordinary typed tools with
+`defineTool` and pass reusable bundles in the separate `bundles` field.
+Pass a workspace's `tools()` result in that field.
 
 ```ts
 import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
