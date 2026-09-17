@@ -2,9 +2,9 @@
  * One seat as one Durable Object. A wake stores the activation id and sets
  * an alarm; the alarm claims the lease, reads the view, runs the activation
  * to its end and releases the lease, all inside one alarm handler. A wake
- * that arrives while an activation runs is handed to the actor to queue;
+ * that arrives while an activation runs is handed to the runner to queue;
  * steering is forwarded separately to the exact live activation. A cut is
- * handed to the actor the same way. The seat's audit transcript lives in the
+ * handed to the runner the same way. The seat's audit transcript lives in the
  * object's own SQLite.
  */
 
@@ -12,9 +12,9 @@ import { DurableObject } from 'cloudflare:workers';
 import type { RoomNotification } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
 import type { SeatRoom, Steer, Wake } from '@ambionframework/ambion/transport';
-import { SeatActor } from '@ambionframework/ambion/transport';
+import { AgentRunner } from '@ambionframework/ambion/transport';
 import type { SeatEvent } from './configure.ts';
-import { definitionOf, runtimeFor, seatEvent } from './configure.ts';
+import { definitionOf, executionFor, seatEvent } from './configure.ts';
 import type { Env } from './room-object.ts';
 import { seatMetadata, sqlStorage } from './storage.ts';
 
@@ -47,7 +47,7 @@ function seatLine(
 }
 
 export class SeatObject extends DurableObject<Env> {
-	private actor: SeatActor | undefined;
+	private runner: AgentRunner | undefined;
 	private readonly metadata;
 	private readonly storage;
 
@@ -60,7 +60,7 @@ export class SeatObject extends DurableObject<Env> {
 	/**
 	 * A wake for the activation the object holds, or for a fresh one when it
 	 * holds none, sets the alarm. A wake for a different activation while one
-	 * runs is queued by the actor.
+	 * runs is queued by the runner.
 	 */
 	async wake(wake: Wake): Promise<void> {
 		const next = await this.metadata.change((current) =>
@@ -77,25 +77,25 @@ export class SeatObject extends DurableObject<Env> {
 					},
 		);
 		if (next.activation !== wake.activation) {
-			if (this.actor !== undefined) await this.actor.wake(wake);
+			if (this.runner !== undefined) await this.runner.wake(wake);
 			return;
 		}
 		if (!next.hold) await this.ctx.storage.setAlarm(Date.now());
 	}
 
-	/** Forward steering to a live actor without changing durable wake state. */
+	/** Forward steering to a live runner without changing durable wake state. */
 	async steer(steer: Steer): Promise<void> {
-		await this.actor?.steer(steer);
+		await this.runner?.steer(steer);
 	}
 
 	/**
-	 * The room ended this activation's lease: the actor stops it, when it runs
+	 * The room ended this activation's lease: the runner stops it, when it runs
 	 * here. A cut for an activation this object holds but has not started
-	 * reaches no actor, and the alarm that starts it is refused its claim.
+	 * reaches no runner, and the alarm that starts it is refused its claim.
 	 */
 	async cut(activation: string): Promise<void> {
 		await this.metadata.change((current) => ({ patch: { cuts: (current.cuts ?? 0) + 1 } }));
-		await this.actor?.cut(activation);
+		await this.runner?.cut(activation);
 	}
 
 	/**
@@ -132,25 +132,21 @@ export class SeatObject extends DurableObject<Env> {
 			return;
 		}
 		await this.metadata.change(() => ({ patch: { phase: 'running' } }));
-		const runtime = runtimeFor({
+		const execution = executionFor({
 			storage: this.storage,
 			clock: systemClock(),
 		});
-		this.actor = new SeatActor(seatRoom, {
-			clock: runtime.clock,
-			call: runtime.call,
+		this.runner = new AgentRunner(seatRoom, {
+			...execution,
 			definition: definitionOf(seat),
 			room,
 			seat,
-			transcripts: runtime.transcripts,
-			stream: runtime.stream,
-			model: runtime.model,
 			emit: (event) => seatEvent(seatLine(room, seat, activation, event)),
 		});
 		try {
-			await this.actor.run(activation);
+			await this.runner.run(activation);
 		} finally {
-			this.actor = undefined;
+			this.runner = undefined;
 			await this.clear();
 		}
 	}

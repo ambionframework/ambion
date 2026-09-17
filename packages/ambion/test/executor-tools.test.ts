@@ -1,13 +1,13 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+import { Activation, type ActivationHost } from '../src/execution/activation.ts';
+import { binding, toolsFor } from '../src/execution/tools.ts';
 import { defineAgent, defineTool } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';
-import { Activation, type ActivationHost } from '../src/seat/activation.ts';
-import { binding, toolsFor } from '../src/seat/tools.ts';
 import type {
 	ActivationSpec,
 	ActivationView,

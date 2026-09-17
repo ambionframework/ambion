@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Activation, type ActivationHost } from '../src/execution/activation.ts';
+import { binding, toolsFor } from '../src/execution/tools.ts';
 import { defineAgent } from '../src/index.ts';
-import { Activation, type ActivationHost } from '../src/seat/activation.ts';
-import { binding, toolsFor } from '../src/seat/tools.ts';
 import type {
 	ActivationView,
 	CommitRequest,

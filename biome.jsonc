@@ -91,8 +91,8 @@
 		//   room/                         every fact and every decision, pure over the journal
 		//   answers.ts                    what the room answers a seat's three calls with
 		//   tools/                        the workspace port, and the four tools over it
-		//   seat/                         the seat side of the wire: one activation at a time
-		//   room.ts                     the room, which composes them all
+		//   execution/                   the execution side of the wire and its services
+		//   room.ts                     the room facade, which composes them all
 		//
 		// `docs/toolchain.md` §1 names the layers; each override below refuses
 		// the imports its layer may not make.
@@ -116,8 +116,9 @@
 											"./journal/*",
 											"./room/*",
 											"./tools/*",
-											"./seat/*",
+											"./execution/*",
 											"./room.ts",
+											"./room-host.ts",
 											"./index.ts",
 											"./transport.ts"
 										],
@@ -144,8 +145,10 @@
 											"../journal/*",
 											"../room/*",
 											"../tools/*",
-											"../seat/*",
+											"../execution/runner*",
+											"../execution/compose*",
 											"../room.ts",
+											"../room-host.ts",
 											"../index.ts",
 											"../transport.ts"
 										],
@@ -173,8 +176,9 @@
 											"../protocol.ts",
 											"../room/*",
 											"../tools/*",
-											"../seat/*",
+											"../execution/*",
 											"../room.ts",
+											"../room-host.ts",
 											"../index.ts",
 											"../transport.ts"
 										],
@@ -200,8 +204,9 @@
 										"group": [
 											"../host/*",
 											"../tools/*",
-											"../seat/*",
+											"../execution/*",
 											"../room.ts",
+											"../room-host.ts",
 											"../index.ts",
 											"../transport.ts",
 											"@earendil-works/pi-*",
@@ -228,9 +233,10 @@
 									{
 										"group": [
 											"./tools/*",
-											"./seat/*",
+											"./execution/*",
 											"./host/*",
 											"./room.ts",
+											"./room-host.ts",
 											"./index.ts",
 											"./transport.ts",
 											"@earendil-works/pi-*",
@@ -258,8 +264,9 @@
 										"group": [
 											"../journal/*",
 											"../room/*",
-											"../seat/*",
+											"../execution/*",
 											"../room.ts",
+											"../room-host.ts",
 											"../index.ts",
 											"../transport.ts"
 										],
@@ -273,7 +280,7 @@
 			}
 		},
 		{
-			"includes": ["packages/ambion/src/seat/**"],
+			"includes": ["packages/ambion/src/execution/**"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -286,10 +293,40 @@
 											"../journal/*",
 											"../room/*",
 											"../room.ts",
+											"../room-host.ts",
 											"../index.ts",
 											"../transport.ts"
 										],
 										"message": "The seat side reaches its room through the wire alone: no log, no fold, no session."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The collaboration host uses protocol and room facts. Execution and
+			// provider services are composed by the public room facade.
+			"includes": ["packages/ambion/src/room-host.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"./execution/*",
+											"./room.ts",
+											"./index.ts",
+											"./transport.ts",
+											"@earendil-works/pi-*",
+											"@ambionframework/pi-journal"
+										],
+										"message": "The room host owns collaboration state; execution services belong to the facade."
 									}
 								]
 							}

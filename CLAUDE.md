@@ -78,7 +78,7 @@ Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
   every entry shares. `packages/pi-journal` owns Pi session persistence over
   that storage contract. Ambion owns only participants-as-values and
   the room. A third concern is a
-  design failure: push it into a dependency or drop it. `seat/render.ts` formats
+  design failure: push it into a dependency or drop it. `execution/render.ts` formats
   structured collaboration context for Pi. Summary guidance belongs with the
   seat executor; the room owns summary assignment and provenance.
   Both stay pure and stateless. What the room says to a developer stays with

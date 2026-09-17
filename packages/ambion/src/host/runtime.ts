@@ -11,9 +11,9 @@
  */
 
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
-import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
+import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { Api, Model, Models } from '@earendil-works/pi-ai';
+import { createExecutionServices } from '../execution/services.ts';
 import type { SeatPort, SeatRoom } from '../protocol.ts';
 import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
 
@@ -68,12 +68,25 @@ export interface RunningRoom {
 
 /**
  * How a room reaches a seat. In process, a port is the seat's own actor over
- * a direct handle on the room (`inProcessTransport` in `seat/seat.ts`);
+ * a direct handle on the room (`inProcessTransport` in `execution/runner.ts`);
  * across a boundary, a port carries the wake over, and the seat reaches
  * back through the same boundary.
  */
 export interface Transport {
 	connect(room: SeatRoom, context: SeatContext): SeatPort;
+}
+
+/** The collaboration host's narrow request for one configured seat port. */
+export interface ExecutionConnector {
+	connect(
+		room: SeatRoom,
+		request: {
+			readonly room: string;
+			readonly seat: string;
+			readonly definition: AgentDefinition;
+			readonly emit: (event: RoomNotification) => void;
+		},
+	): SeatPort;
 }
 
 export interface Runtime {
@@ -111,6 +124,25 @@ export interface Runtime {
 	evict(name: string): void;
 }
 
+/** Collaboration services that a room host may use. */
+export interface RoomRuntime {
+	readonly clock: Clock;
+	readonly journals: JournalOpener;
+	readonly wake: Runtime['wake'];
+	readonly retry: Runtime['retry'];
+	release(room: RunningRoom): void;
+}
+
+export function roomRuntime(runtime: Runtime, name: string): RoomRuntime {
+	return {
+		clock: runtime.clock,
+		journals: runtime.journals,
+		wake: runtime.wake,
+		retry: runtime.retry,
+		release: (room) => releaseRoom(runtime, name, room),
+	};
+}
+
 export interface CreateRuntimeOptions {
 	clock?: Clock;
 	transport?: Transport;
@@ -126,63 +158,29 @@ export interface CreateRuntimeOptions {
 	call?: Partial<Runtime['call']>;
 }
 
-/** The system clock, and one timer that never holds the process open. */
-export function systemClock(): Clock {
-	return {
-		now: () => Date.now(),
-		alarm(at, fire) {
-			const timer = setTimeout(fire, Math.max(0, at - Date.now()));
-			timer.unref?.();
-			return () => clearTimeout(timer);
-		},
-	};
-}
-
-/** Pi's model registry, built once on the first default model execution. */
-let builtinRegistry: Promise<Models> | undefined;
-const registry = () =>
-	(builtinRegistry ??= import('@earendil-works/pi-ai/providers/all').then(({ builtinModels }) =>
-		builtinModels(),
-	));
-
-/** The default model call: Pi's builtin registry, keyed from the provider's env var. */
-const registryStream: StreamFn = async (model, context, streamOptions) => {
-	const envKey = process.env[`${model.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
-	const resolved =
-		streamOptions?.apiKey || !envKey ? streamOptions : { ...streamOptions, apiKey: envKey };
-	return (await registry()).streamSimple(model, context, resolved);
-};
-
-/** `provider/model-id` through Pi's catalog. */
-const registryModel: ModelResolver = async (id, agent) => {
-	const slash = id.indexOf('/');
-	if (slash > 0) {
-		const model = (await registry()).getModel(id.slice(0, slash), id.slice(slash + 1));
-		if (model) return model;
-	}
-	throw new Error(`Unknown model '${id}' for agent '${agent}': expected 'provider/model-id'.`);
-};
-
-/** A custom stream never reads the model; a stub keeps Pi's loop satisfied. */
-export const stubModel: ModelResolver = (id) =>
-	({ id, name: id, api: 'scripted', provider: 'scripted' }) as unknown as Model<Api>;
+export { systemClock } from './clock.ts';
 
 export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const running = new Map<string, RunningRoom>();
 	const storage = options.storage ?? memoryJournals();
 	const journals = namespaced(storage, 'ambion/room');
-	const transcripts = piSessions(storage);
+	const services = createExecutionServices({
+		storage,
+		clock: options.clock,
+		call: options.call,
+		stream: options.stream,
+	});
 	const runtime: Runtime = {
-		clock: options.clock ?? systemClock(),
+		clock: services.clock,
 		storage,
 		journals,
-		transcripts,
+		transcripts: services.transcripts,
 		...(options.transport === undefined ? {} : { transport: options.transport }),
-		stream: options.stream ?? registryStream,
-		model: options.stream ? stubModel : registryModel,
+		stream: services.stream,
+		model: services.model,
 		wake: { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake },
 		retry: { attempts: 3, backoff: (attempt) => attempt * 30_000, ...options.retry },
-		call: { attempts: 2, ...options.call },
+		call: services.call,
 		evict(name) {
 			const room = running.get(name);
 			running.delete(name);

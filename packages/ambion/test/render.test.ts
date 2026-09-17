@@ -6,7 +6,7 @@
  * context tests; this file holds the one line.
  */
 import { describe, expect, it } from 'vitest';
-import { renderLine } from '../src/seat/render.ts';
+import { renderLine } from '../src/execution/render.ts';
 import type { Message } from '../src/types.ts';
 
 describe('one line of the record', () => {

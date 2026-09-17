@@ -1,7 +1,7 @@
 # Next: simplify Ambion for 0.1.0
 
-Reviewed against main `26a58f8`, after
-[PR #144](https://github.com/ambionframework/ambion/pull/144) merged.
+Reviewed against main `6a63f3a`, after
+[PR #145](https://github.com/ambionframework/ambion/pull/145) merged.
 The [Relay demo](../examples/persistent/README.md) is the reference consumer.
 Two follow-up Astra/High reviews and isolated SQLite/browser reproductions
 revisited the earlier subsystem review. Findings below distinguish reproduced
@@ -72,8 +72,9 @@ entries do not form one transaction, and rooms retain separate conversation cont
 **Items 1–2 merged in PRs #140–#142:** failed-stop recovery, explicit browser
 entry, coherent room/exchange reads, and partial-creation recovery.
 Item 3 defines cancellation through one atomic journal entry, merged in
-PR #143. Stop cleanup merged in PR #144. Contribution validation is prepared
-for review. Item 4, execution ownership, is next.
+PR #143. Stop cleanup merged in PR #144; contribution validation merged in
+PR #145. Execution ownership in item 4 is prepared for review. Participant
+vocabulary is next.
 
 ## 1. Keep commands and observation coherent in Relay
 
@@ -254,7 +255,8 @@ conversation context or cross-room atomicity.
       Rejected contributions write nothing and leave their keys available for
       corrected retries. Accepted text remains unchanged through direct calls;
       `say` retains input trimming and uses the room's refusal. Relay retains
-      HTTP validation and size limits. This change is prepared for review.
+      HTTP validation and size limits. Merged in PR #145 with all seven CI
+      checks passing.
 
 **Verification:** concurrent sends, newly owed summary work, failed and uncertain
 cancellation appends, retry, newer-run fencing, and uncooperative tools.
@@ -265,22 +267,22 @@ submission regression suites from PRs #137–#139.
 
 ### Compose execution outside the room
 
-The earlier executor separation is real, but `RoomHost` still stores `stream`,
-`model`, and `transcripts`, chooses `inProcessTransport`, and constructs a large
-`SeatContext`. Cloudflare's runner creates a runtime to obtain execution
-services, while its RPC connector only needs room/agent identity.
+**Prepared for review:** the public facade composes execution before starting
+`RoomHost`. The host receives journal, clock, retry, and cleanup dependencies
+plus a configured connector. Execution services remain outside that object.
+Cloudflare uses the same service factory without creating a room runtime.
 
-- [ ] Move Pi model resolution, provider calls, transcript setup, and local runner
+- [x] Move Pi model resolution, provider calls, transcript setup, and local runner
       construction into execution composition. Give the room a configured
       connector that captures those services and returns execution ports.
-- [ ] Remove those fields/imports and the local-executor fallback from
+- [x] Remove those fields/imports and the local-executor fallback from
       `RoomHost`; remove the temporary room runtime from Cloudflare runner setup.
       Preserve fixed per-run definitions, room-specific scripted streams, and
       room-local lookup of identically named agents.
-- [ ] Keep a thin default facade: ordinary applications still define agents and
+- [x] Keep a thin default facade: ordinary applications still define agents and
       start rooms without manually assembling an executor. Advanced placement
       continues through the existing hosting/transport boundary.
-- [ ] Organize internal components by ownership: pure collaboration queries and
+- [x] Organize internal components by ownership: pure collaboration queries and
       decisions, journal/host effects, and Pi execution. Move `seat/` execution
       code to `execution/` and use `AgentRunner` for `SeatActor` when touching
       that boundary. Membership is a seat; execution is a runner.

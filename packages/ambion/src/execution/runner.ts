@@ -1,21 +1,9 @@
 /**
- * A seat: one agent in one room, what wakes it, and the side of the wire
- * that runs its activations.
+ * Runs agent activations over the SeatRoom protocol.
  *
- * A seat is the agent plus what the room knows about it while it is seated:
- * where its attention sits on the scale, and whether an activation of it is
- * live. The agent definition is a value and says none of that: the same
- * definition is the quiet corner in one room and the one who meets people in
- * another.
- *
- * Three things live here. The routing rule, because it is a fact about a
- * seat rather than about the room: every message has a reach, and a seat
- * wakes when its attention is at least that wide. The seat's own actor: it
- * takes a wake, claims the lease, reads the room's view, builds the Pi
- * `Agent` over it with the tool its purpose permits (`tools.ts`), runs it,
- * renews the lease while it runs, and releases the lease when it stops.
- * And the transport that puts every seat in the room's own process. What
- * the actor knows of the room, it learns through three calls (`protocol.ts`).
+ * AgentRunner owns the Pi loop and transcript audit. The room owns routing,
+ * leases, and the collaboration record. Wake, steer, and cut reach this runner
+ * through the transport.
  */
 
 import type { SessionOpener } from '@ambionframework/pi-journal';
@@ -45,7 +33,7 @@ interface Current {
  * The seat's side of the wire. One actor per seat, for as long as the room
  * runs; one activation at a time, named by the wake that started it.
  */
-export class SeatActor implements SeatPort {
+export class AgentRunner implements SeatPort {
 	private readonly room: SeatRoom;
 	private readonly context: SeatContext;
 	private current: Current | undefined;
@@ -317,7 +305,7 @@ export class SeatActor implements SeatPort {
 export function inProcessTransport(): Transport {
 	return {
 		connect(room, context) {
-			return new SeatActor(room, context);
+			return new AgentRunner(room, context);
 		},
 	};
 }

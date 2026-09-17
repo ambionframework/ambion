@@ -3,10 +3,10 @@ import type { Api, Context, Model } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { type Clock, createRuntime, defineAgent } from '../src/index.ts';
 import {
+	AgentRunner,
 	type CommitResult,
 	type LeaseRequest,
 	type LeaseResponse,
-	SeatActor,
 	type SeatRoom,
 	type Steer,
 	type ViewResponse,
@@ -69,7 +69,7 @@ function actorFor(
 	modelResolver: (id: string, agent: string) => Promise<Model<Api>>,
 ) {
 	const runtime = createRuntime({ clock, stream });
-	return new SeatActor(room, {
+	return new AgentRunner(room, {
 		clock,
 		call: runtime.call,
 		definition: product,

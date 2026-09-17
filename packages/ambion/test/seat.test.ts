@@ -11,10 +11,10 @@ import { describe, expect, it } from 'vitest';
 import type { Message } from '../src/index.ts';
 import { type Clock, createRuntime, defineAgent } from '../src/index.ts';
 import {
+	AgentRunner,
 	type CommitResult,
 	type LeaseRequest,
 	type LeaseResponse,
-	SeatActor,
 	type SeatRoom,
 	type Steer,
 	type ViewResponse,
@@ -111,7 +111,7 @@ function play(stream: StreamFn = scripted(() => quiet()), transcripts?: SessionO
 	const clock = fakeClock();
 	const runtime = createRuntime({ clock, stream });
 	const room = new PlayedRoom(clock);
-	const actor = new SeatActor(room, {
+	const actor = new AgentRunner(room, {
 		clock,
 		call: runtime.call,
 		definition: product,

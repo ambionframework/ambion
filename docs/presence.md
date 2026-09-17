@@ -1,7 +1,7 @@
 # Presence
 
 Presence is the contract for people in a room. The implementation is in
-[`room.ts`](../packages/ambion/src/room.ts), with the durable fold in
+[`room-host.ts`](../packages/ambion/src/room-host.ts), with the durable fold in
 [`room/presence.ts`](../packages/ambion/src/room/presence.ts) and the message
 shapes in [`types.ts`](../packages/ambion/src/types.ts). Read
 [`agent.md`](agent.md) first: presence follows the same journal, routing, and
@@ -64,7 +64,7 @@ They wait on the journal and are available after the person returns.
 ## 4. The visit
 
 The public handle is deliberately small: a `human` definition, a live `since`
-cursor, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room.ts)
+cursor, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room-host.ts)
 for the exact TypeScript signature.
 
 `since` is a live read of the person's latest durable `left` message. It is
@@ -174,7 +174,7 @@ The people: andrei (present, has not seen the last 2 messages).
 · andrei arrived
 ```
 
-The full rendering rules are in [`seat/render.ts`](../packages/ambion/src/seat/render.ts).
+The full rendering rules are in [`execution/render.ts`](../packages/ambion/src/execution/render.ts).
 
 ## 10. Observing presence
 

@@ -40,10 +40,17 @@ it('builds every entry the manifest names', async () => {
 
 it('keeps the wire off the entry a host builds a room with', () => {
 	// A host that never runs a seat elsewhere reads none of these.
-	for (const name of ['SeatActor', 'inProcessTransport', 'assertWire', 'roundTrip']) {
+	for (const name of [
+		'AgentRunner',
+		'createExecutionServices',
+		'inProcessTransport',
+		'assertWire',
+		'roundTrip',
+	]) {
 		expect(transport).toHaveProperty(name);
 		expect(main).not.toHaveProperty(name);
 	}
+	expect(transport).not.toHaveProperty('SeatActor');
 	// The room primitives stay where a host looks for them.
 	for (const name of ['defineAgent', 'defineHuman', 'defineTool', 'fromPiTool', 'startRoom']) {
 		expect(main).toHaveProperty(name);
