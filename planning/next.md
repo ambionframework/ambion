@@ -1,7 +1,9 @@
 # Next: simplify Ambion for 0.1.0
 
-Reviewed against main `7a60a03`, 2026-09-16, after
-[PR #139](https://github.com/ambionframework/ambion/pull/139) merged.
+Reviewed against main `27148ba`, 2026-09-16, after
+PRs [#140](https://github.com/ambionframework/ambion/pull/140),
+[#141](https://github.com/ambionframework/ambion/pull/141), and
+[#142](https://github.com/ambionframework/ambion/pull/142) merged.
 The [Relay demo](../examples/persistent/README.md) is the reference consumer.
 Two follow-up Astra/High reviews and isolated SQLite/browser reproductions
 revisited the earlier subsystem review. Findings below distinguish reproduced
@@ -69,10 +71,10 @@ entries do not form one transaction, and rooms retain separate conversation cont
 | 5     | Reduce repeated projection work where measured                    | Ordinary reads and updates reuse one replayable interpretation                            | Measurement dependent |
 | 6     | Close release evidence and consumer gaps                          | Supported configurations are proven from shipped packages                                 | Independent slices    |
 
-**Prepared as three stacked PRs, awaiting review:** failed-stop recovery, explicit
-browser entry, and coherent room/exchange reads with partial-creation recovery.
-Items 1–2 below describe that implementation. The next work is item 3: define
-the cancellation boundary and enforce contribution rules at the kernel boundary.
+**Items 1–2 merged in PRs #140–#142:** failed-stop recovery, explicit browser
+entry, coherent room/exchange reads, and partial-creation recovery.
+Item 3 now defines cancellation through one atomic journal entry.
+Contribution validation and the separate stop-expiry gap remain next.
 
 ## 1. Keep commands and observation coherent in Relay
 
@@ -128,7 +130,7 @@ cannot recreate presence. Both behaviors use the existing kernel contracts.
 
 ## 2. Make room and exchange state directly readable
 
-**Third PR in the stack:** one detached read contract supplies initialization,
+**Merged in PR #142:** one detached read contract supplies initialization,
 metadata, exchange outcomes, and selective messages. Relay and Cloudflare use
 these journal facts; live exchange handles retain their waiting contracts.
 
@@ -232,20 +234,29 @@ conversation context or cross-room atomicity.
 
 ## 3. Complete control and contribution contracts
 
-- [ ] Make `abort()` awaitable with a defined boundary for concurrent sends and
-      newly owed work. The current bounded revocation loop does not establish
-      that boundary merely by returning its promise.
-- [ ] Specify whether cancellation includes closing work caused by the cancelled
-      discussion. Order admission, revocation, and closure through the journal.
-      Completion confirms durable authority changes. External tool termination
-      and reversal of file or remote effects remain separate concerns.
+- [x] Make `abort()` awaitable. One `cancel` entry ends prior work and closes
+      the current discussion without assigning a summary. Previously pending
+      summaries become failed; terminal outcomes remain unchanged. Later
+      messages can start fresh work. Same-handle retries retain the command key
+      until confirmation, so uncertain commits cannot cancel later work twice.
+      Implementation is prepared for review; it has not merged.
+- [x] Define completion as confirmation of durable authority changes.
+      External cuts remain best effort. Provider termination and reversal of
+      file or remote effects stay outside the journal transaction. See the
+      [cancellation contract](../docs/durability.md#cancellation).
+- [ ] Fix stop cleanup for expired running leases. Review found that `revoke()`
+      selects only live leases, while stopped rooms skip expiry reconciliation.
+      Resume can retry that work after an acknowledged stop. Define which
+      obligations stop settles while preserving the recorded open exchange;
+      do not reuse cancellation merely to close it. Test expiry before stop,
+      retry after storage failure, restart, and newer-run fencing.
 - [ ] Reject blank human and agent contributions inside collaboration decisions.
       Relay and `say` already reject them, but direct API/protocol calls can
       bypass that rule. Keep HTTP shape/size limits in the application.
 
 **Verification:** concurrent sends, newly owed summary work, failed and uncertain
-revocation, retry, newer-run fencing, and uncooperative tools. Exercise semantic
-validation through direct, protocol, and tool paths. Preserve the lifecycle and
+cancellation appends, retry, newer-run fencing, and uncooperative tools.
+Exercise semantic validation through direct, protocol, and tool paths. Preserve the lifecycle and
 submission regression suites from PRs #137–#139.
 
 ## 4. Finish ownership boundaries and names
@@ -441,7 +452,7 @@ status. The final API audit and release sign-off remain.
 - Same-named agents with different definitions already have coverage in
   [`bindings.test.ts`](../packages/ambion/test/bindings.test.ts); missing-composition
   resume rejection is covered in [`restart.test.ts`](../packages/ambion/test/restart.test.ts).
-  The third stacked PR adds missing-room reads and partial-creation recovery.
+  PR #142 adds missing-room reads and partial-creation recovery.
 - The CLI/Cloudflare prerelease and package discovery exist. Packed checks and
   migrations need updates for actual changes, not another initial extraction.
 

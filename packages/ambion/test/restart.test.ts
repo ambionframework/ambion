@@ -588,7 +588,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			expect(resumed.participants().find((s) => s.name === 'alpha')).toMatchObject({
 				status: 'active',
 			});
-			resumed.abort();
+			await resumed.abort();
 			await waitForRoom(resumed);
 			await tick();
 			// the seat side hears the cut over the wire, and the room opened it to say so
@@ -700,7 +700,7 @@ describe('a room dropped from memory', () => {
 		const { session, visit, opened, held } = await dropped();
 		await tick();
 		const before = (await storedOf(opened.journals, session.name)).length;
-		session.abort();
+		await expect(session.abort()).rejects.toThrow(/evicted|stopped|interrupted/i);
 		await tick();
 		await tick();
 		await visit.leave();

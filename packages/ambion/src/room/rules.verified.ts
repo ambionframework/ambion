@@ -42,3 +42,9 @@ export function nextAttempt(attempts: number): number {
 	//@ ensures \result >= 1
 	return attempts + 1;
 }
+
+//@ contract A cause before a cancellation marker belongs to cancelled work.
+export function beforeCancellation(position: number, cancelledAt: number): boolean {
+	//@ ensures \result <==> position < cancelledAt
+	return position < cancelledAt;
+}

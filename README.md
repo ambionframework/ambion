@@ -203,8 +203,9 @@ and the current evidence for each model.
   Continuing contributions can keep an exchange open.
 - Tools can act before a contribution commits. Applications own effect
   idempotency; conversation freshness does not make external effects transactional.
-- `abort()` and `stop()` affect the room. An exchange handle does not provide
-  independent cancellation of its agents.
+- Await `abort()` or `stop()` to confirm their durable room-wide work.
+  Exchange handles do not provide independent cancellation. See the
+  [cancellation contract](docs/durability.md#cancellation).
 - A process crash does not record a person's departure. Hosts reconcile
   durable presence with their actual connections after recovery.
 - Subscriptions belong to a running host. Reconnecting clients read durable

@@ -56,6 +56,8 @@ export type LeaseHold =
 	| (LeaseFact & {
 			phase: 'ended';
 			reason: EndReason;
+			/** Derived marker for a lease ended by a cancellation projection. */
+			cancelled?: true;
 			/** The seq when the end landed. */
 			until: Seq;
 	  });

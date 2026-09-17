@@ -46,6 +46,7 @@ export function summaryCompletion(
 	close: Pick<Close, 'owner' | 'from' | 'through' | 'summary'>,
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
+	cancelledAt?: number,
 ): SummaryOutcome {
 	const summary = messages.find(
 		(message): message is SummaryMessage =>
@@ -58,6 +59,16 @@ export function summaryCompletion(
 	if (summary !== undefined) return { status: 'published', summary };
 	const writer = close.summary;
 	if (writer === undefined) return { status: 'silent' };
+	return summaryDraftOutcome(close, writer, messages, leases, cancelledAt);
+}
+
+function summaryDraftOutcome(
+	close: Pick<Close, 'owner' | 'from' | 'through'>,
+	writer: string,
+	messages: readonly Message[],
+	leases: ReadonlyMap<string, LeaseHold>,
+	cancelledAt?: number,
+): SummaryOutcome {
 	if (
 		messages.some(
 			(message) =>
@@ -79,6 +90,15 @@ export function summaryCompletion(
 			(lease) =>
 				lease.phase === 'ended' && (lease.reason === 'revoked' || lease.reason === 'abandoned'),
 		);
+	const cancelledDraft =
+		cancelledAt !== undefined &&
+		close.through < cancelledAt &&
+		drafts.some(
+			(lease) => lease.phase === 'ended' && lease.reason === 'revoked' && lease.cancelled === true,
+		);
+	if (cancelledDraft) return { status: 'failed' };
+	if (!stoodDown && cancelledAt !== undefined && close.through < cancelledAt)
+		return { status: 'failed' };
 	if (!stoodDown) return { status: 'pending', writer };
 	// Preserve reads of histories with a running draft beside a terminal one.
 	if (drafts.some((lease) => lease.phase === 'running')) return { status: 'pending' };
@@ -91,11 +111,12 @@ function closedExchangeView(
 	close: Close,
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
+	cancelledAt?: number,
 ): Extract<ExchangeView, { status: 'closed' }> {
 	return {
 		...closedExchange(close, messages),
 		status: 'closed',
-		summary: summaryOutcome(close, messages, leases),
+		summary: summaryOutcome(close, messages, leases, cancelledAt),
 	};
 }
 
@@ -118,8 +139,9 @@ export function exchangeViews(
 	messages: readonly Message[],
 	open: Exchange | undefined,
 	leases: ReadonlyMap<string, LeaseHold>,
+	cancelledAt?: number,
 ): ExchangeView[] {
-	const closed = closes.map((close) => closedExchangeView(close, messages, leases));
+	const closed = closes.map((close) => closedExchangeView(close, messages, leases, cancelledAt));
 	return open === undefined ? closed : [...closed, { status: 'open', ...open }];
 }
 
@@ -127,8 +149,9 @@ function summaryOutcome(
 	close: Close,
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
+	cancelledAt?: number,
 ): SummaryOutcome {
-	const completion = summaryCompletion(close, messages, leases);
+	const completion = summaryCompletion(close, messages, leases, cancelledAt);
 	if (completion.status === 'published')
 		return { status: 'published', summary: copyMessage(completion.summary) };
 	if (completion.status === 'pending')

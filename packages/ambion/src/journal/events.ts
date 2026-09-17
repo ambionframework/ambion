@@ -22,6 +22,12 @@ export interface Close {
 	summary?: string;
 }
 
+/** A room-wide cancellation marker, with an optional close for open work. */
+export interface Cancellation {
+	at: string;
+	close?: Omit<Close, 'summary'>;
+}
+
 /** One seat in a composition: its name, how the room knows it, and what wakes it. */
 export interface Seating {
 	name: string;

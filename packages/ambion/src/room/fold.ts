@@ -25,6 +25,7 @@ import {
 	pendingWakes,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
+import { beforeCancellation } from './rules.verified.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends PendingActivation {
@@ -44,6 +45,8 @@ export interface RoomState {
 	readonly people: Map<string, PersonState>;
 	readonly exchange: Exchange | undefined;
 	readonly closes: Close[];
+	/** The latest cancellation marker, whose journal position bounds old work. */
+	readonly cancelledAt?: Seq;
 	readonly leases: Map<string, LeaseHold>;
 	readonly deliveries: Map<Seq, MessageDelivery>;
 	readonly pending: PendingWake[];
@@ -66,6 +69,7 @@ export interface FoldOptions {
 interface BaseFacts {
 	messages: Message[];
 	closes: Close[];
+	cancelledAt: Seq | undefined;
 	leases: Map<string, LeaseHold>;
 	composition: Composition | undefined;
 	deliveries: Map<Seq, MessageDelivery>;
@@ -75,6 +79,7 @@ interface BaseFacts {
 export const baseOf = (state: RoomState): BaseFacts => ({
 	messages: [...state.messages],
 	closes: [...state.closes],
+	cancelledAt: state.cancelledAt,
 	leases: new Map(state.leases),
 	composition: state.composition,
 	deliveries: new Map(state.deliveries),
@@ -84,6 +89,7 @@ export const baseOf = (state: RoomState): BaseFacts => ({
 const older = (): BaseFacts => ({
 	messages: [],
 	closes: [],
+	cancelledAt: undefined,
 	leases: new Map(),
 	composition: undefined,
 	deliveries: new Map(),
@@ -99,6 +105,12 @@ export function applyEvent(read: BaseFacts, entry: Entry): void {
 	}
 	if (entry.kind === 'close') {
 		read.closes.push(entry.body);
+		return;
+	}
+	if (entry.kind === 'cancel') {
+		read.cancelledAt = entry.seq;
+		cancelLeases(read.leases, entry.seq, entry.body.at);
+		if (entry.body.close !== undefined) read.closes.push(entry.body.close);
 		return;
 	}
 	if (entry.kind === 'lease') {
@@ -119,7 +131,7 @@ export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomS
 
 /** Derives all room views from the base facts. */
 export function project(read: BaseFacts, options: FoldOptions): RoomState {
-	const { messages, closes, leases, composition, deliveries } = read;
+	const { messages, closes, leases, composition, deliveries, cancelledAt } = read;
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
 	const isPerson = (name: string) => people.has(name);
@@ -130,8 +142,8 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
-	);
-	const owed = foldOwed(closes, messages, leases, options);
+	).filter((wake) => cancelledAt === undefined || wake.position >= cancelledAt);
+	const owed = foldOwed(closes, messages, leases, options, cancelledAt);
 	const state: RoomState = {
 		composition,
 		roster,
@@ -139,6 +151,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		people,
 		exchange,
 		closes,
+		cancelledAt,
 		leases,
 		deliveries,
 		pending,
@@ -148,6 +161,27 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		lastSeq: messages.at(-1)?.seq ?? 0,
 	};
 	return state;
+}
+
+/** A cancellation ends old leases while retaining their reads. */
+function cancelLeases(leases: Map<string, LeaseHold>, cancelledAt: Seq, at: string): void {
+	for (const [id, lease] of leases) {
+		const parsed = decodeActivationId(id);
+		if (
+			lease.phase === 'running' &&
+			parsed !== undefined &&
+			beforeCancellation(parsed.position, cancelledAt)
+		) {
+			leases.set(id, {
+				...lease,
+				phase: 'ended',
+				reason: 'revoked',
+				cancelled: true,
+				at,
+				until: cancelledAt,
+			});
+		}
+	}
 }
 
 function reserveOf(composition: Composition | undefined, roster: readonly Seating[]): Seating[] {
@@ -201,9 +235,10 @@ function foldOwed(
 	messages: readonly Message[],
 	leases: ReadonlyMap<string, LeaseHold>,
 	context: FoldOptions,
+	cancelledAt: Seq | undefined,
 ): Owed[] {
 	return closes.flatMap((close) => {
-		const completion = summaryCompletion(close, messages, leases);
+		const completion = summaryCompletion(close, messages, leases, cancelledAt);
 		if (completion.status !== 'pending' || completion.writer === undefined) return [];
 		return [
 			withAttempts(

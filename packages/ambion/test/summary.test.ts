@@ -799,7 +799,7 @@ describe('closing summaries', () => {
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
 		await drafting.promise;
-		session.abort();
+		await session.abort();
 		await waitForRoom(session);
 		expect(summaries(await session.messages())).toHaveLength(0);
 		expect(await currentExchange(session)).toBeUndefined();

@@ -209,7 +209,7 @@ export class RoomObject extends DurableObject<Env> {
 	}
 
 	async abort(): Promise<void> {
-		this.running().abort();
+		await this.running().abort();
 	}
 
 	async stop(): Promise<void> {
