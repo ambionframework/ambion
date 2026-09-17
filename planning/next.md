@@ -71,8 +71,8 @@ entries do not form one transaction, and rooms retain separate conversation cont
 
 **Current stack starts with failed-stop recovery in Relay.** The implementation
 retains cleanup ownership and supports retry after restart. Review remains open.
-Follow with explicit browser entry policy.
-Then prioritize item 2 as the largest architectural simplification. Cancellation
+The second change makes browser entry explicit.
+Prioritize item 2 as the largest architectural simplification. Cancellation
 needs a precise contract, but it does not block exposing existing journal facts.
 
 ## 1. Keep commands and observation coherent in Relay
@@ -103,10 +103,10 @@ The kernel's shared-presence contract is correct; Relay must choose entry policy
       Do not let handle existence alone determine either admission or success.
       Save stopped hosting intent after cleanup. An unacknowledged stop can
       resume after restart and remains retryable.
-- [ ] Keep polling read-only. Enter on room selection or deliberate restoration
+- [x] Keep polling read-only. Enter on room selection or deliberate restoration
       after reload. If a later snapshot reports absence, require deliberate
       reentry before sending again. Show that state in the composer.
-- [ ] Pause queued delivery after a presence rejection. Retain its original key
+- [x] Pause queued delivery after a presence rejection. Retain its original key
       and text; retry after explicit entry. A rejected late send must not cause
       polling to recreate presence and flush the message automatically.
 

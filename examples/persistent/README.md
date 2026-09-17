@@ -65,6 +65,9 @@ room before entering the next. Switch user leaves the current room and opens the
 identity picker. A reload restores the selected identity and room visit.
 Presence belongs to the person across clients; leaving ends their shared visit.
 Closing a tab does not automatically record a departure.
+Background polling never enters a room. If another client ends the shared
+visit, the composer offers **re-enter**. Queued messages keep their delivery
+keys and wait for deliberate entry. A stale poll cannot undo that pause.
 
 ## The sample team
 
