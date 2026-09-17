@@ -151,6 +151,7 @@ for the claims that need more than a unit test:
 
 | Claim                                                    | Evidence                                                                         |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Stop cleanup across expiry, storage failure, and restart | [`stop-work.test.ts`](../packages/ambion/test/stop-work.test.ts)                 |
 | Atomic cancellation, retry, and restart                  | [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)           |
 | Ordered publication and recovery after submission faults | [`submission.test.ts`](../packages/ambion/test/submission.test.ts)               |
 | Crash before/after every append, then same-key retry     | [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts)                         |

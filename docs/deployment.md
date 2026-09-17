@@ -94,9 +94,18 @@ all those clients. The host tracks tabs or sockets and calls `leave` only
 when its person-level presence policy requires it.
 
 `room.stop()` deliberately revokes work and records departures. It is a
-graceful end of that run. `runtime.evict(name)` drops local handles and
-observers without writing departures or releasing leases. Neither operation
-is a way to close one client's connection while keeping the room active.
+graceful end of that run. Shutdown settles every running lease, including
+expired leases, and every recorded pending activation. It also settles unread
+steering exposed by those revocations. Completion requires a confirmed journal
+read with no execution obligations left.
+
+Stop preserves an open exchange. A resumed run can close it and assign a new
+summary through normal reconciliation. An already assigned summary that stop
+revoked remains failed.
+
+`runtime.evict(name)` drops local handles and observers without writing
+departures or releasing leases. Neither operation closes one client's
+connection while keeping the room active.
 
 Concurrent `stop()` calls wait for the same shutdown operation. If a durable
 revocation or departure fails, callers observe that failure and may retry the
