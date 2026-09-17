@@ -4,11 +4,14 @@ import { decodeActivationId } from '../activation-id.ts';
 import type { ActivationSpec } from '../protocol.ts';
 import type { Seq } from '../types.ts';
 import type { RoomState } from './fold.ts';
+import { beforeCancellation } from './rules.verified.ts';
 
 /** Compile a stored activation id into one room authority. */
 export function activationSpec(id: string, state: RoomState): ActivationSpec | undefined {
 	const parsed = decodeActivationId(id);
 	if (parsed === undefined) return undefined;
+	if (state.cancelledAt !== undefined && beforeCancellation(parsed.position, state.cancelledAt))
+		return undefined;
 	if (!state.roster.some((candidate) => candidate.name === parsed.seat)) return undefined;
 	// A lease is tied to the message or close that caused it.  Once that seat
 	// leaves, an old activation stays stale even if the name is seated again.

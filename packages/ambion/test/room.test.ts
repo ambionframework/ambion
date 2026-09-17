@@ -375,7 +375,7 @@ describe('startRoom', () => {
 		expect(spoken(await faulty.messages())).toHaveLength(1);
 		// the failed activation is one attempt: the wake is pending again after the
 		// backoff, so the room is still working, and only an abort settles it now
-		faulty.abort();
+		await faulty.abort();
 		await waitForRoom(faulty);
 
 		// abort quiets an active room, keeping what was already said
@@ -388,7 +388,7 @@ describe('startRoom', () => {
 		const hungVisit = await hung.visit(andrei);
 		const hungEvents = collect(hung);
 		await hungVisit.send({ text: 'hang' });
-		hung.abort();
+		await hung.abort();
 		await waitForRoom(hung);
 		expect(hungEvents.some((e) => e.type === 'error')).toBe(false);
 		expect(spoken(await hung.messages())).toHaveLength(1);
@@ -410,7 +410,7 @@ describe('startRoom', () => {
 		await racingVisit.send({ text: 'hang' });
 		await racingStarted.promise;
 		await racingVisit.send({ text: 'mid-turn note' }); // queues a steer into the hung run
-		racing.abort();
+		await racing.abort();
 		await waitForRoom(racing);
 		expect(racingCalls).toBe(1);
 		expect(spoken(await racing.messages())).toHaveLength(2);
@@ -701,7 +701,7 @@ describe('startRoom', () => {
 		const visit = await enter(session);
 		await visit.send({ text: 'wait for me' });
 		await hangs.promise;
-		session.abort();
+		await session.abort();
 		await waitForRoom(session);
 		// the room ended the lease and told the seat, and the seat stopped: the room is idle
 		expect(cuts).toEqual(['message:4:solo:1']);

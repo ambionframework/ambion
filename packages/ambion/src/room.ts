@@ -53,6 +53,7 @@ import type {
 	Steer,
 	ViewResponse,
 } from './protocol.ts';
+import { activationSpec } from './room/activation.ts';
 import { closedExchange, summaryCompletion } from './room/exchange.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
@@ -175,8 +176,8 @@ export interface Room {
 	exchange(from: Seq): ExchangeHandle | undefined;
 	visit(human: HumanDefinition): Promise<Visit>;
 	stop(): Promise<void>;
-	/** Revoke every lease in flight. The room keeps running; `stop` ends it. */
-	abort(): void;
+	/** Cancel work at one durable journal boundary. The room keeps running. */
+	abort(): Promise<void>;
 	/**
 	 * Put a registered agent on the roster while the room runs. The seating lands on the record, and it wakes the seat it names.
 	 */
@@ -350,6 +351,9 @@ class RoomHost implements Room, RunningRoom {
 	private publications: Promise<void> = Promise.resolve();
 	/** A stop is one shared operation; a failed one may be retried after its promise clears. */
 	private stopInFlight: Promise<void> | undefined;
+	/** A cancellation append in flight, with its key retained across uncertainty. */
+	private abortInFlight: Promise<void> | undefined;
+	private abortKey: string | undefined;
 	private fold: { length: number; state: RoomState } | undefined;
 	private phase: Phase = 'starting';
 	/** This run's id: the fence it writes first, and the stamp on every entry it writes. */
@@ -668,7 +672,12 @@ class RoomHost implements Room, RunningRoom {
 		const state = this.state();
 		const recordedClose = state.closes.find((candidate) => candidate.from === close.from);
 		if (recordedClose === undefined) return 'silent';
-		const completion = summaryCompletion(recordedClose, state.messages, state.leases);
+		const completion = summaryCompletion(
+			recordedClose,
+			state.messages,
+			state.leases,
+			state.cancelledAt,
+		);
 		return completion.status === 'published' ? completion.summary : completion.status;
 	}
 
@@ -947,6 +956,7 @@ class RoomHost implements Room, RunningRoom {
 		if (entry.kind === 'message') this.queueMessage(entry);
 		else if (entry.kind === 'close') this.queueClose(entry.body);
 		else if (entry.kind === 'lease') this.queueLease(entry.body, this.opens(entry.body.id));
+		else if (entry.kind === 'cancel') this.queueCancellation(entry.body.close, entry.seq);
 	}
 
 	/** Queue one captured publication without making journal confirmation await listeners or transport. */
@@ -1034,6 +1044,30 @@ class RoomHost implements Room, RunningRoom {
 		});
 	}
 
+	/** A cancellation closes its current exchange and cuts every lease it superseded. */
+	private queueCancellation(close: Close | undefined, seq: Seq): void {
+		const state = this.state();
+		const revoked = [...state.leases.values()].filter(
+			(lease) => lease.phase === 'ended' && lease.reason === 'revoked' && lease.until === seq,
+		);
+		this.sentAt.clear();
+		if (close !== undefined) this.queueClose(close);
+		this.publish(() => {
+			for (const lease of revoked) {
+				const seat = seatOf(lease.id);
+				if (seat === undefined) continue;
+				this.cutPort(seat, lease.id);
+				if (this.heardLeases.has(lease.id))
+					this.emit({
+						type: 'activation_end',
+						agent: seat,
+						spoke: state.messages.some((message) => message.activationId === lease.id),
+					});
+			}
+			this.notifyExchangeWaiters();
+		});
+	}
+
 	/**
 	 * A lease change: the first change of an id starts an activation, and an
 	 * end ends one. A change that ends a lease the journal never held is a
@@ -1082,11 +1116,13 @@ class RoomHost implements Room, RunningRoom {
 	 * The delivery projection excludes authors and context-bound activations.
 	 */
 	private steer(steer: Steer): void {
+		if (activationSpec(steer.activation, this.state()) === undefined) return;
 		this.dispatch(steer.seat, (port) => port.steer(steer));
 	}
 
 	/** One activation wake over the wire. */
 	private send(id: string, seat: string): void {
+		if (activationSpec(id, this.state()) === undefined) return;
 		this.sentAt.set(id, this.now());
 		this.dispatch(seat, (port) => port.wake({ room: this.name, seat, activation: id }));
 	}
@@ -1341,10 +1377,35 @@ class RoomHost implements Room, RunningRoom {
 
 	// -- control ----------------------------------------------------------------
 
-	abort(): void {
-		// A room that is gone writes nothing more: the stop revoked what was live, or the next run does.
-		if (this.gone()) return;
-		void this.revoke(() => true);
+	async abort(): Promise<void> {
+		this.assertRunning();
+		if (this.abortInFlight !== undefined) return this.abortInFlight;
+		const key = this.abortKey ?? crypto.randomUUID();
+		this.abortKey = key;
+		const operation = this.cancel(key);
+		this.abortInFlight = operation;
+		try {
+			await operation;
+			this.abortKey = undefined;
+		} finally {
+			if (this.abortInFlight === operation) this.abortInFlight = undefined;
+		}
+	}
+
+	/** Append the cancellation marker after every earlier journal request. */
+	private async cancel(key: string): Promise<void> {
+		await this.ready;
+		this.assertRunning();
+		const appended = await this.submit(
+			'cancel',
+			() => {
+				if (this.gone()) return { event: undefined };
+				return decide(this.state(), { type: 'cancel' }, this.now());
+			},
+			key,
+		);
+		this.requireSubmission(appended);
+		if (!('entry' in appended)) throw new Error(`Room '${this.name}' stopped before cancellation.`);
 	}
 
 	/**

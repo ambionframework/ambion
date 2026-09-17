@@ -1,8 +1,6 @@
 /**
- * Abort cancels a real request. `docs/agent.md` §5: `abort()` is Pi's own
- * abort fanned out, what was mid-flight ends without speaking, and the room
- * is still running afterwards. A scripted stream answers an abort by script;
- * a real one has an open HTTP stream to close.
+ * Cancellation records one durable cut. Provider and tool termination remains
+ * best effort, and the room stays available for a later exchange.
  */
 import { expect, it } from 'vitest';
 import { enter } from '../support/room.ts';
@@ -43,7 +41,7 @@ live('control', () => {
 		await within(started, 30_000, 'the activation starting');
 		// Long enough for the request to be open and streaming; too short for an essay.
 		await settle(2_000);
-		session.abort();
+		await session.abort();
 		await within(exchange.messages(), 15_000, 'the exchange closing after abort');
 
 		expect(saidBy(await session.messages(), 'essayist')).toEqual([]);

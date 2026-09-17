@@ -166,7 +166,7 @@ async function roomRoute(
 	if (request.method === 'GET') return read(rooms, name, resource, id, url, response);
 	if (resource === 'humans') return human(rooms, name, id ?? '', request, response);
 	if (request.method !== 'POST' || id) fail(405, 'Use POST for lifecycle operations.');
-	reply(response, resource === 'abort' ? 202 : 200, await rooms.lifecycle(name, resource));
+	reply(response, 200, await rooms.lifecycle(name, resource));
 }
 async function collection(rooms: Rooms, request: IncomingMessage, response: ServerResponse) {
 	if (request.method === 'GET') return reply(response, 200, await rooms.list());

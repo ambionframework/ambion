@@ -91,7 +91,7 @@ it('wakes, runs the activation on its alarm, and the room sends an untaken wake 
 	expect(await room.exchange(secondExchange.from)).toEqual(secondExchange);
 });
 
-it('takes the cut the room sends over RPC when it revokes a wake', async () => {
+it('cancels an unclaimed wake over RPC and closes its exchange', async () => {
 	const room = env.ROOM.get(env.ROOM.idFromName('cut-test'));
 	const seat = env.SEAT.get(
 		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'cut-test', 'product'])),
@@ -109,29 +109,18 @@ it('takes the cut the room sends over RPC when it revokes a wake', async () => {
 	// runner's speed and not the room's behaviour.
 	expect(await until(() => seat.wakes())).toBeGreaterThanOrEqual(1);
 
-	// the room writes off every wake it owes, and tells the seat side over the wire
+	// The room records the cancellation and writes off the unclaimed wake.
 	await room.abort();
-	expect(await until(() => seat.cuts())).toBe(1);
-	// the lease the room revoked ends on the record, so the alarm claims nothing
-	const revoked = await until(async () =>
-		runInDurableObject(room, async (_instance, state) => {
-			const journal = await namespaced(sqlStorage(state), 'ambion/room').open('cut-test');
-			const stored = (await journal.read(0)).entries.map(
-				(entry) =>
-					entry.entry as {
-						kind: string;
-						body: LeaseObservation;
-					},
-			);
-			const leases = stored.filter((entry) => entry.kind === 'lease').map((entry) => entry.body);
-			return leases.find((lease) => lease.phase === 'ended' && lease.reason === 'revoked');
-		}),
+	const cancelled = await room.read({ messages: false });
+	expect(cancelled.exchange).toBeUndefined();
+	expect(cancelled.exchanges).toContainEqual(
+		expect.objectContaining({ status: 'closed', from: exchange.from }),
 	);
-	expect(revoked).toMatchObject({ id: 'message:4:product:1', reason: 'revoked' });
-	await runDurableObjectAlarm(seat);
-	// The revoked exchange still closes durably and remains addressable by its
-	// opening sequence, while the product has no answer to publish.
+	// The RPC returns after the durable cancellation cut and exchange close.
 	await room.exchangeMessages(exchange.from);
+	await runDurableObjectAlarm(seat);
+	// The revoked exchange remains addressable by its opening sequence, while
+	// the product has no answer to publish.
 	expect(await room.exchange(exchange.from)).toEqual(exchange);
 	const messages: Message[] = await room.messages();
 	expect(messages.filter((m) => m.from === 'product')).toEqual([]);

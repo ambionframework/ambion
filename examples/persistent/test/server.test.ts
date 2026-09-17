@@ -402,8 +402,19 @@ describe('persistent browser host', () => {
 		const people = await request(base, '/people');
 		const aborted = await request(base, '/rooms/design/abort', { method: 'POST' });
 		controller.abort();
+		const status = await request(base, '/rooms/design');
 		expect(exchange.status).toBe(200);
 		expect(people.response.status).toBe(200);
-		expect(aborted.response.status).toBe(202);
+		expect(aborted.response.status).toBe(200);
+		expect((aborted.body as { exchange?: unknown }).exchange).toBeUndefined();
+		expect((aborted.body as { exchanges: unknown[] }).exchanges).toContainEqual(
+			expect.objectContaining({
+				from: (sent.body as { from: number }).from,
+				status: 'closed',
+				summary: { status: 'silent' },
+			}),
+		);
+		expect(status.response.status).toBe(200);
+		expect((status.body as { exchange?: unknown }).exchange).toBeUndefined();
 	});
 });

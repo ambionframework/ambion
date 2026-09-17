@@ -114,13 +114,15 @@ The same message API handles both new questions and steering.
 | Create room | Save its name and goal, start its team, and join as the selected person  |
 | Stop        | Revoke room work and record human departures; preserve history and files |
 | Resume      | Host the existing room again from its journal                            |
-| Abort work  | Request cancellation while the room remains available                    |
+| Abort work  | Confirm cancellation while the room remains available                    |
 | Select room | Leave the current room and enter the selected room                       |
 | Switch user | Leave the current room and choose another predefined identity            |
 
 Stop cancels work rather than pausing a model call. Resume does not undo that
-cancellation. Abort requests cancellation without ending human visits or stopping
-the room; its HTTP acknowledgement does not mean cancellation has finished.
+cancellation. Abort keeps human visits and the room available. Its HTTP response
+confirms durable cancellation; later prompts can start fresh work. Provider calls
+or tools may still be exiting. See the
+[cancellation contract](../../docs/durability.md#cancellation).
 
 A failed stop leaves the room `stopping` and rejects new messages. Retry the
 stop request to finish cleanup. Resume first finishes that cleanup, then opens
@@ -216,7 +218,7 @@ to keep that room stopped across server restarts.
 | `GET /people`                                              | Predefined human identities                                                |
 | `GET /rooms`                                               | Rooms, running status, participants, current exchange, and recent activity |
 | `POST /rooms` with `{name, goal}`                          | Create and start a room                                                    |
-| `POST /rooms/:room/resume`, `/stop`, `/abort`              | Room lifecycle operations; abort returns 202 while cancellation proceeds   |
+| `POST /rooms/:room/resume`, `/stop`, `/abort`              | Room lifecycle operations; abort returns 200 after durable cancellation    |
 | `PUT /rooms/:room/humans/:person`                          | Join as a predefined human                                                 |
 | `POST /rooms/:room/humans/:person` with `{key, text, to?}` | Send as a present human and return `{from, owner, at}` after acceptance    |
 | `DELETE /rooms/:room/humans/:person`                       | Record the person's departure                                              |

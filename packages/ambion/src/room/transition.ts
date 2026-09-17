@@ -35,10 +35,17 @@ type LeaseCommand =
 type ComposeCommand = { type: 'compose'; composition: Body<Composition> };
 type CloseCommand = { type: 'close'; close: Close };
 type RunCommand = { type: 'run' };
+type CancelCommand = { type: 'cancel' };
 type ReconcileCommand = { type: 'reconcile'; options: Omit<ReconcileOptions, 'now'> };
 
 export type RoomCommand =
-	MessageCommand | LeaseCommand | ComposeCommand | CloseCommand | RunCommand | ReconcileCommand;
+	| MessageCommand
+	| LeaseCommand
+	| ComposeCommand
+	| CloseCommand
+	| RunCommand
+	| CancelCommand
+	| ReconcileCommand;
 
 export type Refusal =
 	{ category: 'stale' | 'refused'; reason: string } | { category: 'missed'; missed: Message[] };
@@ -73,6 +80,11 @@ export function decide(
 ): RoomDecision<'composition'>;
 export function decide(state: RoomState, command: CloseCommand, now: number): RoomDecision<'close'>;
 export function decide(state: RoomState, command: RunCommand, now: number): RoomDecision<'run'>;
+export function decide(
+	state: RoomState,
+	command: CancelCommand,
+	now: number,
+): RoomDecision<'cancel'>;
 export function decide(state: RoomState, command: ReconcileCommand, now: number): ReconcileDecision;
 /** Decide against the state read inside the journal's write queue. Time is an explicit input. */
 export function decide(
@@ -106,6 +118,25 @@ export function decide(
 			};
 		case 'run':
 			return { event: { kind: 'run', body: { at: iso(now) } } };
+		case 'cancel':
+			return {
+				event: {
+					kind: 'cancel',
+					body: {
+						at: iso(now),
+						...(state.exchange === undefined
+							? {}
+							: {
+									close: {
+										owner: state.exchange.owner,
+										from: state.exchange.from,
+										through: state.lastSeq,
+										at: iso(now),
+									},
+								}),
+					},
+				},
+			};
 		case 'reconcile':
 			return reconcile(state, command, now);
 	}

@@ -34,7 +34,13 @@ export function readView(
 			watermark,
 		};
 
-	const exchanges = exchangeViews(state.closes, state.messages, state.exchange, state.leases);
+	const exchanges = exchangeViews(
+		state.closes,
+		state.messages,
+		state.exchange,
+		state.leases,
+		state.cancelledAt,
+	);
 	const current = exchanges.find(
 		(exchange): exchange is Extract<ExchangeView, { readonly status: 'open' }> =>
 			exchange.status === 'open',

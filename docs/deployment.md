@@ -263,8 +263,10 @@ it does not certify the correctness of each contribution.
 remote runner with a valid lease require different handling. Lease expiry and
 host topology affect recovery time.
 
-**Control and observation belong to the running room.** `abort()` and `stop()`
-affect room work. Exchange handles do not provide independent cancellation.
+**Control and observation belong to the running room.** Await `abort()` and
+`stop()` before reporting their durable work complete. See the
+[cancellation contract](durability.md#cancellation). Exchange handles do not
+provide independent cancellation.
 Subscriptions belong to one host; 0.1.0 includes no durable subscription service
 across processes.
 

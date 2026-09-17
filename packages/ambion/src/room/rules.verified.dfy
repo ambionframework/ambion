@@ -60,3 +60,13 @@ lemma nextAttempt_ensures(attempts: int)
   ensures (nextAttempt(attempts) >= 1)
 {
 }
+
+function beforeCancellation(position: int, cancelledAt: int): bool
+{
+  (position < cancelledAt)
+}
+
+lemma beforeCancellation_ensures(position: int, cancelledAt: int)
+  ensures (beforeCancellation(position, cancelledAt) <==> (position < cancelledAt))
+{
+}

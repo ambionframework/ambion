@@ -158,7 +158,7 @@ export async function openRooms(
 					save(entry);
 					break;
 				case 'abort':
-					liveRoom(entry).abort();
+					await liveRoom(entry).abort();
 					break;
 				default:
 					fail(404, 'Unknown lifecycle action.');

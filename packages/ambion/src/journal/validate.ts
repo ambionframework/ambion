@@ -16,6 +16,15 @@ const activationId = Type.Optional(Type.String());
 const commonMessage = { activationId, wakes, at: Type.String() };
 const seating = Type.Object({ name: Type.String(), identity: Type.String(), attention }, extra);
 const covers = Type.Object({ from: seq, through: seq }, extra);
+const cancelClose = Type.Object(
+	{
+		owner: Type.String(),
+		from: seq,
+		through: seq,
+		at: Type.String(),
+	},
+	{ additionalProperties: false },
+);
 
 const messageSchemas: Record<string, TSchema> = {
 	said: Type.Object(
@@ -114,6 +123,7 @@ const schemas: Record<Kind, TSchema> = {
 		extra,
 	),
 	run: Type.Object({ at: Type.String() }, extra),
+	cancel: Type.Object({ at: Type.String(), close: Type.Optional(cancelClose) }, extra),
 };
 
 /** Validate a room journal body. Unknown entry kinds stay outside this vocabulary. */

@@ -111,6 +111,10 @@ The watermark includes close and lease entries. Activity can change when a lease
 expires without another append, so the watermark cannot validate a cached view.
 See [`RoomSnapshot` and `ExchangeView`](../packages/ambion/src/types.ts) for types.
 
+Cancellation closes the current discussion without assigning a new summary. It
+settles existing pending summary work as failed. See the
+[cancellation contract](durability.md#cancellation) for ordering and retry behavior.
+
 ## 7. What reads one
 
 - The summary writer receives one dedicated closing activation and may write a

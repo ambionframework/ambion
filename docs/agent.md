@@ -107,8 +107,8 @@ activations, leases, routing, exchange boundaries, and completion by folding
 recorded entries. A host can resume the same behavior by replaying the journal.
 
 The journal records messages, membership changes, leases, exchange closes,
-composition, and run fences. It also records the activation id that authorized
-an agent contribution. The room stamps provenance fields; callers cannot claim
+composition, cancellation boundaries, and run fences. It also records the
+activation id that authorized an agent contribution. The room stamps provenance fields; callers cannot claim
 another participant's name.
 
 The room serializes accepted writes. Agents can reason concurrently. A speech

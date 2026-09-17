@@ -86,6 +86,33 @@ the record. Transcript audit failure is reported separately as `audit_error`;
 it does not turn successful or deliberately silent collaboration into failed
 work, and no durable audit backlog is promised.
 
+## Cancellation
+
+**`await room.abort()` confirms one durable cancellation boundary.** The journal
+orders cancellation with messages and executor commits. Work before that boundary
+loses publication authority, including expired leases, pending retries, and unread
+steering. Messages recorded afterward can start fresh work. Membership and human
+presence remain unchanged.
+
+Cancellation closes the current exchange without assigning a summary. An existing
+pending summary becomes failed; a published or settled outcome remains unchanged.
+The cancellation entry records these effects atomically. Replay applies the same
+boundary, so restart cannot revive cancelled work.
+
+Concurrent calls share one operation. If storage rejects or leaves the write in
+doubt, retry `abort()` on the same room handle. The handle retains its request key
+until confirmation. If that entry already committed, the retry acknowledges it
+without cancelling newer work. A call after confirmed success is a new cancellation.
+Stopped or evicted handles reject cancellation.
+
+Completion confirms journal authority changes. Executor cuts are best effort;
+completion does not wait for a provider or tool to exit or reverse external effects.
+Hosts must await the promise before reporting cancellation as complete.
+
+**Storage compatibility:** cancellation adds the `cancel` journal entry kind.
+Current runtimes read existing journals. Older runtimes must not resume a journal
+that contains cancellation entries, because they do not interpret that boundary.
+
 ## 5. What the room does not promise
 
 The room does not promise exactly-once model execution or external side effects.
@@ -124,6 +151,7 @@ for the claims that need more than a unit test:
 
 | Claim                                                    | Evidence                                                                         |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Atomic cancellation, retry, and restart                  | [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)           |
 | Ordered publication and recovery after submission faults | [`submission.test.ts`](../packages/ambion/test/submission.test.ts)               |
 | Crash before/after every append, then same-key retry     | [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts)                         |
 | Host handover and lease retry under load                 | [`hosts.test.ts`](../packages/ambion/test/hosts.test.ts)                         |

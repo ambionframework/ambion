@@ -75,6 +75,7 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 function liveSeatOf(room: Answering, id: string, state: RoomState): string | undefined {
 	const lease = state.leases.get(id);
 	if (lease === undefined || !isLive(lease, room.now())) return undefined;
+	if (activationSpec(id, state) === undefined) return undefined;
 	const seat = seatOf(id);
 	return seat !== undefined && onRoster(state, seat) ? seat : undefined;
 }
