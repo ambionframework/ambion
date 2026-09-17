@@ -69,7 +69,7 @@ const scenarios: readonly Scenario[] = [
 		name: 'launch',
 		person: 'cara',
 		request:
-			'Read the brief and prototype. Draft accurate release notes and flag any needed decision.',
+			'Read the brief and prototype. Draft accurate release notes, save them to /shared/launch.md, and flag any needed decision.',
 		specialists: ['writer'],
 		artifact: '/shared/launch.md',
 		artifactCheck: (text) => expect(text).not.toContain('Status: not written.'),
@@ -136,7 +136,7 @@ live('Relay assistant', () => {
 					const artifact = await readWorkspace(base, scenario.artifact);
 					expect(artifact.status).toBe(200);
 					expect(artifact.text.trim()).not.toBe('');
-					expect(artifact.text).not.toBe(original?.text);
+					expect(artifact.text, JSON.stringify(messages, null, 2)).not.toBe(original?.text);
 					scenario.artifactCheck(artifact.text);
 				}
 			} finally {
@@ -162,7 +162,7 @@ live('Relay assistant', () => {
 				method: 'POST',
 				body: JSON.stringify({
 					key: 'relay-live-launch-revision-first',
-					text: 'Draft accurate release notes from the current prototype and brief.',
+					text: 'Draft accurate release notes from the current prototype and brief, and save them to /shared/launch.md.',
 				}),
 			});
 			expect(first.status).toBe(202);
@@ -173,7 +173,7 @@ live('Relay assistant', () => {
 				method: 'POST',
 				body: JSON.stringify({
 					key: 'relay-live-launch-revision-second',
-					text: "Revise the draft: change the opening sentence to exactly 'Relay keeps handoffs visible.' and keep the draft under 100 words.",
+					text: "Revise /shared/launch.md: change the opening sentence to exactly 'Relay keeps handoffs visible.' and keep the draft under 100 words.",
 				}),
 			});
 			expect(second.status).toBe(202);
