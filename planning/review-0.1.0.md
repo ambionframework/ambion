@@ -73,10 +73,20 @@ only when two names currently mean one thing, or one name means two things.
 | E6  | Provenance for resources                                | Positioning | Small  |
 | E7  | The human patterns the room represents                  | Positioning | Small  |
 | E8  | Delegation by reference, with no task database          | Positioning | 0.2    |
+| F2  | A session with passes as the executor contract          | Adapters    | Medium |
+| F3  | Three prompt parts and a delta render                   | Adapters    | Small  |
+| F4  | Speech through say; one step vocabulary                 | Adapters    | Medium |
+| F5  | Steering by capability, correctness by freshness        | Adapters    | Small  |
+| F6  | Room tools on every surface                             | Adapters    | Medium |
+| F7  | The activation trace, durable and live                  | Adapters    | Medium |
+| F8  | The drill-down read path                                | Adapters    | Small  |
+| F9  | Harness memory across activations                       | Adapters    | Small  |
+| F10 | Ship two adapters and test them with fakes              | Adapters    | Large  |
 
 Section D names scope the release documents do not. Section E reads the
-code against the positioning. Section F assesses the open pull requests.
-Section G proposes the order.
+code against the positioning. Section F reads four harness surfaces and
+defines the adapter and the activation trace. Section G assesses the open
+pull requests. Section H proposes the order.
 
 ## A. Correctness
 
@@ -150,7 +160,7 @@ mutable cache, and the Cloudflare object writes a person's identity before
 admission.
 
 **Solution.** PR #152 addresses all three with no new public room API and
-one new journal method, `entriesFrom(start)`. Section F reviews it. Merge it
+one new journal method, `entriesFrom(start)`. Section G reviews it. Merge it
 before the exchange outcome work and before B1.
 
 **Impact.** A retry after a lost acknowledgement can only return its own
@@ -255,7 +265,7 @@ limits: {
 ```
 
 Document the two constants in the same table. Apply the rename before the
-API freeze in section G.
+API freeze in section H.
 
 **Impact.** One table answers every question about time and retry. The
 Cloudflare `configure()` options and the runtime options read the same way.
@@ -568,7 +578,7 @@ is a dated review under `docs/`. `LemmaScript-files.txt` sits at the root.
 The repository has no changelog. PR #40 proposed one in 2026-09-03 and only
 its directory move landed.
 
-**Solution.** Reduce `next.md` to the ordered checklist in section G with
+**Solution.** Reduce `next.md` to the ordered checklist in section H with
 one link per item to its design note. Move dated evidence to
 `planning/evidence/` and link it from the release document. Move the
 LemmaScript list under `scripts/` if the verifier permits a path. Add
@@ -877,7 +887,8 @@ the driver runs another pass with a fresh view. Ship Pi as
 persistence inside it. The kernel's own scripted tests run on a scripted
 executor that needs no Pi at all.
 
-**Impact.** A framework adapter is one function. Leases, renewals, cuts,
+**Impact.** A framework adapter is one function (F2 refines it to a
+session with passes). Leases, renewals, cuts,
 and freshness are proved once, in the kernel, for every framework. The
 conformance suite (D6) tests the driver against a scripted executor and any
 adapter against the same cases.
@@ -1013,7 +1024,7 @@ exchange. The pattern table becomes a page in `docs/room.md`.
 
 **Problem.** PR #151 represents delegation as a task record with status,
 owner, subscriptions, and event history stored in the journal, plus a
-working-room registry and a protocol extension. The review in section F
+working-room registry and a protocol extension. The review in section G
 found unbounded growth and a cancelled stop. The pattern is real: an agent
 hands work to a group and continues.
 
@@ -1034,7 +1045,306 @@ positioning stays true: the journal is the source and rooms compose.
 they are public API changes that the freeze must include. E3 is in as an
 example with a fake harness in CI. E8 is the 0.2 design.
 
-## F. In-flight pull requests
+## F. Harness adapters and the activation trace
+
+**Four surfaces, two families.** Pi's agent core and the Anthropic SDK tool
+runner give the caller the loop: the caller builds the request, receives
+events, runs tools, and decides when to stop. The Claude Agent SDK and the
+Codex SDK own the loop: the caller opens a session, sends input, and reads
+events. An adapter for the first family binds tools and reads a stream. An
+adapter for the second family drives a session and reads items. The
+executor contract in E2 must fit both families, and the step vocabulary in
+F4 must be one, so that a person can open a room, an exchange, an
+activation, and the work inside it, on any surface.
+
+### F1. What each surface offers
+
+The table reads the four surfaces as their sources describe them on
+2026-09-17: the Pi agent core 0.84.3 declarations installed in this
+repository and the Pi SDK documentation, the Anthropic TypeScript SDK page,
+the Claude Agent SDK TypeScript reference and its hooks page, and the Codex
+TypeScript SDK sources (`events.ts`, `items.ts`, `thread.ts`,
+`threadOptions.ts`).
+
+| Capability         | Pi agent core                                                                                       | Anthropic SDK tool runner           | Claude Agent SDK                                                                                                   | Codex SDK                                                                                                                                      |
+| ------------------ | --------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Loop owner         | Caller                                                                                              | SDK helper, caller hosted           | Harness                                                                                                            | Harness                                                                                                                                        |
+| Start              | `new Agent({...})`, `prompt()`                                                                      | `client.beta.messages.toolRunner()` | `query({ prompt, options })`                                                                                       | `codex.startThread(options)`, `thread.run()`                                                                                                   |
+| Steer during a run | `agent.steer(message)`, delivered after the current turn's tool calls                               | Between turns, in the caller's loop | `prompt` as `AsyncIterable<SDKUserMessage>`; a message yields while a turn runs                                    | None; the next `run` on the same thread                                                                                                        |
+| Cut                | `agent.abort()`                                                                                     | `stream.controller.abort()`         | `query.interrupt()` or `abortController`                                                                           | `TurnOptions.signal`                                                                                                                           |
+| Stream             | `message_update` with `text_delta` and `thinking_delta`                                             | `content_block_delta` events        | `includePartialMessages` gives `stream_event` with content block deltas                                            | `item.started`, `item.updated`, `item.completed`                                                                                               |
+| Thinking           | `ThinkingContent` blocks and deltas                                                                 | `thinking` blocks                   | `thinking` blocks in assistant messages                                                                            | `reasoning` items with text                                                                                                                    |
+| Tool calls         | `tool_execution_start` with `args`, `_update` with `partialResult`, `_end` with `result`, `isError` | Runner hooks and `tool_use` blocks  | `tool_use` and `tool_result` messages; `PreToolUse`, `PostToolUse`, `PostToolUseFailure` hooks                     | `command_execution` (command, output, exit code), `file_change` (paths, kind), `mcp_tool_call` (server, tool, arguments, result), `web_search` |
+| Room tools         | `AgentTool` with TypeBox parameters                                                                 | `betaZodTool` or a JSON Schema tool | `createSdkMcpServer` with `tool()` in process, or a stdio MCP server                                               | A stdio MCP server through `config.mcp_servers`                                                                                                |
+| Usage              | `AssistantMessage.usage`: tokens and cost                                                           | `message.usage`                     | `usage` and `cost` on assistant and tool result messages; a `cost` message                                         | `turn.completed.usage`: input, cached, cache write, output, reasoning tokens; no cost                                                          |
+| Failure            | `stopReason` `error` with `errorMessage`; `length`; `aborted`                                       | Typed errors with `status`          | `result` subtypes; the `StopFailure` hook                                                                          | `turn.failed` with `error`; `error` items                                                                                                      |
+| Resume             | Session tree in the Pi journal                                                                      | The caller's history array          | `resume`, `continue`, `forkSession`, `resumeSessionAt`                                                             | `resumeThread(id)`; threads persist under `~/.codex/sessions`                                                                                  |
+| Policy             | The caller's tools                                                                                  | The caller's tools                  | `permissionMode`, `allowedTools`, `canUseTool`, the `PermissionRequest` hook, `maxBudgetUsd`, `maxTurns`, `effort` | `sandboxMode`, `approvalPolicy`, `modelReasoningEffort`, `networkAccessEnabled`                                                                |
+| Place              | None                                                                                                | None                                | `cwd`, `additionalDirectories`                                                                                     | `workingDirectory`, `additionalDirectories`                                                                                                    |
+
+**Three facts shape the adapter.** Every surface streams text, thinking, and
+tool activity with enough identity to rebuild a step list. Every surface
+reports usage. Two surfaces take a message during a run and two do not, so
+steering is a capability an adapter declares, and the kernel's correctness
+rests on freshness alone (F5).
+
+### F2. The executor contract, refined: a session with passes
+
+**Problem.** E2 defined one `run(pass)` call. Two facts from the matrix
+change the shape. A harness keeps its own session between turns, so a
+second pass on a fresh session throws away the harness's context, its tool
+results, and its cache. The Pi executor does this today, because
+`Activation.pass()` builds a new `Agent` for every pass and the model reads
+the whole record again. And a harness resumes by id, so an activation that
+lost its process can continue where the harness left off.
+
+**Solution.** Make the unit a session and the pass a turn on it.
+
+```ts
+interface Executor {
+  open(activation: {
+    spec: ActivationSpec;
+    tools: readonly RoomTool[];
+    trace: TraceSink;
+    signal: AbortSignal;
+  }): Promise<ExecutorSession>;
+}
+interface ExecutorSession {
+  /** One turn. The first pass takes the whole view; a later pass takes what landed since. */
+  pass(input: PassInput): Promise<PassResult>;
+  /** Deliver a message during a pass. Absent when the harness cannot take one. */
+  steer?(steer: Steer): Promise<void>;
+  close(): Promise<void>;
+}
+type PassInput =
+  { kind: 'view'; view: ActivationView } | { kind: 'delta'; since: Seq; view: ActivationView };
+interface PassResult {
+  readThrough: Seq;
+  stop: 'stopped' | 'length' | 'aborted';
+  failure?: { cause: 'permanent' | 'transient'; error: Error };
+  session?: { harness: string; id: string };
+}
+```
+
+The driver in the kernel keeps what it has: the lease, the renewal at half
+the lease, the cut, the wake queue, the freshness check, and the decision to
+run another pass. It renders a delta for every pass after the first. It
+records `session` on the lease release so a later read can find the
+harness's own transcript.
+
+**Impact.** A Claude Code activation keeps its file reads across a steer.
+The Pi executor keeps its `Agent` across passes and calls `prompt()` with
+the delta. Token cost per pass follows what changed.
+
+### F3. Input: three prompt parts and a delta
+
+**Problem.** `renderActivation` returns one system prompt and one context
+string, shaped for Pi. A harness has a system prompt of its own and a place
+for additions: `appendSystemPrompt` for the Claude Agent SDK, `AGENTS.md` in
+the working directory or a prompt preamble for Codex. The stable text
+should sit where a harness caches it, and the volatile text should sit last.
+
+**Solution.** Let the renderer return three parts, and let each adapter
+place them.
+
+| Part      | Content                                                                   | Stability          | Pi            | Anthropic SDK                 | Claude Agent SDK                       | Codex                   |
+| --------- | ------------------------------------------------------------------------- | ------------------ | ------------- | ----------------------------- | -------------------------------------- | ----------------------- |
+| mechanism | The record format, the room tools, what a refusal means, the `[new]` mark | Per kernel version | system prompt | `system` with `cache_control` | `appendSystemPrompt`                   | prompt preamble         |
+| agent     | Identity, instructions, guidance (B6)                                     | Per definition     | system prompt | `system`                      | `appendSystemPrompt`                   | `AGENTS.md` or preamble |
+| context   | Clock, participants, reserve, the record or its delta, the ask            | Per pass           | user message  | user message                  | the prompt, or a streamed user message | `run(input)`            |
+
+Add `renderDelta(view, since)` for a later pass: the messages after `since`,
+the ask, and nothing repeated.
+
+**Impact.** The mechanism text caches. A harness reads its own conventions
+and the room's in the places it expects.
+
+### F4. Output: speech through `say`, everything else into the trace
+
+**Problem.** A harness ends a turn with text: Codex's `finalResponse` and
+`agent_message` items, the Claude Agent SDK's assistant text, Pi's text
+blocks. None of that is speech in the room. If an adapter copied final text
+onto the record, the freshness rule, the `readThrough` acknowledgement, and
+the summary provenance would lose their meaning, and an agent that meant to
+stay silent would speak.
+
+**Solution.** The record takes speech through `say` only, from every
+surface. An adapter maps every other output to one neutral step:
+
+```ts
+type Step =
+  | { type: 'pass'; pass: number; input: 'view' | 'delta'; through: Seq }
+  | { type: 'thinking'; text: string; final: boolean }
+  | { type: 'text'; text: string; final: boolean }
+  | { type: 'tool_call'; call: string; name: string; input: unknown }
+  | { type: 'tool_result'; call: string; output: unknown; error?: string }
+  | {
+      type: 'room';
+      call: string;
+      intent: Intent;
+      result: 'committed' | 'unchanged' | 'missed' | 'refused' | 'stale';
+      seq?: Seq;
+    }
+  | { type: 'steer'; seq: Seq; consumed: boolean }
+  | { type: 'approval'; call: string; name: string; decision?: 'allow' | 'deny' }
+  | {
+      type: 'usage';
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+      cost?: number;
+    }
+  | { type: 'end'; stop: PassResult['stop']; failure?: PassResult['failure'] };
+```
+
+Every step carries `activation`, `pass`, `at`, and an index. The mapping
+per surface:
+
+| Surface event                                                                                                           | Step                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Pi `message_update` with `thinking_delta` or `text_delta`; `message_end`                                                | `thinking` or `text`, `final` on end                                    |
+| Pi `tool_execution_start`, `_update`, `_end`                                                                            | `tool_call`; `tool_result` on end                                       |
+| Anthropic `content_block_*` for thinking and text; `tool_use`; `tool_result`                                            | As Pi                                                                   |
+| Claude Agent SDK `stream_event` deltas; `assistant` blocks; `tool_use`; `tool_result`; `permission_prompt`; `cost`      | `thinking`, `text`, `tool_call`, `tool_result`, `approval`, `usage`     |
+| Codex `reasoning`, `agent_message`, `command_execution`, `file_change`, `mcp_tool_call`, `web_search`; `turn.completed` | `thinking`, `text`, one `tool_call` and `tool_result` per item, `usage` |
+| A room tool call from any surface                                                                                       | `room` with the commit result                                           |
+
+A Codex `file_change` item names paths, which become `refs` (E5) on the
+activation's next `say` when the adapter is configured to declare them.
+
+**Impact.** A UI renders one step list for every framework. The record
+keeps its meaning. A question about a tool call has one answer shape.
+
+### F5. Steering by capability, correctness by freshness
+
+**Problem.** Pi and the Claude Agent SDK take a message during a run. Codex
+and the tool runner take one only between turns. The kernel promises that a
+stale say is refused and reconsidered, and it says nothing about delivery
+inside a run.
+
+**Solution.** The driver delivers a steer to `session.steer` when the
+adapter defines it, and holds the steer for the next pass otherwise.
+`readThrough` advances only on evidence: Pi's context adapter sees the steer
+inside a provider request; the Claude Agent SDK echoes a `user` message for
+each streamed input, and the adapter advances on the echo; Codex advances
+to the pass's `through` and no further. The `steer` step records
+`consumed`. When a pass ends with an unconsumed steer or a moved record, the
+driver runs a delta pass.
+
+**Impact.** No adapter acknowledges context it did not deliver. A harness
+without steering converges with one extra pass.
+
+### F6. Room tools on every surface
+
+**Problem.** The three room tools exist as TypeBox schemas and as Pi tools.
+Each surface takes tools in its own form: Pi an `AgentTool`, the Anthropic
+SDK a Zod or JSON Schema tool, the Claude Agent SDK an in-process MCP server
+with Zod shapes or a stdio MCP server, Codex a stdio MCP server through its
+configuration.
+
+**Solution.** Keep the room tools fixed at three, and write them once per
+adapter in that surface's form; three fixed schemas need no conversion.
+Bind each instance to one activation: in process for Pi, the tool runner,
+and the Claude Agent SDK (`createSdkMcpServer` per activation); through a
+small stdio server for Codex that reaches the host over a local socket with
+the activation id in its environment. Domain tools written with
+`defineTool` reach loop executors directly and reach harnesses through the
+same stdio server, which serves JSON Schema through the low-level MCP server
+API. Pass harness policy through the adapter's options: `permissionMode`,
+`allowedTools`, `canUseTool`, and `maxBudgetUsd` for the Claude Agent SDK;
+`sandboxMode`, `approvalPolicy`, and `modelReasoningEffort` for Codex. A
+`PermissionRequest` hook or an approval prompt becomes an `approval` step,
+and the application answers it.
+
+**Impact.** An agent on any surface speaks, seats, and unseats with the
+same three tools. The application's own tools follow without a second tool
+system.
+
+### F7. The activation trace: durable and live
+
+**Problem.** A UI today sees `activation_start`, `activation_end`, and tool
+names, with no activation id (B8). The Pi transcript is written once, at
+the end of the activation, in Pi's shape, in a Pi journal. Nothing is
+visible while an agent works, and nothing is readable for a Codex agent.
+
+**Solution.** Let the driver write every step to a trace journal per
+activation, `ambion/trace/<room>/<activation>`, in the runtime's storage,
+as the step arrives. Coalesce deltas into one `text` or `thinking` step per
+block. Bound the trace with `limits.trace`: bytes per tool output and steps
+per pass, with truncation marked in the step. Give each definition a trace
+policy, `trace: { thinking: 'omit' | 'summary' | 'full', toolOutput: 'omit' | 'full' }`,
+because thinking is executor-private and one owner may not want another
+owner's UI to read it. Emit the same steps live on `subscribe` as
+`{ type: 'step', activation, step }`. Record `usage` and the harness
+`session` on the lease release (D2, F2), so a read that shows an activation
+can point at the harness's own transcript. Keep the Pi journal as the Pi
+executor's private audit.
+
+**Impact.** A person watches an agent think and act as it happens, on any
+surface, and reads the same steps a week later from the same storage.
+
+### F8. The drill-down read path
+
+**Problem.** The reads stop at the exchange. `readRoom` lists exchanges and
+`readExchange` returns messages. Nothing lists the activations an exchange
+caused or the steps an activation took.
+
+**Solution.** Add one level per read.
+
+| Read                       | Returns                                                                                           | Source                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `readRoom(name)`           | Exchanges with status, owner, range, and summary outcome                                          | The fold (exists)                          |
+| `readExchange(name, from)` | Messages in range, and `activations`: id, seat, attempt, purpose, outcome, usage, harness session | Leases whose cause lies in the range (new) |
+| `readActivation(name, id)` | The steps by pass, usage, outcome, and the messages it committed                                  | The trace journal (new)                    |
+| `subscribe`                | Messages and exchange facts, and `step` events with `activation`                                  | Live (B8)                                  |
+
+Every step orders by activation, pass, and index. Every activation orders
+by its lease's first change. A UI merges live steps into a read by those
+keys the way it merges messages by `seq` today.
+
+**Impact.** Room, exchange, activation, step: four reads, one storage, live
+and after the fact.
+
+### F9. Harness memory across activations
+
+**Problem.** Each activation reads the record fresh, and an agent has no
+private memory except its artifacts. A harness session is cheap to resume.
+Resuming one across activations gives an agent memory of its own tool work
+and a warm cache, and it lets the agent drift from the record.
+
+**Solution.** Make it an adapter option with a default. `memory:
+'activation'` opens a session per activation and closes it at release.
+`memory: 'seat'` resumes one harness session per seat across activations
+and records the session id with each release. The freshness rule governs
+speech in both modes. Document the tradeoff in `docs/trust.md` (D8): a seat
+with memory holds state the record does not show.
+
+**Impact.** The default keeps the journal as the only shared truth. The
+option exists for agents whose harness context is expensive to rebuild.
+
+### F10. Adapters to ship and how to test them
+
+**Problem.** The claim needs one adapter per family and a way to test each
+without a provider.
+
+**Solution.** Ship `@ambionframework/pi` for the loop family and
+`@ambionframework/claude` for the harness family, on the Claude Agent SDK,
+in 0.1.0. Add `examples/codex` with the stdio room tools server. Run the
+conformance suite (D6) against each adapter with a fake: a scripted
+`streamFn` for Pi, a fake executable through `pathToClaudeCodeExecutable`
+for the Claude Agent SDK, and a fake `codex` binary on `PATH` for Codex.
+The suite drives a wake, a first pass, a say, a missed say, a delta pass,
+and a release; a cut during a tool call; a steer consumed and a steer held;
+a permanent and a transient failure; usage on release; and the trace
+journal's contents after each case.
+
+**Impact.** Two families proven in CI. A third adapter has a checklist.
+
+**0.1.0:** F2, F4, F7, and F8 are kernel API and join the pre-freeze batch.
+F3, F5, F6, F9, and F10 land with the adapters after the freeze.
+
+## G. In-flight pull requests
 
 **The live tier is red on both open implementation PRs for one reason
 outside them.** The "Live tests on anthropic/claude-sonnet-5" job failed on
@@ -1043,7 +1353,7 @@ logs traces to one provider reply: 400 `invalid_request_error`, "Your credit
 balance is too low to access the Anthropic API." Each live room recorded
 three activations, an `abandoned` event, and a silent close (see D1). The
 scripted suites, lint, types, the CLI smoke, and the Dafny proofs pass on
-both heads. Restore the account before any live evidence in section G
+both heads. Restore the account before any live evidence in section H
 counts.
 
 **Merge PR #152 first.** "Bind delivery receipts and identity to journal
@@ -1114,7 +1424,7 @@ model call; the hosting entry's execution services already return a
 **Close the stale pull requests.** Nine open pull requests date from
 2026-09-01 to 2026-09-11, and every one conflicts with main. Main delivered
 the aim of each one by another route. Three carry one idea worth taking
-before closure. Section G assumes these closures.
+before closure. Section H assumes these closures.
 
 | PR  | Title                                                    | Recommendation                                                                |
 | --- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -1142,34 +1452,36 @@ green; merge them, then check whether one TypeBox version remains
 ([next.md §9](next.md)). PR #5, #6, and #7 are green. PR #4 has a stale run
 from 2026-08-25 and needs a rebase before its checks mean anything.
 
-## G. Proposed order
+## H. Proposed order
 
 **Fix, then freeze, then simplify, then prove.** The order keeps every
 public rename and every journal field in one window, and every behavior
 fix before it.
 
-| Step | Work                                               | Depends on | Evidence                                                                                                                          |
-| ---- | -------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | Merge PR #152; close stale PRs; bump the Pi pair   |            | CI green on main                                                                                                                  |
-| 2    | A1, A2, D1, the closing-context slice of PR #153   | 1          | Probes as regressions on memory and SQLite; a 400 abandons in one attempt                                                         |
-| 3    | C1, D9                                             |            | `pnpm install` and `pnpm check` on Node 22; two live jobs                                                                         |
-| 4    | B3, B4, B5, B7, B8, C5, C6, D4, D5, E1, E2, E5, E6 | 2          | Two entries; a fixed seat refuses an agent's unseat; a scripted executor passes the driver suite                                  |
-| 5    | D2, D3: usage and format on the journal            | 4          | Golden journals replay; `activation_end` carries usage                                                                            |
-| 6    | API and journal freeze: additive changes only      | 5          | A note in `release-0.1.0.md`                                                                                                      |
-| 7    | B1                                                 | 1          | Equivalence property test; envelope table                                                                                         |
-| 8    | B2, B9                                             | 4          | File budget rule; template on `read()`                                                                                            |
-| 9    | B6, C2, C3, D6, E3, E4                             | 4          | Prompt snapshots; testing entry and conformance suites in a packed consumer; Node template smoke; the fake harness seats an agent |
-| 10   | next.md §3 exchange outcomes, E7                   | 7          | Silence, exhaustion, cancellation, permanent failure, and awaiting reads                                                          |
-| 11   | C4, C7, D7, D8, D10, release evidence (next.md §9) | 6          | Packed consumers from npmjs; Node 22 and 24; Cloudflare; `CHANGELOG.md`; `docs/trust.md`                                          |
+| Step | Work                                                               | Depends on | Evidence                                                                                                                                |
+| ---- | ------------------------------------------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Merge PR #152; close stale PRs; bump the Pi pair                   |            | CI green on main                                                                                                                        |
+| 2    | A1, A2, D1, the closing-context slice of PR #153                   | 1          | Probes as regressions on memory and SQLite; a 400 abandons in one attempt                                                               |
+| 3    | C1, D9                                                             |            | `pnpm install` and `pnpm check` on Node 22; two live jobs                                                                               |
+| 4    | B3, B4, B5, B7, B8, C5, C6, D4, D5, E1, E2, E5, E6, F2, F4, F7, F8 | 2          | Two entries; a fixed seat refuses an agent's unseat; a scripted executor passes the driver suite; `readActivation` returns steps        |
+| 5    | D2, D3: usage and format on the journal                            | 4          | Golden journals replay; `activation_end` carries usage                                                                                  |
+| 6    | API and journal freeze: additive changes only                      | 5          | A note in `release-0.1.0.md`                                                                                                            |
+| 7    | B1                                                                 | 1          | Equivalence property test; envelope table                                                                                               |
+| 8    | B2, B9                                                             | 4          | File budget rule; template on `read()`                                                                                                  |
+| 9    | B6, C2, C3, D6, E3, E4, F3, F5, F6, F9, F10                        | 4          | Prompt snapshots; testing entry and conformance suites in a packed consumer; Node template smoke; both adapters pass the suite on fakes |
+| 10   | next.md §3 exchange outcomes, E7                                   | 7          | Silence, exhaustion, cancellation, permanent failure, and awaiting reads                                                                |
+| 11   | C4, C7, D7, D8, D10, release evidence (next.md §9)                 | 6          | Packed consumers from npmjs; Node 22 and 24; Cloudflare; `CHANGELOG.md`; `docs/trust.md`                                                |
 
 **The freeze at step 6 is the release decision.** Thirty-nine pull requests
 merged between 2026-09-15 and 2026-09-17, and many renamed a public term.
 The docs carry the residue of those renames. After step 5, every change to
 the main entry and to the journal bodies is additive until the tag.
 
-## H. Deferred past 0.1.0
+## I. Deferred past 0.1.0
 
 - Delegation to a working room (PR #151), rebuilt by reference (E8) on B1.
+- A published Codex adapter package; `examples/codex` covers the surface
+  until a consumer needs the package.
 - Publishing `@ambionframework/evals` (PR #153); it stays private until
   its failure matrix, live acceptance, and judge calibration are done.
 - A bounded projection with checkpoints; B1 keeps full replay.
