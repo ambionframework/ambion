@@ -11,6 +11,7 @@ platform plans live in the [0.1.0 scope](../planning/release-0.1.0.md) and
 packages/
   ambion/       runtime library
   assistant/    default assistant agent and behavioral guidance
+  evals/        room simulations, human actors, checks, and judge agents
   cli/          ambion binary and project generator
   cloudflare/   Durable Object adapter
   journal/      append-only journal storage
@@ -23,7 +24,7 @@ docs/           design and operational contracts
 .github/        CI, live, and release workflows
 ```
 
-The seven `packages/*` entries are publishable and share a lockstep version.
+The eight `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
@@ -33,6 +34,7 @@ cli ──▶ ambion
 cloudflare ──▶ ambion, journal
 workspace ──▶ ambion
 assistant ──▶ ambion
+evals ──▶ ambion
 ```
 
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release

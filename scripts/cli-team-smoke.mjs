@@ -48,6 +48,7 @@ async function packFixture(destination) {
 		'pi-journal',
 		'ambion',
 		'assistant',
+		'evals',
 		'workspace',
 		'cloudflare',
 		'cli',
@@ -163,7 +164,63 @@ export function release(room: SeatRoom, activation: string, readThrough: number)
 	);
 	await workspaceFixture(destination);
 	await assistantFixture(destination);
+	await evalFixture(destination);
 	return archives;
+}
+
+/** Exercise room simulation exports without an assistant or summary writer. */
+async function evalFixture(destination) {
+	await writeFile(
+		join(destination, 'src', 'evals.ts'),
+		`
+import assert from 'node:assert/strict';
+import { createRuntime, defineHuman, startRoom } from '@ambionframework/ambion';
+import { createHumanSimulator, defineRoomEval, runEvals } from '@ambionframework/evals';
+
+const actor = createHumanSimulator({ model: 'test/model', instructions: 'Ask for stock.' });
+assert.equal(typeof actor.decide, 'function');
+const calls: string[] = [];
+const subject = defineRoomEval({
+  id: 'packed/inventory', version: 1, input: { added: 2 },
+  humans: [defineHuman({ name: 'priya', identity: 'Requests inventory.' })],
+  simulator: { async decide({ actions }) {
+    return actions.length === 0
+      ? { action: { kind: 'say', human: 'priya', text: 'How much stock?' } }
+      : { action: { kind: 'finish', reason: 'No agents are configured in this package smoke.' } };
+  } },
+  limits: { maxActions: 1, settleTimeoutMs: 1000 },
+  async setup({ defer, input }) {
+    calls.push('setup');
+    defer(() => { calls.push('dispose'); });
+    const room = await startRoom({ name: 'packed-simulation', agents: [], runtime: createRuntime() });
+    return { room, fixture: { stock: 40 + input.added } };
+  },
+  beforeAction() { calls.push('action'); },
+  async capture({ fixture }) {
+    calls.push('capture');
+    return { stock: fixture?.stock ?? null };
+  },
+  checks: [{
+    id: 'stock', requires: ['simulation', 'stock'],
+    async evaluate({ output, evidence }) {
+      calls.push('check');
+      assert.equal(evidence.stock, 42);
+      assert.deepEqual(output.exchanges.map(exchange => exchange.owner), ['priya']);
+    },
+  }],
+  judge: {
+    id: 'smoke-judge', requires: ['simulation'],
+    async evaluate() {
+      return { verdict: 'pass', explanation: 'Package smoke only.', evidenceRefs: ['simulation'] };
+    },
+  },
+  async teardown() { calls.push('teardown'); },
+});
+const report = await runEvals([subject], { samples: 1 });
+assert.equal(report.passed, true, JSON.stringify(report.samples));
+assert.deepEqual(calls, ['setup', 'action', 'capture', 'check', 'teardown', 'dispose']);
+`,
+	);
 }
 
 /** Exercise the assistant factory and shorthand through packed exports. */
@@ -300,6 +357,7 @@ async function installAndCheck(destination, archives) {
 	run('pnpm', ['check:types'], destination);
 	run(process.execPath, ['workspace.mjs'], destination);
 	run(process.execPath, ['src/assistant.ts'], destination);
+	run(process.execPath, ['src/evals.ts'], destination);
 	const version = capture('pnpm', ['exec', 'ambion', '--version'], destination);
 	if (version.status !== 0 || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\n?$/.test(version.output))
 		throw new Error(`The packed CLI did not report a version: ${version.output}`);

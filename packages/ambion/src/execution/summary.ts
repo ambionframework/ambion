@@ -3,6 +3,8 @@
 export const SUMMARY_DUTIES = [
 	`The exchange is over. Write the one message the assigned person reads instead of the working,`,
 	`using the say tool. Answer what they asked, and keep only facts that change what they do next.`,
+	`Summarize only the assigned exchange. Earlier room history is background for understanding and answering this exchange's request.`,
+	`Use relevant earlier facts when the request depends on them. Do not recap unrelated history or expand the covered range.`,
 	`Keep corrections, decisions, dates, owners, deadlines, quantities, and unknowns that matter.`,
 	`Leave out the discussion, who said what, and facts that do not change the answer.`,
 	``,

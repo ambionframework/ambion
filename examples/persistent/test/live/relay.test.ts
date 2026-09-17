@@ -1,13 +1,22 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDemo } from '../../src/server.ts';
+import { gradeRelayTrace, observeResponse, type RelayObservation } from '../support/evals.ts';
 
 const model = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
 const provider = model.slice(0, model.indexOf('/')).toUpperCase().replace(/-/g, '_');
 const keyVariable = `${provider}_API_KEY`;
-const live = describe.skipIf(!process.env[keyVariable]);
+const judgeModel = process.env.AMBION_JUDGE_MODEL ?? model;
+const judgeProvider = judgeModel.split('/')[0]?.toUpperCase().replace(/-/g, '_');
+const missingKeys = [keyVariable, `${judgeProvider}_API_KEY`].filter((key) => !process.env[key]);
+if (process.env.AMBION_EVAL_REQUIRED === '1' && missingKeys.length > 0) {
+	throw new Error(
+		`Required Relay evaluation credentials are missing: ${[...new Set(missingKeys)].join(', ')}`,
+	);
+}
+const live = describe.skipIf(missingKeys.length > 0);
 
 interface Message {
 	seq?: number;
@@ -90,6 +99,7 @@ const scenarios: readonly Scenario[] = [
 			expect(
 				messages.some((message) => message.kind === 'seated' && message.subject !== 'assistant'),
 			).toBe(true);
+			expect(saidBy(messages, ['writer'])).not.toHaveLength(0);
 			const summary = messages.find((message) => message.kind === 'summary');
 			expect(summary?.text).toMatch(/R-19/);
 			expect(summary?.text).not.toMatch(/email (?:was|has been) sent/i);
@@ -97,10 +107,23 @@ const scenarios: readonly Scenario[] = [
 	},
 ];
 
+let trace: RelayObservation[] = [];
+let scenarioSignal: AbortSignal | undefined;
+let scenarioErrors: string[] = [];
+
 live('Relay assistant', () => {
+	beforeEach(({ signal }) => {
+		trace = [];
+		scenarioErrors = [];
+		scenarioSignal = signal;
+	});
+	afterEach(async ({ task }) => {
+		const errors = task.result?.errors?.map((error) => error.message ?? 'Scenario failed.') ?? [];
+		await gradeRelayTrace(task.name, trace, [...new Set([...scenarioErrors, ...errors])]);
+	}, 90_000);
 	it.each(scenarios)(
 		'$name produces the expected shared result',
-		async (scenario) => {
+		retainedScenario(async (scenario: Scenario) => {
 			const directory = await mkdtemp(join(tmpdir(), `ambion-relay-${scenario.name}-live-`));
 			const demo = await openDemo(join(directory, 'demo'), 'start');
 			try {
@@ -143,128 +166,150 @@ live('Relay assistant', () => {
 				await demo.close();
 				await rm(directory, { recursive: true, force: true });
 			}
-		},
+		}),
 		180_000,
 	);
 
-	it('uses one directed writer activation for a human revision', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'ambion-relay-launch-revision-live-'));
-		const demo = await openDemo(join(directory, 'demo'), 'start');
-		try {
-			await prepareBrief(directory, 'launch');
-			await listen(demo);
-			const address = demo.server.address();
-			if (!address || typeof address === 'string') throw new Error('The server has no address.');
-			const base = `http://127.0.0.1:${address.port}`;
-			const path = '/rooms/launch/humans/cara';
-			expect((await request(base, path, { method: 'PUT' })).status).toBe(200);
-			const first = await request(base, path, {
-				method: 'POST',
-				body: JSON.stringify({
-					key: 'relay-live-launch-revision-first',
-					text: 'Draft accurate release notes from the current prototype and brief, and save them to /shared/launch.md.',
-				}),
-			});
-			expect(first.status).toBe(202);
-			const firstDelivery = (await first.json()) as Delivery;
-			await untilSummary(base, 'launch', firstDelivery.from);
-			const beforeRevision = await readWorkspace(base, '/shared/launch.md');
-			const second = await request(base, path, {
-				method: 'POST',
-				body: JSON.stringify({
-					key: 'relay-live-launch-revision-second',
-					text: "Revise /shared/launch.md: change the opening sentence to exactly 'Relay keeps handoffs visible.' and keep the draft under 100 words.",
-				}),
-			});
-			expect(second.status).toBe(202);
-			const secondDelivery = (await second.json()) as Delivery;
-			const messages = await untilSummary(base, 'launch', secondDelivery.from);
-			const writerActivations = messages.filter(
-				(message) =>
-					message.seq !== undefined &&
-					message.seq >= secondDelivery.from &&
-					message.kind === 'said' &&
-					message.from === 'assistant' &&
-					message.to === 'writer',
-			);
-			expect(writerActivations).toHaveLength(1);
-			const afterRevision = await readWorkspace(base, '/shared/launch.md');
-			expect(afterRevision.text).not.toBe(beforeRevision.text);
-			expect(afterRevision.text).toContain('Relay keeps handoffs visible.');
-			expect(afterRevision.text.trim().split(/\s+/u).length).toBeLessThan(100);
-		} finally {
-			await demo.close();
-			await rm(directory, { recursive: true, force: true });
-		}
-	}, 180_000);
-
-	it('reactivates a specialist for a renewed request despite an existing draft', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'ambion-relay-triage-renewed-live-'));
-		const demo = await openDemo(join(directory, 'demo'), 'start');
-		try {
-			await listen(demo);
-			const address = demo.server.address();
-			if (!address || typeof address === 'string') throw new Error('The server has no address.');
-			const base = `http://127.0.0.1:${address.port}`;
-			const path = '/rooms/triage/humans/cara';
-			await writeFile(
-				join(directory, 'demo', 'workspace', 'shared', 'response-R-19.md'),
-				'Relay does not send reminder emails. Check the board for current handoff status.\n',
-			);
-			const unchanged = await snapshotWorkspace(base);
-			expect((await request(base, path, { method: 'PUT' })).status).toBe(200);
-			const first = await request(base, path, {
-				method: 'POST',
-				body: JSON.stringify({
-					key: 'relay-live-triage-renewed-first',
-					text: 'Bring in the writer for R-19 only. Draft exactly two sentences about the current reminder capability. Do not edit any files.',
-				}),
-			});
-			expect(first.status).toBe(202);
-			const firstDelivery = (await first.json()) as Delivery;
-			await untilSummary(base, 'triage', firstDelivery.from);
-			const removal = await request(base, path, {
-				method: 'POST',
-				body: JSON.stringify({
-					key: 'relay-live-triage-renewed-remove',
-					text: 'Unseat writer now. No further specialist work and no file edits.',
-				}),
-			});
-			expect(removal.status).toBe(202);
-			const removalDelivery = (await removal.json()) as Delivery;
-			const removed = await untilSummary(base, 'triage', removalDelivery.from);
-			expect(removed).toEqual(
-				expect.arrayContaining([expect.objectContaining({ kind: 'unseated', subject: 'writer' })]),
-			);
-			const second = await request(base, path, {
-				method: 'POST',
-				body: JSON.stringify({
-					key: 'relay-live-triage-renewed-second',
-					text: 'Bring in the writer for R-19 only. Draft exactly two sentences about the current reminder capability. Do not edit any files.',
-				}),
-			});
-			expect(second.status).toBe(202);
-			const secondDelivery = (await second.json()) as Delivery;
-			const messages = await untilSummary(base, 'triage', secondDelivery.from);
-			expect(messages).toEqual(
-				expect.arrayContaining([expect.objectContaining({ kind: 'seated', subject: 'writer' })]),
-			);
-			expect(
-				messages.some(
+	it(
+		'uses one directed writer activation for a human revision',
+		retainedScenario(async () => {
+			const directory = await mkdtemp(join(tmpdir(), 'ambion-relay-launch-revision-live-'));
+			const demo = await openDemo(join(directory, 'demo'), 'start');
+			try {
+				await prepareBrief(directory, 'launch');
+				await listen(demo);
+				const address = demo.server.address();
+				if (!address || typeof address === 'string') throw new Error('The server has no address.');
+				const base = `http://127.0.0.1:${address.port}`;
+				const path = '/rooms/launch/humans/cara';
+				expect((await request(base, path, { method: 'PUT' })).status).toBe(200);
+				const first = await request(base, path, {
+					method: 'POST',
+					body: JSON.stringify({
+						key: 'relay-live-launch-revision-first',
+						text: 'Draft accurate release notes from the current prototype and brief, and save them to /shared/launch.md.',
+					}),
+				});
+				expect(first.status).toBe(202);
+				const firstDelivery = (await first.json()) as Delivery;
+				await untilSummary(base, 'launch', firstDelivery.from);
+				const beforeRevision = await readWorkspace(base, '/shared/launch.md');
+				const second = await request(base, path, {
+					method: 'POST',
+					body: JSON.stringify({
+						key: 'relay-live-launch-revision-second',
+						text: "Revise /shared/launch.md: change the opening sentence to exactly 'Relay keeps handoffs visible.' and keep the draft under 100 words.",
+					}),
+				});
+				expect(second.status).toBe(202);
+				const secondDelivery = (await second.json()) as Delivery;
+				const messages = await untilSummary(base, 'launch', secondDelivery.from);
+				const writerActivations = messages.filter(
 					(message) =>
 						message.seq !== undefined &&
 						message.seq >= secondDelivery.from &&
 						message.kind === 'said' &&
-						message.from === 'writer',
-				),
-			).toBe(true);
-			expect(await snapshotWorkspace(base)).toEqual(unchanged);
-		} finally {
-			await demo.close();
-			await rm(directory, { recursive: true, force: true });
-		}
-	}, 180_000);
+						message.from === 'assistant' &&
+						message.to === 'writer',
+				);
+				expect(writerActivations).toHaveLength(1);
+				const afterRevision = await readWorkspace(base, '/shared/launch.md');
+				expect(afterRevision.text).not.toBe(beforeRevision.text);
+				expect(afterRevision.text).toContain('Relay keeps handoffs visible.');
+				expect(afterRevision.text.trim().split(/\s+/u).length).toBeLessThan(100);
+			} finally {
+				await demo.close();
+				await rm(directory, { recursive: true, force: true });
+			}
+		}),
+		180_000,
+	);
+
+	it(
+		'reactivates a specialist for a renewed request despite an existing draft',
+		retainedScenario(async () => {
+			const directory = await mkdtemp(join(tmpdir(), 'ambion-relay-triage-renewed-live-'));
+			const demo = await openDemo(join(directory, 'demo'), 'start');
+			try {
+				await listen(demo);
+				const address = demo.server.address();
+				if (!address || typeof address === 'string') throw new Error('The server has no address.');
+				const base = `http://127.0.0.1:${address.port}`;
+				const path = '/rooms/triage/humans/cara';
+				await writeFile(
+					join(directory, 'demo', 'workspace', 'shared', 'response-R-19.md'),
+					'Relay does not send reminder emails. Check the board for current handoff status.\n',
+				);
+				const unchanged = await snapshotWorkspace(base);
+				expect((await request(base, path, { method: 'PUT' })).status).toBe(200);
+				const first = await request(base, path, {
+					method: 'POST',
+					body: JSON.stringify({
+						key: 'relay-live-triage-renewed-first',
+						text: 'Bring in the writer for R-19 only. Draft exactly two sentences about the current reminder capability. Do not edit any files.',
+					}),
+				});
+				expect(first.status).toBe(202);
+				const firstDelivery = (await first.json()) as Delivery;
+				await untilSummary(base, 'triage', firstDelivery.from);
+				const removal = await request(base, path, {
+					method: 'POST',
+					body: JSON.stringify({
+						key: 'relay-live-triage-renewed-remove',
+						text: 'Unseat writer now. No further specialist work and no file edits.',
+					}),
+				});
+				expect(removal.status).toBe(202);
+				const removalDelivery = (await removal.json()) as Delivery;
+				const removed = await untilSummary(base, 'triage', removalDelivery.from);
+				expect(removed).toEqual(
+					expect.arrayContaining([
+						expect.objectContaining({ kind: 'unseated', subject: 'writer' }),
+					]),
+				);
+				const second = await request(base, path, {
+					method: 'POST',
+					body: JSON.stringify({
+						key: 'relay-live-triage-renewed-second',
+						text: 'Bring in the writer for R-19 only. Draft exactly two sentences about the current reminder capability. Do not edit any files.',
+					}),
+				});
+				expect(second.status).toBe(202);
+				const secondDelivery = (await second.json()) as Delivery;
+				const messages = await untilSummary(base, 'triage', secondDelivery.from);
+				expect(messages).toEqual(
+					expect.arrayContaining([expect.objectContaining({ kind: 'seated', subject: 'writer' })]),
+				);
+				expect(
+					messages.some(
+						(message) =>
+							message.seq !== undefined &&
+							message.seq >= secondDelivery.from &&
+							message.kind === 'said' &&
+							message.from === 'writer',
+					),
+				).toBe(true);
+				expect(await snapshotWorkspace(base)).toEqual(unchanged);
+			} finally {
+				await demo.close();
+				await rm(directory, { recursive: true, force: true });
+			}
+		}),
+		180_000,
+	);
 });
+
+/** Preserve the original failure before Vitest runs the grading hook. */
+function retainedScenario<Args extends unknown[]>(run: (...args: Args) => Promise<void>) {
+	return async (...args: Args): Promise<void> => {
+		try {
+			await run(...args);
+		} catch (error) {
+			scenarioErrors.push(error instanceof Error ? error.message : String(error));
+			throw error;
+		}
+	};
+}
 
 /** Each independent scenario starts at its place in the product sequence. */
 async function prepareBrief(directory: string, scenario: string): Promise<void> {
@@ -300,10 +345,17 @@ async function listen(demo: Awaited<ReturnType<typeof openDemo>>): Promise<void>
 }
 
 async function request(base: string, path: string, init: RequestInit): Promise<Response> {
-	return fetch(`${base}${path}`, {
+	const deadline = AbortSignal.timeout(10_000);
+	const signals = [deadline, scenarioSignal, init.signal].filter(
+		(signal): signal is AbortSignal => signal != null,
+	);
+	const response = await fetch(`${base}${path}`, {
 		...init,
+		signal: AbortSignal.any(signals),
 		headers: { 'content-type': 'application/json', ...(init.headers ?? {}) },
 	});
+	await observeResponse(trace, path, init, response);
+	return response;
 }
 
 async function readWorkspace(

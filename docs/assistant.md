@@ -295,6 +295,9 @@ decline; the source discussion then remains available in agent context.
 
 A closing activation receives only `say`, with a fixed source range and
 recipient. It cannot seat agents, use domain tools, or reopen investigation.
+It reads room history through the closing boundary as background.
+Its summary answers only the assigned exchange, including relevant earlier facts
+when the request depends on them.
 Necessary steering must occur during ordinary work before the exchange closes.
 See [Summaries](summary.md) for the existing authority and completion rules.
 

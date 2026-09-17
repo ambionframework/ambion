@@ -342,6 +342,7 @@
 				"packages/cloudflare/src/**",
 				"packages/cli/src/**",
 				"packages/workspace/src/**",
+				"packages/evals/src/**",
 				"examples/**/src/**"
 			],
 			"linter": {
@@ -356,6 +357,35 @@
 										// the manifest names it. Every other path reaches inside the core.
 										"group": ["@ambionframework/ambion/!(transport)", "**/packages/ambion/src/*"],
 										"message": "Reach the core through `@ambionframework/ambion` or its `/transport` entry, never a file inside it."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// Eval execution is reusable; subject policy stays with its consumer.
+			"includes": ["packages/evals/src/**"],
+			"linter": {
+				"rules": {
+					"suspicious": { "noConsole": "error" },
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"@ambionframework/assistant",
+											"@ambionframework/assistant/*",
+											"**/assistant/**",
+											"**/examples/**",
+											"@ambionframework/ambion/!(transport)",
+											"**/ambion/src/**"
+										],
+										"message": "Eval mechanics use public runtime APIs. Subject behavior belongs to its suite."
 									}
 								]
 							}

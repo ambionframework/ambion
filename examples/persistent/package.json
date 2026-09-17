@@ -20,6 +20,7 @@
 	"devDependencies": {
 		"typescript": "^7.0.2",
 		"vitest": "^4.1.11",
-		"@earendil-works/pi-ai": "^0.84.3"
+		"@earendil-works/pi-ai": "^0.84.3",
+		"@ambionframework/evals": "workspace:*"
 	}
 }

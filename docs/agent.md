@@ -154,9 +154,11 @@ from the activation id and current journal state. A caller cannot construct
 authority by changing fields in a request.
 
 An ordinary activation reads the goal, participants, reserve identities, and
-the messages allowed by its context boundary. A summary activation reads its
-fixed exchange, recipient, and that person's preferences. It cannot change
-the recipient or source range.
+the messages allowed by its context boundary. A summary activation reads room
+history through its fixed closing boundary, its assigned exchange, recipient,
+and that person's preferences. Earlier history supplies context for the assigned
+exchange. The summary answers only that exchange and cannot change its recipient
+or source range.
 
 Active agents receive new eligible context between provider requests. A steer
 does not acknowledge that context. The next contribution must report what the
