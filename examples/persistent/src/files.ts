@@ -19,7 +19,10 @@ export async function listFiles(workspace: Workspace) {
 					.map(({ path, size }) => ({ path, size })),
 			);
 			pending.push(
-				...entries.filter((entry) => entry.kind === 'directory').map((entry) => entry.path),
+				...entries
+					// Virtual shell devices are infrastructure, not project artifacts.
+					.filter((entry) => entry.kind === 'directory' && entry.path !== '/dev')
+					.map((entry) => entry.path),
 			);
 		}
 		return files.sort((a, b) => a.path.localeCompare(b.path));

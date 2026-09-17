@@ -43,7 +43,15 @@ async function packFixture(destination) {
 	await mkdir(archiveDirectory);
 	run('pnpm', ['build'], ROOT);
 	const archives = {};
-	for (const name of ['journal', 'pi-journal', 'ambion', 'workspace', 'cloudflare', 'cli']) {
+	for (const name of [
+		'journal',
+		'pi-journal',
+		'ambion',
+		'assistant',
+		'workspace',
+		'cloudflare',
+		'cli',
+	]) {
 		const directory = join(ROOT, 'packages', name);
 		const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
 		run('pnpm', ['pack', '--pack-destination', archiveDirectory], directory);
@@ -154,7 +162,43 @@ export function release(room: SeatRoom, activation: string, readThrough: number)
 `,
 	);
 	await workspaceFixture(destination);
+	await assistantFixture(destination);
 	return archives;
+}
+
+/** Exercise the assistant factory and shorthand through packed exports. */
+async function assistantFixture(destination) {
+	await writeFile(
+		join(destination, 'src', 'assistant.ts'),
+		`import assert from 'node:assert/strict';
+import { createRuntime, defineAgent, resumeRoom, startRoom, type AgentDefinition } from '@ambionframework/ambion';
+import { defineAssistant } from '@ambionframework/assistant';
+
+const assistant: AgentDefinition = defineAssistant({
+  name: 'coordinator',
+  model: 'test/model',
+  instructions: 'Retain all specialists across exchanges.',
+});
+const specialist = defineAgent({
+  name: 'specialist', identity: 'Checks facts.', instructions: 'Check facts.', model: 'test/model',
+});
+const runtime = createRuntime();
+const room = await startRoom({
+  name: 'packed-assistant', assistant, agents: [specialist], seats: {}, runtime,
+});
+try {
+  assert.deepEqual((await room.read()).participants.map((seat) => seat.name), ['coordinator']);
+} finally {
+  await room.stop();
+}
+const resumed = await resumeRoom('packed-assistant', { runtime, agents: [assistant, specialist] });
+try {
+  assert.deepEqual((await resumed.read()).participants.map((seat) => seat.name), ['coordinator']);
+} finally {
+  await resumed.stop();
+}
+`,
+	);
 }
 
 /** Exercise the resource entry and the existing facade from packed declarations and code. */
@@ -255,6 +299,7 @@ async function installAndCheck(destination, archives) {
 	run('pnpm', ['install', '--ignore-scripts', '--frozen-lockfile=false'], destination);
 	run('pnpm', ['check:types'], destination);
 	run(process.execPath, ['workspace.mjs'], destination);
+	run(process.execPath, ['src/assistant.ts'], destination);
 	const version = capture('pnpm', ['exec', 'ambion', '--version'], destination);
 	if (version.status !== 0 || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\n?$/.test(version.output))
 		throw new Error(`The packed CLI did not report a version: ${version.output}`);

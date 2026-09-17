@@ -31,6 +31,8 @@ export type { ExchangeHandle, Room, RoomSnapshot, Visit } from './room-host.ts';
 export interface StartRoomOptions {
 	/** The room name shared by all runs over its journal. */
 	name: string;
+	/** A reusable assistant definition that joins the ordinary composition as a broadcast summary writer. */
+	assistant?: AgentDefinition;
 	/** The fixed executable catalog for this run. */
 	agents?: readonly AgentDefinition[];
 	/** Initial members and attention. Omit to seat all agents at broadcast; `{}` keeps all in reserve. */
@@ -152,12 +154,35 @@ function assertFree(runtime: Runtime, name: string): void {
 }
 
 function composeFrom(options: StartRoomOptions): CompositionDraft {
-	const definitions = capturedDefinitions(options);
+	const normalized = normalizeAssistant(options);
+	const definitions = capturedDefinitions(normalized);
 	return {
-		goal: options.goal?.trim() || undefined,
-		summary: options.summary,
+		goal: normalized.goal?.trim() || undefined,
+		summary: normalized.summary,
 		definitions,
-		seats: initialSeats(options, definitions),
+		seats: initialSeats(normalized, definitions),
+	};
+}
+
+/** Expand the assistant shorthand before the existing composition validation path. */
+function normalizeAssistant(options: StartRoomOptions): StartRoomOptions {
+	const assistant = options.assistant;
+	if (assistant === undefined) return options;
+	const name = assistant.name;
+	if (options.agents?.some((agent) => agent.name === name)) throw duplicate(name);
+	if (options.summary !== undefined && options.summary !== name)
+		throw new Error(`Assistant '${name}' conflicts with summary agent '${options.summary}'.`);
+	const hasConfiguredAttention = options.seats !== undefined && Object.hasOwn(options.seats, name);
+	const configuredAttention = hasConfiguredAttention ? options.seats?.[name] : undefined;
+	if (configuredAttention !== undefined && configuredAttention !== 'broadcast')
+		throw new Error(`Assistant '${name}' must use 'broadcast' attention.`);
+	const seats =
+		options.seats === undefined ? undefined : { ...options.seats, [name]: 'broadcast' as const };
+	return {
+		...options,
+		agents: [assistant, ...(options.agents ?? [])],
+		seats,
+		summary: name,
 	};
 }
 

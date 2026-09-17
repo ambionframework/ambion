@@ -23,6 +23,12 @@ An empty map starts every catalog agent in the reserve. `summary` names one
 catalog agent that may receive closing work. It does not create a separate
 membership type.
 
+The optional `assistant` property registers an ordinary agent, seats it at
+`broadcast`, and selects it as the summary writer. With this property,
+`seats: {}` seats only the assistant. Omitted `seats` still seats every catalog
+agent at `broadcast`. Explicit seats configure the other agents. See
+[Default assistant](assistant.md) for conflicts and the complete shorthand.
+
 On resume, supply definitions for every recorded agent name. Additional
 definitions enter the reserve in the new run. Names outside that run's catalog
 cannot be seated.

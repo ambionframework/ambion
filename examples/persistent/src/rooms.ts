@@ -113,11 +113,12 @@ export async function openRooms(
 		const room = recorded.initialized
 			? await resumeRoom(entry.name, options)
 			: await startRoom({
-					...options,
+					agents: entry.team.specialists,
+					assistant: entry.team.assistant,
+					runtime,
 					name: entry.name,
 					goal: entry.goal,
-					summary: 'assistant',
-					seats: scenario?.seats ?? { assistant: 'broadcast', builder: 'named' },
+					seats: scenario?.seats ?? { builder: 'named' },
 				});
 		// The handle is owned before subscription. A later host failure leaves a
 		// usable running room that shutdown can still clean up.
