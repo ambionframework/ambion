@@ -2,7 +2,7 @@ import type { JournalOpener } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
-import { deferred, roomName, waitForRoom } from './support/room.ts';
+import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
 import { faultyJournals, gatedJournals, memory, tappedJournals } from './support/storage.ts';
 
@@ -67,7 +67,7 @@ describe('membership writes with fixed definitions', () => {
 			]);
 			expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
 			expect(
-				(await session.messages()).filter((message) => message.kind === 'seated'),
+				(await messagesOf(session)).filter((message) => message.kind === 'seated'),
 			).toHaveLength(1);
 		} finally {
 			await session.stop();
@@ -127,10 +127,12 @@ describe('membership writes with fixed definitions', () => {
 			await expect(session.seat(chosen.name)).rejects.toThrow(/disk is full/);
 			faulty.fail(false);
 			await waitForRoom(session);
-			expect(session.participants().map((participant) => participant.name)).toContain(chosen.name);
+			expect((await participantsOf(session)).map((participant) => participant.name)).toContain(
+				chosen.name,
+			);
 			expect(calls).toEqual(['chosen']);
 			expect(
-				(await session.messages()).filter((message) => message.kind === 'seated'),
+				(await messagesOf(session)).filter((message) => message.kind === 'seated'),
 			).toHaveLength(1);
 		} finally {
 			faulty.fail(false);
@@ -169,7 +171,7 @@ describe('membership writes with fixed definitions', () => {
 				await waitForRoom(session);
 				expect(calls).toEqual(['chosen']);
 				expect(
-					(await session.messages()).filter((message) => message.kind === 'seated'),
+					(await messagesOf(session)).filter((message) => message.kind === 'seated'),
 				).toHaveLength(1);
 			} finally {
 				unreadable.fail(false);

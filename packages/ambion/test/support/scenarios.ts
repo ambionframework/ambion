@@ -19,7 +19,7 @@ import {
 import { inProcessTransport } from '../../src/transport.ts';
 import { fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
-import { collect, roomName, waitForRoom } from './room.ts';
+import { collect, messagesOf, participantsOf, roomName, waitForRoom } from './room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -123,7 +123,7 @@ export const oneExchange: Scenario = {
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Can I tell the client Thursday?' });
 		await waitForRoom(session);
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(record.filter(isSpoken).map((m) => m.from)).toEqual(['priya', 'product', 'product']);
 		const summary = record.find(isSummary);
 		expect(summary).toMatchObject({ to: 'priya', text: 'The one message.' });
@@ -166,12 +166,12 @@ export const twoPeopleTwoExchanges: Scenario = {
 		await his.send({ text: 'Second?' });
 		await waitForRoom(session);
 		await hers.leave();
-		const summaries = (await session.messages()).filter(isSummary);
+		const summaries = (await messagesOf(session)).filter(isSummary);
 		expect(summaries.map((m) => [m.to, m.text])).toEqual([
 			['priya', 'for priya'],
 			['sam', 'for sam'],
 		]);
-		expect(session.participants().find((s) => s.name === 'priya')).toMatchObject({
+		expect((await participantsOf(session)).find((s) => s.name === 'priya')).toMatchObject({
 			presence: 'absent',
 		});
 		await finish(session, events, runtime);
@@ -200,14 +200,14 @@ export const seatFromReserve: Scenario = {
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'Is there enough steel for the pour?' });
 		await waitForRoom(session);
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(record.find((m) => m.kind === 'seated')).toMatchObject({
 			from: 'assistant',
 			subject: 'surveyor',
 		});
 		expect(record.filter(isSpoken).map((m) => m.from)).toContain('surveyor');
 		expect(record.find(isSummary)).toBeDefined();
-		expect(session.participants().map((s) => s.name)).toContain('surveyor');
+		expect((await participantsOf(session)).map((s) => s.name)).toContain('surveyor');
 		await finish(session, events, runtime);
 	},
 };

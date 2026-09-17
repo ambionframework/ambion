@@ -9,7 +9,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { seatSessionId } from '../src/transport.ts';
-import { roomName, waitForRoom } from './support/room.ts';
+import { participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
@@ -44,10 +44,10 @@ describe('participant views', () => {
 				}),
 			);
 			const exchange = await visit.send({ text: 'Question?' });
-			await exchange.messages();
+			await exchange.waitForClose();
 			await waitForRoom(room);
 
-			const participants = room.participants();
+			const participants = await participantsOf(room);
 			for (const participant of participants) {
 				if (participant.kind === 'agent') {
 					expectTypeOf(participant).toEqualTypeOf<AgentParticipantInfo>();
@@ -133,7 +133,7 @@ describe('participant views', () => {
 			const exchange = await (
 				await room.visit(defineHuman({ name: 'reader', identity: 'Reads the room.' }))
 			).send({ text: 'Question?' });
-			await exchange.messages();
+			await exchange.waitForClose();
 			await room.stop();
 
 			const expectedId = JSON.stringify(['ambion/seat-session', room.name, 'writer']);

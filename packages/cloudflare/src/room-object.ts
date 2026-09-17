@@ -9,7 +9,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type {
 	Attention,
 	Clock,
-	Exchange,
+	ExchangeRef,
 	ExchangeView,
 	Message,
 	ParticipantInfo,
@@ -150,7 +150,7 @@ export class RoomObject extends DurableObject<Env> {
 			...(options.seats === undefined ? {} : { seats: options.seats }),
 			...(options.goal === undefined ? {} : { goal: options.goal }),
 		});
-		await this.room.messages();
+		await this.room.read({ messages: false });
 	}
 
 	/** Start the configured room when its durable state has no live room. */
@@ -184,7 +184,12 @@ export class RoomObject extends DurableObject<Env> {
 		return visit;
 	}
 
-	async send(input: { from: string; to?: string; text: string; key?: string }): Promise<Exchange> {
+	async send(input: {
+		from: string;
+		to?: string;
+		text: string;
+		key?: string;
+	}): Promise<ExchangeRef> {
 		const visit = await this.visitOf(input.from);
 		const exchange = await visit.send({
 			text: input.text,
@@ -273,18 +278,18 @@ export class RoomObject extends DurableObject<Env> {
 			: { owner: exchange.owner, from: exchange.from, at: exchange.at };
 	}
 
-	async exchangeMessages(from: Seq): Promise<Message[]> {
+	async waitForClose(from: Seq): Promise<Message[]> {
 		// This convenience waits for a live close. Use read() for a stopped record.
 		const exchange = this.running().exchange(from);
 		if (exchange === undefined) throw new Error(`Exchange '${from}' is not on the record.`);
-		return exchange.messages();
+		return exchange.waitForClose();
 	}
 
-	async response(from: Seq) {
+	async waitForSummary(from: Seq) {
 		// This convenience waits for a live summary. Use read() for a stopped record.
 		const exchange = this.running().exchange(from);
 		if (exchange === undefined) throw new Error(`Exchange '${from}' is not on the record.`);
-		return exchange.response();
+		return exchange.waitForSummary();
 	}
 
 	// -- what a seat asks, in wire types --------------------------------------

@@ -24,7 +24,15 @@ import { inProcessTransport } from '../src/transport.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
-import { currentExchange, messageBefore, roomName, storedOf, waitForRoom } from './support/room.ts';
+import {
+	currentExchange,
+	messageBefore,
+	messagesOf,
+	participantsOf,
+	roomName,
+	storedOf,
+	waitForRoom,
+} from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -177,7 +185,7 @@ class Walk {
 			streamFn: scripted(script),
 		});
 		this.watch();
-		await this.session.messages();
+		await messagesOf(this.session);
 	}
 
 	private watch(): void {
@@ -324,16 +332,17 @@ describe('the room under a random walk', () => {
 					inheritedExchange: walk.inherited.exchange,
 				});
 				// every summary stands through the last message before it, whatever the walk did
-				const record = await walk.session.messages();
+				const record = await messagesOf(walk.session);
 				for (const summary of record.filter(isSummary)) {
 					expect(summary.covers.through).toBe(messageBefore(record, summary.seq));
 				}
 				await walk.session.stop();
 			} catch (error) {
 				const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
-				const seats = walk.session
-					.participants()
-					.map((s) => [s.name, s.kind === 'agent' ? s.status : s.presence]);
+				const seats = (await participantsOf(walk.session)).map((s) => [
+					s.name,
+					s.kind === 'agent' ? s.status : s.presence,
+				]);
 				walk.journal.push(`seats: ${JSON.stringify(seats)}`);
 				walk.journal.push(`events: ${walk.events.map(brief).join(' ')}`);
 				const stored = await storedOf(opened.journals, walk.name);

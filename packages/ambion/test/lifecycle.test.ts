@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
-import { gatedJournals, faultyJournals, storages } from './support/storage.ts';
-import { roomName } from './support/room.ts';
+import { messagesOf, participantsOf, roomName } from './support/room.ts';
+import { faultyJournals, gatedJournals, storages } from './support/storage.ts';
 
 type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void };
 
@@ -60,7 +60,7 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			releaseArrival.resolve();
 			const [one, two] = await Promise.all([first, second]);
 			expect(one.human).toEqual(two.human);
-			expect((await room.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(
+			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
 				1,
 			);
 		} finally {
@@ -86,11 +86,13 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			const freshVisit = await room.visit(person);
 			await expect(oldVisit.send({ text: 'old handle' })).rejects.toThrow(/ended|leaving/);
 			await oldVisit.leave();
-			expect(room.participants().find((entry) => entry.name === person.name)).toMatchObject({
+			expect(
+				(await participantsOf(room)).find((entry) => entry.name === person.name),
+			).toMatchObject({
 				presence: 'present',
 			});
 			await freshVisit.leave();
-			expect((await room.messages()).filter((message) => message.kind === 'left')).toHaveLength(2);
+			expect((await messagesOf(room)).filter((message) => message.kind === 'left')).toHaveLength(2);
 		} finally {
 			faulty.fail(false);
 			await room.stop();
@@ -122,7 +124,9 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			try {
 				const freshVisit = await resumed.visit(person);
 				await oldVisit.leave();
-				expect(resumed.participants().find((entry) => entry.name === person.name)).toMatchObject({
+				expect(
+					(await participantsOf(resumed)).find((entry) => entry.name === person.name),
+				).toMatchObject({
 					presence: 'present',
 				});
 				await freshVisit.leave();
@@ -162,7 +166,7 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			await expect(first).rejects.toThrow('arrival failed');
 			await expect(second).rejects.toThrow('arrival failed');
 			await expect(secondSend).rejects.toThrow('arrival failed');
-			expect((await room.messages()).some((message) => message.kind === 'said')).toBe(false);
+			expect((await messagesOf(room)).some((message) => message.kind === 'said')).toBe(false);
 		} finally {
 			rejectArrival.resolve();
 			await room.stop();
@@ -210,9 +214,9 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			await expect(visit.leave()).rejects.toThrow('disk is full');
 			faulty.fail(false);
 			await visit.leave();
-			const participant = room.participants().find((entry) => entry.name === person.name);
+			const participant = (await participantsOf(room)).find((entry) => entry.name === person.name);
 			expect(participant).toMatchObject({ kind: 'human', presence: 'absent' });
-			expect((await room.messages()).filter((message) => message.kind === 'left')).toHaveLength(1);
+			expect((await messagesOf(room)).filter((message) => message.kind === 'left')).toHaveLength(1);
 		} finally {
 			await room.stop();
 			await opened.dispose();
@@ -240,7 +244,7 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			expect(await settlesAfterTurn(second)).toBe(false);
 			releaseDeparture.resolve();
 			await Promise.all([first, second]);
-			expect((await room.messages()).filter((message) => message.kind === 'left')).toHaveLength(1);
+			expect((await messagesOf(room)).filter((message) => message.kind === 'left')).toHaveLength(1);
 		} finally {
 			releaseDeparture.resolve();
 			await room.stop();
@@ -269,7 +273,9 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			expect(await settlesAfterTurn(second)).toBe(false);
 			releaseDeparture.resolve();
 			await Promise.all([first, second]);
-			expect(room.participants().find((entry) => entry.name === person.name)).toMatchObject({
+			expect(
+				(await participantsOf(room)).find((entry) => entry.name === person.name),
+			).toMatchObject({
 				presence: 'absent',
 			});
 		} finally {
@@ -306,7 +312,9 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			releaseArrival.resolve();
 			await expect(arrival).rejects.toThrow(/stopped/);
 			await stop;
-			expect(room.participants().find((entry) => entry.name === person.name)).toMatchObject({
+			expect(
+				(await participantsOf(room)).find((entry) => entry.name === person.name),
+			).toMatchObject({
 				presence: 'absent',
 			});
 		} finally {

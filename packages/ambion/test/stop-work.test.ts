@@ -2,7 +2,14 @@ import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import { runningRoom, type SeatPort, type Wake } from '../src/transport.ts';
-import { deferred, roomName, stateOf, storedOf } from './support/room.ts';
+import {
+	deferred,
+	messagesOf,
+	participantsOf,
+	roomName,
+	stateOf,
+	storedOf,
+} from './support/room.ts';
 import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import {
 	faultyJournals,
@@ -291,7 +298,7 @@ it('does not recreate cancelled work when a steering message was unread', async 
 		await expect(visit.send({ to: worker.name, text: 'steer this work' })).rejects.toThrow(
 			/disk is full/,
 		);
-		await room.messages();
+		await messagesOf(room);
 		expect(unreadable.readFailures()).toBeGreaterThan(0);
 		await expect(room.stop()).rejects.toThrow(/unreadable/);
 		unreadable.fail(false);
@@ -302,7 +309,7 @@ it('does not recreate cancelled work when a steering message was unread', async 
 			await resumed.reconcile();
 			await new Promise<void>((resolve) => setImmediate(resolve));
 			expect(calls).toBe(1);
-			const messages = await resumed.messages();
+			const messages = await messagesOf(resumed);
 			const original = messages.find(
 				(message) => message.kind === 'said' && message.text === 'start work',
 			);
@@ -385,7 +392,7 @@ describe.each(storages)('stopped summary recovery on $name storage', (storage) =
 				expect(stateOf(resumed).closes.some((close) => close.from === exchange.from)).toBe(true);
 				const recovered = resumed.exchange(exchange.from);
 				if (recovered === undefined) throw new Error('The resumed exchange is missing.');
-				await expect(recovered.response()).rejects.toThrow(/interrupted/);
+				await expect(recovered.waitForSummary()).rejects.toThrow(/interrupted/);
 			} finally {
 				await resumed.stop();
 			}
@@ -429,7 +436,7 @@ describe.each(storages)('stop recovery with an empty cache on $name storage', (s
 			const resumed = await resumeRoom(name, { runtime, agents: [] });
 			try {
 				expect(
-					resumed.participants().find((participant) => participant.name === person.name),
+					(await participantsOf(resumed)).find((participant) => participant.name === person.name),
 				).toMatchObject({
 					presence: 'absent',
 				});

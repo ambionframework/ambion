@@ -23,7 +23,7 @@ import {
 } from './support/cast.ts';
 import { World, within } from './support/chaos.ts';
 import { fakeClock } from './support/clock.ts';
-import { collect, roomName, waitForRoom } from './support/room.ts';
+import { collect, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { memory } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
@@ -121,7 +121,7 @@ describe('a split: two live hosts over one journal', () => {
 		try {
 			expect(events.some((e) => e.type === 'superseded')).toBe(true);
 			expect(runningRoom(first, name)).toBeUndefined();
-			const record = await taken.messages();
+			const record = await messagesOf(taken);
 			expect(record.map((m) => m.key)).toContain('q2');
 			expect(record.map((m) => m.key)).not.toContain('q3');
 			expect(new Set(record.map((m) => m.seq)).size).toBe(record.length);
@@ -131,7 +131,7 @@ describe('a split: two live hosts over one journal', () => {
 				agents,
 				streamFn: scripted(script),
 			});
-			expect((await third.messages()).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
+			expect((await messagesOf(third)).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
 			await third.stop();
 			// the second host learns at its next write: its stop finds the fence, says so, and frees the name
 			const taken_events = collect(taken);

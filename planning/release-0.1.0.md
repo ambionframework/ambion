@@ -184,7 +184,7 @@ also participate in ordinary discussion under its configured attention.
 Closing execution uses only the regular `say` tool. Ordinary activations use
 `say`, `seat`, `unseat`, and their domain tools.
 
-`exchange.messages()` waits for the fixed discussion. `exchange.response()`
+`exchange.waitForClose()` waits for the fixed discussion. `exchange.waitForSummary()`
 waits for its summary or a terminal result without one. An application can
 always use the discussion when no summary is available.
 
@@ -192,7 +192,7 @@ always use the discussion when no summary is available.
 review.** Once a closed exchange has a summary, agent context uses it in place
 of the covered source messages. Agents continue from the summary and their
 domain tools. Human participants can review the original discussion through
-`exchange.messages()`. The journal retains every source message for review and
+`exchange.waitForClose()`. The journal retains every source message for review and
 recovery. Closure without a summary does not itself replace source messages.
 
 ### F5. Persistence and recovery
@@ -291,9 +291,10 @@ Provide ESM packages, declarations, accurate package READMEs, and examples
 checked against the packed release artifacts. The Node target remains
 22.19 or later, subject to the tested compatibility matrix.
 
-The planned packages are `@ambionframework/ambion`,
+The release packages are `@ambionframework/ambion`,
 `@ambionframework/journal`, `@ambionframework/pi-journal`, and
-`@ambionframework/workspace`. The main library composes the defaults;
+`@ambionframework/workspace`, `@ambionframework/cloudflare`, and
+`@ambionframework/cli`. The main library composes the defaults;
 applications import additional packages only when they need those capabilities.
 
 Pi remains the supported model loop. Provider selection follows the installed

@@ -3,7 +3,7 @@
  * best effort, and the room stays available for a later exchange.
  */
 import { expect, it } from 'vitest';
-import { enter } from '../support/room.ts';
+import { enter, messagesOf } from '../support/room.ts';
 import {
 	agent,
 	errorsIn,
@@ -42,9 +42,9 @@ live('control', () => {
 		// Long enough for the request to be open and streaming; too short for an essay.
 		await settle(2_000);
 		await session.abort();
-		await within(exchange.messages(), 15_000, 'the exchange closing after abort');
+		await within(exchange.waitForClose(), 15_000, 'the exchange closing after abort');
 
-		expect(saidBy(await session.messages(), 'essayist')).toEqual([]);
+		expect(saidBy(await messagesOf(session), 'essayist')).toEqual([]);
 		expect(errorsIn(events)).toEqual([]);
 		expect(events).toContainEqual({ type: 'activation_end', agent: 'essayist', spoke: false });
 
@@ -55,7 +55,7 @@ live('control', () => {
 			text: 'Drop the essay, do not write it. Say the word "ready" and nothing else.',
 		});
 		await untilQuiet(session);
-		const said = saidBy(await session.messages(), 'essayist');
+		const said = saidBy(await messagesOf(session), 'essayist');
 		expect(said).toHaveLength(1);
 		expect(said[0]?.text).toMatch(/ready/i);
 		expect(said[0]?.text.length).toBeLessThan(120);

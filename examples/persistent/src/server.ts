@@ -259,15 +259,14 @@ async function mutateHuman(
 	method: string | undefined,
 	input: unknown,
 ) {
+	const snapshot = await room.read({ messages: false });
 	switch (method) {
 		case 'DELETE':
 			if (
-				room
-					.participants()
-					.some(
-						(seat) =>
-							seat.name === person.name && seat.kind === 'human' && seat.presence === 'present',
-					)
+				snapshot.participants.some(
+					(seat) =>
+						seat.name === person.name && seat.kind === 'human' && seat.presence === 'present',
+				)
 			)
 				await (await room.visit(person)).leave();
 			return { left: person.name };
@@ -276,12 +275,10 @@ async function mutateHuman(
 			return { joined: person.name };
 		case 'POST': {
 			if (
-				!room
-					.participants()
-					.some(
-						(seat) =>
-							seat.name === person.name && seat.kind === 'human' && seat.presence === 'present',
-					)
+				!snapshot.participants.some(
+					(seat) =>
+						seat.name === person.name && seat.kind === 'human' && seat.presence === 'present',
+				)
 			)
 				fail(409, 'Enter this room before sending.');
 			if (!isDelivery(input))

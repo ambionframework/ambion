@@ -25,7 +25,7 @@ What is built:
   unless explicitly stopped; an uninitialized named record waits for
   an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
   `unseat`, `abort`, `read`, `messages`, `participants`, `exchange`,
-  `exchangeMessages` and `response` over RPC, and the three calls a seat makes: `view`, `commit`
+  `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its `alarm()` runs `reconcile()`.
 - **`SeatObject`** runs one seat. `wake` stores the activation id and sets
   an alarm; `alarm()` claims the lease, reads the view, runs the activation
@@ -50,7 +50,7 @@ tools, including `say`, `seat`, and `unseat`.
 
 `read()` returns the detached coherent room projection, including stopped
 records. `messages()` and `participants()` use that projection; the live
-`exchangeMessages()` and `response()` conveniences retain their wait behavior
+`waitForClose()` and `waitForSummary()` conveniences retain their wait behavior
 and require a running room. Use `read()` to inspect a stopped open exchange or
 its recorded summary outcome.
 

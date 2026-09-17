@@ -1,3 +1,4 @@
+import { messagesOf, participantsOf } from './room.ts';
 /**
  * The chaos harness: one room, driven the way a host drives it, through
  * crashes the harness places on purpose.
@@ -62,7 +63,7 @@ export async function outcome(
 	journals: JournalOpener,
 	cast: Cast = steady(),
 ): Promise<void> {
-	const record = await session.messages();
+	const record = await messagesOf(session);
 	for (const question of questions) {
 		const landed = record.filter((m) => m.key === question.key);
 		expect(landed, `delivery ${question.key}`).toHaveLength(1);
@@ -78,10 +79,10 @@ export async function outcome(
 	const closes = (await storedOf(journals, session.name)).filter((r) => r.kind === 'close');
 	expect(closes).toHaveLength(3);
 	expect(await currentExchange(session)).toBeUndefined();
-	expect(session.participants().find((s) => s.name === priya.name)).toMatchObject({
+	expect((await participantsOf(session)).find((s) => s.name === priya.name)).toMatchObject({
 		presence: 'absent',
 	});
-	expect(session.participants().find((s) => s.name === sam.name)).toMatchObject({
+	expect((await participantsOf(session)).find((s) => s.name === sam.name)).toMatchObject({
 		presence: 'present',
 	});
 }
@@ -199,7 +200,7 @@ export class World {
 			if (notCrashed(error) || !this.dead) throw error;
 		}
 		await this.retrying(async () => {
-			await this.session.messages();
+			await messagesOf(this.session);
 		});
 	}
 
@@ -238,7 +239,7 @@ export class World {
 		} catch (error) {
 			if (!/no composition/.test(String(error))) throw error;
 			await this.open();
-			await this.session.messages();
+			await messagesOf(this.session);
 			return;
 		}
 		this.inherited = {
@@ -299,11 +300,11 @@ export class World {
 			await this.ensure();
 			// quiet on its own, or waiting on the clock: a lease to expire, a backoff to pass
 			const settled = await Promise.race([
-				this.session.messages().then(() => true),
+				messagesOf(this.session).then(() => true),
 				new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
 			]);
 			if (this.dead) continue;
-			if (settled && idle(this.session)) return;
+			if (settled && (await idle(this.session))) return;
 			await this.clock.advance(31_000);
 		}
 		throw new Error('the room never went quiet');
@@ -350,7 +351,7 @@ export class World {
 		return [
 			`crashes: ${this.crashes}, writes: ${this.writes}`,
 			`messages: ${await read(async () =>
-				(this.session ? await this.session.messages() : (snapshot?.messages ?? []))
+				(this.session ? await messagesOf(this.session) : (snapshot?.messages ?? []))
 					.map((m: Message) => `#${m.seq} ${m.kind} ${m.from}${m.key ? ` (${m.key})` : ''}`)
 					.join('; '),
 			)}`,
@@ -364,8 +365,8 @@ export class World {
 }
 
 /** Nothing live and nothing open, on the fold the room holds now. */
-export function idle(session: Room): boolean {
-	const seats = session.participants();
+export async function idle(session: Room): Promise<boolean> {
+	const seats = await participantsOf(session);
 	const state = (session as Room & { state(): { exchange: unknown } }).state();
 	return (
 		state.exchange === undefined && seats.every((s) => s.kind !== 'agent' || s.status === 'idle')

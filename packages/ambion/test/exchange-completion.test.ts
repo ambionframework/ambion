@@ -16,6 +16,7 @@ import {
 	closedExchange,
 	crash,
 	deferred,
+	messagesOf,
 	roomName,
 	stateOf,
 	storedOf,
@@ -66,11 +67,11 @@ const summaryFor =
 
 async function expectOutcome(exchange: ExchangeHandle, outcome: Outcome): Promise<void> {
 	if (outcome === 'failed') {
-		await expect(exchange.response()).rejects.toThrow(/interrupted/i);
+		await expect(exchange.waitForSummary()).rejects.toThrow(/interrupted/i);
 	} else if (outcome === 'published') {
-		await expect(exchange.response()).resolves.toMatchObject({ text: 'Recorded result.' });
+		await expect(exchange.waitForSummary()).resolves.toMatchObject({ text: 'Recorded result.' });
 	} else {
-		await expect(exchange.response()).resolves.toBeUndefined();
+		await expect(exchange.waitForSummary()).resolves.toBeUndefined();
 	}
 }
 
@@ -158,7 +159,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			const recovered = resumed.exchange(exchange.from);
 			if (recovered === undefined) throw new Error('Expected the recorded exchange.');
 			let settled = false;
-			const response = recovered.response().then((message) => {
+			const response = recovered.waitForSummary().then((message) => {
 				settled = true;
 				return message;
 			});
@@ -198,7 +199,7 @@ describe('exchange completion handles', () => {
 			const visit = await room.visit(priya);
 			faulty.fail('before', 'close');
 			const exchange = await visit.send({ text: 'First?', key: 'close-retry-1' });
-			const waiting = exchange.messages();
+			const waiting = exchange.waitForClose();
 			let closed = false;
 			void waiting.then(
 				() => {
@@ -266,15 +267,15 @@ describe('exchange completion handles', () => {
 		try {
 			const visit = await room.visit(priya);
 			const first = await visit.send({ text: 'First?', key: 'response-isolation-1' });
-			await first.messages();
+			await first.waitForClose();
 			await firstSummaryStarted.promise;
-			const response = first.response();
+			const response = first.waitForSummary();
 			const second = await visit.send({ text: 'Second?', key: 'response-isolation-2' });
 			await laterAgentStarted.promise;
 			firstSummaryRelease.resolve();
 			await expect(response).resolves.toMatchObject({ text: 'First result.', to: priya.name });
 			let secondDone = false;
-			void second.response().then(
+			void second.waitForSummary().then(
 				() => {
 					secondDone = true;
 				},
@@ -285,14 +286,14 @@ describe('exchange completion handles', () => {
 			await new Promise((resolve) => setImmediate(resolve));
 			expect(secondDone).toBe(false);
 			laterAgentRelease.resolve();
-			const secondConversation = await second.messages();
-			const durableSummary = (await room.messages()).find((message) => message.kind === 'summary');
+			const secondConversation = await second.waitForClose();
+			const durableSummary = (await messagesOf(room)).find((message) => message.kind === 'summary');
 			expect(secondConversation.every((message) => message.kind !== 'summary')).toBe(true);
 			expect(durableSummary?.seq).toBeGreaterThan(second.from);
 			expect(durableSummary?.seq).toBeLessThanOrEqual(
 				closedExchange(room, second.from)?.through ?? 0,
 			);
-			await expect(second.response()).resolves.toBeUndefined();
+			await expect(second.waitForSummary()).resolves.toBeUndefined();
 		} finally {
 			firstSummaryRelease.resolve();
 			laterAgentRelease.resolve();
@@ -341,7 +342,7 @@ describe('exchange completion handles', () => {
 				key: 'summary-unclaimed-1',
 			});
 			await summaryStarted.promise;
-			const response = exchange.response().then(
+			const response = exchange.waitForSummary().then(
 				() => ({ resolved: true, error: '' }),
 				(error: unknown) => ({ resolved: false, error: String(error) }),
 			);

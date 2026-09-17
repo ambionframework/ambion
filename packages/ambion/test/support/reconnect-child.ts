@@ -13,6 +13,7 @@ import {
 	startRoom,
 } from '../../src/index.ts';
 import { fakeClock } from './clock.ts';
+import { messagesOf } from './room.ts';
 import { quiet, scripted, speak } from './scripted.ts';
 import { nodeSql } from './storage.ts';
 
@@ -83,18 +84,18 @@ async function resume(): Promise<void> {
 		const exchange = room.exchange(checkpoint.from);
 		assert.ok(exchange);
 		assert.equal((await visit.send(checkpoint.request)).from, exchange.from);
-		const discussion = await exchange.messages();
+		const discussion = await exchange.waitForClose();
 		assert.ok(
 			discussion.some((message) => message.kind === 'said' && message.text === 'Recovered answer.'),
 		);
-		assert.equal(await exchange.response(), undefined);
-		const messages = await room.messages();
+		assert.equal(await exchange.waitForSummary(), undefined);
+		const messages = await messagesOf(room);
 		assert.equal(messages.filter((message) => message.kind === 'arrived').length, 1);
 		assert.equal(
 			messages.filter((message) => message.kind === 'said' && message.key === request.key).length,
 			1,
 		);
-		const missed = await room.messages({ since: checkpoint.cursor });
+		const missed = await messagesOf(room, { since: checkpoint.cursor });
 		assert.ok(missed.length > 0);
 		assert.ok(missed.every((message) => message.seq > checkpoint.cursor));
 		assert.ok(

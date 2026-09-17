@@ -12,7 +12,7 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { Close, Composition, Seating } from '../journal/events.ts';
 import { type Entry, placed } from '../journal/journal.ts';
-import type { Exchange, Message, Seq } from '../types.ts';
+import type { ExchangeRef, Message, Seq } from '../types.ts';
 import { type MessageDelivery, messageDelivery } from './delivery.ts';
 import { openExchange, summaryCompletion } from './exchange.ts';
 import {
@@ -43,7 +43,7 @@ export interface RoomState {
 	readonly roster: Seating[];
 	readonly reserve: Seating[];
 	readonly people: Map<string, PersonState>;
-	readonly exchange: Exchange | undefined;
+	readonly exchange: ExchangeRef | undefined;
 	readonly closes: Close[];
 	/** The latest cancellation marker, whose journal position bounds old work. */
 	readonly cancelledAt?: Seq;

@@ -25,7 +25,7 @@ export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> :
 export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandoned';
 
 /** A question the room is working on. */
-export interface Exchange {
+export interface ExchangeRef {
 	/** The person whose question opened it, and who owns what follows. */
 	readonly owner: string;
 	/** The seq of that question: where the exchange starts. */
@@ -35,7 +35,7 @@ export interface Exchange {
 }
 
 /** An exchange the room has finished, and the range it turned out to hold. */
-export interface ClosedExchange extends Exchange {
+export interface ClosedExchange extends ExchangeRef {
 	/** The last seq on the record when the room went quiet. */
 	readonly through: Seq;
 }
@@ -49,7 +49,7 @@ export type SummaryOutcome =
 
 /** A detached exchange view that can be read without starting a room. */
 export type ExchangeView =
-	| (Exchange & { readonly status: 'open' })
+	| (ExchangeRef & { readonly status: 'open' })
 	| (ClosedExchange & { readonly status: 'closed'; readonly summary: SummaryOutcome });
 
 interface RoomSnapshotFields {
@@ -285,7 +285,7 @@ export type RoomNotification =
 	 * question it answered starts here, whatever the room makes of it
 	 * later.
 	 */
-	| { type: 'exchange_opened'; exchange: Exchange }
+	| { type: 'exchange_opened'; exchange: ExchangeRef }
 	/**
 	 * The room went quiet with an exchange open, so that exchange is over and
 	 * holds the range it turned out to cover. It arrives after `settled` and

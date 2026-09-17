@@ -3,7 +3,7 @@ import { type Runtime, runningRoom } from '../src/host/runtime.ts';
 import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import type { Intent } from '../src/protocol.ts';
 import { fakeClock } from './support/clock.ts';
-import { crash, roomName, stateOf } from './support/room.ts';
+import { crash, messagesOf, roomName, stateOf } from './support/room.ts';
 import { storages } from './support/storage.ts';
 
 const agent = (name: string) =>
@@ -54,11 +54,11 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 			const commit = (activation: string, intent: Intent) =>
 				peer.commit({ activation, key: crypto.randomUUID(), intent });
 			expect(await commit(first, { kind: 'seated', name: 'reserve' })).toHaveProperty('committed');
-			const before = await room.messages();
+			const before = await messagesOf(room);
 			expect(await commit(second, { kind: 'seated', name: 'reserve' })).toEqual({
 				unchanged: { kind: 'seated', name: 'reserve' },
 			});
-			expect(await room.messages()).toEqual(before);
+			expect(await messagesOf(room)).toEqual(before);
 			expect(stateOf(room).leases.get(second)?.readThrough).toBe(0);
 			expect(await commit(first, { kind: 'unseated', name: 'priya' })).toHaveProperty('refused');
 			expect(await commit(first, { kind: 'seated', name: 'unknown' })).toHaveProperty('refused');
@@ -102,7 +102,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 				readThrough: stateOf(room).lastSeq,
 			});
 			await room.reconcile();
-			await first.messages();
+			await first.waitForClose();
 			const closing = stateOf(room).due.find((work) => work.seat === 'alpha');
 			expect(closing?.source).toBe('closed');
 			const second = await visit.send({ text: 'Remove the writer.' });
@@ -115,7 +115,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 					intent: { kind: 'unseated', name: 'alpha' },
 				}),
 			).toHaveProperty('committed');
-			await expect(first.response()).rejects.toThrow(/interrupted/);
+			await expect(first.waitForSummary()).rejects.toThrow(/interrupted/);
 			await room.seat('alpha', { attention: 'none' });
 			if (closing === undefined) throw new Error('Expected closing assignment.');
 			expect(await peer.lease({ operation: 'claim', activation: closing.id })).toHaveProperty(
@@ -126,7 +126,7 @@ describe.each(storages)('ordinary membership on $name', (storage) => {
 				agents: [alpha, beta],
 				runtime: createRuntime({ storage: opened.storage, clock, transport: transport([]) }),
 			});
-			await expect(resumed.exchange(first.from)?.response()).rejects.toThrow(/interrupted/);
+			await expect(resumed.exchange(first.from)?.waitForSummary()).rejects.toThrow(/interrupted/);
 			expect(stateOf(resumed).due.some((work) => work.id === closing.id)).toBe(false);
 		} finally {
 			await resumed?.stop();

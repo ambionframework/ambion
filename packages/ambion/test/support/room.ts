@@ -3,6 +3,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type Message,
+	type ParticipantInfo,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -76,11 +77,22 @@ export async function waitForRoom(
 	while (Date.now() < deadline) {
 		await room.reconcile();
 		await tick();
-		await room.messages();
+		await room.read({ messages: false });
 		const work = liveWork(internal.state(), internal.runtime.clock.now());
 		if (scope === 'settled' ? !work.exchange : work.rest) return;
 	}
 	throw new Error(`The room did not reach ${scope}.`);
+}
+
+export async function messagesOf(
+	room: Pick<Room, 'read'>,
+	options: { since?: number } = {},
+): Promise<Message[]> {
+	return [...(await room.read({ messages: options })).messages];
+}
+
+export async function participantsOf(room: Pick<Room, 'read'>): Promise<ParticipantInfo[]> {
+	return [...(await room.read({ messages: false })).participants];
 }
 
 export function deferred(): { promise: Promise<void>; resolve: () => void } {

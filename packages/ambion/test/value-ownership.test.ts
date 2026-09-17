@@ -8,7 +8,7 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import { andrei, roomName } from './support/room.ts';
+import { andrei, messagesOf, participantsOf, roomName } from './support/room.ts';
 import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
@@ -35,22 +35,22 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 			const room = await startRoom({ name: roomName('owned-read'), runtime });
 			try {
 				const exchange = await (await room.visit(andrei)).send({ text: 'Original question.' });
-				await exchange.messages();
+				await exchange.waitForClose();
 				const expected = await readRoom(room.name, {
 					runtime: createRuntime({ storage: opened.storage }),
 				});
 				const messages =
 					source === 'messages'
-						? await room.messages()
+						? await messagesOf(room)
 						: source === 'snapshot'
 							? (await readRoom(room.name, { runtime })).messages
-							: await exchange.messages();
+							: await exchange.waitForClose();
 				const question = messages.find(isSpoken);
 				if (question === undefined) throw new Error('No question was read.');
 				changeMessage(question);
-				expect(await room.messages()).toEqual(expected.messages);
+				expect(await messagesOf(room)).toEqual(expected.messages);
 				expect(await readRoom(room.name, { runtime })).toEqual(expected);
-				expect(await exchange.messages()).toEqual(
+				expect(await exchange.waitForClose()).toEqual(
 					expected.messages.filter((message) => message.seq >= exchange.from),
 				);
 			} finally {
@@ -72,18 +72,27 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 		});
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Original question.' });
-			await exchange.messages();
-			const filter = { since: 0 };
-			const reading = room.messages(filter);
-			filter.since = Number.MAX_SAFE_INTEGER;
-			expect((await reading).filter(isSpoken).map((message) => message.text)).toEqual([
-				'Original question.',
-			]);
+			await exchange.waitForClose();
+			const liveOptions = { messages: { since: 0 } };
+			const recordedOptions = {
+				runtime: createRuntime({ storage: opened.storage }),
+				messages: { since: 0 },
+			};
+			const readings = [room.read(liveOptions), readRoom(room.name, recordedOptions)];
+			liveOptions.messages.since = Number.MAX_SAFE_INTEGER;
+			recordedOptions.messages.since = Number.MAX_SAFE_INTEGER;
+			liveOptions.messages = { since: Number.MAX_SAFE_INTEGER };
+			recordedOptions.messages = { since: Number.MAX_SAFE_INTEGER };
+			for (const snapshot of await Promise.all(readings)) {
+				expect(snapshot.messages.filter(isSpoken).map((message) => message.text)).toEqual([
+					'Original question.',
+				]);
+			}
 			const options: { attention: 'none' | 'broadcast' } = { attention: 'none' };
 			const seating = room.seat(writer.name, options);
 			options.attention = 'broadcast';
 			await seating;
-			expect(room.participants()).toContainEqual(
+			expect(await participantsOf(room)).toContainEqual(
 				expect.objectContaining({ name: writer.name, attention: 'none' }),
 			);
 		} finally {
@@ -105,12 +114,12 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 		});
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Question?' });
-			const response = await exchange.response();
+			const response = await exchange.waitForSummary();
 			if (response === undefined) throw new Error('No summary was written.');
 			const expected = structuredClone(response);
 			changeMessage(response);
-			expect(await exchange.response()).toEqual(expected);
-			expect((await room.messages()).find((message) => message.kind === 'summary')).toEqual(
+			expect(await exchange.waitForSummary()).toEqual(expected);
+			expect((await messagesOf(room)).find((message) => message.kind === 'summary')).toEqual(
 				expected,
 			);
 		} finally {
@@ -132,7 +141,7 @@ describe.each(storages)('room value ownership on $name', (storage) => {
 			});
 			room.subscribe((event) => seen.push(event));
 			const exchange = await visit.send({ text: 'Original question.' });
-			await exchange.messages();
+			await exchange.waitForClose();
 			expect(seen).toContainEqual({
 				type: 'message',
 				message: expect.objectContaining({ from: andrei.name, text: 'Original question.' }),

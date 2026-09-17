@@ -34,7 +34,7 @@ import {
 import { idle } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { History, standing, violations } from './support/history.ts';
-import { collect, roomName, storedOf, waitForRoom } from './support/room.ts';
+import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { childJournals, childStorage, gatedJournals, memory, sqlite } from './support/storage.ts';
 import { serializing } from './support/transport.ts';
@@ -124,7 +124,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			'sam',
 			'read',
 			undefined,
-			() => taken.messages(),
+			() => messagesOf(taken),
 			(record) => record.map((m) => ({ seq: m.seq, key: m.key })),
 		);
 		try {
@@ -135,7 +135,7 @@ describe.each([memory, sqlite])('a split on $name: two live hosts over one journ
 			expect(folded.lastSeq).toBeGreaterThan(0);
 			expect(folded.messages.every((message) => message.seq > 0)).toBe(true);
 			const found = violations(history, {
-				record: await taken.messages(),
+				record: await messagesOf(taken),
 				stored,
 				state: folded,
 			});
@@ -200,10 +200,10 @@ describe('a split: two live hosts over one SQLite database', () => {
 	async function quietNow(session: Room, clock: FakeClock): Promise<void> {
 		for (let round = 0; round < 12; round += 1) {
 			const settled = await Promise.race([
-				session.messages().then(() => true),
+				messagesOf(session).then(() => true),
 				new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
 			]);
-			if (settled && idle(session)) return;
+			if (settled && (await idle(session))) return;
 			await clock.advance(2_000);
 		}
 		throw new Error('the room never went quiet');

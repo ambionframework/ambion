@@ -16,7 +16,7 @@ import type {
 	Steer,
 	Transport,
 } from '../src/transport.ts';
-import { andrei, roomName } from './support/room.ts';
+import { andrei, participantsOf, roomName } from './support/room.ts';
 import { type Storage, storages } from './support/storage.ts';
 
 const agents = ['alpha', 'beta'].map((name) =>
@@ -99,7 +99,9 @@ describe.each(storages)('protocol value ownership on $name', (storage) => {
 			expect(await committing).toMatchObject({
 				committed: { kind: 'said', key: 'original', text: 'Original contribution.' },
 			});
-			expect(room.participants().some((participant) => participant.name === 'beta')).toBe(true);
+			expect((await participantsOf(room)).some((participant) => participant.name === 'beta')).toBe(
+				true,
+			);
 		} finally {
 			await room.stop();
 			await opened.dispose();

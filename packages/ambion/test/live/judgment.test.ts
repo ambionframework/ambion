@@ -7,7 +7,7 @@
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { defineTool } from '../../src/index.ts';
-import { enter } from '../support/room.ts';
+import { enter, messagesOf } from '../support/room.ts';
 import {
 	activationsOf,
 	agent,
@@ -43,7 +43,7 @@ live('judgment', () => {
 		await visit.send({ text: 'Will it rain on site today?' });
 		await untilQuiet(session);
 
-		const messages = await session.messages();
+		const messages = await messagesOf(session);
 		const answers = saidBy(messages, 'weather');
 		expect(answers).toHaveLength(1);
 		expect(answers[0]?.text).toMatch(/dry|no rain/i);
@@ -89,7 +89,7 @@ live('judgment', () => {
 		await visit.send({ text: 'How many units of SKU A-100 do we have?' });
 		await untilQuiet(session);
 
-		const messages = await session.messages();
+		const messages = await messagesOf(session);
 		const ask = saidBy(messages, 'desk').find((m) => m.to === 'stock');
 		expect(ask).toBeDefined();
 		// Nothing woke the passive seat until the say that named it.

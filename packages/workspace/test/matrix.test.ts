@@ -92,12 +92,12 @@ const twoWorkspaces: Scenario = {
 		});
 		await memoryDrive.destroy();
 		destroyed.resolve();
-		await exchange.messages();
-		await exchange.response();
+		await exchange.waitForClose();
+		await exchange.waitForSummary();
 
 		expect(alphaResults.some((r) => r.includes('no longer available'))).toBe(true);
 		expect(betaResults.some((r) => r.includes('two'))).toBe(true);
-		const said = (await session.messages()).filter(isSpoken).map((m) => m.text);
+		const said = (await session.read()).messages.filter(isSpoken).map((m) => m.text);
 		expect(said).toContain('alpha done');
 		expect(said).toContain('beta done');
 		await finish(session, events, runtime);

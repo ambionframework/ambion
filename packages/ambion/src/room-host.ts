@@ -41,11 +41,11 @@ import type {
 	ViewResponse,
 } from './protocol.ts';
 import { activationSpec } from './room/activation.ts';
-import { closedExchange, summaryCompletion } from './room/exchange.ts';
+import { closedExchange, discussionMessages, summaryCompletion } from './room/exchange.ts';
 import { foldRoom, type RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
-import { type MessageSelection, readView } from './room/read.ts';
+import { captureMessageSelection, type MessageSelection, readView } from './room/read.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
 import {
 	decide,
@@ -56,16 +56,14 @@ import {
 	type RoomDecision,
 	stopWork as stopWorkDecision,
 } from './room/transition.ts';
-import { participantsOf } from './room/view.ts';
 import type {
 	AgentDefinition,
 	Attention,
 	ClosedExchange,
 	EndReason,
-	Exchange,
+	ExchangeRef,
 	HumanDefinition,
 	Message,
-	ParticipantInfo,
 	PresenceMessage,
 	RoomNotification,
 	RoomSnapshot,
@@ -103,26 +101,20 @@ export interface CompositionDraft {
 /** A presence change before the room stamps when it happened. */
 type PresenceDraft = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 
-export interface ExchangeHandle {
-	/** The person who opened this exchange. */
-	readonly owner: string;
-	/** The source sequence of the opening question. This identifies the exchange. */
-	readonly from: Seq;
-	/** The timestamp of the opening question. */
-	readonly at: string;
+export interface ExchangeHandle extends ExchangeRef {
 	/**
 	 * Resolve with the fixed non-summary conversation after the durable close.
 	 * Reject if the room stops before the exchange closes.
 	 */
-	messages(): Promise<Message[]>;
+	waitForClose(): Promise<Message[]>;
 	/** Resolve with the durable summary, or `undefined` when no summary is needed; reject when required work fails. */
-	response(): Promise<SummaryMessage | undefined>;
+	waitForSummary(): Promise<SummaryMessage | undefined>;
 }
 
 export interface Room {
 	readonly name: string;
-	messages(options?: { since?: Seq }): Promise<Message[]>;
-	participants(): ParticipantInfo[];
+	/** Observe one detached room snapshot without waiting for agent work. */
+	read(options?: { messages?: MessageSelection }): Promise<RoomSnapshot>;
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): ExchangeHandle | undefined;
@@ -460,24 +452,9 @@ export class RoomHost implements Room, RunningRoom {
 		}
 	}
 
-	/** The record, once every write asked for has landed or failed and every doubt is settled. */
-	async messages(options: { since?: Seq } = {}): Promise<Message[]> {
-		const since = options.since;
-		await this.ready;
-		await this.journal.settled();
-		const messages = this.state().messages;
-		return since === undefined
-			? messages.map(copyMessage)
-			: messages.filter((m) => m.seq > since).map(copyMessage);
-	}
-
-	/** The roster and people folded from the durable record. */
-	participants(): ParticipantInfo[] {
-		const state = this.state();
-		return participantsOf({ state, live: this.live(state) });
-	}
-
-	async snapshot(options: { messages?: MessageSelection } = {}): Promise<RoomSnapshot> {
+	/** Read the detached room projection after pending journal work settles. */
+	async read(options: { messages?: MessageSelection } = {}): Promise<RoomSnapshot> {
+		const messages = captureMessageSelection(options.messages);
 		await this.ready;
 		await this.journal.settled();
 		return readView(
@@ -485,7 +462,7 @@ export class RoomHost implements Room, RunningRoom {
 			this.state(),
 			this.runtime.clock.now(),
 			this.journal.lastSeq,
-			options.messages,
+			messages,
 		);
 	}
 
@@ -501,15 +478,15 @@ export class RoomHost implements Room, RunningRoom {
 		return message === undefined ? undefined : this.handleFor(exchange);
 	}
 
-	private handleFor(exchange: Exchange): ExchangeHandle {
+	private handleFor(exchange: ExchangeRef): ExchangeHandle {
 		const at =
 			this.state().messages.find((message) => message.seq === exchange.from)?.at ?? exchange.at;
 		return {
 			owner: exchange.owner,
 			from: exchange.from,
 			at,
-			messages: () => this.exchangeMessages(exchange.from),
-			response: () => this.responseFor(exchange.from),
+			waitForClose: () => this.exchangeMessages(exchange.from),
+			waitForSummary: () => this.responseFor(exchange.from),
 		};
 	}
 
@@ -534,10 +511,7 @@ export class RoomHost implements Room, RunningRoom {
 
 	private async exchangeMessages(from: Seq): Promise<Message[]> {
 		const close = await this.waitForClose(from);
-		return this.state()
-			.messages.filter((message) => message.kind !== 'summary')
-			.filter((message) => message.seq >= close.from && message.seq <= close.through)
-			.map(copyMessage);
+		return discussionMessages(this.state().messages, close.from, close.through);
 	}
 
 	private async responseFor(from: Seq): Promise<SummaryMessage | undefined> {

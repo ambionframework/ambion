@@ -8,7 +8,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { roomName, waitForRoom } from './support/room.ts';
+import { messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
 import { faultyJournals, memory } from './support/storage.ts';
 
@@ -105,7 +105,7 @@ describe('room bindings', () => {
 		).send({ text: 'Still mine?' });
 		await waitForRoom(first);
 		expect(
-			(await first.messages()).some(
+			(await messagesOf(first)).some(
 				(message) => message.kind === 'said' && message.text === 'Still mine?',
 			),
 		).toBe(true);
@@ -134,12 +134,16 @@ describe('room bindings', () => {
 			await expect(session.seat(original.name)).rejects.toThrow(/disk is full/);
 			faulty.fail(false);
 			await session.seat(original.name);
-			expect(session.participants().find((seat) => seat.name === original.name)).toMatchObject({
+			expect(
+				(await participantsOf(session)).find((seat) => seat.name === original.name),
+			).toMatchObject({
 				identity: original.identity,
 			});
 			await session.unseat(original.name);
 			await session.seat(original.name);
-			expect(session.participants().find((seat) => seat.name === original.name)).toMatchObject({
+			expect(
+				(await participantsOf(session)).find((seat) => seat.name === original.name),
+			).toMatchObject({
 				identity: original.identity,
 			});
 		} finally {

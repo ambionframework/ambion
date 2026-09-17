@@ -167,7 +167,7 @@ the one activation where it writes for them.
 **Later activations use summaries; people can review the exchange.** Once a
 closed exchange has a summary, agent context replaces its covered messages
 with that summary. Products continue from the summary and their own APIs.
-The journal retains the original discussion, and `exchange.messages()` exposes
+The journal retains the original discussion, and `exchange.waitForClose()` exposes
 it for human review. The terminal keeps the original lines visible. See the
 [summary contract](../../docs/summary.md).
 

@@ -12,7 +12,14 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
-import { collect, deferred, roomName, waitForRoom } from './support/room.ts';
+import {
+	collect,
+	deferred,
+	messagesOf,
+	participantsOf,
+	roomName,
+	waitForRoom,
+} from './support/room.ts';
 import {
 	byAgent,
 	callTool,
@@ -98,11 +105,8 @@ const kinds = (record: readonly Message[]) => record.map((message) => message.ki
 const presence = (record: readonly Message[]) => record.filter(isPresence);
 const activated = (events: RoomNotification[]) =>
 	events.filter((event) => event.type === 'activation_start').map((event) => event.agent);
-const seatNames = (session: Room) =>
-	session
-		.participants()
-		.filter((seat) => seat.kind === 'agent')
-		.map((seat) => seat.name);
+const seatNames = async (session: Room) =>
+	(await participantsOf(session)).filter((seat) => seat.kind === 'agent').map((seat) => seat.name);
 describe('ordinary participation', () => {
 	it('shows every ordinary seat the reserve and membership tools', async () => {
 		const contexts: string[] = [];
@@ -127,15 +131,15 @@ describe('ordinary participation', () => {
 		expect(tools[0]).toEqual(['say', 'seat', 'unseat']);
 		expect(contexts[0]).toContain('The reserve: agents not in the room.');
 		expect(contexts[0]).toContain('- surveyor: Quantity surveyor. Holds the tonnage.');
-		expect(kinds(await session.messages())).toEqual(['arrived', 'said', 'seated', 'said']);
+		expect(kinds(await messagesOf(session))).toEqual(['arrived', 'said', 'seated', 'said']);
 		expect(
-			presence(await session.messages()).find((message) => message.kind === 'seated'),
+			presence(await messagesOf(session)).find((message) => message.kind === 'seated'),
 		).toMatchObject({
 			from: 'product',
 			subject: 'surveyor',
 		});
 		expect(activated(events)).toContain('surveyor');
-		expect(seatNames(session)).toEqual(['product', 'surveyor']);
+		expect(await seatNames(session)).toEqual(['product', 'surveyor']);
 	});
 
 	it('lets an ordinary seat add several colleagues without a local call quota', async () => {
@@ -153,8 +157,8 @@ describe('ordinary participation', () => {
 		await (await session.visit(priya)).send({ text: 'Bring everyone needed.' });
 		await waitForRoom(session);
 
-		expect(seatNames(session)).toEqual(['product', 'surveyor', 'architect', 'greeter']);
-		expect(kinds(await session.messages())).toEqual([
+		expect(await seatNames(session)).toEqual(['product', 'surveyor', 'architect', 'greeter']);
+		expect(kinds(await messagesOf(session))).toEqual([
 			'arrived',
 			'said',
 			'seated',
@@ -179,9 +183,9 @@ describe('ordinary participation', () => {
 		await (await session.visit(priya)).send({ text: 'Is the team ready?' });
 		await waitForRoom(session);
 
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(record.filter((message) => message.kind === 'seated')).toHaveLength(0);
-		expect(seatNames(session)).toEqual(['product', 'surveyor']);
+		expect(await seatNames(session)).toEqual(['product', 'surveyor']);
 		expect(contexts[1]).toContain('delivered');
 	});
 
@@ -237,7 +241,7 @@ describe('ordinary participation', () => {
 		await waitForRoom(session);
 
 		expect(contexts.at(-1)).toContain('[surveyor → product] The drawings will settle this.');
-		expect(seatNames(session)).toContain(architect.name);
+		expect(await seatNames(session)).toContain(architect.name);
 		expect(activated(events)).toContain(product.name);
 	});
 });
@@ -257,11 +261,11 @@ describe('ordinary unseating and host membership', () => {
 		await (await session.visit(priya)).send({ text: 'Can anyone decide?' });
 		await waitForRoom(session);
 
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(
 			record.some((message) => message.kind === 'unseated' && message.subject === surveyor.name),
 		).toBe(true);
-		expect(seatNames(session)).toEqual([product.name]);
+		expect(await seatNames(session)).toEqual([product.name]);
 		expect(activated(events)).toContain(product.name);
 	});
 
@@ -274,10 +278,10 @@ describe('ordinary unseating and host membership', () => {
 
 		await session.seat(surveyor.name);
 		await waitForRoom(session);
-		expect(seatNames(session)).toEqual([product.name, surveyor.name]);
+		expect(await seatNames(session)).toEqual([product.name, surveyor.name]);
 		await session.unseat(surveyor.name);
-		expect(seatNames(session)).toEqual([product.name]);
-		const record = await session.messages();
+		expect(await seatNames(session)).toEqual([product.name]);
+		const record = await messagesOf(session);
 		expect(kinds(record)).toEqual(['seated', 'unseated']);
 		expect(presence(record).every((message) => message.from === undefined)).toBe(true);
 
@@ -293,6 +297,6 @@ describe('ordinary unseating and host membership', () => {
 			streamFn: scripted(byAgent({})),
 		});
 		started.push(resumed);
-		expect(seatNames(resumed)).toEqual([product.name]);
+		expect(await seatNames(resumed)).toEqual([product.name]);
 	});
 });

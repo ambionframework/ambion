@@ -100,7 +100,7 @@ async function packFixture(destination) {
 	await mkdir(join(destination, 'src'));
 	await writeFile(
 		join(destination, 'src', 'index.ts'),
-		"import { PACKAGE_NAME } from '@ambionframework/ambion';\nimport type { Env } from '@ambionframework/cloudflare';\n\nconst name: string = PACKAGE_NAME;\nconst env: Env | undefined = undefined;\nvoid name;\nvoid env;\n",
+		"import { PACKAGE_NAME, readExchange } from '@ambionframework/ambion';\nimport type { ExchangeRef, Room } from '@ambionframework/ambion';\nimport type { Env } from '@ambionframework/cloudflare';\n\nconst name: string = PACKAGE_NAME;\nconst env: Env | undefined = undefined;\ndeclare const room: Room;\ndeclare const exchange: ExchangeRef;\nconst snapshot = room.read({ messages: false });\nconst handle = room.exchange(exchange.from);\nif (handle !== undefined) {\n  void handle.waitForClose();\n  void handle.waitForSummary();\n}\nvoid readExchange('room', exchange.from);\nvoid snapshot;\nvoid name;\nvoid env;\n",
 	);
 	await writeFile(
 		join(destination, 'src', 'transport.ts'),

@@ -15,6 +15,7 @@ import {
 	collect,
 	crash,
 	deferred,
+	messagesOf,
 	roomName,
 	stateOf,
 	waitForRoom,
@@ -91,7 +92,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			await visit.send({ to: alpha.name, text: 'Begin analysis.' });
 			await started.promise;
 			await visit.send({ to: priya.name, text: 'The requirement has changed.' });
-			const update = (await room.messages()).at(-1);
+			const update = (await messagesOf(room)).at(-1);
 			expect(update?.wakes ?? []).toEqual([]);
 			expect(
 				observed.steers.filter((steer) => steer.message.seq === update?.seq).map((s) => s.seat),
@@ -149,7 +150,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			await visit.send({ to: alpha.name, text: 'Begin analysis.' });
 			await started.promise;
 			await visit.send({ to: priya.name, text: 'Recover this unconsumed context.' });
-			const update = (await room.messages()).at(-1);
+			const update = (await messagesOf(room)).at(-1);
 			expect(update?.wakes ?? []).toEqual([]);
 			crash(firstRuntime, room);
 			release.resolve();
@@ -225,7 +226,7 @@ describe.each(storages)('message delivery on $name', (storage) => {
 			expect(observed.steers.filter((steer) => steer.seat === assistant.name)).toEqual([]);
 			const ended = assistantEnded(room);
 			summaryRelease.resolve();
-			const summary = await first.response();
+			const summary = await first.waitForSummary();
 			await ended;
 			expect(summary?.text).toBe('First exchange result.');
 			expect(contexts.every((text) => !text.includes('Later question outside the summary.'))).toBe(

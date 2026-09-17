@@ -9,7 +9,7 @@
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { defineHuman, defineTool, isPresence, isSummary } from '../../src/index.ts';
-import { enter, messageBefore } from '../support/room.ts';
+import { enter, messageBefore, messagesOf, participantsOf } from '../support/room.ts';
 import {
 	activationsOf,
 	agent,
@@ -73,7 +73,7 @@ live('the exchange', () => {
 			await visit.send({ text: 'Can we ship the batch on Friday?' });
 			await untilQuiet(session);
 
-			const messages = await session.messages();
+			const messages = await messagesOf(session);
 			const question = saidBy(messages, andrei.name)[0];
 			expect(question).toBeDefined();
 			// The configured writer receives the closed exchange.
@@ -147,13 +147,13 @@ live('the exchange', () => {
 		await visit.send({ text: 'How long does a building permit take for the extension?' });
 		await untilQuiet(session);
 
-		const messages = await session.messages();
+		const messages = await messagesOf(session);
 		const seatings = messages.filter(isPresence).filter((m) => m.kind === 'seated');
 		expect(seatings.map((m) => m.subject)).toEqual(['permits']);
 		// `from` is the author on every kind: the assistant decided this seating.
 		expect(seatings[0]).toMatchObject({ from: 'assistant', identity: permits.identity });
-		expect(session.participants().map((seat) => seat.name)).toContain('permits');
-		expect(session.participants().map((seat) => seat.name)).not.toContain('catering');
+		expect((await participantsOf(session)).map((seat) => seat.name)).toContain('permits');
+		expect((await participantsOf(session)).map((seat) => seat.name)).not.toContain('catering');
 		const answer = saidBy(messages, 'permits');
 		expect(answer).toHaveLength(1);
 		expect(answer[0]?.text).toContain('10 working days');

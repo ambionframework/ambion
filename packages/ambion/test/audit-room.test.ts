@@ -68,7 +68,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 			try {
 				const exchange = await (await room.visit(andrei)).send({ text: 'Ready?' });
 				await waitForRoom(room, 'quiet', 2_000);
-				const discussion = await exchange.messages();
+				const discussion = await exchange.waitForClose();
 				expect(discussion.filter((message) => message.from === product.name)).toHaveLength(
 					outcome === 'spoken' ? 1 : 0,
 				);
@@ -91,7 +91,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 				});
 				await waitForRoom(resumed, 'quiet', 2_000);
 				expect(calls).toBe(finishedCalls);
-				await expect(resumed.exchange(exchange.from)?.messages()).resolves.toEqual(discussion);
+				await expect(resumed.exchange(exchange.from)?.waitForClose()).resolves.toEqual(discussion);
 			} finally {
 				await resumed?.stop();
 				await room.stop();
@@ -126,7 +126,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Result?' });
 			await waitForRoom(room, 'quiet', 2_000);
-			const response = await exchange.response();
+			const response = await exchange.waitForSummary();
 			expect(response?.text).toBe(outcome === 'published' ? 'Consolidated answer.' : undefined);
 			expect(summaryCalls).toBeGreaterThan(0);
 			expect(
@@ -176,7 +176,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 			expect(events.filter((event) => event.type === 'activation_start')).toHaveLength(1);
 			expect(events.filter((event) => event.type === 'audit_error')).toHaveLength(2);
 			expect(events.filter((event) => event.type === 'error')).toEqual([]);
-			const messages = await exchange.messages();
+			const messages = await exchange.waitForClose();
 			expect([...stateOf(room).leases.values()]).toEqual([
 				expect.objectContaining({ reason: 'released', readThrough: messages.at(-1)?.seq }),
 			]);
@@ -221,7 +221,7 @@ describe.each(storages)('audit failure isolation on $name', (storage) => {
 			await clock.advance(100);
 			await waitForRoom(room, 'quiet', 2_000);
 			expect(
-				(await exchange.messages()).filter((message) => message.from === product.name),
+				(await exchange.waitForClose()).filter((message) => message.from === product.name),
 			).toEqual([expect.objectContaining({ text: 'Recovered answer.' })]);
 			expect(events.filter((event) => event.type === 'audit_error')).toHaveLength(2);
 			const finishedCalls = calls;

@@ -3,13 +3,20 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
-	resumeRoom,
-	startRoom,
 	type Room,
 	type RoomNotification,
+	resumeRoom,
+	startRoom,
 } from '../src/index.ts';
 import { inProcessTransport, type SeatPort, type Transport } from '../src/transport.ts';
-import { runningLeases, stateOf, waitForRoom, roomName } from './support/room.ts';
+import {
+	messagesOf,
+	participantsOf,
+	roomName,
+	runningLeases,
+	stateOf,
+	waitForRoom,
+} from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { faultyJournals, storages } from './support/storage.ts';
 
@@ -134,7 +141,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			const reentered = await resumed.visit(person);
 			const confirmed = observed(reentered.send({ text: 'second', key: 'submission-second' }));
 			await expect(confirmed).resolves.toMatchObject({ owner: person.name });
-			expect((await resumed.messages()).filter((message) => message.kind === 'said')).toHaveLength(
+			expect((await messagesOf(resumed)).filter((message) => message.kind === 'said')).toHaveLength(
 				2,
 			);
 
@@ -153,7 +160,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			const retry = await retryVisit.send({ text: 'second', key: 'submission-second' });
 			expect(retry.from).toBeGreaterThan(0);
 			expect(
-				(await resumed.messages()).filter(
+				(await messagesOf(resumed)).filter(
 					(message) => message.kind === 'said' && message.key === 'submission-second',
 				),
 			).toHaveLength(1);
@@ -186,7 +193,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			await expect(nested).resolves.toMatchObject({ owner: person.name });
 			off();
 			expect(
-				(await room.messages())
+				(await messagesOf(room))
 					.filter((message) => message.kind === 'said')
 					.map((message) => message.text),
 			).toEqual(['outer', 'inner']);
@@ -284,7 +291,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 				streamFn: scripted(() => quiet()),
 			});
 			expect(
-				(await recovered.messages()).filter(
+				(await messagesOf(recovered)).filter(
 					(message) => message.kind === 'said' && message.key === 'submission-eviction-trigger',
 				),
 			).toHaveLength(1);
@@ -349,7 +356,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			).toBe(true);
 
 			await room.reconcile();
-			await room.messages();
+			await messagesOf(room);
 			off();
 			expect(types(events)).toEqual(before);
 		} finally {
@@ -374,7 +381,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			await expect(lost).rejects.toThrow(/disk is full/);
 
 			faulty.fail(false);
-			await room.messages();
+			await messagesOf(room);
 			await waitForRoom(room);
 			expect(
 				events.filter(
@@ -391,7 +398,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 					(event) => event.type === 'message' && event.message.key === 'submission-later',
 				),
 			).toHaveLength(1);
-			expect((await room.messages()).filter((message) => message.kind === 'said')).toHaveLength(2);
+			expect((await messagesOf(room)).filter((message) => message.kind === 'said')).toHaveLength(2);
 			off();
 		} finally {
 			faulty.fail(false);
@@ -450,7 +457,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 			const stopped = observed(resumed.stop());
 			await expect(stopped).resolves.toBeUndefined();
 			expect(
-				resumed.participants().find((participant) => participant.name === agent.name),
+				(await participantsOf(resumed)).find((participant) => participant.name === agent.name),
 			).toMatchObject({
 				status: 'idle',
 			});

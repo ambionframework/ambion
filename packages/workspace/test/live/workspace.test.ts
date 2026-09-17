@@ -43,7 +43,7 @@ live('the workspace', () => {
 		const { session, runtime, events } = await open('workspace', { agents: [librarian] });
 		const visit = await enter(session, person);
 		const exchange = await visit.send({ text: 'How many lanterns are in crate-19?' });
-		await exchange.response();
+		await exchange.waitForSummary();
 
 		const tools = events.flatMap((e) =>
 			e.type === 'tool_execution_start' && e.agent === 'librarian' ? [e.toolName] : [],
@@ -52,7 +52,7 @@ live('the workspace', () => {
 		expect(tools.some((tool) => ['write', 'edit', 'bash'].includes(tool))).toBe(true);
 		// `say` is the room's own event, never surfaced as a tool.
 		expect(tools).not.toContain('say');
-		const answer = saidBy(await session.messages(), 'librarian');
+		const answer = saidBy((await session.read()).messages, 'librarian');
 		expect(answer).toHaveLength(1);
 		expect(answer[0]?.text).toMatch(/\b7\b|seven/i);
 		const journal = (await backend.readFiles()).find(

@@ -10,7 +10,16 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { crash, deferred, roomName, stateOf, storedOf, waitForRoom } from './support/room.ts';
+import {
+	crash,
+	deferred,
+	messagesOf,
+	participantsOf,
+	roomName,
+	stateOf,
+	storedOf,
+	waitForRoom,
+} from './support/room.ts';
 import { callTool, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
@@ -50,11 +59,11 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		try {
 			const visit = await room.visit(priya);
 			const first = await visit.send({ text: 'No writer seated yet.' });
-			await expect(first.response()).resolves.toBeUndefined();
+			await expect(first.waitForSummary()).resolves.toBeUndefined();
 			expect(stateOf(room).closes.at(-1)?.summary).toBeUndefined();
 			await room.seat('beta', { attention: 'none' });
 			const second = await visit.send({ text: 'The writer is seated now.' });
-			await second.response();
+			await second.waitForSummary();
 			expect(stateOf(room).closes.at(-1)?.summary).toBe('beta');
 		} finally {
 			await room.stop();
@@ -72,14 +81,16 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			streamFn: silent(),
 		});
 		try {
-			expect(room.participants()).toEqual([]);
+			expect(await participantsOf(room)).toEqual([]);
 			expect(stateOf(room).reserve.map((agent) => agent.name)).toEqual(['alpha', 'beta']);
 			await room.seat(beta.name, { attention: 'named' });
 			await waitForRoom(room);
-			expect(room.participants()).toMatchObject([{ name: beta.name, attention: 'named' }]);
+			expect(await participantsOf(room)).toMatchObject([{ name: beta.name, attention: 'named' }]);
 			await room.unseat(beta.name);
 			await room.seat(beta.name);
-			expect(room.participants()).toMatchObject([{ name: beta.name, attention: 'broadcast' }]);
+			expect(await participantsOf(room)).toMatchObject([
+				{ name: beta.name, attention: 'broadcast' },
+			]);
 		} finally {
 			await room.stop();
 			await opened.dispose();
@@ -104,7 +115,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			const visit = await room.visit(priya);
 			await visit.send({ to: alpha.name, text: 'By name.' });
 			await waitForRoom(room);
-			expect((await room.messages()).find((message) => message.kind === 'said')).toMatchObject({
+			expect((await messagesOf(room)).find((message) => message.kind === 'said')).toMatchObject({
 				from: priya.name,
 				to: alpha.name,
 				text: 'By name.',
@@ -165,7 +176,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			const visit = await visiting;
 			await visit.send({ to: 'alpha', text: 'Use captured values.' });
 			await waitForRoom(room);
-			expect(room.participants()).toEqual(
+			expect(await participantsOf(room)).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({ name: 'alpha', identity: 'Original.', attention: 'named' }),
 				]),
@@ -173,7 +184,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			expect(prompts.every((prompt) => prompt.includes('Original instructions.'))).toBe(true);
 			expect(prompts.length).toBeGreaterThan(0);
 			expect(calls).toEqual(['original']);
-			expect((await room.messages()).find((message) => message.kind === 'said')?.from).toBe(
+			expect((await messagesOf(room)).find((message) => message.kind === 'said')?.from).toBe(
 				'priya',
 			);
 			await expect(room.seat('replacement')).rejects.toThrow();
@@ -206,7 +217,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 				runtime: createRuntime({ storage: opened.storage }),
 				streamFn: silent(),
 			});
-			expect(resumed.participants()).toMatchObject([{ name: 'beta', attention: 'none' }]);
+			expect(await participantsOf(resumed)).toMatchObject([{ name: 'beta', attention: 'none' }]);
 			expect(
 				stateOf(resumed)
 					.reserve.map((agent) => agent.name)
@@ -227,7 +238,9 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			).rejects.toThrow();
 			// Failed validation must not fence the current host.
 			await resumed.seat('alpha');
-			expect(resumed.participants().map((participant) => participant.name)).toContain('alpha');
+			expect((await participantsOf(resumed)).map((participant) => participant.name)).toContain(
+				'alpha',
+			);
 		} finally {
 			await resumed?.stop();
 			await room.stop();
@@ -256,7 +269,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			expect(await storedOf(opened.journals, room.name)).toEqual(before);
 			await visit.send({ to: alpha.name, text: 'The original run still works.' });
 			await waitForRoom(room);
-			expect((await room.messages()).some((message) => message.kind === 'said')).toBe(true);
+			expect((await messagesOf(room)).some((message) => message.kind === 'said')).toBe(true);
 		} finally {
 			await room.stop();
 			await opened.dispose();
@@ -306,7 +319,9 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 			await rejected;
 			expect(await storedOf(opened.journals, room.name)).toEqual(before);
 			await newer.seat('beta');
-			expect(newer.participants().map((participant) => participant.name)).toContain('beta');
+			expect((await participantsOf(newer)).map((participant) => participant.name)).toContain(
+				'beta',
+			);
 		} finally {
 			release.resolve();
 			await newer?.stop();

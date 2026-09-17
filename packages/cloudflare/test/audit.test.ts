@@ -45,7 +45,7 @@ it('reports audit failure while a remote seat completes its contribution', async
 			activation: expect.stringContaining(':product:1'),
 			error: 'Remote audit unavailable.',
 		});
-		const messages: Message[] = await room.exchangeMessages(exchange.from);
+		const messages: Message[] = await room.waitForClose(exchange.from);
 		expect(messages.filter((message) => message.from === 'product')).toHaveLength(1);
 		expect(events.filter((event) => event.event === 'error')).toEqual([]);
 		expect(

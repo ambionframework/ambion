@@ -34,5 +34,5 @@ are planning records, not API references.
 
 Human review and agent context intentionally differ: after a close, a summary
 may stand for its covered messages in later activations, while
-`exchange.messages()` always returns the original discussion. The journal
+`exchange.waitForClose()` always returns the original discussion. The journal
 retains both.
