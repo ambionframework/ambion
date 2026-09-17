@@ -264,6 +264,14 @@ export type RoomNotification =
 	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
 	| { type: 'activation_end'; agent: string; spoke: boolean }
 	| { type: 'error'; agent: string; error: Error }
+	/** A room delivery or seat call failed, or its result became unknown. */
+	| {
+			type: 'delivery_error';
+			agent: string;
+			activation: string;
+			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';
+			error: Error;
+	  }
 	/** Transcript persistence failed independently of the execution outcome. */
 	| { type: 'audit_error'; agent: string; activation: string; error: Error }
 	/**

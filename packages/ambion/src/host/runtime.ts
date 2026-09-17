@@ -48,7 +48,7 @@ export function releaseRoom(runtime: Runtime, name: string, room: RunningRoom): 
 /** The dependencies that one in-process seat needs for one captured definition. */
 export interface SeatContext {
 	readonly clock: Clock;
-	readonly call: { readonly attempts: number };
+	readonly call: { readonly attempts: number; readonly timeout: number };
 	readonly definition: AgentDefinition;
 	readonly room: string;
 	readonly seat: string;
@@ -110,16 +110,12 @@ export interface Runtime {
 	/** How many times the room retries a failed summary, and how long it waits before each retry. */
 	readonly retry: { readonly attempts: number; readonly backoff: (attempt: number) => number };
 	/**
-	 * How many times a seat sends one call to the room before it gives up. A
-	 * call the room answers is done, whatever it answers; a call that never
-	 * comes back is sent again, because the wire lost the call or the answer.
-	 *
-	 * This is its own policy, beside `retry`. An attempt at an activation
-	 * costs a model call and waits a backoff; an attempt at a call costs one
-	 * message and waits for nothing. One number over both would move each
-	 * when a host tuned the other.
+	 * `timeout` bounds each executor call to the room, in milliseconds.
+	 * `attempts` bounds claim and release retries. Defaults: 10,000 ms and two attempts.
+	 * The journal remains authoritative when a timed out call may have reached the room.
+	 * These limits are separate from execution retries, which can repeat model work.
 	 */
-	readonly call: { readonly attempts: number };
+	readonly call: { readonly attempts: number; readonly timeout: number };
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
 	evict(name: string): void;
 }

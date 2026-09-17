@@ -1,13 +1,13 @@
 import {
+	type Attention,
+	type CreateRuntimeOptions,
 	createRuntime,
 	defaultRuntime,
 	defineAgent,
 	defineHuman,
-	type Attention,
-	type CreateRuntimeOptions,
 	type Message,
+	startRoom,
 } from '@ambionframework/ambion';
-import { startRoom } from '@ambionframework/ambion';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,

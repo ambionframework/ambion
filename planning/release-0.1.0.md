@@ -298,10 +298,12 @@ checked against the packed release artifacts. The Node target remains
 22.19 or later, subject to the tested compatibility matrix.
 
 The release packages are `@ambionframework/ambion`,
-`@ambionframework/journal`, `@ambionframework/pi-journal`, and
-`@ambionframework/workspace`, `@ambionframework/cloudflare`, and
+`@ambionframework/journal`, `@ambionframework/pi-journal`,
+`@ambionframework/workspace`, `@ambionframework/assistant`, `@ambionframework/cloudflare`, and
 `@ambionframework/cli`. The main library composes the defaults;
 applications import additional packages only when they need those capabilities.
+The assistant package supplies a reusable ordinary agent definition. Its
+behavioral defaults do not add kernel privileges.
 
 Pi remains the supported model loop. Provider selection follows the installed
 Pi integration. A provider-neutral plugin ecosystem is outside this release.

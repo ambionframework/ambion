@@ -23,6 +23,7 @@ export interface SeatEvent {
 	seat: string;
 	activation: string;
 	event: RoomNotification['type'];
+	operation?: Extract<RoomNotification, { type: 'delivery_error' }>['operation'];
 	tool?: string;
 	error?: string;
 	at: string;
@@ -35,6 +36,7 @@ export interface ConfigureOptions {
 	stream?: CreateRuntimeOptions['stream'];
 	wake?: CreateRuntimeOptions['wake'];
 	retry?: CreateRuntimeOptions['retry'];
+	call?: CreateRuntimeOptions['call'];
 	/**
 	 * What to do with an event a seat raised. An activation runs inside the
 	 * seat's own object and its events reach no other, so this is the only way
@@ -75,6 +77,7 @@ export function runtimeFor(
 		...(settings.stream === undefined ? {} : { stream: settings.stream }),
 		...(settings.wake === undefined ? {} : { wake: settings.wake }),
 		...(settings.retry === undefined ? {} : { retry: settings.retry }),
+		...(settings.call === undefined ? {} : { call: settings.call }),
 		...options,
 	});
 }
@@ -89,6 +92,7 @@ export function executionFor(
 	return createExecutionServices({
 		...options,
 		...(settings.stream === undefined ? {} : { stream: settings.stream }),
+		...(settings.call === undefined ? {} : { call: settings.call }),
 	});
 }
 

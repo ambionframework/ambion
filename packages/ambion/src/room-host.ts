@@ -89,6 +89,14 @@ export type { RoomSnapshot } from './types.ts';
  * Eviction is terminal: a room that lost its name takes no phase after it.
  */
 type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
+type DeliveryOperation = 'wake' | 'steer' | 'cut';
+
+interface DeliveryState {
+	activation: string;
+	token: number;
+	pending: boolean;
+	failed: boolean;
+}
 
 /** What a run starts with, as definitions. The journal holds the same composition, by name. */
 export interface CompositionDraft {
@@ -219,6 +227,8 @@ export class RoomHost implements Room, RunningRoom {
 	private readonly responseWaiters = new Set<() => void>();
 	/** When this room last sent each wake. A cache: a resumed room sends every pending wake again. */
 	private readonly sentAt = new Map<string, number>();
+	/** Delivery state is bounded by currently due/live activations and fences late replies by token. */
+	private readonly deliveryStates = new Map<string, DeliveryState>();
 	/** Every lease id this room has heard a change for. It says `activation_start` once. */
 	private readonly heardLeases = new Set<string>();
 	private cancelAlarm: () => void = () => {};
@@ -818,6 +828,9 @@ export class RoomHost implements Room, RunningRoom {
 		else if (entry.kind === 'close') this.queueClose(entry.body);
 		else if (entry.kind === 'lease') this.queueLease(entry.body, this.opens(entry.body.id));
 		else if (entry.kind === 'cancel') this.queueCancellation(entry.body.close, entry.seq);
+		// Membership, cancellation, and lease entries can make an earlier
+		// delivery obsolete without dispatching another message immediately.
+		this.pruneDeliveryErrors();
 	}
 
 	/** Queue one captured publication without making journal confirmation await listeners or transport. */
@@ -978,28 +991,109 @@ export class RoomHost implements Room, RunningRoom {
 	 */
 	private steer(steer: Steer): void {
 		if (activationSpec(steer.activation, this.state()) === undefined) return;
-		this.dispatch(steer.seat, (port) => port.steer(steer));
+		this.dispatch(steer.seat, 'steer', steer.activation, (port) => port.steer(steer));
 	}
 
 	/** One activation wake over the wire. */
 	private send(id: string, seat: string): void {
 		if (activationSpec(id, this.state()) === undefined) return;
 		this.sentAt.set(id, this.now());
-		this.dispatch(seat, (port) => port.wake({ room: this.name, seat, activation: id }));
+		this.dispatch(seat, 'wake', id, (port) => port.wake({ room: this.name, seat, activation: id }));
 	}
 
 	private cutPort(seat: string, activation: string): void {
-		this.dispatch(seat, (port) => port.cut(activation));
+		this.dispatch(seat, 'cut', activation, (port) => port.cut(activation));
 	}
 
 	/** Contain synchronous connector faults and asynchronous transport rejection independently. */
-	private dispatch(seat: string, send: (port: SeatPort) => Promise<void>): void {
+	private dispatch(
+		seat: string,
+		operation: DeliveryOperation,
+		activation: string,
+		send: (port: SeatPort) => Promise<void>,
+	): void {
 		if (this.phase === 'evicted') return;
-		try {
-			void send(this.port(seat)).catch(() => {});
-		} catch {
-			// A synchronous connector failure cannot undo the journal entry.
+		this.pruneDeliveryErrors();
+		const key = JSON.stringify([seat, operation, activation]);
+		const previous = this.deliveryStates.get(key);
+		if (previous?.pending && !previous.failed) {
+			previous.failed = true;
+			this.emitDeliveryError(
+				seat,
+				operation,
+				activation,
+				new Error('The previous delivery result is still pending; its outcome is unknown.'),
+			);
 		}
+		const state: DeliveryState = previous ?? {
+			activation,
+			token: 0,
+			pending: false,
+			failed: false,
+		};
+		const token = state.token + 1;
+		state.token = token;
+		state.pending = true;
+		this.deliveryStates.set(key, state);
+		const report = (error: unknown) => {
+			const current = this.deliveryStates.get(key);
+			if (
+				this.gone() ||
+				current?.token !== token ||
+				(operation !== 'cut' && !this.deliveryActive(activation))
+			)
+				return;
+			current.pending = false;
+			if (current.failed) return;
+			current.failed = true;
+			this.emitDeliveryError(seat, operation, activation, error);
+		};
+		try {
+			const result = send(this.port(seat));
+			void result.then(() => {
+				const current = this.deliveryStates.get(key);
+				if (current?.token !== token) return;
+				current.pending = false;
+				current.failed = false;
+			}, report);
+		} catch (error) {
+			report(error);
+		}
+	}
+
+	private deliveryActive(activation: string): boolean {
+		return (
+			this.state().due.some((work) => work.id === activation) ||
+			this.state().leases.get(activation)?.phase === 'running'
+		);
+	}
+
+	/** Remove failures for activations that are no longer pending or live. */
+	private pruneDeliveryErrors(): void {
+		const active = new Set([
+			...this.state().due.map((work) => work.id),
+			...[...this.state().leases.values()]
+				.filter((lease) => lease.phase === 'running')
+				.map((lease) => lease.id),
+		]);
+		for (const [key, state] of this.deliveryStates)
+			if (!active.has(state.activation)) this.deliveryStates.delete(key);
+	}
+
+	/** Report a failed or unknown delivery without changing the journal result. */
+	private emitDeliveryError(
+		seat: string,
+		operation: DeliveryOperation,
+		activation: string,
+		error: unknown,
+	): void {
+		this.emit({
+			type: 'delivery_error',
+			agent: seat,
+			activation,
+			operation,
+			error: error instanceof Error ? error : new Error(String(error)),
+		});
 	}
 
 	private port(seat: string): SeatPort {
@@ -1340,6 +1434,7 @@ export class RoomHost implements Room, RunningRoom {
 	 */
 	evict(): void {
 		this.phase = 'evicted';
+		this.deliveryStates.clear();
 		this.journal.close();
 		this.cancelAlarm();
 		this.listeners.clear();

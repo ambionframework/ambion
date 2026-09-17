@@ -273,6 +273,7 @@ function describeEvent(event: RoomNotification): Omit<Activity, 'at'> | undefine
 	switch (event.type) {
 		case 'error':
 		case 'audit_error':
+		case 'delivery_error':
 			return { type: event.type, agent: event.agent, text: event.error.message };
 		case 'activation_start':
 			return { type: event.type, agent: event.agent, text: 'Reading and working' };

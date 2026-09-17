@@ -36,6 +36,10 @@ export function fakeClock(start = Date.parse('2026-01-01T09:00:00.000Z')): FakeC
 			return () => pending.delete(alarm);
 		},
 		async advance(ms) {
+			// Room calls start synchronously, but their async answers settle on the
+			// microtask queue. Drain current-time work before jumping past a call
+			// deadline so the fake clock does not manufacture a timeout race.
+			await settle();
 			const target = now + ms;
 			while (true) {
 				const due = [...pending]

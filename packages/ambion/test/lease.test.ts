@@ -401,7 +401,7 @@ describe('a lease', () => {
 describe('a lease judged where its change is written', () => {
 	const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
-	it('keeps a lease whose renewal landed ahead of the expiry the alarm decided', async () => {
+	it('keeps a remote renewal while retrying a locally expired execution', async () => {
 		const clock = fakeClock();
 		const base = await memory.open();
 		const gate = deferred();
@@ -426,9 +426,11 @@ describe('a lease judged where its change is written', () => {
 			agents: [solo, assistant],
 			runtime: createRuntime({ clock, storage: journals }),
 			streamFn: scripted(async (_c, _a, call) => {
-				if (call !== 1) return quiet();
-				await held.promise;
-				return speak('late but alive');
+				if (call === 1) {
+					await held.promise;
+					return speak('late but alive');
+				}
+				return call === 2 ? speak('recovered after expiry') : quiet();
 			}),
 		});
 		started.push(session);
@@ -448,6 +450,9 @@ describe('a lease judged where its change is written', () => {
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
 
 		held.resolve();
+		// The accepted renewal holds the remote lease to 90s; its expiry then
+		// schedules the retry after the 30s backoff, at 120s.
+		await clock.advance(60_000);
 		await waitForRoom(session);
 		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
@@ -457,8 +462,12 @@ describe('a lease judged where its change is written', () => {
 			.filter((r) => r.kind === 'lease')
 			.map((r) => r.body as LeaseChange)
 			.filter((l) => decodeActivationId(l.id)?.seat === 'solo');
-		// the claim, the renewal, the check at the run's end, and one release: no expiry
-		expect(stored.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual(['released']);
+		// The local expiry releases as a failed attempt; the room's accepted
+		// renewal keeps authority until its later expiry, which creates the retry.
+		expect(stored.filter((l) => l.phase === 'ended').map((l) => l.reason)).toEqual([
+			'expired',
+			'released',
+		]);
 	});
 
 	it('keeps a pending summary for each close when another exchange ends during its claim', async () => {
@@ -468,6 +477,7 @@ describe('a lease judged where its change is written', () => {
 		const runtime = createRuntime({
 			clock,
 			storage: opened.storage,
+			call: { timeout: 20_000 },
 			transport: faultyTransport(
 				inProcessTransport(),
 				[

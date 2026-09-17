@@ -6,6 +6,9 @@ execution, persistence, tools, and package ownership. Deterministic probes found
 release work beyond naming and API cleanup. No provider calls were used.
 [release-0.1.0.md](release-0.1.0.md) remains the scope definition.
 
+Integration with main `cd39709` also includes the reusable assistant package.
+Its instructions define ordinary agent behavior; the kernel still owns authority.
+
 ## The model to preserve
 
 **Developers define participants, open rooms, send messages, and read exchanges.**
@@ -35,7 +38,7 @@ agent definition and membership, presence and connection, and acceptance and com
 
 | Order | Work                                                    | Why it comes first                                                       | Status          |
 | ----- | ------------------------------------------------------- | ------------------------------------------------------------------------ | --------------- |
-| 1     | Execution progress under transport failure              | A lost claim, release, or dispatch can strand accepted work              | In progress     |
+| 1     | Execution progress under transport failure              | A lost claim, release, or dispatch can strand accepted work              | In review       |
 | 2     | Delivery integrity and authoritative value ownership    | Acknowledgements and live state must agree with durable facts            | Planned         |
 | 3     | Durable exchange execution outcomes                     | Reconnected applications must distinguish silence from exhausted work    | Planned         |
 | 4     | Incremental projections and a tested operating envelope | Completed history must not dominate every current operation              | Planned         |
@@ -45,9 +48,9 @@ agent definition and membership, presence and connection, and acceptance and com
 | 8     | Internal modules, exports, and packages                 | Make code ownership and public declarations consistent                   | Planned         |
 | 9     | Remaining release evidence                              | Verify the supported deployments and packed consumers                    | Planned         |
 
-**First implementation:** execution progress under transport failure. Deliver
-bounded, cancellation-aware host calls and a defined policy for work that never
-acquires an executor. Preserve authority checks on late responses.
+**Implemented for review:** execution progress under transport failure.
+The first change bounds local waits, reports uncertain delivery, and preserves
+journal authority. Delivery integrity is the next implementation item.
 
 **Accepted summary policy:** humans and agents continue from the same recorded
 summary. It replaces covered discussion in later agent prompts as inexpensive
@@ -57,39 +60,53 @@ remain deferred. See the [summary contract](../docs/summary.md#shared-context-an
 
 ## 1. Execution must progress or expose why it cannot
 
-**Confirmed: an unresolved claim or release strands the runner.**
-[`runner.ts`](../packages/ambion/src/execution/runner.ts) awaits both calls outside
-the cancellation race. Its retry count bounds rejected calls but places no
+**Confirmed on the reviewed main: an unresolved claim or release strands the runner.**
+[`runner.ts`](../packages/ambion/src/execution/runner.ts) awaited both calls outside
+the cancellation race. Its retry count bounded rejected calls but placed no
 elapsed bound on an unresolved call. A deterministic probe cut the activation
 and queued another wake; the second claim never started in either case.
 
-**Confirmed: work that never claims a lease escapes execution limits.**
-[`dispatch`](../packages/ambion/src/room-host.ts) swallows connector faults and
+**Confirmed on the reviewed main: unclaimed work has no delivery diagnostics.**
+[`dispatch`](../packages/ambion/src/room-host.ts) swallowed connector faults and
 transport rejection. A throwing connector produced eleven attempts in ten fake
 seconds, with no error notification and an open exchange. The configured
 activation deadline was two seconds and the retry cap was one. Neither policy
 covers work before a lease exists.
 
-- [ ] Bound host calls and make claim and release waits cancellation-aware.
+- [x] Bound host calls and make claim and release waits cancellation-aware.
       Use host clocks for deterministic deadlines. Capture each call's outcome;
       late replies must not start cancelled work or release another activation.
-- [ ] Preserve existing authority when a call's result is unknown. A timeout
+- [x] Preserve existing authority when a call's result is unknown. A timeout
       does not establish that the remote operation failed or undo its effects.
       Retries retain the same activation identity and journal fencing.
-- [ ] Report dispatch failures through host diagnostics without undoing accepted
+- [x] Report dispatch failures through host diagnostics without undoing accepted
       messages. Avoid unhandled promise rejections and unbounded diagnostic noise.
-- [ ] Define the policy for work that cannot acquire an executor. Separate
-      delivery failure from a failed model attempt. Make any terminal decision
-      recoverable from the journal and compatible with delayed claims.
-- [ ] Keep timers and local wait ownership in the host/executor. Keep durable
+- [x] Document and test the admission policy: unclaimed work retries while
+      eligible, and failed deliveries emit diagnostics. Execution retry caps
+      start after a claim. Abort and unseat provide durable terminal boundaries.
+      Preserve work pending through shutdown or an intentional executor hold.
+      Do not interpret activation deadlines as source-message age.
+- [x] Keep timers and local wait ownership in the host/executor. Keep durable
       eligibility and terminal decisions in room rules. Add no task database,
       scheduler hierarchy, or total exchange budget.
+
+Automatic admission expiry remains a separate future decision. It would need
+an explicit durable start and restart semantics. It is unnecessary for the
+initial call-liveness fix and must not be introduced through a hidden timeout.
 
 **Evidence required:** hung claim and release; cut followed by a new wake;
 late successful and stale replies; hung or rejected renewals; synchronous
 connector failure; rejected wake delivery; delayed claims; recovery after lost
 acknowledgements and restart. Use deterministic clocks and both supported host
 models. Verify that stale contributions remain fenced and cleanup owns its work.
+
+**Implemented evidence:** 14 executor regressions cover bounded waits, cuts,
+late replies, expired claims, and unknown commit results. Another 14 cases cover
+dispatch and durable cancellation on memory and SQLite. Two workerd regressions
+cover bounded recovery release and late replies preserving newer seat metadata.
+The existing renewal race now verifies eventual retry after local expiry.
+See [durability](../docs/durability.md#transport-calls-and-unclaimed-work) for
+the accepted transport and admission contract.
 
 ## 2. Delivery integrity and one owner for each value
 
@@ -354,9 +371,11 @@ Proposed internal organization, retaining private modules:
 
 ### Package decisions
 
-Keep the six current packages for 0.1.0. Journal and Pi transcript persistence
+Keep the seven current packages for 0.1.0. Journal and Pi transcript persistence
 already have independent ownership and consumers. Keep workspace resource and
 its bound tools in one package. Keep Cloudflare and CLI as deployment choices.
+Keep reusable assistant instructions in the assistant package, separate from
+kernel enforcement and model execution.
 
 `workspace/resource` avoids an Ambion runtime import, but installing workspace
 still installs its declared Ambion dependency. **Import independence is not
@@ -409,7 +428,7 @@ exchange duration remain explicit limits.
 - [ ] Install minimal packed consumers outside the monorepo: journal alone;
       Pi sessions plus journal; embedded Ambion; persistent Node plus workspace;
       resource-only imports; generated CLI/Cloudflare project. A fixture declaring
-      all six packages does not prove each consumer's dependency closure.
+      all seven packages does not prove each consumer's dependency closure.
 - [ ] Resolve or justify both TypeBox versions through authored-tool declaration
       and runtime tests. Replace the cast-based scripted `stubModel` with a valid
       execution-owned model. Document any necessary `skipLibCheck` boundary.

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
-import { memory, storages } from './support/storage.ts';
 import { roomName, storedOf, waitForRoom } from './support/room.ts';
 import { isClosing, quiet, scripted, speak, toolNames } from './support/scripted.ts';
+import { memory, storages } from './support/storage.ts';
 
 const assistant = defineAgent({
 	name: 'assistant',
