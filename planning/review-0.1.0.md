@@ -65,9 +65,18 @@ only when two names currently mean one thing, or one name means two things.
 | D8  | A trust statement between owners                        | Scope       | Small  |
 | D9  | Provider evidence beyond one account                    | Scope       | Small  |
 | D10 | An API reference                                        | Scope       | Small  |
+| E1  | Take Pi out of the kernel vocabulary                    | Positioning | Medium |
+| E2  | One executor contract and one activation driver         | Positioning | Large  |
+| E3  | Neutral room tools and a headless adapter               | Positioning | Medium |
+| E4  | The workspace as one binding among many                 | Positioning | Medium |
+| E5  | Artifact references on the record                       | Positioning | Small  |
+| E6  | Provenance for resources                                | Positioning | Small  |
+| E7  | The human patterns the room represents                  | Positioning | Small  |
+| E8  | Delegation by reference, with no task database          | Positioning | 0.2    |
 
-Section D names scope the release documents do not. Section E assesses the
-open pull requests. Section F proposes the order.
+Section D names scope the release documents do not. Section E reads the
+code against the positioning. Section F assesses the open pull requests.
+Section G proposes the order.
 
 ## A. Correctness
 
@@ -141,7 +150,7 @@ mutable cache, and the Cloudflare object writes a person's identity before
 admission.
 
 **Solution.** PR #152 addresses all three with no new public room API and
-one new journal method, `entriesFrom(start)`. Section D reviews it. Merge it
+one new journal method, `entriesFrom(start)`. Section F reviews it. Merge it
 before the exchange outcome work and before B1.
 
 **Impact.** A retry after a lost acknowledgement can only return its own
@@ -246,7 +255,7 @@ limits: {
 ```
 
 Document the two constants in the same table. Apply the rename before the
-API freeze in section E.
+API freeze in section G.
 
 **Impact.** One table answers every question about time and retry. The
 Cloudflare `configure()` options and the runtime options read the same way.
@@ -559,7 +568,7 @@ is a dated review under `docs/`. `LemmaScript-files.txt` sits at the root.
 The repository has no changelog. PR #40 proposed one in 2026-09-03 and only
 its directory move landed.
 
-**Solution.** Reduce `next.md` to the ordered checklist in section F with
+**Solution.** Reduce `next.md` to the ordered checklist in section G with
 one link per item to its design note. Move dated evidence to
 `planning/evidence/` and link it from the release document. Move the
 LemmaScript list under `scripts/` if the verifier permits a path. Add
@@ -775,7 +784,257 @@ Fail CI when the reference is stale.
 
 **0.1.0:** in.
 
-## E. In-flight pull requests
+## E. The kernel story: executors, patterns, artifacts
+
+**The kernel is the protocol, the journal, and the rules.** Everything that
+holds a model is an executor. Everything that holds data is a resource. The
+positioning says so, and the wire protocol in
+[`protocol.ts`](../packages/ambion/src/protocol.ts) already honors it: a seat
+reaches the room through `view`, `commit`, and `lease`, and the room reaches
+a seat through `wake`, `steer`, and `cut`, with plain JSON on both sides.
+The vocabulary, the runtime, and the workspace package do not honor it yet.
+This section reads the code against three claims: any framework can seat an
+agent, the room represents how people work together, and agents collaborate
+through artifacts.
+
+### E1. Take Pi out of the kernel vocabulary
+
+**Problem.** The room reads two fields of an agent definition: `name` and
+`identity` ([`room-host.ts`](../packages/ambion/src/room-host.ts) lines 284,
+347, 755, and 1453). Every other field belongs to the executor, and every
+one of them is Pi's. [`types.ts`](../packages/ambion/src/types.ts) imports
+`AgentToolResult`, `AgentToolUpdateCallback`, and `ToolExecutionMode` from
+Pi's agent core and `Model` from Pi's provider layer. `AmbionTool.invoke`
+returns a Pi result. `AgentDefinition.model` is a Pi model id. `Runtime`
+carries a Pi `StreamFn`, a Pi model resolver, and a Pi transcript opener,
+and the same three reach every seat through `SeatContext`. An agent written
+on another framework has no definition type to fill and a runtime full of
+fields it cannot use. The Cloudflare adapter, the one existing example of
+another host, still runs Pi inside the seat object.
+
+**Solution.** Let a definition carry what the room reads and one executor.
+
+```ts
+interface AgentDefinition {
+  readonly name: string;
+  readonly identity: string;
+  readonly executor: Executor;
+}
+const inventory = defineAgent({
+  name: 'inventory',
+  identity: 'Checks stock constraints.',
+  executor: pi({ model: 'anthropic/claude-sonnet-5', instructions, tools: [lookup] }),
+});
+```
+
+Move `instructions`, `model`, `tools`, `bundles`, and `guidance` into the
+Pi executor's options. Remove `stream`, `model`, and `transcripts` from
+`Runtime`; a Pi executor takes them in `pi({ ... })` and a room-level
+override becomes `pi.override(room, { stream })` in the testing entry.
+Keep `defineTool` in the kernel as a neutral JSON Schema tool: TypeBox
+emits JSON Schema, and `invoke` returns text or a neutral content array.
+The composition entry in the journal already stores only name, identity,
+and attention, so stored rooms are unaffected.
+
+**Impact.** Two agents in one room can run on two frameworks. The kernel
+package imports no model library. The thesis "the agent is the unit of
+modularity" reaches the executor.
+
+### E2. One executor contract and one activation driver
+
+**Problem.** [`runner.ts`](../packages/ambion/src/execution/runner.ts) and
+[`activation.ts`](../packages/ambion/src/execution/activation.ts) hold two
+things in one place. One is executor-neutral: the claim, the renewal at half
+the lease, the release with a reason, the cut, the queue of wakes, the pass
+loop that reads a fresh view when the record moved past acknowledged
+context, and the freshness bookkeeping for `readThrough`. The other is Pi:
+building an `Agent`, steering it between provider requests, reading its
+stop reason, and persisting its transcript. A second framework would copy
+the first half to get the second.
+
+**Solution.** Keep the driver in the kernel's hosting entry and define one
+contract for the framework-specific half.
+
+```ts
+interface Executor {
+  /** Run one pass over the view with the room tools bound. Return when the model stops. */
+  run(pass: {
+    view: ActivationView;
+    tools: readonly RoomTool[]; // say, seat, unseat as neutral tools
+    steers: AsyncIterable<Steer>; // optional to consume
+    signal: AbortSignal; // the cut
+  }): Promise<{
+    readThrough: Seq; // the record position the model consumed
+    failure?: { cause: 'permanent' | 'transient'; error: Error };
+  }>;
+}
+```
+
+The driver owns everything else. An executor that cannot consume a steer
+ignores the iterable; a say that arrives late is refused as `missed`, and
+the driver runs another pass with a fresh view. Ship Pi as
+`@ambionframework/pi`, the reference executor, with its transcript
+persistence inside it. The kernel's own scripted tests run on a scripted
+executor that needs no Pi at all.
+
+**Impact.** A framework adapter is one function. Leases, renewals, cuts,
+and freshness are proved once, in the kernel, for every framework. The
+conformance suite (D6) tests the driver against a scripted executor and any
+adapter against the same cases.
+
+### E3. Room tools as neutral tools, and a headless adapter as the proof
+
+**Problem.** `say`, `seat`, and `unseat` exist as TypeBox schemas in
+[`define.ts`](../packages/ambion/src/define.ts) and as Pi tools in
+[`execution/tools.ts`](../packages/ambion/src/execution/tools.ts). A harness
+like Claude Code or Codex reaches tools through MCP and reaches the model
+through its own loop. Nothing in the repository mentions MCP, headless
+runs, or a subprocess executor, so the claim that a high-level harness can
+seat an agent has no evidence.
+
+**Solution.** Expose the three room tools as neutral tools in the hosting
+entry, with a helper that serves them as an MCP server bound to one
+activation. Add `examples/headless`: an executor whose `run` starts one
+headless harness run per pass, hands it the rendered view as the prompt,
+serves `say`, `seat`, and `unseat` over MCP, maps the process exit to the
+pass result, and maps the cut to a kill. Document what the adapter loses
+(no steer during a run, no transcript in the kernel) and what covers it
+(the freshness check and a fresh pass). Prove it in CI with a fake harness
+binary that speaks the same protocol, and once by hand with the real one.
+
+**Impact.** The positioning claim has a runnable proof. An owner can seat a
+Claude Code agent beside a Pi agent in one room.
+
+### E4. The workspace as one binding among many
+
+**Problem.** All five source files of
+[`packages/workspace`](../packages/workspace/src) import Pi: the backend
+contract is a list of Pi harness tools, the environment adapter implements
+Pi's `ExecutionEnv`, and `bindTools` produces Pi tools. The resource owner
+(`openResource`, `use`, `dispose`, `destroy`) is neutral and useful on its
+own. A headless agent needs none of the tools: its harness already has file
+tools, and the directory is the medium. A SQL view resource needs none of
+them either.
+
+**Solution.** Split the package along the boundary it already has:
+`@ambionframework/workspace/resource` stays neutral and becomes the
+documented resource contract (`name`, `use`, `dispose`, `destroy`) that any
+resource implements. The just-bash filesystem and its Pi tools become the
+Pi binding of that resource. Add a second resource in the examples, a
+read-only SQL view over `node:sqlite` with `query` and `describe` tools
+built with `defineTool`, to show that the pattern has two members.
+
+**Impact.** The kernel's artifact story does not depend on a shell. A
+directory, a database view, and a document store share one lifecycle and
+one provenance rule.
+
+### E5. Artifact references on the record
+
+**Problem.** Agents in Relay write files in a shared workspace and the
+record never mentions them. A person reading an exchange sees "wrote the
+brief" as prose and finds the file in a separate panel. A summary cannot
+cite what it summarizes. A message cannot point at another room's exchange.
+The journal holds words and holds no references.
+
+**Solution.** Let a spoken message and a summary carry `refs`, a list of
+URIs the author names. The kernel validates the syntax, stores the list,
+renders it after the line, returns it from every read, and reads nothing
+behind a URI. Give the workspace binding a scheme, `file:///shared/brief.md`
+under a named resource, and give rooms one: `ambion://room/<name>` and
+`ambion://room/<name>/exchange/<from>`, which `readRoom` and `readExchange`
+already resolve. Add `refs` to the `say` tool's parameters so an agent
+declares what it touched.
+
+**Impact.** An exchange lists the artifacts it touched. A summary cites its
+sources. A room is an artifact another room can reference, which is the
+ground for delegation (E8).
+
+### E6. Provenance for resources
+
+**Problem.** `ToolContext` carries the agent, the call id, the signal, and
+an update callback. It carries no activation id, no exchange, and no room
+([next.md §5](next.md)). A resource that records who changed an artifact
+can name the agent and cannot name the collaboration that caused the
+change. "What changed during this exchange" has no answer.
+
+**Solution.** Add three immutable fields to `ToolContext`: `activation`,
+`exchange` (owner and from), and `room`. The driver in E2 supplies them
+from the view. Let the workspace binding keep a change log keyed by
+activation id, with `workspace.changes({ exchange })` as the read, so the
+example shows the pattern without the kernel reading any file.
+
+**Impact.** Every artifact change traces to an activation and an exchange.
+Applications get retry-safe operation keys from the activation id at no
+cost.
+
+### E7. The human patterns the room represents
+
+**Problem.** The scope names one pattern, a question and the discussion it
+starts. People work together in more shapes than that. The table reads the
+kernel's primitives against the common ones.
+
+| Pattern                                    | Today                                   | Gap                                           |
+| ------------------------------------------ | --------------------------------------- | --------------------------------------------- |
+| Ask and get an answer                      | Exchange, close, optional summary       |                                               |
+| Ongoing room over days, people come and go | Visits, presence, catch-up, resume      |                                               |
+| Broadcast for information, no reply owed   | A said message; seats may stay silent   |                                               |
+| Bring in a specialist                      | Reserve, `seat`, directed say           |                                               |
+| Steer work in progress                     | Steer between provider requests         |                                               |
+| Two people in one discussion               | Second question joins the open exchange | Summary reaches the owner only                |
+| Waiting on a person                        | The exchange closes when agents stop    | "Done" and "waiting on you" read the same     |
+| Approve before an agent acts               | A directed question to a person         | Same as above; the wait has no representation |
+| Stop one agent, keep the room              | `unseat` revokes its lease              | Named as a limit, documented as removal       |
+| Consult privately                          | Every message is visible to every seat  | Needs another room; no reference to it (E5)   |
+| Delegate a task to a working group         | PR #151 proposes tasks                  | See E8                                        |
+| Vote, sign off, structured decision        | Application tools and artifacts         | Outside the kernel by design                  |
+| Scheduled check-in                         | Deferred: timers                        |                                               |
+
+**Solution.** Close the two gaps that need a rule and document the rest.
+
+- **Awaiting a person.** Derive a fourth outcome for a closed exchange from
+  facts the journal holds: when the last spoken message of the exchange is
+  directed at a person and that person has said nothing since, the exchange
+  is `awaiting` that person. Add `pendingFor(person)` to the room read: the
+  directed messages to a person with no later message from them. No new
+  entry kind and no timer. A later timer (deferred) can expire the wait.
+- **A summary for each person who spoke.** Let the closing commit accept
+  `to` naming any person whose message lies in the exchange's range, and
+  let the writer publish one summary per such person. The owner stays the
+  default recipient. The refusal in `closingCommit` becomes "a person who
+  spoke in this exchange".
+- Document `unseat` as the way to stop one agent, and another room by
+  reference as the way to consult privately.
+
+**Impact.** A product can show "waiting on Priya" and "your open questions"
+from the journal alone. A human-in-the-loop approval is an awaiting
+exchange. The pattern table becomes a page in `docs/room.md`.
+
+### E8. Delegation by reference, with no task database
+
+**Problem.** PR #151 represents delegation as a task record with status,
+owner, subscriptions, and event history stored in the journal, plus a
+working-room registry and a protocol extension. The review in section F
+found unbounded growth and a cancelled stop. The pattern is real: an agent
+hands work to a group and continues.
+
+**Solution.** Build delegation on E5 and E7 and keep the kernel at four
+concepts. A working room is a room. The delegating agent's message carries a
+ref to `ambion://room/<working>/exchange/<from>`. The origin exchange that
+waits on the working room is `awaiting` that room's owner, a person or an
+agent, by the E7 rule extended to an agent recipient. When the working room
+closes its exchange, the host, which owns both rooms, delivers one message
+with a ref back to the origin room; the message wakes seats by attention as
+any message does. Status is a read of the referenced exchange. No task
+record, no registry, no protocol extension.
+
+**Impact.** Delegation costs two references and one host rule. The
+positioning stays true: the journal is the source and rooms compose.
+
+**0.1.0:** E5, E6, and the E7 rules are in. E1, E2, and E4 are in because
+they are public API changes that the freeze must include. E3 is in as an
+example with a fake harness in CI. E8 is the 0.2 design.
+
+## F. In-flight pull requests
 
 **The live tier is red on both open implementation PRs for one reason
 outside them.** The "Live tests on anthropic/claude-sonnet-5" job failed on
@@ -784,7 +1043,7 @@ logs traces to one provider reply: 400 `invalid_request_error`, "Your credit
 balance is too low to access the Anthropic API." Each live room recorded
 three activations, an `abandoned` event, and a silent close (see D1). The
 scripted suites, lint, types, the CLI smoke, and the Dafny proofs pass on
-both heads. Restore the account before any live evidence in section F
+both heads. Restore the account before any live evidence in section G
 counts.
 
 **Merge PR #152 first.** "Bind delivery receipts and identity to journal
@@ -855,7 +1114,7 @@ model call; the hosting entry's execution services already return a
 **Close the stale pull requests.** Nine open pull requests date from
 2026-09-01 to 2026-09-11, and every one conflicts with main. Main delivered
 the aim of each one by another route. Three carry one idea worth taking
-before closure. Section F assumes these closures.
+before closure. Section G assumes these closures.
 
 | PR  | Title                                                    | Recommendation                                                                |
 | --- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -883,38 +1142,40 @@ green; merge them, then check whether one TypeBox version remains
 ([next.md §9](next.md)). PR #5, #6, and #7 are green. PR #4 has a stale run
 from 2026-08-25 and needs a rebase before its checks mean anything.
 
-## F. Proposed order
+## G. Proposed order
 
 **Fix, then freeze, then simplify, then prove.** The order keeps every
 public rename and every journal field in one window, and every behavior
 fix before it.
 
-| Step | Work                                               | Depends on | Evidence                                                                                         |
-| ---- | -------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------ |
-| 1    | Merge PR #152; close stale PRs; bump the Pi pair   |            | CI green on main                                                                                 |
-| 2    | A1, A2, D1, the closing-context slice of PR #153   | 1          | Probes as regressions on memory and SQLite; a 400 abandons in one attempt                        |
-| 3    | C1, D9                                             |            | `pnpm install` and `pnpm check` on Node 22; two live jobs                                        |
-| 4    | B3, B4, B5, B7, B8, C5, C6, D4, D5                 | 2          | Generated declarations list two entries; a fixed seat refuses an agent's unseat                  |
-| 5    | D2, D3: usage and format on the journal            | 4          | Golden journals replay; `activation_end` carries usage                                           |
-| 6    | API and journal freeze: additive changes only      | 5          | A note in `release-0.1.0.md`                                                                     |
-| 7    | B1                                                 | 1          | Equivalence property test; envelope table                                                        |
-| 8    | B2, B9                                             | 4          | File budget rule; template on `read()`                                                           |
-| 9    | B6, C2, C3, D6                                     | 4          | Prompt snapshots; testing entry and conformance suites in a packed consumer; Node template smoke |
-| 10   | next.md §3 exchange outcomes                       | 7          | Silence, exhaustion, cancellation, and permanent failure reads                                   |
-| 11   | C4, C7, D7, D8, D10, release evidence (next.md §9) | 6          | Packed consumers from npmjs; Node 22 and 24; Cloudflare; `CHANGELOG.md`; `docs/trust.md`         |
+| Step | Work                                               | Depends on | Evidence                                                                                                                          |
+| ---- | -------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Merge PR #152; close stale PRs; bump the Pi pair   |            | CI green on main                                                                                                                  |
+| 2    | A1, A2, D1, the closing-context slice of PR #153   | 1          | Probes as regressions on memory and SQLite; a 400 abandons in one attempt                                                         |
+| 3    | C1, D9                                             |            | `pnpm install` and `pnpm check` on Node 22; two live jobs                                                                         |
+| 4    | B3, B4, B5, B7, B8, C5, C6, D4, D5, E1, E2, E5, E6 | 2          | Two entries; a fixed seat refuses an agent's unseat; a scripted executor passes the driver suite                                  |
+| 5    | D2, D3: usage and format on the journal            | 4          | Golden journals replay; `activation_end` carries usage                                                                            |
+| 6    | API and journal freeze: additive changes only      | 5          | A note in `release-0.1.0.md`                                                                                                      |
+| 7    | B1                                                 | 1          | Equivalence property test; envelope table                                                                                         |
+| 8    | B2, B9                                             | 4          | File budget rule; template on `read()`                                                                                            |
+| 9    | B6, C2, C3, D6, E3, E4                             | 4          | Prompt snapshots; testing entry and conformance suites in a packed consumer; Node template smoke; the fake harness seats an agent |
+| 10   | next.md §3 exchange outcomes, E7                   | 7          | Silence, exhaustion, cancellation, permanent failure, and awaiting reads                                                          |
+| 11   | C4, C7, D7, D8, D10, release evidence (next.md §9) | 6          | Packed consumers from npmjs; Node 22 and 24; Cloudflare; `CHANGELOG.md`; `docs/trust.md`                                          |
 
 **The freeze at step 6 is the release decision.** Thirty-nine pull requests
 merged between 2026-09-15 and 2026-09-17, and many renamed a public term.
 The docs carry the residue of those renames. After step 5, every change to
 the main entry and to the journal bodies is additive until the tag.
 
-## G. Deferred past 0.1.0
+## H. Deferred past 0.1.0
 
-- Exchange-scoped tasks and working rooms (PR #151), rebuilt on B1.
+- Delegation to a working room (PR #151), rebuilt by reference (E8) on B1.
 - Publishing `@ambionframework/evals` (PR #153); it stays private until
   its failure matrix, live acceptance, and judge calibration are done.
 - A bounded projection with checkpoints; B1 keeps full replay.
 - Tool execution provenance ([next.md §5](next.md)); the shape is open.
 - Automatic admission expiry for unclaimed work.
 - A durable subscription service across processes.
-- Native timers, external event subscriptions, and scheduler ingress.
+- Native timers, external event subscriptions, and scheduler ingress. The
+  first ingress is a notice from a resource, routed by attention like a
+  message, with a ref (E5) and no author.
