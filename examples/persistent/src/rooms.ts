@@ -30,8 +30,10 @@ interface Activity {
 	agent?: string;
 	text: string;
 }
+type HostLifecycle =
+	{ status: 'stopped' } | { status: 'running'; room: Room } | { status: 'stopping'; room: Room };
 interface HostedRoom extends CatalogEntry {
-	room?: Room;
+	lifecycle: HostLifecycle;
 	team: ReturnType<typeof team>;
 	activity: Activity[];
 	tail: Promise<unknown>;
@@ -77,6 +79,7 @@ export async function openRooms(
 	function attach(row: CatalogEntry): HostedRoom {
 		const entry = {
 			...row,
+			lifecycle: { status: 'stopped' as const },
 			team: roomTeam,
 			activity: [],
 			tail: Promise.resolve(),
@@ -95,12 +98,15 @@ export async function openRooms(
 		return result;
 	}
 	async function run(entry: HostedRoom): Promise<void> {
-		if (entry.room) return;
+		if (entry.lifecycle.status === 'running') return;
+		// A failed stop still owns its room handle. Complete that cleanup before
+		// creating a new run, so a stopped run cannot admit new work.
+		if (entry.lifecycle.status === 'stopping') await stopEntry(entry);
 		entry.enabled = 1;
 		save(entry);
 		const options = { agents: entry.team.agents, runtime };
 		const scenario = scenarios.find((candidate) => candidate.name === entry.name);
-		entry.room = entry.started
+		const room = entry.started
 			? await resumeRoom(entry.name, options)
 			: await startRoom({
 					...options,
@@ -109,16 +115,19 @@ export async function openRooms(
 					summary: 'assistant',
 					seats: scenario?.seats ?? { assistant: 'broadcast', builder: 'named' },
 				});
+		// The handle is owned before the catalog save. A failed save leaves a
+		// usable running room that shutdown can still clean up.
+		entry.lifecycle = { status: 'running', room };
 		entry.started = 1;
 		save(entry);
-		entry.room.subscribe((event) => recordActivity(entry, event));
+		room.subscribe((event) => recordActivity(entry, event));
 	}
 	async function status(entry: HostedRoom) {
 		const snapshot = await readRoom(entry.name, { runtime });
 		return {
 			name: entry.name,
 			goal: entry.goal,
-			status: entry.room ? 'running' : 'stopped',
+			status: entry.lifecycle.status,
 			participants: snapshot.participants,
 			exchange: snapshot.exchange ?? null,
 			activity: [...entry.activity],
@@ -149,9 +158,11 @@ export async function openRooms(
 					await run(entry);
 					break;
 				case 'stop':
+					await stopEntry(entry);
+					// Persist the stopped intent only after durable cleanup succeeds.
+					// A restart then reopens an unresolved stop for another retry.
 					entry.enabled = 0;
 					save(entry);
-					await stopEntry(entry);
 					break;
 				case 'abort':
 					liveRoom(entry).abort();
@@ -175,12 +186,12 @@ export async function openRooms(
 		if (failure) throw failure.reason;
 	}
 	async function stopEntry(entry: HostedRoom): Promise<void> {
-		try {
-			await entry.room?.stop();
-		} finally {
-			// Room.stop releases its runtime registration even when a storage write fails.
-			entry.room = undefined;
-		}
+		if (entry.lifecycle.status === 'stopped') return;
+		const room = entry.lifecycle.room;
+		// Keep the handle while cleanup is in flight and after a failed write.
+		entry.lifecycle = { status: 'stopping', room };
+		await room.stop();
+		entry.lifecycle = { status: 'stopped' };
 	}
 	try {
 		for (const row of database.prepare('SELECT * FROM demo_rooms ORDER BY rowid').all()) {
@@ -215,30 +226,18 @@ export async function openRooms(
 		async close() {
 			closing = true;
 			// Preserve hosting intent so process restart resumes previously running rooms.
-			let failure: unknown;
-			try {
-				await closeEntries();
-			} catch (error) {
-				failure = error;
-			}
-			try {
-				await workspaceTail;
-			} catch (error) {
-				failure ??= error;
-			}
-			try {
-				await workspace.dispose();
-			} catch (error) {
-				failure ??= error;
-			}
-			if (failure !== undefined) throw failure;
+			// Each step keeps its resources when it fails, so a later close retries
+			// the retained room handles before disposing shared resources.
+			await closeEntries();
+			await workspaceTail;
+			await workspace.dispose();
 		},
 	};
 }
 
 export function liveRoom(entry: HostedRoom): Room {
-	if (!entry.room) fail(409, 'Resume this room first.');
-	return entry.room;
+	if (entry.lifecycle.status !== 'running') fail(409, 'Resume this room first.');
+	return entry.lifecycle.room;
 }
 
 function recordActivity(entry: HostedRoom, event: RoomNotification): void {

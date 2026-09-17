@@ -119,6 +119,12 @@ Stop cancels work rather than pausing a model call. Resume does not undo that
 cancellation. Abort requests cancellation without ending human visits or stopping
 the room; its HTTP acknowledgement does not mean cancellation has finished.
 
+A failed stop leaves the room `stopping` and rejects new messages. Retry the
+stop request to finish cleanup. Resume first finishes that cleanup, then opens
+a new run. The host retains the failed handle until cleanup succeeds.
+The catalog records stopped intent after cleanup. If stop fails or the process
+exits before acknowledgement, restart can reopen the room; retry the stop request.
+
 The timeline keeps human prompts and final summaries visible. The discussion
 expands while agents work and collapses when the summary arrives. You can
 expand it again to inspect the exchange. An exchange with one agent reply

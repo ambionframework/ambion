@@ -24,19 +24,25 @@ export async function openDemo(
 	});
 
 	let closing: Promise<void> | undefined;
+	let closed: Promise<unknown> | undefined;
 	return {
 		server,
 		close() {
-			closing ??= shutdown();
+			if (closing) return closing;
+			const attempt = shutdown();
+			closing = attempt.catch((error: unknown) => {
+				closing = undefined;
+				throw error;
+			});
 			return closing;
 		},
 	};
 	async function shutdown() {
-		const closed = closeServer(server);
 		let failure: unknown;
 		const remember = (candidate: unknown): void => {
 			if (failure === undefined && candidate !== undefined) failure = candidate;
 		};
+		closed ??= closeServer(server);
 		remember(await captureFailure(() => rooms.close()));
 		remember(await captureFailure(() => server.closeAllConnections()));
 		remember(
@@ -45,8 +51,8 @@ export async function openDemo(
 				if (error !== undefined) throw error;
 			}),
 		);
-		remember(await captureFailure(() => database.close()));
 		if (failure !== undefined) throw failure;
+		await database.close();
 	}
 }
 
