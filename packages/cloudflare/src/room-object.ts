@@ -72,7 +72,16 @@ export interface Person {
 }
 
 /** The room reaches a seat over RPC to the seat object named for it. */
-function rpcTransport(env: Env): Transport {
+function rpcTransport(ctx: DurableObjectState, env: Env): Transport {
+	const keepAlive = <T>(work: Promise<T>): Promise<T> => {
+		ctx.waitUntil(
+			work.then(
+				() => undefined,
+				() => undefined,
+			),
+		);
+		return work;
+	};
 	return {
 		connect(_room, context: SeatContext) {
 			const { room: roomName, seat } = context;
@@ -80,9 +89,9 @@ function rpcTransport(env: Env): Transport {
 				env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', roomName, seat])),
 			);
 			return {
-				wake: (wake) => stub.wake({ ...wake, hostRoom: context.hostRoom ?? roomName }),
-				steer: (steer) => stub.steer(steer),
-				cut: (activation) => stub.cut(activation),
+				wake: (wake) => keepAlive(stub.wake({ ...wake, hostRoom: context.hostRoom ?? roomName })),
+				steer: (steer) => keepAlive(stub.steer(steer)),
+				cut: (activation) => keepAlive(stub.cut(activation)),
 			};
 		},
 	};
@@ -104,7 +113,7 @@ export class RoomObject extends DurableObject<Env> {
 		this.runtime = runtimeFor({
 			storage: this.storage,
 			clock: this.clock,
-			transport: rpcTransport(env),
+			transport: rpcTransport(ctx, env),
 		});
 		this.metadata = roomMetadata(this.storage);
 		ctx.blockConcurrencyWhile(async () => {

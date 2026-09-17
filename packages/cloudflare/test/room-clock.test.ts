@@ -95,3 +95,102 @@ it('serializes alarm writes when an earlier native write is delayed', async () =
 	await clock.settled();
 	expect(native.alarm).toBe(50);
 });
+
+it('waits for every due callback, including async child work, before returning', async () => {
+	const native = storage();
+	const now = 10;
+	let releaseFirst: () => void = () => {};
+	let releaseSecond: () => void = () => {};
+	const first = new Promise<void>((resolve) => {
+		releaseFirst = resolve;
+	});
+	const second = new Promise<void>((resolve) => {
+		releaseSecond = resolve;
+	});
+	let started = 0;
+	let completed = 0;
+	const clock = new RoomClock(
+		native,
+		() => {},
+		() => now,
+	);
+	clock.alarm(10, async () => {
+		started++;
+		await first;
+		completed++;
+	});
+	clock.alarm(10, async () => {
+		started++;
+		await second;
+		completed++;
+	});
+	const fired = clock.fire();
+	await new Promise<void>((resolve) => setTimeout(resolve, 0));
+	expect(started).toBe(2);
+	expect(completed).toBe(0);
+	let returned = false;
+	void fired.then(() => {
+		returned = true;
+	});
+	releaseFirst();
+	await new Promise<void>((resolve) => setTimeout(resolve, 0));
+	expect(returned).toBe(false);
+	releaseSecond();
+	await fired;
+	expect(completed).toBe(2);
+	expect(native.alarm).toBeUndefined();
+});
+
+it('propagates a callback failure after scheduling the next alarm', async () => {
+	const native = storage();
+	const clock = new RoomClock(
+		native,
+		() => {},
+		() => 10,
+	);
+	clock.alarm(10, () => {
+		throw new Error('child reconciliation failed');
+	});
+	clock.alarm(20, () => {});
+	await expect(clock.fire()).rejects.toThrow('child reconciliation failed');
+	expect(native.alarm).toBe(20);
+});
+
+it('retries one transient native alarm failure', async () => {
+	const native = storage();
+	let attempts = 0;
+	const clock = new RoomClock(
+		{
+			async setAlarm(at) {
+				attempts++;
+				if (attempts === 1) throw new Error('transient alarm failure');
+				await native.setAlarm(at);
+			},
+			deleteAlarm: native.deleteAlarm,
+		},
+		() => {},
+		() => 0,
+	);
+	clock.alarm(100, () => {});
+	await clock.settled();
+	expect(attempts).toBe(2);
+	expect(native.alarm).toBe(100);
+});
+
+it('surfaces a native alarm failure after the bounded retry', async () => {
+	let attempts = 0;
+	const clock = new RoomClock(
+		{
+			async setAlarm() {
+				attempts++;
+				throw new Error('alarm unavailable');
+			},
+			async deleteAlarm() {},
+		},
+		() => {},
+		() => 0,
+	);
+	clock.alarm(100, () => {});
+	await expect(clock.settled()).rejects.toThrow('alarm unavailable');
+	expect(attempts).toBe(2);
+});

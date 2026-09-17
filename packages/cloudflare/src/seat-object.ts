@@ -11,7 +11,13 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Clock, RoomNotification } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
-import type { ExecutionServices, SeatRoom, Steer, TaskSeatRoom, Wake } from '@ambionframework/ambion/transport';
+import type {
+	ExecutionServices,
+	SeatRoom,
+	Steer,
+	TaskSeatRoom,
+	Wake,
+} from '@ambionframework/ambion/transport';
 import { AgentRunner } from '@ambionframework/ambion/transport';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent } from './configure.ts';
@@ -82,6 +88,27 @@ export class SeatObject extends DurableObject<Env> {
 		);
 		if (next.activation !== wake.activation) {
 			if (this.runner !== undefined) await this.runner.wake(wake);
+			else if (next.phase === 'running') {
+				// A seat object may have been evicted after claiming its old
+				// activation. The next retry has a new id; retain that retry and
+				// schedule it instead of leaving the stale running marker wedged.
+				const recovered = await this.metadata.change((current) =>
+					current.activation === next.activation && current.phase === 'running'
+						? {
+								patch: {
+									room: wake.room,
+									hostRoom: wake.hostRoom ?? wake.room,
+									seat: wake.seat,
+									activation: wake.activation,
+									phase: 'pending' as const,
+									wakes: (current.wakes ?? 0) + 1,
+								},
+							}
+						: undefined,
+				);
+				if (recovered.activation === wake.activation && !recovered.hold)
+					await this.ctx.storage.setAlarm(Date.now());
+			}
 			return;
 		}
 		if (!next.hold) await this.ctx.storage.setAlarm(Date.now());

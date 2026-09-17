@@ -187,6 +187,9 @@ and can continue on the remaining assignments.
 Already-running domain tools follow their existing cancellation semantics.
 Selective cancellation of one Task's tool calls is outside the initial scope.
 The exchange waits for remaining room execution even when all Tasks are final.
+After the exchange closes, the runtime releases its working-room hosts.
+Their journals remain available for historical reads. Stopping the origin also
+releases its working rooms.
 
 Updates include the evidence and limitations needed by subscribers. The
 owner requests missing information through Task-directed `say()` messages.

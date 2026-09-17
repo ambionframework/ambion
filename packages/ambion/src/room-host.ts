@@ -1050,6 +1050,7 @@ export class RoomHost implements Room, RunningRoom {
 	 * ahead of the close opens the next exchange, and the room says so.
 	 */
 	private queueClose(close: Close): void {
+		this.evictTaskRooms(close.from);
 		const question = this.state().messages.find((m) => m.seq === close.from);
 		const exchange: ClosedExchange = {
 			owner: close.owner,
@@ -1486,7 +1487,7 @@ export class RoomHost implements Room, RunningRoom {
 	private arm(at: number | undefined): void {
 		this.cancelAlarm();
 		this.cancelAlarm =
-			at === undefined ? () => {} : this.runtime.clock.alarm(at, () => void this.reconcile());
+			at === undefined ? () => {} : this.runtime.clock.alarm(at, () => this.reconcile());
 	}
 
 	// -- control ----------------------------------------------------------------
@@ -1579,10 +1580,29 @@ export class RoomHost implements Room, RunningRoom {
 			// run said `superseded`, and the name is the other run's.
 			if (this.phase !== 'evicted') throw error;
 		} finally {
+			this.evictTaskRooms();
 			// The name comes free whatever the storage did. A failed write must
 			// not leave a room that can never be started again.
 			this.runtime.release(this);
 			this.rejectExchangeWaiters(new Error(`Room '${this.name}' was stopped.`));
+		}
+	}
+
+	/** Working rooms are cohosted implementation details of their origin. */
+	private evictTaskRooms(exchange?: Seq): void {
+		const names = new Set(
+			[...(this.state().tasks?.values() ?? [])]
+				.filter(
+					(task) =>
+						task.originRoom === this.name && (exchange === undefined || task.exchange === exchange),
+				)
+				.map((task) => task.workingRoom),
+		);
+		for (const name of names) {
+			const child = this.runtime.get(name);
+			if (child === undefined) continue;
+			this.runtime.release(child);
+			child.evict();
 		}
 	}
 
@@ -1614,17 +1634,7 @@ export class RoomHost implements Room, RunningRoom {
 		const origin = this.state().composition?.taskScope?.room;
 		const parent = origin === undefined ? undefined : this.runtime.get(origin);
 		if (parent instanceof RoomHost) void parent.reconcile();
-		for (const name of new Set(
-			[...(this.state().tasks?.values() ?? [])]
-				.filter((task) => task.originRoom === this.name)
-				.map((task) => task.workingRoom),
-		)) {
-			const child = this.runtime.get(name);
-			if (child !== undefined) {
-				this.runtime.release(child);
-				child.evict();
-			}
-		}
+		this.evictTaskRooms();
 		this.phase = 'evicted';
 		this.deliveryStates.clear();
 		this.journal.close();

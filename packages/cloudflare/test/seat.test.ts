@@ -141,6 +141,32 @@ it('keeps the first pending activation when different wakes arrive together', as
 	expect(await seat.wakes()).toBe(1);
 });
 
+it('replaces a stale running activation when a fresh retry wake arrives', async () => {
+	const name = 'wake-after-seat-eviction';
+	const seat = env.SEAT.get(
+		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
+	);
+	await runInDurableObject(seat, async (_instance, state) => {
+		await seatMetadata(sqlStorage(state)).change(() => ({
+			patch: {
+				room: name,
+				seat: 'product',
+				activation: 'message:1:product:1',
+				phase: 'running',
+			},
+		}));
+		await state.storage.deleteAlarm();
+	});
+	await seat.wake({ room: name, seat: 'product', activation: 'message:1:product:2' });
+	const state = await until(async () => {
+		const metadata = await runInDurableObject(seat, (_instance, durable) =>
+			seatMetadata(sqlStorage(durable)).read(),
+		);
+		return metadata.activation !== 'message:1:product:1' ? metadata : undefined;
+	});
+	expect(state.activation).not.toBe('message:1:product:1');
+});
+
 it('forwards steering to the live runner without recording a wake', async () => {
 	type FakeRunner = { last?: Steer; steer(value: Steer): Promise<void> };
 	const seat = env.SEAT.get(

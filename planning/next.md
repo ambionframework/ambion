@@ -9,6 +9,27 @@ release work beyond naming and API cleanup. No provider calls were used.
 Integration with main `cd39709` also includes the reusable assistant package.
 Its instructions define ordinary agent behavior; the kernel still owns authority.
 
+## Exchange-scoped Tasks
+
+**Implemented: Tasks provide parallel work within one exchange.**
+[`docs/tasks.md`](../docs/tasks.md) defines creation, updates, owner steering,
+subscriptions, and idle intervention. Many Tasks can share a working room.
+Each owner activation receives its Tasks for that exchange and their status.
+Owners can continue responding while their working rooms run.
+
+**Recovery uses the existing room journals.** Source receipts, authoritative
+Task events, delivery obligations, and acknowledgements survive replay.
+Memory, SQLite, and Cloudflare tests cover delivery recovery and authority.
+Adversarial regressions cover cancellation races, stale context, owner
+intervention, bounded Task calls, and working-room cleanup.
+
+**Relay exposes Tasks and their working discussions.** The inspector groups
+Tasks by exchange and reads child history without activating that room.
+The scripted UI acceptance run confirmed background work, a concurrent owner
+reply, terminal status, and preserved history after reload. It used no provider
+calls. `pnpm --filter @ambionframework-examples/persistent test:tasks-ui`
+starts the same local scenario. Live-model acceptance runs in the live suite.
+
 ## The model to preserve
 
 **Developers define participants, open rooms, send messages, and read exchanges.**

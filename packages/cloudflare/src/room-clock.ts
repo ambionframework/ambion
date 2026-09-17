@@ -34,14 +34,25 @@ export class RoomClock implements Clock {
 	async fire(): Promise<void> {
 		const now = this.now();
 		const due = [...this.timers].filter((timer) => timer.at <= now).sort((a, b) => a.at - b.at);
-		try {
-			for (const timer of due) {
-				if (this.timers.delete(timer)) timer.fire();
+		const callbacks: Promise<void>[] = [];
+		for (const timer of due) {
+			if (this.timers.delete(timer)) {
+				// Clock deliberately exposes a void callback, but RoomHost callbacks may
+				// return async reconciliation work. Promise resolution assimilates it.
+				callbacks.push(Promise.resolve().then(() => timer.fire()));
 			}
+		}
+		let callbackFailure: PromiseRejectedResult | undefined;
+		try {
+			const results = await Promise.allSettled(callbacks);
+			callbackFailure = results.find(
+				(result): result is PromiseRejectedResult => result.status === 'rejected',
+			);
 		} finally {
 			this.changed();
 			await this.settled();
 		}
+		if (callbackFailure) throw callbackFailure.reason;
 	}
 
 	/** Wait until every queued change has reached native alarm storage. */
@@ -64,6 +75,12 @@ export class RoomClock implements Clock {
 			return;
 		}
 		const next = Math.min(...[...this.timers].map((timer) => timer.at));
-		await this.storage.setAlarm(next);
+		try {
+			await this.storage.setAlarm(next);
+		} catch {
+			// A native alarm write can fail transiently during a DO wake. Retry once
+			// while keeping the failure observable if the second write also fails.
+			await this.storage.setAlarm(next);
+		}
 	}
 }

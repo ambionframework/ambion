@@ -328,7 +328,18 @@ export type RoomNotification =
 			type: 'delivery_error';
 			agent: string;
 			activation: string;
-			operation: 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'claim' | 'renew' | 'release';
+			operation:
+				| 'wake'
+				| 'steer'
+				| 'cut'
+				| 'view'
+				| 'commit'
+				| 'claim'
+				| 'renew'
+				| 'release'
+				| 'task'
+				| 'task_update'
+				| 'task_say';
 			error: Error;
 	  }
 	/** Transcript persistence failed independently of the execution outcome. */

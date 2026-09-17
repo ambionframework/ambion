@@ -1067,7 +1067,8 @@
 					);
 					return active
 						? 'Working'
-						: currentRoom()?.tasks?.some((task) => task.status === 'open')
+						: currentRoom()?.exchange &&
+							  currentRoom()?.tasks?.some((task) => task.exchange === currentRoom().exchange.from)
 							? 'Background work'
 							: 'Ready';
 				};
