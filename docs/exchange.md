@@ -98,6 +98,19 @@ Live notifications include `message`, `exchange_opened`, and
 `exchange_closed` events, plus execution diagnostics. Notifications and pending
 waits belong to the current run and must be recreated after interruption.
 
+**`readRoom(name)` returns detached state from one journal position.** It starts
+no agents and performs no reconciliation. `RoomSnapshot` reports initialization,
+recorded goal, participants, exchange views, and the journal `watermark`.
+A stopped open exchange remains open until the journal records its close.
+
+Pass `{ messages: false }` for metadata, or `{ messages: { since } }` for messages
+after an exclusive cursor. `since` must be a non-negative safe integer. A future
+cursor returns no messages; exchange metadata remains complete.
+
+The watermark includes close and lease entries. Activity can change when a lease
+expires without another append, so the watermark cannot validate a cached view.
+See [`RoomSnapshot` and `ExchangeView`](../packages/ambion/src/types.ts) for types.
+
 ## 7. What reads one
 
 - The summary writer receives one dedicated closing activation and may write a

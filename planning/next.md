@@ -69,11 +69,10 @@ entries do not form one transaction, and rooms retain separate conversation cont
 | 5     | Reduce repeated projection work where measured                    | Ordinary reads and updates reuse one replayable interpretation                            | Measurement dependent |
 | 6     | Close release evidence and consumer gaps                          | Supported configurations are proven from shipped packages                                 | Independent slices    |
 
-**Current stack starts with failed-stop recovery in Relay.** The implementation
-retains cleanup ownership and supports retry after restart. Review remains open.
-The second change makes browser entry explicit.
-Prioritize item 2 as the largest architectural simplification. Cancellation
-needs a precise contract, but it does not block exposing existing journal facts.
+**Prepared as three stacked PRs, awaiting review:** failed-stop recovery, explicit
+browser entry, and coherent room/exchange reads with partial-creation recovery.
+Items 1–2 below describe that implementation. The next work is item 3: define
+the cancellation boundary and enforce contribution rules at the kernel boundary.
 
 ## 1. Keep commands and observation coherent in Relay
 
@@ -129,17 +128,17 @@ cannot recreate presence. Both behaviors use the existing kernel contracts.
 
 ## 2. Make room and exchange state directly readable
 
-**Deliver in stages:** expose recorded initialization and metadata, then repair
-partial creation. Add exchange views and selective reads next. Migrate Relay and
-Cloudflare onto those queries. Keep each stage independently reviewable.
+**Third PR in the stack:** one detached read contract supplies initialization,
+metadata, exchange outcomes, and selective messages. Relay and Cloudflare use
+these journal facts; live exchange handles retain their waiting contracts.
 
 ### Findings
 
-[`RoomSnapshot`](../packages/ambion/src/room.ts) exposes messages, participants,
-and the open exchange. Closed ranges and summary outcomes exist inside the
-kernel but are only partially exposed through live waiting handles.
+Before this change, `RoomSnapshot` exposed messages, participants, and the open
+exchange. Closed ranges and summary outcomes existed inside the kernel but were
+only partially exposed through live waiting handles.
 
-Consequently:
+The resulting caller obligations were:
 
 - Relay's [`timelineGroups`](../examples/persistent/index.html) discovers
   discussion groups from `summary.covers`. A declined, absent, or failed summary
@@ -155,36 +154,36 @@ Consequently:
 
 ### Change
 
-- [ ] Define one detached, serializable exchange view using existing close and
+- [x] Define one detached, serializable exchange view using existing close and
       [`summaryCompletion`](../packages/ambion/src/room/exchange.ts) queries.
       Represent open/closed discussion and the fixed closed range separately
       from pending/published/silent/failed summary outcome. Preserve opening
       identity, owner, timestamp, and the published summary reference.
-- [ ] Make completed exchanges readable from stopped storage without starting
+- [x] Make completed exchanges readable from stopped storage without starting
       agents. Live `exchange.messages()` and `exchange.response()` remain waiting
       conveniences over the same interpretation, not competing state machines.
-- [ ] Extend the existing room-read surface with coherent metadata, participant
+- [x] Extend the existing room-read surface with coherent metadata, participant
       and exchange views, and optional messages after an exclusive cursor. Return
       a journal watermark for the committed facts observed, including non-message
       changes. Use `Journal.lastSeq`, the accepted journal sequence. Preserve
       `RoomState.lastSeq`, the message cursor used for close boundaries. Do not
       introduce a second counter or a generic patch/feed protocol.
-- [ ] Specify cursor scope, full initial read, overlap handling, invalid/future
+- [x] Specify cursor scope, full initial read, overlap handling, invalid/future
       cursor behavior, and old exchanges whose summary changes after a newer
       exchange opens. A first implementation may return complete selected
       exchange metadata with incremental messages; correctness precedes paging.
       The watermark is not a whole-response cache validator: activity derived
       from lease expiry can change with time before another entry lands. Return
       time-derived metadata afresh and keep host diagnostics separate.
-- [ ] Make status-only reads avoid copying message history. Apply range selection
+- [x] Make status-only reads avoid copying message history. Apply range selection
       before detaching values. Use the same query functions for running and
       stopped rooms; host-local tool activity remains diagnostic data.
-- [ ] Distinguish a missing room from an initialized empty room, and expose
+- [x] Distinguish a missing room from an initialized empty room, and expose
       recorded public metadata such as the goal. Reads must not compose a room,
       start execution, or create audit sessions. Preserve an open exchange in
       stopped storage until a recorded close exists. Use existing storage operations
       unless an actual adapter limitation requires more.
-- [ ] Replace Relay's summary-based grouping and Cloudflare's completion inference
+- [x] Replace Relay's summary-based grouping and Cloudflare's completion inference
       with that view. Keep collapse controls, a direct single reply, human prompts,
       and final-answer presentation in the UI. Invalidate rendering on metadata
       changes as well as messages. Closure does not certify quality.
@@ -213,12 +212,12 @@ because the catalog selected `startRoom`. No model calls occurred.
 The recorded goal belongs to the journal after initialization. Relay still needs
 provisional creation parameters before that commit.
 
-- [ ] Use the recorded metadata/existence result to recover partially completed
+- [x] Use the recorded metadata/existence result to recover partially completed
       creation and choose start versus resume. Delete duplicate catalog facts
       where possible; retain provisional creation intent if needed to recover a
       catalog insertion that preceded the journal. Do not pretend both writes
       are one transaction or erase the initialization gap by renaming it.
-- [ ] Keep hosting intent, credentials, identity selection, HTTP authorization,
+- [x] Keep hosting intent, credentials, identity selection, HTTP authorization,
       file previews, and shutdown resource ownership in the application.
 
 **Verification:** fail before composition and after composition but before the
@@ -442,7 +441,7 @@ status. The final API audit and release sign-off remain.
 - Same-named agents with different definitions already have coverage in
   [`bindings.test.ts`](../packages/ambion/test/bindings.test.ts); missing-composition
   resume rejection is covered in [`restart.test.ts`](../packages/ambion/test/restart.test.ts).
-  Missing-room read semantics and partial creation remain item 2.
+  The third stacked PR adds missing-room reads and partial-creation recovery.
 - The CLI/Cloudflare prerelease and package discovery exist. Packed checks and
   migrations need updates for actual changes, not another initial extraction.
 

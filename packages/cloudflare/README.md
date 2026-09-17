@@ -21,10 +21,11 @@ What is built:
   SQLite. The runtime derives room journals and Pi audit sessions from it.
   Room and seat objects store their durable metadata under their own names.
   This package only wraps `ctx.storage.sql` in `run` and `all` (`sqlOver`).
-- **`RoomObject`** runs the room. Its constructor resumes the room the
-  storage names, over `resumeRoom`. It exposes `start`, `visit`,
-  `send`, `leave`, `seat`, `unseat`, `abort`, `messages`, `participants`,
-  `exchange`, `exchangeMessages` and `response` over RPC, and the three calls a seat makes: `view`, `commit`
+- **`RoomObject`** runs the room. Its constructor resumes an initialized room
+  unless explicitly stopped; an uninitialized named record waits for
+  an explicit `start`. It exposes `start`, `visit`, `send`, `leave`, `seat`,
+  `unseat`, `abort`, `read`, `messages`, `participants`, `exchange`,
+  `exchangeMessages` and `response` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its `alarm()` runs `reconcile()`.
 - **`SeatObject`** runs one seat. `wake` stores the activation id and sets
   an alarm; `alarm()` claims the lease, reads the view, runs the activation
@@ -44,6 +45,12 @@ install a new definition. The room metadata retains the catalog names, so
 automatic resume resolves the same definitions through `configure`. Resume
 requires catalog names in the room metadata. Every seat uses the same room
 tools, including `say`, `seat`, and `unseat`.
+
+`read()` returns the detached coherent room projection, including stopped
+records. `messages()` and `participants()` use that projection; the live
+`exchangeMessages()` and `response()` conveniences retain their wait behavior
+and require a running room. Use `read()` to inspect a stopped open exchange or
+its recorded summary outcome.
 
 `pnpm test` runs the adapter tests inside workerd, through `@cloudflare/vitest-pool-workers`, as part of
 the repository's `turbo test`. The tests serialize every value that crosses

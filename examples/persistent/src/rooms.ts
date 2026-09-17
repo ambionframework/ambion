@@ -21,7 +21,6 @@ export function fail(status: number, message: string): never {
 interface CatalogEntry {
 	name: string;
 	goal: string;
-	started: number;
 	enabled: number;
 }
 interface Activity {
@@ -53,8 +52,11 @@ export async function openRooms(
 	};
 	const runtime = createRuntime({ storage: sqliteJournals(sql), stream });
 	database.exec(
-		'CREATE TABLE IF NOT EXISTS demo_rooms (name TEXT PRIMARY KEY, goal TEXT NOT NULL, started INTEGER NOT NULL, enabled INTEGER NOT NULL)',
+		'CREATE TABLE IF NOT EXISTS demo_rooms (name TEXT PRIMARY KEY, goal TEXT NOT NULL, enabled INTEGER NOT NULL)',
 	);
+	const columns = database.prepare('PRAGMA table_info(demo_rooms)').all() as { name: string }[];
+	if (columns.some((column) => column.name === 'started'))
+		database.exec('ALTER TABLE demo_rooms DROP COLUMN started');
 	const entries = new Map<string, HostedRoom>();
 	let closing = false;
 	const workspacePath = resolve(directory, 'workspace');
@@ -89,8 +91,8 @@ export async function openRooms(
 	}
 	function save(entry: HostedRoom): void {
 		database
-			.prepare('UPDATE demo_rooms SET started = ?, enabled = ? WHERE name = ?')
-			.run(entry.started, entry.enabled, entry.name);
+			.prepare('UPDATE demo_rooms SET enabled = ? WHERE name = ?')
+			.run(entry.enabled, entry.name);
 	}
 	function serial<T>(entry: HostedRoom, operation: () => Promise<T>): Promise<T> {
 		const result = entry.tail.then(operation);
@@ -106,7 +108,8 @@ export async function openRooms(
 		save(entry);
 		const options = { agents: entry.team.agents, runtime };
 		const scenario = scenarios.find((candidate) => candidate.name === entry.name);
-		const room = entry.started
+		const recorded = await readRoom(entry.name, { runtime, messages: false });
+		const room = recorded.initialized
 			? await resumeRoom(entry.name, options)
 			: await startRoom({
 					...options,
@@ -115,31 +118,21 @@ export async function openRooms(
 					summary: 'assistant',
 					seats: scenario?.seats ?? { assistant: 'broadcast', builder: 'named' },
 				});
-		// The handle is owned before the catalog save. A failed save leaves a
+		// The handle is owned before subscription. A later host failure leaves a
 		// usable running room that shutdown can still clean up.
 		entry.lifecycle = { status: 'running', room };
-		entry.started = 1;
-		save(entry);
 		room.subscribe((event) => recordActivity(entry, event));
 	}
 	async function status(entry: HostedRoom) {
-		const snapshot = await readRoom(entry.name, { runtime });
-		return {
-			name: entry.name,
-			goal: entry.goal,
-			status: entry.lifecycle.status,
-			participants: snapshot.participants,
-			exchange: snapshot.exchange ?? null,
-			activity: [...entry.activity],
-			pattern: scenarios.find((scenario) => scenario.name === entry.name)?.pattern,
-			prompt: scenarios.find((scenario) => scenario.name === entry.name)?.prompt,
-		};
+		return roomView(entry, await readRoom(entry.name, { runtime, messages: false }));
 	}
 	async function create(name: string, goal: string) {
 		if (closing) fail(503, 'The host is stopping.');
 		if (entries.has(name)) fail(409, 'This room already exists.');
-		database.prepare('INSERT INTO demo_rooms VALUES (?, ?, 0, 1)').run(name, goal);
-		const entry = attach({ name, goal, started: 0, enabled: 1 });
+		database
+			.prepare('INSERT INTO demo_rooms (name, goal, enabled) VALUES (?, ?, 1)')
+			.run(name, goal);
+		const entry = attach({ name, goal, enabled: 1 });
 		return serial(entry, async () => {
 			await run(entry);
 			return status(entry);
@@ -198,7 +191,6 @@ export async function openRooms(
 			const entry = attach({
 				name: String(row.name),
 				goal: String(row.goal),
-				started: Number(row.started),
 				enabled: Number(row.enabled),
 			});
 			if (entry.enabled) await run(entry);
@@ -220,9 +212,37 @@ export async function openRooms(
 		list: () =>
 			Promise.all([...entries.values()].map((entry) => serial(entry, () => status(entry)))),
 		messages: (name: string, since: number) =>
-			withRoom(name, async (entry) =>
-				(await readRoom(entry.name, { runtime })).messages.filter((message) => message.seq > since),
+			withRoom(
+				name,
+				async (entry) => (await readRoom(entry.name, { runtime, messages: { since } })).messages,
 			),
+		read: (name: string, since?: number) =>
+			withRoom(name, async (entry) =>
+				roomView(
+					entry,
+					await readRoom(entry.name, {
+						runtime,
+						messages: since === undefined ? undefined : { since },
+					}),
+				),
+			),
+		exchange: (name: string, from: number) =>
+			withRoom(name, async (entry) => {
+				const snapshot = await readRoom(entry.name, {
+					runtime,
+					messages: { since: Math.max(0, from - 1) },
+				});
+				const exchange = snapshot.exchanges.find((candidate) => candidate.from === from);
+				if (exchange === undefined) return undefined;
+				const through = exchange.status === 'closed' ? exchange.through : Number.POSITIVE_INFINITY;
+				return {
+					exchange,
+					messages: snapshot.messages.filter(
+						(message) =>
+							message.kind !== 'summary' && message.seq >= exchange.from && message.seq <= through,
+					),
+				};
+			}),
 		async close() {
 			closing = true;
 			// Preserve hosting intent so process restart resumes previously running rooms.
@@ -232,6 +252,17 @@ export async function openRooms(
 			await workspaceTail;
 			await workspace.dispose();
 		},
+	};
+}
+
+function roomView(entry: HostedRoom, snapshot: Awaited<ReturnType<typeof readRoom>>) {
+	return {
+		...snapshot,
+		goal: snapshot.initialized ? snapshot.goal : entry.goal,
+		status: entry.lifecycle.status,
+		activity: [...entry.activity],
+		pattern: scenarios.find((scenario) => scenario.name === entry.name)?.pattern,
+		prompt: scenarios.find((scenario) => scenario.name === entry.name)?.prompt,
 	};
 }
 

@@ -20,10 +20,10 @@ A prompt has two phases: acceptance, then asynchronous results:
 2. An ordinary message wakes the broadcast assistant, which answers or involves
    specialists. Agents collaborate through room messages and read or edit shared
    files. A follow-up steers the open exchange through the same message API.
-3. The browser polls room status and new journal messages about once a second.
-   After discussion finishes, an optional closing activation can publish a
-   summary. The UI collapses the covered discussion when that summary arrives;
-   the original messages remain in the journal.
+3. The browser polls a coherent room view about once a second. Each response
+   contains participants, exchange states, and new messages from one journal
+   position. The UI collapses completed discussion. An optional closing
+   activation can publish a summary later; the original messages remain readable.
 
 An **activation** is one agent doing work. An **exchange** is a human prompt and
 the resulting collaboration. Each room has at most one open exchange; separate
@@ -129,8 +129,8 @@ The catalog records stopped intent after cleanup. If stop fails or the process
 exits before acknowledgement, restart can reopen the room; retry the stop request.
 
 The timeline keeps human prompts and final summaries visible. The discussion
-expands while agents work and collapses when the summary arrives. You can
-expand it again to inspect the exchange. An exchange with one agent reply
+stays visible while agents work and collapses when the journal records its close.
+You can expand it again even when no summary is published. An exchange with one agent reply
 shows that reply directly, without a summary card or disclosure. Room details show presence and
 recent model and tool execution events. Activity is local to this host run;
 durable messages remain available after restart and while a room is stopped.
@@ -156,8 +156,10 @@ one workspace resource.
     home/                       # Agent home directories
 ```
 
-The host catalog records room names, goals, initialization, and whether the
-host should run them. Collaboration state remains in each room journal.
+The host catalog records room names, provisional creation goals, and desired
+hosting state. The journal determines initialization and the recorded goal.
+Recovery resumes an initialized room even if its creation response was lost.
+Collaboration state remains in each room journal.
 That journal includes membership, presence, exchanges, and work records as well
 as visible messages; there is no separate application task database.
 A deliberately stopped room stays stopped when the server restarts. The
@@ -218,10 +220,16 @@ to keep that room stopped across server restarts.
 | `PUT /rooms/:room/humans/:person`                          | Join as a predefined human                                                 |
 | `POST /rooms/:room/humans/:person` with `{key, text, to?}` | Send as a present human and return `{from, owner, at}` after acceptance    |
 | `DELETE /rooms/:room/humans/:person`                       | Record the person's departure                                              |
+| `GET /rooms/:room?since=:seq`                              | Coherent room metadata, exchange views, and messages after the cursor      |
 | `GET /rooms/:room/messages?since=:seq`                     | Durable messages after an exclusive cursor, including stopped rooms        |
-| `GET /rooms/:room/exchanges/:from`                         | Wait for a running room's fixed exchange discussion                        |
+| `GET /rooms/:room/exchanges/:from`                         | Recorded exchange view and its discussion, including stopped rooms         |
 | `GET /workspace`                                           | Local root and workspace file list                                         |
 | `GET /file?path=/shared/plan.md`                           | Text preview                                                               |
+
+Room reads return immediately and never start agents. `watermark` identifies
+all committed facts observed, including closes and lease changes. It is not a
+cache validator for activity that changes with lease expiry. A stopped room can
+retain an open exchange until a later run records its close.
 
 The server binds to loopback. Identity selection is a local demo convention,
 not authentication. A deployed application must authenticate clients and

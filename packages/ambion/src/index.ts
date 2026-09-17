@@ -28,6 +28,7 @@ export type {
 	Clock,
 	ClosedExchange,
 	Exchange,
+	ExchangeView,
 	HumanDefinition,
 	HumanSeatInfo,
 	Message,
@@ -41,6 +42,7 @@ export type {
 	Seq,
 	SpokenMessage,
 	SummaryMessage,
+	SummaryOutcome,
 	ToolBundle,
 	ToolContext,
 } from './types.ts';

@@ -13,7 +13,7 @@ import {
 } from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
-import { closedExchange, deferred, roomName, waitForRoom } from './support/room.ts';
+import { closedExchange, crash, deferred, roomName, waitForRoom } from './support/room.ts';
 import { contextText, isClosing, quiet, scripted, speak, summarise } from './support/scripted.ts';
 import { memory, type OpenedStorage, storages } from './support/storage.ts';
 
@@ -86,6 +86,105 @@ async function world(
 }
 
 describe('the room API', () => {
+	it.each(storages)('reads one detached projection over $name storage', async (storage) => {
+		const opened = await storage.open();
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: fakeClock(),
+			transport: inProcessTransport(),
+		});
+		const missingName = roomName(`room-read-missing-${storage.name}`);
+		try {
+			const missing = await readRoom(missingName, { runtime, messages: false });
+			if (missing.initialized) throw new Error('Expected an uninitialized room.');
+			expect(missing.goal).toBeUndefined();
+			expect(missing).toEqual({
+				name: missingName,
+				initialized: false,
+				messages: [],
+				participants: [],
+				exchanges: [],
+				exchange: undefined,
+				watermark: 0,
+			});
+			await expect(readRoom(missingName, { runtime, messages: { since: -1 } })).rejects.toThrow(
+				/cursor/i,
+			);
+
+			const name = roomName(`room-read-${storage.name}`);
+			const room = await startRoom({
+				name,
+				runtime,
+				agents: [],
+				goal: 'Keep the record coherent.',
+			});
+			try {
+				const initialized = await readRoom(name, { runtime, messages: false });
+				expect(initialized).toMatchObject({ initialized: true, goal: 'Keep the record coherent.' });
+				const sent = await (await room.visit(priya)).send({ text: 'A question?', key: 'read-1' });
+				await room.messages();
+				const complete = await readRoom(name, { runtime });
+				const closed = complete.exchanges.find((exchange) => exchange.from === sent.from);
+				expect(closed).toMatchObject({ status: 'closed', summary: { status: 'silent' } });
+				expect(complete.exchange).toBeUndefined();
+				expect(complete.watermark).toBeGreaterThan(complete.messages.at(-1)?.seq ?? 0);
+
+				const suffix = await readRoom(name, {
+					runtime,
+					messages: { since: sent.from },
+				});
+				expect(suffix.messages.every((message) => message.seq > sent.from)).toBe(true);
+				const future = await readRoom(name, {
+					runtime,
+					messages: { since: Number.MAX_SAFE_INTEGER },
+				});
+				if (!future.initialized) throw new Error('Expected initialized metadata.');
+				expect(future.messages).toEqual([]);
+				expect(future.watermark).toBe(complete.watermark);
+
+				const message = complete.messages.find((item) => item.seq === sent.from);
+				if (message !== undefined) (message as { text: string }).text = 'mutated';
+				const participant = complete.participants.find((item) => item.name === priya.name);
+				if (participant !== undefined) (participant as { name: string }).name = 'mutated';
+				const detached = await readRoom(name, { runtime });
+				const detachedMessage = detached.messages.find((item) => item.seq === sent.from);
+				expect(
+					detachedMessage !== undefined && isSpoken(detachedMessage)
+						? detachedMessage.text
+						: undefined,
+				).toBe('A question?');
+				expect(detached.participants.some((item) => item.name === priya.name)).toBe(true);
+			} finally {
+				await room.stop();
+			}
+		} finally {
+			await opened.dispose();
+		}
+	});
+
+	it.each(storages)(
+		'keeps an open exchange open after host eviction on $name storage',
+		async (storage) => {
+			const opened = await storage.open();
+			const runtime = createRuntime({
+				storage: opened.storage,
+				clock: fakeClock(),
+				transport: inProcessTransport(),
+			});
+			const name = roomName(`room-read-open-${storage.name}`);
+			const room = await startRoom({ name, runtime, agents: [alpha], streamFn: answer });
+			try {
+				await (await room.visit(priya)).send({ text: 'Stay open?', key: 'open-1' });
+				crash(runtime, room);
+				const snapshot = await readRoom(name, { runtime, messages: false });
+				expect(snapshot.initialized).toBe(true);
+				expect(snapshot.exchange?.status).toBe('open');
+			} finally {
+				await opened.dispose();
+			}
+		},
+	);
+
 	it('opens ready, returns an exchange handle, and reads a durable snapshot', async () => {
 		const { opened, runtime, room } = await world(memory, {
 			summary: assistant.name,

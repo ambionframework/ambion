@@ -154,11 +154,15 @@ async function roomRoute(
 	url: URL,
 ) {
 	const match =
-		/^\/rooms\/([a-z][a-z0-9-]*)\/(messages|exchanges|humans|resume|stop|abort)(?:\/([^/]+))?$/.exec(
+		/^\/rooms\/([a-z][a-z0-9-]*)(?:\/(messages|exchanges|humans|resume|stop|abort)(?:\/([^/]+))?)?$/.exec(
 			url.pathname,
 		);
 	if (!match) fail(404, 'Unknown route.');
 	const [, name = '', resource = '', id] = match;
+	if (!resource) {
+		if (request.method !== 'GET') fail(405, 'Use GET for room reads.');
+		return selectedRoom(rooms, name, url, response);
+	}
 	if (request.method === 'GET') return read(rooms, name, resource, id, url, response);
 	if (resource === 'humans') return human(rooms, name, id ?? '', request, response);
 	if (request.method !== 'POST' || id) fail(405, 'Use POST for lifecycle operations.');
@@ -203,21 +207,50 @@ async function read(
 ) {
 	if (id && resource !== 'exchanges') fail(404, 'Unknown route.');
 	switch (resource) {
-		case 'messages': {
-			const since = Number(url.searchParams.get('since') ?? 0);
-			if (!Number.isSafeInteger(since) || since < 0) fail(400, 'Invalid cursor.');
-			return reply(response, 200, await rooms.messages(name, since));
-		}
-		case 'exchanges': {
-			const exchange = await rooms.withRoom(name, async (entry) =>
-				liveRoom(entry).exchange(Number(id)),
-			);
-			if (!exchange) fail(404, 'Unknown exchange.');
-			return reply(response, 200, await exchange.messages());
-		}
+		case 'messages':
+			return messagesRead(rooms, name, url, response);
+		case 'exchanges':
+			return exchangeRead(rooms, name, id, response);
 		default:
 			fail(404, 'Unknown route.');
 	}
+}
+
+async function messagesRead(
+	rooms: Rooms,
+	name: string,
+	url: URL,
+	response: ServerResponse,
+): Promise<void> {
+	const since = Number(url.searchParams.get('since') ?? 0);
+	if (!Number.isSafeInteger(since) || since < 0) fail(400, 'Invalid cursor.');
+	return reply(response, 200, await rooms.messages(name, since));
+}
+
+async function exchangeRead(
+	rooms: Rooms,
+	name: string,
+	id: string | undefined,
+	response: ServerResponse,
+): Promise<void> {
+	const from = Number(id);
+	if (!Number.isSafeInteger(from) || from < 1) fail(400, 'Invalid exchange reference.');
+	const exchange = await rooms.exchange(name, from);
+	if (!exchange) fail(404, 'Unknown exchange.');
+	return reply(response, 200, exchange);
+}
+
+async function selectedRoom(
+	rooms: Rooms,
+	name: string,
+	url: URL,
+	response: ServerResponse,
+): Promise<void> {
+	const rawSince = url.searchParams.get('since');
+	const since = rawSince === null ? undefined : Number(rawSince);
+	if (since !== undefined && (!Number.isSafeInteger(since) || since < 0))
+		fail(400, 'Invalid cursor.');
+	return reply(response, 200, await rooms.read(name, since));
 }
 
 async function mutateHuman(

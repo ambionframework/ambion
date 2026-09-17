@@ -106,6 +106,17 @@ async function request(base: string, path: string, init: RequestInit = {}) {
 	return { response, body };
 }
 
+async function waitForSummary(base: string) {
+	let result = await request(base, '/rooms/delivery/messages?since=0');
+	for (let attempt = 0; attempt < 50; attempt += 1) {
+		if ((result.body as { kind?: string }[]).some((message) => message.kind === 'summary'))
+			return result;
+		await new Promise<void>((resolve) => setTimeout(resolve, 10));
+		result = await request(base, '/rooms/delivery/messages?since=0');
+	}
+	return result;
+}
+
 function json(method: string, body: unknown): RequestInit {
 	return { method, body: JSON.stringify(body) };
 }
@@ -330,13 +341,17 @@ describe('persistent browser host', () => {
 			host.base,
 			`/rooms/delivery/exchanges/${(sent.body as { from: number }).from}`,
 		);
-		const messages = await request(host.base, '/rooms/delivery/messages?since=0');
+		const messages = await waitForSummary(host.base);
 		const workspace = await request(host.base, '/workspace');
 		const filePath = encodeURIComponent('/home/builder/shared/demo.txt');
 		const fileBeforeRestart = await request(host.base, `/file?path=${filePath}`);
 		const otherRoomHistory = await request(host.base, '/rooms/design/messages?since=0');
 		const sharedWorkspace = await request(host.base, '/workspace');
 		expect(discussion.response.status).toBe(200);
+		expect(discussion.body).toMatchObject({
+			exchange: expect.objectContaining({ from: (sent.body as { from: number }).from }),
+			messages: expect.any(Array),
+		});
 		expect(
 			(messages.body as { kind: string }[]).some((message) => message.kind === 'summary'),
 		).toBe(true);
@@ -383,10 +398,11 @@ describe('persistent browser host', () => {
 			`${base}/rooms/design/exchanges/${(sent.body as { from: number }).from}`,
 			{ signal: controller.signal },
 		);
+		const exchange = await waiting;
 		const people = await request(base, '/people');
 		const aborted = await request(base, '/rooms/design/abort', { method: 'POST' });
 		controller.abort();
-		await expect(waiting).rejects.toThrow();
+		expect(exchange.status).toBe(200);
 		expect(people.response.status).toBe(200);
 		expect(aborted.response.status).toBe(202);
 	});

@@ -139,6 +139,8 @@ export interface RoomMetadata {
 	name?: string;
 	/** Definition names supplied for this room run. Used for automatic resume. */
 	agents?: string[];
+	/** A planned stop leaves the record readable without automatically resuming it. */
+	stopped?: boolean;
 	people?: Record<string, unknown>;
 }
 
