@@ -166,6 +166,9 @@ function message(
 	now: number,
 	route = true,
 ): RoomDecision<'message'> {
+	if ((body.kind === 'said' || body.kind === 'summary') && body.text.trim() === '') {
+		return refused('The message is empty. Say something, or end your turn instead.');
+	}
 	const wakes = route ? routes(body, state, liveWork(state, now).seats) : [];
 	return {
 		event: { kind: 'message', body: { ...body, ...(wakes.length === 0 ? {} : { wakes }) } },

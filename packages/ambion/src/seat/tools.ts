@@ -91,8 +91,6 @@ async function say(
 ): Promise<AgentToolResult<Record<string, never>>> {
 	const params = rawParams as { to?: string; text: string };
 	const text = params.text.trim();
-	if (text === '')
-		throw new Error('The message is empty. Say something, or end your turn instead.');
 	const to = params.to?.trim() ? params.to.trim() : undefined;
 	const intent: Intent = { kind: 'said', ...(to === undefined ? {} : { to }), text };
 	const response = await bound.room.commit({
