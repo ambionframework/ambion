@@ -127,9 +127,8 @@ must apply the stronger message contract.
       Document this tightening of the existing first-write-wins behavior.
 - [x] Preserve retry identity across lost acknowledgements, restart, and human
       reentry. Decide key scoping without weakening payload conflict checks.
-- [x] Align adapter key handling. Cloudflare currently drops an explicitly
-      supplied empty key through a truthiness check. Preserve it or reject empty
-      keys consistently across adapters and the core.
+- [x] Preserve explicitly supplied empty keys consistently across Cloudflare
+      and the core.
 
 **Evidence required:** exact and conflicting retries; two humans; changed
 recipient; concurrent sends; memory and SQLite; restart and Cloudflare RPC.
