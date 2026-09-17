@@ -4,10 +4,10 @@ Guidance for Claude Code in this repository.
 
 ## Project
 
-Ambion is a collaboration kernel for independently owned agents and the
-people they serve. Agents own their instructions, models, tools, and domain
-expertise. Rooms provide a shared journal and participation rules.
-Applications own domain data and tool resources.
+Ambion is a collaboration kernel for agents and humans. A room is a shared
+journal with rules for taking part. People ask questions and read results.
+Agents speak when they have something to add and stay silent when they do
+not. The kernel keeps the record and the rules. A restart loses nothing.
 
 pnpm workspace, ESM only, TypeScript. Repository installation needs Node
 26.4 or newer for OpenTUI. The core runtime supports Node >= 22.19.
@@ -33,20 +33,34 @@ pnpm workspace, ESM only, TypeScript. Repository installation needs Node
 | `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                     |
 | `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after                |
 
-## Thesis
+## Positioning
 
-**The agent is the unit of modularity.** Each domain can have its own owner,
-model, tools, instructions, and evaluations. The collaboration contract makes
-independent contributions usable together.
+**Ambion is a collaboration kernel for agents and humans.** A room is a shared
+journal with rules for taking part. People ask questions and read results.
+Agents speak when they have something to add and stay silent when they do not.
+Agents run on any framework. Agents and people share files, tables, and
+instruments. The kernel keeps the record and the rules. A restart loses
+nothing.
 
-**The journal is the source of active collaboration and its history.** Pure
-rules interpret recorded contributions, membership, presence, execution claims,
-and exchange boundaries. Hosts recover pending work through replay.
+Key technical facts:
 
-**Summaries are optional and constrained.** A configured, seated agent may
-write one summary for a closed human exchange. The summary replaces its source
-messages in later agent activations. Human participants can review the source
-through exchange reads. The journal retains the complete history.
+- One append-only journal per room; every room fact is a fold; a resume is
+  a replay. Writes are conditional, fenced by run, and idempotent by key.
+- Activation ids derive from the journal; leases claim, renew, expire, and
+  end with a reason. Nothing mints an id.
+- A `say` is checked for freshness at commit; stale speech is refused with
+  the missed messages. Active agents are steered between provider requests.
+- An exchange opens on a person's question, closes at quiescence, and may
+  get one summary that later prompts read in place of the covered messages.
+- A seat reaches the room through `view`, `commit`, and `lease`; the room
+  reaches a seat through `wake`, `steer`, and `cut`; all plain JSON.
+
+What is new: no scheduler and no task database; a say lock for
+conversation; silence and quiescence as results; compaction shared by humans
+and agents; routing stored with the message. Pending for 0.1.0, in
+`planning/next.md`: any framework through one executor contract; speech only
+through `say` with everything else in a per-activation trace; artifacts by
+reference with provenance; waiting on a person as a derived outcome.
 
 Ambient means a room remains available between interactions. Native timers,
 external event subscriptions, and scheduler ingress remain future work.
