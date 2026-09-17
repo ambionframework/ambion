@@ -1,497 +1,388 @@
-# Next: a simpler collaboration kernel for 0.1.0
+# Next: the work to a solid 0.1.0
 
-Reviewed on 2026-09-17 against main `b310ff6` and the accepted summary policy
-in `9eaaf73`. Three reviewers and the primary agent examined collaboration,
-execution, persistence, tools, and package ownership. Deterministic probes found
-release work beyond naming and API cleanup. No provider calls were used.
-[release-0.1.0.md](release-0.1.0.md) remains the scope definition.
+Rewritten on 2026-09-17 against main `deaaf94`. [release-0.1.0.md](release-0.1.0.md)
+owns the scope. [review-0.1.0.md](review-0.1.0.md) owns the analysis: the
+confirmed defects, the design and experience items, the scope the release
+did not name, the kernel positioning, the harness adapters, and the open
+pull requests. [docs/example.md](../docs/example.md) owns the one example.
+This file owns the order of the work and the evidence each step needs.
 
-Integration with main `cd39709` also includes the reusable assistant package.
-Its instructions define ordinary agent behavior; the kernel still owns authority.
+**An item lands with its evidence or stays open.** Every checkbox names
+the review item that explains it. A phase closes when its evidence line
+holds on main.
 
 ## The model to preserve
 
-**Developers define participants, open rooms, send messages, and read exchanges.**
-A definition supplies behavior. A room owns one collaboration journal. A visit
-binds a human identity to shared presence. An exchange bounds a discussion.
-Tools reach application-owned resources, which can be shared across rooms.
-
-An activation is one agent's authority to work. A lease bounds that authority.
-These are hosting concerns. The journal determines active collaboration and
-history; no scheduler, task database, or second persistent status model is needed.
-
-| Concern                                                               | Owner                 | Rule                                                              |
-| --------------------------------------------------------------------- | --------------------- | ----------------------------------------------------------------- |
-| Definitions and tools                                                 | Application code      | Fixed definitions per room run; no executable code in the journal |
-| Membership, presence, messages, exchanges, claims                     | Room journal          | Pure interpretation of confirmed entries                          |
-| Timers, runners, subscriptions, live handles                          | Host                  | Recreate after restart; retain failed cleanup ownership           |
-| Model audit                                                           | Pi transcript storage | Audit failure does not change accepted collaboration              |
-| Domain files and external effects                                     | Application resources | Independent of journal transactions                               |
-| Identity selection, discovery, desired hosting state, delivery outbox | Application           | Explicit entry and stable retry keys; polling observes            |
-
-**Judge a change by the obligation it removes.** Fewer exports are useful when
-callers need fewer rules. Renaming a stable concept without removing ambiguity
-is lower priority. Preserve the distinction between source discussion and summary,
-agent definition and membership, presence and connection, and acceptance and completion.
-
-## Prioritized work
-
-| Order | Work                                                    | Why it comes first                                                       | Status          |
-| ----- | ------------------------------------------------------- | ------------------------------------------------------------------------ | --------------- |
-| 1     | Execution progress under transport failure              | A lost claim, release, or dispatch can strand accepted work              | In review       |
-| 2     | Delivery integrity and authoritative value ownership    | Acknowledgements and live state must agree with durable facts            | Planned         |
-| 3     | Durable exchange execution outcomes                     | Reconnected applications must distinguish silence from exhausted work    | Planned         |
-| 4     | Incremental projections and a tested operating envelope | Completed history must not dominate every current operation              | Planned         |
-| 5     | Tool execution provenance                               | Reused definitions need a reliable context for application-owned effects | Design decision |
-| 6     | Presence and membership semantics                       | Simplify entry, recovery, and repeated membership commands               | Planned         |
-| 7     | Application and hosting surfaces                        | Keep ordinary applications independent of execution machinery            | Planned         |
-| 8     | Internal modules, exports, and packages                 | Make code ownership and public declarations consistent                   | Planned         |
-| 9     | Remaining release evidence                              | Verify the supported deployments and packed consumers                    | Planned         |
-
-**Implemented for review:** execution progress under transport failure.
-The first change bounds local waits, reports uncertain delivery, and preserves
-journal authority. Delivery integrity is the next implementation item.
-
-**Accepted summary policy:** humans and agents continue from the same recorded
-summary. It replaces covered discussion in later agent prompts as inexpensive
-context compaction. Detail loss is accepted; the journal retains the source.
-Source retrieval, pagination, and changes to summary prompts or replacement
-remain deferred. See the [summary contract](../docs/summary.md#shared-context-and-compaction).
-
-## 1. Execution must progress or expose why it cannot
-
-**Confirmed on the reviewed main: an unresolved claim or release strands the runner.**
-[`runner.ts`](../packages/ambion/src/execution/runner.ts) awaited both calls outside
-the cancellation race. Its retry count bounded rejected calls but placed no
-elapsed bound on an unresolved call. A deterministic probe cut the activation
-and queued another wake; the second claim never started in either case.
-
-**Confirmed on the reviewed main: unclaimed work has no delivery diagnostics.**
-[`dispatch`](../packages/ambion/src/room-host.ts) swallowed connector faults and
-transport rejection. A throwing connector produced eleven attempts in ten fake
-seconds, with no error notification and an open exchange. The configured
-activation deadline was two seconds and the retry cap was one. Neither policy
-covers work before a lease exists.
-
-- [x] Bound host calls and make claim and release waits cancellation-aware.
-      Use host clocks for deterministic deadlines. Capture each call's outcome;
-      late replies must not start cancelled work or release another activation.
-- [x] Preserve existing authority when a call's result is unknown. A timeout
-      does not establish that the remote operation failed or undo its effects.
-      Retries retain the same activation identity and journal fencing.
-- [x] Report dispatch failures through host diagnostics without undoing accepted
-      messages. Avoid unhandled promise rejections and unbounded diagnostic noise.
-- [x] Document and test the admission policy: unclaimed work retries while
-      eligible, and failed deliveries emit diagnostics. Execution retry caps
-      start after a claim. Abort and unseat provide durable terminal boundaries.
-      Preserve work pending through shutdown or an intentional executor hold.
-      Do not interpret activation deadlines as source-message age.
-- [x] Keep timers and local wait ownership in the host/executor. Keep durable
-      eligibility and terminal decisions in room rules. Add no task database,
-      scheduler hierarchy, or total exchange budget.
-
-Automatic admission expiry remains a separate future decision. It would need
-an explicit durable start and restart semantics. It is unnecessary for the
-initial call-liveness fix and must not be introduced through a hidden timeout.
-
-**Evidence required:** hung claim and release; cut followed by a new wake;
-late successful and stale replies; hung or rejected renewals; synchronous
-connector failure; rejected wake delivery; delayed claims; recovery after lost
-acknowledgements and restart. Use deterministic clocks and both supported host
-models. Verify that stale contributions remain fenced and cleanup owns its work.
-
-**Implemented evidence:** 14 executor regressions cover bounded waits, cuts,
-late replies, expired claims, and unknown commit results. Another 14 cases cover
-dispatch and durable cancellation on memory and SQLite. Two workerd regressions
-cover bounded recovery release and late replies preserving newer seat metadata.
-The existing renewal race now verifies eventual retry after local expiry.
-See [durability](../docs/durability.md#transport-calls-and-unclaimed-work) for
-the accepted transport and admission contract.
-
-## 2. Delivery integrity and one owner for each value
-
-### Delivery keys identify a logical request
-
-**Confirmed: conflicting keys silently acknowledge another request.** Alice
-sends `request-1`; Bob sends different text with the same key. Bob receives
-Alice's exchange and his message does not land. The same issue affects one
-sender reusing a key with different content.
-
-[`Journal`](../packages/journal/src/journal.ts) intentionally deduplicates by
-key and entry kind. The [room delivery boundary](../packages/ambion/src/room-host.ts)
-must apply the stronger message contract.
-
-- [ ] Bind delivery receipts to operation, author, recipient, and content.
-      Return the original receipt for an exact retry. Reject conflicting reuse.
-      Document this tightening of the existing first-write-wins behavior.
-- [ ] Preserve retry identity across lost acknowledgements, restart, and human
-      reentry. Decide key scoping without weakening payload conflict checks.
-- [ ] Align adapter key handling. Cloudflare currently drops an explicitly
-      supplied empty key through a truthiness check. Preserve it or reject empty
-      keys consistently across adapters and the core.
-
-**Evidence required:** exact and conflicting retries; two humans; changed
-recipient; concurrent sends; memory and SQLite; restart and Cloudflare RPC.
-
-### The generic journal owns its cache
-
-**Confirmed: returned entries can alter live interpretation without a write.**
-Mutating `append()`'s returned body changes a repeated-key result. Reopening the
-same storage returns the original body. Public `entries` also exposes a mutable
-array. Storage snapshots alone do not protect the journal's cache.
-
-- [ ] Keep the cache private. Make public entries and append results detached
-      or deeply immutable, with matching TypeScript contracts.
-- [ ] Apply the same ownership rule to callbacks and deduplication results.
-      Avoid copying complete history on every append or observation.
-
-**Evidence required:** nested mutations through each public path cannot change
-later reads, retry results, sequence allocation, or replay.
-
-### Cloudflare must use admitted identity
-
-**Source-traced: adapter metadata can disagree with the room journal.**
-[`visit()`](../packages/cloudflare/src/room-object.ts) writes `metadata.people`
-before admission. A cached visit bypasses validation of replacement identity.
-After restart, the cache is empty and the replacement conflicts with recorded
-identity. Invalid names can also persist before validation. This trace needs a
-workerd reproduction before implementation.
-
-- [ ] Reproduce conflicting identity, malformed input, and interrupted admission.
-- [ ] Make the journal authoritative for admitted identity and presence.
-      Retain only necessary hosting configuration in adapter metadata. Reuse
-      the current-visit access work in section 6 where it removes duplicate state.
-- [ ] Ensure rejected operations cannot corrupt subsequent send, leave, or
-      restart behavior. Handle partial failure without another identity registry.
-
-## 3. Exchanges expose durable execution outcomes
-
-**Confirmed: exhausted work and deliberate silence have equivalent public reads.**
-A silent worker and a provider-failed worker with exhausted retries both produce
-`closed` with a `silent` summary outcome and only the human question as source.
-Independent reads after stop preserve that equivalence. Failure is visible in
-live `error` and `abandoned` notifications, while lease facts remain internal.
-
-Closure correctly fixes a discussion boundary. The missing capability concerns
-execution health, which the kernel knows. It does not concern answer correctness.
-
-- [ ] Derive operational completion facts in the existing exchange read:
-      normal quiescence, cancellation, and exhausted or interrupted work.
-- [ ] Preserve relevant per-agent terminal facts for partial failures. Define
-      how later successful attempts affect the outcome. Avoid a Boolean success
-      field that could imply semantic correctness.
-- [ ] Keep durable outcomes separate from transient error objects and provider
-      diagnostics. Reconnect must not require an application-maintained event log.
-
-**Evidence required:** silence, no eligible workers, exhausted failures, recovery,
-partial failure, cancellation, summaries after failure, and reads after restart.
-
-## 4. Current operations must not repeatedly rebuild settled history
-
-**Measured: completed history remains on the execution and read paths.**
-[`evolve`](../packages/ambion/src/room/transition.ts) copies base facts and calls
-[`project`](../packages/ambion/src/room/fold.ts), which reconstructs membership,
-pending work, and summary obligations. A status read builds all exchange views,
-including searches through historical messages and leases.
-
-The probe used actual source functions on Node 26.8.2. Each exchange had one
-short question, response, and summary, with two completed leases. Pending and
-owed work were zero. These are single-run synthetic measurements without
-storage/provider I/O or isolated warmup; they do not establish production capacity.
-
-| Closed exchanges | Journal entries | Initial fold | Status read without messages | Apply a new question |
-| ---------------- | --------------- | ------------ | ---------------------------- | -------------------- |
-| 100              | 802             | 9 ms         | 1 ms                         | 1 ms                 |
-| 1,000            | 8,002           | 590 ms       | 26 ms                        | 48 ms                |
-| 4,000            | 32,002          | 10.3 s       | 388 ms                       | 412 ms               |
-
-- [ ] Maintain incremental, journal-derived projections for membership, active
-      leases, pending deliveries, and completed exchange outcomes.
-- [ ] Avoid rescanning settled work for unrelated entries. Let reads select the
-      exchange history they need without reconstructing all historical outcomes.
-- [ ] Keep full replay as the reference. Compare incremental results against it
-      under cancellation, reseating, late summaries, takeover, and restart.
-- [ ] Add reproducible performance evidence and publish a finite supported
-      operating envelope. Measure multiple rooms sharing one Node event loop.
-
-This preserves full-history storage and shared summary compaction. Checkpoints,
-retention, deletion, and an additional authoritative scheduler are not prerequisites.
-
-## 5. Tools need immutable execution provenance
-
-**Confirmed omission; capability design remains open.**
-[`ToolContext`](../packages/ambion/src/types.ts) exposes agent identity, provider
-call id, and cancellation. It carries no room, activation, or durable cause.
-A shared definition therefore needs per-room closures or separate application
-plumbing to associate effects with the collaboration that caused them.
-
-- [ ] Define the minimum immutable execution scope for ordinary tools. Consider
-      room, activation, and purpose without exposing mutable room internals.
-- [ ] Demonstrate one retry-safe domain operation with a definition reused across
-      rooms. Distinguish a provider call id from an application operation key.
-- [ ] Keep domain authorization, transactions, and effect idempotency owned by
-      the application. Provenance does not make arbitrary effects exactly once.
-
-Validate the need and shape before stabilizing the tool API. Do not add a new
-tool framework or require per-room copies of every agent definition by default.
-
-## 6. Presence and membership describe facts
-
-### Presence does not prove reading
-
-[`presence.ts`](../packages/ambion/src/room/presence.ts) advances `since` only
-when a human leaves. [`view.ts`](../packages/ambion/src/room/view.ts) calls it
-reading progress, and the executor tells agents what the person “has not seen.”
-Reading or speaking after return does not advance this cursor. These are
-unsupported consumption claims.
-
-- [ ] Name the cursor `lastDeparture` and the derived count
-      `messagesSinceDeparture`; render those facts literally. Preserve exclusive
-      catch-up behavior. Do not add read receipts to repair a naming error.
-- [ ] Update the public visit, protocol, prompts, tests, and presence contract
-      together. The stored departure event needs no migration. Protocol field
-      renames require coordinated host/executor updates.
-
-### Reacquiring access must not enter the room
-
-Relay's [`mutateHuman`](../examples/persistent/src/server.ts) reads participants,
-then calls idempotent `visit()` before sending or leaving. Its queue currently
-makes this safe. This is a caller coordination obligation, not a reproduced
-Relay race. The library should make the intended operation direct.
-
-- [ ] Preserve `room.visit(human)` as idempotent explicit entry.
-- [ ] Provide effect-free access to the current visit by name, returning absent
-      when the person is absent. Reconstruct access after recovery without an
-      arrival. Use it for stateless send/departure requests and delete the
-      participant-check/ensure-entry sequence from Relay and Cloudflare.
-- [ ] Keep authoritative send checks inside the journal queue. A stale handle
-      cannot restore presence or send after its visit ends. A delayed HTTP
-      request that acquires access after deliberate reentry has current authority;
-      rejecting stale navigation intent remains application policy. Keep shared identity
-      semantics; do not introduce per-tab visits or connection tokens.
-
-### Membership commands should be safe to repeat
-
-[`seat`/`unseat`](../packages/ambion/src/room-host.ts) reject already-satisfied
-host requests. Agent membership commits already return `unchanged`.
-
-- [ ] Make exact duplicate host membership commands succeed without another
-      entry, wake, or lease change. Keep unknown-name errors.
-- [ ] Define different-attention requests explicitly. Do not silently discard
-      them or revoke work through an implicit unseat/reseat cycle. Preserve
-      current conflict behavior until a dedicated attention change is justified.
-
-**Evidence required:** reading never implies departure or vice versa; crashes
-preserve recorded presence; absent access writes nothing; stale handles fail;
-retry after deliberate reentry retains the original delivery key and exchange.
-Concurrent duplicate membership commands must produce one change.
-
-`RoomSnapshot.participants` contains seated agents and all known humans, including
-absent humans. Reserve definitions are separate. Document this precisely; do not
-interpret absence from that view as an available identity. Add reserve data only
-for a real selection UI, without another definition catalog or participant wrapper.
-
-## 7. One application surface; one hosting surface
-
-**The runtime is an owner, not a freely copyable dependency record.**
-[`Runtime`](../packages/ambion/src/host/runtime.ts) exposes storage, model calls,
-transcripts, protocol transport, retries, and eviction. A private WeakMap binds
-its identity: a spread copy satisfies the interface but cannot host rooms.
-PR #146 narrowed the internal room dependency; the public surface remains broad.
-
-**`/transport` now means more than transport.** It exports the runner, executor
-construction, audit identity, live-room lookup, wire contracts, and wire helpers.
-A developer seeking audit access should not need to infer this history.
-
-- [ ] Use `/hosting` as the single advanced entry, replacing `/transport` in one
-      coordinated pre-release migration. Keep the protocol as a clearly named
-      section inside that entry. Do not add `/kernel`, `/protocol`, `/executor`,
-      and `/audit` public entries without independent consumer needs.
-- [ ] Keep `createRuntime` and explicit runtime selection on the application
-      path. Encode its factory-owned identity and expose only deliberate public
-      operations. Move execution service inspection, audit access, and destructive
-      eviction to hosting. Default applications still need no executor setup.
-- [ ] Move host-only `reconcile` access off ordinary `Room` when migrating
-      Cloudflare alarms. Keep the actual host capability directly accessible
-      through `/hosting`; do not introduce a parallel room facade.
-- [ ] Use one stream option name (`stream`) at runtime and room scope. Move
-      `ModelResolver` to hosting. Preserve supported Pi tool types in tool
-      authoring; a new provider-neutral tool SDK would add conversion work.
-- [ ] Rename executor-facing seat types by responsibility: `SeatContext` to
-      `AgentExecutionContext`, `SeatPort` to `AgentPort`, and `SeatRoom` to
-      `RoomProtocol`. Keep `seat`/`unseat` for membership. Rename local variables
-      only when they currently call a runner or protocol endpoint a membership.
-
-**Evidence required:** a normal room and persistent multi-room host remain easy
-examples; generated declarations expose the intended entries; structural runtime
-copies fail at compile time; scripted streams and lazy providers still work.
-Preserve Node and Cloudflare composition, independent same-name rooms, audit
-identity, inherited leases, and failure cleanup. Public renames must not rename
-stored journal fields, transcript IDs, or Durable Object bindings incidentally.
-
-## 8. Files and packages teach ownership
-
-**Move responsibilities before moving paths.**
-[`types.ts`](../packages/ambion/src/types.ts) mixes conversation values, definitions,
-Pi tool types, clocks, model resolution, lease reasons, and local notifications.
-[`host/runtime.ts`](../packages/ambion/src/host/runtime.ts) mixes dependency
-contracts, registry state, transport, and default executor construction.
-`room-host.ts` imports that concrete composition module for narrow contracts.
-
-Proposed internal organization, retaining private modules:
-
-| Area                | Responsibility and change                                                      |
-| ------------------- | ------------------------------------------------------------------------------ |
-| `room.ts`           | Application composition and start/resume/read operations                       |
-| `conversation.ts`   | Detached message, participant, and exchange values and their guards            |
-| `define.ts`         | Agent/human definitions and capture; move tool authoring to `tools.ts`         |
-| `tools.ts`          | Typed authoring, bundles, normalization, and Pi adaptation                     |
-| `host/contracts.ts` | Narrow clock, room, connector, and lifecycle dependency contracts              |
-| `host/runtime.ts`   | Runtime ownership and room registry                                            |
-| `host/room.ts`      | Current `room-host.ts`: journal effects, admission, cleanup, notifications     |
-| `host/protocol.ts`  | Current `answers.ts`: implement room protocol calls; replace vague `Answering` |
-| `room/`             | Pure projection, decisions, queries, and reconciliation policy                 |
-| `execution/`        | Pi services, runner, tool binding, rendering, and audit                        |
-| `protocol.ts`       | Serialized calls and responses; no journal schema or executable definitions    |
-| `journal/`          | Room event vocabulary and its storage adapter                                  |
-
-- [ ] Split `types.ts` by these owners. Keep collaboration values free of model
-      and transcript types. Separate local execution diagnostics from durable
-      messages in type ownership, while preserving one useful subscription API.
-- [ ] Replace ambiguous internal `room/view.ts` with `room/context.ts`,
-      `room/read.ts` with `room/snapshot.ts`, and `answers.ts` as above. Retain
-      distinct room/executor activation files: authorization and running work
-      are different responsibilities. Do not flatten them to save a filename.
-- [ ] Make import rules enforce these boundaries against implementation modules,
-      including type-only imports. Check emitted declarations as well as source.
-- [ ] Tighten `PresenceMessage` as a discriminated union when migrating its
-      consumers. Four event kinds currently share optional preferences, identity,
-      attention, and author fields. Account explicitly for accepted historical
-      shapes before promising stronger fields; types alone cannot repair data.
-
-### Package decisions
-
-Keep the seven current packages for 0.1.0. Journal and Pi transcript persistence
-already have independent ownership and consumers. Keep workspace resource and
-its bound tools in one package. Keep Cloudflare and CLI as deployment choices.
-Keep reusable assistant instructions in the assistant package, separate from
-kernel enforcement and model execution.
-
-`workspace/resource` avoids an Ambion runtime import, but installing workspace
-still installs its declared Ambion dependency. **Import independence is not
-installation independence.** Verify minimal packed consumers before claiming it.
-Extract a resource-only package only when an independent consumer needs that
-installation benefit. Likewise, a standalone executor needs a real installation
-or deployment requirement; file separation alone is insufficient.
-
-- [ ] Make `pi-journal/src/index.ts` a small export entry. Move its session
-      implementation behind it; keep the existing Pi terminology and package name.
-- [ ] Align package descriptions and keywords with the collaboration kernel.
-      The main manifest still describes “ambient-aware, always-on agents.”
-      Do not imply a scheduler, managed hosting, or filesystem security boundary.
-- [ ] Keep storage IDs, binding names, and published package names stable during
-      source cleanup. A `SeatObject` class rename needs explicit Cloudflare
-      migration evidence; it is not part of routine terminology replacement.
-
-### Learning path
-
-- [ ] Lead with four application concepts: definitions, room, visit, exchange.
-      Introduce attention with membership, resources with tools, and activations
-      and leases only in hosting. `Agent catalog` is an ordinary definitions list,
-      not another object developers must construct.
-- [ ] Make `docs/room.md` the kernel overview, replacing the misleading
-      `docs/agent.md` entry point. Keep focused presence, exchange, summary,
-      durability, and deployment contracts; link shared explanations once.
-- [ ] Present Relay as the representative persistent Node application. Label
-      `ambion new` accurately as a local Cloudflare project, not the universal
-      path for every application. Do not build another CLI host in this pass.
-- [ ] Typecheck the short application and hosting examples against packed exports.
-      Remove stale completion claims and obsolete source paths as each slice lands.
-
-Planning stays in two files. The completed CLI plan is retired; current usage
-belongs in its package README and outstanding work remains below.
-
-## 9. Remaining release evidence
-
-These obligations survive the review. Existing passing tests do not certify
-the final 0.1.0 package set.
-
-### Extend the history measurements
-
-Section 4 owns the projection changes and their equivalence tests. Extend its
-measurements to Relay polling, memory, provider input size, and multiple rooms.
-Publish supported limits before release. Full-history retention and unbounded
-exchange duration remain explicit limits.
-
-### Prove shipped configurations
-
-- [ ] Install minimal packed consumers outside the monorepo: journal alone;
-      Pi sessions plus journal; embedded Ambion; persistent Node plus workspace;
-      resource-only imports; generated CLI/Cloudflare project. A fixture declaring
-      all seven packages does not prove each consumer's dependency closure.
-- [ ] Resolve or justify both TypeBox versions through authored-tool declaration
-      and runtime tests. Replace the cast-based scripted `stubModel` with a valid
-      execution-owned model. Document any necessary `skipLibCheck` boundary.
-- [ ] Verify ESM exports, declarations, package contents, versioning, registry
-      read-token instructions, and lockstep CLI/Cloudflare publication.
-- [ ] Verify core Node 22.19+, Relay/tooling Node 26.4+, and actual workerd settings
-      separately. Check other examples in Knip and remove unused task contracts
-      only after inspecting their consumers.
-
-### Recovery and resource evidence
-
-- [ ] Cover missing duplicate-wake, takeover, delayed-cut, audit-retry, clock-skew,
-      process-pause, and uncooperative-tool combinations. Preserve surviving
-      remote leases and distinguish authority safety from recovery latency.
-- [ ] Reproduce historical Cloudflare wake/cut races and duplicate activation-end
-      reports on current code. Retain ordering traces. Remove test controls from
-      production adapter state where feasible; do not fix races with timeouts.
-- [ ] Verify `/dev/null` on both workspace backends. Preserve whole-operation
-      serialization, shared ownership, and dispose-versus-destroy behavior.
-- [ ] Extend summary evidence for silence, corrections, conflicting constraints,
-      multiple humans, late summaries, and message numbering.
-- [ ] Run `pnpm check`, targeted chaos, and proofs for changed rules. Retain
-      real-provider restart validation and exercise Relay after API migrations.
-      Record commit, commands, environment, results, and unresolved limits.
-
-### Release sign-off
-
-- [ ] Audit README, package docs, templates, and design contracts against final
-      APIs. State real source/protocol/storage breaks and exact migration steps.
-- [ ] Sign off scope F1–F9 with landed implementation and reproducible evidence:
-      definitions/tools, participation/delivery, exchanges, persistence,
-      observation/control, deployment, and packed distribution.
-
-## Delivered foundations and deliberate limits
-
-PRs #137–#147 delivered durable presence/control, idempotent visits, coherent
-room views, partial-creation recovery, contribution validation, executor
-composition, and participant vocabulary. Preserve those regressions. Earlier
-work established fixed definitions, typed tools, structured activations,
-conditional journal commits, workspace ownership, and restart/reconnect evidence.
-
-[PR #148](https://github.com/ambionframework/ambion/pull/148) delivered coherent
-`room.read()`, immediate `readExchange()`, explicit close/summary waits, and
-`ExchangeRef`. All seven CI checks passed, including real-model tests. Local
-validation covered 793 core tests, 36 Relay tests, 23 Cloudflare tests,
-39 workspace tests, 6 CLI tests, and packed consumer/generated Worker checks.
-
-The CLI `new`/`dev` workflow and packed/generated-project smoke are implemented.
-Its published-prerelease validation is recorded in
-[the release run](https://github.com/ambionframework/ambion/actions/runs/35059680708).
-PR #147 passed all seven checks, including proofs, Node 22/24, CLI smoke, and
-real-provider tests. Historical evidence remains in version control.
-
-Deferred: scheduler ingress, native timers/subscriptions, a task database,
-mandatory summaries, automatic exactly-once external effects, another generic
-tool SDK, browser-only execution, hosted service, turnkey deployment commands,
-and new packages without independent consumers. CLI remote authentication,
-automated evaluations, multiple terminal clients, and live activity transport
-also remain outside its current two-command scope.
-
-Preserve earlier exclusions: hot-loaded definitions, multiple simultaneous
-discussions within one room, per-tab presence tokens, automatic departures,
-distributed workspace ownership, automatic summary skipping by message count,
-manual summary retry, exchange budgets, and mandatory new storage formats.
-Agent source retrieval, pagination, and changes to summary compaction are also
-deferred under the accepted shared-summary policy.
+**Developers define participants, open rooms, send messages, and read
+exchanges.** A definition supplies identity and an executor. A room owns
+one journal. A visit binds a person to shared presence. An exchange bounds
+a discussion. Tools reach application-owned resources. Everything else is a
+fold over the journal or a hosting concern.
+
+| Concern                                                       | Owner                 | Rule                                                               |
+| ------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------ |
+| Definitions, executors, tools                                 | Application code      | Fixed per room run; no executable code in the journal              |
+| Membership, presence, messages, exchanges, claims, references | Room journal          | Pure interpretation of confirmed entries                           |
+| Model loops, harness sessions, activation steps               | Executor              | One session per activation; steps go to the trace, speech to `say` |
+| Files, tables, instruments, and their change logs             | Application resources | Independent of journal transactions; stamped with provenance       |
+| Timers, runners, subscriptions, live handles                  | Host                  | Recreated after restart                                            |
+| Identity selection, discovery, hosting state, delivery outbox | Application           | Explicit entry and stable retry keys                               |
+
+**Judge a change by the obligation it removes.** Fewer exports are useful
+when callers need fewer rules. A rename earns its place only when one name
+means two things or two names mean one.
+
+## Decisions taken
+
+- **One example.** The site example and Relay are replaced by the agentic
+  lab workspace in [docs/example.md](../docs/example.md).
+- **Two entries.** `@ambionframework/ambion` for applications and
+  `@ambionframework/ambion/hosting` for hosts and adapters. `/transport`
+  goes away before the tag (review B5).
+- **The kernel imports no model library.** Pi becomes an executor package,
+  and the Claude Agent SDK becomes a second one (review E1, F10).
+- **Speech enters the record through `say` only**, on every executor
+  (review F4).
+- **The freeze.** After phase 2, every change to the main entry and to the
+  journal bodies is additive until the tag.
+- **Shared summaries.** Humans and agents continue from the same recorded
+  summary; the source stays in the journal for review
+  ([summary contract](../docs/summary.md)).
+- **A public registry.** The packages publish to npmjs at 0.1.0 (review D7).
+
+## The phases
+
+| Phase | Name                              | Starts after | Review items                                                               |
+| ----- | --------------------------------- | ------------ | -------------------------------------------------------------------------- |
+| 0     | Unblock the tree                  |              | A3, C1, C7, D9, G                                                          |
+| 1     | Correctness                       | 0            | A1, A2, D1, the PR #153 kernel slice                                       |
+| 2     | The public shape, then the freeze | 1            | B3, B4, B5, B7, B8, C5, C6, D2, D3, D4, D5, E1, E2, E5, E6, F2, F4, F7, F8 |
+| 3     | Kernel internals                  | 2            | B1, B2, B9, E7, exchange outcomes                                          |
+| 4     | Executors and adapters            | 2            | B6, C2, D6, F3, F5, F6, F9, F10                                            |
+| 5     | Resources and artifacts           | 2            | E4, E5, E6                                                                 |
+| 6     | The workbench example and the UI  | 3, 4, 5      | C3, docs/example.md                                                        |
+| 7     | Documentation                     | 2            | C4, D8, D10, and the pages below                                           |
+| 8     | Release evidence and sign-off     | 6, 7         | D7, the scope's F1 to F9                                                   |
+
+Phases 3, 4, and 5 run in parallel after the freeze. Phase 7 starts after
+the freeze and finishes with phase 6.
+
+## Phase 0. Unblock the tree
+
+**Goal:** main installs on every supported Node, the open pull requests
+are decided, and the live tier can run.
+
+- [ ] Merge PR #152. Note in `durability.md` that a same-key retry is bound
+      to its activation (review G).
+- [ ] Close PR #73, #67, #63, #60, #58, #48, #44, #40, and #28. Take the
+      export-list assertion into phase 2 and the changelog into this phase
+      (review G).
+- [ ] Hold PR #151; delegation returns by reference in 0.2 (review E8).
+      Land the closing-context slice of PR #153 alone in phase 1; keep the
+      evals package private (review G).
+- [ ] Bump `pi-agent-core` and `pi-ai` to 0.85.1 together in `ambion`,
+      `cloudflare`, `pi-journal`, and `workspace`; run the live tier once.
+      Merge PR #111, #112, #5, #6, and #7; rebase PR #4 (review G).
+- [ ] Restore the provider account. Add a second provider job to the live
+      workflow, and fail a job on a credit or authentication error with the
+      account's name (review D9).
+- [ ] Install on Node 22: load OpenTUI lazily as an optional dependency, or
+      move the terminal client to its own package; make the root `engines`
+      field true; add a CI step that installs on Node 22 (review C1).
+- [ ] Add `CHANGELOG.md` with an `Unreleased` section; every pull request
+      that changes a public entry adds a line (review C7).
+
+**Evidence:** CI green on main; `pnpm install` and `pnpm check` on Node 22;
+two live jobs green; Dependabot rebases an npm bump.
+
+## Phase 1. Correctness
+
+**Goal:** the two confirmed defects and the retry of permanent failures are
+fixed with regressions.
+
+- [ ] Send a commit through the retrying call path under its key; when
+      every attempt is lost, end the tool call with an unknown outcome
+      (review A1).
+- [ ] Let `stop()` end running leases only; an activation that never
+      claimed stays pending across the stop; `durability.md` and
+      `deployment.md` say one thing (review A2).
+- [ ] Classify a provider failure at the executor boundary; carry
+      `cause: 'permanent' | 'transient'` on the failed lease end and on the
+      `error` and `abandoned` events; abandon a permanent failure at once
+      (review D1).
+- [ ] Land the closing-context change from PR #153: a closing activation
+      reads every message through the close boundary with the divider at
+      its exchange (review G).
+
+**Evidence:** the two probes from the review as regressions on memory and
+SQLite; a 400 reply abandons in one attempt; a resumed room answers a
+question sent before a graceful stop.
+
+## Phase 2. The public shape, then the freeze
+
+**Goal:** every public rename, every journal field, and every read the
+release needs land in one window.
+
+### The vocabulary and the runtime
+
+- [ ] `AgentDefinition` becomes `{ name, identity, executor }`; Pi's
+      model, instructions, tools, bundles, and guidance move into `pi({})`
+      (review E1).
+- [ ] `Runtime` loses `stream`, `model`, and `transcripts`; the type is
+      branded; `defaultRuntime` is created on first use; `evict` moves to
+      hosting (review B4, E1).
+- [ ] The executor contract: `open(activation)` returns a session with
+      `pass(input)`, optional `steer`, and `close`; the driver stays in the
+      kernel and renders a delta for later passes (review E2, F2).
+- [ ] Two entries; `/transport` removed; the export list of each entry
+      asserted in `package.test.ts` (review B5).
+- [ ] One limits vocabulary: `delivery`, `lease`, `activation`, `call`,
+      `context`, `message`, `trace` (review B3, D5, F7).
+- [ ] `AmbionError` with a closed set of codes at every throw site (review
+      B7).
+- [ ] An activation id on every execution event; `RoomEvent` and
+      `ExecutionEvent` as two families under one `subscribe` (review B8).
+- [ ] The naming list: `AgentExecutionContext`, `AgentPort`,
+      `RoomProtocol`, `stream`, `lastDeparture`, `messagesSinceDeparture`,
+      `ExchangeRead`; the docs say "definitions" (review C5).
+- [ ] Room name validation; a refused summary name that no seat holds;
+      `opened` on the exchange handle; idempotent host `seat`; prefixed key
+      kinds (review C6).
+- [ ] A `fixed` seat attribute; the summary writer fixed by default; an
+      agent's unseat of a fixed seat refused (review D4).
+- [ ] `limits.context.messages` and `limits.message.bytes`, with defaults
+      that keep current behavior (review D5).
+
+### The record and the reads
+
+- [ ] `refs` on spoken messages and summaries; `ambion://room/<name>` and
+      `ambion://room/<name>/exchange/<from>` (review E5).
+- [ ] `activation`, `exchange`, and `room` on `ToolContext` (review E6).
+- [ ] The `Step` vocabulary; a trace journal per activation; coalesced
+      deltas; `limits.trace`; a trace policy per definition; live `step`
+      events (review F4, F7).
+- [ ] `activations` on the exchange read; `readActivation(name, id)`
+      (review F8).
+- [ ] Usage on `activation_end` and on the release entry; a closed
+      exchange sums the usage of its activations (review D2).
+- [ ] `format: 1` on the run entry; golden journals under
+      `test/fixtures/journals/` replayed in CI; the compatibility promise in
+      `durability.md` (review D3).
+
+### The freeze
+
+- [ ] A note in `release-0.1.0.md`: the main entry and the journal bodies
+      take additive changes only until the tag.
+
+**Evidence:** generated declarations list two entries and the export
+snapshot passes; a scripted executor passes the driver suite; a fixed seat
+refuses an agent's unseat; `readActivation` returns steps; golden journals
+replay; `activation_end` carries usage.
+
+## Phase 3. Kernel internals
+
+**Goal:** a current operation costs what the current work costs, and each
+mechanism reads in one place.
+
+- [ ] Evolve the projection per entry: people, roster, the open exchange,
+      pending activations by seat, owed drafts by close; keep `foldRoom` as
+      the reference; one property test compares both under cancellation,
+      reseating, late summaries, takeover, and restart (review B1).
+- [ ] Split `room-host.ts` into room, people, dispatch, waits, and control;
+      add a file line budget to the lint gate (review B2).
+- [ ] Exchange outcomes: complete, cancelled, exhausted, and `awaiting` a
+      person; `pendingFor(person)` on the room read; a summary for each
+      person who spoke in the exchange (review E7; scope F4).
+- [ ] The Cloudflare room object exposes the core surface plus `start`;
+      `messages`, `participants`, and `status` go away; alarms reach
+      `reconcileRoom` through hosting (review B9).
+
+**Evidence:** the equivalence property test; the envelope table remeasured
+at 100, 1,000, and 4,000 closed exchanges; outcome reads after restart; the
+Cloudflare template on `read()`.
+
+## Phase 4. Executors and adapters
+
+**Goal:** two executor families run in one room, proven on fakes in CI.
+
+- [ ] `@ambionframework/pi`: the `Agent` kept across passes; `prompt()`
+      with the delta; `readThrough` from the provider request boundary; the
+      Pi journal as its private audit (review F2, F5).
+- [ ] `@ambionframework/claude` on the Claude Agent SDK: `say`, `seat`,
+      and `unseat` through `createSdkMcpServer` per activation; streaming
+      input for steer, with the user echo advancing `readThrough`; hooks
+      and tool messages mapped to steps; a permission request as an
+      `approval` step; `permissionMode`, `allowedTools`, `canUseTool`, and
+      `maxBudgetUsd` passed through (review F5, F6).
+- [ ] `examples/codex`: a thread per activation; a stdio room tools server
+      over a local socket; items mapped to steps; `file_change` paths as
+      `refs` (review F6, F10).
+- [ ] Three prompt parts and `renderDelta`; the default speaking policy as
+      one exported constant a definition can replace; prompt snapshots for
+      an ordinary and a closing activation (review B6, F3).
+- [ ] `memory: 'activation' | 'seat'` on both adapters (review F9).
+- [ ] `@ambionframework/ambion/testing`: `scripted`, `speak`, `quiet`,
+      `callTool`, `byAgent`, `fakeClock`, `settled`; the `stubModel` cast
+      removed; the repository's tests on the published entry (review C2).
+- [ ] Conformance suites: storage, transport, and executor, published;
+      each shipped adapter passes on a fake (review D6, F10).
+
+**Evidence:** both adapters pass the executor suite on fakes; a room with
+one Pi seat and one Claude seat in CI; prompt snapshots; the assistant
+package's prompt shrinks to what the kernel does not enforce.
+
+## Phase 5. Resources and artifacts
+
+**Goal:** artifacts are references on the record with provenance behind
+them, and the workspace is one binding of one resource contract.
+
+- [ ] The resource contract stays neutral at `@ambionframework/workspace/resource`;
+      just-bash and its Pi tools become the Pi binding (review E4).
+- [ ] A SQL resource over `node:sqlite` with `query` and `record` tools, in
+      the example (review E4).
+- [ ] A change log in the workspace binding keyed by activation, with
+      `changes({ exchange })` (review E6).
+- [ ] The instrument resource for the example: readiness, run, and
+      measurement tools, with approval on a limit (docs/example.md).
+- [ ] Workspace `/dev/null` and the backend matrix on both backends.
+
+**Evidence:** two resources on one contract; "what changed during this
+exchange" answered from the change log; a summary that cites a ref.
+
+## Phase 6. The workbench example and the user interface
+
+**Goal:** one example that a new reader runs first, that the deployment
+guide describes, and that the drill-down UI is built on.
+
+- [ ] Remove `examples/site` and `examples/persistent`; move their reports
+      and `docs/assistant-acceptance.md` under `planning/evidence/`
+      (review C7).
+- [ ] Build `examples/workbench` per [docs/example.md](../docs/example.md):
+      six definitions with executors chosen by environment, the SQL
+      resource, the library workspace, the instrument, one persistent host
+      with a room per project, the library files, and the tests.
+- [ ] The user interface: projects, room, exchange, activation, steps; live
+      steps merged by activation, pass, and index; cost per exchange;
+      `awaiting` and `approval` shown to the person (review F8).
+- [ ] The nine scenarios in docs/example.md on the scripted executor, and
+      the restart scenario in a fresh process.
+- [ ] `ambion new --template node` derived from the example with one room
+      and two definitions; the Cloudflare template on `read()` (review C3).
+
+**Evidence:** the nine scenarios pass scripted on memory and SQLite; the
+live tier runs them on two providers; a restart preserves the question; the
+Design Agent runs on the Claude adapter while the rest run on Pi.
+
+## Phase 7. Documentation
+
+**Goal:** a reader meets one voice, one glossary, and one page per
+mechanism, with no history of names they never used.
+
+- [ ] `docs/room.md`: the overview and the glossary; `docs/README.md` leads
+      with it; `agent.md` becomes the definitions and tools page (review
+      C4, C5).
+- [ ] `docs/patterns.md`: the human patterns table and the two rules that
+      close it (review E7).
+- [ ] `docs/executors.md`: the executor contract, the step vocabulary, the
+      harness matrix, and how to write an adapter (review F).
+- [ ] `docs/resources.md`: the resource contract, references, and
+      provenance; `workspace.md` becomes the Pi binding page (review E4 to
+      E6).
+- [ ] `docs/trust.md`: guarantees and non-guarantees between owners,
+      membership authority, harness memory (review D8, D4, F9).
+- [ ] `docs/envelope.md`: the limits table and the measured envelope
+      (review B3, B1, D5).
+- [ ] `durability.md`: the format promise, stop semantics, permanent
+      failure, commit retry (review A1, A2, D1, D3).
+- [ ] Retire the residue: rule citations in source comments, pre-release
+      migration notes, package descriptions and keywords, comment voice,
+      `demos/README.md` (review C4).
+- [ ] A generated API reference per entry under `docs/api/`, with a CI
+      staleness check (review D10).
+- [ ] `README.md` rewritten around the workbench; package READMEs; the CLI
+      README; `CONTRIBUTING.md` with the Node floors.
+- [ ] The 0.1.0 entry in `CHANGELOG.md`.
+
+**Evidence:** every page in the index has one owner section; a grep for
+numbered rule citations finds none; the API reference builds in CI; the
+README example typechecks against the packed entry.
+
+## Phase 8. Release evidence and sign-off
+
+**Goal:** the packages install from a public registry, and every claim in
+the scope has evidence on the tagged commit.
+
+- [ ] Publish to npmjs under `@ambionframework`; remove the token
+      instructions; the release workflow verifies a consumer from npmjs
+      (review D7).
+- [ ] Packed consumers outside the monorepo: journal alone; pi-journal with
+      journal; kernel with pi; kernel with claude; the workbench; the
+      generated Node and Cloudflare projects; the resource-only import.
+- [ ] One TypeBox version; ESM exports and declarations checked; package
+      contents; lockstep versions.
+- [ ] Node 22 and 24 tests; Node 26 CLI; workerd tests; the historical
+      Cloudflare wake and cut races reproduced on current code.
+- [ ] The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
+      golden journals; the live tier on two providers; the commit, the
+      commands, and the results recorded under `planning/evidence/`.
+- [ ] Recovery evidence: duplicate wake, takeover, delayed cut, audit retry,
+      clock skew, process pause, uncooperative tool.
+- [ ] Summary evidence: silence, corrections, conflicting constraints,
+      multiple humans, late summaries.
+- [ ] Sign off the scope's F1 to F9 against landed implementation; tag
+      `v0.1.0`.
+
+**Evidence:** `npm install @ambionframework/ambion` works without a token;
+every consumer above installs and typechecks; the sign-off table in
+`planning/evidence/0.1.0.md` names a commit and a run for each claim.
+
+## Package decisions
+
+**Nine published packages, one private, two examples.** Each package has
+one owner concern and one independent consumer.
+
+| Package                       | Concern                                                       | Depends on          |
+| ----------------------------- | ------------------------------------------------------------- | ------------------- |
+| `@ambionframework/journal`    | The append-only journal and its storage contract              |                     |
+| `@ambionframework/pi-journal` | Pi transcript sessions over journal storage                   | journal             |
+| `@ambionframework/ambion`     | The kernel: protocol, journal vocabulary, rules, room, driver | journal             |
+| `@ambionframework/pi`         | The Pi executor                                               | ambion, pi-journal  |
+| `@ambionframework/claude`     | The Claude Agent SDK executor                                 | ambion              |
+| `@ambionframework/workspace`  | The resource contract and the just-bash Pi binding            | ambion, pi          |
+| `@ambionframework/assistant`  | The assistant definition                                      | ambion, pi          |
+| `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                            | ambion, journal, pi |
+| `@ambionframework/cli`        | `ambion new` and `ambion dev`                                 | ambion              |
+| `@ambionframework/evals`      | Private until its own work-left list closes                   | ambion              |
+| `examples/workbench`          | The one example                                               | all of the above    |
+| `examples/codex`              | The Codex adapter over the stdio room tools server            | ambion              |
+
+Storage ids, binding names, and published names stay stable through the
+source moves. A `SeatObject` class rename needs Cloudflare migration
+evidence and is not part of this plan.
+
+## Deferred past 0.1.0
+
+- Delegation to a working room, rebuilt by reference (review E8).
+- A published Codex adapter package; the example covers the surface.
+- Publishing `@ambionframework/evals`.
+- A bounded projection with checkpoints; the incremental fold keeps full
+  replay.
+- Automatic admission expiry for unclaimed work.
+- A durable subscription service across processes.
+- Native timers, external event subscriptions, and scheduler ingress. The
+  first ingress is a notice from a resource, routed by attention like a
+  message, with a ref and no author.
+- Per-tab presence, automatic departures, hot-loaded definitions, multiple
+  simultaneous discussions in one room, exchange budgets, distributed
+  workspace ownership, manual summary retry.
+
+## History
+
+PRs #137 to #150 delivered durable presence and control, idempotent visits,
+coherent room views, partial-creation recovery, contribution validation,
+executor composition, participant vocabulary, coherent reads, the assistant
+package, and bounded executor waits. Earlier work established fixed
+definitions, typed tools, structured activations, conditional journal
+commits, workspace ownership, and restart evidence. Those regressions stay.
+The review of 2026-09-17 found the two defects in phase 1 with
+deterministic probes and recorded the rest of this plan.

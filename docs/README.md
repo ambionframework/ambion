@@ -19,6 +19,7 @@ each page.
 | [Roster](roster.md)         | Agent membership, reserve, and attention                   |
 | [Summaries](summary.md)     | Optional closing work and context replacement              |
 | [Workspace](workspace.md)   | Shared filesystem resources and lifecycle                  |
+| [Example](example.md)       | The one runnable example: an agentic lab workspace         |
 | [Durability](durability.md) | Journal guarantees, recovery, leases, and failure evidence |
 | [Deployment](deployment.md) | Host placement, storage, reconnect, and operational limits |
 | [Toolchain](toolchain.md)   | Package layout, checks, CI, and release commands           |
