@@ -1,9 +1,7 @@
 # Next: simplify Ambion for 0.1.0
 
-Reviewed against main `27148ba`, 2026-09-16, after
-PRs [#140](https://github.com/ambionframework/ambion/pull/140),
-[#141](https://github.com/ambionframework/ambion/pull/141), and
-[#142](https://github.com/ambionframework/ambion/pull/142) merged.
+Reviewed against main `3391145`, after
+[PR #143](https://github.com/ambionframework/ambion/pull/143) merged.
 The [Relay demo](../examples/persistent/README.md) is the reference consumer.
 Two follow-up Astra/High reviews and isolated SQLite/browser reproductions
 revisited the earlier subsystem review. Findings below distinguish reproduced
@@ -73,8 +71,9 @@ entries do not form one transaction, and rooms retain separate conversation cont
 
 **Items 1–2 merged in PRs #140–#142:** failed-stop recovery, explicit browser
 entry, coherent room/exchange reads, and partial-creation recovery.
-Item 3 now defines cancellation through one atomic journal entry.
-Contribution validation and the separate stop-expiry gap remain next.
+Item 3 defines cancellation through one atomic journal entry, merged in
+PR #143. The stop cleanup fix is prepared for review. Contribution validation
+is next.
 
 ## 1. Keep commands and observation coherent in Relay
 
@@ -239,17 +238,17 @@ conversation context or cross-room atomicity.
       summaries become failed; terminal outcomes remain unchanged. Later
       messages can start fresh work. Same-handle retries retain the command key
       until confirmation, so uncertain commits cannot cancel later work twice.
-      Implementation is prepared for review; it has not merged.
+      Merged in PR #143 with all seven CI checks passing.
 - [x] Define completion as confirmation of durable authority changes.
       External cuts remain best effort. Provider termination and reversal of
       file or remote effects stay outside the journal transaction. See the
       [cancellation contract](../docs/durability.md#cancellation).
-- [ ] Fix stop cleanup for expired running leases. Review found that `revoke()`
-      selects only live leases, while stopped rooms skip expiry reconciliation.
-      Resume can retry that work after an acknowledged stop. Define which
-      obligations stop settles while preserving the recorded open exchange;
-      do not reuse cancellation merely to close it. Test expiry before stop,
-      retry after storage failure, restart, and newer-run fencing.
+- [x] Settle all recorded execution obligations before stop acknowledges.
+      Revoke running leases regardless of expiry, then remaining pending work,
+      including unread steering. Decide each revocation after journal recovery;
+      confirm completion through a fresh queued decision. Preserve the open
+      exchange and existing departure/fencing contracts. This fix is prepared
+      for review; it has not merged.
 - [ ] Reject blank human and agent contributions inside collaboration decisions.
       Relay and `say` already reject them, but direct API/protocol calls can
       bypass that rule. Keep HTTP shape/size limits in the application.

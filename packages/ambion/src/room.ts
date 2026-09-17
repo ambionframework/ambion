@@ -67,6 +67,7 @@ import {
 	type Refusal,
 	type RoomCommand,
 	type RoomDecision,
+	stopWork as stopWorkDecision,
 } from './room/transition.ts';
 import { seatsOf } from './room/view.ts';
 import { inProcessTransport } from './seat/seat.ts';
@@ -1408,31 +1409,15 @@ class RoomHost implements Room, RunningRoom {
 		if (!('entry' in appended)) throw new Error(`Room '${this.name}' stopped before cancellation.`);
 	}
 
-	/**
-	 * Revoke every live lease on the seats `which` picks: the room writes the
-	 * end, and the seat side is cut. A write that was queued ahead of the
-	 * revoke lands first and can leave a lease live or a wake pending, so
-	 * the room looks again until nothing it picks is live.
-	 */
-	private async revoke(which: (seat: string) => boolean): Promise<void> {
-		if (this.phase === 'evicted') return;
-		await this.ready.catch(() => {});
-		for (let pass = 0; pass < PASSES; pass += 1) {
-			const picked = [...this.live(this.state())].filter(([seat]) => which(seat));
-			if (picked.length === 0) break;
-			for (const [, ids] of picked) await this.cut(ids);
+	/** Revoke every running lease and due obligation until a durable read finds none. */
+	private async stopWork(): Promise<void> {
+		// Admission is closed. Each entry settles one recorded obligation;
+		// the final decision confirms the recovered journal has no work left.
+		for (;;) {
+			const result = await this.submit('lease', () => stopWorkDecision(this.state(), this.now()));
+			this.requireSubmission(result);
+			if (!('entry' in result)) return;
 		}
-		if (!this.gone()) await this.reconcile();
-	}
-
-	/**
-	 * Cut one seat: every lease it holds ends revoked, every wake pending for
-	 * it and every draft due for it is written off the same way, and the seat
-	 * side is told to stop, wherever the seat runs. The room writes first, so
-	 * a seat that never hears the cut is refused whatever it writes after it.
-	 */
-	private async cut(ids: string[]): Promise<void> {
-		for (const id of ids) this.requireEnd(await this.end(id, 'revoked', 0));
 	}
 
 	private requireEnd(result: boolean | { refusal: Refusal }): boolean {
@@ -1462,7 +1447,7 @@ class RoomHost implements Room, RunningRoom {
 			// A room dropped from memory writes nothing: the next run over the journal takes it up.
 			if (this.phase === 'evicted') return;
 			await this.ready;
-			await this.revoke(() => true);
+			await this.stopWork();
 			// A write queued ahead of the stop lands first, so the record says who was present.
 			await this.journal.settled();
 			await this.leaveEverybody();

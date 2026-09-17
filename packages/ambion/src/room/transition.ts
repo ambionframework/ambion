@@ -142,6 +142,15 @@ export function decide(
 	}
 }
 
+/** Select one recorded work item for a planned stop, including expired leases. */
+export function stopWork(state: RoomState, now: number): RoomDecision<'lease'> {
+	const running = [...state.leases.values()].find((lease) => lease.phase === 'running');
+	const id = running?.id ?? state.due[0]?.id;
+	return id === undefined
+		? { event: undefined }
+		: end(state, { type: 'end', id, reason: 'revoked', readThrough: 0 }, now);
+}
+
 const iso = (now: number): string => new Date(now).toISOString();
 const refused = (reason: string): { refusal: Refusal } => ({
 	refusal: { category: 'refused', reason },
