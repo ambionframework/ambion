@@ -6,7 +6,7 @@
  * room calls back, and `Transport` is what connects one to the other.
  * `inProcessTransport` is the default: it receives a room-call facade and
  * a separate executor context. Nothing crosses a process. A host that puts the seats
- * somewhere else writes its own, and `SeatActor` is the seat side to run
+ * somewhere else writes its own, and `AgentRunner` is the seat side to run
  * there. `@ambionframework/cloudflare` is one such host.
  *
  * Every shape a call carries is here, because a transport serialises them.
@@ -16,6 +16,12 @@
  * of this. `docs/agent.md` §6 is the design contract for the wire.
  */
 
+export { AgentRunner, inProcessTransport } from './execution/runner.ts';
+export {
+	createExecutionServices,
+	type ExecutionServices,
+	type ExecutionServicesOptions,
+} from './execution/services.ts';
 export type { SeatContext, Transport } from './host/runtime.ts';
 export { runningRoom } from './host/runtime.ts';
 export type {
@@ -37,5 +43,4 @@ export type {
 	Wake,
 } from './protocol.ts';
 export { assertWire, roundTrip } from './protocol.ts';
-export { inProcessTransport, SeatActor } from './seat/seat.ts';
 export type { EndReason } from './types.ts';

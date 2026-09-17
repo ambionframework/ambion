@@ -160,6 +160,15 @@ activation consumed.
 
 ## Execution boundary
 
+**The host configures execution before starting the room.** A connector captures
+the model call, model resolver, transcript storage, clock, and call retry policy.
+The room supplies the captured agent definition and receives an execution port.
+It does not construct a model runner or choose execution services.
+
+`startRoom` and `resumeRoom` supply this composition by default. Their `streamFn`
+override applies to one room run. Other rooms retain their own definitions and
+model calls, including when they use the same agent names.
+
 **A transport receives room calls and executor dependencies separately.**
 `Transport.connect(room, context)` receives a plain `SeatRoom` facade with
 `view`, `commit`, and `lease`. It cannot reach room lifecycle methods through
@@ -169,6 +178,10 @@ that facade. The returned `SeatPort` handles `wake`, `steer`, and `cut`.
 clock, call retry policy, model services, transcript storage, and notifications.
 The in-process executor uses these values directly. Remote hosts resolve their
 execution dependencies where the agent runs. Only protocol data crosses RPC.
+
+`AgentRunner` executes activations through those three room calls.
+`createExecutionServices` supplies its model and transcript services without
+creating a room runtime. Both are available from `/transport` for remote hosts.
 
 The runtime keeps lifecycle control separately. `runningRoom(runtime, name)`
 returns the same restricted room-call surface. Room decisions use the journal
@@ -183,6 +196,7 @@ their existing JSON shapes.
 `Seating`, `LeaseChange`, or `LeaseHold`. Hosts use room reads and exchange
 handles for collaboration history. Executors use `ActivationView`,
 `CommitResult`, and `LeaseResponse`. `EndReason` remains part of lease requests.
+`AgentRunner` replaces `SeatActor`; the old name has no alias.
 
 ## History and limits
 

@@ -45,9 +45,10 @@ The core has two published entries: `@ambionframework/ambion` for hosts and
 The core imports no platform modules. Workspace filesystem code owns Node
 dependencies; Cloudflare code owns Durable Object integration.
 
-The core source is layered downward: shared types and definitions, protocol,
-host, journal adapter, pure room state and decisions, seat execution, and the
-top-level room composition. `biome.jsonc` enforces the layer boundaries.
+The core separates collaboration from execution. `room-host.ts` coordinates
+the journal and pure decisions under `room/`. `execution/` owns Pi services
+and agent runners. `room.ts` composes both behind the public facade.
+`biome.jsonc` enforces these import boundaries.
 
 ## 2. Toolchain choices
 

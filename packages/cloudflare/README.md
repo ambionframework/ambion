@@ -34,6 +34,8 @@ What is built:
   writes no activation metadata and sets no alarm. Unread messages remain
   recoverable from the room journal. `cut` stops the activation the room ended. The seat's audit session lives in its own
   storage.
+  It composes `AgentRunner` services directly from that storage and the worker
+  configuration. It does not create a room runtime.
 - **`configure`** names the complete agent catalog the objects resolve by name,
   and the model call they make.
 

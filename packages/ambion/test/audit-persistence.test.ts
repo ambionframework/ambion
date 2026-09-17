@@ -2,8 +2,8 @@ import { type JournalOpener, type JournalStorage, memoryJournals } from '@ambion
 import { piSessions } from '@ambionframework/pi-journal';
 import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
+import { Activation, type ActivationHost, persistTurns } from '../src/execution/activation.ts';
 import type { ActivationView } from '../src/protocol.ts';
-import { Activation, type ActivationHost, persistTurns } from '../src/seat/activation.ts';
 
 const message: AgentMessage = { role: 'user', content: 'hello', timestamp: 1 };
 const agent = { state: { messages: [message] } } as unknown as Agent;

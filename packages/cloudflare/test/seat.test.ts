@@ -138,19 +138,19 @@ it('keeps the first pending activation when different wakes arrive together', as
 	expect(await seat.wakes()).toBe(1);
 });
 
-it('forwards steering to the live actor without recording a wake', async () => {
-	type FakeActor = { last?: Steer; steer(value: Steer): Promise<void> };
+it('forwards steering to the live runner without recording a wake', async () => {
+	type FakeRunner = { last?: Steer; steer(value: Steer): Promise<void> };
 	const seat = env.SEAT.get(
 		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', 'steer-forward', 'product'])),
 	);
-	const fake: FakeActor = {
+	const fake: FakeRunner = {
 		steer(value) {
 			this.last = value;
 			return Promise.resolve();
 		},
 	};
 	await runInDurableObject(seat, async (instance) => {
-		(instance as unknown as { actor: FakeActor }).actor = fake;
+		(instance as unknown as { runner: FakeRunner }).runner = fake;
 	});
 	const steer: Steer = {
 		room: 'steer-forward',
@@ -168,7 +168,7 @@ it('forwards steering to the live actor without recording a wake', async () => {
 	await seat.steer(steer);
 	const forwarded = await runInDurableObject(
 		seat,
-		async (instance) => (instance as unknown as { actor?: FakeActor }).actor?.last,
+		async (instance) => (instance as unknown as { runner?: FakeRunner }).runner?.last,
 	);
 	expect(forwarded).toEqual(steer);
 	expect(await seat.wakes()).toBe(0);
@@ -176,7 +176,7 @@ it('forwards steering to the live actor without recording a wake', async () => {
 		await runInDurableObject(seat, async (_instance, state) => state.storage.getAlarm()),
 	).toBeNull();
 	await runInDurableObject(seat, async (instance) => {
-		(instance as unknown as { actor?: FakeActor }).actor = undefined;
+		(instance as unknown as { runner?: FakeRunner }).runner = undefined;
 	});
 });
 

@@ -1,6 +1,8 @@
 import { defineAgent } from '@ambionframework/ambion';
+import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
-import { configure, definitionOf } from '../src/configure.ts';
+import { configure, definitionOf, executionFor, runtimeFor } from '../src/configure.ts';
+import { scripted } from './scripted.ts';
 
 const agent = (name: string) =>
 	defineAgent({
@@ -25,5 +27,19 @@ describe('configure', () => {
 		const first = agent('duplicate');
 		const second = agent('duplicate');
 		expect(() => configure({ agents: [first, second] })).toThrow(/repeat agent 'duplicate'/);
+	});
+
+	it('composes the configured stream and transcripts over supplied storage', async () => {
+		const stream = scripted;
+		configure({ agents: [agent('execution')], stream });
+		const storage = memoryJournals();
+		const services = executionFor({ storage });
+		const id = 'configured-execution';
+		const transcript = await services.transcripts.open(id, 'room');
+		const runtimeTranscript = await runtimeFor({ storage }).transcripts.open(id);
+
+		expect(services.stream).toBe(stream);
+		expect(await transcript.getMetadata()).toMatchObject({ id, parentSessionId: 'room' });
+		expect(await runtimeTranscript.getMetadata()).toMatchObject({ id, parentSessionId: 'room' });
 	});
 });
