@@ -9,7 +9,7 @@
 		"resume": "node --env-file-if-exists=.env src/main.ts resume",
 		"check:types": "tsc --noEmit",
 		"test": "vitest run --exclude 'test/live/**'",
-		"test:live": "vitest run --config vitest.live.config.ts"
+		"test:live": "pnpm --filter '@ambionframework-examples/persistent^...' build && vitest run --config vitest.live.config.ts"
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
