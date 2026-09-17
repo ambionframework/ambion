@@ -49,15 +49,15 @@ highest product risk identified here; do not let naming work postpone it.
 
 ### Delivery slices
 
-| Slice | Deliverable                                                                                                | Status        |
-| ----- | ---------------------------------------------------------------------------------------------------------- | ------------- |
-| 1A    | `room.read`, immediate `readExchange`, explicit close/summary waits, `ExchangeRef`, and consumer migration | In progress   |
-| 1B    | Bounded source retrieval from captured activation context and corrected summary guidance                   | Next after 1A |
-| 2A    | Factual departure vocabulary; no implied read receipts                                                     | Planned       |
-| 2B    | Effect-free current-visit access and exact-repeat membership commands                                      | Planned       |
-| 3     | Application/runtime ownership and one `/hosting` entry                                                     | Planned       |
-| 4     | Internal ownership modules, declaration/package checks, and learning-path cleanup                          | Planned       |
-| 5     | History measurements, remaining recovery evidence, and release sign-off                                    | Planned       |
+| Slice | Deliverable                                                                                                | Status              |
+| ----- | ---------------------------------------------------------------------------------------------------------- | ------------------- |
+| 1A    | `room.read`, immediate `readExchange`, explicit close/summary waits, `ExchangeRef`, and consumer migration | Prepared for review |
+| 1B    | Bounded source retrieval from captured activation context and corrected summary guidance                   | Next after 1A       |
+| 2A    | Factual departure vocabulary; no implied read receipts                                                     | Planned             |
+| 2B    | Effect-free current-visit access and exact-repeat membership commands                                      | Planned             |
+| 3     | Application/runtime ownership and one `/hosting` entry                                                     | Planned             |
+| 4     | Internal ownership modules, declaration/package checks, and learning-path cleanup                          | Planned             |
+| 5     | History measurements, remaining recovery evidence, and release sign-off                                    | Planned             |
 
 Slice 1A returns an `ExchangeSnapshot` containing the exchange view, original
 discussion, and observed watermark. Missing exchanges return `undefined`.
@@ -66,20 +66,27 @@ Existing wait results and errors remain unchanged under explicit names.
 The Cloudflare live-wait methods use the same names; HTTP routes remain stable.
 Source retrieval and summary behavior stay in 1B so each contract is reviewable.
 
+**1A evidence:** `pnpm format` and `pnpm check` passed. The gate included
+793 core tests, 36 Relay tests, 23 Cloudflare tests, 39 workspace tests, and
+6 CLI tests. The core total includes 22 new exchange-read cases across memory
+and SQLite storage. Packed consumer type checks and the generated Worker dry
+run passed. Adversarial review found no remaining blocker. CI evidence belongs
+to the implementation PR.
+
 ## 1. One source discussion, available through coherent reads
 
-### Findings
+### Findings at the reviewed baseline
 
-**Relay still reconstructs exchange semantics.**
-[`rooms.ts`](../examples/persistent/src/rooms.ts) searches a snapshot's exchanges,
-calculates the closing boundary, removes summaries, and filters messages.
+**Relay reconstructed exchange semantics.**
+[`rooms.ts`](../examples/persistent/src/rooms.ts) searched a snapshot's exchanges,
+calculated the closing boundary, removed summaries, and filtered messages.
 Those rules already belong to the kernel.
 
-**Read-like method names can wait indefinitely.**
-[`ExchangeHandle`](../packages/ambion/src/room-host.ts) exposes `messages()` as a
+**Read-like method names could wait indefinitely.**
+[`ExchangeHandle`](../packages/ambion/src/room-host.ts) exposed `messages()` as a
 wait for close and `response()` as a wait for an optional summary. Room messages
-are immediate reads. `RoomHost.snapshot()` already exists but is absent from
-`Room`; callers repeat the room name and runtime through `readRoom`.
+were immediate reads. `RoomHost.snapshot()` existed but was absent from
+`Room`; callers repeated the room name and runtime through `readRoom`.
 
 **A personalized summary becomes every agent's shared memory.**
 [`summary.ts`](../packages/ambion/src/execution/summary.ts) asks the writer to
@@ -96,15 +103,15 @@ source omission, not an observed model mistake. No provider calls were used.
 
 ### Changes
 
-- [ ] Expose one coherent `room.read(options)` using the existing snapshot path.
+- [x] Expose one coherent `room.read(options)` using the existing snapshot path.
       Keep `readRoom(name, options)` for records without a running handle.
       Retain one pure read implementation and detached returned values.
       Migrate ordinary observation from `messages()` and `participants()` to
       this read, then remove redundant public convenience methods.
-- [ ] Add `readExchange(roomName, from, options)` for an immediate exchange view
+- [x] Add `readExchange(roomName, from, options)` for an immediate exchange view
       and its original discussion. Use the same selector for running and stopped
       records. A missing exchange must be explicit; reading never starts work.
-- [ ] Rename waits to `waitForClose()` and `waitForSummary()`. Preserve the
+- [x] Rename waits to `waitForClose()` and `waitForSummary()`. Preserve the
       existing returned discussion and optional summary initially. Rename the
       identity value `Exchange` to `ExchangeRef` when migrating its consumers;
       keep `ExchangeView` for recorded state and `ExchangeHandle` for live waits.

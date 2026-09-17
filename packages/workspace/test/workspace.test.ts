@@ -60,7 +60,7 @@ async function run(agents: AgentDefinition[], seats: Record<string, Script>): Pr
 	});
 	const visit = await enter(session);
 	const exchange = await visit.send({ text: 'go' });
-	await exchange.messages();
+	await exchange.waitForClose();
 	return session;
 }
 
@@ -103,7 +103,9 @@ describe('the built-in tools', () => {
 		expect(writer[1]?.text).toBe('/home/writer\nslab pour Thu\nwriter\n');
 		const reader = results.reader ?? [];
 		expect(reader[0]).toMatchObject({ tool: 'read', text: 'slab pour Thu\n', failed: false });
-		expect((await session.messages()).filter(isSpoken).map((m) => m.text)).toContain('written');
+		expect((await session.read()).messages.filter(isSpoken).map((m) => m.text)).toContain(
+			'written',
+		);
 		await session.stop();
 		await site.destroy();
 	});

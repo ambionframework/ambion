@@ -29,6 +29,8 @@ import {
 	currentExchange,
 	deferred,
 	enter,
+	messagesOf,
+	participantsOf,
 	roomName,
 	storedOf,
 	tick,
@@ -104,7 +106,7 @@ describe('a lease', () => {
 		await clock.advance(1);
 		await waitForRoom(session);
 		expect(starts(events)).toBe(1);
-		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
+		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
 			'solo',
 		]);
@@ -119,7 +121,7 @@ describe('a lease', () => {
 		await visit.send({ text: 'say hi' });
 		await waitForRoom(session);
 		expect(starts(events)).toBe(1);
-		expect((await session.messages()).filter(isSpoken)).toHaveLength(2);
+		expect((await messagesOf(session)).filter(isSpoken)).toHaveLength(2);
 	});
 
 	it('expires a lease whose release was lost twice, and answers the late release stale', async () => {
@@ -138,7 +140,7 @@ describe('a lease', () => {
 		await tick();
 		await tick();
 		// the seat spoke, its release was lost, and the room still holds the lease
-		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toContain('solo');
+		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toContain('solo');
 		expect(events.some((e) => e.type === 'activation_end')).toBe(false);
 		expect(await currentExchange(session)).toBeDefined();
 
@@ -153,7 +155,7 @@ describe('a lease', () => {
 		await clock.advance(30_000);
 		await waitForRoom(session);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(2);
-		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
+		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
 			'solo',
 		]);
@@ -244,7 +246,9 @@ describe('a lease', () => {
 		// the wake is answered, so the exchange closes and the seat stands idle
 		expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 		expect(await currentExchange(session)).toBeUndefined();
-		expect(session.participants().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
+		expect((await participantsOf(session)).find((s) => s.name === 'solo')).toMatchObject({
+			status: 'idle',
+		});
 		// and the room stays that way: no fourth attempt starts, whatever the clock does
 		await clock.advance(600_000);
 		await waitForRoom(session);
@@ -294,7 +298,7 @@ describe('a lease', () => {
 				.map((entry) => entry.body),
 		).toMatchObject([{ phase: 'ended', reason: 'abandoned' }]);
 		// nothing is owed, no summary was written, and the record stands whole
-		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
+		expect((await messagesOf(session)).filter(isSummary)).toHaveLength(0);
 		await clock.advance(600_000);
 		await waitForRoom(session);
 		expect(events.filter((e) => e.type === 'abandoned')).toHaveLength(1);
@@ -325,7 +329,7 @@ describe('a lease', () => {
 		await tick();
 		await tick();
 		// the say arrived under a lease that ended, so nothing landed
-		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual(['andrei']);
+		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual(['andrei']);
 		expect(events.filter((e) => e.type === 'activation_end')).toHaveLength(1);
 		// a lease that expired without a word answers nothing: the exchange stays
 		// open, and the seat is woken again after the backoff
@@ -358,7 +362,7 @@ describe('a lease', () => {
 		visit = await enter(session);
 		await visit.send({ text: 'First?' });
 		await waitForRoom(session);
-		expect((await session.messages()).filter(isSpoken).map((m) => m.text)).toEqual([
+		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.text)).toEqual([
 			'First?',
 			'solo on First?',
 			'Second?',
@@ -445,7 +449,7 @@ describe('a lease judged where its change is written', () => {
 
 		held.resolve();
 		await waitForRoom(session);
-		expect((await session.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
+		expect((await messagesOf(session)).filter(isSpoken).map((m) => m.from)).toEqual([
 			'andrei',
 			'solo',
 		]);
@@ -511,14 +515,14 @@ describe('a lease judged where its change is written', () => {
 		await visit.send({ text: 'First?' });
 		// a room that owes a draft is not quiet, so the failed attempt is the wait
 		await drafted;
-		expect((await session.messages()).filter(isSummary)).toHaveLength(0);
+		expect((await messagesOf(session)).filter(isSummary)).toHaveLength(0);
 
 		// the seat works on the second exchange when the backoff passes and the draft is claimed
 		await visit.send({ text: 'Second?' });
 		await tick();
 		await tick();
 		await clock.advance(30_000);
-		expect(session.participants().find((s) => s.name === 'assistant')).toMatchObject({
+		expect((await participantsOf(session)).find((s) => s.name === 'assistant')).toMatchObject({
 			status: 'active',
 		});
 		// the seat finishes while the draft's view is on the wire: a second close joins the draft
@@ -533,7 +537,7 @@ describe('a lease judged where its change is written', () => {
 		await clock.advance(200_000);
 		await waitForRoom(session);
 
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
 		const summaries = record.filter(isSummary);
 		expect(summaries).toHaveLength(2);

@@ -15,6 +15,7 @@ import {
 	startRoom,
 } from '../../../src/index.ts';
 import { inProcessTransport, type SeatRoom, type Transport } from '../../../src/transport.ts';
+import { messagesOf, participantsOf } from '../../support/room.ts';
 import { nodeSql } from '../../support/storage.ts';
 
 const [phase, directory] = process.argv.slice(2);
@@ -110,7 +111,7 @@ async function start(): Promise<void> {
 		fastSeq.promise,
 		fastReleased.promise,
 	]);
-	const slowStatus = room.participants().find((seat) => seat.name === slow.name);
+	const slowStatus = (await participantsOf(room)).find((seat) => seat.name === slow.name);
 	assert.equal(slowStatus?.kind, 'agent');
 	assert.equal(slowStatus.status, 'active');
 	await writeFile(
@@ -155,8 +156,8 @@ async function resume(): Promise<void> {
 		assert(exchange);
 		const retry = await visit.send(request);
 		assert.equal(retry.from, checkpoint.from);
-		const discussion = await exchange.messages();
-		const messages = await room.messages();
+		const discussion = await exchange.waitForClose();
+		const messages = await messagesOf(room);
 		const questions = messages.filter(
 			(message) => isSpoken(message) && message.key === request.key,
 		);

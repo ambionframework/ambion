@@ -79,11 +79,11 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 	});
 	expect(exchange).toEqual({ owner: 'priya', from: expect.any(Number), at: expect.any(String) });
 	expect(retry).toEqual(exchange);
-	const conversation = await stub.exchangeMessages(exchange.from);
+	const conversation = await stub.waitForClose(exchange.from);
 	expect(conversation.map((message) => message.seq)).toEqual([exchange.from]);
 	expect(conversation.every((message) => message.kind !== 'summary')).toBe(true);
 	// There was no agent answer, so the response milestone is deliberately silent.
-	expect(await stub.response(exchange.from)).toBeUndefined();
+	expect(await stub.waitForSummary(exchange.from)).toBeUndefined();
 
 	const messages = await stub.messages();
 	expect(messages.map((m) => [m.kind, m.from])).toEqual([
@@ -121,8 +121,8 @@ it('keeps a stopped record readable without resuming the room', async () => {
 		text: 'A durable question?',
 		key: 'stopped-1',
 	});
-	await stub.exchangeMessages(exchange.from);
-	await stub.response(exchange.from);
+	await stub.waitForClose(exchange.from);
+	await stub.waitForSummary(exchange.from);
 	await stub.stop();
 	const read = await stub.read();
 	expect(read).toMatchObject({

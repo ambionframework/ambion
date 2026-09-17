@@ -6,7 +6,7 @@
 import { Type } from 'typebox';
 import { expect, it } from 'vitest';
 import { defineTool } from '../../src/index.ts';
-import { enter } from '../support/room.ts';
+import { enter, messagesOf } from '../support/room.ts';
 import {
 	agent,
 	errorsIn,
@@ -47,7 +47,7 @@ live('the model and the loop', () => {
 		await visit.send({ text: 'What is the status of order 7781?' });
 		await untilQuiet(session);
 
-		const messages = await session.messages();
+		const messages = await messagesOf(session);
 		expect(events).toContainEqual({
 			type: 'tool_execution_start',
 			agent: 'clerk',
@@ -85,12 +85,12 @@ live('the model and the loop', () => {
 			// the failed activation is one attempt, and the room would wake the seat
 			// again after the backoff: the abort writes that wake off
 			await session.abort();
-			await within(exchange.messages(), 60_000, 'the exchange closing');
+			await within(exchange.waitForClose(), 60_000, 'the exchange closing');
 
 			const errors = errorsIn(events);
 			expect(errors).toHaveLength(1);
 			expect(errors[0]).toMatch(/^clerk: /);
-			expect(saidBy(await session.messages(), 'clerk')).toEqual([]);
+			expect(saidBy(await messagesOf(session), 'clerk')).toEqual([]);
 			expect(events).toContainEqual({ type: 'activation_end', agent: 'clerk', spoke: false });
 		} finally {
 			try {

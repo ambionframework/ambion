@@ -62,7 +62,8 @@ later seating creates new work only when the journal derives it.
 
 ## Views and resume
 
-`room.participants()` returns current agents and human visitors. Reserve agents
+The `participants` field of `await room.read({ messages: false })` contains
+current agents and human visitors. Reserve agents
 do not appear. Views contain identity, membership status, and attention. They
 do not contain executable definitions or authority.
 

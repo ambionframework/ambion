@@ -10,7 +10,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { runningRoom, type SeatRoom, type Transport } from '../src/transport.ts';
-import { roomName, stateOf } from './support/room.ts';
+import { messagesOf, roomName, stateOf } from './support/room.ts';
 import { memory, type OpenedStorage, type Storage, storages } from './support/storage.ts';
 
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
@@ -70,22 +70,22 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			const { opened, room, runtime } = await openWorld(storage, { agents: [] });
 			try {
 				const visit = await room.visit(person);
-				const before = await room.messages();
+				const before = await messagesOf(room);
 				const beforeSnapshot = await readRoom(room.name, { runtime });
 				const key = 'visit-blank';
 				await expect(visit.send({ key, text: blank })).rejects.toThrow(/message is empty/i);
-				expect(await room.messages()).toEqual(before);
+				expect(await messagesOf(room)).toEqual(before);
 				expect((await readRoom(room.name, { runtime })).exchange).toEqual(beforeSnapshot.exchange);
 				expect((await readRoom(room.name, { runtime })).watermark).toBe(beforeSnapshot.watermark);
 
 				const preserved = '  accepted \u00a0 ';
 				const exchange = await visit.send({ key, text: preserved });
-				const said = (await room.messages()).find((message) => message.key === key);
+				const said = (await messagesOf(room)).find((message) => message.key === key);
 				expect(said).toMatchObject({ kind: 'said', text: preserved, key });
 				expect(exchange.from).toBe(said?.seq);
-				const accepted = await room.messages();
+				const accepted = await messagesOf(room);
 				expect((await visit.send({ key, text: blank })).from).toBe(exchange.from);
-				expect(await room.messages()).toEqual(accepted);
+				expect(await messagesOf(room)).toEqual(accepted);
 			} finally {
 				await room.stop();
 				await opened.dispose();
@@ -116,7 +116,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 					intent: { kind: 'said', text: blank },
 				});
 				expect(refused).toMatchObject({ refused: expect.stringMatching(/message is empty/i) });
-				expect(await room.messages()).toEqual(before.messages);
+				expect(await messagesOf(room)).toEqual(before.messages);
 				expect((await readRoom(room.name, { runtime })).watermark).toBe(before.watermark);
 
 				const preserved = '  ordinary \u00a0 ';
@@ -159,7 +159,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 					intent: { kind: 'said', text: blank },
 				});
 				expect(refused).toMatchObject({ refused: expect.stringMatching(/message is empty/i) });
-				expect(await room.messages()).toEqual(before.messages);
+				expect(await messagesOf(room)).toEqual(before.messages);
 				expect((await readRoom(room.name, { runtime })).watermark).toBe(before.watermark);
 
 				const preserved = '  summary \u00a0 ';
@@ -203,7 +203,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 				intent: { kind: 'said', text: 'Original text.' },
 			});
 			expect(original).toMatchObject({ committed: { text: 'Original text.' } });
-			const before = await room.messages();
+			const before = await messagesOf(room);
 			const replay = await peer.commit({
 				activation,
 				key: 'replay-original',
@@ -211,9 +211,9 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 				intent: { kind: 'said', text: '\u00a0\u2003' },
 			});
 			expect(replay).toEqual(original);
-			expect(await room.messages()).toEqual(before);
+			expect(await messagesOf(room)).toEqual(before);
 			expect(
-				(await room.messages()).filter((message) => message.key === 'replay-original'),
+				(await messagesOf(room)).filter((message) => message.key === 'replay-original'),
 			).toHaveLength(1);
 		} finally {
 			await room.stop();

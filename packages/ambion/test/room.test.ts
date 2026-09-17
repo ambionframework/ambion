@@ -18,6 +18,8 @@ import {
 	collect,
 	deferred,
 	enter,
+	messagesOf,
+	participantsOf,
 	roomName,
 	waitForRoom,
 } from './support/room.ts';
@@ -94,7 +96,7 @@ describe('startRoom', () => {
 		await visit.send({ text: 'What is the answer?' });
 		await waitForRoom(session);
 
-		const texts = spoken(await session.messages()).map((m) => `${m.from}: ${m.text}`);
+		const texts = spoken(await messagesOf(session)).map((m) => `${m.from}: ${m.text}`);
 		expect(texts).toContain('alpha: the answer is 42');
 		expect(texts).toContain('beta: ack: 42');
 		expect(texts).toHaveLength(3); // woken seats declined: glances, not messages
@@ -161,7 +163,7 @@ describe('startRoom', () => {
 		await (await enter(session)).send({ text: 'anyone?' });
 		await waitForRoom(session);
 
-		expect(spoken(await session.messages())).toHaveLength(1);
+		expect(spoken(await messagesOf(session))).toHaveLength(1);
 		expect(events.some((e) => e.type === 'message' && e.message.from === 'shy')).toBe(false);
 		const end = events.find((e) => e.type === 'activation_end');
 		expect(end).toMatchObject({ agent: 'shy', spoke: false });
@@ -244,7 +246,7 @@ describe('startRoom', () => {
 		await (await enter(session)).send({ text: 'who said what?' });
 		await waitForRoom(session);
 
-		const said = (await session.messages()).at(-1);
+		const said = (await messagesOf(session)).at(-1);
 		expect(said?.from).toBe('liar'); // stamped, regardless of what the content claimed
 		const roster = contexts.at(-1) ?? '';
 		expect(roster).toContain('- aside (idle, named only): Watches quietly.');
@@ -293,12 +295,12 @@ describe('startRoom', () => {
 			agents: [scribe, assistant],
 			streamFn: scripted(() => quiet()),
 		});
-		expect(spoken(await again.messages()).map((m) => m.text)).toEqual([
+		expect(spoken(await messagesOf(again)).map((m) => m.text)).toEqual([
 			'for the record',
 			'and in this order',
 		]);
 		// seqs continue rather than restart
-		const seqs = (await again.messages()).map((m) => m.seq);
+		const seqs = (await messagesOf(again)).map((m) => m.seq);
 		expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
 		expect(new Set(seqs).size).toBe(seqs.length);
 		await again.stop();
@@ -317,7 +319,7 @@ describe('startRoom', () => {
 			agents: [scribe, assistant],
 			streamFn: scripted(() => quiet()),
 		});
-		expect(await fresh.messages()).toHaveLength(0);
+		expect(await messagesOf(fresh)).toHaveLength(0);
 	});
 
 	it('streams events in order, surfaces errors as events, and aborts to a quiet room', async () => {
@@ -372,7 +374,7 @@ describe('startRoom', () => {
 		await faultVisit.send({ text: 'trigger' });
 		await failed;
 		expect(faultEvents.some((e) => e.type === 'error' && e.agent === 'solo')).toBe(true);
-		expect(spoken(await faulty.messages())).toHaveLength(1);
+		expect(spoken(await messagesOf(faulty))).toHaveLength(1);
 		// the failed activation is one attempt: the wake is pending again after the
 		// backoff, so the room is still working, and only an abort settles it now
 		await faulty.abort();
@@ -391,7 +393,7 @@ describe('startRoom', () => {
 		await hung.abort();
 		await waitForRoom(hung);
 		expect(hungEvents.some((e) => e.type === 'error')).toBe(false);
-		expect(spoken(await hung.messages())).toHaveLength(1);
+		expect(spoken(await messagesOf(hung))).toHaveLength(1);
 
 		// an abort with a steer still queued must not rebuild the activation it cancelled
 		let racingCalls = 0;
@@ -413,7 +415,7 @@ describe('startRoom', () => {
 		await racing.abort();
 		await waitForRoom(racing);
 		expect(racingCalls).toBe(1);
-		expect(spoken(await racing.messages())).toHaveLength(2);
+		expect(spoken(await messagesOf(racing))).toHaveLength(2);
 	});
 
 	it('fails a say that races past the record, delivering what was missed', async () => {
@@ -460,7 +462,7 @@ describe('startRoom', () => {
 		await visit.send({ text: 'thoughts?' });
 		await waitForRoom(session);
 
-		const texts = spoken(await session.messages()).map((m) => m.text);
+		const texts = spoken(await messagesOf(session)).map((m) => m.text);
 		expect(texts).toEqual(['thoughts?', 'the point', 'a genuinely different angle']);
 		const conflicts = events.filter((e) => e.type === 'conflict');
 		expect(conflicts).toHaveLength(1);
@@ -496,7 +498,7 @@ describe('startRoom', () => {
 		await yieldVisit.send({ text: 'thoughts?' });
 		await waitForRoom(yielding);
 
-		expect(spoken(await yielding.messages())).toHaveLength(2);
+		expect(spoken(await messagesOf(yielding))).toHaveLength(2);
 		const end = yieldEvents.find((e) => e.type === 'activation_end' && e.agent === 'second');
 		expect(end).toMatchObject({ spoke: false });
 	});
@@ -521,7 +523,7 @@ describe('startRoom', () => {
 		await (await enter(session)).send({ text: 'say hi' });
 		await waitForRoom(session);
 
-		const seat = session.participants().find((s) => s.name === 'solo');
+		const seat = (await participantsOf(session)).find((s) => s.name === 'solo');
 		if (seat?.kind !== 'agent') throw new Error('The solo seat is absent.');
 		const id = seatSessionId(name, seat.name);
 		const piSeat = await runtime.transcripts.open(id);
@@ -558,7 +560,7 @@ describe('startRoom', () => {
 		await visit.send({ text: 'once, retried', key: 'delivery-1' });
 		await waitForRoom(session);
 
-		const said = spoken(await session.messages());
+		const said = spoken(await messagesOf(session));
 		expect(said.map((m) => [m.seq, m.text, m.key])).toEqual([[4, 'once', 'delivery-1']]);
 		// one message, one event, one activation
 		expect(events.filter((e) => e.type === 'message' && e.message.kind === 'said')).toHaveLength(1);
@@ -637,7 +639,7 @@ describe('startRoom', () => {
 			runtime,
 			streamFn: scripted(() => quiet()),
 		});
-		expect((await again.messages()).map((m) => m.from)).toEqual(['andrei', 'andrei']);
+		expect((await messagesOf(again)).map((m) => m.from)).toEqual(['andrei', 'andrei']);
 		await again.stop();
 	});
 
@@ -659,7 +661,7 @@ describe('startRoom', () => {
 			/wakes for nothing said/,
 		);
 		// and nothing landed: the record holds the arrival alone
-		expect((await session.messages()).map((m) => m.kind)).toEqual(['arrived']);
+		expect((await messagesOf(session)).map((m) => m.kind)).toEqual(['arrived']);
 		await session.stop();
 	});
 
@@ -706,7 +708,9 @@ describe('startRoom', () => {
 		await waitForRoom(session);
 		// the room ended the lease and told the seat, and the seat stopped: the room is idle
 		expect(cuts).toEqual(['message:4:solo:1']);
-		expect(session.participants().find((s) => s.name === 'solo')).toMatchObject({ status: 'idle' });
+		expect((await participantsOf(session)).find((s) => s.name === 'solo')).toMatchObject({
+			status: 'idle',
+		});
 		await session.stop();
 	});
 
@@ -809,7 +813,7 @@ describe('startRoom', () => {
 		expect(await room.lease({ activation: 'message:4:solo:1', operation: 'claim' })).toMatchObject({
 			ok: {},
 		});
-		const before = await session.messages();
+		const before = await messagesOf(session);
 		for (const readThrough of [undefined, -1, 1.5, 99]) {
 			const reply = await room.commit({
 				activation: 'message:4:solo:1',
@@ -819,7 +823,7 @@ describe('startRoom', () => {
 			});
 			expect(reply).toMatchObject({ refused: expect.any(String) });
 		}
-		expect(await session.messages()).toEqual(before);
+		expect(await messagesOf(session)).toEqual(before);
 		const opened = await room.view('message:4:solo:1');
 		if ('stale' in opened) throw new Error('Expected a live activation.');
 		expect(

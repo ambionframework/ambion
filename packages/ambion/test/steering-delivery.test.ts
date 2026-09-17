@@ -8,7 +8,7 @@ import {
 	type Wake,
 } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
-import { assistant, deferred, roomName, stateOf, waitForRoom } from './support/room.ts';
+import { assistant, deferred, messagesOf, roomName, stateOf, waitForRoom } from './support/room.ts';
 import { byAgent, contextText, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
 
@@ -104,7 +104,7 @@ describe.each(storages)('messages across activation completion on $name', (stora
 				// The caller sends an ordinary message while the executor releases.
 				// Its active recipient is recorded even though idle attention excludes it.
 				await visit.send({ to: priya.name, text: 'Keep this final correction.' });
-				const update = (await room.messages()).at(-1);
+				const update = (await messagesOf(room)).at(-1);
 				expect(update?.wakes ?? []).toEqual([]);
 				expect(observed.steers).toHaveLength(1);
 				expect(observed.steers[0]?.message).toEqual(update);

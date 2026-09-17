@@ -61,11 +61,11 @@ try {
   const exchange = await visit.send({
     text: 'We have 12 units in stock. Can we promise an order for 15?',
   });
-  const response = await exchange.response();
+  const response = await exchange.waitForSummary();
   if (response) {
     console.log(response.text);
   } else {
-    for (const message of await exchange.messages()) {
+    for (const message of await exchange.waitForClose()) {
       if (message.kind === 'said') console.log(`${message.from}: ${message.text}`);
     }
   }
@@ -75,10 +75,14 @@ try {
 }
 ```
 
-`exchange.messages()` waits for the fixed discussion. `exchange.response()`
+`exchange.waitForClose()` waits for the fixed discussion. `exchange.waitForSummary()`
 waits for its summary or a terminal result without one. The writer may decline,
 and a room without a configured writer still closes exchanges and exposes the
 discussion. Every closed human exchange is eligible when its writer is seated.
+
+`room.read()` returns current messages, participants, and exchange states.
+Use `readRoom(name, { runtime })` or `readExchange(name, from, { runtime })`
+to inspect durable state without a live handle. Reads never wait for completion.
 
 Use `defineTool` for an agent's ordinary typed tools. Put reusable tool bundles
 in the separate `bundles` field. The current `agents` list supplies every
@@ -105,7 +109,7 @@ to a running host.
 
 **Summaries compact later activations.** Once a closed exchange has a summary,
 agent context uses it in place of the covered source messages. Human
-participants can review the original discussion through `exchange.messages()`.
+participants can review the original discussion through `exchange.waitForClose()`.
 The journal retains the complete history.
 
 **0.1.0 remains a release target.** The

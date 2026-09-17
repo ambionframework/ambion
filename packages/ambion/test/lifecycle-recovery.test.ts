@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
 import type { JournalOpener } from '@ambionframework/journal';
-import { createRuntime, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
+import { describe, expect, it } from 'vitest';
+import { createRuntime, defineHuman, type Room, resumeRoom, startRoom } from '../src/index.ts';
+import { messagesOf, participantsOf, roomName } from './support/room.ts';
 import { faultyJournals, gatedJournals, storages, tappedJournals } from './support/storage.ts';
-import { roomName } from './support/room.ts';
 
 const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
 const reenteredPerson = defineHuman({ name: 'andrei', identity: 'Founder, returned.' });
@@ -72,8 +72,8 @@ function unreadableOpener(source: JournalOpener) {
 	};
 }
 
-async function leftMessages(room: { messages(): Promise<readonly { kind: string }[]> }) {
-	return (await room.messages()).filter((message) => message.kind === 'left');
+async function leftMessages(room: Pick<Room, 'read'>) {
+	return (await messagesOf(room)).filter((message) => message.kind === 'left');
 }
 
 describe.each(storages)('durable visit recovery on $name storage', (storage) => {
@@ -94,7 +94,7 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			await visit.leave();
 			expect(await leftMessages(room)).toHaveLength(1);
 			expect(
-				room.participants().find((participant) => participant.name === person.name),
+				(await participantsOf(room)).find((participant) => participant.name === person.name),
 			).toMatchObject({
 				presence: 'absent',
 			});
@@ -126,7 +126,7 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			const oldRetry = observed(oldVisit.leave());
 			await oldRetry;
 			expect(
-				room.participants().find((participant) => participant.name === person.name),
+				(await participantsOf(room)).find((participant) => participant.name === person.name),
 			).toMatchObject({
 				presence: 'present',
 			});
@@ -209,7 +209,7 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 
 			releaseDeparture.resolve();
 			const freshVisit = await reentry;
-			expect((await room.messages()).map((message) => message.kind)).toEqual([
+			expect((await messagesOf(room)).map((message) => message.kind)).toEqual([
 				'arrived',
 				'left',
 				'arrived',
@@ -242,7 +242,7 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			await room.stop();
 			expect(await leftMessages(room)).toHaveLength(1);
 			expect(
-				room.participants().find((participant) => participant.name === person.name),
+				(await participantsOf(room)).find((participant) => participant.name === person.name),
 			).toMatchObject({
 				presence: 'absent',
 			});
@@ -273,7 +273,7 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			await oldVisit.leave();
 			expect(await leftMessages(room)).toHaveLength(1);
 			expect(
-				room.participants().find((participant) => participant.name === person.name),
+				(await participantsOf(room)).find((participant) => participant.name === person.name),
 			).toMatchObject({
 				presence: 'absent',
 			});
@@ -303,7 +303,7 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			await oldRoom.stop();
 			expect(await leftMessages(resumed)).toHaveLength(0);
 			expect(
-				resumed.participants().find((participant) => participant.name === person.name),
+				(await participantsOf(resumed)).find((participant) => participant.name === person.name),
 			).toMatchObject({
 				presence: 'present',
 			});
@@ -332,7 +332,7 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			expect(retryExchange.from).toBe(firstExchange.from);
 			expect(retryExchange.owner).toBe(firstExchange.owner);
 			expect(
-				(await room.messages()).filter(
+				(await messagesOf(room)).filter(
 					(message) => message.kind === 'said' && message.key === 'same-question',
 				),
 			).toHaveLength(1);
@@ -360,7 +360,7 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			const newIdentity = await room.visit(reenteredPerson);
 			expect(newIdentity.human).toEqual(reenteredPerson);
 			expect(
-				(await room.messages()).filter((message) => kindOf(message) === 'arrived'),
+				(await messagesOf(room)).filter((message) => kindOf(message) === 'arrived'),
 			).toHaveLength(2);
 			await newIdentity.leave();
 		} finally {
@@ -391,13 +391,13 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			const failedArrival = observed(room.visit(person));
 			await expect(failedArrival).rejects.toThrow(/disk is full/);
 			// Drain the journal's failed recovery read while it is still unreadable.
-			await room.messages();
+			await messagesOf(room);
 			expect(appendFailed).toBe(true);
 			expect(unreadable.readFailures()).toBeGreaterThan(0);
 
 			unreadable.fail(false);
 			const recovered = await room.visit(person);
-			expect((await room.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(
+			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
 				1,
 			);
 			await recovered.leave();
@@ -431,7 +431,7 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			const failedStop = observed(room.stop());
 			await expect(failedStop).rejects.toThrow(/disk is full/);
 			// The stop's queued recovery read also fails, leaving the folded state present.
-			await room.messages();
+			await messagesOf(room);
 			expect(appendFailed).toBe(true);
 			expect(unreadable.readFailures()).toBeGreaterThan(0);
 
@@ -468,14 +468,14 @@ describe.each(storages)('durable visit recovery on $name storage', (storage) => 
 			const failedLeave = observed(oldVisit.leave());
 			await expect(failedLeave).rejects.toThrow(/disk is full/);
 			// Force the journal's queued recovery read to fail while the cache is stale.
-			await room.messages();
+			await messagesOf(room);
 			expect(appendFailed).toBe(true);
 			expect(unreadable.readFailures()).toBeGreaterThan(0);
 
 			unreadable.fail(false);
 			const freshVisit = await room.visit(reenteredPerson);
 			expect(await leftMessages(room)).toHaveLength(1);
-			expect((await room.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(
+			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
 				2,
 			);
 			await expect(oldVisit.send({ text: 'stale old handle' })).rejects.toThrow(/ended|leaving/);

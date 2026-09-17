@@ -12,11 +12,19 @@ import {
 	roomRuntime,
 } from './host/runtime.ts';
 import { roomJournal } from './journal/journal.ts';
+import { discussionMessages } from './room/exchange.ts';
 import { foldRoom } from './room/fold.ts';
 import type { MessageSelection } from './room/read.ts';
-import { readView } from './room/read.ts';
+import { captureMessageSelection, readView } from './room/read.ts';
 import { type CompositionDraft, type Room, RoomHost } from './room-host.ts';
-import type { AgentDefinition, Attention, RoomSnapshot } from './types.ts';
+import type {
+	AgentDefinition,
+	Attention,
+	ExchangeView,
+	Message,
+	RoomSnapshot,
+	Seq,
+} from './types.ts';
 
 export type { ExchangeHandle, Room, RoomSnapshot, Visit } from './room-host.ts';
 
@@ -91,10 +99,12 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 	return room;
 }
 
+/** Observe a room's recorded state without requiring a running handle. */
 export async function readRoom(name: string, options: ReadRoomOptions = {}): Promise<RoomSnapshot> {
 	const runtime = options.runtime ?? defaultRuntime;
+	const messages = captureMessageSelection(options.messages);
 	const live = registeredRoom(runtime, name);
-	if (live instanceof RoomHost) return live.snapshot(options);
+	if (live instanceof RoomHost) return live.read({ messages });
 	const journal = roomJournal(runtime.journals.open(name));
 	await journal.ready;
 	await journal.settled();
@@ -103,8 +113,37 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 		foldRoom(journal.entries, runtime.retry),
 		runtime.clock.now(),
 		journal.lastSeq,
-		options.messages,
+		messages,
 	);
+}
+
+/** An exchange and its original discussion at one observed journal position. */
+export interface ExchangeSnapshot {
+	readonly exchange: ExchangeView;
+	readonly messages: readonly Message[];
+	readonly watermark: Seq;
+}
+
+/** Read one exchange's durable discussion without starting or reconciling a room. */
+export async function readExchange(
+	name: string,
+	from: Seq,
+	options: { runtime?: Runtime } = {},
+): Promise<ExchangeSnapshot | undefined> {
+	if (!Number.isSafeInteger(from) || from <= 0)
+		throw new RangeError('Exchange reference must be a positive safe integer.');
+	const snapshot = await readRoom(name, {
+		runtime: options.runtime,
+		messages: { since: from - 1 },
+	});
+	const exchange = snapshot.exchanges.find((candidate) => candidate.from === from);
+	if (exchange === undefined) return undefined;
+	const through = exchange.status === 'closed' ? exchange.through : snapshot.watermark;
+	return {
+		exchange,
+		messages: discussionMessages(snapshot.messages, from, through),
+		watermark: snapshot.watermark,
+	};
 }
 
 function assertFree(runtime: Runtime, name: string): void {

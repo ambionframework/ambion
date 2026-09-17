@@ -12,6 +12,7 @@ export type { CreateRuntimeOptions, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type {
 	ExchangeHandle,
+	ExchangeSnapshot,
 	ReadRoomOptions,
 	ResumeRoomOptions,
 	Room,
@@ -19,7 +20,7 @@ export type {
 	StartRoomOptions,
 	Visit,
 } from './room.ts';
-export { readRoom, resumeRoom, startRoom } from './room.ts';
+export { readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
 export type {
 	AgentDefinition,
 	AgentParticipantInfo,
@@ -27,7 +28,7 @@ export type {
 	Attention,
 	Clock,
 	ClosedExchange,
-	Exchange,
+	ExchangeRef,
 	ExchangeView,
 	HumanDefinition,
 	HumanParticipantInfo,

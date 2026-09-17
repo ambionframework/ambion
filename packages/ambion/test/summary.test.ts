@@ -25,7 +25,9 @@ import {
 	currentExchange,
 	deferred,
 	messageBefore,
+	messagesOf,
 	roomName as name,
+	participantsOf,
 	tick,
 	waitForRoom,
 } from './support/room.ts';
@@ -232,7 +234,7 @@ describe('closing summaries', () => {
 		expect(summary.from).toBe('assistant');
 		expect(summary.to).toBe('priya');
 		expect(summary.text).toContain('Saturday');
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		// it stands through the last message before it, and leaves none behind
 		expect(summary.covers.through).toBe(messageBefore(record, summary.seq));
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
@@ -270,7 +272,7 @@ describe('closing summaries', () => {
 		await visit.send({ text: 'Can I tell the client Thursday?' });
 		await quiescent(session);
 
-		expect(summaries(await session.messages())).toHaveLength(0);
+		expect(summaries(await messagesOf(session))).toHaveLength(0);
 	});
 
 	it('wakes nobody, and every seat reads it at the next activation', async () => {
@@ -314,7 +316,7 @@ describe('closing summaries', () => {
 		expect(prompts[0]).not.toContain('summarised for <name> below');
 		expect(prompts.at(-1)).toContain('summarised for <name> below');
 		// the record keeps every message, and nothing was rewritten
-		expect(said(await session.messages())).toContain(
+		expect(said(await messagesOf(session))).toContain(
 			'Thursday is out: the inspector needs 48h notice.',
 		);
 	});
@@ -342,7 +344,7 @@ describe('closing summaries', () => {
 		const summary = await written;
 
 		expect(summary.to).toBe('priya');
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(summary.covers.from).toBe(record.find((m) => isSpoken(m))?.seq);
 	});
 
@@ -374,7 +376,7 @@ describe('closing summaries', () => {
 		const summary = await written;
 		await quiescent(session);
 
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(summaries(record)).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'conflict')).toEqual([]);
 		expect(summary.text).toBe('the first answer');
@@ -424,7 +426,7 @@ describe('closing summaries', () => {
 		await quiescent(session);
 		expect(events.filter((e) => e.type === 'conflict')).toEqual([]);
 		expect(drafts.length).toBeGreaterThan(0);
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		const between = record.find((message) => message.kind === 'left' && message.from === 'sam');
 		expect(between).toBeDefined();
 		if (between === undefined)
@@ -458,7 +460,7 @@ describe('closing summaries', () => {
 		await quiescent(session);
 
 		expect(calls).toHaveLength(1);
-		expect(summaries(await session.messages())).toHaveLength(0);
+		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(0);
 		expect(
 			events.filter((e) => e.type === 'activation_end' && e.agent === 'assistant'),
@@ -484,19 +486,19 @@ describe('closing summaries', () => {
 		await visit.send({ text: 'Can I tell the client Thursday?' });
 		await drafted;
 		expect(events.filter((e) => e.type === 'error')).toHaveLength(1);
-		expect(summaries(await session.messages())).toHaveLength(0);
+		expect(summaries(await messagesOf(session))).toHaveLength(0);
 
 		// a failed activation leaves the summary owed; an arrival is not the backoff passing
 		const written = nextSummary(session);
 		await session.visit(sam);
 		await waitForRoom(session, 'settled');
-		expect(summaries(await session.messages())).toHaveLength(0);
+		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		// the room's own alarm writes it, once the backoff has passed
 		await clock.advance(30_000);
 		const summary = await written;
 
 		expect(summary.text).toBe('written the second time');
-		expect(summary.covers.from).toBe((await session.messages()).find((m) => isSpoken(m))?.seq);
+		expect(summary.covers.from).toBe((await messagesOf(session)).find((m) => isSpoken(m))?.seq);
 	});
 
 	it('writes for the person whose question opened the exchange, and for nobody else', async () => {
@@ -520,7 +522,7 @@ describe('closing summaries', () => {
 		await quiescent(session);
 
 		expect(summary.to).toBe('priya');
-		expect(summaries(await session.messages())).toHaveLength(1);
+		expect(summaries(await messagesOf(session))).toHaveLength(1);
 	});
 
 	it('writes for a person who left before the room settled, the way they read', async () => {
@@ -544,7 +546,7 @@ describe('closing summaries', () => {
 		const summary = await written;
 
 		expect(summary.to).toBe('priya');
-		expect(summary.covers.through).toBe(messageBefore(await session.messages(), summary.seq));
+		expect(summary.covers.through).toBe(messageBefore(await messagesOf(session), summary.seq));
 		// how she reads outlives her visit, with the exchange she opened
 		expect(prompts[0]).toContain('Leave out who said what.');
 	});
@@ -573,7 +575,7 @@ describe('closing summaries', () => {
 		await theirs.send({ text: 'What does the move cost?' });
 		await quiescent(session);
 
-		const written = summaries(await session.messages());
+		const written = summaries(await messagesOf(session));
 		expect(written.map((m) => m.to)).toEqual(['priya', 'sam', 'dan']);
 		expect(written.map((m) => m.from)).toEqual(['assistant', 'assistant', 'assistant']);
 		expect(prompts).toHaveLength(3);
@@ -622,7 +624,7 @@ describe('closing summaries', () => {
 		held.resolve();
 		await quiescent(session);
 
-		const written = summaries(await session.messages());
+		const written = summaries(await messagesOf(session));
 		expect(written.map((m) => m.to)).toEqual(['priya', 'sam']);
 		// one seat, so the two activations ran one after the other
 		const starts = seen.filter((e) => e.type === 'activation_start' && e.agent === 'assistant');
@@ -632,7 +634,7 @@ describe('closing summaries', () => {
 			seen.indexOf(ends[0] as RoomNotification),
 		);
 		// and sam's range starts at his own question
-		const questions = (await session.messages()).filter((m) => isSpoken(m) && m.from === 'sam');
+		const questions = (await messagesOf(session)).filter((m) => isSpoken(m) && m.from === 'sam');
 		expect(written[1]?.covers.from).toBe(questions[0]?.seq);
 	});
 
@@ -652,9 +654,9 @@ describe('closing summaries', () => {
 		await ended;
 
 		// The room lists it as the seat it is: an agent seated at none.
-		const seat = session.participants().find((s) => s.name === 'assistant');
+		const seat = (await participantsOf(session)).find((s) => s.name === 'assistant');
 		expect(seat).toMatchObject({ kind: 'agent', attention: 'none' });
-		const seatSession = session.participants().find((value) => value.name === 'assistant');
+		const seatSession = (await participantsOf(session)).find((value) => value.name === 'assistant');
 		if (seatSession?.kind !== 'agent') throw new Error('The assistant seat is absent.');
 		const entries = await (
 			await transcriptRuntime.transcripts.open(seatSessionId(session.name, seatSession.name))
@@ -686,7 +688,7 @@ describe('closing summaries', () => {
 		await waitForRoom(session);
 		await quiescent(session);
 
-		const seat = session.participants().find((s) => s.name === 'assistant');
+		const seat = (await participantsOf(session)).find((s) => s.name === 'assistant');
 		expect(seat).toMatchObject({
 			kind: 'agent',
 			attention: 'none',
@@ -708,7 +710,7 @@ describe('closing summaries', () => {
 		await visit.send({ text: 'And what does Saturday need?' });
 		await quiescent(session);
 
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		const written = summaries(record);
 		expect(written).toHaveLength(2);
 		const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
@@ -726,13 +728,13 @@ describe('closing summaries', () => {
 
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
-		const conversation = await exchange.messages();
+		const conversation = await exchange.waitForClose();
 		const close = closedExchange(session, exchange.from);
-		const response = await exchange.response();
+		const response = await exchange.waitForSummary();
 		expect(response).toMatchObject({ kind: 'summary', to: priya.name });
 		expect(close).toMatchObject({ owner: priya.name, from: exchange.from });
 		expect(conversation.every((message) => message.kind !== 'summary')).toBe(true);
-		expect(summaries(await session.messages())).toHaveLength(1);
+		expect(summaries(await messagesOf(session))).toHaveLength(1);
 		const wrote = events.findIndex((e) => e.type === 'message' && e.message.kind === 'summary');
 		const closed = events.findIndex((e) => e.type === 'exchange_closed');
 		expect(wrote).toBeGreaterThan(closed);
@@ -755,7 +757,7 @@ describe('closing summaries', () => {
 		await visit.send({ text: 'Can I tell the client Thursday?' });
 		await quiescent(session);
 
-		expect(said(await session.messages())).toEqual([
+		expect(said(await messagesOf(session))).toEqual([
 			'Can I tell the client Thursday?',
 			'Thursday is out.',
 		]);
@@ -774,7 +776,7 @@ describe('closing summaries', () => {
 		await drafted;
 
 		// the activation failed, so the summary is owed and the range is still whole
-		expect(summaries(await session.messages())).toHaveLength(0);
+		expect(summaries(await messagesOf(session))).toHaveLength(0);
 
 		// Every attempt fails, so the room reaches the cap and gives up. The
 		// exchange remains durable, but its response rejects as failed.
@@ -782,8 +784,8 @@ describe('closing summaries', () => {
 		await clock.advance(60_000);
 		await waitForRoom(session);
 		expect(events.filter((e) => e.type === 'abandoned')).toHaveLength(1);
-		expect(summaries(await session.messages())).toHaveLength(0);
-		await expect(exchange.response()).rejects.toThrow(/interrupted/i);
+		expect(summaries(await messagesOf(session))).toHaveLength(0);
+		await expect(exchange.waitForSummary()).rejects.toThrow(/interrupted/i);
 	});
 
 	it('writes off a draft the host revoked, and publishes no response', async () => {
@@ -802,14 +804,14 @@ describe('closing summaries', () => {
 		await drafting.promise;
 		await session.abort();
 		await waitForRoom(session);
-		expect(summaries(await session.messages())).toHaveLength(0);
+		expect(summaries(await messagesOf(session))).toHaveLength(0);
 		expect(await currentExchange(session)).toBeUndefined();
-		await expect(exchange.response()).rejects.toThrow(/interrupted/i);
+		await expect(exchange.waitForSummary()).rejects.toThrow(/interrupted/i);
 		// the revocation stands: nothing wakes the assistant for the same close again
 		expect(starts()).toBe(1);
 		await clock.advance(200_000);
 		expect(starts()).toBe(1);
-		expect(await session.messages()).toEqual(expect.any(Array));
+		expect(await messagesOf(session)).toEqual(expect.any(Array));
 	});
 
 	it('rejects exchange completion when the room stops before publication', async () => {
@@ -822,10 +824,10 @@ describe('closing summaries', () => {
 		const exchange = await visit.send({ text: 'Can I tell the client Thursday?' });
 		// Shutdown while the room still owes a summary: the activation is aborted,
 		// and completion for this unfinished exchange rejects.
-		const waiting = exchange.messages();
+		const waiting = exchange.waitForClose();
 		await session.stop();
 		await expect(waiting).rejects.toThrow(/stopped|interrupted/i);
-		await expect(exchange.response()).rejects.toThrow(/stopped|interrupted/i);
+		await expect(exchange.waitForSummary()).rejects.toThrow(/stopped|interrupted/i);
 		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(0);
 	});
 
@@ -834,7 +836,7 @@ describe('closing summaries', () => {
 		await session.visit(priya);
 		await waitForRoom(session);
 
-		const seats = session.participants();
+		const seats = await participantsOf(session);
 		expect(seats.find((s) => s.name === 'assistant')).toMatchObject({
 			kind: 'agent',
 			attention: 'none',
@@ -862,7 +864,7 @@ describe('an exchange', () => {
 		await quiescent(session);
 
 		expect(await currentExchange(session)).toBeUndefined();
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		const question = record.find(isSpoken);
 		const opened = events.filter((e) => e.type === 'exchange_opened');
 		const closed = events.filter((e) => e.type === 'exchange_closed');
@@ -980,7 +982,7 @@ describe('an exchange', () => {
 		await second;
 		await quiescent(session);
 
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		const [first, next] = record.filter(isSpoken);
 		// The stale close decision is reconsidered: the later committed question
 		// remains inside the exchange that was already open.
@@ -1020,7 +1022,7 @@ describe('an exchange', () => {
 		await second;
 		await quiescent(session);
 
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		const [first, next] = record.filter(isSpoken);
 		// The later question stays in the first exchange because its close decision
 		// was stale when it reached the journal.
@@ -1058,14 +1060,14 @@ describe('an exchange', () => {
 		await said;
 		await quiescent(session);
 
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		const [first, next] = record.filter(isSpoken);
 		// The word was committed before the stale close could land, so it remains
 		// in the existing exchange and does not trigger another composition.
 		expect(openings(events)).toEqual([first?.seq]);
 		expect(ranges(events)).toEqual([[first?.seq, next?.seq]]);
 		expect(record.some((m) => m.kind === 'seated')).toBe(false);
-		expect(session.participants().find((s) => s.name === 'assistant')).toMatchObject({
+		expect((await participantsOf(session)).find((s) => s.name === 'assistant')).toMatchObject({
 			status: 'idle',
 		});
 		expect(await currentExchange(session)).toBeUndefined();
@@ -1087,8 +1089,8 @@ describe('an exchange', () => {
 		// The exchange is over before the optional response is published.
 		expect(closed).toBeGreaterThan(order.lastIndexOf('activation_end', closed));
 		expect(summary).toBeGreaterThan(closed);
-		await expect(exchange.response()).resolves.toMatchObject({ kind: 'summary' });
-		expect(summaries(await session.messages())).toHaveLength(1);
+		await expect(exchange.waitForSummary()).resolves.toMatchObject({ kind: 'summary' });
+		expect(summaries(await messagesOf(session))).toHaveLength(1);
 	});
 });
 
@@ -1170,11 +1172,11 @@ describe('a room without a summary writer', () => {
 		await visit.send({ text: 'Can I tell the client Thursday?' });
 		await quiescent(session);
 
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(record.filter((m) => m.kind === 'summary')).toEqual([]);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said', 'said']);
 		expect(events.filter((e) => e.type === 'exchange_closed')).toHaveLength(1);
-		expect(session.participants().map((s) => s.name)).toEqual(['product', 'priya']);
+		expect((await participantsOf(session)).map((s) => s.name)).toEqual(['product', 'priya']);
 		await session.stop();
 	});
 });
@@ -1232,7 +1234,7 @@ describe('a summary writer with domain tools', () => {
 			expect(view.tools).toEqual(['say']);
 			expect(view.prompt).not.toContain('Book guidance.');
 		}
-		expect(summaries(await session.messages())).toHaveLength(1);
+		expect(summaries(await messagesOf(session))).toHaveLength(1);
 	});
 });
 
@@ -1284,7 +1286,7 @@ describe('ordinary and closing work on one agent', () => {
 		await session.reconcile();
 		expect(await currentExchange(session)).toMatchObject({ from: second.from });
 		let settled = false;
-		const discussion = second.messages().then((messages) => {
+		const discussion = second.waitForClose().then((messages) => {
 			settled = true;
 			return messages;
 		});
@@ -1296,8 +1298,8 @@ describe('ordinary and closing work on one agent', () => {
 				(message) => isSpoken(message) && message.text === 'Answer to Second question?',
 			),
 		).toBe(true);
-		expect(await first.response()).toMatchObject({ kind: 'summary', text: 'Summary 1.' });
-		expect(await second.response()).toMatchObject({ kind: 'summary', text: 'Summary 2.' });
+		expect(await first.waitForSummary()).toMatchObject({ kind: 'summary', text: 'Summary 1.' });
+		expect(await second.waitForSummary()).toMatchObject({ kind: 'summary', text: 'Summary 2.' });
 		await quiescent(session);
 		expect(closingContexts).toHaveLength(2);
 		expect(closingContexts[0]).not.toContain('Second question?');

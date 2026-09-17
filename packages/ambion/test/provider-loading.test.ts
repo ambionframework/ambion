@@ -77,7 +77,7 @@ describe('provider loading', () => {
 			});
 			const visit = await room.visit(defineHuman({ name: 'person', identity: 'tester' }));
 			const exchange = await visit.send({ text: 'hello' });
-			await exchange.response();
+			await exchange.waitForSummary();
 			await room.stop();`,
 		);
 		expect(result.code).toBe(0);

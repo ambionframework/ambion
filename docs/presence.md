@@ -49,7 +49,7 @@ visit.
 ```ts
 const visit = await room.visit(andrei);
 const exchange = await visit.send({ text: 'Anything to flag?' });
-await exchange.response();
+await exchange.waitForSummary();
 await visit.leave();
 ```
 
@@ -106,7 +106,7 @@ Presence changes the room's projection before the message is routed: an agent
 activated by an arrival sees the person as present, and one activated by a
 departure sees them as absent. Only deliberate `visit`, `leave`, `seat`, and
 `unseat` operations create these entries. Sequence numbers are monotonic,
-strictly ordered journal positions; `messages({ since })` is exclusive and
+strictly ordered journal positions; `room.read({ messages: { since } })` is exclusive and
 starts after the supplied position.
 
 See [`roster.md`](roster.md) for the attention scale. A directed delivery wakes
@@ -143,7 +143,7 @@ recorded departure:
 
 ```ts
 const visit = await room.visit(andrei);
-const missed = await room.messages({ since: visit.since });
+const { messages: missed } = await room.read({ messages: { since: visit.since } });
 ```
 
 The result includes room messages, including speech and presence, in journal
@@ -178,14 +178,15 @@ The full rendering rules are in [`execution/render.ts`](../packages/ambion/src/e
 
 ## 10. Observing presence
 
-`room.participants()` returns `ParticipantInfo` values, distinguished by `kind`.
+The `participants` field of `await room.read({ messages: false })` contains
+`ParticipantInfo` values, distinguished by `kind`.
 Both variants have `name` and `identity`. An agent has activity `status` and
 `attention`; a human has `presence`. These views contain no transcript IDs.
-`room.messages()` and `room.subscribe()` expose presence through the existing
+`room.read()` and `room.subscribe()` expose presence through the existing
 message stream. There is no separate presence event channel.
 
 Subscriptions are live only and do not replay history. Subscribe before reading
-with `messages({ since })`, merge an overlap by `seq`, and advance the cursor
+with `room.read({ messages: { since } })`, merge an overlap by `seq`, and advance the cursor
 only after the client consumes the ordered messages. Recreate the subscription
 and visit after a process restart; handles and subscriptions are in-memory.
 

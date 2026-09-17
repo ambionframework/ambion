@@ -5,7 +5,6 @@ import {
 	defineAgent,
 	defineHuman,
 	isSpoken,
-	type Message,
 	type Room,
 	readRoom,
 	startRoom,
@@ -16,7 +15,9 @@ import {
 	collect,
 	currentExchange,
 	deferred,
+	messagesOf,
 	roomName as name,
+	participantsOf,
 	waitForRoom,
 } from './support/room.ts';
 import { contextText, quiet, scripted } from './support/scripted.ts';
@@ -54,11 +55,10 @@ const open = (overrides: Partial<Parameters<typeof startRoom>[0]> = {}) =>
 		...overrides,
 	});
 
-const kinds = async (session: { messages(): Promise<Message[]> }) =>
-	(await session.messages()).map((m) => m.kind);
+const kinds = async (session: Pick<Room, 'read'>) => (await messagesOf(session)).map((m) => m.kind);
 
-const presenceOf = (session: Room, name: string) => {
-	const seat = session.participants().find((s) => s.name === name);
+const presenceOf = async (session: Room, name: string) => {
+	const seat = (await participantsOf(session)).find((s) => s.name === name);
 	return seat?.kind === 'human' ? seat.presence : undefined;
 };
 
@@ -83,8 +83,8 @@ describe('presence', () => {
 	it('runs a room of agents with nobody present, and settles', async () => {
 		const session = track(await open());
 		await waitForRoom(session);
-		expect(await session.messages()).toHaveLength(0);
-		expect(session.participants().filter((s) => s.kind === 'human')).toHaveLength(0);
+		expect(await messagesOf(session)).toHaveLength(0);
+		expect((await participantsOf(session)).filter((s) => s.kind === 'human')).toHaveLength(0);
 	});
 
 	it('commits an arrival and wakes nobody, because no seat watches for one by default', async () => {
@@ -153,7 +153,7 @@ describe('presence', () => {
 		await session.visit(andrei);
 		await waitForRoom(session);
 
-		const arrival = (await session.messages())[0];
+		const arrival = (await messagesOf(session))[0];
 		expect(arrival).toMatchObject({ kind: 'arrived', from: 'andrei', subject: 'andrei' });
 		expect(arrival && isSpoken(arrival)).toBe(false);
 		expect(arrival && 'text' in arrival).toBe(false);
@@ -167,7 +167,7 @@ describe('presence', () => {
 		await two.send({ text: 'from mara' });
 		await waitForRoom(session);
 
-		const said = (await session.messages()).filter(isSpoken);
+		const said = (await messagesOf(session)).filter(isSpoken);
 		expect(said.map((m) => [m.from, m.text])).toEqual([
 			['andrei', 'from andrei'],
 			['mara', 'from mara'],
@@ -182,11 +182,11 @@ describe('presence', () => {
 		await waitForRoom(session);
 		expect(browser.human).toBe(terminal.human); // one person is in the room once, or not at all
 		expect(await kinds(session)).toEqual(['arrived']); // the second visit committed nothing
-		expect(presenceOf(session, 'andrei')).toBe('present');
+		expect(await presenceOf(session, 'andrei')).toBe('present');
 
 		await terminal.leave();
 		await waitForRoom(session);
-		expect(presenceOf(session, 'andrei')).toBe('absent');
+		expect(await presenceOf(session, 'andrei')).toBe('absent');
 		expect(await kinds(session)).toEqual(['arrived', 'left']);
 		// leaving is a message like any other, and the stream carries it
 		const left = seen.filter((e) => e.type === 'message' && e.message.kind === 'left');
@@ -209,7 +209,7 @@ describe('presence', () => {
 		await waitForRoom(first);
 		await visit.leave();
 		await waitForRoom(first);
-		expect(presenceOf(first, 'andrei')).toBe('absent');
+		expect(await presenceOf(first, 'andrei')).toBe('absent');
 		// absent, and still on the roster the agents read
 		expect(contexts.at(-1)).toContain('andrei');
 		await first.stop();
@@ -224,8 +224,10 @@ describe('presence', () => {
 			}),
 		);
 		await waitForRoom(again); // startRoom is synchronous; the replay is awaited here
-		expect(presenceOf(again, 'andrei')).toBe('absent');
-		expect(again.participants().find((s) => s.name === 'andrei')?.identity).toBe(andrei.identity);
+		expect(await presenceOf(again, 'andrei')).toBe('absent');
+		expect((await participantsOf(again)).find((s) => s.name === 'andrei')?.identity).toBe(
+			andrei.identity,
+		);
 	});
 
 	it('refuses a stale visit, and takes leave() twice', async () => {
@@ -244,7 +246,7 @@ describe('presence', () => {
 		await first.send({ text: 'before' });
 		await first.leave();
 		await waitForRoom(session);
-		const left = (await session.messages()).find((m) => m.kind === 'left');
+		const left = (await messagesOf(session)).find((m) => m.kind === 'left');
 
 		const again = await session.visit(andrei);
 		expect(again.since).toBe(left?.seq);
@@ -253,7 +255,7 @@ describe('presence', () => {
 
 		await again.leave();
 		await waitForRoom(session);
-		const second = (await session.messages()).filter((m) => m.kind === 'left').at(-1);
+		const second = (await messagesOf(session)).filter((m) => m.kind === 'left').at(-1);
 		const back = await session.visit(andrei);
 		expect(back.since).toBe(second?.seq); // it moves when they leave again
 	});
@@ -263,15 +265,15 @@ describe('presence', () => {
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'one' });
 		await visit.leave();
-		const left = (await session.messages()).find((m) => m.kind === 'left');
+		const left = (await messagesOf(session)).find((m) => m.kind === 'left');
 		const again = await session.visit(andrei);
 		await again.send({ text: 'two' });
 		await waitForRoom(session);
 
-		const missed = await session.messages({ since: again.since });
+		const missed = await messagesOf(session, { since: again.since });
 		expect(missed.map((m) => m.kind)).toEqual(['arrived', 'said']);
 		expect(missed.every((m) => m.seq > (left?.seq ?? 0))).toBe(true);
-		expect(await session.messages()).toHaveLength(5);
+		expect(await messagesOf(session)).toHaveLength(5);
 	});
 
 	it('closes its visits when the run stops, without waking anybody', async () => {
@@ -389,7 +391,7 @@ describe('a storage that fails', () => {
 		fail(true);
 		await expect(visit.send({ text: 'lost' })).rejects.toThrow(/disk is full/);
 		// the failed delivery is nowhere: not on the record, not on the stream, and nobody woke
-		expect(await session.messages()).toHaveLength(1);
+		expect(await messagesOf(session)).toHaveLength(1);
 		expect(seen.filter((e) => e.type === 'message')).toHaveLength(1);
 		expect(seen.some((e) => e.type === 'activation_start')).toBe(false);
 
@@ -399,7 +401,7 @@ describe('a storage that fails', () => {
 		fail(false);
 		const kept = await visit.send({ text: 'kept' });
 		expect(kept).toMatchObject({ owner: 'andrei', from: 4 });
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(record.map((m) => m.seq)).toEqual([3, 4]);
 		expect(record.map((m) => m.kind)).toEqual(['arrived', 'said']);
 		await session.stop();
@@ -414,7 +416,7 @@ describe('a storage that fails', () => {
 		fail(true, 'close');
 		await visit.send({ text: 'first?' });
 		// the seat is woken; the host waits for the room to be quiet
-		await expect(session.messages()).resolves.toEqual(expect.any(Array));
+		await expect(messagesOf(session)).resolves.toEqual(expect.any(Array));
 		expect(events.map((e) => e.type)).not.toContain('exchange_closed');
 		expect(events.map((e) => e.type)).not.toContain('quiet');
 		expect(await currentExchange(session)).toMatchObject({ owner: 'andrei' });
@@ -426,7 +428,7 @@ describe('a storage that fails', () => {
 		expect(await currentExchange(session)).toBeUndefined();
 		const closed = events.filter((e) => e.type === 'exchange_closed');
 		expect(closed).toHaveLength(1);
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(closed[0]).toMatchObject({
 			exchange: { owner: 'andrei', from: record[1]?.seq, through: record.at(-1)?.seq },
 		});

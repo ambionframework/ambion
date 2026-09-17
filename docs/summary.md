@@ -66,13 +66,13 @@ same facts as the live room.
 
 ## Completion and reads
 
-`exchange.response()` resolves with the stored summary or `undefined` when no
+`exchange.waitForSummary()` resolves with the stored summary or `undefined` when no
 summary is required or the writer declines. A failed or exhausted assignment
 keeps the source discussion available and reports its terminal result through
 the existing exchange contract.
 
 Once a summary covers a closed range, later agent activations read the summary
-in place of those source messages. `exchange.messages()` always returns the
+in place of those source messages. `exchange.waitForClose()` always returns the
 fixed source discussion for human review. The journal retains every entry.
 
 If a pending assignment is removed because its writer leaves, the assignment

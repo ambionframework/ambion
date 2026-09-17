@@ -26,7 +26,14 @@ import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { type Entry, History, standing, violations } from './support/history.ts';
 import { invariants } from './support/invariants.ts';
-import { roomName, runningLeases, stateOf, storedOf, waitForRoom } from './support/room.ts';
+import {
+	messagesOf,
+	roomName,
+	runningLeases,
+	stateOf,
+	storedOf,
+	waitForRoom,
+} from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { type FailMode, gatedJournals, memory, sqlite, tappedJournals } from './support/storage.ts';
 import { type Fault, faultyTransport, type Operation, serializing } from './support/transport.ts';
@@ -155,7 +162,7 @@ class Cluster {
 			streamFn: scripted(this.cast.script),
 		});
 		this.watch();
-		await this.session.messages();
+		await messagesOf(this.session);
 	}
 
 	private watch(): void {
@@ -297,7 +304,7 @@ class Cluster {
 		const stored = await storedOf(this.opened.journals, this.name);
 		const entries = standing(stored) as readonly RoomEntry[];
 		const state = foldRoom(entries, RETRY);
-		const record = await this.session.messages();
+		const record = await messagesOf(this.session);
 		expect(state.messages).toEqual(record);
 		expect(record.length).toBeGreaterThan(0);
 		expect(violations(this.history, { record, stored, state })).toEqual([]);
@@ -378,7 +385,7 @@ class Person {
 			this.name,
 			'read',
 			undefined,
-			() => cluster.session.messages(),
+			() => messagesOf(cluster.session),
 			(record) => record.map((m) => ({ seq: m.seq, key: m.key })),
 		);
 	}
@@ -417,7 +424,7 @@ class Host {
 				'host',
 				'read',
 				undefined,
-				() => cluster.session.messages(),
+				() => messagesOf(cluster.session),
 				(record) => record.map((m) => ({ seq: m.seq, key: m.key })),
 			);
 		} else if (op === 'advance') {

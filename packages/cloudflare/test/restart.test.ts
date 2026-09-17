@@ -72,7 +72,7 @@ it('serves a seat that was at work when the object went away, and takes its comm
 		return messages.find((message) => isSpoken(message) && message.from === 'slow');
 	});
 	expect(isSpoken(said) && said.text).toBe('The slow answer stands.');
-	const conversation = await again.exchangeMessages(exchange.from);
+	const conversation = await again.waitForClose(exchange.from);
 	expect(conversation[0]?.seq).toBe(exchange.from);
 	const resumedNames = (await again.participants()).map((participant) => participant.name);
 	expect(resumedNames).toContain('slow');

@@ -1,3 +1,4 @@
+import { messagesOf, participantsOf } from './room.ts';
 /**
  * What holds whatever a run did. A room can go many ways; the record it
  * leaves has one shape, and every scenario ends by checking it.
@@ -6,7 +7,13 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { expect } from 'vitest';
 import { decodeActivationId } from '../../src/activation-id.ts';
-import { isPresence, isSummary, type Room, type RoomNotification } from '../../src/index.ts';
+import {
+	isPresence,
+	isSummary,
+	type Message,
+	type Room,
+	type RoomNotification,
+} from '../../src/index.ts';
 import type { LeaseChange } from '../../src/journal/events.ts';
 import { standing } from './history.ts';
 import { storedOf } from './room.ts';
@@ -33,7 +40,7 @@ export async function invariants(
 	events: RoomNotification[],
 	options: InvariantOptions = {},
 ): Promise<void> {
-	const messages = await session.messages();
+	const messages = await messagesOf(session);
 	// Every place on the record is its own, and the record is in order. One
 	// counter gives out every place, so the record is not contiguous: an entry
 	// beside it takes a place from the same counter.
@@ -45,7 +52,7 @@ export async function invariants(
 	const since = emitted[0] ?? Number.POSITIVE_INFINITY;
 	expect(emitted).toEqual(messages.filter((m) => m.seq >= since).map((m) => m.seq));
 	// Every author is a name the room admitted, or was composed with.
-	const names = new Set(session.participants().map((seat) => seat.name));
+	const names = new Set((await participantsOf(session)).map((seat) => seat.name));
 	for (const message of messages) {
 		if (isPresence(message)) names.add(message.subject);
 	}
@@ -68,7 +75,7 @@ export async function invariants(
 }
 
 async function summariesMatchCloses(
-	messages: Awaited<ReturnType<Room['messages']>>,
+	messages: Message[],
 	events: RoomNotification[],
 	journals: JournalOpener | undefined,
 	name: string,

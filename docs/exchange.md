@@ -29,6 +29,9 @@ activations from its opening question to its durable close.
 An exchange records its owner, opening time, and opening message position
 (`from`). A durable close fixes its inclusive final message position
 (`through`). Journal administration can occupy positions between messages.
+`ExchangeRef` carries identity. `ExchangeView` carries recorded state.
+`ExchangeHandle` provides live waits. An `ExchangeSnapshot` contains a view,
+its original discussion, and the observed journal watermark.
 See [the public types](../packages/ambion/src/types.ts) for the exact shapes.
 
 ## 3. Three rules
@@ -74,15 +77,15 @@ question. Persist `handle.from`; after restart, reacquire it with
 
 ```ts
 const exchange = await (await room.visit(priya)).send({ text: 'Can I promise Thursday?' });
-const conversation = await exchange.messages();
-const response = await exchange.response();
+const conversation = await exchange.waitForClose();
+const response = await exchange.waitForSummary();
 
 const resumed = await resumeRoom('site', { runtime, agents });
 const same = resumed.exchange(exchange.from);
 ```
 
-`messages()` waits for the durable close and returns non-summary messages in
-the inclusive `[from, through]` range. `response()` then waits for its optional
+`waitForClose()` waits for the durable close and returns non-summary messages in
+the inclusive `[from, through]` range. `waitForSummary()` waits for its optional
 summary, returning `undefined` when no writer is configured or the writer
 deliberately stays silent. A revoked or abandoned required assignment rejects
 the response. The exchange handle is the completion API; there is no room-wide
@@ -98,9 +101,10 @@ Live notifications include `message`, `exchange_opened`, and
 `exchange_closed` events, plus execution diagnostics. Notifications and pending
 waits belong to the current run and must be recreated after interruption.
 
-**`readRoom(name)` returns detached state from one journal position.** It starts
+**`room.read()` returns detached state from one journal position.** It starts
 no agents and performs no reconciliation. `RoomSnapshot` reports initialization,
 recorded goal, participants, exchange views, and the journal `watermark`.
+Use `readRoom(name, { runtime })` without a running handle, including stopped rooms.
 A stopped open exchange remains open until the journal records its close.
 
 Pass `{ messages: false }` for metadata, or `{ messages: { since } }` for messages
@@ -109,7 +113,29 @@ cursor returns no messages; exchange metadata remains complete.
 
 The watermark includes close and lease entries. Activity can change when a lease
 expires without another append, so the watermark cannot validate a cached view.
+An active host reads its observed journal prefix after local writes settle;
+a read does not force synchronization with another host's writes.
 See [`RoomSnapshot` and `ExchangeView`](../packages/ambion/src/types.ts) for types.
+
+**`readExchange(name, from, { runtime })` reads the original discussion immediately.**
+It returns `undefined` for a missing exchange. The reference must be a positive
+safe integer. The snapshot includes the exchange view and excludes summaries
+from its discussion. A closed discussion uses its fixed inclusive source range;
+an open discussion contains the messages recorded so far. Reading never waits
+for close or summary completion. Late summaries appear in the exchange outcome.
+
+```ts
+const recorded = await readExchange(saved.roomName, saved.exchangeFrom, { runtime });
+if (recorded) {
+  console.log(recorded.exchange.status, recorded.messages);
+}
+```
+
+**Pre-0.1 migration:** replace room `messages()` and `participants()` with
+fields from `await room.read()`. Pass `{ messages: false }` when only metadata
+is needed. Exchange `messages()` becomes `waitForClose()`; `response()` becomes
+`waitForSummary()`. The identity type `Exchange` becomes `ExchangeRef`.
+The old names have no aliases. Stored messages and exchange identities are unchanged.
 
 Cancellation closes the current discussion without assigning a new summary. It
 settles existing pending summary work as failed. See the
@@ -136,7 +162,7 @@ apply their own operational limits where needed.
 
 [`exchange-completion.test.ts`](../packages/ambion/test/exchange-completion.test.ts)
 checks opening ownership, quiescent close boundaries, steering, owner
-departure, multiple exchanges, and the ordering of `messages()` before
-`response()`. Replay and storage variants are included. Restart behavior is
+departure, multiple exchanges, and the ordering of `waitForClose()` before
+`waitForSummary()`. Replay and storage variants are included. Restart behavior is
 covered by [`restart.test.ts`](../packages/ambion/test/restart.test.ts) and
 presence/reconnect cases by [`presence.test.ts`](../packages/ambion/test/presence.test.ts).

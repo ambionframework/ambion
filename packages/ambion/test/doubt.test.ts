@@ -16,7 +16,7 @@ import {
 } from '../src/index.ts';
 import { type CommitResult, inProcessTransport, type Transport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
-import { collect, roomName, storedOf, waitForRoom } from './support/room.ts';
+import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
 import {
 	answersLastQuestion,
 	byAgent,
@@ -122,7 +122,7 @@ describe('a room in doubt', () => {
 		const visit = await session.visit(priya);
 		await visit.send({ text: 'First?', key: 'q1' });
 		await confirmation;
-		const summaries = (await session.messages()).filter(isSummary);
+		const summaries = (await messagesOf(session)).filter(isSummary);
 		expect(retried).toBe(true);
 		expect(summaries).toHaveLength(1);
 		const seqs = replies.flatMap((reply) => ('committed' in reply ? [reply.committed.seq] : []));
@@ -137,13 +137,13 @@ describe('a room in doubt', () => {
 		await expect(visit.send({ text: 'First?', key: 'q1' })).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		await waitForRoom(session);
-		const record = await session.messages();
+		const record = await messagesOf(session);
 		expect(record.filter((m) => m.key === 'q1')).toHaveLength(1);
 		expect(record.filter(isSpoken).filter((m) => m.from === alpha.name)).toHaveLength(1);
 		expect(events.filter((e) => e.type === 'message').map((e) => e.message.key)).toContain('q1');
 		// and a retry under the same key lands nothing new
 		await visit.send({ text: 'First?', key: 'q1' });
-		expect((await session.messages()).filter((m) => m.key === 'q1')).toHaveLength(1);
+		expect((await messagesOf(session)).filter((m) => m.key === 'q1')).toHaveLength(1);
 	});
 
 	it('keeps a question queued before close in the current exchange', async () => {
@@ -201,7 +201,7 @@ describe('a room in doubt', () => {
 		await waitForRoom(session);
 		faulty.fail('after', 'message');
 		const delivery = visit.send({ text: 'First?', key: 'q1' });
-		const read = session.messages();
+		const read = messagesOf(session);
 		await expect(delivery).rejects.toThrow(/disk is full/);
 		faulty.fail(false);
 		expect((await read).map((m) => m.key)).toContain('q1');
@@ -217,7 +217,7 @@ describe('a room in doubt', () => {
 		faulty.fail(false);
 		await second;
 		await waitForRoom(session);
-		const arrivals = (await session.messages())
+		const arrivals = (await messagesOf(session))
 			.filter(isPresence)
 			.filter((m) => m.kind === 'arrived');
 		expect(arrivals).toHaveLength(1);

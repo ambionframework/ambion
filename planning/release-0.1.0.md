@@ -184,7 +184,7 @@ also participate in ordinary discussion under its configured attention.
 Closing execution uses only the regular `say` tool. Ordinary activations use
 `say`, `seat`, `unseat`, and their domain tools.
 
-`exchange.messages()` waits for the fixed discussion. `exchange.response()`
+`exchange.waitForClose()` waits for the fixed discussion. `exchange.waitForSummary()`
 waits for its summary or a terminal result without one. An application can
 always use the discussion when no summary is available.
 
@@ -192,7 +192,7 @@ always use the discussion when no summary is available.
 review.** Once a closed exchange has a summary, agent context uses it in place
 of the covered source messages. Agents continue from the summary and their
 domain tools. Human participants can review the original discussion through
-`exchange.messages()`. The journal retains every source message for review and
+`exchange.waitForClose()`. The journal retains every source message for review and
 recovery. Closure without a summary does not itself replace source messages.
 
 ### F5. Persistence and recovery

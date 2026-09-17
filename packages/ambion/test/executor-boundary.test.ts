@@ -61,7 +61,9 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 		const events = collect(room);
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Answer this.' });
-			await expect(exchange.response()).resolves.toMatchObject({ text: 'Summary: Room override.' });
+			await expect(exchange.waitForSummary()).resolves.toMatchObject({
+				text: 'Summary: Room override.',
+			});
 			await waitForRoom(room, 'quiet', 2_000);
 			expect(defaultCalls).toBe(0);
 			expect(connections).toHaveLength(1);
@@ -152,7 +154,7 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 			if (old === undefined) throw new Error('No running room.');
 			assertRoomCalls(old);
 			const firstExchange = await (await first.visit(andrei)).send({ text: 'First?' });
-			await firstExchange.messages();
+			await firstExchange.waitForClose();
 			runtime.evict(name);
 			expect(runningRoom(runtime, name)).toBeUndefined();
 			resumed = await resumeRoom(name, { agents: [writer], runtime, streamFn: reply('New run.') });
@@ -160,7 +162,9 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 			expect(current).not.toBe(old);
 			await expect(old.view('unknown')).resolves.toEqual({ stale: 'the room is gone' });
 			const next = await (await resumed.visit(andrei)).send({ text: 'Next?' });
-			expect(await next.messages()).toContainEqual(expect.objectContaining({ text: 'New run.' }));
+			expect(await next.waitForClose()).toContainEqual(
+				expect.objectContaining({ text: 'New run.' }),
+			);
 		} finally {
 			await resumed?.stop();
 			await first.stop();

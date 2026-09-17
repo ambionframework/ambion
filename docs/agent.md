@@ -100,8 +100,8 @@ departure.
 
 One exchange starts with a person's question and ends when the room has no
 remaining discussion work. The room records its fixed source range. Later
-messages do not change that range. `exchange.messages()` returns the source
-discussion for human review. `exchange.response()` returns the optional
+messages do not change that range. `exchange.waitForClose()` returns the source
+discussion for human review. `exchange.waitForSummary()` returns the optional
 summary result. See [exchange.md](exchange.md), [presence.md](presence.md), and
 [summary.md](summary.md).
 

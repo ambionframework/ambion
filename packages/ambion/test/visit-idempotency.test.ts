@@ -8,7 +8,7 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import { roomName } from './support/room.ts';
+import { messagesOf, roomName } from './support/room.ts';
 import { gatedJournals, storages, tappedJournals } from './support/storage.ts';
 
 const person = defineHuman({ name: 'andrei', identity: 'Founder.' });
@@ -101,13 +101,13 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 			expect(one.human).toEqual(person);
 			expect(two.human).toEqual(person);
 			expect(three.human).toEqual(person);
-			expect((await room.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(
+			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
 				1,
 			);
 
 			const mismatch = observed(room.visit(returnedPerson));
 			await expect(mismatch).rejects.toThrow(/different identity/);
-			expect((await room.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(
+			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
 				1,
 			);
 			await one.leave();
@@ -154,7 +154,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 			unreadable.fail(false);
 			const existing = await room.visit(person);
 			expect(existing.human).toEqual(first.human);
-			expect((await room.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(
+			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
 				1,
 			);
 			await existing.leave();
@@ -182,7 +182,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 			await expect(stale).rejects.toThrow(/stopped|evicted|gone|superseded/);
 			expect((await resumed.visit(person)).human).toEqual(person);
 			expect(
-				(await resumed.messages()).filter((message) => message.kind === 'arrived'),
+				(await messagesOf(resumed)).filter((message) => message.kind === 'arrived'),
 			).toHaveLength(1);
 		} finally {
 			await resumed?.stop().catch(() => {});
@@ -207,7 +207,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 			const [one, two] = await Promise.all([room.visit(person), room.visit(person)]);
 			await one.leave();
 			await expect(two.send({ text: 'after the shared leave' })).rejects.toThrow(/ended|leaving/);
-			expect((await room.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(
+			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
 				1,
 			);
 		} finally {
@@ -238,7 +238,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 			failDeparture = true;
 			const departure = observed(old.leave());
 			await expect(departure).rejects.toThrow(/disk is full/);
-			const failedRead = observed(room.messages());
+			const failedRead = observed(messagesOf(room));
 			await failedRead.catch(() => {});
 			expect(appended).toBe(true);
 			expect(unreadable.readFailures()).toBeGreaterThan(0);
@@ -246,8 +246,8 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 			unreadable.fail(false);
 			const fresh = await room.visit(person);
 			expect(fresh).not.toBe(old);
-			expect((await room.messages()).filter((message) => message.kind === 'left')).toHaveLength(1);
-			expect((await room.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(
+			expect((await messagesOf(room)).filter((message) => message.kind === 'left')).toHaveLength(1);
+			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
 				2,
 			);
 			await expect(old.send({ text: 'old handle is ended' })).rejects.toThrow(/ended|leaving/);
@@ -280,11 +280,11 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 			expect(retry.from).toBe(original.from);
 			expect(retry.owner).toBe(original.owner);
 			expect(
-				(await room.messages()).filter(
+				(await messagesOf(room)).filter(
 					(message) => message.kind === 'said' && message.key === 'visit-question',
 				),
 			).toHaveLength(1);
-			expect((await room.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(
+			expect((await messagesOf(room)).filter((message) => message.kind === 'arrived')).toHaveLength(
 				2,
 			);
 			await fresh.leave();

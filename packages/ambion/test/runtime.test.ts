@@ -7,7 +7,7 @@ import { readdir } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import { createRuntime, isSpoken, readRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
-import { andrei, assistant, roomName, waitForRoom } from './support/room.ts';
+import { andrei, assistant, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { childStorage, memory, sqlite } from './support/storage.ts';
 
@@ -35,8 +35,8 @@ describe('createRuntime', () => {
 		await (await b.visit(andrei)).send({ text: 'in the second' });
 		await Promise.all([waitForRoom(a, 'settled'), waitForRoom(b, 'settled')]);
 
-		expect((await a.messages()).filter(isSpoken).map((m) => m.text)).toEqual(['in the first']);
-		expect((await b.messages()).filter(isSpoken).map((m) => m.text)).toEqual(['in the second']);
+		expect((await messagesOf(a)).filter(isSpoken).map((m) => m.text)).toEqual(['in the first']);
+		expect((await messagesOf(b)).filter(isSpoken).map((m) => m.text)).toEqual(['in the second']);
 		expect((await readRoom(name, { runtime: first })).name).toBe(a.name);
 		expect((await readRoom(name, { runtime: second })).name).toBe(b.name);
 		await Promise.all([a.stop(), b.stop()]);

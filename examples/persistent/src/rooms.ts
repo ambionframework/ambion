@@ -5,6 +5,7 @@ import {
 	createRuntime,
 	type Room,
 	type RoomNotification,
+	readExchange,
 	readRoom,
 	resumeRoom,
 	startRoom,
@@ -228,20 +229,10 @@ export async function openRooms(
 			),
 		exchange: (name: string, from: number) =>
 			withRoom(name, async (entry) => {
-				const snapshot = await readRoom(entry.name, {
-					runtime,
-					messages: { since: Math.max(0, from - 1) },
-				});
-				const exchange = snapshot.exchanges.find((candidate) => candidate.from === from);
-				if (exchange === undefined) return undefined;
-				const through = exchange.status === 'closed' ? exchange.through : Number.POSITIVE_INFINITY;
-				return {
-					exchange,
-					messages: snapshot.messages.filter(
-						(message) =>
-							message.kind !== 'summary' && message.seq >= exchange.from && message.seq <= through,
-					),
-				};
+				const result = await readExchange(entry.name, from, { runtime });
+				return result === undefined
+					? undefined
+					: { exchange: result.exchange, messages: result.messages };
 			}),
 		async close() {
 			closing = true;

@@ -25,6 +25,8 @@ import {
 	crash,
 	currentExchange,
 	deferred,
+	messagesOf,
+	participantsOf,
 	roomName,
 	storedOf,
 	tick,
@@ -99,7 +101,7 @@ async function world(storage: (typeof storages)[number]): Promise<World> {
 	};
 }
 
-const summaries = async (session: Room) => (await session.messages()).filter(isSummary);
+const summaries = async (session: Room) => (await messagesOf(session)).filter(isSummary);
 
 /** Resolves when this seat's next activation ends. */
 const ended = (session: Room, seat: string) =>
@@ -141,7 +143,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await visit.send({ text: 'Can I tell the client Thursday?' });
 			await new Promise((resolve) => setImmediate(resolve));
 			const before = {
-				participants: session.participants(),
+				participants: await participantsOf(session),
 				exchange: await currentExchange(session),
 			};
 			expect(before.participants.find((s) => s.name === 'alpha')).toMatchObject({
@@ -158,11 +160,11 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			});
 			const events = collect(resumed);
 			// the fold before the crash is the fold after the resume
-			expect(resumed.participants()).toEqual(before.participants);
+			expect(await participantsOf(resumed)).toEqual(before.participants);
 			expect(await currentExchange(resumed)).toEqual(before.exchange);
 			// the pending wake is sent again, and beta answers into the same exchange
 			await ended(resumed, 'beta');
-			expect((await resumed.messages()).filter(isSpoken).map((m) => m.from)).toEqual([
+			expect((await messagesOf(resumed)).filter(isSpoken).map((m) => m.from)).toEqual([
 				'priya',
 				'beta',
 				'beta',
@@ -182,7 +184,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			).toHaveLength(1);
 			expect(events.some((e) => e.type === 'exchange_closed')).toBe(true);
 			expect(await summaries(resumed)).toHaveLength(1);
-			expect(resumed.participants().find((s) => s.name === 'alpha')).toMatchObject({
+			expect((await participantsOf(resumed)).find((s) => s.name === 'alpha')).toMatchObject({
 				status: 'idle',
 			});
 			await resumed.stop();
@@ -234,7 +236,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				events.filter((e) => e.type === 'activation_start' && e.agent === 'alpha'),
 			).toHaveLength(1);
 			expect(await currentExchange(resumed)).toBeUndefined();
-			expect(resumed.participants().find((s) => s.name === 'alpha')).toMatchObject({
+			expect((await participantsOf(resumed)).find((s) => s.name === 'alpha')).toMatchObject({
 				status: 'idle',
 			});
 			const stored = await storedOf(opened.journals, name);
@@ -258,7 +260,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				streamFn: scripted(byAgent({})),
 			});
 			await waitForRoom(one);
-			expect(one.participants().map((s) => s.name)).toEqual(['alpha', 'assistant']);
+			expect((await participantsOf(one)).map((s) => s.name)).toEqual(['alpha', 'assistant']);
 			await one.stop();
 
 			const two = await startRoom({
@@ -270,7 +272,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				streamFn: scripted(byAgent({})),
 			});
 			await waitForRoom(two);
-			expect(two.participants().map((s) => s.name)).toEqual(['beta', 'assistant']);
+			expect((await participantsOf(two)).map((s) => s.name)).toEqual(['beta', 'assistant']);
 			await two.stop();
 
 			const view = await readRoom(name, { runtime: runtime() });
@@ -294,7 +296,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				streamFn: scripted(byAgent({})),
 			});
 			// before the replay, the seats fold from the composition the run is about to write
-			expect(session.participants().map((s) => [s.name, s.identity])).toEqual([
+			expect((await participantsOf(session)).map((s) => [s.name, s.identity])).toEqual([
 				['alpha', 'Alpha.'],
 				['assistant', assistant.identity],
 			]);
@@ -361,7 +363,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await waitForRoom(two);
 			// Startup may durably close before subscribers attach; the journal assertion below is authoritative.
 			expect(await currentExchange(two)).toBeUndefined();
-			const question = (await two.messages()).find((m) => m.kind === 'said');
+			const question = (await messagesOf(two)).find((m) => m.kind === 'said');
 			const closes = (await storedOf(opened.journals, name)).filter(
 				(entry) => entry.kind === 'close',
 			);
@@ -397,8 +399,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			});
 			// no `left` was written, so both are still present, and visiting again writes nothing
 			expect(
-				resumed
-					.participants()
+				(await participantsOf(resumed))
 					.filter((s) => s.kind === 'human')
 					.map((s) => [s.name, s.presence]),
 			).toEqual([
@@ -406,20 +407,20 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				['sam', 'present'],
 			]);
 			const again = await resumed.visit(priya);
-			expect((await resumed.messages()).map((m) => m.kind)).toEqual(['arrived', 'arrived']);
+			expect((await messagesOf(resumed)).map((m) => m.kind)).toEqual(['arrived', 'arrived']);
 
 			const renamed = defineHuman({ name: 'priya', identity: 'A different priya.' });
 			await expect(resumed.visit(renamed)).rejects.toThrow(/different identity/);
 			await again.leave();
 			const back = await resumed.visit(renamed);
 			expect(back.human.identity).toBe('A different priya.');
-			expect((await resumed.messages()).map((m) => m.kind)).toEqual([
+			expect((await messagesOf(resumed)).map((m) => m.kind)).toEqual([
 				'arrived',
 				'arrived',
 				'left',
 				'arrived',
 			]);
-			expect(resumed.participants().find((s) => s.name === 'priya')).toMatchObject({
+			expect((await participantsOf(resumed)).find((s) => s.name === 'priya')).toMatchObject({
 				identity: 'A different priya.',
 			});
 			await resumed.stop();
@@ -456,7 +457,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			await visit.send({ text: 'Second?' });
 			await waitForRoom(session, 'settled');
 			expect(await summaries(session)).toHaveLength(0);
-			const record = await session.messages();
+			const record = await messagesOf(session);
 			const questions = record.filter((m) => isSpoken(m) && m.from === 'priya');
 			crash(first, session);
 
@@ -554,7 +555,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const visit = await session.visit(priya);
 			await visit.send({ text: 'Anyone?' });
 			await tick();
-			expect(session.participants().find((s) => s.name === 'alpha')).toMatchObject({
+			expect((await participantsOf(session)).find((s) => s.name === 'alpha')).toMatchObject({
 				status: 'active',
 			});
 			crash(first, session);
@@ -585,7 +586,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				agents,
 				streamFn: scripted(script),
 			});
-			expect(resumed.participants().find((s) => s.name === 'alpha')).toMatchObject({
+			expect((await participantsOf(resumed)).find((s) => s.name === 'alpha')).toMatchObject({
 				status: 'active',
 			});
 			await resumed.abort();
@@ -655,7 +656,11 @@ describe('a room dropped from memory', () => {
 			streamFn: scripted(byAgent({})),
 		});
 		runtime.evict(name);
-		expect(session.participants().map((s) => s.name)).toEqual(['alpha', 'beta', 'assistant']);
+		expect((await participantsOf(session)).map((s) => s.name)).toEqual([
+			'alpha',
+			'beta',
+			'assistant',
+		]);
 		await opened.dispose();
 	});
 
@@ -692,7 +697,7 @@ describe('a room dropped from memory', () => {
 
 	it('rejects an exchange messages wait when runtime evicts the room', async () => {
 		const { exchange, held } = await dropped();
-		await expect(exchange.messages()).rejects.toThrow(/stopped|interrupted|evicted/i);
+		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|interrupted|evicted/i);
 		held.resolve();
 	});
 
@@ -736,7 +741,7 @@ describe('a room dropped from memory', () => {
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'go' });
 		runtime.evict(session.name);
-		await expect(exchange.messages()).rejects.toThrow(/stopped|interrupted|evicted/i);
+		await expect(exchange.waitForClose()).rejects.toThrow(/stopped|interrupted|evicted/i);
 		held.resolve();
 	});
 

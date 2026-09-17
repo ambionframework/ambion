@@ -15,7 +15,7 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
-import { deferred, roomName, waitForRoom } from './support/room.ts';
+import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';
 import { gatedJournals, storages } from './support/storage.ts';
 
@@ -62,7 +62,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 		});
 		try {
 			await first.visit(priya);
-			const before = await first.messages();
+			const before = await messagesOf(first);
 			expect(before).toHaveLength(1);
 			expect(before[0]).toMatchObject({
 				kind: 'arrived',
@@ -80,9 +80,9 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			});
 			try {
 				expect(
-					(await resumed.messages()).filter((message) => message.kind === 'arrived'),
+					(await messagesOf(resumed)).filter((message) => message.kind === 'arrived'),
 				).toHaveLength(1);
-				expect(resumed.participants()).toContainEqual({
+				expect(await participantsOf(resumed)).toContainEqual({
 					kind: 'human',
 					name: priya.name,
 					identity: priya.identity,
@@ -95,15 +95,15 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 				expect(reconnected.since).toBeUndefined();
 				expect(secondHandle.human).toEqual(priya);
 				expect(
-					(await resumed.messages()).filter((message) => message.kind === 'arrived'),
+					(await messagesOf(resumed)).filter((message) => message.kind === 'arrived'),
 				).toHaveLength(1);
 
 				await reconnected.leave();
-				expect((await resumed.messages()).map((message) => message.kind)).toEqual([
+				expect((await messagesOf(resumed)).map((message) => message.kind)).toEqual([
 					'arrived',
 					'left',
 				]);
-				expect(resumed.participants()).toContainEqual({
+				expect(await participantsOf(resumed)).toContainEqual({
 					kind: 'human',
 					name: priya.name,
 					identity: priya.identity,
@@ -131,9 +131,9 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 		try {
 			const visit = await first.visit(priya);
 			const sent = await visit.send({ text: 'Can I promise Thursday?', key: 'promise-1' });
-			const conversation = await sent.messages();
+			const conversation = await sent.waitForClose();
 			await visit.leave();
-			const left = (await first.messages()).find((message) => message.kind === 'left');
+			const left = (await messagesOf(first)).find((message) => message.kind === 'left');
 			expect(left).toBeDefined();
 			expect(visit.since).toBe(left?.seq);
 
@@ -146,7 +146,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			try {
 				const reconnected = await resumed.visit(priya);
 				expect(reconnected.since).toBe(left?.seq);
-				const missed = await resumed.messages({ since: reconnected.since });
+				const missed = await messagesOf(resumed, { since: reconnected.since });
 				expect(missed.map((message) => message.kind)).toEqual(['arrived']);
 
 				const retry = await reconnected.send({
@@ -154,9 +154,9 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 					key: 'promise-1',
 				});
 				expect(retry.from).toBe(sent.from);
-				expect(await retry.messages()).toEqual(conversation);
+				expect(await retry.waitForClose()).toEqual(conversation);
 				expect(
-					(await resumed.messages()).filter((message) => message.key === 'promise-1'),
+					(await messagesOf(resumed)).filter((message) => message.key === 'promise-1'),
 				).toHaveLength(1);
 				expect(reconnected.since).toBe(left?.seq);
 			} finally {
@@ -190,7 +190,7 @@ describe.each(storages)('human reconnect on $name storage', (storage) => {
 			});
 			const arriving = room.visit(priya);
 			await entered.promise;
-			const replay = room.messages({ since: 0 });
+			const replay = messagesOf(room, { since: 0 });
 			holding = false;
 			gate.resolve();
 			const [visit, history] = await Promise.all([arriving, replay]);
@@ -246,8 +246,8 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 				const wakeStarted = started(first, watcher.name);
 				const exchange = await visit.send({ text: 'Hold this question.', key: `${lifecycle}-1` });
 				await wakeStarted;
-				const messages = exchange.messages();
-				const response = exchange.response();
+				const messages = exchange.waitForClose();
+				const response = exchange.waitForSummary();
 
 				if (lifecycle === 'stop') {
 					await first.stop();
@@ -287,8 +287,8 @@ describe.each(storages)('exchange waiters across host lifecycle on $name storage
 				await clock.advance(60_000);
 				await clock.advance(30_000);
 				await waitForRoom(resumed);
-				expect(await recovered?.messages()).toEqual(expect.any(Array));
-				expect((await resumed.messages()).filter(isSpoken)).toHaveLength(1);
+				expect(await recovered?.waitForClose()).toEqual(expect.any(Array));
+				expect((await messagesOf(resumed)).filter(isSpoken)).toHaveLength(1);
 			} finally {
 				held.resolve();
 				await resumed?.stop();

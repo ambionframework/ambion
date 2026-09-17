@@ -1,6 +1,6 @@
 import type {
 	AgentParticipantInfo,
-	Exchange,
+	ExchangeRef,
 	Message,
 	ParticipantInfo,
 } from '@ambionframework/ambion';
@@ -8,7 +8,7 @@ import type {
 export interface RoomStatus {
 	name: string;
 	participants: ParticipantInfo[];
-	exchange: Exchange | undefined;
+	exchange: ExchangeRef | undefined;
 	exchangeState: 'idle' | 'working' | 'completed';
 }
 

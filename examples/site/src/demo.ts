@@ -132,7 +132,7 @@ let room: Room = await startRoom({
 });
 
 /** The roster as the run starts, before any question composes it. */
-const seatsAtStart = room.participants();
+const seatsAtStart = (await room.read({ messages: false })).participants;
 
 /** Bookkeeping: correlate every activation with the message that caused it. */
 function track(event: RoomNotification, at: string): void {
@@ -245,7 +245,7 @@ const priyaVisit = await room.visit(priya);
 const initial = await priyaVisit.send({
 	text: 'Can I tell the client Thursday for the Level 3 pour, or not?',
 });
-await initial.response();
+await initial.waitForSummary();
 
 step(
 	'priya asks the question she has to answer today; the assistant composes the room for it, then writes her the answer',
@@ -272,7 +272,7 @@ const samExchange = await samVisit.send({
 // The delivery opened the exchange, so the room goes quiet only when it
 // closes. A run where every product declines has nothing to crash into: it
 // takes the close instead of waiting for an answer that never comes.
-const crashedAt = await Promise.race([firstAnswer, samExchange.messages().then(() => lastSeq)]);
+const crashedAt = await Promise.race([firstAnswer, samExchange.waitForClose().then(() => lastSeq)]);
 stopWatchingForIt();
 
 step(
@@ -303,7 +303,7 @@ const danVisit = await room.visit(dan);
 const danExchange = await danVisit.send({
 	text: 'What does moving cost, and is there anything of mine holding this up?',
 });
-await danExchange.response();
+await danExchange.waitForSummary();
 
 step('priya comes back to decisions she did not see made');
 const priyaBack = await room.visit(priya);
@@ -317,15 +317,19 @@ step(
 const followUp = await priyaBack.send({
 	text: 'Remind me what Saturday needs from me before I ring the client.',
 });
-await followUp.response();
+await followUp.waitForSummary();
 
-const missed = priyaBack.since === undefined ? [] : await room.messages({ since: priyaBack.since });
+const missed =
+	priyaBack.since === undefined
+		? []
+		: (await room.read({ messages: { since: priyaBack.since } })).messages;
 const sinceOnReturn = priyaBack.since;
 
 // Stop before capture so the room journal and record include the same final presence entries.
 await room.stop();
-const finalRecord: Message[] = await room.messages();
-const participants = room.participants();
+const finalSnapshot = await room.read();
+const finalRecord: readonly Message[] = finalSnapshot.messages;
+const participants = finalSnapshot.participants;
 
 /**
  * Each agent's Pi audit session, read through the execution API.

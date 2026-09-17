@@ -212,7 +212,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 
 			const exchange = resumed.exchange(state.exchangeFrom);
 			if (exchange === undefined) throw new Error('The resumed exchange is missing.');
-			expect((await exchange.messages()).filter(isSpoken).map((m) => m.text)).toEqual([
+			expect((await exchange.waitForClose()).filter(isSpoken).map((m) => m.text)).toEqual([
 				'What is the answer?',
 				'Remote answer.',
 			]);
@@ -274,7 +274,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 
 			const exchange = resumed.exchange(state.exchangeFrom);
 			if (exchange === undefined) throw new Error('The resumed exchange is missing.');
-			expect((await exchange.messages()).filter(isSpoken).map((m) => m.text)).toEqual([
+			expect((await exchange.waitForClose()).filter(isSpoken).map((m) => m.text)).toEqual([
 				'What is the answer?',
 				'Retry answer.',
 			]);

@@ -55,7 +55,7 @@ carry keys. The record retains the token and message for replay and inspection.
 
 ## 3. What a read promises
 
-`messages()` returns all confirmed room messages in sequence order; administrative
+`room.read()` returns confirmed room messages in sequence order; administrative
 journal entries may leave gaps between their sequence positions. An acknowledged
 write appears in a later read, and a resumed run replays the full record before
 answering. `subscribe()` is the push view of the same facts: one `message`
@@ -134,7 +134,7 @@ After a process failure:
    definitions for every recorded agent name.
 2. Recreate authenticated visits and preserve recorded presence until the host
    confirms departure.
-3. Recreate subscriptions before reading `messages({ since })`; merge by `seq`.
+3. Recreate subscriptions before reading `room.read({ messages: { since } })`; merge by `seq`.
 4. Reacquire exchange handles with `room.exchange(from)` and recreate waits.
 5. Reconnect remote runners to the current room host. Preserve unexpired leases;
    let expired leases follow normal retry policy.

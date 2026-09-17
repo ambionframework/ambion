@@ -47,10 +47,10 @@ function answer(question: string, response: string, calls: Call[]): StreamFn {
 	});
 }
 
-function messagesOf(room: { messages(): Promise<readonly Message[]> }) {
+function spokenTexts(room: { read(): Promise<{ messages: readonly Message[] }> }) {
 	return room
-		.messages()
-		.then((messages) => messages.filter(isSpoken).map((message) => message.text));
+		.read()
+		.then(({ messages }) => messages.filter(isSpoken).map((message) => message.text));
 }
 
 function forwardingTransport(
@@ -99,8 +99,8 @@ describe('execution composition', () => {
 			]);
 			await Promise.all([waitForRoom(first), waitForRoom(second)]);
 
-			expect(await messagesOf(first)).toEqual(['First question?', 'First answer.']);
-			expect(await messagesOf(second)).toEqual(['Second question?', 'Second answer.']);
+			expect(await spokenTexts(first)).toEqual(['First question?', 'First answer.']);
+			expect(await spokenTexts(second)).toEqual(['Second question?', 'Second answer.']);
 			const firstTranscript = await runtime.transcripts.open(seatSessionId(first.name, 'writer'));
 			const secondTranscript = await runtime.transcripts.open(seatSessionId(second.name, 'writer'));
 			expect(await firstTranscript.getMetadata()).toMatchObject({ parentSessionId: first.name });
@@ -150,7 +150,7 @@ describe('execution composition', () => {
 		let resumed: Awaited<ReturnType<typeof startRoom>> | undefined;
 		try {
 			const original = await (await first.visit(andrei)).send({ text: 'Original question?' });
-			await original.messages();
+			await original.waitForClose();
 			await first.stop();
 
 			resumed = await resumeRoom(first.name, {
@@ -162,10 +162,10 @@ describe('execution composition', () => {
 				await resumed.visit(defineHuman({ name: 'replacement-person', identity: 'A new visitor.' }))
 			).send({ text: 'Replacement question?' });
 			const other = await (await second.visit(andrei)).send({ text: 'Other question?' });
-			await Promise.all([replacement.messages(), other.messages()]);
+			await Promise.all([replacement.waitForClose(), other.waitForClose()]);
 
-			expect(await messagesOf(resumed)).toContain('Replacement answer.');
-			expect(await messagesOf(second)).toEqual(['Other question?', 'Runtime answer.']);
+			expect(await spokenTexts(resumed)).toContain('Replacement answer.');
+			expect(await spokenTexts(second)).toEqual(['Other question?', 'Runtime answer.']);
 			expect(fallbackCalls.length).toBeGreaterThan(0);
 			expect(
 				fallbackCalls.every((call) => call.systemPrompt.includes('Keep the other room separate.')),
@@ -197,9 +197,9 @@ describe('execution composition', () => {
 		});
 		try {
 			const exchange = await (await room.visit(andrei)).send({ text: 'Wrapped question?' });
-			await exchange.messages();
+			await exchange.waitForClose();
 
-			expect(await messagesOf(room)).toEqual(['Wrapped question?', 'Wrapped answer.']);
+			expect(await spokenTexts(room)).toEqual(['Wrapped question?', 'Wrapped answer.']);
 			expect(connections).toHaveLength(1);
 			const connection = connections[0];
 			if (connection === undefined) throw new Error('The runner did not connect.');

@@ -17,7 +17,6 @@ import {
 	isSummary,
 	type Message,
 	type RoomNotification,
-	readRoom,
 	type SummaryMessage,
 	startRoom,
 	type Visit,
@@ -168,8 +167,8 @@ const WAKES: Record<Attention, string> = {
 	presence: 'on anything said, and on arrivals',
 };
 
-function who(): void {
-	const participants = room.participants();
+async function who(): Promise<void> {
+	const participants = (await room.read({ messages: false })).participants;
 	const present = new Set(participants.map((participant) => participant.name));
 	for (const agent of AGENTS) {
 		if (!present.has(agent.name)) {
@@ -201,12 +200,12 @@ function line(m: Message): string {
 }
 
 async function record(): Promise<void> {
-	for (const m of await room.messages()) console.log(`  ${line(m)}`);
+	for (const m of (await room.read()).messages) console.log(`  ${line(m)}`);
 }
 
 /** One exchange, one message: what the assistant wrote, and what each stands for. */
 async function summaries(): Promise<void> {
-	const written = (await room.messages()).filter(isSummary);
+	const written = (await room.read()).messages.filter(isSummary);
 	if (written.length === 0) return console.log('  (the assistant has not written yet)');
 	for (const m of written) {
 		console.log(`  [${m.seq}] ${paint(m.from, m.from)} → ${m.to}, for ${span(m)}:`);
@@ -220,7 +219,7 @@ async function missed(): Promise<void> {
 		console.log('  (you have not stopped reading yet — nothing to catch up on)');
 		return;
 	}
-	for (const m of await room.messages({ since })) console.log(`  ${line(m)}`);
+	for (const m of (await room.read({ messages: { since } })).messages) console.log(`  ${line(m)}`);
 }
 
 /** The diary is the one document every product writes to; the host reads it off the drive. */
@@ -309,7 +308,9 @@ async function say(input: string): Promise<void> {
 		return;
 	}
 	const [, name, text] = directed;
-	const target = room.participants().find((participant) => participant.name === name);
+	const target = (await room.read({ messages: false })).participants.find(
+		(participant) => participant.name === name,
+	);
 	if (!target || !text) return console.log(`${red}no such participant: ${name}${reset}`);
 	await visit.send({ to: name, text });
 }
@@ -331,8 +332,7 @@ console.log(`\n${ROOM_NAME} is running. Model: ${MODEL} (set AMBION_MODEL to cha
 if (!process.env.ANTHROPIC_API_KEY) {
 	console.log(`${red}ANTHROPIC_API_KEY is not set — the products will fail to answer.${reset}`);
 }
-console.log(`${dim}Reading it takes no run: readRoom('${ROOM_NAME}') works from anywhere.${reset}`);
-void readRoom(ROOM_NAME);
+console.log(`${dim}room.read() observes without starting agent work.${reset}`);
 help();
 await join('priya');
 rl.setPrompt(`${speaking} › `);

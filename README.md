@@ -82,7 +82,7 @@ through `say`; the room stamps its recipient and source range.
 **Summaries compact later activations; people can review the discussion.**
 Once a closed exchange has a summary, later agent activations read it in place
 of the covered source messages. The journal retains those messages, and
-`exchange.messages()` lets applications show the original discussion to human
+`exchange.waitForClose()` lets applications show the original discussion to human
 participants. See the [summary contract](docs/summary.md).
 
 ## Install
@@ -160,7 +160,7 @@ try {
   const exchange = await visit.send({
     text: 'We have 12 units in stock and Thursday capacity for 8. Can we promise 10 for Thursday?',
   });
-  for (const message of await exchange.messages()) {
+  for (const message of await exchange.waitForClose()) {
     if (message.kind === 'said') console.log(`${message.from}: ${message.text}`);
   }
   await visit.leave();
@@ -172,9 +172,13 @@ try {
 Set `summary` to the name of a defined agent when the application needs an
 optional closing summary. Include every executable definition in `agents`; leave
 an agent out of `seats` to keep it in the reserve. If `seats` is omitted, every
-defined agent starts at `broadcast` attention. `exchange.response()` waits for
+defined agent starts at `broadcast` attention. `exchange.waitForSummary()` waits for
 a summary or a terminal result without one. A writer may decline, and the
 application can always read the discussion.
+
+Use `room.read()` for immediate conversation and participant state.
+`readRoom(name, { runtime })` and `readExchange(name, from, { runtime })` also
+inspect stopped rooms. These reads never wait for an agent to finish.
 
 ## Hosting and persistence
 

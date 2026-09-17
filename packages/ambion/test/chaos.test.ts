@@ -24,7 +24,7 @@ import { agents, priya, type Question, questions, sam, script, TIMING } from './
 import { idle, liveLeases, outcome, World, within } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';
-import { collect, currentExchange, roomName } from './support/room.ts';
+import { collect, currentExchange, messagesOf, participantsOf, roomName } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { childJournals, childStorage, memory, type Storage, storages } from './support/storage.ts';
 
@@ -112,10 +112,10 @@ function killAt(dir: string, name: string, at: number, storage: string): Promise
 async function quietNow(session: Room, clock: FakeClock): Promise<void> {
 	for (let round = 0; round < 12; round += 1) {
 		const settled = await Promise.race([
-			session.messages().then(() => true),
+			messagesOf(session).then(() => true),
 			new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
 		]);
-		if (settled && idle(session)) return;
+		if (settled && (await idle(session))) return;
 		await clock.advance(2_000);
 	}
 	throw new Error('the room never went quiet');
@@ -134,7 +134,7 @@ async function finish(session: Room, clock: FakeClock): Promise<void> {
 	};
 	await deliver(first);
 	await quietNow(session, clock);
-	const record = await session.messages();
+	const record = await messagesOf(session);
 	const hers = record
 		.filter(isPresence)
 		.filter((m) => m.from === priya.name)
@@ -144,7 +144,7 @@ async function finish(session: Room, clock: FakeClock): Promise<void> {
 	await quietNow(session, clock);
 	await deliver(third);
 	await quietNow(session, clock);
-	expect(session.participants().find((s) => s.name === sam.name)).toMatchObject({
+	expect((await participantsOf(session)).find((s) => s.name === sam.name)).toMatchObject({
 		presence: 'present',
 	});
 }

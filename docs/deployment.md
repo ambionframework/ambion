@@ -142,8 +142,8 @@ const visit = await room.visit(human);
 const exchange = room.exchange(saved.exchangeFrom);
 if (!exchange) throw new Error('The saved exchange is not in this room.');
 
-const discussion = await exchange.messages();
-const response = await exchange.response(); // A summary, or undefined.
+const discussion = await exchange.waitForClose();
+const response = await exchange.waitForSummary(); // A summary, or undefined.
 ```
 
 An exchange key is its opening question's `seq`. Another message sent while
@@ -168,7 +168,8 @@ const messages = new Map<number, Message>();
 const unsubscribe = room.subscribe((event) => {
   if (event.type === 'message') messages.set(event.message.seq, event.message);
 });
-for (const message of await room.messages({ since: saved.lastConsumedSeq })) {
+const snapshot = await room.read({ messages: { since: saved.lastConsumedSeq } });
+for (const message of snapshot.messages) {
   messages.set(message.seq, message);
 }
 const ordered = [...messages.values()].sort((a, b) => a.seq - b.seq);

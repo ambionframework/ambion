@@ -15,7 +15,7 @@ import {
 	type SeatRoom,
 	type Wake,
 } from '../src/transport.ts';
-import { deferred, roomName, stateOf, storedOf, waitForRoom } from './support/room.ts';
+import { deferred, messagesOf, roomName, stateOf, storedOf, waitForRoom } from './support/room.ts';
 import { byAgent, isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import {
 	faultyJournals,
@@ -57,7 +57,7 @@ async function unsettledAfterTurn<T>(promise: Promise<T>): Promise<boolean> {
 }
 
 async function closesWithoutSummary(room: Room, from: number): Promise<void> {
-	await room.exchange(from)?.messages();
+	await room.exchange(from)?.waitForClose();
 }
 
 describe('durable cancellation', () => {
@@ -114,7 +114,9 @@ describe('durable cancellation', () => {
 					intent: { kind: 'said', text: 'late old speech' },
 				}),
 			).toMatchObject({ stale: expect.any(String) });
-			expect((await room.messages()).filter((message) => message.from === worker.name)).toEqual([]);
+			expect((await messagesOf(room)).filter((message) => message.from === worker.name)).toEqual(
+				[],
+			);
 
 			const second = await visit.send({ text: 'new question' });
 			await newWake.promise;
@@ -236,7 +238,9 @@ describe('durable cancellation', () => {
 
 			const after = await visit.send({ text: 'after cancellation' });
 			expect(after.from).toBeGreaterThan(before.from);
-			expect((await room.messages()).filter((message) => message.from === worker.name)).toEqual([]);
+			expect((await messagesOf(room)).filter((message) => message.from === worker.name)).toEqual(
+				[],
+			);
 			await room.abort();
 			for (const [id, until] of firstEnds)
 				expect(stateOf(room).leases.get(id)).toMatchObject({ until });
@@ -313,13 +317,13 @@ describe('durable cancellation', () => {
 		try {
 			const visit = await room.visit(person);
 			const first = await visit.send({ text: 'summarise this' });
-			await first.messages();
+			await first.waitForClose();
 			await summaryStarted.promise;
 			const second = await visit.send({ text: 'a new question' });
 			await room.abort();
-			await expect(first.response()).rejects.toThrow(/interrupted/i);
-			await expect(second.response()).resolves.toBeUndefined();
-			expect((await room.messages()).filter((message) => message.kind === 'summary')).toEqual([]);
+			await expect(first.waitForSummary()).rejects.toThrow(/interrupted/i);
+			await expect(second.waitForSummary()).resolves.toBeUndefined();
+			expect((await messagesOf(room)).filter((message) => message.kind === 'summary')).toEqual([]);
 		} finally {
 			await room.stop();
 		}
@@ -348,7 +352,9 @@ describe.each(storages)('cancellation storage recovery (%s)', (storage: Storage)
 				faulty.fail(false);
 				await room.abort();
 				await closesWithoutSummary(room, exchange.from);
-				expect((await room.messages()).filter((message) => message.kind === 'summary')).toEqual([]);
+				expect((await messagesOf(room)).filter((message) => message.kind === 'summary')).toEqual(
+					[],
+				);
 			} finally {
 				faulty.fail(false);
 				await room.stop();
@@ -374,7 +380,7 @@ describe.each(storages)('cancellation storage recovery (%s)', (storage: Storage)
 			faulty.fail('after', 'cancel');
 			await expect(room.abort()).rejects.toThrow(/disk is full/);
 			faulty.fail(false);
-			await room.messages();
+			await messagesOf(room);
 
 			const second = await visit.send({ text: 'land after the durable cut' });
 			await room.abort();
@@ -386,7 +392,7 @@ describe.each(storages)('cancellation storage recovery (%s)', (storage: Storage)
 			expect(
 				(await storedOf(opened.journals, room.name)).filter((entry) => entry.kind === 'cancel'),
 			).toHaveLength(2);
-			await first.messages();
+			await first.waitForClose();
 		} finally {
 			faulty.fail(false);
 			await room.stop();

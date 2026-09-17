@@ -30,7 +30,7 @@ import type { Close } from '../journal/events.ts';
 import {
 	type ClosedExchange,
 	copyMessage,
-	type Exchange,
+	type ExchangeRef,
 	type ExchangeView,
 	isSpoken,
 	isSummary,
@@ -133,11 +133,23 @@ export function closedExchange(
 	};
 }
 
+/** Select and detach the non-summary discussion for one exchange's inclusive range. */
+export function discussionMessages(
+	messages: readonly Message[],
+	from: number,
+	through: number,
+): Message[] {
+	return messages
+		.filter((message) => message.kind !== 'summary')
+		.filter((message) => message.seq >= from && message.seq <= through)
+		.map(copyMessage);
+}
+
 /** Build detached exchange views in journal order, including the current open exchange. */
 export function exchangeViews(
 	closes: readonly Close[],
 	messages: readonly Message[],
-	open: Exchange | undefined,
+	open: ExchangeRef | undefined,
 	leases: ReadonlyMap<string, LeaseHold>,
 	cancelledAt?: number,
 ): ExchangeView[] {
@@ -169,7 +181,7 @@ export function openExchange(
 	messages: readonly Message[],
 	closes: readonly Close[],
 	isPerson: (name: string) => boolean,
-): Exchange | undefined {
+): ExchangeRef | undefined {
 	const closedThrough = closes.at(-1)?.through ?? 0;
 	const question = messages.find(
 		(message): message is SpokenMessage =>

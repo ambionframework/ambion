@@ -14,6 +14,16 @@ import { participantsOf } from './view.ts';
 
 export type MessageSelection = false | { since?: Seq };
 
+/** Capture a caller's selection before an asynchronous read begins. */
+export function captureMessageSelection(
+	selection: MessageSelection | undefined,
+): MessageSelection | undefined {
+	const captured =
+		selection === false || selection === undefined ? selection : { since: selection.since };
+	validateSelection(captured);
+	return captured;
+}
+
 /** Build a room read without executing, reconciling, or changing the journal. */
 export function readView(
 	name: string,
