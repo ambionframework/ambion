@@ -9,6 +9,7 @@ import type { Clock, ModelResolver } from '../types.ts';
 
 interface ExecutionCall {
 	readonly attempts: number;
+	readonly timeout: number;
 }
 
 /** A collision safe id for the Pi session that one agent owns in one room. */
@@ -60,9 +61,15 @@ export const stubModel: ModelResolver = (id) =>
 
 export function createExecutionServices(options: ExecutionServicesOptions): ExecutionServices {
 	const custom = options.stream !== undefined;
+	const attempts = options.call?.attempts ?? 2;
+	const timeout = options.call?.timeout ?? 10_000;
+	if (!Number.isSafeInteger(attempts) || attempts < 1)
+		throw new Error('Room call attempts must be a positive safe integer.');
+	if (!Number.isFinite(timeout) || timeout <= 0)
+		throw new Error('Room call timeout must be a finite positive number.');
 	return {
 		clock: options.clock ?? systemClock(),
-		call: { attempts: 2, ...options.call },
+		call: { attempts, timeout },
 		transcripts: piSessions(options.storage),
 		stream: options.stream ?? registryStream,
 		model: custom ? stubModel : registryModel,

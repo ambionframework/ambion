@@ -39,7 +39,7 @@
 		"build": "tsdown",
 		"check:types": "tsc --noEmit",
 		"test": "vitest run",
-		"test:live": "vitest run --config vitest.live.config.ts"
+		"test:live": "pnpm --filter '@ambionframework/assistant^...' build && vitest run --config vitest.live.config.ts"
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*"

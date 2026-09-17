@@ -1,13 +1,13 @@
 import {
+	type Attention,
+	type CreateRuntimeOptions,
 	createRuntime,
 	defaultRuntime,
 	defineAgent,
 	defineHuman,
-	type Attention,
-	type CreateRuntimeOptions,
 	type Message,
+	startRoom,
 } from '@ambionframework/ambion';
-import { startRoom } from '@ambionframework/ambion';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
@@ -163,7 +163,7 @@ live('default assistant judgment with controlled specialist evidence', () => {
 			/unverified|not (?:tested|verified|rendered)|no (?:runtime|browser|tests)|did not (?:render|run|test)/i,
 		);
 		expect(result.summary?.text).toMatch(
-			/not (?:deployed|released)|no (?:deployment|release)|did not (?:deploy|release)|nothing (?:deployed|released)/i,
+			/not (?:deployed|released)|no (?:deployment|release)|did not (?:deploy|release)|nothing (?:was )?(?:deployed|released)/i,
 		);
 	});
 });

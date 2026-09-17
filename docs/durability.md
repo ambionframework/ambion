@@ -86,6 +86,37 @@ the record. Transcript audit failure is reported separately as `audit_error`;
 it does not turn successful or deliberately silent collaboration into failed
 work, and no durable audit backlog is promised.
 
+### Transport calls and unclaimed work
+
+**A local timeout leaves the remote result unknown.** Executor calls to the room
+use `runtime.call.timeout`, in milliseconds, with a default of 10,000.
+Claims and releases retry up to `runtime.call.attempts`, which defaults to two.
+Retries keep the activation identity. A timeout neither revokes a lease nor
+reverses a contribution that the journal already accepted.
+
+A cut ends local claim and release waits. Late replies cannot start cancelled
+execution. Renewal waits retain a separate alarm at the last confirmed lease
+expiry. An unresolved renewal therefore cannot extend local execution authority.
+The room still checks every claim and contribution against recorded authority.
+If the executor stops at that expiry, it reports unfinished execution as failed.
+A remotely renewed lease must not convert that stop into deliberate silence.
+Cloudflare recovery uses the same call limits to release an interrupted
+activation. An unknown result frees local seat metadata; the journal still owns
+the lease. A late reply cannot clear another activation's metadata.
+
+**Unclaimed work remains pending while eligible.** The room resends delivery
+under `runtime.wake.resend`. Delivery failure does not consume an execution
+attempt. Activation deadlines start at a claim, not at the source message.
+An unresolved delivery does not prevent a later resend.
+Work can remain pending through a shutdown or a deliberate executor hold.
+Abort and unseating record the boundaries that make delayed claims stale.
+
+Hosts receive `delivery_error` diagnostics for failed or uncertain transport
+calls. Each diagnostic identifies the agent, activation, and operation.
+These are live diagnostics; they do not change the accepted message or establish
+a durable exchange outcome. A successful delivery call does not prove that
+execution has started.
+
 ## Cancellation
 
 **`await room.abort()` confirms one durable cancellation boundary.** The journal

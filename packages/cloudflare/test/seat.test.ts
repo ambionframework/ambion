@@ -7,12 +7,15 @@
 
 import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
-import type { Steer } from '@ambionframework/ambion/transport';
+import type { LeaseResponse, SeatRoom, Steer } from '@ambionframework/ambion/transport';
 import { namespaced } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it } from 'vitest';
+import { configure, type SeatEvent } from '../src/configure.ts';
 import { seatMetadata, sqlStorage } from '../src/storage.ts';
+import { scripted } from './scripted.ts';
 import { until } from './until.ts';
+import { assistant, product, slow } from './worker.ts';
 
 type LeaseObservation = { id: string; phase: 'running' | 'ended'; reason?: string };
 
@@ -178,6 +181,136 @@ it('forwards steering to the live runner without recording a wake', async () => 
 	await runInDurableObject(seat, async (instance) => {
 		(instance as unknown as { runner?: FakeRunner }).runner = undefined;
 	});
+});
+
+it('bounds recovery release and clears local state after an unknown result', async () => {
+	const name = 'seat-recovery-release-timeout';
+	const activation = 'message:1:product:1';
+	const seat = env.SEAT.get(
+		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
+	);
+	const events: SeatEvent[] = [];
+	const defaults = { agents: [assistant, product, slow], stream: scripted, wake: { resend: 50 } };
+	configure({
+		...defaults,
+		call: { attempts: 1, timeout: 10 },
+		onSeatEvent: (event) => events.push(event),
+	});
+	try {
+		await runInDurableObject(seat, async (instance, state) => {
+			type Internal = {
+				metadata: {
+					change: (
+						change: (current: Readonly<Record<string, unknown>>) => {
+							patch: Record<string, unknown>;
+						},
+					) => Promise<unknown>;
+				};
+				roomFor: (room: string) => SeatRoom;
+			};
+			const object = instance as unknown as Internal;
+			await object.metadata.change(() => ({
+				patch: { room: name, seat: 'product', activation, phase: 'running' },
+			}));
+			object.roomFor = () => ({
+				view: async () => ({ stale: 'unused' }),
+				commit: async () => ({ stale: 'unused' }),
+				lease: async () => new Promise<LeaseResponse>(() => {}),
+			});
+			await state.storage.setAlarm(Date.now());
+		});
+
+		await runDurableObjectAlarm(seat);
+		await new Promise((resolve) => setTimeout(resolve, 25));
+		const metadata = await runInDurableObject(seat, (_instance, state) =>
+			seatMetadata(sqlStorage(state)).read(),
+		);
+		expect(metadata.activation).toBeUndefined();
+		expect(events).toContainEqual(
+			expect.objectContaining({
+				event: 'delivery_error',
+				activation,
+				operation: 'release',
+				error: 'Room call timed out.',
+			}),
+		);
+	} finally {
+		configure(defaults);
+	}
+});
+
+it('keeps newer metadata when a timed out recovery release replies late', async () => {
+	const name = 'seat-recovery-release-late';
+	const activation = 'message:1:product:1';
+	const newer = 'message:2:product:1';
+	const seat = env.SEAT.get(
+		env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', name, 'product'])),
+	);
+	let resolveLate: (response: LeaseResponse) => void = () => {};
+	const late = new Promise<LeaseResponse>((resolve) => {
+		resolveLate = resolve;
+	});
+	const events: SeatEvent[] = [];
+	const defaults = { agents: [assistant, product, slow], stream: scripted, wake: { resend: 50 } };
+	configure({
+		...defaults,
+		call: { attempts: 1, timeout: 10 },
+		onSeatEvent: (event) => events.push(event),
+	});
+	try {
+		await runInDurableObject(seat, async (instance, state) => {
+			type Internal = {
+				metadata: {
+					change: (
+						change: (current: Readonly<Record<string, unknown>>) => {
+							patch: Record<string, unknown>;
+						},
+					) => Promise<unknown>;
+				};
+				roomFor: (room: string) => SeatRoom;
+			};
+			const object = instance as unknown as Internal;
+			await object.metadata.change(() => ({
+				patch: { room: name, seat: 'product', activation, phase: 'running' },
+			}));
+			const metadata = seatMetadata(sqlStorage(state));
+			object.roomFor = () => ({
+				view: async () => ({ stale: 'unused' }),
+				commit: async () => ({ stale: 'unused' }),
+				lease: async () => {
+					await metadata.change(() => ({
+						patch: { room: name, seat: 'product', activation: newer, phase: 'pending' },
+					}));
+					return late;
+				},
+			});
+			await state.storage.setAlarm(Date.now());
+		});
+
+		await runDurableObjectAlarm(seat);
+		await new Promise((resolve) => setTimeout(resolve, 25));
+		const metadata = await runInDurableObject(seat, (_instance, state) =>
+			seatMetadata(sqlStorage(state)).read(),
+		);
+		expect(metadata.activation).toBe(newer);
+		resolveLate({ ok: { expiresAt: Date.now() + 10_000, lastSeq: 1 } });
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const afterLate = await runInDurableObject(seat, (_instance, state) =>
+			seatMetadata(sqlStorage(state)).read(),
+		);
+		expect(afterLate.activation).toBe(newer);
+		expect(events).toContainEqual(
+			expect.objectContaining({
+				event: 'delivery_error',
+				activation,
+				operation: 'release',
+				error: 'Room call timed out.',
+			}),
+		);
+	} finally {
+		resolveLate({ stale: 'late' });
+		configure(defaults);
+	}
 });
 
 it.each(['idle', 'pending'] as const)(

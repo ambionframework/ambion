@@ -130,15 +130,18 @@ describe('presence', () => {
 
 	it('steers a seat already at work, which is the whole of what presence routing does', async () => {
 		const held = deferred();
+		const providerStarted = deferred();
 		const seen: string[] = [];
 		const holding = scripted(async (context) => {
 			seen.push(contextText(context));
+			providerStarted.resolve();
 			await held.promise;
 			return quiet();
 		});
 		const session = track(await open({ streamFn: holding }));
 		const visit = await session.visit(andrei);
 		await visit.send({ text: 'start something long' }); // watcher is now mid-activation
+		await providerStarted.promise;
 		await session.visit(mara); // arrives while it works
 		held.resolve();
 		await waitForRoom(session);

@@ -17,6 +17,9 @@ import { renderActivation, renderLine } from './render.ts';
 import { seatSessionId } from './services.ts';
 import { binding, toolsFor } from './tools.ts';
 
+type CallResult<T> =
+	{ kind: 'value'; value: T } | { kind: 'lost'; error: Error } | { kind: 'cancelled' };
+
 // -- the actor ----------------------------------------------------------------
 
 /** One activation the actor holds while it runs. */
@@ -25,7 +28,7 @@ interface Current {
 	activation: Activation;
 	/** The activation ran to its end, and its release is in flight. It takes no steer. */
 	over: boolean;
-	/** Resolves when the room ended the lease: the actor moves on, whatever the run still does. */
+	/** Ends local waits after a room cut or the last confirmed lease expiry. */
 	cut: () => void;
 	cutOff: Promise<void>;
 }
@@ -110,47 +113,93 @@ export class AgentRunner implements SeatPort {
 	private async take(id: string): Promise<void> {
 		// Held before the claim, so a steer that lands while the claim is in
 		// flight reaches the activation and remains available for the next run.
-		const activation = new Activation(id, this.context.seat, this.host(id));
 		let cut = () => {};
 		const cutOff = new Promise<void>((resolve) => {
 			cut = resolve;
 		});
+		const activation = new Activation(id, this.context.seat, this.host(id, cutOff));
 		const current: Current = { id, activation, over: false, cut, cutOff };
 		this.current = current;
-		const claimed = await this.claim(id);
-		if (claimed !== undefined) {
-			const stopRenewing = this.renewUntil(current, claimed.expiresAt);
-			try {
-				// The cut ends the wait, and never the run: a run that ignores the
-				// abort finishes on its own, past a seat that took its next wake.
-				await Promise.race([activation.run(), cutOff]);
-			} finally {
-				stopRenewing();
-				// Over, and holding the seat through the release: a wake that lands
-				// now runs next, and never beside the activation that is releasing.
-				current.over = true;
-				await this.release(id, activation);
+		try {
+			const claimed = await this.claim(id);
+			if (claimed !== undefined) {
+				const expired = claimed.expiresAt <= this.context.clock.now();
+				if (expired) {
+					activation.failed = true;
+					this.cutCurrent();
+				}
+				const stopRenewing = expired ? () => {} : this.renewUntil(current, claimed.expiresAt);
+				try {
+					if (!expired) {
+						// The cut ends the wait, and never the run: a run that ignores the
+						// abort finishes on its own, past a seat that took its next wake.
+						await Promise.race([activation.run(), cutOff]);
+					}
+				} finally {
+					stopRenewing();
+					// Over, and holding the seat through the release: a wake that lands
+					// now runs next, and never beside the activation that is releasing.
+					current.over = true;
+					await this.release(id, activation);
+				}
 			}
+		} finally {
+			if (this.current === current) this.current = undefined;
+			await this.next();
 		}
-		this.current = undefined;
-		await this.next();
 	}
 
 	/**
 	 * One call to the room, sent again while it never comes back. A call the
 	 * room answers is done, whatever it answers. A call that throws reached
 	 * nobody, or its answer was lost, so the seat sends it again, up to the
-	 * attempts the runtime names. `undefined` says every attempt was lost.
+	 * attempts the runtime names. A cut cancels the call without a retry.
 	 */
-	private async calls<T>(send: () => Promise<T>): Promise<T | undefined> {
+	private async calls<T>(
+		send: () => Promise<T>,
+		cancelled?: Promise<void>,
+	): Promise<CallResult<T>> {
+		let last: CallResult<T> = { kind: 'lost', error: new Error('Room call failed.') };
 		for (let attempt = 0; attempt < this.context.call.attempts; attempt += 1) {
-			try {
-				return await send();
-			} catch {
-				// The call never came back: sent again.
-			}
+			const result = await this.call(send, cancelled);
+			if (result.kind === 'value') return result;
+			if (result.kind === 'cancelled') return result;
+			last = result;
 		}
-		return undefined;
+		return last;
+	}
+
+	/** Wait for one room call, its host-clock deadline, or the activation cut. */
+	private async call<T>(
+		send: () => Promise<T>,
+		cancelled: Promise<void> | undefined,
+		timeout = this.context.call.timeout,
+	): Promise<CallResult<T>> {
+		let stopAlarm = () => {};
+		let resolveDeadline: () => void = () => {};
+		const deadline = new Promise<void>((resolve) => {
+			resolveDeadline = resolve;
+		});
+		stopAlarm = this.context.clock.alarm(this.context.clock.now() + timeout, resolveDeadline);
+		let sent: Promise<T>;
+		try {
+			sent = send();
+		} catch (error) {
+			sent = Promise.reject(error);
+		}
+		const outcome = await Promise.race([
+			sent.then(
+				(value) => ({ kind: 'value' as const, value }),
+				(error: unknown) => ({
+					kind: 'lost' as const,
+					error: error instanceof Error ? error : new Error(String(error)),
+				}),
+			),
+			deadline.then(() => ({ kind: 'lost' as const, error: new Error('Room call timed out.') })),
+			...(cancelled === undefined ? [] : [cancelled.then(() => ({ kind: 'cancelled' as const }))]),
+		]);
+		stopAlarm();
+		return outcome;
 	}
 
 	/**
@@ -159,8 +208,15 @@ export class AgentRunner implements SeatPort {
 	 * activation starts whichever call reached the room first.
 	 */
 	private async claim(id: string): Promise<{ expiresAt: number } | undefined> {
-		const claimed = await this.calls(() => this.room.lease({ activation: id, operation: 'claim' }));
-		return claimed === undefined || 'stale' in claimed ? undefined : claimed.ok;
+		const claimed = await this.calls(
+			() => this.room.lease({ activation: id, operation: 'claim' }),
+			this.current?.cutOff,
+		);
+		if (claimed.kind !== 'value') {
+			if (claimed.kind === 'lost') this.reportCallFailure(id, 'claim', claimed.error);
+			return undefined;
+		}
+		return 'stale' in claimed.value ? undefined : claimed.value.ok;
 	}
 
 	/** The next wake that queued, to its end. */
@@ -176,81 +232,152 @@ export class AgentRunner implements SeatPort {
 	 */
 	private async release(id: string, activation: Activation): Promise<void> {
 		const { reason } = activation;
-		await this.calls(() =>
-			this.room.lease({
-				activation: id,
-				operation: 'release',
-				reason,
-				readThrough: activation.readThrough,
-			}),
+		const released = await this.calls(
+			() =>
+				this.room.lease({
+					activation: id,
+					operation: 'release',
+					reason,
+					readThrough: activation.readThrough,
+				}),
+			this.current?.cutOff,
 		);
+		if (released.kind === 'lost') this.reportCallFailure(id, 'release', released.error);
 	}
 
 	/**
 	 * One renewal: the new expiry, `stale` when the room refused it, or
-	 * `lost` when it never reached the room.
+	 * `lost` when no reply confirms the result.
 	 */
 	private async renew(activation: Activation): Promise<number | 'stale' | 'lost'> {
-		try {
-			const renewed = await this.room.lease({
-				activation: activation.id,
-				operation: 'renew',
-				readThrough: activation.readThrough,
-			});
-			return 'stale' in renewed ? 'stale' : renewed.ok.expiresAt;
-		} catch {
-			return 'lost';
+		const renewed = await this.call(
+			() =>
+				this.room.lease({
+					activation: activation.id,
+					operation: 'renew',
+					readThrough: activation.readThrough,
+				}),
+			this.current?.cutOff,
+		);
+		if (renewed.kind !== 'value') {
+			if (renewed.kind === 'lost') this.reportCallFailure(activation.id, 'renew', renewed.error);
+			return renewed.kind === 'cancelled' ? 'stale' : 'lost';
 		}
+		return 'stale' in renewed.value ? 'stale' : renewed.value.ok.expiresAt;
 	}
 
 	/**
 	 * Renew at half the expiry, for as long as the activation runs and the
 	 * room renews it. A refused renewal cuts the activation now: its lease
 	 * ended, so nothing it writes lands. A renewal that moves the expiry
-	 * nowhere says the lease reached its deadline, and one that never
-	 * reached the room leaves the lease to expire where it stands: the actor
-	 * cuts the activation at that expiry, when the room expires the lease.
+	 * nowhere says the lease reached its deadline. An unconfirmed renewal
+	 * keeps the last confirmed expiry as the local execution boundary.
+	 * The room may have accepted a renewal whose reply was lost.
 	 * The cancel stops the loop for good: a renewal in flight when the
 	 * activation ends arms nothing when it comes back.
 	 */
 	private renewUntil(current: Current, firstExpiry: number): () => void {
 		const clock = this.context.clock;
 		let stopped = false;
-		let cancel = () => {};
+		let cancelRenewal = () => {};
+		let cancelExpiry = () => {};
 		const cut = () => {
 			if (this.current === current) this.cutCurrent();
 		};
+		const expire = () => {
+			if (this.current !== current) return;
+			// A local expiry is an execution failure even when the room may still
+			// accept a late renewal. The room's journal remains authoritative.
+			current.activation.failed = true;
+			this.cutCurrent();
+		};
 		const schedule = (expiry: number) => {
-			cancel = clock.alarm(clock.now() + (expiry - clock.now()) / 2, () => void again(expiry));
+			cancelRenewal();
+			cancelExpiry();
+			cancelRenewal = clock.alarm(
+				clock.now() + (expiry - clock.now()) / 2,
+				() => void again(expiry),
+			);
+			cancelExpiry = clock.alarm(expiry, expire);
 		};
 		const again = async (held: number) => {
 			const renewed = await this.renew(current.activation);
 			if (stopped) return;
 			if (renewed === 'stale') cut();
-			else if (renewed === 'lost') cancel = clock.alarm(held, cut);
-			else if (renewed <= held) cancel = clock.alarm(renewed, cut);
-			else schedule(renewed);
+			else if (renewed === 'lost') {
+				cancelRenewal = () => {};
+			} else if (renewed <= held) {
+				cancelRenewal = () => {};
+				cancelExpiry();
+				cancelExpiry = clock.alarm(renewed, expire);
+			} else schedule(renewed);
 		};
 		schedule(firstExpiry);
 		return () => {
 			stopped = true;
-			cancel();
+			cancelRenewal();
+			cancelExpiry();
 		};
 	}
 
-	private host(id: string) {
+	private host(id: string, cancelled: Promise<void>) {
 		const { clock, room, seat, transcripts } = this.context;
 		return {
-			view: () => this.room.view(id),
-			renew: (readThrough: number) =>
-				this.room.lease({ activation: id, operation: 'renew', readThrough }),
-			build: (view: ActivationView, activation: Activation) => this.build(view, activation),
+			view: async () => {
+				const opened = await this.call(() => this.room.view(id), cancelled);
+				if (opened.kind === 'value') return opened.value;
+				if (opened.kind === 'cancelled') return { stale: 'the activation was cut' };
+				this.reportCallFailure(id, 'view', opened.error);
+				throw opened.error;
+			},
+			renew: async (readThrough: number) => {
+				const renewed = await this.call(
+					() => this.room.lease({ activation: id, operation: 'renew', readThrough }),
+					cancelled,
+				);
+				if (renewed.kind === 'value') return renewed.value;
+				if (renewed.kind === 'cancelled') return { stale: 'the activation was cut' };
+				this.reportCallFailure(id, 'renew', renewed.error);
+				throw renewed.error;
+			},
+			build: (view: ActivationView, activation: Activation) =>
+				this.build(view, activation, cancelled),
 			persist: (agent: PiAgent) => {
 				const open = () => this.openAudit(transcripts, seatSessionId(room, seat), room);
 				return persistTurns(open, agent, new Date(clock.now()).toISOString());
 			},
-			emit: (event: RoomNotification) => this.context.emit?.(event),
+			emit: (event: RoomNotification) => this.emit(event),
 			now: () => clock.now(),
+		};
+	}
+
+	private reportCallFailure(
+		activation: string,
+		operation: 'view' | 'commit' | 'claim' | 'renew' | 'release',
+		error: Error,
+	): void {
+		this.emit({ type: 'delivery_error', agent: this.context.seat, activation, operation, error });
+	}
+
+	private emit(event: RoomNotification): void {
+		try {
+			this.context.emit?.(event);
+		} catch {
+			// A diagnostic listener cannot strand an activation.
+		}
+	}
+
+	private boundedRoom(cancelled: Promise<void>): SeatRoom {
+		return {
+			view: (id) => this.room.view(id),
+			commit: async (request) => {
+				const committed = await this.call(() => this.room.commit(request), cancelled);
+				if (committed.kind === 'value') return committed.value;
+				if (committed.kind === 'cancelled') return { stale: 'the activation was cut' };
+				this.reportCallFailure(request.activation, 'commit', committed.error);
+				throw committed.error;
+			},
+			lease: (request) => this.room.lease(request),
 		};
 	}
 
@@ -277,6 +404,7 @@ export class AgentRunner implements SeatPort {
 	private async build(
 		view: ActivationView,
 		activation: Activation,
+		cancelled: Promise<void>,
 	): Promise<{ agent: PiAgent; context: string }> {
 		const def = this.context.definition;
 		if (view.spec.seat !== def.name)
@@ -292,7 +420,7 @@ export class AgentRunner implements SeatPort {
 				systemPrompt: rendered.systemPrompt,
 				model: await this.context.model(def.model, def.name),
 				thinkingLevel: 'off',
-				tools: toolsFor(view, def, binding(activation, this.room)),
+				tools: toolsFor(view, def, binding(activation, this.boundedRoom(cancelled))),
 				messages: [],
 			},
 		});

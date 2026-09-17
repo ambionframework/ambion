@@ -1,11 +1,13 @@
 # Next: a simpler collaboration kernel for 0.1.0
 
-Reviewed against main `31f2621`, after
-[PR #147](https://github.com/ambionframework/ambion/pull/147) merged.
-This review traces Relay, public declarations, package entries, and internal
-ownership. Parallel reviewers examined application APIs, packages, and navigation.
+Reviewed on 2026-09-17 against main `b310ff6` and the accepted summary policy
+in `9eaaf73`. Three reviewers and the primary agent examined collaboration,
+execution, persistence, tools, and package ownership. Deterministic probes found
+release work beyond naming and API cleanup. No provider calls were used.
 [release-0.1.0.md](release-0.1.0.md) remains the scope definition.
-The implementation slices below distinguish current work from later proposals.
+
+Integration with main `cd39709` also includes the reusable assistant package.
+Its instructions define ordinary agent behavior; the kernel still owns authority.
 
 ## The model to preserve
 
@@ -34,113 +36,206 @@ agent definition and membership, presence and connection, and acceptance and com
 
 ## Prioritized work
 
-| Order | Work                                                                 | Benefit                                                                     | Scope                     |
-| ----- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------- |
-| 1     | Complete conversation reads and recoverable summary context          | Clients and agents can inspect source without reconstructing exchange rules | Two medium slices         |
-| 2     | Make presence and membership vocabulary match recorded facts         | Remove false reading claims and unnecessary command coordination            | Small slices              |
-| 3     | Define one application surface and one hosting surface               | Ordinary users stop navigating executor machinery                           | Medium source migration   |
-| 4     | Align files, exports, packages, and learning paths with those owners | The repository and declarations teach the same model                        | Bounded structural slices |
-| 5     | Measure growing histories and close release evidence                 | Optimize demonstrated costs and prove shipped configurations                | Measurement dependent     |
+| Order | Work                                                    | Why it comes first                                                       | Status          |
+| ----- | ------------------------------------------------------- | ------------------------------------------------------------------------ | --------------- |
+| 1     | Execution progress under transport failure              | A lost claim, release, or dispatch can strand accepted work              | In review       |
+| 2     | Delivery integrity and authoritative value ownership    | Acknowledgements and live state must agree with durable facts            | Planned         |
+| 3     | Durable exchange execution outcomes                     | Reconnected applications must distinguish silence from exhausted work    | Planned         |
+| 4     | Incremental projections and a tested operating envelope | Completed history must not dominate every current operation              | Planned         |
+| 5     | Tool execution provenance                               | Reused definitions need a reliable context for application-owned effects | Design decision |
+| 6     | Presence and membership semantics                       | Simplify entry, recovery, and repeated membership commands               | Planned         |
+| 7     | Application and hosting surfaces                        | Keep ordinary applications independent of execution machinery            | Planned         |
+| 8     | Internal modules, exports, and packages                 | Make code ownership and public declarations consistent                   | Planned         |
+| 9     | Remaining release evidence                              | Verify the supported deployments and packed consumers                    | Planned         |
 
-**First implementation:** kernel-owned, immediate exchange reads and explicit
-names for waits. This removes Relay's duplicated range selection and supplies
-the foundation for agent source retrieval. The summary capability gap is the
-highest product risk identified here; do not let naming work postpone it.
+**Implemented for review:** execution progress under transport failure.
+The first change bounds local waits, reports uncertain delivery, and preserves
+journal authority. Delivery integrity is the next implementation item.
 
-### Delivery slices
+**Accepted summary policy:** humans and agents continue from the same recorded
+summary. It replaces covered discussion in later agent prompts as inexpensive
+context compaction. Detail loss is accepted; the journal retains the source.
+Source retrieval, pagination, and changes to summary prompts or replacement
+remain deferred. See the [summary contract](../docs/summary.md#shared-context-and-compaction).
 
-| Slice | Deliverable                                                                                                | Status              |
-| ----- | ---------------------------------------------------------------------------------------------------------- | ------------------- |
-| 1A    | `room.read`, immediate `readExchange`, explicit close/summary waits, `ExchangeRef`, and consumer migration | Prepared for review |
-| 1B    | Bounded source retrieval from captured activation context and corrected summary guidance                   | Next after 1A       |
-| 2A    | Factual departure vocabulary; no implied read receipts                                                     | Planned             |
-| 2B    | Effect-free current-visit access and exact-repeat membership commands                                      | Planned             |
-| 3     | Application/runtime ownership and one `/hosting` entry                                                     | Planned             |
-| 4     | Internal ownership modules, declaration/package checks, and learning-path cleanup                          | Planned             |
-| 5     | History measurements, remaining recovery evidence, and release sign-off                                    | Planned             |
+## 1. Execution must progress or expose why it cannot
 
-Slice 1A returns an `ExchangeSnapshot` containing the exchange view, original
-discussion, and observed watermark. Missing exchanges return `undefined`.
-Positive safe-integer references are required. Reads never wait for completion.
-Existing wait results and errors remain unchanged under explicit names.
-The Cloudflare live-wait methods use the same names; HTTP routes remain stable.
-Source retrieval and summary behavior stay in 1B so each contract is reviewable.
+**Confirmed on the reviewed main: an unresolved claim or release strands the runner.**
+[`runner.ts`](../packages/ambion/src/execution/runner.ts) awaited both calls outside
+the cancellation race. Its retry count bounded rejected calls but placed no
+elapsed bound on an unresolved call. A deterministic probe cut the activation
+and queued another wake; the second claim never started in either case.
 
-**1A evidence:** `pnpm format` and `pnpm check` passed. The gate included
-793 core tests, 36 Relay tests, 23 Cloudflare tests, 39 workspace tests, and
-6 CLI tests. The core total includes 22 new exchange-read cases across memory
-and SQLite storage. Packed consumer type checks and the generated Worker dry
-run passed. Adversarial review found no remaining blocker. CI evidence belongs
-to the implementation PR.
+**Confirmed on the reviewed main: unclaimed work has no delivery diagnostics.**
+[`dispatch`](../packages/ambion/src/room-host.ts) swallowed connector faults and
+transport rejection. A throwing connector produced eleven attempts in ten fake
+seconds, with no error notification and an open exchange. The configured
+activation deadline was two seconds and the retry cap was one. Neither policy
+covers work before a lease exists.
 
-## 1. One source discussion, available through coherent reads
+- [x] Bound host calls and make claim and release waits cancellation-aware.
+      Use host clocks for deterministic deadlines. Capture each call's outcome;
+      late replies must not start cancelled work or release another activation.
+- [x] Preserve existing authority when a call's result is unknown. A timeout
+      does not establish that the remote operation failed or undo its effects.
+      Retries retain the same activation identity and journal fencing.
+- [x] Report dispatch failures through host diagnostics without undoing accepted
+      messages. Avoid unhandled promise rejections and unbounded diagnostic noise.
+- [x] Document and test the admission policy: unclaimed work retries while
+      eligible, and failed deliveries emit diagnostics. Execution retry caps
+      start after a claim. Abort and unseat provide durable terminal boundaries.
+      Preserve work pending through shutdown or an intentional executor hold.
+      Do not interpret activation deadlines as source-message age.
+- [x] Keep timers and local wait ownership in the host/executor. Keep durable
+      eligibility and terminal decisions in room rules. Add no task database,
+      scheduler hierarchy, or total exchange budget.
 
-### Findings at the reviewed baseline
+Automatic admission expiry remains a separate future decision. It would need
+an explicit durable start and restart semantics. It is unnecessary for the
+initial call-liveness fix and must not be introduced through a hidden timeout.
 
-**Relay reconstructed exchange semantics.**
-[`rooms.ts`](../examples/persistent/src/rooms.ts) searched a snapshot's exchanges,
-calculated the closing boundary, removed summaries, and filtered messages.
-Those rules already belong to the kernel.
+**Evidence required:** hung claim and release; cut followed by a new wake;
+late successful and stale replies; hung or rejected renewals; synchronous
+connector failure; rejected wake delivery; delayed claims; recovery after lost
+acknowledgements and restart. Use deterministic clocks and both supported host
+models. Verify that stale contributions remain fenced and cleanup owns its work.
 
-**Read-like method names could wait indefinitely.**
-[`ExchangeHandle`](../packages/ambion/src/room-host.ts) exposed `messages()` as a
-wait for close and `response()` as a wait for an optional summary. Room messages
-were immediate reads. `RoomHost.snapshot()` existed but was absent from
-`Room`; callers repeated the room name and runtime through `readRoom`.
+**Implemented evidence:** 14 executor regressions cover bounded waits, cuts,
+late replies, expired claims, and unknown commit results. Another 14 cases cover
+dispatch and durable cancellation on memory and SQLite. Two workerd regressions
+cover bounded recovery release and late replies preserving newer seat metadata.
+The existing renewal race now verifies eventual retry after local expiry.
+See [durability](../docs/durability.md#transport-calls-and-unclaimed-work) for
+the accepted transport and admission contract.
 
-**A personalized summary becomes every agent's shared memory.**
-[`summary.ts`](../packages/ambion/src/execution/summary.ts) asks the writer to
-omit facts unrelated to its recipient's next action.
-[`render.ts`](../packages/ambion/src/execution/render.ts) then replaces covered
-source messages for later agents. Its prompt suggests using tools for omitted
-facts, but the built-in tools expose only speech and membership operations.
-Domain tools need not contain facts spoken in the room.
+## 2. Delivery integrity and one owner for each value
 
-A deterministic `renderRecord` reproduction used two messages containing an
-export limit of **731 records**, followed by a valid short summary, “Friday is
-feasible.” The source retained 731; the rendered context omitted it. This proves
-source omission, not an observed model mistake. No provider calls were used.
+### Delivery keys identify a logical request
 
-### Changes
+**Confirmed: conflicting keys silently acknowledge another request.** Alice
+sends `request-1`; Bob sends different text with the same key. Bob receives
+Alice's exchange and his message does not land. The same issue affects one
+sender reusing a key with different content.
 
-- [x] Expose one coherent `room.read(options)` using the existing snapshot path.
-      Keep `readRoom(name, options)` for records without a running handle.
-      Retain one pure read implementation and detached returned values.
-      Migrate ordinary observation from `messages()` and `participants()` to
-      this read, then remove redundant public convenience methods.
-- [x] Add `readExchange(roomName, from, options)` for an immediate exchange view
-      and its original discussion. Use the same selector for running and stopped
-      records. A missing exchange must be explicit; reading never starts work.
-- [x] Rename waits to `waitForClose()` and `waitForSummary()`. Preserve the
-      existing returned discussion and optional summary initially. Rename the
-      identity value `Exchange` to `ExchangeRef` when migrating its consumers;
-      keep `ExchangeView` for recorded state and `ExchangeHandle` for live waits.
-      Remove superseded aliases before 0.1.0.
-- [ ] Give ordinary agents bounded, read-only access to the source of replaced
-      ranges. Original messages already reach `ActivationView`; first expose
-      them through an executor tool over that captured context. Share the pure
-      range selector with application reads. No new transport call is needed
-      while the context already contains the source. Restrict access to closed
-      ranges available to that activation, with message/byte limits and explicit
-      continuation. Summaries retain their recipient and source provenance.
-      Retrieval must not publish a contribution, seat an agent, or open an exchange.
-      A historical read must not advance the activation's freshness cursor.
-- [ ] Replace instructions that treat a summary as complete truth or assume
-      domain tools can recover conversational facts. Preserve optional closing
-      work through the ordinary `say` tool. No second summarizer or summary kind.
+[`Journal`](../packages/journal/src/journal.ts) intentionally deduplicates by
+key and entry kind. The [room delivery boundary](../packages/ambion/src/room-host.ts)
+must apply the stronger message contract.
 
-The preferred direction preserves compact context with recoverable source.
-Until retrieval exists, retaining source is the conservative fallback. Disabling
-replacement changes the documented compaction behavior and requires an explicit
-scope update. A shorter prompt alone does not solve inaccessible evidence.
+- [ ] Bind delivery receipts to operation, author, recipient, and content.
+      Return the original receipt for an exact retry. Reject conflicting reuse.
+      Document this tightening of the existing first-write-wins behavior.
+- [ ] Preserve retry identity across lost acknowledgements, restart, and human
+      reentry. Decide key scoping without weakening payload conflict checks.
+- [ ] Align adapter key handling. Cloudflare currently drops an explicitly
+      supplied empty key through a truthiness check. Preserve it or reject empty
+      keys consistently across adapters and the core.
 
-**Evidence required:** open/closed/stopped/missing exchanges; silent, failed,
-and late summaries; exclusive cursors; recovery and superseded runs; invalid
-ranges; detached values. A later specialist must retrieve an omitted constraint
-from the exact source after restart. Keep source retrieval bounded and distinguish
-journal sequences from displayed message numbers.
+**Evidence required:** exact and conflicting retries; two humans; changed
+recipient; concurrent sends; memory and SQLite; restart and Cloudflare RPC.
 
-## 2. Presence and membership describe facts
+### The generic journal owns its cache
+
+**Confirmed: returned entries can alter live interpretation without a write.**
+Mutating `append()`'s returned body changes a repeated-key result. Reopening the
+same storage returns the original body. Public `entries` also exposes a mutable
+array. Storage snapshots alone do not protect the journal's cache.
+
+- [ ] Keep the cache private. Make public entries and append results detached
+      or deeply immutable, with matching TypeScript contracts.
+- [ ] Apply the same ownership rule to callbacks and deduplication results.
+      Avoid copying complete history on every append or observation.
+
+**Evidence required:** nested mutations through each public path cannot change
+later reads, retry results, sequence allocation, or replay.
+
+### Cloudflare must use admitted identity
+
+**Source-traced: adapter metadata can disagree with the room journal.**
+[`visit()`](../packages/cloudflare/src/room-object.ts) writes `metadata.people`
+before admission. A cached visit bypasses validation of replacement identity.
+After restart, the cache is empty and the replacement conflicts with recorded
+identity. Invalid names can also persist before validation. This trace needs a
+workerd reproduction before implementation.
+
+- [ ] Reproduce conflicting identity, malformed input, and interrupted admission.
+- [ ] Make the journal authoritative for admitted identity and presence.
+      Retain only necessary hosting configuration in adapter metadata. Reuse
+      the current-visit access work in section 6 where it removes duplicate state.
+- [ ] Ensure rejected operations cannot corrupt subsequent send, leave, or
+      restart behavior. Handle partial failure without another identity registry.
+
+## 3. Exchanges expose durable execution outcomes
+
+**Confirmed: exhausted work and deliberate silence have equivalent public reads.**
+A silent worker and a provider-failed worker with exhausted retries both produce
+`closed` with a `silent` summary outcome and only the human question as source.
+Independent reads after stop preserve that equivalence. Failure is visible in
+live `error` and `abandoned` notifications, while lease facts remain internal.
+
+Closure correctly fixes a discussion boundary. The missing capability concerns
+execution health, which the kernel knows. It does not concern answer correctness.
+
+- [ ] Derive operational completion facts in the existing exchange read:
+      normal quiescence, cancellation, and exhausted or interrupted work.
+- [ ] Preserve relevant per-agent terminal facts for partial failures. Define
+      how later successful attempts affect the outcome. Avoid a Boolean success
+      field that could imply semantic correctness.
+- [ ] Keep durable outcomes separate from transient error objects and provider
+      diagnostics. Reconnect must not require an application-maintained event log.
+
+**Evidence required:** silence, no eligible workers, exhausted failures, recovery,
+partial failure, cancellation, summaries after failure, and reads after restart.
+
+## 4. Current operations must not repeatedly rebuild settled history
+
+**Measured: completed history remains on the execution and read paths.**
+[`evolve`](../packages/ambion/src/room/transition.ts) copies base facts and calls
+[`project`](../packages/ambion/src/room/fold.ts), which reconstructs membership,
+pending work, and summary obligations. A status read builds all exchange views,
+including searches through historical messages and leases.
+
+The probe used actual source functions on Node 26.8.2. Each exchange had one
+short question, response, and summary, with two completed leases. Pending and
+owed work were zero. These are single-run synthetic measurements without
+storage/provider I/O or isolated warmup; they do not establish production capacity.
+
+| Closed exchanges | Journal entries | Initial fold | Status read without messages | Apply a new question |
+| ---------------- | --------------- | ------------ | ---------------------------- | -------------------- |
+| 100              | 802             | 9 ms         | 1 ms                         | 1 ms                 |
+| 1,000            | 8,002           | 590 ms       | 26 ms                        | 48 ms                |
+| 4,000            | 32,002          | 10.3 s       | 388 ms                       | 412 ms               |
+
+- [ ] Maintain incremental, journal-derived projections for membership, active
+      leases, pending deliveries, and completed exchange outcomes.
+- [ ] Avoid rescanning settled work for unrelated entries. Let reads select the
+      exchange history they need without reconstructing all historical outcomes.
+- [ ] Keep full replay as the reference. Compare incremental results against it
+      under cancellation, reseating, late summaries, takeover, and restart.
+- [ ] Add reproducible performance evidence and publish a finite supported
+      operating envelope. Measure multiple rooms sharing one Node event loop.
+
+This preserves full-history storage and shared summary compaction. Checkpoints,
+retention, deletion, and an additional authoritative scheduler are not prerequisites.
+
+## 5. Tools need immutable execution provenance
+
+**Confirmed omission; capability design remains open.**
+[`ToolContext`](../packages/ambion/src/types.ts) exposes agent identity, provider
+call id, and cancellation. It carries no room, activation, or durable cause.
+A shared definition therefore needs per-room closures or separate application
+plumbing to associate effects with the collaboration that caused them.
+
+- [ ] Define the minimum immutable execution scope for ordinary tools. Consider
+      room, activation, and purpose without exposing mutable room internals.
+- [ ] Demonstrate one retry-safe domain operation with a definition reused across
+      rooms. Distinguish a provider call id from an application operation key.
+- [ ] Keep domain authorization, transactions, and effect idempotency owned by
+      the application. Provenance does not make arbitrary effects exactly once.
+
+Validate the need and shape before stabilizing the tool API. Do not add a new
+tool framework or require per-room copies of every agent definition by default.
+
+## 6. Presence and membership describe facts
 
 ### Presence does not prove reading
 
@@ -191,12 +286,12 @@ preserve recorded presence; absent access writes nothing; stale handles fail;
 retry after deliberate reentry retains the original delivery key and exchange.
 Concurrent duplicate membership commands must produce one change.
 
-`participants()` currently contains seated agents and all known humans, including
+`RoomSnapshot.participants` contains seated agents and all known humans, including
 absent humans. Reserve definitions are separate. Document this precisely; do not
 interpret absence from that view as an available identity. Add reserve data only
 for a real selection UI, without another definition catalog or participant wrapper.
 
-## 3. One application surface; one hosting surface
+## 7. One application surface; one hosting surface
 
 **The runtime is an owner, not a freely copyable dependency record.**
 [`Runtime`](../packages/ambion/src/host/runtime.ts) exposes storage, model calls,
@@ -234,7 +329,7 @@ Preserve Node and Cloudflare composition, independent same-name rooms, audit
 identity, inherited leases, and failure cleanup. Public renames must not rename
 stored journal fields, transcript IDs, or Durable Object bindings incidentally.
 
-## 4. Files and packages teach ownership
+## 8. Files and packages teach ownership
 
 **Move responsibilities before moving paths.**
 [`types.ts`](../packages/ambion/src/types.ts) mixes conversation values, definitions,
@@ -276,9 +371,11 @@ Proposed internal organization, retaining private modules:
 
 ### Package decisions
 
-Keep the six current packages for 0.1.0. Journal and Pi transcript persistence
+Keep the seven current packages for 0.1.0. Journal and Pi transcript persistence
 already have independent ownership and consumers. Keep workspace resource and
 its bound tools in one package. Keep Cloudflare and CLI as deployment choices.
+Keep reusable assistant instructions in the assistant package, separate from
+kernel enforcement and model execution.
 
 `workspace/resource` avoids an Ambion runtime import, but installing workspace
 still installs its declared Ambion dependency. **Import independence is not
@@ -314,28 +411,24 @@ or deployment requirement; file separation alone is insufficient.
 Planning stays in two files. The completed CLI plan is retired; current usage
 belongs in its package README and outstanding work remains below.
 
-## 5. Measurements and release gates
+## 9. Remaining release evidence
 
 These obligations survive the review. Existing passing tests do not certify
 the final 0.1.0 package set.
 
-### Measure before optimizing
+### Extend the history measurements
 
-- [ ] Measure Relay-shaped histories with explicit room/message/lease counts:
-      cold replay, unchanged polls, append/renewal, memory, and provider input size.
-      Separate status copies, projection work, and provider latency.
-- [ ] Optimize only measured repeated work. Keep one disposable projection and
-      pure event application. Compare incremental results with full replay,
-      retained prior values, and fault/restart histories.
-- [ ] Publish supported limits. Full history and unbounded exchange duration
-      remain explicit limits; checkpoints and retention systems are outside scope.
+Section 4 owns the projection changes and their equivalence tests. Extend its
+measurements to Relay polling, memory, provider input size, and multiple rooms.
+Publish supported limits before release. Full-history retention and unbounded
+exchange duration remain explicit limits.
 
 ### Prove shipped configurations
 
 - [ ] Install minimal packed consumers outside the monorepo: journal alone;
       Pi sessions plus journal; embedded Ambion; persistent Node plus workspace;
       resource-only imports; generated CLI/Cloudflare project. A fixture declaring
-      all six packages does not prove each consumer's dependency closure.
+      all seven packages does not prove each consumer's dependency closure.
 - [ ] Resolve or justify both TypeBox versions through authored-tool declaration
       and runtime tests. Replace the cast-based scripted `stubModel` with a valid
       execution-owned model. Document any necessary `skipLibCheck` boundary.
@@ -356,7 +449,7 @@ the final 0.1.0 package set.
 - [ ] Verify `/dev/null` on both workspace backends. Preserve whole-operation
       serialization, shared ownership, and dispose-versus-destroy behavior.
 - [ ] Extend summary evidence for silence, corrections, conflicting constraints,
-      multiple humans, late summaries, source retrieval, and message numbering.
+      multiple humans, late summaries, and message numbering.
 - [ ] Run `pnpm check`, targeted chaos, and proofs for changed rules. Retain
       real-provider restart validation and exercise Relay after API migrations.
       Record commit, commands, environment, results, and unresolved limits.
@@ -377,6 +470,12 @@ composition, and participant vocabulary. Preserve those regressions. Earlier
 work established fixed definitions, typed tools, structured activations,
 conditional journal commits, workspace ownership, and restart/reconnect evidence.
 
+[PR #148](https://github.com/ambionframework/ambion/pull/148) delivered coherent
+`room.read()`, immediate `readExchange()`, explicit close/summary waits, and
+`ExchangeRef`. All seven CI checks passed, including real-model tests. Local
+validation covered 793 core tests, 36 Relay tests, 23 Cloudflare tests,
+39 workspace tests, 6 CLI tests, and packed consumer/generated Worker checks.
+
 The CLI `new`/`dev` workflow and packed/generated-project smoke are implemented.
 Its published-prerelease validation is recorded in
 [the release run](https://github.com/ambionframework/ambion/actions/runs/35059680708).
@@ -394,5 +493,5 @@ Preserve earlier exclusions: hot-loaded definitions, multiple simultaneous
 discussions within one room, per-tab presence tokens, automatic departures,
 distributed workspace ownership, automatic summary skipping by message count,
 manual summary retry, exchange budgets, and mandatory new storage formats.
-The bounded source-read tool above addresses a demonstrated capability gap;
-it does not introduce a general retrieval or retention system.
+Agent source retrieval, pagination, and changes to summary compaction are also
+deferred under the accepted shared-summary policy.
