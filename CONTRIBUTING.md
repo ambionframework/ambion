@@ -5,8 +5,8 @@ CLI includes OpenTUI. The core library retains its Node **>= 22.19** floor.
 
 Ambion is a collaboration kernel for independently owned agents and the
 people they serve. Read the [documentation index](docs/README.md) for current
-contracts and the [0.1.0 scope](planning/release-0.1.0.md) for release targets.
-[The delivery plan](planning/next.md) owns pending work and completion evidence.
+contracts and [the plan](planning/next.md) for the 0.1.0 scope, the work, and
+its evidence. [The backlog](planning/backlog.md) holds everything after.
 
 ```sh
 pnpm install

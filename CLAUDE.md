@@ -31,7 +31,7 @@ pnpm workspace, ESM only, TypeScript. Repository installation needs Node
 | `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                   |
 | `examples/site`       | Runnable example                                                                                 |
 | `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                     |
-| `planning/`           | `release-0.1.0.md`: release scope; `next.md`: remaining and deferred work                        |
+| `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after                |
 
 ## Thesis
 
@@ -51,9 +51,9 @@ through exchange reads. The journal retains the complete history.
 Ambient means a room remains available between interactions. Native timers,
 external event subscriptions, and scheduler ingress remain future work.
 
-[`planning/release-0.1.0.md`](planning/release-0.1.0.md) defines the release
-positioning, scope, and limits. [`planning/next.md`](planning/next.md) owns
-implementation work and completion evidence. `README.md` and `docs/` document
+[`planning/next.md`](planning/next.md) defines the 0.1.0 scope and owns the
+work and its evidence. [`planning/backlog.md`](planning/backlog.md) holds
+everything after 0.1.0. `README.md` and `docs/` document
 current capabilities and label pending release changes explicitly. Keep examples
 on the implemented API until the corresponding change lands.
 

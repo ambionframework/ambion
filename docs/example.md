@@ -62,26 +62,26 @@ without requiring the user to manage every agent interaction.
 ## How the specification maps onto the kernel
 
 **Every noun in the specification is one of four application concepts or
-one resource.** The table names the mechanism and the review item that
-delivers it.
+one resource.** The table names the mechanism and the item in
+[next.md](../planning/next.md) that delivers it.
 
-| Specification                                | Mechanism                                                                                          | Review item |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------- |
-| A project                                    | One room per project; rooms persist across questions                                               |             |
-| A user                                       | A visit with a definition and reading preferences                                                  |             |
-| Five specialized agents                      | Five definitions, each with its own executor; the reserve holds the ones a question does not need  | E1, F10     |
-| The Assistant                                | The assistant package's definition, seated at `broadcast`, named as the summary writer, fixed      | D4          |
-| "Ask questions only when needed"             | A directed say to the person; the exchange closes as `awaiting` that person                        | E7          |
-| "Requests for human input or approval"       | An `awaiting` exchange, and an `approval` step when an instrument tool needs a decision            | E7, F6      |
-| "Let specialists collaborate directly"       | Directed says between seats; attention `named` for specialists the Assistant brings in             |             |
-| "Synthesize"                                 | The closing activation writes one summary for the person who asked; it cites its sources           | E5          |
-| Projects, designs, test plans, runs, results | A SQL resource over one SQLite database, with `query` and `record` tools                           | E4          |
-| Datasheets, manuals, safety data sheets      | The directory workspace under `/library`, read through the workspace binding                       | E4          |
-| Equipment records and instrument operation   | A simulated instrument resource with readiness, run, and measurement tools, and approval on limits | E6, F6      |
-| "Traceable artifacts"                        | `refs` on messages and summaries; provenance on every resource change                              | E5, E6      |
-| "History" as a workspace capability          | The journal for collaboration; the resource's own change log keyed by activation for artifacts     | E6          |
-| "Scheduling" and "task ownership"            | Application state in the SQL resource; outside the kernel by design                                |             |
-| Results and measured data                    | Rows in the results table, with the run and the activation that produced them                      | E6          |
+| Specification                                | Mechanism                                                                                          | Item    |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------- |
+| A project                                    | One room per project; rooms persist across questions                                               |         |
+| A user                                       | A visit with a definition and reading preferences                                                  |         |
+| Five specialized agents                      | Five definitions, each with its own executor; the reserve holds the ones a question does not need  | E1, F10 |
+| The Assistant                                | The assistant package's definition, seated at `broadcast`, named as the summary writer, fixed      | D4      |
+| "Ask questions only when needed"             | A directed say to the person; the exchange closes as `awaiting` that person                        | E7      |
+| "Requests for human input or approval"       | An `awaiting` exchange, and an `approval` step when an instrument tool needs a decision            | E7, F6  |
+| "Let specialists collaborate directly"       | Directed says between seats; attention `named` for specialists the Assistant brings in             |         |
+| "Synthesize"                                 | The closing activation writes one summary for the person who asked; it cites its sources           | E5      |
+| Projects, designs, test plans, runs, results | A SQL resource over one SQLite database, with `query` and `record` tools                           | E4      |
+| Datasheets, manuals, safety data sheets      | The directory workspace under `/library`, read through the workspace binding                       | E4      |
+| Equipment records and instrument operation   | A simulated instrument resource with readiness, run, and measurement tools, and approval on limits | E6, F6  |
+| "Traceable artifacts"                        | `refs` on messages and summaries; provenance on every resource change                              | E5, E6  |
+| "History" as a workspace capability          | The journal for collaboration; the resource's own change log keyed by activation for artifacts     | E6      |
+| "Scheduling" and "task ownership"            | Application state in the SQL resource; outside the kernel by design                                |         |
+| Results and measured data                    | Rows in the results table, with the run and the activation that produced them                      | E6      |
 
 **The kernel owns the collaboration and nothing in the lab.** The example
 owns the schema, the library files, the instrument simulation, and the

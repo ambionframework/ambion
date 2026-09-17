@@ -128,6 +128,6 @@ distinguishes current behavior from the release plan.
 - [Design contracts](https://github.com/ambionframework/ambion/tree/main/docs)
 - [Deployment and recovery](https://github.com/ambionframework/ambion/blob/main/docs/deployment.md)
 - [Multi-agent site example](https://github.com/ambionframework/ambion/tree/main/examples/site)
-- [0.1.0 release scope](https://github.com/ambionframework/ambion/blob/main/planning/release-0.1.0.md)
+- [0.1.0 plan](https://github.com/ambionframework/ambion/blob/main/planning/next.md)
 
 Apache 2.0.
