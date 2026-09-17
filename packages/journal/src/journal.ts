@@ -83,6 +83,11 @@ export interface Entry<TBody = unknown> {
 	readonly run?: string;
 }
 
+/** Clone one value at an ownership boundary. Journal bodies are JSON values. */
+function detached<T>(value: T): T {
+	return structuredClone(value);
+}
+
 /** The body each kind carries. A caller names one body shape per kind. */
 export type Bodies<TKind extends string> = Record<TKind, unknown>;
 
@@ -149,14 +154,18 @@ function envelope<TKind extends string>(
 	const stored = data as Stored;
 	const kind = stored.kind;
 	if (typeof kind !== 'string') return undefined;
-	const body = stored.body;
-	if (!words.accepts(kind, body)) return undefined;
+	// Validate an owned copy. A vocabulary is application code and must not
+	// be able to mutate a storage snapshot that the journal later caches.
+	const candidate = detached(stored.body);
+	if (!words.accepts(kind, candidate)) return undefined;
 	const seq = positionOf(stored.seq);
 	// Every entry takes a place on the record; one without is not an entry.
 	if (seq === undefined) return undefined;
 	return {
 		kind,
-		body,
+		// Storage owns its returned snapshot; take another copy before the
+		// value enters the journal cache so an adapter cannot alias it.
+		body: detached(stored.body),
 		seq,
 		...(typeof stored.key === 'string' ? { key: stored.key } : {}),
 		...(typeof stored.run === 'string' ? { run: stored.run } : {}),
@@ -188,10 +197,23 @@ type KindEntry<TKind extends string, TBodies extends Bodies<TKind>, K extends TK
 
 export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	/** Every entry, replayed then appended, in the order the writes were confirmed. */
-	readonly entries: Entries<TKind, TBodies>[] = [];
+	private readonly cache: Entries<TKind, TBodies>[] = [];
 	readonly ready: Promise<JournalStorage>;
 	/** The place the last entry took. The next entry of any kind takes the one after it. */
-	lastSeq = 0;
+	private sequence = 0;
+	get lastSeq(): Seq {
+		return this.sequence;
+	}
+	/** A detached snapshot of the complete accepted history. */
+	get entries(): readonly Entries<TKind, TBodies>[] {
+		return this.entriesFrom(0);
+	}
+	/** A detached snapshot of accepted entries from the cache index onward. */
+	entriesFrom(start: number): readonly Entries<TKind, TBodies>[] {
+		if (!Number.isSafeInteger(start) || start < 0)
+			throw new RangeError('The journal entry index must be a non-negative safe integer.');
+		return this.cache.slice(start).map((entry) => detached(entry));
+	}
 	private readonly byKey = new Map<string, Entries<TKind, TBodies>>();
 	/** The serial queue. One append at a time, in request order. */
 	private tail: Promise<unknown> = Promise.resolve();
@@ -276,7 +298,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	private take(entry: Entries<TKind, TBodies>, written: string | undefined): void {
 		if (entry.kind === this.words.run) this.pass(written);
 		if (this.voided(entry, written)) return;
-		this.cache(entry);
+		this.remember(entry);
 	}
 
 	/**
@@ -293,11 +315,11 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	 * One entry into the cache, and the room hears it. Nothing during the
 	 * replay is news, so nothing is heard until the replay is over.
 	 */
-	private cache(entry: Entries<TKind, TBodies>): void {
-		this.entries.push(entry);
-		this.lastSeq = Math.max(this.lastSeq, entry.seq);
+	private remember(entry: Entries<TKind, TBodies>): void {
+		this.cache.push(entry);
+		this.sequence = Math.max(this.sequence, entry.seq);
 		if (entry.key !== undefined) this.byKey.set(entry.key, entry);
-		if (this.replayed) this.hear?.(entry);
+		if (this.replayed) this.hear?.(detached(entry));
 	}
 
 	/**
@@ -310,7 +332,13 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 		kind: K,
 		intent: AppendIntent<TBodies[K], TResult>,
 	): Promise<AppendResult<KindEntry<TKind, TBodies, K>, TResult>> {
-		const link = this.tail.then(() => this.land(kind, intent));
+		// Capture the operation identity before the request waits behind earlier
+		// writes. The decision itself still runs in queue order after recovery.
+		const captured: AppendIntent<TBodies[K], TResult> = {
+			key: intent.key,
+			decide: intent.decide,
+		};
+		const link = this.tail.then(() => this.land(kind, captured));
 		// One append that fails must not stop the next one. The queue keeps its
 		// order; the caller of the failed append sees its failure.
 		this.tail = link.catch(() => {});
@@ -399,14 +427,21 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 					`The key '${intent.key}' already names a '${seen.kind}' entry at seq ${seen.seq}.`,
 				);
 			}
-			return { entry: seen as KindEntry<TKind, TBodies, K> };
+			return { entry: detached(seen) as KindEntry<TKind, TBodies, K> };
 		}
 		const proposal = intent.decide();
 		if ('result' in proposal) return proposal;
 		if (!('body' in proposal)) {
 			throw new Error('The append decision must return a body or a result.');
 		}
-		const stored = beside(kind, proposal.body, nextSeq(this.lastSeq), intent.key, this.run);
+		// Capture the draft before crossing the asynchronous storage boundary.
+		const stored = beside(
+			kind,
+			detached(proposal.body),
+			nextSeq(this.sequence),
+			intent.key,
+			this.run,
+		);
 		// Validate before storage sees the envelope. A bad proposal cannot
 		// poison the journal and cannot consume a storage position.
 		if (envelope(this.words, stored) === undefined) {
@@ -414,7 +449,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 		}
 		const appended = await this.persist(storage, stored);
 		this.cursor = appended.position;
-		return { entry: this.took(appended) as KindEntry<TKind, TBodies, K> };
+		return { entry: detached(this.took(appended)) as KindEntry<TKind, TBodies, K> };
 	}
 
 	/**

@@ -61,6 +61,16 @@ entry before the decision runs. Reusing its key for another kind fails. A
 fence key also belongs to its original writer. A new writer must append its
 own fence under the vocabulary's `run` kind.
 
+**Returned values are owned snapshots.** `entries`, append results (including
+retries), and `hear` callbacks cannot mutate the journal's cache. `lastSeq` is
+read-only. `entriesFrom(index)` copies only the accepted entries from a
+non-negative array index onward; this index is an entry count, not a journal
+sequence or storage position. Incremental consumers advance it by the number
+of returned entries. The full `entries` snapshot does not grow after it is read.
+
+Decisions still run inside the queue. Their proposed body is captured before
+awaiting storage; later caller mutations do not change that append.
+
 **Migration:** `append` replaces `commit` and `write`. Remove the vocabulary's
 `record` field and the third `Journal` type parameter. The caller derives
 message views and freshness from entries. `record`, `since`, `lastCommitted`,

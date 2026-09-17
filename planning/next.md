@@ -38,8 +38,8 @@ agent definition and membership, presence and connection, and acceptance and com
 
 | Order | Work                                                    | Why it comes first                                                       | Status          |
 | ----- | ------------------------------------------------------- | ------------------------------------------------------------------------ | --------------- |
-| 1     | Execution progress under transport failure              | A lost claim, release, or dispatch can strand accepted work              | In review       |
-| 2     | Delivery integrity and authoritative value ownership    | Acknowledgements and live state must agree with durable facts            | Planned         |
+| 1     | Execution progress under transport failure              | A lost claim, release, or dispatch can strand accepted work              | Delivered #150  |
+| 2     | Delivery integrity and authoritative value ownership    | Acknowledgements and live state must agree with durable facts            | In review       |
 | 3     | Durable exchange execution outcomes                     | Reconnected applications must distinguish silence from exhausted work    | Planned         |
 | 4     | Incremental projections and a tested operating envelope | Completed history must not dominate every current operation              | Planned         |
 | 5     | Tool execution provenance                               | Reused definitions need a reliable context for application-owned effects | Design decision |
@@ -48,9 +48,10 @@ agent definition and membership, presence and connection, and acceptance and com
 | 8     | Internal modules, exports, and packages                 | Make code ownership and public declarations consistent                   | Planned         |
 | 9     | Remaining release evidence                              | Verify the supported deployments and packed consumers                    | Planned         |
 
-**Implemented for review:** execution progress under transport failure.
-The first change bounds local waits, reports uncertain delivery, and preserves
-journal authority. Delivery integrity is the next implementation item.
+**Delivered:** [execution progress under transport failure (#150)](https://github.com/ambionframework/ambion/pull/150).
+Local waits are bounded and delivery faults are observable; the journal retains
+authority. Delivery integrity and value ownership are implemented for review.
+Durable exchange execution outcomes are next.
 
 **Accepted summary policy:** humans and agents continue from the same recorded
 summary. It replaces covered discussion in later agent prompts as inexpensive
@@ -112,7 +113,7 @@ the accepted transport and admission contract.
 
 ### Delivery keys identify a logical request
 
-**Confirmed: conflicting keys silently acknowledge another request.** Alice
+**Confirmed on the reviewed main: conflicting keys silently acknowledge another request.** Alice
 sends `request-1`; Bob sends different text with the same key. Bob receives
 Alice's exchange and his message does not land. The same issue affects one
 sender reusing a key with different content.
@@ -121,12 +122,12 @@ sender reusing a key with different content.
 key and entry kind. The [room delivery boundary](../packages/ambion/src/room-host.ts)
 must apply the stronger message contract.
 
-- [ ] Bind delivery receipts to operation, author, recipient, and content.
+- [x] Bind delivery receipts to operation, author, recipient, and content.
       Return the original receipt for an exact retry. Reject conflicting reuse.
       Document this tightening of the existing first-write-wins behavior.
-- [ ] Preserve retry identity across lost acknowledgements, restart, and human
+- [x] Preserve retry identity across lost acknowledgements, restart, and human
       reentry. Decide key scoping without weakening payload conflict checks.
-- [ ] Align adapter key handling. Cloudflare currently drops an explicitly
+- [x] Align adapter key handling. Cloudflare currently drops an explicitly
       supplied empty key through a truthiness check. Preserve it or reject empty
       keys consistently across adapters and the core.
 
@@ -135,14 +136,14 @@ recipient; concurrent sends; memory and SQLite; restart and Cloudflare RPC.
 
 ### The generic journal owns its cache
 
-**Confirmed: returned entries can alter live interpretation without a write.**
+**Confirmed on the reviewed main: returned entries can alter live interpretation without a write.**
 Mutating `append()`'s returned body changes a repeated-key result. Reopening the
 same storage returns the original body. Public `entries` also exposes a mutable
 array. Storage snapshots alone do not protect the journal's cache.
 
-- [ ] Keep the cache private. Make public entries and append results detached
+- [x] Keep the cache private. Make public entries and append results detached
       or deeply immutable, with matching TypeScript contracts.
-- [ ] Apply the same ownership rule to callbacks and deduplication results.
+- [x] Apply the same ownership rule to callbacks and deduplication results.
       Avoid copying complete history on every append or observation.
 
 **Evidence required:** nested mutations through each public path cannot change
@@ -150,19 +151,29 @@ later reads, retry results, sequence allocation, or replay.
 
 ### Cloudflare must use admitted identity
 
-**Source-traced: adapter metadata can disagree with the room journal.**
+**Reproduced in workerd: adapter metadata can disagree with the room journal.**
 [`visit()`](../packages/cloudflare/src/room-object.ts) writes `metadata.people`
 before admission. A cached visit bypasses validation of replacement identity.
 After restart, the cache is empty and the replacement conflicts with recorded
-identity. Invalid names can also persist before validation. This trace needs a
-workerd reproduction before implementation.
+identity. Invalid names can also persist before validation. The baseline regression confirmed that a conflicting visit incorrectly resolved.
 
-- [ ] Reproduce conflicting identity, malformed input, and interrupted admission.
-- [ ] Make the journal authoritative for admitted identity and presence.
+- [x] Reproduce conflicting identity, malformed input, and interrupted admission.
+- [x] Make the journal authoritative for admitted identity and presence.
       Retain only necessary hosting configuration in adapter metadata. Reuse
       the current-visit access work in section 6 where it removes duplicate state.
-- [ ] Ensure rejected operations cannot corrupt subsequent send, leave, or
+- [x] Ensure rejected operations cannot corrupt subsequent send, leave, or
       restart behavior. Handle partial failure without another identity registry.
+
+**Implemented evidence:** exact and conflicting retries, concurrency, lost
+acknowledgements, and contribution matching run on memory and SQLite. Journal
+mutation tests cover append receipts, retries, snapshots, callbacks, vocabulary
+validation, delayed storage, and replay. Workerd covers rejected and interrupted
+admission, restart, empty keys, and deterministic leave/reentry ordering.
+
+`Journal.entries` now returns a detached snapshot; `entriesFrom(index)` copies
+only the accepted entries needed by an incremental consumer. Cloudflare removes
+`metadata.people` and reconstructs present visits inside its startup barrier.
+No journal schema, receipt store, or room API is added.
 
 ## 3. Exchanges expose durable execution outcomes
 
@@ -263,7 +274,9 @@ Relay race. The library should make the intended operation direct.
 - [ ] Provide effect-free access to the current visit by name, returning absent
       when the person is absent. Reconstruct access after recovery without an
       arrival. Use it for stateless send/departure requests and delete the
-      participant-check/ensure-entry sequence from Relay and Cloudflare.
+      participant-check/ensure-entry sequence from Relay. Cloudflare already
+      reconstructs present visits during startup and keeps sending effect-free;
+      it does not require this additional API.
 - [ ] Keep authoritative send checks inside the journal queue. A stale handle
       cannot restore presence or send after its visit ends. A delayed HTTP
       request that acquires access after deliberate reentry has current authority;

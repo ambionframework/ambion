@@ -219,7 +219,9 @@ is 60 seconds, with retry backoff, so lost local work can pause before it contin
 arrival. Relay owns navigation policy: its per-room queue serializes presence
 checks with entry, sending, and departure. An absent leave does nothing; an
 absent send returns HTTP 409, including a delivery retry. After explicit entry,
-the same key returns the original exchange without another spoken message.
+the same key and exact request return the original exchange without another
+spoken message. Keys belong to the room: changing the sender, recipient, or
+text under an existing key rejects instead of acknowledging the older request.
 
 **Ctrl+C performs a graceful shutdown.** It stops the hosted rooms and closes
 SQLite after workspace operations finish. Hosting intent stays in the catalog

@@ -25,6 +25,7 @@
  * - **Say when it has stopped.** An exchange closed, and nothing live.
  */
 
+import { decodeActivationId } from './activation-id.ts';
 import { answerCommit, answerLease, answerView } from './answers.ts';
 import { captureHuman } from './define.ts';
 import type { ExecutionConnector, RoomRuntime, RunningRoom } from './host/runtime.ts';
@@ -90,6 +91,44 @@ export type { RoomSnapshot } from './types.ts';
  */
 type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 type DeliveryOperation = 'wake' | 'steer' | 'cut';
+
+/** Compare a delivery with the body returned by a same-key journal retry. */
+function deliveryMatches(
+	command: Extract<RoomCommand, { type: 'deliver' }>,
+	message: Message,
+): boolean {
+	return (
+		message.kind === 'said' &&
+		message.activationId === undefined &&
+		message.from === command.from &&
+		message.to === command.to &&
+		message.text === command.text
+	);
+}
+
+function contributionMatches(commit: CommitRequest, message: Message): boolean {
+	const { activation, intent } = commit;
+	if (message.activationId !== activation) return false;
+	const parsed = decodeActivationId(activation);
+	if (parsed !== undefined && message.from !== parsed.seat) return false;
+
+	if (intent.kind === 'seated' || intent.kind === 'unseated') {
+		return message.kind === intent.kind && message.subject === intent.name;
+	}
+	if (message.kind === 'said') return message.to === intent.to && message.text === intent.text;
+	// A closing agent says through the same `said` intent, but the room records
+	// its contribution as a summary addressed to the exchange owner. An omitted
+	// recipient is that canonical owner; a supplied recipient must still match.
+	return (
+		message.kind === 'summary' &&
+		(intent.to === undefined || message.to === intent.to) &&
+		message.text === intent.text
+	);
+}
+
+function messageKeyConflict(key: string, message: Message): string {
+	return `The key '${key}' already names a different room operation at message seq ${message.seq}.`;
+}
 
 interface DeliveryState {
 	activation: string;
@@ -398,15 +437,14 @@ export class RoomHost implements Room, RunningRoom {
 
 	/** Every fact about the room, folded over the journal as it stands. */
 	state(): RoomState {
-		const entries = this.journal.entries;
 		const current = this.fold;
+		const entries = this.journal.entriesFrom(current?.length ?? 0);
 		if (current === undefined) {
 			this.fold = { length: entries.length, state: foldRoom(entries, this.runtime.retry) };
 			return this.fold.state;
 		}
-		for (const entry of entries.slice(current.length))
-			current.state = evolve(current.state, entry, this.runtime.retry);
-		current.length = entries.length;
+		for (const entry of entries) current.state = evolve(current.state, entry, this.runtime.retry);
+		current.length += entries.length;
 		return current.state;
 	}
 
@@ -780,7 +818,7 @@ export class RoomHost implements Room, RunningRoom {
 	 */
 	private async commitMessage(
 		key: string,
-		command: Extract<RoomCommand, { type: 'deliver' | 'commit' }>,
+		command: Extract<RoomCommand, { type: 'deliver' }>,
 	): Promise<Message> {
 		const appended = await this.submit(
 			'message',
@@ -789,7 +827,9 @@ export class RoomHost implements Room, RunningRoom {
 		);
 		this.requireSubmission(appended);
 		if (!('entry' in appended)) throw new Error('The room command did not append a message.');
-		return placed(appended.entry);
+		const message = placed(appended.entry);
+		if (!deliveryMatches(command, message)) throw new Error(messageKeyConflict(key, message));
+		return message;
 	}
 
 	/** Validate before host effects, then decide again where the message commits. */
@@ -1136,7 +1176,17 @@ export class RoomHost implements Room, RunningRoom {
 			() => decide(this.state(), { type: 'commit', commit }, this.now()),
 			commit.key,
 		);
-		if ('entry' in appended) return { committed: copyMessage(placed(appended.entry)) };
+		if ('entry' in appended) {
+			const message = placed(appended.entry);
+			if (!contributionMatches(commit, message))
+				return {
+					refusal: {
+						category: 'refused',
+						reason: messageKeyConflict(commit.key, message),
+					},
+				};
+			return { committed: copyMessage(message) };
+		}
 		if (appended.result === undefined) throw new Error('The commit did not propose a message.');
 		return appended.result;
 	}

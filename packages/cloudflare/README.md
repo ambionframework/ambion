@@ -27,6 +27,9 @@ What is built:
   `unseat`, `abort`, `read`, `messages`, `participants`, `exchange`,
   `waitForClose` and `waitForSummary` over RPC, and the three calls a seat makes: `view`, `commit`
   and `lease`. Its `alarm()` runs `reconcile()`.
+  Identity and presence come from the room journal. Restart restores handles
+  only for present humans; `send` never enters the room implicitly. Explicit
+  `visit` ensures presence, and repeated `leave` is harmless.
 - **`SeatObject`** runs one seat. `wake` stores the activation id and sets
   an alarm; `alarm()` claims the lease, reads the view, runs the activation
   and whatever queued behind it to their end, and releases the lease.

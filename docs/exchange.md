@@ -94,8 +94,9 @@ quiet wait.
 Summary completion is folded from the recorded close, messages, and lease
 history (`summaryCompletion`). A covering summary wins over lease state; a
 pending assignment remains pending until it publishes or records a terminal
-failure. Reusing a delivery key returns the same handle, and concurrent sends
-into one open exchange share its identity.
+failure. Retrying the same delivery key and payload returns the same handle;
+conflicting reuse rejects. Concurrent sends into one open exchange share its
+identity. See [delivery guarantees](durability.md#2-what-a-delivery-promises).
 
 Live notifications include `message`, `exchange_opened`, and
 `exchange_closed` events, plus execution diagnostics. Notifications and pending
