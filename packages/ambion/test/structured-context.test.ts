@@ -163,10 +163,41 @@ describe('structured activation context', () => {
 		const summary = viewOf(spec.summarize, facts());
 
 		expect(summary.through).toBe(3);
-		expect(summary.context.messages.map((message) => message.seq)).toEqual([3]);
+		expect(summary.context.messages.map((message) => message.seq)).toEqual([2, 3]);
 		expect(summary.context.messages).not.toContainEqual(
 			expect.objectContaining({ text: 'Later.' }),
 		);
+	});
+
+	it('uses folded history as background while keeping the assigned exchange and close boundary', () => {
+		const closing: ActivationSpec = {
+			id: 'closed:7:worker:1',
+			seat: 'worker',
+			attempt: 1,
+			purpose: { kind: 'summarize', exchange: 7, person: 'priya', through: 7 },
+		};
+		const state = foldRoom(summaryHistory(), { backoff: () => 0 });
+		const roomFacts = { ...facts(), state };
+		const view = viewOf(closing, roomFacts);
+		const rendered = renderActivation(roundTrip(view), worker);
+		expect(view.spec.purpose).toEqual(closing.purpose);
+		expect(view.through).toBe(7);
+		expect(view.context.messages.map((message) => message.seq)).toEqual([2, 3, 4, 6, 7]);
+		expect(rendered.context).toContain('Mira owns R-19. The approved count is 8.');
+		expect(rendered.context).not.toContain('Superseded draft: 10 units.');
+		expect(rendered.context).not.toContain('Later correction: 12 units.');
+		const marker = 'Current exchange begins here; earlier exchanges are background';
+		expect(rendered.context.indexOf(marker)).toBeGreaterThan(
+			rendered.context.indexOf('Mira owns R-19.'),
+		);
+		expect(rendered.context.indexOf(marker)).toBeLessThan(
+			rendered.context.indexOf('Use the recorded status.'),
+		);
+		expect(rendered.systemPrompt).toContain('Summarize only the assigned exchange.');
+		expect(rendered.systemPrompt).toContain(
+			'Do not recap unrelated history or expand the covered range.',
+		);
+		expect(JSON.stringify(view.context.messages)).not.toContain('Lead with blockers.');
 	});
 
 	it('renders ordinary and closing prompts with the same ordinary identity', () => {
@@ -186,3 +217,39 @@ describe('structured activation context', () => {
 		expect(summary.context).not.toContain('Later.');
 	});
 });
+
+function summaryHistory(): Entry[] {
+	return [
+		...entries.slice(0, 3),
+		{
+			kind: 'message',
+			seq: 4,
+			body: { kind: 'said', at, from: 'product', text: 'Superseded draft: 10 units.' },
+		},
+		{ kind: 'close', seq: 5, body: { owner: 'priya', from: 3, through: 4, at, summary: 'worker' } },
+		{
+			kind: 'message',
+			seq: 6,
+			body: {
+				kind: 'summary',
+				at,
+				from: 'worker',
+				to: 'priya',
+				text: 'Mira owns R-19. The approved count is 8.',
+				covers: { from: 3, through: 4 },
+				activationId: 'closed:3:worker:1',
+			},
+		},
+		{
+			kind: 'message',
+			seq: 7,
+			body: { kind: 'said', at, from: 'priya', text: 'Use the recorded status.' },
+		},
+		{ kind: 'close', seq: 8, body: { owner: 'priya', from: 7, through: 7, at, summary: 'worker' } },
+		{
+			kind: 'message',
+			seq: 9,
+			body: { kind: 'said', at, from: 'product', text: 'Later correction: 12 units.' },
+		},
+	];
+}

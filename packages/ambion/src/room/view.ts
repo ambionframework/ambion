@@ -51,9 +51,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts): ActivationView {
 	const goal = state.composition?.goal;
 	const messages =
 		purpose.kind === 'summarize'
-			? state.messages.filter(
-					(message) => message.seq >= purpose.exchange && message.seq <= purpose.through,
-				)
+			? state.messages.filter((message) => message.seq <= purpose.through)
 			: state.messages;
 	const context: CollaborationContext = {
 		name: facts.name,

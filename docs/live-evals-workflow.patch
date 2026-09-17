@@ -1,0 +1,74 @@
+diff --git a/.github/workflows/live.yml b/.github/workflows/live.yml
+index b4caaa1..1563b91 100644
+--- a/.github/workflows/live.yml
++++ b/.github/workflows/live.yml
+@@ -13,6 +13,19 @@ on:
+         description: The model every live seat runs on, as provider/model-id
+         type: string
+         default: anthropic/claude-sonnet-5
++      simulator_model:
++        description: Human simulator model; defaults to the subject model
++        type: string
++        default: ''
++      judge_model:
++        description: Judge model; defaults to the subject model
++        type: string
++        default: ''
++      eval_profile:
++        description: Assistant room simulation sample profile
++        type: choice
++        options: [development, baseline, acceptance]
++        default: baseline
+   schedule:
+     # Mondays at 06:00 UTC, before the week's first change lands.
+     - cron: '0 6 * * 1'
+@@ -69,10 +82,16 @@ jobs:
+     needs: gate
+     if: needs.gate.outputs.run == 'true'
+     runs-on: ubuntu-latest
+-    timeout-minutes: 30
++    timeout-minutes: 120
+     env:
+       AMBION_MODEL: ${{ inputs.model || 'anthropic/claude-sonnet-5' }}
++      AMBION_SIMULATOR_MODEL: ${{ inputs.simulator_model || inputs.model || 'anthropic/claude-sonnet-5' }}
++      AMBION_JUDGE_MODEL: ${{ inputs.judge_model || inputs.model || 'anthropic/claude-sonnet-5' }}
++      AMBION_EVAL_PROFILE: ${{ inputs.eval_profile || (github.event_name == 'schedule' && 'baseline' || 'development') }}
++      AMBION_EVAL_REQUIRED: '1'
++      AMBION_EVAL_OUTPUT: ${{ github.workspace }}/eval-results
+       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
++      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+     steps:
+       - uses: actions/checkout@v5
+         with:
+@@ -84,13 +103,25 @@ jobs:
+           cache: pnpm
+       - run: pnpm install --frozen-lockfile
+ 
+-      # Without a key every live test skips, and a green run would say
+-      # nothing. The job fails instead, so a missing secret is visible.
+-      - name: the key is present
++      # Required subject, simulator, and judge runs cannot pass by skipping.
++      - name: subject, simulator, and judge credentials are present
+         run: |
+-          [ -n "$ANTHROPIC_API_KEY" ] || {
+-            echo 'ANTHROPIC_API_KEY is not set: add it to the repository secrets.' >&2
+-            exit 1
++          node --input-type=module <<'JS'
++          for (const model of [process.env.AMBION_MODEL, process.env.AMBION_SIMULATOR_MODEL, process.env.AMBION_JUDGE_MODEL]) {
++            const provider = model?.split('/')[0];
++            if (!provider || !model.includes('/')) throw new Error('Expected provider/model-id.');
++            const key = `${provider.toUpperCase().replace(/-/g, '_')}_API_KEY`;
++            if (!process.env[key]) throw new Error(`${key} is required for ${model}.`);
+           }
++          JS
+ 
++      - run: pnpm run build
+       - run: pnpm run test:live
++      - name: retain evaluation evidence, including failures
++        if: always()
++        uses: actions/upload-artifact@v4
++        with:
++          name: eval-results-${{ github.run_id }}-${{ github.run_attempt }}
++          path: eval-results/
++          if-no-files-found: warn
++          retention-days: 14

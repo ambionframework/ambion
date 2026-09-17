@@ -46,3 +46,6 @@ examples/*/demo-run.json
 
 # local secrets and ad-hoc end-to-end scripts
 .e2e/
+
+# Retained local evaluation runs. Curated fixtures belong in test directories.
+eval-results/

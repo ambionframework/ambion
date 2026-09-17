@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
 	type Attention,
 	type CreateRuntimeOptions,
@@ -71,7 +73,27 @@ async function evaluate(options: {
 		return { messages: await exchange.waitForClose(), summary };
 	} finally {
 		clearTimeout(timer);
-		await room.stop();
+		try {
+			const root = process.env.AMBION_EVAL_OUTPUT;
+			if (root) {
+				const directory = join(root, 'assistant-legacy');
+				await mkdir(directory, { recursive: true });
+				await writeFile(
+					join(directory, `${room.name}.json`),
+					JSON.stringify(
+						{
+							model,
+							input: options,
+							snapshot: await room.read(),
+						},
+						null,
+						2,
+					),
+				);
+			}
+		} finally {
+			await room.stop();
+		}
 	}
 }
 

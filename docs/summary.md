@@ -66,6 +66,16 @@ When the room records a close, it assigns a dedicated activation only when
 the person who opened it. It receives that person's current preferences.
 Later messages do not change the source range or recipient.
 
+**The summary answers only its assigned exchange.** The closing activation
+receives room history up to that exchange's fixed closing boundary.
+Earlier summaries replace their covered messages in the rendered context.
+The context marks where the assigned exchange begins.
+
+Use earlier history to interpret the request and supply relevant facts.
+Do not recap unrelated history. Earlier context does not expand the summary's
+covered range. Messages after the closing boundary remain excluded, including
+during retries.
+
 The closing activation receives the regular `say` tool with this shape:
 
 ```ts

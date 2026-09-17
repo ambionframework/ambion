@@ -420,7 +420,7 @@ describe('room transition', () => {
 		const view = viewOf(spec, { name: 'room', now, state, live: new Map(), unseen: () => 0 });
 		expect(view.through).toBe(3);
 		expect(view.context.reserve).toEqual([{ name: 'reserve', identity: 'Reserve.' }]);
-		expect(view.context.messages.map((message) => message.seq)).toEqual([3]);
+		expect(view.context.messages.map((message) => message.seq)).toEqual([2, 3]);
 	});
 
 	it('starts a new summary assignment after reseating before close, and never revives one ended after close', () => {

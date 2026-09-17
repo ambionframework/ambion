@@ -11,17 +11,18 @@ each page.
 
 ## Contracts
 
-| Document                    | Use it for                                                 |
-| --------------------------- | ---------------------------------------------------------- |
-| [Agent](agent.md)           | Definitions, tools, activation rules, and room operations  |
-| [Exchange](exchange.md)     | Human questions, completion, and durable result handles    |
-| [Presence](presence.md)     | Visits, arrivals, departures, and catch-up                 |
-| [Roster](roster.md)         | Agent membership, reserve, and attention                   |
-| [Summaries](summary.md)     | Optional closing work and context replacement              |
-| [Workspace](workspace.md)   | Shared filesystem resources and lifecycle                  |
-| [Durability](durability.md) | Journal guarantees, recovery, leases, and failure evidence |
-| [Deployment](deployment.md) | Host placement, storage, reconnect, and operational limits |
-| [Toolchain](toolchain.md)   | Package layout, checks, CI, and release commands           |
+| Document                    | Use it for                                                       |
+| --------------------------- | ---------------------------------------------------------------- |
+| [Agent](agent.md)           | Definitions, tools, activation rules, and room operations        |
+| [Exchange](exchange.md)     | Human questions, completion, and durable result handles          |
+| [Presence](presence.md)     | Visits, arrivals, departures, and catch-up                       |
+| [Roster](roster.md)         | Agent membership, reserve, and attention                         |
+| [Summaries](summary.md)     | Optional closing work and context replacement                    |
+| [Workspace](workspace.md)   | Shared filesystem resources and lifecycle                        |
+| [Durability](durability.md) | Journal guarantees, recovery, leases, and failure evidence       |
+| [Deployment](deployment.md) | Host placement, storage, reconnect, and operational limits       |
+| [Evals](evals.md)           | Generic code evals and lifecycle, applied first to the assistant |
+| [Toolchain](toolchain.md)   | Package layout, checks, CI, and release commands                 |
 
 ## Navigation hints
 

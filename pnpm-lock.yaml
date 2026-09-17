@@ -45,6 +45,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/workspace
     devDependencies:
+      '@ambionframework/evals':
+        specifier: workspace:*
+        version: link:../../packages/evals
       '@earendil-works/pi-ai':
         specifier: ^0.84.3
         version: 0.84.3(ws@8.21.3)(zod@4.4.3)
@@ -120,6 +123,9 @@ importers:
         specifier: workspace:*
         version: link:../ambion
     devDependencies:
+      '@ambionframework/evals':
+        specifier: workspace:*
+        version: link:../evals
       '@earendil-works/pi-ai':
         specifier: ^0.84.3
         version: 0.84.3(ws@8.21.3)(zod@4.4.3)
@@ -173,6 +179,25 @@ importers:
       '@earendil-works/pi-agent-core':
         specifier: ^0.84.3
         version: 0.84.3(ws@8.21.3)(zod@4.4.3)
+      '@earendil-works/pi-ai':
+        specifier: ^0.84.3
+        version: 0.84.3(ws@8.21.3)(zod@4.4.3)
+      tsdown:
+        specifier: ^0.22.14
+        version: 0.22.14(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.2.0)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/evals:
+    dependencies:
+      '@ambionframework/ambion':
+        specifier: workspace:*
+        version: link:../ambion
+    devDependencies:
       '@earendil-works/pi-ai':
         specifier: ^0.84.3
         version: 0.84.3(ws@8.21.3)(zod@4.4.3)

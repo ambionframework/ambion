@@ -454,6 +454,31 @@ exchange duration remain explicit limits.
       real-provider restart validation and exercise Relay after API migrations.
       Record commit, commands, environment, results, and unresolved limits.
 
+### Agent and room evaluations
+
+- [x] Retain reusable evidence sealing, cleanup, programmatic checks, independent
+      judges, result storage, and offline regrading from the first implementation.
+- [x] Retain the [baseline](../docs/evals-baseline.md) and
+      [full-run diagnosis](../docs/evals-acceptance.md). Provider credits again
+      prevented complete live verification. Neither run establishes acceptance.
+- [x] Include history through the fixed closing boundary. Scope the summary to
+      its assigned exchange. Deterministic regressions and the separate A08 run pass.
+- [x] Make [room simulation](../docs/evals.md) the primary eval interface.
+      A model-driven actor represents declared humans. The runner validates
+      actions, waits for settlement, then runs checks and an independent judge.
+- [x] Apply the simulator first to the production assistant. Start with named
+      routing, renewed work, paired private evidence, and a multi-human follow-up.
+- [ ] Verify action limits, invalid identities, cancellation, settling, lifecycle
+      callback order, evidence isolation, and cleanup with deterministic tests.
+- [ ] Review full-trace judge calibration independently. Preserve false passes
+      and disputed failures. Define peer attribution and capacity/authorization
+      distinctions explicitly. Keep deterministic assertions for exact constraints.
+- [ ] Capture the original browser history for renewed writer participation.
+      Constructed persisted history alone does not resolve that observed failure.
+- [ ] Establish live simulator acceptance from retained first-attempt evidence.
+      Report subject, human simulator, and judge versions separately. Expand
+      coverage only after the initial simulation lifecycle is verified.
+
 ### Release sign-off
 
 - [ ] Audit README, package docs, templates, and design contracts against final
@@ -486,7 +511,7 @@ Deferred: scheduler ingress, native timers/subscriptions, a task database,
 mandatory summaries, automatic exactly-once external effects, another generic
 tool SDK, browser-only execution, hosted service, turnkey deployment commands,
 and new packages without independent consumers. CLI remote authentication,
-automated evaluations, multiple terminal clients, and live activity transport
+distributed evaluation matrices, multiple terminal clients, and live activity transport
 also remain outside its current two-command scope.
 
 Preserve earlier exclusions: hot-loaded definitions, multiple simultaneous
