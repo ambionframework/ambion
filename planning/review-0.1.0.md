@@ -437,13 +437,18 @@ must rebuild a `StreamFn` from Pi internals. `waitForRoom` in
 [`room.ts`](../packages/ambion/test/support/room.ts) reaches into the private
 fold, so even the repository's own wait has no public form. The runtime's
 scripted path resolves models through a cast in `stubModel`
-([next.md §9](next.md)).
+([next.md §9](next.md)). Draft PR #153 shows the cost: its evaluation
+harness re-implements the scripted stream three times from Pi primitives,
+and it waits for a quiet room by polling `reconcile()` and `read()` on a
+zero-delay timer. Its own design document lists "no room-wide wait-for-idle
+handle" as a gap.
 
 **Solution.** Publish `@ambionframework/ambion/testing` with `scripted`,
 `speak`, `quiet`, `callTool`, `byAgent`, `fakeClock`, and `settled(room)`.
-Build `settled` on the public read: every agent participant `idle` and no
-open exchange. Replace the `stubModel` cast with a valid scripted model.
-Move the repository's tests onto the published entry.
+Build `settled` on the public read: every agent participant `idle`, no
+open exchange, and no closed exchange with a pending summary. Replace the
+`stubModel` cast with a valid scripted model. Move the repository's tests
+and the PR #153 harness onto the published entry.
 
 **Impact.** A developer tests a room the way the kernel tests itself, with
 no key and no network. The repository stops depending on private access
@@ -809,6 +814,44 @@ implemented while `next.md` says they are. Delegation to a working room is
 the right 0.2 feature. Land the design contract in `planning/` and rebuild
 it on the incremental fold (B1) with a bounded change set per journal.
 
+**Split draft PR #153 and land its kernel slice alone.** "Add room
+simulation evals with human actors and assistant cases" (+8,455/−146,
+76 files, one commit) bundles four separable changes.
+
+| Slice                                                        | Size        | Recommendation                                   |
+| ------------------------------------------------------------ | ----------- | ------------------------------------------------ |
+| Closing context: `view.ts`, `render.ts`, `summary.ts`, tests | 4 lines     | Land in 0.1.0 on its own                         |
+| `@ambionframework/evals`: an eighth published package        | 4,631 lines | Keep private until its own work-left list closes |
+| Assistant simulation suite and fixtures                      | 2,456 lines | Assistant package work; review separately        |
+| Three reports and `docs/live-evals-workflow.patch`           | 703 lines   | Move under `planning/evidence/` (C7)             |
+
+The kernel slice changes what a closing activation reads: every message
+through the close boundary, with the divider at the assigned exchange, in
+place of the assigned range alone. The two added duty lines tell the writer
+to summarize only its exchange. It fixes an observed defect (a closing
+activation lost facts from earlier exchanges) and has deterministic tests.
+Two review points: the closing prompt now grows with the room's age, which
+D5 bounds, and the closing instruction's positional range shifted, which
+confirms that the instruction counts rendered messages.
+
+The package is a separate concern from the kernel. Its public type surface
+is 283 lines at alpha maturity, and its own "Work left" names the failure
+matrix, live acceptance, and judge calibration as open. [next.md](next.md)
+defers new packages without independent consumers and automated
+evaluations; the PR edits that deferral sentence and leaves the release
+scope unchanged. Its Node 24 check failed in
+`test/simulation-unsafe.test.ts` on a 20 ms settle budget that also bounds
+the first settle, a timing flake. Its live check was cancelled at the
+workflow's 30-minute timeout. The workflow patch sits in `docs/` because the
+pushing token lacked the `workflow` scope; apply it with a credential that
+has it.
+
+Two facts in the harness bear on the kernel. It fakes a quiet wait and a
+scripted stream (C2). Its simulator and its judge each start a full room
+to obtain one model completion, because the kernel exposes no one-shot
+model call; the hosting entry's execution services already return a
+`stream` and a `model` resolver, and the harness can call Pi with them.
+
 **Close the stale pull requests.** Nine open pull requests date from
 2026-09-01 to 2026-09-11, and every one conflicts with main. Main delivered
 the aim of each one by another route. Three carry one idea worth taking
@@ -849,7 +892,7 @@ fix before it.
 | Step | Work                                               | Depends on | Evidence                                                                                         |
 | ---- | -------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------ |
 | 1    | Merge PR #152; close stale PRs; bump the Pi pair   |            | CI green on main                                                                                 |
-| 2    | A1, A2, D1                                         | 1          | Probes as regressions on memory and SQLite; a 400 abandons in one attempt                        |
+| 2    | A1, A2, D1, the closing-context slice of PR #153   | 1          | Probes as regressions on memory and SQLite; a 400 abandons in one attempt                        |
 | 3    | C1, D9                                             |            | `pnpm install` and `pnpm check` on Node 22; two live jobs                                        |
 | 4    | B3, B4, B5, B7, B8, C5, C6, D4, D5                 | 2          | Generated declarations list two entries; a fixed seat refuses an agent's unseat                  |
 | 5    | D2, D3: usage and format on the journal            | 4          | Golden journals replay; `activation_end` carries usage                                           |
@@ -868,6 +911,8 @@ the main entry and to the journal bodies is additive until the tag.
 ## G. Deferred past 0.1.0
 
 - Exchange-scoped tasks and working rooms (PR #151), rebuilt on B1.
+- Publishing `@ambionframework/evals` (PR #153); it stays private until
+  its failure matrix, live acceptance, and judge calibration are done.
 - A bounded projection with checkpoints; B1 keeps full replay.
 - Tool execution provenance ([next.md §5](next.md)); the shape is open.
 - Automatic admission expiry for unclaimed work.
