@@ -1,8 +1,13 @@
-import type { AgentSeatInfo, Exchange, Message, SeatInfo } from '@ambionframework/ambion';
+import type {
+	AgentParticipantInfo,
+	Exchange,
+	Message,
+	ParticipantInfo,
+} from '@ambionframework/ambion';
 
 export interface RoomStatus {
 	name: string;
-	participants: SeatInfo[];
+	participants: ParticipantInfo[];
 	exchange: Exchange | undefined;
 	exchangeState: 'idle' | 'working' | 'completed';
 }
@@ -19,12 +24,12 @@ export class WorkerError extends Error {
 
 interface StartResponse {
 	started: string;
-	participants: SeatInfo[];
+	participants: ParticipantInfo[];
 }
 
 interface JoinResponse {
 	joined: string;
-	participants: SeatInfo[];
+	participants: ParticipantInfo[];
 }
 
 export interface ExchangeResult {
@@ -123,8 +128,8 @@ export class WorkerClient {
 	}
 }
 
-export function agentParticipants(status: RoomStatus): AgentSeatInfo[] {
+export function agentParticipants(status: RoomStatus): AgentParticipantInfo[] {
 	return status.participants.filter(
-		(participant): participant is AgentSeatInfo => participant.kind === 'agent',
+		(participant): participant is AgentParticipantInfo => participant.kind === 'agent',
 	);
 }

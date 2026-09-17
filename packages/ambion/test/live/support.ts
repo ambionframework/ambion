@@ -25,6 +25,7 @@ import {
 	type StartRoomOptions,
 	startRoom,
 } from '../../src/index.ts';
+import { seatSessionId } from '../../src/transport.ts';
 import { collect, roomName, waitForRoom } from '../support/room.ts';
 
 /** The model every live seat runs on. The example reads the same variable. */
@@ -136,7 +137,7 @@ export async function spent(runtime: Runtime, session: Room): Promise<Spent> {
 	const total: Spent = { activations: 0, tokens: 0, cost: 0 };
 	for (const info of session.participants()) {
 		if (info.kind !== 'agent') continue;
-		const seat = await runtime.transcripts.open(info.sessionId);
+		const seat = await runtime.transcripts.open(seatSessionId(session.name, info.name));
 		for (const entry of await seat.findEntries()) add(total, entry);
 	}
 	return total;

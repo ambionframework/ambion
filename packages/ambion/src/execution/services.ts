@@ -11,6 +11,11 @@ interface ExecutionCall {
 	readonly attempts: number;
 }
 
+/** A collision safe id for the Pi session that one agent owns in one room. */
+export function seatSessionId(room: string, seat: string): string {
+	return JSON.stringify(['ambion/seat-session', room, seat]);
+}
+
 export interface ExecutionServices {
 	readonly clock: Clock;
 	readonly call: ExecutionCall;

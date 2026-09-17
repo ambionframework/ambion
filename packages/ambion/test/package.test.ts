@@ -43,6 +43,7 @@ it('keeps the wire off the entry a host builds a room with', () => {
 	for (const name of [
 		'AgentRunner',
 		'createExecutionServices',
+		'seatSessionId',
 		'inProcessTransport',
 		'assertWire',
 		'roundTrip',

@@ -12,7 +12,14 @@
  * context to one running activation, and `cut` stops an activation whose
  * lease the room ended.
  */
-import type { AgentSeatInfo, EndReason, HumanSeatInfo, Message, Seq, Without } from './types.ts';
+import type {
+	AgentParticipantInfo,
+	EndReason,
+	HumanParticipantInfo,
+	Message,
+	Seq,
+	Without,
+} from './types.ts';
 
 /** The work authorized by the room, with the facts that purpose requires. */
 export type ActivationPurpose =
@@ -62,8 +69,8 @@ export interface SeatPort {
 
 /** Public participant facts with each person's recorded reading progress. */
 export type ContextParticipant =
-	| Omit<AgentSeatInfo, 'sessionId'>
-	| (HumanSeatInfo & {
+	| AgentParticipantInfo
+	| (HumanParticipantInfo & {
 			readonly changedAt?: string;
 			readonly since?: Seq;
 			readonly unseen: number;
