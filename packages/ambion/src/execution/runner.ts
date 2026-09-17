@@ -11,9 +11,10 @@ import type { Agent as PiAgent, Session as PiSession } from '@earendil-works/pi-
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { SeatContext, Transport } from '../host/runtime.ts';
 import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../protocol.ts';
-import { type RoomNotification, seatSessionId } from '../types.ts';
+import type { RoomNotification } from '../types.ts';
 import { Activation, persistTurns } from './activation.ts';
 import { renderActivation, renderLine } from './render.ts';
+import { seatSessionId } from './services.ts';
 import { binding, toolsFor } from './tools.ts';
 
 // -- the actor ----------------------------------------------------------------

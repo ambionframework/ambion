@@ -55,7 +55,7 @@ export type ExchangeView =
 interface RoomSnapshotFields {
 	readonly name: string;
 	readonly messages: readonly Message[];
-	readonly participants: readonly SeatInfo[];
+	readonly participants: readonly ParticipantInfo[];
 	readonly exchanges: readonly ExchangeView[];
 	readonly exchange: Extract<ExchangeView, { readonly status: 'open' }> | undefined;
 	/** The accepted journal sequence observed by this read. */
@@ -207,11 +207,6 @@ export function isPresence(message: Message): message is PresenceMessage {
 /** Whether a seat is taking an activation. Runtime state, not a seating choice. */
 export type SeatStatus = 'active' | 'idle';
 
-/** A collision-safe id for the Pi session that one seat owns in one room. */
-export function seatSessionId(room: string, seat: string): string {
-	return JSON.stringify(['ambion/seat-session', room, seat]);
-}
-
 /**
  * What wakes a seat, as the widest kind of message it activates for. One
  * widening scale, not a set of flags: `none` is woken by nothing said in the
@@ -227,24 +222,22 @@ export type Attention = 'none' | 'named' | 'broadcast' | 'presence';
 /** A person is in the room or they are not. */
 export type PresenceStatus = 'present' | 'absent';
 
-export interface AgentSeatInfo {
+export interface AgentParticipantInfo {
 	kind: 'agent';
 	name: string;
 	identity: string;
 	status: SeatStatus;
 	attention: Attention;
-	/** The id of the seat's downstream Pi session. */
-	sessionId: string;
 }
 
-export interface HumanSeatInfo {
+export interface HumanParticipantInfo {
 	kind: 'human';
 	name: string;
 	identity: string;
 	presence: PresenceStatus;
 }
 
-export type SeatInfo = AgentSeatInfo | HumanSeatInfo;
+export type ParticipantInfo = AgentParticipantInfo | HumanParticipantInfo;
 
 /** The room's event stream: one notification per room-level fact. */
 export type RoomNotification =

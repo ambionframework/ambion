@@ -1,4 +1,4 @@
-import type { SeatInfo, Seq } from '@ambionframework/ambion';
+import type { ParticipantInfo, Seq } from '@ambionframework/ambion';
 import type { Env } from '@ambionframework/cloudflare';
 import { configure, RoomObject, SeatObject } from '@ambionframework/cloudflare';
 import { AGENTS, COMPOSITION, human, ROOM_NAME } from './room.ts';
@@ -64,7 +64,9 @@ function textOf(value: unknown): string {
 	return value;
 }
 
-async function start(stub: RoomStub): Promise<{ started: string; participants: SeatInfo[] }> {
+async function start(
+	stub: RoomStub,
+): Promise<{ started: string; participants: ParticipantInfo[] }> {
 	await stub.ensureStart(COMPOSITION);
 	return { started: ROOM_NAME, participants: await stub.participants() };
 }
@@ -72,7 +74,7 @@ async function start(stub: RoomStub): Promise<{ started: string; participants: S
 async function join(
 	stub: RoomStub,
 	request: Request,
-): Promise<{ joined: string; participants: SeatInfo[] }> {
+): Promise<{ joined: string; participants: ParticipantInfo[] }> {
 	const input = request.headers.get('content-type') === null ? {} : await body(request);
 	const name = input.name === undefined ? human.name : input.name;
 	if (typeof name !== 'string' || name !== human.name)

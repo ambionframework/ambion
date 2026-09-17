@@ -7,13 +7,13 @@ import {
 	isSpoken,
 	type Message,
 	resumeRoom,
-	seatSessionId,
 	startRoom,
 } from '../src/index.ts';
 import {
 	inProcessTransport,
 	type SeatContext,
 	type SeatRoom,
+	seatSessionId,
 	type Transport,
 } from '../src/transport.ts';
 import { andrei, roomName, waitForRoom } from './support/room.ts';

@@ -12,11 +12,11 @@ import type {
 	Exchange,
 	ExchangeView,
 	Message,
+	ParticipantInfo,
 	ReadRoomOptions,
 	Room,
 	RoomSnapshot,
 	Runtime,
-	SeatInfo,
 	Seq,
 	Visit,
 } from '@ambionframework/ambion';
@@ -54,7 +54,7 @@ export interface RoomStatus {
 	name: string;
 	initialized: boolean;
 	goal?: string;
-	participants: SeatInfo[];
+	participants: ParticipantInfo[];
 	exchanges: readonly ExchangeView[];
 	exchange: ExchangeView | undefined;
 	watermark: Seq;
@@ -225,7 +225,7 @@ export class RoomObject extends DurableObject<Env> {
 		return [...snapshot.messages];
 	}
 
-	async participants(): Promise<SeatInfo[]> {
+	async participants(): Promise<ParticipantInfo[]> {
 		const snapshot = await this.read({ messages: false });
 		return [...snapshot.participants];
 	}

@@ -10,7 +10,7 @@ import {
 import { exchangeViews } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { liveWork } from './reconcile.ts';
-import { seatsOf } from './view.ts';
+import { participantsOf } from './view.ts';
 
 export type MessageSelection = false | { since?: Seq };
 
@@ -50,7 +50,7 @@ export function readView(
 		initialized: true,
 		...(state.composition.goal === undefined ? {} : { goal: state.composition.goal }),
 		messages: selectMessages(state.messages, messages),
-		participants: seatsOf({ name, state, live: liveWork(state, now).seats }),
+		participants: participantsOf({ state, live: liveWork(state, now).seats }),
 		exchanges,
 		exchange: current,
 		watermark,

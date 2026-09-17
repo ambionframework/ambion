@@ -7,7 +7,7 @@ import type {
 	CollaborationContext,
 	ContextParticipant,
 } from '../protocol.ts';
-import { type Message, type SeatInfo, type Seq, seatSessionId } from '../types.ts';
+import type { AgentParticipantInfo, Message, ParticipantInfo, Seq } from '../types.ts';
 import type { RoomState } from './fold.ts';
 
 /** What the view is built from: the fold and current host facts. */
@@ -22,12 +22,9 @@ export interface RoomFacts {
 }
 
 /** The roster and people returned by the public participants query. */
-export function seatsOf(facts: Pick<RoomFacts, 'name' | 'state' | 'live'>): SeatInfo[] {
+export function participantsOf(facts: Pick<RoomFacts, 'state' | 'live'>): ParticipantInfo[] {
 	return [
-		...agentsOf(facts).map((agent) => ({
-			...agent,
-			sessionId: seatSessionId(facts.name, agent.name),
-		})),
+		...agentsOf(facts),
 		...[...facts.state.people.values()].map((person) => ({
 			kind: 'human' as const,
 			name: person.name,
@@ -37,9 +34,7 @@ export function seatsOf(facts: Pick<RoomFacts, 'name' | 'state' | 'live'>): Seat
 	];
 }
 
-function agentsOf(
-	facts: Pick<RoomFacts, 'state' | 'live'>,
-): Extract<ContextParticipant, { kind: 'agent' }>[] {
+function agentsOf(facts: Pick<RoomFacts, 'state' | 'live'>): AgentParticipantInfo[] {
 	return facts.state.roster.map((seat) => ({
 		kind: 'agent',
 		name: seat.name,

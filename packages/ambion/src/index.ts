@@ -22,7 +22,7 @@ export type {
 export { readRoom, resumeRoom, startRoom } from './room.ts';
 export type {
 	AgentDefinition,
-	AgentSeatInfo,
+	AgentParticipantInfo,
 	AmbionTool,
 	Attention,
 	Clock,
@@ -30,14 +30,14 @@ export type {
 	Exchange,
 	ExchangeView,
 	HumanDefinition,
-	HumanSeatInfo,
+	HumanParticipantInfo,
 	Message,
 	ModelResolver,
+	ParticipantInfo,
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,
 	RoomNotification,
-	SeatInfo,
 	SeatStatus,
 	Seq,
 	SpokenMessage,
@@ -46,7 +46,7 @@ export type {
 	ToolBundle,
 	ToolContext,
 } from './types.ts';
-export { isPresence, isSpoken, isSummary, seatSessionId } from './types.ts';
+export { isPresence, isSpoken, isSummary } from './types.ts';
 
 /** Kept in step with package.json by a test. */
 export const PACKAGE_NAME = '@ambionframework/ambion';

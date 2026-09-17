@@ -36,6 +36,7 @@ import {
 	resumeRoom,
 	startRoom,
 } from '@ambionframework/ambion';
+import { seatSessionId } from '@ambionframework/ambion/transport';
 import { namespaced, type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/pi-journal';
 import {
@@ -327,8 +328,7 @@ const finalRecord: Message[] = await room.messages();
 const participants = room.participants();
 
 /**
- * Every downstream room the run wrote: `<room>:<agent>` for a seat, the
- * assistant's among them.
+ * Each agent's Pi audit session, read through the execution API.
  */
 const seatSessions: {
 	agent: string;
@@ -342,7 +342,7 @@ const readerStorage = sqliteJournals(nodeSql(readerDatabase));
 const reader = piSessions(readerStorage);
 for (const seat of participants) {
 	if (seat.kind !== 'agent') continue;
-	const id = seat.sessionId;
+	const id = seatSessionId(NAME, seat.name);
 	const piSeat = await reader.open(id);
 	const entries = await piSeat.findEntries();
 	entries.sort((a, b) => a.seq - b.seq);

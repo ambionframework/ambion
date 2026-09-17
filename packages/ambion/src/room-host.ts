@@ -56,7 +56,7 @@ import {
 	type RoomDecision,
 	stopWork as stopWorkDecision,
 } from './room/transition.ts';
-import { seatsOf } from './room/view.ts';
+import { participantsOf } from './room/view.ts';
 import type {
 	AgentDefinition,
 	Attention,
@@ -65,10 +65,10 @@ import type {
 	Exchange,
 	HumanDefinition,
 	Message,
+	ParticipantInfo,
 	PresenceMessage,
 	RoomNotification,
 	RoomSnapshot,
-	SeatInfo,
 	Seq,
 	SummaryMessage,
 	Without,
@@ -122,7 +122,7 @@ export interface ExchangeHandle {
 export interface Room {
 	readonly name: string;
 	messages(options?: { since?: Seq }): Promise<Message[]>;
-	participants(): SeatInfo[];
+	participants(): ParticipantInfo[];
 	subscribe(listener: (event: RoomNotification) => void): () => void;
 	/** Reacquire an exchange by the source sequence of its opening question. */
 	exchange(from: Seq): ExchangeHandle | undefined;
@@ -472,9 +472,9 @@ export class RoomHost implements Room, RunningRoom {
 	}
 
 	/** The roster and people folded from the durable record. */
-	participants(): SeatInfo[] {
+	participants(): ParticipantInfo[] {
 		const state = this.state();
-		return seatsOf({ name: this.name, state, live: this.live(state) });
+		return participantsOf({ state, live: this.live(state) });
 	}
 
 	async snapshot(options: { messages?: MessageSelection } = {}): Promise<RoomSnapshot> {

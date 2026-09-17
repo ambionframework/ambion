@@ -21,6 +21,7 @@ export {
 	createExecutionServices,
 	type ExecutionServices,
 	type ExecutionServicesOptions,
+	seatSessionId,
 } from './execution/services.ts';
 export type { SeatContext, Transport } from './host/runtime.ts';
 export { runningRoom } from './host/runtime.ts';

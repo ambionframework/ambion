@@ -178,11 +178,11 @@ The full rendering rules are in [`execution/render.ts`](../packages/ambion/src/e
 
 ## 10. Observing presence
 
-`room.participants()` returns the current agent and human views. A human view
-has `kind: 'human'`, `name`, `identity`, and `presence`; an agent view also has
-membership status, attention, and its session id. `room.messages()` and
-`room.subscribe()` expose presence through the existing message stream. There
-is no separate presence event channel.
+`room.participants()` returns `ParticipantInfo` values, distinguished by `kind`.
+Both variants have `name` and `identity`. An agent has activity `status` and
+`attention`; a human has `presence`. These views contain no transcript IDs.
+`room.messages()` and `room.subscribe()` expose presence through the existing
+message stream. There is no separate presence event channel.
 
 Subscriptions are live only and do not replay history. Subscribe before reading
 with `messages({ since })`, merge an overlap by `seq`, and advance the cursor

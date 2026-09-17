@@ -198,6 +198,12 @@ handles for collaboration history. Executors use `ActivationView`,
 `CommitResult`, and `LeaseResponse`. `EndReason` remains part of lease requests.
 `AgentRunner` replaces `SeatActor`; the old name has no alias.
 
+**Participant migration:** `ParticipantInfo`, `AgentParticipantInfo`, and
+`HumanParticipantInfo` replace `SeatInfo`, `AgentSeatInfo`, and `HumanSeatInfo`.
+The old names have no aliases. Participant views omit `sessionId`.
+Audit consumers import `seatSessionId` from `/transport` and supply the room
+and agent names. Existing transcript identifiers remain unchanged.
+
 ## History and limits
 
 Composition entries use version 2. The room rejects legacy compositions and

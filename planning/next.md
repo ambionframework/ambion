@@ -1,7 +1,7 @@
 # Next: simplify Ambion for 0.1.0
 
-Reviewed against main `6a63f3a`, after
-[PR #145](https://github.com/ambionframework/ambion/pull/145) merged.
+Reviewed against main `6eefdbd`, after
+[PR #146](https://github.com/ambionframework/ambion/pull/146) merged.
 The [Relay demo](../examples/persistent/README.md) is the reference consumer.
 Two follow-up Astra/High reviews and isolated SQLite/browser reproductions
 revisited the earlier subsystem review. Findings below distinguish reproduced
@@ -73,8 +73,8 @@ entries do not form one transaction, and rooms retain separate conversation cont
 entry, coherent room/exchange reads, and partial-creation recovery.
 Item 3 defines cancellation through one atomic journal entry, merged in
 PR #143. Stop cleanup merged in PR #144; contribution validation merged in
-PR #145. Execution ownership in item 4 is prepared for review. Participant
-vocabulary is next.
+PR #145. Execution ownership in item 4 merged in PR #146. Participant
+vocabulary is prepared for review. Projection measurements follow item 4.
 
 ## 1. Keep commands and observation coherent in Relay
 
@@ -267,7 +267,7 @@ submission regression suites from PRs #137–#139.
 
 ### Compose execution outside the room
 
-**Prepared for review:** the public facade composes execution before starting
+**Merged in PR #146:** the public facade composes execution before starting
 `RoomHost`. The host receives journal, clock, retry, and cleanup dependencies
 plus a configured connector. Execution services remain outside that object.
 Cloudflare uses the same service factory without creating a room runtime.
@@ -295,15 +295,16 @@ The default execution path must remain shorter to explain than the extension pat
 
 ### Finish the participant vocabulary
 
-`participants()` still returns `SeatInfo`, including humans. Its agent variant
-also exposes a Pi `sessionId`; the protocol then explicitly omits that field.
+**Prepared for review:** `participants()` returns `ParticipantInfo`, with agent
+and human variants. Agent views are shared with activation context without
+stripping executor fields; audit lookup belongs to `/transport`.
 
-- [ ] Rename to `ParticipantInfo`, `AgentParticipantInfo`, and
+- [x] Rename to `ParticipantInfo`, `AgentParticipantInfo`, and
       `HumanParticipantInfo`; rename the internal query to `participantsOf`.
-- [ ] Remove transcript IDs from participant views. Move `seatSessionId` from
+- [x] Remove transcript IDs from participant views. Move `seatSessionId` from
       the root API to explicit execution/audit access through the existing
       hosting entry. Preserve its stored identity algorithm and transcript names.
-- [ ] Delete old aliases during the pre-0.1 migration, update both clients and
+- [x] Delete old aliases during the pre-0.1 migration, update both clients and
       declarations, and document the source break. Do not rename agent, human,
       visit, exchange, attention, or journal for cosmetic consistency.
 
