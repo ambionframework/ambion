@@ -34,6 +34,12 @@ If `seats` is omitted, every defined agent starts as a member with
 reserve. The summary writer must be seated when the human exchange closes.
 Otherwise that exchange has no summary assignment.
 
+`startRoom({ assistant })` accepts an ordinary agent definition and supplies
+its catalog entry, broadcast seat, and summary assignment. A conflicting
+explicit summary writer is refused. This shorthand preserves the closing
+activation and membership rules described here. See
+[Default assistant](assistant.md) for the built-in implementation.
+
 Every human exchange is eligible for a summary. Eligibility does not depend on
 the number of messages or speakers. A room with no configured summary writer
 still closes exchanges and retains their source messages.

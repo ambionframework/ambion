@@ -89,6 +89,21 @@ needs; other definitions remain available. Agents can seat another specialist
 during an exchange. The assistant receives ordinary room messages and writes
 the optional closing summary through `say`.
 
+Relay uses `defineAssistant` from `@ambionframework/assistant`. Room startup
+passes this definition through `assistant`, which supplies its broadcast seat
+and summary assignment. Scenario configuration specifies only specialist
+seats. Resume supplies the complete catalog and preserves recorded membership.
+
+The default assistant avoids repeating requests that specialists already
+receive. It sends a concise directed request when named attention requires
+activation. Corrective steering is extremely rare and requires clear evidence
+of divergence or context rot. Human constraints survive specialist handoffs;
+for example, a request for a two-sentence draft about one ticket with no file
+edits keeps the writer from saving a draft. Known workspace paths are checked
+before a missing-artifact claim is repeated, and conflicting reports remain
+qualified. Relay supplies its domain instructions and workspace tools
+separately. See the [assistant contract](../../docs/assistant.md).
+
 | Room     | Collaboration pattern                     | Starting work                                      |
 | -------- | ----------------------------------------- | -------------------------------------------------- |
 | design   | Independent perspectives, then a decision | Compare feedback and write a scoped brief          |

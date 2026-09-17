@@ -1,4 +1,4 @@
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join as joinPath } from 'node:path';
 import type { CreateRuntimeOptions } from '@ambionframework/ambion';
@@ -309,6 +309,13 @@ describe('persistent browser host', () => {
 		const workspace = await request(base, '/workspace');
 		const root = (workspace.body as { root: string }).root;
 		await writeFile(joinPath(root, 'plain.txt'), 'safe');
+		await mkdir(joinPath(root, 'dev'), { recursive: true });
+		await writeFile(joinPath(root, 'dev/null'), '');
+		const listing = await request(base, '/workspace');
+		const paths = (listing.body as { files: { path: string }[] }).files.map((file) => file.path);
+		expect(paths).toContain('/plain.txt');
+		expect(paths).toContain('/shared/prototype.html');
+		expect(paths).not.toContain('/dev/null');
 		await symlink('/etc/hosts', joinPath(root, 'escape.txt'));
 		const plain = await request(base, '/file?path=%2Fplain.txt');
 		const escaped = await request(base, '/file?path=%2Fescape.txt');

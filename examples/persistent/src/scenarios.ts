@@ -16,7 +16,7 @@ export const scenarios: {
 		pattern: 'Independent perspectives → one decision',
 		prompt:
 			'Read the customer feedback. Compare the two strongest priorities, challenge the assumptions, and recommend one small milestone in the brief.',
-		seats: { assistant: 'broadcast', planner: 'named', reviewer: 'named' },
+		seats: { planner: 'named', reviewer: 'named' },
 	},
 	{
 		name: 'delivery',
@@ -24,7 +24,7 @@ export const scenarios: {
 		pattern: 'Implement → review → revise',
 		prompt:
 			'Make the handoff list show overdue items clearly and remain usable on a phone. Review the changes and fix any concrete issues.',
-		seats: { assistant: 'broadcast', builder: 'named', reviewer: 'named' },
+		seats: { builder: 'named', reviewer: 'named' },
 	},
 	{
 		name: 'launch',
@@ -32,7 +32,7 @@ export const scenarios: {
 		pattern: 'Draft → human feedback → revision',
 		prompt:
 			'Draft short release notes from the current prototype and brief. Check every feature claim, and flag anything that needs my decision.',
-		seats: { assistant: 'broadcast', writer: 'named', reviewer: 'named' },
+		seats: { writer: 'named', reviewer: 'named' },
 	},
 	{
 		name: 'triage',
@@ -40,7 +40,7 @@ export const scenarios: {
 		pattern: 'Triage → specialist handoff',
 		prompt:
 			'Triage the reports in tickets.md. Investigate the highest-impact issue, recommend a fix, and draft a response without promising a release date.',
-		seats: { assistant: 'broadcast' },
+		seats: {},
 	},
 ];
 

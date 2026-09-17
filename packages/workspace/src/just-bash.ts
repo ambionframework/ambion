@@ -209,7 +209,15 @@ export function directoryBackend(root: string): WorkspaceBackend {
 	const resource = lazyResource(async () => {
 		const { ReadWriteFs } = await import('just-bash');
 		await mkdir(root, { recursive: true });
-		return new ReadWriteFs({ root });
+		class DirectoryFs extends ReadWriteFs {
+			override async lstat(path: string) {
+				// ReadWriteFs 3.4.2 validates the parent of / outside its own root.
+				// The virtual root is a directory, never a traversable symlink;
+				// stat keeps the backend's root validation without inspecting its parent.
+				return posix.normalize(path) === '/' ? this.stat('/') : super.lstat(path);
+			}
+		}
+		return new DirectoryFs({ root });
 	});
 	return {
 		connect: async (agent) => connectOver(await resource.get(), agent),

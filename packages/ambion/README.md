@@ -20,6 +20,7 @@ npm install @ambionframework/ambion
 
 The main library includes its journal dependency. Add
 `@ambionframework/workspace` when agents need optional filesystem tools.
+Add `@ambionframework/assistant` for the default assistant implementation.
 Model execution uses Pi and needs credentials for the chosen provider.
 
 ## Use
@@ -83,6 +84,12 @@ discussion. Every closed human exchange is eligible when its writer is seated.
 `room.read()` returns current messages, participants, and exchange states.
 Use `readRoom(name, { runtime })` or `readExchange(name, from, { runtime })`
 to inspect durable state without a live handle. Reads never wait for completion.
+
+Use `startRoom({ assistant, agents })` to register an assistant definition,
+seat it at `broadcast`, and select it as the summary writer. Supply specialists
+in `agents`; omit the assistant from that list. An explicit `seats: {}` starts
+only the assistant. Omitting `seats` starts all catalog agents at `broadcast`.
+See the [assistant contract](https://github.com/ambionframework/ambion/blob/main/docs/assistant.md).
 
 Use `defineTool` for an agent's ordinary typed tools. Put reusable tool bundles
 in the separate `bundles` field. The current `agents` list supplies every

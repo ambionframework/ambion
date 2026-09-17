@@ -33,7 +33,11 @@ public roster text. `instructions` are private model guidance. `model` names a
 Pi provider model. `tools` and `bundles` supply the agent's domain tools.
 
 `summary` is an optional name from `agents`. It assigns closing work to that
-ordinary agent. There is no separate assistant definition, role, or tool set.
+ordinary agent. `assistant` accepts an ordinary agent definition and supplies
+its registration, broadcast seat, and summary assignment. The optional
+`@ambionframework/assistant` package supplies a default definition factory.
+The shorthand introduces no separate role or tool set. See
+[Default assistant](assistant.md) for configuration and behavior.
 
 Definitions are values, captured for one run. On resume, the host supplies
 executable definitions for every recorded agent name. The new run may use

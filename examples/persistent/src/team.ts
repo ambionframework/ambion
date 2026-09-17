@@ -1,4 +1,5 @@
 import { defineAgent, defineHuman } from '@ambionframework/ambion';
+import { defineAssistant } from '@ambionframework/assistant';
 import type { Workspace } from '@ambionframework/workspace';
 
 export const people = [
@@ -30,17 +31,17 @@ export const people = [
 export function team(workspace: Workspace) {
 	const model = process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5';
 	const shared =
-		'Read /shared/project.md and relevant files before working. All rooms share this workspace. ' +
+		'During ordinary work, read /shared/project.md and relevant files before acting. All rooms share this workspace. ' +
 		'Preserve work from other rooms. Read before editing. Use /shared for team artifacts. ' +
-		'Only claim actions your tools completed. You have local file and shell tools, no web, email, or deployment tools. ' +
-		'Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work. ';
+		'Explicit human constraints override role defaults and must survive every seating or specialist handoff. Respect scope, item limits, output requirements, and permissions such as “do not edit files”; when file edits are prohibited, do not call write or shell commands that modify files. ' +
+		'Only report completed actions supported by tool results or recorded specialist evidence. For consequential claims that conflict with the known record, distinguish a specialist report from tool evidence. Read a concrete path named by the project before claiming that an artifact is absent; an empty broad search is not evidence of absence. If sources conflict, report the contradiction and qualify the unsupported claim instead of propagating it. Do not infer shipped, released, deployed, or newly scoped behavior from source or artifact presence; distinguish the static prototype from delivered capability and state verification limits. You have local file and shell tools, no web, email, or deployment tools. ';
 	const specialists = [
 		{
 			name: 'planner',
 			identity:
 				'Product strategist. Turns customer evidence into scoped decisions and acceptance criteria.',
 			instructions:
-				'Use feedback and constraints to propose priorities. Write decisions to /shared/brief.md. Separate evidence from assumptions.',
+				'Use feedback and constraints to propose priorities. Write decisions to /shared/brief.md when the user permits file edits; if editing is prohibited, return the decision text without changing files. Separate evidence from assumptions and preserve unresolved contradictions.',
 		},
 		{
 			name: 'builder',
@@ -53,40 +54,33 @@ export function team(workspace: Workspace) {
 			identity:
 				'Product writer. Creates release notes, onboarding text, and customer response drafts.',
 			instructions:
-				'Read the brief and actual implementation. Write clear, accurate copy. Never promise features that are not built. Save drafts under /shared.',
+				'Read the brief and actual implementation. Write clear, accurate copy. Never promise features that are not built. Save drafts under /shared only when the user asks for or permits file edits; when the user says not to edit files, provide the requested draft in your response and do not write.',
 		},
 		{
 			name: 'reviewer',
 			identity:
 				'Quality reviewer. Challenges assumptions and checks implementation and product claims.',
 			instructions:
-				"Read the relevant artifacts. Find concrete gaps and suggest the smallest correction. Check facts with tools. Do not rewrite another specialist's files unless asked.",
+				"Read the relevant artifacts, including concrete paths named by the project, before making claims about their existence. Find concrete gaps and suggest the smallest correction. Check facts with tools; treat an empty search result as inconclusive when a known path can be read. If evidence conflicts, state both the checked result and the report that conflicts with it. Do not rewrite another specialist's files unless asked.",
 		},
 	];
-	const agents = [
+	const assistant = defineAssistant({
+		model,
+		instructions: shared,
+		bundles: [workspace.tools()],
+	});
+	const specialistDefinitions = specialists.map(({ instructions, ...definition }) =>
 		defineAgent({
-			name: 'assistant',
-			identity:
-				'Team coordinator. Interprets human requests and brings together specialist contributions.',
-			instructions:
-				shared +
-				'People address the room without naming agents. Answer simple questions directly. ' +
-				'For substantive work, choose planner, builder, writer, or reviewer from their expertise. ' +
-				'Seat a specialist by name if needed, then give a concrete assignment using say addressed to that name. ' +
-				'For independent perspectives, ask specialists in parallel. For review, wait for the artifact before asking reviewer. ' +
-				'Relay useful feedback to the owner for revision. Stop when the request is satisfied; do not invent extra work. ' +
-				'Keep intermediate coordination short. When assigned closing work, use say to summarize the outcome, files, and unresolved decisions.',
+			...definition,
+			instructions: `${shared}${instructions} Report your result to assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
 			model,
 			bundles: [workspace.tools()],
 		}),
-		...specialists.map(({ instructions, ...definition }) =>
-			defineAgent({
-				...definition,
-				instructions: `${shared}${instructions} Report your result to assistant, or to the specialist who asked you.`,
-				model,
-				bundles: [workspace.tools()],
-			}),
-		),
-	];
-	return { workspace, agents };
+	);
+	return {
+		workspace,
+		assistant,
+		specialists: specialistDefinitions,
+		agents: [assistant, ...specialistDefinitions],
+	};
 }

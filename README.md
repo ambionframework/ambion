@@ -110,6 +110,9 @@ npm install @ambionframework/ambion
 
 The main library includes the journal dependency. Add
 `@ambionframework/workspace` when agents need its optional filesystem tools.
+Add `@ambionframework/assistant` for a default assistant that guides membership
+and summarizes exchanges. The [assistant contract](docs/assistant.md) describes
+its behavior and the `startRoom({ assistant })` shorthand.
 See [Contributing](CONTRIBUTING.md) to build and run from source.
 
 ## Try a working application

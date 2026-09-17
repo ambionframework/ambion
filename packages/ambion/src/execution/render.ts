@@ -110,11 +110,14 @@ export function renderRecord(
 	record: readonly Message[],
 	people: readonly HumanContextParticipant[],
 	now: number,
+	exchangeFrom?: Seq,
 ): string {
 	if (record.length === 0) return '(the record is empty)';
 	const dividers = unseenDividers(people);
 	const lines: string[] = [];
 	for (const block of blocks(record)) {
+		if ('line' in block && block.line.seq === exchangeFrom)
+			lines.push('── Current exchange begins here; earlier exchanges are background ──');
 		lines.push(renderBlock(block, now), ...divide(block, dividers));
 	}
 	return lines.join('\n');
@@ -280,7 +283,12 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 		renderPeople(people, context.now),
 		``,
 		`The record of '${context.name}' so far:`,
-		renderRecord(context.messages, people, context.now),
+		renderRecord(
+			context.messages,
+			people,
+			context.now,
+			view.spec.purpose.kind === 'respond' ? context.exchange?.from : undefined,
+		),
 		``,
 		askOf(view, def),
 	].join('\n');
@@ -318,9 +326,18 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 	}
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = context.exchange
-		? `${context.exchange.owner}'s question at message ${numbered(context.messages, context.exchange.from)} is open. `
+		? `${context.exchange.owner}'s exchange opened by message ${numbered(context.messages, context.exchange.from)} is active; the marked request is the current human direction. `
 		: '';
-	return `${open}Take your turn, ${def.name}: say something, seat or unseat a colleague, use your tools, or end your turn.`;
+	return (
+		`${open}Take your turn, ${def.name}: this is ordinary work. ` +
+		`Follow your configured instructions. Unless they require otherwise, use your tools or membership operations when needed ` +
+		`and speak only to add something the record lacks. ` +
+		`If the current request is already answered within this exchange, end silently without repeating its answer or failure to another recipient. ` +
+		`An explicit later request to recheck, revise, or involve a colleague is new work even if an earlier exchange contains a similar answer. ` +
+		`A specialist result after your directed assignment is already visible to the human; do not forward it during ordinary work. ` +
+		`These speech defaults yield to explicit instructions in your agent definition. ` +
+		`Closing summaries require a separate closing assignment.`
+	);
 }
 
 /** What a seat does with a presence line that lands while it is working. */
@@ -365,7 +382,9 @@ const SUMMARY_PARAGRAPH = [
 	`messages are still on the record; what stands for them is the summary further down,`,
 	`written for that person, and you read it in place of them. The line names who`,
 	`it was written for, because two people's summaries may cover the same stretch. Treat a`,
-	`summary as what happened. It asks you for nothing and it addresses one person, not you.`,
+	`summary as a recorded report, preserving its uncertainty and qualifications. Later corrections`,
+	`or conflicting concrete evidence take precedence over a summarized claim. The summary asks`,
+	`you for nothing and addresses one person, not you.`,
 	`If you need a fact it left out, read it again from your own tools rather than asking the`,
 	`room to repeat itself.`,
 ];

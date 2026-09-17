@@ -8,10 +8,12 @@
 		"start": "node --env-file-if-exists=.env src/main.ts start",
 		"resume": "node --env-file-if-exists=.env src/main.ts resume",
 		"check:types": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run --exclude 'test/live/**'",
+		"test:live": "vitest run --config vitest.live.config.ts"
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/assistant": "workspace:*",
 		"@ambionframework/journal": "workspace:*",
 		"@ambionframework/workspace": "workspace:*"
 	},

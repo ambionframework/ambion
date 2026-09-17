@@ -10,6 +10,7 @@ platform plans live in the [0.1.0 scope](../planning/release-0.1.0.md) and
 ```text
 packages/
   ambion/       runtime library
+  assistant/    default assistant agent and behavioral guidance
   cli/          ambion binary and project generator
   cloudflare/   Durable Object adapter
   journal/      append-only journal storage
@@ -22,7 +23,7 @@ docs/           design and operational contracts
 .github/        CI, live, and release workflows
 ```
 
-The six `packages/*` entries are publishable and share a lockstep version.
+The seven `packages/*` entries are publishable and share a lockstep version.
 Examples are private. The package graph is:
 
 ```text
@@ -31,6 +32,7 @@ pi-journal ──▶ journal
 cli ──▶ ambion
 cloudflare ──▶ ambion, journal
 workspace ──▶ ambion
+assistant ──▶ ambion
 ```
 
 Internal dependencies use `workspace:*`; pnpm rewrites them to the release

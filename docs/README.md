@@ -25,6 +25,9 @@ each page.
 
 ## Navigation hints
 
+[Default assistant](assistant.md) describes the assistant package, room
+configuration shorthand, and Relay integration.
+
 `agent.md` is the entry point for the runtime model. Read `exchange.md` and
 `presence.md` for the two durable concepts built on top of it. Read
 `durability.md` before choosing storage or recovery behavior, then
