@@ -42,7 +42,20 @@ it('reconstructs a working room before its remote seat returns after eviction', 
 	const { room, exchange } = await begin(name, 'Please recover Task execution.');
 	await until(async () => {
 		const snapshot = await room.read({ messages: false });
-		return snapshot.tasks.find((task) => task.status === 'open');
+		const task = snapshot.tasks.find((item) => item.status === 'open');
+		const owner = snapshot.participants.find(
+			(participant) => participant.kind === 'agent' && participant.name === 'task-owner',
+		);
+		// Evict only after the owner releases its creation activation. Cutting it
+		// earlier tests the separate 30-second retry policy, beyond this test's deadline.
+		if (task === undefined || owner?.kind !== 'agent' || owner.status !== 'idle') return undefined;
+		const childSeat = env.SEAT.get(
+			env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', task.workingRoom, 'task-slow'])),
+		);
+		const metadata = await runInDurableObject(childSeat, (_instance, state) =>
+			seatMetadata(sqlStorage(state)).read(),
+		);
+		return metadata.phase === 'running' ? task : undefined;
 	});
 	await runInDurableObject(room, async (_instance, state) => {
 		state.abort('reconstruct Task rooms');
