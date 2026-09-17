@@ -70,3 +70,59 @@ lemma beforeCancellation_ensures(position: int, cancelledAt: int)
   ensures (beforeCancellation(position, cancelledAt) <==> (position < cancelledAt))
 {
 }
+
+function taskIdleEpoch(activity: int): int
+  requires (activity >= 0)
+{
+  if (activity < 1) then
+    1
+  else
+    activity
+}
+
+lemma taskIdleEpoch_ensures(activity: int)
+  requires (activity >= 0)
+  ensures (taskIdleEpoch(activity) >= 1)
+  ensures ((activity >= 1) ==> (taskIdleEpoch(activity) == activity))
+{
+}
+
+function shouldRequestTaskIdle(open: bool, quiet: bool, pendingDelivery: bool, hasSameEpoch: bool): bool
+{
+  (((open && quiet) && !(pendingDelivery)) && !(hasSameEpoch))
+}
+
+lemma shouldRequestTaskIdle_ensures(open: bool, quiet: bool, pendingDelivery: bool, hasSameEpoch: bool)
+  ensures (shouldRequestTaskIdle(open, quiet, pendingDelivery, hasSameEpoch) <==> (((open && quiet) && !(pendingDelivery)) && !(hasSameEpoch)))
+{
+}
+
+function taskCanCreate(origin: bool, exchangeOpen: bool): bool
+{
+  (origin && exchangeOpen)
+}
+
+lemma taskCanCreate_ensures(origin: bool, exchangeOpen: bool)
+  ensures (taskCanCreate(origin, exchangeOpen) <==> (origin && exchangeOpen))
+{
+}
+
+function taskCanMutate(origin: bool, owner: bool, working: bool, steering: bool): bool
+{
+  ((origin && owner) || (working && !(steering)))
+}
+
+lemma taskCanMutate_ensures(origin: bool, owner: bool, working: bool, steering: bool)
+  ensures (taskCanMutate(origin, owner, working, steering) <==> ((origin && owner) || (working && !(steering))))
+{
+}
+
+function taskCanTransition(open: bool, replay: bool): bool
+{
+  (open || replay)
+}
+
+lemma taskCanTransition_ensures(open: bool, replay: bool)
+  ensures (taskCanTransition(open, replay) <==> (open || replay))
+{
+}

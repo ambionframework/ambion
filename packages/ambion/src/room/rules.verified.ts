@@ -48,3 +48,45 @@ export function beforeCancellation(position: number, cancelledAt: number): boole
 	//@ ensures \result <==> position < cancelledAt
 	return position < cancelledAt;
 }
+
+//@ contract A working-room activity watermark has a positive Task idle epoch.
+export function taskIdleEpoch(activity: number): number {
+	//@ requires activity >= 0
+	//@ ensures \result >= 1
+	//@ ensures activity >= 1 ==> \result == activity
+	return activity < 1 ? 1 : activity;
+}
+
+//@ contract An open, quiet Task requests intervention only without a pending delivery or prior idle event.
+export function shouldRequestTaskIdle(
+	open: boolean,
+	quiet: boolean,
+	pendingDelivery: boolean,
+	hasSameEpoch: boolean,
+): boolean {
+	//@ ensures \result <==> (open && quiet && !pendingDelivery && !hasSameEpoch)
+	return open && quiet && !pendingDelivery && !hasSameEpoch;
+}
+
+//@ contract A Task is created only in its originating room while its exchange is open.
+export function taskCanCreate(origin: boolean, exchangeOpen: boolean): boolean {
+	//@ ensures \result <==> (origin && exchangeOpen)
+	return origin && exchangeOpen;
+}
+
+//@ contract A Task mutation belongs to its owner in the origin or to a worker in the working room.
+export function taskCanMutate(
+	origin: boolean,
+	owner: boolean,
+	working: boolean,
+	steering: boolean,
+): boolean {
+	//@ ensures \result <==> ((origin && owner) || (working && !steering))
+	return (origin && owner) || (working && !steering);
+}
+
+//@ contract A Task terminal state is immutable after the first accepted operation, except when replaying that operation.
+export function taskCanTransition(open: boolean, replay: boolean): boolean {
+	//@ ensures \result <==> (open || replay)
+	return open || replay;
+}

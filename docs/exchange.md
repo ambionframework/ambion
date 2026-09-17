@@ -40,8 +40,10 @@ See [the public types](../packages/ambion/src/types.ts) for the exact shapes.
    arrivals, and departures do not open one. A question that lands while one is
    open belongs to that exchange's work.
 2. Quiescence closes the current exchange. The room derives “live” from leases
-   and pending wakes, then appends a close with the observed `through` boundary.
-   Work that reaches a terminal state is handled the same way.
+   and pending wakes in the originating room and its Task working rooms.
+   Open Tasks and pending Task operations or deliveries also prevent closure.
+   After this work settles, the room appends a close with the observed
+   `through` boundary. See [Tasks](tasks.md) for intervention and cancellation.
 3. Ordinary messages landing while it is open steer eligible active seats and
    do not change its owner, range, or recipient. A later human question is
    therefore part of the current work, not a second exchange.

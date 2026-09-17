@@ -29,6 +29,12 @@ An **activation** is one agent doing work. An **exchange** is a human prompt and
 the resulting collaboration. Each room has at most one open exchange; separate
 rooms can work concurrently. Leaving a room does not stop its agents.
 
+**Tasks let an agent delegate background work and continue the conversation.**
+The agent can assign specialists or another activation of itself to a working
+room. Each owner activation receives its own Tasks and their current status
+for that exchange. The exchange stays open until the Tasks and their working
+rooms finish. Background work does not become an independent backlog.
+
 For example, triage can write `/shared/customer_response_draft.md`, and launch
 can review that file in a separate conversation. The global workspace panel
 reads those same files, independently of the selected room.
@@ -124,6 +130,14 @@ Refresh Shared workspace in the left panel to inspect the file. Switch rooms
 while the agents work, or add a follow-up message to the open exchange.
 The same message API handles both new questions and steering.
 
+**The Background tasks panel shows work for one exchange.** It defaults to
+the current exchange, or the latest completed exchange. Select an earlier
+exchange to review its Tasks. Each card shows the assignment, owner, working
+agents, status, and latest progress or outcome. **View work** opens a read-only
+working conversation without leaving the parent room or changing presence.
+Continue speaking in the main composer while the agents work. The owner can
+use the follow-up to steer its Task.
+
 | Control     | Effect                                                                   |
 | ----------- | ------------------------------------------------------------------------ |
 | Create room | Save its name and goal, start its team, and join as the selected person  |
@@ -152,6 +166,32 @@ shows that reply directly, without a summary card or disclosure. Room details sh
 recent model and tool execution events. Activity is local to this host run;
 durable messages remain available after restart and while a room is stopped.
 The single-reply rule only changes presentation; a closing activation may still run.
+
+## Test background Tasks through the browser
+
+**A scripted agent fixture exercises the real UI, tools, and journals.** It
+uses a temporary workspace and SQLite database. It needs no provider credentials.
+Build the packages, then start it from the repository root:
+
+```sh
+pnpm build
+pnpm --filter @ambionframework-examples/persistent test:tasks-ui --delay-ms 45000
+```
+
+Open the URL printed by the fixture. Choose Alice and enter delivery.
+
+1. Send `Please start a background task.`
+2. Check that the Task card shows **open**. Click **View work**.
+3. Send `While the background task runs, what is its status?`
+4. Check that the assistant answers while the working-room builder remains active.
+5. Check that the card becomes **succeeded** and the exchange becomes completed.
+6. Reload the page. Check that the Task result and working conversation remain readable.
+
+Use `--fail` on a separate fixture run to check a failed outcome. Use
+`--port 4173` to choose a fixed port. Each run demonstrates one Task; restart
+the fixture to repeat it. Ctrl+C stops the server and removes its temporary files.
+These checks test runtime and UI behavior with scripted decisions. They do
+not measure a live model's delegation choices.
 
 ## What persists
 
@@ -240,6 +280,7 @@ to keep that room stopped across server restarts.
 | `GET /rooms/:room?since=:seq`                              | Coherent room metadata, exchange views, and messages after the cursor      |
 | `GET /rooms/:room/messages?since=:seq`                     | Durable messages after an exclusive cursor, including stopped rooms        |
 | `GET /rooms/:room/exchanges/:from`                         | Recorded exchange view and its discussion, including stopped rooms         |
+| `GET /rooms/:room/tasks/:task`                             | Task state and its working-room snapshot, checked against the parent room  |
 | `GET /workspace`                                           | Local root and workspace file list                                         |
 | `GET /file?path=/shared/plan.md`                           | Text preview                                                               |
 

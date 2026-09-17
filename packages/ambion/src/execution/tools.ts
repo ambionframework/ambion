@@ -6,8 +6,15 @@
  */
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
-import { SAY, SEAT, UNSEAT } from '../define.ts';
-import type { ActivationView, CommitResult, Intent, SeatRoom } from '../protocol.ts';
+import { SAY, SEAT, TASK, TASK_UPDATE, UNSEAT } from '../define.ts';
+import type {
+	ActivationView,
+	CommitResult,
+	Intent,
+	SeatRoom,
+	TaskResponse,
+	TaskSeatRoom,
+} from '../protocol.ts';
 import type { AgentDefinition, AmbionTool, Message } from '../types.ts';
 import type { Activation } from './activation.ts';
 import { refusal } from './render.ts';
@@ -58,6 +65,74 @@ export function binding(activation: Activation, room: SeatRoom): Binding {
 	};
 }
 
+function taskResult(
+	activation: Activation,
+	toolCallId: string,
+	result: TaskResponse,
+): AgentToolResult<Record<string, never>> {
+	const { view, ...facts } = result;
+	if (view !== undefined) {
+		// PiContext advances the durable read only when this exact tool result
+		// appears in a provider request. Returning the result alone is not
+		// consumption, so a delivery or a dropped turn cannot acknowledge it.
+		activation.toolResultExpected(toolCallId, view.through);
+	}
+	const rendered = JSON.stringify({
+		...facts,
+		...(view === undefined ? {} : { context: view.context }),
+	});
+	if ('refused' in result) throw new Error(rendered);
+	return {
+		content: [
+			{
+				type: 'text',
+				text: rendered,
+			},
+		],
+		details: {},
+	};
+}
+
+function taskTool(bound: Binding): AgentTool {
+	return {
+		...TASK,
+		label: TASK.name,
+		execute: async (_id, raw) => {
+			const params = raw as { text: string; agents?: string[]; room?: string };
+			if ((params.agents === undefined) === (params.room === undefined))
+				throw new Error('A Task requires exactly one of agents or room.');
+			const room = taskRoom(bound.room);
+			const result = await room.task({
+				activation: bound.activation.id,
+				key: _id,
+				readThrough: bound.activation.readThrough,
+				text: params.text,
+				...(params.agents === undefined ? { room: params.room } : { agents: params.agents }),
+			});
+			return taskResult(bound.activation, _id, result);
+		},
+	};
+}
+
+function taskUpdateTool(bound: Binding): AgentTool {
+	return {
+		...TASK_UPDATE,
+		label: TASK_UPDATE.name,
+		execute: async (_id, raw) => {
+			const params = raw as { task: string; text: string; status?: 'succeeded' | 'failed' };
+			const result = await taskRoom(bound.room).taskUpdate({
+				activation: bound.activation.id,
+				key: _id,
+				readThrough: bound.activation.readThrough,
+				task: params.task,
+				text: params.text,
+				...(params.status === undefined ? {} : { status: params.status }),
+			});
+			return taskResult(bound.activation, _id, result);
+		},
+	};
+}
+
 function landResponse(
 	activation: Activation,
 	response: CommitResult,
@@ -77,7 +152,7 @@ function sayTool(bound: Binding, closingPerson?: string): AgentTool {
 		label: SAY.name,
 		description:
 			closingPerson === undefined
-				? 'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly.'
+				? 'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Set `task` instead to steer a Task; `task` and `to` are mutually exclusive.'
 				: summaryToolDescription(closingPerson),
 		execute: async (toolCallId, rawParams) => say(bound, toolCallId, rawParams, closingPerson),
 	};
@@ -89,9 +164,21 @@ async function say(
 	rawParams: unknown,
 	closingPerson?: string,
 ): Promise<AgentToolResult<Record<string, never>>> {
-	const params = rawParams as { to?: string; text: string };
+	const params = rawParams as { to?: string; task?: string; text: string };
 	const text = params.text.trim();
 	const to = params.to?.trim() ? params.to.trim() : undefined;
+	if (params.task !== undefined && to !== undefined)
+		throw new Error('A Task destination and participant destination are mutually exclusive.');
+	if (params.task !== undefined) {
+		const result = await taskRoom(bound.room).taskSay({
+			activation: bound.activation.id,
+			key: toolCallId,
+			readThrough: bound.activation.readThrough,
+			task: params.task,
+			text,
+		});
+		return taskResult(bound.activation, toolCallId, result);
+	}
 	const intent: Intent = { kind: 'said', ...(to === undefined ? {} : { to }), text };
 	const response = await bound.room.commit({
 		activation: bound.activation.id,
@@ -105,19 +192,38 @@ async function say(
 	return closingPerson === undefined ? result : { ...result, terminate: true };
 }
 
+function taskRoom(room: SeatRoom): TaskSeatRoom {
+	if (!('task' in room) || typeof room.task !== 'function')
+		throw new Error('This room does not support Tasks.');
+	return room as TaskSeatRoom;
+}
+
 function acknowledgeSay(bound: Binding, response: CommitResult): void {
 	if ('committed' in response && response.committed.kind === 'said') {
 		bound.activation.acknowledgeThrough(response.committed.seq);
 	}
 }
 
-function missedSay(
+async function missedSay(
 	bound: Binding,
 	toolCallId: string,
 	response: Extract<CommitResult, { missed: readonly Message[] }>,
 	closingPerson: string | undefined,
-): never {
+): Promise<never> {
 	if (closingPerson === undefined) {
+		if (response.missed.length === 0) {
+			const fresh = await bound.room.view(bound.activation.id);
+			if ('view' in fresh) {
+				taskResult(bound.activation, toolCallId, {
+					refused:
+						'The room moved while you were speaking. Read the fresh context, then decide again.',
+					view: fresh.view,
+				});
+			}
+			throw new Error(
+				'The room moved while you were speaking. Read the fresh context, then decide again.',
+			);
+		}
 		bound.activation.toolResultExpected(
 			toolCallId,
 			response.missed.at(-1)?.seq ?? bound.activation.readThrough,
@@ -172,8 +278,12 @@ export function toolsFor(view: ActivationView, def: AgentDefinition, held: Bindi
 	if (view.spec.purpose.kind === 'summarize') {
 		return [sayTool(held, view.spec.purpose.person)];
 	}
+	const workingTask =
+		view.context.tasks?.some((task) => task.workingRoom === view.context.name) ?? false;
 	return [
 		sayTool(held),
+		...(workingTask ? [] : [taskTool(held)]),
+		taskUpdateTool(held),
 		seatTool(held),
 		unseatTool(held),
 		...def.tools.map((tool) => toPiTool(tool, def)),

@@ -1227,7 +1227,14 @@ describe('a summary writer with domain tools', () => {
 		expect(ordinary.length).toBeGreaterThan(0);
 		expect(closing.length).toBeGreaterThan(0);
 		for (const view of ordinary) {
-			expect(view.tools).toEqual(['say', 'seat', 'unseat', 'book-inspector']);
+			expect(view.tools).toEqual([
+				'say',
+				'task',
+				'task_update',
+				'seat',
+				'unseat',
+				'book-inspector',
+			]);
 			expect(view.prompt).toContain('Book guidance.');
 		}
 		for (const view of closing) {

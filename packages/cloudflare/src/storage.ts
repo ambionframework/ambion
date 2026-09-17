@@ -146,6 +146,8 @@ export interface RoomMetadata {
 
 export interface SeatMetadata {
 	room?: string;
+	/** The object hosting this logical room and its originating exchange. */
+	hostRoom?: string;
 	seat?: string;
 	activation?: string;
 	phase?: 'pending' | 'running';

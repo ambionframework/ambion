@@ -1,8 +1,8 @@
 # Tasks
 
-**This document proposes Tasks and subscriptions for parallel work within an
-exchange.** These capabilities are not implemented. Read [agent.md](agent.md)
-and [exchange.md](exchange.md) for the current runtime contracts.
+**Tasks and subscriptions provide parallel work within an exchange.** Read
+[agent.md](agent.md) and [exchange.md](exchange.md) for the core runtime
+contracts.
 
 ## Task, working room, and subscription
 
@@ -66,6 +66,10 @@ are optional, disabled by default, and controlled by framework configuration.
 Creation records the subscription before delivering the Task assignment, so
 early events cannot be lost.
 
+Set `createRuntime({ tasks: { progress: true } })` to deliver progress updates.
+The Cloudflare adapter accepts the same `tasks` option in `configure()`.
+The default delivers terminal transitions and idle events only.
+
 Other observers can use the same subscription mechanism later. A subscription
 grants notification delivery only. It does not grant authority to steer or
 change Task state. Subscription removal cannot detach a Task from its owning
@@ -80,11 +84,11 @@ The initial transitions are `open → succeeded` and `open → failed`. A progre
 update leaves the status open. A terminal state is final; further instructions
 require a new Task. Success does not require a separate owner approval.
 
-## Proposed tools
+## Tools
 
-**Two Task tools and the existing `say()` tool cover the workflow.** These
-shapes are proposals. The runtime derives authority and provenance from the
-calling activation. Subscriptions are automatic. Attention and notification
+**Two Task tools and the existing `say()` tool cover the workflow.** The
+tools derive authority and provenance from the calling activation.
+Subscriptions are automatic. Attention and notification
 preferences belong to framework configuration. No dedicated Task read tool
 is needed.
 
@@ -124,6 +128,17 @@ The runtime records the Task's originating room and owning exchange from the
 calling activation. A new assignment steers active seats or wakes eligible
 idle seats in the working room. Pinning displays assignments without a
 separate tool operation.
+
+Tasks run in their working rooms in the background. The owner can continue
+engaging the originating room while a Task runs, including when the same agent
+has an independent activation in the working room. Task context in an ordinary
+owner activation includes only that owner's Tasks from the current exchange;
+an owner does not see Tasks from earlier exchanges or Tasks owned by another
+agent. A summary activation likewise sees only its writer's Tasks from the
+exchange it summarizes. A working-room activation sees every Task attached to that room so
+shared work can account for each status. An empty selection is represented by
+`tasks: []`, allowing every activation to reason about the absence of its own
+Tasks without inheriting unrelated history.
 
 The call returns after recording creation, without waiting for completion.
 Separate subscription-management tools are outside the initial scope.
@@ -279,6 +294,20 @@ serializes creation, updates, transitions, instructions, and subscription
 obligations. Working rooms submit operations through the runtime. They do not
 need to know which room hosts that authority.
 
+**Each working room has a separate journal in the originating runtime.** The
+Cloudflare adapter hosts these journals in the originating room object.
+Each working seat retains its own room identity and seat object. The host
+multiplexes room timers onto the object's native alarm.
+
+A working room records an accepted operation while its calling lease is live.
+The originating journal then checks the Task version and records the event.
+Source receipts and destination acknowledgements survive recovery. Operation
+identities include the source room, activation, and tool call.
+
+The executor includes fresh Task context in tool results. It acknowledges
+that context only when a provider request consumes the result. Working-agent
+context omits the originating room and subscription routes.
+
 1. Record Task creation and its owner subscription before dispatching the
    assignment or starting a new working room.
 2. Record each event together with its delivery obligations.
@@ -343,16 +372,16 @@ selective cancellation of Task tool calls are deferred.
 
 The initial mechanism provides parallelism within an exchange. Persistent
 backlogs and Tasks that remain outstanding across exchanges are outside this
-proposal.
+mechanism.
 
 ## Implementation and verification
 
-**Start with one complete execution path and deterministic tests.** Create
-a Task and subscription, execute its assignment, publish updates, deliver
-notifications, settle the Task, and close the exchange. Extend that path to
-multiple Tasks sharing a room.
+**Deterministic tests cover the complete execution path.** They create Tasks,
+execute assignments, deliver updates, settle outcomes, and close exchanges.
+Additional tests cover shared rooms, authority, idle intervention, and recovery.
+The Cloudflare tests exercise remote seats and room-object eviction.
 
-The implementation must verify these behaviors:
+The verification contract includes these behaviors:
 
 - Creation accepts exactly one of `agents` or `room` and automatically records
   the owner subscription before assignment delivery.

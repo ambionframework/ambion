@@ -8,7 +8,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import type {
 	Attention,
-	Clock,
 	ExchangeRef,
 	ExchangeView,
 	Message,
@@ -28,12 +27,17 @@ import type {
 	LeaseResponse,
 	SeatContext,
 	SeatRoom,
+	TaskCreateRequest,
+	TaskSayRequest,
+	TaskSeatRoom,
+	TaskUpdateRequest,
 	Transport,
 	ViewResponse,
 } from '@ambionframework/ambion/transport';
 import { runningRoom } from '@ambionframework/ambion/transport';
 import type { JournalOpener } from '@ambionframework/journal';
 import { definitionOf, runtimeFor } from './configure.ts';
+import { RoomClock } from './room-clock.ts';
 import type { SeatObject } from './seat-object.ts';
 import { type MetadataStore, type RoomMetadata, roomMetadata, sqlStorage } from './storage.ts';
 
@@ -67,23 +71,6 @@ export interface Person {
 	preferences?: string;
 }
 
-/** The clock over the object's alarm. The alarm handler runs `reconcile`, so `fire` is never held. */
-/**
- * The object's alarm as the room's clock. An object holds one alarm, so the
- * cancel deletes whatever stands: the room arms one alarm at a time, and it
- * cancels the one it holds before it arms the next. A second caller in this
- * object would take the first one's alarm away.
- */
-function alarmClock(state: DurableObjectState): Clock {
-	return {
-		now: () => Date.now(),
-		alarm(at) {
-			void state.storage.setAlarm(at);
-			return () => void state.storage.deleteAlarm();
-		},
-	};
-}
-
 /** The room reaches a seat over RPC to the seat object named for it. */
 function rpcTransport(env: Env): Transport {
 	return {
@@ -93,7 +80,7 @@ function rpcTransport(env: Env): Transport {
 				env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', roomName, seat])),
 			);
 			return {
-				wake: (wake) => stub.wake(wake),
+				wake: (wake) => stub.wake({ ...wake, hostRoom: context.hostRoom ?? roomName }),
 				steer: (steer) => stub.steer(steer),
 				cut: (activation) => stub.cut(activation),
 			};
@@ -103,6 +90,7 @@ function rpcTransport(env: Env): Transport {
 
 export class RoomObject extends DurableObject<Env> {
 	private readonly runtime: Runtime;
+	private readonly clock: RoomClock;
 	protected readonly metadata: MetadataStore<RoomMetadata>;
 	protected readonly storage: JournalOpener;
 	private room: Room | undefined;
@@ -112,9 +100,10 @@ export class RoomObject extends DurableObject<Env> {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		this.storage = sqlStorage(ctx);
+		this.clock = new RoomClock(ctx.storage, (work) => ctx.waitUntil(work));
 		this.runtime = runtimeFor({
 			storage: this.storage,
-			clock: alarmClock(ctx),
+			clock: this.clock,
 			transport: rpcTransport(env),
 		});
 		this.metadata = roomMetadata(this.storage);
@@ -294,21 +283,35 @@ export class RoomObject extends DurableObject<Env> {
 
 	// -- what a seat asks, in wire types --------------------------------------
 
-	async view(activation: string): Promise<ViewResponse> {
-		return this.seatRoom().view(activation);
+	async view(activation: string, room?: string): Promise<ViewResponse> {
+		return this.seatRoom(room).view(activation);
 	}
 
-	async commit(commit: CommitRequest): Promise<CommitResult> {
-		return this.seatRoom().commit(commit);
+	async commit(commit: CommitRequest, room?: string): Promise<CommitResult> {
+		return this.seatRoom(room).commit(commit);
 	}
 
-	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
-		return this.seatRoom().lease(lease);
+	async lease(lease: LeaseRequest, room?: string): Promise<LeaseResponse> {
+		return this.seatRoom(room).lease(lease);
+	}
+
+	async task(request: TaskCreateRequest, room?: string) {
+		return this.taskRoom(room).task(request);
+	}
+
+	async taskUpdate(request: TaskUpdateRequest, room?: string) {
+		return this.taskRoom(room).taskUpdate(request);
+	}
+
+	async taskSay(request: TaskSayRequest, room?: string) {
+		return this.taskRoom(room).taskSay(request);
 	}
 
 	/** The room's alarm is its clock: it folds, decides, writes and sends. */
 	override async alarm(): Promise<void> {
+		await this.clock.fire();
 		await this.room?.reconcile();
+		await this.clock.settled();
 	}
 
 	private running(): Room {
@@ -316,9 +319,17 @@ export class RoomObject extends DurableObject<Env> {
 		return this.room;
 	}
 
-	private seatRoom(): SeatRoom {
-		const room = runningRoom(this.runtime, this.running().name);
+	private seatRoom(name: string = this.running().name): SeatRoom {
+		const room = runningRoom(this.runtime, name);
 		if (room === undefined) throw new Error('The room is not running.');
 		return room;
+	}
+
+	private taskRoom(name?: string): TaskSeatRoom {
+		const room = this.seatRoom(name);
+		if (!('task' in room) || !('taskUpdate' in room) || !('taskSay' in room)) {
+			throw new Error('The room does not support Task operations.');
+		}
+		return room as TaskSeatRoom;
 	}
 }

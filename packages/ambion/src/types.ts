@@ -18,6 +18,59 @@ import type { TSchema } from 'typebox';
 /** A position on the record: monotonic, assigned at commit, never reused. */
 export type Seq = RecordSeq;
 
+export interface TaskSubscription {
+	readonly room: string;
+	readonly agent: string;
+	readonly progress: boolean;
+}
+
+export type TaskStatus = 'open' | 'succeeded' | 'failed';
+
+/** Durable task state owned by the exchange that created it. */
+export interface TaskRecord {
+	readonly id: string;
+	readonly text: string;
+	readonly owner: string;
+	readonly originRoom: string;
+	readonly exchange: Seq;
+	readonly workingRoom: string;
+	readonly agents: readonly string[];
+	readonly subscriptions: readonly TaskSubscription[];
+	readonly status: TaskStatus;
+	readonly outcome?: string;
+	readonly createdAt: string;
+}
+
+/** A task event delivered to an interested owner. */
+export interface TaskEvent {
+	readonly id: string;
+	readonly task: string;
+	readonly type: 'created' | 'updated' | 'idle' | 'instructed';
+	readonly text?: string;
+	readonly status: TaskStatus;
+	readonly outcome?: string;
+	readonly sourceRoom: string;
+	readonly author?: string;
+	readonly idleEpoch?: number;
+	readonly at: string;
+}
+
+/** Detached task facts exposed by room reads. */
+export interface TaskView extends TaskRecord {
+	readonly events: readonly TaskEvent[];
+}
+
+/** Assignment facts shown to an agent. Subscription routing stays with the runtime. */
+export interface TaskContext {
+	readonly events: readonly Omit<TaskEvent, 'sourceRoom' | 'task'>[];
+	readonly id: string;
+	readonly text: string;
+	readonly status: TaskStatus;
+	readonly workingRoom: string;
+	readonly owner?: string;
+	readonly outcome?: string;
+}
+
 /** `Omit` over each member of a union, so a discriminated body keeps its shape. */
 export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
@@ -60,6 +113,7 @@ interface RoomSnapshotFields {
 	readonly exchange: Extract<ExchangeView, { readonly status: 'open' }> | undefined;
 	/** The accepted journal sequence observed by this read. */
 	readonly watermark: Seq;
+	readonly tasks: readonly TaskView[];
 }
 
 /** A detached room read. Missing records have no room facts. */
@@ -93,6 +147,11 @@ export type ModelResolver = (id: string, agent: string) => Model<Api> | Promise<
 /** What a participant said. */
 export interface SpokenMessage {
 	kind: 'said';
+	/** The Task this assignment, report, or instruction belongs to. */
+	taskId?: string;
+	taskSnapshot?: TaskView;
+	taskCrossRoom?: boolean;
+	taskNotice?: boolean;
 	/** The place it took on the record. The journal gives it; a draft has none. */
 	seq: Seq;
 	/**

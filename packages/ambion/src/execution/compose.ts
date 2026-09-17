@@ -20,6 +20,7 @@ export function composeExecution(
 				call: runtime.call,
 				definition: request.definition,
 				room: request.room,
+				...(request.hostRoom === undefined ? {} : { hostRoom: request.hostRoom }),
 				seat: request.seat,
 				transcripts: runtime.transcripts,
 				stream,

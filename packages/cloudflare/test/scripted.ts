@@ -14,6 +14,7 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from '@earendil-works/pi-ai';
+import { taskAnswer } from './task-script.ts';
 
 let answers = 0;
 
@@ -39,7 +40,7 @@ function answer(agent: string, context: Context) {
 export const scripted: StreamFn = (model, context, options) => {
 	const stream = createAssistantMessageEventStream();
 	const agent = model.id.slice(model.id.indexOf('/') + 1);
-	const message = answer(agent, context);
+	const message = taskAnswer(agent, context) ?? answer(agent, context);
 	const finish = () => {
 		stream.push({ type: 'start', partial: message });
 		stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
@@ -54,7 +55,7 @@ export const scripted: StreamFn = (model, context, options) => {
 		);
 		return stream;
 	}
-	if (agent === 'slow') setTimeout(finish, SLOW_MS);
+	if (agent === 'slow' || agent === 'task-slow') setTimeout(finish, SLOW_MS);
 	else queueMicrotask(finish);
 	return stream;
 };

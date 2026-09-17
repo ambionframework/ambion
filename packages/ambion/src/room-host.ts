@@ -28,7 +28,13 @@
 import { answerCommit, answerLease, answerView } from './answers.ts';
 import { captureHuman } from './define.ts';
 import type { ExecutionConnector, RoomRuntime, RunningRoom } from './host/runtime.ts';
-import type { Close, Composition, LeaseChange } from './journal/events.ts';
+import type {
+	Close,
+	Composition,
+	LeaseChange,
+	TaskChange,
+	TaskDelivery,
+} from './journal/events.ts';
 import { type Entry, type Kind, placed, type RoomJournal, roomJournal } from './journal/journal.ts';
 import type {
 	CommitRequest,
@@ -36,8 +42,8 @@ import type {
 	LeaseRequest,
 	LeaseResponse,
 	SeatPort,
-	SeatRoom,
 	Steer,
+	TaskSeatRoom,
 	ViewResponse,
 } from './protocol.ts';
 import { activationSpec } from './room/activation.ts';
@@ -56,6 +62,7 @@ import {
 	type RoomDecision,
 	stopWork as stopWorkDecision,
 } from './room/transition.ts';
+import { TaskHost } from './task-host.ts';
 import type {
 	AgentDefinition,
 	Attention,
@@ -69,6 +76,7 @@ import type {
 	RoomSnapshot,
 	Seq,
 	SummaryMessage,
+	TaskRecord,
 	Without,
 } from './types.ts';
 import { copyMessage } from './types.ts';
@@ -104,6 +112,7 @@ export interface CompositionDraft {
 	summary: string | undefined;
 	definitions: AgentDefinition[];
 	seats: ReadonlyMap<string, Attention>;
+	taskScope?: { room: string; exchange: Seq };
 }
 
 /** A presence change before the room stamps when it happened. */
@@ -198,6 +207,8 @@ export class RoomHost implements Room, RunningRoom {
 	/** The configured execution owner for this room's seats. */
 	private readonly connector: ExecutionConnector;
 	private readonly journal: RoomJournal;
+	readonly tasks: TaskHost;
+	private readonly taskRooms = new Map<string, Promise<TaskHost>>();
 	/** The replay, the composition on the journal, and the first reconcile. Every operation waits here. */
 	readonly ready: Promise<void>;
 	/** Every definition this room can seat, by name. */
@@ -210,11 +221,14 @@ export class RoomHost implements Room, RunningRoom {
 		{ identity: string; promise: Promise<VisitRuntime> }
 	>();
 	private readonly ports = new Map<string, SeatPort>();
-	/** The three room calls exposed to an in-process seat. */
-	readonly calls: SeatRoom = {
+	/** Room and Task calls exposed to an in-process seat. */
+	readonly calls: TaskSeatRoom = {
 		view: (id) => this.view(id),
 		commit: (commit) => this.commit(commit),
 		lease: (lease) => this.lease(lease),
+		task: (request) => this.tasks.create(request),
+		taskUpdate: (request) => this.tasks.update(request),
+		taskSay: (request) => this.tasks.say(request),
 	};
 	private readonly listeners = new Set<(event: RoomNotification) => void>();
 	private readonly closeWaiters = new Map<
@@ -282,6 +296,7 @@ export class RoomHost implements Room, RunningRoom {
 			() => this.superseded(),
 		);
 		this.defs = cast ? new Map(cast.definitions.map((agent) => [agent.name, agent])) : bindings;
+		this.tasks = this.taskHost();
 		const starting = cast && compositionOf(cast, this.iso());
 		this.ready = starting ? this.compose(starting) : this.recover();
 		void this.ready.catch(() => {});
@@ -353,6 +368,7 @@ export class RoomHost implements Room, RunningRoom {
 				return decide(current, { type: 'compose', composition: body }, this.now());
 			}),
 		);
+		await this.tasks.restore();
 		await this.reconcile();
 	}
 
@@ -814,6 +830,136 @@ export class RoomHost implements Room, RunningRoom {
 		return 'entry' in appended ? placed(appended.entry) : undefined;
 	}
 
+	private taskHost(): TaskHost {
+		const room = this;
+		return new TaskHost({
+			name: this.name,
+			get ready() {
+				return room.ready;
+			},
+			now: () => this.now(),
+			state: () => this.state(),
+			gone: () => this.gone() || this.abortInFlight !== undefined,
+			catalog: () => [...this.defs.keys()],
+			progress: () => this.runtime.taskProgress,
+			get: (name) => this.taskRoom(name),
+			ensure: (task) => this.ensureTaskRoom(task),
+			write: (key, decision) => this.writeTask(key, decision),
+			deliver: (delivery) => this.deliverTask(delivery),
+			view: (activation) => this.view(activation),
+			changed: () => this.taskChanged(),
+			stop: () => this.stopWork(),
+			cancel: (key) => this.recordCancellation(key),
+		});
+	}
+
+	private taskRoom(name: string): TaskHost | undefined {
+		if (name === this.name) return this.tasks;
+		const room = this.runtime.get(name);
+		return room instanceof RoomHost ? room.tasks : undefined;
+	}
+
+	private async writeTask(key: string, decision: () => TaskChange): Promise<TaskChange> {
+		const written = await this.submit(
+			'task',
+			() => ({ event: { kind: 'task', body: decision() } }),
+			key,
+		);
+		this.requireSubmission(written);
+		if (!('entry' in written)) throw new Error('The Task operation did not commit.');
+		return structuredClone(written.entry.body);
+	}
+
+	private async deliverTask(delivery: TaskDelivery): Promise<number> {
+		await this.journal.ready;
+		if (delivery.to !== undefined && !this.state().roster.some((seat) => seat.name === delivery.to))
+			return 0;
+		const message = await this.commitMessage(delivery.id, {
+			type: 'deliver',
+			from: delivery.from,
+			text: delivery.text,
+			...(delivery.to === undefined ? {} : { to: delivery.to }),
+			taskId: delivery.task.id,
+			taskSnapshot: delivery.task,
+			taskCrossRoom: delivery.sourceRoom !== this.name,
+			taskNotice: !delivery.wake,
+			internal: true,
+		});
+		return message.seq;
+	}
+
+	private ensureTaskRoom(task: TaskRecord): Promise<TaskHost> {
+		const existing = this.taskRoom(task.workingRoom);
+		if (existing !== undefined) return Promise.resolve(existing);
+		const pending = this.taskRooms.get(task.workingRoom);
+		if (pending !== undefined) return pending;
+		const opening = this.openTaskRoom(task).finally(() => this.taskRooms.delete(task.workingRoom));
+		this.taskRooms.set(task.workingRoom, opening);
+		return opening;
+	}
+
+	private async openTaskRoom(task: TaskRecord): Promise<TaskHost> {
+		const definitions = task.agents.map((name) => {
+			const definition = this.defs.get(name);
+			if (definition === undefined) throw new Error(`Unknown Task agent '${name}'.`);
+			return definition;
+		});
+		const stored = await (await this.runtime.journals.open(task.workingRoom)).read(0);
+		const initialized = stored.entries.some(
+			({ entry }) =>
+				typeof entry === 'object' &&
+				entry !== null &&
+				'kind' in entry &&
+				entry.kind === 'composition',
+		);
+		if (this.phase === 'evicted') throw new Error('The Task origin is evicted.');
+		const child = initialized
+			? RoomHost.resume(
+					task.workingRoom,
+					this.runtime,
+					new Map(definitions.map((def) => [def.name, def])),
+					this.connector,
+				)
+			: RoomHost.start(
+					task.workingRoom,
+					this.runtime,
+					{
+						goal: undefined,
+						summary: undefined,
+						definitions,
+						seats: new Map(task.agents.map((name) => [name, 'broadcast' as const])),
+						taskScope: { room: task.originRoom, exchange: task.exchange },
+					},
+					this.connector,
+				);
+		this.runtime.register(child);
+		await child.ready;
+		if (this.isEvicted()) {
+			this.runtime.release(child);
+			child.evict();
+			throw new Error('The Task origin is evicted.');
+		}
+		return child.tasks;
+	}
+
+	private isEvicted(): boolean {
+		return this.phase === 'evicted';
+	}
+
+	taskActive(exchange: number): boolean {
+		return this.tasks.active(exchange);
+	}
+	roomActive(): boolean {
+		return this.tasks.busy();
+	}
+
+	private taskChanged(): void {
+		void this.reconcile();
+		const origin = this.state().composition?.taskScope?.room;
+		const parent = origin === undefined ? undefined : this.runtime.get(origin);
+		if (parent instanceof RoomHost) void parent.reconcile();
+	}
+
 	// -- what the room hears --------------------------------------------------
 
 	/**
@@ -828,6 +974,8 @@ export class RoomHost implements Room, RunningRoom {
 		else if (entry.kind === 'close') this.queueClose(entry.body);
 		else if (entry.kind === 'lease') this.queueLease(entry.body, this.opens(entry.body.id));
 		else if (entry.kind === 'cancel') this.queueCancellation(entry.body.close, entry.seq);
+		else if (entry.kind === 'task') this.publish(() => this.taskChanged());
+		if (this.state().composition?.taskScope !== undefined) this.publish(() => this.taskChanged());
 		// Membership, cancellation, and lease entries can make an earlier
 		// delivery obsolete without dispatching another message immediately.
 		this.pruneDeliveryErrors();
@@ -1104,6 +1252,7 @@ export class RoomHost implements Room, RunningRoom {
 				throw new Error(`Room '${this.name}' has no binding for '${seat}'.`);
 			port = this.connector.connect(this.calls, {
 				room: this.name,
+				hostRoom: this.state().composition?.taskScope?.room ?? this.name,
 				seat,
 				definition,
 				emit: (event) => this.emit(event),
@@ -1236,8 +1385,15 @@ export class RoomHost implements Room, RunningRoom {
 	 * where the room has nothing more to write, and the caller stops looking.
 	 */
 	private async onePass(): Promise<boolean> {
+		try {
+			if ((this.state().taskChanges?.size ?? 0) > 0) await this.tasks.drain();
+		} catch {
+			this.arm(this.now() + this.runtime.wake.resend);
+			return true;
+		}
+		const current = this.state();
 		const decision = decide(
-			this.state(),
+			current,
 			{
 				type: 'reconcile',
 				options: {
@@ -1245,6 +1401,10 @@ export class RoomHost implements Room, RunningRoom {
 					attempts: this.runtime.retry.attempts,
 					sent: this.sentAt,
 					stopped: this.gone(),
+					externalExchange:
+						current.exchange === undefined
+							? false
+							: this.runtime.externalExchange(this.name, current.exchange.from),
 				},
 			},
 			this.now(),
@@ -1299,7 +1459,15 @@ export class RoomHost implements Room, RunningRoom {
 	private async close(close: Close): Promise<boolean> {
 		const written = await this.submit('close', () => {
 			if (this.gone()) return { event: undefined };
-			return decide(this.state(), { type: 'close', close }, this.now());
+			return decide(
+				this.state(),
+				{
+					type: 'close',
+					close,
+					external: this.runtime.externalExchange(this.name, close.from),
+				},
+				this.now(),
+			);
 		});
 		this.requireSubmission(written);
 		if ('entry' in written) return true;
@@ -1342,10 +1510,18 @@ export class RoomHost implements Room, RunningRoom {
 	private async cancel(key: string): Promise<void> {
 		await this.ready;
 		this.assertRunning();
+		// Admission is closed while abortInFlight holds. Include earlier writes
+		// before deciding whether this exchange has Tasks to settle.
+		await this.journal.settled();
+		if (await this.tasks.cancel(key)) return;
+		await this.recordCancellation(key);
+	}
+
+	private async recordCancellation(key: string): Promise<void> {
 		const appended = await this.submit(
 			'cancel',
 			() => {
-				if (this.gone()) return { event: undefined };
+				if (this.phase === 'evicted') return { event: undefined };
 				return decide(this.state(), { type: 'cancel' }, this.now());
 			},
 			key,
@@ -1392,6 +1568,8 @@ export class RoomHost implements Room, RunningRoom {
 			// A room dropped from memory writes nothing: the next run over the journal takes it up.
 			if (this.phase === 'evicted') return;
 			await this.ready;
+			await this.journal.settled();
+			await this.tasks.cancel(`stop:${this.state().exchange?.from ?? 0}`);
 			await this.stopWork();
 			// A write queued ahead of the stop lands first, so the record says who was present.
 			await this.journal.settled();
@@ -1433,6 +1611,20 @@ export class RoomHost implements Room, RunningRoom {
 	 * nothing this run had queued lands after.
 	 */
 	evict(): void {
+		const origin = this.state().composition?.taskScope?.room;
+		const parent = origin === undefined ? undefined : this.runtime.get(origin);
+		if (parent instanceof RoomHost) void parent.reconcile();
+		for (const name of new Set(
+			[...(this.state().tasks?.values() ?? [])]
+				.filter((task) => task.originRoom === this.name)
+				.map((task) => task.workingRoom),
+		)) {
+			const child = this.runtime.get(name);
+			if (child !== undefined) {
+				this.runtime.release(child);
+				child.evict();
+			}
+		}
 		this.phase = 'evicted';
 		this.deliveryStates.clear();
 		this.journal.close();
@@ -1448,6 +1640,7 @@ function compositionOf(cast: CompositionDraft, at: string): Without<Composition,
 	return {
 		...(cast.goal === undefined ? {} : { goal: cast.goal }),
 		version: 2,
+		...(cast.taskScope === undefined ? {} : { taskScope: cast.taskScope }),
 		...(cast.summary === undefined ? {} : { summary: cast.summary }),
 		agents: cast.definitions
 			.filter((agent) => cast.seats.has(agent.name))

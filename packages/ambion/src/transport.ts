@@ -4,6 +4,7 @@
  * A seat makes three calls — `view`, `commit` and `lease` — and the room
  * answers them. `SeatRoom` names the three, `SeatPort` names the side the
  * room calls back, and `Transport` is what connects one to the other.
+ * `TaskSeatRoom` adds `task`, `taskUpdate`, and `taskSay` for Task execution.
  * `inProcessTransport` is the default: it receives a room-call facade and
  * a separate executor context. Nothing crosses a process. A host that puts the seats
  * somewhere else writes its own, and `AgentRunner` is the seat side to run
@@ -40,6 +41,12 @@ export type {
 	SeatRoom,
 	Stale,
 	Steer,
+	TaskCreateRequest,
+	TaskResponse,
+	TaskSayRequest,
+	TaskSeatRoom,
+	TaskToolResult,
+	TaskUpdateRequest,
 	ViewResponse,
 	Wake,
 } from './protocol.ts';

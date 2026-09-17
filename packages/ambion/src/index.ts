@@ -44,6 +44,12 @@ export type {
 	SpokenMessage,
 	SummaryMessage,
 	SummaryOutcome,
+	TaskContext,
+	TaskEvent,
+	TaskRecord,
+	TaskStatus,
+	TaskSubscription,
+	TaskView,
 	ToolBundle,
 	ToolContext,
 } from './types.ts';

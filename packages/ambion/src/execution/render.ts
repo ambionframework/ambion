@@ -16,6 +16,7 @@
 import type { ActivationView, ContextParticipant } from '../protocol.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
 import { isSpoken, isSummary, type Message, type Seq, type SummaryMessage } from '../types.ts';
+import { renderTasks, taskDuties } from './render-tasks.ts';
 import { SUMMARY_DUTIES } from './summary.ts';
 
 const MINUTE = 60_000;
@@ -48,7 +49,8 @@ function plural(n: number, unit: string): string {
  */
 export function renderLine(message: Message): string {
 	if (isSpoken(message) || isSummary(message)) {
-		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}`;
+		const task = isSpoken(message) && message.taskId ? ` [Task ${message.taskId}]` : '';
+		return `[${message.from}${message.to ? ` → ${message.to}` : ''}]${task} ${message.text}`;
 	}
 	const by = message.from === undefined || message.from === message.subject;
 	return `· ${message.subject} ${message.kind}${by ? '' : ` by ${message.from}`}`;
@@ -252,6 +254,8 @@ function duties(view: ActivationView, def: AgentDefinition): string[] {
 		`it, and speak again only if your reply still adds something.`,
 		``,
 		...AUDIENCE_PARAGRAPH,
+		``,
+		...taskDuties(view.context),
 	];
 	if (def.guidance) lines.push(``, def.guidance);
 	// A fold renders once the record holds a summary, so only such a record
@@ -281,6 +285,7 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 		``,
 		`The people (present: in the room now; absent: not in the room):`,
 		renderPeople(people, context.now),
+		...renderTasks(context),
 		``,
 		`The record of '${context.name}' so far:`,
 		renderRecord(

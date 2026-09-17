@@ -100,6 +100,8 @@ describe('executor tool authority', () => {
 
 		expect(names(toolsFor(view({ kind: 'respond', message: 4 }), worker, held))).toEqual([
 			'say',
+			'task',
+			'task_update',
 			'seat',
 			'unseat',
 			'record_decision',
@@ -156,7 +158,7 @@ describe('executor tool authority', () => {
 			view({ kind: 'respond', message: 4 }),
 			worker,
 			binding(activation, room),
-		)[1];
+		).find((tool) => tool.name === 'seat');
 		if (seat === undefined) throw new Error('The response tools have no seat tool.');
 
 		await expect(seat.execute('seat-call', { name: 'surveyor' })).resolves.toMatchObject({

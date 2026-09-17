@@ -17,11 +17,11 @@ import {
 	type Vocabulary,
 } from '@ambionframework/journal';
 import type { Message, Without } from '../types.ts';
-import type { Cancellation, Close, Composition, Fence, LeaseChange } from './events.ts';
+import type { Cancellation, Close, Composition, Fence, LeaseChange, TaskChange } from './events.ts';
 import { validateRoomBody } from './validate.ts';
 
 /** The entry kinds the room writes to its journal. */
-export type Kind = 'message' | 'lease' | 'close' | 'composition' | 'run' | 'cancel';
+export type Kind = 'message' | 'lease' | 'close' | 'composition' | 'run' | 'cancel' | 'task';
 
 /**
  * What a body is before the journal gives it a place. Two of the room's
@@ -43,6 +43,7 @@ export interface Bodies {
 	composition: Body<Composition>;
 	run: Fence;
 	cancel: Cancellation;
+	task: TaskChange;
 }
 
 /** The room validates bodies. The journal orders and fences entries. */

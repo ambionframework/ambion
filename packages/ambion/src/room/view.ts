@@ -7,8 +7,9 @@ import type {
 	CollaborationContext,
 	ContextParticipant,
 } from '../protocol.ts';
-import type { AgentParticipantInfo, Message, ParticipantInfo, Seq } from '../types.ts';
+import type { AgentParticipantInfo, Message, ParticipantInfo, Seq, TaskView } from '../types.ts';
 import type { RoomState } from './fold.ts';
+import { taskContext } from './tasks.ts';
 
 /** What the view is built from: the fold and current host facts. */
 export interface RoomFacts {
@@ -61,6 +62,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts): ActivationView {
 		...(goal === undefined ? {} : { goal }),
 		participants: [...agentsOf(facts), ...peopleOf(facts)],
 		messages: messages.map(contextMessage),
+		tasks: visibleTasks(spec, facts).map((task) => taskContext(task, facts.name)),
 		reserve: state.reserve.map(({ name, identity }) => ({ name, identity })),
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
@@ -75,11 +77,36 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts): ActivationView {
 	});
 }
 
+/** Select only the Tasks this activation is entitled to carry in context. */
+function visibleTasks(spec: ActivationSpec, facts: RoomFacts): TaskView[] {
+	const purpose = spec.purpose;
+	const tasks = [...(facts.state.tasks ?? new Map<string, TaskView>()).values()];
+	if (purpose.kind === 'summarize')
+		return tasks.filter(
+			(task) =>
+				task.originRoom === facts.name &&
+				task.exchange === purpose.exchange &&
+				task.owner === spec.seat,
+		);
+	if (facts.state.composition?.taskScope !== undefined)
+		return tasks.filter((task) => task.workingRoom === facts.name);
+	const exchange = facts.state.exchange?.from;
+	if (exchange === undefined) return [];
+	return tasks.filter(
+		(task) =>
+			task.originRoom === facts.name && task.exchange === exchange && task.owner === spec.seat,
+	);
+}
+
 /** Reading preferences enter context only through the recipient's summary purpose. */
 function contextMessage(message: Message): Message {
-	if (!('preferences' in message)) return message;
 	const publicMessage = { ...message };
-	delete publicMessage.preferences;
+	if ('preferences' in publicMessage) delete publicMessage.preferences;
+	if (publicMessage.kind === 'said') {
+		delete publicMessage.taskSnapshot;
+		delete publicMessage.taskCrossRoom;
+		delete publicMessage.taskNotice;
+	}
 	return publicMessage;
 }
 

@@ -2,6 +2,7 @@ import { type TSchema, Type } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 import { decodeActivationId } from '../activation-id.ts';
 import type { Kind } from './journal.ts';
+import { taskChange, taskView } from './task-schema.ts';
 
 const extra = { additionalProperties: true } as const;
 const seq = Type.Integer({ minimum: 0 });
@@ -13,7 +14,15 @@ const attention = Type.Union([
 ]);
 const wakes = Type.Optional(Type.Array(Type.String()));
 const activationId = Type.Optional(Type.String());
-const commonMessage = { activationId, wakes, at: Type.String() };
+const commonMessage = {
+	activationId,
+	wakes,
+	at: Type.String(),
+	taskId: Type.Optional(Type.String()),
+	taskSnapshot: Type.Optional(taskView),
+	taskCrossRoom: Type.Optional(Type.Boolean()),
+	taskNotice: Type.Optional(Type.Boolean()),
+};
 const seating = Type.Object({ name: Type.String(), identity: Type.String(), attention }, extra);
 const covers = Type.Object({ from: seq, through: seq }, extra);
 const cancelClose = Type.Object(
@@ -25,7 +34,6 @@ const cancelClose = Type.Object(
 	},
 	{ additionalProperties: false },
 );
-
 const messageSchemas: Record<string, TSchema> = {
 	said: Type.Object(
 		{
@@ -114,6 +122,7 @@ const schemas: Record<Kind, TSchema> = {
 	composition: Type.Object(
 		{
 			version: Type.Literal(2),
+			taskScope: Type.Optional(Type.Object({ room: Type.String(), exchange: seq }, extra)),
 			goal: Type.Optional(Type.String()),
 			summary: Type.Optional(Type.String()),
 			agents: Type.Array(seating),
@@ -124,6 +133,7 @@ const schemas: Record<Kind, TSchema> = {
 	),
 	run: Type.Object({ at: Type.String() }, extra),
 	cancel: Type.Object({ at: Type.String(), close: Type.Optional(cancelClose) }, extra),
+	task: taskChange,
 };
 
 /** Validate a room journal body. Unknown entry kinds stay outside this vocabulary. */

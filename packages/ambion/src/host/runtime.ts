@@ -51,11 +51,17 @@ export interface SeatContext {
 	readonly call: { readonly attempts: number; readonly timeout: number };
 	readonly definition: AgentDefinition;
 	readonly room: string;
+	readonly hostRoom?: string;
 	readonly seat: string;
 	readonly transcripts: SessionOpener;
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
 	readonly emit?: (event: RoomNotification) => void;
+}
+
+interface TaskRoom extends RunningRoom {
+	taskActive(exchange: number): boolean;
+	roomActive(): boolean;
 }
 
 /** A room the runtime keeps in its lifecycle registry. */
@@ -82,6 +88,7 @@ export interface ExecutionConnector {
 		room: SeatRoom,
 		request: {
 			readonly room: string;
+			readonly hostRoom?: string;
 			readonly seat: string;
 			readonly definition: AgentDefinition;
 			readonly emit: (event: RoomNotification) => void;
@@ -116,6 +123,7 @@ export interface Runtime {
 	 * These limits are separate from execution retries, which can repeat model work.
 	 */
 	readonly call: { readonly attempts: number; readonly timeout: number };
+	readonly taskProgress: boolean;
 	/** Drop a running room from memory and write nothing. The record keeps everything. */
 	evict(name: string): void;
 }
@@ -126,21 +134,33 @@ export interface RoomRuntime {
 	readonly journals: JournalOpener;
 	readonly wake: Runtime['wake'];
 	readonly retry: Runtime['retry'];
+	readonly taskProgress: boolean;
 	release(room: RunningRoom): void;
+	register(room: RunningRoom): void;
+	get(name: string): RunningRoom | undefined;
+	externalExchange(origin: string, exchange: number): boolean;
 }
 
-export function roomRuntime(runtime: Runtime, name: string): RoomRuntime {
+export function roomRuntime(runtime: Runtime, _name: string): RoomRuntime {
 	return {
 		clock: runtime.clock,
 		journals: runtime.journals,
 		wake: runtime.wake,
 		retry: runtime.retry,
-		release: (room) => releaseRoom(runtime, name, room),
+		release: (room) => releaseRoom(runtime, room.name, room),
+		taskProgress: runtime.taskProgress,
+		register: (room) => registerRoom(runtime, room),
+		get: (roomName) => registeredRoom(runtime, roomName),
+		externalExchange: (origin, exchange) => {
+			const room = registeredRoom(runtime, origin) as TaskRoom | undefined;
+			return room?.taskActive(exchange) ?? false;
+		},
 	};
 }
 
 export interface CreateRuntimeOptions {
 	clock?: Clock;
+	tasks?: { progress?: boolean };
 	transport?: Transport;
 	/** Where the runtime opens room journals and Pi transcript sessions. */
 	storage?: JournalOpener;
@@ -168,6 +188,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	});
 	const runtime: Runtime = {
 		clock: services.clock,
+		taskProgress: options.tasks?.progress ?? false,
 		storage,
 		journals,
 		transcripts: services.transcripts,

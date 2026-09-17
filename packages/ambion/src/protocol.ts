@@ -11,6 +11,7 @@
  * seat through three calls: `wake` starts an activation, `steer` sends
  * context to one running activation, and `cut` stops an activation whose
  * lease the room ended.
+ * TaskSeatRoom adds creation, updates, and Task-directed instructions.
  */
 import type {
 	AgentParticipantInfo,
@@ -44,6 +45,7 @@ export interface ActivationSpec {
 /** A wake names an activation the seat runs. */
 export interface Wake {
 	room: string;
+	hostRoom?: string;
 	seat: string;
 	activation: string;
 }
@@ -83,6 +85,8 @@ export interface CollaborationContext {
 	readonly goal?: string;
 	readonly participants: readonly ContextParticipant[];
 	readonly messages: readonly Without<Message, 'preferences'>[];
+	/** Task assignments and updates relevant to this activation. */
+	readonly tasks?: readonly import('./types.ts').TaskContext[];
 	/** The open exchange for an ordinary response. */
 	readonly exchange?: { readonly owner: string; readonly from: Seq };
 	/** Reserve identities are available to every responding agent. */
@@ -108,7 +112,7 @@ export type ViewResponse = { view: ActivationView } | Stale;
 
 /** What a seat asks the room to put on the record. The room stamps everything else. */
 export type Intent =
-	| { kind: 'said'; to?: string; text: string }
+	| { kind: 'said'; to?: string; taskId?: string; text: string }
 	| { kind: 'seated'; name: string }
 	| { kind: 'unseated'; name: string };
 
@@ -143,6 +147,54 @@ export interface SeatRoom {
 	view(activation: string): Promise<ViewResponse>;
 	commit(commit: CommitRequest): Promise<CommitResult>;
 	lease(lease: LeaseRequest): Promise<LeaseResponse>;
+}
+
+/** Optional Task extension carried by hosts that implement Task execution. */
+export interface TaskSeatRoom extends SeatRoom {
+	task(request: TaskCreateRequest): Promise<TaskResponse>;
+	taskUpdate(request: TaskUpdateRequest): Promise<TaskResponse>;
+	taskSay(request: TaskSayRequest): Promise<TaskResponse>;
+}
+
+export interface TaskCreateRequest {
+	readonly activation: string;
+	readonly key: string;
+	readonly readThrough: number;
+	readonly text: string;
+	readonly agents?: readonly string[];
+	readonly room?: string;
+}
+
+export interface TaskUpdateRequest {
+	readonly activation: string;
+	readonly key: string;
+	readonly readThrough?: number;
+	readonly task: string;
+	readonly text: string;
+	readonly status?: 'succeeded' | 'failed';
+}
+
+export interface TaskSayRequest {
+	readonly activation: string;
+	readonly key: string;
+	readonly readThrough?: number;
+	readonly task: string;
+	readonly text: string;
+}
+
+export type TaskResponse =
+	| TaskToolResult
+	| {
+			readonly refused: string;
+			readonly view?: ActivationView;
+			readonly task?: import('./types.ts').TaskContext;
+	  };
+
+export interface TaskToolResult {
+	readonly view?: ActivationView;
+	readonly task: string;
+	readonly room: string;
+	readonly status: 'open' | 'succeeded' | 'failed';
 }
 
 // -- checks --------------------------------------------------------------------
