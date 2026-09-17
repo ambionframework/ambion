@@ -34,7 +34,13 @@ Ambion serves TypeScript application developers. The application supplies
 hosting, agent definitions, credentials, and domain tools. Ambion supplies the
 collaboration semantics.
 
-![Independent agents contribute to a shared journal in an ongoing room. New context steers active work. An optional summary records a closed exchange for later activations, while people can review its original messages.](docs/assets/ambion-exchange.svg)
+![A person asks a question in a room. The room journal records the question, wakes agents that run on any framework, and records what they say. The agents read and write files, tables, and instruments in a shared workspace. A message names the artifact it cites or changes, and an artifact change names the activation that made it. A restart replays the journal and keeps the workspace.](docs/assets/ambion-room-and-workspace.svg)
+
+The picture shows the room and the workspace side by side. Speech enters the
+record through `say`. Work enters the workspace through tools. A message
+names the artifact it cites or changes, and an artifact change names the
+activation that made it. Files are here today. Tables, instruments,
+references, and provenance land with 0.1.0.
 
 ## The conceptual model
 
