@@ -8,6 +8,21 @@ The writer is an ordinary agent. It has the same identity, instructions,
 model, domain tools, membership, and attention rules as every other agent.
 The room gives it a separate closing activation after the exchange closes.
 
+## Shared context and compaction
+
+**The human-facing summary is also the context for later agents.** This is the
+accepted compaction model. Humans and agents continue from the same recorded
+summary. The room does not maintain a separate summary for agent memory.
+
+A summary replaces its covered source messages in later agent prompts. This
+reduces context size and model cost. Summaries can omit details; this loss is
+an accepted tradeoff. The journal retains the original discussion for application
+reads and human review. Agents have no built-in source-retrieval tool.
+
+Keep the current summary prompts and replacement behavior. Source retrieval,
+pagination, and retaining all covered source in agent prompts are deferred.
+Revisit this decision when demonstrated application needs justify a change.
+
 ## Configuration
 
 Define every executable agent once in `agents`. Set `summary` to the name of

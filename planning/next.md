@@ -5,7 +5,9 @@ Reviewed against main `31f2621`, after
 This review traces Relay, public declarations, package entries, and internal
 ownership. Parallel reviewers examined application APIs, packages, and navigation.
 [release-0.1.0.md](release-0.1.0.md) remains the scope definition.
-The implementation slices below distinguish current work from later proposals.
+[PR #148](https://github.com/ambionframework/ambion/pull/148) completed conversation
+reads. The accepted summary policy below supersedes the proposed source-retrieval
+work. The remaining slices distinguish upcoming work from later proposals.
 
 ## The model to preserve
 
@@ -34,111 +36,61 @@ agent definition and membership, presence and connection, and acceptance and com
 
 ## Prioritized work
 
-| Order | Work                                                                 | Benefit                                                                     | Scope                     |
-| ----- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------- |
-| 1     | Complete conversation reads and recoverable summary context          | Clients and agents can inspect source without reconstructing exchange rules | Two medium slices         |
-| 2     | Make presence and membership vocabulary match recorded facts         | Remove false reading claims and unnecessary command coordination            | Small slices              |
-| 3     | Define one application surface and one hosting surface               | Ordinary users stop navigating executor machinery                           | Medium source migration   |
-| 4     | Align files, exports, packages, and learning paths with those owners | The repository and declarations teach the same model                        | Bounded structural slices |
-| 5     | Measure growing histories and close release evidence                 | Optimize demonstrated costs and prove shipped configurations                | Measurement dependent     |
+| Order | Work                                                                 | Benefit                                                          | Scope                     |
+| ----- | -------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------- |
+| 1     | Complete conversation reads                                          | Clients inspect source without reconstructing exchange rules     | Merged in #148            |
+| 2     | Make presence and membership vocabulary match recorded facts         | Remove false reading claims and unnecessary command coordination | Small slices              |
+| 3     | Define one application surface and one hosting surface               | Ordinary users stop navigating executor machinery                | Medium source migration   |
+| 4     | Align files, exports, packages, and learning paths with those owners | The repository and declarations teach the same model             | Bounded structural slices |
+| 5     | Measure growing histories and close release evidence                 | Optimize demonstrated costs and prove shipped configurations     | Measurement dependent     |
 
-**First implementation:** kernel-owned, immediate exchange reads and explicit
-names for waits. This removes Relay's duplicated range selection and supplies
-the foundation for agent source retrieval. The summary capability gap is the
-highest product risk identified here; do not let naming work postpone it.
+**Next implementation:** factual departure vocabulary (2A). Shared summaries
+remain the accepted context compaction model. Source retrieval is deferred;
+no summary prompt or replacement changes are planned.
 
 ### Delivery slices
 
-| Slice | Deliverable                                                                                                | Status              |
-| ----- | ---------------------------------------------------------------------------------------------------------- | ------------------- |
-| 1A    | `room.read`, immediate `readExchange`, explicit close/summary waits, `ExchangeRef`, and consumer migration | Prepared for review |
-| 1B    | Bounded source retrieval from captured activation context and corrected summary guidance                   | Next after 1A       |
-| 2A    | Factual departure vocabulary; no implied read receipts                                                     | Planned             |
-| 2B    | Effect-free current-visit access and exact-repeat membership commands                                      | Planned             |
-| 3     | Application/runtime ownership and one `/hosting` entry                                                     | Planned             |
-| 4     | Internal ownership modules, declaration/package checks, and learning-path cleanup                          | Planned             |
-| 5     | History measurements, remaining recovery evidence, and release sign-off                                    | Planned             |
+| Slice | Deliverable                                                                                                | Status         |
+| ----- | ---------------------------------------------------------------------------------------------------------- | -------------- |
+| 1A    | `room.read`, immediate `readExchange`, explicit close/summary waits, `ExchangeRef`, and consumer migration | Merged in #148 |
+| 2A    | Factual departure vocabulary; no implied read receipts                                                     | Next           |
+| 2B    | Effect-free current-visit access and exact-repeat membership commands                                      | Planned        |
+| 3     | Application/runtime ownership and one `/hosting` entry                                                     | Planned        |
+| 4     | Internal ownership modules, declaration/package checks, and learning-path cleanup                          | Planned        |
+| 5     | History measurements, remaining recovery evidence, and release sign-off                                    | Planned        |
 
 Slice 1A returns an `ExchangeSnapshot` containing the exchange view, original
 discussion, and observed watermark. Missing exchanges return `undefined`.
 Positive safe-integer references are required. Reads never wait for completion.
 Existing wait results and errors remain unchanged under explicit names.
 The Cloudflare live-wait methods use the same names; HTTP routes remain stable.
-Source retrieval and summary behavior stay in 1B so each contract is reviewable.
+Summary prompts and replacement behavior remain unchanged.
 
 **1A evidence:** `pnpm format` and `pnpm check` passed. The gate included
 793 core tests, 36 Relay tests, 23 Cloudflare tests, 39 workspace tests, and
 6 CLI tests. The core total includes 22 new exchange-read cases across memory
 and SQLite storage. Packed consumer type checks and the generated Worker dry
-run passed. Adversarial review found no remaining blocker. CI evidence belongs
-to the implementation PR.
+run passed. Adversarial review found no remaining blocker. All seven checks passed
+on [PR #148](https://github.com/ambionframework/ambion/pull/148), including real-model tests.
 
-## 1. One source discussion, available through coherent reads
+## 1. Conversation reads delivered; shared compaction accepted
 
-### Findings at the reviewed baseline
+**Conversation reads belong to the kernel.** PR #148 replaced Relay's duplicated
+exchange selection with `readExchange`. `room.read()` provides coherent room
+state. `waitForClose()` and `waitForSummary()` name live waits explicitly.
+`ExchangeRef` identifies an exchange; `ExchangeView` describes recorded state.
 
-**Relay reconstructed exchange semantics.**
-[`rooms.ts`](../examples/persistent/src/rooms.ts) searched a snapshot's exchanges,
-calculated the closing boundary, removed summaries, and filtered messages.
-Those rules already belong to the kernel.
+**Humans and agents continue from the same summary.** A summary serves its human
+recipient and replaces the covered discussion in later agent prompts. This is
+the accepted inexpensive compaction strategy. The room has no separate summary
+for agent memory. The journal retains the source for application reads and human
+review. See the [summary contract](../docs/summary.md#shared-context-and-compaction).
 
-**Read-like method names could wait indefinitely.**
-[`ExchangeHandle`](../packages/ambion/src/room-host.ts) exposed `messages()` as a
-wait for close and `response()` as a wait for an optional summary. Room messages
-were immediate reads. `RoomHost.snapshot()` existed but was absent from
-`Room`; callers repeated the room name and runtime through `readRoom`.
-
-**A personalized summary becomes every agent's shared memory.**
-[`summary.ts`](../packages/ambion/src/execution/summary.ts) asks the writer to
-omit facts unrelated to its recipient's next action.
-[`render.ts`](../packages/ambion/src/execution/render.ts) then replaces covered
-source messages for later agents. Its prompt suggests using tools for omitted
-facts, but the built-in tools expose only speech and membership operations.
-Domain tools need not contain facts spoken in the room.
-
-A deterministic `renderRecord` reproduction used two messages containing an
-export limit of **731 records**, followed by a valid short summary, “Friday is
-feasible.” The source retained 731; the rendered context omitted it. This proves
-source omission, not an observed model mistake. No provider calls were used.
-
-### Changes
-
-- [x] Expose one coherent `room.read(options)` using the existing snapshot path.
-      Keep `readRoom(name, options)` for records without a running handle.
-      Retain one pure read implementation and detached returned values.
-      Migrate ordinary observation from `messages()` and `participants()` to
-      this read, then remove redundant public convenience methods.
-- [x] Add `readExchange(roomName, from, options)` for an immediate exchange view
-      and its original discussion. Use the same selector for running and stopped
-      records. A missing exchange must be explicit; reading never starts work.
-- [x] Rename waits to `waitForClose()` and `waitForSummary()`. Preserve the
-      existing returned discussion and optional summary initially. Rename the
-      identity value `Exchange` to `ExchangeRef` when migrating its consumers;
-      keep `ExchangeView` for recorded state and `ExchangeHandle` for live waits.
-      Remove superseded aliases before 0.1.0.
-- [ ] Give ordinary agents bounded, read-only access to the source of replaced
-      ranges. Original messages already reach `ActivationView`; first expose
-      them through an executor tool over that captured context. Share the pure
-      range selector with application reads. No new transport call is needed
-      while the context already contains the source. Restrict access to closed
-      ranges available to that activation, with message/byte limits and explicit
-      continuation. Summaries retain their recipient and source provenance.
-      Retrieval must not publish a contribution, seat an agent, or open an exchange.
-      A historical read must not advance the activation's freshness cursor.
-- [ ] Replace instructions that treat a summary as complete truth or assume
-      domain tools can recover conversational facts. Preserve optional closing
-      work through the ordinary `say` tool. No second summarizer or summary kind.
-
-The preferred direction preserves compact context with recoverable source.
-Until retrieval exists, retaining source is the conservative fallback. Disabling
-replacement changes the documented compaction behavior and requires an explicit
-scope update. A shorter prompt alone does not solve inaccessible evidence.
-
-**Evidence required:** open/closed/stopped/missing exchanges; silent, failed,
-and late summaries; exclusive cursors; recovery and superseded runs; invalid
-ranges; detached values. A later specialist must retrieve an omitted constraint
-from the exact source after restart. Keep source retrieval bounded and distinguish
-journal sequences from displayed message numbers.
+Compaction can omit details. The review demonstrated this omission, but did not
+establish a need for agent source retrieval or pagination. Accept that tradeoff
+and preserve current prompts and replacement behavior. A built-in `read_exchange`
+tool, continuation tokens, and retaining all covered source in prompts are deferred.
+Revisit them only when demonstrated application needs justify the added concepts.
 
 ## 2. Presence and membership describe facts
 
@@ -356,7 +308,7 @@ the final 0.1.0 package set.
 - [ ] Verify `/dev/null` on both workspace backends. Preserve whole-operation
       serialization, shared ownership, and dispose-versus-destroy behavior.
 - [ ] Extend summary evidence for silence, corrections, conflicting constraints,
-      multiple humans, late summaries, source retrieval, and message numbering.
+      multiple humans, late summaries, and message numbering.
 - [ ] Run `pnpm check`, targeted chaos, and proofs for changed rules. Retain
       real-provider restart validation and exercise Relay after API migrations.
       Record commit, commands, environment, results, and unresolved limits.
@@ -394,5 +346,5 @@ Preserve earlier exclusions: hot-loaded definitions, multiple simultaneous
 discussions within one room, per-tab presence tokens, automatic departures,
 distributed workspace ownership, automatic summary skipping by message count,
 manual summary retry, exchange budgets, and mandatory new storage formats.
-The bounded source-read tool above addresses a demonstrated capability gap;
-it does not introduce a general retrieval or retention system.
+Agent source retrieval, pagination, and changes to summary compaction are also
+deferred under the accepted shared-summary policy.

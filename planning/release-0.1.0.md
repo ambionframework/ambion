@@ -188,12 +188,18 @@ Closing execution uses only the regular `say` tool. Ordinary activations use
 waits for its summary or a terminal result without one. An application can
 always use the discussion when no summary is available.
 
-**Use summaries in later activations and retain the discussion for human
-review.** Once a closed exchange has a summary, agent context uses it in place
-of the covered source messages. Agents continue from the summary and their
-domain tools. Human participants can review the original discussion through
-`exchange.waitForClose()`. The journal retains every source message for review and
-recovery. Closure without a summary does not itself replace source messages.
+**Share the human-facing summary with later agents for inexpensive context
+compaction.** This keeps humans and agents working from the same recorded
+summary. Detail loss is an accepted tradeoff; built-in agent source retrieval
+is outside the current scope. See the [summary contract](../docs/summary.md#shared-context-and-compaction).
+
+Once a closed exchange has a summary, agent context uses it in place of the
+covered source messages. Agents continue from the summary and their domain tools.
+Closure without a summary does not itself replace source messages.
+
+**Retain the discussion for human review.** Human participants can review the
+original discussion through `readExchange()` or `exchange.waitForClose()`.
+The journal retains every source message for review and recovery.
 
 ### F5. Persistence and recovery
 
