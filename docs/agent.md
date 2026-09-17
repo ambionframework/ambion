@@ -60,6 +60,11 @@ from its definition. A closing activation receives only `say`. `say` accepts
 facts. `seat` and `unseat` accept an agent name. The room validates operations
 at the commit boundary.
 
+**Spoken contributions require nonblank text.** The room refuses empty or
+whitespace-only human messages, agent messages, and summaries before writing.
+A refusal does not reserve the request key. Direct calls preserve accepted
+text exactly; `say` trims its input. An agent can finish silently without `say`.
+
 ## Rooms and membership
 
 `startRoom` writes a version 2 composition and starts the room. `seats` names

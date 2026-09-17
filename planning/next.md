@@ -1,7 +1,7 @@
 # Next: simplify Ambion for 0.1.0
 
-Reviewed against main `3391145`, after
-[PR #143](https://github.com/ambionframework/ambion/pull/143) merged.
+Reviewed against main `26a58f8`, after
+[PR #144](https://github.com/ambionframework/ambion/pull/144) merged.
 The [Relay demo](../examples/persistent/README.md) is the reference consumer.
 Two follow-up Astra/High reviews and isolated SQLite/browser reproductions
 revisited the earlier subsystem review. Findings below distinguish reproduced
@@ -72,8 +72,8 @@ entries do not form one transaction, and rooms retain separate conversation cont
 **Items 1–2 merged in PRs #140–#142:** failed-stop recovery, explicit browser
 entry, coherent room/exchange reads, and partial-creation recovery.
 Item 3 defines cancellation through one atomic journal entry, merged in
-PR #143. The stop cleanup fix is prepared for review. Contribution validation
-is next.
+PR #143. Stop cleanup merged in PR #144. Contribution validation is prepared
+for review. Item 4, execution ownership, is next.
 
 ## 1. Keep commands and observation coherent in Relay
 
@@ -247,11 +247,14 @@ conversation context or cross-room atomicity.
       Revoke running leases regardless of expiry, then remaining pending work,
       including unread steering. Decide each revocation after journal recovery;
       confirm completion through a fresh queued decision. Preserve the open
-      exchange and existing departure/fencing contracts. This fix is prepared
-      for review; it has not merged.
-- [ ] Reject blank human and agent contributions inside collaboration decisions.
-      Relay and `say` already reject them, but direct API/protocol calls can
-      bypass that rule. Keep HTTP shape/size limits in the application.
+      exchange and existing departure/fencing contracts. Merged in PR #144
+      with all seven CI checks passing.
+- [x] Reject blank human and agent contributions inside collaboration decisions.
+      One rule covers direct human messages, agent speech, and summaries.
+      Rejected contributions write nothing and leave their keys available for
+      corrected retries. Accepted text remains unchanged through direct calls;
+      `say` retains input trimming and uses the room's refusal. Relay retains
+      HTTP validation and size limits. This change is prepared for review.
 
 **Verification:** concurrent sends, newly owed summary work, failed and uncertain
 cancellation appends, retry, newer-run fencing, and uncooperative tools.
