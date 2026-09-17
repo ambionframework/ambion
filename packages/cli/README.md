@@ -98,7 +98,7 @@ packs local dependencies and exercises the actual `ambion new` command. Its
 package fixtures are internal to the test.
 
 The first version supports one local human and one room on loopback.
-Deployment commands remain future work. See [the CLI plan](../../planning/cli.md)
+Deployment commands remain future work. See [the delivery plan](../../planning/next.md)
 and [deployment and recovery](../../docs/deployment.md) for scope.
 
 Apache 2.0.

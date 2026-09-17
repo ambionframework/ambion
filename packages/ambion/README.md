@@ -108,8 +108,7 @@ agent context uses it in place of the covered source messages. Human
 participants can review the original discussion through `exchange.messages()`.
 The journal retains the complete history.
 
-**0.1.0 remains a release target.** Membership API changes and package
-extraction remain pending. The
+**0.1.0 remains a release target.** The
 [documentation index](https://github.com/ambionframework/ambion/blob/main/docs/README.md)
 distinguishes current behavior from the release plan.
 

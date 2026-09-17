@@ -132,8 +132,9 @@ It is shared presence history, not an acknowledged cursor for each device.
 Keep a separate cursor per client. Sequence numbers are journal positions;
 messages can have gaps between their sequence numbers.
 
-**Resume first, then reacquire handles.** Supply the same executable agent
-catalog and reopen the same storage. With the saved client values:
+**Resume first, then reacquire handles.** Supply executable definitions for
+every recorded agent name and reopen the same storage. A new run may use
+updated definitions. With the saved client values:
 
 ```ts
 const room = await resumeRoom(saved.roomName, { runtime, agents });
@@ -153,7 +154,8 @@ identifies the original exchange even if the room has since moved on.
 Pending waits belong to one running room. Eviction or detected supersession
 rejects them; recreate waits on a handle from the resumed room. A stopped
 run also rejects waits for unfinished work. Already recorded discussion and
-summary results remain available through a resumed room.
+summary results remain available through `readRoom()` or Cloudflare `read()`,
+including stopped rooms. Reading recorded state does not resume execution.
 
 **Subscribe before reading history, and merge by sequence.** Subscriptions
 are local and do not replay past notifications. A message may appear in both

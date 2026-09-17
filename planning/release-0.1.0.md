@@ -291,9 +291,10 @@ Provide ESM packages, declarations, accurate package READMEs, and examples
 checked against the packed release artifacts. The Node target remains
 22.19 or later, subject to the tested compatibility matrix.
 
-The planned packages are `@ambionframework/ambion`,
+The release packages are `@ambionframework/ambion`,
 `@ambionframework/journal`, `@ambionframework/pi-journal`, and
-`@ambionframework/workspace`. The main library composes the defaults;
+`@ambionframework/workspace`, `@ambionframework/cloudflare`, and
+`@ambionframework/cli`. The main library composes the defaults;
 applications import additional packages only when they need those capabilities.
 
 Pi remains the supported model loop. Provider selection follows the installed
