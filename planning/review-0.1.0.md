@@ -1,11 +1,12 @@
 # 0.1.0 hardening review
 
-Reviewed on 2026-09-17 against main `deaaf94`, after PR #150. One reviewer
-read the runtime, the journal, the adapters, the examples, the docs, and the
-open pull requests. Two deterministic probes reproduced the two correctness
-findings below. No provider calls were used. This document is an input to
-[next.md](next.md), which owns the delivery plan. [release-0.1.0.md](release-0.1.0.md)
-owns the scope.
+Reviewed on 2026-09-17 against main `deaaf94`, after PR #150, and revisited
+the same day after PR #153 opened and the live tier reported on PR #151 and
+PR #152. One reviewer read the runtime, the journal, the adapters, the
+examples, the docs, and the open pull requests. Two deterministic probes
+reproduced the two correctness findings below. No provider calls were used.
+This document is an input to [next.md](next.md), which owns the delivery
+plan. [release-0.1.0.md](release-0.1.0.md) owns the scope.
 
 **Baseline.** On Node 22.22 with the engine check bypassed, `pnpm build`,
 the core suite, Biome, Knip, and Prettier all pass.
@@ -54,8 +55,19 @@ only when two names currently mean one thing, or one name means two things.
 | C5  | One word, one meaning: the naming list                  | Experience  | Medium |
 | C6  | Small sharp edges in the application API                | Experience  | Small  |
 | C7  | Lighten the planning and evidence files                 | Experience  | Small  |
+| D1  | Classify a permanent failure and stop retrying it       | Scope       | Small  |
+| D2  | Usage and cost on every activation                      | Scope       | Small  |
+| D3  | A journal format promise with golden fixtures           | Scope       | Medium |
+| D4  | Membership authority for independently owned agents     | Scope       | Small  |
+| D5  | Bounded activation context and message size             | Scope       | Medium |
+| D6  | Conformance suites for storage and transport            | Scope       | Medium |
+| D7  | A public registry                                       | Scope       | Small  |
+| D8  | A trust statement between owners                        | Scope       | Small  |
+| D9  | Provider evidence beyond one account                    | Scope       | Small  |
+| D10 | An API reference                                        | Scope       | Small  |
 
-Section D assesses the open pull requests. Section E proposes the order.
+Section D names scope the release documents do not. Section E assesses the
+open pull requests. Section F proposes the order.
 
 ## A. Correctness
 
@@ -542,7 +554,7 @@ is a dated review under `docs/`. `LemmaScript-files.txt` sits at the root.
 The repository has no changelog. PR #40 proposed one in 2026-09-03 and only
 its directory move landed.
 
-**Solution.** Reduce `next.md` to the ordered checklist in section E with
+**Solution.** Reduce `next.md` to the ordered checklist in section F with
 one link per item to its design note. Move dated evidence to
 `planning/evidence/` and link it from the release document. Move the
 LemmaScript list under `scripts/` if the verifier permits a path. Add
@@ -552,12 +564,229 @@ require an entry from every pull request that changes a public entry.
 **Impact.** A contributor reads the plan in one screen and finds evidence
 by date. The 0.1.0 release notes exist before the tag.
 
-## D. In-flight pull requests
+## D. Scope the release does not yet name
+
+**A solid 0.1.0 states its envelope, its trust model, and its cost.** The
+[scope](release-0.1.0.md) and [next.md](next.md) cover collaboration
+semantics, persistence, and deployment. Ten obligations of a kernel that
+runs unattended, on paid models, for independently owned agents, appear in
+neither document. Each item below says whether it belongs in 0.1.0.
+
+### D1. Classify a permanent failure and stop retrying it
+
+**Problem.** [`activation.ts`](../packages/ambion/src/execution/activation.ts)
+treats every provider error alike: `failureOf` reads `stopReason: 'error'`
+and the lease ends as `failed`. [`reconcile.ts`](../packages/ambion/src/room/reconcile.ts)
+then retries with the activation backoff up to the attempt cap. On
+2026-09-17 the live tier on PR #151 and PR #152 recorded the pattern for a
+400 "credit balance is too low" reply: three activations, 90 seconds of
+backoff, one `abandoned` event, and an exchange closed as silent. A wrong
+key, a revoked key, and a context-length overflow take the same path. The
+retry budget exists for transient failures and spends itself on permanent
+ones.
+
+**Solution.** Classify the failure at the executor boundary, where Pi
+exposes the provider error. Carry `cause: 'permanent' | 'transient'` on the
+`failed` lease end and on the `error` and `abandoned` events. Let the
+reconcile rule abandon a permanent failure at once, with no backoff. Keep
+the attempt cap for transient failures. The lease schema in
+[`validate.ts`](../packages/ambion/src/journal/validate.ts) accepts extra
+fields, so older journals stay readable.
+
+**Impact.** A configuration mistake surfaces in seconds. The exchange
+outcome work in [next.md §3](next.md) gains the fact it needs to say why
+work stopped.
+
+**0.1.0:** in.
+
+### D2. Usage and cost on every activation
+
+**Problem.** The kernel's prompt tells every agent that attention costs
+money, and [`exchange.md`](../docs/exchange.md) says a host measures what an
+exchange cost. Nothing records tokens or cost. Pi's `AssistantMessage`
+carries `usage` with input, output, and cache tokens and a cost, and the
+runner persists those messages to the audit transcript. The Pi journal holds
+`SessionStats` machinery for usage records that the runner never writes.
+
+**Solution.** Sum `usage` over an activation's messages when it releases.
+Put the sum on `activation_end` and on the `released` lease entry as an
+optional field. Let `ExchangeView` for a closed exchange sum the usage of
+the leases in its range, so `readExchange` reports cost after a restart.
+
+**Impact.** Cost per activation and per exchange is a read, on a live room
+and on a stored one. An evaluation harness reads it from the kernel.
+
+**0.1.0:** in.
+
+### D3. A journal format promise with golden fixtures
+
+**Problem.** 0.1.0 ships SQLite persistence, so a journal written by 0.1.0
+must be readable by 0.1.x. The only version marker is `composition.version`.
+The `run` entry holds a timestamp. The `cancel` kind arrived this month, and
+[`durability.md`](../docs/durability.md) says an older runtime cannot resume
+a journal that holds one. No test replays a journal that an earlier build
+wrote.
+
+**Solution.** Declare journal format 1 as the set of kinds and bodies in
+`validate.ts`, and write `format: 1` on the run entry. Store golden
+journals under `packages/ambion/test/fixtures/journals/` as JSON lines
+dumped from memory storage for each chaos scenario, with the expected fold
+beside each. Replay them in CI. State the promise in `durability.md`: a
+0.1.x runtime reads every 0.1.0 journal, a new kind is additive, and a body
+change raises the format.
+
+**Impact.** A persistent service upgrades in place. The durability tier
+proves compatibility on every push.
+
+**0.1.0:** in.
+
+### D4. Membership authority for independently owned agents
+
+**Problem.** The thesis is independently owned agents. The kernel gives
+every ordinary activation `unseat` over every agent, including the summary
+writer. After that removal every exchange closes with no summary and a
+`failed` outcome. The assistant package instructs its model to keep itself
+seated, which puts a room rule into a prompt.
+
+**Solution.** Add one attribute to a seat in the composition:
+`seats: { editor: { attention: 'broadcast', fixed: true } }`. The summary
+writer is fixed by default. An agent's `unseat` of a fixed seat is refused
+with a reason in `transition.ts`; the host can always seat and unseat. No
+roles and no permission matrix.
+
+**Impact.** The room's owner states which participation is policy. The
+prompt line goes away.
+
+**0.1.0:** in.
+
+### D5. Bounded activation context and message size
+
+**Problem.** [`view.ts`](../packages/ambion/src/room/view.ts) hands every
+ordinary activation the whole record. Only a configured summary writer
+compacts closed human exchanges. A room with no writer, or one long
+exchange, grows the prompt until the provider refuses it, which D1 then
+classifies as permanent. The docs state the limit and offer no lever. The
+kernel also accepts a message of any size; Relay caps requests at 16 KiB
+and the kernel does not.
+
+**Solution.** Add `limits.context.messages` to the room. Render the open
+exchange whole, then earlier exchanges newest first until the budget, with
+one line that names how many earlier messages the view omits. Keep
+summaries in place of what they cover. Add `limits.message.bytes` with a
+typed refusal at the room boundary. Default both to the current behavior
+and document the failure mode when the open exchange alone exceeds the
+budget.
+
+**Impact.** A room has a stated maximum prompt size and a stated maximum
+message. The failure mode is a documented refusal.
+
+**0.1.0:** in, with defaults that preserve current behavior.
+
+### D6. Conformance suites for storage and transport
+
+**Problem.** The scope calls separate room and agent hosts an extension
+contract validated by the Cloudflare reference. The storage contract has
+five conformance cases in
+[`storage.test.ts`](../packages/journal/test/storage.test.ts) and the
+transport contract has cases only in the workerd suite. Neither is
+published. A Postgres or Turso storage and a queue-based transport have no
+way to prove conformance.
+
+**Solution.** Publish `storageConformance(open)` from
+`@ambionframework/journal/testing`, built from the five cases plus lost
+acknowledgement and concurrent append. Publish `transportConformance()`
+from the hosting entry's testing tools, built from the runner liveness
+cases: wake, steer, and cut ordering, a late reply, and a cut during a
+claim. Run both suites on the shipped adapters.
+
+**Impact.** "Extension contract" becomes a checkable claim. A third-party
+adapter ships with evidence.
+
+**0.1.0:** in.
+
+### D7. A public registry
+
+**Problem.** Every install path requires a GitHub personal access token:
+the README, the package READMEs, the CLI, and the generated `.npmrc`. The
+scope defers the registry decision. A public 0.1.0 behind a token is a
+private beta.
+
+**Solution.** Publish the seven packages to npmjs under the
+`@ambionframework` scope at 0.1.0. The release workflow already attests
+build provenance. Keep GitHub Packages as a mirror or drop it. Remove the
+token instructions.
+
+**Impact.** `npm install @ambionframework/ambion` works.
+
+**0.1.0:** in; this is a decision, and the work is one workflow change.
+
+### D8. A trust statement between owners
+
+**Problem.** Agents from different owners share a room. The kernel stamps
+provenance, refuses a stale commit, and derives authority from the journal,
+and no document states the trust model. An owner who seats a foreign agent
+cannot read what that agent cannot do (speak under another name, change a
+summary's recipient, revive cancelled work), what it can do to others
+(unseat, address, steer), and what the kernel does not defend (prompt
+injection through messages, tool effects, secrets in transcripts).
+
+**Solution.** Add `docs/trust.md` with one table of guarantees and one of
+non-guarantees. Link each guarantee to the test or the verified rule that
+proves it. Fold D4 into it.
+
+**Impact.** The decision to seat a foreign agent has a page.
+
+**0.1.0:** in; documentation only.
+
+### D9. Provider evidence beyond one account
+
+**Problem.** The live tier runs one provider, one model, and one API key.
+On 2026-09-17 every live run on PR #151 and PR #152 failed because that
+account's credit balance was too low. Release evidence depends on one
+account, and the release claim that provider selection follows the
+installed Pi integration has evidence for one provider.
+
+**Solution.** Run the live tier on two providers through Pi's registry,
+with a separate job per provider. Fail a job on a credit or authentication
+error with a message that names the account. Document the provider matrix
+as tested, expected, and untested.
+
+**Impact.** One account outage does not block a release. The provider
+claim has evidence.
+
+**0.1.0:** in; CI only.
+
+### D10. An API reference
+
+**Problem.** The docs point at source files for shapes ("see the public
+types in `types.ts`"). A developer who wants the signature of `Room.read`
+opens the repository.
+
+**Solution.** Generate a reference for each published entry from the
+emitted declarations into `docs/api/`, and link it from `docs/README.md`.
+Fail CI when the reference is stale.
+
+**Impact.** A developer reads the API without opening source.
+
+**0.1.0:** in.
+
+## E. In-flight pull requests
+
+**The live tier is red on both open implementation PRs for one reason
+outside them.** The "Live tests on anthropic/claude-sonnet-5" job failed on
+PR #152 at 19:12 and on PR #151 at 18:57. Every failed assertion in both
+logs traces to one provider reply: 400 `invalid_request_error`, "Your credit
+balance is too low to access the Anthropic API." Each live room recorded
+three activations, an `abandoned` event, and a silent close (see D1). The
+scripted suites, lint, types, the CLI smoke, and the Dafny proofs pass on
+both heads. Restore the account before any live evidence in section F
+counts.
 
 **Merge PR #152 first.** "Bind delivery receipts and identity to journal
 facts" (+812/−85, 17 files) tightens the delivery contract, keeps the journal
-cache private, and removes the Cloudflare identity store. Every check passes
-except the live run still in progress. Two notes for review before merge.
+cache private, and removes the Cloudflare identity store. Every scripted
+check passes; the live failure above is the account's. Two notes for review
+before merge.
 A same-key retry from a later attempt is refused because the match requires
 the same activation id; document that in `durability.md`. The extra clone
 per heard entry raises the cost that B1 removes, so schedule B1 after it.
@@ -583,7 +812,7 @@ it on the incremental fold (B1) with a bounded change set per journal.
 **Close the stale pull requests.** Nine open pull requests date from
 2026-09-01 to 2026-09-11, and every one conflicts with main. Main delivered
 the aim of each one by another route. Three carry one idea worth taking
-before closure. Section E assumes these closures.
+before closure. Section F assumes these closures.
 
 | PR  | Title                                                    | Recommendation                                                                |
 | --- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -611,30 +840,32 @@ green; merge them, then check whether one TypeBox version remains
 ([next.md §9](next.md)). PR #5, #6, and #7 are green. PR #4 has a stale run
 from 2026-08-25 and needs a rebase before its checks mean anything.
 
-## E. Proposed order
+## F. Proposed order
 
 **Fix, then freeze, then simplify, then prove.** The order keeps every
-public rename in one window and every behavior fix before it.
+public rename and every journal field in one window, and every behavior
+fix before it.
 
-| Step | Work                                             | Depends on | Evidence                                                                                 |
-| ---- | ------------------------------------------------ | ---------- | ---------------------------------------------------------------------------------------- |
-| 1    | Merge PR #152; close stale PRs; bump the Pi pair |            | CI green on main                                                                         |
-| 2    | A1, A2                                           | 1          | Probes as regressions on memory and SQLite                                               |
-| 3    | C1                                               |            | `pnpm install` and `pnpm check` on Node 22                                               |
-| 4    | B3, B4, B5, B7, B8, C5, C6                       | 2          | Generated declarations list two entries                                                  |
-| 5    | API freeze: additive changes only                | 4          | A note in `release-0.1.0.md`                                                             |
-| 6    | B1                                               | 1          | Equivalence property test; envelope table                                                |
-| 7    | B2, B9                                           | 4          | File budget rule; template on `read()`                                                   |
-| 8    | B6, C2, C3                                       | 4          | Prompt snapshots; testing entry in a packed consumer; `ambion new --template node` smoke |
-| 9    | next.md §3 exchange outcomes                     | 6          | Silence, exhaustion, cancellation reads                                                  |
-| 10   | C4, C7, release evidence (next.md §9)            | 5          | Packed consumers; Node 22 and 24; Cloudflare; `CHANGELOG.md`                             |
+| Step | Work                                               | Depends on | Evidence                                                                                         |
+| ---- | -------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------ |
+| 1    | Merge PR #152; close stale PRs; bump the Pi pair   |            | CI green on main                                                                                 |
+| 2    | A1, A2, D1                                         | 1          | Probes as regressions on memory and SQLite; a 400 abandons in one attempt                        |
+| 3    | C1, D9                                             |            | `pnpm install` and `pnpm check` on Node 22; two live jobs                                        |
+| 4    | B3, B4, B5, B7, B8, C5, C6, D4, D5                 | 2          | Generated declarations list two entries; a fixed seat refuses an agent's unseat                  |
+| 5    | D2, D3: usage and format on the journal            | 4          | Golden journals replay; `activation_end` carries usage                                           |
+| 6    | API and journal freeze: additive changes only      | 5          | A note in `release-0.1.0.md`                                                                     |
+| 7    | B1                                                 | 1          | Equivalence property test; envelope table                                                        |
+| 8    | B2, B9                                             | 4          | File budget rule; template on `read()`                                                           |
+| 9    | B6, C2, C3, D6                                     | 4          | Prompt snapshots; testing entry and conformance suites in a packed consumer; Node template smoke |
+| 10   | next.md §3 exchange outcomes                       | 7          | Silence, exhaustion, cancellation, and permanent failure reads                                   |
+| 11   | C4, C7, D7, D8, D10, release evidence (next.md §9) | 6          | Packed consumers from npmjs; Node 22 and 24; Cloudflare; `CHANGELOG.md`; `docs/trust.md`         |
 
-**The freeze at step 5 is the release decision.** Thirty-nine pull requests
+**The freeze at step 6 is the release decision.** Thirty-nine pull requests
 merged between 2026-09-15 and 2026-09-17, and many renamed a public term.
-The docs carry the residue of those renames. After step 4, every change to
-the main entry is additive until the tag.
+The docs carry the residue of those renames. After step 5, every change to
+the main entry and to the journal bodies is additive until the tag.
 
-## F. Deferred past 0.1.0
+## G. Deferred past 0.1.0
 
 - Exchange-scoped tasks and working rooms (PR #151), rebuilt on B1.
 - A bounded projection with checkpoints; B1 keeps full replay.
