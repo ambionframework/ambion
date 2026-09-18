@@ -126,6 +126,14 @@ together. After changing a contract, regenerate with
 `npx lsc gen --backend=dafny <file>`. `LemmaScript-files.txt` lists what CI
 verifies; local verification needs Dafny on `PATH`.
 
+`scripts/setup.sh` provisions the full local toolchain. It installs Node 26
+through nvm, because `@opentui/core` sets that engine floor. It installs .NET 8,
+Dafny 4.11, and Z3 4.12.1, which `pnpm check:lemmascript` reads. It then
+installs the workspace dependencies. The script is idempotent, so a second run
+skips a tool that is already present. On the web, the SessionStart hook at
+`.claude/hooks/session-start.sh` runs the script, and the tool paths reach every
+later shell through `CLAUDE_ENV_FILE`.
+
 ## 7. Lint and format split
 
 Biome lints and Prettier formats. The key repository rules are no explicit
