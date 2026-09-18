@@ -21,6 +21,10 @@ room's synchronous decision, and either appends or returns a result. A repeated
 key returns its original entry before the decision runs; reusing a key for a
 different kind fails. Keys never expire while the record is retained.
 
+The journal owns its cache and sequence counter. Public reads, append receipts,
+and callbacks receive detached values. Incremental room projection reads only
+new entries, so protecting ownership does not copy old history on every operation.
+
 The first entry of each run is a fence and every write carries that run id. A
 later fence voids writes from earlier runs after the fence position. A
 superseded run emits `superseded`, drops its live handles, and writes nothing
@@ -44,14 +48,23 @@ contract.
   recorded routing remain on the journal.
 - **Refused:** a stopped room, ended visit, invalid recipient, or stale
   conditional append writes nothing and rejects.
-- **In doubt:** retry with the same `key`. The message is either absent or
-  already present; the token lands at most once and returns the original handle.
+- **In doubt:** retry with the same `key`, author, recipient, and exact text.
+  The message is either absent or already present; an exact retry lands at most
+  once and returns the original exchange handle, including after restart.
 - **Superseded:** a later run's fence prevents future writes from an earlier
   run. Entries accepted before that fence remain in the journal; the old run's
   subsequent handles and writes are stale.
 
-The same idempotency rule applies to presence and administrative writes that
-carry keys. The record retains the token and message for replay and inspection.
+Keys are scoped to the room, not to a person or visit. Reusing a key for another
+author, recipient, text, or operation rejects without changing the original
+entry. An explicitly supplied empty string is a key; omitting it generates one.
+Applications should generate unique keys and save the key with the request
+before sending. Leaving and reentering does not reset a key.
+
+Agent contributions likewise bind a key to their activation and contribution.
+A retry may carry a newer read position, but cannot replace the accepted content.
+Presence and administrative writes retain the generic journal's kind-level
+deduplication. The record retains every token for replay and inspection.
 
 ## 3. What a read promises
 

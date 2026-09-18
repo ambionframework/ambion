@@ -67,8 +67,8 @@ and agent runners. `room.ts` composes both behind the public facade.
 | Dead code              | Knip 6                                                   |
 
 The core and published packages require Node `>=22.19`. The OpenTUI `ambion
-dev` client additionally needs Node `>=26.4` (or Bun `>=1.3`). CI installs with
-Node 26 and runs the compatibility test matrix on Node 22 and 24.
+dev` client additionally needs Node `>=26.4` (or Bun `>=1.3`). CI installs and
+tests on Node 26.
 
 ## 3. Supply chain
 
@@ -126,6 +126,14 @@ together. After changing a contract, regenerate with
 `npx lsc gen --backend=dafny <file>`. `LemmaScript-files.txt` lists what CI
 verifies; local verification needs Dafny on `PATH`.
 
+`scripts/setup.sh` provisions the full local toolchain. It installs Node 26
+through nvm, because `@opentui/core` sets that engine floor. It installs .NET 8,
+Dafny 4.11, and Z3 4.12.1, which `pnpm check:lemmascript` reads. It then
+installs the workspace dependencies. The script is idempotent, so a second run
+skips a tool that is already present. On the web, the SessionStart hook at
+`.claude/hooks/session-start.sh` runs the script, and the tool paths reach every
+later shell through `CLAUDE_ENV_FILE`.
+
 ## 7. Lint and format split
 
 Biome lints and Prettier formats. The key repository rules are no explicit
@@ -151,18 +159,18 @@ repository jobs plus the LemmaScript reusable workflow:
 | Job     | Checks                                                      |
 | ------- | ----------------------------------------------------------- |
 | `check` | format, types, lint, and Knip on Node 26                    |
-| `test`  | scripted tests on Node 22 and 24                            |
+| `test`  | scripted tests on Node 26                                   |
 | `cli`   | build, CLI version/help/error behavior, and package packing |
 
 The CLI job drives `packages/cli/bin/ambion.mjs`, verifies versions, rejects an
 unknown command, and packs all packages. This checks the artifact users will
 run, including package resolution and `files` lists.
 
-The live workflow runs the same scenarios on a real provider. It is scheduled
-weekly, available by dispatch, and runs for an in-repository pull request from
-a repository admin. It requires `ANTHROPIC_API_KEY`, uses `AMBION_MODEL` (the
-default is `anthropic/claude-sonnet-5`), and cancels a superseded run. Run it
-locally with:
+The live workflow runs the same scenarios on a real provider. It runs after a
+change lands on `main`, on a weekly schedule, and by dispatch. It does not run
+on a pull request, because a real-model run costs money. It requires
+`ANTHROPIC_API_KEY`, uses `AMBION_MODEL` (the default is
+`anthropic/claude-sonnet-5`), and cancels a superseded run. Run it locally with:
 
 ```sh
 pnpm test:live

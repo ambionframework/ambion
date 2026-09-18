@@ -11,9 +11,16 @@ import {
 } from '../src/index.ts';
 import { runningRoom, type SeatRoom, type Transport } from '../src/transport.ts';
 import { messagesOf, roomName, stateOf } from './support/room.ts';
-import { memory, type OpenedStorage, type Storage, storages } from './support/storage.ts';
+import {
+	faultyJournals,
+	memory,
+	type OpenedStorage,
+	type Storage,
+	storages,
+} from './support/storage.ts';
 
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
+const secondPerson = defineHuman({ name: 'sam', identity: 'Engineer.' });
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Answers questions.',
@@ -25,6 +32,12 @@ const writer = defineAgent({
 	identity: 'Writes summaries.',
 	instructions: 'Summarise the record.',
 	model: 'scripted/writer',
+});
+const reserveAgent = defineAgent({
+	name: 'reserve',
+	identity: 'Joins when invited.',
+	instructions: 'Wait.',
+	model: 'scripted/reserve',
 });
 
 const passiveTransport: Transport = {
@@ -64,6 +77,161 @@ async function protocol(runtime: Runtime, name: string): Promise<SeatRoom> {
 const blankTexts = ['', '\u00a0\u2003\u202f'];
 
 describe.each(storages)('contribution validation on $name storage', (storage) => {
+	it('keeps a delivery key bound to its author, recipient, and content', async () => {
+		const { opened, room } = await openWorld(storage, { agents: [] });
+		try {
+			const first = await room.visit(person);
+			const second = await room.visit(secondPerson);
+			const key = 'delivery-integrity';
+			const original = await first.send({ key, to: secondPerson.name, text: 'Original.' });
+			await expect(first.send({ key, to: secondPerson.name, text: 'Changed.' })).rejects.toThrow(
+				/different room operation/,
+			);
+			await expect(first.send({ key, to: person.name, text: 'Original.' })).rejects.toThrow(
+				/different room operation/,
+			);
+			await expect(second.send({ key, to: secondPerson.name, text: 'Original.' })).rejects.toThrow(
+				/different room operation/,
+			);
+			const exactRetry = await first.send({ key, to: secondPerson.name, text: 'Original.' });
+			expect(exactRetry).toMatchObject({
+				owner: original.owner,
+				from: original.from,
+				at: original.at,
+			});
+			expect((await messagesOf(room)).filter((message) => message.key === key)).toHaveLength(1);
+
+			// An explicitly supplied empty key is still a real idempotency key.
+			const empty = await first.send({ key: '', text: 'Empty key.' });
+			const emptyRetry = await first.send({ key: '', text: 'Empty key.' });
+			expect(emptyRetry).toMatchObject({ owner: empty.owner, from: empty.from, at: empty.at });
+			await expect(first.send({ key: '', text: 'Different empty key.' })).rejects.toThrow(
+				/different room operation/,
+			);
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
+	it('serializes concurrent retries under one delivery key', async () => {
+		const { opened, room } = await openWorld(storage, { agents: [] });
+		try {
+			const visit = await room.visit(person);
+			const winner = visit.send({ key: 'concurrent-delivery', text: 'First.' });
+			const conflict = visit.send({ key: 'concurrent-delivery', text: 'Second.' });
+			await expect(winner).resolves.toMatchObject({ owner: person.name });
+			await expect(conflict).rejects.toThrow(/different room operation/);
+			expect(
+				(await messagesOf(room)).filter((message) => message.key === 'concurrent-delivery'),
+			).toHaveLength(1);
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
+	it('replays a delivery after its append acknowledgement is lost', async () => {
+		const opened = await storage.open();
+		const faulty = faultyJournals(opened.storage);
+		const runtime = createRuntime({ storage: faulty.journals, transport: passiveTransport });
+		const room = await startRoom({
+			name: roomName(`delivery-lost-ack-${storage.name}`),
+			runtime,
+		});
+		try {
+			const visit = await room.visit(person);
+			const input = { key: 'lost-delivery', text: 'Durable once.' };
+			faulty.fail('after', 'message');
+			await expect(visit.send(input)).rejects.toThrow(/disk is full/);
+			faulty.fail(false);
+			const replay = await visit.send(input);
+			expect(replay.owner).toBe(person.name);
+			expect((await messagesOf(room)).filter((message) => message.key === input.key)).toHaveLength(
+				1,
+			);
+		} finally {
+			faulty.fail(false);
+			await room.stop().catch(() => {});
+			await opened.dispose();
+		}
+	});
+
+	it('rejects an agent commit that reuses a human delivery key', async () => {
+		const { opened, room, runtime } = await openWorld(storage, {
+			agents: [worker],
+			seats: { [worker.name]: 'broadcast' },
+		});
+		try {
+			const exchange = await (
+				await room.visit(person)
+			).send({ key: 'cross-operation', text: 'Question?' });
+			const peer = await protocol(runtime, room.name);
+			const activation = `message:${exchange.from}:${worker.name}:1`;
+			expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
+			const view = await peer.view(activation);
+			if (!('view' in view)) throw new Error('The ordinary activation is absent.');
+			const conflict = await peer.commit({
+				activation,
+				key: 'cross-operation',
+				readThrough: view.view.through,
+				intent: { kind: 'said', text: 'Question?' },
+			});
+			expect(conflict).toMatchObject({
+				refused: expect.stringMatching(/different room operation/),
+			});
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
+	it('binds membership keys to the committed subject and operation', async () => {
+		const { opened, room, runtime } = await openWorld(storage, {
+			agents: [worker, reserveAgent],
+			seats: { [worker.name]: 'broadcast' },
+		});
+		try {
+			const exchange = await (await room.visit(person)).send({ text: 'Question?' });
+			const peer = await protocol(runtime, room.name);
+			const activation = `message:${exchange.from}:${worker.name}:1`;
+			expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
+			const key = 'membership-integrity';
+			const seated = await peer.commit({
+				activation,
+				key,
+				intent: { kind: 'seated', name: reserveAgent.name },
+			});
+			expect(seated).toMatchObject({ committed: { kind: 'seated', subject: reserveAgent.name } });
+			expect(
+				await peer.commit({
+					activation,
+					key,
+					intent: { kind: 'seated', name: reserveAgent.name },
+				}),
+			).toEqual(seated);
+			const changedSubject = await peer.commit({
+				activation,
+				key,
+				intent: { kind: 'seated', name: worker.name },
+			});
+			expect(changedSubject).toMatchObject({
+				refused: expect.stringMatching(/different room operation/),
+			});
+			const changedOperation = await peer.commit({
+				activation,
+				key,
+				intent: { kind: 'unseated', name: reserveAgent.name },
+			});
+			expect(changedOperation).toMatchObject({
+				refused: expect.stringMatching(/different room operation/),
+			});
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
 	it.each(blankTexts)(
 		'rejects blank visit %j without changing the record, then accepts the same key verbatim',
 		async (blank) => {
@@ -84,7 +252,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 				expect(said).toMatchObject({ kind: 'said', text: preserved, key });
 				expect(exchange.from).toBe(said?.seq);
 				const accepted = await messagesOf(room);
-				expect((await visit.send({ key, text: blank })).from).toBe(exchange.from);
+				await expect(visit.send({ key, text: blank })).rejects.toThrow(/different room operation/);
 				expect(await messagesOf(room)).toEqual(accepted);
 			} finally {
 				await room.stop();
@@ -177,6 +345,28 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 						covers: { from: exchange.from, through: exchange.from },
 					},
 				});
+				const canonicalRetry = await peer.commit({
+					activation: owed.id,
+					key,
+					intent: { kind: 'said', to: person.name, text: preserved },
+				});
+				expect(canonicalRetry).toEqual(accepted);
+				const changedRecipient = await peer.commit({
+					activation: owed.id,
+					key,
+					intent: { kind: 'said', to: secondPerson.name, text: preserved },
+				});
+				expect(changedRecipient).toMatchObject({
+					refused: expect.stringMatching(/different room operation/),
+				});
+				const changedContent = await peer.commit({
+					activation: owed.id,
+					key,
+					intent: { kind: 'said', text: 'Another summary.' },
+				});
+				expect(changedContent).toMatchObject({
+					refused: expect.stringMatching(/different room operation/),
+				});
 			} finally {
 				await room.stop();
 				await opened.dispose();
@@ -184,7 +374,7 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		},
 	);
 
-	it('replays a committed key before validating a replacement blank', async () => {
+	it('replays an exact committed key and rejects a replacement under that key', async () => {
 		const { opened, room, runtime } = await openWorld(storage, {
 			agents: [worker],
 			seats: { [worker.name]: 'broadcast' },
@@ -208,9 +398,18 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 				activation,
 				key: 'replay-original',
 				readThrough: view.view.through,
-				intent: { kind: 'said', text: '\u00a0\u2003' },
+				intent: { kind: 'said', text: 'Original text.' },
 			});
 			expect(replay).toEqual(original);
+			const conflict = await peer.commit({
+				activation,
+				key: 'replay-original',
+				readThrough: view.view.through,
+				intent: { kind: 'said', text: '\u00a0\u2003' },
+			});
+			expect(conflict).toMatchObject({
+				refused: expect.stringMatching(/different room operation/),
+			});
 			expect(await messagesOf(room)).toEqual(before);
 			expect(
 				(await messagesOf(room)).filter((message) => message.key === 'replay-original'),

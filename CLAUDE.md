@@ -62,6 +62,26 @@ pnpm check:lemmascript # prove the contracts in rules.verified.ts with Dafny; CI
 
 Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
 
+### Live runs cost money
+
+**Treat every live run as spend.** `pnpm test:live` and `pnpm chaos` on the
+live tier call a real provider and bill a real account. Be conservative and
+thoughtful.
+
+- **Run the smallest thing that answers the question.** Prefer one test file or
+  one case (`pnpm --filter @ambionframework/ambion exec vitest run --config
+vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
+  full live suite only when a person asks for release evidence.
+- **Prove the code first without a provider.** Run the scripted tier and
+  `pnpm check` before any live run. A live run confirms the real-model path, not
+  basic correctness.
+- **Never repeat a live run to chase a flake.** Read the failure first. A
+  provider error (a credit or authentication message) is not a code defect.
+- **Never commit a key.** Pass a provider key through the environment for one
+  command. Do not write it to a file, a workflow, or the record.
+- **CI runs the live tier on `main` and on a weekly schedule, not on a pull
+  request.** Do not add a live run to a pull request workflow.
+
 ## Code rules
 
 - Pi (`@earendil-works/pi-agent-core`) owns the model loop, tools, transcript.

@@ -557,7 +557,7 @@ describe('startRoom', () => {
 		const events = collect(session);
 		const visit = await enter(session);
 		await visit.send({ text: 'once', key: 'delivery-1' });
-		await visit.send({ text: 'once, retried', key: 'delivery-1' });
+		await visit.send({ text: 'once', key: 'delivery-1' });
 		await waitForRoom(session);
 
 		const said = spoken(await messagesOf(session));

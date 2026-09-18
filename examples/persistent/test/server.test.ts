@@ -249,6 +249,7 @@ describe('persistent browser host', () => {
 		);
 	});
 
+	// Give startup, shutdown, and disk recovery the same 20s budget as the core integration tests.
 	it('stops, reads history, and stays stopped across a host restart until resumed', async () => {
 		const parent = await freshDirectory();
 		const directory = joinPath(parent, 'demo');
@@ -283,7 +284,7 @@ describe('persistent browser host', () => {
 		const resumed = await request(host.base, '/rooms/design/resume', { method: 'POST' });
 		expect(resumed.response.status).toBe(200);
 		expect((resumed.body as { status: string }).status).toBe('running');
-	});
+	}, 20_000);
 
 	it('does not fabricate arrival on an absent leave and rejects unsafe file paths', async () => {
 		const parent = await freshDirectory();

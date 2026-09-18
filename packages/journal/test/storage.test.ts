@@ -7,7 +7,10 @@ import { type Sql, type SqlValue, sqliteJournals } from '../src/sqlite.ts';
 import type { JournalOpener } from '../src/storage.ts';
 
 type Kind = 'note' | 'run';
-type Bodies = { note: { text: string }; run: { owner: string } };
+type Bodies = {
+	note: { text: string; nested?: { values: string[] } };
+	run: { owner: string };
+};
 
 const words: Vocabulary<Kind> = {
 	run: 'run',
@@ -21,8 +24,9 @@ async function journal(
 	name: string,
 	run?: string,
 	lost?: () => void,
+	hear?: (entry: import('../src/journal.ts').Entries<Kind, Bodies>) => void,
 ): Promise<Journal<Kind, Bodies>> {
-	const opened = new Journal<Kind, Bodies>(opener.open(name), words, undefined, run, lost);
+	const opened = new Journal<Kind, Bodies>(opener.open(name), words, hear, run, lost);
 	await opened.ready;
 	return opened;
 }
@@ -99,6 +103,59 @@ describe.each(backends)('$name JournalStorage', ({ open }) => {
 });
 
 describe.each(backends)('$name Journal contract', ({ open }) => {
+	it('detaches append, history, callback, duplicate, and replay values', async () => {
+		const backend = open();
+		try {
+			let heard: import('../src/journal.ts').Entries<Kind, Bodies> | undefined;
+			const first = await journal(backend.opener, 'ownership', undefined, undefined, (entry) => {
+				heard = entry;
+				if (entry.kind === 'note') entry.body.nested?.values.push('callback mutation');
+			});
+			const draft = { text: 'before', nested: { values: ['original'] } };
+			const written = await first.append('note', {
+				key: 'once',
+				decide: () => ({ body: draft }),
+			});
+			if (!('entry' in written) || written.entry.kind !== 'note') throw new Error('the note lands');
+			written.entry.body.text = 'append mutation';
+			written.entry.body.nested?.values.push('append mutation');
+			const exposed = first.entries;
+			if (exposed[0]?.kind !== 'note') throw new Error('the note reads');
+			exposed[0].body.text = 'history mutation';
+			exposed[0].body.nested?.values.push('history mutation');
+			(exposed as import('../src/journal.ts').Entries<Kind, Bodies>[]).pop();
+			if (heard?.kind === 'note') heard.body.text = 'retained callback mutation';
+
+			const resumed = await journal(backend.opener, 'ownership');
+			const replay = resumed.entries;
+			if (replay[0]?.kind === 'note') replay[0].body.nested?.values.push('replay mutation');
+			const retry = await resumed.append('note', {
+				key: 'once',
+				decide: () => ({ body: { text: 'must not decide' } }),
+			});
+			if (!('entry' in retry) || retry.entry.kind !== 'note') throw new Error('the retry lands');
+			expect(retry.entry.body).toEqual({ text: 'before', nested: { values: ['original'] } });
+			retry.entry.body.nested?.values.push('duplicate result mutation');
+			expect(resumed.entries).toEqual([
+				{
+					kind: 'note',
+					body: { text: 'before', nested: { values: ['original'] } },
+					seq: 1,
+					key: 'once',
+				},
+			]);
+			expect((await (await backend.opener.open('ownership')).read(0)).entries[0]?.entry).toEqual({
+				kind: 'note',
+				body: { text: 'before', nested: { values: ['original'] } },
+				seq: 1,
+				key: 'once',
+			});
+			expect(resumed.lastSeq).toBe(1);
+		} finally {
+			backend.dispose();
+		}
+	});
+
 	it('keeps one keyed entry after an append confirmation is lost', async () => {
 		const backend = open();
 		try {

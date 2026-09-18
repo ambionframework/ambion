@@ -141,7 +141,6 @@ export interface RoomMetadata {
 	agents?: string[];
 	/** A planned stop leaves the record readable without automatically resuming it. */
 	stopped?: boolean;
-	people?: Record<string, unknown>;
 }
 
 export interface SeatMetadata {

@@ -85,11 +85,12 @@ it('keeps an atomic metadata patch after an uncertain append confirmation', asyn
 		};
 		const metadata = roomMetadata(uncertain);
 		await metadata.change(() => ({
-			patch: { name: 'room', people: { priya: { name: 'priya', identity: 'Manager.' } } },
+			patch: { name: 'room', agents: ['assistant'], stopped: false },
 		}));
 		expect(await metadata.read()).toEqual({
 			name: 'room',
-			people: { priya: { name: 'priya', identity: 'Manager.' } },
+			agents: ['assistant'],
+			stopped: false,
 		});
 		const entries = await (
 			await namespaced(storage, 'ambion/cloudflare/room').open('metadata')

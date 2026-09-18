@@ -74,7 +74,7 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 	});
 	const retry = await stub.send({
 		from: 'priya',
-		text: 'Can I tell the client Thursday, again?',
+		text: 'Can I tell the client Thursday?',
 		key: 'question-1',
 	});
 	expect(exchange).toEqual({ owner: 'priya', from: expect.any(Number), at: expect.any(String) });
@@ -95,6 +95,252 @@ it('starts, admits a person, and returns one plain exchange for repeated sends',
 	expect(participants.map((participant) => participant.name)).toEqual(['assistant', 'priya']);
 	// The closed exchange remains reacquirable by its opening sequence.
 	expect(await stub.exchange(exchange.from)).toEqual(exchange);
+});
+
+it('rejects conflicting identity without poisoning send or restart recovery', async () => {
+	const name = 'room-identity-conflict';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await stub.start({ name, agents: [] });
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	await runInDurableObject(stub, async (instance) => {
+		const object = instance as unknown as {
+			visit(person: { name: string; identity: string }): Promise<void>;
+		};
+		await expect(object.visit({ name: 'priya', identity: 'Impostor.' })).rejects.toThrow(
+			/different identity/,
+		);
+	});
+	const first = await stub.send({
+		from: 'priya',
+		text: 'The admitted identity remains usable.',
+		key: 'q1',
+	});
+	expect(first.owner).toBe('priya');
+
+	await runInDurableObject(stub, async (_instance, state) => {
+		state.abort('reconstruct after identity conflict');
+	}).catch(() => {});
+	const again = env.ROOM.get(env.ROOM.idFromName(name));
+	const retry = await until(async () => {
+		try {
+			return await again.send({ from: 'priya', text: 'After restart.', key: 'q2' });
+		} catch {
+			return undefined;
+		}
+	});
+	expect(retry.owner).toBe('priya');
+	await runInDurableObject(again, async (instance) => {
+		const object = instance as unknown as {
+			visit(person: { name: string; identity: string }): Promise<void>;
+		};
+		await expect(object.visit({ name: 'priya', identity: 'Impostor.' })).rejects.toThrow(
+			/different identity/,
+		);
+	});
+});
+
+it('does not persist malformed visits and makes repeated leave harmless', async () => {
+	const name = 'room-malformed-visit';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await stub.start({ name, agents: [] });
+	await runInDurableObject(stub, async (instance) => {
+		const object = instance as unknown as {
+			visit(person: { name: string; identity: string }): Promise<void>;
+		};
+		await expect(object.visit({ name: 'Not valid', identity: 'Unknown.' })).rejects.toThrow(
+			/Invalid participant name/,
+		);
+	});
+	const metadata = await runInDurableObject(stub, async (instance) => {
+		const object = instance as unknown as {
+			metadata: { read(): Promise<Record<string, unknown>> };
+		};
+		return object.metadata.read();
+	});
+	expect(metadata.people).toBeUndefined();
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	await stub.leave('priya');
+	await expect(stub.leave('priya')).resolves.toBeUndefined();
+	await runInDurableObject(stub, async (instance) => {
+		const object = instance as unknown as {
+			send(input: { from: string; text: string }): Promise<unknown>;
+		};
+		await expect(object.send({ from: 'priya', text: 'Must not reenter.' })).rejects.toThrow(
+			/has not visited/,
+		);
+	});
+	expect((await stub.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(1);
+	expect((await stub.messages()).filter((message) => message.kind === 'left')).toHaveLength(1);
+});
+
+it('preserves an explicitly empty delivery key across RPC retries', async () => {
+	const name = 'room-empty-delivery-key';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await stub.start({ name, agents: [] });
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	const first = await stub.send({ from: 'priya', text: 'An empty key is still a key.', key: '' });
+	const retry = await stub.send({ from: 'priya', text: 'An empty key is still a key.', key: '' });
+	expect(retry).toEqual(first);
+	expect(
+		(await stub.messages()).filter((message) => message.kind === 'said' && message.key === ''),
+	).toHaveLength(1);
+});
+
+it('rejects a conflicting delivery key payload and recipient over RPC', async () => {
+	const name = 'room-delivery-conflict';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await stub.start({ name, agents: ['assistant'] });
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	await stub.visit({ name: 'sam', identity: 'Engineering lead.' });
+	await runInDurableObject(stub, async (instance) => {
+		const object = instance as unknown as {
+			send(input: { from: string; to?: string; text: string; key?: string }): Promise<unknown>;
+		};
+		await object.send({ from: 'priya', to: 'assistant', text: 'Original.', key: 'same' });
+		await expect(
+			object.send({ from: 'priya', to: 'assistant', text: 'Changed.', key: 'same' }),
+		).rejects.toThrow(/different room operation/);
+		await expect(
+			object.send({ from: 'sam', to: 'assistant', text: 'Original.', key: 'same' }),
+		).rejects.toThrow(/different room operation/);
+		await expect(object.send({ from: 'priya', text: 'Original.', key: 'same' })).rejects.toThrow(
+			/different room operation/,
+		);
+	});
+});
+
+it('rebuilds an admitted visit after the adapter loses its cache on eviction', async () => {
+	const name = 'room-interrupted-admission';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await stub.start({ name, agents: [] });
+	await runInDurableObject(stub, async (instance) => {
+		const object = instance as unknown as {
+			visit(person: { name: string; identity: string }): Promise<void>;
+			visits: Map<string, unknown>;
+		};
+		const originalSet = object.visits.set.bind(object.visits);
+		object.visits.set = ((key: string, value: unknown) => {
+			if (key === 'priya') throw new Error('lose adapter admission cache');
+			return originalSet(key, value);
+		}) as typeof object.visits.set;
+		await expect(object.visit({ name: 'priya', identity: 'Project manager.' })).rejects.toThrow(
+			/lose adapter admission cache/,
+		);
+	});
+	await runInDurableObject(stub, async (_instance, state) => {
+		state.abort('lose adapter admission cache');
+	}).catch(() => {});
+	const again = env.ROOM.get(env.ROOM.idFromName(name));
+	const exchange = await runInDurableObject(again, async (instance) => {
+		const object = instance as unknown as {
+			send(input: { from: string; text: string; key?: string }): Promise<{ owner: string }>;
+		};
+		return object.send({ from: 'priya', text: 'The admitted visit survived.', key: 'q1' });
+	});
+	expect(exchange.owner).toBe('priya');
+	expect((await again.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(1);
+});
+
+it('rebuilds a present human handle after restart without a duplicate arrival', async () => {
+	const name = 'room-present-restart';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await stub.start({ name, agents: [] });
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	await stub.send({ from: 'priya', text: 'Before the restart.', key: 'q1' });
+	await runInDurableObject(stub, async (_instance, state) => {
+		state.abort('reconstruct with a present human');
+	}).catch(() => {});
+	const again = env.ROOM.get(env.ROOM.idFromName(name));
+	// Startup rebuilds the live handle from journal presence, so a send needs no
+	// second visit. The rebuild's visit is idempotent, so it adds no arrival.
+	const exchange = await again.send({ from: 'priya', text: 'After the restart.', key: 'q2' });
+	expect(exchange.owner).toBe('priya');
+	expect((await again.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(1);
+	expect(
+		(await again.participants()).some(
+			(participant) =>
+				participant.kind === 'human' &&
+				participant.name === 'priya' &&
+				participant.presence === 'present',
+		),
+	).toBe(true);
+});
+
+it('keeps a departed human absent after restart', async () => {
+	const name = 'room-departure-restart';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await stub.start({ name, agents: [] });
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	await stub.leave('priya');
+	await runInDurableObject(stub, async (_instance, state) => {
+		state.abort('reconstruct after departure');
+	}).catch(() => {});
+	const again = env.ROOM.get(env.ROOM.idFromName(name));
+	await until(async () => {
+		try {
+			const participants = await again.participants();
+			return participants.some(
+				(participant) =>
+					participant.kind === 'human' &&
+					participant.name === 'priya' &&
+					participant.presence === 'absent',
+			)
+				? true
+				: undefined;
+		} catch {
+			return undefined;
+		}
+	});
+	await runInDurableObject(again, async (instance) => {
+		const object = instance as unknown as {
+			send(input: { from: string; text: string }): Promise<unknown>;
+			leave(name: string): Promise<void>;
+		};
+		await expect(object.send({ from: 'priya', text: 'Must stay absent.' })).rejects.toThrow(
+			/has not visited/,
+		);
+		await object.leave('priya');
+	});
+	expect((await again.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(1);
+});
+
+it('does not delete a deliberately reentered handle after an older leave returns', async () => {
+	const name = 'room-leave-reentry-fence';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await stub.start({ name, agents: [] });
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	await runInDurableObject(stub, async (instance) => {
+		const object = instance as unknown as {
+			visits: Map<string, { leave(): Promise<void> }>;
+			leave(name: string): Promise<void>;
+			visit(person: { name: string; identity: string }): Promise<void>;
+			send(input: { from: string; text: string; key?: string }): Promise<unknown>;
+		};
+		const old = object.visits.get('priya');
+		if (old === undefined) throw new Error('The test visit was not cached.');
+		const original = old.leave.bind(old);
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let departed!: () => void;
+		const departure = new Promise<void>((resolve) => {
+			departed = resolve;
+		});
+		old.leave = async () => {
+			await original();
+			departed();
+			await gate;
+		};
+		const leaving = object.leave('priya');
+		await departure;
+		await object.visit({ name: 'priya', identity: 'Project manager.' });
+		release();
+		await leaving;
+		await object.send({ from: 'priya', text: 'The new visit remains cached.', key: 'q1' });
+	});
+	expect((await stub.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(2);
+	expect((await stub.messages()).filter((message) => message.kind === 'left')).toHaveLength(1);
 });
 
 it('can ensure a resumed room and report its current state', async () => {

@@ -26,6 +26,7 @@ export type {
 	AppendIntent,
 	AppendResult,
 	Bodies,
+	CloneableJournal,
 	Entries,
 	Entry as JournalEntry,
 	Seq,

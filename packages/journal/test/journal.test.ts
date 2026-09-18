@@ -1,11 +1,12 @@
 /** The journal's queue, recovery, idempotency and writer fence. */
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { type Entry, Journal, type Vocabulary } from '../src/journal.ts';
+import { type CloneableJournal, type Entry, Journal, type Vocabulary } from '../src/journal.ts';
 import { memoryJournals } from '../src/memory.ts';
 
 type Kind = 'note' | 'mark' | 'run';
 interface Note {
 	text: string;
+	nested?: { values: string[] };
 }
 interface Mark {
 	label: string;
@@ -75,6 +76,143 @@ describe('a journal', () => {
 		if (!('entry' in first) || !('entry' in again)) throw new Error('both calls return entries');
 		expect(again.entry).toEqual(first.entry);
 		expect(journal.entries).toHaveLength(1);
+	});
+
+	it('owns append results, public history, callbacks, and captured drafts', async () => {
+		const id = `journal-ownership-${++names}`;
+		const storage = await journals.open(id);
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let entered!: () => void;
+		const storageEntered = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const delayed = {
+			read: storage.read.bind(storage),
+			async append(entry: unknown, expected: number) {
+				entered();
+				await gate;
+				return storage.append(entry, expected);
+			},
+		};
+		let heard: Entry<Note> | undefined;
+		const journal = new Journal<Kind, Bodies>(Promise.resolve(delayed), WORDS, (entry) => {
+			if (entry.kind === 'note') {
+				heard = entry;
+				entry.body.text = 'callback changed';
+				entry.body.nested?.values.push('callback changed');
+			}
+		});
+		await journal.ready;
+
+		const draft = { text: 'before', nested: { values: ['original'] } };
+		const intent = {
+			key: 'owned',
+			decide: () => ({ body: draft }),
+		};
+		const pending = journal.append('note', intent);
+		intent.key = 'changed after append';
+		intent.decide = () => ({
+			body: { text: 'changed after append', nested: { values: [] } },
+		});
+		await storageEntered;
+		// The draft is changed while storage is awaiting confirmation. The
+		// journal must retain the value captured at the decision boundary.
+		draft.text = 'caller changed';
+		draft.nested.values.push('caller changed');
+		release();
+		const first = await pending;
+		if (!('entry' in first) || first.entry.kind !== 'note') throw new Error('the note lands');
+		first.entry.body.text = 'append result changed';
+		first.entry.body.nested?.values.push('append result changed');
+
+		const exposed = journal.entries;
+		if (exposed[0]?.kind !== 'note') throw new Error('the note is exposed');
+		exposed[0].body.text = 'history changed';
+		exposed[0].body.nested?.values.push('history changed');
+		(exposed as Entry<Bodies[Kind]>[]).push({ kind: 'note', body: note('fake'), seq: 99 });
+
+		const retry = await journal.append('note', {
+			key: 'owned',
+			decide: () => ({ body: note('decide must not run') }),
+		});
+		if (!('entry' in retry) || retry.entry.kind !== 'note') throw new Error('the retry lands');
+		expect(retry.entry.body).toEqual({ text: 'before', nested: { values: ['original'] } });
+		expect(heard?.body.text).toBe('callback changed');
+		expect(journal.entries).toHaveLength(1);
+		expect(journal.entries[0]?.body).toEqual({ text: 'before', nested: { values: ['original'] } });
+		expect(journal.entriesFrom(1)).toEqual([]);
+		expect(() => journal.entriesFrom(-1)).toThrow(/non-negative/);
+		expect(() => journal.entriesFrom(1.5)).toThrow(/safe integer/);
+		expect(journal.lastSeq).toBe(1);
+		expect(Reflect.set(journal, 'lastSeq', 99)).toBe(false);
+		const beforeNext = journal.entries;
+		await journal.append('note', { decide: () => ({ body: note('next') }) });
+		expect(beforeNext).toHaveLength(1);
+		expect(journal.entriesFrom(1)).toMatchObject([{ seq: 2, body: { text: 'next' } }]);
+	});
+
+	it('refuses a body that cannot be cloned, and takes nothing', async () => {
+		// The journal copies every body at an ownership boundary, so a body holds
+		// data. A body that carries a function cannot be cloned. The append fails
+		// at the copy, before storage, so the journal consumes no position.
+		const journal = await open();
+		const withFunction = { text: 'holds a function', act: () => undefined } as unknown as Note;
+		await expect(journal.append('note', { decide: () => body(withFunction) })).rejects.toThrow();
+		expect(journal.entries).toHaveLength(0);
+		expect(journal.lastSeq).toBe(0);
+		const good = await journal.append('note', { decide: () => body(note('after')) });
+		if (!('entry' in good)) throw new Error('the next note lands');
+		expect(good.entry.seq).toBe(1);
+	});
+
+	it('proves at compile time that every body survives cloning', () => {
+		// `CloneableJournal` is a journal only when every body is data. A body map
+		// that holds a function is not a journal; the type resolves to `never`.
+		expectTypeOf<CloneableJournal<Kind, Bodies>>().toEqualTypeOf<Journal<Kind, Bodies>>();
+		interface WithFunction {
+			note: { act: () => void };
+			mark: Mark;
+			run: Run;
+		}
+		expectTypeOf<CloneableJournal<Kind, WithFunction>>().toBeNever();
+	});
+
+	it('isolates accepted bodies from a vocabulary that retains and mutates them', async () => {
+		const id = `journal-vocabulary-ownership-${++names}`;
+		let candidate: Note | undefined;
+		const mutatingWords: Vocabulary<Kind> = {
+			run: 'run',
+			accepts: (kind: string, value: unknown): kind is Kind => {
+				if (kind !== 'note') return known(kind);
+				if (typeof value !== 'object' || value === null || !('text' in value)) return false;
+				candidate = value as Note;
+				candidate.text = 'changed by accepts';
+				return true;
+			},
+		};
+		const journal = new Journal<Kind, Bodies>(journals.open(id), mutatingWords);
+		await journal.ready;
+		const result = await journal.append('note', {
+			key: 'once',
+			decide: () => ({ body: note('before') }),
+		});
+		if (!('entry' in result) || result.entry.kind !== 'note') throw new Error('the note lands');
+		if (candidate === undefined) throw new Error('The vocabulary received no body.');
+		candidate.text = 'changed after accepts';
+		expect(result.entry.body.text).toBe('before');
+
+		const resumed = new Journal<Kind, Bodies>(journals.open(id), mutatingWords);
+		await resumed.ready;
+		expect(resumed.entries[0]?.body).toEqual({ text: 'before' });
+		const retry = await resumed.append('note', {
+			key: 'once',
+			decide: () => ({ body: note('must not decide') }),
+		});
+		if (!('entry' in retry) || retry.entry.kind !== 'note') throw new Error('the retry lands');
+		expect(retry.entry.body.text).toBe('before');
 	});
 
 	it('rejects a key reused by another kind before deciding', async () => {

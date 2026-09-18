@@ -120,14 +120,26 @@ export class RoomObject extends DurableObject<Env> {
 		this.metadata = roomMetadata(this.storage);
 		ctx.blockConcurrencyWhile(async () => {
 			const { name, agents, stopped } = await this.metadata.read();
-			if (name !== undefined && stopped !== true) {
-				if (agents === undefined) throw new Error(`Room '${name}' has no catalog in its metadata.`);
-				const recorded = await readRoom(name, { runtime: this.runtime, messages: false });
-				if (!recorded.initialized) return;
-				this.room = await resumeRoom(name, {
-					runtime: this.runtime,
-					agents: agents.map(definitionOf),
-				});
+			if (name === undefined || stopped === true) return;
+			if (agents === undefined) throw new Error(`Room '${name}' has no catalog in its metadata.`);
+			const recorded = await readRoom(name, { runtime: this.runtime, messages: false });
+			if (!recorded.initialized) return;
+			const room = await resumeRoom(name, {
+				runtime: this.runtime,
+				agents: agents.map(definitionOf),
+			});
+			this.room = room;
+			// Rebuild only live handles. The journal already contains each
+			// admitted identity (and private preferences); this idempotent core
+			// call does not append another arrival for a person already present.
+			const snapshot = await room.read({ messages: false });
+			for (const participant of snapshot.participants.filter(
+				(participant) => participant.kind === 'human' && participant.presence === 'present',
+			)) {
+				const visit = await room.visit(
+					defineHuman({ name: participant.name, identity: participant.identity }),
+				);
+				this.visits.set(participant.name, visit);
 			}
 		});
 	}
@@ -165,23 +177,19 @@ export class RoomObject extends DurableObject<Env> {
 	}
 
 	async visit(person: Person): Promise<void> {
-		await this.metadata.change((current) => ({
-			patch: { people: { ...current.people, [person.name]: person } },
-		}));
-		await this.visitOf(person.name);
+		// The room journal is the authority for identity and presence. In
+		// particular, do not cache or persist the adapter value before core has
+		// admitted it: a rejected visit must not poison a later send or restart.
+		const human = defineHuman(person);
+		const visit = await this.running().visit(human);
+		this.visits.set(human.name, visit);
 	}
 
 	/** The live visit for a person. A resumed room reconstructs it from durable presence. */
-	private async visitOf(name: string): Promise<Visit> {
+	private visitOf(name: string): Visit {
 		const known = this.visits.get(name);
 		if (known !== undefined) return known;
-		const people = (await this.metadata.read()).people;
-		const person =
-			people !== undefined && Object.hasOwn(people, name) ? (people[name] as Person) : undefined;
-		if (person === undefined) throw new Error(`'${name}' has not visited this room.`);
-		const visit = await this.running().visit(defineHuman(person));
-		this.visits.set(name, visit);
-		return visit;
+		throw new Error(`'${name}' has not visited this room.`);
 	}
 
 	async send(input: {
@@ -190,19 +198,22 @@ export class RoomObject extends DurableObject<Env> {
 		text: string;
 		key?: string;
 	}): Promise<ExchangeRef> {
-		const visit = await this.visitOf(input.from);
+		const visit = this.visitOf(input.from);
 		const exchange = await visit.send({
 			text: input.text,
 			...(input.to === undefined ? {} : { to: input.to }),
-			...(input.key ? { key: input.key } : {}),
+			...(input.key === undefined ? {} : { key: input.key }),
 		});
 		return { owner: exchange.owner, from: exchange.from, at: exchange.at };
 	}
 
 	async leave(name: string): Promise<void> {
-		const visit = await this.visitOf(name);
+		const visit = this.visits.get(name);
+		if (visit === undefined) return;
 		await visit.leave();
-		this.visits.delete(name);
+		// A deliberate reentry may install a new handle while the old departure
+		// is awaiting its journal acknowledgement. Never remove that new handle.
+		if (this.visits.get(name) === visit) this.visits.delete(name);
 	}
 
 	async seat(name: string, options?: { attention?: Attention }): Promise<void> {
