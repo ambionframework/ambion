@@ -25,6 +25,7 @@ export type {
 } from './just-bash.ts';
 export { directoryBackend, memoryBackend } from './just-bash.ts';
 export type { WorkspaceAgent } from './resource.ts';
+export { SHARED_DATABASE } from './sql.ts';
 export type { Workspace } from './workspace.ts';
 export { openWorkspace } from './workspace.ts';
 
