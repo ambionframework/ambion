@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="880" viewBox="0 0 1440 880" role="img" aria-labelledby="title desc">
+  <title id="title">One room and one shared workspace for agents and humans</title>
+  <desc id="desc">A person asks a question in a room. The room journal records the question, wakes the agents whose attention reaches it, and records what they say. Agents read and write shared artifacts: files and tables in a workspace. A message names the artifact it cites or changes, and an artifact change names the activation that made it. The exchange closes when no work remains, and an optional summary stands in for its entries in later prompts. A restart replays the journal and keeps the workspace.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#6c7371"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#3f5bb5"/>
+    </marker>
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#3b8f88"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#232a2b" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      .sans { font-family: Inter, "IBM Plex Sans", system-ui, sans-serif; }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+      .ink { fill: #232a2b; }
+      .dim { fill: #6c7371; }
+      .teal { fill: #3b8f88; }
+      .blue { fill: #3f5bb5; }
+      .small { font-size: 13px; }
+      .body { font-size: 15px; }
+      .label { font-size: 12px; font-weight: 700; letter-spacing: 1.4px; }
+      .title { font-size: 18px; font-weight: 700; }
+      .flow { fill: none; stroke: #6c7371; stroke-width: 2; }
+      .flow-blue { fill: none; stroke: #3f5bb5; stroke-width: 2; }
+      .flow-teal { fill: none; stroke: #3b8f88; stroke-width: 2; stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="880" rx="28" fill="#f4f3ee"/>
+  <text x="56" y="66" class="sans ink" font-size="32" font-weight="700">One room, one shared workspace</text>
+  <text x="56" y="98" class="sans dim" font-size="16">The journal records what is said. The workspace holds what is made. References tie the two together.</text>
+
+  <!-- lane labels -->
+  <text x="56" y="150" class="sans dim label">PEOPLE</text>
+  <text x="384" y="150" class="sans dim label">ROOM · ONE JOURNAL</text>
+  <text x="816" y="150" class="sans dim label">AGENTS · ANY FRAMEWORK</text>
+  <text x="1112" y="150" class="sans dim label">SHARED WORKSPACE</text>
+
+  <!-- person -->
+  <g filter="url(#shadow)">
+    <rect x="56" y="360" width="232" height="150" rx="16" fill="#fbfaf6" stroke="#cf8b6b" stroke-width="2"/>
+  </g>
+  <text x="80" y="396" class="sans ink title">A person</text>
+  <text x="80" y="422" class="sans dim small">present · owns the exchange</text>
+  <text x="80" y="452" class="sans ink small">asks · steers · reads the record</text>
+  <text x="80" y="474" class="sans ink small">opens the files and tables</text>
+
+  <!-- journal -->
+  <g filter="url(#shadow)">
+    <rect x="384" y="172" width="352" height="580" rx="18" fill="#fbfaf6" stroke="#232a2b" stroke-width="1.5"/>
+  </g>
+  <text x="404" y="206" class="sans ink title">Room journal</text>
+  <text x="404" y="228" class="sans dim label" style="letter-spacing:1px">APPEND-ONLY · ORDERED · REPLAYABLE</text>
+  <line x1="384" y1="244" x2="736" y2="244" stroke="#e2e0d8" stroke-width="1.5"/>
+
+  <!-- entries -->
+  <g class="sans">
+    <text x="404" y="278" class="mono dim" font-size="13">1</text>
+    <text x="436" y="278" class="ink body">the person asks</text>
+    <text x="436" y="298" class="dim small">opens the exchange · routing on the entry</text>
+
+    <text x="404" y="338" class="mono dim" font-size="13">2</text>
+    <text x="436" y="338" class="ink body">agent A says</text>
+    <text x="436" y="358" class="teal small">ref: the file it read</text>
+
+    <text x="404" y="398" class="mono dim" font-size="13">3</text>
+    <text x="436" y="398" class="ink body">agent B says</text>
+    <text x="436" y="418" class="teal small">ref: the file it changed</text>
+
+    <text x="404" y="458" class="mono dim" font-size="13">4</text>
+    <text x="436" y="458" class="ink body">the person adds context</text>
+    <text x="436" y="478" class="blue small">steers agent B between provider requests</text>
+
+    <text x="404" y="518" class="mono dim" font-size="13">5</text>
+    <text x="436" y="518" class="ink body">agent B says again</text>
+    <text x="436" y="538" class="dim small">fresh at commit · stale speech is refused</text>
+
+    <text x="404" y="578" class="mono dim" font-size="13">6</text>
+    <text x="436" y="578" class="ink body">close</text>
+    <text x="436" y="598" class="dim small">no work left · the exchange is quiet</text>
+
+    <text x="404" y="638" class="mono dim" font-size="13">7</text>
+    <text x="436" y="638" class="ink body">summary</text>
+    <text x="436" y="658" class="dim small">optional · later prompts read it for 1–6</text>
+  </g>
+  <line x1="384" y1="678" x2="736" y2="678" stroke="#e2e0d8" stroke-width="1.5"/>
+  <text x="404" y="710" class="sans dim small">Every fact above is a fold over these entries.</text>
+  <text x="404" y="730" class="sans dim small">A restart replays them.</text>
+
+  <!-- agents -->
+  <g filter="url(#shadow)">
+    <rect x="816" y="232" width="232" height="118" rx="16" fill="#fbfaf6" stroke="#8fa8ef" stroke-width="2"/>
+    <rect x="816" y="412" width="232" height="118" rx="16" fill="#fbfaf6" stroke="#7fc468" stroke-width="2"/>
+    <rect x="816" y="592" width="232" height="118" rx="16" fill="#fbfaf6" stroke="#e0a94e" stroke-width="2"/>
+  </g>
+  <text x="836" y="266" class="sans ink title">Agent A</text>
+  <text x="836" y="290" class="sans dim small">own owner · model · framework</text>
+  <rect x="836" y="308" width="64" height="24" rx="12" fill="#e8ecfa"/>
+  <text x="868" y="325" text-anchor="middle" class="mono ink" font-size="11">active</text>
+
+  <text x="836" y="446" class="sans ink title">Agent B</text>
+  <text x="836" y="470" class="sans dim small">steered at 4 · speaks at 5</text>
+  <rect x="836" y="488" width="64" height="24" rx="12" fill="#e8f5e2"/>
+  <text x="868" y="505" text-anchor="middle" class="mono ink" font-size="11">active</text>
+
+  <text x="836" y="626" class="sans ink title">Agent C</text>
+  <text x="836" y="650" class="sans dim small">reads · has nothing to add</text>
+  <rect x="836" y="668" width="64" height="24" rx="12" fill="#f6ecd8"/>
+  <text x="868" y="685" text-anchor="middle" class="mono ink" font-size="11">silent</text>
+
+  <!-- workspace -->
+  <g filter="url(#shadow)">
+    <rect x="1112" y="172" width="272" height="580" rx="18" fill="#fbfaf6" stroke="#3b8f88" stroke-width="1.5"/>
+  </g>
+  <text x="1132" y="206" class="sans ink title">Workspace</text>
+  <text x="1132" y="228" class="sans dim label" style="letter-spacing:1px">FILES · TABLES · PROVENANCE</text>
+  <line x1="1112" y1="244" x2="1384" y2="244" stroke="#e2e0d8" stroke-width="1.5"/>
+
+  <rect x="1132" y="264" width="232" height="124" rx="12" fill="#eef5f4" stroke="#bcd9d5" stroke-width="1"/>
+  <text x="1148" y="292" class="sans ink body" font-weight="700">Files</text>
+  <text x="1148" y="316" class="sans dim small">changed through tools</text>
+  <text x="1148" y="334" class="sans dim small">each change names the</text>
+  <text x="1148" y="352" class="sans dim small">activation that made it</text>
+
+  <rect x="1132" y="402" width="232" height="124" rx="12" fill="#eef5f4" stroke="#bcd9d5" stroke-width="1"/>
+  <text x="1148" y="430" class="sans ink body" font-weight="700">Tables</text>
+  <text x="1148" y="454" class="sans dim small">rows one agent records</text>
+  <text x="1148" y="472" class="sans dim small">and the next agent reads</text>
+  <text x="1148" y="490" class="sans dim small">each row names its activation</text>
+
+  <rect x="1132" y="540" width="232" height="124" rx="12" fill="#eef5f4" stroke="#bcd9d5" stroke-width="1"/>
+  <text x="1148" y="568" class="sans ink body" font-weight="700">Change log</text>
+  <text x="1148" y="592" class="sans dim small">one entry per change</text>
+  <text x="1148" y="610" class="sans dim small">keyed by activation</text>
+  <text x="1148" y="628" class="sans dim small">what changed in an exchange</text>
+
+  <text x="1132" y="710" class="sans dim small">The kernel reads none of this.</text>
+  <text x="1132" y="730" class="sans dim small">Resources own it; the room names it.</text>
+
+  <!-- person <-> journal -->
+  <path d="M288 410 H384" class="flow" marker-end="url(#arrow)"/>
+  <text x="336" y="398" text-anchor="middle" class="sans dim small">asks · steers</text>
+  <path d="M384 470 H288" class="flow" marker-end="url(#arrow)"/>
+  <text x="336" y="494" text-anchor="middle" class="sans dim small">reads</text>
+
+  <!-- journal <-> agents -->
+  <path d="M736 272 H816" class="flow" marker-end="url(#arrow)"/>
+  <text x="776" y="262" text-anchor="middle" class="sans dim small">wakes</text>
+  <path d="M816 312 H736" class="flow" marker-end="url(#arrow)"/>
+  <text x="776" y="336" text-anchor="middle" class="sans dim small">says</text>
+
+  <path d="M736 452 H816" class="flow-blue" marker-end="url(#arrow-blue)"/>
+  <text x="776" y="442" text-anchor="middle" class="sans blue small">steers</text>
+  <path d="M816 492 H736" class="flow" marker-end="url(#arrow)"/>
+  <text x="776" y="516" text-anchor="middle" class="sans dim small">says</text>
+
+  <path d="M736 652 H816" class="flow" marker-end="url(#arrow)"/>
+  <text x="776" y="642" text-anchor="middle" class="sans dim small">wakes</text>
+  <text x="776" y="676" text-anchor="middle" class="sans dim small">no commit</text>
+
+  <!-- agents <-> workspace -->
+  <path d="M1048 292 H1112" class="flow" marker-end="url(#arrow)"/>
+  <text x="1080" y="282" text-anchor="middle" class="sans dim small">reads</text>
+  <path d="M1048 472 H1112" class="flow" marker-end="url(#arrow)"/>
+  <text x="1080" y="462" text-anchor="middle" class="sans dim small">writes</text>
+  <path d="M1048 652 H1112" class="flow" marker-end="url(#arrow)"/>
+  <text x="1080" y="642" text-anchor="middle" class="sans dim small">reads</text>
+
+  <!-- refs and provenance: journal <-> workspace, under the agents -->
+  <path d="M520 752 V790 H1296 V752" class="flow-teal" marker-start="url(#arrow-teal)" marker-end="url(#arrow-teal)"/>
+  <text x="908" y="782" text-anchor="middle" class="sans teal small">a message names the artifact it cites or changes · an artifact change names the activation that made it</text>
+
+  <!-- bottom band -->
+  <line x1="56" y1="816" x2="1384" y2="816" stroke="#e2e0d8" stroke-width="1.5"/>
+  <text x="56" y="846" class="sans ink body" font-weight="700">Speech enters the record through say only.</text>
+  <text x="540" y="846" class="sans ink body" font-weight="700">Work enters the workspace through tools.</text>
+  <text x="1000" y="846" class="sans ink body" font-weight="700">A restart loses neither.</text>
+</svg>

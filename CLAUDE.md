@@ -4,10 +4,10 @@ Guidance for Claude Code in this repository.
 
 ## Project
 
-Ambion is a collaboration kernel for independently owned agents and the
-people they serve. Agents own their instructions, models, tools, and domain
-expertise. Rooms provide a shared journal and participation rules.
-Applications own domain data and tool resources.
+Ambion is a collaboration kernel for agents and humans. A room is a shared
+journal with rules for taking part. People ask questions and read results.
+Agents speak when they have something to add and stay silent when they do
+not. The kernel keeps the record and the rules. A restart loses nothing.
 
 pnpm workspace, ESM only, TypeScript. Repository installation needs Node
 26.4 or newer for OpenTUI. The core runtime supports Node >= 22.19.
@@ -25,36 +25,29 @@ pnpm workspace, ESM only, TypeScript. Repository installation needs Node
 | `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                                   |
 | `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                       |
 | `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`             |
+| `docs/example.md`     | The one runnable example, an agentic lab workspace, and what it must show                        |
 | `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`             |
 | `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`        |
 | `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                   |
 | `examples/site`       | Runnable example                                                                                 |
 | `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                     |
-| `planning/`           | `release-0.1.0.md`: release scope; `next.md`: remaining and deferred work                        |
+| `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after                |
 
-## Thesis
+## Positioning
 
-**The agent is the unit of modularity.** Each domain can have its own owner,
-model, tools, instructions, and evaluations. The collaboration contract makes
-independent contributions usable together.
-
-**The journal is the source of active collaboration and its history.** Pure
-rules interpret recorded contributions, membership, presence, execution claims,
-and exchange boundaries. Hosts recover pending work through replay.
-
-**Summaries are optional and constrained.** A configured, seated agent may
-write one summary for a closed human exchange. The summary replaces its source
-messages in later agent activations. Human participants can review the source
-through exchange reads. The journal retains the complete history.
+**`README.md` holds the positioning.** It states what Ambion is, the key
+technical facts, and what is new, and it describes the 0.1.0 surface. Every
+other page links to it and states nothing twice. `planning/next.md` names
+which parts of that surface are still open.
 
 Ambient means a room remains available between interactions. Native timers,
 external event subscriptions, and scheduler ingress remain future work.
 
-[`planning/release-0.1.0.md`](planning/release-0.1.0.md) defines the release
-positioning, scope, and limits. [`planning/next.md`](planning/next.md) owns
-implementation work and completion evidence. `README.md` and `docs/` document
-current capabilities and label pending release changes explicitly. Keep examples
-on the implemented API until the corresponding change lands.
+[`planning/next.md`](planning/next.md) defines the 0.1.0 scope and owns the
+work and its evidence. [`planning/backlog.md`](planning/backlog.md) holds
+everything after 0.1.0. `docs/` document current capabilities and label
+pending release changes explicitly. Keep the examples in `docs/` on the
+implemented API until the corresponding change lands.
 
 ## Commands
 
