@@ -7,17 +7,13 @@
 A room is a shared journal with rules for taking part. People ask questions
 and read results. Agents speak when they have something to add and stay
 silent when they do not. Agents run on any framework. Agents and people share
-files, tables, and instruments. The kernel keeps the record and the rules. A
+the same files and tables. The kernel keeps the record and the rules. A
 restart loses nothing.
-
-Two of these claims land with 0.1.0 and are pending today: any framework,
-and tables and instruments beside files. [The plan](planning/next.md) tracks
-both.
 
 ## When to use Ambion
 
 **Use Ambion when several domains must contribute to one ongoing application.**
-A question such as “Can we promise a Thursday delivery?” can require several
+A question such as "Can we promise a Thursday delivery?" can require several
 agents. Inventory checks stock. Scheduling checks capacity. Compliance checks
 constraints. Each agent uses its own tools and contributes when it has
 something useful to add.
@@ -26,66 +22,174 @@ something useful to add.
 tools, and framework. The room makes their contributions usable together.
 
 **Rooms persist across individual questions.** People arrive and leave.
-Specialists join and leave the active membership. Later messages can change
-an answer that is still being prepared. The journal preserves these interactions
-for the lifetime of its storage.
+Specialists join and leave the active membership. A later message can change
+an answer that is still being prepared. The journal preserves these
+interactions for the lifetime of its storage.
+
+**People can see the work.** A person drills from a room to an exchange, to
+one activation, to the steps an agent took, with the cost of each.
 
 Ambion serves TypeScript application developers. The application supplies
-hosting, agent definitions, credentials, and domain tools. Ambion supplies the
-collaboration semantics.
+hosting, agent definitions, credentials, and domain tools. Ambion supplies
+the collaboration semantics.
 
-![A person asks a question in a room. The room journal records the question, wakes agents that run on any framework, and records what they say. The agents read and write files, tables, and instruments in a shared workspace. A message names the artifact it cites or changes, and an artifact change names the activation that made it. A restart replays the journal and keeps the workspace.](docs/assets/ambion-room-and-workspace.svg)
+![A person asks a question in a room. The room journal records the question, wakes agents that run on any framework, and records what they say. The agents read and write files and tables in a shared workspace. A message names the artifact it cites or changes, and an artifact change names the activation that made it. A restart replays the journal and keeps the workspace.](docs/assets/ambion-room-and-workspace.svg)
 
-The picture shows the room and the workspace side by side. Speech enters the
-record through `say`. Work enters the workspace through tools. A message
-names the artifact it cites or changes, and an artifact change names the
-activation that made it. Files are here today. Tables, instruments,
-references, and provenance land with 0.1.0.
+The journal records what is said. The workspace holds what is made. Speech
+enters the record through `say`. Work enters the workspace through tools. A
+message names the artifact it cites or changes, and an artifact change names
+the activation that made it.
 
 ## The conceptual model
 
-| Concept     | Meaning                                                      |
-| ----------- | ------------------------------------------------------------ |
-| Definitions | One value per agent: a name, an identity, and how it runs    |
-| Room        | Participants collaborating through one ordered journal       |
-| Membership  | An agent's participation and attention within a room         |
-| Visit       | A human's speaking identity and presence lifetime            |
-| Exchange    | An opening message and the discussion it starts              |
-| Activation  | A bounded execution with authority to contribute to the room |
+| Concept    | Meaning                                                                             |
+| ---------- | ----------------------------------------------------------------------------------- |
+| Definition | An immutable value: a name, an identity, and an executor                            |
+| Room       | Participants collaborating through one ordered journal                              |
+| Seat       | An agent's membership in a room, with its attention                                 |
+| Attention  | Which messages wake an idle seat: `none`, `named`, `broadcast`, or `presence`       |
+| Reserve    | Definitions the room knows and has not seated; the room seats them by name          |
+| Visit      | A person's speaking identity and presence lifetime                                  |
+| Exchange   | A person's question and every activation until the room goes quiet                  |
+| Activation | The room waking one seat: a bounded execution with authority to contribute          |
+| Step       | One recorded unit of an activation's work: thinking, text, a tool call, a room call |
+| Resource   | Application-owned data an agent's tools reach, stamped with provenance              |
 
-Application code mainly works with definitions, rooms, visits, and exchanges.
-Membership changes through room operations. Activation and lease details
-belong to the hosting contract. The API calls an agent membership a
-_seat_.
+Application code works with definitions, rooms, visits, and exchanges. Seats
+change through room operations. Activations, leases, executors, and the trace
+belong to the hosting entry, `@ambionframework/ambion/hosting`.
+
+## A small room
+
+Two specialists on two frameworks share one directory and answer one person.
+Each definition owns its instructions and its model. The Pi agent reaches
+the directory through the workspace tools. The Claude Agent SDK agent
+reaches the same directory through its working directory.
+
+```ts
+import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { claude } from '@ambionframework/claude';
+import { pi } from '@ambionframework/pi';
+import { directoryBackend, openWorkspace } from '@ambionframework/workspace';
+
+const shared = openWorkspace({ name: 'delivery', backend: directoryBackend('./shared') });
+
+const inventory = defineAgent({
+  name: 'inventory',
+  identity: 'Checks stock constraints.',
+  executor: pi({
+    model: 'anthropic/claude-sonnet-5',
+    instructions:
+      'Read stock.csv before you answer. State a constraint only when it changes the answer.',
+    bundles: [shared.tools()],
+  }),
+});
+
+const scheduling = defineAgent({
+  name: 'scheduling',
+  identity: 'Checks delivery capacity.',
+  executor: claude({
+    model: 'claude-sonnet-5',
+    instructions:
+      'Read capacity.md before you answer. State a constraint only when it changes the answer.',
+    cwd: './shared',
+  }),
+});
+
+const priya = defineHuman({ name: 'priya', identity: 'Coordinates customer deliveries.' });
+
+const room = await startRoom({
+  name: 'delivery',
+  goal: 'Check delivery promises against stock and capacity.',
+  agents: [inventory, scheduling],
+  seats: { inventory: 'broadcast', scheduling: 'broadcast' },
+  summary: 'scheduling',
+});
+
+try {
+  const visit = await room.visit(priya);
+  const exchange = await visit.send({ text: 'Can we promise 10 units for Thursday?' });
+  for (const message of await exchange.waitForClose()) {
+    if (message.kind === 'said') console.log(`${message.from}: ${message.text}`, message.refs);
+  }
+  await visit.leave();
+} finally {
+  await room.stop();
+}
+```
+
+The exchange opens on the question and closes when no seat has work left.
+Both agents wake, read the directory, and speak or stay silent. A `say`
+that read a stale record is refused with the messages it missed. The
+`summary` seat writes one summary for Priya, and later prompts read it in
+place of the discussion. Leave an agent out of `seats` to keep it in the
+reserve; the room seats it by name when a question needs it.
+
+**Read the work afterwards.** Every read works on a running room and on a
+stopped one.
+
+```ts
+import { readActivation, readExchange } from '@ambionframework/ambion';
+
+const closed = await readExchange('delivery', exchange.from);
+for (const activation of closed?.activations ?? []) {
+  const { steps } = await readActivation('delivery', activation.id);
+  console.log(activation.seat, activation.outcome, activation.usage.cost, steps.length);
+}
+```
+
+`room.read()` returns the conversation and participant state without
+waiting for an agent. `subscribe` streams messages and steps live, each with
+its activation id, so a user interface merges the live stream and the read
+the same way.
 
 ## Key technical facts
 
 - **One append-only journal per room.** Messages, arrivals, departures,
-  seatings, leases, closes, and the composition are entries under one
-  sequence. Every room fact is a pure fold over those entries. A resume is a
-  replay.
+  seatings, leases, closes, references, and the composition are entries under
+  one sequence. Every room fact is a pure fold over those entries. A resume
+  is a replay. See [Durability](docs/durability.md).
 - **Conditional, fenced, idempotent writes.** Storage appends only at the
   expected position. Each run writes a fence, and a later fence voids the
-  earlier run's writes. A retry under the same key lands once. Memory and
-  SQLite storages ship, with a Cloudflare Durable Objects adapter.
+  earlier run's writes. A retry under the same key lands once. Journal format
+  1 carries a compatibility promise, proven by golden journals that replay in
+  CI. Memory and SQLite storages ship, with a Cloudflare Durable Objects
+  adapter.
 - **Derived activation identity.** An activation id encodes its cause, its
   journal position, its seat, and its attempt. Nothing mints an id, so a wake
   can be sent twice and the fold refuses a stale caller. Leases claim, renew,
-  expire, and end with a recorded reason.
+  expire, and end with a recorded reason and the activation's usage.
 - **Freshness checked at commit.** A `say` carries the position its
   activation read. If the record moved, the room refuses it and returns the
-  missed messages. Active agents receive new context between provider
-  requests.
+  missed messages. An active agent receives new context between provider
+  requests when its framework takes a message during a run, and on its next
+  pass otherwise. See [Agents](docs/agent.md).
 - **The exchange is a fold.** The first human question after the last close
-  opens it. Quiescence closes it. One configured writer may publish one
-  summary with a stamped recipient and range, and later prompts read the
-  summary in place of the covered messages while the source stays readable.
+  opens it. Quiescence closes it with an outcome: complete, cancelled,
+  exhausted, or awaiting a person. One configured writer may publish one
+  summary for each person who spoke, with a stamped recipient and range.
+  Later prompts read the summary in place of the covered messages while the
+  source stays readable. See [Exchanges](docs/exchange.md) and
+  [Summaries](docs/summary.md).
+- **One executor contract.** The kernel drives leases, passes, steering, and
+  freshness. A framework supplies one session with passes. Pi and the Claude
+  Agent SDK ship as adapters. A Codex example runs over the same three room
+  tools served through MCP. A conformance suite proves an adapter on fakes.
+- **Speech through `say` only; everything else into a trace.** Every
+  activation writes its steps live to its own trace: thinking, text, tool
+  calls, room calls, steers, approvals, and usage. `readActivation` returns
+  them by pass, and `subscribe` streams them with an activation id.
+- **Artifacts by reference.** A message and a summary carry `refs`, URIs the
+  kernel validates, stores, and renders, and never reads behind. Rooms and
+  exchanges have URIs. Every resource change carries the activation, the
+  exchange, and the room that made it. See [Workspace](docs/workspace.md).
 - **Three JSON calls each way.** A seat calls `view`, `commit`, and `lease`.
   The room calls `wake`, `steer`, and `cut`. In-process and RPC transports
-  share the rules.
+  share the rules. See [Deployment](docs/deployment.md).
 - **Correctness as evidence.** Pure rules carry Dafny-verified contracts. A
   scripted suite runs on memory and SQLite, a chaos sweep crashes before and
-  after every append, and a process-kill test resumes over the same database.
+  after every append, and a process-kill test resumes over the same
+  database.
 
 ## What is new
 
@@ -102,169 +206,102 @@ _seat_.
 - **Routing stored with the message.** The attention scale decides who
   wakes, and the decision is written on the entry, so replay routes the same
   way.
-
-Four more land with 0.1.0 and are pending today. [The plan](planning/next.md)
-holds each one.
-
-- **Any framework, one adapter each.** A definition becomes a name, an
-  identity, and an executor. The kernel keeps the leases, the passes, and the
-  freshness check; a framework supplies one session with passes. Pi and the
-  Claude Agent SDK ship as adapters.
-- **Speech only through `say`; everything else into a trace.** Harness
-  output maps to one step vocabulary, written live per activation, so a
-  person drills from a room to an exchange to an activation to a step, with
-  usage and cost on every activation.
-- **Artifacts by reference.** Messages carry references, every resource
-  change carries provenance, and rooms have URIs, so files, tables, and
-  instruments are the medium and the kernel reads none of them.
+- **Any framework, one adapter each.** A definition is a name, an identity,
+  and an executor. The kernel keeps the leases, the passes, and the freshness
+  check; a framework supplies one session with passes.
+- **The trace beside the record.** Harness output maps to one step
+  vocabulary, written live per activation, so a person drills from a room to
+  an exchange to an activation to a step, with usage and cost on every
+  activation.
+- **Artifacts by reference.** Files and tables are the medium. The record
+  names them, and the kernel reads none of them.
 - **Waiting on a person as a derived outcome.** An exchange whose last word
   is a question to a person reads as awaiting them, which gives approval a
   representation with no new entry kind.
 
 ## Install
 
-Use Node **22.19 or later**. Packages use ESM. Model execution uses the Pi
-integration and requires credentials for the chosen provider.
-
-The [local development CLI](packages/cli/README.md) creates team projects and
-opens their rooms in OpenTUI. Installing the CLI or the repository requires
-Node **26.4 or later**.
-
-The configured registry is GitHub Packages, which requires a token for read
-access. Create a [classic PAT](https://github.com/settings/tokens/new?scopes=read:packages&description=Ambion)
-with `read:packages`, then add this to your project's `.npmrc`:
-
-```ini
-@ambionframework:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
+Use Node **22.19 or later**. The packages are ESM and publish to npmjs.
+Model execution needs credentials for the chosen provider.
 
 ```sh
-export GITHUB_TOKEN=…
-npm install @ambionframework/ambion
+npm install @ambionframework/ambion @ambionframework/pi
 ```
 
-The main library includes the journal dependency. Add
-`@ambionframework/workspace` when agents need its optional filesystem tools.
-Add `@ambionframework/assistant` for a default assistant that guides membership
-and summarizes exchanges. The [assistant contract](docs/assistant.md) describes
-its behavior and the `startRoom({ assistant })` shorthand.
+| Package                       | Concern                                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------- |
+| `@ambionframework/ambion`     | The kernel: protocol, journal vocabulary, rules, room, driver; `/hosting`, `/testing` |
+| `@ambionframework/pi`         | The Pi executor                                                                       |
+| `@ambionframework/claude`     | The Claude Agent SDK executor                                                         |
+| `@ambionframework/workspace`  | The resource contract, a directory workspace, and a SQL resource                      |
+| `@ambionframework/assistant`  | A default assistant that guides membership and writes summaries                       |
+| `@ambionframework/journal`    | The append-only journal and its storage contract                                      |
+| `@ambionframework/pi-journal` | Pi transcript sessions over journal storage                                           |
+| `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                                                    |
+| `@ambionframework/cli`        | `ambion new` and `ambion dev`; needs Node 26.4 or later                               |
+
 See [Contributing](CONTRIBUTING.md) to build and run from source.
 
-## Try a working application
+## The example
 
-- [Relay](examples/persistent/README.md): multiple persistent rooms and people,
-  a browser UI, and a shared local workspace in one Node process.
-- [Local CLI](packages/cli/README.md): `ambion new` creates a team project;
-  `ambion dev` opens its rooms in the terminal.
-- [Site example](examples/site): domain tools and agent collaboration.
+**One example ships: an agentic lab workspace.** [`examples/workbench`](examples/workbench)
+runs six definitions on two frameworks over a shared directory and a SQL
+resource, with a user interface that drills from a project's room into one
+activation. Nine scenarios run on a scripted executor in CI and on real
+providers in the live tier. [The example page](docs/example.md) describes
+what each scenario shows.
 
-## A small room
-
-This example uses two specialist definitions and no summary writer. Each specialist
-owns its instructions and model choice. Define ordinary typed tools with
-`defineTool` and pass reusable bundles in the separate `bundles` field.
-Pass a workspace's `tools()` result in that field.
-
-```ts
-import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
-
-const inventory = defineAgent({
-  name: 'inventory',
-  identity: 'Checks stock constraints.',
-  instructions: 'Use the supplied stock facts. State a constraint only when it changes the answer.',
-  model: 'anthropic/claude-sonnet-4-5',
-});
-const scheduling = defineAgent({
-  name: 'scheduling',
-  identity: 'Checks delivery capacity.',
-  instructions:
-    'Use the supplied capacity facts. State a constraint only when it changes the answer.',
-  model: 'anthropic/claude-sonnet-4-5',
-});
-const priya = defineHuman({
-  name: 'priya',
-  identity: 'Coordinates customer deliveries.',
-});
-
-const room = await startRoom({
-  name: 'delivery',
-  goal: 'Check delivery promises against stock and capacity.',
-  agents: [inventory, scheduling],
-  seats: { inventory: 'broadcast', scheduling: 'broadcast' },
-});
-
-try {
-  const visit = await room.visit(priya);
-  const exchange = await visit.send({
-    text: 'We have 12 units in stock and Thursday capacity for 8. Can we promise 10 for Thursday?',
-  });
-  for (const message of await exchange.waitForClose()) {
-    if (message.kind === 'said') console.log(`${message.from}: ${message.text}`);
-  }
-  await visit.leave();
-} finally {
-  await room.stop();
-}
-```
-
-Set `summary` to the name of a defined agent when the application needs an
-optional closing summary. Include every executable definition in `agents`; leave
-an agent out of `seats` to keep it in the reserve. If `seats` is omitted, every
-defined agent starts at `broadcast` attention. `exchange.waitForSummary()` waits for
-a summary or a terminal result without one. A writer may decline, and the
-application can always read the discussion.
-
-Use `room.read()` for immediate conversation and participant state.
-`readRoom(name, { runtime })` and `readExchange(name, from, { runtime })` also
-inspect stopped rooms. These reads never wait for an agent to finish.
+`ambion new` creates a project from the same layout, with one room and two
+definitions, as a Node service or a Cloudflare Worker. `ambion dev` opens its
+rooms in the terminal.
 
 ## Hosting and persistence
 
 **Placement, persistence, and tool resources are separate choices.**
 
-| Model                         | Storage                            | Use and support                                                    |
-| ----------------------------- | ---------------------------------- | ------------------------------------------------------------------ |
-| Embedded Node application     | In-memory journals                 | Development, tests, and ephemeral application lifetimes            |
-| Persistent Node service       | SQLite through the storage adapter | SQLite adapter and recovery tests; application-managed lifecycle   |
-| Separate room and agent hosts | Storage chosen by each host        | JSON protocol extension contract                                   |
-| Cloudflare Durable Objects    | Each object's SQLite storage       | Publishable adapter for local CLI use; deployment commands pending |
+| Model                         | Storage                     | Use                                                     |
+| ----------------------------- | --------------------------- | ------------------------------------------------------- |
+| Embedded Node application     | In-memory journals          | Development, tests, and ephemeral application lifetimes |
+| Persistent Node service       | SQLite journals             | Long-lived hosts; the example is the reference          |
+| Separate room and agent hosts | Storage chosen by each host | The JSON protocol, with a published conformance suite   |
+| Cloudflare Durable Objects    | Each object's SQLite        | The adapter and the `ambion new` Worker template        |
 
 The host keeps its process alive, supplies definitions again after restart,
-and owns model credentials and tool resources. Persisted history alone does
-not restart an application. The protocol carries collaboration data; execution
-hosts need their own code, credentials, and authorization.
-
-See [Deployment and recovery](docs/deployment.md) for host responsibilities
-and the current evidence for each model.
+and owns model credentials and tool resources. The journal holds the
+collaboration; the host holds the code that runs it. See
+[Deployment and recovery](docs/deployment.md) for host responsibilities and
+the evidence for each model.
 
 ## Boundaries and limits
 
-- Full history remains in storage and replay. Memory and model input can grow
-  with room history. Ambion does not promise bounded context or indefinite scale.
-- Activation deadlines and retry caps do not impose a total exchange budget.
-  Continuing contributions can keep an exchange open.
+- Full history remains in storage and replay. `limits.context` bounds what
+  one activation reads, and `limits.message` bounds what one message
+  carries.
+- Activation deadlines and retry caps impose no total exchange budget.
+  Continuing contributions keep an exchange open.
 - Tools can act before a contribution commits. Applications own effect
-  idempotency; conversation freshness does not make external effects transactional.
-- Await `abort()` or `stop()` to confirm their durable room-wide work.
-  Exchange handles do not provide independent cancellation. See the
-  [cancellation contract](docs/durability.md#cancellation).
-- A process crash does not record a person's departure. Hosts reconcile
-  durable presence with their actual connections after recovery.
-- Subscriptions belong to a running host. Reconnecting clients read durable
-  messages and reacquire exchange handles.
-- Workspace files remain separate from collaboration history. Shared workspaces
-  provide no operating-system isolation between agents or distributed directory ownership.
-- Ambient means a room remains available between interactions. Native timers,
-  external event subscriptions, and a scheduler ingress API are future work.
-
-The journal does not own domain transactions or credentials. Browser-only
-execution, a managed service, and turnkey deployment commands are not provided.
+  idempotency; conversation freshness does not make external effects
+  transactional.
+- Await `abort()` or `stop()` to confirm their durable room-wide work. A
+  graceful stop ends running leases and keeps pending work for the next run.
+  See the [cancellation contract](docs/durability.md#cancellation).
+- A process crash records no departure. Hosts reconcile durable presence
+  with their connections after recovery.
+- Subscriptions belong to a running host. A reconnecting client reads
+  durable messages and reacquires exchange handles.
+- A workspace provides no operating-system isolation between agents. One
+  host owns each resource.
+- A seat with harness memory holds state the record does not show.
+- A room remains available between interactions. Native timers, external
+  event subscriptions, and scheduler ingress are future work.
+- The journal owns no domain transactions and no credentials. Browser-only
+  execution and a managed service are not provided.
 
 ## Read more
 
-[Documentation](docs/README.md) maps the design contracts and hosting guidance.
-[Contributing](CONTRIBUTING.md) covers builds and checks.
+[Documentation](docs/README.md) maps the design contracts and hosting
+guidance. [Contributing](CONTRIBUTING.md) covers builds and checks.
+[The plan](planning/next.md) names the work that remains before the tag.
 
 ## License
 

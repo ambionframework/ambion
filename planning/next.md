@@ -15,88 +15,12 @@ holds on main.
 
 ## Positioning
 
-**Ambion is a collaboration kernel for agents and humans.**
-
-A room is a shared journal with rules for taking part. People ask questions
-and read results. Agents speak when they have something to add and stay
-silent when they do not. Agents run on any framework. Agents and people share
-files, tables, and instruments. The kernel keeps the record and the rules. A
-restart loses nothing.
-
-### Key technical facts
-
-- **One append-only journal per room.** Messages, arrivals, departures,
-  seatings, leases, closes, and the composition are entries under one
-  sequence. Every room fact is a pure fold over those entries. A resume is a
-  replay.
-- **Conditional, fenced, idempotent writes.** Storage appends only at the
-  expected position. Each run writes a fence, and a later fence voids the
-  earlier run's writes. A retry under the same key lands once. Memory and
-  SQLite storages ship, with a Cloudflare Durable Objects adapter.
-- **Derived activation identity.** An activation id encodes its cause, its
-  journal position, its seat, and its attempt. Nothing mints an id, so a wake
-  can be sent twice and the fold refuses a stale caller. Leases claim, renew,
-  expire, and end with a recorded reason.
-- **Freshness checked at commit.** A `say` carries the position its
-  activation read. If the record moved, the room refuses it and returns the
-  missed messages. Active agents receive new context between provider
-  requests.
-- **The exchange is a fold.** The first human question after the last close
-  opens it. Quiescence closes it. One configured writer may publish one
-  summary with a stamped recipient and range, and later prompts read the
-  summary in place of the covered messages while the source stays readable.
-- **Three JSON calls each way.** A seat calls `view`, `commit`, and `lease`.
-  The room calls `wake`, `steer`, and `cut`. In-process and RPC transports
-  share the rules.
-- **Correctness as evidence.** Pure rules carry Dafny-verified contracts. A
-  scripted suite runs on memory and SQLite, a chaos sweep crashes before and
-  after every append, and a process-kill test resumes over the same database.
-
-### What is new
-
-The first five exist on main. The last four land in phases 2, 4, and 5.
-
-- **No scheduler and no task database.** Retries, resends, backoff, and
-  completion derive from the journal, so recovery and live execution use the
-  same facts.
-- **A say lock for conversation.** Optimistic concurrency applied to speech,
-  with the delta returned on refusal, lets agents reason in parallel and
-  serializes what they accept.
-- **Silence and quiescence as results.** An agent can finish without a mark,
-  and an exchange closes when no work remains.
-- **Compaction shared by humans and agents.** The summary written for a
-  person is the context later agents read.
-- **Routing stored with the message.** The attention scale decides who
-  wakes, and the decision is written on the entry, so replay routes the same
-  way.
-- **Any framework, one adapter each.** A definition becomes a name, an
-  identity, and an executor. The kernel keeps the leases, the passes, and the
-  freshness check; a framework supplies one session with passes. Pi and the
-  Claude Agent SDK ship as adapters.
-- **Speech only through `say`; everything else into a trace.** Harness
-  output maps to one step vocabulary, written live per activation, so a
-  person drills from a room to an exchange to an activation to a step, with
-  usage and cost on every activation.
-- **Artifacts by reference.** Messages carry references, every resource
-  change carries provenance, and rooms have URIs, so files, tables, and
-  instruments are the medium and the kernel reads none of them.
-- **Waiting on a person as a derived outcome.** An exchange whose last word
-  is a question to a person reads as awaiting them, which gives approval a
-  representation with no new entry kind.
-
-| Concept    | Meaning                                                                           |
-| ---------- | --------------------------------------------------------------------------------- |
-| Definition | An immutable value: a name, an identity, and an executor                          |
-| Room       | Participants collaborating through one ordered journal                            |
-| Membership | An agent's participation and attention within a room                              |
-| Visit      | A human's speaking identity and presence lifetime                                 |
-| Exchange   | An opening message and the discussion it starts                                   |
-| Activation | A bounded execution with authority to contribute; a session of one or more passes |
-| Resource   | Application-owned data an agent's tools reach, stamped with provenance            |
-
-Application code works with definitions, rooms, visits, and exchanges.
-Membership changes through room operations. Activations, leases, executors,
-and the trace belong to the hosting entry.
+**Ambion is a collaboration kernel for agents and humans.** The
+[README](../README.md) holds the statement, the key technical facts, and
+what is new, written for the 0.1.0 surface. Of the nine novelties it lists,
+the first five exist on main. The last four land in phases 2, 4, and 5: any
+framework through one executor contract, the trace beside the record,
+artifacts by reference, and waiting on a person as a derived outcome.
 
 ## The scope
 

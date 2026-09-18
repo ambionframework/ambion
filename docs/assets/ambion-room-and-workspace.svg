@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="880" viewBox="0 0 1440 880" role="img" aria-labelledby="title desc">
   <title id="title">One room and one shared workspace for agents and humans</title>
-  <desc id="desc">A person asks a question in a room. The room journal records the question, wakes the agents whose attention reaches it, and records what they say. Agents read and write shared artifacts: files, tables, and instruments in a workspace. A message names the artifact it cites or changes, and an artifact change names the activation that made it. The exchange closes when no work remains, and an optional summary stands in for its entries in later prompts. A restart replays the journal and keeps the workspace.</desc>
+  <desc id="desc">A person asks a question in a room. The room journal records the question, wakes the agents whose attention reaches it, and records what they say. Agents read and write shared artifacts: files and tables in a workspace. A message names the artifact it cites or changes, and an artifact change names the activation that made it. The exchange closes when no work remains, and an optional summary stands in for its entries in later prompts. A restart replays the journal and keeps the workspace.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 10 5 0 10Z" fill="#6c7371"/>
@@ -118,7 +118,7 @@
     <rect x="1112" y="172" width="272" height="580" rx="18" fill="#fbfaf6" stroke="#3b8f88" stroke-width="1.5"/>
   </g>
   <text x="1132" y="206" class="sans ink title">Workspace</text>
-  <text x="1132" y="228" class="sans dim label" style="letter-spacing:1px">FILES · TABLES · INSTRUMENTS</text>
+  <text x="1132" y="228" class="sans dim label" style="letter-spacing:1px">FILES · TABLES · PROVENANCE</text>
   <line x1="1112" y1="244" x2="1384" y2="244" stroke="#e2e0d8" stroke-width="1.5"/>
 
   <rect x="1132" y="264" width="232" height="124" rx="12" fill="#eef5f4" stroke="#bcd9d5" stroke-width="1"/>
@@ -134,10 +134,10 @@
   <text x="1148" y="490" class="sans dim small">each row names its activation</text>
 
   <rect x="1132" y="540" width="232" height="124" rx="12" fill="#eef5f4" stroke="#bcd9d5" stroke-width="1"/>
-  <text x="1148" y="568" class="sans ink body" font-weight="700">Instruments</text>
-  <text x="1148" y="592" class="sans dim small">operated within limits</text>
-  <text x="1148" y="610" class="sans dim small">a step past a limit waits</text>
-  <text x="1148" y="628" class="sans dim small">for a person's approval</text>
+  <text x="1148" y="568" class="sans ink body" font-weight="700">Change log</text>
+  <text x="1148" y="592" class="sans dim small">one entry per change</text>
+  <text x="1148" y="610" class="sans dim small">keyed by activation</text>
+  <text x="1148" y="628" class="sans dim small">what changed in an exchange</text>
 
   <text x="1132" y="710" class="sans dim small">The kernel reads none of this.</text>
   <text x="1132" y="730" class="sans dim small">Resources own it; the room names it.</text>
@@ -169,7 +169,7 @@
   <path d="M1048 472 H1112" class="flow" marker-end="url(#arrow)"/>
   <text x="1080" y="462" text-anchor="middle" class="sans dim small">writes</text>
   <path d="M1048 652 H1112" class="flow" marker-end="url(#arrow)"/>
-  <text x="1080" y="642" text-anchor="middle" class="sans dim small">checks</text>
+  <text x="1080" y="642" text-anchor="middle" class="sans dim small">reads</text>
 
   <!-- refs and provenance: journal <-> workspace, under the agents -->
   <path d="M520 752 V790 H1296 V752" class="flow-teal" marker-start="url(#arrow-teal)" marker-end="url(#arrow-teal)"/>

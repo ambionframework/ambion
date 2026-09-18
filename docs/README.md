@@ -1,8 +1,8 @@
 # Documentation
 
-Ambion is a collaboration kernel for independently owned agents and the
-people they serve. Agents own domain behavior. Rooms provide a shared journal,
-participation rules, and optional summaries for completed human exchanges.
+Ambion is a collaboration kernel for agents and humans. A room is a shared
+journal with rules for taking part. The kernel keeps the record and the
+rules.
 
 Start with the [repository README](../README.md) for installation and a small
 room. The documents below describe contracts that are easy to miss when

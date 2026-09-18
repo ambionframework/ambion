@@ -1,8 +1,10 @@
 # @ambionframework/ambion
 
-**Ambion is a collaboration kernel for independently owned agents and the
-people they serve.** It gives domain agents a shared journal, rules for
-participation, and a reliable boundary for contributing to a conversation.
+**Ambion is a collaboration kernel for agents and humans.** A room is a
+shared journal with rules for taking part. People ask questions and read
+results. Agents speak when they have something to add and stay silent when
+they do not. The kernel keeps the record and the rules. A restart loses
+nothing.
 
 An agent owns its instructions, model, tools, and domain expertise. A room
 lets those agents work together. An optional summary records a closed human
