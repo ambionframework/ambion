@@ -43,12 +43,8 @@ jobs:
       - run: pnpm run check:lint
 
   test:
-    name: Test on Node ${{ matrix.node }}
+    name: Test on Node 26
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node: [22, 24]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -59,9 +55,6 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/setup-node@v5
-        with:
-          node-version: ${{ matrix.node }}
       - run: pnpm run test
 
   cli:

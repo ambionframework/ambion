@@ -67,8 +67,8 @@ and agent runners. `room.ts` composes both behind the public facade.
 | Dead code              | Knip 6                                                   |
 
 The core and published packages require Node `>=22.19`. The OpenTUI `ambion
-dev` client additionally needs Node `>=26.4` (or Bun `>=1.3`). CI installs with
-Node 26 and runs the compatibility test matrix on Node 22 and 24.
+dev` client additionally needs Node `>=26.4` (or Bun `>=1.3`). CI installs and
+tests on Node 26.
 
 ## 3. Supply chain
 
@@ -159,7 +159,7 @@ repository jobs plus the LemmaScript reusable workflow:
 | Job     | Checks                                                      |
 | ------- | ----------------------------------------------------------- |
 | `check` | format, types, lint, and Knip on Node 26                    |
-| `test`  | scripted tests on Node 22 and 24                            |
+| `test`  | scripted tests on Node 26                                   |
 | `cli`   | build, CLI version/help/error behavior, and package packing |
 
 The CLI job drives `packages/cli/bin/ambion.mjs`, verifies versions, rejects an
