@@ -2,8 +2,8 @@
 
 This is the repository guide for building, checking, testing, and releasing
 Ambion. The code is a pnpm workspace coordinated by Turborepo. Package and
-platform plans live in the [0.1.0 scope](../planning/release-0.1.0.md) and
-[delivery plan](../planning/next.md); they are not API references.
+platform plans live in [the plan](../planning/next.md) and
+[the backlog](../planning/backlog.md); they are not API references.
 
 ## 1. Repository layout
 

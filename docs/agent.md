@@ -5,8 +5,8 @@ room owns the journal, membership, presence, execution authority, and exchange
 rules. The agent catalog supplies every executable definition for one room run.
 
 The [documentation index](README.md) links the other contracts. The
-[release scope](../planning/release-0.1.0.md) defines the target. The
-[delivery plan](../planning/next.md) records work that remains.
+[plan](../planning/next.md) defines the scope and records the work that
+remains.
 
 ## Definitions
 

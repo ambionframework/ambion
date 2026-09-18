@@ -1,8 +1,10 @@
 # @ambionframework/ambion
 
-**Ambion is a collaboration kernel for independently owned agents and the
-people they serve.** It gives domain agents a shared journal, rules for
-participation, and a reliable boundary for contributing to a conversation.
+**Ambion is a collaboration kernel for agents and humans.** A room is a
+shared journal with rules for taking part. People ask questions and read
+results. Agents speak when they have something to add and stay silent when
+they do not. The kernel keeps the record and the rules. A restart loses
+nothing.
 
 An agent owns its instructions, model, tools, and domain expertise. A room
 lets those agents work together. An optional summary records a closed human
@@ -10,9 +12,9 @@ exchange for its owner. Applications own domain data and tool resources.
 
 ## Install
 
-Use Node **22.19 or later** and ESM. Installation requires a GitHub Packages
-read token and registry configuration from the
-[repository README](https://github.com/ambionframework/ambion#install).
+Use Node **22.19 or later** and ESM. Until the packages publish to npmjs,
+installation needs a GitHub Packages read token and the registry
+configuration in [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 
 ```sh
 npm install @ambionframework/ambion
@@ -128,6 +130,6 @@ distinguishes current behavior from the release plan.
 - [Design contracts](https://github.com/ambionframework/ambion/tree/main/docs)
 - [Deployment and recovery](https://github.com/ambionframework/ambion/blob/main/docs/deployment.md)
 - [Multi-agent site example](https://github.com/ambionframework/ambion/tree/main/examples/site)
-- [0.1.0 release scope](https://github.com/ambionframework/ambion/blob/main/planning/release-0.1.0.md)
+- [0.1.0 plan](https://github.com/ambionframework/ambion/blob/main/planning/next.md)
 
 Apache 2.0.

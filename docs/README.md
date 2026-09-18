@@ -1,8 +1,8 @@
 # Documentation
 
-Ambion is a collaboration kernel for independently owned agents and the
-people they serve. Agents own domain behavior. Rooms provide a shared journal,
-participation rules, and optional summaries for completed human exchanges.
+Ambion is a collaboration kernel for agents and humans. A room is a shared
+journal with rules for taking part. The kernel keeps the record and the
+rules.
 
 Start with the [repository README](../README.md) for installation and a small
 room. The documents below describe contracts that are easy to miss when
@@ -19,6 +19,7 @@ each page.
 | [Roster](roster.md)         | Agent membership, reserve, and attention                   |
 | [Summaries](summary.md)     | Optional closing work and context replacement              |
 | [Workspace](workspace.md)   | Shared filesystem resources and lifecycle                  |
+| [Example](example.md)       | The one runnable example: an agentic lab workspace         |
 | [Durability](durability.md) | Journal guarantees, recovery, leases, and failure evidence |
 | [Deployment](deployment.md) | Host placement, storage, reconnect, and operational limits |
 | [Toolchain](toolchain.md)   | Package layout, checks, CI, and release commands           |
@@ -32,7 +33,7 @@ configuration shorthand, and Relay integration.
 `presence.md` for the two durable concepts built on top of it. Read
 `durability.md` before choosing storage or recovery behavior, then
 `deployment.md` for host procedures. `toolchain.md` is the repository guide;
-the [0.1.0 scope](../planning/release-0.1.0.md) and [delivery plan](../planning/next.md)
+[the plan](../planning/next.md) and [the backlog](../planning/backlog.md)
 are planning records, not API references.
 
 Human review and agent context intentionally differ: after a close, a summary
