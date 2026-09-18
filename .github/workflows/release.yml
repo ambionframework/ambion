@@ -33,7 +33,7 @@ jobs:
     name: Publish to GitHub Packages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           # Do not leave the job's token in .git/config for later steps to read.
           persist-credentials: false
