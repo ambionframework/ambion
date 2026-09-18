@@ -61,14 +61,12 @@ belong to the hosting entry, `@ambionframework/ambion/hosting`.
 
 ## A small room
 
-Two specialists on two frameworks share one directory and answer one person.
-Each definition owns its instructions and its model. The Pi agent reaches
-the directory through the workspace tools. The Claude Agent SDK agent
-reaches the same directory through its working directory.
+Two specialists share one directory and answer one person. Each definition
+owns its instructions, its model, and its executor. Both run on Pi and reach
+the directory through the workspace tools.
 
 ```ts
 import { defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
-import { claude } from '@ambionframework/claude';
 import { pi } from '@ambionframework/pi';
 import { directoryBackend, openWorkspace } from '@ambionframework/workspace';
 
@@ -88,11 +86,11 @@ const inventory = defineAgent({
 const scheduling = defineAgent({
   name: 'scheduling',
   identity: 'Checks delivery capacity.',
-  executor: claude({
-    model: 'claude-sonnet-5',
+  executor: pi({
+    model: 'anthropic/claude-sonnet-5',
     instructions:
       'Read capacity.md before you answer. State a constraint only when it changes the answer.',
-    cwd: './shared',
+    bundles: [shared.tools()],
   }),
 });
 
