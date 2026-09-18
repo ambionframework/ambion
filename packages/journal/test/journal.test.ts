@@ -1,6 +1,6 @@
 /** The journal's queue, recovery, idempotency and writer fence. */
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { type Entry, Journal, type Vocabulary } from '../src/journal.ts';
+import { type CloneableJournal, type Entry, Journal, type Vocabulary } from '../src/journal.ts';
 import { memoryJournals } from '../src/memory.ts';
 
 type Kind = 'note' | 'mark' | 'run';
@@ -152,6 +152,32 @@ describe('a journal', () => {
 		await journal.append('note', { decide: () => ({ body: note('next') }) });
 		expect(beforeNext).toHaveLength(1);
 		expect(journal.entriesFrom(1)).toMatchObject([{ seq: 2, body: { text: 'next' } }]);
+	});
+
+	it('refuses a body that cannot be cloned, and takes nothing', async () => {
+		// The journal copies every body at an ownership boundary, so a body holds
+		// data. A body that carries a function cannot be cloned. The append fails
+		// at the copy, before storage, so the journal consumes no position.
+		const journal = await open();
+		const withFunction = { text: 'holds a function', act: () => undefined } as unknown as Note;
+		await expect(journal.append('note', { decide: () => body(withFunction) })).rejects.toThrow();
+		expect(journal.entries).toHaveLength(0);
+		expect(journal.lastSeq).toBe(0);
+		const good = await journal.append('note', { decide: () => body(note('after')) });
+		if (!('entry' in good)) throw new Error('the next note lands');
+		expect(good.entry.seq).toBe(1);
+	});
+
+	it('proves at compile time that every body survives cloning', () => {
+		// `CloneableJournal` is a journal only when every body is data. A body map
+		// that holds a function is not a journal; the type resolves to `never`.
+		expectTypeOf<CloneableJournal<Kind, Bodies>>().toEqualTypeOf<Journal<Kind, Bodies>>();
+		interface WithFunction {
+			note: { act: () => void };
+			mark: Mark;
+			run: Run;
+		}
+		expectTypeOf<CloneableJournal<Kind, WithFunction>>().toBeNever();
 	});
 
 	it('isolates accepted bodies from a vocabulary that retains and mutates them', async () => {

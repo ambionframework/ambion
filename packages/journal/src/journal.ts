@@ -88,6 +88,44 @@ function detached<T>(value: T): T {
 	return structuredClone(value);
 }
 
+/**
+ * A value that survives `structuredClone`. The journal copies every body at
+ * each ownership boundary, so a body holds data: a JSON value, and the extras
+ * `structuredClone` keeps (a `Date`, a `bigint`, an `undefined` field). A
+ * function, a symbol, or a class instance does not survive the copy, so
+ * `Cloneable` maps it to `never`, and a proof over such a body stops matching.
+ */
+type Cloneable<T> = T extends string | number | boolean | bigint | null | undefined | Date
+	? T
+	: T extends (...args: never[]) => unknown
+		? never
+		: T extends symbol
+			? never
+			: T extends readonly unknown[]
+				? { [K in keyof T]: Cloneable<T[K]> }
+				: T extends object
+					? { [K in keyof T]: Cloneable<T[K]> }
+					: never;
+
+/** True only when `A` and `B` are the same type, and false otherwise. */
+type Equal<A, B> =
+	(<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+
+/** True only when every body of a journal over these kinds survives cloning. */
+type BodiesAreCloneable<TKind extends string, TBodies extends Bodies<TKind>> = {
+	[K in TKind]: Equal<TBodies[K], Cloneable<TBodies[K]>>;
+}[TKind];
+
+/**
+ * A journal whose bodies are proven to survive `structuredClone` at compile
+ * time. The journal copies every body at each ownership boundary, so a body
+ * holds data. Name a journal type through this alias, and it stops compiling
+ * the moment a body gains a function, a symbol, or a class instance. See
+ * `docs/durability.md` §2.
+ */
+export type CloneableJournal<TKind extends string, TBodies extends Bodies<TKind>> =
+	BodiesAreCloneable<TKind, TBodies> extends true ? Journal<TKind, TBodies> : never;
+
 /** The body each kind carries. A caller names one body shape per kind. */
 export type Bodies<TKind extends string> = Record<TKind, unknown>;
 

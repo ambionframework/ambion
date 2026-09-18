@@ -158,11 +158,11 @@ The CLI job drives `packages/cli/bin/ambion.mjs`, verifies versions, rejects an
 unknown command, and packs all packages. This checks the artifact users will
 run, including package resolution and `files` lists.
 
-The live workflow runs the same scenarios on a real provider. It is scheduled
-weekly, available by dispatch, and runs for an in-repository pull request from
-a repository admin. It requires `ANTHROPIC_API_KEY`, uses `AMBION_MODEL` (the
-default is `anthropic/claude-sonnet-5`), and cancels a superseded run. Run it
-locally with:
+The live workflow runs the same scenarios on a real provider. It runs after a
+change lands on `main`, on a weekly schedule, and by dispatch. It does not run
+on a pull request, because a real-model run costs money. It requires
+`ANTHROPIC_API_KEY`, uses `AMBION_MODEL` (the default is
+`anthropic/claude-sonnet-5`), and cancels a superseded run. Run it locally with:
 
 ```sh
 pnpm test:live

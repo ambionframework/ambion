@@ -241,6 +241,31 @@ it('rebuilds an admitted visit after the adapter loses its cache on eviction', a
 	expect((await again.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(1);
 });
 
+it('rebuilds a present human handle after restart without a duplicate arrival', async () => {
+	const name = 'room-present-restart';
+	const stub = env.ROOM.get(env.ROOM.idFromName(name));
+	await stub.start({ name, agents: [] });
+	await stub.visit({ name: 'priya', identity: 'Project manager.' });
+	await stub.send({ from: 'priya', text: 'Before the restart.', key: 'q1' });
+	await runInDurableObject(stub, async (_instance, state) => {
+		state.abort('reconstruct with a present human');
+	}).catch(() => {});
+	const again = env.ROOM.get(env.ROOM.idFromName(name));
+	// Startup rebuilds the live handle from journal presence, so a send needs no
+	// second visit. The rebuild's visit is idempotent, so it adds no arrival.
+	const exchange = await again.send({ from: 'priya', text: 'After the restart.', key: 'q2' });
+	expect(exchange.owner).toBe('priya');
+	expect((await again.messages()).filter((message) => message.kind === 'arrived')).toHaveLength(1);
+	expect(
+		(await again.participants()).some(
+			(participant) =>
+				participant.kind === 'human' &&
+				participant.name === 'priya' &&
+				participant.presence === 'present',
+		),
+	).toBe(true);
+});
+
 it('keeps a departed human absent after restart', async () => {
 	const name = 'room-departure-restart';
 	const stub = env.ROOM.get(env.ROOM.idFromName(name));

@@ -108,6 +108,12 @@ function deliveryMatches(
 
 function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	const { activation, intent } = commit;
+	// This activation check is the primary guard. It pins the returned entry to
+	// this activation, so the later branches compare content within one
+	// activation only. The summary branch relies on it: it accepts any recorded
+	// recipient when the intent omits one, which is safe only because the
+	// activation already matches. Do not loosen this check without tightening
+	// that branch.
 	if (message.activationId !== activation) return false;
 	const parsed = decodeActivationId(activation);
 	if (parsed !== undefined && message.from !== parsed.seat) return false;
