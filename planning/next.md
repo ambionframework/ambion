@@ -333,8 +333,9 @@ code it describes, so the order follows the phases above.
        harness memory (D8, D4, F9). After phase 4 step 6.
 8. [ ] Retire the residue: rule citations, migration notes, package
        descriptions, comment voice, `demos/README.md` (C4). After 1.
-9. [ ] `README.md` around the workbench; package READMEs; the CLI README;
-       `CONTRIBUTING.md` with the Node floors. After phase 6 step 3.
+9. [ ] The `README.md` example typechecked against the packed entries;
+       package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
+       floors. After phase 6 step 3.
 10. [ ] A generated API reference per entry with a CI staleness check
         (D10). P2; after 9.
 11. [ ] The 0.1.0 changelog entry. Last.

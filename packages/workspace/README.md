@@ -14,8 +14,8 @@ This package owns workspace resources and two backends over
 pnpm add @ambionframework/ambion @ambionframework/workspace
 ```
 
-Installing requires a GitHub Packages read token; see the
-[repository README](https://github.com/ambionframework/ambion#install).
+Until the packages publish to npmjs, installation needs a GitHub Packages
+read token; see [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 
 ## Use
 

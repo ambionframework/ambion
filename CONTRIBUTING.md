@@ -3,9 +3,10 @@
 Repository installation requires Node **>= 26.4** and pnpm 10 because the
 CLI includes OpenTUI. The core library retains its Node **>= 22.19** floor.
 
-Ambion is a collaboration kernel for agents and humans. Read the [documentation index](docs/README.md) for current
-contracts and [the plan](planning/next.md) for the 0.1.0 scope, the work, and
-its evidence. [The backlog](planning/backlog.md) holds everything after.
+Ambion is a collaboration kernel for agents and humans. Read the
+[documentation index](docs/README.md) for current contracts and
+[the plan](planning/next.md) for the 0.1.0 scope, the work, and its
+evidence. [The backlog](planning/backlog.md) holds everything after.
 
 ```sh
 pnpm install
