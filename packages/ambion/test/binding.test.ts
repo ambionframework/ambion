@@ -8,9 +8,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
+import { messageDelivery } from '../src/room/delivery.ts';
 import { foldRoom } from '../src/room/fold.ts';
+import { foldPeople } from '../src/room/presence.ts';
+import { routes } from '../src/room/routing.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
+import type { Message } from '../src/types.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('../src/room/rules.verified.ts')>();
@@ -30,6 +34,9 @@ vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 		forgets: vi.fn(actual.forgets),
 		readyToSend: vi.fn(actual.readyToSend),
 		endingOf: vi.fn(actual.endingOf),
+		woken: vi.fn(actual.woken),
+		steers: vi.fn(actual.steers),
+		foldPresence: vi.fn(actual.foldPresence),
 	};
 });
 
@@ -212,5 +219,42 @@ describe('the room runs the verified rules', () => {
 		);
 		expect(asked().pending.map((wake) => wake.id)).toEqual([id]);
 		expect(foldRoom([composition, person, question, cancel], options).pending).toEqual([]);
+	});
+
+	it('wakes the seats woken names', () => {
+		const said: Message = { kind: 'said', seq: 3, at, from: 'priya', text: 'Question.' };
+		vi.mocked(rules.woken).mockReturnValueOnce(['nobody']);
+		expect(routes(said, asked(), new Map())).toEqual(['nobody']);
+		expect(routes(said, asked(), new Map())).toEqual(['product']);
+	});
+
+	it('steers a lease only when steers says so', () => {
+		const later: Message = { kind: 'said', seq: 5, at, from: 'priya', text: 'More.', wakes: [] };
+		const leases = claimed().leases;
+		vi.mocked(rules.steers).mockReturnValueOnce(false);
+		expect(messageDelivery(later, leases).steers).toEqual([]);
+		expect(messageDelivery(later, leases).steers).toEqual([{ seat: 'product', activation: id }]);
+	});
+
+	it('knows the people foldPresence answers', () => {
+		const ghost = {
+			name: 'ghost',
+			identity: '',
+			presence: 'absent',
+			since: undefined,
+			changedAt: undefined,
+			preferences: undefined,
+		} as const;
+		const arrival: Message = {
+			kind: 'arrived',
+			seq: 2,
+			at,
+			from: 'priya',
+			subject: 'priya',
+			identity: 'Person.',
+		};
+		vi.mocked(rules.foldPresence).mockReturnValueOnce(new Map([['ghost', ghost]]));
+		expect([...foldPeople([arrival]).keys()]).toEqual(['ghost']);
+		expect([...foldPeople([arrival]).keys()]).toEqual(['priya']);
 	});
 });

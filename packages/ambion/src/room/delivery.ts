@@ -1,9 +1,9 @@
 /** The recipients a message reaches, derived from journal facts. */
 
 import { decodeActivationId } from '../activation-id.ts';
-import type { Message, Seq } from '../types.ts';
+import type { Message } from '../types.ts';
 import type { LeaseHold } from './lease.ts';
-import { atWork as atWorkRule } from './rules.verified.ts';
+import { steers } from './rules.verified.ts';
 
 export interface MessageDelivery {
 	/** Seats the message explicitly wakes. */
@@ -23,26 +23,20 @@ export function messageDelivery(
 	leases: ReadonlyMap<string, LeaseHold>,
 ): MessageDelivery {
 	const wakes = new Set(message.wakes ?? []);
-	const steers = new Map<string, string>();
+	const steered = new Map<string, string>();
 	for (const lease of leases.values()) {
 		const parsed = decodeActivationId(lease.id);
+		if (parsed === undefined) continue;
+		const { source, seat } = parsed;
+		// The first lease at a seat, in journal order, is the one the message steers.
 		if (
-			parsed?.source === 'message' &&
-			parsed.seat !== message.from &&
-			!wakes.has(parsed.seat) &&
-			atWork(lease, message.seq)
+			steers(source, seat, message.from, wakes.has(seat), lease, message.seq) &&
+			!steered.has(seat)
 		)
-			if (!steers.has(parsed.seat)) steers.set(parsed.seat, lease.id);
+			steered.set(seat, lease.id);
 	}
 	return {
 		wakes: [...wakes],
-		steers: [...steers].map(([seat, activation]) => ({ seat, activation })),
+		steers: [...steered].map(([seat, activation]) => ({ seat, activation })),
 	};
-}
-
-/** The lease interval covered the message position. */
-function atWork(lease: LeaseHold, seq: Seq): boolean {
-	return lease.phase === 'ended'
-		? atWorkRule(lease.since, true, lease.until, seq)
-		: atWorkRule(lease.since, false, 0, seq);
 }

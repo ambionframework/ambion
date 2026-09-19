@@ -1,19 +1,31 @@
 /**
  * The room's routing rule, over what it is handed. `routes` decides who a
- * message wakes; `wakes` is the one comparison it reads off the attention
- * scale. Both are pure, so every test here hands them a value.
+ * message wakes; the verified `wakes` is the one comparison it reads off the
+ * attention scale. Both are pure, so every test here hands them a value.
  *
  * What the rule does inside a running room is `roster.test.ts` and
  * `presence.test.ts`; this file holds the rule itself.
  */
 import { describe, expect, it } from 'vitest';
 import type { RoomState } from '../src/room/fold.ts';
-import { routes, wakes } from '../src/room/routing.ts';
+import { routes } from '../src/room/routing.ts';
+import { isNamed, reachOf, wakes as wakesRule } from '../src/room/rules.verified.ts';
 import type { Attention, Message } from '../src/types.ts';
 
 describe('what a message reaches', () => {
 	const at = '2026-01-01T09:00:00.000Z';
 	const seat = (name: string, attention: Attention) => ({ name, attention });
+	// The three rule calls `routes` makes for one seat, in one place.
+	const wakes = (
+		who: { name: string; attention: Attention },
+		target: string | undefined,
+		m: Message,
+	) =>
+		wakesRule(
+			who.attention,
+			isNamed(target, who.name),
+			reachOf(m.kind, m.kind === 'said' && m.to !== undefined),
+		);
 	const said = (to?: string): Message => ({
 		kind: 'said',
 		seq: 2,

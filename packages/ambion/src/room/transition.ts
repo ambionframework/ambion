@@ -19,11 +19,11 @@ import {
 	acknowledged,
 	admitsClose,
 	coversExchange,
+	speechFreshness as freshnessRule,
 	leaseExpiry,
 	mayEnd,
 	onRecord,
 	permits,
-	speechFreshness as freshnessRule,
 } from './rules.verified.ts';
 
 /** A committed event includes the position assigned by the journal. */

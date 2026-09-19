@@ -1,8 +1,12 @@
 import type { JournalEntry as Entry } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { ActivationSource } from '../src/activation-id.ts';
 import type { LeaseChange } from '../src/journal/events.ts';
+import type { ActivationSpec, CommitRequest } from '../src/protocol.ts';
 import { cameToNothing, foldLeases, type LeaseHold, pendingWakes } from '../src/room/lease.ts';
+import type { PersonState } from '../src/room/presence.ts';
 import {
+	type Attention,
 	applyChange,
 	type Change,
 	cancelHold,
@@ -12,18 +16,23 @@ import {
 	type LeaseEndReason,
 	type LeasePhase,
 	leaseExpiry,
+	type MessageKind,
 	mayEnd,
-	permits,
+	type Person,
+	type Presence,
 	type Purpose,
-	schedule,
+	permits,
 	type Source,
+	schedule,
 	stillExpired,
 	wakeAnswered,
 } from '../src/room/rules.verified.ts';
-import type { ActivationSource } from '../src/activation-id.ts';
-import type { CommitRequest } from '../src/protocol.ts';
-import type { ActivationSpec } from '../src/protocol.ts';
-import type { EndReason, Message } from '../src/types.ts';
+import type {
+	EndReason,
+	Message,
+	PresenceStatus,
+	Attention as PublicAttention,
+} from '../src/types.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
@@ -43,6 +52,11 @@ describe('verified rules', () => {
 		expectTypeOf<Intent>().toEqualTypeOf<CommitRequest['intent']['kind']>();
 		expectTypeOf<Change>().toEqualTypeOf<LeaseChange>();
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
+		expectTypeOf<Attention>().toEqualTypeOf<PublicAttention>();
+		expectTypeOf<MessageKind>().toEqualTypeOf<Message['kind']>();
+		expectTypeOf<Presence>().toEqualTypeOf<PresenceStatus>();
+		expectTypeOf<Person>().toMatchTypeOf<PersonState>();
+		expectTypeOf<PersonState>().toMatchTypeOf<Person>();
 		// The room's hold is the rule's hold plus the derived `cancelled` marker.
 		expectTypeOf<Hold>().toMatchTypeOf<LeaseHold>();
 		expectTypeOf<LeaseHold>().toMatchTypeOf<Hold>();

@@ -36,6 +36,18 @@ datatype LiveLease = LiveLease(source: Source, seat: string, phase: LeasePhase, 
 
 datatype OwedActivation = OwedActivation(source: Source, seat: string)
 
+datatype Attention = none | named | broadcast | presence
+
+datatype MessageKind = said | seated | unseated | arrived | left | summary
+
+datatype Seat = Seat(name: string, attention: Attention)
+
+datatype Presence = present | absent
+
+datatype Person = Person(name: string, identity: string, presence: Presence, since: Option<int>, changedAt: Option<string>, preferences: Option<string>)
+
+datatype PresenceEntry = PresenceEntry(kind: MessageKind, name: string, seq_: int, at: string, identity: Option<string>, preferences: Option<string>)
+
 function expired(expiry: int, now: int): bool
 {
   (expiry <= now)
@@ -703,6 +715,447 @@ lemma exchangeLive_ensures(leases: seq<LiveLease>, due: seq<OwedActivation>, now
 {
 }
 
+function width(attention: Attention): int
+{
+  if attention.named? then
+    1
+  else
+    if attention.broadcast? then
+      2
+    else
+      if attention.presence? then
+        3
+      else
+        0
+}
+
+lemma width_ensures(attention: Attention)
+  ensures (0 <= width(attention))
+  ensures (width(attention) <= 3)
+  ensures ((width(attention) == 0) <==> attention.none?)
+  ensures ((width(attention) == 1) <==> attention.named?)
+  ensures ((width(attention) == 2) <==> attention.broadcast?)
+  ensures ((width(attention) == 3) <==> attention.presence?)
+{
+}
+
+function reachOf(kind: MessageKind, directed: bool): int
+{
+  if kind.summary? then
+    0
+  else
+    if (!kind.said?) then
+      3
+    else
+      if directed then
+        1
+      else
+        2
+}
+
+lemma reachOf_ensures(kind: MessageKind, directed: bool)
+  ensures (0 <= reachOf(kind, directed))
+  ensures (reachOf(kind, directed) <= 3)
+  ensures (kind.summary? ==> (reachOf(kind, directed) == 0))
+  ensures (kind.said? ==> directed ==> (reachOf(kind, directed) == 1))
+  ensures (kind.said? ==> !(directed) ==> (reachOf(kind, directed) == 2))
+  ensures ((!kind.said?) ==> (!kind.summary?) ==> (reachOf(kind, directed) == 3))
+{
+}
+
+function targetOf(kind: MessageKind, to: Option<string>, subject: Option<string>): Option<string>
+{
+  if kind.said? then
+    to
+  else
+    if kind.seated? then
+      subject
+    else
+      None
+}
+
+lemma targetOf_ensures(kind: MessageKind, to: Option<string>, subject: Option<string>)
+  ensures (kind.said? ==> (match to { case Some(i_) => false case None => true }) ==> (match targetOf(kind, to, subject) { case Some(i_) => false case None => true }))
+  ensures (match to { case Some(i_to_val) => (kind.said? ==> (match targetOf(kind, to, subject) { case Some(i_) => true case None => false })) case None => true })
+  ensures (match targetOf(kind, to, subject) { case Some(i_result_val) => (match to { case Some(i_to_val) => (kind.said? ==> (i_result_val == i_to_val)) case None => true }) case None => true })
+  ensures (match subject { case Some(i_subject_val) => (kind.seated? ==> (match targetOf(kind, to, subject) { case Some(i_) => true case None => false })) case None => true })
+  ensures (match targetOf(kind, to, subject) { case Some(i_result_val) => (match subject { case Some(i_subject_val) => (kind.seated? ==> (i_result_val == i_subject_val)) case None => true }) case None => true })
+  ensures ((!kind.said?) ==> (!kind.seated?) ==> (match targetOf(kind, to, subject) { case Some(i_) => false case None => true }))
+{
+}
+
+function isNamed(target: Option<string>, name: string): bool
+{
+  match target {
+    case Some(i_target_val) =>
+      (i_target_val == name)
+    case None =>
+      false
+  }
+}
+
+lemma isNamed_ensures(target: Option<string>, name: string)
+  ensures ((match target { case Some(i_) => false case None => true }) ==> !(isNamed(target, name)))
+  ensures (match target { case Some(i_target_val) => (isNamed(target, name) <==> (i_target_val == name)) case None => true })
+{
+}
+
+function isAuthor(author: Option<string>, name: string): bool
+{
+  match author {
+    case Some(i_author_val) =>
+      (i_author_val == name)
+    case None =>
+      false
+  }
+}
+
+lemma isAuthor_ensures(author: Option<string>, name: string)
+  ensures ((match author { case Some(i_) => false case None => true }) ==> !(isAuthor(author, name)))
+  ensures (match author { case Some(i_author_val) => (isAuthor(author, name) <==> (i_author_val == name)) case None => true })
+{
+}
+
+function wakes(attention: Attention, named: bool, reach: int): bool
+  requires (0 <= reach)
+  requires (reach <= 3)
+{
+  (named || (if (reach == 0) then false else (if (width(attention) < reach) then false else (reach != 1))))
+}
+
+lemma wakes_ensures(attention: Attention, named: bool, reach: int)
+  requires (0 <= reach)
+  requires (reach <= 3)
+  ensures (named ==> wakes(attention, named, reach))
+  ensures (!(named) ==> (reach == 0) ==> !(wakes(attention, named, reach)))
+  ensures (!(named) ==> (reach == 1) ==> !(wakes(attention, named, reach)))
+  ensures (!(named) ==> (reach == 2) ==> (wakes(attention, named, reach) <==> (attention.broadcast? || attention.presence?)))
+  ensures (!(named) ==> (reach == 3) ==> (wakes(attention, named, reach) <==> attention.presence?))
+  ensures (!(named) ==> (reach >= 2) ==> (wakes(attention, named, reach) <==> (width(attention) >= reach)))
+  ensures (!(named) ==> wakes(attention, named, reach) ==> (width(attention) >= reach))
+{
+}
+
+function wokenBy(seat: Seat, author: Option<string>, target: Option<string>, reach: int, busy: bool): bool
+  requires (0 <= reach)
+  requires (reach <= 3)
+{
+  if busy then
+    false
+  else
+    if isAuthor(author, seat.name) then
+      false
+    else
+      wakes(seat.attention, isNamed(target, seat.name), reach)
+}
+
+lemma wokenBy_ensures(seat: Seat, author: Option<string>, target: Option<string>, reach: int, busy: bool)
+  requires (0 <= reach)
+  requires (reach <= 3)
+  ensures (busy ==> !(wokenBy(seat, author, target, reach, busy)))
+  ensures (isAuthor(author, seat.name) ==> !(wokenBy(seat, author, target, reach, busy)))
+  ensures (!(busy) ==> !(isAuthor(author, seat.name)) ==> isNamed(target, seat.name) ==> wokenBy(seat, author, target, reach, busy))
+  ensures ((reach == 1) ==> wokenBy(seat, author, target, reach, busy) ==> isNamed(target, seat.name))
+  ensures ((reach == 0) ==> wokenBy(seat, author, target, reach, busy) ==> isNamed(target, seat.name))
+  ensures (!(busy) ==> !(isAuthor(author, seat.name)) ==> (wokenBy(seat, author, target, reach, busy) <==> wakes(seat.attention, isNamed(target, seat.name), reach)))
+{
+}
+
+function held(busy: seq<string>, name: string): bool
+{
+  (name in busy)
+}
+
+lemma held_ensures(busy: seq<string>, name: string)
+  ensures (held(busy, name) <==> exists i: int :: (((0 <= i) && (i < |busy|)) && (busy[i] == name)))
+{
+}
+
+function onRoster(roster: seq<Seat>, name: string): bool
+{
+  (exists seat :: seat in roster && (seat.name == name))
+}
+
+lemma onRoster_ensures(roster: seq<Seat>, name: string)
+  ensures (onRoster(roster, name) <==> exists i: int :: (((0 <= i) && (i < |roster|)) && (roster[i].name == name)))
+{
+}
+
+function append(names: seq<string>, name: string): seq<string>
+{
+  (names + [name])
+}
+
+lemma append_ensures(names: seq<string>, name: string)
+  ensures (|append(names, name)| == (|names| + 1))
+  ensures (append(names, name)[|names|] == name)
+  ensures forall i: int :: ((0 <= i) ==> (i < |names|) ==> (append(names, name)[i] == names[i]))
+{
+}
+
+function wokenUpTo(roster: seq<Seat>, r: int, author: Option<string>, target: Option<string>, reach: int, busy: seq<string>): seq<string>
+  requires (0 <= reach)
+  requires (reach <= 3)
+  requires (0 <= r)
+  requires (r <= |roster|)
+  decreases r
+{
+  if (r == 0) then
+    []
+  else
+    var seat := roster[(r - 1)];
+    var before := wokenUpTo(roster, (r - 1), author, target, reach, busy);
+    if wokenBy(seat, author, target, reach, held(busy, seat.name)) then
+      append(before, seat.name)
+    else
+      before
+}
+
+lemma wokenUpTo_ensures(roster: seq<Seat>, r: int, author: Option<string>, target: Option<string>, reach: int, busy: seq<string>)
+  requires (0 <= reach)
+  requires (reach <= 3)
+  requires (0 <= r)
+  requires (r <= |roster|)
+  decreases r
+  ensures (|wokenUpTo(roster, r, author, target, reach, busy)| <= r)
+  ensures forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> !(isAuthor(author, wokenUpTo(roster, r, author, target, reach, busy)[i])))
+  ensures forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> !(held(busy, wokenUpTo(roster, r, author, target, reach, busy)[i])))
+  ensures forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> onRoster(roster, wokenUpTo(roster, r, author, target, reach, busy)[i]))
+  ensures ((reach == 1) ==> forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> isNamed(target, wokenUpTo(roster, r, author, target, reach, busy)[i])))
+  ensures ((reach == 0) ==> forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> isNamed(target, wokenUpTo(roster, r, author, target, reach, busy)[i])))
+  ensures forall s: int :: ((0 <= s) ==> (s < r) ==> wokenBy(roster[s], author, target, reach, held(busy, roster[s].name)) ==> exists i: int :: (((0 <= i) && (i < |wokenUpTo(roster, r, author, target, reach, busy)|)) && (wokenUpTo(roster, r, author, target, reach, busy)[i] == roster[s].name)))
+{
+  if r > 0 {
+    wokenUpTo_ensures(roster, r - 1, author, target, reach, busy);
+    if wokenBy(roster[r - 1], author, target, reach, held(busy, roster[r - 1].name)) {
+      assert wokenUpTo(roster, r, author, target, reach, busy) == wokenUpTo(roster, r - 1, author, target, reach, busy) + [roster[r - 1].name];
+      forall s | 0 <= s < r && wokenBy(roster[s], author, target, reach, held(busy, roster[s].name))
+        ensures exists i: int :: 0 <= i && i < |wokenUpTo(roster, r, author, target, reach, busy)| && wokenUpTo(roster, r, author, target, reach, busy)[i] == roster[s].name
+      {
+        if s < r - 1 {
+          var i0: int :| 0 <= i0 && i0 < |wokenUpTo(roster, r - 1, author, target, reach, busy)| && wokenUpTo(roster, r - 1, author, target, reach, busy)[i0] == roster[s].name;
+          assert wokenUpTo(roster, r, author, target, reach, busy)[i0] == roster[s].name;
+        } else {
+          assert wokenUpTo(roster, r, author, target, reach, busy)[|wokenUpTo(roster, r - 1, author, target, reach, busy)|] == roster[r - 1].name;
+        }
+      }
+    } else {
+      assert wokenUpTo(roster, r, author, target, reach, busy) == wokenUpTo(roster, r - 1, author, target, reach, busy);
+    }
+  }
+}
+
+function woken(roster: seq<Seat>, author: Option<string>, target: Option<string>, reach: int, busy: seq<string>): seq<string>
+  requires (0 <= reach)
+  requires (reach <= 3)
+{
+  wokenUpTo(roster, |roster|, author, target, reach, busy)
+}
+
+lemma woken_ensures(roster: seq<Seat>, author: Option<string>, target: Option<string>, reach: int, busy: seq<string>)
+  requires (0 <= reach)
+  requires (reach <= 3)
+  ensures (|woken(roster, author, target, reach, busy)| <= |roster|)
+  ensures forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> !(isAuthor(author, woken(roster, author, target, reach, busy)[i])))
+  ensures forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> !(held(busy, woken(roster, author, target, reach, busy)[i])))
+  ensures forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> onRoster(roster, woken(roster, author, target, reach, busy)[i]))
+  ensures ((reach == 1) ==> forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> isNamed(target, woken(roster, author, target, reach, busy)[i])))
+  ensures ((reach == 0) ==> forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> isNamed(target, woken(roster, author, target, reach, busy)[i])))
+  ensures forall s: int :: ((0 <= s) ==> (s < |roster|) ==> wokenBy(roster[s], author, target, reach, held(busy, roster[s].name)) ==> exists i: int :: (((0 <= i) && (i < |woken(roster, author, target, reach, busy)|)) && (woken(roster, author, target, reach, busy)[i] == roster[s].name)))
+{
+  wokenUpTo_ensures(roster, |roster|, author, target, reach, busy);
+}
+
+function rosterFor(roster: seq<Seat>, seated: bool, subject: string, attention: Option<Attention>): seq<Seat>
+{
+  if !(seated) then
+    roster
+  else
+    (roster + [Seat(subject, (match attention { case Some(i_attention_val) => i_attention_val case None => Attention.broadcast }))])
+}
+
+lemma rosterFor_ensures(roster: seq<Seat>, seated: bool, subject: string, attention: Option<Attention>)
+  ensures (!(seated) ==> (rosterFor(roster, seated, subject, attention) == roster))
+  ensures (seated ==> (|rosterFor(roster, seated, subject, attention)| == (|roster| + 1)))
+  ensures (seated ==> (rosterFor(roster, seated, subject, attention)[|roster|].name == subject))
+  ensures (seated ==> (match attention { case Some(i_) => false case None => true }) ==> rosterFor(roster, seated, subject, attention)[|roster|].attention.broadcast?)
+  ensures (match attention { case Some(i_attention_val) => (seated ==> (rosterFor(roster, seated, subject, attention)[|roster|].attention == i_attention_val)) case None => true })
+  ensures forall i: int :: ((0 <= i) ==> (i < |roster|) ==> (rosterFor(roster, seated, subject, attention)[i] == roster[i]))
+{
+}
+
+function atWorkHold(hold: Hold, seq_: int): bool
+{
+  match hold {
+    case running(i_hold_id, i_hold_at, i_hold_claimedAt, i_hold_since, i_hold_readThrough, i_hold_expiresAt) =>
+      atWork(i_hold_since, false, 0, seq_)
+    case ended(i_hold_id, i_hold_at, i_hold_claimedAt, i_hold_since, i_hold_readThrough, i_hold_reason, i_hold_until) =>
+      atWork(i_hold_since, true, i_hold_until, seq_)
+  }
+}
+
+lemma atWorkHold_ensures(hold: Hold, seq_: int)
+  ensures (atWorkHold(hold, seq_) ==> (hold.since < seq_))
+  ensures (hold.running? ==> (atWorkHold(hold, seq_) <==> (hold.since < seq_)))
+  ensures (hold.ended? ==> (atWorkHold(hold, seq_) <==> ((hold.since < seq_) && (seq_ <= hold.until))))
+{
+}
+
+function steers(source: Source, seat: string, author: Option<string>, woken: bool, hold: Hold, seq_: int): bool
+{
+  if (!source.message?) then
+    false
+  else
+    if woken then
+      false
+    else
+      if isAuthor(author, seat) then
+        false
+      else
+        atWorkHold(hold, seq_)
+}
+
+lemma steers_ensures(source: Source, seat: string, author: Option<string>, woken: bool, hold: Hold, seq_: int)
+  ensures (steers(source, seat, author, woken, hold, seq_) ==> source.message?)
+  ensures (steers(source, seat, author, woken, hold, seq_) ==> !(woken))
+  ensures (isAuthor(author, seat) ==> !(steers(source, seat, author, woken, hold, seq_)))
+  ensures (steers(source, seat, author, woken, hold, seq_) ==> atWorkHold(hold, seq_))
+  ensures (source.message? ==> !(woken) ==> !(isAuthor(author, seat)) ==> atWorkHold(hold, seq_) ==> steers(source, seat, author, woken, hold, seq_))
+{
+}
+
+function present(person: Option<Person>): bool
+{
+  match person {
+    case Some(i_person_val) =>
+      i_person_val.presence.present?
+    case None =>
+      false
+  }
+}
+
+lemma present_ensures(person: Option<Person>)
+  ensures ((match person { case Some(i_) => false case None => true }) ==> !(present(person)))
+  ensures (match person { case Some(i_person_val) => (present(person) <==> i_person_val.presence.present?) case None => true })
+{
+}
+
+function identityOn(known: Option<Person>, identity: Option<string>): string
+{
+  match identity {
+    case Some(i_identity_val) =>
+      i_identity_val
+    case None =>
+      match known {
+        case Some(i_known_val) =>
+          i_known_val.identity
+        case None =>
+          ""
+      }
+  }
+}
+
+lemma identityOn_ensures(known: Option<Person>, identity: Option<string>)
+  ensures (match identity { case Some(i_identity_val) => (identityOn(known, identity) == i_identity_val) case None => true })
+  ensures (match known { case Some(i_known_val) => ((match identity { case Some(i_) => false case None => true }) ==> (identityOn(known, identity) == i_known_val.identity)) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> (match identity { case Some(i_) => false case None => true }) ==> (identityOn(known, identity) == ""))
+{
+}
+
+function preferencesOn(known: Option<Person>, preferences: Option<string>): Option<string>
+{
+  match preferences {
+    case Some(i_preferences_val) =>
+      Some(i_preferences_val)
+    case None =>
+      match known {
+        case Some(i_known_val) =>
+          i_known_val.preferences
+        case None =>
+          None
+      }
+  }
+}
+
+lemma preferencesOn_ensures(known: Option<Person>, preferences: Option<string>)
+  ensures (match preferences { case Some(i_preferences_val) => (match preferencesOn(known, preferences) { case Some(i_value) => (i_value == i_preferences_val) case None => false }) case None => true })
+  ensures (match known { case Some(i_known_val) => ((match preferences { case Some(i_) => false case None => true }) ==> (preferencesOn(known, preferences) == i_known_val.preferences)) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> (match preferences { case Some(i_) => false case None => true }) ==> (match preferencesOn(known, preferences) { case Some(i_) => false case None => true }))
+{
+}
+
+function arrive(known: Option<Person>, entry: PresenceEntry): Person
+{
+  Person(entry.name, identityOn(known, entry.identity), Presence.present, (match known { case Some(i_known_val) => i_known_val.since case None => Option.None }), Some(entry.at), preferencesOn(known, entry.preferences))
+}
+
+lemma arrive_ensures(known: Option<Person>, entry: PresenceEntry)
+  ensures arrive(known, entry).presence.present?
+  ensures (arrive(known, entry).name == entry.name)
+  ensures (match arrive(known, entry).changedAt { case Some(i_value) => (i_value == entry.at) case None => false })
+  ensures (match known { case Some(i_known_val) => (arrive(known, entry).since == i_known_val.since) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> (match arrive(known, entry).since { case Some(i_) => false case None => true }))
+  ensures (match entry.identity { case Some(i_entry_identity_val) => (arrive(known, entry).identity == i_entry_identity_val) case None => true })
+  ensures (match known { case Some(i_known_val) => ((match entry.identity { case Some(i_) => false case None => true }) ==> (arrive(known, entry).identity == i_known_val.identity)) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> (match entry.identity { case Some(i_) => false case None => true }) ==> (arrive(known, entry).identity == ""))
+  ensures (match entry.preferences { case Some(i_entry_preferences_val) => (match arrive(known, entry).preferences { case Some(i_value) => (i_value == i_entry_preferences_val) case None => false }) case None => true })
+  ensures (match known { case Some(i_known_val) => ((match entry.preferences { case Some(i_) => false case None => true }) ==> (arrive(known, entry).preferences == i_known_val.preferences)) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> (match entry.preferences { case Some(i_) => false case None => true }) ==> (match arrive(known, entry).preferences { case Some(i_) => false case None => true }))
+{
+}
+
+function depart(known: Option<Person>, entry: PresenceEntry): Option<Person>
+{
+  match known {
+    case Some(i_known_val) =>
+      Some(Person(entry.name, i_known_val.identity, Presence.absent, Some(entry.seq_), Some(entry.at), i_known_val.preferences))
+    case None =>
+      None
+  }
+}
+
+lemma depart_ensures(known: Option<Person>, entry: PresenceEntry)
+  ensures ((match known { case Some(i_) => false case None => true }) ==> (match depart(known, entry) { case Some(i_) => false case None => true }))
+  ensures (match known { case Some(i_known_val) => (match depart(known, entry) { case Some(i_) => true case None => false }) case None => true })
+  ensures (match depart(known, entry) { case Some(i_result_val) => i_result_val.presence.absent? case None => true })
+  ensures (match depart(known, entry) { case Some(i_result_val) => (i_result_val.name == entry.name) case None => true })
+  ensures (match depart(known, entry) { case Some(i_result_val) => (match i_result_val.since { case Some(i_value) => (i_value == entry.seq_) case None => false }) case None => true })
+  ensures (match depart(known, entry) { case Some(i_result_val) => (match i_result_val.changedAt { case Some(i_value) => (i_value == entry.at) case None => false }) case None => true })
+  ensures (match depart(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (i_result_val.identity == i_known_val.identity) case None => true }) case None => true })
+  ensures (match depart(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (i_result_val.preferences == i_known_val.preferences) case None => true }) case None => true })
+{
+}
+
+function stepPerson(known: Option<Person>, entry: PresenceEntry): Option<Person>
+{
+  if entry.kind.arrived? then
+    Some(arrive(known, entry))
+  else
+    if entry.kind.left? then
+      depart(known, entry)
+    else
+      known
+}
+
+lemma stepPerson_ensures(known: Option<Person>, entry: PresenceEntry)
+  ensures (entry.kind.arrived? ==> (match stepPerson(known, entry) { case Some(i_) => true case None => false }))
+  ensures (entry.kind.arrived? ==> present(stepPerson(known, entry)))
+  ensures (entry.kind.left? ==> !(present(stepPerson(known, entry))))
+  ensures (entry.kind.left? ==> (match known { case Some(i_) => false case None => true }) ==> (match stepPerson(known, entry) { case Some(i_) => false case None => true }))
+  ensures (match known { case Some(i_known_val) => (entry.kind.left? ==> (match stepPerson(known, entry) { case Some(i_) => true case None => false })) case None => true })
+  ensures ((!entry.kind.arrived?) ==> (!entry.kind.left?) ==> (present(stepPerson(known, entry)) <==> present(known)))
+  ensures (match stepPerson(known, entry) { case Some(i_result_val) => ((entry.kind.arrived? || entry.kind.left?) ==> (i_result_val.name == entry.name)) case None => true })
+  ensures (match stepPerson(known, entry) { case Some(i_result_val) => ((entry.kind.arrived? || entry.kind.left?) ==> (match i_result_val.changedAt { case Some(i_value) => (i_value == entry.at) case None => false })) case None => true })
+  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (entry.kind.left? ==> (match i_result_val.since { case Some(i_value) => (i_value == entry.seq_) case None => false })) case None => true })
+  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (entry.kind.arrived? ==> (i_result_val.since == i_known_val.since)) case None => true }) case None => true })
+  ensures (match stepPerson(known, entry) { case Some(i_result_val) => ((match known { case Some(i_) => false case None => true }) ==> entry.kind.arrived? ==> (match i_result_val.since { case Some(i_) => false case None => true })) case None => true })
+  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match entry.identity { case Some(i_entry_identity_val) => (entry.kind.arrived? ==> (i_result_val.identity == i_entry_identity_val)) case None => true }) case None => true })
+  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => ((match entry.identity { case Some(i_) => false case None => true }) ==> entry.kind.arrived? ==> (i_result_val.identity == i_known_val.identity)) case None => true }) case None => true })
+  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (entry.kind.left? ==> (i_result_val.identity == i_known_val.identity)) case None => true }) case None => true })
+  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (entry.kind.left? ==> (i_result_val.preferences == i_known_val.preferences)) case None => true }) case None => true })
+{
+}
+
 method latest(times: seq<int>, floor: int) returns (res: int)
   requires (floor >= 0)
   ensures (res >= floor)
@@ -750,6 +1203,32 @@ method forgets(sentIds: seq<string>, dueIds: seq<string>) returns (res: seq<stri
     i := (i + 1);
   }
   return out;
+}
+
+method foldPresence(entries: seq<PresenceEntry>) returns (res: map<string, Person>)
+  ensures forall n :: ((n in res) ==> (present(Some(res[n])) <==> exists k: int :: (((((0 <= k) && (k < |entries|)) && (entries[k].name == n)) && entries[k].kind.arrived?) && forall j: int :: ((k < j) ==> (j < |entries|) ==> (entries[j].name == n) ==> (!entries[j].kind.left?)))))
+  ensures forall k: int :: ((0 <= k) ==> (k < |entries|) ==> entries[k].kind.arrived? ==> (entries[k].name in res))
+{
+  var people: map<string, Person> := map[];
+  var i := 0;
+  while (i < |entries|)
+    invariant (0 <= i)
+    invariant (i <= |entries|)
+    invariant forall n :: ((n in people) ==> (present(Some(people[n])) <==> exists k: int :: (((((0 <= k) && (k < i)) && (entries[k].name == n)) && entries[k].kind.arrived?) && forall j: int :: ((k < j) ==> (j < i) ==> (entries[j].name == n) ==> (!entries[j].kind.left?)))))
+    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> entries[k].kind.arrived? ==> (entries[k].name in people))
+  {
+    var entry := entries[i];
+    var i_t0 := stepPerson((if entry.name in people then Some(people[entry.name]) else None), entry);
+    var next := i_t0;
+    match next {
+      case Some(i_next_val) =>
+        people := people[entry.name := i_next_val];
+      case None =>
+
+    }
+    i := (i + 1);
+  }
+  return people;
 }
 
 // ---- Proof additions (hand-written, additions-only) ----------------------
@@ -836,4 +1315,67 @@ lemma AttemptIdsAreFreshFromRest(es: seq<AttemptEvent>)
   ensures nextAttempt(attemptFold(Attempts(0, None, {}), es).count) !in attemptFold(Attempts(0, None, {}), es).ended
 {
   AttemptIdsAreFresh(Attempts(0, None, {}), es);
+}
+
+
+// ---- Proof additions (hand-written, additions-only) ----------------------
+
+// The scale is monotone: a wider seat hears everything a narrower one hears,
+// except a message that names the narrower seat (`named` is false on both sides).
+lemma HearsWider(narrow: Attention, wide: Attention, reach: int)
+  requires 0 <= reach <= 3
+  requires width(narrow) <= width(wide)
+  ensures wakes(narrow, false, reach) ==> wakes(wide, false, reach)
+{
+}
+
+// A summary wakes nobody: it names no seat and reaches no seat.
+lemma SummaryWakesNobody(roster: seq<Seat>, author: Option<string>, to: Option<string>, subject: Option<string>, directed: bool, busy: seq<string>)
+  ensures |woken(roster, author, targetOf(MessageKind.summary, to, subject), reachOf(MessageKind.summary, directed), busy)| == 0
+{
+  var target := targetOf(MessageKind.summary, to, subject);
+  var reach := reachOf(MessageKind.summary, directed);
+  targetOf_ensures(MessageKind.summary, to, subject);
+  reachOf_ensures(MessageKind.summary, directed);
+  woken_ensures(roster, author, target, reach, busy);
+  var w := woken(roster, author, target, reach, busy);
+  if |w| > 0 {
+    isNamed_ensures(target, w[0]);
+    assert false;
+  }
+}
+
+// A directed say wakes at most the seat it addresses.
+lemma DirectedSayWakesOnlyTarget(roster: seq<Seat>, author: Option<string>, to: string, subject: Option<string>, busy: seq<string>)
+  ensures forall i :: 0 <= i < |woken(roster, author, targetOf(MessageKind.said, Some(to), subject), reachOf(MessageKind.said, true), busy)| ==> woken(roster, author, targetOf(MessageKind.said, Some(to), subject), reachOf(MessageKind.said, true), busy)[i] == to
+{
+  var target := targetOf(MessageKind.said, Some(to), subject);
+  var reach := reachOf(MessageKind.said, true);
+  targetOf_ensures(MessageKind.said, Some(to), subject);
+  reachOf_ensures(MessageKind.said, true);
+  woken_ensures(roster, author, target, reach, busy);
+  var w := woken(roster, author, target, reach, busy);
+  forall i | 0 <= i < |w| ensures w[i] == to {
+    isNamed_ensures(target, w[i]);
+  }
+}
+
+// A seating wakes the seat it seats: the newcomer is on the roster the routing
+// reads, the seating names it, and an idle non-author target is always woken.
+lemma SeatingWakesNewcomer(roster: seq<Seat>, author: Option<string>, subject: string, attention: Option<Attention>, busy: seq<string>)
+  requires !isAuthor(author, subject)
+  requires !held(busy, subject)
+  ensures exists i :: 0 <= i < |woken(rosterFor(roster, true, subject, attention), author, targetOf(MessageKind.seated, None, Some(subject)), reachOf(MessageKind.seated, false), busy)| && woken(rosterFor(roster, true, subject, attention), author, targetOf(MessageKind.seated, None, Some(subject)), reachOf(MessageKind.seated, false), busy)[i] == subject
+{
+  var r := rosterFor(roster, true, subject, attention);
+  var target := targetOf(MessageKind.seated, None, Some(subject));
+  var reach := reachOf(MessageKind.seated, false);
+  rosterFor_ensures(roster, true, subject, attention);
+  targetOf_ensures(MessageKind.seated, None, Some(subject));
+  reachOf_ensures(MessageKind.seated, false);
+  var s := |roster|;
+  assert r[s].name == subject;
+  isNamed_ensures(target, subject);
+  wokenBy_ensures(r[s], author, target, reach, held(busy, subject));
+  woken_ensures(r, author, target, reach, busy);
 }
