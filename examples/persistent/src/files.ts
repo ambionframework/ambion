@@ -1,4 +1,4 @@
-import type { Workspace } from '@ambionframework/workspace';
+import { BACKGROUND_CONTEXT, type Workspace } from '@ambionframework/workspace';
 import { fail } from './rooms.ts';
 
 const browser = { name: 'assistant', identity: 'Workspace browser' };
@@ -9,7 +9,7 @@ export async function listFiles(workspace: Workspace) {
 		const pending = ['/'];
 		let visited = 0;
 		while (pending.length > 0 && visited < 500) {
-			const result = await env.listDir(pending.shift() ?? '/');
+			const result = await env.listDir(pending.shift() ?? '/', BACKGROUND_CONTEXT);
 			if (!result.ok) throw result.error;
 			const entries = result.value.slice(0, 500 - visited);
 			visited += entries.length;
@@ -41,11 +41,11 @@ export async function readFile(workspace: Workspace, path: string) {
 		let prefix = '';
 		for (const part of parts) {
 			prefix += `/${part}`;
-			const info = await env.fileInfo(prefix);
+			const info = await env.fileInfo(prefix, BACKGROUND_CONTEXT);
 			if (!info.ok) fail(404, 'File not found.');
 			checkFile(info.value);
 		}
-		const result = await env.readTextFile(path);
+		const result = await env.readTextFile(path, BACKGROUND_CONTEXT);
 		if (!result.ok) fail(400, result.error.message);
 		return { path, text: result.value, truncated: false };
 	});

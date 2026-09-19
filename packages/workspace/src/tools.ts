@@ -4,10 +4,30 @@ import {
 	type ToolBundle,
 	type ToolContext,
 } from '@ambionframework/ambion';
-import type { AgentHarnessTool, ExecutionToolContext } from '@earendil-works/pi-agent-core';
+import type {
+	AgentHarnessTool,
+	AgentHarnessToolInvocation,
+	ExecutionToolContext,
+} from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import type { WorkspaceResource } from './resource.ts';
 
 type HarnessTool = AgentHarnessTool<ExecutionToolContext>;
+
+/**
+ * A room owns its own idempotency through the journal, so a harness tool over
+ * the workspace keeps no durable replay memo: `getMemo` reads nothing and
+ * `setMemo` drops its value.
+ */
+function invocationOf(callId: string): AgentHarnessToolInvocation {
+	return {
+		invocationId: callId,
+		operationId: callId,
+		turnId: callId,
+		getMemo: async () => undefined,
+		setMemo: async () => undefined,
+	};
+}
 
 /** Bind a Pi harness tool through the owner's whole-operation queue. */
 function bindTool(tool: HarnessTool, use: WorkspaceResource['use']): AmbionTool {
@@ -18,12 +38,25 @@ function bindTool(tool: HarnessTool, use: WorkspaceResource['use']): AmbionTool 
 		...(tool.label === undefined ? {} : { label: tool.label }),
 		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
 		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
-		execute: async (params, context: ToolContext) =>
-			use(
-				context.agent,
-				(env) => tool.execute(context.callId, params, context.signal, context.onUpdate, { env }),
-				context.signal,
-			),
+		execute: async (params, ctx: ToolContext) => {
+			const context =
+				ctx.signal === undefined
+					? BACKGROUND_CONTEXT
+					: withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
+			return use(
+				ctx.agent,
+				(env) =>
+					tool.execute(
+						ctx.callId,
+						params,
+						ctx.onUpdate ?? (() => undefined),
+						{ env },
+						invocationOf(ctx.callId),
+						context,
+					),
+				ctx.signal,
+			);
+		},
 	});
 }
 

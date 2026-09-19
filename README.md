@@ -219,7 +219,7 @@ the same way.
 
 ## Install
 
-Use Node **22.19 or later**. The packages are ESM and publish to npmjs.
+Use Node **26.4 or later**. The packages are ESM and publish to npmjs.
 Model execution needs credentials for the chosen provider.
 
 ```sh
@@ -236,7 +236,7 @@ npm install @ambionframework/ambion @ambionframework/pi
 | `@ambionframework/journal`    | The append-only journal and its storage contract                                      |
 | `@ambionframework/pi-journal` | Pi transcript sessions over journal storage                                           |
 | `@ambionframework/cloudflare` | Rooms and seats as Durable Objects                                                    |
-| `@ambionframework/cli`        | `ambion new` and `ambion dev`; needs Node 26.4 or later                               |
+| `@ambionframework/cli`        | `ambion new` and `ambion dev`                                                         |
 
 See [Contributing](CONTRIBUTING.md) to build and run from source.
 

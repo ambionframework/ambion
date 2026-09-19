@@ -9,8 +9,8 @@ journal with rules for taking part. People ask questions and read results.
 Agents speak when they have something to add and stay silent when they do
 not. The kernel keeps the record and the rules. A restart loses nothing.
 
-pnpm workspace, ESM only, TypeScript. Repository installation needs Node
-26.4 or newer for OpenTUI. The core runtime supports Node >= 22.19.
+pnpm workspace, ESM only, TypeScript. Every package needs Node 26.4 or
+newer, the OpenTUI floor.
 
 | Path                  | What                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------------ |

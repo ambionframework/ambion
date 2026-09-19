@@ -29,7 +29,7 @@
 		"dist"
 	],
 	"engines": {
-		"node": ">=22.19.0"
+		"node": ">=26.4.0"
 	},
 	"publishConfig": {
 		"registry": "https://npm.pkg.github.com",
@@ -45,7 +45,7 @@
 		"@ambionframework/ambion": "workspace:*"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-ai": "^0.84.3",
+		"@earendil-works/pi-ai": "^0.85.1",
 		"tsdown": "^0.22.14",
 		"typescript": "^7.0.2",
 		"vitest": "^4.1.11"

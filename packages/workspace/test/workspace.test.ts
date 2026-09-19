@@ -11,6 +11,7 @@ import {
 	type ToolContext,
 } from '@ambionframework/ambion';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import type { Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, fauxToolCall } from '@earendil-works/pi-ai';
 import { Bash, InMemoryFs } from 'just-bash';
@@ -31,6 +32,38 @@ import { directoryBackend, memoryBackend, openWorkspace } from '../src/index.ts'
 import { MEMORY_LIMIT_BYTES } from '../src/just-bash.ts';
 
 const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });
+
+/** A context for a direct filesystem or shell call that has no other one. */
+const ctx = BACKGROUND_CONTEXT;
+
+/**
+ * Run one command and collect its bounded output. `exec` now returns metadata
+ * and an exit code, and delivers the combined output through `onUpdate`, so a
+ * test reads the text from the final view.
+ */
+async function sh(
+	env: ExecutionEnv,
+	command: string,
+	options: { cwd?: string; timeout?: number; signal?: AbortSignal } = {},
+): Promise<{ ok: boolean; exitCode?: number; code?: string; output: string }> {
+	let output = '';
+	const context = options.signal ? withAbortSignal(options.signal, BACKGROUND_CONTEXT) : ctx;
+	const result = await env.exec(
+		command,
+		{
+			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+			...(options.timeout === undefined ? {} : { timeout: options.timeout }),
+			capture: { limits: { maxBytes: 1_000_000, maxLines: 100_000 } },
+			onUpdate: (update) => {
+				if (update.kind === 'replace') output = update.output.text;
+			},
+		},
+		context,
+	);
+	return result.ok
+		? { ok: true, exitCode: result.value.exitCode, output }
+		: { ok: false, code: result.error.code, output };
+}
 
 /** Every tool result the model has been shown so far, oldest first. */
 function toolResults(context: Context): { tool: string; text: string; failed: boolean }[] {
@@ -213,11 +246,10 @@ describe('the workspace resource owner', () => {
 			execute: async (
 				_toolCallId: string,
 				_params: unknown,
-				_signal: AbortSignal | undefined,
 				_onUpdate: unknown,
-				context: { env: ExecutionEnv },
+				toolContext: { env: ExecutionEnv },
 			) => ({
-				content: [{ type: 'text' as const, text: context.env.cwd }],
+				content: [{ type: 'text' as const, text: toolContext.env.cwd }],
 				details: {},
 			}),
 		};
@@ -298,9 +330,9 @@ describe('the workspace resource owner', () => {
 		});
 		const append = async (agentName: string, line: string) =>
 			workspace.use(workspaceAgent(agentName), async (env) => {
-				const read = await env.readTextFile('/shared.txt');
+				const read = await env.readTextFile('/shared.txt', ctx);
 				if (!read.ok) throw new Error(read.error.message);
-				const write = await env.writeFile('/shared.txt', `${read.value}${line}\n`);
+				const write = await env.writeFile('/shared.txt', `${read.value}${line}\n`, ctx);
 				if (!write.ok) throw new Error(write.error.message);
 			});
 		await Promise.all([append('alpha', 'alpha'), append('beta', 'beta')]);
@@ -382,7 +414,7 @@ describe('the workspace resource owner', () => {
 			},
 		});
 		await workspace.use(workspaceAgent('alpha'), async (env) => {
-			const result = await env.exec('echo ready');
+			const result = await env.exec('echo ready', undefined, ctx);
 			if (!result.ok) throw new Error('command failed');
 		});
 		await workspace.destroy();
@@ -528,69 +560,67 @@ describe('the just-bash adapter', () => {
 	it('roots the environment at the home, and expands ~ to it', async () => {
 		const { env: alpha } = await env();
 		expect(alpha.cwd).toBe('/home/alpha');
-		expect(await alpha.absolutePath('~')).toEqual({ ok: true, value: '/home/alpha' });
-		expect(await alpha.absolutePath('~/x')).toEqual({ ok: true, value: '/home/alpha/x' });
-		expect(await alpha.absolutePath('sub/../y')).toEqual({ ok: true, value: '/home/alpha/y' });
-		const pwd = await alpha.exec('cd; pwd; echo ~');
-		expect(pwd).toMatchObject({ ok: true, value: { stdout: '/home/alpha\n/home/alpha\n' } });
+		expect(await alpha.absolutePath('~', ctx)).toEqual({ ok: true, value: '/home/alpha' });
+		expect(await alpha.absolutePath('~/x', ctx)).toEqual({ ok: true, value: '/home/alpha/x' });
+		expect(await alpha.absolutePath('sub/../y', ctx)).toEqual({ ok: true, value: '/home/alpha/y' });
+		const pwd = await sh(alpha, 'cd; pwd; echo ~');
+		expect(pwd).toMatchObject({ ok: true, output: '/home/alpha\n/home/alpha\n' });
 	});
 
 	it("classifies just-bash's thrown errors into Pi's codes", async () => {
 		const { env: alpha } = await env();
-		await alpha.writeFile('f.txt', 'x');
+		await alpha.writeFile('f.txt', 'x', ctx);
 		const codeOf = (result: { ok: boolean; error?: { code: string } }) =>
 			result.ok ? 'ok' : result.error?.code;
-		expect(codeOf(await alpha.readTextFile('missing'))).toBe('not_found');
-		expect(codeOf(await alpha.canonicalPath('missing'))).toBe('not_found');
-		expect(codeOf(await alpha.readTextFile('.'))).toBe('is_directory');
-		expect(codeOf(await alpha.listDir('f.txt'))).toBe('not_directory');
-		expect(codeOf(await alpha.createDir('f.txt', { recursive: false }))).toBe('invalid');
-		expect(codeOf(await alpha.remove('.'))).toBe('invalid');
-		expect(await alpha.exists('missing')).toEqual({ ok: true, value: false });
+		expect(codeOf(await alpha.readTextFile('missing', ctx))).toBe('not_found');
+		expect(codeOf(await alpha.canonicalPath('missing', ctx))).toBe('not_found');
+		expect(codeOf(await alpha.readTextFile('.', ctx))).toBe('is_directory');
+		expect(codeOf(await alpha.listDir('f.txt', ctx))).toBe('not_directory');
+		expect(codeOf(await alpha.createDir('f.txt', { recursive: false }, ctx))).toBe('invalid');
+		expect(codeOf(await alpha.remove('.', undefined, ctx))).toBe('invalid');
+		expect(await alpha.exists('missing', ctx)).toEqual({ ok: true, value: false });
 	});
 
 	it('lists a directory with each entry sized, and reads lines', async () => {
 		const { env: alpha } = await env();
-		await alpha.writeFile('a.txt', 'one\ntwo\nthree');
-		await alpha.createDir('d');
-		const listed = await alpha.listDir('.');
+		await alpha.writeFile('a.txt', 'one\ntwo\nthree', ctx);
+		await alpha.createDir('d', undefined, ctx);
+		const listed = await alpha.listDir('.', ctx);
 		expect(listed.ok && listed.value.map((f) => [f.name, f.kind, f.size])).toEqual([
 			['a.txt', 'file', 13],
 			['d', 'directory', 0],
 		]);
-		expect(await alpha.readTextLines('a.txt', { maxLines: 2 })).toEqual({
+		expect(await alpha.readTextLines('a.txt', { maxLines: 2 }, ctx)).toEqual({
 			ok: true,
 			value: ['one', 'two'],
 		});
-		await alpha.renameFile('a.txt', 'd/b.txt');
-		expect(await alpha.readTextFile('d/b.txt')).toEqual({ ok: true, value: 'one\ntwo\nthree' });
+		await alpha.renameFile('a.txt', 'd/b.txt', ctx);
+		expect(await alpha.readTextFile('d/b.txt', ctx)).toEqual({
+			ok: true,
+			value: 'one\ntwo\nthree',
+		});
 	});
 
-	it('delivers output through the callbacks before exec resolves, and keeps no cd', async () => {
+	it('hands one bounded view of combined output to onUpdate, and keeps no cd', async () => {
 		const { env: alpha } = await env();
-		const chunks: string[] = [];
-		const result = await alpha.exec('mkdir -p sub && cd sub && pwd && echo warn >&2', {
-			onStdout: (chunk) => chunks.push(`out:${chunk}`),
-			onStderr: (chunk) => chunks.push(`err:${chunk}`),
-		});
-		expect(chunks).toEqual(['out:/home/alpha/sub\n', 'err:warn\n']);
-		expect(result).toMatchObject({ ok: true, value: { exitCode: 0 } });
-		expect(await alpha.exec('pwd')).toMatchObject({ ok: true, value: { stdout: '/home/alpha\n' } });
-		expect(await alpha.exec('pwd', { cwd: 'sub' })).toMatchObject({
+		const combined = await sh(alpha, 'mkdir -p sub && cd sub && pwd && echo warn >&2');
+		expect(combined).toMatchObject({ ok: true, exitCode: 0, output: '/home/alpha/sub\nwarn\n' });
+		expect(await sh(alpha, 'pwd')).toMatchObject({ ok: true, output: '/home/alpha\n' });
+		expect(await sh(alpha, 'pwd', { cwd: 'sub' })).toMatchObject({
 			ok: true,
-			value: { stdout: '/home/alpha/sub\n' },
+			output: '/home/alpha/sub\n',
 		});
 	});
 
 	it('tells an abort apart from a timeout', async () => {
 		const { env: alpha } = await env();
 		const controller = new AbortController();
-		const aborted = alpha.exec('sleep 5', { abortSignal: controller.signal });
+		const aborted = sh(alpha, 'sleep 5', { signal: controller.signal });
 		controller.abort();
-		expect(await aborted).toMatchObject({ ok: false, error: { code: 'aborted' } });
-		expect(await alpha.exec('sleep 5', { timeout: 0.05 })).toMatchObject({
+		expect(await aborted).toMatchObject({ ok: false, code: 'aborted' });
+		expect(await sh(alpha, 'sleep 5', { timeout: 0.05 })).toMatchObject({
 			ok: false,
-			error: { code: 'timeout' },
+			code: 'timeout',
 		});
 	});
 
@@ -598,31 +628,31 @@ describe('the just-bash adapter', () => {
 		expect(DEFAULT_TIMEOUT_SECONDS).toBe(30);
 		const fs = new InMemoryFs();
 		const short = new BashEnv(new Bash({ fs, cwd: '/' }), '/', { timeout: 0.05 });
-		expect(await short.exec('sleep 5')).toMatchObject({ ok: false, error: { code: 'timeout' } });
-		expect(await short.exec('echo quick')).toMatchObject({
-			ok: true,
-			value: { stdout: 'quick\n' },
-		});
+		expect(await sh(short, 'sleep 5')).toMatchObject({ ok: false, code: 'timeout' });
+		expect(await sh(short, 'echo quick')).toMatchObject({ ok: true, output: 'quick\n' });
 		// A caller's own timeout wins over the default.
-		expect(await short.exec('sleep 0.1; echo late', { timeout: 1 })).toMatchObject({
+		expect(await sh(short, 'sleep 0.1; echo late', { timeout: 1 })).toMatchObject({
 			ok: true,
-			value: { stdout: 'late\n' },
+			output: 'late\n',
 		});
 	});
 
 	it('runs js-exec and python3, and has no curl', async () => {
 		const { env: alpha } = await env();
-		expect(await alpha.exec('js-exec -c "console.log(1 + 2)"')).toMatchObject({
+		expect(await sh(alpha, 'js-exec -c "console.log(1 + 2)"')).toMatchObject({
 			ok: true,
-			value: { stdout: '3\n', exitCode: 0 },
+			exitCode: 0,
+			output: '3\n',
 		});
-		expect(await alpha.exec('python3 -c "print(1 + 2)"')).toMatchObject({
+		expect(await sh(alpha, 'python3 -c "print(1 + 2)"')).toMatchObject({
 			ok: true,
-			value: { stdout: '3\n', exitCode: 0 },
+			exitCode: 0,
+			output: '3\n',
 		});
-		expect(await alpha.exec('curl --version')).toMatchObject({
+		expect(await sh(alpha, 'curl --version')).toMatchObject({
 			ok: true,
-			value: { exitCode: 127, stderr: 'bash: curl: command not found\n' },
+			exitCode: 127,
+			output: 'bash: curl: command not found\n',
 		});
 	});
 
@@ -630,40 +660,40 @@ describe('the just-bash adapter', () => {
 		expect(MEMORY_LIMIT_BYTES).toBe(128 * 1024 * 1024);
 		const { env: alpha } = await env();
 		const half = new Uint8Array(MEMORY_LIMIT_BYTES / 2);
-		expect(await alpha.writeFile('first', half)).toEqual({ ok: true, value: undefined });
+		expect(await alpha.writeFile('first', half, ctx)).toEqual({ ok: true, value: undefined });
 		// The second half does not fit beside the layout `Bash` seeds into a fresh filesystem.
-		const over = await alpha.writeFile('second', half);
+		const over = await alpha.writeFile('second', half, ctx);
 		expect(over.ok).toBe(false);
 		expect(!over.ok && over.error.message).toMatch(/ENOSPC/);
-		await alpha.remove('first');
-		expect(await alpha.writeFile('second', half)).toEqual({ ok: true, value: undefined });
+		await alpha.remove('first', undefined, ctx);
+		expect(await alpha.writeFile('second', half, ctx)).toEqual({ ok: true, value: undefined });
 	});
 
 	it('creates /tmp before a temp file needs it, and appends to it', async () => {
 		const { env: alpha } = await env();
-		const file = await alpha.createTempFile({ prefix: 'bash-', suffix: '.journal' });
+		const file = await alpha.createTempFile({ prefix: 'bash-', suffix: '.journal' }, ctx);
 		expect(file.ok && file.value).toMatch(/^\/tmp\/bash-[0-9a-f]+\.journal$/);
 		if (!file.ok) return;
-		await alpha.appendFile(file.value, 'a');
-		await alpha.appendFile(file.value, 'b');
-		expect(await alpha.readTextFile(file.value)).toEqual({ ok: true, value: 'ab' });
-		const dir = await alpha.createTempDir();
+		await alpha.appendFile(file.value, 'a', ctx);
+		await alpha.appendFile(file.value, 'b', ctx);
+		expect(await alpha.readTextFile(file.value, ctx)).toEqual({ ok: true, value: 'ab' });
+		const dir = await alpha.createTempDir(undefined, ctx);
 		expect(dir.ok && dir.value).toMatch(/^\/tmp\/tmp-/);
 	});
 
 	it('recreates a home removed out from under it, and shares files across agents', async () => {
 		const backend = memoryBackend();
 		const alpha = await backend.connect(agent('alpha'));
-		await alpha.writeFile('shared.txt', 'from alpha');
+		await alpha.writeFile('shared.txt', 'from alpha', ctx);
 		const beta = await backend.connect(agent('beta'));
-		expect(await beta.readTextFile('/home/alpha/shared.txt')).toEqual({
+		expect(await beta.readTextFile('/home/alpha/shared.txt', ctx)).toEqual({
 			ok: true,
 			value: 'from alpha',
 		});
-		await beta.remove('/home/alpha', { recursive: true });
+		await beta.remove('/home/alpha', { recursive: true }, ctx);
 		const again = await backend.connect(agent('alpha'));
-		expect(await again.exists('.')).toEqual({ ok: true, value: true });
-		expect(await again.exec('ls ~')).toMatchObject({ ok: true, value: { stdout: '' } });
+		expect(await again.exists('.', ctx)).toEqual({ ok: true, value: true });
+		expect(await sh(again, 'ls ~')).toMatchObject({ ok: true, output: '' });
 	});
 });
 
@@ -681,7 +711,7 @@ describe('memoryBackend', () => {
 		expect(calls).toBe(0); // nothing runs until something asks for the filesystem
 		expect(await backend.readFiles()).toEqual([{ path: '/site/README.md', text: 'start here\n' }]);
 		const alpha = await backend.connect(agent('alpha'));
-		await alpha.writeFile('/site/notes.md', 'a note\n');
+		await alpha.writeFile('/site/notes.md', 'a note\n', ctx);
 		expect(calls).toBe(1); // memoised: connect reused the filesystem readFiles already built
 		// The first `connect` also lays just-bash's own binaries into the shared
 		// filesystem (`docs/workspace.md` §8), so this checks the two site files
@@ -698,7 +728,7 @@ describe('memoryBackend', () => {
 			seed: async (write) => write.writeFile('/site/README.md', 'hi\n'),
 		});
 		const alpha = await backend.connect(agent('alpha'));
-		await alpha.exec('ln -s /site ~/sitelink && ln -s /nowhere ~/dangling');
+		await alpha.exec('ln -s /site ~/sitelink && ln -s /nowhere ~/dangling', undefined, ctx);
 		const files = await backend.readFiles();
 		expect(files).toContainEqual({ path: '/site/README.md', text: 'hi\n' });
 		expect(files.some((f) => f.path.includes('sitelink') || f.path.includes('dangling'))).toBe(
@@ -746,7 +776,7 @@ describe('memoryBackend', () => {
 		});
 		const workspace = openWorkspace({ name: name('memory-dispose'), backend });
 		await workspace.use(workspaceAgent('alpha'), async (env) => {
-			const old = await env.readTextFile('/old.txt');
+			const old = await env.readTextFile('/old.txt', ctx);
 			if (!old.ok) throw new Error('seed missing');
 		});
 		await workspace.dispose();
