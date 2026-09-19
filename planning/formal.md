@@ -258,7 +258,7 @@ The next closes the exchange, and the next owes a summary draft. The
 room converges, and each pass writes something new. The header now states
 what the code does: each pass writes what the fold owes after the last, and the
 loop stops at the pass that writes nothing. A proof of convergence needs
-a measure over the fold and waits for tranche 3.
+a measure over the fold and waits for tranche 3b.
 
 **Six pure decisions in the pass become rules.** Each one is arithmetic or
 a case split today, with no contract, and each carries a promise of
@@ -696,7 +696,7 @@ and its evidence rows.
 | 2e    | `activation.ts`                            | `activationGrant`, `closeFor`, `names`, `wellFormed`; `onRoster` and `positiveBounded` were proven once and withdrawn                                                                                                                                                                             | Landed    |
 | 2f    | `exchange.ts`, `fold.ts`                   | `openingQuestion`, `summaryVerdict`, `lastOf`; `discussion`, `coversSeq`, `reserveOf`, `reseated`, `foldRoster`, `exchangeContaining`, and `messagesSince` were proven once and withdrawn                                                                                                         | Landed    |
 | H     | `validate.ts`, `activation-id.ts`          | `rangeWellFormed` and `positiveBounded` were proven once and withdrawn; the checks stay as plain code                                                                                                                                                                                             | Withdrawn |
-| 3a    | `room/rules.verified.proofs.dfy`           | `LeaseHistoryKeeps`, `FirstChangeFixesStart`, `OneOpenExchange`, `CloseExtendsTheRecord`: the lease fold over one id and one open exchange                                                                                                                                                        | Landed    |
+| 3a    | `room/rules.verified.proofs.dfy`           | `LeaseHistoryKeeps`, `FirstChangeFixesStart`, `OneOpenExchange`, `CloseExtendsTheRecord`, `AdmittedCloseExtendsTheRecord`: the lease fold over one id and one open exchange                                                                                                                       | Landed    |
 | 3b    | the two `.dfy` files                       | unique roster names, the stop-loop and the pass measures; `seatLive` (C7), `draftsClose` (F7), `storedIdAccepted` (F8)                                                                                                                                                                            | Open      |
 
 **The slices landed in the order 2a, 2b, 2c, 2d, 2e, 2f, then the rest
@@ -716,7 +716,8 @@ against `types.ts`.
 
 **A lemma with no caller lives in the proofs file.** `AttemptIdsAreFresh`,
 `StillExpired`, `EndingStands`, `LeaseHistoryKeeps`,
-`FirstChangeFixesStart`, `OneOpenExchange`, and `CloseExtendsTheRecord`
+`FirstChangeFixesStart`, `OneOpenExchange`, `CloseExtendsTheRecord`, and
+`AdmittedCloseExtendsTheRecord`
 state relations between rules and have no runtime call site, so they are
 written in Dafny in the `.proofs.dfy` beside the rules, and
 `check-extra.sh` verifies them. The `.dfy` equals

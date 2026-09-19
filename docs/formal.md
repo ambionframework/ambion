@@ -103,12 +103,14 @@ describes. Three things hold that binding.
    case, so a rule cannot gain an export without one.
 
 **The call site holds the projection, and the rule holds the decision.**
-`foldLeases` in `lease.ts` reads one lease entry, finds the lease the fold
+`applyLease` in `lease.ts` reads one lease entry, finds the lease the fold
 holds for its id, and asks `applyChange` for the lease after it.
-`openExchange` in `exchange.ts` maps the closes to their `through` seqs,
-asks `lastOf` for the last, and asks `openingQuestion` for the question
-after it. A comment at such a site says "the rule decides" where a
-second check remains to narrow a TypeScript type.
+`cancelLeases` in `fold.ts` asks `cancelHold` for each lease a
+cancellation reaches. `openExchange` in `exchange.ts` maps the closes to
+their `through` seqs, asks `lastOf` for the last, and asks
+`openingQuestion` for the question after it. A comment at such a site
+says "the rule decides" where a second check remains to narrow a
+TypeScript type.
 
 ## 3. The generated files
 
@@ -123,19 +125,22 @@ and never a merge.
 generator cannot write an inductive proof. The journal's proofs file
 proves the fence lemmas by induction over a read: a superseded journal
 stays superseded, the caller hears `lost` at most once, the cursor never
-moves back. The room's proofs file proves four facts over histories:
+moves back. The room's proofs file proves these lemmas:
 
 - `AttemptIdsAreFresh`: no two attempts in one lease history share an id.
-- `LeaseHistoryKeeps` and `FirstChangeFixesStart`: over every history of
-  changes and cancellation markers the fold admits, the first change
-  fixes `since` and `claimedAt`, the read position never moves back, and
-  an ended lease stays as it ended.
+- `LeaseHistoryKeeps` and `FirstChangeFixesStart`: they fold every
+  history of changes and cancellation markers the rules admit. The first
+  change fixes `since` and `claimedAt`. The read position never moves
+  back. An ended lease stays as it ended.
 - `OneOpenExchange`: the open exchange is the earliest question after the
-  last close, and every other question that could open one lands inside
+  last close. Every other question that could open one comes at or after
   it.
-- `CloseExtendsTheRecord`: a close the room admits starts at that
-  question and ends at the record's end, so the closes stay ordered and
-  no two exchanges overlap.
+- `CloseExtendsTheRecord`: a close that starts at that question and ends
+  at the record's last seq keeps the closes ordered. So no two exchanges
+  overlap, and every question after the last close lands inside the
+  closed range. The close the room admits and the close a cancellation
+  carries both have that shape; `AdmittedCloseExtendsTheRecord` derives
+  the first from `admitsClose`.
 - `StillExpired` and `EndingStands`: an expiry stays expired as the clock
   moves forward.
 
@@ -253,8 +258,8 @@ doc it carries:
   `CloseExtendsTheRecord` takes the ordered closes as a premise, so it
   proves the step and the induction over a record is the reader's.
 - The lease lemmas and the exchange lemmas hold over the histories the
-  rules admit. The binding test proves the fold in `lease.ts` and
-  `exchange.ts` calls those rules; the projection from an entry to a
+  rules admit. The binding test proves `lease.ts`, `fold.ts`, and
+  `exchange.ts` call those rules; the projection from an entry to a
   `Change` or a `Message` stays with the scripted suites.
 - The clock never runs backwards. That is a host promise.
 - A pass of the reconciliation converges. The chaos drain and the walk's

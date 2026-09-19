@@ -114,9 +114,9 @@ datatype LeaseEvent =
   | Changed(change: Change, seqNo: int)
   | Cancelled(position: int, cancelledAt: int, stamp: string)
 
-// What the fold admits: a change at a seq at or after the lease's start with a
-// read position of zero or more, and a marker at or after the lease's start.
-// These are the preconditions of `applyChange` and `cancelHold`.
+// What the fold admits, which are the preconditions of `applyChange` and
+// `cancelHold`. A change lands at or after the lease's start with a read
+// position of zero or more. A marker lands at or after the lease's start.
 predicate leaseAdmits(known: Option<Hold>, e: LeaseEvent) {
   match e
   case Changed(change, seqNo) =>
@@ -212,10 +212,6 @@ function throughsOf(closes: seq<CloseRef>): seq<int> {
   seq(|closes|, i requires 0 <= i < |closes| => closes[i].through)
 }
 
-function seqsOf(messages: seq<Message>): seq<int> {
-  seq(|messages|, i requires 0 <= i < |messages| => messages[i].seq_)
-}
-
 lemma ThroughsSorted(closes: seq<CloseRef>)
   requires closesOrdered(closes)
   ensures forall i, j :: 0 <= i < j < |throughsOf(closes)| ==> throughsOf(closes)[i] <= throughsOf(closes)[j]
@@ -223,16 +219,16 @@ lemma ThroughsSorted(closes: seq<CloseRef>)
 {
 }
 
-lemma SeqsSorted(messages: seq<Message>)
-  requires forall i, j :: 0 <= i < j < |messages| ==> messages[i].seq_ < messages[j].seq_
-  requires forall i :: 0 <= i < |messages| ==> messages[i].seq_ >= 1
-  ensures forall i, j :: 0 <= i < j < |seqsOf(messages)| ==> seqsOf(messages)[i] <= seqsOf(messages)[j]
-  ensures forall i :: 0 <= i < |seqsOf(messages)| ==> seqsOf(messages)[i] >= 1
+// The seq the last close reaches, as `openExchange` computes it.
+function closedThrough(closes: seq<CloseRef>): int
+  requires closesOrdered(closes)
 {
+  ThroughsSorted(closes);
+  lastOf(throughsOf(closes))
 }
 
-// The open exchange is the earliest question after the last close, and every
-// other question that could open one lands inside it.
+// The open exchange is the earliest question after the last close. Every other
+// question that could open one comes at or after it.
 lemma OneOpenExchange(messages: seq<Message>, people: seq<string>, closedThrough: int)
   requires forall i, j :: 0 <= i < j < |messages| ==> messages[i].seq_ < messages[j].seq_
   requires openingQuestion(messages, people, closedThrough).Some?
@@ -250,35 +246,50 @@ lemma OneOpenExchange(messages: seq<Message>, people: seq<string>, closedThrough
   }
 }
 
-// A close the room admits extends the ordered record: it starts at the open
-// question, after every earlier close, and ends at the record's end. So no two
-// exchanges overlap, and no close lands inside a later exchange.
-lemma CloseExtendsTheRecord(messages: seq<Message>, people: seq<string>, closes: seq<CloseRef>, close: CloseRef, live: bool)
+// A close of the open exchange starts at the open question and ends at the
+// record's last seq. Both paths that write one have this shape: the close the
+// room admits, and the close a cancellation carries. Such a close keeps the
+// closes ordered, so no two exchanges overlap. Every question that could open
+// an exchange after the last close lands inside the closed range.
+lemma CloseExtendsTheRecord(messages: seq<Message>, people: seq<string>, closes: seq<CloseRef>, close: CloseRef, lastSeq: int)
   requires forall i, j :: 0 <= i < j < |messages| ==> messages[i].seq_ < messages[j].seq_
-  requires forall i :: 0 <= i < |messages| ==> messages[i].seq_ >= 1
+  requires forall i :: 0 <= i < |messages| ==> 1 <= messages[i].seq_ <= lastSeq
   requires closesOrdered(closes)
-  requires (ThroughsSorted(closes); openingQuestion(messages, people, lastOf(throughsOf(closes))).Some?)
-  requires (ThroughsSorted(closes); SeqsSorted(messages);
-    var q := openingQuestion(messages, people, lastOf(throughsOf(closes))).value;
-    admitsClose(Some(OpenExchange(q.from, q.seq_)), close, lastOf(seqsOf(messages)), live))
+  requires openingQuestion(messages, people, closedThrough(closes)).Some?
+  requires close.from == openingQuestion(messages, people, closedThrough(closes)).value.seq_
+  requires close.through == lastSeq
+  ensures closesOrdered(closes + [close])
+  ensures forall k ::
+    0 <= k < |messages| && opensExchange(messages[k], people, closedThrough(closes))
+    ==> close.from <= messages[k].seq_ <= close.through
+{
+  ThroughsSorted(closes);
+  var through := closedThrough(closes);
+  var q := openingQuestion(messages, people, through).value;
+  openingQuestion_ensures(messages, people, through);
+  OneOpenExchange(messages, people, through);
+  lastOf_ensures(throughsOf(closes));
+  var i :| 0 <= i < |messages| && messages[i] == q;
+  assert q.seq_ <= lastSeq;
+  forall k | 0 <= k < |closes| ensures closes[k].through < close.from {
+    assert throughsOf(closes)[k] == closes[k].through;
+    assert closes[k].through <= through;
+  }
+}
+
+// The close the room admits has that shape, and the exchange it closes is not
+// live.
+lemma AdmittedCloseExtendsTheRecord(messages: seq<Message>, people: seq<string>, closes: seq<CloseRef>, close: CloseRef, lastSeq: int, live: bool)
+  requires forall i, j :: 0 <= i < j < |messages| ==> messages[i].seq_ < messages[j].seq_
+  requires forall i :: 0 <= i < |messages| ==> 1 <= messages[i].seq_ <= lastSeq
+  requires closesOrdered(closes)
+  requires openingQuestion(messages, people, closedThrough(closes)).Some?
+  requires var q := openingQuestion(messages, people, closedThrough(closes)).value;
+    admitsClose(Some(OpenExchange(q.from, q.seq_)), close, lastSeq, live)
   ensures closesOrdered(closes + [close])
   ensures !live
 {
-  ThroughsSorted(closes);
-  SeqsSorted(messages);
-  var closedThrough := lastOf(throughsOf(closes));
-  var q := openingQuestion(messages, people, closedThrough).value;
-  openingQuestion_ensures(messages, people, closedThrough);
-  lastOf_ensures(throughsOf(closes));
-  lastOf_ensures(seqsOf(messages));
-  admitsClose_ensures(Some(OpenExchange(q.from, q.seq_)), close, lastOf(seqsOf(messages)), live);
-  assert close.from == q.seq_;
-  assert close.through == lastOf(seqsOf(messages));
-  var i :| 0 <= i < |messages| && messages[i] == q;
-  assert seqsOf(messages)[i] == q.seq_;
-  assert q.seq_ <= lastOf(seqsOf(messages));
-  forall k | 0 <= k < |closes| ensures closes[k].through < close.from {
-    assert throughsOf(closes)[k] == closes[k].through;
-    assert closes[k].through <= closedThrough;
-  }
+  var q := openingQuestion(messages, people, closedThrough(closes)).value;
+  admitsClose_ensures(Some(OpenExchange(q.from, q.seq_)), close, lastSeq, live);
+  CloseExtendsTheRecord(messages, people, closes, close, lastSeq);
 }
