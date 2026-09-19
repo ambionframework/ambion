@@ -4,8 +4,6 @@ datatype Option<T> = None | Some(value: T)
 
 function MathMax(a: int, b: int): int { if a >= b then a else b }
 
-datatype StoredEntry = StoredEntry(position: int)
-
 datatype Fence = Fence(fence: Option<string>, fenced: bool, superseded: bool)
 
 datatype Passed = Passed(state: Fence, keep: bool, lost: bool)
@@ -78,55 +76,6 @@ lemma scanned_ensures(cursor: int, position: int)
   ensures (scanned(cursor, position) >= cursor)
   ensures (scanned(cursor, position) >= position)
   ensures ((scanned(cursor, position) == cursor) || (scanned(cursor, position) == position))
-{
-}
-
-function nextPosition(head: int): int
-{
-  (head + 1)
-}
-
-lemma nextPosition_ensures(head: int)
-  ensures (nextPosition(head) == (head + 1))
-  ensures (nextPosition(head) > head)
-{
-}
-
-function admit(head: int, expected: int): Option<int>
-  requires (head >= 0)
-{
-  if (head == expected) then
-    Option.Some(nextPosition(head))
-  else
-    Option.None
-}
-
-lemma admit_ensures(head: int, expected: int)
-  requires (head >= 0)
-  ensures ((match admit(head, expected) { case Some(i_) => true case None => false }) <==> (head == expected))
-  ensures (match admit(head, expected) { case Some(i_result_val) => (i_result_val == nextPosition(head)) case None => true })
-  ensures (match admit(head, expected) { case Some(i_result_val) => (i_result_val == (expected + 1)) case None => true })
-  ensures (match admit(head, expected) { case Some(i_result_val) => (i_result_val > expected) case None => true })
-  ensures ((head != expected) ==> (match admit(head, expected) { case Some(i_) => false case None => true }))
-{
-}
-
-function readPosition(after: int, scanned: Option<int>): int
-{
-  match scanned {
-    case Some(i_scanned_val) =>
-      MathMax(after, i_scanned_val)
-    case None =>
-      after
-  }
-}
-
-lemma readPosition_ensures(after: int, scanned: Option<int>)
-  ensures (readPosition(after, scanned) >= after)
-  ensures (match scanned { case Some(i_scanned_val) => (readPosition(after, scanned) >= i_scanned_val) case None => true })
-  ensures ((match scanned { case Some(i_) => false case None => true }) ==> (readPosition(after, scanned) == after))
-  ensures (match scanned { case Some(i_scanned_val) => ((i_scanned_val >= after) ==> (readPosition(after, scanned) == i_scanned_val)) case None => true })
-  ensures (match scanned { case Some(i_scanned_val) => ((i_scanned_val < after) ==> (readPosition(after, scanned) == after)) case None => true })
 {
 }
 
@@ -246,31 +195,4 @@ lemma writable_ensures(closed: bool, state: Fence, own: Option<string>, isRun: b
   ensures (match state.fence { case Some(i_state_fence_val) => (match own { case Some(i_own_val) => (!(closed) ==> !(state.superseded) ==> (i_own_val == i_state_fence_val) ==> writable(closed, state, own, isRun)) case None => true }) case None => true })
   ensures (match own { case Some(i_own_val) => (match state.fence { case Some(i_state_fence_val) => ((i_own_val != i_state_fence_val) ==> !(isRun) ==> !(writable(closed, state, own, isRun))) case None => true }) case None => true })
 {
-}
-
-method visibleEntries(entries: seq<StoredEntry>, after: int) returns (res: seq<StoredEntry>)
-  ensures (|res| <= |entries|)
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i].position > after))
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in entries))
-  ensures forall i: int :: ((0 <= i) ==> (i < |entries|) ==> (entries[i].position > after) ==> (entries[i] in res))
-  ensures forall i: int :: ((0 <= i) ==> (i < |entries|) ==> (entries[i].position <= after) ==> !((entries[i] in res)))
-{
-  var out: seq<StoredEntry> := [];
-  var i := 0;
-  while (i < |entries|)
-    invariant (0 <= i)
-    invariant (i <= |entries|)
-    invariant (|out| <= i)
-    invariant forall k: int :: ((0 <= k) ==> (k < |out|) ==> (out[k].position > after))
-    invariant forall k: int :: ((0 <= k) ==> (k < |out|) ==> (out[k] in entries))
-    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (entries[k].position > after) ==> (entries[k] in out))
-    decreases (|entries| - i)
-  {
-    var stored := (if ((0 <= i) && (i < |entries|)) then entries[i] else StoredEntry(after));
-    if (stored.position > after) {
-      out := (out + [stored]);
-    }
-    i := (i + 1);
-  }
-  return out;
 }

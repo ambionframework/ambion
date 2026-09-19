@@ -17,16 +17,13 @@ import {
 import { routes } from './routing.ts';
 import {
 	acknowledged,
-	addressesOwner,
 	admitsClose,
 	admitsLease,
-	commitAuthority,
 	coversExchange,
 	speechFreshness as freshnessRule,
 	leaseExpiry,
 	mayEnd,
 	onRecord,
-	permits,
 	stampedSummary,
 } from './rules.verified.ts';
 
@@ -264,8 +261,7 @@ function commit(state: RoomState, request: CommitRequest, now: number): RoomDeci
 	const live = liveSpec(state, request.activation, spec, now);
 	if ('refusal' in live) return live;
 	const { intent } = request;
-	if (!permits(live.purpose.kind, intent.kind))
-		return refused('This activation cannot submit that intent.');
+	if (!permits(live, intent.kind)) return refused('This activation cannot submit that intent.');
 	const purpose = live.purpose;
 	if (intent.kind === 'said' && purpose.kind === 'summarize')
 		return closingCommit(state, request, live, purpose, now);
@@ -281,7 +277,7 @@ function closingCommit(
 ): RoomDecision<'message'> {
 	const intent = request.intent;
 	if (intent.kind !== 'said') return refused('This activation cannot submit that intent.');
-	if (!addressesOwner(intent.to, purpose.person))
+	if (intent.to !== undefined && intent.to !== purpose.person)
 		return refused('A closing response must address the exchange owner.');
 	if (state.messages.some((entry) => isCoveringSummary(entry, purpose)))
 		return refused('This exchange already has a summary.');
@@ -339,16 +335,20 @@ function liveSpec(
 	now: number,
 ): ActivationSpec | { refusal: Refusal } {
 	const held = state.leases.get(id);
-	const authority = commitAuthority(
-		held?.phase,
-		held !== undefined && isExpired(held, now),
-		spec !== undefined,
-	);
-	if (authority === 'stale') return stale('the lease ended');
-	// The grant already holds the seat on the roster. The re-test narrows the type only.
-	if (authority === 'refused' || spec === undefined)
-		return refused('This activation has no room grant.');
+	if (held === undefined || !isLive(held, now)) return stale('the lease ended');
+	if (spec === undefined) return refused('This activation has no room grant.');
 	return spec;
+}
+
+/** Both purposes permit speech. Only a response permits a seating or an unseating. */
+function permits(spec: ActivationSpec, kind: CommitRequest['intent']['kind']): boolean {
+	switch (kind) {
+		case 'said':
+			return true;
+		case 'seated':
+		case 'unseated':
+			return spec.purpose.kind === 'respond';
+	}
 }
 
 function speechFreshness(

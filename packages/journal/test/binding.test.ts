@@ -7,12 +7,10 @@
  * own tests and fail here.
  */
 
-import { DatabaseSync } from 'node:sqlite';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Journal, type Vocabulary } from '../src/journal.ts';
 import { memoryJournals } from '../src/memory.ts';
 import * as rules from '../src/rules.verified.ts';
-import { type Sql, type SqlValue, sqliteJournals } from '../src/sqlite.ts';
 import { bindings } from './support/binding.ts';
 
 vi.mock('../src/rules.verified.ts', async (importOriginal) => {
@@ -133,44 +131,11 @@ describe('the journal runs the verified rules', () => {
 		});
 	});
 
-	it('admits a storage append and reports a read position as the rules answer', async () => {
-		const storage = await journals.open(`binding-storage-${++names}`);
-		bind.once(rules.admit, undefined);
-		expect(await storage.append({ n: 1 }, 0)).toBeUndefined();
-		expect(await storage.append({ n: 1 }, 0)).toEqual({ position: 1, entry: { n: 1 } });
-		bind.once(rules.readPosition, 99);
-		expect((await storage.read(0)).position).toBe(99);
-	});
-
-	it('numbers an entry and reads the visible entries as the rules answer', async () => {
+	it('numbers an entry as nextSeq answers', async () => {
 		const journal = await open();
 		bind.once(rules.nextSeq, 7);
 		expect(await journal.append('note', { decide: () => note('a') })).toMatchObject({
 			entry: { seq: 7 },
 		});
-		const storage = await journals.open(`binding-visible-${++names}`);
-		await storage.append({ n: 1 }, 0);
-		bind.once(rules.visibleEntries, []);
-		expect((await storage.read(0)).entries).toEqual([]);
-		expect((await storage.read(0)).entries).toHaveLength(1);
-	});
-
-	it('places a SQLite append where nextPosition answers', async () => {
-		const database = new DatabaseSync(':memory:');
-		const sql: Sql = {
-			run: (query, ...params) => {
-				database.prepare(query).run(...params);
-			},
-			all: (query, ...params) =>
-				database.prepare(query).all(...params) as Record<string, SqlValue>[],
-		};
-		try {
-			const storage = await sqliteJournals(sql).open('binding');
-			bind.once(rules.nextPosition, 5);
-			expect(await storage.append({ n: 1 }, 0)).toMatchObject({ position: 5 });
-			expect(await storage.append({ n: 2 }, 5)).toMatchObject({ position: 6 });
-		} finally {
-			database.close();
-		}
 	});
 });

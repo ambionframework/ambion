@@ -26,10 +26,6 @@ datatype LeasePhase = running | ended
 
 datatype LeaseEndReason = released | failed | revoked | expired | abandoned
 
-datatype Purpose = respond | summarize
-
-datatype Intent = said | seated | unseated
-
 datatype Freshness = invalid | missed | fresh_
 
 datatype OpenExchange = OpenExchange(owner: string, from: int)
@@ -41,8 +37,6 @@ datatype Hold = running(id: string, at: string, claimedAt: string, since: int, r
 datatype Change = running(id: string, expiresAt: int, at: string, readThrough: int) | ended(id: string, reason: LeaseEndReason, at: string, readThrough: int)
 
 datatype Taken = running(readThrough: int, position: int) | ended(reason: LeaseEndReason, readThrough: int, position: int)
-
-datatype Schedule = Schedule(attempt: int, notBefore: Option<int>)
 
 datatype Ending = revoked | expired | stays
 
@@ -72,8 +66,6 @@ datatype Admission = ended | granted | held
 
 datatype Stamped = Stamped(to: string, covers: Range)
 
-datatype Authority = granted | stale | refused
-
 function expired(expiry: int, now: int): bool
 {
   (expiry <= now)
@@ -93,21 +85,6 @@ lemma coversAttempt_ensures(ended: bool, until: int, seq_: int)
   ensures (!(ended) ==> coversAttempt(ended, until, seq_))
   ensures (ended ==> (coversAttempt(ended, until, seq_) <==> (seq_ <= until)))
   ensures (coversAttempt(ended, until, seq_) ==> forall earlier: int :: ((earlier <= seq_) ==> coversAttempt(ended, until, earlier)))
-{
-}
-
-function givesUp(attempts: int, cap: int): bool
-  requires (attempts >= 0)
-  requires (cap >= 1)
-{
-  (attempts >= cap)
-}
-
-lemma givesUp_ensures(attempts: int, cap: int)
-  requires (attempts >= 0)
-  requires (cap >= 1)
-  ensures (givesUp(attempts, cap) <==> (attempts >= cap))
-  ensures (!(givesUp(attempts, cap)) ==> ((attempts + 1) <= cap))
 {
 }
 
@@ -155,26 +132,6 @@ lemma mayEnd_ensures(known: Option<LeasePhase>, reason: LeaseEndReason, pastExpi
   ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> reason.expired? ==> (mayEnd(known, reason, pastExpiry) <==> pastExpiry)) case None => true })
   ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> reason.released? ==> (mayEnd(known, reason, pastExpiry) <==> !(pastExpiry))) case None => true })
   ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> reason.failed? ==> (mayEnd(known, reason, pastExpiry) <==> !(pastExpiry))) case None => true })
-{
-}
-
-function permits(purpose: Purpose, intent: Intent): bool
-{
-  match intent {
-    case said =>
-      (purpose.respond? || purpose.summarize?)
-    case seated =>
-      purpose.respond?
-    case unseated =>
-      purpose.respond?
-  }
-}
-
-lemma permits_ensures(purpose: Purpose, intent: Intent)
-  ensures (intent.said? ==> permits(purpose, intent))
-  ensures ((!intent.said?) ==> (permits(purpose, intent) <==> purpose.respond?))
-  ensures (purpose.summarize? ==> (permits(purpose, intent) <==> intent.said?))
-  ensures (purpose.respond? ==> permits(purpose, intent))
 {
 }
 
@@ -498,133 +455,6 @@ lemma countsAgainst_ensures(lease: Taken, seq_: int)
 {
 }
 
-function schedule(unsuccessful: int, last: int, backoff: int): Schedule
-  requires (unsuccessful >= 0)
-  requires (last >= 0)
-{
-  Schedule(nextAttempt(unsuccessful), (if (unsuccessful == 0) then Option.None else Option.Some((last + backoff))))
-}
-
-lemma schedule_ensures(unsuccessful: int, last: int, backoff: int)
-  requires (unsuccessful >= 0)
-  requires (last >= 0)
-  ensures (schedule(unsuccessful, last, backoff).attempt == nextAttempt(unsuccessful))
-  ensures ((unsuccessful == 0) ==> (match schedule(unsuccessful, last, backoff).notBefore { case Some(i_) => false case None => true }))
-  ensures ((unsuccessful > 0) ==> ((match schedule(unsuccessful, last, backoff).notBefore { case Some(i_) => true case None => false }) && (match schedule(unsuccessful, last, backoff).notBefore { case Some(i_value) => (i_value == (last + backoff)) case None => false })))
-  ensures ((unsuccessful > 0) ==> (backoff >= 0) ==> ((match schedule(unsuccessful, last, backoff).notBefore { case Some(i_) => true case None => false }) && (match schedule(unsuccessful, last, backoff).notBefore { case Some(i_value) => (i_value >= last) case None => false })))
-{
-}
-
-function removedAfter(removals: seq<int>, seq_: int): bool
-  decreases |removals|
-{
-  if (|removals| == 0) then
-    false
-  else
-    var head := (if ((0 <= 0) && (0 < |removals|)) then removals[0] else seq_);
-    ((head > seq_) || removedAfter(removals[1..], seq_))
-}
-
-lemma removedAfter_ensures(removals: seq<int>, seq_: int)
-  ensures (removedAfter(removals, seq_) <==> exists i: int :: (((0 <= i) && (i < |removals|)) && (removals[i] > seq_)))
-  ensures (removedAfter(removals, seq_) ==> forall earlier: int :: ((earlier <= seq_) ==> removedAfter(removals, earlier)))
-{
-}
-
-function readyToSend(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int): bool
-  requires (resend >= 0)
-{
-  var backoffOver := (!(backedOff) || (notBefore <= now));
-  var windowOver := (!(wasSent) || ((sentAt + resend) <= now));
-  (backoffOver && windowOver)
-}
-
-lemma readyToSend_ensures(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int)
-  requires (resend >= 0)
-  ensures (readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend) <==> ((!(backedOff) || (notBefore <= now)) && (!(wasSent) || ((sentAt + resend) <= now))))
-  ensures (backedOff ==> (notBefore > now) ==> !(readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend)))
-  ensures (wasSent ==> (now < (sentAt + resend)) ==> !(readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend)))
-{
-}
-
-function waitsUntil(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int): int
-  requires (resend >= 0)
-{
-  var backoff := (if backedOff then notBefore else now);
-  if (backoff > now) then
-    backoff
-  else
-    if wasSent then
-      (sentAt + resend)
-    else
-      now
-}
-
-lemma waitsUntil_ensures(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int)
-  requires (resend >= 0)
-  ensures ((waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend) <= now) <==> readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend))
-  ensures (backedOff ==> (notBefore > now) ==> (waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend) == notBefore))
-  ensures ((!(backedOff) || (notBefore <= now)) ==> wasSent ==> (waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend) == (sentAt + resend)))
-  ensures ((!(backedOff) || (notBefore <= now)) ==> !(wasSent) ==> (waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend) == now))
-{
-}
-
-function looksAgainAt(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int): int
-  requires (resend >= 1)
-{
-  var at := waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend);
-  if (at > now) then
-    at
-  else
-    (now + resend)
-}
-
-lemma looksAgainAt_ensures(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int)
-  requires (resend >= 1)
-  ensures (looksAgainAt(now, backedOff, notBefore, wasSent, sentAt, resend) > now)
-  ensures (!(readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend)) ==> (looksAgainAt(now, backedOff, notBefore, wasSent, sentAt, resend) == waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend)))
-  ensures (readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend) ==> (looksAgainAt(now, backedOff, notBefore, wasSent, sentAt, resend) == (now + resend)))
-{
-}
-
-function earliestAfter(now: int, times: seq<int>): Option<int>
-  decreases |times|
-{
-  if (|times| == 0) then
-    None
-  else
-    var head := (if ((0 <= 0) && (0 < |times|)) then times[0] else now);
-    var rest := earliestAfter(now, times[1..]);
-    if (head <= now) then
-      rest
-    else
-      match rest {
-        case Some(i_rest_val) =>
-          Some((if (head < i_rest_val) then head else i_rest_val))
-        case None =>
-          Some(head)
-      }
-}
-
-lemma earliestAfter_ensures(now: int, times: seq<int>)
-  ensures (match earliestAfter(now, times) { case Some(i_result_val) => (i_result_val > now) case None => true })
-  ensures ((match earliestAfter(now, times) { case Some(i_) => false case None => true }) <==> forall i: int :: ((0 <= i) ==> (i < |times|) ==> (times[i] <= now)))
-  ensures (match earliestAfter(now, times) { case Some(i_result_val) => forall i: int :: ((0 <= i) ==> (i < |times|) ==> (times[i] > now) ==> (i_result_val <= times[i])) case None => true })
-  ensures (match earliestAfter(now, times) { case Some(i_result_val) => exists i: int :: (((0 <= i) && (i < |times|)) && (times[i] == i_result_val)) case None => true })
-{
-}
-
-function staleLease(derived: bool, seated: bool, removedAfterCause: bool): bool
-{
-  ((!(derived) || !(seated)) || removedAfterCause)
-}
-
-lemma staleLease_ensures(derived: bool, seated: bool, removedAfterCause: bool)
-  ensures (staleLease(derived, seated, removedAfterCause) <==> ((!(derived) || !(seated)) || removedAfterCause))
-  ensures (derived ==> seated ==> !(removedAfterCause) ==> !(staleLease(derived, seated, removedAfterCause)))
-{
-}
-
 function endingOf(running: bool, stale: bool, pastExpiry: bool): Ending
 {
   if !(running) then
@@ -646,40 +476,6 @@ lemma endingOf_ensures(running: bool, stale: bool, pastExpiry: bool)
   ensures (running ==> !(stale) ==> !(pastExpiry) ==> endingOf(running, stale, pastExpiry).stays?)
   ensures (endingOf(running, stale, pastExpiry).expired? ==> !(stale))
   ensures ((!endingOf(running, stale, pastExpiry).stays?) ==> running)
-{
-}
-
-function mayClose(stopped: bool, endings: int, exchangeOpen: bool, exchangeLive: bool): bool
-  requires (endings >= 0)
-{
-  (((!(stopped) && (endings == 0)) && exchangeOpen) && !(exchangeLive))
-}
-
-lemma mayClose_ensures(stopped: bool, endings: int, exchangeOpen: bool, exchangeLive: bool)
-  requires (endings >= 0)
-  ensures (mayClose(stopped, endings, exchangeOpen, exchangeLive) ==> !(stopped))
-  ensures (mayClose(stopped, endings, exchangeOpen, exchangeLive) ==> (endings == 0))
-  ensures (mayClose(stopped, endings, exchangeOpen, exchangeLive) ==> exchangeOpen)
-  ensures (mayClose(stopped, endings, exchangeOpen, exchangeLive) ==> !(exchangeLive))
-  ensures (!(stopped) ==> (endings == 0) ==> exchangeOpen ==> !(exchangeLive) ==> mayClose(stopped, endings, exchangeOpen, exchangeLive))
-{
-}
-
-function closeMoved(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool): bool
-{
-  match open {
-    case Some(i_open_val) =>
-      ((i_open_val.from == close.from) && ((lastSeq != close.through) || exchangeLive))
-    case None =>
-      false
-  }
-}
-
-lemma closeMoved_ensures(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool)
-  ensures (closeMoved(open, close, lastSeq, exchangeLive) ==> (match open { case Some(i_) => true case None => false }))
-  ensures (match open { case Some(i_open_val) => (closeMoved(open, close, lastSeq, exchangeLive) <==> ((i_open_val.from == close.from) && ((lastSeq != close.through) || exchangeLive))) case None => true })
-  ensures (closeMoved(open, close, lastSeq, exchangeLive) ==> !(admitsClose(open, close, lastSeq, exchangeLive)))
-  ensures (admitsClose(open, close, lastSeq, exchangeLive) ==> !(closeMoved(open, close, lastSeq, exchangeLive)))
 {
 }
 
@@ -793,11 +589,11 @@ function activationGrant(id: ActivationFields, cancelledAt: Option<int>, seated:
           if !(recorded) then
             None
           else
-            Some(Grant(id.seat, id.attempt, GrantPurpose.respond(id.position)))
+            Some(Grant(id.seat, id.attempt, respond(id.position)))
         else
           match close {
             case Some(i_close_val) =>
-              Some(Grant(id.seat, id.attempt, GrantPurpose.summarize(i_close_val.from, i_close_val.owner, i_close_val.through)))
+              Some(Grant(id.seat, id.attempt, summarize(i_close_val.from, i_close_val.owner, i_close_val.through)))
             case None =>
               None
           }
@@ -960,105 +756,6 @@ lemma stampedSummary_ensures(owner: string, from: int, through: int)
 {
 }
 
-function addressesOwner(to: Option<string>, owner: string): bool
-{
-  match to {
-    case Some(i_to_val) =>
-      (i_to_val == owner)
-    case None =>
-      true
-  }
-}
-
-lemma addressesOwner_ensures(to: Option<string>, owner: string)
-  ensures ((match to { case Some(i_) => false case None => true }) ==> addressesOwner(to, owner))
-  ensures (match to { case Some(i_to_val) => (addressesOwner(to, owner) <==> (i_to_val == owner)) case None => true })
-{
-}
-
-function commitAuthority(known: Option<LeasePhase>, pastExpiry: bool, granted: bool): Authority
-{
-  match known {
-    case Some(i_known_val) =>
-      if i_known_val.ended? then
-        Authority.stale
-      else
-        if pastExpiry then
-          Authority.stale
-        else
-          if granted then
-            Authority.granted
-          else
-            Authority.refused
-    case None =>
-      Authority.stale
-  }
-}
-
-lemma commitAuthority_ensures(known: Option<LeasePhase>, pastExpiry: bool, granted: bool)
-  ensures ((match known { case Some(i_) => false case None => true }) ==> commitAuthority(known, pastExpiry, granted).stale?)
-  ensures (match known { case Some(i_known_val) => (i_known_val.ended? ==> commitAuthority(known, pastExpiry, granted).stale?) case None => true })
-  ensures (pastExpiry ==> commitAuthority(known, pastExpiry, granted).stale?)
-  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> !(pastExpiry) ==> (commitAuthority(known, pastExpiry, granted).granted? <==> granted)) case None => true })
-  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> !(pastExpiry) ==> (commitAuthority(known, pastExpiry, granted).refused? <==> !(granted))) case None => true })
-  ensures (commitAuthority(known, pastExpiry, granted).granted? ==> (((match known { case Some(i_) => true case None => false }) && !(pastExpiry)) && granted))
-  ensures (commitAuthority(known, pastExpiry, granted).refused? ==> (((match known { case Some(i_) => true case None => false }) && !(pastExpiry)) && !(granted)))
-  ensures ((!commitAuthority(known, pastExpiry, granted).stale?) ==> ((match known { case Some(i_) => true case None => false }) && !(pastExpiry)))
-{
-}
-
-function isAuthor(author: Option<string>, name: string): bool
-{
-  match author {
-    case Some(i_author_val) =>
-      (i_author_val == name)
-    case None =>
-      false
-  }
-}
-
-lemma isAuthor_ensures(author: Option<string>, name: string)
-  ensures ((match author { case Some(i_) => false case None => true }) ==> !(isAuthor(author, name)))
-  ensures (match author { case Some(i_author_val) => (isAuthor(author, name) <==> (i_author_val == name)) case None => true })
-{
-}
-
-function atWork(since: int, ended: bool, until: int, seq_: int): bool
-{
-  ((since < seq_) && (!(ended) || (until >= seq_)))
-}
-
-lemma atWork_ensures(since: int, ended: bool, until: int, seq_: int)
-  ensures (atWork(since, ended, until, seq_) ==> (since < seq_))
-  ensures (atWork(since, ended, until, seq_) ==> ended ==> (until >= seq_))
-  ensures (!(ended) ==> (atWork(since, ended, until, seq_) <==> (since < seq_)))
-  ensures (!(atWork(since, ended, until, seq_)) ==> ((seq_ <= since) || (ended && (until < seq_))))
-{
-}
-
-function steers(ordinary: bool, seat: string, author: Option<string>, woken: bool, since: int, ended: bool, until: int, seq_: int): bool
-{
-  if !(ordinary) then
-    false
-  else
-    if woken then
-      false
-    else
-      if isAuthor(author, seat) then
-        false
-      else
-        atWork(since, ended, until, seq_)
-}
-
-lemma steers_ensures(ordinary: bool, seat: string, author: Option<string>, woken: bool, since: int, ended: bool, until: int, seq_: int)
-  ensures (steers(ordinary, seat, author, woken, since, ended, until, seq_) ==> ordinary)
-  ensures (steers(ordinary, seat, author, woken, since, ended, until, seq_) ==> !(woken))
-  ensures (isAuthor(author, seat) ==> !(steers(ordinary, seat, author, woken, since, ended, until, seq_)))
-  ensures (steers(ordinary, seat, author, woken, since, ended, until, seq_) ==> atWork(since, ended, until, seq_))
-  ensures (ordinary ==> !(woken) ==> !(isAuthor(author, seat)) ==> atWork(since, ended, until, seq_) ==> steers(ordinary, seat, author, woken, since, ended, until, seq_))
-{
-}
-
 function lastOf(seqs: seq<int>): int
   requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |seqs|) ==> (seqs[i] <= seqs[j]))
   requires forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] >= 1))
@@ -1104,53 +801,4 @@ lemma openingQuestion_ensures(messages: seq<Message>, people: seq<string>, close
   ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => exists i: int :: ((((0 <= i) && (i < |messages|)) && (messages[i] == i_result_val)) && forall j: int :: ((0 <= j) ==> (j < i) ==> !(opensExchange(messages[j], people, closedThrough)))) case None => true })
   ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => ((|messages| > 0) && (i_result_val.seq_ <= messages[(|messages| - 1)].seq_)) case None => true })
 {
-}
-
-method latest(times: seq<int>, floor: int) returns (res: int)
-  requires (floor >= 0)
-  ensures (res >= floor)
-  ensures forall i: int :: ((0 <= i) ==> (i < |times|) ==> (res >= times[i]))
-{
-  var best := floor;
-  var i := 0;
-  while (i < |times|)
-    invariant (0 <= i)
-    invariant (i <= |times|)
-    invariant (best >= floor)
-    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (best >= times[k]))
-  {
-    var v := (if ((0 <= i) && (i < |times|)) then times[i] else floor);
-    if (v > best) {
-      best := v;
-    }
-    i := (i + 1);
-  }
-  return best;
-}
-
-method forgets(sentIds: seq<string>, dueIds: seq<string>) returns (res: seq<string>)
-  ensures (|res| <= |sentIds|)
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> !((res[i] in dueIds)))
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in sentIds))
-  ensures forall i: int :: ((0 <= i) ==> (i < |sentIds|) ==> !((sentIds[i] in dueIds)) ==> (sentIds[i] in res))
-  ensures forall i: int :: ((0 <= i) ==> (i < |dueIds|) ==> !((dueIds[i] in res)))
-{
-  var out: seq<string> := [];
-  var i := 0;
-  while (i < |sentIds|)
-    invariant (0 <= i)
-    invariant (i <= |sentIds|)
-    invariant (|out| <= i)
-    invariant forall k: int :: ((0 <= k) ==> (k < |out|) ==> !((out[k] in dueIds)))
-    invariant forall k: int :: ((0 <= k) ==> (k < |out|) ==> (out[k] in sentIds))
-    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> !((sentIds[k] in dueIds)) ==> (sentIds[k] in out))
-    decreases (|sentIds| - i)
-  {
-    var id := (if ((0 <= i) && (i < |sentIds|)) then sentIds[i] else "");
-    if !((id in dueIds)) {
-      out := (out + [id]);
-    }
-    i := (i + 1);
-  }
-  return out;
 }
