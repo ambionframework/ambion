@@ -11,9 +11,10 @@ A file copies the landed rules its contracts name, so it verifies on its
 own. The copy is the reference for the slice; the landed file wins where
 the two differ.
 
-| File                 | Slice | Obligations | Verified with                 |
-| -------------------- | ----- | ----------- | ----------------------------- |
-| `reconcile.rules.ts` | 2c    | 35          | LemmaScript 0.6.1, Dafny 4.11 |
+| File                  | Slice | Obligations | Verified with                 |
+| --------------------- | ----- | ----------- | ----------------------------- |
+| `reconcile.rules.ts`  | 2c    | 35          | LemmaScript 0.6.1, Dafny 4.11 |
+| `transition.rules.ts` | 2a    | 37          | LemmaScript 0.6.1, Dafny 4.11 |
 
 Verify one file at a desk:
 

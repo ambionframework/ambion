@@ -325,10 +325,12 @@ unions. `end` in `transition.ts` runs it with `isExpired` as the input.
 
 ## D. The transitions
 
-**Nine rules landed on this branch.** D1, D2, D4, D5, D6, D7, and D9 are
-in the room's rules file with their proofs, `transition.ts`,
-`exchange.ts`, and `lease.ts` run them, and the binding test names them.
-D3, D8, D10, and D11 wait for slice 2a.
+**Nine rules landed on this branch, and the rest are proven.** D1, D2,
+D4, D5, D6, D7, and D9 are in the room's rules file with their proofs,
+`transition.ts`, `exchange.ts`, and `lease.ts` run them, and the binding
+test names them. D3, D8, D10, and D11 wait for slice 2a; their rules are
+in [`planning/evidence/formal/transition.rules.ts`](evidence/formal/transition.rules.ts),
+which CI verifies with 37 obligations.
 
 **`decide` was a set of case splits with no contract.** Each helper in
 `transition.ts` is a table over a few booleans, and each table is a
@@ -727,16 +729,16 @@ before it entered this plan; the files are under
 [`planning/evidence/formal/`](evidence/formal/README.md), and CI verifies
 them with the landed rules.
 
-| Group                   | File                                          | Obligations | Status                     |
-| ----------------------- | --------------------------------------------- | ----------- | -------------------------- |
-| A. Journal              | `packages/journal/src/rules.verified.ts`      | 41          | Landed                     |
-| B. Lease fold           | `packages/ambion/src/room/rules.verified.ts`  | 56 with D   | Landed                     |
-| C. Reconciliation       | `planning/evidence/formal/reconcile.rules.ts` | 35          | Proven, slice 2c open      |
-| D. Transitions          | `packages/ambion/src/room/rules.verified.ts`  | 22 landed   | Nine landed, slice 2a open |
-| E. Routing and presence | `packages/ambion/src/room/rules.verified.ts`  | prototype   | Planned, slice 2d          |
-| F. Activation identity  | `packages/ambion/src/room/rules.verified.ts`  | prototype   | Planned, slice 2e          |
-| G. Exchange and roster  | `packages/ambion/src/room/rules.verified.ts`  | prototype   | Planned, slice 2f          |
-| H. Vocabulary           | `packages/ambion/src/rules.verified.ts`       | prototype   | Planned                    |
+| Group                   | File                                                            | Obligations   | Status                       |
+| ----------------------- | --------------------------------------------------------------- | ------------- | ---------------------------- |
+| A. Journal              | `packages/journal/src/rules.verified.ts`                        | 41            | Landed                       |
+| B. Lease fold           | `packages/ambion/src/room/rules.verified.ts`                    | 56 with D     | Landed                       |
+| C. Reconciliation       | `planning/evidence/formal/reconcile.rules.ts`                   | 35            | Proven, slice 2c open        |
+| D. Transitions          | `room/rules.verified.ts`, `evidence/formal/transition.rules.ts` | 56 with B, 37 | Nine landed, the rest proven |
+| E. Routing and presence | `packages/ambion/src/room/rules.verified.ts`                    | prototype     | Planned, slice 2d            |
+| F. Activation identity  | `packages/ambion/src/room/rules.verified.ts`                    | prototype     | Planned, slice 2e            |
+| G. Exchange and roster  | `packages/ambion/src/room/rules.verified.ts`                    | prototype     | Planned, slice 2f            |
+| H. Vocabulary           | `packages/ambion/src/rules.verified.ts`                         | prototype     | Planned                      |
 
 **Three defects and three decisions came out of the review.** The seq
 bound, the early stamped write, and the read past the head are fixed on
