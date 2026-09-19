@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Workspace } from '../src/index.ts';
-import { memoryBackend, openWorkspace, SHARED_DATABASE } from '../src/index.ts';
+import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace, SHARED_DATABASE } from '../src/index.ts';
 
 const agent = (name: string) => ({ name, identity: `${name} identity` });
 
@@ -117,14 +117,23 @@ SELECT p.id, p.name FROM part p JOIN scratch.pick USING(id) ORDER BY p.id;`,
 
 		// The CSV lands on the shared filesystem and python reads it.
 		await site.use(agent('alpha'), async (env) => {
-			const csv = await env.readTextFile('/home/alpha/out/m.csv');
+			const csv = await env.readTextFile('/home/alpha/out/m.csv', BACKGROUND_CONTEXT);
 			expect(csv.ok && csv.value).toContain('1,a,1.5');
-			const py = await env.exec(`python3 - <<'PY'
+			let output = '';
+			const py = await env.exec(
+				`python3 - <<'PY'
 import csv
 rows=list(csv.DictReader(open('/home/alpha/out/m.csv')))
 print(len(rows), rows[1]['amt'])
-PY`);
-			expect(py.ok && py.value.stdout.trim()).toBe('3 \\N');
+PY`,
+				{
+					onUpdate: (update) => {
+						if (update.kind === 'replace') output = update.output.text;
+					},
+				},
+				BACKGROUND_CONTEXT,
+			);
+			expect(py.ok && output.trim()).toBe('3 \\N');
 		});
 		await site.destroy();
 	});
@@ -195,7 +204,7 @@ INSERT INTO big SELECT id FROM seq;`,
 		expect(bad.text).toContain('SQL error');
 		// The earlier good file is intact.
 		await site.use(agent('alpha'), async (env) => {
-			const csv = await env.readTextFile('/home/alpha/keep.csv');
+			const csv = await env.readTextFile('/home/alpha/keep.csv', BACKGROUND_CONTEXT);
 			expect(csv.ok && csv.value).toContain('1');
 		});
 		await site.destroy();

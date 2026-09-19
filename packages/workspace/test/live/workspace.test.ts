@@ -17,7 +17,7 @@ import {
 	spent,
 } from '../../../ambion/test/live/support.ts';
 import { enter, roomName } from '../../../ambion/test/support/room.ts';
-import { memoryBackend, openWorkspace } from '../../src/index.ts';
+import { BACKGROUND_CONTEXT, memoryBackend, openWorkspace } from '../../src/index.ts';
 
 live('the workspace', () => {
 	it('a seat reads a file it was told about, writes one back, and answers from what it read', async () => {
@@ -73,6 +73,8 @@ live('the workspace', () => {
 			const result = await env.exec(
 				'sqlite3 /workspace/shared.db "CREATE TABLE pour(id INTEGER, grade TEXT, tonnes REAL);' +
 					" INSERT INTO pour VALUES (1,'C30',10),(2,'C40',5),(3,'C30',15),(4,'C40',20)\"",
+				undefined,
+				BACKGROUND_CONTEXT,
 			);
 			if (!result.ok || result.value.exitCode !== 0) throw new Error('seed failed');
 		});

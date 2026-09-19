@@ -24,6 +24,7 @@ import { posix } from 'node:path';
 import type {
 	AgentHarnessTool,
 	AgentToolResult,
+	Context,
 	ExecutionEnv,
 	ExecutionToolContext,
 	ShellExecOptions,
@@ -92,31 +93,52 @@ export function createSqlTool(): AgentHarnessTool<
 		description:
 			'Run SQLite statements on the shared database. Share a table or a view; it needs no copy. Set export for a CSV file.',
 		parameters: sqlSchema,
-		execute: (_toolCallId, params, signal, _onUpdate, context) => run(context.env, params, signal),
+		execute: (_toolCallId, params, _onUpdate, toolContext, _invocation, context) =>
+			run(toolContext.env, params, context),
 	};
 }
 
-async function run(
+/**
+ * Run one command and return its combined output and exit code. `exec` returns
+ * metadata and delivers the output through `onUpdate`, so this collects the
+ * final view. No capture limit reaches `exec`, so the whole output comes back
+ * for the JSON parse.
+ */
+async function shell(
 	env: ExecutionEnv,
-	params: SqlParams,
-	signal: AbortSignal | undefined,
-): Promise<SqlResult> {
-	const database = await resolvePath(env, params.database ?? SHARED_DATABASE);
-	await ensureParent(env, database);
-	const scriptPath = await writeScript(env, params.sql);
-	const options: ShellExecOptions = {
-		...(signal === undefined ? {} : { abortSignal: signal }),
-		...(params.timeout === undefined ? {} : { timeout: params.timeout }),
-	};
+	command: string,
+	options: ShellExecOptions,
+	context: Context,
+): Promise<{ output: string; exitCode: number }> {
+	let output = '';
+	const result = await env.exec(
+		command,
+		{
+			...options,
+			onUpdate: (update) => {
+				if (update.kind === 'replace') output = update.output.text;
+			},
+		},
+		context,
+	);
+	if (!result.ok) throw result.error;
+	return { output, exitCode: result.value.exitCode };
+}
+
+async function run(env: ExecutionEnv, params: SqlParams, context: Context): Promise<SqlResult> {
+	const database = await resolvePath(env, params.database ?? SHARED_DATABASE, context);
+	await ensureParent(env, database, context);
+	const scriptPath = await writeScript(env, params.sql, context);
+	const options: ShellExecOptions = params.timeout === undefined ? {} : { timeout: params.timeout };
 	const maxRows = params.maxRows ?? PREVIEW_ROWS;
 	try {
 		if (params.export === undefined)
-			return await preview(env, database, scriptPath, maxRows, options);
-		const exportPath = await resolvePath(env, params.export);
-		await ensureParent(env, exportPath);
-		return await exportCsv(env, database, scriptPath, exportPath, maxRows, options);
+			return await preview(env, database, scriptPath, maxRows, options, context);
+		const exportPath = await resolvePath(env, params.export, context);
+		await ensureParent(env, exportPath, context);
+		return await exportCsv(env, database, scriptPath, exportPath, maxRows, options, context);
 	} finally {
-		await env.remove(scriptPath, { force: true });
+		await env.remove(scriptPath, { force: true }, context);
 	}
 }
 
@@ -127,16 +149,17 @@ async function preview(
 	scriptPath: string,
 	maxRows: number,
 	options: ShellExecOptions,
+	context: Context,
 ): Promise<SqlResult> {
-	const result = await runSqlite(env, ['-json'], database, scriptPath, undefined, options);
-	if (result.exitCode !== 0) return failed(database, result.stderr);
-	if (result.stdout.length > MAX_JSON_CHARS) {
+	const result = await runSqlite(env, ['-json'], database, scriptPath, undefined, options, context);
+	if (result.exitCode !== 0) return failed(database, result.output);
+	if (result.output.length > MAX_JSON_CHARS) {
 		const text =
 			'The result is large. Add a LIMIT for a preview, or set export to write the full result as CSV.';
 		return report(text, { database, rows: 0, truncated: true });
 	}
-	const rows = parseRows(result.stdout);
-	if (rows === undefined) return report(result.stdout.trim(), { database, rows: 0 });
+	const rows = parseRows(result.output);
+	if (rows === undefined) return report(result.output.trim(), { database, rows: 0 });
 	if (rows.length === 0) return report(`Ran on ${database}. No rows.`, { database, rows: 0 });
 	return report(table(rows, maxRows), { database, rows: rows.length });
 }
@@ -153,24 +176,25 @@ async function exportCsv(
 	exportPath: string,
 	maxRows: number,
 	options: ShellExecOptions,
+	context: Context,
 ): Promise<SqlResult> {
-	const temp = await env.createTempFile({ suffix: '.csv' });
+	const temp = await env.createTempFile({ suffix: '.csv' }, context);
 	if (!temp.ok) throw temp.error;
 	const tempOut = temp.value;
 	const flags = ['-csv', '-header', '-nullvalue', `'${NULL_SENTINEL}'`];
 	try {
-		const result = await runSqlite(env, flags, database, scriptPath, tempOut, options);
-		if (result.exitCode !== 0) return failed(database, result.stderr);
-		const head = await env.readTextLines(tempOut, { maxLines: maxRows + 1 });
+		const result = await runSqlite(env, flags, database, scriptPath, tempOut, options, context);
+		if (result.exitCode !== 0) return failed(database, result.output);
+		const head = await env.readTextLines(tempOut, { maxLines: maxRows + 1 }, context);
 		const lines = head.ok ? head.value.filter((line) => line !== '') : [];
-		const rows = await countRows(env, tempOut);
-		const moved = await env.renameFile(tempOut, exportPath);
+		const rows = await countRows(env, tempOut, context);
+		const moved = await env.renameFile(tempOut, exportPath, context);
 		if (!moved.ok) throw moved.error;
 		const block = lines.length === 0 ? '(no rows)' : `\`\`\`csv\n${lines.join('\n')}\n\`\`\``;
 		const footer = `\n\nWrote ${rows} ${plural(rows)} to ${exportPath}. A NULL value reads as ${NULL_SENTINEL}.`;
 		return report(`${block}${footer}`, { database, rows, export: exportPath });
 	} finally {
-		await env.remove(tempOut, { force: true });
+		await env.remove(tempOut, { force: true }, context);
 	}
 }
 
@@ -182,12 +206,11 @@ async function runSqlite(
 	scriptPath: string,
 	redirect: string | undefined,
 	options: ShellExecOptions,
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+	context: Context,
+): Promise<{ output: string; exitCode: number }> {
 	const parts = ['sqlite3', ...flags, quote(database), '<', quote(scriptPath)];
 	if (redirect !== undefined) parts.push('>', quote(redirect));
-	const result = await env.exec(parts.join(' '), options);
-	if (!result.ok) throw result.error;
-	return result.value;
+	return shell(env, parts.join(' '), options, context);
 }
 
 /**
@@ -231,30 +254,39 @@ function cell(value: unknown): string {
 }
 
 /** Count the CSV data rows with xan, which reads RFC 4180 quoting and skips the header. */
-async function countRows(env: ExecutionEnv, path: string): Promise<number> {
-	const result = await env.exec(`xan count ${quote(path)}`);
+async function countRows(env: ExecutionEnv, path: string, context: Context): Promise<number> {
+	let output = '';
+	const result = await env.exec(
+		`xan count ${quote(path)}`,
+		{
+			onUpdate: (update) => {
+				if (update.kind === 'replace') output = update.output.text;
+			},
+		},
+		context,
+	);
 	if (!result.ok) return 0;
-	const rows = Number.parseInt(result.value.stdout.trim(), 10);
+	const rows = Number.parseInt(output.trim(), 10);
 	return Number.isFinite(rows) ? rows : 0;
 }
 
-async function resolvePath(env: ExecutionEnv, path: string): Promise<string> {
-	const resolved = await env.absolutePath(path);
+async function resolvePath(env: ExecutionEnv, path: string, context: Context): Promise<string> {
+	const resolved = await env.absolutePath(path, context);
 	if (!resolved.ok) throw resolved.error;
 	return resolved.value;
 }
 
-async function ensureParent(env: ExecutionEnv, path: string): Promise<void> {
-	const made = await env.createDir(posix.dirname(path), { recursive: true });
+async function ensureParent(env: ExecutionEnv, path: string, context: Context): Promise<void> {
+	const made = await env.createDir(posix.dirname(path), { recursive: true }, context);
 	if (!made.ok) throw made.error;
 }
 
-async function writeScript(env: ExecutionEnv, sql: string): Promise<string> {
-	const temp = await env.createTempFile({ suffix: '.sql' });
+async function writeScript(env: ExecutionEnv, sql: string, context: Context): Promise<string> {
+	const temp = await env.createTempFile({ suffix: '.sql' }, context);
 	if (!temp.ok) throw temp.error;
-	const written = await env.writeFile(temp.value, sql);
+	const written = await env.writeFile(temp.value, sql, context);
 	if (!written.ok) {
-		await env.remove(temp.value, { force: true });
+		await env.remove(temp.value, { force: true }, context);
 		throw written.error;
 	}
 	return temp.value;
