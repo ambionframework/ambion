@@ -20,6 +20,14 @@ datatype OpenExchange = OpenExchange(owner: string, from: int)
 
 datatype CloseRef = CloseRef(owner: string, from: int, through: int)
 
+datatype Hold = running(id: string, at: string, claimedAt: string, since: int, readThrough: int, expiresAt: int) | ended(id: string, at: string, claimedAt: string, since: int, readThrough: int, reason: LeaseEndReason, until: int)
+
+datatype Change = running(id: string, expiresAt: int, at: string, readThrough: int) | ended(id: string, reason: LeaseEndReason, at: string, readThrough: int)
+
+datatype Taken = running(readThrough: int, position: int) | ended(reason: LeaseEndReason, readThrough: int, position: int)
+
+datatype Schedule = Schedule(attempt: int, notBefore: Option<int>)
+
 function expired(expiry: int, now: int): bool
 {
   (expiry <= now)
@@ -39,6 +47,8 @@ lemma atWork_ensures(since: int, ended: bool, until: int, seq_: int)
   ensures (atWork(since, ended, until, seq_) ==> (since < seq_))
   ensures (atWork(since, ended, until, seq_) ==> ended ==> (until >= seq_))
   ensures (!(ended) ==> (atWork(since, ended, until, seq_) <==> (since < seq_)))
+  ensures (atWork(since, ended, until, seq_) ==> coversAttempt(ended, until, seq_))
+  ensures (!(atWork(since, ended, until, seq_)) ==> ((seq_ <= since) || (ended && (until < seq_))))
 {
 }
 
@@ -50,6 +60,7 @@ function coversAttempt(ended: bool, until: int, seq_: int): bool
 lemma coversAttempt_ensures(ended: bool, until: int, seq_: int)
   ensures (!(ended) ==> coversAttempt(ended, until, seq_))
   ensures (ended ==> (coversAttempt(ended, until, seq_) <==> (seq_ <= until)))
+  ensures (coversAttempt(ended, until, seq_) ==> forall earlier: int :: ((earlier <= seq_) ==> coversAttempt(ended, until, earlier)))
 {
 }
 
@@ -262,4 +273,313 @@ lemma survivesCancellation_ensures(position: int, cancelledAt: Option<int>)
   ensures (match cancelledAt { case Some(i_cancelledAt_val) => (survivesCancellation(position, cancelledAt) <==> !(beforeCancellation(position, i_cancelledAt_val))) case None => true })
   ensures (match cancelledAt { case Some(i_cancelledAt_val) => (survivesCancellation(position, cancelledAt) <==> (position >= i_cancelledAt_val)) case None => true })
 {
+}
+
+function applyChange(known: Option<Hold>, change: Change, seq_: int): Hold
+  requires (seq_ >= 1)
+  requires (change.readThrough >= 0)
+  requires (match known { case Some(i_known_val) => ((i_known_val.readThrough >= 0) && (i_known_val.since <= seq_)) case None => true })
+{
+  match known {
+    case Some(i_known_val) =>
+      if i_known_val.ended? then
+        i_known_val
+      else
+        var since := (match known { case Some(i_known_val) => i_known_val.since case None => seq_ });
+        var claimedAt := (match known { case Some(i_known_val) => i_known_val.claimedAt case None => change.at });
+        var prior := (match known { case Some(i_known_val) => i_known_val.readThrough case None => 0 });
+        var readThrough := MathMax(prior, change.readThrough);
+        match change {
+          case running(i_change_id, i_change_expiresAt, i_change_at, i_change_readThrough) =>
+            Hold.running(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_expiresAt)
+          case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough) =>
+            Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, seq_)
+        }
+    case None =>
+      var since := (match known { case Some(i_known_val) => i_known_val.since case None => seq_ });
+      var claimedAt := (match known { case Some(i_known_val) => i_known_val.claimedAt case None => change.at });
+      var prior := (match known { case Some(i_known_val) => i_known_val.readThrough case None => 0 });
+      var readThrough := MathMax(prior, change.readThrough);
+      match change {
+        case running(i_change_id, i_change_expiresAt, i_change_at, i_change_readThrough) =>
+          Hold.running(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_expiresAt)
+        case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough) =>
+          Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, seq_)
+      }
+  }
+}
+
+lemma applyChange_ensures(known: Option<Hold>, change: Change, seq_: int)
+  requires (seq_ >= 1)
+  requires (change.readThrough >= 0)
+  requires (match known { case Some(i_known_val) => ((i_known_val.readThrough >= 0) && (i_known_val.since <= seq_)) case None => true })
+  ensures (match known { case Some(i_known_val) => (i_known_val.ended? ==> (applyChange(known, change, seq_) == i_known_val)) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> ((applyChange(known, change, seq_).since == seq_) && (applyChange(known, change, seq_).claimedAt == change.at)))
+  ensures (match known { case Some(i_known_val) => ((applyChange(known, change, seq_).since == i_known_val.since) && (applyChange(known, change, seq_).claimedAt == i_known_val.claimedAt)) case None => true })
+  ensures (match known { case Some(i_known_val) => (applyChange(known, change, seq_).readThrough >= i_known_val.readThrough) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> (applyChange(known, change, seq_).readThrough == change.readThrough))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> (applyChange(known, change, seq_).readThrough >= change.readThrough)) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> ((applyChange(known, change, seq_).id == change.id) && (applyChange(known, change, seq_).at == change.at)))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> ((applyChange(known, change, seq_).id == change.id) && (applyChange(known, change, seq_).at == change.at))) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> change.ended? ==> ((applyChange(known, change, seq_).ended? && (applyChange(known, change, seq_).until == seq_)) && (applyChange(known, change, seq_).reason == change.reason)))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> change.ended? ==> ((applyChange(known, change, seq_).ended? && (applyChange(known, change, seq_).until == seq_)) && (applyChange(known, change, seq_).reason == change.reason))) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> change.running? ==> (applyChange(known, change, seq_).running? && (applyChange(known, change, seq_).expiresAt == change.expiresAt)))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> change.running? ==> (applyChange(known, change, seq_).running? && (applyChange(known, change, seq_).expiresAt == change.expiresAt))) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> applyChange(known, change, seq_).ended? ==> (applyChange(known, change, seq_).since <= applyChange(known, change, seq_).until))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> applyChange(known, change, seq_).ended? ==> (applyChange(known, change, seq_).since <= applyChange(known, change, seq_).until)) case None => true })
+{
+}
+
+function cancelHold(hold: Hold, position: int, cancelledAt: int, at: string): Hold
+  requires (hold.since <= cancelledAt)
+{
+  if (hold.ended? || !(beforeCancellation(position, cancelledAt))) then
+    hold
+  else
+    Hold.ended(hold.id, at, hold.claimedAt, hold.since, hold.readThrough, LeaseEndReason.revoked, cancelledAt)
+}
+
+lemma cancelHold_ensures(hold: Hold, position: int, cancelledAt: int, at: string)
+  requires (hold.since <= cancelledAt)
+  ensures (hold.ended? ==> (cancelHold(hold, position, cancelledAt, at) == hold))
+  ensures (hold.running? ==> !(beforeCancellation(position, cancelledAt)) ==> (cancelHold(hold, position, cancelledAt, at) == hold))
+  ensures (hold.running? ==> beforeCancellation(position, cancelledAt) ==> (((cancelHold(hold, position, cancelledAt, at).ended? && cancelHold(hold, position, cancelledAt, at).reason.revoked?) && (cancelHold(hold, position, cancelledAt, at).until == cancelledAt)) && (cancelHold(hold, position, cancelledAt, at).at == at)))
+  ensures (cancelHold(hold, position, cancelledAt, at).readThrough == hold.readThrough)
+  ensures (cancelHold(hold, position, cancelledAt, at).since == hold.since)
+  ensures (cancelHold(hold, position, cancelledAt, at).claimedAt == hold.claimedAt)
+  ensures (cancelHold(hold, position, cancelledAt, at).id == hold.id)
+  ensures (cancelHold(hold, position, cancelledAt, at).ended? ==> hold.running? ==> (cancelHold(hold, position, cancelledAt, at).since <= cancelHold(hold, position, cancelledAt, at).until))
+{
+}
+
+function isExpired(phase: LeasePhase, expiresAt: int, now: int): bool
+{
+  (phase.running? && expired(expiresAt, now))
+}
+
+lemma isExpired_ensures(phase: LeasePhase, expiresAt: int, now: int)
+  ensures (isExpired(phase, expiresAt, now) <==> (phase.running? && expired(expiresAt, now)))
+  ensures (isExpired(phase, expiresAt, now) ==> phase.running?)
+{
+}
+
+function isLive(phase: LeasePhase, expiresAt: int, now: int): bool
+{
+  (phase.running? && !(isExpired(phase, expiresAt, now)))
+}
+
+lemma isLive_ensures(phase: LeasePhase, expiresAt: int, now: int)
+  ensures (isLive(phase, expiresAt, now) <==> (phase.running? && (now < expiresAt)))
+  ensures !((isLive(phase, expiresAt, now) && isExpired(phase, expiresAt, now)))
+  ensures (phase.running? ==> (isLive(phase, expiresAt, now) || isExpired(phase, expiresAt, now)))
+  ensures (phase.ended? ==> !(isLive(phase, expiresAt, now)))
+{
+}
+
+function cameToNothing(reason: LeaseEndReason): bool
+{
+  (reason.failed? || reason.expired?)
+}
+
+lemma cameToNothing_ensures(reason: LeaseEndReason)
+  ensures (cameToNothing(reason) <==> (reason.failed? || reason.expired?))
+{
+}
+
+function answers(lease: Taken, seq_: int): bool
+  requires (seq_ >= 1)
+{
+  match lease {
+    case running(i_lease_readThrough, i_lease_position) =>
+      true
+    case ended(i_lease_reason, i_lease_readThrough, i_lease_position) =>
+      if cameToNothing(i_lease_reason) then
+        false
+      else
+        (((i_lease_reason.abandoned? || i_lease_reason.revoked?) && (i_lease_position == seq_)) || (i_lease_readThrough >= seq_))
+  }
+}
+
+lemma answers_ensures(lease: Taken, seq_: int)
+  requires (seq_ >= 1)
+  ensures (lease.running? ==> answers(lease, seq_))
+  ensures (lease.ended? ==> cameToNothing(lease.reason) ==> !(answers(lease, seq_)))
+  ensures (lease.ended? ==> lease.reason.released? ==> (answers(lease, seq_) <==> (lease.readThrough >= seq_)))
+  ensures (lease.ended? ==> (lease.reason.abandoned? || lease.reason.revoked?) ==> (answers(lease, seq_) <==> ((lease.position == seq_) || (lease.readThrough >= seq_))))
+  ensures (lease.ended? ==> (lease.readThrough < seq_) ==> (lease.position != seq_) ==> !(answers(lease, seq_)))
+{
+}
+
+function wakeAnswered(taken: seq<Taken>, seq_: int): bool
+  requires (seq_ >= 1)
+{
+  (exists lease :: lease in taken && answers(lease, seq_))
+}
+
+lemma wakeAnswered_ensures(taken: seq<Taken>, seq_: int)
+  requires (seq_ >= 1)
+  ensures (wakeAnswered(taken, seq_) <==> exists i: int :: (((0 <= i) && (i < |taken|)) && answers(taken[i], seq_)))
+  ensures (!(wakeAnswered(taken, seq_)) ==> forall i: int :: ((0 <= i) ==> (i < |taken|) ==> taken[i].ended?))
+  ensures (!(wakeAnswered(taken, seq_)) ==> forall i: int :: ((0 <= i) ==> (i < |taken|) ==> (taken[i].ended? && (cameToNothing(taken[i].reason) || (taken[i].readThrough < seq_)))))
+{
+}
+
+function countsAgainst(lease: Taken, seq_: int): bool
+  requires (seq_ >= 1)
+{
+  match lease {
+    case running(i_lease_readThrough, i_lease_position) =>
+      false
+    case ended(i_lease_reason, i_lease_readThrough, i_lease_position) =>
+      (cameToNothing(i_lease_reason) || (i_lease_position == seq_))
+  }
+}
+
+lemma countsAgainst_ensures(lease: Taken, seq_: int)
+  requires (seq_ >= 1)
+  ensures (lease.running? ==> !(countsAgainst(lease, seq_)))
+  ensures (lease.ended? ==> cameToNothing(lease.reason) ==> countsAgainst(lease, seq_))
+  ensures (lease.ended? ==> !(cameToNothing(lease.reason)) ==> (countsAgainst(lease, seq_) <==> (lease.position == seq_)))
+{
+}
+
+function schedule(unsuccessful: int, last: int, backoff: int): Schedule
+  requires (unsuccessful >= 0)
+  requires (last >= 0)
+{
+  Schedule(nextAttempt(unsuccessful), (if (unsuccessful == 0) then Option.None else Option.Some((last + backoff))))
+}
+
+lemma schedule_ensures(unsuccessful: int, last: int, backoff: int)
+  requires (unsuccessful >= 0)
+  requires (last >= 0)
+  ensures (schedule(unsuccessful, last, backoff).attempt == nextAttempt(unsuccessful))
+  ensures ((unsuccessful == 0) ==> (match schedule(unsuccessful, last, backoff).notBefore { case Some(i_) => false case None => true }))
+  ensures ((unsuccessful > 0) ==> ((match schedule(unsuccessful, last, backoff).notBefore { case Some(i_) => true case None => false }) && (match schedule(unsuccessful, last, backoff).notBefore { case Some(i_value) => (i_value == (last + backoff)) case None => false })))
+  ensures ((unsuccessful > 0) ==> (backoff >= 0) ==> ((match schedule(unsuccessful, last, backoff).notBefore { case Some(i_) => true case None => false }) && (match schedule(unsuccessful, last, backoff).notBefore { case Some(i_value) => (i_value >= last) case None => false })))
+{
+}
+
+function removedAfter(removals: seq<int>, seq_: int): bool
+  decreases |removals|
+{
+  if (|removals| == 0) then
+    false
+  else
+    var head := (if ((0 <= 0) && (0 < |removals|)) then removals[0] else seq_);
+    ((head > seq_) || removedAfter(removals[1..], seq_))
+}
+
+lemma removedAfter_ensures(removals: seq<int>, seq_: int)
+  ensures (removedAfter(removals, seq_) <==> exists i: int :: (((0 <= i) && (i < |removals|)) && (removals[i] > seq_)))
+  ensures (removedAfter(removals, seq_) ==> forall earlier: int :: ((earlier <= seq_) ==> removedAfter(removals, earlier)))
+{
+}
+
+method latest(times: seq<int>, floor: int) returns (res: int)
+  requires (floor >= 0)
+  ensures (res >= floor)
+  ensures forall i: int :: ((0 <= i) ==> (i < |times|) ==> (res >= times[i]))
+{
+  var best := floor;
+  var i := 0;
+  while (i < |times|)
+    invariant (0 <= i)
+    invariant (i <= |times|)
+    invariant (best >= floor)
+    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (best >= times[k]))
+  {
+    var v := (if ((0 <= i) && (i < |times|)) then times[i] else floor);
+    if (v > best) {
+      best := v;
+    }
+    i := (i + 1);
+  }
+  return best;
+}
+
+// ---- Proof additions (hand-written, additions-only) ----------------------
+
+// The attempts at one message cause for one seat, in journal order. `count` is how many
+// covering leases the fold counts as unsuccessful (`failed.length` in `statusOf`); `running`
+// is the attempt at this cause that holds a running lease; `ended` is every attempt number
+// at this cause whose lease ended, for any reason.
+datatype AttemptEvent =
+  | Claim(attempt: int)      // runningLease admits a first claim of the id the fold owes
+  | Written(attempt: int)    // mayEnd(undefined, revoked | abandoned): the owed id ended before it started
+  | EndAtCause(attempt: int) // mayEnd(running, reason): the running attempt at this cause ended
+  | OtherFailure             // a covering lease of another cause came to nothing
+datatype Attempts = Attempts(count: int, running: Option<int>, ended: set<int>)
+
+// What the room admits: a claim or a write-off only of the id the fold owes, while nothing
+// at this cause runs; an end only of the running attempt.
+predicate attemptAdmitted(s: Attempts, e: AttemptEvent)
+  requires s.count >= 0
+{
+  match e
+  case Claim(a) => a == nextAttempt(s.count) && s.running == None
+  case Written(a) => a == nextAttempt(s.count) && s.running == None
+  case EndAtCause(a) => s.running == Some(a)
+  case OtherFailure => true
+}
+
+function attemptStep(s: Attempts, e: AttemptEvent): Attempts {
+  match e
+  case Claim(a) => Attempts(s.count, Some(a), s.ended)
+  case Written(a) => Attempts(s.count + 1, None, s.ended + {a})
+  case EndAtCause(a) => Attempts(s.count + 1, None, s.ended + {a})
+  case OtherFailure => Attempts(s.count + 1, s.running, s.ended)
+}
+
+// Every ended attempt is numbered at most `count`, and a running one at most `count + 1`.
+predicate attemptsInv(s: Attempts) {
+  s.count >= 0
+  && (forall a :: a in s.ended ==> a <= s.count)
+  && (s.running.Some? ==> s.running.value <= s.count + 1)
+}
+
+lemma AttemptStepPreserves(s: Attempts, e: AttemptEvent)
+  requires attemptsInv(s) && attemptAdmitted(s, e)
+  ensures attemptsInv(attemptStep(s, e))
+{ }
+
+// The id the fold derives next names no lease that ended.
+lemma NextAttemptIsFresh(s: Attempts)
+  requires attemptsInv(s)
+  ensures nextAttempt(s.count) !in s.ended
+{ }
+
+function attemptFold(s: Attempts, es: seq<AttemptEvent>): Attempts
+  decreases |es|
+{
+  if |es| == 0 then s else attemptFold(attemptStep(s, es[0]), es[1..])
+}
+
+predicate attemptsAdmitted(s: Attempts, es: seq<AttemptEvent>)
+  requires attemptsInv(s)
+  decreases |es|
+{
+  |es| == 0 || (attemptAdmitted(s, es[0]) && (AttemptStepPreserves(s, es[0]); attemptsAdmitted(attemptStep(s, es[0]), es[1..])))
+}
+
+lemma AttemptIdsAreFresh(s: Attempts, es: seq<AttemptEvent>)
+  requires attemptsInv(s) && attemptsAdmitted(s, es)
+  decreases |es|
+  ensures attemptsInv(attemptFold(s, es))
+  ensures nextAttempt(attemptFold(s, es).count) !in attemptFold(s, es).ended
+{
+  if |es| > 0 {
+    AttemptStepPreserves(s, es[0]);
+    AttemptIdsAreFresh(attemptStep(s, es[0]), es[1..]);
+  }
+  NextAttemptIsFresh(attemptFold(s, es));
+}
+
+// From rest: no lease at this cause, nothing counted.
+lemma AttemptIdsAreFreshFromRest(es: seq<AttemptEvent>)
+  requires attemptsAdmitted(Attempts(0, None, {}), es)
+  ensures attemptsInv(attemptFold(Attempts(0, None, {}), es))
+  ensures nextAttempt(attemptFold(Attempts(0, None, {}), es).count) !in attemptFold(Attempts(0, None, {}), es).ended
+{
+  AttemptIdsAreFresh(Attempts(0, None, {}), es);
 }

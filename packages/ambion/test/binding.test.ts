@@ -23,6 +23,9 @@ vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 		speechFreshness: vi.fn(actual.speechFreshness),
 		admitsClose: vi.fn(actual.admitsClose),
 		survivesCancellation: vi.fn(actual.survivesCancellation),
+		applyChange: vi.fn(actual.applyChange),
+		cancelHold: vi.fn(actual.cancelHold),
+		wakeAnswered: vi.fn(actual.wakeAnswered),
 	};
 });
 
@@ -130,6 +133,40 @@ describe('the room runs the verified rules', () => {
 		expect(decide(asked(), { type: 'close', close: { ...close, through: 9 } }, now)).toMatchObject({
 			event: { kind: 'close', body: { through: 9 } },
 		});
+	});
+
+	it('holds the lease applyChange answers', () => {
+		const sentinel = {
+			id,
+			phase: 'ended',
+			reason: 'failed',
+			at,
+			claimedAt: at,
+			since: 1,
+			readThrough: 0,
+			until: 4,
+		} as const;
+		vi.mocked(rules.applyChange).mockReturnValueOnce(sentinel);
+		expect(claimed().leases.get(id)).toEqual(sentinel);
+		expect(claimed().leases.get(id)).toMatchObject({ phase: 'running' });
+	});
+
+	it('ends a lease at a cancellation only as cancelHold answers', () => {
+		const state = () =>
+			foldRoom([composition, person, question, running, { ...cancel, seq: 5 }], options);
+		vi.mocked(rules.cancelHold).mockImplementationOnce((hold) => hold);
+		expect(state().leases.get(id)).toMatchObject({ phase: 'running' });
+		expect(state().leases.get(id)).toMatchObject({
+			phase: 'ended',
+			reason: 'revoked',
+			cancelled: true,
+		});
+	});
+
+	it('owes a wake only when wakeAnswered says nobody answered it', () => {
+		vi.mocked(rules.wakeAnswered).mockReturnValueOnce(true);
+		expect(asked().pending).toEqual([]);
+		expect(asked().pending.map((wake) => wake.id)).toEqual([id]);
 	});
 
 	it('keeps a pending wake only when survivesCancellation says so', () => {

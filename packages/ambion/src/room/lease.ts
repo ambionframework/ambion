@@ -33,10 +33,17 @@ import type { LeaseChange } from '../journal/events.ts';
 import type { EndReason, Message, Seq } from '../types.ts';
 import type { MessageDelivery } from './delivery.ts';
 import {
-	acknowledged,
+	applyChange,
+	cameToNothing as cameToNothingRule,
+	countsAgainst,
 	coversAttempt as coverageRule,
-	expired,
-	nextAttempt,
+	isExpired as isExpiredRule,
+	isLive as isLiveRule,
+	latest,
+	removedAfter,
+	schedule,
+	type Taken,
+	wakeAnswered,
 } from './rules.verified.ts';
 
 /** What the lease entries for one activation fold to. */
@@ -85,42 +92,15 @@ export function applyLease(
 	leases: Map<string, LeaseHold>,
 	{ body: change, seq }: JournalEntry<LeaseChange>,
 ): void {
-	const known = leases.get(change.id);
-	if (known?.phase === 'ended') return;
-	const since = known?.since ?? seq;
-	const claimedAt = known?.claimedAt ?? change.at;
-	const readThrough = acknowledged(known?.readThrough, change.readThrough);
-	leases.set(
-		change.id,
-		change.phase === 'running'
-			? {
-					id: change.id,
-					phase: 'running',
-					expiresAt: change.expiresAt,
-					at: change.at,
-					claimedAt,
-					since,
-					readThrough,
-				}
-			: {
-					id: change.id,
-					phase: 'ended',
-					reason: change.reason,
-					at: change.at,
-					claimedAt,
-					since,
-					until: seq,
-					readThrough,
-				},
-	);
+	leases.set(change.id, applyChange(leases.get(change.id), change, seq));
 }
 
 export const isExpired = (lease: LeaseHold, now: number): boolean =>
-	lease.phase === 'running' && expired(lease.expiresAt, now);
+	isExpiredRule(lease.phase, lease.phase === 'running' ? lease.expiresAt : 0, now);
 
 /** A lease that holds: running, and not past its expiry. */
 export const isLive = (lease: LeaseHold, now: number): boolean =>
-	lease.phase === 'running' && !isExpired(lease, now);
+	isLiveRule(lease.phase, lease.phase === 'running' ? lease.expiresAt : 0, now);
 
 /**
  * An activation the room owes a seat, and has not had. A message that woke a
@@ -158,13 +138,6 @@ export interface PendingActivationOptions {
 }
 
 /**
- * A lease that ended this way answers nothing it heard. The seat read the
- * record and left nothing anybody can use, so every message it heard is
- * pending again for that seat.
- */
-const ANSWERS_NOTHING: ReadonlySet<EndReason> = new Set<EndReason>(['failed', 'expired']);
-
-/**
  * Every wake a message decided that no lease has answered, for a seat still
  * on the roster. A seat that left the roster answers no wake: what it was
  * sent is not pending.
@@ -196,7 +169,7 @@ function pendingForMessage(
 ): PendingWake[] {
 	const pending: PendingWake[] = [];
 	for (const seat of reached(delivery, roster)) {
-		if (removedAfter(messages, seat, message.seq)) continue;
+		if (removedAfter(removalsOf(messages, seat), message.seq)) continue;
 		const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
 		const wake = statusOf(message, seat, taken, options);
 		if (wake !== undefined) pending.push(wake);
@@ -204,10 +177,10 @@ function pendingForMessage(
 	return pending;
 }
 
-/** Whether a delivery predates a durable removal of this seat. */
-const removedAfter = (messages: readonly Message[], seat: string, seq: Seq): boolean =>
-	messages.some(
-		(message) => message.kind === 'unseated' && message.subject === seat && message.seq > seq,
+/** The seqs of every durable removal of this seat. */
+const removalsOf = (messages: readonly Message[], seat: string): number[] =>
+	messages.flatMap((message) =>
+		message.kind === 'unseated' && message.subject === seat ? [message.seq] : [],
 	);
 
 /**
@@ -238,16 +211,13 @@ function reached(delivery: MessageDelivery, roster: ReadonlySet<string>): Set<st
 	);
 }
 
-/**
- * A completed lease answers only context its executor explicitly consumed.
- * A running lease still holds its work, so the room waits for its terminal
- * result before it schedules the same message again.
- */
-const answered = (lease: LeaseHold, seq: Seq): boolean =>
-	lease.phase === 'running' ||
-	((lease.reason === 'abandoned' || lease.reason === 'revoked') &&
-		decodeActivationId(lease.id)?.position === seq) ||
-	(!answersNothing(lease) && lease.readThrough >= seq);
+/** A lease as the wake rules read it: its phase, reason, acknowledgment, and the position its id names. */
+function takenOf(lease: LeaseHold): Taken {
+	const position = decodeActivationId(lease.id)?.position ?? 0;
+	return lease.phase === 'running'
+		? { phase: 'running', readThrough: lease.readThrough, position }
+		: { phase: 'ended', reason: lease.reason, readThrough: lease.readThrough, position };
+}
 
 /** A lease covers a message while it works, or through the end of its attempted work. */
 const coversAttempt = (lease: LeaseHold, seq: Seq): boolean =>
@@ -266,12 +236,9 @@ function statusOf(
 ): PendingWake | undefined {
 	// A running lease keeps the work claimed. A completed lease settles it only
 	// after the executor recorded explicit progress through this message.
-	if (taken.some((lease) => answered(lease, message.seq))) return undefined;
-	const failed = taken.filter(
-		(lease) =>
-			cameToNothing(lease) ||
-			(lease.phase === 'ended' && decodeActivationId(lease.id)?.position === message.seq),
-	);
+	const covering = taken.map(takenOf);
+	if (wakeAnswered(covering, message.seq)) return undefined;
+	const failed = taken.filter((lease) => countsAgainst(takenOf(lease), message.seq));
 	return {
 		...pendingActivation('message', message.seq, seat, failed, options),
 		seq: message.seq,
@@ -293,29 +260,30 @@ export function pendingActivation(
 	options: PendingActivationOptions,
 ): PendingActivation {
 	const unsuccessfulAttempts = failed.length;
-	const attempt = nextAttempt(unsuccessfulAttempts);
-	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
+	// `Date.parse` stays here: a stamp is a string, outside the rules' envelope.
+	const last = latest(
+		failed.map((lease) => Date.parse(lease.at)),
+		0,
+	);
+	const plan = schedule(
+		unsuccessfulAttempts,
+		last,
+		unsuccessfulAttempts === 0 ? 0 : options.backoff(unsuccessfulAttempts),
+	);
 	return {
-		id: encodeActivationId({ source, position, seat, attempt }),
+		id: encodeActivationId({ source, position, seat, attempt: plan.attempt }),
 		source,
 		position,
 		seat,
-		attempt,
+		attempt: plan.attempt,
 		unsuccessfulAttempts,
-		notBefore:
-			unsuccessfulAttempts === 0 ? undefined : last + options.backoff(unsuccessfulAttempts),
+		notBefore: plan.notBefore,
 	};
 }
 
-/** Whether the lease ended for a reason in `reasons`. */
-const endedFor = (lease: LeaseHold, reasons: ReadonlySet<EndReason>): boolean =>
-	lease.phase === 'ended' && reasons.has(lease.reason);
-
-/** The lease answers no work it attempted. */
-const answersNothing = (lease: LeaseHold): boolean => endedFor(lease, ANSWERS_NOTHING);
-
 /** The attempt came to nothing, so the next one is numbered after it. */
-export const cameToNothing = answersNothing;
+export const cameToNothing = (lease: LeaseHold): boolean =>
+	lease.phase === 'ended' && cameToNothingRule(lease.reason);
 
 /** The seat an id names, or nothing for an id the room did not derive. */
 export const seatOf = (id: string): string | undefined => decodeActivationId(id)?.seat;

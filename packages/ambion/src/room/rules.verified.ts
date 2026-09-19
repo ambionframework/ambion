@@ -23,23 +23,26 @@ export type Purpose = 'respond' | 'summarize';
 export type Intent = 'said' | 'seated' | 'unseated';
 
 //@ contract A lease is past its expiry once now reaches it.
-export function expired(expiry: number, now: number): boolean {
+function expired(expiry: number, now: number): boolean {
 	//@ ensures \result <==> expiry <= now
 	return expiry <= now;
 }
 
-//@ contract A lease was at work when a message landed: it held a change before the message, and ended, if it ended, after it.
+//@ contract A lease was at work when a message landed: it held a change before the message, and ended, if it ended, after it. A message heard at work is one the lease covers.
 export function atWork(since: number, ended: boolean, until: number, seq: number): boolean {
 	//@ ensures \result ==> since < seq
 	//@ ensures \result && ended ==> until >= seq
 	//@ ensures !ended ==> (\result <==> since < seq)
+	//@ ensures \result ==> coversAttempt(ended, until, seq)
+	//@ ensures !\result ==> seq <= since || (ended && until < seq)
 	return since < seq && (!ended || until >= seq);
 }
 
-//@ contract A lease covers an entry while it attempts work.
+//@ contract A lease covers an entry while it attempts work, and every earlier entry with it.
 export function coversAttempt(ended: boolean, until: number, seq: number): boolean {
 	//@ ensures !ended ==> \result
 	//@ ensures ended ==> (\result <==> seq <= until)
+	//@ ensures \result ==> forall(earlier, earlier <= seq ==> coversAttempt(ended, until, earlier))
 	return !ended || seq <= until;
 }
 
@@ -53,7 +56,7 @@ export function givesUp(attempts: number, cap: number): boolean {
 }
 
 //@ contract The next attempt is numbered after the failed ones.
-export function nextAttempt(attempts: number): number {
+function nextAttempt(attempts: number): number {
 	//@ requires attempts >= 0
 	//@ ensures \result == attempts + 1
 	//@ ensures \result >= 1
@@ -208,4 +211,209 @@ export function survivesCancellation(position: number, cancelledAt: number | und
 	//@ ensures cancelledAt != undefined ==> (\result <==> position >= cancelledAt)
 	if (cancelledAt === undefined) return true;
 	return !beforeCancellation(position, cancelledAt);
+}
+
+/** The lease the fold holds for one id. `LeaseHold` in `lease.ts` is this plus the derived `cancelled` marker. */
+export type Hold =
+	| {
+			id: string;
+			phase: 'running';
+			at: string;
+			claimedAt: string;
+			since: number;
+			readThrough: number;
+			expiresAt: number;
+	  }
+	| {
+			id: string;
+			phase: 'ended';
+			at: string;
+			claimedAt: string;
+			since: number;
+			readThrough: number;
+			reason: LeaseEndReason;
+			until: number;
+	  };
+
+/** One lease entry, as the journal records it. The same shape as `LeaseChange` in `events.ts`. */
+export type Change =
+	| { id: string; phase: 'running'; expiresAt: number; at: string; readThrough: number }
+	| { id: string; phase: 'ended'; reason: LeaseEndReason; at: string; readThrough: number };
+
+/** A lease that covers a message, as the wake rules read it: its phase, reason, acknowledgment, and the position its id names. */
+export type Taken =
+	| { phase: 'running'; readThrough: number; position: number }
+	| { phase: 'ended'; reason: LeaseEndReason; readThrough: number; position: number };
+
+/** When the next attempt may start, and its number. */
+export interface Schedule {
+	readonly attempt: number;
+	readonly notBefore: number | undefined;
+}
+
+//@ contract One lease entry applied to the lease the fold holds. An ended lease is final. The first entry fixes since and claimedAt. readThrough never moves back. An ending entry sets until to its own seq and carries its reason.
+export function applyChange(known: Hold | undefined, change: Change, seq: number): Hold {
+	//@ requires seq >= 1
+	//@ requires change.readThrough >= 0
+	//@ requires known != undefined ==> known.readThrough >= 0 && known.since <= seq
+	//@ ensures known != undefined && known.phase == 'ended' ==> \result == known
+	//@ ensures known == undefined ==> \result.since == seq && \result.claimedAt == change.at
+	//@ ensures known != undefined ==> \result.since == known.since && \result.claimedAt == known.claimedAt
+	//@ ensures known != undefined ==> \result.readThrough >= known.readThrough
+	//@ ensures known == undefined ==> \result.readThrough == change.readThrough
+	//@ ensures known != undefined && known.phase == 'running' ==> \result.readThrough >= change.readThrough
+	//@ ensures known == undefined ==> \result.id == change.id && \result.at == change.at
+	//@ ensures known != undefined && known.phase == 'running' ==> \result.id == change.id && \result.at == change.at
+	//@ ensures known == undefined && change.phase == 'ended' ==> \result.phase == 'ended' && \result.until == seq && \result.reason == change.reason
+	//@ ensures known != undefined && known.phase == 'running' && change.phase == 'ended' ==> \result.phase == 'ended' && \result.until == seq && \result.reason == change.reason
+	//@ ensures known == undefined && change.phase == 'running' ==> \result.phase == 'running' && \result.expiresAt == change.expiresAt
+	//@ ensures known != undefined && known.phase == 'running' && change.phase == 'running' ==> \result.phase == 'running' && \result.expiresAt == change.expiresAt
+	//@ ensures known == undefined && \result.phase == 'ended' ==> \result.since <= \result.until
+	//@ ensures known != undefined && known.phase == 'running' && \result.phase == 'ended' ==> \result.since <= \result.until
+	if (known !== undefined && known.phase === 'ended') return known;
+	const since = known === undefined ? seq : known.since;
+	const claimedAt = known === undefined ? change.at : known.claimedAt;
+	const prior = known === undefined ? 0 : known.readThrough;
+	const readThrough = Math.max(prior, change.readThrough);
+	if (change.phase === 'running') {
+		return {
+			id: change.id,
+			phase: 'running',
+			at: change.at,
+			claimedAt,
+			since,
+			readThrough,
+			expiresAt: change.expiresAt,
+		};
+	}
+	return {
+		id: change.id,
+		phase: 'ended',
+		at: change.at,
+		claimedAt,
+		since,
+		readThrough,
+		reason: change.reason,
+		until: seq,
+	};
+}
+
+//@ contract A cancellation marker ends every running lease whose cause is before it as revoked, at the marker's seq, and keeps its id, since, claimedAt and readThrough. An ended lease, and a running lease caused at or after the marker, stay as they are.
+export function cancelHold(hold: Hold, position: number, cancelledAt: number, at: string): Hold {
+	//@ requires hold.since <= cancelledAt
+	//@ ensures hold.phase == 'ended' ==> \result == hold
+	//@ ensures hold.phase == 'running' && !beforeCancellation(position, cancelledAt) ==> \result == hold
+	//@ ensures hold.phase == 'running' && beforeCancellation(position, cancelledAt) ==> \result.phase == 'ended' && \result.reason == 'revoked' && \result.until == cancelledAt && \result.at == at
+	//@ ensures \result.readThrough == hold.readThrough
+	//@ ensures \result.since == hold.since
+	//@ ensures \result.claimedAt == hold.claimedAt
+	//@ ensures \result.id == hold.id
+	//@ ensures \result.phase == 'ended' && hold.phase == 'running' ==> \result.since <= \result.until
+	if (hold.phase === 'ended' || !beforeCancellation(position, cancelledAt)) return hold;
+	return {
+		id: hold.id,
+		phase: 'ended',
+		at,
+		claimedAt: hold.claimedAt,
+		since: hold.since,
+		readThrough: hold.readThrough,
+		reason: 'revoked',
+		until: cancelledAt,
+	};
+}
+
+//@ contract A lease is expired when it runs and now reached its expiry.
+export function isExpired(phase: LeasePhase, expiresAt: number, now: number): boolean {
+	//@ ensures \result <==> (phase == 'running' && expired(expiresAt, now))
+	//@ ensures \result ==> phase == 'running'
+	return phase === 'running' && expired(expiresAt, now);
+}
+
+//@ contract A lease is live when it runs and now is before its expiry. A running lease is live or expired and never both; an ended lease is neither.
+export function isLive(phase: LeasePhase, expiresAt: number, now: number): boolean {
+	//@ ensures \result <==> (phase == 'running' && now < expiresAt)
+	//@ ensures !(\result && isExpired(phase, expiresAt, now))
+	//@ ensures phase == 'running' ==> (\result || isExpired(phase, expiresAt, now))
+	//@ ensures phase == 'ended' ==> !\result
+	return phase === 'running' && !isExpired(phase, expiresAt, now);
+}
+
+//@ contract An attempt came to nothing when it failed or expired.
+export function cameToNothing(reason: LeaseEndReason): boolean {
+	//@ ensures \result <==> (reason == 'failed' || reason == 'expired')
+	return reason === 'failed' || reason === 'expired';
+}
+
+//@ contract A running lease answers every message it covers. A failed or expired lease answers nothing. An abandoned or revoked lease answers the position its id names. Every other ended lease answers only positions at or below its acknowledged readThrough.
+function answers(lease: Taken, seq: number): boolean {
+	//@ requires seq >= 1
+	//@ ensures lease.phase == 'running' ==> \result
+	//@ ensures lease.phase == 'ended' && cameToNothing(lease.reason) ==> !\result
+	//@ ensures lease.phase == 'ended' && lease.reason == 'released' ==> (\result <==> lease.readThrough >= seq)
+	//@ ensures lease.phase == 'ended' && (lease.reason == 'abandoned' || lease.reason == 'revoked') ==> (\result <==> (lease.position == seq || lease.readThrough >= seq))
+	//@ ensures lease.phase == 'ended' && lease.readThrough < seq && lease.position != seq ==> !\result
+	if (lease.phase === 'running') return true;
+	if (cameToNothing(lease.reason)) return false;
+	if ((lease.reason === 'abandoned' || lease.reason === 'revoked') && lease.position === seq)
+		return true;
+	return lease.readThrough >= seq;
+}
+
+//@ contract A wake is answered when some covering lease answers it. A pending wake has no running covering lease, and no covering lease acknowledged the message.
+export function wakeAnswered(taken: Taken[], seq: number): boolean {
+	//@ requires seq >= 1
+	//@ ensures \result <==> exists(i, 0 <= i && i < taken.length && answers(taken[i], seq))
+	//@ ensures !\result ==> forall(i, 0 <= i && i < taken.length ==> taken[i].phase == 'ended')
+	//@ ensures !\result ==> forall(i, 0 <= i && i < taken.length ==> taken[i].phase == 'ended' && (cameToNothing(taken[i].reason) || taken[i].readThrough < seq))
+	return taken.some((lease) => answers(lease, seq));
+}
+
+//@ contract A covering lease counts as an unsuccessful attempt when it came to nothing, or when it ended for any reason and its id names the message. A running lease never counts.
+export function countsAgainst(lease: Taken, seq: number): boolean {
+	//@ requires seq >= 1
+	//@ ensures lease.phase == 'running' ==> !\result
+	//@ ensures lease.phase == 'ended' && cameToNothing(lease.reason) ==> \result
+	//@ ensures lease.phase == 'ended' && !cameToNothing(lease.reason) ==> (\result <==> lease.position == seq)
+	if (lease.phase === 'running') return false;
+	return cameToNothing(lease.reason) || lease.position === seq;
+}
+
+//@ contract The latest of the times, and at least the floor.
+export function latest(times: number[], floor: number): number {
+	//@ requires floor >= 0
+	//@ ensures \result >= floor
+	//@ ensures forall(i, 0 <= i && i < times.length ==> \result >= times[i])
+	let best = floor;
+	for (let i = 0; i < times.length; i++) {
+		//@ invariant 0 <= i && i <= times.length
+		//@ invariant best >= floor
+		//@ invariant forall(k, 0 <= k && k < i ==> best >= times[k])
+		const v = times[i] ?? floor;
+		if (v > best) best = v;
+	}
+	return best;
+}
+
+//@ contract A first attempt waits for nothing. After attempts that came to nothing, the next is numbered one past them and starts no earlier than the last one's end plus the backoff.
+export function schedule(unsuccessful: number, last: number, backoff: number): Schedule {
+	//@ requires unsuccessful >= 0
+	//@ requires last >= 0
+	//@ ensures \result.attempt == nextAttempt(unsuccessful)
+	//@ ensures unsuccessful == 0 ==> \result.notBefore == undefined
+	//@ ensures unsuccessful > 0 ==> \result.notBefore != undefined && \result.notBefore == last + backoff
+	//@ ensures unsuccessful > 0 && backoff >= 0 ==> \result.notBefore != undefined && \result.notBefore >= last
+	return {
+		attempt: nextAttempt(unsuccessful),
+		notBefore: unsuccessful === 0 ? undefined : last + backoff,
+	};
+}
+
+//@ contract A removal after seq settles seq and every earlier position.
+export function removedAfter(removals: number[], seq: number): boolean {
+	//@ decreases removals.length
+	//@ ensures \result <==> exists(i, 0 <= i && i < removals.length && removals[i] > seq)
+	//@ ensures \result ==> forall(earlier, earlier <= seq ==> removedAfter(removals, earlier))
+	if (removals.length === 0) return false;
+	const head = removals[0] ?? seq;
+	return head > seq || removedAfter(removals.slice(1), seq);
 }

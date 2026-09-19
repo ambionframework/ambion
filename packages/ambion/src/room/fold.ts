@@ -25,7 +25,7 @@ import {
 	pendingWakes,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
-import { beforeCancellation, survivesCancellation } from './rules.verified.ts';
+import { cancelHold, survivesCancellation } from './rules.verified.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends PendingActivation {
@@ -167,20 +167,10 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 function cancelLeases(leases: Map<string, LeaseHold>, cancelledAt: Seq, at: string): void {
 	for (const [id, lease] of leases) {
 		const parsed = decodeActivationId(id);
-		if (
-			lease.phase === 'running' &&
-			parsed !== undefined &&
-			beforeCancellation(parsed.position, cancelledAt)
-		) {
-			leases.set(id, {
-				...lease,
-				phase: 'ended',
-				reason: 'revoked',
-				cancelled: true,
-				at,
-				until: cancelledAt,
-			});
-		}
+		if (parsed === undefined) continue;
+		const next = cancelHold(lease, parsed.position, cancelledAt, at);
+		// The rule answers the lease as it stands when the marker leaves it alone.
+		if (next !== lease && next.phase === 'ended') leases.set(id, { ...next, cancelled: true });
 	}
 }
 

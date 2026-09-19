@@ -1,8 +1,12 @@
 import type { JournalEntry as Entry } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { LeaseChange } from '../src/journal/events.ts';
-import { cameToNothing, foldLeases, pendingWakes } from '../src/room/lease.ts';
+import { cameToNothing, foldLeases, type LeaseHold, pendingWakes } from '../src/room/lease.ts';
 import {
+	applyChange,
+	type Change,
+	cancelHold,
+	type Hold,
 	type Intent,
 	type LeaseEndReason,
 	type LeasePhase,
@@ -10,6 +14,8 @@ import {
 	mayEnd,
 	permits,
 	type Purpose,
+	schedule,
+	wakeAnswered,
 } from '../src/room/rules.verified.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import type { ActivationSpec } from '../src/protocol.ts';
@@ -31,6 +37,75 @@ describe('verified rules', () => {
 		expectTypeOf<LeasePhase>().toEqualTypeOf<'running' | 'ended'>();
 		expectTypeOf<Purpose>().toEqualTypeOf<ActivationSpec['purpose']['kind']>();
 		expectTypeOf<Intent>().toEqualTypeOf<CommitRequest['intent']['kind']>();
+		expectTypeOf<Change>().toEqualTypeOf<LeaseChange>();
+		// The room's hold is the rule's hold plus the derived `cancelled` marker.
+		expectTypeOf<Hold>().toMatchTypeOf<LeaseHold>();
+		expectTypeOf<LeaseHold>().toMatchTypeOf<Hold>();
+	});
+
+	it('folds one lease entry: ended is final, since is fixed, readThrough never moves back', () => {
+		const first = applyChange(
+			undefined,
+			{ id: 'message:2:solo:1', phase: 'running', expiresAt: 9, at, readThrough: 2 },
+			3,
+		);
+		expect(first).toMatchObject({ phase: 'running', since: 3, claimedAt: at, readThrough: 2 });
+		const renewed = applyChange(
+			first,
+			{ id: 'message:2:solo:1', phase: 'running', expiresAt: 19, at, readThrough: 0 },
+			5,
+		);
+		expect(renewed).toMatchObject({ since: 3, readThrough: 2, expiresAt: 19 });
+		const ended = applyChange(
+			renewed,
+			{ id: 'message:2:solo:1', phase: 'ended', reason: 'released', at, readThrough: 4 },
+			8,
+		);
+		expect(ended).toMatchObject({ phase: 'ended', since: 3, until: 8, readThrough: 4 });
+		expect(
+			applyChange(
+				ended,
+				{ id: 'message:2:solo:1', phase: 'running', expiresAt: 99, at, readThrough: 9 },
+				9,
+			),
+		).toBe(ended);
+	});
+
+	it('cancels a running lease caused before the marker and leaves every other lease alone', () => {
+		const running: Hold = {
+			id: 'message:2:solo:1',
+			phase: 'running',
+			at,
+			claimedAt: at,
+			since: 3,
+			readThrough: 2,
+			expiresAt: 9,
+		};
+		expect(cancelHold(running, 2, 6, at)).toMatchObject({
+			phase: 'ended',
+			reason: 'revoked',
+			until: 6,
+			since: 3,
+			readThrough: 2,
+		});
+		expect(cancelHold(running, 7, 6, at)).toBe(running);
+		const ended = cancelHold(running, 2, 6, at);
+		expect(cancelHold(ended, 2, 9, at)).toBe(ended);
+	});
+
+	it('answers a wake by reason and schedules the next attempt after the backoff', () => {
+		expect(wakeAnswered([{ phase: 'running', readThrough: 0, position: 2 }], 2)).toBe(true);
+		expect(
+			wakeAnswered([{ phase: 'ended', reason: 'expired', readThrough: 9, position: 2 }], 2),
+		).toBe(false);
+		expect(
+			wakeAnswered([{ phase: 'ended', reason: 'released', readThrough: 1, position: 2 }], 2),
+		).toBe(false);
+		expect(
+			wakeAnswered([{ phase: 'ended', reason: 'revoked', readThrough: 0, position: 2 }], 2),
+		).toBe(true);
+		expect(schedule(0, 0, 0)).toEqual({ attempt: 1, notBefore: undefined });
+		expect(schedule(2, 1_000, 300)).toEqual({ attempt: 3, notBefore: 1_300 });
 	});
 
 	it('gates every end reason by the lease phase and the clock', () => {

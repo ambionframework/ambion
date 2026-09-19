@@ -167,6 +167,12 @@ A refuter built each one as a running probe against the code.
 
 ## B. The lease fold
 
+**Landed on this branch.** Every rule below is in the room's rules file
+with its proof, `lease.ts` and `fold.ts` run them, the binding test
+names them, and the `AttemptIdsAreFresh` lemma is the first hand-written
+addition in the room's `.dfy`. Dafny proves the room file's 56
+obligations in seven seconds.
+
 **One step rule replaces `applyLease`.** `applyChange(known, change, seq)`
 takes the lease the fold holds for an id, one lease entry, and the entry's
 seq, and answers the lease after it. Its contract is the lease's life:
@@ -652,7 +658,7 @@ and its evidence rows.
 | 1     | `journal.ts`, `memory.ts`                  | `visibleEntries` (A1)                                                                                                                                                                                                     | Landed |
 | 2a    | `transition.ts`                            | `mayEnd`, `permits`, `leaseExpiry`, `acknowledged`, `onRecord`, `speechFreshness`, `admitsClose`, `coversExchange`, `survivesCancellation`                                                                                | Landed |
 | 2a    | `transition.ts`, `answers.ts`              | `presenceOutcome`, `membershipOutcome`, `hostMembership`, `addressOutcome`, `deliveryOutcome`, `distinct`, `stampedSummary`, `addressesOwner`, `commitAuthority`, `admitsLease`, `deliveryMatches`, `contributionMatches` | Open   |
-| 2b    | `lease.ts`, `fold.ts`                      | `applyChange`, `cancelLease`, `answers`, `wakeAnswered`, `countsAgainst`, `schedule`, `latest`, `draftsClose`, `removedAfter`, `nextActivationId`                                                                         | Open   |
+| 2b    | `lease.ts`, `fold.ts`                      | `applyChange`, `cancelLease`, `answers`, `wakeAnswered`, `countsAgainst`, `schedule`, `latest`, `draftsClose`, `removedAfter`, `nextActivationId`                                                                         | Landed |
 | 2c    | `reconcile.ts`                             | `endingOf`, `staleLease`, `mayClose`, `waitsUntil`, `readyToSend`, `looksAgainAt`, `earliestAfter`, `forgets`, `exchangeLive`, `seatLive`                                                                                 | Open   |
 | 2d    | `routing.ts`, `delivery.ts`, `presence.ts` | `width`, `reachOf`, `targetOf`, `wakes`, `wokenBy`, `woken`, `rosterFor`, `steers`, `atWorkHold`, `stepPerson`, `foldPresence`, the `hearsWider` lemma                                                                    | Open   |
 | 2e    | `activation.ts`, `activation-id.ts`        | `activationGrant`, `closeFor`, `names`, `seated`, `wellFormed`, `positiveBounded`                                                                                                                                         | Open   |
@@ -711,7 +717,7 @@ this plan; the obligation counts are the verifier's runs on this branch.
 | Group                   | File                                         | Obligations | Status                     |
 | ----------------------- | -------------------------------------------- | ----------- | -------------------------- |
 | A. Journal              | `packages/journal/src/rules.verified.ts`     | 41          | Landed                     |
-| B. Lease fold           | `packages/ambion/src/room/rules.verified.ts` | prototype   | Planned, slice 2b          |
+| B. Lease fold           | `packages/ambion/src/room/rules.verified.ts` | 56 with D   | Landed                     |
 | C. Reconciliation       | `packages/ambion/src/room/rules.verified.ts` | prototype   | Planned, slice 2c          |
 | D. Transitions          | `packages/ambion/src/room/rules.verified.ts` | 22 landed   | Nine landed, slice 2a open |
 | E. Routing and presence | `packages/ambion/src/room/rules.verified.ts` | prototype   | Planned, slice 2d          |
