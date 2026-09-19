@@ -23,6 +23,10 @@ jobs:
     uses: midspiral/LemmaScript/.github/workflows/verify.yml@cb1dda6b958aede92a8f79e54d1a82735c8d498f
     with:
       backend: dafny
+      # The tools that regenerate and verify come from this ref. It matches
+      # the `lemmascript` version in package.json, so CI and a desk generate
+      # the same Dafny. Bump both together.
+      ls-ref: v0.6.1
       typecheck: false
 
   check:

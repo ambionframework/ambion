@@ -12,26 +12,26 @@ not. The kernel keeps the record and the rules. A restart loses nothing.
 pnpm workspace, ESM only, TypeScript. Every package needs Node 26.4 or
 newer, the OpenTUI floor.
 
-| Path                  | What                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------ |
-| `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them                |
-| `packages/cli`        | Project creation and local rooms through Wrangler and OpenTUI; ships with the Cloudflare adapter |
-| `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd     |
-| `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                       |
-| `packages/pi-journal` | Full Pi transcript sessions over the generic journal storage contract                            |
-| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                    |
-| `docs/agent.md`       | Design contract for the core — read before changing the runtime                                  |
-| `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`                 |
-| `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                                   |
-| `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                       |
-| `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`             |
-| `docs/example.md`     | The one runnable example, an agentic lab workspace, and what it must show                        |
-| `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`             |
-| `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`        |
-| `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                   |
-| `examples/site`       | Runnable example                                                                                 |
-| `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                     |
-| `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after                |
+| Path                  | What                                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `packages/ambion`     | The runtime. One file per concern, in layers Biome holds; `room.ts` composes them                                           |
+| `packages/cli`        | Project creation and local rooms through Wrangler and OpenTUI; ships with the Cloudflare adapter                            |
+| `packages/cloudflare` | A room as Durable Objects: one object per room, one per seat. Publishable; tested in workerd                                |
+| `packages/journal`    | An append-only journal: one queue, fenced by run, with conditional commits                                                  |
+| `packages/pi-journal` | Full Pi transcript sessions over the generic journal storage contract                                                       |
+| `packages/workspace`  | A workspace resource and its tools, over an in-memory or directory filesystem                                               |
+| `docs/agent.md`       | Design contract for the core — read before changing the runtime                                                             |
+| `docs/exchange.md`    | Design contract for the exchange, the room's unit of work — read with `agent.md`                                            |
+| `docs/presence.md`    | Design contract for presence and visits — read with `agent.md`                                                              |
+| `docs/summary.md`     | Design contract for optional summaries of closed exchanges                                                                  |
+| `docs/workspace.md`   | Design contract for the workspace an agent's tools reach into — read with `agent.md`                                        |
+| `docs/example.md`     | The one runnable example, an agentic lab workspace, and what it must show                                                   |
+| `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`                                        |
+| `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                   |
+| `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                              |
+| `examples/site`       | Runnable example                                                                                                            |
+| `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                                                |
+| `planning/`           | `next.md`: the must-have scope and plan for 0.1.0; `backlog.md`: everything after; `formal.md`: the verified rules to write |
 
 ## Positioning
 
@@ -103,8 +103,10 @@ vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
 - A pure rule the journal or the fold decides by lives in the layer's
   `rules.verified.ts`, with `//@ requires` and `//@ ensures` contracts.
-  Regenerate its `.dfy` and `.dfy.gen` with `npx lsc gen --backend=dafny`
-  after every edit.
+  Regenerate its `.dfy` and `.dfy.gen` with `npx lsc regen --backend=dafny
+<file>` after every edit; `pnpm check` fails on a stale generation.
+  [`planning/formal.md`](planning/formal.md) holds the envelope a rule must
+  stay inside and the rules still to write.
 - Cognitive complexity: max 10 in source, 15 in tests.
 - Prettier formats (tabs, single quotes, width 100, semicolons); Biome lints.
 - Tests are vitest. A scripted `streamFn` makes a room deterministic.
