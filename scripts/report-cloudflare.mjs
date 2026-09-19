@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Writes the demo report for a run on Cloudflare, from the JSON that
- * `examples/site`'s `pnpm demo:cloudflare` captured.
+ * Writes the demo report for a run on Cloudflare, from the JSON that a run
+ * captured. The example that once produced it, `examples/site`, no longer
+ * exists.
  *
  *   node scripts/report-cloudflare.mjs demo-cloudflare-run.json demos/<file>.html
  *
