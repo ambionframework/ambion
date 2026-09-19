@@ -39,6 +39,8 @@ interface HostedRoom extends CatalogEntry {
 	team: ReturnType<typeof team>;
 	activity: Activity[];
 	tail: Promise<unknown>;
+	/** The change listeners a caller registered with `watch`. They survive a stop. */
+	watchers: Set<() => void>;
 }
 
 /** The catalog records hosting intent. Collaboration state stays in each room journal. */
@@ -85,6 +87,7 @@ export async function openRooms(
 			team: roomTeam,
 			activity: [],
 			tail: Promise.resolve(),
+			watchers: new Set<() => void>(),
 		};
 		entries.set(row.name, entry);
 		return entry;
@@ -122,7 +125,7 @@ export async function openRooms(
 		// The handle is owned before subscription. A later host failure leaves a
 		// usable running room that shutdown can still clean up.
 		entry.lifecycle = { status: 'running', room };
-		room.subscribe((event) => recordActivity(entry, event));
+		room.subscribe((event) => notify(entry, event));
 	}
 	async function status(entry: HostedRoom) {
 		return roomView(entry, await readRoom(entry.name, { runtime, messages: false }));
@@ -144,6 +147,14 @@ export async function openRooms(
 		const entry = entries.get(name);
 		if (!entry) fail('Unknown room.');
 		return serial(entry, () => operation(entry));
+	}
+	function watch(name: string, changed: () => void): () => void {
+		const entry = entries.get(name);
+		if (!entry) fail('Unknown room.');
+		entry.watchers.add(changed);
+		return () => {
+			entry.watchers.delete(changed);
+		};
 	}
 	async function lifecycle(name: string, action: RoomAction) {
 		return withRoom(name, async (entry) => {
@@ -204,6 +215,7 @@ export async function openRooms(
 	return {
 		create,
 		withRoom,
+		watch,
 		withWorkspace,
 		workspace,
 		lifecycle,
@@ -248,6 +260,12 @@ function roomView(entry: HostedRoom, snapshot: Awaited<ReturnType<typeof readRoo
 export function liveRoom(entry: HostedRoom): Room {
 	if (entry.lifecycle.status !== 'running') fail('Resume this room first.');
 	return entry.lifecycle.room;
+}
+
+/** One room event: record the activity it shows, then tell every watcher to read again. */
+function notify(entry: HostedRoom, event: RoomNotification): void {
+	recordActivity(entry, event);
+	for (const watcher of [...entry.watchers]) watcher();
 }
 
 function recordActivity(entry: HostedRoom, event: RoomNotification): void {

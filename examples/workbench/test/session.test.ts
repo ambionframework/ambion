@@ -51,6 +51,9 @@ class FakeHost implements Workbench {
 		if (!found) throw new Error(`No room ${room}`);
 		return found;
 	}
+	watch(_room: string, _changed: () => void) {
+		return () => {};
+	}
 	async join(room: string, who: string) {
 		this.record(`join:${room}:${who}`);
 	}
