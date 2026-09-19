@@ -1,10 +1,11 @@
 import type { ParticipantInfo } from '@ambionframework/ambion';
-import { fg, StyledText, type TextRenderable } from '@opentui/core';
+import { bold, fg, StyledText, type TextRenderable } from '@opentui/core';
 import { brand, tui as palette } from './brand.ts';
 import type { Composer } from './composer.ts';
 import type { FilesPanel } from './files-panel.ts';
 import type { Mode } from './keys.ts';
 import { emptyText, type Session } from './session.ts';
+import { ellipsize } from './text.ts';
 import type { Transcript } from './transcript.ts';
 import type { RoomView } from './workbench.ts';
 
@@ -16,21 +17,33 @@ const HINTS = {
 /** At this width or wider, the composer shows its hint line. */
 const ROOMY = 96;
 
-/** A participant's color: coral at work, green present, dim otherwise. */
-function participantColor(participant: ParticipantInfo): string {
-	if (participant.kind === 'agent')
-		return participant.status === 'active' ? palette.coral : palette.dim;
-	return participant.presence === 'present' ? palette.green : palette.dim;
+/** True when an agent is at work or a person is present. */
+function lit(participant: ParticipantInfo): boolean {
+	return participant.kind === 'agent'
+		? participant.status === 'active'
+		: participant.presence === 'present';
 }
 
-/** The header lines for one room: who is in it, and what it is for. */
-function roomLines(view: RoomView) {
+/** A participant's color: coral at work, green present, dim otherwise. */
+function participantColor(participant: ParticipantInfo): string {
+	if (!lit(participant)) return palette.dim;
+	return participant.kind === 'agent' ? palette.coral : palette.green;
+}
+
+/**
+ * The header lines for one room: its name and goal, then who is in it. A filled
+ * dot marks a lit participant and an empty dot marks the others, so the state
+ * reads without color. The goal ends with an ellipsis when it does not fit.
+ */
+function roomLines(view: RoomView, width: number) {
+	const goal = ellipsize(view.goal ?? '', width - view.name.length - 2);
 	return [
 		fg(palette.muted)('\n'),
+		bold(fg(palette.accent)(view.name)),
+		fg(palette.dim)(`  ${goal}\n`),
 		...view.participants.map((participant) =>
-			fg(participantColor(participant))(`${participant.name}  `),
+			fg(participantColor(participant))(`${lit(participant) ? '●' : '○'} ${participant.name}  `),
 		),
-		fg(palette.dim)(`\n${view.name}  ${view.goal ?? ''}`),
 	];
 }
 
@@ -134,7 +147,7 @@ export class Painter {
 		this.header.content = new StyledText([
 			fg(palette.accent)(`${brand.name} ${brand.product}`),
 			fg(palette.muted)(who),
-			...(view ? roomLines(view) : []),
+			...(view ? roomLines(view, this.width()) : []),
 		]);
 	}
 
@@ -157,6 +170,6 @@ export class Painter {
 			return [fg(palette.muted)(`${view.name} is ${view.status}. Use /resume.`)];
 		if (view.exchange)
 			return [fg(palette.coral)('● '), fg(palette.muted)('A new message steers the open exchange')];
-		return [fg(palette.green)('● '), fg(palette.muted)('Ready')];
+		return [fg(palette.green)('● '), fg(palette.muted)('Active')];
 	}
 }
