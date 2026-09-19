@@ -52,15 +52,17 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 	const purpose = spec.purpose;
 	const goal = state.composition?.goal;
 	// A summary reads its fixed closed exchange; a range never pages it. An
-	// ordinary response reads the whole record, or one bounded page of it.
-	const paged = purpose.kind === 'respond' && range !== undefined;
+	// ordinary response reads the whole record, or one bounded page of it. A
+	// malformed range reads the whole record, because a seat's request is data.
+	const page =
+		purpose.kind === 'respond' && range !== undefined && validRange(range) ? range : undefined;
 	const messages =
 		purpose.kind === 'summarize'
 			? state.messages.filter(
 					(message) => message.seq >= purpose.exchange && message.seq <= purpose.through,
 				)
-			: paged
-				? pageOf(state.messages, range)
+			: page !== undefined
+				? pageOf(state.messages, page)
 				: state.messages;
 	const context: CollaborationContext = {
 		name: facts.name,
@@ -72,7 +74,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
 			: { exchange: { owner: state.exchange.owner, from: state.exchange.from } }),
-		...earliestOf(paged, state.messages),
+		...earliestOf(page !== undefined, state.messages),
 		...purposeContext(purpose, state),
 	};
 	// In-process executors receive the same detached snapshot as remote executors.
@@ -83,6 +85,12 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 	});
 }
 
+/** A well-formed page request: a positive limit, and a non-negative cursor. */
+function validRange(range: ViewRange): boolean {
+	if (!Number.isSafeInteger(range.limit) || range.limit <= 0) return false;
+	return range.before === undefined || (Number.isSafeInteger(range.before) && range.before >= 0);
+}
+
 /** The record floor, reported only for a bounded page, so a seat can stop paging. */
 function earliestOf(paged: boolean, messages: readonly Message[]): { earliest?: Seq } {
 	const first = messages[0];
@@ -91,8 +99,9 @@ function earliestOf(paged: boolean, messages: readonly Message[]): { earliest?: 
 
 /**
  * One bounded page of the record: the last `limit` messages before the cursor.
- * The floor snaps down so no summarised range is split, because a page that
- * holds part of a covered range renders a fold that stands for nothing.
+ * The floor moves up past a range this page would split, so the page never
+ * renders a fold with a wrong count. A range this page holds no summary for
+ * stays whole when the seat pages to it; the seat assembles the pages.
  */
 function pageOf(messages: readonly Message[], range: ViewRange): Message[] {
 	const before = range.before ?? Number.POSITIVE_INFINITY;

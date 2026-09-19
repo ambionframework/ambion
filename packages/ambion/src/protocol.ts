@@ -100,7 +100,9 @@ export interface CollaborationContext {
 /**
  * A bounded read of the record for one view. The room returns the messages
  * before `before` (the tail when it is absent), keeping the last `limit` of
- * them, and it never splits a summarised range across the page floor.
+ * them. The room aligns a page floor to the summaries the page holds, so one
+ * page never renders a fold with a wrong count. A seat that wants an older
+ * range reads the next page from the lowest position it holds.
  */
 export interface ViewRange {
 	readonly before?: Seq;

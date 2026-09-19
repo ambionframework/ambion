@@ -5,9 +5,10 @@
  * hands them a value.
  */
 import { describe, expect, it } from 'vitest';
+import { defineAgent } from '../src/define.ts';
 import { windowToLimit } from '../src/execution/render.ts';
 import type { Entry } from '../src/journal/journal.ts';
-import type { ActivationSpec } from '../src/protocol.ts';
+import type { ActivationSpec, ViewRange } from '../src/protocol.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
 import { type RoomFacts, viewOf } from '../src/room/view.ts';
 import type { Message, Seq } from '../src/types.ts';
@@ -163,5 +164,46 @@ describe('the room pages the record', () => {
 		// the summary that stands for it.
 		const view = viewOf(respondSpec(), facts(state), { limit: 6 });
 		expect(view.context.messages.map((m) => m.seq)).toEqual([7, 8, 9, 10]);
+	});
+
+	it('reads the whole record when the range is malformed', () => {
+		const state = foldRoom(entries, options);
+		const bad: ViewRange[] = [
+			{ limit: 0 },
+			{ limit: -5 },
+			{ limit: Number.NaN },
+			{ limit: 2, before: -1 },
+		];
+		for (const range of bad) {
+			const view = viewOf(respondSpec(), facts(state), range);
+			expect(view.context.messages.map((m) => m.seq)).toEqual([2, 3, 4, 5]);
+			expect(view.context.earliest).toBeUndefined();
+		}
+	});
+});
+
+describe('activationTokenLimit validation', () => {
+	const base = {
+		name: 'reader',
+		identity: 'Reads.',
+		instructions: 'Read.',
+		model: 'scripted/reader',
+	};
+
+	it('rejects an estimator without a limit', () => {
+		expect(() => defineAgent({ ...base, estimateTokens: (text) => text.length })).toThrow(
+			/activationTokenLimit/,
+		);
+	});
+
+	it('rejects a nonpositive limit', () => {
+		expect(() => defineAgent({ ...base, activationTokenLimit: 0 })).toThrow(/positive integer/);
+	});
+
+	it('keeps the limit and estimator on the definition', () => {
+		const estimate = (text: string) => text.length;
+		const agent = defineAgent({ ...base, activationTokenLimit: 500, estimateTokens: estimate });
+		expect(agent.activationTokenLimit).toBe(500);
+		expect(agent.estimateTokens).toBe(estimate);
 	});
 });

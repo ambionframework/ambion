@@ -5,8 +5,45 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createRuntime, defineAgent, startRoom } from '../src/index.ts';
+import { inProcessTransport, type SeatRoom, type Transport } from '../src/transport.ts';
 import { andrei, messagesOf, roomName, waitForRoom } from './support/room.ts';
-import { answersEveryQuestion, contextText, type Script, scripted } from './support/scripted.ts';
+import {
+	answersEveryQuestion,
+	contextText,
+	isClosing,
+	quiet,
+	type Script,
+	scripted,
+	summarise,
+} from './support/scripted.ts';
+
+/** A page seen by the seat: the record floor it reported, and how many messages it carried. */
+interface Page {
+	earliest: number | undefined;
+	count: number;
+}
+
+/** Wrap the in-process transport and record every view response the seat reads. */
+function spyTransport(pages: Page[]): Transport {
+	const local = inProcessTransport();
+	return {
+		connect(room, context) {
+			const watched: SeatRoom = {
+				...room,
+				view: async (id, range) => {
+					const response = await room.view(id, range);
+					if ('view' in response)
+						pages.push({
+							earliest: response.view.context.earliest,
+							count: response.view.context.messages.length,
+						});
+					return response;
+				},
+			};
+			return local.connect(watched, context);
+		},
+	};
+}
 
 describe('a limit windows the record', () => {
 	it('drops an older unsummarised exchange but keeps the open one', async () => {
@@ -41,5 +78,79 @@ describe('a limit windows the record', () => {
 		// The record still holds the dropped exchange for human review.
 		const all = await messagesOf(room);
 		expect(all.some((message) => 'text' in message && message.text === 'alpha marker')).toBe(true);
+	});
+
+	it('pages the room over the wire, so a budgeted seat reads bounded responses', async () => {
+		const pages: Page[] = [];
+		const worker = defineAgent({
+			name: 'worker',
+			identity: 'Answers a question.',
+			instructions: 'Answer the current question.',
+			model: 'scripted/worker',
+			activationTokenLimit: 40,
+			estimateTokens: (text) => text.length,
+		});
+		const runtime = createRuntime({
+			transport: spyTransport(pages),
+			stream: scripted(answersEveryQuestion(['andrei'])),
+		});
+		const room = await startRoom({ name: roomName('limit-wire'), runtime, agents: [worker] });
+
+		await (await room.visit(andrei)).send({ text: 'a question' });
+		await waitForRoom(room);
+
+		// The room served a bounded page, not the whole record: a paged response
+		// carries the record floor. Without the range reaching the room, none would.
+		expect(pages.length).toBeGreaterThan(0);
+		expect(pages.some((page) => page.earliest !== undefined)).toBe(true);
+		await room.stop();
+	});
+
+	it('lets a summary writer with a limit read its whole exchange', async () => {
+		const closings: string[] = [];
+		const scribeScript: Script = (context) => {
+			if (!isClosing(context)) return quiet();
+			closings.push(contextText(context));
+			return summarise('done');
+		};
+		const worker = defineAgent({
+			name: 'worker',
+			identity: 'Answers.',
+			instructions: 'Answer.',
+			model: 'scripted/worker',
+		});
+		// A limit small enough to trim the exchange if the closing activation windowed.
+		const scribe = defineAgent({
+			name: 'scribe',
+			identity: 'Writes the closing message.',
+			instructions: 'Summarize the exchange.',
+			model: 'scripted/scribe',
+			activationTokenLimit: 20,
+			estimateTokens: (text) => text.length,
+		});
+		const runtime = createRuntime({
+			stream: scripted((context, name, call) =>
+				name === 'scribe'
+					? scribeScript(context, name, call)
+					: answersEveryQuestion(['andrei'])(context, name, call),
+			),
+		});
+		const room = await startRoom({
+			name: roomName('limit-summary'),
+			runtime,
+			agents: [worker, scribe],
+			summary: 'scribe',
+			seats: { worker: 'broadcast', scribe: 'broadcast' },
+		});
+
+		const exchange = await (await room.visit(andrei)).send({ text: 'opening question' });
+		await exchange.waitForClose();
+		await waitForRoom(room);
+
+		// The closing activation reads its fixed exchange whole, so the opener is
+		// present even though it sits past the writer's token limit.
+		expect(closings.length).toBeGreaterThan(0);
+		expect(closings.every((text) => text.includes('opening question'))).toBe(true);
+		await room.stop();
 	});
 });

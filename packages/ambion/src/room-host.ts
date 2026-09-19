@@ -258,7 +258,7 @@ export class RoomHost implements Room, RunningRoom {
 	private readonly ports = new Map<string, SeatPort>();
 	/** The three room calls exposed to an in-process seat. */
 	readonly calls: SeatRoom = {
-		view: (id) => this.view(id),
+		view: (id, range) => this.view(id, range),
 		commit: (commit) => this.commit(commit),
 		lease: (lease) => this.lease(lease),
 	};

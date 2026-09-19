@@ -10,7 +10,15 @@ import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/
 import type { Agent as PiAgent } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { SeatContext, Transport } from '../host/runtime.ts';
-import type { ActivationView, SeatPort, SeatRoom, Steer, ViewResponse, Wake } from '../protocol.ts';
+import type {
+	ActivationView,
+	SeatPort,
+	SeatRoom,
+	Steer,
+	ViewRange,
+	ViewResponse,
+	Wake,
+} from '../protocol.ts';
 import type { Message, RoomNotification, Seq } from '../types.ts';
 import { Activation, persistTurns } from './activation.ts';
 import { renderActivation, renderLine, windowToLimit } from './render.ts';
@@ -358,6 +366,11 @@ export class AgentRunner implements SeatPort {
 	 * from the tail, keeps the newest blocks that fit, and stops when the window
 	 * starts above the record it holds or the record reaches its floor. The open
 	 * exchange stays whole even past the limit.
+	 *
+	 * The first page fixes the frame — its purpose, exchange, participants, and
+	 * `through`. Later pages add only older messages, so the acknowledged
+	 * position stays what the tail page held. A summary activation reads its
+	 * whole fixed exchange, so it never windows.
 	 */
 	private async windowedView(
 		id: string,
@@ -367,14 +380,18 @@ export class AgentRunner implements SeatPort {
 		const estimate = this.context.definition.estimateTokens ?? defaultEstimate;
 		let before: number | undefined;
 		let held: Message[] = [];
+		let frame: ActivationView | undefined;
 		for (;;) {
 			const page = await this.pageView(id, before, cancelled);
 			if ('stop' in page) return page.stop;
-			held = [...page.view.context.messages, ...held];
-			const window = windowToLimit(held, estimate, limit, pinOf(page.view));
+			if (frame === undefined) frame = page.view;
+			if (frame.spec.purpose.kind !== 'respond') return { view: frame };
+			const older = page.view.context.messages;
+			held = [...older, ...held];
+			const window = windowToLimit(held, estimate, limit, pinOf(frame));
 			before = held[0]?.seq;
-			if (before === undefined || windowSettled(window.from, held, page.view.context.earliest))
-				return { view: withWindow(page.view, window.kept) };
+			if (pagingDone(window.from, held, frame.context.earliest, older.length))
+				return { view: withWindow(frame, window.kept) };
 		}
 	}
 
@@ -384,10 +401,9 @@ export class AgentRunner implements SeatPort {
 		before: number | undefined,
 		cancelled: Promise<void>,
 	): Promise<{ stop: ViewResponse } | { view: ActivationView }> {
-		const opened = await this.call(
-			() => this.room.view(id, { before, limit: RECORD_PAGE }),
-			cancelled,
-		);
+		const range: ViewRange =
+			before === undefined ? { limit: RECORD_PAGE } : { before, limit: RECORD_PAGE };
+		const opened = await this.call(() => this.room.view(id, range), cancelled);
 		if (opened.kind === 'cancelled') return { stop: { stale: 'the activation was cut' } };
 		if (opened.kind !== 'value') {
 			this.reportCallFailure(id, 'view', opened.error);
@@ -489,10 +505,19 @@ function pinOf(view: ActivationView): Seq | undefined {
 	return view.spec.purpose.kind === 'respond' ? view.context.exchange?.from : undefined;
 }
 
-/** The window is done when it starts above the held record, or the record has no earlier entry. */
-function windowSettled(from: Seq, held: readonly Message[], earliest: Seq | undefined): boolean {
+/**
+ * Paging is done when the last page added nothing, the window starts above the
+ * held record, or the record has no earlier entry. Otherwise the window still
+ * reaches the oldest held message, so an earlier page may hold more of it.
+ */
+function pagingDone(
+	from: Seq,
+	held: readonly Message[],
+	earliest: Seq | undefined,
+	older: number,
+): boolean {
 	const lowest = held[0]?.seq;
-	if (lowest === undefined) return true;
+	if (older === 0 || lowest === undefined) return true;
 	if (from > lowest) return true;
 	return earliest === undefined || lowest <= earliest;
 }

@@ -59,7 +59,11 @@ function recordLimit(
 	activationTokenLimit: number | undefined,
 	estimateTokens: ((text: string) => number) | undefined,
 ): { activationTokenLimit?: number; estimateTokens?: (text: string) => number } {
-	if (activationTokenLimit === undefined) return {};
+	if (activationTokenLimit === undefined) {
+		if (estimateTokens !== undefined)
+			throw new Error('An agent estimateTokens needs an activationTokenLimit.');
+		return {};
+	}
 	if (!Number.isSafeInteger(activationTokenLimit) || activationTokenLimit <= 0)
 		throw new Error('An agent activationTokenLimit must be a positive integer.');
 	if (estimateTokens !== undefined && typeof estimateTokens !== 'function')
