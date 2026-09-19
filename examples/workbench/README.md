@@ -71,6 +71,10 @@ person leaves the current room, then enters it as the new person.
 | PageUp, PageDown      | In the files panel: scroll the file                        |
 | Ctrl+Y                | In the files panel: copy the file to the clipboard         |
 
+The files panel renders Markdown files with headings, lists, and code. It
+shows a SQLite database (`.db`, `.sqlite`, `.sqlite3`, up to 8 MiB) as tables,
+with the first 50 rows of each. The panel opens the database read-only.
+
 A discussion is the thread between a question and its summary, with each
 steering message in its place. It starts closed. Start a message with `//` to
 send a leading slash, as in `//library/led-5mm.md`.
@@ -163,6 +167,7 @@ workspace resources.
 | `src/composer.ts`    | The composer, room chip, and palette                  |
 | `src/browser.ts`     | The files panel state: search, matches, chosen file   |
 | `src/files-panel.ts` | The files panel beside the conversation               |
+| `src/database.ts`    | The SQLite preview: tables and their first rows       |
 | `src/tui.ts`         | The terminal: layout, keys, and the run loop          |
 | `src/main.ts`        | The entry point                                       |
 | `src/brand.ts`       | The product name and the terminal palette             |

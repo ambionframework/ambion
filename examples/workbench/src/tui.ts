@@ -276,6 +276,8 @@ class WorkbenchTui {
 	private readonly fileKeys: Record<string, () => void> = {
 		up: () => this.session.browser.move(-1),
 		down: () => this.session.browser.move(1),
+		left: () => this.session.browser.moveTable(-1),
+		right: () => this.session.browser.moveTable(1),
 		pageup: () => this.panel.scrollBy(-this.panel.page),
 		pagedown: () => this.panel.scrollBy(this.panel.page),
 		escape: () => this.escapeFiles(),

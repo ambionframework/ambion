@@ -18,6 +18,8 @@ export class FileBrowser {
 	file: FileContent | undefined;
 	/** Why the chosen file did not load. */
 	problem: string | undefined;
+	/** The table shown when the chosen file is a database. */
+	table = 0;
 	private files: readonly FileEntry[] = [];
 	private token = 0;
 	private readonly load: (path: string) => Promise<FileContent>;
@@ -73,6 +75,14 @@ export class FileBrowser {
 		this.refilter();
 	}
 
+	/** Show another table of the chosen database. */
+	moveTable(step: number): void {
+		const count = this.file?.tables?.length ?? 0;
+		if (count === 0) return;
+		this.table = Math.max(0, Math.min(count - 1, this.table + step));
+		this.changed();
+	}
+
 	move(step: number): void {
 		const last = this.matches.length - 1;
 		if (last < 0) return;
@@ -98,7 +108,10 @@ export class FileBrowser {
 	private async read(path: string, mine: number): Promise<void> {
 		try {
 			const file = await this.load(path);
-			if (mine === this.token) this.file = file;
+			if (mine !== this.token) return;
+			this.file = file;
+			// Start on the first table that holds rows.
+			this.table = Math.max(0, file.tables?.findIndex((table) => table.count > 0) ?? 0);
 		} catch (error) {
 			if (mine !== this.token) return;
 			this.file = undefined;

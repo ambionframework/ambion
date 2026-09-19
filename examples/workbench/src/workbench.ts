@@ -9,7 +9,7 @@ import { fail, liveRoom, openRooms, type RoomAction, type RoomView } from './roo
 import { scenarios } from './scenarios.ts';
 
 export type { Person } from './definitions.ts';
-export type { FileContent, FileEntry } from './files.ts';
+export type { FileContent, FileEntry, TableView } from './files.ts';
 export type { RoomAction, RoomView } from './rooms.ts';
 
 /**

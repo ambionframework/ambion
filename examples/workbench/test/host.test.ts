@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join as joinPath } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import type { CreateRuntimeOptions } from '@ambionframework/ambion';
 import {
 	createAssistantMessageEventStream,
@@ -242,6 +243,33 @@ describe('Workbench host', () => {
 		workbench = await open(directory);
 		expect((await workbench.file(path)).text).toBe(PLAN);
 	}, 20_000);
+
+	it('previews a SQLite database as tables, and refuses a file that is not one', async () => {
+		const directory = joinPath(await freshDirectory(), 'run');
+		const workbench = await open(directory);
+		const root = joinPath(directory, 'workspace');
+		const database = new DatabaseSync(joinPath(root, 'shared/data.db'));
+		database.exec(
+			'CREATE TABLE readings (id INTEGER PRIMARY KEY, note TEXT); INSERT INTO readings (note) VALUES (\'near\'), (NULL); CREATE TABLE "odd name" (a);',
+		);
+		database.close();
+		await writeFile(joinPath(root, 'shared/fake.db'), 'not a database');
+		const preview = await workbench.file('/shared/data.db');
+		expect(preview.tables).toEqual([
+			{ name: 'odd name', columns: ['a'], rows: [], count: 0 },
+			{
+				name: 'readings',
+				columns: ['id', 'note'],
+				rows: [
+					['1', 'near'],
+					['2', 'NULL'],
+				],
+				count: 2,
+			},
+		]);
+		expect(preview.text).toContain('# readings (2 rows)');
+		await expect(workbench.file('/shared/fake.db')).rejects.toThrow(/not a SQLite database/);
+	});
 
 	it('aborts an open exchange and keeps the room available', async () => {
 		const workbench = await open(joinPath(await freshDirectory(), 'run'), () =>

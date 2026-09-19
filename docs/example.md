@@ -148,6 +148,7 @@ examples/workbench/
     composer.ts        the composer, room chip, and palette
     browser.ts         the files panel state: search and the chosen file
     files-panel.ts     the files panel beside the conversation
+    database.ts        the SQLite preview: tables and their first rows
     tui.ts             the terminal: layout, keys, and the run loop
     main.ts            the entry point
   library/             the datasheets as text
