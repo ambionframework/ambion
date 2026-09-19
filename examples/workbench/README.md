@@ -50,6 +50,11 @@ pnpm tui              # connects to http://127.0.0.1:3000
 pnpm tui http://127.0.0.1:3000 theo   # a base URL and a person
 ```
 
+`pnpm tui` starts Node with `--experimental-ffi`, which OpenTUI needs. Run the
+script through `pnpm`, or pass the flag yourself. When you exit, the terminal
+ends your visit to the room. The web page for the same person then offers
+**re-enter**.
+
 `start` creates a fresh `.data` directory. Use `pnpm resume` for later runs.
 Both commands accept a directory argument. Set `PORT` to change the port. Set
 `AMBION_MODEL` and its provider credential to change the model. The default
@@ -153,6 +158,7 @@ access to rooms and workspace resources.
 | `src/rooms.ts`       | The host lifecycle and the room catalog              |
 | `src/server.ts`      | The HTTP routing for both endpoints                  |
 | `src/client.ts`      | The HTTP client the terminal uses                    |
+| `src/feed.ts`        | The terminal's room feed: one read at a time         |
 | `src/tui.ts`         | The terminal endpoint                                |
 | `src/brand.ts`       | The product name and the terminal palette            |
 | `ui/index.html`      | The web endpoint                                     |
