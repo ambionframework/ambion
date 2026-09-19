@@ -3,7 +3,6 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { Message } from '../types.ts';
 import type { LeaseHold } from './lease.ts';
-import { steers } from './rules.verified.ts';
 
 export interface MessageDelivery {
 	/** Seats the message explicitly wakes. */
@@ -28,22 +27,23 @@ export function messageDelivery(
 		const parsed = decodeActivationId(lease.id);
 		if (parsed === undefined) continue;
 		const { source, seat } = parsed;
-		// The first lease at a seat, in journal order, is the one the message steers.
-		const ended = lease.phase === 'ended';
-		const at = steers(
-			source === 'message',
-			seat,
-			message.from,
-			wakes.has(seat),
-			lease.since,
-			ended,
-			ended ? lease.until : 0,
-			message.seq,
-		);
-		if (at && !steered.has(seat)) steered.set(seat, lease.id);
+		// A message steers an ordinary lease that was at work when it landed, and
+		// never the author's seat or a seat it wakes. The first lease at a seat,
+		// in journal order, is the one it steers.
+		const steers =
+			source === 'message' &&
+			seat !== message.from &&
+			!wakes.has(seat) &&
+			atWork(lease, message.seq);
+		if (steers && !steered.has(seat)) steered.set(seat, lease.id);
 	}
 	return {
 		wakes: [...wakes],
 		steers: [...steered].map(([seat, activation]) => ({ seat, activation })),
 	};
+}
+
+/** The lease held a change before the message, and ended, if it ended, after it. */
+function atWork(lease: LeaseHold, seq: number): boolean {
+	return lease.since < seq && (lease.phase !== 'ended' || lease.until >= seq);
 }

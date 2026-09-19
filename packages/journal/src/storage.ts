@@ -47,3 +47,11 @@ export function namespaced(storage: JournalOpener, namespace: string): JournalOp
 		open: (name) => storage.open(JSON.stringify([namespace, name])),
 	};
 }
+
+/** The position a read reports: the highest position it scanned, and never one before `after`. */
+export function positionRead(
+	after: StoragePosition,
+	head: StoragePosition | undefined,
+): StoragePosition {
+	return head === undefined ? after : Math.max(after, head);
+}

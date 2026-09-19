@@ -7,19 +7,27 @@ contract. LemmaScript turns the contract into Dafny obligations, Dafny
 proves them, and the gate fails when a proof breaks or a generated file is
 stale. Two files hold every rule:
 
-| File                                                                                          | Concern                                                                                         | Obligations                    |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------ |
-| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor, the storage                                    | 18, and 23 in its proofs file  |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease, the admissions, the grant, the steer, the exchange, the verdict, the pass, the close | 106, and 14 in its proofs file |
+| File                                                                                          | Concern                                                                                            | Obligations                   |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
+| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor                                                    | 12, and 23 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 74, and 14 in its proofs file |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
 suites.** Routing, presence, the roster, addressing, membership changes,
-the keyed retry, the reads, and the validator's shape checks decide in
-their own files with no contract. The line is deliberate: a proof pays
-for itself on a state machine whose failure loses or duplicates work, and
-it costs a redeclared type, a binding case, and a Dafny run on every
-edit. A concern crosses the line when a defect in it would corrupt the
-record or the lease history.
+the keyed retry, the reads, the pass's scheduling, the storage adapters,
+and the validator's shape checks decide in their own files with no
+contract. The line is deliberate: a proof pays for itself on a state
+machine whose failure loses or duplicates work, and it costs a
+redeclared type, a binding case, and a Dafny run on every edit. A concern
+crosses the line when a defect in it would corrupt the record or the
+lease history.
+
+**A rule earns its place by what its contract says.** A rule stays when
+its contract states a property the body does not restate: an invariant
+of the fold, monotonicity, freshness, mutual exclusion, or an admission
+that gates the record. A rule stays when a proof depends on it. A rule
+whose contract only restates its body is a test, and it lives beside the
+code as one.
 
 **A change to a core state machine is a change to a rules file.** The
 fold, the transition, and the pass project the state and run a rule. So
@@ -222,12 +230,10 @@ doc it carries:
 
 **The rules cover the decisions, and the tests cover the rest.**
 
-- The journal's storage adapters run the storage rules, and the SQL
-  compare-and-append in `sqlite.ts` is outside the envelope. The storage
-  tests hold it.
-- The record is ordered by seq, which the journal proves; `lastOf`,
-  `openingQuestion`, and `messagesSince` require it and no runtime check
-  repeats it.
+- The storage adapters and the SQL compare-and-append in `sqlite.ts` are
+  outside the rules. The storage tests hold them.
+- The record is ordered by seq, which the journal proves; `lastOf` and
+  `openingQuestion` require it and no runtime check repeats it.
 - The clock never runs backwards. That is a host promise.
 - A pass of the reconciliation converges. The chaos drain and the walk's
   `drained` check witness it; a measure over the fold is open work.

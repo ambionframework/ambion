@@ -62,7 +62,6 @@ import {
 	type Passed,
 	type Seen,
 	scanned,
-	visibleEntries,
 	writable,
 } from './rules.verified.ts';
 import type { JournalStorage, StoredEntry } from './storage.ts';
@@ -328,7 +327,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	private async read(storage: JournalStorage): Promise<void> {
 		const after = this.cursor;
 		const found = await storage.read(after);
-		const entries = visibleEntries(found.entries, after);
+		const entries = found.entries.filter((stored) => stored.position > after);
 		entries.sort((a, b) => a.position - b.position);
 		for (const entry of entries) {
 			const known = envelope(this.words, entry.entry) as Entries<TKind, TBodies> | undefined;
