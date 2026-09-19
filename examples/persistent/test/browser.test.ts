@@ -12,6 +12,9 @@ interface Delivery {
 interface BrowserApp {
 	state: {
 		rooms: BrowserRoom[];
+		taskExchange: string;
+		selectedTask: { room: string; id: string } | null;
+		taskRead: unknown;
 		human: string;
 		selected: string;
 		entryState: 'restoring' | 'entered' | 'required';
@@ -26,6 +29,9 @@ interface BrowserApp {
 	reenterRoom(): Promise<void>;
 	poll(full?: boolean): Promise<void> | undefined;
 	renderTimeline(): void;
+	renderTasks(): void;
+	renderHeader(): void;
+	inspectTask(task: { id: string }): void;
 	createRoom(): Promise<void>;
 	switchUser(): Promise<void>;
 }
@@ -94,9 +100,9 @@ function browser(fetch_: typeof fetch, runStartup = false) {
 	const source = runStartup
 		? script.replace(
 				/\n\t\t\t\}\)\(\);\s*$/,
-				'\nreturn {state, flushOutbox, restoreSelection, reenterRoom, poll, renderTimeline, createRoom, switchUser}; })();',
+				'\nreturn {state, flushOutbox, restoreSelection, reenterRoom, poll, renderTimeline, renderTasks, renderHeader, inspectTask, createRoom, switchUser}; })();',
 			)
-		: `${script.slice(0, boot)}\nreturn {state, flushOutbox, restoreSelection, reenterRoom, poll, renderTimeline, createRoom, switchUser}; })();`;
+		: `${script.slice(0, boot)}\nreturn {state, flushOutbox, restoreSelection, reenterRoom, poll, renderTimeline, renderTasks, renderHeader, inspectTask, createRoom, switchUser}; })();`;
 	const app = runInNewContext(source, {
 		document: { getElementById, createElement: element },
 		location: { origin: 'http://localhost:3000' },
@@ -587,5 +593,79 @@ describe('browser delivery and navigation', () => {
 			['/rooms/delivery/humans/alice', 'DELETE'],
 			['/rooms/new-room/humans/alice', 'PUT'],
 		]);
+	});
+});
+
+describe('Task inspector', () => {
+	const task = (id: string, exchange: number, status = 'open') => ({
+		id,
+		exchange,
+		status,
+		text: `Assignment ${id}`,
+		owner: 'assistant',
+		agents: ['reviewer'],
+		events: [],
+	});
+	it('shows the selected exchange and refreshes Task status without new messages', async () => {
+		const room = {
+			...recordedRoom([{ from: 10, status: 'open' }]),
+			tasks: [task('old', 2, 'succeeded'), task('current', 10)],
+		};
+		const { app, getElementById } = browser(async (input) =>
+			response(
+				String(input) === '/people'
+					? [{ name: 'alice' }]
+					: String(input) === '/rooms'
+						? [room]
+						: room,
+			),
+		);
+		app.state.rooms = [room];
+		app.renderTasks();
+		expect(textOf(getElementById('task-list'))).toContain('Assignment current');
+		expect(textOf(getElementById('task-list'))).not.toContain('Assignment old');
+		room.tasks[1] = {
+			...task('current', 10, 'succeeded'),
+			outcome: 'Review complete.',
+		} as (typeof room.tasks)[number];
+		await app.poll();
+		expect(textOf(getElementById('task-list'))).toContain('Review complete.');
+		app.state.taskExchange = '2';
+		app.renderTasks();
+		expect(textOf(getElementById('task-list'))).toContain('Assignment old');
+		expect(textOf(getElementById('task-list'))).not.toContain('Assignment current');
+	});
+	it('shows background work until the owning exchange closes after Task settlement', () => {
+		const { app, getElementById } = browser(async () => response({}));
+		const room: BrowserRoom = {
+			...recordedRoom([]),
+			participants: [],
+			exchange: { from: 10 },
+			tasks: [task('current', 10, 'succeeded')],
+		};
+		app.state.rooms = [room];
+		app.renderHeader();
+		expect(getElementById('room-state').textContent).toBe('Background work');
+		room.exchange = undefined;
+		app.renderHeader();
+		expect(getElementById('room-state').textContent).toBe('Ready');
+	});
+	it('discards a working-room read after the user closes the inspector', async () => {
+		let finish: (value: Response) => void = () => {};
+		const fetched = new Promise<Response>((resolve) => {
+			finish = resolve;
+		});
+		const calls: string[] = [];
+		const { app } = browser(async (input) => {
+			calls.push(String(input));
+			return fetched;
+		});
+		app.inspectTask({ id: 'task-one' });
+		expect(calls).toEqual(['/rooms/delivery/tasks/task-one']);
+		app.inspectTask({ id: 'task-one' });
+		finish(response({ task: task('task-one', 10), room: { participants: [], messages: [] } }));
+		await vi.waitFor(() => expect(app.state.selectedTask).toBeNull());
+		await new Promise<void>((resolve) => setImmediate(resolve));
+		expect(app.state.taskRead).toBeNull();
 	});
 });

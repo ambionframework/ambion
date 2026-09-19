@@ -25,7 +25,17 @@ type ProposedEvent<K extends Kind = Kind> = {
 
 type PresenceChange = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 type MessageCommand =
-	| { type: 'deliver'; from: string; to?: string; text: string }
+	| {
+			type: 'deliver';
+			from: string;
+			to?: string;
+			taskId?: string;
+			taskSnapshot?: import('../types.ts').TaskView;
+			taskCrossRoom?: boolean;
+			taskNotice?: boolean;
+			text: string;
+			internal?: boolean;
+	  }
 	| { type: 'presence'; change: PresenceChange; route: boolean }
 	| { type: 'commit'; commit: CommitRequest };
 type LeaseCommand =
@@ -33,7 +43,7 @@ type LeaseCommand =
 	| { type: 'renew'; id: string; expiry: number; deadline: number; readThrough?: number }
 	| { type: 'end'; id: string; reason: EndReason; readThrough: number };
 type ComposeCommand = { type: 'compose'; composition: Body<Composition> };
-type CloseCommand = { type: 'close'; close: Close };
+type CloseCommand = { type: 'close'; close: Close; external?: boolean };
 type RunCommand = { type: 'run' };
 type CancelCommand = { type: 'cancel' };
 type ReconcileCommand = { type: 'reconcile'; options: Omit<ReconcileOptions, 'now'> };
@@ -112,7 +122,8 @@ export function decide(
 				event:
 					state.exchange?.from === command.close.from &&
 					state.lastSeq === command.close.through &&
-					!liveWork(state, now).exchange
+					!liveWork(state, now).exchange &&
+					command.external !== true
 						? { kind: 'close', body: command.close }
 						: undefined,
 			};
@@ -169,7 +180,10 @@ function message(
 	if ((body.kind === 'said' || body.kind === 'summary') && body.text.trim() === '') {
 		return refused('The message is empty. Say something, or end your turn instead.');
 	}
-	const wakes = route ? routes(body, state, liveWork(state, now).seats) : [];
+	const wakes =
+		route && !(body.kind === 'said' && body.taskNotice)
+			? routes(body, state, liveWork(state, now).seats)
+			: [];
 	return {
 		event: { kind: 'message', body: { ...body, ...(wakes.length === 0 ? {} : { wakes }) } },
 	};
@@ -182,17 +196,32 @@ function deliver(
 ): RoomDecision<'message'> {
 	const { from, to, text } = command;
 	const author = state.people.get(from);
-	if (author?.presence !== 'present') return refused(`'${from}' is not present in this room.`);
+	if (!command.internal && author?.presence !== 'present')
+		return refused(`'${from}' is not present in this room.`);
 	const target = state.roster.find((seat) => seat.name === to);
-	if (to !== undefined && !state.people.has(to) && target === undefined) {
+	if (!command.internal && to !== undefined && !state.people.has(to) && target === undefined) {
 		return refused(`Cannot direct a delivery to '${to}': not in this room.`);
 	}
-	if (target?.attention === 'none') {
+	if (!command.internal && target?.attention === 'none') {
 		return refused(`Cannot direct a delivery to '${to}': it wakes for nothing said.`);
 	}
 	return message(
 		state,
-		{ kind: 'said', at: iso(now), from, ...(to === undefined ? {} : { to }), text },
+		{
+			kind: 'said',
+			at: iso(now),
+			from,
+			...(to === undefined ? {} : { to }),
+			...(command.taskId === undefined
+				? {}
+				: {
+						taskId: command.taskId,
+						taskSnapshot: command.taskSnapshot,
+						taskCrossRoom: command.taskCrossRoom,
+						taskNotice: command.taskNotice,
+					}),
+			text,
+		},
 		now,
 	);
 }

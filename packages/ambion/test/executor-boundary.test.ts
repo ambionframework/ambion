@@ -5,6 +5,7 @@ import {
 	runningRoom,
 	type SeatContext,
 	type SeatRoom,
+	type TaskSeatRoom,
 	type Transport,
 } from '../src/transport.ts';
 import { andrei, collect, deferred, roomName, tick, waitForRoom } from './support/room.ts';
@@ -19,9 +20,18 @@ const writer = defineAgent({
 	model: 'scripted/writer',
 });
 
-function assertRoomCalls(room: SeatRoom): void {
-	expectTypeOf<keyof SeatRoom>().toEqualTypeOf<'view' | 'commit' | 'lease'>();
-	expect(Object.keys(room).sort()).toEqual(['commit', 'lease', 'view']);
+function assertRoomCalls(room: TaskSeatRoom): void {
+	expectTypeOf<keyof TaskSeatRoom>().toEqualTypeOf<
+		'view' | 'commit' | 'lease' | 'task' | 'taskUpdate' | 'taskSay'
+	>();
+	expect(Object.keys(room).sort()).toEqual([
+		'commit',
+		'lease',
+		'task',
+		'taskSay',
+		'taskUpdate',
+		'view',
+	]);
 	expect(Object.getPrototypeOf(room)).toBe(Object.prototype);
 }
 
@@ -69,7 +79,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 			expect(connections).toHaveLength(1);
 			const connection = connections[0];
 			if (connection === undefined) throw new Error('No executor connected.');
-			assertRoomCalls(connection.room);
+			assertRoomCalls(connection.room as TaskSeatRoom);
 			expect(connection.room).not.toBe(room);
 			expect(connection.context.definition).toEqual(writer);
 			expect(connection.context.stream).toBe(stream);
@@ -152,7 +162,7 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 		try {
 			const old = runningRoom(runtime, name);
 			if (old === undefined) throw new Error('No running room.');
-			assertRoomCalls(old);
+			assertRoomCalls(old as TaskSeatRoom);
 			const firstExchange = await (await first.visit(andrei)).send({ text: 'First?' });
 			await firstExchange.waitForClose();
 			runtime.evict(name);

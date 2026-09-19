@@ -178,12 +178,17 @@ model calls, including when they use the same agent names.
 `view`, `commit`, and `lease`. It cannot reach room lifecycle methods through
 that facade. The returned `SeatPort` handles `wake`, `steer`, and `cut`.
 
+Task-capable hosts extend this facade with `TaskSeatRoom`: `task`, `taskUpdate`,
+and `taskSay`. Custom transports must forward these calls to support
+[Tasks](tasks.md). Each call retains the activation and operation identity
+across retries. The in-process and Cloudflare transports support these calls.
+
 `SeatContext` supplies one captured agent definition, the room and seat names,
 clock, call retry policy, model services, transcript storage, and notifications.
 The in-process executor uses these values directly. Remote hosts resolve their
 execution dependencies where the agent runs. Only protocol data crosses RPC.
 
-`AgentRunner` executes activations through those three room calls.
+`AgentRunner` executes activations through the room-call facade.
 `createExecutionServices` supplies its model and transcript services without
 creating a room runtime. Both are available from `/transport` for remote hosts.
 

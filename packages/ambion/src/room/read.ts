@@ -6,6 +6,7 @@ import {
 	type Message,
 	type RoomSnapshot,
 	type Seq,
+	type TaskView,
 } from '../types.ts';
 import { exchangeViews } from './exchange.ts';
 import type { RoomState } from './fold.ts';
@@ -42,6 +43,7 @@ export function readView(
 			exchanges: [],
 			exchange: undefined,
 			watermark,
+			tasks: [],
 		};
 
 	const exchanges = exchangeViews(
@@ -64,6 +66,9 @@ export function readView(
 		exchanges,
 		exchange: current,
 		watermark,
+		tasks: [...(state.tasks ?? new Map<string, TaskView>()).values()].map((task) =>
+			structuredClone(task),
+		),
 	};
 }
 

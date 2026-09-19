@@ -10,7 +10,7 @@ import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { Agent as PiAgent, Session as PiSession } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { SeatContext, Transport } from '../host/runtime.ts';
-import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../protocol.ts';
+import type { ActivationView, SeatPort, SeatRoom, Steer, TaskSeatRoom, Wake } from '../protocol.ts';
 import type { RoomNotification } from '../types.ts';
 import { Activation, persistTurns } from './activation.ts';
 import { renderActivation, renderLine } from './render.ts';
@@ -353,7 +353,8 @@ export class AgentRunner implements SeatPort {
 
 	private reportCallFailure(
 		activation: string,
-		operation: 'view' | 'commit' | 'claim' | 'renew' | 'release',
+		operation:
+			'view' | 'commit' | 'claim' | 'renew' | 'release' | 'task' | 'task_update' | 'task_say',
 		error: Error,
 	): void {
 		this.emit({ type: 'delivery_error', agent: this.context.seat, activation, operation, error });
@@ -367,9 +368,9 @@ export class AgentRunner implements SeatPort {
 		}
 	}
 
-	private boundedRoom(cancelled: Promise<void>): SeatRoom {
-		return {
-			view: (id) => this.room.view(id),
+	private boundedRoom(cancelled: Promise<void>): SeatRoom | TaskSeatRoom {
+		const base: SeatRoom = {
+			view: (id) => this.toolCall(id, 'view', () => this.room.view(id), cancelled),
 			commit: async (request) => {
 				const committed = await this.call(() => this.room.commit(request), cancelled);
 				if (committed.kind === 'value') return committed.value;
@@ -379,6 +380,31 @@ export class AgentRunner implements SeatPort {
 			},
 			lease: (request) => this.room.lease(request),
 		};
+		if (!('task' in this.room) || typeof this.room.task !== 'function') return base;
+		const room = this.room as TaskSeatRoom;
+		return {
+			...base,
+			task: (request) =>
+				this.toolCall(request.activation, 'task', () => room.task(request), cancelled),
+			taskUpdate: (request) =>
+				this.toolCall(request.activation, 'task_update', () => room.taskUpdate(request), cancelled),
+			taskSay: (request) =>
+				this.toolCall(request.activation, 'task_say', () => room.taskSay(request), cancelled),
+		} satisfies TaskSeatRoom;
+	}
+
+	/** Bound Task operations and context refreshes by the same call and cancellation limits. */
+	private async toolCall<T>(
+		activation: string,
+		operation: 'view' | 'task' | 'task_update' | 'task_say',
+		send: () => Promise<T>,
+		cancelled: Promise<void>,
+	): Promise<T> {
+		const result = await this.call(send, cancelled);
+		if (result.kind === 'value') return result.value;
+		if (result.kind === 'cancelled') throw new Error('The activation was cut.');
+		this.reportCallFailure(activation, operation, result.error);
+		throw result.error;
 	}
 
 	private openAudit(transcripts: SessionOpener, id: string, parent: string): Promise<PiSession> {

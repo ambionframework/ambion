@@ -514,6 +514,52 @@
 			.panel:last-child {
 				border-bottom: 0;
 			}
+			.task-list {
+				display: grid;
+				gap: 12px;
+				margin-top: 12px;
+			}
+			.task-card {
+				padding: 12px;
+				border: 1px solid var(--line);
+				border-radius: 8px;
+				font-size: 12px;
+				overflow-wrap: anywhere;
+			}
+			.task-card p {
+				white-space: pre-wrap;
+				line-height: 1.5;
+				margin: 8px 0;
+			}
+			.task-meta {
+				color: var(--muted);
+				font-size: 10px;
+			}
+			.task-status {
+				font-size: 10px;
+				font-weight: 700;
+				text-transform: uppercase;
+				color: var(--amber);
+			}
+			.task-status.succeeded {
+				color: var(--green);
+			}
+			.task-status.failed {
+				color: var(--red);
+			}
+			.task-work {
+				border-top: 1px solid var(--line);
+				margin-top: 10px;
+				padding-top: 10px;
+			}
+			.task-work article {
+				border-bottom: 1px solid var(--line-soft);
+				padding: 8px 0;
+			}
+			.task-exchange {
+				width: 100%;
+				margin-top: 6px;
+			}
 			.participants {
 				display: grid;
 				gap: 9px;
@@ -819,6 +865,12 @@
 						<div class="section-label" style="margin-left: 0">Participants</div>
 						<div id="participants" class="participants"></div>
 					</section>
+					<section class="panel" aria-label="Background tasks">
+						<div class="section-label" style="margin-left: 0">Background tasks</div>
+						<label class="task-meta" for="task-exchange">Exchange</label>
+						<select id="task-exchange" class="task-exchange"></select>
+						<div id="task-list" class="task-list" aria-live="polite"></div>
+					</section>
 					<details class="panel">
 						<summary>Activity</summary>
 						<div id="activity" class="activity" style="margin-top: 12px"></div>
@@ -860,6 +912,10 @@
 					drafts: {},
 					outbox: [],
 					expanded: new Set(),
+					taskExchange: '',
+					selectedTask: null,
+					taskRead: null,
+					taskError: '',
 					workspace: null,
 					refreshing: false,
 					workspaceRefreshing: false,
@@ -962,6 +1018,7 @@
 						return body;
 					},
 					rooms: () => api.request('/rooms'),
+					task: (room, task) => api.request(`/rooms/${escPath(room)}/tasks/${escPath(task)}`),
 					people: () => api.request('/people'),
 					read: (room, since) =>
 						api.request(`/rooms/${escPath(room)}${since === undefined ? '' : `?since=${since}`}`),
@@ -1008,7 +1065,12 @@
 					const active = (currentRoom()?.participants || []).some(
 						(participant) => participant.kind === 'agent' && participant.status === 'active',
 					);
-					return active ? 'Working' : 'Ready';
+					return active
+						? 'Working'
+						: currentRoom()?.exchange &&
+							  currentRoom()?.tasks?.some((task) => task.exchange === currentRoom().exchange.from)
+							? 'Background work'
+							: 'Ready';
 				};
 				const renderRooms = () => {
 					const target = $('rooms');
@@ -1276,6 +1338,130 @@
 					person.role || person.description || person.identity || 'Predefined human identity';
 				const personLabel = (person) =>
 					`${person.name}${personDetail(person) ? ` · ${personDetail(person)}` : ''}`;
+				const taskExchange = () => {
+					const room = currentRoom();
+					return Number(
+						state.taskExchange || room?.exchange?.from || room?.exchanges?.at(-1)?.from || 0,
+					);
+				};
+				const refreshTask = async () => {
+					const selection = state.selectedTask;
+					if (!selection || selection.room !== state.selected) return;
+					try {
+						const result = await api.task(selection.room, selection.id);
+						if (state.selectedTask !== selection) return;
+						state.taskRead = result;
+						state.taskError = '';
+					} catch (error) {
+						if (state.selectedTask !== selection) return;
+						state.taskError = error.message;
+					}
+					renderTasks();
+				};
+				const inspectTask = (task) => {
+					state.selectedTask =
+						state.selectedTask?.id === task.id ? null : { room: state.selected, id: task.id };
+					state.taskRead = null;
+					state.taskError = '';
+					renderTasks();
+					void refreshTask();
+				};
+				const taskWork = (task) => {
+					const target = node('div', 'task-work');
+					const result = state.taskRead;
+					if (!result || result.task.id !== task.id) {
+						target.append(node('p', '', state.taskError || 'Loading working room…'));
+						return target;
+					}
+					target.append(node('strong', '', 'Working room'));
+					target.append(
+						node(
+							'p',
+							'task-meta',
+							result.room.participants
+								.map((seat) => `${seat.name} · ${seat.status || seat.presence}`)
+								.join(', '),
+						),
+					);
+					if (state.taskError) target.append(node('p', '', state.taskError));
+					result.room.messages
+						.filter((message) => message.kind === 'said')
+						.forEach((message) => {
+							const item = node('article');
+							item.append(
+								node('strong', 'task-meta', messageLabel(message)),
+								node('p', '', message.text),
+							);
+							target.append(item);
+						});
+					return target;
+				};
+				const taskUpdateText = (task) => {
+					if (task.outcome) return task.outcome;
+					const latest = task.events.at(-1);
+					if (latest?.type === 'idle') return 'Waiting for the owner to help.';
+					return latest?.type === 'created' ? '' : latest?.text || '';
+				};
+				const taskCard = (task) => {
+					const card = node('article', 'task-card');
+					card.append(
+						node('span', `task-status ${task.status}`, task.status),
+						node('p', '', task.text),
+					);
+					card.append(node('div', 'task-meta', `Owner: ${task.owner} · ${task.agents.join(', ')}`));
+					const update = taskUpdateText(task);
+					if (update) card.append(node('p', '', update));
+					const button = node(
+						'button',
+						'btn',
+						state.selectedTask?.id === task.id ? 'Hide work' : 'View work',
+					);
+					button.type = 'button';
+					button.addEventListener('click', () => inspectTask(task));
+					card.append(button);
+					if (state.selectedTask?.id === task.id) card.append(taskWork(task));
+					return card;
+				};
+				const renderTasks = () => {
+					const room = currentRoom();
+					const exchange = taskExchange();
+					const select = $('task-exchange');
+					select.replaceChildren();
+					(room?.exchanges || [])
+						.slice()
+						.reverse()
+						.forEach((item) => {
+							const option = node(
+								'option',
+								'',
+								`${item.status === 'open' ? 'Current' : 'Completed'} · ${formatTime(item.at)} · #${item.from}`,
+							);
+							option.value = String(item.from);
+							select.append(option);
+						});
+					select.value = String(exchange);
+					select.disabled = !room?.exchanges?.length;
+					const target = $('task-list');
+					target.replaceChildren();
+					const tasks = (room?.tasks || []).filter((task) => task.exchange === exchange);
+					if (!tasks.length)
+						target.append(
+							node(
+								'p',
+								'task-meta',
+								'No background tasks in this exchange. You can ask the room to delegate work and keep talking here.',
+							),
+						);
+					tasks.forEach((task) => {
+						target.append(taskCard(task));
+					});
+				};
+				$('task-exchange').addEventListener('change', () => {
+					state.taskExchange = $('task-exchange').value;
+					state.selectedTask = null;
+					state.taskRead = null;
+					renderTasks();
+				});
 				const renderPeople = () => {
 					const people = state.people;
 					peopleSignature = people
@@ -1455,6 +1641,7 @@
 					renderHeader();
 					renderParticipants();
 					renderActivity();
+					renderTasks();
 					renderTimeline();
 					renderWorkspace();
 					renderPending();
@@ -1464,6 +1651,9 @@
 					state.flushGeneration += 1;
 					state.flushController?.abort();
 					state.selected = name;
+					state.taskExchange = '';
+					state.selectedTask = null;
+					state.taskRead = null;
 					state.entryState = 'required';
 					state.timelineKey = '';
 					save();
@@ -1607,6 +1797,7 @@
 					const work = (async () => {
 						try {
 							await pollRooms(full, epoch);
+							await refreshTask();
 						} catch (error) {
 							reportPollError(error);
 						} finally {
@@ -1627,6 +1818,7 @@
 						snapshot?.exchanges,
 						snapshot?.exchange,
 						snapshot?.activity,
+						snapshot?.tasks,
 					]);
 				const mergeSelected = (room, incoming, since) => {
 					const before = latestSeq(room);

@@ -28,7 +28,8 @@ export function messageDelivery(
 		const parsed = decodeActivationId(lease.id);
 		if (
 			parsed?.source === 'message' &&
-			parsed.seat !== message.from &&
+			(parsed.seat !== message.from ||
+				(message.kind === 'said' && message.taskCrossRoom === true)) &&
 			!wakes.has(parsed.seat) &&
 			atWork(lease, message.seq)
 		)

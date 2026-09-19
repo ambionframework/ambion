@@ -90,7 +90,11 @@ export function routes(
 			? [...state.roster, { name: message.subject, attention: message.attention ?? 'broadcast' }]
 			: state.roster;
 	const woken = roster
-		.filter((seat) => seat.name !== author && !holdsOrdinary(state, live.get(seat.name)))
+		.filter(
+			(seat) =>
+				(seat.name !== author || (message.kind === 'said' && message.taskCrossRoom === true)) &&
+				!holdsOrdinary(state, live.get(seat.name)),
+		)
 		.filter((seat) => wakes(seat, target, message))
 		.map((seat) => seat.name);
 	return [...new Set(woken)];

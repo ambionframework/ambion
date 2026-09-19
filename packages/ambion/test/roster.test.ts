@@ -128,7 +128,7 @@ describe('ordinary participation', () => {
 		await (await session.visit(priya)).send({ text: 'How much steel is on site?' });
 		await waitForRoom(session);
 
-		expect(tools[0]).toEqual(['say', 'seat', 'unseat']);
+		expect(tools[0]).toEqual(['say', 'task', 'task_update', 'seat', 'unseat']);
 		expect(contexts[0]).toContain('The reserve: agents not in the room.');
 		expect(contexts[0]).toContain('- surveyor: Quantity surveyor. Holds the tonnage.');
 		expect(kinds(await messagesOf(session))).toEqual(['arrived', 'said', 'seated', 'said']);

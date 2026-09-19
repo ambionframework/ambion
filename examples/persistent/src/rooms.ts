@@ -218,6 +218,13 @@ export async function openRooms(
 				name,
 				async (entry) => (await readRoom(entry.name, { runtime, messages: { since } })).messages,
 			),
+		task: (name: string, id: string) =>
+			withRoom(name, async (entry) => {
+				const origin = await readRoom(entry.name, { runtime, messages: false });
+				const task = origin.tasks.find((candidate) => candidate.id === id);
+				if (task === undefined) fail(404, 'This Task does not belong to this room.');
+				return { task, room: await readRoom(task.workingRoom, { runtime }) };
+			}),
 		read: (name: string, since?: number) =>
 			withRoom(name, async (entry) =>
 				roomView(

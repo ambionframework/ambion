@@ -112,6 +112,7 @@ describe('the room API', () => {
 				participants: [],
 				exchanges: [],
 				exchange: undefined,
+				tasks: [],
 				watermark: 0,
 			});
 			await expect(readRoom(missingName, { runtime, messages: { since: -1 } })).rejects.toThrow(

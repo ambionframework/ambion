@@ -3,7 +3,7 @@
  * plain JSON, and one that loses, repeats or delays them on purpose.
  */
 import type { Clock } from '../../src/index.ts';
-import type { SeatPort, SeatRoom, Transport } from '../../src/transport.ts';
+import type { SeatPort, TaskSeatRoom, Transport } from '../../src/transport.ts';
 import { assertWire, roundTrip } from '../../src/transport.ts';
 
 export interface SerializingTransport extends Transport {
@@ -32,11 +32,18 @@ export function serializing(transport: Transport): SerializingTransport {
 	return {
 		violations,
 		connect(room, context) {
-			const wrapped: SeatRoom = {
+			const taskRoom = room as TaskSeatRoom;
+			const wrapped: TaskSeatRoom = {
 				view: async (id) => check('view response', await room.view(check('view', id))),
 				commit: async (commit) =>
 					check('commit response', await room.commit(check('commit', commit))),
 				lease: async (lease) => check('lease response', await room.lease(check('lease', lease))),
+				task: async (request) =>
+					check('task response', await taskRoom.task(check('task', request))),
+				taskUpdate: async (request) =>
+					check('taskUpdate response', await taskRoom.taskUpdate(check('taskUpdate', request))),
+				taskSay: async (request) =>
+					check('taskSay response', await taskRoom.taskSay(check('taskSay', request))),
 			};
 			const port = transport.connect(wrapped, context);
 			return {
@@ -48,7 +55,8 @@ export function serializing(transport: Transport): SerializingTransport {
 	};
 }
 
-export type Operation = 'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'lease';
+export type Operation =
+	'wake' | 'steer' | 'cut' | 'view' | 'commit' | 'lease' | 'task' | 'taskUpdate' | 'taskSay';
 
 export interface Fault {
 	on: Operation;
@@ -97,10 +105,14 @@ export function faultyTransport(transport: Transport, faults: Fault[], clock: Cl
 	};
 	return {
 		connect(room, context) {
-			const wrapped: SeatRoom = {
+			const taskRoom = room as TaskSeatRoom;
+			const wrapped: TaskSeatRoom = {
 				view: (id) => through('view', id, () => room.view(id)),
 				commit: (commit) => through('commit', commit, () => room.commit(commit)),
 				lease: (lease) => through('lease', lease, () => room.lease(lease)),
+				task: (request) => through('task', request, () => taskRoom.task(request)),
+				taskUpdate: (request) => through('taskUpdate', request, () => taskRoom.taskUpdate(request)),
+				taskSay: (request) => through('taskSay', request, () => taskRoom.taskSay(request)),
 			};
 			const port: SeatPort = transport.connect(wrapped, context);
 			return {

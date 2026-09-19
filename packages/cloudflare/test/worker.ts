@@ -28,7 +28,19 @@ export const slow = defineAgent({
 });
 
 configure({
-	agents: [assistant, product, slow],
+	agents: [
+		assistant,
+		product,
+		slow,
+		...['task-owner', 'task-worker', 'task-slow'].map((name) =>
+			defineAgent({
+				name,
+				identity: name,
+				instructions: 'Complete the Task.',
+				model: `scripted/${name}`,
+			}),
+		),
+	],
 	stream: scripted,
 	// Alarms fire on their own in workerd: a wake nobody takes is sent again this often.
 	wake: { resend: 50 },

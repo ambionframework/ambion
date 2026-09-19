@@ -28,6 +28,8 @@ export interface ReconcileOptions {
 	sent: ReadonlyMap<string, number>;
 	/** A stopped room closes nothing and wakes nobody. */
 	stopped: boolean;
+	/** Activity in working rooms owned by this exchange. */
+	externalExchange?: boolean;
 }
 
 /** One wake over the wire: the activation, and the seat that takes it. */
@@ -122,7 +124,14 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
 	const abandoned = options.stopped ? [] : abandonments(state, options);
 	// An expiry or an abandonment changes what is live: the close waits for the fold that holds it.
 	const settled = revoked.length === 0 && expired.length === 0 && abandoned.length === 0;
-	const close = options.stopped || !settled ? undefined : closing(state, work, options.now);
+	const close =
+		options.stopped || !settled
+			? undefined
+			: closing(
+					state,
+					{ ...work, exchange: work.exchange || options.externalExchange === true },
+					options.now,
+				);
 	const sends = options.stopped ? [] : dueWakes(state, options);
 	return {
 		revoked,

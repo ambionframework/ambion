@@ -30,6 +30,13 @@ The assistant can answer simple questions directly. Specialists own domain
 judgments. The assistant must not invent extra work after the request is
 satisfied or require every specialist contribution to pass through it.
 
+Tasks run in their working rooms in the background, so the assistant can keep
+engaging the originating room while parallel work proceeds. This includes a
+Task performed by the same agent in another room; each room gives that agent
+an independent activation. Ordinary Task context is scoped to the owner’s
+Tasks in the current exchange, while working-room activations see the Tasks
+attached to that room.
+
 ## Package and room configuration
 
 **The package supplies a reusable agent definition.** The

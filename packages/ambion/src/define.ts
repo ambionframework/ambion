@@ -207,6 +207,7 @@ export const SAY = {
 	name: 'say' as const,
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
+		task: Type.Optional(Type.String({ description: 'A Task id to steer.' })),
 		text: Type.String(),
 	}),
 };
@@ -224,6 +225,28 @@ export const UNSEAT = {
 	name: 'unseat' as const,
 	parameters: Type.Object({
 		name: Type.String({ description: 'A seated agent name.' }),
+	}),
+};
+
+/** The room tool that creates or attaches a Task. */
+export const TASK = {
+	name: 'task' as const,
+	description: 'Create a Task in a new or existing working room.',
+	parameters: Type.Object({
+		text: Type.String(),
+		agents: Type.Optional(Type.Array(Type.String())),
+		room: Type.Optional(Type.String()),
+	}),
+};
+
+/** The room tool that publishes Task progress or a terminal outcome. */
+export const TASK_UPDATE = {
+	name: 'task_update' as const,
+	description: 'Publish Task progress or settle its outcome.',
+	parameters: Type.Object({
+		task: Type.String(),
+		text: Type.String(),
+		status: Type.Optional(Type.Union([Type.Literal('succeeded'), Type.Literal('failed')])),
 	}),
 };
 
@@ -282,7 +305,12 @@ function assertAgentTools(agent: string, tools: readonly AmbionTool[]): void {
 			throw new Error(`Agent '${agent}' brings duplicate tools named '${name}'.`);
 		}
 		names.add(name);
-		const roomTool = name === SAY.name || name === SEAT.name || name === UNSEAT.name;
+		const roomTool =
+			name === SAY.name ||
+			name === SEAT.name ||
+			name === UNSEAT.name ||
+			name === TASK.name ||
+			name === TASK_UPDATE.name;
 		if (roomTool)
 			throw new Error(
 				`Agent '${agent}' brings a tool named '${name}': the room supplies it for an activation. Give it another name.`,

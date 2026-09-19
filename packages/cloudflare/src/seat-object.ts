@@ -11,7 +11,13 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Clock, RoomNotification } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
-import type { ExecutionServices, SeatRoom, Steer, Wake } from '@ambionframework/ambion/transport';
+import type {
+	ExecutionServices,
+	SeatRoom,
+	Steer,
+	TaskSeatRoom,
+	Wake,
+} from '@ambionframework/ambion/transport';
 import { AgentRunner } from '@ambionframework/ambion/transport';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent } from './configure.ts';
@@ -72,6 +78,7 @@ export class SeatObject extends DurableObject<Env> {
 				: {
 						patch: {
 							room: wake.room,
+							hostRoom: wake.hostRoom ?? wake.room,
 							seat: wake.seat,
 							activation: wake.activation,
 							phase: current.phase ?? 'pending',
@@ -81,6 +88,27 @@ export class SeatObject extends DurableObject<Env> {
 		);
 		if (next.activation !== wake.activation) {
 			if (this.runner !== undefined) await this.runner.wake(wake);
+			else if (next.phase === 'running') {
+				// A seat object may have been evicted after claiming its old
+				// activation. The next retry has a new id; retain that retry and
+				// schedule it instead of leaving the stale running marker wedged.
+				const recovered = await this.metadata.change((current) =>
+					current.activation === next.activation && current.phase === 'running'
+						? {
+								patch: {
+									room: wake.room,
+									hostRoom: wake.hostRoom ?? wake.room,
+									seat: wake.seat,
+									activation: wake.activation,
+									phase: 'pending' as const,
+									wakes: (current.wakes ?? 0) + 1,
+								},
+							}
+						: undefined,
+				);
+				if (recovered.activation === wake.activation && !recovered.hold)
+					await this.ctx.storage.setAlarm(Date.now());
+			}
 			return;
 		}
 		if (!next.hold) await this.ctx.storage.setAlarm(Date.now());
@@ -127,7 +155,7 @@ export class SeatObject extends DurableObject<Env> {
 		const state = await this.metadata.read();
 		const { activation, room, seat } = state;
 		if (activation === undefined || room === undefined || seat === undefined) return;
-		const seatRoom = this.roomFor(room);
+		const seatRoom = this.roomFor(room, state.hostRoom ?? room);
 		const execution = executionFor({
 			storage: this.storage,
 			clock: systemClock(),
@@ -225,12 +253,15 @@ export class SeatObject extends DurableObject<Env> {
 		return result;
 	}
 
-	/** The three calls this seat makes on its room, each over a stub of its own. */
-	private roomFor(room: string): SeatRoom {
+	/** Route logical room calls through the object that hosts its exchange. */
+	private roomFor(room: string, hostRoom: string): TaskSeatRoom {
 		return {
-			view: (id) => this.roomStub(room).view(id),
-			commit: (commit) => this.roomStub(room).commit(commit),
-			lease: (lease) => this.roomStub(room).lease(lease),
+			view: (id) => this.roomStub(hostRoom).view(id, room),
+			commit: (commit) => this.roomStub(hostRoom).commit(commit, room),
+			lease: (lease) => this.roomStub(hostRoom).lease(lease, room),
+			task: (request) => this.roomStub(hostRoom).task(request, room),
+			taskUpdate: (request) => this.roomStub(hostRoom).taskUpdate(request, room),
+			taskSay: (request) => this.roomStub(hostRoom).taskSay(request, room),
 		};
 	}
 

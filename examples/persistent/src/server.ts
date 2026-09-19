@@ -154,7 +154,7 @@ async function roomRoute(
 	url: URL,
 ) {
 	const match =
-		/^\/rooms\/([a-z][a-z0-9-]*)(?:\/(messages|exchanges|humans|resume|stop|abort)(?:\/([^/]+))?)?$/.exec(
+		/^\/rooms\/([a-z][a-z0-9-]*)(?:\/(messages|exchanges|tasks|humans|resume|stop|abort)(?:\/([^/]+))?)?$/.exec(
 			url.pathname,
 		);
 	if (!match) fail(404, 'Unknown route.');
@@ -205,8 +205,11 @@ async function read(
 	url: URL,
 	response: ServerResponse,
 ) {
-	if (id && resource !== 'exchanges') fail(404, 'Unknown route.');
+	if (id && resource !== 'exchanges' && resource !== 'tasks') fail(404, 'Unknown route.');
 	switch (resource) {
+		case 'tasks':
+			if (!id) fail(400, 'Supply a Task identity.');
+			return reply(response, 200, await rooms.task(name, id));
 		case 'messages':
 			return messagesRead(rooms, name, url, response);
 		case 'exchanges':

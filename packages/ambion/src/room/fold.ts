@@ -10,9 +10,9 @@
  */
 
 import { decodeActivationId } from '../activation-id.ts';
-import type { Close, Composition, Seating } from '../journal/events.ts';
+import type { Close, Composition, Seating, TaskChange } from '../journal/events.ts';
 import { type Entry, placed } from '../journal/journal.ts';
-import type { ExchangeRef, Message, Seq } from '../types.ts';
+import type { ExchangeRef, Message, Seq, TaskView } from '../types.ts';
 import { type MessageDelivery, messageDelivery } from './delivery.ts';
 import { openExchange, summaryCompletion } from './exchange.ts';
 import {
@@ -26,6 +26,7 @@ import {
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
 import { beforeCancellation } from './rules.verified.ts';
+import { applyTask, mergeTask } from './tasks.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends PendingActivation {
@@ -54,6 +55,9 @@ export interface RoomState {
 	/** Every activation the room owes, whatever caused it: the wakes and the drafts as one list. */
 	readonly due: PendingActivation[];
 	readonly messages: readonly Message[];
+	readonly tasks?: ReadonlyMap<string, TaskView>;
+	readonly taskChanges?: ReadonlyMap<string, TaskChange>;
+	readonly taskSeq?: Seq;
 	readonly lastSeq: Seq;
 }
 
@@ -73,6 +77,9 @@ interface BaseFacts {
 	leases: Map<string, LeaseHold>;
 	composition: Composition | undefined;
 	deliveries: Map<Seq, MessageDelivery>;
+	tasks: Map<string, TaskView>;
+	taskChanges: Map<string, TaskChange>;
+	taskSeq: Seq;
 }
 
 /** The private base facts held by a projection for incremental evolution. */
@@ -83,6 +90,9 @@ export const baseOf = (state: RoomState): BaseFacts => ({
 	leases: new Map(state.leases),
 	composition: state.composition,
 	deliveries: new Map(state.deliveries),
+	tasks: new Map(state.tasks ?? []),
+	taskChanges: new Map(state.taskChanges ?? []),
+	taskSeq: state.taskSeq ?? 0,
 });
 
 /** The empty room facts before the first committed event. */
@@ -93,14 +103,19 @@ const older = (): BaseFacts => ({
 	leases: new Map(),
 	composition: undefined,
 	deliveries: new Map(),
+	tasks: new Map(),
+	taskChanges: new Map(),
+	taskSeq: 0,
 });
 
 /** Applies one committed event to the room facts. */
 export function applyEvent(read: BaseFacts, entry: Entry): void {
 	if (entry.kind === 'message') {
-		const message = placed(entry);
-		read.deliveries.set(message.seq, messageDelivery(message, read.leases));
-		read.messages.push(message);
+		applyMessage(read, entry);
+		return;
+	}
+	if (entry.kind === 'task') {
+		applyTaskEntry(read, entry);
 		return;
 	}
 	if (entry.kind === 'close') {
@@ -121,6 +136,20 @@ export function applyEvent(read: BaseFacts, entry: Entry): void {
 		read.composition = { ...entry.body, seq: entry.seq };
 		return;
 	}
+}
+
+function applyMessage(read: BaseFacts, entry: Extract<Entry, { kind: 'message' }>): void {
+	const message = placed(entry);
+	read.deliveries.set(message.seq, messageDelivery(message, read.leases));
+	read.messages.push(message);
+	if (message.kind === 'said' && message.taskSnapshot !== undefined)
+		mergeTask(read.tasks, message.taskSnapshot);
+}
+
+function applyTaskEntry(read: BaseFacts, entry: Extract<Entry, { kind: 'task' }>): void {
+	read.taskChanges.set(entry.body.event, entry.body);
+	if ('deliveries' in entry.body) read.taskSeq = entry.seq;
+	applyTask(read.tasks, entry.body);
 }
 
 export function foldRoom(entries: readonly Entry[], options: FoldOptions): RoomState {
@@ -158,7 +187,10 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		owed,
 		due: [...pending, ...owed],
 		messages,
-		lastSeq: messages.at(-1)?.seq ?? 0,
+		tasks: new Map(read.tasks),
+		taskChanges: new Map(read.taskChanges),
+		taskSeq: read.taskSeq,
+		lastSeq: Math.max(messages.at(-1)?.seq ?? 0, read.taskSeq),
 	};
 	return state;
 }

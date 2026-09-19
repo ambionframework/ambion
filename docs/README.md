@@ -29,6 +29,9 @@ each page.
 [Default assistant](assistant.md) describes the assistant package, room
 configuration shorthand, and Relay integration.
 
+[Tasks](tasks.md) proposes parallel work and Task subscriptions within one
+exchange. Tasks, subscriptions, and their tools are not implemented.
+
 `agent.md` is the entry point for the runtime model. Read `exchange.md` and
 `presence.md` for the two durable concepts built on top of it. Read
 `durability.md` before choosing storage or recovery behavior, then
