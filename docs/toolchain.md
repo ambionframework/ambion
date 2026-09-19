@@ -136,8 +136,8 @@ check with no proof, because CI passes no `--slow`; keep every timeout at 60
 or below. A rule that calls `filter` needs `--standard-libraries` in the
 flag column. The CI job clones the LemmaScript tools at `ls-ref`, which
 must name the `lemmascript` version in `package.json`.
-[`planning/formal.md`](../planning/formal.md) holds the constructs that
-lower and the rules still to write.
+[`formal.md`](formal.md) holds the mechanism, the constructs that lower,
+and what a contributor does to change a rule.
 
 `scripts/setup.sh` provisions the full local toolchain. It installs Node 26
 through nvm, because `@opentui/core` sets that engine floor. It installs .NET 8,

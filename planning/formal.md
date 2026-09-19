@@ -1,11 +1,12 @@
 # Formal: verified rules for the journal and the room
 
-This file is the plan for formal verification of the two critical
-subsystems: the journal in `packages/journal` and the room's state
-transitions in `packages/ambion/src/room`. It names each gap, the rule
-that closes it, the contract the rule carries, the call site that runs
-the rule's body, and the evidence each step needs. [next.md](next.md)
-owns the 0.1.0 scope; this file feeds its phase 8 evidence line.
+This file is the record of the review that made the journal in
+`packages/journal` and the room in `packages/ambion/src/room` decide by
+verified rules, and the list of what is still open. It names each gap,
+the rule that closes it, the contract the rule carries, and the call site
+that runs the rule's body. [`docs/formal.md`](../docs/formal.md) states
+the mechanism a contributor uses. [next.md](next.md) owns the 0.1.0
+scope; this file feeds its phase 8 evidence line.
 
 The review behind this file ran on 2026-09-19 against main `914951c`. It
 read both packages, the design contracts, and the LemmaScript 0.6.1
@@ -14,7 +15,8 @@ more. A verifier and a refuter judged each one against the code with
 running probes and differential fuzzing. Of the 101 candidates, 79
 survived both, 11 were refuted or restated, 8 were already carried, and
 1 was outside the envelope. Every rule this file keeps survived, and
-every group was then written as a LemmaScript file and proven by Dafny.
+every group now lives in a runtime rules file with its proof and its
+callers. The three files carry 244 obligations.
 
 **A rule is verified when the runtime runs its body.** LemmaScript turns
 a `//@ requires` and `//@ ensures` contract on a pure TypeScript function
@@ -60,28 +62,12 @@ file and omits the journal file.
 
 ## What LemmaScript 0.6.1 can express here
 
-**The probes in this branch fix the envelope.** Each row is a construct
-the plan uses, with the result of a `lsc gen` and `dafny verify` run on
-a small file. The rules below stay inside the rows that verify.
-
-| Construct                                                   | Result                                                                                                                                                     |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Records, discriminated unions on a literal field            | Verifies; each lowers to a Dafny datatype                                                                                                                  |
-| A named string-literal union (`type Reason = 'a' \| 'b'`)   | Verifies; an inline literal union in a parameter lowers to `string`, and a case split over it does not prove                                               |
-| `T \| undefined`, narrowed in an `if` or under `==>`        | Verifies; a narrowing inside a return expression or a `\|\|` does not lower, and two optionals compared with `===` do not, so narrow both in an `if` first |
-| `Math.max`, `Math.min`, ternaries, object literals          | Verifies                                                                                                                                                   |
-| `xs.some(cb)`                                               | Verifies; lowers to `exists`                                                                                                                               |
-| `forall(i, ...)` and `exists(i, ...)` in a contract         | Verifies; the Dafny `forall i ::` spelling does not parse                                                                                                  |
-| An index loop with `//@ invariant` over `i`                 | Verifies when the body reads `xs[i]` under the loop bound only                                                                                             |
-| `for (const v of xs)`                                       | Lowers to a hidden index, so an index invariant cannot name it                                                                                             |
-| A read `xs[i]` tested with `!== undefined`                  | Does not lower                                                                                                                                             |
-| A mutable `let x: T \| undefined` changed in a loop         | Does not type in Dafny; fold a sequence by recursion instead                                                                                               |
-| Recursion over a sequence with `//@ decreases`              | Verifies                                                                                                                                                   |
-| `xs.filter(cb)`                                             | Lowers to `Std.Collections.Seq.Filter` and needs `--standard-libraries` on the file's line in `LemmaScript-files.txt`                                      |
-| `Map.has`, `Set.has`, `new Set(s).add(x)`                   | Verifies                                                                                                                                                   |
-| An import of a rule from another verified file              | Verifies; the import lowers to an axiom that carries the imported contract                                                                                 |
-| `switch` over a named string union                          | Verifies                                                                                                                                                   |
-| Regular expressions, `Date.parse`, `structuredClone`, async | Outside the envelope                                                                                                                                       |
+**The envelope is in [`docs/formal.md`](../docs/formal.md) §6.** The
+probes on this branch fixed it, and every rule below stays inside it. Two
+rows came out of the landing itself: two records with the same fields are
+two Dafny datatypes, so a shared predicate is written per record; and a
+quantifier with no function call inside it has no trigger, so a
+per-position lemma over a range is stated on the range's bounds.
 
 ## A. The journal
 
@@ -193,8 +179,8 @@ seq, and answers the lease after it. Its contract is the lease's life:
 The rules file redeclares `Hold`, `Change`, and `Reason` beside the rule,
 because LemmaScript lowers only the types in its own file and Biome's layer
 rule points `lease.ts` at the rules and never back. `LeaseHold` in
-`lease.ts` is `Hold` plus the derived `cancelled` marker, which the caller
-adds after the rule answers.
+`lease.ts` is the rule's `Hold`; the cancellation rule writes the
+`cancelled` marker itself.
 
 **A cancellation is a second step rule.** `cancelHold(hold, position,
 cancelledAt, at)` ends a running lease whose cause is before the marker.
@@ -243,26 +229,24 @@ expired and never both, and an ended lease is neither. `transition.ts`,
 `reconcile.ts`, and `routing.ts` read them through `lease.ts` unchanged.
 
 **`removedAfter` is a rule over the removal positions.** `lease.ts`,
-`reconcile.ts` `revocations`, `exchange.ts` `summaryDraftOutcome`, and
-`activation.ts` each write `unseated && subject === seat && seq > position`
-by hand. One rule over the seqs of the seat's removals replaces four
-copies.
+`reconcile.ts`, `exchange.ts`, and `activation.ts` each wrote
+`unseated && subject === seat && seq > position` by hand. One rule over
+the seqs of the seat's removals replaced four copies, and `removalsOf` in
+`lease.ts` is the one projection they share.
 
 ## C. The reconciliation
 
-**Every rule below is proven and waits for its slice.** The file
-[`planning/evidence/formal/reconcile.rules.ts`](evidence/formal/reconcile.rules.ts)
-holds the eleven rules with their contracts. CI verifies its 35
-obligations with the landed files. Slice 2c moves them into the room's
-rules file and reshapes `reconcile.ts` around them.
+**Landed on this branch.** Every rule below is in the room's rules file
+with its proof, `reconcile.ts`, `summary.ts`, and `room-host.ts` run
+them, and the binding test names them.
 
 **The header of `reconcile.ts` overclaims, and a trace refutes it.** The
 file promises that "a second decision over the result writes nothing". A
 refuter traced the fold at a fixed clock. A pass expires a lease. The
 next pass finds the retry the fold now owes and writes it off at the cap.
 The next closes the exchange, and the next owes a summary draft. The
-room converges, and each pass writes something new. The header states what the
-code does: each pass writes what the fold owes after the last, and the
+room converges, and each pass writes something new. The header now states
+what the code does: each pass writes what the fold owes after the last, and the
 loop stops at the pass that writes nothing. A proof of convergence needs
 a measure over the fold and waits for tranche 3.
 
@@ -302,22 +286,21 @@ a case split today, with no contract, and each carries a promise of
   today. B and C name one rule; B's `Taken` record is the shape the room
   keeps.
 
-- **C7. `exchangeLive(leases, owed)` and `seatLive(leases, owed, seat)`**
-  are the two questions `liveWork` answers over projected `LiveLease` and
-  `OwedId` records: the exchange's own work is live exactly when a
-  running, unexpired lease a message caused exists or an activation a
-  message caused is owed; a seat is live exactly when it holds a live
-  lease or the room owes it an activation; a close-caused activation
-  holds no exchange open. `mayClose` and `admitsClose` take `exchangeLive`
-  from them.
+- **C7. `exchangeLive(leases, owed, now)`** is the question `liveWork`
+  answers over projected `LiveLease` and `OwedActivation` records: the
+  exchange's own work is live exactly when a running, unexpired lease a
+  message caused exists or an activation a message caused is owed; a
+  close-caused activation holds no exchange open. `mayClose`,
+  `admitsClose`, and `closeMoved` take it. The seats live now stay a
+  projection in `liveSeats`; a `seatLive` rule is open work.
 
 **Two lemmas relate the rules across files.** `endingStands` says that a
 lease the pass ends as expired or revoked is one `mayEnd` in
 `transition.ts` accepts at any later clock reading, because `expired` is
 monotone in `now`. Without it the decision and the write are two rules
 with no proof that the second admits the first. `stillExpired` is the
-monotonicity on its own. Neither has a runtime caller; both live beside the
-rules they relate, and the binding test names them.
+monotonicity on its own. Neither has a runtime caller; both are rules in
+the file, and `rules.test.ts` imports them so that Knip keeps them.
 
 **`mayEnd` moves from `transition.ts` into the rules.** Its four lines are
 the reason gate: an unknown lease ends only as revoked or abandoned; an
@@ -328,12 +311,9 @@ unions. `end` in `transition.ts` runs it with `isExpired` as the input.
 
 ## D. The transitions
 
-**Nine rules landed on this branch, and the rest are proven.** D1, D2,
-D4, D5, D6, D7, and D9 are in the room's rules file with their proofs,
-`transition.ts`, `exchange.ts`, and `lease.ts` run them, and the binding
-test names them. D3, D8, D10, and D11 wait for slice 2a; their rules are
-in [`planning/evidence/formal/transition.rules.ts`](evidence/formal/transition.rules.ts),
-which CI verifies with 37 obligations.
+**Landed on this branch.** Every rule below is in the room's rules file
+with its proof; `transition.ts`, `exchange.ts`, `lease.ts`, `answers.ts`,
+and `room-host.ts` run them, and the binding test names them.
 
 **`decide` was a set of case splits with no contract.** Each helper in
 `transition.ts` is a table over a few booleans, and each table is a
@@ -391,14 +371,12 @@ self, attention)` is the four-way refusal of a directed message.
 - **D9. The acknowledgment merge.** `acknowledged(prior, incoming)` is the
   `Math.max` that `runningLease`, `end`, and `applyLease` each write; one
   rule, three callers.
-- **D10. A person's delivery.** `deliveryOutcome(present, directed,
-known, unreachable, empty)` answers `'absent'`, `'unknown'`,
-  `'unreachable'`, `'empty'`, or `'ok'`: only a present person delivers,
-  a directed delivery reaches only a name the record knows and never a
-  seat at attention `none`, and an empty text is refused. The refuter
-  found the empty refusal in `message`, after the presence and address
-  gates, and the rule carries all four. `docs/presence.md` §4 promises
-  the presence check at the commit boundary.
+- **D10. A person's delivery.** `deliver` runs `present` on the author
+  and `addressOutcome` on the recipient, the same two rules the commit
+  path runs, so a person's delivery and an agent's say are refused by one
+  table. The empty-text refusal stays in `message`, after both gates, as
+  the refuter found it. `docs/presence.md` §4 promises the presence check
+  at the commit boundary.
 - **D11. A key answers only the same operation.** `deliveryMatches` and
   `contributionMatches` in `room-host.ts` decide whether the entry a
   repeated key returns is the retried delivery or commit: the same
@@ -413,22 +391,22 @@ as stale when its lease is dead, refused when it has no grant, and stale
 when its seat left the roster, in that order. A refuter traced a lease that
 is live while its seat was unseated after the cause: `activationSpec`
 refuses the grant first, so the commit reads as refused, and the roster
-branch in `liveSpec` is dead code. `commitAuthority(live, granted)` states
-the two outcomes the code has, and `liveSpec` drops the third.
+branch in `liveSpec` is dead code. `commitAuthority(known, pastExpiry,
+granted)` states the two outcomes the code has, and `liveSpec` dropped
+the third.
 
 ## E. Routing, delivery, and presence
 
-**Every rule below is proven and waits for its slice.** The file
-[`planning/evidence/formal/routing.rules.ts`](evidence/formal/routing.rules.ts)
-holds the twelve rules with their contracts, and its `.dfy` carries four
-lemmas: a summary wakes nobody, a wider seat hears what a narrower one
-hears, the roster loop is sound and complete, and a seating wakes its
-newcomer. CI verifies its 41 obligations with the landed files.
+**Landed on this branch.** Every rule below is in the room's rules file
+with its proof, and its `.dfy` carries four hand-written lemmas: a
+summary wakes nobody, a wider seat hears what a narrower one hears, the
+roster loop is sound and complete, and a seating wakes its newcomer.
+`routing.ts`, `delivery.ts`, and `presence.ts` run the rules.
 
-**No routing rule is verified, and `docs/durability.md` §7 said one is.**
-`routing.ts` imports nothing from the rules file. The attention scale, the
-reach of a message, and who wakes are three tables; each becomes a rule,
-and one lemma states the monotonicity the roster doc promises.
+**Before the review no routing rule was verified, and `docs/durability.md`
+§7 said one was.** The attention scale, the reach of a message, and who
+wakes were three tables; each is a rule, and one lemma states the
+monotonicity the roster doc promises.
 
 - **E1. `width(attention)`** is the scale: none 0, named 1, broadcast 2,
   presence 3. The `WIDTH` record goes. The rules file redeclares
@@ -443,8 +421,8 @@ and one lemma states the monotonicity the roster doc promises.
   when its width reaches the message's reach, and a directed say or a
   summary wakes no seat it does not name. `hearsWider(narrow, wide,
 reach)` is the lemma: a wider seat hears everything a narrower seat
-  hears, the named target aside. It has no runtime caller and the binding
-  test names it.
+  hears, the named target aside. It is the `HearsWider` lemma in the
+  `.dfy`.
 - **E4. `wokenBy(seat, author, target, reach, busy)`** is the per-seat
   decision `routes` makes with two filter callbacks today: never the
   author, never a seat at ordinary work, always the named seat, and
@@ -452,8 +430,8 @@ reach)` is the lemma: a wider seat hears everything a narrower seat
   loop over the roster with soundness and completeness: every name it
   answers is on the roster, is not the author, is not busy, and `wokenBy`
   admits it; every seat `wokenBy` admits is in the answer. `routes` runs
-  it. **`rosterFor`** appends a seating's newcomer, and
-  **`holdsOrdinary(purposes)`** says a closing activation holds no seat.
+  it. **`rosterFor`** appends a seating's newcomer. Which seats are busy
+  stays a projection in `routing.ts`: a closing activation holds no seat.
 - **E5. `targetOf(kind, to, subject)`**: a directed say names who it
   addresses, a seating names who it seats, and no other message names a
   seat.
@@ -462,8 +440,8 @@ reach)` is the lemma: a wider seat hears everything a narrower seat
   when it landed, never the author's seat, never a seat the message wakes,
   and never a closing lease, so a seat is never both woken and steered by
   one message. **`atWorkHold(hold, seq)`** takes the lease record itself,
-  and its ended case is an equivalence where today's `atWork` has an
-  implication; the four-scalar `atWork` and its adapter go.
+  and its ended case is an equivalence; the four-scalar `atWork` is the
+  internal rule it unfolds to, and the adapter in `delivery.ts` went.
 - **E7. `stepPerson(known, entry)`** is one presence entry applied to one
   person: an arrival makes the person present and keeps the last-departure
   cursor; a departure makes a known person absent and sets the cursor to
@@ -475,18 +453,21 @@ reach)` is the lemma: a wider seat hears everything a narrower seat
   verified fold.
 
 **The rules file carries its own copies of the types.** `Attention`,
-`MessageKind`, `Seat`, `Hold`, and `Person` are declared again beside the
-rules, because the generator reads one file and the layer rule keeps the
-rules below `lease.ts` and `types.ts`. A type test in `rules.test.ts`
-asserts each copy is assignable both ways from the public type, so the two
-cannot drift without a compile error.
+`MessageKind`, `Seat`, `Seating`, `Hold`, and `Person` are declared again
+beside the rules, because the generator reads one file and the layer rule
+keeps the rules below `lease.ts` and `types.ts`. A type test in
+`rules.test.ts` asserts each copy is assignable both ways from the public
+type, so the two cannot drift without a compile error. `Seat` and
+`Seating` are both kept: Dafny has no structural subtyping, so the routing
+rules over a name and an attention and the roster rules over a full
+seating each read their own record.
 
 ## F. Activation identity and authority
 
-**Every rule below is proven and waits for its slice.** The file
-[`planning/evidence/formal/activation.rules.ts`](evidence/formal/activation.rules.ts)
-holds the rules with their contracts, and CI verifies its 21 obligations
-with the landed files.
+**Landed on this branch.** F1, F2, F4, F5, and F6 are in the rules files
+with their proofs, and `activation.ts`, `lease.ts`, `activation-id.ts`,
+and five seating checks run them. F3 kept the rule B landed. F7 and F8
+are open.
 
 **The id's grammar stays in TypeScript; the authority it grants becomes a
 rule.** `decodeActivationId` is a regular expression, outside the envelope.
@@ -495,23 +476,24 @@ unseatings, and the closes, and today it is spread over `activation.ts`,
 `lease.ts`, `exchange.ts`, `reconcile.ts`, and `fold.ts` as hand-written
 comparisons.
 
-- **F1. `activationGrant(id, cancelledAt, roster, unseatings, recorded,
+- **F1. `activationGrant(id, cancelledAt, roster, removed, recorded,
 close)`** answers the grant `activationSpec` computes: nothing for a
   position before the cancellation marker, nothing for a seat off the
-  roster or unseated after the cause, a `respond` purpose only for a
+  roster or removed after the cause, a `respond` purpose only for a
   recorded message position, a `summarize` purpose only for a close that
   names the seat as writer; the grant's seat and attempt are the id's own,
   and the purpose kind is fixed by the id's source. `docs/agent.md`
-  "Activation and context" promises every clause. `activationSpec` becomes
-  the adapter: decode, project the unseatings once in `fold.ts`, and run
-  the rule.
+  "Activation and context" promises every clause. `activationSpec` is the
+  adapter: decode, guard `wellFormed`, project the removal with
+  `removedAfter`, find the close with `closeFor`, and run the rule.
 - **F2. `closeFor(closes, through, writer)`** is the first close whose
   `through` matches and whose `summary` names the writer, with the
   contract that no earlier close matches. A cancel close carries no
   summary, and `names` refuses it.
-- **F3. `removedAfter(unseatings, seat, position)`** replaces four copies
-  of the same predicate, one per file above. An unseating at the cause
-  position itself does not make the cause stale, and the contract says so.
+- **F3. `removedAfter(removals, seq)`** is B's rule, and `removalsOf` in
+  `lease.ts` is the one projection of a seat's removals. The four copies
+  of the predicate went. An unseating at the cause position itself does
+  not make the cause stale, and the contract says so.
 - **F4. `nextActivationId(source, position, seat, unsuccessfulAttempts)`**
   builds the record the encoder takes: the cause's own fields, and the
   attempt one past the failed ones. `docs/durability.md` §4 promises that
@@ -520,8 +502,8 @@ close)`** answers the grant `activationSpec` computes: nothing for a
   the codec accepts: position and attempt between one and the largest safe
   integer, a non-empty seat. `safePositiveInteger` runs `positiveBounded`;
   integrality stays in TypeScript.
-- **F6. `seated(roster, name)`** replaces five one-line scans, and is the
-  vocabulary the grant's contract names.
+- **F6. `onRoster(roster, name)`** replaced five one-line scans, and is
+  the vocabulary the grant's contract names.
 
 **One refutation found a latent disagreement.** `fold.ts` `draftedOver`
 counts a closed-source lease at a close's `through` as a draft of that
@@ -529,37 +511,37 @@ close for any seat; `exchange.ts` `summaryDraftOutcome` counts only the
 named writer's. A journal the room writes never shows the difference,
 because the room derives every closed-source id from the close's own
 writer. A journal from another writer, or a summary writer changed by a
-later composition, would fold two answers. `draftsClose(id, through,
-writer)` is one rule for both sites, and `withAttempts` already holds the
-writer to pass.
+later composition, would fold two answers. **F7.** `draftsClose(id,
+through, writer)` as one rule for both sites is open; `withAttempts`
+already holds the writer to pass, and `draftsOf` in `exchange.ts` is the
+writer-bound side today.
 
 **One refutation corrected a claim about validation.** `validate.ts`
 checks an activation id on a lease's `id` and on a message's
 `activationId`, and reads no other kind. A close or a run with an
-`activationId` field passes. `storedIdAccepted(kind, present, wellFormed)`
-states what the validator does. A refusal of the field on other kinds is
-a schema change that D3 takes.
+`activationId` field passes. **F8.** `storedIdAccepted(kind, present,
+wellFormed)` would state what the validator does. A refusal of the field
+on other kinds is a schema change that D3 in `next.md` takes.
 
 ## G. The exchange, the summary, and the roster
 
-**Every rule below is proven and waits for its slice.** The file
-[`planning/evidence/formal/exchange.rules.ts`](evidence/formal/exchange.rules.ts)
-holds the twelve rules with their contracts, and CI verifies its 52
-obligations with the landed files.
+**Landed on this branch.** Every rule below is in the rules files with
+its proof; `exchange.ts`, `fold.ts`, `read.ts`, `view.ts`, `answers.ts`,
+`render.ts`, and `room-host.ts` run them, and the binding test names them.
 
-**The exchange is a fold, and none of it is verified.** `exchange.ts` and
-`fold.ts` hold the rules `docs/exchange.md` §3 and §5, `docs/summary.md`,
-and `docs/roster.md` state, each as a filter chain or a case split.
+**Before the review the exchange fold was not verified.** `exchange.ts`
+and `fold.ts` held the rules `docs/exchange.md` §3 and §5,
+`docs/summary.md`, and `docs/roster.md` state, each as a filter chain or
+a case split.
 
 - **G1. `openingQuestion(messages, people, closedThrough)`** is the open
   exchange: the first spoken message from a person after the last close's
   `through`, with soundness and completeness over the message list.
-  `opensExchange` is the per-message test, and the search is an index
-  loop, because `find` is outside the envelope. `openExchange` runs it
-  with the people map's keys. `lastOf(seqs)` is the last close's `through` and
+  `opensExchange` is the per-message test. `openExchange` runs it with
+  the people map's keys. `lastOf(seqs)` is the last close's `through` and
   the record's `lastSeq`, as one rule.
-- **G2. `summaryVerdict(covered, writer, writerRemoved, cancelledAfter,
-drafts)`** is the outcome lattice: a covering summary from the named
+- **G2. `summaryVerdict(covered, writerNamed, removedAfterClose, drafts,
+cancelledAfterClose)`** is the outcome lattice: a covering summary from the named
   writer is published whatever the leases say; no named writer means
   silent; a writer unseated after the close means failed; a cancellation
   after the close fails a draft still owed and changes nothing published
@@ -569,18 +551,18 @@ drafts)`** is the outcome lattice: a covering summary from the named
   selection and hands the rule five values. The refuter found the last
   line of `summaryDraftOutcome` unreachable, and the rule drops it.
 - **G3. `coversClose(summaryFrom, summaryThrough, closeFrom,
-closeThrough)`** is the containment three readers write by hand, and
-  `coversSeq` is the per-position test the renderer uses; the lemma says
-  a summary that covers a close covers every position in it, so the
-  completion reader, the commit guard, and the context reader agree on
-  which messages a summary replaces.
+closeThrough)`** is the containment `coversExchange` unfolds to, and
+  `coversSeq` in the vocabulary's rules file is the per-position test the
+  view and the renderer run. The per-position lemma over the range did
+  not survive: a quantifier with no function inside it has no trigger,
+  and Dafny refuses it. The containment is stated on the bounds.
 - **G4. `discussion(messages, from, through)`** is the human-facing
   range: every non-summary message inside the inclusive range, in record
   order, and nothing else. `docs/exchange.md` §6 cites it for
   `waitForClose`.
-- **G5. `cancelLease(lease, position, cancelledAt, at)`** is B's
-  `cancelHold` with the `cancelled` marker inside the rule, so the
-  `LeaseHold` type moves into the rules file whole. **`survivesCancellation(
+- **G5. `cancelHold(hold, position, cancelledAt, at)`** writes the
+  `cancelled` marker inside the rule, and `markedCancelled` reads it, so
+  the `LeaseHold` type is the rules file's `Hold` whole. **`survivesCancellation(
 position, cancelledAt)`** is the boundary test `fold.ts` `project` and
   `exchange.ts` write inline without calling `beforeCancellation`; both
   run it, so the one verified boundary rule has a caller on the path that
@@ -606,16 +588,17 @@ compositionSeq)`** applies every membership change after the
 **Two facts stay outside the rules and the plan states them.** The record
 is ordered by seq, which the journal package proves, so `lastOf` reads
 the last element as the maximum under a precondition nothing checks at
-runtime. The roster is unique by construction, because `startRoom` refuses
-a duplicate name; `uniqueNames` states the invariant `reseated` keeps.
+runtime. The roster is unique by construction, because `compose` runs
+`distinct` on the catalog; the contracts of `reseated` and `foldRoster`
+state that they keep one seat per name.
 
 ## H. The vocabulary's own rules
 
-**Two checks belong below the room, in a rules file of their own.**
-`validate.ts` and `activation-id.ts` sit in the vocabulary layer, which
-imports nothing from `room/`, so their rules live in
-`packages/ambion/src/rules.verified.ts`, listed in `LemmaScript-files.txt`
-beside the other two.
+**Landed on this branch.** `validate.ts` and `activation-id.ts` sit in
+the vocabulary layer, which imports nothing from `room/`, so their rules
+live in `packages/ambion/src/rules.verified.ts`, listed in
+`LemmaScript-files.txt` beside the other two. `coversSeq` (G3) lives there
+too, because `render.ts` runs it.
 
 - **H1. `rangeWellFormed(from, through)`.** The validator accepts a close
   with `through` before `from`, a cancel close with the same, and a
@@ -626,8 +609,11 @@ beside the other two.
   the range before replay, as a malformed known body.
 - **H2. `positiveBounded(value)`.** The codec's domain (F5), beside it.
 
-**Seven changes make the proofs part of the gate.** Each one was checked
-on this branch against LemmaScript 0.6.1 and the pinned CI workflow.
+**Seven changes made the proofs part of the gate.** Each one was checked
+on this branch against LemmaScript 0.6.1 and the pinned CI workflow, and
+[`docs/formal.md`](../docs/formal.md) states the result. Items 1, 4, 6,
+and 7 are done; 2 and 3 are documented; 5 waits for a proof that outgrows
+the additions block.
 
 1. **`pnpm check` regenerates the Dafny.** `lsc gen-check --backend=dafny`
    regenerates every `.dfy.gen` in the list and fails when a committed
@@ -670,10 +656,9 @@ regen` merges the new generation into the `.dfy` three ways and keeps
    of the table below names the rule that carries the claim, and §7 links
    the rows.
 
-**The envelope goes in `docs/toolchain.md` §6.** The table above is the
-first written record of what lowers. A contributor who writes a rule
-outside it loses a draft to a Dafny error that names a generated
-identifier. The section states the rows and the two commands.
+**The envelope is in `docs/formal.md` §6.** A contributor who writes a
+rule outside it loses a draft to a Dafny error that names a generated
+identifier. The page states the rows, the commands, and the workflow.
 
 ## The order of work
 
@@ -684,46 +669,47 @@ name it. Each slice is one pull request with its `.dfy` regenerated by
 `lsc regen`, its binding test, the type test for every redeclared union,
 and its evidence rows.
 
-| Slice | Files                                      | Rules                                                                                                                                                                                                                     | State  |
-| ----- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 1     | `journal.ts`, `memory.ts`, `sqlite.ts`     | `fenceStep`, `keyed`, `writable`, `advanceSeq`, `scanned`, `admit`, `nextPosition`, `readPosition`, the fold lemmas                                                                                                       | Landed |
-| 1     | the two cursor consumers                   | `scanned` at the Cloudflare and Pi cursors (A2)                                                                                                                                                                           | Landed |
-| 1     | `journal.ts`, `memory.ts`                  | `visibleEntries` (A1)                                                                                                                                                                                                     | Landed |
-| 2a    | `transition.ts`                            | `mayEnd`, `permits`, `leaseExpiry`, `acknowledged`, `onRecord`, `speechFreshness`, `admitsClose`, `coversExchange`, `survivesCancellation`                                                                                | Landed |
-| 2a    | `transition.ts`, `answers.ts`              | `presenceOutcome`, `membershipOutcome`, `hostMembership`, `addressOutcome`, `deliveryOutcome`, `distinct`, `stampedSummary`, `addressesOwner`, `commitAuthority`, `admitsLease`, `deliveryMatches`, `contributionMatches` | Open   |
-| 2b    | `lease.ts`, `fold.ts`                      | `applyChange`, `cancelLease`, `answers`, `wakeAnswered`, `countsAgainst`, `schedule`, `latest`, `draftsClose`, `removedAfter`, `nextActivationId`                                                                         | Landed |
-| 2c    | `reconcile.ts`                             | `endingOf`, `staleLease`, `mayClose`, `waitsUntil`, `readyToSend`, `looksAgainAt`, `earliestAfter`, `forgets`, `exchangeLive`, `seatLive`                                                                                 | Open   |
-| 2d    | `routing.ts`, `delivery.ts`, `presence.ts` | `width`, `reachOf`, `targetOf`, `wakes`, `wokenBy`, `woken`, `rosterFor`, `steers`, `atWorkHold`, `stepPerson`, `foldPresence`, the `hearsWider` lemma                                                                    | Open   |
-| 2e    | `activation.ts`, `activation-id.ts`        | `activationGrant`, `closeFor`, `names`, `seated`, `wellFormed`, `positiveBounded`                                                                                                                                         | Open   |
-| 2f    | `exchange.ts`, `fold.ts`, `read.ts`        | `openingQuestion`, `discussion`, `summaryVerdict`, `coversSeq`, `reserveOf`, `reseated`, `foldRoster`, `lastOf`, `exchangeContaining`, `messagesSince`                                                                    | Open   |
-| H     | `validate.ts`, `activation-id.ts`          | `rangeWellFormed`, `positiveBounded`, in a rules file of the vocabulary layer                                                                                                                                             | Open   |
-| 3     | the two `.dfy` files                       | `AttemptIdsAreFresh`, the lease fold over one id, one open exchange, unique roster names, the stop-loop and the pass measures                                                                                             | Open   |
+| Slice | Files                                               | Rules                                                                                                                                                                                                                                                                                                                      | State  |
+| ----- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1     | `journal.ts`, `memory.ts`, `sqlite.ts`              | `fenceStep`, `keyed`, `writable`, `advanceSeq`, `scanned`, `admit`, `nextPosition`, `readPosition`, `visibleEntries`, the fold lemmas                                                                                                                                                                                      | Landed |
+| 1     | the two cursor consumers                            | `scanned` at the Cloudflare and Pi cursors (A2)                                                                                                                                                                                                                                                                            | Landed |
+| 2a    | `transition.ts`, `answers.ts`, `room-host.ts`       | `mayEnd`, `permits`, `leaseExpiry`, `acknowledged`, `onRecord`, `speechFreshness`, `admitsClose`, `coversExchange`, `admitsLease`, `commitAuthority`, `presenceOutcome`, `membershipOutcome`, `hostMembership`, `addressOutcome`, `distinct`, `stampedSummary`, `addressesOwner`, `deliveryMatches`, `contributionMatches` | Landed |
+| 2b    | `lease.ts`, `fold.ts`                               | `applyChange`, `cancelHold`, `answers`, `wakeAnswered`, `countsAgainst`, `schedule`, `latest`, `removedAfter`, `nextActivationId`, `survivesCancellation`                                                                                                                                                                  | Landed |
+| 2c    | `reconcile.ts`, `summary.ts`                        | `endingOf`, `staleLease`, `mayClose`, `waitsUntil`, `readyToSend`, `looksAgainAt`, `earliestAfter`, `forgets`, `exchangeLive`, `closeMoved`, `namesWriter`                                                                                                                                                                 | Landed |
+| 2d    | `routing.ts`, `delivery.ts`, `presence.ts`          | `width`, `reachOf`, `targetOf`, `wakes`, `wokenBy`, `woken`, `rosterFor`, `steers`, `atWorkHold`, `stepPerson`, `foldPresence`, `present`, the `HearsWider` lemma                                                                                                                                                          | Landed |
+| 2e    | `activation.ts`, `activation-id.ts`                 | `activationGrant`, `closeFor`, `names`, `onRoster`, `wellFormed`, `positiveBounded`                                                                                                                                                                                                                                        | Landed |
+| 2f    | `exchange.ts`, `fold.ts`, `read.ts`, `room-host.ts` | `openingQuestion`, `discussion`, `summaryVerdict`, `coversSeq`, `reserveOf`, `reseated`, `foldRoster`, `lastOf`, `exchangeContaining`, `messagesSince`                                                                                                                                                                     | Landed |
+| H     | `validate.ts`, `activation-id.ts`                   | `rangeWellFormed`, `positiveBounded`, in a rules file of the vocabulary layer                                                                                                                                                                                                                                              | Landed |
+| 3     | the two `.dfy` files                                | the lease fold over one id, one open exchange, unique roster names, the stop-loop and the pass measures; `seatLive` (C7), `draftsClose` (F7), `storedIdAccepted` (F8)                                                                                                                                                      | Open   |
 
-**The order inside tranche 2 is 2a, 2b, 2c, 2d, 2e, 2f.** The lease step
-first, because `atWork` and `coversAttempt` read the interval it pins;
-the pass next, because `mayClose` and `admitsClose` take `exchangeLive`
-from it; then the routing, the identity, and the exchange, each of which
-reshapes one file around its rules.
+**The slices landed in the order 2a, 2b, 2c, 2d, 2e, 2f, then the rest
+of 2a and H.** The lease step first, because `atWork` and
+`coversAttempt` read the interval it pins; the pass next, because
+`mayClose` and `admitsClose` take `exchangeLive` from it; then the
+routing, the identity, and the exchange, each of which reshaped one file
+around its rules.
 
-**Names and types are settled once, before 2b.** The accepted set names
+**Names and types were settled once.** The accepted set named
 `removedAfter` three ways, `answers` two ways, and `Seat` and `Hold`
-three ways each. The room's rules file keeps one `removedAfter` over
-`Unseating` records (F3), one `answers` over a `Taken` record (B), one
-`Seat` with name, identity, and attention, and one `LeaseHold` with the
-`cancelled` marker. `rules.test.ts` asserts each against `types.ts`.
+three ways each. The room's rules file keeps one `removedAfter` over the
+seqs of a seat's removals (B), one `answers` over a `Taken` record (B),
+one `Seat` for the routing and one `Seating` for the roster (E), and one
+`Hold` with the `cancelled` marker (G5). `rules.test.ts` asserts each
+against `types.ts`.
 
-**A lemma with no caller lives in the `.dfy`.** `hearsWider`,
-`stillExpired`, `endingStands`, and `AttemptIdsAreFresh` state relations
-between rules and have no runtime call site. The rules file header says
-every function in it runs in the room, and Knip fails an export nobody
-imports, so a proof-only lemma is written in Dafny in the additions
-block, below the generated lemmas, and the binding test names it.
+**A lemma with no caller lives in the `.dfy`.** `HearsWider`,
+`SummaryWakesNobody`, `SeatingWakesNewcomer`, and `AttemptIdsAreFresh`
+state relations between rules and have no runtime call site, so they are
+written in Dafny in the additions block, below the generated lemmas.
+`stillExpired` and `endingStands` are the two exceptions: they are rules
+in the file, and `rules.test.ts` imports them.
 
-**The room's rules file is measured before 2c.** A file listed with a
-timeout above 60 s runs as a generation check in CI. When `dafny verify`
-on the room file passes 40 s, the seq-quantified rules of 2d and 2f move
-to `rules.fold.verified.ts` beside it; an import from one rules file into
-another lowers to an axiom that carries the imported contract.
+**The room's rules file is measured.** Its 200 obligations verify in
+about 27 seconds. When `dafny verify` on the room file passes 40 s, the
+seq-quantified rules of 2d and 2f move to `rules.fold.verified.ts` beside
+it; an import from one rules file into another lowers to an axiom when a
+body calls it, so the contract a rule names must be called in a body of
+the importing file.
 
 **Tranche 3 waits for the addressed projection.** A lemma over the fold is
 a lemma over that shape, so the lease fold, the exchange fold, and the
@@ -742,26 +728,14 @@ is a host promise and the second the journal's proof.
 
 ## Evidence
 
-**This branch proved what it proposes.** Every rule in A, B, and the
-landed part of D is on the branch with its proof and its callers. Every
-other rule was written as a LemmaScript file and verified by Dafny 4.11
-before it entered this plan; the files are under
-[`planning/evidence/formal/`](evidence/formal/README.md), and CI verifies
-them with the landed rules.
+**This branch proved what it proposed, and the runtime runs it.** Every
+rule in this file is in a runtime rules file with its proof and its
+callers, or is named as open work above. The evidence of each slice is
+the rules file, the binding test that names the rule, and the type test
+that pins its copies.
 
-| Group                   | File                                                            | Obligations        | Status                       |
-| ----------------------- | --------------------------------------------------------------- | ------------------ | ---------------------------- |
-| A. Journal              | `packages/journal/src/rules.verified.ts`                        | 41                 | Landed                       |
-| B. Lease fold           | `packages/ambion/src/room/rules.verified.ts`                    | 56 with D          | Landed                       |
-| C. Reconciliation       | `planning/evidence/formal/reconcile.rules.ts`                   | 35                 | Proven, slice 2c open        |
-| D. Transitions          | `room/rules.verified.ts`, `evidence/formal/transition.rules.ts` | 56 with B, 37      | Nine landed, the rest proven |
-| E. Routing and presence | `planning/evidence/formal/routing.rules.ts`                     | 41                 | Proven, slice 2d open        |
-| F. Activation identity  | `planning/evidence/formal/activation.rules.ts`                  | 21                 | Proven, slice 2e open        |
-| G. Exchange and roster  | `planning/evidence/formal/exchange.rules.ts`                    | 52                 | Proven, slice 2f open        |
-| H. Vocabulary           | `packages/ambion/src/rules.verified.ts`                         | two one-line rules | Planned                      |
-
-**Three defects and three decisions came out of the review.** The seq
-bound, the early stamped write, and the read past the head are fixed on
-the branch. The writerless journal (A3), the malformed seq (A4), and the
-draft predicate (F) are decisions this file records and a later change
-takes.
+| Group                      | File                                         | Obligations | Status |
+| -------------------------- | -------------------------------------------- | ----------- | ------ |
+| A. Journal                 | `packages/journal/src/rules.verified.ts`     | 41          | Landed |
+| B, C, D, E, F, G. The room | `packages/ambion/src/room/rules.verified.ts` | 200         | Landed |
+| H. The vocabulary          | `packages/ambion/src/rules.verified.ts`      | 3           | Landed |

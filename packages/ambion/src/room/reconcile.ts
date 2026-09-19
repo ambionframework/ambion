@@ -4,11 +4,11 @@
  * `decide` is pure. It reads the folded state and the clock and returns the
  * entries to write, the wakes to send, and when to look again. Every wake it
  * sends comes off one list, `state.due`: the activations the room owes,
- * whatever caused each one. The room applies
- * a decision, and a second decision over the result writes nothing: that is
- * what makes it safe to run after every commit, every lease change, every
- * alarm and every wake, and after a resume that does not know what the last
- * run got to.
+ * whatever caused each one. Each pass writes what the fold owes after the
+ * last, and the loop stops at the pass that writes nothing: that is what
+ * makes it safe to run after every commit, every lease change, every alarm
+ * and every wake, and after a resume that does not know what the last run
+ * got to.
  */
 
 import { decodeActivationId } from '../activation-id.ts';

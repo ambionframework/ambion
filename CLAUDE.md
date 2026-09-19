@@ -28,6 +28,7 @@ newer, the OpenTUI floor.
 | `docs/example.md`     | The one runnable example, an agentic lab workspace, and what it must show                                                   |
 | `docs/roster.md`      | Design contract for a roster that changes while the room runs — read with `agent.md`                                        |
 | `docs/durability.md`  | What the record promises under failure, and how the tiers prove it — read with `agent.md`                                   |
+| `docs/formal.md`      | The verified rules, their proofs, and the gate — read before changing a `rules.verified.ts`                                 |
 | `docs/toolchain.md`   | Build, CI, release — read before changing `.github/`, `scripts/`, root configs                                              |
 | `examples/site`       | Runnable example                                                                                                            |
 | `demos/`              | One dated report per merged change — regenerate on the branch, then leave it                                                |
@@ -101,12 +102,14 @@ vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
   that may reach what it needs, and never above `room.ts`.
 - No `any`, no non-null assertions, no unused imports or variables.
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
-- A pure rule the journal or the fold decides by lives in the layer's
-  `rules.verified.ts`, with `//@ requires` and `//@ ensures` contracts.
-  Regenerate its `.dfy` and `.dfy.gen` with `npx lsc regen --backend=dafny
-<file>` after every edit; `pnpm check` fails on a stale generation.
-  [`planning/formal.md`](planning/formal.md) holds the envelope a rule must
-  stay inside and the rules still to write.
+- A pure rule the journal or the room decides by lives in the layer's
+  `rules.verified.ts`, with `//@ requires` and `//@ ensures` contracts,
+  and the caller runs its body. Regenerate its `.dfy` and `.dfy.gen` with
+  `npx lsc regen --backend=dafny <file>` after every edit; `pnpm check`
+  fails on a stale generation. [`docs/formal.md`](docs/formal.md) holds
+  the mechanism and the envelope a rule must stay inside;
+  [`planning/formal.md`](planning/formal.md) holds the rules still to
+  write.
 - Cognitive complexity: max 10 in source, 15 in tests.
 - Prettier formats (tabs, single quotes, width 100, semicolons); Biome lints.
 - Tests are vitest. A scripted `streamFn` makes a room deterministic.
