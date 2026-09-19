@@ -1,19 +1,19 @@
 {
-  "name": "Ambion",
-  "short_name": "Ambion",
-  "icons": [
-    {
-      "src": "android-chrome-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "android-chrome-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ],
-  "theme_color": "#074F60",
-  "background_color": "#FAF8F4",
-  "display": "standalone"
+	"name": "Ambion",
+	"short_name": "Ambion",
+	"icons": [
+		{
+			"src": "android-chrome-192.png",
+			"sizes": "192x192",
+			"type": "image/png"
+		},
+		{
+			"src": "android-chrome-512.png",
+			"sizes": "512x512",
+			"type": "image/png"
+		}
+	],
+	"theme_color": "#074F60",
+	"background_color": "#FAF8F4",
+	"display": "standalone"
 }

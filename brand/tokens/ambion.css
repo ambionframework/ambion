@@ -1,13 +1,19 @@
-@font-face { font-family: 'Manrope'; src: url('../fonts/Manrope-Variable.ttf') format('truetype'); font-weight: 200 800; font-style: normal; font-display: swap; }
+@font-face {
+	font-family: 'Manrope';
+	src: url('../fonts/Manrope-Variable.ttf') format('truetype');
+	font-weight: 200 800;
+	font-style: normal;
+	font-display: swap;
+}
 :root {
-  --ambion-teal: #074F60;
-  --ambion-coral: #F76B52;
-  --ambion-ink: #142C33;
-  --ambion-paper: #FAF8F4;
-  --ambion-white: #FFFFFF;
-  --ambion-muted: #536970;
-  --ambion-font: 'Manrope', system-ui, sans-serif;
-  --ambion-radius: 16px;
-  --ambion-space: 4px;
+	--ambion-teal: #074f60;
+	--ambion-coral: #f76b52;
+	--ambion-ink: #142c33;
+	--ambion-paper: #faf8f4;
+	--ambion-white: #ffffff;
+	--ambion-muted: #536970;
+	--ambion-font: 'Manrope', system-ui, sans-serif;
+	--ambion-radius: 16px;
+	--ambion-space: 4px;
 }
 /* Coral is an accent, not body text on light backgrounds. */
