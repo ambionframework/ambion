@@ -1,4 +1,3 @@
-import { admit, readPosition, visibleEntries } from './rules.verified.ts';
 import type {
 	JournalOpener,
 	JournalRead,
@@ -11,9 +10,11 @@ class MemoryJournal implements JournalStorage {
 	private readonly entries: StoredEntry[] = [];
 
 	async read(after: StoragePosition): Promise<JournalRead> {
+		const head = this.entries.at(-1)?.position;
 		return {
-			entries: structuredClone(visibleEntries(this.entries, after)),
-			position: readPosition(after, this.entries.at(-1)?.position),
+			entries: structuredClone(this.entries.filter((stored) => stored.position > after)),
+			// A read reports the highest position it scanned, and never one before `after`.
+			position: head === undefined ? after : Math.max(after, head),
 		};
 	}
 
@@ -21,8 +22,9 @@ class MemoryJournal implements JournalStorage {
 		entry: unknown,
 		expectedPosition: StoragePosition,
 	): Promise<StoredEntry | undefined> {
-		const position = admit(this.entries.at(-1)?.position ?? 0, expectedPosition);
-		if (position === undefined) return undefined;
+		const head = this.entries.at(-1)?.position ?? 0;
+		if (head !== expectedPosition) return undefined;
+		const position = head + 1;
 		const stored = { entry: structuredClone(entry), position };
 		this.entries.push(stored);
 		return structuredClone(stored);

@@ -2,7 +2,7 @@ import type { JournalEntry as Entry } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
 import type { Close, LeaseChange } from '../src/journal/events.ts';
-import type { ActivationPurpose, ActivationSpec, CommitRequest } from '../src/protocol.ts';
+import type { ActivationPurpose } from '../src/protocol.ts';
 import { cameToNothing, foldLeases, type LeaseHold, pendingWakes } from '../src/room/lease.ts';
 import {
 	type ActivationFields,
@@ -12,15 +12,11 @@ import {
 	cancelHold,
 	type GrantPurpose,
 	type Hold,
-	type Intent,
 	type LeaseEndReason,
 	type LeasePhase,
 	leaseExpiry,
 	mayEnd,
-	type Purpose,
-	permits,
 	type Source,
-	schedule,
 	wakeAnswered,
 } from '../src/room/rules.verified.ts';
 import type { EndReason, Message } from '../src/types.ts';
@@ -39,8 +35,6 @@ describe('verified rules', () => {
 	it('declares the same unions the public types declare', () => {
 		expectTypeOf<LeaseEndReason>().toEqualTypeOf<EndReason>();
 		expectTypeOf<LeasePhase>().toEqualTypeOf<'running' | 'ended'>();
-		expectTypeOf<Purpose>().toEqualTypeOf<ActivationSpec['purpose']['kind']>();
-		expectTypeOf<Intent>().toEqualTypeOf<CommitRequest['intent']['kind']>();
 		expectTypeOf<Change>().toEqualTypeOf<LeaseChange>();
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
 		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
@@ -101,7 +95,7 @@ describe('verified rules', () => {
 		expect(cancelHold(ended, 2, 9, at)).toBe(ended);
 	});
 
-	it('answers a wake by reason and schedules the next attempt after the backoff', () => {
+	it('answers a wake by reason', () => {
 		expect(wakeAnswered([{ phase: 'running', readThrough: 0, position: 2 }], 2)).toBe(true);
 		expect(
 			wakeAnswered([{ phase: 'ended', reason: 'expired', readThrough: 9, position: 2 }], 2),
@@ -112,8 +106,6 @@ describe('verified rules', () => {
 		expect(
 			wakeAnswered([{ phase: 'ended', reason: 'revoked', readThrough: 0, position: 2 }], 2),
 		).toBe(true);
-		expect(schedule(0, 0, 0)).toEqual({ attempt: 1, notBefore: undefined });
-		expect(schedule(2, 1_000, 300)).toEqual({ attempt: 3, notBefore: 1_300 });
 	});
 
 	it('gates every end reason by the lease phase and the clock', () => {
@@ -125,12 +117,6 @@ describe('verified rules', () => {
 		expect(mayEnd('running', 'expired', false)).toBe(false);
 		expect(mayEnd('running', 'released', false)).toBe(true);
 		expect(mayEnd('running', 'failed', true)).toBe(false);
-	});
-
-	it('permits speech under both purposes and membership under a response only', () => {
-		expect(permits('summarize', 'said')).toBe(true);
-		expect(permits('summarize', 'seated')).toBe(false);
-		expect(permits('respond', 'unseated')).toBe(true);
 	});
 
 	it('expires a lease at the earlier of the renewal window and the deadline', () => {

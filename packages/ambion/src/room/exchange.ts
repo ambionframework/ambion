@@ -45,7 +45,6 @@ import {
 	type Draft,
 	lastOf,
 	openingQuestion,
-	removedAfter,
 	summaryVerdict,
 	survivesCancellation,
 } from './rules.verified.ts';
@@ -75,7 +74,7 @@ export function summaryCompletion(
 	const verdict = summaryVerdict(
 		summary !== undefined,
 		writer !== undefined,
-		writer !== undefined && removedAfter(removalsOf(messages, writer), close.through),
+		writer !== undefined && removalsOf(messages, writer).some((removal) => removal > close.through),
 		draftsOf(leases, close.through, writer),
 		!survivesCancellation(close.through, cancelledAt),
 	);

@@ -34,16 +34,12 @@ import type { Message, Seq } from '../types.ts';
 import type { MessageDelivery } from './delivery.ts';
 import {
 	applyChange,
-	cameToNothing as cameToNothingRule,
 	countsAgainst,
 	coversAttempt as coverageRule,
 	type Hold,
 	isExpired as isExpiredRule,
 	isLive as isLiveRule,
-	latest,
 	nextActivationId,
-	removedAfter,
-	schedule,
 	type Taken,
 	wakeAnswered,
 } from './rules.verified.ts';
@@ -146,7 +142,7 @@ function pendingForMessage(
 ): PendingWake[] {
 	const pending: PendingWake[] = [];
 	for (const seat of reached(delivery, roster)) {
-		if (removedAfter(removalsOf(messages, seat), message.seq)) continue;
+		if (removalsOf(messages, seat).some((removal) => removal > message.seq)) continue;
 		const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
 		const wake = statusOf(message, seat, taken, options);
 		if (wake !== undefined) pending.push(wake);
@@ -237,28 +233,20 @@ export function pendingActivation(
 	options: PendingActivationOptions,
 ): PendingActivation {
 	const unsuccessfulAttempts = failed.length;
-	// `Date.parse` stays here: a stamp is a string, outside the rules' envelope.
-	const last = latest(
-		failed.map((lease) => Date.parse(lease.at)),
-		0,
-	);
-	const plan = schedule(
-		unsuccessfulAttempts,
-		last,
-		unsuccessfulAttempts === 0 ? 0 : options.backoff(unsuccessfulAttempts),
-	);
+	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
 	const next = nextActivationId(source, position, seat, unsuccessfulAttempts);
 	return {
 		id: encodeActivationId(next),
 		...next,
 		unsuccessfulAttempts,
-		notBefore: plan.notBefore,
+		notBefore:
+			unsuccessfulAttempts === 0 ? undefined : last + options.backoff(unsuccessfulAttempts),
 	};
 }
 
 /** The attempt came to nothing, so the next one is numbered after it. */
 export const cameToNothing = (lease: LeaseHold): boolean =>
-	lease.phase === 'ended' && cameToNothingRule(lease.reason);
+	lease.phase === 'ended' && (lease.reason === 'failed' || lease.reason === 'expired');
 
 /** The seat an id names, or nothing for an id the room did not derive. */
 export const seatOf = (id: string): string | undefined => decodeActivationId(id)?.seat;

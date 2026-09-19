@@ -2,8 +2,9 @@
  * The rules the room decides by, as functions LemmaScript checks: the
  * activation lifecycle and the exchange lifecycle. Every function here is
  * pure, and `lease.ts`, `reconcile.ts`, `transition.ts`, `activation.ts`,
- * `delivery.ts`, `exchange.ts`, `fold.ts`, `answers.ts`, and the host run
- * these bodies: the proof is about the code the room runs. `lsc check`
+ * `exchange.ts`, and `fold.ts` run these bodies: the proof is about the
+ * code the room runs. A rule is here when its contract states a property
+ * the body does not restate, or when a proof depends on it. `lsc check`
  * turns the `//@` annotations into Dafny obligations, and CI verifies
  * them. `rules.verified.proofs.dfy` beside this file carries the lemmas
  * the generator cannot write.
@@ -23,12 +24,6 @@ export type LeasePhase = 'running' | 'ended';
 /** Why a lease ended. The same union as `EndReason` in `types.ts`. */
 export type LeaseEndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandoned';
 
-/** What an activation is for: an answer to a message, or a closing summary. */
-export type Purpose = 'respond' | 'summarize';
-
-/** What a commit asks for. */
-export type Intent = 'said' | 'seated' | 'unseated';
-
 //@ contract A lease is past its expiry once now reaches it.
 function expired(expiry: number, now: number): boolean {
 	//@ ensures \result <==> expiry <= now
@@ -41,15 +36,6 @@ export function coversAttempt(ended: boolean, until: number, seq: number): boole
 	//@ ensures ended ==> (\result <==> seq <= until)
 	//@ ensures \result ==> forall(earlier, earlier <= seq ==> coversAttempt(ended, until, earlier))
 	return !ended || seq <= until;
-}
-
-//@ contract The room gives a wake up once the attempts reach the cap.
-export function givesUp(attempts: number, cap: number): boolean {
-	//@ requires attempts >= 0
-	//@ requires cap >= 1
-	//@ ensures \result <==> attempts >= cap
-	//@ ensures !\result ==> attempts + 1 <= cap
-	return attempts >= cap;
 }
 
 //@ contract The next attempt is numbered after the failed ones.
@@ -83,21 +69,6 @@ export function mayEnd(
 	if (known === 'ended' || reason === 'abandoned') return false;
 	if (reason === 'revoked') return true;
 	return pastExpiry === (reason === 'expired');
-}
-
-//@ contract Both purposes permit speech. Only a response permits a seating or an unseating. A closing activation can do nothing but speak.
-export function permits(purpose: Purpose, intent: Intent): boolean {
-	//@ ensures intent == 'said' ==> \result
-	//@ ensures intent != 'said' ==> (\result <==> purpose == 'respond')
-	//@ ensures purpose == 'summarize' ==> (\result <==> intent == 'said')
-	//@ ensures purpose == 'respond' ==> \result
-	switch (intent) {
-		case 'said':
-			return purpose === 'respond' || purpose === 'summarize';
-		case 'seated':
-		case 'unseated':
-			return purpose === 'respond';
-	}
 }
 
 //@ contract A claim or a renewal expires at the earlier of now plus the expiry and the first claim plus the deadline. A fresh claim expires after now, and a renewal expires after now exactly when the deadline has not passed.
@@ -256,12 +227,6 @@ export type Taken =
 	| { phase: 'running'; readThrough: number; position: number }
 	| { phase: 'ended'; reason: LeaseEndReason; readThrough: number; position: number };
 
-/** When the next attempt may start, and its number. */
-export interface Schedule {
-	readonly attempt: number;
-	readonly notBefore: number | undefined;
-}
-
 //@ contract One lease entry applied to the lease the fold holds. An ended lease is final. The first entry fixes since and claimedAt. readThrough never moves back. An ending entry sets until to its own seq and carries its reason.
 export function applyChange(known: Hold | undefined, change: Change, seq: number): Hold {
 	//@ requires seq >= 1
@@ -360,7 +325,7 @@ export function isLive(phase: LeasePhase, expiresAt: number, now: number): boole
 }
 
 //@ contract An attempt came to nothing when it failed or expired.
-export function cameToNothing(reason: LeaseEndReason): boolean {
+function cameToNothing(reason: LeaseEndReason): boolean {
 	//@ ensures \result <==> (reason == 'failed' || reason == 'expired')
 	return reason === 'failed' || reason === 'expired';
 }
@@ -399,127 +364,11 @@ export function countsAgainst(lease: Taken, seq: number): boolean {
 	return cameToNothing(lease.reason) || lease.position === seq;
 }
 
-//@ contract The latest of the times, and at least the floor.
-export function latest(times: number[], floor: number): number {
-	//@ requires floor >= 0
-	//@ ensures \result >= floor
-	//@ ensures forall(i, 0 <= i && i < times.length ==> \result >= times[i])
-	let best = floor;
-	for (let i = 0; i < times.length; i++) {
-		//@ invariant 0 <= i && i <= times.length
-		//@ invariant best >= floor
-		//@ invariant forall(k, 0 <= k && k < i ==> best >= times[k])
-		const v = times[i] ?? floor;
-		if (v > best) best = v;
-	}
-	return best;
-}
-
-//@ contract A first attempt waits for nothing. After attempts that came to nothing, the next is numbered one past them and starts no earlier than the last one's end plus the backoff.
-export function schedule(unsuccessful: number, last: number, backoff: number): Schedule {
-	//@ requires unsuccessful >= 0
-	//@ requires last >= 0
-	//@ ensures \result.attempt == nextAttempt(unsuccessful)
-	//@ ensures unsuccessful == 0 ==> \result.notBefore == undefined
-	//@ ensures unsuccessful > 0 ==> \result.notBefore != undefined && \result.notBefore == last + backoff
-	//@ ensures unsuccessful > 0 && backoff >= 0 ==> \result.notBefore != undefined && \result.notBefore >= last
-	return {
-		attempt: nextAttempt(unsuccessful),
-		notBefore: unsuccessful === 0 ? undefined : last + backoff,
-	};
-}
-
-//@ contract A removal after seq settles seq and every earlier position.
-export function removedAfter(removals: number[], seq: number): boolean {
-	//@ decreases removals.length
-	//@ ensures \result <==> exists(i, 0 <= i && i < removals.length && removals[i] > seq)
-	//@ ensures \result ==> forall(earlier, earlier <= seq ==> removedAfter(removals, earlier))
-	if (removals.length === 0) return false;
-	const head = removals[0] ?? seq;
-	return head > seq || removedAfter(removals.slice(1), seq);
-}
-
 /** How a running lease ends in a pass, or that it stays. */
 export type Ending = 'revoked' | 'expired' | 'stays';
 
 /** The journal fact that caused an activation. The same union as `ActivationSource`. */
 export type Source = 'message' | 'closed';
-
-//@ contract An activation is ready when its backoff is over and its resend window is over.
-export function readyToSend(
-	now: number,
-	backedOff: boolean,
-	notBefore: number,
-	wasSent: boolean,
-	sentAt: number,
-	resend: number,
-): boolean {
-	//@ requires resend >= 0
-	//@ ensures \result <==> ((!backedOff || notBefore <= now) && (!wasSent || sentAt + resend <= now))
-	//@ ensures backedOff && notBefore > now ==> !\result
-	//@ ensures wasSent && now < sentAt + resend ==> !\result
-	const backoffOver = !backedOff || notBefore <= now;
-	const windowOver = !wasSent || sentAt + resend <= now;
-	return backoffOver && windowOver;
-}
-
-//@ contract When the room sends one activation it owes: the backoff when it is ahead, else the end of the resend window, else now. The wait is over exactly when the activation is ready.
-function waitsUntil(
-	now: number,
-	backedOff: boolean,
-	notBefore: number,
-	wasSent: boolean,
-	sentAt: number,
-	resend: number,
-): number {
-	//@ requires resend >= 0
-	//@ ensures \result <= now <==> readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend)
-	//@ ensures backedOff && notBefore > now ==> \result == notBefore
-	//@ ensures (!backedOff || notBefore <= now) && wasSent ==> \result == sentAt + resend
-	//@ ensures (!backedOff || notBefore <= now) && !wasSent ==> \result == now
-	const backoff = backedOff ? notBefore : now;
-	if (backoff > now) return backoff;
-	return wasSent ? sentAt + resend : now;
-}
-
-//@ contract When the room looks at an activation again: its wait when the wait is ahead, else one resend window from now. Always after now.
-export function looksAgainAt(
-	now: number,
-	backedOff: boolean,
-	notBefore: number,
-	wasSent: boolean,
-	sentAt: number,
-	resend: number,
-): number {
-	//@ requires resend >= 1
-	//@ ensures \result > now
-	//@ ensures !readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend) ==> \result == waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend)
-	//@ ensures readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend) ==> \result == now + resend
-	const at = waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend);
-	return at > now ? at : now + resend;
-}
-
-//@ contract The earliest time after now among the given times, or nothing when none is after now.
-export function earliestAfter(now: number, times: readonly number[]): number | undefined {
-	//@ decreases times.length
-	//@ ensures \result != undefined ==> \result > now
-	//@ ensures \result == undefined <==> forall(i, 0 <= i && i < times.length ==> times[i] <= now)
-	//@ ensures \result != undefined ==> forall(i, 0 <= i && i < times.length && times[i] > now ==> \result <= times[i])
-	//@ ensures \result != undefined ==> exists(i, 0 <= i && i < times.length && times[i] == \result)
-	if (times.length === 0) return undefined;
-	const head = times[0] ?? now;
-	const rest = earliestAfter(now, times.slice(1));
-	if (head <= now) return rest;
-	if (rest === undefined) return head;
-	return head < rest ? head : rest;
-}
-
-//@ contract A lease is stale when the room did not derive its id, its seat left the roster, or a removal of its seat landed after its cause.
-export function staleLease(derived: boolean, seated: boolean, removedAfterCause: boolean): boolean {
-	//@ ensures \result <==> (!derived || !seated || removedAfterCause)
-	//@ ensures derived && seated && !removedAfterCause ==> !\result
-	return !derived || !seated || removedAfterCause;
-}
 
 //@ contract A running lease is revoked when its seat is stale; else it is expired when past its expiry; else it stays. A revocation wins over an expiry, and an ended lease is never ended again.
 export function endingOf(running: boolean, stale: boolean, pastExpiry: boolean): Ending {
@@ -532,60 +381,6 @@ export function endingOf(running: boolean, stale: boolean, pastExpiry: boolean):
 	if (!running) return 'stays';
 	if (stale) return 'revoked';
 	return pastExpiry ? 'expired' : 'stays';
-}
-
-//@ contract The room closes the open exchange only on a pass that ends no lease and writes off no activation, when nothing the exchange caused is live, and the room runs.
-export function mayClose(
-	stopped: boolean,
-	endings: number,
-	exchangeOpen: boolean,
-	exchangeLive: boolean,
-): boolean {
-	//@ requires endings >= 0
-	//@ ensures \result ==> !stopped
-	//@ ensures \result ==> endings == 0
-	//@ ensures \result ==> exchangeOpen
-	//@ ensures \result ==> !exchangeLive
-	//@ ensures !stopped && endings == 0 && exchangeOpen && !exchangeLive ==> \result
-	return !stopped && endings === 0 && exchangeOpen && !exchangeLive;
-}
-
-//@ contract A close that did not land still counts as progress when the same exchange is open and the record moved or its work is live. It never counts on a reading where the close is admitted.
-export function closeMoved(
-	open: OpenExchange | undefined,
-	close: CloseRef,
-	lastSeq: number,
-	exchangeLive: boolean,
-): boolean {
-	//@ ensures \result ==> open != undefined
-	//@ ensures open != undefined ==> (\result <==> (open.from == close.from && (lastSeq != close.through || exchangeLive)))
-	//@ ensures \result ==> !admitsClose(open, close, lastSeq, exchangeLive)
-	//@ ensures admitsClose(open, close, lastSeq, exchangeLive) ==> !\result
-	if (open === undefined) return false;
-	return open.from === close.from && (lastSeq !== close.through || exchangeLive);
-}
-
-//@ contract The ids this room sent that the fold no longer owes: every id kept was sent and is not due, and every sent id that is not due is kept.
-export function forgets(sentIds: readonly string[], dueIds: readonly string[]): string[] {
-	//@ ensures \result.length <= sentIds.length
-	//@ ensures forall(i, 0 <= i && i < \result.length ==> !dueIds.includes(\result[i]))
-	//@ ensures forall(i, 0 <= i && i < \result.length ==> sentIds.includes(\result[i]))
-	//@ ensures forall(i, 0 <= i && i < sentIds.length && !dueIds.includes(sentIds[i]) ==> \result.includes(sentIds[i]))
-	//@ ensures forall(i, 0 <= i && i < dueIds.length ==> !\result.includes(dueIds[i]))
-	const out: string[] = [];
-	let i = 0;
-	while (i < sentIds.length) {
-		//@ invariant 0 <= i && i <= sentIds.length
-		//@ invariant out.length <= i
-		//@ invariant forall(k, 0 <= k && k < out.length ==> !dueIds.includes(out[k]))
-		//@ invariant forall(k, 0 <= k && k < out.length ==> sentIds.includes(out[k]))
-		//@ invariant forall(k, 0 <= k && k < i && !dueIds.includes(sentIds[k]) ==> out.includes(sentIds[k]))
-		//@ decreases sentIds.length - i
-		const id = sentIds[i] ?? '';
-		if (!dueIds.includes(id)) out.push(id);
-		i++;
-	}
-	return out;
 }
 
 /** A lease as the liveness rules read it. */
@@ -883,76 +678,6 @@ export function stampedSummary(owner: string, from: number, through: number): St
 	//@ ensures \result.covers.from == from && \result.covers.through == through
 	//@ ensures coversExchange(\result.to, \result.covers.from, \result.covers.through, owner, from, through)
 	return { to: owner, covers: { from, through } };
-}
-
-//@ contract The recipient a closing commit names is the owner, or none.
-export function addressesOwner(to: string | undefined, owner: string): boolean {
-	//@ ensures to == undefined ==> \result
-	//@ ensures to != undefined ==> (\result <==> to == owner)
-	if (to === undefined) return true;
-	return to === owner;
-}
-
-/** What the room answers a commit about its lease and grant. */
-export type Authority = 'stale' | 'refused' | 'granted';
-
-//@ contract A commit lands only under a lease the fold holds as running and not past its expiry, and only with a room grant. A missing, ended, or expired lease reads as stale; a live lease without a grant as refused.
-export function commitAuthority(
-	known: LeasePhase | undefined,
-	pastExpiry: boolean,
-	granted: boolean,
-): Authority {
-	//@ ensures known == undefined ==> \result == 'stale'
-	//@ ensures known != undefined && known == 'ended' ==> \result == 'stale'
-	//@ ensures pastExpiry ==> \result == 'stale'
-	//@ ensures known != undefined && known == 'running' && !pastExpiry ==> (\result == 'granted' <==> granted)
-	//@ ensures known != undefined && known == 'running' && !pastExpiry ==> (\result == 'refused' <==> !granted)
-	//@ ensures \result == 'granted' ==> known != undefined && !pastExpiry && granted
-	//@ ensures \result == 'refused' ==> known != undefined && !pastExpiry && !granted
-	//@ ensures \result != 'stale' ==> known != undefined && !pastExpiry
-	if (known === undefined) return 'stale';
-	if (known === 'ended') return 'stale';
-	if (pastExpiry) return 'stale';
-	return granted ? 'granted' : 'refused';
-}
-
-//@ contract This seat wrote the message. A seating the host decided has no author.
-function isAuthor(author: string | undefined, name: string): boolean {
-	//@ ensures author == undefined ==> !\result
-	//@ ensures author != undefined ==> (\result <==> author == name)
-	if (author !== undefined && author === name) return true;
-	return false;
-}
-
-//@ contract A lease was at work when a message landed: it held a change before the message, and ended, if it ended, after it.
-function atWork(since: number, ended: boolean, until: number, seq: number): boolean {
-	//@ ensures \result ==> since < seq
-	//@ ensures \result && ended ==> until >= seq
-	//@ ensures !ended ==> (\result <==> since < seq)
-	//@ ensures !\result ==> seq <= since || (ended && until < seq)
-	return since < seq && (!ended || until >= seq);
-}
-
-//@ contract A message steers an ordinary lease that was at work when the message landed, and never the author's seat, a seat the message wakes, or a closing lease.
-export function steers(
-	ordinary: boolean,
-	seat: string,
-	author: string | undefined,
-	woken: boolean,
-	since: number,
-	ended: boolean,
-	until: number,
-	seq: number,
-): boolean {
-	//@ ensures \result ==> ordinary
-	//@ ensures \result ==> !woken
-	//@ ensures isAuthor(author, seat) ==> !\result
-	//@ ensures \result ==> atWork(since, ended, until, seq)
-	//@ ensures ordinary && !woken && !isAuthor(author, seat) && atWork(since, ended, until, seq) ==> \result
-	if (!ordinary) return false;
-	if (woken) return false;
-	if (isAuthor(author, seat)) return false;
-	return atWork(since, ended, until, seq);
 }
 
 //@ contract The last position on an ordered record bounds every position on it; an empty record ends at 0.

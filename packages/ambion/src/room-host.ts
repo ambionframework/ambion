@@ -48,7 +48,6 @@ import { isLive, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { captureMessageSelection, type MessageSelection, readView } from './room/read.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
-import { closeMoved } from './room/rules.verified.ts';
 import {
 	decide,
 	evolve,
@@ -1361,7 +1360,10 @@ export class RoomHost implements Room, RunningRoom {
 		this.requireSubmission(written);
 		if ('entry' in written) return true;
 		const state = this.state();
-		return closeMoved(state.exchange, close, state.lastSeq, liveWork(state, this.now()).exchange);
+		return (
+			state.exchange?.from === close.from &&
+			(state.lastSeq !== close.through || liveWork(state, this.now()).exchange)
+		);
 	}
 
 	/** Wake exchange handles after reconciliation changes the durable state. */

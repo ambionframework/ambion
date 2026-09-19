@@ -22,20 +22,7 @@ import {
 	removalsOf,
 	seatOf,
 } from './lease.ts';
-import {
-	earliestAfter,
-	endingOf,
-	exchangeLive,
-	forgets,
-	givesUp,
-	type LiveLease,
-	looksAgainAt,
-	mayClose,
-	type OwedActivation,
-	readyToSend,
-	removedAfter,
-	staleLease,
-} from './rules.verified.ts';
+import { endingOf, exchangeLive, type LiveLease, type OwedActivation } from './rules.verified.ts';
 import { summaryWriter } from './summary.ts';
 
 export interface ReconcileOptions {
@@ -154,9 +141,10 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
 	const abandoned = options.stopped ? [] : abandonments(state, options);
 	// An ending changes what is live: the close waits for the fold that holds it.
 	const ended = revoked.length + expired.length + abandoned.length;
-	const close = mayClose(options.stopped, ended, state.exchange !== undefined, work.exchange)
-		? closing(state, options.now)
-		: undefined;
+	const close =
+		options.stopped || ended > 0 || state.exchange === undefined || work.exchange
+			? undefined
+			: closing(state, options.now);
 	const sends = options.stopped ? [] : dueWakes(state, options);
 	return {
 		revoked,
@@ -178,10 +166,9 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
  */
 function isStale(state: RoomState, id: string): boolean {
 	const parsed = decodeActivationId(id);
-	const seated = parsed !== undefined && state.roster.some((seat) => seat.name === parsed.seat);
-	const removedAfterCause =
-		parsed !== undefined && removedAfter(removalsOf(state.messages, parsed.seat), parsed.position);
-	return staleLease(parsed !== undefined, seated, removedAfterCause);
+	if (parsed === undefined) return true;
+	if (!state.roster.some((seat) => seat.name === parsed.seat)) return true;
+	return removalsOf(state.messages, parsed.seat).some((removal) => removal > parsed.position);
 }
 
 /** Every lease that ends in this pass, by how it ends. A revocation wins over an expiry. */
@@ -209,15 +196,13 @@ function endings(state: RoomState, now: number): { revoked: Ended[]; expired: En
  * exactly as long as the fold owes the activation.
  */
 function forgotten(state: RoomState, options: ReconcileOptions): string[] {
-	return forgets(
-		[...options.sent.keys()],
-		state.due.map((owed) => owed.id),
-	);
+	const due = new Set(state.due.map((owed) => owed.id));
+	return [...options.sent.keys()].filter((id) => !due.has(id));
 }
 
 /** An activation the room owes whose attempts reached the cap. */
 const capped = (owed: PendingActivation, options: ReconcileOptions): boolean =>
-	givesUp(owed.unsuccessfulAttempts, options.attempts);
+	owed.unsuccessfulAttempts >= options.attempts;
 
 /**
  * The attempt at each activation at the cap, ended before it starts. The
@@ -239,8 +224,8 @@ function abandonments(state: RoomState, options: ReconcileOptions): Ended[] {
 
 /**
  * The exchange closes when nothing works on it. It names the configured
- * summary writer when the exchange owes a summary. `mayClose` decided the
- * pass; this reads the open exchange it admitted.
+ * summary writer when the exchange owes a summary. The pass decided that
+ * nothing is live; this reads the open exchange.
  */
 function closing(state: RoomState, now: number): Reconciliation['close'] {
 	const exchange = state.exchange;
@@ -275,23 +260,17 @@ const owing = (state: RoomState, options: ReconcileOptions): PendingActivation[]
  *
  * A wake a message decided and a draft a close owes wait the same way.
  */
-function waits(owed: PendingActivation, options: ReconcileOptions) {
+function dueAt(owed: PendingActivation, options: ReconcileOptions): number {
+	const backoff = owed.notBefore ?? options.now;
+	if (backoff > options.now) return backoff;
 	const sent = options.sent.get(owed.id);
-	return {
-		backedOff: owed.notBefore !== undefined,
-		notBefore: owed.notBefore ?? 0,
-		wasSent: sent !== undefined,
-		sentAt: sent ?? 0,
-	};
+	return sent === undefined ? options.now : sent + options.resend;
 }
 
 /** Every wake the room sends now: an activation it owes that waits on nothing. */
 function dueWakes(state: RoomState, options: ReconcileOptions): Send[] {
 	return owing(state, options)
-		.filter((owed) => {
-			const { backedOff, notBefore, wasSent, sentAt } = waits(owed, options);
-			return readyToSend(options.now, backedOff, notBefore, wasSent, sentAt, options.resend);
-		})
+		.filter((owed) => dueAt(owed, options) <= options.now)
 		.map((owed) => ({ id: owed.id, seat: owed.seat }));
 }
 
@@ -303,8 +282,8 @@ function dueWakes(state: RoomState, options: ReconcileOptions): Send[] {
  */
 function retryTimes(state: RoomState, options: ReconcileOptions): number[] {
 	return owing(state, options).map((owed) => {
-		const { backedOff, notBefore, wasSent, sentAt } = waits(owed, options);
-		return looksAgainAt(options.now, backedOff, notBefore, wasSent, sentAt, options.resend);
+		const at = dueAt(owed, options);
+		return at > options.now ? at : options.now + options.resend;
 	});
 }
 
@@ -312,5 +291,6 @@ function nextAlarm(state: RoomState, options: ReconcileOptions): number | undefi
 	const expiries = [...state.leases.values()].flatMap((lease) =>
 		lease.phase === 'running' && isLive(lease, options.now) ? [lease.expiresAt] : [],
 	);
-	return earliestAfter(options.now, [...expiries, ...retryTimes(state, options)]);
+	const future = [...expiries, ...retryTimes(state, options)].filter((at) => at > options.now);
+	return future.length === 0 ? undefined : Math.min(...future);
 }

@@ -1,5 +1,4 @@
 /** SQLite storage for named journal entries. */
-import { nextPosition, readPosition } from './rules.verified.ts';
 import type {
 	JournalOpener,
 	JournalRead,
@@ -38,7 +37,9 @@ class SqliteJournal implements JournalStorage {
 				after,
 			)
 			.map((row) => ({ position: Number(row.position), entry: JSON.parse(String(row.entry)) }));
-		return { entries, position: readPosition(after, entries.at(-1)?.position) };
+		const head = entries.at(-1)?.position;
+		// A read reports the highest position it scanned, and never one before `after`.
+		return { entries, position: head === undefined ? after : Math.max(after, head) };
 	}
 
 	async append(
@@ -51,7 +52,7 @@ class SqliteJournal implements JournalStorage {
 			 WHERE (SELECT COALESCE(MAX(position), 0) FROM journal_entries WHERE journal = ?) = ?
 			 RETURNING position, entry`,
 			this.name,
-			nextPosition(expectedPosition),
+			expectedPosition + 1,
 			JSON.stringify(entry),
 			this.name,
 			expectedPosition,
