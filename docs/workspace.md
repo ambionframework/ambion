@@ -85,6 +85,63 @@ const readPlan = defineTool({
 `ToolContext` contains `agent`, `signal`, `callId`, and `onUpdate`. It holds
 no workspace or resource field.
 
+## Query the shared database
+
+**The `sql` tool runs SQLite statements on one shared database.** The default
+backends open the database at `/workspace/shared.db`. Every agent queries this
+one file, so a table or a view one agent creates is data another agent reads
+at once. The tool takes these parameters:
+
+| Parameter  | Meaning                                                          |
+| ---------- | ---------------------------------------------------------------- |
+| `sql`      | One or more SQLite statements. The last query gives the preview. |
+| `database` | The file opened as `main`. The default is the shared database.   |
+| `export`   | A path for the full result as CSV. Omit it to write no file.     |
+| `maxRows`  | How many rows the preview shows. The default is 50.              |
+| `timeout`  | Seconds before the query stops.                                  |
+
+**The preview stays in context and writes nothing to disk.** The tool shows
+the last query's result as a Markdown table, capped at `maxRows`. It keeps the
+data in the database. An agent reads the result and continues.
+
+**Share through a table or a view.** The data stays in the shared database, so
+no agent copies a file. A view holds its own query and reflects the current
+tables. `sqlite_master` holds each view's definition, so an agent reads how a
+shared view was built before the agent trusts its data. Prefer a view or a
+table for every hand-off between agents.
+
+**The resource owner serializes every write.** The owner runs one operation at
+a time (see the queue above), so writes to the shared database take a total
+order and one write never overwrites another.
+
+**Attach a private scratch database with `ATTACH ':memory:'`.** The scratch
+database lives for one call. A single statement joins the shared tables with
+the scratch tables. For data an agent keeps across calls, set `database` to a
+private file; the tool opens that file as `main`.
+
+**Export only for a reader outside SQL.** Set `export` when a script or another
+tool needs the rows. The tool writes the full result as CSV to that path and
+shows the file's head. A NULL value reads as `\N`, so a NULL stays apart from
+an empty string.
+
+### just-bash as one implementation
+
+The `sql` contract holds over any backend that supplies a `sqlite3` command.
+just-bash is the default implementation, and it has these specific behaviors:
+
+- **It loads the main database into a WebAssembly engine and writes the file
+  back after each call.** The owner's serialization keeps this write-back safe:
+  two calls never overlap, so no call loses another's write.
+- **`ATTACH` opens `:memory:` only.** The engine has no bridge to the virtual
+  filesystem, so `ATTACH` of a second file fails to open it. A cross-file join
+  is not available; a cross-database join uses a `:memory:` scratch database.
+- **CSV is the bridge to `python3`.** The just-bash `python3` has no `sqlite3`
+  module, so a Python script reads an exported CSV file.
+- **The tool passes command-line flags.** just-bash `sqlite3` reads flags such
+  as `-json` and `-csv`. It does not read dot-commands such as `.mode`.
+- **The dialect is SQLite.** Dates are functions, `||` joins text, and a column
+  type is an affinity.
+
 ## Use a resource without the room runtime
 
 `@ambionframework/workspace/resource` exports `openResource` and the same

@@ -39,6 +39,7 @@ import { Bash, type IFileSystem, InMemoryFs } from 'just-bash';
 import type { WorkspaceBackend } from './backend.ts';
 import { BashEnv } from './bash-env.ts';
 import type { WorkspaceAgent } from './resource.ts';
+import { createSqlTool, SHARED_DATABASE } from './sql.ts';
 
 /** Build one agent's environment over the workspace's filesystem. */
 async function connectOver(fs: IFileSystem, agent: WorkspaceAgent): Promise<BashEnv> {
@@ -96,19 +97,28 @@ export interface MemoryWorkspaceBackend extends WorkspaceBackend {
 
 /** Default tool guidance for the just-bash backends. */
 const JUST_BASH_GUIDANCE = [
-	`Your workspace gives you four tools: read, write, edit and bash, over a shared virtual`,
-	`filesystem. Your home is /home/<your name>. Other agents connected to this workspace`,
-	`read and write the same files, with no wall between one agent's home and another's.`,
+	`Your workspace gives you five tools: read, write, edit, bash and sql, over a shared`,
+	`virtual filesystem. Your home is /home/<your name>. Other agents connected to this`,
+	`workspace read and write the same files, with no wall between one agent's home and`,
+	`another's.`,
 	``,
 	`bash runs a simulated Unix shell: the common coreutils (ls, cat, grep, sed, awk, find,`,
 	`tar, and more), plus jq for JSON, yq for YAML and TOML, xan for CSV, and sqlite3. Run`,
 	`a script with js-exec (JavaScript) or python3 (Python). bash has no network: curl and`,
 	`every other network command are disabled.`,
+	``,
+	`sql runs SQLite statements on one shared database at ${SHARED_DATABASE}. Every agent`,
+	`queries this database, so a table or a view you create is data another agent reads at`,
+	`once. Share through a view or a table; this needs no copy. Attach a private scratch`,
+	`database with ATTACH ':memory:' inside one call. The tool shows the last result as a`,
+	`table and keeps the data in the database. Set export to write the full result as a CSV`,
+	`file for another tool or script. This is SQLite: dates are functions, || joins text,`,
+	`and a column type is an affinity.`,
 ].join('\n');
 
 /** Create the Pi harness tools offered by each just-bash backend instance. */
 function justBashTools(): readonly AgentHarnessTool<ExecutionToolContext>[] {
-	return [createReadTool(), createWriteTool(), createEditTool(), createBashTool()];
+	return [createReadTool(), createWriteTool(), createEditTool(), createBashTool(), createSqlTool()];
 }
 
 /**
