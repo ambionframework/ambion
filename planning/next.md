@@ -117,45 +117,30 @@ the fold has the least user-visible surface.
 
 ### Phase 0. Unblock the tree (P0)
 
-**Goal:** main installs on every supported Node, the open pull requests
-are decided, and the live tier can run.
+**Goal:** the live tier runs on a restored account and fails fast by cause.
 
-1. [ ] Merge PR #152; note in `durability.md` that a same-key retry is
-       bound to its activation (A3).
-2. [ ] Close the nine stale pull requests in the [backlog](backlog.md);
-       take the export-list assertion into B5.
-3. [ ] Hold PR #151; schedule the closing-context slice of PR #153 for
-       phase 1; keep the evals package private.
-4. [x] Bump `pi-agent-core` and `pi-ai` to 0.85.1 together in `ambion`,
-       `cloudflare`, `pi-journal`, `workspace`, and `assistant`; close the
-       superseded PR #111, #112, #5, #6, #7, and #4. Needs 1.
-5. [ ] Install on the single Node floor (C1). Needs 4, because the lockfile
-       moves once.
-6. [ ] Restore the provider account; add the second provider job; fail a
-       job on a credit or authentication error with the account's name
-       (D9). Run the live tier once after 4.
-7. [ ] A `CHANGELOG.md` waits; the release entry does not need one now (C7).
+1. [ ] Restore the provider account; fail a job on a credit or
+       authentication error, naming the account (D9). Run the live tier
+       once after the restore. A second provider job is optional: Pi's
+       transport is expected to keep behavior provider-neutral, so add one
+       only if a provider-specific defect turns up.
 
-**Evidence:** CI green on main; `pnpm install` and `pnpm check` on Node 22;
-two live jobs green; Dependabot rebases an npm bump.
+**Evidence:** the live tier job is green; a credit or authentication
+failure names the account and aborts the job.
 
 ### Phase 1. Correctness (P0)
 
-**Goal:** the two confirmed defects and the retry of permanent failures are
-fixed with regressions, before any rename touches the same files.
+**Goal:** a closing activation reads the same divider an ordinary
+activation gets.
 
-1. [ ] `stop()` ends running leases only; pending work survives a graceful
-       stop (A2). First, because it loses data today.
-2. [ ] Retry a commit under its key; an unknown outcome ends the tool call
-       (A1).
-3. [ ] Classify provider failures; abandon a permanent failure at once
-       (D1). Needs 2, because both change the release path in the runner.
-4. [ ] A closing activation reads every message through the close boundary
+1. [ ] A closing activation reads every message through the close boundary
        with the divider at its exchange (the PR #153 slice).
+       [`render.ts`](../packages/ambion/src/execution/render.ts) wires the
+       exchange-from divider only for a `respond` purpose; a `summarize`
+       purpose gets `undefined`.
 
-**Evidence:** the two probes as regressions on memory and SQLite; a 400
-reply abandons in one attempt; a resumed room answers a question sent
-before a graceful stop.
+**Evidence:** a closing activation's rendered record carries the same
+exchange-boundary divider a respond activation gets.
 
 ### Phase 2. The public shape, then the freeze (P0)
 
@@ -291,26 +276,18 @@ template on `read()`.
 guide describes. The example is one terminal process with an assistant and
 three specialists ([docs/example.md](../docs/example.md)).
 
-1. [x] Remove `examples/site` and `examples/persistent`.
-2. [ ] Move the old example reports and `docs/assistant-acceptance.md` under
+1. [ ] Move the old example reports and `docs/assistant-acceptance.md` under
        `planning/evidence/` (C7).
-3. [x] `examples/workbench`: the assistant, three specialists, the library
-       workspace, and a persistent host with a room per project. The host and
-       the terminal run in one process. The example builds no SQL resource
-       and no instrument, and no specialist runs on the Claude adapter.
-4. [x] Scripted tests for the rooms, including a restart of the host over
-       the same directory.
-5. [x] The terminal: rooms, exchanges with discussions and summaries, and a
-       files panel. It previews Markdown and SQLite databases.
-6. [ ] The terminal shows steps per activation, the cost per exchange, and
+2. [ ] The terminal shows steps per activation, the cost per exchange, and
        `awaiting` and `approval` to the person (F8). Needs phase 3 step 2.
-7. [x] Two scenarios on the live tier, on one provider.
-8. [ ] The same scenarios on a second provider.
-9. [ ] `ambion new --template node` derived from the example; the
+3. [ ] `ambion new --template node` derived from the example; the
        Cloudflare template on `read()` (C3). Needs phase 3 step 4.
 
+A second provider for the two live scenarios is optional, for the same
+reason as D9: add one only if a provider-specific defect turns up.
+
 **Evidence:** the rooms pass scripted; the live tier runs two scenarios on
-one provider and on a second provider; a restart preserves the question.
+one provider; a restart preserves the question.
 
 ### Phase 7. Documentation (P1)
 
@@ -364,8 +341,8 @@ the scope has evidence on the tagged commit.
 4. [ ] Node 22 and 24 tests; Node 26 CLI; workerd tests; the historical
        Cloudflare wake and cut races reproduced on current code.
 5. [ ] The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
-       golden journals; the live tier on two providers; results recorded
-       under `planning/evidence/`.
+       golden journals; the live tier on one provider (D9); results
+       recorded under `planning/evidence/`.
 6. [ ] Recovery evidence: duplicate wake, takeover, delayed cut, audit
        retry, clock skew, process pause, uncooperative tool.
 7. [ ] Summary evidence: silence, corrections, conflicting constraints,
@@ -381,32 +358,6 @@ commit and a run for each claim.
 
 Each item states the problem, the solution, and the impact. The review of
 2026-09-17 established the facts; file links point at main `deaaf94`.
-
-### A. Correctness
-
-**A1. Retry a commit under its key before reporting it lost.**
-[`runner.ts`](../packages/ambion/src/execution/runner.ts) retries a claim and
-a release up to `call.attempts` times and sends a commit once. When the
-reply is lost, the `say` tool throws, and a model that repeats itself lands
-the same message twice under a new tool call id; a probe recorded three
-commits and two identical answers. Send a commit through the retrying path
-with the same key, and end the tool call with an unknown outcome when every
-attempt is lost. Duplicate speech after a lost reply becomes impossible.
-
-**A2. Let unclaimed work survive a graceful stop.** `stop()` in
-[`room-host.ts`](../packages/ambion/src/room-host.ts) ends every entry in
-`state.due` as `revoked`, and [`lease.ts`](../packages/ambion/src/room/lease.ts)
-counts a revoked lease at the message position as answered, so a resumed
-room never wakes the seat. A probe showed the crash path preserving a
-question and the stop path discarding it; Relay's shutdown calls `stop()`
-for every room. Let stop end running leases only and write nothing for an
-activation that never claimed. A deploy restart loses no accepted question.
-
-**A3. Bind delivery keys and identity to journal facts.** A reused delivery
-key acknowledges another person's message, the journal exposes its mutable
-cache, and the Cloudflare object writes a person's identity before
-admission. PR #152 fixes all three with one new journal method,
-`entriesFrom(start)`, and no new room API. Merge it first.
 
 ### B. Architecture
 
@@ -500,12 +451,6 @@ core takes definitions. Expose the core surface plus `start` and
 
 ### C. Developer experience
 
-**C1. One Node floor across the tree.** The manifests once declared Node
-`>=22.19` while `@opentui/core` declares `>=26.4` and `.npmrc` sets
-`engine-strict=true`, so two floors described one tree. Every manifest now
-declares Node `>=26.4`, the OpenTUI floor, and CI installs and tests on
-Node 26. The docs state the one floor.
-
 **C2. Publish the deterministic test tools.** The scripted stream and the
 fake clock live in `test/support`; PR #153 re-implements the stream three
 times and polls `reconcile()` and `read()` to wait for a quiet room.
@@ -555,15 +500,6 @@ evidence under `planning/evidence/`. A `CHANGELOG.md` waits until after the
 tag; the release does not require a per-pull-request entry now.
 
 ### D. Scope the release did not name
-
-**D1. Classify a permanent failure and stop retrying it.**
-[`activation.ts`](../packages/ambion/src/execution/activation.ts) treats every
-provider error alike and the reconcile rule retries with backoff to the
-cap; the live tier on 2026-09-17 spent three activations and 90 seconds on
-a 400 "credit balance is too low" before an `abandoned` event and a silent
-close. Carry `cause: 'permanent' | 'transient'` on the failed lease end
-and on the `error` and `abandoned` events; abandon a permanent failure at
-once.
 
 **D2. Usage and cost on every activation.** Pi's `AssistantMessage` carries
 `usage` with tokens and cost, and the runner persists those messages;
@@ -628,10 +564,12 @@ tool effects, secrets in transcripts). Write `docs/trust.md` with one table
 of guarantees and one of non-guarantees, each linked to its test or
 verified rule.
 
-**D9. Provider evidence beyond one account.** The live tier runs one
+**D9. Provider evidence on a restored account.** The live tier runs one
 provider on one key; on 2026-09-17 every live run failed on that account's
-balance. Run two providers as separate jobs and fail on a credit or
-authentication error with the account's name.
+balance. Restore the account and fail a job on a credit or authentication
+error with the account's name. A second provider is not required: Pi's
+transport is expected to keep behavior provider-neutral. Add a second
+provider job only if a provider-specific defect turns up.
 
 **D10. An API reference.** The docs point at source files for shapes.
 Generate a reference per entry from the emitted declarations into
@@ -891,3 +829,11 @@ executor composition, participant vocabulary, coherent reads, the assistant
 package, and bounded executor waits. Earlier work established fixed
 definitions, typed tools, structured activations, conditional journal
 commits, workspace ownership, and restart evidence. Those regressions stay.
+
+PR #152 bound delivery keys and identity to journal facts (A3). PR #161
+let unclaimed work survive a graceful stop (A2); PR #162 retried a lost
+commit under its key (A1); PR #164 classified permanent provider failures
+(D1). PR #163 windowed the activation record to a per-agent token limit,
+the first slice of D5. The single Node 26.4 floor (C1) is live on CI. The
+nine stale pull requests (#28, #40, #44, #48, #58, #60, #63, #67, #73) are
+closed, each with the route that delivered its aim on main.
