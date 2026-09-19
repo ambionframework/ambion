@@ -3,11 +3,9 @@
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
-	"description": "Workbench: an agentic lab workbench with a web and a terminal endpoint.",
+	"description": "Workbench: an agentic lab workbench that hosts its rooms and shows them in one terminal.",
 	"scripts": {
-		"start": "node --env-file-if-exists=.env src/main.ts start",
-		"resume": "node --env-file-if-exists=.env src/main.ts resume",
-		"tui": "node --experimental-ffi --env-file-if-exists=.env src/tui.ts",
+		"start": "node --experimental-ffi --env-file-if-exists=.env src/main.ts",
 		"check:types": "tsc --noEmit",
 		"test": "vitest run --exclude 'test/live/**'",
 		"test:live": "pnpm --filter '@ambionframework-examples/workbench^...' build && vitest run --config vitest.live.config.ts"

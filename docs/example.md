@@ -68,22 +68,21 @@ pattern. Each room offers a suggested prompt.
 | sensing | Design → test plan       | Wire the HC-SR04 and plan a distance test    |
 | power   | Datasheet check → budget | Add up the kit current and confirm USB power |
 
-### Two endpoints, one host
+### One process, one terminal
 
-**One Node process hosts the rooms. A web page and a terminal read the same
-rooms through one loopback HTTP API.**
+**One Node process runs the rooms and the terminal together.** The terminal
+calls the host through a typed in-process API. The example defines no HTTP
+interface.
 
-- **Web.** `ui/index.html` is one page with inline CSS and JavaScript. It
-  has no build step. It shows the rooms, the conversation, the participants,
-  and the library.
-- **Terminal.** `src/tui.ts` is an OpenTUI client on a dark theme. It has a
-  multi-line composer with a room chip, slash commands (`/room`, `/abort`,
-  `/stop`, `/resume`), and the same discussions as the web page.
-
-Both endpoints share the repository brand kit in the root `brand/`
-directory. The web page loads `/brand/tokens/ambion.css` and the brand icons
-and logo. The terminal reads the colors from `brand/tokens/ambion.tokens.json`.
-One kit holds the identity.
+- **Lifecycle.** The rooms run while the terminal runs. When the person
+  quits, the host ends each visit, then closes the rooms. The journals stay
+  on disk. The next start resumes them.
+- **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
+  a multi-line composer with a room chip, and slash commands to switch person
+  or room, create a room, read workspace files, and stop, resume, or abort.
+  The person picks an identity on the first screen.
+- **Brand.** The terminal reads its colors from the repository brand kit in
+  `brand/tokens/ambion.tokens.json`.
 
 ## How the example maps onto the kernel
 
@@ -138,23 +137,24 @@ examples/workbench/
     definitions.ts     the assistant, three specialists, and the people
     scenarios.ts       the rooms, and the workspace seed
     rooms.ts           the host lifecycle and the room catalog
+    workbench.ts       the host: open, read, send, control, create, files
+    names.ts           the room name and goal rules
     files.ts           the workspace list and one file preview
-    server.ts          the persistent host: HTTP for both endpoints
-    client.ts          the HTTP client the terminal uses
-    feed.ts            the terminal's room feed: one read at a time
+    session.ts         the terminal's state and commands, without OpenTUI
+    feed.ts            the room feed: one read at a time
     commands.ts        the slash commands and their suggestions
     timeline.ts        the record grouped into questions, threads, and summaries
-    transcript.ts      the terminal conversation
-    composer.ts        the terminal composer, room chip, and palette
-    tui.ts             the terminal endpoint
-    main.ts            start or resume
+    transcript.ts      the conversation
+    composer.ts        the composer, room chip, and palette
+    viewer.ts          the workspace file overlay
+    tui.ts             the terminal: layout, keys, and the run loop
+    main.ts            the entry point
   library/             the datasheets as text
-  ui/                  the web page: rooms, conversation, and library
-  test/                scripted tests: host, client, feed, commands, timeline, recovery
+  test/                scripted tests: host, session, feed, commands, timeline, recovery
   test/live/           two scenarios on a real provider
 ```
 
-The example serves the repository brand kit from the root `brand/`
+The example reads the repository brand kit from the root `brand/`
 directory. It adds no brand files of its own. A Node template for `ambion new` is planned to derive from this layout
 (item C3 in [next.md](../planning/next.md)). It does not exist yet.
 

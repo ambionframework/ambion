@@ -1,11 +1,12 @@
-import type { Message } from '@ambionframework/ambion';
+import type { ExchangeView, Message } from '@ambionframework/ambion';
 import { describe, expect, it } from 'vitest';
-import type { ExchangeInfo } from '../src/client.ts';
 import { type Block, buildTimeline, discussionKeys } from '../src/timeline.ts';
 
 const said = (seq: number, from: string, to?: string): Message =>
 	({ seq, kind: 'said', from, to, text: `${from} ${seq}`, at: '2026-01-01T00:00:00Z' }) as Message;
-const summaryOf = (seq: number, to: string): Message =>
+type Summary = Extract<Message, { kind: 'summary' }>;
+const AT = '2026-01-01T00:00:00Z';
+const summaryOf = (seq: number, to: string): Summary =>
 	({
 		seq,
 		kind: 'summary',
@@ -13,14 +14,14 @@ const summaryOf = (seq: number, to: string): Message =>
 		to,
 		text: `summary ${seq}`,
 		at: '2026-01-01T00:00:00Z',
-	}) as Message;
+	}) as Summary;
 const arrived = (seq: number): Message =>
 	({ seq, kind: 'arrived', subject: 'theo', at: '2026-01-01T00:00:00Z' }) as Message;
 
 const humans = new Set(['theo', 'mira']);
 const build = (
 	messages: Message[],
-	exchanges: ExchangeInfo[],
+	exchanges: ExchangeView[],
 	extra: Partial<Parameters<typeof buildTimeline>[0]> = {},
 ) =>
 	buildTimeline({
@@ -49,11 +50,12 @@ const thread = [
 	said(134, 'experiments'),
 	summaryOf(145, 'theo'),
 ];
-const closed: ExchangeInfo = {
+const closed: ExchangeView = {
 	from: 98,
 	through: 134,
 	status: 'closed',
 	owner: 'theo',
+	at: AT,
 	summary: { status: 'published', summary: summaryOf(145, 'theo') },
 };
 
@@ -85,11 +87,12 @@ describe('buildTimeline', () => {
 
 	it('shows one reply directly, with no discussion and no summary', () => {
 		const messages = [said(59, 'mira'), said(61, 'assistant', 'mira'), summaryOf(66, 'mira')];
-		const exchange: ExchangeInfo = {
+		const exchange: ExchangeView = {
 			from: 59,
 			through: 61,
 			status: 'closed',
 			owner: 'mira',
+			at: AT,
 			summary: { status: 'published', summary: summaryOf(66, 'mira') },
 		};
 		expect(shape(build(messages, [exchange]))).toEqual(['question:59', 'said:61']);
@@ -97,11 +100,12 @@ describe('buildTimeline', () => {
 
 	it('keeps the closing mark when a person is the only one who spoke after the question', () => {
 		// An exchange aborted after a follow-up: no agent replied, so there is nothing to show directly.
-		const exchange: ExchangeInfo = {
+		const exchange: ExchangeView = {
 			from: 4,
 			through: 9,
 			status: 'closed',
 			owner: 'mira',
+			at: AT,
 			summary: { status: 'silent' },
 		};
 		const blocks = build([said(4, 'mira'), said(9, 'mira')], [exchange]);
@@ -110,11 +114,12 @@ describe('buildTimeline', () => {
 	});
 
 	it('notes a closed exchange that has no reply and no summary', () => {
-		const exchange: ExchangeInfo = {
+		const exchange: ExchangeView = {
 			from: 75,
 			through: 75,
 			status: 'closed',
 			owner: 'theo',
+			at: AT,
 			summary: { status: 'silent' },
 		};
 		const blocks = build([said(75, 'theo')], [exchange]);
@@ -123,14 +128,14 @@ describe('buildTimeline', () => {
 	});
 
 	it('flags a discussion whose summary is pending or failed', () => {
-		const pending = { ...closed, summary: { status: 'pending' as const } };
+		const pending: ExchangeView = { ...closed, summary: { status: 'pending' } };
 		const blocks = build(thread.slice(0, -1), [pending]);
 		expect(blocks[1]).toMatchObject({ type: 'discussion', flag: 'Summary pending' });
 	});
 
 	it('keeps the open exchange in the open, and ends with a live block', () => {
 		const messages = [said(4, 'mira'), said(6, 'assistant', 'design'), said(9, 'mira')];
-		const open: ExchangeInfo = { from: 4, status: 'open', owner: 'mira' };
+		const open: ExchangeView = { from: 4, status: 'open', owner: 'mira', at: AT };
 		const blocks = build(messages, [open], {
 			open: { owner: 'mira' },
 			working: ['assistant', 'design'],
@@ -146,7 +151,7 @@ describe('buildTimeline', () => {
 	});
 
 	it('shows an earlier exchange collapsed beside a newer open one', () => {
-		const later: ExchangeInfo = { from: 150, status: 'open', owner: 'mira' };
+		const later: ExchangeView = { from: 150, status: 'open', owner: 'mira', at: AT };
 		const blocks = build([...thread, said(150, 'mira')], [closed, later], {
 			open: { owner: 'mira' },
 		});

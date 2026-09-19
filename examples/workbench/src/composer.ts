@@ -11,6 +11,9 @@ import {
 import { tui as palette } from './brand.ts';
 import type { Suggestion } from './commands.ts';
 
+/** The palette's title, by what its rows complete to. */
+const TITLES = { command: 'Commands', room: 'Rooms', person: 'People', file: 'Files' } as const;
+
 const MAX_INPUT_LINES = 6;
 const MAX_PALETTE_ROWS = 6;
 
@@ -110,10 +113,14 @@ export class Composer {
 		this.frame.borderColor = palette.line;
 	}
 
-	/** Show the room the composer sends to. A dot means the room is working. */
-	setRoom(name: string, working: boolean): void {
+	/** Show what the composer sends to, such as a room. A dot means the room is working. */
+	setChip(label: string, working: boolean): void {
 		const dot = working ? fg(palette.coral)('● ') : fg(palette.dim)('');
-		this.chip.content = new StyledText([dot, bold(fg(palette.accent)(`${name} ›`))]);
+		this.chip.content = new StyledText([dot, bold(fg(palette.accent)(`${label} ›`))]);
+	}
+
+	setPlaceholder(text: string): void {
+		this.input.placeholder = text;
 	}
 
 	setStatus(content: StyledText): void {
@@ -134,8 +141,7 @@ export class Composer {
 		);
 		const shown = rows.slice(first, first + MAX_PALETTE_ROWS);
 		const width = Math.max(...rows.map((row) => row.label.length)) + 2;
-		// A command label starts with a slash. A room label is a bare name.
-		this.paletteBox.title = rows.some((row) => row.label.startsWith('/')) ? 'Commands' : 'Rooms';
+		this.paletteBox.title = TITLES[rows[0]?.kind ?? 'command'];
 		this.paletteBox.titleColor = palette.muted;
 		this.paletteBox.height = shown.length + 2;
 		const chunks = shown.flatMap((row, index) => {

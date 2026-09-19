@@ -10,7 +10,7 @@ import {
 	TextRenderable,
 } from '@opentui/core';
 import { tui as palette } from './brand.ts';
-import type { Block, DiscussionBlock, MessageBlock, Role } from './timeline.ts';
+import type { Block, DiscussionBlock, LiveBlock, MessageBlock, Role } from './timeline.ts';
 
 /** Wait one layout pass, so a scroll position can use the new heights. */
 const SETTLE_MS = 40;
@@ -141,7 +141,7 @@ export class Transcript {
 	private blockNode(block: Block, selected: string | undefined): BoxRenderable | TextRenderable {
 		if (block.type === 'message') return this.messageNode(block);
 		if (block.type === 'discussion') return this.discussionNode(block, block.key === selected);
-		if (block.type === 'live') return this.liveNode(block.text);
+		if (block.type === 'live') return this.liveNode(block);
 		return this.text([paint(block.text, { color: palette.dim })]);
 	}
 
@@ -207,10 +207,12 @@ export class Transcript {
 		return wrapper;
 	}
 
-	private liveNode(text: string): TextRenderable {
+	private liveNode(block: LiveBlock): TextRenderable {
+		const detail = block.detail ? [paint(`   ${block.detail}`, { color: palette.dim })] : [];
 		return this.text([
 			paint('● ', { color: palette.coral }),
-			paint(text, { color: palette.muted }),
+			paint(block.text, { color: palette.muted }),
+			...detail,
 			paint('   /abort cancels it', { color: palette.dim }),
 		]);
 	}

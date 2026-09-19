@@ -5,7 +5,6 @@ import {
 	createRuntime,
 	type Room,
 	type RoomNotification,
-	readExchange,
 	readRoom,
 	resumeRoom,
 	startRoom,
@@ -15,8 +14,11 @@ import { directoryBackend, openWorkspace } from '@ambionframework/workspace';
 import { team } from './definitions.ts';
 import { scenarios, seedWorkspace } from './scenarios.ts';
 
-export function fail(status: number, message: string): never {
-	throw Object.assign(new Error(message), { status });
+/** What a person can do to a room's work. Abort ends the open exchange. Stop and resume end and start a run. */
+export type RoomAction = 'abort' | 'stop' | 'resume';
+
+export function fail(message: string): never {
+	throw new Error(message);
 }
 
 interface CatalogEntry {
@@ -68,7 +70,7 @@ export async function openRooms(
 	const roomTeam = team(workspace);
 	let workspaceTail = Promise.resolve();
 	function withWorkspace<T>(operation: () => Promise<T>): Promise<T> {
-		if (closing) fail(503, 'The host is stopping.');
+		if (closing) fail('The host is stopping.');
 		const result = workspaceTail.then(operation);
 		workspaceTail = result.then(
 			() => undefined,
@@ -126,8 +128,8 @@ export async function openRooms(
 		return roomView(entry, await readRoom(entry.name, { runtime, messages: false }));
 	}
 	async function create(name: string, goal: string) {
-		if (closing) fail(503, 'The host is stopping.');
-		if (entries.has(name)) fail(409, 'This room already exists.');
+		if (closing) fail('The host is stopping.');
+		if (entries.has(name)) fail('This room already exists.');
 		database
 			.prepare('INSERT INTO workbench_rooms (name, goal, enabled) VALUES (?, ?, 1)')
 			.run(name, goal);
@@ -138,12 +140,12 @@ export async function openRooms(
 		});
 	}
 	async function withRoom<T>(name: string, operation: (entry: HostedRoom) => Promise<T>) {
-		if (closing) fail(503, 'The host is stopping.');
+		if (closing) fail('The host is stopping.');
 		const entry = entries.get(name);
-		if (!entry) fail(404, 'Unknown room.');
+		if (!entry) fail('Unknown room.');
 		return serial(entry, () => operation(entry));
 	}
-	async function lifecycle(name: string, action: string) {
+	async function lifecycle(name: string, action: RoomAction) {
 		return withRoom(name, async (entry) => {
 			switch (action) {
 				case 'resume':
@@ -159,8 +161,6 @@ export async function openRooms(
 				case 'abort':
 					await liveRoom(entry).abort();
 					break;
-				default:
-					fail(404, 'Unknown lifecycle action.');
 			}
 			return status(entry);
 		});
@@ -206,15 +206,9 @@ export async function openRooms(
 		withRoom,
 		withWorkspace,
 		workspace,
-		workspacePath,
 		lifecycle,
 		list: () =>
 			Promise.all([...entries.values()].map((entry) => serial(entry, () => status(entry)))),
-		messages: (name: string, since: number) =>
-			withRoom(
-				name,
-				async (entry) => (await readRoom(entry.name, { runtime, messages: { since } })).messages,
-			),
 		read: (name: string, since?: number) =>
 			withRoom(name, async (entry) =>
 				roomView(
@@ -225,13 +219,6 @@ export async function openRooms(
 					}),
 				),
 			),
-		exchange: (name: string, from: number) =>
-			withRoom(name, async (entry) => {
-				const result = await readExchange(entry.name, from, { runtime });
-				return result === undefined
-					? undefined
-					: { exchange: result.exchange, messages: result.messages };
-			}),
 		async close() {
 			closing = true;
 			// Preserve hosting intent so process restart resumes previously running rooms.
@@ -243,6 +230,9 @@ export async function openRooms(
 		},
 	};
 }
+
+/** A room as the host presents it: the recorded read, plus the hosting state and the recent work. */
+export type RoomView = ReturnType<typeof roomView>;
 
 function roomView(entry: HostedRoom, snapshot: Awaited<ReturnType<typeof readRoom>>) {
 	return {
@@ -256,7 +246,7 @@ function roomView(entry: HostedRoom, snapshot: Awaited<ReturnType<typeof readRoo
 }
 
 export function liveRoom(entry: HostedRoom): Room {
-	if (entry.lifecycle.status !== 'running') fail(409, 'Resume this room first.');
+	if (entry.lifecycle.status !== 'running') fail('Resume this room first.');
 	return entry.lifecycle.room;
 }
 

@@ -1,5 +1,6 @@
-import type { Message } from '@ambionframework/ambion';
-import type { ExchangeInfo } from './client.ts';
+import type { ExchangeView, Message } from '@ambionframework/ambion';
+
+type ClosedView = Extract<ExchangeView, { status: 'closed' }>;
 
 /** How a message reads in the conversation. A steer is a person's message inside a thread. */
 export type Role = 'question' | 'said' | 'summary' | 'steer';
@@ -23,7 +24,7 @@ export interface DiscussionBlock {
 	items: MessageBlock[];
 }
 
-export interface NoteBlock {
+interface NoteBlock {
 	type: 'note';
 	text: string;
 }
@@ -32,14 +33,18 @@ export interface NoteBlock {
 export interface LiveBlock {
 	type: 'live';
 	text: string;
+	/** The latest work an agent reported, when there is one. */
+	detail?: string;
 }
 
 export type Block = MessageBlock | DiscussionBlock | NoteBlock | LiveBlock;
 
 export interface TimelineInput {
 	messages: readonly Message[];
-	exchanges: readonly ExchangeInfo[];
+	exchanges: readonly ExchangeView[];
 	open?: { owner: string };
+	/** The latest work an agent reported in the open exchange. */
+	activity?: string;
 	humans: ReadonlySet<string>;
 	/** The agents that are working now. */
 	working: readonly string[];
@@ -48,7 +53,7 @@ export interface TimelineInput {
 }
 
 interface Group {
-	exchange: ExchangeInfo;
+	exchange: ClosedView;
 	source: Message[];
 	summary: Message | undefined;
 	direct: boolean;
@@ -71,19 +76,17 @@ function noteFor(outcome: string | undefined): string {
 
 function groupsOf(input: TimelineInput): Group[] {
 	return input.exchanges
-		.filter((exchange) => exchange.status === 'closed' && exchange.through !== undefined)
+		.filter((exchange): exchange is ClosedView => exchange.status === 'closed')
 		.map((exchange) => {
 			const source = input.messages.filter(
 				(message) =>
-					message.kind === 'said' &&
-					message.seq > exchange.from &&
-					message.seq <= (exchange.through ?? 0),
+					message.kind === 'said' && message.seq > exchange.from && message.seq <= exchange.through,
 			);
-			const published = exchange.summary?.status === 'published';
+			const published = exchange.summary.status === 'published';
 			return {
 				exchange,
 				source,
-				summary: published ? exchange.summary?.summary : undefined,
+				summary: published ? exchange.summary.summary : undefined,
 				// One agent reply shows directly. A lone person's message is not a reply, so an
 				// exchange that holds only that, such as an aborted one, keeps its closing mark.
 				direct: source.length === 1 && !input.humans.has(source[0]?.from ?? ''),
@@ -133,7 +136,8 @@ class Builder {
 	build(): Block[] {
 		for (const message of this.input.messages.filter(spoken)) this.place(message);
 		for (const group of this.groups) this.emit(group);
-		if (this.input.open) this.blocks.push(liveBlock(this.input.open.owner, this.input.working));
+		if (this.input.open)
+			this.blocks.push(liveBlock(this.input.open.owner, this.input.working, this.input.activity));
 		return this.blocks;
 	}
 
@@ -181,7 +185,7 @@ function groupBlocks(
 	input: TimelineInput,
 	roleOf: (message: Message, inThread: boolean) => Role,
 ): Block[] {
-	const outcome = group.exchange.summary?.status;
+	const outcome = group.exchange.summary.status;
 	const summary: Block[] = group.summary
 		? [{ type: 'message', message: group.summary, role: 'summary' }]
 		: [];
@@ -205,9 +209,9 @@ function groupBlocks(
 	return [discussion, ...summary];
 }
 
-function liveBlock(owner: string, working: readonly string[]): LiveBlock {
+function liveBlock(owner: string, working: readonly string[], activity?: string): LiveBlock {
 	const agents = working.length > 0 ? ` with ${working.join(', ')}` : '';
-	return { type: 'live', text: `Working on ${owner}’s question${agents}` };
+	return { type: 'live', text: `Working on ${owner}’s question${agents}`, detail: activity };
 }
 
 /** The keys of the discussions in the blocks, top to bottom. */

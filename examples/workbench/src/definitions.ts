@@ -28,6 +28,9 @@ export const people = [
 	role,
 }));
 
+/** A person who can use the Workbench. */
+export type Person = (typeof people)[number];
+
 /** The shared rules every agent follows. The kernel adds the collaboration rules. */
 const shared =
 	'This is a lab workbench for a toy Arduino kit. Read /library for the datasheets and /shared/kit.md for the kit and the house rules before you act. ' +

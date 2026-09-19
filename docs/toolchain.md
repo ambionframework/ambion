@@ -16,7 +16,7 @@ packages/
   journal/      append-only journal storage
   pi-journal/   Pi session persistence over journal storage
   workspace/    filesystem resource and tool bundles
-examples/workbench/   Workbench: rooms with a web page and a terminal, over one host
+examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
 .github/        CI, live, and release workflows

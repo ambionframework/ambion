@@ -6,7 +6,7 @@ import type { CreateRuntimeOptions } from '@ambionframework/ambion';
 import { afterEach, describe, expect, it } from 'vitest';
 import { people } from '../src/definitions.ts';
 import { liveRoom, openRooms } from '../src/rooms.ts';
-import { openWorkbench } from '../src/server.ts';
+import { openWorkbench } from '../src/workbench.ts';
 
 type StopFailure = false | 'before' | 'after';
 type WrappedDatabase = {
@@ -137,12 +137,6 @@ function failNextDeparture(): { attempts: () => number; restore: () => void } {
 	};
 }
 
-async function request(base: string, path: string, init?: RequestInit) {
-	const response = await fetch(`${base}${path}`, init);
-	const text = await response.text();
-	return { response, body: text ? (JSON.parse(text) as unknown) : {} };
-}
-
 describe('Workbench host stop recovery', () => {
 	const directories: string[] = [];
 
@@ -177,7 +171,7 @@ describe('Workbench host stop recovery', () => {
 			]);
 			expect(first.status).toBe('stopped');
 			expect(second.status).toBe('stopped');
-			const messages = await rooms.messages('review', 0);
+			const messages = (await rooms.read('review', 0)).messages;
 			expect(messages.filter((message) => message.kind === 'left')).toHaveLength(1);
 			expect(model.calls()).toBe(0);
 		} finally {
@@ -209,7 +203,7 @@ describe('Workbench host stop recovery', () => {
 			const stopped = await restarted.lifecycle('review', 'stop');
 			expect(stopped.status).toBe('stopped');
 			expect(
-				(await restarted.messages('review', 0)).filter((message) => message.kind === 'left'),
+				(await restarted.read('review', 0)).messages.filter((message) => message.kind === 'left'),
 			).toHaveLength(1);
 			expect(model.calls()).toBe(0);
 		} finally {
@@ -239,7 +233,7 @@ describe('Workbench host stop recovery', () => {
 			const resumed = await rooms.lifecycle('review', 'resume');
 			expect(resumed.status).toBe('running');
 			expect(
-				(await rooms.messages('review', 0)).filter((message) => message.kind === 'left'),
+				(await rooms.read('review', 0)).messages.filter((message) => message.kind === 'left'),
 			).toHaveLength(1);
 			await rooms.lifecycle('review', 'stop');
 			await rooms.lifecycle('review', 'resume');
@@ -275,7 +269,7 @@ describe('Workbench host stop recovery', () => {
 			await expect(rooms.lifecycle('review', 'stop')).rejects.toThrow(/catalog save failure/);
 			expect((await rooms.list())[0]?.status).toBe('stopped');
 			expect(
-				(await rooms.messages('review', 0)).filter((message) => message.kind === 'left'),
+				(await rooms.read('review', 0)).messages.filter((message) => message.kind === 'left'),
 			).toHaveLength(1);
 			const retry = await rooms.lifecycle('review', 'stop');
 			expect(retry.status).toBe('stopped');
@@ -292,49 +286,32 @@ describe('Workbench host stop recovery', () => {
 		}
 	});
 
-	it('reports failed HTTP stop cleanup and rejects admission until retry succeeds', async () => {
-		const directory = await mkdtemp(joinPath(tmpdir(), 'ambion-http-stop-recovery-'));
+	it('reports a failed stop through the host and rejects admission until a retry succeeds', async () => {
+		const directory = await mkdtemp(joinPath(tmpdir(), 'ambion-host-stop-recovery-'));
 		const failure = failNextDeparture();
 		let modelCalls = 0;
 		const stream: CreateRuntimeOptions['stream'] = () => {
 			modelCalls += 1;
-			throw new Error('model calls are forbidden in HTTP lifecycle recovery tests');
+			throw new Error('model calls are forbidden in host lifecycle recovery tests');
 		};
 		let workbench: Awaited<ReturnType<typeof openWorkbench>> | undefined;
 		try {
-			workbench = await openWorkbench(joinPath(directory, 'workbench'), 'start', stream);
-			await new Promise<void>((resolve, reject) => {
-				workbench?.server.once('error', reject);
-				workbench?.server.listen(0, '127.0.0.1', () => resolve());
-			});
-			const address = workbench.server.address();
-			if (!address || typeof address === 'string') throw new Error('The test server did not bind.');
-			const base = `http://127.0.0.1:${address.port}`;
-			const path = '/rooms/bringup/humans/mira';
-			expect((await request(base, path, { method: 'PUT' })).response.status).toBe(200);
-			const first = await request(base, '/rooms/bringup/stop', { method: 'POST' });
-			expect(first.response.status).toBe(500);
-			expect((await request(base, path, { method: 'PUT' })).response.status).toBe(409);
-			expect((await request(base, '/rooms')).body).toEqual(
-				expect.arrayContaining([expect.objectContaining({ name: 'bringup', status: 'stopping' })]),
+			workbench = await openWorkbench({ directory: joinPath(directory, 'run'), stream });
+			await workbench.join('bringup', 'mira');
+			await expect(workbench.control('bringup', 'stop')).rejects.toThrow(/write failure/);
+			await expect(workbench.join('bringup', 'mira')).rejects.toThrow(/Resume this room first/);
+			expect((await workbench.rooms()).find((room) => room.name === 'bringup')?.status).toBe(
+				'stopping',
 			);
 			failure.restore();
-			const second = await request(base, '/rooms/bringup/stop', { method: 'POST' });
-			expect(second.response.status).toBe(200);
-			expect((second.body as { status: string }).status).toBe('stopped');
-			const messages = await request(base, '/rooms/bringup/messages');
-			expect(
-				(messages.body as unknown[]).filter(
-					(message) => (message as { kind?: string }).kind === 'left',
-				),
-			).toHaveLength(1);
+			expect((await workbench.control('bringup', 'stop')).status).toBe('stopped');
+			const messages = (await workbench.read('bringup', 0)).messages;
+			expect(messages.filter((message) => message.kind === 'left')).toHaveLength(1);
 			expect(failure.attempts()).toBe(1);
 			const shutdownFailure = failNextDeparture();
 			try {
-				expect(
-					(await request(base, '/rooms/bringup/resume', { method: 'POST' })).response.status,
-				).toBe(200);
-				expect((await request(base, path, { method: 'PUT' })).response.status).toBe(200);
+				expect((await workbench.control('bringup', 'resume')).status).toBe('running');
+				await workbench.join('bringup', 'mira');
 				await expect(workbench.close()).rejects.toThrow(/write failure/);
 			} finally {
 				shutdownFailure.restore();
