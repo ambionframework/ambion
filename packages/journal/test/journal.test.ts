@@ -472,6 +472,25 @@ describe('the writer fence and uncertain append', () => {
 		expect(reader.entries.map((entry) => entry.seq)).toEqual([1, 2, 3]);
 	});
 
+	it('never fences a journal that writes for no run, whatever run entries it reads', async () => {
+		const id = `journal-reader-${++names}`;
+		let lost = 0;
+		const writerless = await open(id, undefined, undefined, () => {
+			lost += 1;
+		});
+		await writerless.append('run', { decide: () => body({ owner: 'nobody' }) });
+		const first = await open(id, 'run-1');
+		await first.append('run', { decide: () => body({ owner: 'run-1' }) });
+		const reader = await open(id, undefined, undefined, () => {
+			lost += 1;
+		});
+		expect(reader.entries.map((entry) => entry.seq)).toEqual([1, 2]);
+		expect(await reader.append('note', { decide: () => body(note('still writes')) })).toMatchObject(
+			{ entry: { seq: 3 } },
+		);
+		expect(lost).toBe(0);
+	});
+
 	it('recovers a successful append whose confirmation was lost', async () => {
 		const id = `journal-doubt-${++names}`;
 		const storage = await journals.open(id);

@@ -109,7 +109,7 @@ the lemmas the generator cannot write, by induction over a read:
 same-run test inside the rule. `advanceSeq` and `scanned` replace two
 `Math.max` calls whose meaning no contract reached. `admit`,
 `nextPosition`, and `readPosition` carry the storage contract into
-`memory.ts` and `sqlite.ts`. Dafny proves 35 obligations in three seconds.
+`memory.ts` and `sqlite.ts`. Dafny proves 41 obligations in three seconds.
 
 **Three edge behaviors came out of the proofs, and each is now a rule.**
 A refuter built each one as a running probe against the code.
@@ -132,24 +132,29 @@ A refuter built each one as a running probe against the code.
 
 **Left for the plan.** Each item names the file it changes.
 
-- **A1. The visible-entries filter as a loop rule.** `read` filters and
-  sorts the storage's answer inline. `visibleEntries(entries, after)` with
-  an index loop proves soundness (every result is past `after`) and
-  completeness (every stored entry past `after` is in the result). The
-  `filter` form proves soundness only, because Dafny's `Seq.Filter` does
-  not unfold. `journal.ts` `read` and `memory.ts` `read` run it.
+- **A1. The visible-entries filter as a loop rule.** Landed on this
+  branch. `read` filtered the storage's answer inline.
+  `visibleEntries(entries, after)` with an index loop proves soundness
+  (every result is past `after`), completeness (every stored entry past
+  `after` is in the result), and membership. The `filter` form proves
+  soundness only, because Dafny's `Seq.Filter` does not unfold.
+  `journal.ts` `read` and `memory.ts` `read` run it.
 - **A2. The cursor rule in every consumer.** Landed on this branch.
   `packages/cloudflare/src/storage.ts` `refresh` and
   `packages/pi-journal/src/index.ts` `refresh` each kept a cursor by
   hand: the Cloudflare one assigned each entry's position and took a max
   only at the end, and the Pi one took no max. Both run `scanned` per
   entry, and the journal package exports it from `index.ts` for that.
-- **A3. A journal with no run.** `sameWriter(undefined, undefined)` is
-  true, so a journal that writes for no run treats an unstamped run entry
-  as its own fence, and a stamped run entry after it supersedes the
-  reader. The contract states it; the design has not decided it. Either
-  `sameWriter` needs both names, or `docs/durability.md` §1 says a
-  writerless journal is fenced by an unstamped run entry.
+- **A3. A journal with no run.** Decided and landed on this branch.
+  `sameWriter(undefined, undefined)` was true, so a journal that writes
+  for no run treated an unstamped run entry as its own fence, and a
+  stamped run entry after it superseded the reader. `journal.ts` says
+  such a journal reads the fence like any other reader. `sameWriter` now
+  needs both names, the lemma `NoRunReadsLikeAnyReader` proves a
+  writerless journal is never fenced, never superseded, and never hears
+  `lost`, and a test holds it. Three more lemmas prove that which entries
+  a step keeps never depends on who reads, so an entry `writable` admits
+  is one every reader at the same fence keeps.
 - **A4. A malformed seq.** `positionOf` skips a stored entry whose seq is
   not a place, as it skips a foreign kind. A known kind with a bad seq is
   corruption, and a skip hides it. `envelope` throws for it, as it throws
@@ -644,7 +649,7 @@ and its evidence rows.
 | ----- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 1     | `journal.ts`, `memory.ts`, `sqlite.ts`     | `fenceStep`, `keyed`, `writable`, `advanceSeq`, `scanned`, `admit`, `nextPosition`, `readPosition`, the fold lemmas                                                                                                       | Landed |
 | 1     | the two cursor consumers                   | `scanned` at the Cloudflare and Pi cursors (A2)                                                                                                                                                                           | Landed |
-| 1     | `journal.ts`, `memory.ts`                  | `visibleEntries` (A1)                                                                                                                                                                                                     | Open   |
+| 1     | `journal.ts`, `memory.ts`                  | `visibleEntries` (A1)                                                                                                                                                                                                     | Landed |
 | 2a    | `transition.ts`                            | `mayEnd`, `permits`, `leaseExpiry`, `acknowledged`, `onRecord`, `speechFreshness`, `admitsClose`, `coversExchange`, `survivesCancellation`                                                                                | Landed |
 | 2a    | `transition.ts`, `answers.ts`              | `presenceOutcome`, `membershipOutcome`, `hostMembership`, `addressOutcome`, `deliveryOutcome`, `distinct`, `stampedSummary`, `addressesOwner`, `commitAuthority`, `admitsLease`, `deliveryMatches`, `contributionMatches` | Open   |
 | 2b    | `lease.ts`, `fold.ts`                      | `applyChange`, `cancelLease`, `answers`, `wakeAnswered`, `countsAgainst`, `schedule`, `latest`, `draftsClose`, `removedAfter`, `nextActivationId`                                                                         | Open   |

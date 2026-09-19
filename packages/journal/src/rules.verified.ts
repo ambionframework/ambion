@@ -5,8 +5,8 @@
  * check` turns the `//@` annotations into Dafny obligations, and CI
  * verifies them. `rules.verified.dfy` carries the lemmas over a whole
  * read that the generator cannot write: superseded is absorbing, `lost`
- * fires at most once, the counter covers every cached seq, and the cursor
- * never moves back.
+ * fires at most once, a journal with no run is never fenced, the counter
+ * covers every cached seq, and the cursor never moves back.
  */
 
 /** The fence as one read leaves it: whose run entry stands, and what this run has met. */
@@ -37,13 +37,19 @@ export interface Seen {
 /** What a key decides: the decision runs, the first entry answers, or the append fails. */
 export type Keyed = 'fresh' | 'replay' | 'conflict';
 
-//@ contract Two writers are the same run when the names agree, or when neither is named.
+/** One stored entry as the read filter sees it: the proof reads its position only. */
+//@ declare-type StoredEntry { position: number }
+export interface StoredEntry {
+	readonly position: number;
+	readonly entry: unknown;
+}
+
+//@ contract Two writers are the same run when both are named and the names agree. A journal with no run is nobody's run.
 function sameWriter(own: string | undefined, writer: string | undefined): boolean {
-	//@ ensures own == undefined && writer == undefined ==> \result
-	//@ ensures own != undefined && writer == undefined ==> !\result
-	//@ ensures own == undefined && writer != undefined ==> !\result
+	//@ ensures own == undefined ==> !\result
+	//@ ensures writer == undefined ==> !\result
 	//@ ensures own != undefined && writer != undefined ==> (\result <==> own == writer)
-	return own === writer;
+	return own !== undefined && writer !== undefined && own === writer;
 }
 
 //@ contract The next entry of any kind takes the seq after the last one the journal gave out. A seq is a double, so the last one stays below the largest safe integer and its successor is exact.
@@ -81,20 +87,22 @@ export function scanned(cursor: number, position: number): number {
 	return Math.max(cursor, position);
 }
 
-//@ contract A conditional append admits an entry only at the expected head, and then at the next position.
-export function admit(head: number, expected: number): number | undefined {
-	//@ requires head >= 0
-	//@ ensures \result != undefined <==> head == expected
-	//@ ensures \result != undefined ==> \result == nextPosition(head)
-	//@ ensures \result != undefined ==> \result > expected
-	return head === expected ? nextPosition(head) : undefined;
-}
-
 //@ contract The next storage position is one past the head, so stored positions strictly increase.
 export function nextPosition(head: number): number {
 	//@ ensures \result == head + 1
 	//@ ensures \result > head
 	return head + 1;
+}
+
+//@ contract A conditional append admits an entry only when the head is the expected position, and then at the next position. A mismatch admits nothing.
+export function admit(head: number, expected: number): number | undefined {
+	//@ requires head >= 0
+	//@ ensures \result != undefined <==> head == expected
+	//@ ensures \result != undefined ==> \result == nextPosition(head)
+	//@ ensures \result != undefined ==> \result == expected + 1
+	//@ ensures \result != undefined ==> \result > expected
+	//@ ensures head != expected ==> \result == undefined
+	return head === expected ? nextPosition(head) : undefined;
 }
 
 //@ contract A read reports the highest position it scanned, and never one before the position it read after.
@@ -105,6 +113,29 @@ export function readPosition(after: number, scanned: number | undefined): number
 	//@ ensures scanned != undefined && scanned >= after ==> \result == scanned
 	//@ ensures scanned != undefined && scanned < after ==> \result == after
 	return scanned === undefined ? after : Math.max(after, scanned);
+}
+
+//@ contract A read after a position returns every stored entry past it, only those, nothing the storage does not hold, and nothing at or before the position.
+export function visibleEntries(entries: readonly StoredEntry[], after: number): StoredEntry[] {
+	//@ ensures \result.length <= entries.length
+	//@ ensures forall(i, 0 <= i && i < \result.length ==> \result[i].position > after)
+	//@ ensures forall(i, 0 <= i && i < \result.length ==> entries.includes(\result[i]))
+	//@ ensures forall(i, 0 <= i && i < entries.length && entries[i].position > after ==> \result.includes(entries[i]))
+	//@ ensures forall(i, 0 <= i && i < entries.length && entries[i].position <= after ==> !\result.includes(entries[i]))
+	const out: StoredEntry[] = [];
+	let i = 0;
+	while (i < entries.length) {
+		//@ invariant 0 <= i && i <= entries.length
+		//@ invariant out.length <= i
+		//@ invariant forall(k, 0 <= k && k < out.length ==> out[k].position > after)
+		//@ invariant forall(k, 0 <= k && k < out.length ==> entries.includes(out[k]))
+		//@ invariant forall(k, 0 <= k && k < i && entries[k].position > after ==> out.includes(entries[k]))
+		//@ decreases entries.length - i
+		const stored = entries[i] ?? { position: after, entry: undefined };
+		if (stored.position > after) out.push(stored);
+		i++;
+	}
+	return out;
 }
 
 //@ contract A run entry moves the fence to its run. This journal's own run entry marks it fenced. Another run's entry past that supersedes it, once. Superseded is absorbing.
@@ -145,7 +176,7 @@ function passEntry(state: Fence, writer: string | undefined): Passed {
 	return { state, keep, lost: false };
 }
 
-//@ contract One stored entry through the fence: a run entry moves it and is always kept; any other entry is kept unless the fence voids it.
+//@ contract One stored entry through the fence: a run entry moves it and is always kept; any other entry is kept unless the fence voids it. A journal with no run is never fenced.
 export function fenceStep(
 	state: Fence,
 	own: string | undefined,
@@ -170,6 +201,8 @@ export function fenceStep(
 	//@ ensures isRun && !sameWriter(own, writer) && state.fenced && !state.superseded ==> \result.lost
 	//@ ensures !state.fenced && !(isRun && sameWriter(own, writer)) ==> \result.state.fenced == false
 	//@ ensures !state.fenced && !state.superseded ==> !\result.state.superseded
+	//@ ensures own == undefined && !state.fenced ==> !\result.state.fenced
+	//@ ensures own == undefined && !state.fenced && !state.superseded ==> !\result.state.superseded && !\result.lost
 	return isRun ? passFence(state, own, writer) : passEntry(state, writer);
 }
 

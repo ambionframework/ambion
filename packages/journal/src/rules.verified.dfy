@@ -4,6 +4,8 @@ datatype Option<T> = None | Some(value: T)
 
 function MathMax(a: int, b: int): int { if a >= b then a else b }
 
+datatype StoredEntry = StoredEntry(position: int)
+
 datatype Fence = Fence(fence: Option<string>, fenced: bool, superseded: bool)
 
 datatype Passed = Passed(state: Fence, keep: bool, lost: bool)
@@ -14,13 +16,12 @@ datatype Keyed = fresh_ | replay | conflict
 
 function sameWriter(own: Option<string>, writer: Option<string>): bool
 {
-  (own == writer)
+  (((match own { case Some(i_) => true case None => false }) && (match writer { case Some(i_) => true case None => false })) && (own == writer))
 }
 
 lemma sameWriter_ensures(own: Option<string>, writer: Option<string>)
-  ensures ((match own { case Some(i_) => false case None => true }) ==> (match writer { case Some(i_) => false case None => true }) ==> sameWriter(own, writer))
-  ensures (match own { case Some(i_own_val) => ((match writer { case Some(i_) => false case None => true }) ==> !(sameWriter(own, writer))) case None => true })
-  ensures (match writer { case Some(i_writer_val) => ((match own { case Some(i_) => false case None => true }) ==> !(sameWriter(own, writer))) case None => true })
+  ensures ((match own { case Some(i_) => false case None => true }) ==> !(sameWriter(own, writer)))
+  ensures ((match writer { case Some(i_) => false case None => true }) ==> !(sameWriter(own, writer)))
   ensures (match own { case Some(i_own_val) => (match writer { case Some(i_writer_val) => (sameWriter(own, writer) <==> (i_own_val == i_writer_val)) case None => true }) case None => true })
 {
 }
@@ -80,6 +81,17 @@ lemma scanned_ensures(cursor: int, position: int)
 {
 }
 
+function nextPosition(head: int): int
+{
+  (head + 1)
+}
+
+lemma nextPosition_ensures(head: int)
+  ensures (nextPosition(head) == (head + 1))
+  ensures (nextPosition(head) > head)
+{
+}
+
 function admit(head: int, expected: int): Option<int>
   requires (head >= 0)
 {
@@ -93,18 +105,9 @@ lemma admit_ensures(head: int, expected: int)
   requires (head >= 0)
   ensures ((match admit(head, expected) { case Some(i_) => true case None => false }) <==> (head == expected))
   ensures (match admit(head, expected) { case Some(i_result_val) => (i_result_val == nextPosition(head)) case None => true })
+  ensures (match admit(head, expected) { case Some(i_result_val) => (i_result_val == (expected + 1)) case None => true })
   ensures (match admit(head, expected) { case Some(i_result_val) => (i_result_val > expected) case None => true })
-{
-}
-
-function nextPosition(head: int): int
-{
-  (head + 1)
-}
-
-lemma nextPosition_ensures(head: int)
-  ensures (nextPosition(head) == (head + 1))
-  ensures (nextPosition(head) > head)
+  ensures ((head != expected) ==> (match admit(head, expected) { case Some(i_) => false case None => true }))
 {
 }
 
@@ -192,6 +195,8 @@ lemma fenceStep_ensures(state: Fence, own: Option<string>, isRun: bool, writer: 
   ensures (isRun ==> !(sameWriter(own, writer)) ==> state.fenced ==> !(state.superseded) ==> fenceStep(state, own, isRun, writer).lost)
   ensures (!(state.fenced) ==> !((isRun && sameWriter(own, writer))) ==> (fenceStep(state, own, isRun, writer).state.fenced == false))
   ensures (!(state.fenced) ==> !(state.superseded) ==> !(fenceStep(state, own, isRun, writer).state.superseded))
+  ensures ((match own { case Some(i_) => false case None => true }) ==> !(state.fenced) ==> !(fenceStep(state, own, isRun, writer).state.fenced))
+  ensures ((match own { case Some(i_) => false case None => true }) ==> !(state.fenced) ==> !(state.superseded) ==> (!(fenceStep(state, own, isRun, writer).state.superseded) && !(fenceStep(state, own, isRun, writer).lost)))
 {
 }
 
@@ -241,6 +246,33 @@ lemma writable_ensures(closed: bool, state: Fence, own: Option<string>, isRun: b
   ensures (match state.fence { case Some(i_state_fence_val) => (match own { case Some(i_own_val) => (!(closed) ==> !(state.superseded) ==> (i_own_val == i_state_fence_val) ==> writable(closed, state, own, isRun)) case None => true }) case None => true })
   ensures (match own { case Some(i_own_val) => (match state.fence { case Some(i_state_fence_val) => ((i_own_val != i_state_fence_val) ==> !(isRun) ==> !(writable(closed, state, own, isRun))) case None => true }) case None => true })
 {
+}
+
+method visibleEntries(entries: seq<StoredEntry>, after: int) returns (res: seq<StoredEntry>)
+  ensures (|res| <= |entries|)
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i].position > after))
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in entries))
+  ensures forall i: int :: ((0 <= i) ==> (i < |entries|) ==> (entries[i].position > after) ==> (entries[i] in res))
+  ensures forall i: int :: ((0 <= i) ==> (i < |entries|) ==> (entries[i].position <= after) ==> !((entries[i] in res)))
+{
+  var out: seq<StoredEntry> := [];
+  var i := 0;
+  while (i < |entries|)
+    invariant (0 <= i)
+    invariant (i <= |entries|)
+    invariant (|out| <= i)
+    invariant forall k: int :: ((0 <= k) ==> (k < |out|) ==> (out[k].position > after))
+    invariant forall k: int :: ((0 <= k) ==> (k < |out|) ==> (out[k] in entries))
+    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (entries[k].position > after) ==> (entries[k] in out))
+    decreases (|entries| - i)
+  {
+    var stored := (if ((0 <= i) && (i < |entries|)) then entries[i] else StoredEntry(after));
+    if (stored.position > after) {
+      out := (out + [stored]);
+    }
+    i := (i + 1);
+  }
+  return out;
 }
 
 // ---- Proof additions (hand-written, additions-only) ----------------------
@@ -341,6 +373,22 @@ lemma LostAtMostOnce(state: Fence, own: Option<string>, entries: seq<Stamped>)
   }
 }
 
+// A journal with no run reads the fence like any other reader: it is never
+// fenced, never superseded, and never hears `lost`, whatever the read holds.
+lemma NoRunReadsLikeAnyReader(state: Fence, entries: seq<Stamped>)
+  decreases |entries|
+  requires !state.fenced && !state.superseded
+  ensures !fenceFold(state, None, entries).fenced
+  ensures !fenceFold(state, None, entries).superseded
+  ensures lostCount(state, None, entries) == 0
+{
+  if |entries| > 0 {
+    var passed := fenceStep(state, None, entries[0].isRun, entries[0].writer);
+    fenceStep_ensures(state, None, entries[0].isRun, entries[0].writer);
+    NoRunReadsLikeAnyReader(passed.state, entries[1..]);
+  }
+}
+
 // After the fence of run r, a kept stamped entry that is not a run entry is r's.
 lemma KeptAfterFenceIsTheFencesRun(state: Fence, own: Option<string>, writer: string, r: string)
   requires state.fence == Some(r)
@@ -361,6 +409,41 @@ lemma OwnThenOtherSupersedes(state: Fence, own: string, other: string)
   sameWriter_ensures(Some(own), Some(own));
   sameWriter_ensures(Some(own), Some(other));
   fenceStep_ensures(afterOwn, Some(own), true, Some(other));
+}
+
+// Which entries a step keeps, and where the fence moves, never depend on
+// who reads: two readers at the same fence keep the same entry.
+lemma KeepIgnoresReader(state: Fence, a: Option<string>, b: Option<string>, isRun: bool, writer: Option<string>)
+  ensures fenceStep(state, a, isRun, writer).keep == fenceStep(state, b, isRun, writer).keep
+  ensures fenceStep(state, a, isRun, writer).state.fence == fenceStep(state, b, isRun, writer).state.fence
+{
+  fenceStep_ensures(state, a, isRun, writer);
+  fenceStep_ensures(state, b, isRun, writer);
+}
+
+// Over a whole read, the fence two readers arrive at is the same when they
+// started at the same fence, so the entries they keep are the same.
+lemma FenceIgnoresReader(s: Fence, t: Fence, a: Option<string>, b: Option<string>, entries: seq<Stamped>)
+  decreases |entries|
+  requires s.fence == t.fence
+  ensures fenceFold(s, a, entries).fence == fenceFold(t, b, entries).fence
+{
+  if |entries| > 0 {
+    var ns := fenceStep(s, a, entries[0].isRun, entries[0].writer).state;
+    var nt := fenceStep(t, b, entries[0].isRun, entries[0].writer).state;
+    fenceStep_ensures(s, a, entries[0].isRun, entries[0].writer);
+    fenceStep_ensures(t, b, entries[0].isRun, entries[0].writer);
+    FenceIgnoresReader(ns, nt, a, b, entries[1..]);
+  }
+}
+
+// A writable journal appends an entry every reader at the same fence keeps:
+// the pure half of "every entry this journal appends, every reader keeps".
+lemma WritableIsKeptByEveryReader(closed: bool, state: Fence, own: Option<string>, isRun: bool, reader: Option<string>)
+  ensures writable(closed, state, own, isRun) ==> fenceStep(state, reader, isRun, own).keep
+{
+  writable_ensures(closed, state, own, isRun);
+  KeepIgnoresReader(state, own, reader, isRun, own);
 }
 
 // The last seq the journal gives out: below the largest safe integer, so

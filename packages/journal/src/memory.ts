@@ -1,4 +1,4 @@
-import { admit, readPosition } from './rules.verified.ts';
+import { admit, readPosition, visibleEntries } from './rules.verified.ts';
 import type {
 	JournalOpener,
 	JournalRead,
@@ -12,7 +12,7 @@ class MemoryJournal implements JournalStorage {
 
 	async read(after: StoragePosition): Promise<JournalRead> {
 		return {
-			entries: structuredClone(this.entries.filter((entry) => entry.position > after)),
+			entries: structuredClone(visibleEntries(this.entries, after)),
 			position: readPosition(after, this.entries.at(-1)?.position),
 		};
 	}
