@@ -1,7 +1,7 @@
 /** Pi transcript audit over named Ambion journals. */
 
 import type { JournalOpener, JournalStorage, StoragePosition } from '@ambionframework/journal';
-import { namespaced } from '@ambionframework/journal';
+import { namespaced, scanned } from '@ambionframework/journal';
 import type {
 	AgentMessage,
 	CustomEntry,
@@ -213,9 +213,9 @@ class JournalAuditSession implements AuditSession {
 		for (const stored of read.entries) {
 			if (!isMutation(stored.entry)) throw fail('Session journal contains an invalid mutation.');
 			apply(this.projection, stored.entry);
-			this.projection.position = stored.position;
+			this.projection.position = scanned(this.projection.position, stored.position);
 		}
-		if (read.entries.length === 0) this.projection.position = read.position;
+		this.projection.position = scanned(this.projection.position, read.position);
 		if (this.projection.metadata === undefined)
 			throw fail('Session journal has no metadata entry.');
 		return this.projection;
