@@ -166,6 +166,12 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		call: options.call,
 		stream: options.stream,
 	});
+	const retry = { attempts: 3, backoff: (attempt: number) => attempt * 30_000, ...options.retry };
+	// The verified `givesUp` rule requires a cap of at least one attempt. The
+	// runtime establishes that precondition here, once, for every room it runs.
+	if (!Number.isInteger(retry.attempts) || retry.attempts < 1) {
+		throw new Error('Runtime retry.attempts must be a positive integer: the room makes at least one attempt.');
+	}
 	const runtime: Runtime = {
 		clock: services.clock,
 		storage,
@@ -175,7 +181,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		stream: services.stream,
 		model: services.model,
 		wake: { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake },
-		retry: { attempts: 3, backoff: (attempt) => attempt * 30_000, ...options.retry },
+		retry,
 		call: services.call,
 		evict(name) {
 			const room = running.get(name);

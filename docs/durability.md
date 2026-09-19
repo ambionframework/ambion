@@ -193,18 +193,20 @@ The scripted suite uses a fake clock, scripted model, serialized transport, and
 memory and SQLite storage. The failure matrix and process tests are linked here
 for the claims that need more than a unit test:
 
-| Claim                                                    | Evidence                                                                         |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Stop cleanup across expiry, storage failure, and restart | [`stop-work.test.ts`](../packages/ambion/test/stop-work.test.ts)                 |
-| Atomic cancellation, retry, and restart                  | [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)           |
-| Ordered publication and recovery after submission faults | [`submission.test.ts`](../packages/ambion/test/submission.test.ts)               |
-| Crash before/after every append, then same-key retry     | [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts)                         |
-| Host handover and lease retry under load                 | [`hosts.test.ts`](../packages/ambion/test/hosts.test.ts)                         |
-| Child-process kill and SQLite recovery                   | [`reconnect-process.test.ts`](../packages/ambion/test/reconnect-process.test.ts) |
-| Random wire, disk, clock, visit, and crash walk          | [`property.test.ts`](../packages/ambion/test/property.test.ts)                   |
-| Invocation/outcome history against the record            | [`consistency.test.ts`](../packages/ambion/test/consistency.test.ts)             |
-| Stale host loses after a fence                           | [`split.test.ts`](../packages/ambion/test/split.test.ts)                         |
-| Pure sequencing, routing, lease, and retry rules         | [`rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)             |
+| Claim                                                                                         | Evidence                                                                         |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Stop cleanup across expiry, storage failure, and restart                                      | [`stop-work.test.ts`](../packages/ambion/test/stop-work.test.ts)                 |
+| Atomic cancellation, retry, and restart                                                       | [`cancellation.test.ts`](../packages/ambion/test/cancellation.test.ts)           |
+| Ordered publication and recovery after submission faults                                      | [`submission.test.ts`](../packages/ambion/test/submission.test.ts)               |
+| Crash before/after every append, then same-key retry                                          | [`chaos.test.ts`](../packages/ambion/test/chaos.test.ts)                         |
+| Host handover and lease retry under load                                                      | [`hosts.test.ts`](../packages/ambion/test/hosts.test.ts)                         |
+| Child-process kill and SQLite recovery                                                        | [`reconnect-process.test.ts`](../packages/ambion/test/reconnect-process.test.ts) |
+| Random wire, disk, clock, visit, and crash walk                                               | [`property.test.ts`](../packages/ambion/test/property.test.ts)                   |
+| Invocation/outcome history against the record                                                 | [`consistency.test.ts`](../packages/ambion/test/consistency.test.ts)             |
+| Stale host loses after a fence                                                                | [`split.test.ts`](../packages/ambion/test/split.test.ts)                         |
+| Pure lease, retry, and cancellation boundary rules                                            | [`room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)        |
+| The fence as a state machine, the key, the seq counter, the cursor, and the storage admission | [`journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)     |
+| The rules still to write, and the constructs a rule may use                                   | [`planning/formal.md`](../planning/formal.md)                                    |
 
 Run the process-boundary scenario without provider credentials:
 
