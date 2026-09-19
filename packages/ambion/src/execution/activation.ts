@@ -247,62 +247,70 @@ function failureOf(agent: Agent): { error: Error; cause: FailureCause } | undefi
 	return undefined;
 }
 
-/** Statuses a retry cannot fix: a bad request, and every authentication refusal. */
-const PERMANENT_STATUS = new Set([400, 401, 403, 404, 405, 422]);
+/** HTTP statuses a retry cannot fix: a bad request, a billing refusal, and the authentication refusals. */
+const PERMANENT_STATUS = new Set([400, 401, 402, 403, 404, 405, 422]);
 
 /**
- * Whether a failed provider message is permanent or transient. A permanent
- * status, a credit refusal, or an authentication refusal does not pass on a
- * retry. Every other failure, including a rate limit, a server error, and a
- * lost connection, is transient.
+ * Whether a failed provider message is permanent or transient. A credit or an
+ * authentication refusal in the text, or a permanent HTTP status a diagnostic
+ * reports, is permanent. Every other failure is transient, so an uncertain
+ * message retries rather than gives up: a wasted retry costs less than a
+ * question the room drops.
  */
 function providerCause(message: AgentMessage): FailureCause {
+	if (permanentText('errorMessage' in message ? message.errorMessage : undefined))
+		return 'permanent';
 	const status = statusOf(message);
-	if (status !== undefined) return PERMANENT_STATUS.has(status) ? 'permanent' : 'transient';
-	return permanentText('errorMessage' in message ? message.errorMessage : undefined)
-		? 'permanent'
-		: 'transient';
+	return status !== undefined && PERMANENT_STATUS.has(status) ? 'permanent' : 'transient';
 }
 
 /** One provider diagnostic, as the classifier reads it. */
 type Diagnostic = { error?: { code?: unknown }; details?: Record<string, unknown> };
 
-/** A status code the provider reported, from a diagnostic or the error text. */
+/**
+ * The HTTP status a diagnostic reports, or nothing. The classifier reads a
+ * status only from a diagnostic, never from free error text, because a rate
+ * limit names a token count that reads like a status. The last diagnostic
+ * with a status wins, so a final attempt speaks for the failure.
+ */
 function statusOf(message: AgentMessage): number | undefined {
 	const diagnostics: Diagnostic[] = 'diagnostics' in message ? (message.diagnostics ?? []) : [];
+	let status: number | undefined;
 	for (const diagnostic of diagnostics) {
-		const status = diagnosticStatus(diagnostic);
-		if (status !== undefined) return status;
+		const found = diagnosticStatus(diagnostic);
+		if (found !== undefined) status = found;
 	}
-	return numeric('errorMessage' in message ? message.errorMessage : undefined);
+	return status;
 }
 
 /** A status code one diagnostic reports, on its error code or its details. */
 function diagnosticStatus(diagnostic: Diagnostic): number | undefined {
-	const code = numeric(diagnostic.error?.code);
+	const code = httpStatus(diagnostic.error?.code);
 	if (code !== undefined) return code;
 	const details = diagnostic.details ?? {};
 	for (const key of ['status', 'statusCode', 'httpStatus']) {
-		const value = numeric(details[key]);
+		const value = httpStatus(details[key]);
 		if (value !== undefined) return value;
 	}
 	return undefined;
 }
 
-/** A whole 4xx or 5xx status in a value, or nothing. */
-function numeric(value: unknown): number | undefined {
-	if (typeof value === 'number' && Number.isInteger(value)) return value;
-	if (typeof value === 'string') {
-		const match = value.match(/\b([45]\d\d)\b/);
-		if (match) return Number(match[1]);
-	}
-	return undefined;
+/** A whole HTTP status, from a number or a fully numeric string, in the 4xx or 5xx range. */
+function httpStatus(value: unknown): number | undefined {
+	const parsed =
+		typeof value === 'number'
+			? value
+			: typeof value === 'string' && /^\d+$/.test(value.trim())
+				? Number(value.trim())
+				: undefined;
+	if (parsed === undefined || !Number.isInteger(parsed)) return undefined;
+	return parsed >= 400 && parsed <= 599 ? parsed : undefined;
 }
 
-/** Error text that names a credit or an authentication refusal. */
+/** Error text that names a credit or an authentication refusal, in phrases a retry cannot clear. */
 function permanentText(text: string | undefined): boolean {
 	if (text === undefined) return false;
-	return /credit balance|authenticat|unauthoriz|invalid[_\s]?api[_\s]?key|forbidden|permission denied/i.test(
+	return /credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s]?api[_\s]?key|unauthorized|permission denied/i.test(
 		text,
 	);
 }

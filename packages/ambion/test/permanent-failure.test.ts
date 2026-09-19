@@ -56,6 +56,36 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 		}
 	});
 
+	it('does not read a rate-limit token count as a permanent status', async () => {
+		const opened = await storage.open();
+		let calls = 0;
+		const runtime = createRuntime({ storage: opened.storage, retry: { backoff: () => 0 } });
+		const room = await startRoom({
+			name: roomName(`ratelimit-${storage.name}`),
+			agents: [worker],
+			seats: { [worker.name]: 'named' },
+			runtime,
+			streamFn: scripted(() => {
+				calls += 1;
+				// The token count reads like a 400 status, but a rate limit is transient.
+				throw new Error('429 rate limit of 400,000 input tokens per minute exceeded');
+			}),
+		});
+		const events = collect(room);
+		try {
+			const visit = await room.visit(person);
+			await visit.send({ to: worker.name, text: 'answer me' });
+			await waitForRoom(room);
+			expect(calls).toBe(runtime.retry.attempts);
+			expect(abandonments(events)).toEqual([
+				expect.objectContaining({ agent: worker.name, cause: 'transient' }),
+			]);
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
 	it('retries a transient failure to the cap', async () => {
 		const opened = await storage.open();
 		let calls = 0;
