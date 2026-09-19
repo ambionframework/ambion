@@ -264,7 +264,7 @@
 			}
 			.room-meta {
 				color: var(--dim);
-				font-size: 10px;
+				font-size: 11px;
 			}
 			.new-room {
 				margin-top: 20px;
@@ -340,6 +340,8 @@
 				padding: 22px 26px 28px;
 			}
 			.timeline-inner {
+				--gutter: 78px;
+				--gap: 15px;
 				max-width: 850px;
 				margin: 0 auto;
 			}
@@ -361,14 +363,14 @@
 			.message {
 				position: relative;
 				display: grid;
-				grid-template-columns: 78px minmax(0, 1fr);
-				gap: 15px;
+				grid-template-columns: var(--gutter) minmax(0, 1fr);
+				gap: var(--gap);
 				padding: 0 0 21px;
 			}
 			.message::before {
 				content: '';
 				position: absolute;
-				left: 77px;
+				left: calc(var(--gutter) - 1px);
 				top: 22px;
 				bottom: 0;
 				border-left: 1px solid var(--line-soft);
@@ -378,7 +380,7 @@
 			}
 			.message-side {
 				color: var(--dim);
-				font-size: 10px;
+				font-size: 11px;
 				text-align: right;
 				padding-top: 3px;
 			}
@@ -432,47 +434,263 @@
 			.presence .message-text {
 				color: var(--muted);
 			}
+			/* A discussion is the thread between a question and its summary. The toggle
+			   lines up with the message cards; the thread sits on a rail beneath it. */
+			.discussion {
+				margin: 0 0 21px calc(var(--gutter) + var(--gap));
+			}
+			.discussion-toggle {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				padding: 8px 12px;
+				border: 1px solid var(--line);
+				border-radius: 7px;
+				color: var(--muted);
+				font-size: 12px;
+				cursor: pointer;
+				user-select: none;
+				transition:
+					background 0.12s,
+					border-color 0.12s;
+			}
+			.discussion-toggle::-webkit-details-marker {
+				display: none;
+			}
+			.discussion-toggle::marker {
+				content: '';
+			}
+			.discussion-toggle:hover {
+				border-color: var(--accent-edge);
+				background: var(--panel);
+			}
+			.discussion-toggle:focus-visible {
+				outline: 2px solid var(--accent);
+				outline-offset: 2px;
+			}
+			.discussion[open] > .discussion-toggle {
+				background: var(--panel-2);
+			}
+			.discussion-chevron {
+				flex: none;
+				width: 6px;
+				height: 6px;
+				margin: 0 3px 2px 1px;
+				border-right: 1.5px solid currentColor;
+				border-bottom: 1.5px solid currentColor;
+				transform: rotate(-45deg);
+				transition: transform 0.12s;
+			}
+			.discussion[open] .discussion-chevron {
+				margin-bottom: 4px;
+				transform: rotate(45deg);
+			}
+			.discussion-title {
+				color: var(--text);
+				font-weight: 600;
+			}
+			.discussion-count {
+				flex: none;
+			}
+			.discussion-who {
+				flex: 1;
+				min-width: 0;
+				overflow: hidden;
+				color: var(--dim);
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.discussion-flag {
+				flex: none;
+				padding: 1px 8px;
+				border: 1px solid var(--line);
+				border-radius: 99px;
+				color: var(--muted);
+				font-size: 11px;
+			}
+			.discussion-flag.pending {
+				border-color: var(--amber);
+				color: var(--amber);
+			}
+			.discussion-flag.failed {
+				border-color: var(--red);
+				color: var(--red);
+			}
+			.discussion-hint {
+				flex: none;
+				margin-left: auto;
+				color: var(--accent);
+				font-weight: 600;
+			}
+			.discussion-hint::before {
+				content: 'Show';
+			}
+			.discussion[open] .discussion-hint::before {
+				content: 'Hide';
+			}
+			.discussion-body {
+				margin: 10px 0 0 6px;
+				padding: 2px 0 0 14px;
+				border-left: 2px solid var(--line);
+				animation: reveal 0.16s ease-out;
+			}
+			@keyframes reveal {
+				from {
+					opacity: 0;
+					transform: translateY(-4px);
+				}
+			}
+			.message.compact {
+				display: block;
+				padding-bottom: 10px;
+			}
+			.message.compact::before {
+				display: none;
+			}
+			.message.compact .message-card {
+				padding: 9px 12px;
+				border-color: var(--line-soft);
+				background: transparent;
+				box-shadow: none;
+			}
+			.message.compact .message-text {
+				font-size: 13px;
+			}
+			.closed-note {
+				margin: -8px 0 21px calc(var(--gutter) + var(--gap));
+				color: var(--dim);
+				font-size: 12px;
+			}
+			.message-byline time {
+				margin-left: auto;
+				color: var(--dim);
+				font-size: 11px;
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.discussion-toggle,
+				.discussion-chevron {
+					transition: none;
+				}
+				.discussion-body,
+				.dot.working {
+					animation: none;
+				}
+			}
 			.composer {
 				border-top: 1px solid var(--line);
 				padding: 14px 26px 19px;
 				background: var(--panel);
 			}
 			.compose-inner {
+				display: grid;
+				gap: 8px;
 				max-width: 850px;
 				margin: 0 auto;
-				display: grid;
-				grid-template-columns: 1fr auto;
+			}
+			.compose-row {
+				display: flex;
+				align-items: flex-end;
 				gap: 9px;
-				align-items: end;
 			}
-			.compose-box {
-				position: relative;
-			}
-			.compose-box .textarea {
-				width: 100%;
+			.compose-row .textarea {
+				flex: 1;
+				min-width: 0;
 				min-height: 42px;
 				max-height: 130px;
-				resize: vertical;
-				padding-right: 70px;
-			}
-			.compose-hint {
-				position: absolute;
-				right: 9px;
-				bottom: 8px;
-				color: var(--dim);
-				font-size: 10px;
-				pointer-events: none;
+				/* The box grows with its text, so it needs no resize grip. */
+				resize: none;
+				field-sizing: content;
 			}
 			.send {
+				flex: none;
 				height: 42px;
 				min-width: 78px;
 			}
+			/* The live row sits at the end of the conversation, on the open exchange. It
+			   lines up with the message cards and carries the one control that cancels
+			   that exchange. */
+			.live-row {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				margin: 0 0 0 calc(var(--gutter) + var(--gap));
+				padding: 6px 6px 6px 12px;
+				border: 1px dashed var(--amber);
+				border-radius: 7px;
+				color: var(--muted);
+				font-size: 12px;
+			}
+			.live-text {
+				flex: 1;
+				min-width: 0;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.dot.working {
+				background: var(--amber);
+				animation: pulse 1.2s ease-in-out infinite;
+			}
+			.abort {
+				flex: none;
+				height: 28px;
+				padding: 0 12px;
+				border-color: var(--red);
+				background: transparent;
+				color: var(--red);
+			}
+			.abort:hover {
+				background: #f9e9e6;
+				color: var(--red);
+			}
+			.abort.armed {
+				background: var(--red);
+				color: #ffffff;
+			}
+			.compose-meta {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+				min-height: 18px;
+			}
+			.compose-status {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				color: var(--muted);
+				font-size: 12px;
+			}
+			.compose-status .dot.ready {
+				background: var(--green);
+			}
+			@keyframes pulse {
+				50% {
+					opacity: 0.3;
+				}
+			}
+			.compose-keys {
+				color: var(--dim);
+				font-size: 11px;
+			}
 			.pending-note {
-				max-width: 850px;
-				margin: 7px auto 0;
 				color: var(--amber);
-				font-size: 10px;
-				min-height: 15px;
+				font-size: 12px;
+			}
+			.pending-note:empty {
+				display: none;
+			}
+			.pending-note button {
+				margin-left: 6px;
+				padding: 2px 9px;
+				border: 1px solid var(--amber);
+				border-radius: 5px;
+				background: transparent;
+				color: var(--amber);
+				font-size: 11px;
+			}
+			.pending-note button:hover {
+				background: var(--panel-2);
 			}
 			.panel {
 				border-bottom: 1px solid var(--line-soft);
@@ -518,7 +736,7 @@
 			}
 			.participant-kind {
 				color: var(--dim);
-				font-size: 10px;
+				font-size: 11px;
 			}
 			.activity {
 				display: grid;
@@ -620,24 +838,31 @@
 					padding-left: 14px;
 					padding-right: 14px;
 				}
-				.message {
-					grid-template-columns: 54px minmax(0, 1fr);
-					gap: 9px;
-				}
-				.message::before {
-					left: 53px;
+				.timeline-inner {
+					--gutter: 54px;
+					--gap: 9px;
 				}
 			}
+			/* A suggested prompt is a chip that fills the box. It hides once the box has text. */
 			.suggestion {
-				text-align: left;
-				background: none;
-				border: 0;
+				justify-self: start;
+				max-width: 100%;
+				overflow: hidden;
+				padding: 4px 11px;
+				border: 1px dashed var(--line);
+				border-radius: 99px;
+				background: transparent;
 				color: var(--muted);
-				padding: 0 0 12px;
 				font-size: 12px;
-				line-height: 1.5;
+				text-align: left;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.suggestion[hidden] {
+				display: none;
 			}
 			.suggestion:hover {
+				border-color: var(--accent-edge);
 				color: var(--accent);
 			}
 			.workspace-panel {
@@ -645,16 +870,99 @@
 			}
 			#files {
 				display: grid;
-				gap: 5px;
+				gap: 1px;
 			}
 			#files button {
 				overflow-wrap: anywhere;
 			}
-			#file-preview {
-				font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-				font-size: 11px;
+			#files .file {
+				padding: 5px 8px;
+				border: 0;
+				border-radius: 5px;
+				background: transparent;
+				color: var(--text);
+				font-size: 12px;
+				text-align: left;
+			}
+			#files .participant-kind {
+				margin-bottom: 6px;
+			}
+			#files .file:hover {
+				background: var(--panel-2);
+			}
+			.file-dir {
+				color: var(--dim);
+			}
+			/* A file opens in a native dialog: Escape closes it, focus stays inside it,
+			   and the page behind it is inert. */
+			.modal {
+				/* A definite height gives the body something to fill. An auto-height dialog
+				   with a flex body can collapse the body in Safari. */
+				width: min(960px, calc(100vw - 32px));
+				height: min(90dvh, 1000px);
+				max-height: none;
+				padding: 0;
+				border: 1px solid var(--line);
+				border-radius: 12px;
+				background: var(--panel);
+				color: var(--text);
+				box-shadow: 0 24px 80px rgba(20, 44, 51, 0.28);
+			}
+			.modal[open] {
+				display: flex;
+				flex-direction: column;
+			}
+			.modal::backdrop {
+				background: rgba(20, 44, 51, 0.38);
+				backdrop-filter: blur(2px);
+			}
+			.modal-head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 16px;
+				padding: 14px 18px;
+				border-bottom: 1px solid var(--line-soft);
+			}
+			.modal-title {
+				overflow-wrap: anywhere;
+				font-weight: 600;
+			}
+			.modal-meta {
+				color: var(--dim);
+				font-size: 12px;
+			}
+			.modal-actions {
+				display: flex;
+				flex: none;
+				gap: 8px;
+			}
+			.modal-body {
+				flex: 1 1 auto;
+				min-height: 0;
+				margin: 0;
+				padding: 16px 18px 20px;
+				overflow: auto;
+				background: var(--bg);
+				font:
+					13px/1.6 ui-monospace,
+					SFMono-Regular,
+					Menlo,
+					Monaco,
+					Consolas,
+					monospace;
 				white-space: pre-wrap;
 				overflow-wrap: anywhere;
+				tab-size: 4;
+			}
+			@media (max-width: 790px) {
+				.modal {
+					width: calc(100vw - 16px);
+					height: 92dvh;
+				}
+				.compose-keys {
+					display: none;
+				}
 			}
 			#room-pattern {
 				color: var(--accent);
@@ -683,8 +991,14 @@
 				.top-actions {
 					justify-content: flex-start;
 				}
+				.room-head {
+					flex-direction: column;
+					gap: 8px;
+				}
 				.head-state {
-					display: none;
+					display: flex;
+					gap: 10px;
+					text-align: left;
 				}
 				.workspace-panel:not([open]) {
 					margin-top: 12px;
@@ -705,7 +1019,6 @@
 					<button id="switch-user" class="btn" type="button">Switch user</button>
 					<button id="resume" class="btn" type="button">Resume</button>
 					<button id="stop" class="btn warn" type="button">Stop</button>
-					<button id="abort" class="btn danger" type="button">Abort work</button>
 				</div>
 			</header>
 			<div class="layout">
@@ -754,11 +1067,6 @@
 							</button>
 						</summary>
 						<div id="files" class="activity" style="margin-top: 12px"></div>
-						<pre
-							id="file-preview"
-							class="message-text"
-							style="margin: 12px 0 0; max-height: 180px; overflow: auto; color: var(--muted)"
-						></pre>
 					</details>
 				</aside>
 				<main class="workspace">
@@ -775,22 +1083,32 @@
 					</section>
 					<section id="timeline" class="timeline">
 						<div id="timeline-inner" class="timeline-inner"></div>
+						<div id="live" class="timeline-inner live" hidden>
+							<div class="live-row">
+								<i class="dot working"></i>
+								<span id="live-text" class="live-text"></span>
+								<button id="abort" class="btn abort" type="button">Abort</button>
+							</div>
+						</div>
 					</section>
 					<form id="composer" class="composer">
-						<button id="suggestion" type="button" class="suggestion" hidden></button>
 						<div class="compose-inner">
-							<div class="compose-box">
+							<button id="suggestion" type="button" class="suggestion" hidden></button>
+							<div class="compose-row">
 								<textarea
 									id="message"
 									class="textarea"
 									rows="1"
 									placeholder="Ask the room…"
-								></textarea
-								><span class="compose-hint">↵ send</span>
+								></textarea>
+								<button id="send" class="btn primary send" type="submit">Send</button>
 							</div>
-							<button id="send" class="btn primary send" type="submit">Send</button>
+							<div class="compose-meta">
+								<span id="compose-status" class="compose-status"></span>
+								<span class="compose-keys">Enter to send · Shift+Enter for a new line</span>
+							</div>
+							<div id="pending" class="pending-note"></div>
 						</div>
-						<div id="pending" class="pending-note"></div>
 					</form>
 				</main>
 				<aside class="inspector">
@@ -805,6 +1123,19 @@
 				</aside>
 			</div>
 		</div>
+		<dialog id="file-modal" class="modal" aria-labelledby="file-modal-title">
+			<header class="modal-head">
+				<div>
+					<div id="file-modal-title" class="modal-title"></div>
+					<div id="file-modal-meta" class="modal-meta"></div>
+				</div>
+				<div class="modal-actions">
+					<button id="file-copy" class="btn" type="button">Copy</button>
+					<button id="file-close" class="btn" type="button">Close</button>
+				</div>
+			</header>
+			<pre id="file-modal-body" class="modal-body" tabindex="-1"></pre>
+		</dialog>
 		<div id="toast" class="toast" role="status"></div>
 		<div id="identity-gate" class="gate">
 			<section class="gate-card" aria-labelledby="identity-heading">
@@ -989,7 +1320,17 @@
 					);
 					return active ? 'Working' : 'Ready';
 				};
+				// The poll renders once a second. A list that rebuilds its buttons on every
+				// render drops keyboard focus, so a list rebuilds only when its data changes.
+				let roomsSignature = '';
 				const renderRooms = () => {
+					const signature = JSON.stringify([
+						state.rooms.map((room) => [room.name, room.status, (room.participants || []).length]),
+						state.selected,
+						state.navigating,
+					]);
+					if (signature === roomsSignature) return;
+					roomsSignature = signature;
 					const target = $('rooms');
 					target.replaceChildren();
 					state.rooms.forEach((room) => {
@@ -999,7 +1340,10 @@
 						const active = room.status === 'running';
 						button.append(node('i', `room-dot${active ? '' : ' idle'}`));
 						button.append(node('span', 'room-name', room.name));
-						button.append(node('span', 'room-meta', String((room.participants || []).length)));
+						const count = (room.participants || []).length;
+						const meta = node('span', 'room-meta', String(count));
+						meta.title = `${count} participants`;
+						button.append(meta);
 						button.addEventListener('click', () => void selectRoom(room.name));
 						target.append(button);
 					});
@@ -1082,16 +1426,23 @@
 				};
 				const messageBody = (message) =>
 					message.text || (message.kind === 'arrived' ? 'presence recorded' : 'presence changed');
-				const messageNode = (message) => {
-					const item = node('article', 'message');
-					const side = node('div', 'message-side');
-					side.append(node('time', '', formatTime(message.at)));
+				// A compact message sits inside a discussion. Its time joins the byline,
+				// because the discussion has no time gutter.
+				const messageNode = (message, compact = false) => {
+					const item = node('article', compact ? 'message compact' : 'message');
 					const card = node('div', `message-card ${messageKind(message)}`);
 					const byline = node('div', 'message-byline');
 					byline.append(node('span', 'kind', message.kind));
 					byline.append(node('span', '', messageLabel(message)));
+					if (compact) byline.append(node('time', '', formatTime(message.at)));
 					card.append(byline);
 					card.append(node('div', 'message-text', messageBody(message)));
+					if (compact) {
+						item.append(card);
+						return item;
+					}
+					const side = node('div', 'message-side');
+					side.append(node('time', '', formatTime(message.at)));
 					item.append(side, card);
 					return item;
 				};
@@ -1141,30 +1492,39 @@
 				const appendDiscussionSummary = (target, group) => {
 					if (group.summary) target.append(messageNode(group.summary));
 				};
-				const discussionOutcome = (group) => {
+				const discussionFlag = (group) => {
 					if (group.outcome === 'published') return '';
-					if (group.outcome === 'pending') return ' · Summary pending';
-					if (group.outcome === 'failed') return ' · Summary failed';
-					return ' · No summary';
+					if (group.outcome === 'pending') return 'Summary pending';
+					if (group.outcome === 'failed') return 'Summary failed';
+					return 'No summary';
+				};
+				const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+				const discussionToggle = (group) => {
+					const toggle = node('summary', 'discussion-toggle');
+					const chevron = node('i', 'discussion-chevron');
+					chevron.setAttribute('aria-hidden', 'true');
+					toggle.append(chevron, node('span', 'discussion-title', 'Discussion'));
+					toggle.append(node('span', 'discussion-count', plural(group.source.length, 'message')));
+					const voices = [...new Set(group.source.map((message) => message.from).filter(Boolean))];
+					if (voices.length) toggle.append(node('span', 'discussion-who', voices.join(' · ')));
+					const flag = discussionFlag(group);
+					if (flag) toggle.append(node('span', `discussion-flag ${group.outcome}`, flag));
+					toggle.append(node('span', 'discussion-hint'));
+					return toggle;
 				};
 				const appendDiscussionDetails = (target, group) => {
 					const details = node('details', 'discussion');
 					const key = `${state.selected}:${group.exchange.from}`;
 					details.open = state.expanded.has(key);
-					details.append(
-						node(
-							'summary',
-							'',
-							`Show discussion · ${group.source.length} messages${discussionOutcome(group)}`,
-						),
-					);
 					details.addEventListener('toggle', () => {
 						if (details.open) state.expanded.add(key);
 						else state.expanded.delete(key);
 					});
+					const body = node('div', 'discussion-body');
 					group.source.forEach((message) => {
-						details.append(messageNode(message));
+						body.append(messageNode(message, true));
 					});
+					details.append(discussionToggle(group), body);
 					target.append(details);
 					appendDiscussionSummary(target, group);
 				};
@@ -1173,6 +1533,10 @@
 					added.add(group);
 					if (!group.source.length) {
 						appendDiscussionSummary(target, group);
+						// A closed exchange with no summary and no discussion, such as an aborted
+						// one, would otherwise leave the question with no outcome.
+						if (!group.summary)
+							target.append(node('div', 'closed-note', `Closed · ${discussionFlag(group)}`));
 						return;
 					}
 					appendDiscussionDetails(target, group);
@@ -1236,7 +1600,11 @@
 						timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 48;
 					state.timelineKey = key;
 					target.replaceChildren();
-					if (!messages.length) {
+					// Presence entries stay hidden, so a room holding only those is empty.
+					const hasConversation = messages.some(
+						(message) => message.kind === 'said' || message.kind === 'summary',
+					);
+					if (!hasConversation) {
 						appendEmptyTimeline(target);
 					} else {
 						appendTimelineContent(target, messages, timelineGroups(messages));
@@ -1301,25 +1669,73 @@
 					$('room-goal').textContent =
 						room?.goal || 'Choose a room to enter, or create one for a new conversation.';
 					$('room-pattern').textContent = room?.pattern || '';
-					$('suggestion').hidden = !room?.prompt;
-					$('suggestion').textContent = room?.prompt ? `Try: ${room.prompt}` : '';
-					$('message').placeholder = room ? 'Message the room…' : 'Choose a room…';
 					renderRoomStatus(room);
 				};
+				const activeAgents = (room) =>
+					(room?.participants || [])
+						.filter(
+							(participant) => participant.kind === 'agent' && participant.status === 'active',
+						)
+						.map((participant) => participant.name);
+				// Abort cancels the open exchange, so it applies to a running room that has one.
+				const isWorking = (room) => room?.status === 'running' && Boolean(room.exchange);
+				const composeStatus = (room) => {
+					if (!room) return { kind: 'idle', text: '' };
+					if (room.status !== 'running') {
+						const text = room.status === 'stopping' ? 'Room is stopping' : 'Room is stopped';
+						return { kind: 'idle', text };
+					}
+					if (!isWorking(room)) return { kind: 'ready', text: 'Ready' };
+					return { kind: 'working', text: 'A new message steers the open exchange' };
+				};
+				// The live row sits on the open exchange and holds the Abort button.
+				const renderLive = () => {
+					const room = currentRoom();
+					const timeline = $('timeline');
+					const nearBottom =
+						timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 48;
+					const wasHidden = $('live').hidden;
+					$('live').hidden = !isWorking(room);
+					if ($('live').hidden) return;
+					const agents = activeAgents(room);
+					$('live-text').textContent =
+						`Working on ${room.exchange.owner}’s question${agents.length ? ` · ${agents.join(', ')}` : ''}`;
+					if (wasHidden && nearBottom) timeline.scrollTop = timeline.scrollHeight;
+				};
+				const renderComposer = () => {
+					const room = currentRoom();
+					const hasDraft = $('message').value.trim() !== '';
+					$('suggestion').hidden = !room?.prompt || hasDraft;
+					$('suggestion').textContent = room?.prompt ? `Try: ${room.prompt}` : '';
+					$('suggestion').title = room?.prompt || '';
+					$('message').placeholder = room ? 'Message the room…' : 'Choose a room…';
+					const { kind, text } = composeStatus(room);
+					$('compose-status').replaceChildren(
+						...(text ? [node('i', `dot ${kind}`), node('span', '', text)] : []),
+					);
+				};
+				let workspaceSignature = '';
 				const renderWorkspace = () => {
+					const files = state.workspace?.files || [];
+					const signature = JSON.stringify(files);
+					if (signature === workspaceSignature) return;
+					workspaceSignature = signature;
 					const target = $('files');
 					target.replaceChildren();
-					const workspace = state.workspace;
 					target.append(node('div', 'participant-kind', 'Datasheets in /library and shared files'));
-					const files = workspace?.files || [];
 					if (!files.length) {
 						target.append(node('div', 'participant-kind', 'No files listed'));
 						return;
 					}
 					files.forEach((file) => {
-						const button = node('button', 'btn', file.path.replace(/^\//, ''));
+						const button = node('button', 'file');
+						button.dataset.path = file.path;
+						const split = file.path.lastIndexOf('/') + 1;
+						button.append(
+							node('span', 'file-dir', file.path.slice(1, split)),
+							file.path.slice(split),
+						);
 						button.type = 'button';
-						button.style.textAlign = 'left';
 						button.title = `${file.path} · ${file.size} bytes`;
 						button.addEventListener('click', () => showFile(file.path));
 						target.append(button);
@@ -1327,6 +1743,23 @@
 				};
 				const renderDraft = () => {
 					$('message').value = state.drafts[`${state.selected}:${state.human}`] || '';
+				};
+				// Show the lifecycle actions that apply to this room. A greyed-out button
+				// that can never act on the room is noise.
+				let abortTimer = 0;
+				const disarmAbort = () => {
+					clearTimeout(abortTimer);
+					abortTimer = 0;
+					$('abort').classList.remove('armed');
+					$('abort').textContent = 'Abort';
+				};
+				const updateLifecycleVisibility = (room) => {
+					const running = room?.status === 'running';
+					const stopping = room?.status === 'stopping';
+					$('resume').hidden = !room || running;
+					$('stop').hidden = !room || !(running || stopping);
+					$('abort').hidden = !isWorking(room);
+					if ($('abort').hidden) disarmAbort();
 				};
 				const updateControls = () => {
 					const room = currentRoom();
@@ -1339,6 +1772,7 @@
 					$('resume').disabled = state.navigating || !hasIdentity || !room || running;
 					$('stop').disabled = state.navigating || !hasIdentity || !room || (!running && !stopping);
 					$('abort').disabled = state.navigating || !hasIdentity || !room || !running;
+					updateLifecycleVisibility(room);
 					$('room-name').disabled = state.navigating || !hasIdentity;
 					$('new-room-goal').disabled = state.navigating || !hasIdentity;
 					$('new-room').querySelector('button').disabled = state.navigating || !hasIdentity;
@@ -1432,9 +1866,11 @@
 					renderIdentityGate();
 					renderRooms();
 					renderHeader();
+					renderComposer();
 					renderParticipants();
 					renderActivity();
 					renderTimeline();
+					renderLive();
 					renderWorkspace();
 					renderPending();
 					updateControls();
@@ -1464,6 +1900,10 @@
 					}
 					await poll(true);
 				};
+				// A phone keyboard would cover the conversation, so only a wide screen focuses.
+				const focusComposer = () => {
+					if (!matchMedia('(max-width: 790px)').matches) $('message').focus();
+				};
 				const selectRoom = async (name) => {
 					if (state.navigating || state.selected === name || !state.human) return;
 					state.navigating = true;
@@ -1479,6 +1919,7 @@
 						state.navigating = false;
 						render();
 						void poll(true);
+						focusComposer();
 					}
 				};
 				const refreshWorkspace = async () => {
@@ -1493,11 +1934,26 @@
 						state.workspaceRefreshing = false;
 					}
 				};
+				let previewPath = '';
+				let previewText = '';
+				const formatBytes = (bytes) =>
+					bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 				const showFile = async (path) => {
 					try {
 						const result = await api.file(path);
-						$('file-preview').textContent =
-							`${result.path}${result.truncated ? ' · truncated' : ''}\n\n${result.text}`;
+						previewPath = result.path;
+						previewText = result.text;
+						const bytes = new TextEncoder().encode(result.text).length;
+						const lines = plural(result.text.split('\n').length, 'line');
+						$('file-modal-title').textContent = result.path;
+						$('file-modal-meta').textContent =
+							`${formatBytes(bytes)} · ${lines}${result.truncated ? ' · truncated' : ''}`;
+						$('file-modal-body').textContent = result.text;
+						$('file-modal-body').scrollTop = 0;
+						$('file-copy').textContent = 'Copy';
+						if (!$('file-modal').open) $('file-modal').showModal();
+						// Focus the text, so the arrow keys and Space scroll it at once.
+						$('file-modal-body').focus();
 					} catch (error) {
 						showToast(error instanceof Error ? error.message : String(error), true);
 					}
@@ -1851,6 +2307,7 @@
 					$('message').value = prompt;
 					state.drafts[`${state.selected}:${state.human}`] = prompt;
 					save();
+					renderComposer();
 					$('message').focus();
 				});
 				$('switch-user').addEventListener('click', () => void switchUser());
@@ -1859,9 +2316,10 @@
 						state.drafts[`${state.selected}:${state.human}`] = $('message').value;
 						save();
 					}
+					renderComposer();
 				});
 				$('message').addEventListener('keydown', (event) => {
-					if (event.key === 'Enter' && !event.shiftKey) {
+					if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
 						event.preventDefault();
 						void sendMessage();
 					}
@@ -1872,8 +2330,41 @@
 				});
 				$('resume').addEventListener('click', () => void control('resume'));
 				$('stop').addEventListener('click', () => void control('stop'));
-				$('abort').addEventListener('click', () => void control('abort'));
+				// Abort cancels the open exchange. The first click arms the button, and a
+				// second click within three seconds confirms.
+				$('abort').addEventListener('click', () => {
+					if (abortTimer) {
+						disarmAbort();
+						void control('abort');
+						return;
+					}
+					$('abort').classList.add('armed');
+					$('abort').textContent = 'Confirm abort';
+					abortTimer = setTimeout(disarmAbort, 3000);
+				});
 				$('refresh-files').addEventListener('click', () => void refreshWorkspace());
+				let copyTimer = 0;
+				$('file-copy').addEventListener('click', async () => {
+					try {
+						await navigator.clipboard.writeText(previewText);
+						$('file-copy').textContent = 'Copied';
+					} catch {
+						$('file-copy').textContent = 'Copy failed';
+					}
+					clearTimeout(copyTimer);
+					copyTimer = setTimeout(() => {
+						$('file-copy').textContent = 'Copy';
+					}, 1500);
+				});
+				$('file-close').addEventListener('click', () => $('file-modal').close());
+				// A click on the backdrop lands on the dialog itself, and closes it.
+				$('file-modal').addEventListener('click', (event) => {
+					if (event.target === $('file-modal')) $('file-modal').close();
+				});
+				// The file list rebuilds while the dialog is open, so return focus by path.
+				$('file-modal').addEventListener('close', () => {
+					[...$('files').children].find((item) => item.dataset.path === previewPath)?.focus();
+				});
 				const createRoom = async () => {
 					const name = $('room-name').value.trim();
 					const goal = $('new-room-goal').value.trim();
@@ -1891,6 +2382,10 @@
 					event.preventDefault();
 					void createRoom();
 				});
+				// On a narrow screen the file list would push the conversation below the
+				// fold, so it starts closed there.
+				if (matchMedia('(max-width: 790px)').matches)
+					document.querySelector('.workspace-panel').open = false;
 				renderDraft();
 				render();
 				state.bootPromise = (async () => {
