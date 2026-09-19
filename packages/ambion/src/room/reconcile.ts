@@ -22,6 +22,7 @@ import {
 	removalsOf,
 	seatOf,
 } from './lease.ts';
+import { onRoster } from './rules.roster.verified.ts';
 import {
 	earliestAfter,
 	endingOf,
@@ -32,7 +33,6 @@ import {
 	looksAgainAt,
 	mayClose,
 	type OwedActivation,
-	onRoster,
 	readyToSend,
 	removedAfter,
 	staleLease,

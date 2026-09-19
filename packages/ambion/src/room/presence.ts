@@ -14,7 +14,7 @@ import {
 	type PresenceStatus,
 	type Seq,
 } from '../types.ts';
-import { foldPresence } from './rules.verified.ts';
+import { foldPresence } from './rules.roster.verified.ts';
 
 /** One person in the room, for as long as they are in it. */
 export interface VisitRuntime {

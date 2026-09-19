@@ -7,4 +7,3 @@ CHANGELOG.md
 demos/
 # Local persistent-demo workspace artifacts are runtime data.
 examples/persistent/.data/
-# Prototype rules the plan cites: LemmaScript sources, verified as they are.

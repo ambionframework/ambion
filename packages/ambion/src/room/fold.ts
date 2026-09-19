@@ -25,14 +25,13 @@ import {
 	pendingWakes,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
+import { lastOf } from './rules.record.verified.ts';
 import {
-	cancelHold,
 	foldRoster as foldRosterRule,
-	lastOf,
 	type Membership,
 	reserveOf as reserveRule,
-	survivesCancellation,
-} from './rules.verified.ts';
+} from './rules.roster.verified.ts';
+import { cancelHold, survivesCancellation } from './rules.verified.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends PendingActivation {

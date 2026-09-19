@@ -16,7 +16,7 @@ import type { Body } from '../journal/journal.ts';
 import type { Message } from '../types.ts';
 import { activationSpec } from './activation.ts';
 import type { RoomState } from './fold.ts';
-import { reachOf, rosterFor, targetOf, woken } from './rules.verified.ts';
+import { reachOf, rosterFor, targetOf, woken } from './rules.roster.verified.ts';
 
 type RoutedMessage = Message | Body<Message>;
 

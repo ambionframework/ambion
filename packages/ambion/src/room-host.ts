@@ -49,12 +49,11 @@ import type { VisitRuntime } from './room/presence.ts';
 import { captureMessageSelection, type MessageSelection, readView } from './room/read.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
 import {
-	closeMoved,
 	contributionMatches as contributionRule,
 	deliveryMatches as deliveryRule,
-	exchangeContaining,
 	type Recorded,
-} from './room/rules.verified.ts';
+} from './room/rules.record.verified.ts';
+import { closeMoved, exchangeContaining } from './room/rules.verified.ts';
 import {
 	decide,
 	evolve,

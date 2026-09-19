@@ -20,8 +20,6 @@ function MathMin(a: int, b: int): int { if a <= b then a else b }
 
 function MathMax(a: int, b: int): int { if a >= b then a else b }
 
-datatype Message = Message(kind: string, seq_: int, from: string, at: string)
-
 datatype LeasePhase = running | ended
 
 datatype LeaseEndReason = released | failed | revoked | expired | abandoned
@@ -52,18 +50,6 @@ datatype LiveLease = LiveLease(source: Source, seat: string, phase: LeasePhase, 
 
 datatype OwedActivation = OwedActivation(source: Source, seat: string)
 
-datatype Attention = none | named | broadcast | presence
-
-datatype MessageKind = said | seated | unseated | arrived | left | summary
-
-datatype Seat = Seat(name: string, attention: Attention)
-
-datatype Presence = present | absent
-
-datatype Person = Person(name: string, identity: string, presence: Presence, since: Option<int>, changedAt: Option<string>, preferences: Option<string>)
-
-datatype PresenceEntry = PresenceEntry(kind: MessageKind, name: string, seq_: int, at: string, identity: Option<string>, preferences: Option<string>)
-
 datatype ActivationFields = ActivationFields(source: Source, position: int, seat: string, attempt: int)
 
 datatype CloseFact = CloseFact(owner: string, from: int, through: int, summary: Option<string>)
@@ -80,12 +66,6 @@ datatype Range = Range(from: int, through: int)
 
 datatype Found = closed(from: int) | open(from: int) | outside
 
-datatype Seating = Seating(name: string, identity: string, attention: Attention)
-
-datatype Membership = seated(name: string, identity: string, attention: Attention) | unseated(name: string) | other
-
-datatype RosterChange = RosterChange(seq_: int, membership: Membership)
-
 datatype LeaseKind = claim | renew
 
 datatype Admission = ended | granted | held
@@ -98,13 +78,7 @@ datatype Outcome = refused | unchanged_ | written
 
 datatype MembershipKind = seated | unseated
 
-datatype Address = ok | unknown | self | unreachable
-
 datatype Authority = granted | refused | stale
-
-datatype Recorded = Recorded(kind: MessageKind, from: Option<string>, to: Option<string>, text: string, subject: Option<string>, activationId: Option<string>)
-
-datatype Contribution = said(text: string) | seated(name: string) | unseated(name: string)
 
 function expired(expiry: int, now: int): bool
 {
@@ -113,20 +87,6 @@ function expired(expiry: int, now: int): bool
 
 lemma expired_ensures(expiry: int, now: int)
   ensures (expired(expiry, now) <==> (expiry <= now))
-{
-}
-
-function atWork(since: int, ended: bool, until: int, seq_: int): bool
-{
-  ((since < seq_) && (!(ended) || (until >= seq_)))
-}
-
-lemma atWork_ensures(since: int, ended: bool, until: int, seq_: int)
-  ensures (atWork(since, ended, until, seq_) ==> (since < seq_))
-  ensures (atWork(since, ended, until, seq_) ==> ended ==> (until >= seq_))
-  ensures (!(ended) ==> (atWork(since, ended, until, seq_) <==> (since < seq_)))
-  ensures (atWork(since, ended, until, seq_) ==> coversAttempt(ended, until, seq_))
-  ensures (!(atWork(since, ended, until, seq_)) ==> ((seq_ <= since) || (ended && (until < seq_))))
 {
 }
 
@@ -741,37 +701,6 @@ lemma namesWriter_ensures(configured: bool, seated: bool)
 {
 }
 
-function stillExpired(expiry: int, now: int, later: int): bool
-  requires (now <= later)
-{
-  (expired(expiry, now) || expired(expiry, later))
-}
-
-lemma stillExpired_ensures(expiry: int, now: int, later: int)
-  requires (now <= later)
-  ensures (expired(expiry, now) ==> stillExpired(expiry, now, later))
-  ensures (stillExpired(expiry, now, later) <==> expired(expiry, later))
-{
-}
-
-function endingStands(stale: bool, expiry: int, now: int, later: int): bool
-  requires (now <= later)
-{
-  var ending := endingOf(true, stale, expired(expiry, now));
-  if ending.expired? then
-    mayEnd(Some(LeasePhase.running), LeaseEndReason.expired, stillExpired(expiry, now, later))
-  else
-    (ending.revoked? && mayEnd(Some(LeasePhase.running), LeaseEndReason.revoked, expired(expiry, later)))
-}
-
-lemma endingStands_ensures(stale: bool, expiry: int, now: int, later: int)
-  requires (now <= later)
-  ensures (endingOf(true, stale, expired(expiry, now)).expired? ==> mayEnd(Some(LeasePhase.running), LeaseEndReason.expired, expired(expiry, later)))
-  ensures (endingOf(true, stale, expired(expiry, now)).revoked? ==> mayEnd(Some(LeasePhase.running), LeaseEndReason.revoked, expired(expiry, later)))
-  ensures (endingStands(stale, expiry, now, later) <==> (!endingOf(true, stale, expired(expiry, now)).stays?))
-{
-}
-
 function holdsExchange(source: Source): bool
 {
   source.message?
@@ -793,427 +722,6 @@ lemma exchangeLive_ensures(leases: seq<LiveLease>, due: seq<OwedActivation>, now
   ensures ((exists j: int :: (((0 <= j) && (j < |due|)) && due[j].source.message?)) ==> exchangeLive(leases, due, now))
   ensures ((forall i: int :: ((0 <= i) ==> (i < |leases|) ==> !(isLive(leases[i].phase, leases[i].expiresAt, now)))) ==> (|due| == 0) ==> !(exchangeLive(leases, due, now)))
   ensures ((|leases| == 0) ==> (|due| == 0) ==> !(exchangeLive(leases, due, now)))
-{
-}
-
-function width(attention: Attention): int
-{
-  if attention.named? then
-    1
-  else
-    if attention.broadcast? then
-      2
-    else
-      if attention.presence? then
-        3
-      else
-        0
-}
-
-lemma width_ensures(attention: Attention)
-  ensures (0 <= width(attention))
-  ensures (width(attention) <= 3)
-  ensures ((width(attention) == 0) <==> attention.none?)
-  ensures ((width(attention) == 1) <==> attention.named?)
-  ensures ((width(attention) == 2) <==> attention.broadcast?)
-  ensures ((width(attention) == 3) <==> attention.presence?)
-{
-}
-
-function reachOf(kind: MessageKind, directed: bool): int
-{
-  if kind.summary? then
-    0
-  else
-    if (!kind.said?) then
-      3
-    else
-      if directed then
-        1
-      else
-        2
-}
-
-lemma reachOf_ensures(kind: MessageKind, directed: bool)
-  ensures (0 <= reachOf(kind, directed))
-  ensures (reachOf(kind, directed) <= 3)
-  ensures (kind.summary? ==> (reachOf(kind, directed) == 0))
-  ensures (kind.said? ==> directed ==> (reachOf(kind, directed) == 1))
-  ensures (kind.said? ==> !(directed) ==> (reachOf(kind, directed) == 2))
-  ensures ((!kind.said?) ==> (!kind.summary?) ==> (reachOf(kind, directed) == 3))
-{
-}
-
-function targetOf(kind: MessageKind, to: Option<string>, subject: Option<string>): Option<string>
-{
-  if kind.said? then
-    to
-  else
-    if kind.seated? then
-      subject
-    else
-      None
-}
-
-lemma targetOf_ensures(kind: MessageKind, to: Option<string>, subject: Option<string>)
-  ensures (kind.said? ==> (match to { case Some(i_) => false case None => true }) ==> (match targetOf(kind, to, subject) { case Some(i_) => false case None => true }))
-  ensures (match to { case Some(i_to_val) => (kind.said? ==> (match targetOf(kind, to, subject) { case Some(i_) => true case None => false })) case None => true })
-  ensures (match targetOf(kind, to, subject) { case Some(i_result_val) => (match to { case Some(i_to_val) => (kind.said? ==> (i_result_val == i_to_val)) case None => true }) case None => true })
-  ensures (match subject { case Some(i_subject_val) => (kind.seated? ==> (match targetOf(kind, to, subject) { case Some(i_) => true case None => false })) case None => true })
-  ensures (match targetOf(kind, to, subject) { case Some(i_result_val) => (match subject { case Some(i_subject_val) => (kind.seated? ==> (i_result_val == i_subject_val)) case None => true }) case None => true })
-  ensures ((!kind.said?) ==> (!kind.seated?) ==> (match targetOf(kind, to, subject) { case Some(i_) => false case None => true }))
-{
-}
-
-function isNamed(target: Option<string>, name: string): bool
-{
-  match target {
-    case Some(i_target_val) =>
-      (i_target_val == name)
-    case None =>
-      false
-  }
-}
-
-lemma isNamed_ensures(target: Option<string>, name: string)
-  ensures ((match target { case Some(i_) => false case None => true }) ==> !(isNamed(target, name)))
-  ensures (match target { case Some(i_target_val) => (isNamed(target, name) <==> (i_target_val == name)) case None => true })
-{
-}
-
-function isAuthor(author: Option<string>, name: string): bool
-{
-  match author {
-    case Some(i_author_val) =>
-      (i_author_val == name)
-    case None =>
-      false
-  }
-}
-
-lemma isAuthor_ensures(author: Option<string>, name: string)
-  ensures ((match author { case Some(i_) => false case None => true }) ==> !(isAuthor(author, name)))
-  ensures (match author { case Some(i_author_val) => (isAuthor(author, name) <==> (i_author_val == name)) case None => true })
-{
-}
-
-function wakes(attention: Attention, named: bool, reach: int): bool
-  requires (0 <= reach)
-  requires (reach <= 3)
-{
-  (named || (if (reach == 0) then false else (if (width(attention) < reach) then false else (reach != 1))))
-}
-
-lemma wakes_ensures(attention: Attention, named: bool, reach: int)
-  requires (0 <= reach)
-  requires (reach <= 3)
-  ensures (named ==> wakes(attention, named, reach))
-  ensures (!(named) ==> (reach == 0) ==> !(wakes(attention, named, reach)))
-  ensures (!(named) ==> (reach == 1) ==> !(wakes(attention, named, reach)))
-  ensures (!(named) ==> (reach == 2) ==> (wakes(attention, named, reach) <==> (attention.broadcast? || attention.presence?)))
-  ensures (!(named) ==> (reach == 3) ==> (wakes(attention, named, reach) <==> attention.presence?))
-  ensures (!(named) ==> (reach >= 2) ==> (wakes(attention, named, reach) <==> (width(attention) >= reach)))
-  ensures (!(named) ==> wakes(attention, named, reach) ==> (width(attention) >= reach))
-{
-}
-
-function wokenBy(seat: Seat, author: Option<string>, target: Option<string>, reach: int, busy: bool): bool
-  requires (0 <= reach)
-  requires (reach <= 3)
-{
-  if busy then
-    false
-  else
-    if isAuthor(author, seat.name) then
-      false
-    else
-      wakes(seat.attention, isNamed(target, seat.name), reach)
-}
-
-lemma wokenBy_ensures(seat: Seat, author: Option<string>, target: Option<string>, reach: int, busy: bool)
-  requires (0 <= reach)
-  requires (reach <= 3)
-  ensures (busy ==> !(wokenBy(seat, author, target, reach, busy)))
-  ensures (isAuthor(author, seat.name) ==> !(wokenBy(seat, author, target, reach, busy)))
-  ensures (!(busy) ==> !(isAuthor(author, seat.name)) ==> isNamed(target, seat.name) ==> wokenBy(seat, author, target, reach, busy))
-  ensures ((reach == 1) ==> wokenBy(seat, author, target, reach, busy) ==> isNamed(target, seat.name))
-  ensures ((reach == 0) ==> wokenBy(seat, author, target, reach, busy) ==> isNamed(target, seat.name))
-  ensures (!(busy) ==> !(isAuthor(author, seat.name)) ==> (wokenBy(seat, author, target, reach, busy) <==> wakes(seat.attention, isNamed(target, seat.name), reach)))
-{
-}
-
-function held(busy: seq<string>, name: string): bool
-{
-  (name in busy)
-}
-
-lemma held_ensures(busy: seq<string>, name: string)
-  ensures (held(busy, name) <==> exists i: int :: (((0 <= i) && (i < |busy|)) && (busy[i] == name)))
-{
-}
-
-function onRoster(roster: seq<Seat>, name: string): bool
-{
-  (exists seat :: seat in roster && (seat.name == name))
-}
-
-lemma onRoster_ensures(roster: seq<Seat>, name: string)
-  ensures (onRoster(roster, name) <==> exists i: int :: (((0 <= i) && (i < |roster|)) && (roster[i].name == name)))
-{
-}
-
-function append(names: seq<string>, name: string): seq<string>
-{
-  (names + [name])
-}
-
-lemma append_ensures(names: seq<string>, name: string)
-  ensures (|append(names, name)| == (|names| + 1))
-  ensures (append(names, name)[|names|] == name)
-  ensures forall i: int :: ((0 <= i) ==> (i < |names|) ==> (append(names, name)[i] == names[i]))
-{
-}
-
-function wokenUpTo(roster: seq<Seat>, r: int, author: Option<string>, target: Option<string>, reach: int, busy: seq<string>): seq<string>
-  requires (0 <= reach)
-  requires (reach <= 3)
-  requires (0 <= r)
-  requires (r <= |roster|)
-  decreases r
-{
-  if (r == 0) then
-    []
-  else
-    var seat := roster[(r - 1)];
-    var before := wokenUpTo(roster, (r - 1), author, target, reach, busy);
-    if wokenBy(seat, author, target, reach, held(busy, seat.name)) then
-      append(before, seat.name)
-    else
-      before
-}
-
-lemma wokenUpTo_ensures(roster: seq<Seat>, r: int, author: Option<string>, target: Option<string>, reach: int, busy: seq<string>)
-  requires (0 <= reach)
-  requires (reach <= 3)
-  requires (0 <= r)
-  requires (r <= |roster|)
-  ensures (|wokenUpTo(roster, r, author, target, reach, busy)| <= r)
-  ensures forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> !(isAuthor(author, wokenUpTo(roster, r, author, target, reach, busy)[i])))
-  ensures forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> !(held(busy, wokenUpTo(roster, r, author, target, reach, busy)[i])))
-  ensures forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> onRoster(roster, wokenUpTo(roster, r, author, target, reach, busy)[i]))
-  ensures ((reach == 1) ==> forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> isNamed(target, wokenUpTo(roster, r, author, target, reach, busy)[i])))
-  ensures ((reach == 0) ==> forall i: int :: ((0 <= i) ==> (i < |wokenUpTo(roster, r, author, target, reach, busy)|) ==> isNamed(target, wokenUpTo(roster, r, author, target, reach, busy)[i])))
-  ensures forall s: int :: ((0 <= s) ==> (s < r) ==> wokenBy(roster[s], author, target, reach, held(busy, roster[s].name)) ==> exists i: int :: (((0 <= i) && (i < |wokenUpTo(roster, r, author, target, reach, busy)|)) && (wokenUpTo(roster, r, author, target, reach, busy)[i] == roster[s].name)))
-{
-}
-
-function woken(roster: seq<Seat>, author: Option<string>, target: Option<string>, reach: int, busy: seq<string>): seq<string>
-  requires (0 <= reach)
-  requires (reach <= 3)
-{
-  wokenUpTo(roster, |roster|, author, target, reach, busy)
-}
-
-lemma woken_ensures(roster: seq<Seat>, author: Option<string>, target: Option<string>, reach: int, busy: seq<string>)
-  requires (0 <= reach)
-  requires (reach <= 3)
-  ensures (|woken(roster, author, target, reach, busy)| <= |roster|)
-  ensures forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> !(isAuthor(author, woken(roster, author, target, reach, busy)[i])))
-  ensures forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> !(held(busy, woken(roster, author, target, reach, busy)[i])))
-  ensures forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> onRoster(roster, woken(roster, author, target, reach, busy)[i]))
-  ensures ((reach == 1) ==> forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> isNamed(target, woken(roster, author, target, reach, busy)[i])))
-  ensures ((reach == 0) ==> forall i: int :: ((0 <= i) ==> (i < |woken(roster, author, target, reach, busy)|) ==> isNamed(target, woken(roster, author, target, reach, busy)[i])))
-  ensures forall s: int :: ((0 <= s) ==> (s < |roster|) ==> wokenBy(roster[s], author, target, reach, held(busy, roster[s].name)) ==> exists i: int :: (((0 <= i) && (i < |woken(roster, author, target, reach, busy)|)) && (woken(roster, author, target, reach, busy)[i] == roster[s].name)))
-{
-}
-
-function rosterFor(roster: seq<Seat>, seated: bool, subject: string, attention: Option<Attention>): seq<Seat>
-{
-  if !(seated) then
-    roster
-  else
-    (roster + [Seat(subject, (match attention { case Some(i_attention_val) => i_attention_val case None => Attention.broadcast }))])
-}
-
-lemma rosterFor_ensures(roster: seq<Seat>, seated: bool, subject: string, attention: Option<Attention>)
-  ensures (!(seated) ==> (rosterFor(roster, seated, subject, attention) == roster))
-  ensures (seated ==> (|rosterFor(roster, seated, subject, attention)| == (|roster| + 1)))
-  ensures (seated ==> (rosterFor(roster, seated, subject, attention)[|roster|].name == subject))
-  ensures (seated ==> (match attention { case Some(i_) => false case None => true }) ==> rosterFor(roster, seated, subject, attention)[|roster|].attention.broadcast?)
-  ensures (match attention { case Some(i_attention_val) => (seated ==> (rosterFor(roster, seated, subject, attention)[|roster|].attention == i_attention_val)) case None => true })
-  ensures forall i: int :: ((0 <= i) ==> (i < |roster|) ==> (rosterFor(roster, seated, subject, attention)[i] == roster[i]))
-{
-}
-
-function atWorkHold(hold: Hold, seq_: int): bool
-{
-  match hold {
-    case running(i_hold_id, i_hold_at, i_hold_claimedAt, i_hold_since, i_hold_readThrough, i_hold_expiresAt) =>
-      atWork(i_hold_since, false, 0, seq_)
-    case ended(i_hold_id, i_hold_at, i_hold_claimedAt, i_hold_since, i_hold_readThrough, i_hold_reason, i_hold_cancelled, i_hold_until) =>
-      atWork(i_hold_since, true, i_hold_until, seq_)
-  }
-}
-
-lemma atWorkHold_ensures(hold: Hold, seq_: int)
-  ensures (atWorkHold(hold, seq_) ==> (hold.since < seq_))
-  ensures (hold.running? ==> (atWorkHold(hold, seq_) <==> (hold.since < seq_)))
-  ensures (hold.ended? ==> (atWorkHold(hold, seq_) <==> ((hold.since < seq_) && (seq_ <= hold.until))))
-{
-}
-
-function steers(source: Source, seat: string, author: Option<string>, woken: bool, hold: Hold, seq_: int): bool
-{
-  if (!source.message?) then
-    false
-  else
-    if woken then
-      false
-    else
-      if isAuthor(author, seat) then
-        false
-      else
-        atWorkHold(hold, seq_)
-}
-
-lemma steers_ensures(source: Source, seat: string, author: Option<string>, woken: bool, hold: Hold, seq_: int)
-  ensures (steers(source, seat, author, woken, hold, seq_) ==> source.message?)
-  ensures (steers(source, seat, author, woken, hold, seq_) ==> !(woken))
-  ensures (isAuthor(author, seat) ==> !(steers(source, seat, author, woken, hold, seq_)))
-  ensures (steers(source, seat, author, woken, hold, seq_) ==> atWorkHold(hold, seq_))
-  ensures (source.message? ==> !(woken) ==> !(isAuthor(author, seat)) ==> atWorkHold(hold, seq_) ==> steers(source, seat, author, woken, hold, seq_))
-{
-}
-
-function present(person: Option<Person>): bool
-{
-  match person {
-    case Some(i_person_val) =>
-      i_person_val.presence.present?
-    case None =>
-      false
-  }
-}
-
-lemma present_ensures(person: Option<Person>)
-  ensures ((match person { case Some(i_) => false case None => true }) ==> !(present(person)))
-  ensures (match person { case Some(i_person_val) => (present(person) <==> i_person_val.presence.present?) case None => true })
-{
-}
-
-function identityOn(known: Option<Person>, identity: Option<string>): string
-{
-  match identity {
-    case Some(i_identity_val) =>
-      i_identity_val
-    case None =>
-      match known {
-        case Some(i_known_val) =>
-          i_known_val.identity
-        case None =>
-          ""
-      }
-  }
-}
-
-lemma identityOn_ensures(known: Option<Person>, identity: Option<string>)
-  ensures (match identity { case Some(i_identity_val) => (identityOn(known, identity) == i_identity_val) case None => true })
-  ensures (match known { case Some(i_known_val) => ((match identity { case Some(i_) => false case None => true }) ==> (identityOn(known, identity) == i_known_val.identity)) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> (match identity { case Some(i_) => false case None => true }) ==> (identityOn(known, identity) == ""))
-{
-}
-
-function preferencesOn(known: Option<Person>, preferences: Option<string>): Option<string>
-{
-  match preferences {
-    case Some(i_preferences_val) =>
-      Some(i_preferences_val)
-    case None =>
-      match known {
-        case Some(i_known_val) =>
-          i_known_val.preferences
-        case None =>
-          None
-      }
-  }
-}
-
-lemma preferencesOn_ensures(known: Option<Person>, preferences: Option<string>)
-  ensures (match preferences { case Some(i_preferences_val) => (match preferencesOn(known, preferences) { case Some(i_value) => (i_value == i_preferences_val) case None => false }) case None => true })
-  ensures (match known { case Some(i_known_val) => ((match preferences { case Some(i_) => false case None => true }) ==> (preferencesOn(known, preferences) == i_known_val.preferences)) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> (match preferences { case Some(i_) => false case None => true }) ==> (match preferencesOn(known, preferences) { case Some(i_) => false case None => true }))
-{
-}
-
-function arrive(known: Option<Person>, entry: PresenceEntry): Person
-{
-  Person(entry.name, identityOn(known, entry.identity), Presence.present, (match known { case Some(i_known_val) => i_known_val.since case None => Option.None }), Some(entry.at), preferencesOn(known, entry.preferences))
-}
-
-lemma arrive_ensures(known: Option<Person>, entry: PresenceEntry)
-  ensures arrive(known, entry).presence.present?
-  ensures (arrive(known, entry).name == entry.name)
-  ensures (match arrive(known, entry).changedAt { case Some(i_value) => (i_value == entry.at) case None => false })
-  ensures (match known { case Some(i_known_val) => (arrive(known, entry).since == i_known_val.since) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> (match arrive(known, entry).since { case Some(i_) => false case None => true }))
-  ensures (match entry.identity { case Some(i_entry_identity_val) => (arrive(known, entry).identity == i_entry_identity_val) case None => true })
-  ensures (match known { case Some(i_known_val) => ((match entry.identity { case Some(i_) => false case None => true }) ==> (arrive(known, entry).identity == i_known_val.identity)) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> (match entry.identity { case Some(i_) => false case None => true }) ==> (arrive(known, entry).identity == ""))
-  ensures (match entry.preferences { case Some(i_entry_preferences_val) => (match arrive(known, entry).preferences { case Some(i_value) => (i_value == i_entry_preferences_val) case None => false }) case None => true })
-  ensures (match known { case Some(i_known_val) => ((match entry.preferences { case Some(i_) => false case None => true }) ==> (arrive(known, entry).preferences == i_known_val.preferences)) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> (match entry.preferences { case Some(i_) => false case None => true }) ==> (match arrive(known, entry).preferences { case Some(i_) => false case None => true }))
-{
-}
-
-function depart(known: Option<Person>, entry: PresenceEntry): Option<Person>
-{
-  match known {
-    case Some(i_known_val) =>
-      Some(Person(entry.name, i_known_val.identity, Presence.absent, Some(entry.seq_), Some(entry.at), i_known_val.preferences))
-    case None =>
-      None
-  }
-}
-
-lemma depart_ensures(known: Option<Person>, entry: PresenceEntry)
-  ensures ((match known { case Some(i_) => false case None => true }) ==> (match depart(known, entry) { case Some(i_) => false case None => true }))
-  ensures (match known { case Some(i_known_val) => (match depart(known, entry) { case Some(i_) => true case None => false }) case None => true })
-  ensures (match depart(known, entry) { case Some(i_result_val) => i_result_val.presence.absent? case None => true })
-  ensures (match depart(known, entry) { case Some(i_result_val) => (i_result_val.name == entry.name) case None => true })
-  ensures (match depart(known, entry) { case Some(i_result_val) => (match i_result_val.since { case Some(i_value) => (i_value == entry.seq_) case None => false }) case None => true })
-  ensures (match depart(known, entry) { case Some(i_result_val) => (match i_result_val.changedAt { case Some(i_value) => (i_value == entry.at) case None => false }) case None => true })
-  ensures (match depart(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (i_result_val.identity == i_known_val.identity) case None => true }) case None => true })
-  ensures (match depart(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (i_result_val.preferences == i_known_val.preferences) case None => true }) case None => true })
-{
-}
-
-function stepPerson(known: Option<Person>, entry: PresenceEntry): Option<Person>
-{
-  if entry.kind.arrived? then
-    Some(arrive(known, entry))
-  else
-    if entry.kind.left? then
-      depart(known, entry)
-    else
-      known
-}
-
-lemma stepPerson_ensures(known: Option<Person>, entry: PresenceEntry)
-  ensures (entry.kind.arrived? ==> (match stepPerson(known, entry) { case Some(i_) => true case None => false }))
-  ensures (entry.kind.arrived? ==> present(stepPerson(known, entry)))
-  ensures (entry.kind.left? ==> !(present(stepPerson(known, entry))))
-  ensures (entry.kind.left? ==> (match known { case Some(i_) => false case None => true }) ==> (match stepPerson(known, entry) { case Some(i_) => false case None => true }))
-  ensures (match known { case Some(i_known_val) => (entry.kind.left? ==> (match stepPerson(known, entry) { case Some(i_) => true case None => false })) case None => true })
-  ensures ((!entry.kind.arrived?) ==> (!entry.kind.left?) ==> (present(stepPerson(known, entry)) <==> present(known)))
-  ensures (match stepPerson(known, entry) { case Some(i_result_val) => ((entry.kind.arrived? || entry.kind.left?) ==> (i_result_val.name == entry.name)) case None => true })
-  ensures (match stepPerson(known, entry) { case Some(i_result_val) => ((entry.kind.arrived? || entry.kind.left?) ==> (match i_result_val.changedAt { case Some(i_value) => (i_value == entry.at) case None => false })) case None => true })
-  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (entry.kind.left? ==> (match i_result_val.since { case Some(i_value) => (i_value == entry.seq_) case None => false })) case None => true })
-  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (entry.kind.arrived? ==> (i_result_val.since == i_known_val.since)) case None => true }) case None => true })
-  ensures (match stepPerson(known, entry) { case Some(i_result_val) => ((match known { case Some(i_) => false case None => true }) ==> entry.kind.arrived? ==> (match i_result_val.since { case Some(i_) => false case None => true })) case None => true })
-  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match entry.identity { case Some(i_entry_identity_val) => (entry.kind.arrived? ==> (i_result_val.identity == i_entry_identity_val)) case None => true }) case None => true })
-  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => ((match entry.identity { case Some(i_) => false case None => true }) ==> entry.kind.arrived? ==> (i_result_val.identity == i_known_val.identity)) case None => true }) case None => true })
-  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (entry.kind.left? ==> (i_result_val.identity == i_known_val.identity)) case None => true }) case None => true })
-  ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (entry.kind.left? ==> (i_result_val.preferences == i_known_val.preferences)) case None => true }) case None => true })
 {
 }
 
@@ -1286,14 +794,14 @@ lemma closeFor_ensures(closes: seq<CloseFact>, through: int, writer: string)
 {
 }
 
-function activationGrant(id: ActivationFields, cancelledAt: Option<int>, roster: seq<Seat>, removed: bool, recorded: bool, close: Option<CloseFact>): Option<Grant>
+function activationGrant(id: ActivationFields, cancelledAt: Option<int>, seated: bool, removed: bool, recorded: bool, close: Option<CloseFact>): Option<Grant>
   requires wellFormed(id)
   requires (match close { case Some(i_close_val) => closeMatches(i_close_val, id.position, id.seat) case None => true })
 {
   if !(survivesCancellation(id.position, cancelledAt)) then
     None
   else
-    if !(onRoster(roster, id.seat)) then
+    if !(seated) then
       None
     else
       if removed then
@@ -1313,20 +821,20 @@ function activationGrant(id: ActivationFields, cancelledAt: Option<int>, roster:
           }
 }
 
-lemma activationGrant_ensures(id: ActivationFields, cancelledAt: Option<int>, roster: seq<Seat>, removed: bool, recorded: bool, close: Option<CloseFact>)
+lemma activationGrant_ensures(id: ActivationFields, cancelledAt: Option<int>, seated: bool, removed: bool, recorded: bool, close: Option<CloseFact>)
   requires wellFormed(id)
   requires (match close { case Some(i_close_val) => closeMatches(i_close_val, id.position, id.seat) case None => true })
-  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => ((i_result_val.seat == id.seat) && (i_result_val.attempt == id.attempt)) case None => true })
-  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => survivesCancellation(id.position, cancelledAt) case None => true })
-  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (match cancelledAt { case Some(i_cancelledAt_val) => !(beforeCancellation(id.position, i_cancelledAt_val)) case None => true }) case None => true })
-  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => onRoster(roster, id.seat) case None => true })
-  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => !(removed) case None => true })
-  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (i_result_val.purpose.respond? <==> id.source.message?) case None => true })
-  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (id.source.message? ==> (recorded && (i_result_val.purpose.message == id.position))) case None => true })
-  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (id.source.closed? ==> ((match close { case Some(i_) => true case None => false }) && (i_result_val.purpose.through == id.position))) case None => true })
-  ensures (match close { case Some(i_close_val) => (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (id.source.closed? ==> (((i_result_val.purpose.exchange == i_close_val.from) && (i_result_val.purpose.person == i_close_val.owner)) && (i_result_val.purpose.through == i_close_val.through))) case None => true }) case None => true })
-  ensures (id.source.message? ==> recorded ==> survivesCancellation(id.position, cancelledAt) ==> onRoster(roster, id.seat) ==> !(removed) ==> (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_) => true case None => false }))
-  ensures (match close { case Some(i_close_val) => (id.source.closed? ==> survivesCancellation(id.position, cancelledAt) ==> onRoster(roster, id.seat) ==> !(removed) ==> (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_) => true case None => false })) case None => true })
+  ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => ((i_result_val.seat == id.seat) && (i_result_val.attempt == id.attempt)) case None => true })
+  ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => survivesCancellation(id.position, cancelledAt) case None => true })
+  ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (match cancelledAt { case Some(i_cancelledAt_val) => !(beforeCancellation(id.position, i_cancelledAt_val)) case None => true }) case None => true })
+  ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => seated case None => true })
+  ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => !(removed) case None => true })
+  ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (i_result_val.purpose.respond? <==> id.source.message?) case None => true })
+  ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (id.source.message? ==> (recorded && (i_result_val.purpose.message == id.position))) case None => true })
+  ensures (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (id.source.closed? ==> ((match close { case Some(i_) => true case None => false }) && (i_result_val.purpose.through == id.position))) case None => true })
+  ensures (match close { case Some(i_close_val) => (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_result_val) => (id.source.closed? ==> (((i_result_val.purpose.exchange == i_close_val.from) && (i_result_val.purpose.person == i_close_val.owner)) && (i_result_val.purpose.through == i_close_val.through))) case None => true }) case None => true })
+  ensures (id.source.message? ==> recorded ==> survivesCancellation(id.position, cancelledAt) ==> seated ==> !(removed) ==> (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_) => true case None => false }))
+  ensures (match close { case Some(i_close_val) => (id.source.closed? ==> survivesCancellation(id.position, cancelledAt) ==> seated ==> !(removed) ==> (match activationGrant(id, cancelledAt, seated, removed, recorded, close) { case Some(i_) => true case None => false })) case None => true })
 {
 }
 
@@ -1421,53 +929,6 @@ lemma summaryVerdict_ensures(covered: bool, writerNamed: bool, removedAfterClose
 {
 }
 
-function lastOf(seqs: seq<int>): int
-  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |seqs|) ==> (seqs[i] <= seqs[j]))
-  requires forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] >= 1))
-{
-  if ((0 <= (|seqs| - 1)) && ((|seqs| - 1) < |seqs|)) then
-    seqs[(|seqs| - 1)]
-  else
-    0
-}
-
-lemma lastOf_ensures(seqs: seq<int>)
-  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |seqs|) ==> (seqs[i] <= seqs[j]))
-  requires forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] >= 1))
-  ensures (lastOf(seqs) >= 0)
-  ensures ((|seqs| == 0) ==> (lastOf(seqs) == 0))
-  ensures ((|seqs| > 0) ==> (lastOf(seqs) == seqs[(|seqs| - 1)]))
-  ensures forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] <= lastOf(seqs)))
-{
-}
-
-function opensExchange(message: Message, people: seq<string>, closedThrough: int): bool
-{
-  (((message.kind == "said") && (message.from in people)) && (message.seq_ > closedThrough))
-}
-
-lemma opensExchange_ensures(message: Message, people: seq<string>, closedThrough: int)
-  ensures (opensExchange(message, people, closedThrough) <==> (((message.kind == "said") && (message.from in people)) && (message.seq_ > closedThrough)))
-  ensures ((message.kind != "said") ==> !(opensExchange(message, people, closedThrough)))
-  ensures ((message.seq_ <= closedThrough) ==> !(opensExchange(message, people, closedThrough)))
-{
-}
-
-function openingQuestion(messages: seq<Message>, people: seq<string>, closedThrough: int): Option<Message>
-  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |messages|) ==> (messages[i].seq_ < messages[j].seq_))
-{
-  SeqFind(messages, (message: Message) => opensExchange(message, people, closedThrough))
-}
-
-lemma openingQuestion_ensures(messages: seq<Message>, people: seq<string>, closedThrough: int)
-  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |messages|) ==> (messages[i].seq_ < messages[j].seq_))
-  ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => (((i_result_val.kind == "said") && (i_result_val.from in people)) && (i_result_val.seq_ > closedThrough)) case None => true })
-  ensures ((match openingQuestion(messages, people, closedThrough) { case Some(i_) => false case None => true }) <==> !(exists i: int :: (((0 <= i) && (i < |messages|)) && opensExchange(messages[i], people, closedThrough))))
-  ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => exists i: int :: ((((0 <= i) && (i < |messages|)) && (messages[i] == i_result_val)) && forall j: int :: ((0 <= j) ==> (j < i) ==> !(opensExchange(messages[j], people, closedThrough)))) case None => true })
-  ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => ((|messages| > 0) && (i_result_val.seq_ <= messages[(|messages| - 1)].seq_)) case None => true })
-{
-}
-
 function inside(range: Range, seq_: int): bool
 {
   ((range.from <= seq_) && (seq_ <= range.through))
@@ -1475,48 +936,6 @@ function inside(range: Range, seq_: int): bool
 
 lemma inside_ensures(range: Range, seq_: int)
   ensures (inside(range, seq_) <==> ((range.from <= seq_) && (seq_ <= range.through)))
-{
-}
-
-function carries(roster: seq<Seating>, name: string): bool
-{
-  (exists seat :: seat in roster && (seat.name == name))
-}
-
-lemma carries_ensures(roster: seq<Seating>, name: string)
-  ensures (carries(roster, name) <==> exists k: int :: (((0 <= k) && (k < |roster|)) && (roster[k].name == name)))
-{
-}
-
-function fromCatalog(catalog: seq<Seating>, seat: Seating): bool
-{
-  (exists held :: held in catalog && ((held.name == seat.name) && (held.identity == seat.identity)))
-}
-
-lemma fromCatalog_ensures(catalog: seq<Seating>, seat: Seating)
-  ensures (fromCatalog(catalog, seat) <==> exists k: int :: ((((0 <= k) && (k < |catalog|)) && (catalog[k].name == seat.name)) && (catalog[k].identity == seat.identity)))
-{
-}
-
-function atBroadcast(seat: Seating): Seating
-{
-  Seating(seat.name, seat.identity, Attention.broadcast)
-}
-
-lemma atBroadcast_ensures(seat: Seating)
-  ensures (atBroadcast(seat).name == seat.name)
-  ensures (atBroadcast(seat).identity == seat.identity)
-  ensures atBroadcast(seat).attention.broadcast?
-{
-}
-
-function afterComposition(seq_: int, compositionSeq: int): bool
-{
-  (seq_ > compositionSeq)
-}
-
-lemma afterComposition_ensures(seq_: int, compositionSeq: int)
-  ensures (afterComposition(seq_, compositionSeq) <==> (seq_ > compositionSeq))
 {
 }
 
@@ -1664,42 +1083,6 @@ lemma hostMembership_ensures(kind: MembershipKind, onRoster: bool, isPerson: boo
 {
 }
 
-function addressOutcome(directed: bool, known: bool, self: bool, seatAttention: Option<Attention>): Address
-  requires (match seatAttention { case Some(i_seatAttention_val) => known case None => true })
-{
-  if !(directed) then
-    Address.ok
-  else
-    if !(known) then
-      Address.unknown
-    else
-      if self then
-        Address.self
-      else
-        match seatAttention {
-          case Some(i_seatAttention_val) =>
-            if i_seatAttention_val.none? then
-              Address.unreachable
-            else
-              Address.ok
-          case None =>
-            Address.ok
-        }
-}
-
-lemma addressOutcome_ensures(directed: bool, known: bool, self: bool, seatAttention: Option<Attention>)
-  requires (match seatAttention { case Some(i_seatAttention_val) => known case None => true })
-  ensures (!(directed) ==> addressOutcome(directed, known, self, seatAttention).ok?)
-  ensures (directed ==> !(known) ==> addressOutcome(directed, known, self, seatAttention).unknown?)
-  ensures (directed ==> known ==> self ==> addressOutcome(directed, known, self, seatAttention).self?)
-  ensures (match seatAttention { case Some(i_seatAttention_val) => (directed ==> known ==> !(self) ==> i_seatAttention_val.none? ==> addressOutcome(directed, known, self, seatAttention).unreachable?) case None => true })
-  ensures (directed ==> known ==> !(self) ==> (match seatAttention { case Some(i_) => false case None => true }) ==> addressOutcome(directed, known, self, seatAttention).ok?)
-  ensures (match seatAttention { case Some(i_seatAttention_val) => (directed ==> known ==> !(self) ==> (!i_seatAttention_val.none?) ==> addressOutcome(directed, known, self, seatAttention).ok?) case None => true })
-  ensures (addressOutcome(directed, known, self, seatAttention).ok? ==> directed ==> (known && !(self)))
-  ensures (match seatAttention { case Some(i_seatAttention_val) => (addressOutcome(directed, known, self, seatAttention).ok? ==> directed ==> (!i_seatAttention_val.none?)) case None => true })
-{
-}
-
 function commitAuthority(known: Option<LeasePhase>, pastExpiry: bool, granted: bool): Authority
 {
   match known {
@@ -1728,131 +1111,6 @@ lemma commitAuthority_ensures(known: Option<LeasePhase>, pastExpiry: bool, grant
   ensures (commitAuthority(known, pastExpiry, granted).granted? ==> (((match known { case Some(i_) => true case None => false }) && !(pastExpiry)) && granted))
   ensures (commitAuthority(known, pastExpiry, granted).refused? ==> (((match known { case Some(i_) => true case None => false }) && !(pastExpiry)) && !(granted)))
   ensures ((!commitAuthority(known, pastExpiry, granted).stale?) ==> ((match known { case Some(i_) => true case None => false }) && !(pastExpiry)))
-{
-}
-
-function sameName(a: Option<string>, b: Option<string>): bool
-{
-  match a {
-    case Some(i_a_val) =>
-      match b {
-        case Some(i_b_val) =>
-          (i_a_val == i_b_val)
-        case None =>
-          false
-      }
-    case None =>
-      match b {
-        case Some(i_) =>
-          false
-        case None =>
-          true
-      }
-  }
-}
-
-lemma sameName_ensures(a: Option<string>, b: Option<string>)
-  ensures ((match a { case Some(i_) => false case None => true }) ==> (match b { case Some(i_) => false case None => true }) ==> sameName(a, b))
-  ensures (match b { case Some(i_b_val) => ((match a { case Some(i_) => false case None => true }) ==> !(sameName(a, b))) case None => true })
-  ensures (match a { case Some(i_a_val) => ((match b { case Some(i_) => false case None => true }) ==> !(sameName(a, b))) case None => true })
-  ensures (match a { case Some(i_a_val) => (match b { case Some(i_b_val) => (sameName(a, b) <==> (i_a_val == i_b_val)) case None => true }) case None => true })
-{
-}
-
-function namedAs(optional: Option<string>, name: string): bool
-{
-  match optional {
-    case Some(i_optional_val) =>
-      (i_optional_val == name)
-    case None =>
-      false
-  }
-}
-
-lemma namedAs_ensures(optional: Option<string>, name: string)
-  ensures ((match optional { case Some(i_) => false case None => true }) ==> !(namedAs(optional, name)))
-  ensures (match optional { case Some(i_optional_val) => (namedAs(optional, name) <==> (i_optional_val == name)) case None => true })
-{
-}
-
-function deliveryMatches(from: string, to: Option<string>, text: string, message: Recorded): bool
-{
-  if (!message.kind.said?) then
-    false
-  else
-    match message.activationId {
-      case Some(i_message_activationId_val) =>
-        false
-      case None =>
-        if !(namedAs(message.from, from)) then
-          false
-        else
-          (sameName(message.to, to) && (message.text == text))
-    }
-}
-
-lemma deliveryMatches_ensures(from: string, to: Option<string>, text: string, message: Recorded)
-  ensures (deliveryMatches(from, to, text, message) <==> ((((message.kind.said? && (match message.activationId { case Some(i_) => false case None => true })) && namedAs(message.from, from)) && sameName(message.to, to)) && (message.text == text)))
-  ensures (deliveryMatches(from, to, text, message) ==> message.kind.said?)
-  ensures (deliveryMatches(from, to, text, message) ==> (match message.activationId { case Some(i_) => false case None => true }))
-  ensures (match message.activationId { case Some(i_message_activationId_val) => !(deliveryMatches(from, to, text, message)) case None => true })
-{
-}
-
-function sameMembership(kind: MessageKind, subject: Option<string>, intentKind: MessageKind, name: string): bool
-{
-  ((kind == intentKind) && namedAs(subject, name))
-}
-
-lemma sameMembership_ensures(kind: MessageKind, subject: Option<string>, intentKind: MessageKind, name: string)
-  ensures (sameMembership(kind, subject, intentKind, name) <==> ((kind == intentKind) && namedAs(subject, name)))
-{
-}
-
-function contributionMatches(activation: string, seat: string, intent: Contribution, to: Option<string>, message: Recorded): bool
-{
-  if !(namedAs(message.activationId, activation)) then
-    false
-  else
-    if !(namedAs(message.from, seat)) then
-      false
-    else
-      match intent {
-        case seated(i_intent_name) =>
-          sameMembership(message.kind, message.subject, MessageKind.seated, i_intent_name)
-        case unseated(i_intent_name) =>
-          sameMembership(message.kind, message.subject, MessageKind.unseated, i_intent_name)
-        case said(i_intent_text) =>
-          if message.kind.said? then
-            (sameName(message.to, to) && (message.text == i_intent_text))
-          else
-            if (!message.kind.summary?) then
-              false
-            else
-              match to {
-                case Some(i_to_val) =>
-                  if !(namedAs(message.to, i_to_val)) then
-                    false
-                  else
-                    (message.text == i_intent_text)
-                case None =>
-                  (message.text == i_intent_text)
-              }
-      }
-}
-
-lemma contributionMatches_ensures(activation: string, seat: string, intent: Contribution, to: Option<string>, message: Recorded)
-  ensures (contributionMatches(activation, seat, intent, to, message) ==> namedAs(message.activationId, activation))
-  ensures (contributionMatches(activation, seat, intent, to, message) ==> namedAs(message.from, seat))
-  ensures ((match message.activationId { case Some(i_) => false case None => true }) ==> !(contributionMatches(activation, seat, intent, to, message)))
-  ensures ((message.kind.arrived? || message.kind.left?) ==> !(contributionMatches(activation, seat, intent, to, message)))
-  ensures (intent.seated? ==> (contributionMatches(activation, seat, intent, to, message) <==> (((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && message.kind.seated?) && namedAs(message.subject, intent.name))))
-  ensures (intent.unseated? ==> (contributionMatches(activation, seat, intent, to, message) <==> (((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && message.kind.unseated?) && namedAs(message.subject, intent.name))))
-  ensures (intent.said? ==> message.kind.said? ==> (contributionMatches(activation, seat, intent, to, message) <==> (((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && sameName(message.to, to)) && (message.text == intent.text))))
-  ensures (intent.said? ==> message.kind.summary? ==> (match to { case Some(i_) => false case None => true }) ==> (contributionMatches(activation, seat, intent, to, message) <==> ((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && (message.text == intent.text))))
-  ensures (match to { case Some(i_to_val) => (intent.said? ==> message.kind.summary? ==> (contributionMatches(activation, seat, intent, to, message) <==> (((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && namedAs(message.to, i_to_val)) && (message.text == intent.text)))) case None => true })
-  ensures (intent.said? ==> (!message.kind.said?) ==> (!message.kind.summary?) ==> !(contributionMatches(activation, seat, intent, to, message)))
-  ensures (contributionMatches(activation, seat, intent, to, message) ==> intent.said? ==> (message.text == intent.text))
 {
 }
 
@@ -1905,92 +1163,6 @@ method forgets(sentIds: seq<string>, dueIds: seq<string>) returns (res: seq<stri
   return out;
 }
 
-method foldPresence(entries: seq<PresenceEntry>) returns (res: map<string, Person>)
-  ensures forall n :: ((n in res) ==> (present(Some(res[n])) <==> exists k: int :: (((((0 <= k) && (k < |entries|)) && (entries[k].name == n)) && entries[k].kind.arrived?) && forall j: int :: ((k < j) ==> (j < |entries|) ==> (entries[j].name == n) ==> (!entries[j].kind.left?)))))
-  ensures forall k: int :: ((0 <= k) ==> (k < |entries|) ==> entries[k].kind.arrived? ==> (entries[k].name in res))
-{
-  var people: map<string, Person> := map[];
-  var i := 0;
-  while (i < |entries|)
-    invariant (0 <= i)
-    invariant (i <= |entries|)
-    invariant forall n :: ((n in people) ==> (present(Some(people[n])) <==> exists k: int :: (((((0 <= k) && (k < i)) && (entries[k].name == n)) && entries[k].kind.arrived?) && forall j: int :: ((k < j) ==> (j < i) ==> (entries[j].name == n) ==> (!entries[j].kind.left?)))))
-    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> entries[k].kind.arrived? ==> (entries[k].name in people))
-  {
-    var entry := entries[i];
-    var i_t0 := stepPerson((if entry.name in people then Some(people[entry.name]) else None), entry);
-    var next := i_t0;
-    match next {
-      case Some(i_next_val) =>
-        people := people[entry.name := i_next_val];
-      case None =>
-
-    }
-    i := (i + 1);
-  }
-  return people;
-}
-
-method discussion(messages: seq<Message>, from: int, through: int) returns (res: seq<Message>)
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (((res[i].kind != "summary") && (from <= res[i].seq_)) && (res[i].seq_ <= through)))
-  ensures forall k: int :: ((0 <= k) ==> (k < |messages|) ==> (messages[k].kind != "summary") ==> (from <= messages[k].seq_) ==> (messages[k].seq_ <= through) ==> exists i: int :: (((0 <= i) && (i < |res|)) && (res[i] == messages[k])))
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in messages))
-  ensures (|res| <= |messages|)
-{
-  var out: seq<Message> := [];
-  var i := 0;
-  while (i < |messages|)
-    invariant (0 <= i)
-    invariant (i <= |messages|)
-    invariant (|out| <= i)
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (((out[m].kind != "summary") && (from <= out[m].seq_)) && (out[m].seq_ <= through)))
-    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (messages[k].kind != "summary") ==> (from <= messages[k].seq_) ==> (messages[k].seq_ <= through) ==> exists m: int :: (((0 <= m) && (m < |out|)) && (out[m] == messages[k])))
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m] in messages))
-  {
-    var head := messages[i];
-    if (((head.kind != "summary") && (head.seq_ >= from)) && (head.seq_ <= through)) {
-      ghost var before: seq<Message> := out;
-      out := (out + [head]);
-      assert forall m: int :: ((0 <= m) ==> (m < |before|) ==> (out[m] == before[m]));
-      assert (out[|before|] == head);
-    }
-    i := (i + 1);
-  }
-  return out;
-}
-
-method messagesSince(messages: seq<Message>, since: int) returns (res: seq<Message>)
-  requires forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |messages|) ==> (messages[a].seq_ < messages[b].seq_))
-  ensures (|res| <= |messages|)
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i].seq_ > since))
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in messages))
-  ensures forall k: int :: ((0 <= k) ==> (k < |messages|) ==> (messages[k].seq_ > since) ==> (messages[k] in res))
-  ensures forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |res|) ==> (res[a].seq_ < res[b].seq_))
-{
-  var out: seq<Message> := [];
-  var i := 0;
-  while (i < |messages|)
-    invariant (0 <= i)
-    invariant (i <= |messages|)
-    invariant (|out| <= i)
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m].seq_ > since))
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m] in messages))
-    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (messages[k].seq_ > since) ==> (messages[k] in out))
-    invariant forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |out|) ==> (out[a].seq_ < out[b].seq_))
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> forall k: int :: ((i <= k) ==> (k < |messages|) ==> (out[m].seq_ < messages[k].seq_)))
-  {
-    var head := messages[i];
-    if (head.seq_ > since) {
-      ghost var before: seq<Message> := out;
-      out := (out + [head]);
-      assert forall m: int :: ((0 <= m) ==> (m < |before|) ==> (out[m] == before[m]));
-      assert (out[|before|] == head);
-    }
-    i := (i + 1);
-  }
-  return out;
-}
-
 method exchangeContaining(closes: seq<Range>, open: Option<int>, seq_: int) returns (res: Found)
   ensures (match res { case closed(i_result_from) => exists i: int :: (((((0 <= i) && (i < |closes|)) && inside(closes[i], seq_)) && (closes[i].from == i_result_from)) && forall k: int :: ((0 <= k) ==> (k < i) ==> !(inside(closes[k], seq_)))) case _ => true })
   ensures ((!res.closed?) ==> forall i: int :: ((0 <= i) ==> (i < |closes|) ==> !(inside(closes[i], seq_))))
@@ -2008,8 +1180,8 @@ method exchangeContaining(closes: seq<Range>, open: Option<int>, seq_: int) retu
     invariant forall k: int :: ((0 <= k) ==> (k < i) ==> !(inside(closes[k], seq_)))
   {
     var close := (if ((0 <= i) && (i < |closes|)) then closes[i] else Range(0, -1));
-    var i_t1 := inside(close, seq_);
-    if i_t1 {
+    var i_t0 := inside(close, seq_);
+    if i_t0 {
       return Found.closed(close.from);
     }
     i := (i + 1);
@@ -2023,119 +1195,6 @@ method exchangeContaining(closes: seq<Range>, open: Option<int>, seq_: int) retu
 
   }
   return Found.outside;
-}
-
-method reserveOf(catalog: seq<Seating>, roster: seq<Seating>) returns (res: seq<Seating>)
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> !(carries(roster, res[i].name)))
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> res[i].attention.broadcast?)
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> fromCatalog(catalog, res[i]))
-  ensures forall k: int :: ((0 <= k) ==> (k < |catalog|) ==> (carries(roster, catalog[k].name) || exists i: int :: ((((0 <= i) && (i < |res|)) && (res[i].name == catalog[k].name)) && (res[i].identity == catalog[k].identity))))
-  ensures (|res| <= |catalog|)
-{
-  var out: seq<Seating> := [];
-  var i := 0;
-  while (i < |catalog|)
-    invariant (0 <= i)
-    invariant (i <= |catalog|)
-    invariant (|out| <= i)
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> !(carries(roster, out[m].name)))
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> out[m].attention.broadcast?)
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> fromCatalog(catalog, out[m]))
-    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (carries(roster, catalog[k].name) || exists m: int :: ((((0 <= m) && (m < |out|)) && (out[m].name == catalog[k].name)) && (out[m].identity == catalog[k].identity))))
-  {
-    var head := (if ((0 <= i) && (i < |catalog|)) then catalog[i] else Seating("", "", Attention.broadcast));
-    var i_t2 := carries(roster, head.name);
-    if !(i_t2) {
-      ghost var before: seq<Seating> := out;
-      var i_t3 := atBroadcast(head);
-      out := (out + [i_t3]);
-      assert forall m: int :: ((0 <= m) ==> (m < |before|) ==> (out[m] == before[m]));
-      assert ((out[|before|].name == head.name) && (out[|before|].identity == head.identity));
-    }
-    i := (i + 1);
-  }
-  return out;
-}
-
-method without(roster: seq<Seating>, name: string) returns (res: seq<Seating>)
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i].name != name))
-  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in roster))
-  ensures forall k: int :: ((0 <= k) ==> (k < |roster|) ==> (roster[k].name != name) ==> exists i: int :: (((0 <= i) && (i < |res|)) && (res[i] == roster[k])))
-  ensures ((forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |roster|) ==> (roster[i].name != roster[j].name))) ==> forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |res|) ==> (res[i].name != res[j].name)))
-  ensures (|res| <= |roster|)
-{
-  var out: seq<Seating> := [];
-  var i := 0;
-  while (i < |roster|)
-    invariant (0 <= i)
-    invariant (i <= |roster|)
-    invariant (|out| <= i)
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m].name != name))
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> exists k: int :: (((0 <= k) && (k < i)) && (roster[k] == out[m])))
-    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m] in roster))
-    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (roster[k].name != name) ==> exists m: int :: (((0 <= m) && (m < |out|)) && (out[m] == roster[k])))
-    invariant ((forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |roster|) ==> (roster[a].name != roster[b].name))) ==> forall m: int, n: int :: ((0 <= m) ==> (m < n) ==> (n < |out|) ==> (out[m].name != out[n].name)))
-  {
-    var head := (if ((0 <= i) && (i < |roster|)) then roster[i] else Seating("", "", Attention.broadcast));
-    if (head.name != name) {
-      ghost var before: seq<Seating> := out;
-      out := (out + [head]);
-      assert forall m: int :: ((0 <= m) ==> (m < |before|) ==> (out[m] == before[m]));
-      assert (out[|before|] == head);
-    }
-    i := (i + 1);
-  }
-  return out;
-}
-
-method reseated(roster: seq<Seating>, change: Membership) returns (res: seq<Seating>)
-  ensures (match change { case other => (res == roster) case _ => true })
-  ensures (match change { case unseated(i_change_name) => !(carries(res, i_change_name)) case _ => true })
-  ensures (match change { case seated(i_change_name, i_change_identity, i_change_attention) => ((((|res| >= 1) && (res[(|res| - 1)].name == i_change_name)) && (res[(|res| - 1)].identity == i_change_identity)) && (res[(|res| - 1)].attention == i_change_attention)) case _ => true })
-  ensures (match change { case seated(i_change_name, i_change_identity, i_change_attention) => forall i: int :: ((0 <= i) ==> (i < (|res| - 1)) ==> (res[i].name != i_change_name)) case _ => true })
-  ensures ((!change.other?) ==> forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i].name != change.name) ==> (res[i] in roster)))
-  ensures ((!change.other?) ==> forall k: int :: ((0 <= k) ==> (k < |roster|) ==> (roster[k].name != change.name) ==> exists i: int :: (((0 <= i) && (i < |res|)) && (res[i] == roster[k]))))
-  ensures ((forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |roster|) ==> (roster[i].name != roster[j].name))) ==> forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |res|) ==> (res[i].name != res[j].name)))
-{
-  match change {
-    case other =>
-      return roster;
-    case _ =>
-      var i_t4 := without(roster, change.name);
-      var rest := i_t4;
-      match change {
-        case unseated(i_change_name) =>
-          return rest;
-        case _ =>
-          var seat := Seating(change.name, change.identity, change.attention);
-          var out := (rest + [seat]);
-          assert forall m: int :: ((0 <= m) ==> (m < |rest|) ==> (out[m] == rest[m]));
-          assert (out[|rest|] == seat);
-          return out;
-      }
-  }
-}
-
-method foldRoster(agents: seq<Seating>, changes: seq<RosterChange>, compositionSeq: int) returns (res: seq<Seating>)
-  ensures ((forall i: int :: ((0 <= i) ==> (i < |changes|) ==> (!(afterComposition(changes[i].seq_, compositionSeq)) || changes[i].membership.other?))) ==> (res == agents))
-  ensures ((forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |agents|) ==> (agents[i].name != agents[j].name))) ==> forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |res|) ==> (res[i].name != res[j].name)))
-{
-  var roster := agents;
-  var i := 0;
-  while (i < |changes|)
-    invariant (0 <= i)
-    invariant (i <= |changes|)
-    invariant ((forall k: int :: ((0 <= k) ==> (k < i) ==> (!(afterComposition(changes[k].seq_, compositionSeq)) || changes[k].membership.other?))) ==> (roster == agents))
-    invariant ((forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |agents|) ==> (agents[a].name != agents[b].name))) ==> forall m: int, n: int :: ((0 <= m) ==> (m < n) ==> (n < |roster|) ==> (roster[m].name != roster[n].name)))
-  {
-    var change := (if ((0 <= i) && (i < |changes|)) then changes[i] else RosterChange(0, Membership.other));
-    var i_t5 := afterComposition(change.seq_, compositionSeq);
-    if i_t5 {
-      roster := reseated(roster, change.membership);
-    }
-    i := (i + 1);
-  }
-  return roster;
 }
 
 method distinct(names: seq<string>) returns (res: bool)

@@ -40,13 +40,10 @@ import {
 	type SummaryOutcome,
 } from '../types.ts';
 import { type LeaseHold, removalsOf } from './lease.ts';
+import { discussion, lastOf, openingQuestion } from './rules.record.verified.ts';
 import {
 	coversExchange,
 	type Draft,
-	discussion,
-	lastOf,
-	markedCancelled,
-	openingQuestion,
 	removedAfter,
 	summaryVerdict,
 	survivesCancellation,
@@ -105,7 +102,7 @@ function draftsOf(
 		.map((lease) =>
 			lease.phase === 'running'
 				? { phase: 'running' }
-				: { phase: 'ended', reason: lease.reason, cancelled: markedCancelled(lease) },
+				: { phase: 'ended', reason: lease.reason, cancelled: lease.cancelled === true },
 		);
 }
 

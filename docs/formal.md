@@ -4,13 +4,22 @@
 runs the proven bodies.** A rule is a pure TypeScript function with a
 contract. LemmaScript turns the contract into Dafny obligations, Dafny
 proves them, and the gate fails when a proof breaks or a generated file is
-stale. Three files hold every rule:
+stale. Five files hold every rule, one per concern:
 
-| File                                                                                          | Concern                                                           | Obligations |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------- |
-| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor, the storage      | 41          |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | Every decision the room makes over its fold                       | 200         |
-| [`packages/ambion/src/rules.verified.ts`](../packages/ambion/src/rules.verified.ts)           | The ranges the validator admits and the domain the id codec takes | 3           |
+| File                                                                                                        | Concern                                                           | Obligations                    |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------ |
+| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                       | The fence, the key, the seq counter, the cursor, the storage      | 18, and 23 in its proofs file  |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)               | The lease, the transitions, the pass, the grant, the verdict      | 106, and 14 in its proofs file |
+| [`packages/ambion/src/room/rules.roster.verified.ts`](../packages/ambion/src/room/rules.roster.verified.ts) | The routing, presence, the roster, and addressing                 | 48, and 12 in its proofs file  |
+| [`packages/ambion/src/room/rules.record.verified.ts`](../packages/ambion/src/room/rules.record.verified.ts) | The message list and the keyed retry                              | 18                             |
+| [`packages/ambion/src/rules.verified.ts`](../packages/ambion/src/rules.verified.ts)                         | The ranges the validator admits and the domain the id codec takes | 3                              |
+
+**A change to the room's state management is a change to a rules file.**
+The room decides nothing by hand: `transition.ts`, `fold.ts`, and the
+pass project the state and run a rule. So an edit to how the room
+decides lands in one of these files, `pnpm rule:check` proves that file
+in seconds, and the gate refuses the edit until its proof, its binding
+case, and its type pin agree.
 
 This page states the mechanism: what a rule is, how its proof reaches the
 running code, what the generated files are, how the gate runs them, and
@@ -73,14 +82,10 @@ describes. Three things hold that binding.
 2. **A binding test replaces each rule with a sentinel.**
    [`packages/ambion/test/binding.test.ts`](../packages/ambion/test/binding.test.ts)
    and [`packages/journal/test/binding.test.ts`](../packages/journal/test/binding.test.ts)
-   mock the rules module, return a sentinel from one rule, and check that
-   the decision follows the sentinel. One case per rule and call site,
-   the host included.
-3. **A guard states each precondition where the rule is called.** A
-   `//@ requires` is a promise the caller makes. `createRuntime` refuses a
-   retry cap below one and a wake interval below one millisecond, because
-   `givesUp` and `leaseExpiry` require them. `activationSpec` checks
-   `wellFormed` on a decoded id before `activationGrant` reads it.
+   wrap every exported rule, return a sentinel from one rule, and check
+   that the decision follows the sentinel. One case per rule and call
+   site, the host included. The file fails when an exported rule has no
+   case, so a rule cannot gain an export without one.
 
 **The call site holds the projection, and the rule holds the decision.**
 `foldPeople` maps each presence message to the six fields `foldPresence`
@@ -90,43 +95,45 @@ rule decides" where a second check remains to narrow a TypeScript type.
 
 ## 3. The generated files
 
-**Each rules file has a `.dfy.gen` and a `.dfy` beside it.** `lsc gen`
-writes the `.dfy.gen`: one Dafny datatype per record or named union, one
-function per rule, and one `_ensures` lemma per rule that states the
-contract. The `.dfy` is the file Dafny verifies. It is the generation plus
-hand-written additions, and `lsc check` holds the pair to additions only.
+**Each rules file has a `.dfy.gen` and a `.dfy` beside it, and they are
+the same file.** `lsc gen` writes the `.dfy.gen`: one Dafny datatype per
+record or named union, one function per rule, and one `_ensures` lemma per
+rule that states the contract. The `.dfy` is the file Dafny verifies, and
+nothing hand-written goes in it, so `lsc regen` after an edit is a copy
+and never a merge.
 
-**A hand-written lemma goes below the generated ones.** The generator
-cannot write an inductive proof. The journal's `.dfy` proves the fence
-lemmas by induction over a read: a superseded journal stays superseded,
-the caller hears `lost` at most once, the cursor never moves back. The
-room's `.dfy` proves `AttemptIdsAreFresh` over a lease history and the
-roster induction behind `woken`. Such a lemma has no runtime caller, and
-it lives only in Dafny.
+**A hand-written proof goes in a `.proofs.dfy` beside the rules.** The
+generator cannot write an inductive proof. The journal's proofs file
+proves the fence lemmas by induction over a read: a superseded journal
+stays superseded, the caller hears `lost` at most once, the cursor never
+moves back. The room's proofs files prove `AttemptIdsAreFresh` over a
+lease history, that the clock only moves forward, and that the roster
+loop wakes every seat the per-seat rule admits. A proofs file starts with
+`include` of the generated file and calls the generated `_ensures`
+lemmas. `check-extra.sh` at the root verifies every proofs file, at a
+desk and in CI.
 
-**`lsc regen` merges a contract change into the `.dfy`.** It rewrites the
-`.dfy.gen`, then merges the change into the `.dfy` three ways with the
-previous `.dfy.gen` as the anchor. Run it after every edit and before any
-`lsc gen`, because `lsc gen` overwrites the anchor. When the merge reports
-a conflict, delete the `.dfy`, `.dfy.gen`, `.dfy.base`, and `.dfy.merged`
-files, run `lsc gen`, and append the additions block again from version
-control. The `.dfy.base` and `.dfy.merged` files are ignored by git.
+**A contract states what Dafny proves on its own.** A clause that needs
+induction is a lemma in the proofs file, and the rule's `//@ contract`
+line names that lemma. `woken` carries no `ensures`; `WokenIsExact` in
+the roster proofs file states what it answers.
 
 ## 4. The gate
 
 **`pnpm check` regenerates, and `pnpm check:lemmascript` proves.**
 
-| Command                                | What it runs                                                         | Needs Dafny |
-| -------------------------------------- | -------------------------------------------------------------------- | ----------- |
-| `pnpm check`                           | `lsc gen-check`: regenerate every `.dfy.gen` and fail on a stale one | No          |
-| `pnpm check:lemmascript`               | `lsc check`: regenerate, then `dafny verify` on every `.dfy`         | Yes         |
-| `npx lsc regen --backend=dafny <file>` | Regenerate one file and merge the change into its `.dfy`             | No          |
+| Command                  | What it runs                                                                 | Needs Dafny |
+| ------------------------ | ---------------------------------------------------------------------------- | ----------- |
+| `pnpm check`             | `lsc gen-check`: regenerate every `.dfy.gen` and fail on a stale one         | No          |
+| `pnpm rule:check <file>` | Regenerate one rules file, prove it, and prove the proofs file beside it     | Yes         |
+| `pnpm check:lemmascript` | `lsc check` on every listed file, then `check-extra.sh` on every proofs file | Yes         |
 
 A stale generation fails at the desk and in CI. The proof itself runs in
 the `lemmascript` job of `.github/workflows/ci.yml`, which calls the
 LemmaScript reusable workflow at a pinned reference that names the
-`lemmascript` version in `package.json`. The room's 200 obligations verify
-in about thirty seconds, and the journal's 41 in three.
+`lemmascript` version in `package.json`; that workflow runs
+`check-extra.sh` after the listed files. The largest file proves in about
+fifteen seconds, and a rule edit re-proves only its own file.
 
 **`LemmaScript-files.txt` lists what CI verifies.** One line per file:
 `path [timeout] [dafny flags]`. A timeout above 60 turns the batch check
@@ -136,31 +143,39 @@ flag column. `scripts/setup.sh` installs Dafny 4.11 for a desk run.
 
 ## 5. Change a rule
 
-**Edit the body and the contract together, then regenerate.**
+**Edit the body and the contract together, then check the file.**
 
 1. Edit the rule in its rules file. Keep the function pure.
-2. Run `npx lsc regen --backend=dafny <file>` and then
-   `npx lsc check --backend=dafny <file>`. Read a failing clause as a
+2. Run `pnpm rule:check <file>`. It regenerates the Dafny, proves the
+   file, and proves the proofs file beside it. Read a failing clause as a
    claim the body does not make, and change one of the two.
 3. Run `pnpm check`. It fails on a stale generation, an unused export, a
-   redeclared type that drifted from its public type, and a caller that
-   stopped following the rule.
-4. When a `.dfy` addition names the rule, the regeneration carries it;
-   verify that the addition still proves.
+   redeclared type that drifted from its public type, an exported rule
+   with no binding case, and a caller that stopped following the rule.
 
 **Add a rule where its caller may import it.** The core is laid out in
 layers, and an import points down only (`toolchain.md` §1). A decision
-in `room/` goes in the room's rules file. A check in `journal/validate.ts`
-or `activation-id.ts` goes in the vocabulary's rules file, because the
+over the lease, a transition, the pass, or a grant goes in the room's
+`rules.verified.ts`; one over the routing, presence, or the roster in
+`rules.roster.verified.ts`; one over the message list in
+`rules.record.verified.ts`. A check in `journal/validate.ts` or
+`activation-id.ts` goes in the vocabulary's rules file, because the
 vocabulary imports nothing from `room/`. A rule the journal package
 decides by goes in the journal's rules file. Then:
 
 1. Write the projection at the call site and make the caller follow the
    rule's answer.
-2. Add a binding case that replaces the rule with a sentinel.
+2. Add a binding case that replaces the rule with a sentinel. The binding
+   file fails until every exported rule has one.
 3. Pin every union or record the rule redeclares in `rules.test.ts`.
 4. State each `//@ requires` at the call site as a guard, or as a comment
    that names the code that establishes it.
+
+**A helper only a contract names is internal.** It carries a Biome
+ignore that says which contract names it, as `fromCatalog` and
+`markedCancelled` do. Two rules files cannot share a type: Dafny lowers
+each file on its own, so a union both files read is declared in both and
+pinned in both.
 
 **Remove a rule by removing its caller first.** Knip fails an export with
 no importer, so a rule that lost its caller fails the gate until it is

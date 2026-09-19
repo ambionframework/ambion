@@ -3,7 +3,7 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { Message } from '../types.ts';
 import type { LeaseHold } from './lease.ts';
-import { steers } from './rules.verified.ts';
+import { steers } from './rules.roster.verified.ts';
 
 export interface MessageDelivery {
 	/** Seats the message explicitly wakes. */
@@ -29,11 +29,18 @@ export function messageDelivery(
 		if (parsed === undefined) continue;
 		const { source, seat } = parsed;
 		// The first lease at a seat, in journal order, is the one the message steers.
-		if (
-			steers(source, seat, message.from, wakes.has(seat), lease, message.seq) &&
-			!steered.has(seat)
-		)
-			steered.set(seat, lease.id);
+		const ended = lease.phase === 'ended';
+		const at = steers(
+			source === 'message',
+			seat,
+			message.from,
+			wakes.has(seat),
+			lease.since,
+			ended,
+			ended ? lease.until : 0,
+			message.seq,
+		);
+		if (at && !steered.has(seat)) steered.set(seat, lease.id);
 	}
 	return {
 		wakes: [...wakes],

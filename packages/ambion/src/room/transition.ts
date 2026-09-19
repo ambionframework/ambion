@@ -15,10 +15,10 @@ import {
 	type Reconciliation,
 } from './reconcile.ts';
 import { routes } from './routing.ts';
+import { addressOutcome, onRoster, present } from './rules.roster.verified.ts';
 import {
 	acknowledged,
 	addressesOwner,
-	addressOutcome,
 	admitsClose,
 	admitsLease,
 	commitAuthority,
@@ -30,10 +30,8 @@ import {
 	mayEnd,
 	membershipOutcome,
 	onRecord,
-	onRoster,
 	permits,
 	presenceOutcome,
-	present,
 	stampedSummary,
 } from './rules.verified.ts';
 

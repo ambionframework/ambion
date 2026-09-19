@@ -58,7 +58,8 @@ pnpm check     # format, build, typecheck, lint, test — the gate CI runs
 pnpm format    # biome --write, then prettier --write
 pnpm test:live # the room on a real model; needs <PROVIDER>_API_KEY and costs money
 pnpm chaos     # the sweeps on both storages, the handover at every write, the kill at every third write, 200 seeds of the walk and the history
-pnpm check:lemmascript # prove the contracts in rules.verified.ts with Dafny; CI runs it, a contributor needs Dafny on PATH
+pnpm check:lemmascript # prove every *.verified.ts and *.proofs.dfy with Dafny; CI runs it, a contributor needs Dafny on PATH
+pnpm rule:check <file> # regenerate and prove one rules file after an edit
 ```
 
 Run `pnpm format` and `pnpm check` before every push. CI runs the same gate.
@@ -103,11 +104,12 @@ vitest.live.config.ts test/live/<file>.test.ts`) over the whole suite. Run the
 - No `any`, no non-null assertions, no unused imports or variables.
 - `packages/ambion/src` must not write to stdout. Hosts pass a logger in.
 - A pure rule the journal or the room decides by lives in the layer's
-  `rules.verified.ts`, with `//@ requires` and `//@ ensures` contracts,
-  and the caller runs its body. Regenerate its `.dfy` and `.dfy.gen` with
-  `npx lsc regen --backend=dafny <file>` after every edit; `pnpm check`
-  fails on a stale generation. [`docs/formal.md`](docs/formal.md) holds
-  the mechanism and the envelope a rule must stay inside;
+  `*.verified.ts` file, with `//@ requires` and `//@ ensures` contracts,
+  and the caller runs its body. After every edit run `pnpm rule:check
+<file>`; `pnpm check` fails on a stale generation and on an exported
+  rule with no binding case. A hand-written proof goes in the
+  `.proofs.dfy` beside the rules. [`docs/formal.md`](docs/formal.md)
+  holds the mechanism and the envelope a rule must stay inside;
   [`planning/formal.md`](planning/formal.md) holds the rules still to
   write.
 - Cognitive complexity: max 10 in source, 15 in tests.

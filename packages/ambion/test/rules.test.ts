@@ -5,16 +5,24 @@ import type { Close, LeaseChange, Seating } from '../src/journal/events.ts';
 import type { ActivationPurpose, ActivationSpec, CommitRequest } from '../src/protocol.ts';
 import { cameToNothing, foldLeases, type LeaseHold, pendingWakes } from '../src/room/lease.ts';
 import type { PersonState } from '../src/room/presence.ts';
+import type {
+	Contribution,
+	MessageKind as RecordMessageKind,
+} from '../src/room/rules.record.verified.ts';
+import {
+	type Attention,
+	type MessageKind,
+	type Person,
+	type Presence,
+	type Seating as RuleSeating,
+	reserveOf,
+} from '../src/room/rules.roster.verified.ts';
 import {
 	type ActivationFields,
-	type Attention,
 	applyChange,
 	type Change,
 	type CloseFact,
-	type Contribution,
 	cancelHold,
-	endingStands,
-	fromCatalog,
 	type GrantPurpose,
 	type Hold,
 	type Intent,
@@ -22,18 +30,12 @@ import {
 	type LeasePhase,
 	leaseExpiry,
 	type MembershipKind,
-	type MessageKind,
 	mayEnd,
-	type Person,
-	type Presence,
 	type PresenceKind,
 	type Purpose,
 	permits,
-	type Seating as RuleSeating,
-	reserveOf,
 	type Source,
 	schedule,
-	stillExpired,
 	wakeAnswered,
 } from '../src/room/rules.verified.ts';
 import type {
@@ -63,6 +65,7 @@ describe('verified rules', () => {
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
 		expectTypeOf<Attention>().toEqualTypeOf<PublicAttention>();
 		expectTypeOf<MessageKind>().toEqualTypeOf<Message['kind']>();
+		expectTypeOf<RecordMessageKind>().toEqualTypeOf<Message['kind']>();
 		expectTypeOf<Presence>().toEqualTypeOf<PresenceStatus>();
 		expectTypeOf<Person>().toMatchTypeOf<PersonState>();
 		expectTypeOf<PersonState>().toMatchTypeOf<Person>();
@@ -129,16 +132,6 @@ describe('verified rules', () => {
 		expect(cancelHold(ended, 2, 9, at)).toBe(ended);
 	});
 
-	it('accepts at the write the ending the decision made', () => {
-		expect(stillExpired(1_000, 1_000, 1_500)).toBe(true);
-		// Expired at the decision, and still expired at the write.
-		expect(endingStands(false, 1_000, 1_000, 1_500)).toBe(true);
-		// Revoked: no clock.
-		expect(endingStands(true, 9_000, 1_000, 1_500)).toBe(true);
-		// Neither: the lease stays.
-		expect(endingStands(false, 9_000, 1_000, 1_500)).toBe(false);
-	});
-
 	it('answers a wake by reason and schedules the next attempt after the backoff', () => {
 		expect(wakeAnswered([{ phase: 'running', readThrough: 0, position: 2 }], 2)).toBe(true);
 		expect(
@@ -186,7 +179,7 @@ describe('roster rules', () => {
 		];
 		const reserve = reserveOf(catalog, [{ name: 'a', identity: 'A.', attention: 'named' }]);
 		expect(reserve).toEqual([{ name: 'b', identity: 'B.', attention: 'broadcast' }]);
-		expect(reserve.every((seat) => fromCatalog(catalog, seat))).toBe(true);
+		expect(reserve.every((seat) => catalog.some((held) => held.name === seat.name))).toBe(true);
 	});
 });
 

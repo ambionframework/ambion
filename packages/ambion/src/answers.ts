@@ -11,7 +11,9 @@ import type {
 import { activationSpec } from './room/activation.ts';
 import type { RoomState } from './room/fold.ts';
 import { isExpired, seatOf } from './room/lease.ts';
-import { commitAuthority, messagesSince, onRoster as seated } from './room/rules.verified.ts';
+import { messagesSince } from './room/rules.record.verified.ts';
+import { onRoster as seated } from './room/rules.roster.verified.ts';
+import { commitAuthority } from './room/rules.verified.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
 import { copyMessage, type EndReason, type RoomNotification } from './types.ts';

@@ -6,25 +6,22 @@
  * follows it. A caller that computed the decision by hand would pass its
  * own tests and fail here.
  */
-import { describe, expect, it, vi } from 'vitest';
+
+import { DatabaseSync } from 'node:sqlite';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Journal, type Vocabulary } from '../src/journal.ts';
 import { memoryJournals } from '../src/memory.ts';
 import * as rules from '../src/rules.verified.ts';
+import { type Sql, type SqlValue, sqliteJournals } from '../src/sqlite.ts';
+import { bindings } from './support/binding.ts';
 
 vi.mock('../src/rules.verified.ts', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('../src/rules.verified.ts')>();
-	return {
-		...actual,
-		fenceStep: vi.fn(actual.fenceStep),
-		keyed: vi.fn(actual.keyed),
-		writable: vi.fn(actual.writable),
-		advanceSeq: vi.fn(actual.advanceSeq),
-		scanned: vi.fn(actual.scanned),
-		admit: vi.fn(actual.admit),
-		readPosition: vi.fn(actual.readPosition),
-		nextPosition: vi.fn(actual.nextPosition),
-	};
+	const { mocked } = await import('./support/binding.ts');
+	return mocked(await importOriginal<typeof import('../src/rules.verified.ts')>());
 });
+
+const bind = bindings({ rules });
+afterAll(() => expect(bind.unbound()).toEqual([]));
 
 type Kind = 'note' | 'run';
 type Bodies = { note: { text: string }; run: { owner: string } };
@@ -50,7 +47,7 @@ async function open(run?: string): Promise<Journal<Kind, Bodies>> {
 describe('the journal runs the verified rules', () => {
 	it('refuses a write when writable says so', async () => {
 		const journal = await open('run-1');
-		vi.mocked(rules.writable).mockReturnValueOnce(false);
+		bind.once(rules.writable, false);
 		await expect(journal.append('note', { decide: () => note('a') })).rejects.toThrow(
 			/run entry first/,
 		);
@@ -62,11 +59,11 @@ describe('the journal runs the verified rules', () => {
 	it('answers a key the way keyed decides', async () => {
 		const journal = await open();
 		await journal.append('note', { key: 'k', decide: () => note('first') });
-		vi.mocked(rules.keyed).mockReturnValueOnce('conflict');
+		bind.once(rules.keyed, 'conflict');
 		await expect(journal.append('note', { key: 'k', decide: () => note('again') })).rejects.toThrow(
 			/already names/,
 		);
-		vi.mocked(rules.keyed).mockReturnValueOnce('fresh');
+		bind.once(rules.keyed, 'fresh');
 		// A fresh answer runs the decision and lands a second entry under the key.
 		expect(await journal.append('note', { key: 'k', decide: () => note('fresh') })).toMatchObject({
 			entry: { seq: 2, body: { text: 'fresh' } },
@@ -78,7 +75,7 @@ describe('the journal runs the verified rules', () => {
 
 	it('keeps or drops an entry as fenceStep answers', async () => {
 		const journal = await open();
-		vi.mocked(rules.fenceStep).mockReturnValueOnce({
+		bind.once(rules.fenceStep, {
 			state: { fence: undefined, fenced: false, superseded: false },
 			keep: false,
 			lost: false,
@@ -99,7 +96,7 @@ describe('the journal runs the verified rules', () => {
 			lost,
 		);
 		await journal.ready;
-		vi.mocked(rules.fenceStep).mockReturnValueOnce({
+		bind.once(rules.fenceStep, {
 			state: { fence: 'run-2', fenced: true, superseded: true },
 			keep: true,
 			lost: true,
@@ -113,7 +110,7 @@ describe('the journal runs the verified rules', () => {
 
 	it('moves the counter as advanceSeq answers', async () => {
 		const journal = await open();
-		vi.mocked(rules.advanceSeq).mockReturnValueOnce(41);
+		bind.once(rules.advanceSeq, 41);
 		await journal.append('note', { decide: () => note('a') });
 		expect(journal.lastSeq).toBe(41);
 		expect(await journal.append('note', { decide: () => note('b') })).toMatchObject({
@@ -125,12 +122,11 @@ describe('the journal runs the verified rules', () => {
 		const journal = await open();
 		await journal.append('note', { decide: () => note('a') });
 		// A cursor held at zero expects the head at zero: the storage refuses the moved append.
-		vi.mocked(rules.scanned).mockReturnValue(0);
+		bind.always(rules.scanned, () => 0);
 		await expect(journal.append('note', { decide: () => note('b') })).rejects.toThrow(
 			/moved under the write/,
 		);
-		vi.mocked(rules.scanned).mockReset();
-		vi.mocked(rules.scanned).mockImplementation((cursor, position) => Math.max(cursor, position));
+		bind.restore(rules.scanned);
 		await journal.settled();
 		expect(await journal.append('note', { decide: () => note('c') })).toMatchObject({
 			entry: { seq: 2 },
@@ -139,10 +135,42 @@ describe('the journal runs the verified rules', () => {
 
 	it('admits a storage append and reports a read position as the rules answer', async () => {
 		const storage = await journals.open(`binding-storage-${++names}`);
-		vi.mocked(rules.admit).mockReturnValueOnce(undefined);
+		bind.once(rules.admit, undefined);
 		expect(await storage.append({ n: 1 }, 0)).toBeUndefined();
 		expect(await storage.append({ n: 1 }, 0)).toEqual({ position: 1, entry: { n: 1 } });
-		vi.mocked(rules.readPosition).mockReturnValueOnce(99);
+		bind.once(rules.readPosition, 99);
 		expect((await storage.read(0)).position).toBe(99);
+	});
+
+	it('numbers an entry and reads the visible entries as the rules answer', async () => {
+		const journal = await open();
+		bind.once(rules.nextSeq, 7);
+		expect(await journal.append('note', { decide: () => note('a') })).toMatchObject({
+			entry: { seq: 7 },
+		});
+		const storage = await journals.open(`binding-visible-${++names}`);
+		await storage.append({ n: 1 }, 0);
+		bind.once(rules.visibleEntries, []);
+		expect((await storage.read(0)).entries).toEqual([]);
+		expect((await storage.read(0)).entries).toHaveLength(1);
+	});
+
+	it('places a SQLite append where nextPosition answers', async () => {
+		const database = new DatabaseSync(':memory:');
+		const sql: Sql = {
+			run: (query, ...params) => {
+				database.prepare(query).run(...params);
+			},
+			all: (query, ...params) =>
+				database.prepare(query).all(...params) as Record<string, SqlValue>[],
+		};
+		try {
+			const storage = await sqliteJournals(sql).open('binding');
+			bind.once(rules.nextPosition, 5);
+			expect(await storage.append({ n: 1 }, 0)).toMatchObject({ position: 5 });
+			expect(await storage.append({ n: 2 }, 5)).toMatchObject({ position: 6 });
+		} finally {
+			database.close();
+		}
 	});
 });

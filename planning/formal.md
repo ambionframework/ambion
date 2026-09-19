@@ -16,7 +16,8 @@ running probes and differential fuzzing. Of the 101 candidates, 79
 survived both, 11 were refuted or restated, 8 were already carried, and
 1 was outside the envelope. Every rule this file keeps survived, and
 every group now lives in a runtime rules file with its proof and its
-callers. The three files carry 244 obligations.
+callers. The five rules files and three proofs files carry 242
+obligations.
 
 **A rule is verified when the runtime runs its body.** LemmaScript turns
 a `//@ requires` and `//@ ensures` contract on a pure TypeScript function
@@ -397,11 +398,12 @@ the third.
 
 ## E. Routing, delivery, and presence
 
-**Landed on this branch.** Every rule below is in the room's rules file
-with its proof, and its `.dfy` carries four hand-written lemmas: a
-summary wakes nobody, a wider seat hears what a narrower one hears, the
-roster loop is sound and complete, and a seating wakes its newcomer.
-`routing.ts`, `delivery.ts`, and `presence.ts` run the rules.
+**Landed on this branch.** Every rule below is in
+`rules.roster.verified.ts` with its proof, and its proofs file carries
+the roster induction and four lemmas: a summary wakes nobody, a wider
+seat hears what a narrower one hears, the roster loop is sound and
+complete, and a seating wakes its newcomer. `routing.ts`, `delivery.ts`,
+and `presence.ts` run the rules.
 
 **Before the review no routing rule was verified, and `docs/durability.md`
 §7 said one was.** The attention scale, the reach of a message, and who
@@ -697,19 +699,20 @@ one `Seat` for the routing and one `Seating` for the roster (E), and one
 `Hold` with the `cancelled` marker (G5). `rules.test.ts` asserts each
 against `types.ts`.
 
-**A lemma with no caller lives in the `.dfy`.** `HearsWider`,
-`SummaryWakesNobody`, `SeatingWakesNewcomer`, and `AttemptIdsAreFresh`
-state relations between rules and have no runtime call site, so they are
-written in Dafny in the additions block, below the generated lemmas.
-`stillExpired` and `endingStands` are the two exceptions: they are rules
-in the file, and `rules.test.ts` imports them.
+**A lemma with no caller lives in the proofs file.** `HearsWider`,
+`SummaryWakesNobody`, `SeatingWakesNewcomer`, `WokenIsExact`,
+`AttemptIdsAreFresh`, `StillExpired`, and `EndingStands` state relations
+between rules and have no runtime call site, so they are written in Dafny
+in the `.proofs.dfy` beside the rules, and `check-extra.sh` verifies
+them. The `.dfy` equals its generation, so a regeneration never merges.
 
-**The room's rules file is measured.** Its 200 obligations verify in
-about 27 seconds. When `dafny verify` on the room file passes 40 s, the
-seq-quantified rules of 2d and 2f move to `rules.fold.verified.ts` beside
-it; an import from one rules file into another lowers to an axiom when a
-body calls it, so the contract a rule names must be called in a body of
-the importing file.
+**The room's rules are three files.** `rules.verified.ts` holds the
+lease, the transitions, the pass, the grant, and the verdict;
+`rules.roster.verified.ts` the routing, presence, the roster, and
+addressing; `rules.record.verified.ts` the message list and the keyed
+retry. The largest proves in about fifteen seconds, and an edit re-proves
+one file. A union two files read is declared in both and pinned in both,
+because Dafny lowers each file on its own.
 
 **Tranche 3 waits for the addressed projection.** A lemma over the fold is
 a lemma over that shape, so the lease fold, the exchange fold, and the
@@ -734,8 +737,10 @@ callers, or is named as open work above. The evidence of each slice is
 the rules file, the binding test that names the rule, and the type test
 that pins its copies.
 
-| Group                      | File                                         | Obligations | Status |
-| -------------------------- | -------------------------------------------- | ----------- | ------ |
-| A. Journal                 | `packages/journal/src/rules.verified.ts`     | 41          | Landed |
-| B, C, D, E, F, G. The room | `packages/ambion/src/room/rules.verified.ts` | 200         | Landed |
-| H. The vocabulary          | `packages/ambion/src/rules.verified.ts`      | 3           | Landed |
+| Group                            | File                                                | Obligations        | Status |
+| -------------------------------- | --------------------------------------------------- | ------------------ | ------ |
+| A. Journal                       | `packages/journal/src/rules.verified.ts`            | 18, and 23 proofs  | Landed |
+| B, C, D, F, G2. The room         | `packages/ambion/src/room/rules.verified.ts`        | 106, and 14 proofs | Landed |
+| E, G6. Routing, presence, roster | `packages/ambion/src/room/rules.roster.verified.ts` | 48, and 12 proofs  | Landed |
+| G1, G4, G7, G8, D11. The record  | `packages/ambion/src/room/rules.record.verified.ts` | 18                 | Landed |
+| H. The vocabulary                | `packages/ambion/src/rules.verified.ts`             | 3                  | Landed |
