@@ -1,9 +1,9 @@
 # Ambion brand assets
 
-This directory holds the logos, icons, and web application files from the
-Ambion brand kit, version 1.0. It does not hold the full kit. The full kit
-adds a brand guide PDF, a distinctiveness review, the Manrope font file, and
-the generator script.
+This directory holds the logos, icons, web application files, and font from
+the Ambion brand kit, version 1.0. It does not hold the full kit. The full
+kit adds a brand guide PDF, a distinctiveness review, and the generator
+script.
 
 ## Contents
 
@@ -17,6 +17,8 @@ the generator script.
   the README banner (1600 x 420), each as SVG and PNG.
 - **`tokens`** holds the brand colors and type scale as CSS custom
   properties (`ambion.css`) and as a JSON token file (`ambion.tokens.json`).
+- **`fonts`** holds `Manrope-Variable.ttf`, the brand typeface, and its SIL
+  Open Font License, `OFL.txt`. Keep the two files together.
 
 ## Asset rules
 
@@ -27,6 +29,11 @@ fields.
 
 The minimum visible mark size is 24 px. The horizontal logo needs a canvas
 of at least 160 px. Use `icons/favicon.svg` below 24 px.
+
+Use Manrope 400 for body text, 600 for labels, and 700 for headings. Fall
+back to `system-ui, sans-serif` where the font is not loaded. The wordmark
+in the logo files uses outlined Manrope Bold with adjusted tracking; do not
+retype it. The OFL does not grant rights to the Ambion name or logo.
 
 ## Web integration
 
