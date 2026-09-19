@@ -71,26 +71,21 @@ handles.
   terminal clients, live activity transport in the CLI.
 - A `SeatObject` class rename in the Cloudflare adapter.
 - A provider-neutral plugin ecosystem beyond the executor contract.
+- A second live-tier provider job; Pi's transport is expected to keep
+  behavior provider-neutral (D9). Add one only if a provider-specific
+  defect turns up.
 
 ## Pull requests to close or hold
 
-Nine open pull requests from 2026-09-01 to 2026-09-11 conflict with main,
-and main delivered the aim of each by another route. Three carry an idea
-that 0.1.0 takes.
+Nine pull requests from 2026-09-01 to 2026-09-11 conflicted with main, and
+main delivered the aim of each by another route: #73, #67, #63, #60, #58,
+#48, #44, #40, and #28 are closed, each with a comment naming the route.
+Two remain open.
 
-| PR   | Title                                                    | Decision                                                                      |
-| ---- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| #73  | Split the package into four entry points                 | Close; the export-list assertion goes into B5                                 |
-| #67  | Close an exchange with a message                         | Close; PR #108, #123, and #148 delivered the aims                             |
-| #63  | Split application surface from host and protocol exports | Close; B5 supersedes it                                                       |
-| #60  | Fix queued seat wakes and refused starts                 | Close; PR #61 delivered the same mechanism                                    |
-| #58  | LemmaScript and Dafny verification                       | Close; PR #59 delivered it; check findings F5 and F10 against `durability.md` |
-| #48  | Refactor session into runtime, log, fold, reconcile      | Close; sliced into PR #49 to #71                                              |
-| #44  | Move quiescence out of the room                          | Close; the exchange is a fold                                                 |
-| #40  | Move planning docs under `planning/`                     | Close; PR #42 moved the files; the changelog goes into C7                     |
-| #28  | Shorten the idea to its three claims                     | Close; the section no longer exists                                           |
-| #151 | Exchange-scoped tasks and Relay background work          | Hold; rebuilt by reference above                                              |
-| #153 | Room simulation evals (draft)                            | Land the closing-context slice in 0.1.0; keep the package private             |
+| PR   | Title                                           | Decision                                                          |
+| ---- | ----------------------------------------------- | ----------------------------------------------------------------- |
+| #151 | Exchange-scoped tasks and Relay background work | Hold; rebuilt by reference above                                  |
+| #153 | Room simulation evals (draft)                   | Land the closing-context slice in 0.1.0; keep the package private |
 
 **The Pi pair.** PR #113 and PR #114 each bump one half of
 `pi-agent-core` and `pi-ai` to 0.85.1, so each lockfile resolves two
