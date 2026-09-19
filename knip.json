@@ -11,7 +11,7 @@
 		"packages/*": {
 			"project": ["src/**/*.ts"]
 		},
-		"examples/persistent": {
+		"examples/workbench": {
 			"project": ["src/**/*.ts"]
 		},
 		"packages/cloudflare": {

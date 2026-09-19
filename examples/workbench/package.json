@@ -1,0 +1,25 @@
+{
+	"name": "@ambionframework-examples/workbench",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"description": "Workbench: an agentic lab workbench that hosts its rooms and shows them in one terminal.",
+	"scripts": {
+		"start": "node --experimental-ffi --env-file-if-exists=.env src/main.ts",
+		"check:types": "tsc --noEmit",
+		"test": "vitest run --exclude 'test/live/**'",
+		"test:live": "pnpm --filter '@ambionframework-examples/workbench^...' build && vitest run --config vitest.live.config.ts"
+	},
+	"dependencies": {
+		"@ambionframework/ambion": "workspace:*",
+		"@ambionframework/assistant": "workspace:*",
+		"@ambionframework/journal": "workspace:*",
+		"@ambionframework/workspace": "workspace:*",
+		"@opentui/core": "0.5.11"
+	},
+	"devDependencies": {
+		"typescript": "^7.0.2",
+		"vitest": "^4.1.11",
+		"@earendil-works/pi-ai": "^0.85.1"
+	}
+}
