@@ -1,7 +1,7 @@
 # Contributing to Ambion
 
-Repository installation requires Node **>= 26.4** and pnpm 10 because the
-CLI includes OpenTUI. The core library retains its Node **>= 22.19** floor.
+Repository installation requires Node **>= 26.4** and pnpm 10, the OpenTUI
+floor. Every package holds the same Node floor.
 
 Ambion is a collaboration kernel for agents and humans. Read the
 [documentation index](docs/README.md) for current contracts and

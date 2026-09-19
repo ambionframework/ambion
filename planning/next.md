@@ -123,17 +123,18 @@ are decided, and the live tier can run.
 1. [ ] Merge PR #152; note in `durability.md` that a same-key retry is
        bound to its activation (A3).
 2. [ ] Close the nine stale pull requests in the [backlog](backlog.md);
-       take the export-list assertion into B5 and the changelog into C7.
+       take the export-list assertion into B5.
 3. [ ] Hold PR #151; schedule the closing-context slice of PR #153 for
        phase 1; keep the evals package private.
-4. [ ] Bump `pi-agent-core` and `pi-ai` to 0.85.1 together in `ambion`,
-       `cloudflare`, `pi-journal`, and `workspace`; merge PR #111, #112,
-       #5, #6, and #7; rebase PR #4. Needs 1.
-5. [ ] Install on Node 22 (C1). Needs 4, because the lockfile moves once.
+4. [x] Bump `pi-agent-core` and `pi-ai` to 0.85.1 together in `ambion`,
+       `cloudflare`, `pi-journal`, `workspace`, and `assistant`; close the
+       superseded PR #111, #112, #5, #6, #7, and #4. Needs 1.
+5. [ ] Install on the single Node floor (C1). Needs 4, because the lockfile
+       moves once.
 6. [ ] Restore the provider account; add the second provider job; fail a
        job on a credit or authentication error with the account's name
        (D9). Run the live tier once after 4.
-7. [ ] Add `CHANGELOG.md` with an `Unreleased` section (C7).
+7. [ ] A `CHANGELOG.md` waits; the release entry does not need one now (C7).
 
 **Evidence:** CI green on main; `pnpm install` and `pnpm check` on Node 22;
 two live jobs green; Dependabot rebases an npm bump.
@@ -418,6 +419,18 @@ that compares both under cancellation, reseating, late summaries, takeover,
 and restart. A room with a year of history answers at the speed of one with
 a day.
 
+**Hold each derived projection as an addressed value the entry updates.** The
+Pi 0.85.1 session storage names its derived state under a `Value<T>` address:
+a branch tip, a lane state, an operation state. Each commit updates that value
+as part of the write, so a read hits the value at its current version and
+replays nothing. Ambion applies the shape to the in-memory projection. The
+roster, the open exchange, the pending wakes, and the owed drafts each become
+an addressed field that one entry updates as it lands. `foldRoom` replays the
+whole log and stays the reference for correctness. The equivalence property
+test proves the projection and the fold agree. A durable checkpoint that lets
+a resume skip settled history is a later format change
+([backlog](backlog.md)).
+
 **B2. Split the room host by mechanism.** `room-host.ts` holds 1,468 lines
 and seven mechanisms; the complexity rule bounds a function and nothing
 bounds a file. Cut it into `host/room.ts` (phases, compose, recover,
@@ -485,12 +498,11 @@ core takes definitions. Expose the core surface plus `start` and
 
 ### C. Developer experience
 
-**C1. Install on the supported Node floor.** Every manifest declares Node
-`>=22.19`; `@opentui/core` declares `>=26.4`, and `.npmrc` sets
-`engine-strict=true`, so `pnpm install` fails on Node 22 before it installs
-anything, and Dependabot cannot rebase npm bumps. Load OpenTUI lazily as an
-optional dependency or move the terminal client to its own package; make
-the root `engines` true; install on Node 22 in CI.
+**C1. One Node floor across the tree.** The manifests once declared Node
+`>=22.19` while `@opentui/core` declares `>=26.4` and `.npmrc` sets
+`engine-strict=true`, so two floors described one tree. Every manifest now
+declares Node `>=26.4`, the OpenTUI floor, and CI installs and tests on
+Node 26. The docs state the one floor.
 
 **C2. Publish the deterministic test tools.** The scripted stream and the
 fake clock live in `test/support`; PR #153 re-implements the stream three
@@ -536,10 +548,9 @@ Validate the room name, refuse the unheld summary name, add `opened` to
 the handle, make the host operation idempotent, and prefix the key kinds.
 
 **C7. Lighten the planning and evidence files.** `demos/` holds 4.4 MB of
-generated HTML; `docs/assistant-acceptance.md` is a dated review; no
-changelog exists. Move dated evidence under `planning/evidence/`, add
-`CHANGELOG.md`, and require an entry from every pull request that changes a
-public entry.
+generated HTML; `docs/assistant-acceptance.md` is a dated review. Move dated
+evidence under `planning/evidence/`. A `CHANGELOG.md` waits until after the
+tag; the release does not require a per-pull-request entry now.
 
 ### D. Scope the release did not name
 
@@ -564,6 +575,15 @@ older runtimes cannot read it; no test replays a journal an earlier build
 wrote. Declare format 1, write `format: 1` on the run entry, store golden
 journals per chaos scenario with expected folds, replay them in CI, and
 state the promise: a 0.1.x runtime reads every 0.1.0 journal.
+
+**Model the format as a header field with a named upgrade path.** The Pi
+0.85.1 storage carries a `storageVersion` in its header, and it ships a named
+upgrade from format 3 to format 4 that replays the old records into the new
+state (`openLegacyV3`, `upgradeLegacyV3ToV4`). Ambion mirrors the shape.
+`format: 1` on the run entry is the header field, and the reader dispatches
+on it. A later format adds its own reader and one named upgrade, so an older
+journal loads through a known path. The golden journals hold the promise: CI
+replays a journal each shipped build wrote and checks the fold.
 
 **D4. Membership authority for independently owned agents.** Any ordinary
 activation can unseat any agent, including the summary writer, after which

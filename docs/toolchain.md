@@ -66,9 +66,8 @@ and agent runners. `room.ts` composes both behind the public facade.
 | Formatting             | Prettier 3; 100-column, tabs in code, spaces in Markdown |
 | Dead code              | Knip 6                                                   |
 
-The core and published packages require Node `>=22.19`. The OpenTUI `ambion
-dev` client additionally needs Node `>=26.4` (or Bun `>=1.3`). CI installs and
-tests on Node 26.
+Every package requires Node `>=26.4`, the OpenTUI floor. The `ambion dev`
+client also runs on Bun `>=1.3`. CI installs and tests on Node 26.
 
 ## 3. Supply chain
 

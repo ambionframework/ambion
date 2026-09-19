@@ -12,7 +12,7 @@ exchange for its owner. Applications own domain data and tool resources.
 
 ## Install
 
-Use Node **22.19 or later** and ESM. Until the packages publish to npmjs,
+Use Node **26.4 or later** and ESM. Until the packages publish to npmjs,
 installation needs a GitHub Packages read token and the registry
 configuration in [the toolchain guide](https://github.com/ambionframework/ambion/blob/main/docs/toolchain.md#9-release-and-publishing).
 

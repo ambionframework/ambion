@@ -1,4 +1,5 @@
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 
 /** The stable identity a backend uses for one calling agent. */
 export interface WorkspaceAgent {
@@ -78,7 +79,7 @@ export function openResource(options: {
 				ensureUsable(signal);
 				return await operation(env);
 			} finally {
-				await env.cleanup();
+				await env.cleanup(BACKGROUND_CONTEXT);
 			}
 		};
 		const task = tail.then(run, run);

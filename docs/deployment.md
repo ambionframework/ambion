@@ -16,7 +16,7 @@ tracks the evidence still required for release.
 
 ## Embedded Node
 
-**The embedded model needs no remote coordination service.** Use Node 22.19
+**The embedded model needs no remote coordination service.** Use Node 26.4
 or later and ESM. Supply agent definitions, provider credentials, and domain
 tools. Keep the process alive while agents work. The default in-memory
 journals lose their contents when their storage instance is lost.

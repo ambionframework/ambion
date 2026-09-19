@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceAgent, WorkspaceBackend } from '../src/index.ts';
-import { directoryBackend, memoryBackend, openWorkspace } from '../src/index.ts';
+import {
+	BACKGROUND_CONTEXT,
+	directoryBackend,
+	memoryBackend,
+	openWorkspace,
+} from '../src/index.ts';
 import { openResource, type ResourceBackend } from '../src/resource.ts';
 
 const agent = (name: string): WorkspaceAgent => ({ name, identity: `${name}-identity` });
@@ -91,7 +96,7 @@ describe('workspace lifecycle', () => {
 				backend: directoryBackend(root),
 			});
 			await workspace.use(agent('writer'), async (env) => {
-				const result = await env.writeFile('persisted.txt', 'keep me\n');
+				const result = await env.writeFile('persisted.txt', 'keep me\n', BACKGROUND_CONTEXT);
 				if (!result.ok) throw result.error;
 			});
 

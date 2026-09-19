@@ -16,6 +16,11 @@
  * The design contract is `docs/workspace.md`.
  */
 
+/**
+ * A caller of `workspace.use` reaches Pi's `ExecutionEnv`, whose members take
+ * a context. Use this context when the call has no other one.
+ */
+export { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 export type { WorkspaceBackend } from './backend.ts';
 export type {
 	MemoryBackendFile,

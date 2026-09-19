@@ -1,4 +1,4 @@
-/** Pi sessions preserve their full public record over named Ambion journals. */
+/** Pi transcript audits preserve their ordered record over named Ambion journals. */
 import { DatabaseSync } from 'node:sqlite';
 import {
 	type JournalOpener,
@@ -8,7 +8,7 @@ import {
 	type SqlValue,
 	sqliteJournals,
 } from '@ambionframework/journal';
-import { InMemorySessionRepo } from '@earendil-works/pi-agent-core';
+import type { JsonValue } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import { piSessions } from '../src/index.ts';
 
@@ -35,138 +35,55 @@ const backends: readonly { name: string; open(): Backend }[] = [
 	},
 ];
 
-const custom = (id: string, data: unknown) => ({
+const custom = (id: string, data: JsonValue) => ({
 	id,
 	type: 'custom' as const,
 	customType: 'audit',
 	data,
 });
 
-describe.each(backends)('Pi sessions over $name journals', ({ open }) => {
-	it('preserves the public session record across newly opened facades', async () => {
+describe.each(backends)('Pi transcript audits over $name journals', ({ open }) => {
+	it('preserves the ordered record across newly opened facades', async () => {
 		const backend = open();
 		try {
 			const first = await piSessions(backend.journals).open('child', 'parent');
 			const root = await first.appendEntry(custom('root', { message: 'root' }), 'main');
-			await first.createLane('review', root.id);
-			const branch = await first.appendEntry(custom('branch', { message: 'branch' }), 'review');
-			await first.moveLane('main', root.id);
-			await first.appendRecord({
-				id: 'operation',
-				type: 'operation_started',
-				lane: 'review',
-				sourceLeafId: root.id,
-				intent: { kind: 'run', originalPrompt: [], initialMessages: [] },
-			});
-			await first.setName('Review transcript');
-			await first.setLabel(branch.id, 'keep');
+			const branch = await first.appendEntry(custom('branch', { message: 'branch' }), 'main');
 
 			const second = await piSessions(backend.journals).open('child');
 			expect(await second.getMetadata()).toMatchObject({ id: 'child', parentSessionId: 'parent' });
-			expect(await second.getLanes()).toEqual([
-				{ lane: 'main', leafId: root.id },
-				{ lane: 'review', leafId: branch.id },
-			]);
 			expect(await second.findEntries({ customType: 'audit', order: 'oldestFirst' })).toMatchObject(
 				[
 					{ id: root.id, parentId: null, seq: 1, data: { message: 'root' } },
-					{ id: branch.id, parentId: root.id, seq: 3, data: { message: 'branch' } },
+					{ id: branch.id, parentId: root.id, seq: 2, data: { message: 'branch' } },
 				],
 			);
-			expect(
-				await second.findEntriesOnBranch({ start: branch.id, order: 'oldestFirst' }),
-			).toMatchObject([{ id: root.id }, { id: branch.id }]);
-			expect(await second.findRecords({ type: 'operation_started', lane: 'review' })).toMatchObject(
-				[{ id: 'operation', seq: 5, sourceLeafId: root.id }],
-			);
-			expect(await second.findOpenOperations('review')).toMatchObject([{ id: 'operation' }]);
-			expect(await second.getName()).toBe('Review transcript');
-			expect(await second.getLabel(branch.id)).toBe('keep');
-			expect(await second.getStats()).toMatchObject({ messageCount: 0 });
-			expect((await second.getLog()).map((item) => item.kind)).toEqual([
-				'entry',
-				'lane',
-				'entry',
-				'lane',
-				'record',
-				'fact',
-				'fact',
+			expect(await second.findEntries({ order: 'newestFirst', limit: 1 })).toMatchObject([
+				{ id: branch.id, seq: 2 },
 			]);
+			expect(await second.getEntry(root.id)).toMatchObject({ id: root.id, seq: 1 });
 		} finally {
 			backend.dispose();
 		}
 	});
 
-	it('replays message usage and finished operation records', async () => {
+	it('appends messages and custom entries through the transcript verbs', async () => {
 		const backend = open();
 		try {
-			const first = await piSessions(backend.journals).open('usage');
-			const message = await first.appendEntry(
-				{
-					id: 'message',
-					type: 'message',
-					message: {
-						role: 'custom',
-						customType: 'test',
-						content: 'hello',
-						display: true,
-						timestamp: 1,
-					},
-				},
-				'main',
-			);
-			await first.appendRecord({
-				id: 'run',
-				type: 'operation_started',
-				lane: 'main',
-				sourceLeafId: message.id,
-				intent: { kind: 'run', originalPrompt: [], initialMessages: [] },
-			});
-			await first.appendRecord({
-				id: 'usage',
-				type: 'usage',
-				lane: 'main',
-				cause: 'assistant',
-				runId: 'run',
-				entryId: message.id,
-				attempt: 1,
-				stopReason: 'stop',
-				usage: {
-					input: 3,
-					output: 5,
-					cacheRead: 2,
-					cacheWrite: 1,
-					totalTokens: 11,
-					cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 },
-				},
-			});
-			await first.appendRecord({
-				id: 'finished',
-				type: 'operation_finished',
-				lane: 'main',
-				runId: 'run',
-				outcome: 'completed',
-			});
-
-			const second = await piSessions(backend.journals).open('usage');
-			expect(await second.findOpenOperations('main')).toEqual([]);
-			expect(await second.getStats()).toMatchObject({
-				messageCount: 1,
-				cachedTokens: 2,
-				uncachedTokens: 4,
-				totalTokens: 11,
-				costTotal: 10,
-			});
-			expect(await second.findRecords({ type: 'usage', afterSeq: 2 })).toMatchObject([
-				{ id: 'usage', runId: 'run' },
-			]);
-			expect((await second.getLog({ afterSeq: 1 })).map((item) => item.seq)).toEqual([2, 3, 4]);
+			const session = await piSessions(backend.journals).open('verbs');
+			await session.appendCustomEntry('audit/activation', { seat: 'product' });
+			await session.appendMessage({ role: 'user', content: 'a turn', timestamp: 1 });
+			const again = await piSessions(backend.journals).open('verbs');
+			const entries = await again.findEntries({ order: 'oldestFirst' });
+			expect(entries.map((entry) => entry.type)).toEqual(['custom', 'message']);
+			expect(entries.map((entry) => entry.seq)).toEqual([1, 2]);
+			expect(entries[1]?.parentId).toBe(entries[0]?.id);
 		} finally {
 			backend.dispose();
 		}
 	});
 
-	it('retries concurrent compare-and-append writes without corrupting lane parents', async () => {
+	it('retries concurrent compare-and-append writes without corrupting parents', async () => {
 		const backend = open();
 		try {
 			const sessions = piSessions(backend.journals);
@@ -225,25 +142,18 @@ describe.each(backends)('Pi sessions over $name journals', ({ open }) => {
 		}
 	});
 
-	it('rejects an entry id that already belongs to a record before it writes', async () => {
+	it('rejects a duplicate entry id before it writes', async () => {
 		const backend = open();
 		try {
-			const sessions = piSessions(backend.journals);
-			const session = await sessions.open('id-collision');
-			await session.appendRecord({
-				id: 'shared-id',
-				type: 'operation_started',
-				lane: 'main',
-				sourceLeafId: null,
-				intent: { kind: 'run', originalPrompt: [], initialMessages: [] },
-			});
+			const session = await piSessions(backend.journals).open('id-collision');
+			await session.appendEntry(custom('shared-id', { first: true }), 'main');
 			const storage = await backend.journals.open(
 				JSON.stringify(['ambion/pi-session', 'id-collision']),
 			);
 			const before = await storage.read(0);
 			await expect(
 				session.appendEntry(custom('shared-id', { poisoned: true }), 'main'),
-			).rejects.toThrow(/duplicate id/);
+			).rejects.toThrow(/already exists/);
 			expect(await storage.read(0)).toEqual(before);
 		} finally {
 			backend.dispose();
@@ -329,23 +239,6 @@ describe.each(backends)('Pi sessions over $name journals', ({ open }) => {
 		}
 	});
 
-	it('persists clearing names and labels across facades', async () => {
-		const backend = open();
-		try {
-			const session = await piSessions(backend.journals).open('cleared');
-			const entry = await session.appendEntry(custom('labelled', { value: true }), 'main');
-			await session.setName('temporary');
-			await session.setLabel(entry.id, 'temporary');
-			await session.setName(undefined);
-			await session.setLabel(entry.id, undefined);
-			const reread = await piSessions(backend.journals).open('cleared');
-			expect(await reread.getName()).toBeUndefined();
-			expect(await reread.getLabel(entry.id)).toBeUndefined();
-		} finally {
-			backend.dispose();
-		}
-	});
-
 	it('keeps one projection when a reader races an append confirmation', async () => {
 		const backend = open();
 		try {
@@ -406,23 +299,4 @@ it('opens Pi transcripts under a collision-safe namespace', async () => {
 	};
 	await piSessions(journals).open('room/a');
 	expect(names).toEqual([JSON.stringify(['ambion/pi-session', 'room/a'])]);
-});
-
-it('matches Pi memory session query and branch semantics', async () => {
-	const reference = await new InMemorySessionRepo().create({ id: 'reference' });
-	const actual = await piSessions(memoryJournals()).open('actual');
-	for (const session of [reference, actual]) {
-		await session.appendEntry(custom('root', { value: 0 }), 'main');
-		await session.appendEntry({ ...custom('middle', { value: 1 }), customType: 'keep' }, 'main');
-		await session.appendEntry({ ...custom('leaf', { value: 2 }), customType: 'skip' }, 'main');
-	}
-	const entryIds = (entries: readonly { id: string }[]) => entries.map((entry) => entry.id);
-	const options = { customType: 'keep', order: 'oldestFirst' as const };
-	expect(entryIds(await actual.findEntries(options))).toEqual(
-		entryIds(await reference.findEntries(options)),
-	);
-	const branch = { start: 'leaf', stopAtId: 'middle', order: 'oldestFirst' as const };
-	expect(entryIds(await actual.findEntriesOnBranch(branch))).toEqual(
-		entryIds(await reference.findEntriesOnBranch(branch)),
-	);
 });

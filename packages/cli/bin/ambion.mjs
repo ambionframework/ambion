@@ -14,18 +14,16 @@
 // The floor is duplicated here and in package.json on purpose: this file has to
 // parse on old Node, so it cannot use JSON import attributes to read the one in
 // package.json, and the value is a build-time constant either way.
-const MIN_NODE_MAJOR = 22;
-const MIN_NODE_MINOR = 19;
-const ENGINES_LABEL = '>=22.19 or >=23.6';
+const MIN_NODE_MAJOR = 26;
+const MIN_NODE_MINOR = 4;
+const ENGINES_LABEL = '>=26.4';
 
 function supported() {
 	const match = /^(\d+)\.(\d+)/.exec(process.versions.node);
 	if (!match) return true; // unparseable: let the real CLI fail loudly instead
 	const major = parseInt(match[1], 10);
 	const minor = parseInt(match[2], 10);
-	// Ambion loads TypeScript workspace files through Node's own type stripping,
-	// which is on by default in 22.18+ and 23.6+ but not in 23.0–23.5.
-	if (major === 23 && minor < 6) return false;
+	// One floor covers both native TypeScript type stripping and OpenTUI.
 	if (major > MIN_NODE_MAJOR) return true;
 	return major === MIN_NODE_MAJOR && minor >= MIN_NODE_MINOR;
 }

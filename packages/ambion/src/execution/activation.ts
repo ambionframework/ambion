@@ -27,12 +27,8 @@
  * has called it that all along: every one lands in the seat's downstream
  * session as an `ambion/activation` entry.
  */
-import type {
-	Agent,
-	AgentEvent,
-	AgentMessage,
-	Session as PiSession,
-} from '@earendil-works/pi-agent-core';
+import type { AuditSession as PiSession } from '@ambionframework/pi-journal';
+import type { Agent, AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ActivationView, LeaseResponse, ViewResponse } from '../protocol.ts';
 import type { EndReason, RoomNotification, Seq } from '../types.ts';
 import { PiContext } from './pi.ts';

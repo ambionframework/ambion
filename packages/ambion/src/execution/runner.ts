@@ -6,8 +6,8 @@
  * through the transport.
  */
 
-import type { SessionOpener } from '@ambionframework/pi-journal';
-import type { Agent as PiAgent, Session as PiSession } from '@earendil-works/pi-agent-core';
+import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
+import type { Agent as PiAgent } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { SeatContext, Transport } from '../host/runtime.ts';
 import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../protocol.ts';
