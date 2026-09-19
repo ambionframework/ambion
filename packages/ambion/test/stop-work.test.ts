@@ -9,6 +9,7 @@ import {
 	roomName,
 	stateOf,
 	storedOf,
+	waitForRoom,
 } from './support/room.ts';
 import { isClosing, quiet, scripted, speak } from './support/scripted.ts';
 import {
@@ -260,7 +261,7 @@ describe.each(storages)('stop revocation recovery on $name storage', (storage) =
 	);
 });
 
-it('does not recreate cancelled work when a steering message was unread', async () => {
+it('takes up unread steering work after a stop and resume', async () => {
 	const opened = await sqlite.open();
 	const unreadable = unreadableOpener(opened.storage);
 	let failSteer = false;
@@ -300,15 +301,20 @@ it('does not recreate cancelled work when a steering message was unread', async 
 		);
 		await messagesOf(room);
 		expect(unreadable.readFailures()).toBeGreaterThan(0);
+		// The first stop revokes the running lease before the read fails.
 		await expect(room.stop()).rejects.toThrow(/unreadable/);
 		unreadable.fail(false);
 		await room.stop();
 
 		const resumed = await resumeRoom(name, { runtime, agents: [worker], streamFn: stream });
 		try {
-			await resumed.reconcile();
-			await new Promise<void>((resolve) => setImmediate(resolve));
-			expect(calls).toBe(1);
+			// The steering message never claimed a lease, so the resumed room wakes
+			// the seat for it. A planned stop keeps unclaimed work.
+			for (let attempt = 0; attempt < 100 && calls < 2; attempt += 1) {
+				await resumed.reconcile();
+				await new Promise<void>((resolve) => setImmediate(resolve));
+			}
+			expect(calls).toBe(2);
 			const messages = await messagesOf(resumed);
 			const original = messages.find(
 				(message) => message.kind === 'said' && message.text === 'start work',
@@ -325,8 +331,10 @@ it('does not recreate cancelled work when a steering message was unread', async 
 			const steeringLease = [...leases].find(([id]) =>
 				id.startsWith(`message:${steering.seq}:worker:`),
 			)?.[1];
+			// The interrupted running attempt stays revoked; the unclaimed steering
+			// work runs again in the new run.
 			expect(oldLease).toMatchObject({ phase: 'ended', reason: 'revoked', readThrough: 0 });
-			expect(steeringLease).toMatchObject({ phase: 'ended', reason: 'revoked' });
+			expect(steeringLease).toMatchObject({ phase: 'running' });
 		} finally {
 			await resumed.stop();
 		}
@@ -478,6 +486,79 @@ describe.each(storages)('durable stop state on $name storage', (storage) => {
 			expect(stateOf(room).closes.some((close) => close.from === exchange.from)).toBe(false);
 		} finally {
 			release.resolve();
+			await room.stop().catch(() => {});
+			await opened.dispose();
+		}
+	});
+});
+
+describe.each(storages)('graceful stop keeps unclaimed work on $name storage', (storage) => {
+	it('answers a woken but unclaimed question after a resume', async () => {
+		const opened = await storage.open();
+		// This runtime only wakes the seat and never claims, so the question is
+		// due but no lease covers it when the room stops.
+		const wakes: Wake[] = [];
+		const capturing = createRuntime({
+			storage: opened.storage,
+			transport: {
+				connect(): SeatPort {
+					return {
+						wake: async (wake) => {
+							wakes.push(wake);
+						},
+						steer: async () => {},
+						cut: async () => {},
+					};
+				},
+			},
+		});
+		const name = roomName(`stop-unclaimed-${storage.name}`);
+		const room = await startRoom({
+			name,
+			agents: [worker],
+			seats: { [worker.name]: 'named' },
+			runtime: capturing,
+			streamFn: scripted(() => quiet()),
+		});
+		try {
+			const visit = await room.visit(person);
+			await visit.send({ to: worker.name, text: 'answer me after the restart' });
+			await new Promise<void>((resolve) => setImmediate(resolve));
+			expect(wakes.length).toBeGreaterThan(0);
+			await room.stop();
+
+			// A planned stop writes no revocation for an activation that never claimed.
+			const revocations = (await storedOf(opened.journals, name)).filter(
+				(entry) =>
+					entry.kind === 'lease' &&
+					(entry.body as { phase?: string; reason?: string }).phase === 'ended' &&
+					(entry.body as { phase?: string; reason?: string }).reason === 'revoked',
+			);
+			expect(revocations).toHaveLength(0);
+
+			// A second run over the same record wakes the seat and answers.
+			const resumed = await resumeRoom(name, {
+				runtime: createRuntime({ storage: opened.storage }),
+				agents: [worker],
+				streamFn: scripted((_context, agent, call) =>
+					agent === worker.name && call === 1 ? speak('the answer') : quiet(),
+				),
+			});
+			try {
+				await waitForRoom(resumed, 'quiet');
+				const messages = await messagesOf(resumed);
+				expect(
+					messages.some(
+						(message) =>
+							message.kind === 'said' &&
+							message.from === worker.name &&
+							message.text === 'the answer',
+					),
+				).toBe(true);
+			} finally {
+				await resumed.stop();
+			}
+		} finally {
 			await room.stop().catch(() => {});
 			await opened.dispose();
 		}
