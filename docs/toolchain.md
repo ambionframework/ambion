@@ -105,25 +105,40 @@ published-consumer path. The graph is defined in [`turbo.jsonc`](../turbo.jsonc)
 
 Use these commands at the repository root:
 
-| Command                    | Purpose                                           |
-| -------------------------- | ------------------------------------------------- |
-| `pnpm build`               | Build every package through Turborepo             |
-| `pnpm check:types`         | Type-check packages after their builds            |
-| `pnpm test`                | Run report checks and the scripted Vitest suites  |
-| `pnpm check:format`        | Verify Prettier formatting                        |
-| `pnpm check:lint`          | Run Biome with warnings as errors, then Knip      |
-| `pnpm check:lemmascript`   | Verify listed contracts with Dafny                |
-| `pnpm check`               | Format → build/types → lint → report checks/tests |
-| `pnpm format`              | Apply Biome then Prettier                         |
-| `pnpm test:live`           | Run provider-backed live suites                   |
-| `pnpm chaos`               | Run widened failure sweeps (`AMBION_SEEDS=200`)   |
-| `pnpm version:set <x.y.z>` | Set all publishable package versions              |
-| `pnpm publish:packages`    | Pack or publish release artifacts                 |
+| Command                      | Purpose                                                                |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| `pnpm build`                 | Build every package through Turborepo                                  |
+| `pnpm check:types`           | Type-check packages after their builds                                 |
+| `pnpm test`                  | Run report checks and the scripted Vitest suites                       |
+| `pnpm check:format`          | Verify Prettier formatting                                             |
+| `pnpm check:lint`            | Run Biome with warnings as errors, then Knip                           |
+| `pnpm check:lemmascript`     | Verify every listed rules file and every proofs file with Dafny        |
+| `pnpm rule:check <file>`     | Regenerate and verify one rules file and its proofs file               |
+| `pnpm check:lemmascript:gen` | Regenerate the Dafny and fail on a stale file                          |
+| `pnpm check`                 | Format → build/types → lint → Dafny regeneration → report checks/tests |
+| `pnpm format`                | Apply Biome then Prettier                                              |
+| `pnpm test:live`             | Run provider-backed live suites                                        |
+| `pnpm chaos`                 | Run widened failure sweeps (`AMBION_SEEDS=200`)                        |
+| `pnpm version:set <x.y.z>`   | Set all publishable package versions                                   |
+| `pnpm publish:packages`      | Pack or publish release artifacts                                      |
 
-LemmaScript source, generated `.dfy.gen`, and proof `.dfy` files are kept
-together. After changing a contract, regenerate with
-`npx lsc gen --backend=dafny <file>`. `LemmaScript-files.txt` lists what CI
-verifies; local verification needs Dafny on `PATH`.
+LemmaScript source, its generated `.dfy.gen` and `.dfy`, and a hand-written
+`.proofs.dfy` are kept together. The `.dfy` equals the generation, so
+`npx lsc regen --backend=dafny <file>` after a contract edit is a copy; a
+proof the generator cannot write goes in the `.proofs.dfy`, which includes
+the generated file. `pnpm check` runs `lsc gen-check`, which regenerates
+and fails on a stale file without Dafny; `pnpm check:lemmascript` runs the
+proof and `check-extra.sh`, which verifies every proofs file, and needs
+Dafny on `PATH`. `pnpm rule:check <file>` does both for one file.
+
+`LemmaScript-files.txt` lists what CI verifies, one `path [timeout] [dafny
+flags]` per line. A timeout above 60 turns the batch check into a generation
+check with no proof, because CI passes no `--slow`; keep every timeout at 60
+or below. A rule that calls `filter` needs `--standard-libraries` in the
+flag column. The CI job clones the LemmaScript tools at `ls-ref`, which
+must name the `lemmascript` version in `package.json`.
+[`formal.md`](formal.md) holds the mechanism, the constructs that lower,
+and what a contributor does to change a rule.
 
 `scripts/setup.sh` provisions the full local toolchain. It installs Node 26
 through nvm, because `@opentui/core` sets that engine floor. It installs .NET 8,

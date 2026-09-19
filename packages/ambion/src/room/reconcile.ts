@@ -4,18 +4,38 @@
  * `decide` is pure. It reads the folded state and the clock and returns the
  * entries to write, the wakes to send, and when to look again. Every wake it
  * sends comes off one list, `state.due`: the activations the room owes,
- * whatever caused each one. The room applies
- * a decision, and a second decision over the result writes nothing: that is
- * what makes it safe to run after every commit, every lease change, every
- * alarm and every wake, and after a resume that does not know what the last
- * run got to.
+ * whatever caused each one. Each pass writes what the fold owes after the
+ * last, and the loop stops at the pass that writes nothing: that is what
+ * makes it safe to run after every commit, every lease change, every alarm
+ * and every wake, and after a resume that does not know what the last run
+ * got to.
  */
 
 import { decodeActivationId } from '../activation-id.ts';
 import type { Close, LeaseChange } from '../journal/events.ts';
 import type { RoomState } from './fold.ts';
-import { isExpired, isLive, type PendingActivation, seatOf } from './lease.ts';
-import { givesUp } from './rules.verified.ts';
+import {
+	isExpired,
+	isLive,
+	type LeaseHold,
+	type PendingActivation,
+	removalsOf,
+	seatOf,
+} from './lease.ts';
+import {
+	earliestAfter,
+	endingOf,
+	exchangeLive,
+	forgets,
+	givesUp,
+	type LiveLease,
+	looksAgainAt,
+	mayClose,
+	type OwedActivation,
+	readyToSend,
+	removedAfter,
+	staleLease,
+} from './rules.verified.ts';
 import { summaryWriter } from './summary.ts';
 
 export interface ReconcileOptions {
@@ -100,29 +120,43 @@ export interface LiveWork {
 /** One scan of the folded state and the clock, for every caller that asks. */
 export function liveWork(state: RoomState, now: number): LiveWork {
 	const seats = liveSeats(state, now);
-	const holders = [...seats.values()];
 	return {
 		seats,
-		exchange: holders.some((ids) => ids.some(holdsExchange)),
+		exchange: exchangeLive(liveLeases(state), owedActivations(state), now),
 		rest: seats.size === 0,
 	};
 }
 
-/** The activation holds an exchange open when a message caused it. */
-function holdsExchange(id: string): boolean {
-	const source = decodeActivationId(id)?.source;
-	return source === 'message';
+/** Every lease the room derived an id for, as the liveness rules read it. */
+function liveLeases(state: RoomState): LiveLease[] {
+	return [...state.leases.values()].flatMap((lease: LeaseHold) => {
+		const parsed = decodeActivationId(lease.id);
+		if (parsed === undefined) return [];
+		return [
+			{
+				source: parsed.source,
+				seat: parsed.seat,
+				phase: lease.phase,
+				expiresAt: lease.phase === 'running' ? lease.expiresAt : 0,
+			},
+		];
+	});
+}
+
+/** Every activation the room owes, as the liveness rules read it. */
+function owedActivations(state: RoomState): OwedActivation[] {
+	return state.due.map((owed) => ({ source: owed.source, seat: owed.seat }));
 }
 
 export function planReconciliation(state: RoomState, options: ReconcileOptions): Reconciliation {
 	const work = liveWork(state, options.now);
-	const revoked = revocations(state, options.now);
-	const revokedIds = new Set(revoked.map((lease) => lease.id));
-	const expired = expiries(state, options.now, revokedIds);
+	const { revoked, expired } = endings(state, options.now);
 	const abandoned = options.stopped ? [] : abandonments(state, options);
-	// An expiry or an abandonment changes what is live: the close waits for the fold that holds it.
-	const settled = revoked.length === 0 && expired.length === 0 && abandoned.length === 0;
-	const close = options.stopped || !settled ? undefined : closing(state, work, options.now);
+	// An ending changes what is live: the close waits for the fold that holds it.
+	const ended = revoked.length + expired.length + abandoned.length;
+	const close = mayClose(options.stopped, ended, state.exchange !== undefined, work.exchange)
+		? closing(state, options.now)
+		: undefined;
 	const sends = options.stopped ? [] : dueWakes(state, options);
 	return {
 		revoked,
@@ -136,32 +170,37 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
 }
 
 /**
- * A running lease from before a removal is stale forever.  This check is
- * journal-derived so a resumed room repairs a crash between the removal
- * message and the asynchronous cut of the old seat.
+ * A lease is stale when the room did not derive its id, its seat left the
+ * roster, or a removal of its seat landed after its cause. A running lease
+ * from before a removal is stale forever. This check is journal-derived so
+ * a resumed room repairs a crash between the removal message and the
+ * asynchronous cut of the old seat.
  */
-function revocations(state: RoomState, now: number): Ended[] {
+function isStale(state: RoomState, id: string): boolean {
+	const parsed = decodeActivationId(id);
+	const seated = parsed !== undefined && state.roster.some((seat) => seat.name === parsed.seat);
+	const removedAfterCause =
+		parsed !== undefined && removedAfter(removalsOf(state.messages, parsed.seat), parsed.position);
+	return staleLease(parsed !== undefined, seated, removedAfterCause);
+}
+
+/** Every lease that ends in this pass, by how it ends. A revocation wins over an expiry. */
+function endings(state: RoomState, now: number): { revoked: Ended[]; expired: Ended[] } {
 	const at = new Date(now).toISOString();
-	return [...state.leases.values()]
-		.filter((lease) => lease.phase === 'running')
-		.filter((lease) => {
-			const parsed = decodeActivationId(lease.id);
-			if (parsed === undefined || !state.roster.some((seat) => seat.name === parsed.seat))
-				return true;
-			return state.messages.some(
-				(message) =>
-					message.kind === 'unseated' &&
-					message.subject === parsed.seat &&
-					message.seq > parsed.position,
-			);
-		})
-		.map((lease) => ({
-			id: lease.id,
-			phase: 'ended' as const,
-			reason: 'revoked' as const,
-			at,
-			readThrough: lease.readThrough,
-		}));
+	const revoked: Ended[] = [];
+	const expired: Ended[] = [];
+	for (const lease of state.leases.values()) {
+		const ending = endingOf(
+			lease.phase === 'running',
+			isStale(state, lease.id),
+			isExpired(lease, now),
+		);
+		if (ending === 'stays') continue;
+		const ended = { id: lease.id, phase: 'ended' as const, at, readThrough: lease.readThrough };
+		if (ending === 'revoked') revoked.push({ ...ended, reason: 'revoked' });
+		else expired.push({ ...ended, reason: 'expired' });
+	}
+	return { revoked, expired };
 }
 
 /**
@@ -170,8 +209,10 @@ function revocations(state: RoomState, now: number): Ended[] {
  * exactly as long as the fold owes the activation.
  */
 function forgotten(state: RoomState, options: ReconcileOptions): string[] {
-	const due = new Set(state.due.map((owed) => owed.id));
-	return [...options.sent.keys()].filter((id) => !due.has(id));
+	return forgets(
+		[...options.sent.keys()],
+		state.due.map((owed) => owed.id),
+	);
 }
 
 /** An activation the room owes whose attempts reached the cap. */
@@ -196,30 +237,14 @@ function abandonments(state: RoomState, options: ReconcileOptions): Ended[] {
 		}));
 }
 
-function expiries(
-	state: RoomState,
-	now: number,
-	revoked: ReadonlySet<string> = new Set(),
-): Reconciliation['expired'] {
-	const at = new Date(now).toISOString();
-	return [...state.leases.values()]
-		.filter((lease) => !revoked.has(lease.id) && isExpired(lease, now))
-		.map((lease) => ({
-			id: lease.id,
-			phase: 'ended' as const,
-			reason: 'expired' as const,
-			at,
-			readThrough: lease.readThrough,
-		}));
-}
-
 /**
  * The exchange closes when nothing works on it. It names the configured
- * summary writer when the exchange owes a summary.
+ * summary writer when the exchange owes a summary. `mayClose` decided the
+ * pass; this reads the open exchange it admitted.
  */
-function closing(state: RoomState, work: LiveWork, now: number): Reconciliation['close'] {
+function closing(state: RoomState, now: number): Reconciliation['close'] {
 	const exchange = state.exchange;
-	if (exchange === undefined || work.exchange) return undefined;
+	if (exchange === undefined) return undefined;
 	const base = {
 		owner: exchange.owner,
 		from: exchange.from,
@@ -250,17 +275,23 @@ const owing = (state: RoomState, options: ReconcileOptions): PendingActivation[]
  *
  * A wake a message decided and a draft a close owes wait the same way.
  */
-function dueAt(owed: PendingActivation, options: ReconcileOptions): number {
-	const backoff = owed.notBefore ?? options.now;
-	if (backoff > options.now) return backoff;
+function waits(owed: PendingActivation, options: ReconcileOptions) {
 	const sent = options.sent.get(owed.id);
-	return sent === undefined ? options.now : sent + options.resend;
+	return {
+		backedOff: owed.notBefore !== undefined,
+		notBefore: owed.notBefore ?? 0,
+		wasSent: sent !== undefined,
+		sentAt: sent ?? 0,
+	};
 }
 
 /** Every wake the room sends now: an activation it owes that waits on nothing. */
 function dueWakes(state: RoomState, options: ReconcileOptions): Send[] {
 	return owing(state, options)
-		.filter((owed) => dueAt(owed, options) <= options.now)
+		.filter((owed) => {
+			const { backedOff, notBefore, wasSent, sentAt } = waits(owed, options);
+			return readyToSend(options.now, backedOff, notBefore, wasSent, sentAt, options.resend);
+		})
 		.map((owed) => ({ id: owed.id, seat: owed.seat }));
 }
 
@@ -272,8 +303,8 @@ function dueWakes(state: RoomState, options: ReconcileOptions): Send[] {
  */
 function retryTimes(state: RoomState, options: ReconcileOptions): number[] {
 	return owing(state, options).map((owed) => {
-		const at = dueAt(owed, options);
-		return at > options.now ? at : options.now + options.resend;
+		const { backedOff, notBefore, wasSent, sentAt } = waits(owed, options);
+		return looksAgainAt(options.now, backedOff, notBefore, wasSent, sentAt, options.resend);
 	});
 }
 
@@ -281,6 +312,5 @@ function nextAlarm(state: RoomState, options: ReconcileOptions): number | undefi
 	const expiries = [...state.leases.values()].flatMap((lease) =>
 		lease.phase === 'running' && isLive(lease, options.now) ? [lease.expiresAt] : [],
 	);
-	const future = [...expiries, ...retryTimes(state, options)].filter((at) => at > options.now);
-	return future.length === 0 ? undefined : Math.min(...future);
+	return earliestAfter(options.now, [...expiries, ...retryTimes(state, options)]);
 }

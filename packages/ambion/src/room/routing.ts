@@ -49,7 +49,7 @@ function reachOf(message: RoutedMessage): Attention {
  * nobody else at all. Rule 1 routes, rule 6 decides who sits out, and a
  * presence message is routed like any other.
  */
-export function wakes(
+function wakes(
 	seat: { name: string; attention: Attention },
 	target: string | undefined,
 	message: RoutedMessage,

@@ -166,6 +166,22 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		call: options.call,
 		stream: options.stream,
 	});
+	const retry = { attempts: 3, backoff: (attempt: number) => attempt * 30_000, ...options.retry };
+	const wake = { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake };
+	// The verified rules carry preconditions the runtime establishes here,
+	// once, for every room it runs: `givesUp` requires a cap of at least one
+	// attempt, and the alarm and the lease expiry require each wake interval
+	// to be at least one millisecond, so a resend and a claim always wait.
+	if (!Number.isInteger(retry.attempts) || retry.attempts < 1) {
+		throw new Error(
+			'Runtime retry.attempts must be a positive integer: the room makes at least one attempt.',
+		);
+	}
+	for (const [name, value] of Object.entries(wake)) {
+		if (!Number.isFinite(value) || value < 1) {
+			throw new Error(`Runtime wake.${name} must be at least one millisecond.`);
+		}
+	}
 	const runtime: Runtime = {
 		clock: services.clock,
 		storage,
@@ -174,8 +190,8 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		...(options.transport === undefined ? {} : { transport: options.transport }),
 		stream: services.stream,
 		model: services.model,
-		wake: { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake },
-		retry: { attempts: 3, backoff: (attempt) => attempt * 30_000, ...options.retry },
+		wake,
+		retry,
 		call: services.call,
 		evict(name) {
 			const room = running.get(name);

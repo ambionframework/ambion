@@ -12,6 +12,19 @@ import { quiet, scripted } from './support/scripted.ts';
 import { childStorage, memory, sqlite } from './support/storage.ts';
 
 describe('createRuntime', () => {
+	it('refuses a retry cap below one attempt, which the verified cap rule requires', () => {
+		expect(() => createRuntime({ retry: { attempts: 0 } })).toThrow(/at least one attempt/);
+		expect(() => createRuntime({ retry: { attempts: 1.5 } })).toThrow(/positive integer/);
+		expect(createRuntime({ retry: { attempts: 1 } }).retry.attempts).toBe(1);
+	});
+
+	it('refuses a wake interval below one millisecond, so a resend and a claim always wait', () => {
+		expect(() => createRuntime({ wake: { resend: 0 } })).toThrow(/wake.resend/);
+		expect(() => createRuntime({ wake: { expiry: -1 } })).toThrow(/wake.expiry/);
+		expect(() => createRuntime({ wake: { deadline: Number.NaN } })).toThrow(/wake.deadline/);
+		expect(createRuntime({ wake: { resend: 1 } }).wake.resend).toBe(1);
+	});
+
 	it('keeps two runtimes apart: one name runs in both, and neither reads the other', async () => {
 		const name = roomName('runtime');
 		const [one, two] = await Promise.all([memory.open(), memory.open()]);

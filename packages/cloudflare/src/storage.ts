@@ -9,7 +9,7 @@ import type {
 	SqlValue,
 	StoragePosition,
 } from '@ambionframework/journal';
-import { namespaced, sqliteJournals } from '@ambionframework/journal';
+import { namespaced, scanned, sqliteJournals } from '@ambionframework/journal';
 
 /** The object's SQLite as the core reaches it. */
 export function sqlOver(storage: SqlStorage): Sql {
@@ -76,10 +76,10 @@ class MetadataJournal<T extends object> implements MetadataStore<T> {
 		const found = await this.storage;
 		const read = await found.read(this.cursor);
 		for (const stored of read.entries) {
-			this.cursor = stored.position;
+			this.cursor = scanned(this.cursor, stored.position);
 			this.take(stored.entry as MetadataEvent<T>);
 		}
-		this.cursor = Math.max(this.cursor, read.position);
+		this.cursor = scanned(this.cursor, read.position);
 		return this.current;
 	}
 

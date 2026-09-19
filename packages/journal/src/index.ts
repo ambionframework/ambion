@@ -34,6 +34,7 @@ export type {
 } from './journal.ts';
 export { Journal } from './journal.ts';
 export { memoryJournals } from './memory.ts';
+export { scanned } from './rules.verified.ts';
 export type { Sql, SqlValue } from './sqlite.ts';
 export { sqliteJournals } from './sqlite.ts';
 export type {

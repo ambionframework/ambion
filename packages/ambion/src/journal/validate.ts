@@ -143,7 +143,32 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 			`Invalid room journal body for kind '${kind}' at body.at: expected a timestamp.`,
 		);
 	validateActivationId(kind, objectBody(body));
+	validateRanges(kind, objectBody(body));
 	return true;
+}
+
+/** Every range a body carries: a close, the close a cancel carries, and what a summary covers. */
+function validateRanges(kind: string, body: Record<string, unknown> | undefined): void {
+	if (body === undefined) return;
+	if (kind === 'close') validateRange(kind, body, 'body');
+	if (kind === 'cancel') validateRange(kind, objectBody(body.close), 'body.close');
+	if (kind === 'message' && body.kind === 'summary')
+		validateRange(kind, objectBody(body.covers), 'body.covers');
+}
+
+function validateRange(
+	kind: string,
+	range: Record<string, unknown> | undefined,
+	path: string,
+): void {
+	if (range === undefined) return;
+	const { from, through } = range;
+	if (typeof from !== 'number' || typeof through !== 'number') return;
+	// The schema above already made both integers.
+	if (from >= 1 && from <= through) return;
+	throw new Error(
+		`Invalid room journal body for kind '${kind}' at ${path}: expected a range from 1 that ends where it starts or later.`,
+	);
 }
 
 function validateCompositionVersion(body: unknown): void {

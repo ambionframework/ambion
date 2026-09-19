@@ -25,7 +25,7 @@ import {
 	pendingWakes,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
-import { beforeCancellation } from './rules.verified.ts';
+import { cancelHold, lastOf, survivesCancellation } from './rules.verified.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends PendingActivation {
@@ -134,15 +134,14 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 	const { messages, closes, leases, composition, deliveries, cancelledAt } = read;
 	const people = foldPeople(messages);
 	const roster = foldRoster(composition, messages);
-	const isPerson = (name: string) => people.has(name);
-	const exchange = openExchange(messages, closes, isPerson);
+	const exchange = openExchange(messages, closes, [...people.keys()]);
 	const pending = pendingWakes(
 		messages,
 		deliveries,
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
-	).filter((wake) => cancelledAt === undefined || wake.position >= cancelledAt);
+	).filter((wake) => survivesCancellation(wake.position, cancelledAt));
 	const owed = foldOwed(closes, messages, leases, options, cancelledAt);
 	const state: RoomState = {
 		composition,
@@ -158,7 +157,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		owed,
 		due: [...pending, ...owed],
 		messages,
-		lastSeq: messages.at(-1)?.seq ?? 0,
+		lastSeq: lastOf(messages.map((message) => message.seq)),
 	};
 	return state;
 }
@@ -167,20 +166,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 function cancelLeases(leases: Map<string, LeaseHold>, cancelledAt: Seq, at: string): void {
 	for (const [id, lease] of leases) {
 		const parsed = decodeActivationId(id);
-		if (
-			lease.phase === 'running' &&
-			parsed !== undefined &&
-			beforeCancellation(parsed.position, cancelledAt)
-		) {
-			leases.set(id, {
-				...lease,
-				phase: 'ended',
-				reason: 'revoked',
-				cancelled: true,
-				at,
-				until: cancelledAt,
-			});
-		}
+		if (parsed !== undefined) leases.set(id, cancelHold(lease, parsed.position, cancelledAt, at));
 	}
 }
 

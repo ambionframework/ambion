@@ -1,7 +1,28 @@
 import type { JournalEntry as Entry } from '@ambionframework/journal';
-import { describe, expect, it } from 'vitest';
-import type { LeaseChange } from '../src/journal/events.ts';
-import { cameToNothing, foldLeases, pendingWakes } from '../src/room/lease.ts';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
+import type { Close, LeaseChange } from '../src/journal/events.ts';
+import type { ActivationPurpose, ActivationSpec, CommitRequest } from '../src/protocol.ts';
+import { cameToNothing, foldLeases, type LeaseHold, pendingWakes } from '../src/room/lease.ts';
+import {
+	type ActivationFields,
+	applyChange,
+	type Change,
+	type CloseFact,
+	cancelHold,
+	type GrantPurpose,
+	type Hold,
+	type Intent,
+	type LeaseEndReason,
+	type LeasePhase,
+	leaseExpiry,
+	mayEnd,
+	type Purpose,
+	permits,
+	type Source,
+	schedule,
+	wakeAnswered,
+} from '../src/room/rules.verified.ts';
 import type { EndReason, Message } from '../src/types.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
@@ -13,6 +34,111 @@ const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
 
 const explicitDeliveries = (messages: Message[]) =>
 	new Map(messages.map((message) => [message.seq, { wakes: message.wakes ?? [], steers: [] }]));
+
+describe('verified rules', () => {
+	it('declares the same unions the public types declare', () => {
+		expectTypeOf<LeaseEndReason>().toEqualTypeOf<EndReason>();
+		expectTypeOf<LeasePhase>().toEqualTypeOf<'running' | 'ended'>();
+		expectTypeOf<Purpose>().toEqualTypeOf<ActivationSpec['purpose']['kind']>();
+		expectTypeOf<Intent>().toEqualTypeOf<CommitRequest['intent']['kind']>();
+		expectTypeOf<Change>().toEqualTypeOf<LeaseChange>();
+		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
+		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
+		expectTypeOf<GrantPurpose>().toEqualTypeOf<ActivationPurpose>();
+		expectTypeOf<Close>().toMatchTypeOf<CloseFact>();
+		// The room's hold is the rule's hold plus the derived `cancelled` marker.
+		expectTypeOf<Hold>().toEqualTypeOf<LeaseHold>();
+	});
+
+	it('folds one lease entry: ended is final, since is fixed, readThrough never moves back', () => {
+		const first = applyChange(
+			undefined,
+			{ id: 'message:2:solo:1', phase: 'running', expiresAt: 9, at, readThrough: 2 },
+			3,
+		);
+		expect(first).toMatchObject({ phase: 'running', since: 3, claimedAt: at, readThrough: 2 });
+		const renewed = applyChange(
+			first,
+			{ id: 'message:2:solo:1', phase: 'running', expiresAt: 19, at, readThrough: 0 },
+			5,
+		);
+		expect(renewed).toMatchObject({ since: 3, readThrough: 2, expiresAt: 19 });
+		const ended = applyChange(
+			renewed,
+			{ id: 'message:2:solo:1', phase: 'ended', reason: 'released', at, readThrough: 4 },
+			8,
+		);
+		expect(ended).toMatchObject({ phase: 'ended', since: 3, until: 8, readThrough: 4 });
+		expect(
+			applyChange(
+				ended,
+				{ id: 'message:2:solo:1', phase: 'running', expiresAt: 99, at, readThrough: 9 },
+				9,
+			),
+		).toBe(ended);
+	});
+
+	it('cancels a running lease caused before the marker and leaves every other lease alone', () => {
+		const running: Hold = {
+			id: 'message:2:solo:1',
+			phase: 'running',
+			at,
+			claimedAt: at,
+			since: 3,
+			readThrough: 2,
+			expiresAt: 9,
+		};
+		expect(cancelHold(running, 2, 6, at)).toMatchObject({
+			phase: 'ended',
+			reason: 'revoked',
+			cancelled: true,
+			until: 6,
+			since: 3,
+			readThrough: 2,
+		});
+		expect(cancelHold(running, 7, 6, at)).toBe(running);
+		const ended = cancelHold(running, 2, 6, at);
+		expect(cancelHold(ended, 2, 9, at)).toBe(ended);
+	});
+
+	it('answers a wake by reason and schedules the next attempt after the backoff', () => {
+		expect(wakeAnswered([{ phase: 'running', readThrough: 0, position: 2 }], 2)).toBe(true);
+		expect(
+			wakeAnswered([{ phase: 'ended', reason: 'expired', readThrough: 9, position: 2 }], 2),
+		).toBe(false);
+		expect(
+			wakeAnswered([{ phase: 'ended', reason: 'released', readThrough: 1, position: 2 }], 2),
+		).toBe(false);
+		expect(
+			wakeAnswered([{ phase: 'ended', reason: 'revoked', readThrough: 0, position: 2 }], 2),
+		).toBe(true);
+		expect(schedule(0, 0, 0)).toEqual({ attempt: 1, notBefore: undefined });
+		expect(schedule(2, 1_000, 300)).toEqual({ attempt: 3, notBefore: 1_300 });
+	});
+
+	it('gates every end reason by the lease phase and the clock', () => {
+		expect(mayEnd(undefined, 'revoked', false)).toBe(true);
+		expect(mayEnd(undefined, 'released', false)).toBe(false);
+		expect(mayEnd('ended', 'revoked', true)).toBe(false);
+		expect(mayEnd('running', 'abandoned', false)).toBe(false);
+		expect(mayEnd('running', 'expired', true)).toBe(true);
+		expect(mayEnd('running', 'expired', false)).toBe(false);
+		expect(mayEnd('running', 'released', false)).toBe(true);
+		expect(mayEnd('running', 'failed', true)).toBe(false);
+	});
+
+	it('permits speech under both purposes and membership under a response only', () => {
+		expect(permits('summarize', 'said')).toBe(true);
+		expect(permits('summarize', 'seated')).toBe(false);
+		expect(permits('respond', 'unseated')).toBe(true);
+	});
+
+	it('expires a lease at the earlier of the renewal window and the deadline', () => {
+		expect(leaseExpiry(1_000, 1_000, 60, 600)).toBe(1_060);
+		expect(leaseExpiry(1_590, 1_000, 60, 600)).toBe(1_600);
+		expect(leaseExpiry(1_700, 1_000, 60, 600)).toBe(1_600);
+	});
+});
 
 describe('lease rules', () => {
 	it('keeps a lease interval through its terminal entry', () => {

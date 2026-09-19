@@ -35,11 +35,20 @@ import {
 	isSpoken,
 	isSummary,
 	type Message,
-	type SpokenMessage,
+	type Seq,
 	type SummaryMessage,
 	type SummaryOutcome,
 } from '../types.ts';
-import type { LeaseHold } from './lease.ts';
+import { type LeaseHold, removalsOf } from './lease.ts';
+import {
+	coversExchange,
+	type Draft,
+	lastOf,
+	openingQuestion,
+	removedAfter,
+	summaryVerdict,
+	survivesCancellation,
+} from './rules.verified.ts';
 
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
@@ -52,58 +61,50 @@ export function summaryCompletion(
 		(message): message is SummaryMessage =>
 			isSummary(message) &&
 			message.from === close.summary &&
-			message.to === close.owner &&
-			message.covers.from <= close.from &&
-			message.covers.through >= close.through,
+			coversExchange(
+				message.to,
+				message.covers.from,
+				message.covers.through,
+				close.owner,
+				close.from,
+				close.through,
+			),
 	);
 	if (summary !== undefined) return { status: 'published', summary };
 	const writer = close.summary;
-	if (writer === undefined) return { status: 'silent' };
-	return summaryDraftOutcome(close, writer, messages, leases, cancelledAt);
+	const verdict = summaryVerdict(
+		summary !== undefined,
+		writer !== undefined,
+		writer !== undefined && removedAfter(removalsOf(messages, writer), close.through),
+		draftsOf(leases, close.through, writer),
+		!survivesCancellation(close.through, cancelledAt),
+	);
+	// The rule decides. The re-tests narrow the TypeScript type only.
+	if (verdict.status === 'published' && summary !== undefined)
+		return { status: 'published', summary };
+	if (verdict.status === 'pending' && verdict.owed && writer !== undefined)
+		return { status: 'pending', writer };
+	if (verdict.status === 'pending') return { status: 'pending' };
+	return { status: verdict.status === 'silent' ? 'silent' : 'failed' };
 }
 
-function summaryDraftOutcome(
-	close: Pick<Close, 'owner' | 'from' | 'through'>,
-	writer: string,
-	messages: readonly Message[],
+/** The drafts of one close's summary: every lease of the writer's closing activations at the close. */
+function draftsOf(
 	leases: ReadonlyMap<string, LeaseHold>,
-	cancelledAt?: number,
-): SummaryOutcome {
-	if (
-		messages.some(
-			(message) =>
-				message.kind === 'unseated' && message.subject === writer && message.seq > close.through,
-		)
-	)
-		return { status: 'failed' };
-	const drafts = [...leases.values()].filter((lease) => {
-		const parsed = decodeActivationId(lease.id);
-		// A terminal lease from another seat cannot settle this close.
-		return (
-			parsed?.source === 'closed' && parsed.position === close.through && parsed.seat === writer
+	through: Seq,
+	writer: string | undefined,
+): Draft[] {
+	return [...leases.values()]
+		.filter((lease) => {
+			const parsed = decodeActivationId(lease.id);
+			// A terminal lease from another seat cannot settle this close.
+			return parsed?.source === 'closed' && parsed.position === through && parsed.seat === writer;
+		})
+		.map((lease) =>
+			lease.phase === 'running'
+				? { phase: 'running' }
+				: { phase: 'ended', reason: lease.reason, cancelled: lease.cancelled === true },
 		);
-	});
-	const released = drafts.some((lease) => lease.phase === 'ended' && lease.reason === 'released');
-	const stoodDown =
-		released ||
-		drafts.some(
-			(lease) =>
-				lease.phase === 'ended' && (lease.reason === 'revoked' || lease.reason === 'abandoned'),
-		);
-	const cancelledDraft =
-		cancelledAt !== undefined &&
-		close.through < cancelledAt &&
-		drafts.some(
-			(lease) => lease.phase === 'ended' && lease.reason === 'revoked' && lease.cancelled === true,
-		);
-	if (cancelledDraft) return { status: 'failed' };
-	if (!stoodDown && cancelledAt !== undefined && close.through < cancelledAt)
-		return { status: 'failed' };
-	if (!stoodDown) return { status: 'pending', writer };
-	// Preserve reads of histories with a running draft beside a terminal one.
-	if (drafts.some((lease) => lease.phase === 'running')) return { status: 'pending' };
-	if (released) return { status: 'silent' };
-	return drafts.length === 0 ? { status: 'pending' } : { status: 'failed' };
 }
 
 /** Build one detached closed exchange view from the recorded close. */
@@ -180,12 +181,11 @@ function summaryOutcome(
 export function openExchange(
 	messages: readonly Message[],
 	closes: readonly Close[],
-	isPerson: (name: string) => boolean,
+	people: readonly string[],
 ): ExchangeRef | undefined {
-	const closedThrough = closes.at(-1)?.through ?? 0;
-	const question = messages.find(
-		(message): message is SpokenMessage =>
-			message.seq > closedThrough && isSpoken(message) && isPerson(message.from),
-	);
-	return question && { owner: question.from, from: question.seq, at: question.at };
+	const question = openingQuestion(messages, people, lastOf(closes.map((close) => close.through)));
+	// The re-test narrows the TypeScript type only: the contract fixes the kind.
+	return question !== undefined && isSpoken(question)
+		? { owner: question.from, from: question.seq, at: question.at }
+		: undefined;
 }
