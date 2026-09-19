@@ -3,6 +3,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	type Message,
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
@@ -78,7 +79,8 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 			await visit.send({ to: worker.name, text: 'please answer' });
 			await waitForRoom(room, 'quiet');
 			const answers = (await messagesOf(room)).filter(
-				(message) => message.kind === 'said' && message.from === worker.name,
+				(message): message is Extract<Message, { kind: 'said' }> =>
+					message.kind === 'said' && message.from === worker.name,
 			);
 			// The lost reply retried under the same key, so exactly one answer landed.
 			expect(answers).toHaveLength(1);
