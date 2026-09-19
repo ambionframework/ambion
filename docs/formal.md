@@ -10,7 +10,7 @@ stale. Two files hold every rule:
 | File                                                                                          | Concern                                                                                            | Obligations                   |
 | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
 | [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor                                                    | 12, and 23 in its proofs file |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 74, and 14 in its proofs file |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease fold, the admissions, the grant, the retry, the opening question, the verdict, the close | 74, and 36 in its proofs file |
 
 **Everything else is ordinary TypeScript under the scripted and chaos
 suites.** Routing, presence, the roster, addressing, membership changes,
@@ -103,10 +103,14 @@ describes. Three things hold that binding.
    case, so a rule cannot gain an export without one.
 
 **The call site holds the projection, and the rule holds the decision.**
-`foldPeople` maps each presence message to the six fields `foldPresence`
-reads and returns what the rule answers. `messageDelivery` decodes each
-lease id and asks `steers` per lease. A comment at such a site says "the
-rule decides" where a second check remains to narrow a TypeScript type.
+`applyLease` in `lease.ts` reads one lease entry, finds the lease the fold
+holds for its id, and asks `applyChange` for the lease after it.
+`cancelLeases` in `fold.ts` asks `cancelHold` for each lease a
+cancellation reaches. `openExchange` in `exchange.ts` maps the closes to
+their `through` seqs, asks `lastOf` for the last, and asks
+`openingQuestion` for the question after it. A comment at such a site
+says "the rule decides" where a second check remains to narrow a
+TypeScript type.
 
 ## 3. The generated files
 
@@ -121,11 +125,28 @@ and never a merge.
 generator cannot write an inductive proof. The journal's proofs file
 proves the fence lemmas by induction over a read: a superseded journal
 stays superseded, the caller hears `lost` at most once, the cursor never
-moves back. The room's proofs file proves `AttemptIdsAreFresh` over a
-lease history and that the clock only moves forward. A proofs file starts with
-`include` of the generated file and calls the generated `_ensures`
-lemmas. `check-extra.sh` at the root verifies every proofs file, at a
-desk and in CI.
+moves back. The room's proofs file proves these lemmas:
+
+- `AttemptIdsAreFresh`: no two attempts in one lease history share an id.
+- `LeaseHistoryKeeps` and `FirstChangeFixesStart`: they fold every
+  history of changes and cancellation markers the rules admit. The first
+  change fixes `since` and `claimedAt`. The read position never moves
+  back. An ended lease stays as it ended.
+- `OneOpenExchange`: the open exchange is the earliest question after the
+  last close. Every other question that could open one comes at or after
+  it.
+- `CloseExtendsTheRecord`: a close that starts at that question and ends
+  at the record's last seq keeps the closes ordered. So no two exchanges
+  overlap, and every question after the last close lands inside the
+  closed range. The close the room admits and the close a cancellation
+  carries both have that shape; `AdmittedCloseExtendsTheRecord` derives
+  the first from `admitsClose`.
+- `StillExpired` and `EndingStands`: an expiry stays expired as the clock
+  moves forward.
+
+A proofs file starts with `include` of the generated file and calls the
+generated `_ensures` lemmas. `check-extra.sh` at the root verifies every
+proofs file, at a desk and in CI.
 
 **A contract states what Dafny proves on its own.** A clause that needs
 induction is a lemma in the proofs file, and the rule's `//@ contract`
@@ -234,6 +255,12 @@ doc it carries:
   outside the rules. The storage tests hold them.
 - The record is ordered by seq, which the journal proves; `lastOf` and
   `openingQuestion` require it and no runtime check repeats it.
+  `CloseExtendsTheRecord` takes the ordered closes as a premise, so it
+  proves the step and the induction over a record is the reader's.
+- The lease lemmas and the exchange lemmas hold over the histories the
+  rules admit. The binding test proves `lease.ts`, `fold.ts`, and
+  `exchange.ts` call those rules; the projection from an entry to a
+  `Change` or a `Message` stays with the scripted suites.
 - The clock never runs backwards. That is a host promise.
 - A pass of the reconciliation converges. The chaos drain and the walk's
   `drained` check witness it; a measure over the fold is open work.
