@@ -6,8 +6,7 @@ the evidence each step needs, and the reason behind each item.
 [docs/example.md](../docs/example.md) holds the one example. Rewritten on
 2026-09-17 against main `deaaf94` from a review that read the runtime, the
 journal, the adapters, the examples, the docs, the four harness SDKs, and
-the open pull requests; two deterministic probes confirmed the defects in
-phase 1.
+the open pull requests.
 
 **An item lands with its evidence or stays open.** Every checkbox names an
 item in [the items](#the-items). A phase closes when its evidence line
@@ -93,17 +92,15 @@ means two things or two names mean one.
 
 ## The order of work
 
-**The critical path is phase 0, 1, 2, 4, 6, then 8.** Phases 3, 5, and 7
-run beside it after the freeze. Inside a phase, the steps are numbered in
+**The critical path is phase 2, 4, 6, then 8.** Phases 3, 5, and 7 run
+beside it after the freeze. Inside a phase, the steps are numbered in
 execution order, and a step names the step it needs. Three priorities sort
 the work: **P0** blocks other work or the tag; **P1** carries the release
 story; **P2** is in scope and can land last.
 
 | Phase | Name                              | Priority | Starts after | Blocks     |
 | ----- | --------------------------------- | -------- | ------------ | ---------- |
-| 0     | Unblock the tree                  | P0       |              | 1          |
-| 1     | Correctness                       | P0       | 0            | 2          |
-| 2     | The public shape, then the freeze | P0       | 1            | 3, 4, 5, 7 |
+| 2     | The public shape, then the freeze | P0       |              | 3, 4, 5, 7 |
 | 4     | Executors and adapters            | P1       | 2            | 6          |
 | 5     | Resources and artifacts           | P1       | 2            | 6          |
 | 3     | Kernel internals                  | P1       | 2            | 6          |
@@ -114,33 +111,6 @@ story; **P2** is in scope and can land last.
 When phases 3, 4, and 5 compete for the same hands, take them in the order
 4, 5, 3: the adapters carry the story, the resources feed the example, and
 the fold has the least user-visible surface.
-
-### Phase 0. Unblock the tree (P0)
-
-**Goal:** the live tier runs on a restored account and fails fast by cause.
-
-1. [ ] Restore the provider account; fail a job on a credit or
-       authentication error, naming the account (D9). Run the live tier
-       once after the restore. A second provider job is optional: Pi's
-       transport is expected to keep behavior provider-neutral, so add one
-       only if a provider-specific defect turns up.
-
-**Evidence:** the live tier job is green; a credit or authentication
-failure names the account and aborts the job.
-
-### Phase 1. Correctness (P0)
-
-**Goal:** a closing activation reads the same divider an ordinary
-activation gets.
-
-1. [ ] A closing activation reads every message through the close boundary
-       with the divider at its exchange (the PR #153 slice).
-       [`render.ts`](../packages/ambion/src/execution/render.ts) wires the
-       exchange-from divider only for a `respond` purpose; a `summarize`
-       purpose gets `undefined`.
-
-**Evidence:** a closing activation's rendered record carries the same
-exchange-boundary divider a respond activation gets.
 
 ### Phase 2. The public shape, then the freeze (P0)
 
@@ -283,8 +253,9 @@ three specialists ([docs/example.md](../docs/example.md)).
 3. [ ] `ambion new --template node` derived from the example; the
        Cloudflare template on `read()` (C3). Needs phase 3 step 4.
 
-A second provider for the two live scenarios is optional, for the same
-reason as D9: add one only if a provider-specific defect turns up.
+A second provider for the two live scenarios is optional: Pi's transport
+keeps behavior provider-neutral, so add one only if a provider-specific
+defect turns up.
 
 **Evidence:** the rooms pass scripted; the live tier runs two scenarios on
 one provider; a restart preserves the question.
@@ -341,8 +312,8 @@ the scope has evidence on the tagged commit.
 4. [ ] Node 22 and 24 tests; Node 26 CLI; workerd tests; the historical
        Cloudflare wake and cut races reproduced on current code.
 5. [ ] The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
-       golden journals; the live tier on one provider (D9); results
-       recorded under `planning/evidence/`.
+       golden journals; the live tier on one provider; results recorded
+       under `planning/evidence/`.
 6. [ ] Recovery evidence: duplicate wake, takeover, delayed cut, audit
        retry, clock skew, process pause, uncooperative tool.
 7. [ ] Summary evidence: silence, corrections, conflicting constraints,
@@ -563,13 +534,6 @@ address, steer), and what the kernel does not defend (prompt injection,
 tool effects, secrets in transcripts). Write `docs/trust.md` with one table
 of guarantees and one of non-guarantees, each linked to its test or
 verified rule.
-
-**D9. Provider evidence on a restored account.** The live tier runs one
-provider on one key; on 2026-09-17 every live run failed on that account's
-balance. Restore the account and fail a job on a credit or authentication
-error with the account's name. A second provider is not required: Pi's
-transport is expected to keep behavior provider-neutral. Add a second
-provider job only if a provider-specific defect turns up.
 
 **D10. An API reference.** The docs point at source files for shapes.
 Generate a reference per entry from the emitted declarations into

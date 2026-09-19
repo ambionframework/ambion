@@ -66,6 +66,11 @@ When the room records a close, it assigns a dedicated activation only when
 the person who opened it. It receives that person's current preferences.
 Later messages do not change the source range or recipient.
 
+The closing activation reads every message through the end of its exchange,
+not only its own range. A divider marks where its exchange begins, so the
+writer can tell background history from the exchange it covers. What it may
+write stays fixed to that exchange.
+
 The closing activation receives the regular `say` tool with this shape:
 
 ```ts

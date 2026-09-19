@@ -51,16 +51,16 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 	const state = facts.state;
 	const purpose = spec.purpose;
 	const goal = state.composition?.goal;
-	// A summary reads its fixed closed exchange; a range never pages it. An
-	// ordinary response reads the whole record, or one bounded page of it. A
-	// malformed range reads the whole record, because a seat's request is data.
+	// A summary reads every message through its closed exchange, background and
+	// current alike; a range never pages it. What it covers stays fixed to its
+	// own exchange. An ordinary response reads the whole record, or one bounded
+	// page of it. A malformed range reads the whole record, because a seat's
+	// request is data.
 	const page =
 		purpose.kind === 'respond' && range !== undefined && validRange(range) ? range : undefined;
 	const messages =
 		purpose.kind === 'summarize'
-			? state.messages.filter(
-					(message) => message.seq >= purpose.exchange && message.seq <= purpose.through,
-				)
+			? state.messages.filter((message) => message.seq <= purpose.through)
 			: page !== undefined
 				? pageOf(state.messages, page)
 				: state.messages;

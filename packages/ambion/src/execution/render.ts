@@ -329,7 +329,7 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 			context.messages,
 			people,
 			context.now,
-			view.spec.purpose.kind === 'respond' ? context.exchange?.from : undefined,
+			view.spec.purpose.kind === 'respond' ? context.exchange?.from : view.spec.purpose.exchange,
 		),
 		``,
 		askOf(view, def),

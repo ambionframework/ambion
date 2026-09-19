@@ -159,11 +159,13 @@ describe('structured activation context', () => {
 		expect(JSON.stringify(summary)).not.toContain('SECRET SAM PREFERENCE.');
 	});
 
-	it('keeps summary messages fixed at the recorded close boundary', () => {
+	it('reads every message through the close boundary, but covers only its own exchange', () => {
 		const summary = viewOf(spec.summarize, facts());
 
 		expect(summary.through).toBe(3);
-		expect(summary.context.messages.map((message) => message.seq)).toEqual([3]);
+		// The arrival at seq 2 is background: earlier than the exchange this
+		// activation covers, but still part of what a closing seat reads.
+		expect(summary.context.messages.map((message) => message.seq)).toEqual([2, 3]);
 		expect(summary.context.messages).not.toContainEqual(
 			expect.objectContaining({ text: 'Later.' }),
 		);
@@ -184,5 +186,11 @@ describe('structured activation context', () => {
 		expect(summary.context).not.toContain('The reserve:');
 		expect(summary.context).toContain("priya's exchange is over: messages");
 		expect(summary.context).not.toContain('Later.');
+		// The closing seat reads the arrival that came before its own exchange,
+		// with a divider marking where its own exchange begins.
+		expect(summary.context).toContain('· priya arrived');
+		expect(summary.context).toContain(
+			'── Current exchange begins here; earlier exchanges are background ──',
+		);
 	});
 });
