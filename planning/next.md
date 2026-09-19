@@ -820,20 +820,3 @@ one concern and one independent consumer.
 Storage ids, binding names, and published names stay stable through the
 source moves. A `SeatObject` class rename needs Cloudflare migration
 evidence and is not part of this plan.
-
-## History
-
-PRs #137 to #150 delivered durable presence and control, idempotent visits,
-coherent room views, partial-creation recovery, contribution validation,
-executor composition, participant vocabulary, coherent reads, the assistant
-package, and bounded executor waits. Earlier work established fixed
-definitions, typed tools, structured activations, conditional journal
-commits, workspace ownership, and restart evidence. Those regressions stay.
-
-PR #152 bound delivery keys and identity to journal facts (A3). PR #161
-let unclaimed work survive a graceful stop (A2); PR #162 retried a lost
-commit under its key (A1); PR #164 classified permanent provider failures
-(D1). PR #163 windowed the activation record to a per-agent token limit,
-the first slice of D5. The single Node 26.4 floor (C1) is live on CI. The
-nine stale pull requests (#28, #40, #44, #48, #58, #60, #63, #67, #73) are
-closed, each with the route that delivered its aim on main.
