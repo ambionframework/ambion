@@ -13,7 +13,7 @@ import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
-import { copyMessage, type EndReason, type RoomNotification } from './types.ts';
+import { copyMessage, type EndReason, type FailureCause, type RoomNotification } from './types.ts';
 
 const stale = (why: string): Stale => ({ stale: why });
 
@@ -40,7 +40,12 @@ export interface Answering {
 	claim(id: string): Promise<LeaseResponse>;
 	renew(id: string, readThrough?: number): Promise<LeaseResponse>;
 	/** End one lease, for whatever reason. Nothing to end is not an error. */
-	end(id: string, reason: EndReason, readThrough: number): Promise<boolean | { refusal: Refusal }>;
+	end(
+		id: string,
+		reason: EndReason,
+		readThrough: number,
+		cause?: FailureCause,
+	): Promise<boolean | { refusal: Refusal }>;
 	reconcile(): Promise<void>;
 }
 
@@ -147,7 +152,7 @@ async function release(
 		liveSeatOf(room, lease.activation, state) === undefined
 	)
 		return stale('the lease ended');
-	const ended = await room.end(lease.activation, lease.reason, lease.readThrough);
+	const ended = await room.end(lease.activation, lease.reason, lease.readThrough, lease.cause);
 	if (typeof ended !== 'boolean') {
 		const refusal = ended.refusal;
 		return stale('reason' in refusal ? refusal.reason : 'the lease ended');

@@ -4,7 +4,7 @@ import { decodeActivationId } from '../activation-id.ts';
 import type { Close, Composition } from '../journal/events.ts';
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest } from '../protocol.ts';
-import type { EndReason, Message, PresenceMessage } from '../types.ts';
+import type { EndReason, FailureCause, Message, PresenceMessage } from '../types.ts';
 import { activationSpec } from './activation.ts';
 import { applyEvent, baseOf, type FoldOptions, project, type RoomState } from './fold.ts';
 import { isExpired, isLive } from './lease.ts';
@@ -42,7 +42,7 @@ type MessageCommand =
 type LeaseCommand =
 	| { type: 'claim'; id: string; expiry: number; deadline: number }
 	| { type: 'renew'; id: string; expiry: number; deadline: number; readThrough?: number }
-	| { type: 'end'; id: string; reason: EndReason; readThrough: number };
+	| { type: 'end'; id: string; reason: EndReason; readThrough: number; cause?: FailureCause };
 type ComposeCommand = { type: 'compose'; composition: Body<Composition> };
 type CloseCommand = { type: 'close'; close: Close };
 type RunCommand = { type: 'run' };
@@ -517,7 +517,7 @@ function end(
 	const invalid = invalidProgress(state, command.readThrough);
 	if (invalid !== undefined) return invalid;
 	const known = state.leases.get(command.id);
-	const { reason } = command;
+	const { reason, cause } = command;
 	if (!mayEnd(known?.phase, reason, known !== undefined && isExpired(known, now)))
 		return { event: undefined };
 	return {
@@ -529,6 +529,7 @@ function end(
 				reason,
 				at: iso(now),
 				readThrough: acknowledged(known?.readThrough, command.readThrough),
+				...(cause === undefined ? {} : { cause }),
 			},
 		},
 	};

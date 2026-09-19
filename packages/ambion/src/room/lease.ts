@@ -95,6 +95,8 @@ export interface PendingActivation {
 	unsuccessfulAttempts: number;
 	/** When the next attempt may start, or undefined when it may start now. */
 	notBefore: number | undefined;
+	/** A failed attempt ended for a permanent cause, so the room abandons it. */
+	permanent: boolean;
 }
 
 /** A wake on the journal that no lease has answered. */
@@ -240,12 +242,16 @@ export function pendingActivation(
 	// A stamp `Date.parse` cannot read counts as no time, so the backoff still holds.
 	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)).filter(Number.isFinite));
 	const next = nextActivationId(source, position, seat, unsuccessfulAttempts);
+	// A permanent failure stops the retries: no attempt follows it, so any
+	// permanent cause among the failures is the last attempt's cause.
+	const permanent = failed.some((lease) => lease.phase === 'ended' && lease.cause === 'permanent');
 	return {
 		id: encodeActivationId(next),
 		...next,
 		unsuccessfulAttempts,
 		notBefore:
 			unsuccessfulAttempts === 0 ? undefined : last + options.backoff(unsuccessfulAttempts),
+		permanent,
 	};
 }
 

@@ -24,6 +24,14 @@ export type Without<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> :
 /** Why a lease ended. */
 export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandoned';
 
+/**
+ * Why an activation failed. A permanent failure does not pass on a retry, so
+ * the room abandons it at once. A transient failure may pass, so the room
+ * retries it to the cap. An authentication or a bad request is permanent; a
+ * rate limit, a server error, or a lost connection is transient.
+ */
+export type FailureCause = 'permanent' | 'transient';
+
 /** A question the room is working on. */
 export interface ExchangeRef {
 	/** The person whose question opened it, and who owns what follows. */
@@ -263,7 +271,7 @@ export type RoomNotification =
 	| { type: 'tool_execution_end'; agent: string; toolName: string }
 	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
 	| { type: 'activation_end'; agent: string; spoke: boolean }
-	| { type: 'error'; agent: string; error: Error }
+	| { type: 'error'; agent: string; error: Error; cause?: FailureCause }
 	/** A room delivery or seat call failed, or its result became unknown. */
 	| {
 			type: 'delivery_error';
@@ -275,11 +283,12 @@ export type RoomNotification =
 	/** Transcript persistence failed independently of the execution outcome. */
 	| { type: 'audit_error'; agent: string; activation: string; error: Error }
 	/**
-	 * The room gave up: every attempt at a wake or a draft came to nothing,
-	 * and the cap is reached. `activation` names the attempt the room did
-	 * not make, and the journal holds the entry that says so.
+	 * The room gave up: a permanent failure, or every attempt at a wake or a
+	 * draft came to nothing and the cap is reached. `activation` names the
+	 * attempt the room did not make, `cause` says why, and the journal holds
+	 * the entry that says so.
 	 */
-	| { type: 'abandoned'; agent: string; activation: string }
+	| { type: 'abandoned'; agent: string; activation: string; cause: FailureCause }
 	/**
 	 * Another run took the name: its fence is on the journal past this run's.
 	 * This run is superseded, and drops itself from memory the way

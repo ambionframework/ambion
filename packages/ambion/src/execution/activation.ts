@@ -30,7 +30,7 @@
 import type { AuditSession as PiSession } from '@ambionframework/pi-journal';
 import type { Agent, AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ActivationView, LeaseResponse, ViewResponse } from '../protocol.ts';
-import type { EndReason, RoomNotification, Seq } from '../types.ts';
+import type { EndReason, FailureCause, RoomNotification, Seq } from '../types.ts';
 import { PiContext } from './pi.ts';
 
 /** What only the seat side can give an activation: the room's view, and a model over it. */
@@ -62,6 +62,8 @@ export class Activation {
 	private cancelled = false;
 	/** Whether it ended without reaching the record at all. The room's second. */
 	failed = false;
+	/** Why it failed, when it did: a permanent cause stops the retries. */
+	private failureCause: FailureCause | undefined;
 
 	constructor(id: string, seat: string, host: ActivationHost) {
 		this.id = id;
@@ -120,6 +122,11 @@ export class Activation {
 	get reason(): EndReason {
 		if (this.failed) return 'failed';
 		return 'released';
+	}
+
+	/** Why a failed activation failed, so the room decides whether to try again. */
+	get cause(): FailureCause | undefined {
+		return this.failureCause;
 	}
 
 	/**
@@ -194,8 +201,9 @@ export class Activation {
 		const failure = failureOf(agent);
 		if (failure === undefined) return undefined;
 		this.failed = true;
-		this.host.emit({ type: 'error', agent: this.seat, error: failure });
-		return failure;
+		this.failureCause = failure.cause;
+		this.host.emit({ type: 'error', agent: this.seat, error: failure.error, cause: failure.cause });
+		return failure.error;
 	}
 
 	/** Audit failure is diagnostic only. It never changes the provider outcome. */
@@ -216,20 +224,95 @@ export class Activation {
 		}
 	}
 
-	/** Record an execution failure and notify the host. */
+	/**
+	 * Record an execution failure and notify the host. A broken pass is a local
+	 * fault, such as a lost room call or a build error, so its cause is
+	 * transient and the room tries the activation again.
+	 */
 	private broke(error: Error): false {
 		this.failed = true;
-		this.host.emit({ type: 'error', agent: this.seat, error });
+		this.failureCause = 'transient';
+		this.host.emit({ type: 'error', agent: this.seat, error, cause: 'transient' });
 		return false;
 	}
 }
 
-function failureOf(agent: Agent): Error | undefined {
+/** A failed provider message: name it in the error, and classify its cause. */
+function failureOf(agent: Agent): { error: Error; cause: FailureCause } | undefined {
 	const last = agent.state.messages.at(-1);
 	if (last && 'stopReason' in last && last.stopReason === 'error') {
-		return new Error(('errorMessage' in last && last.errorMessage) || 'The activation failed.');
+		const message = ('errorMessage' in last && last.errorMessage) || 'The activation failed.';
+		return { error: new Error(message), cause: providerCause(last) };
 	}
 	return undefined;
+}
+
+/** HTTP statuses a retry cannot fix: a bad request, a billing refusal, and the authentication refusals. */
+const PERMANENT_STATUS = new Set([400, 401, 402, 403, 404, 405, 422]);
+
+/**
+ * Whether a failed provider message is permanent or transient. A credit or an
+ * authentication refusal in the text, or a permanent HTTP status a diagnostic
+ * reports, is permanent. Every other failure is transient, so an uncertain
+ * message retries rather than gives up: a wasted retry costs less than a
+ * question the room drops.
+ */
+function providerCause(message: AgentMessage): FailureCause {
+	if (permanentText('errorMessage' in message ? message.errorMessage : undefined))
+		return 'permanent';
+	const status = statusOf(message);
+	return status !== undefined && PERMANENT_STATUS.has(status) ? 'permanent' : 'transient';
+}
+
+/** One provider diagnostic, as the classifier reads it. */
+type Diagnostic = { error?: { code?: unknown }; details?: Record<string, unknown> };
+
+/**
+ * The HTTP status a diagnostic reports, or nothing. The classifier reads a
+ * status only from a diagnostic, never from free error text, because a rate
+ * limit names a token count that reads like a status. The last diagnostic
+ * with a status wins, so a final attempt speaks for the failure.
+ */
+function statusOf(message: AgentMessage): number | undefined {
+	const diagnostics: Diagnostic[] = 'diagnostics' in message ? (message.diagnostics ?? []) : [];
+	let status: number | undefined;
+	for (const diagnostic of diagnostics) {
+		const found = diagnosticStatus(diagnostic);
+		if (found !== undefined) status = found;
+	}
+	return status;
+}
+
+/** A status code one diagnostic reports, on its error code or its details. */
+function diagnosticStatus(diagnostic: Diagnostic): number | undefined {
+	const code = httpStatus(diagnostic.error?.code);
+	if (code !== undefined) return code;
+	const details = diagnostic.details ?? {};
+	for (const key of ['status', 'statusCode', 'httpStatus']) {
+		const value = httpStatus(details[key]);
+		if (value !== undefined) return value;
+	}
+	return undefined;
+}
+
+/** A whole HTTP status, from a number or a fully numeric string, in the 4xx or 5xx range. */
+function httpStatus(value: unknown): number | undefined {
+	const parsed =
+		typeof value === 'number'
+			? value
+			: typeof value === 'string' && /^\d+$/.test(value.trim())
+				? Number(value.trim())
+				: undefined;
+	if (parsed === undefined || !Number.isInteger(parsed)) return undefined;
+	return parsed >= 400 && parsed <= 599 ? parsed : undefined;
+}
+
+/** Error text that names a credit or an authentication refusal, in phrases a retry cannot clear. */
+function permanentText(text: string | undefined): boolean {
+	if (text === undefined) return false;
+	return /credit balance|authentication_error|permission_error|invalid_request_error|invalid[_\s]?api[_\s]?key|unauthorized|permission denied/i.test(
+		text,
+	);
 }
 
 /** Every turn a model took, in the downstream session that owns it. */

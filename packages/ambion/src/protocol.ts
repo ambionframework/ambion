@@ -15,6 +15,7 @@
 import type {
 	AgentParticipantInfo,
 	EndReason,
+	FailureCause,
 	HumanParticipantInfo,
 	Message,
 	Seq,
@@ -137,7 +138,13 @@ export type CommitResult =
 export type LeaseRequest =
 	| { activation: string; operation: 'claim' }
 	| { activation: string; operation: 'renew'; readThrough?: Seq }
-	| { activation: string; operation: 'release'; reason: EndReason; readThrough: Seq };
+	| {
+			activation: string;
+			operation: 'release';
+			reason: EndReason;
+			readThrough: Seq;
+			cause?: FailureCause;
+	  };
 
 /**
  * The lease holds, with its expiry and the last place on the record. The seat

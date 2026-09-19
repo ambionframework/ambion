@@ -1,11 +1,22 @@
 /** The room journal event vocabulary. */
 
-import type { Attention, EndReason, Seq } from '../types.ts';
+import type { Attention, EndReason, FailureCause, Seq } from '../types.ts';
 
-/** One entry about an activation: it holds a lease, or its lease ended. */
+/**
+ * One entry about an activation: it holds a lease, or its lease ended. A
+ * failed or abandoned end carries `cause`, so a resumed room reads why the
+ * activation failed and whether to try it again.
+ */
 export type LeaseChange =
 	| { id: string; phase: 'running'; expiresAt: number; at: string; readThrough: Seq }
-	| { id: string; phase: 'ended'; reason: EndReason; at: string; readThrough: Seq };
+	| {
+			id: string;
+			phase: 'ended';
+			reason: EndReason;
+			at: string;
+			readThrough: Seq;
+			cause?: FailureCause;
+	  };
 
 /** A run took the name and fenced earlier runs. */
 export interface Fence {

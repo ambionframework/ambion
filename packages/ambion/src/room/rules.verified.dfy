@@ -26,15 +26,17 @@ datatype LeasePhase = running | ended
 
 datatype LeaseEndReason = released | failed | revoked | expired | abandoned
 
+datatype FailureCause = permanent | transient
+
 datatype Freshness = invalid | missed | fresh_
 
 datatype OpenExchange = OpenExchange(owner: string, from: int)
 
 datatype CloseRef = CloseRef(owner: string, from: int, through: int)
 
-datatype Hold = running(id: string, at: string, claimedAt: string, since: int, readThrough: int, expiresAt: int) | ended(id: string, at: string, claimedAt: string, since: int, readThrough: int, reason: LeaseEndReason, cancelled: Option<bool>, until: int)
+datatype Hold = running(id: string, at: string, claimedAt: string, since: int, readThrough: int, expiresAt: int) | ended(id: string, at: string, claimedAt: string, since: int, readThrough: int, reason: LeaseEndReason, cancelled: Option<bool>, cause: Option<string>, until: int)
 
-datatype Change = running(id: string, expiresAt: int, at: string, readThrough: int) | ended(id: string, reason: LeaseEndReason, at: string, readThrough: int)
+datatype Change = running(id: string, expiresAt: int, at: string, readThrough: int) | ended(id: string, reason: LeaseEndReason, at: string, readThrough: int, cause: Option<string>)
 
 datatype Taken = running(readThrough: int, position: int) | ended(reason: LeaseEndReason, readThrough: int, position: int)
 
@@ -292,8 +294,8 @@ function applyChange(known: Option<Hold>, change: Change, seq_: int): Hold
         match change {
           case running(i_change_id, i_change_expiresAt, i_change_at, i_change_readThrough) =>
             Hold.running(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_expiresAt)
-          case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough) =>
-            Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, None, seq_)
+          case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough, i_change_cause) =>
+            Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, None, i_change_cause, seq_)
         }
     case None =>
       var since := (match known { case Some(i_known_val) => i_known_val.since case None => seq_ });
@@ -303,8 +305,8 @@ function applyChange(known: Option<Hold>, change: Change, seq_: int): Hold
       match change {
         case running(i_change_id, i_change_expiresAt, i_change_at, i_change_readThrough) =>
           Hold.running(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_expiresAt)
-        case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough) =>
-          Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, None, seq_)
+        case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough, i_change_cause) =>
+          Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, None, i_change_cause, seq_)
       }
   }
 }
@@ -321,8 +323,8 @@ lemma applyChange_ensures(known: Option<Hold>, change: Change, seq_: int)
   ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> (applyChange(known, change, seq_).readThrough >= change.readThrough)) case None => true })
   ensures ((match known { case Some(i_) => false case None => true }) ==> ((applyChange(known, change, seq_).id == change.id) && (applyChange(known, change, seq_).at == change.at)))
   ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> ((applyChange(known, change, seq_).id == change.id) && (applyChange(known, change, seq_).at == change.at))) case None => true })
-  ensures ((match known { case Some(i_) => false case None => true }) ==> change.ended? ==> ((applyChange(known, change, seq_).ended? && (applyChange(known, change, seq_).until == seq_)) && (applyChange(known, change, seq_).reason == change.reason)))
-  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> change.ended? ==> ((applyChange(known, change, seq_).ended? && (applyChange(known, change, seq_).until == seq_)) && (applyChange(known, change, seq_).reason == change.reason))) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> change.ended? ==> (((applyChange(known, change, seq_).ended? && (applyChange(known, change, seq_).until == seq_)) && (applyChange(known, change, seq_).reason == change.reason)) && (applyChange(known, change, seq_).cause == change.cause)))
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> change.ended? ==> (((applyChange(known, change, seq_).ended? && (applyChange(known, change, seq_).until == seq_)) && (applyChange(known, change, seq_).reason == change.reason)) && (applyChange(known, change, seq_).cause == change.cause))) case None => true })
   ensures ((match known { case Some(i_) => false case None => true }) ==> change.running? ==> (applyChange(known, change, seq_).running? && (applyChange(known, change, seq_).expiresAt == change.expiresAt)))
   ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> change.running? ==> (applyChange(known, change, seq_).running? && (applyChange(known, change, seq_).expiresAt == change.expiresAt))) case None => true })
   ensures ((match known { case Some(i_) => false case None => true }) ==> applyChange(known, change, seq_).ended? ==> (applyChange(known, change, seq_).since <= applyChange(known, change, seq_).until))
@@ -347,7 +349,7 @@ function cancelHold(hold: Hold, position: int, cancelledAt: int, at: string): Ho
   if (hold.ended? || !(beforeCancellation(position, cancelledAt))) then
     hold
   else
-    Hold.ended(hold.id, at, hold.claimedAt, hold.since, hold.readThrough, LeaseEndReason.revoked, Some(true), cancelledAt)
+    Hold.ended(hold.id, at, hold.claimedAt, hold.since, hold.readThrough, LeaseEndReason.revoked, Some(true), None, cancelledAt)
 }
 
 lemma cancelHold_ensures(hold: Hold, position: int, cancelledAt: int, at: string)

@@ -130,7 +130,14 @@ describe('acknowledged lease context', () => {
 
 		const decision = planReconciliation(releasedUnread, reconciliation(1));
 		expect(decision.abandoned).toEqual([
-			{ id: 'message:2:solo:2', phase: 'ended', reason: 'abandoned', at, readThrough: 0 },
+			{
+				id: 'message:2:solo:2',
+				phase: 'ended',
+				reason: 'abandoned',
+				at,
+				readThrough: 0,
+				cause: 'transient',
+			},
 		]);
 		const stopped = evolve(
 			releasedUnread,
