@@ -48,7 +48,13 @@ import { isLive, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { captureMessageSelection, type MessageSelection, readView } from './room/read.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
-import { closeMoved, exchangeContaining } from './room/rules.verified.ts';
+import {
+	closeMoved,
+	contributionMatches as contributionRule,
+	deliveryMatches as deliveryRule,
+	exchangeContaining,
+	type Recorded,
+} from './room/rules.verified.ts';
 import {
 	decide,
 	evolve,
@@ -93,43 +99,35 @@ export type { RoomSnapshot } from './types.ts';
 type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 type DeliveryOperation = 'wake' | 'steer' | 'cut';
 
+/** A recorded message, projected to what the retry rules read. */
+function recorded(message: Message): Recorded {
+	return {
+		kind: message.kind,
+		from: message.from,
+		to: 'to' in message ? message.to : undefined,
+		text: 'text' in message ? message.text : '',
+		subject: 'subject' in message ? message.subject : undefined,
+		activationId: message.activationId,
+	};
+}
+
 /** Compare a delivery with the body returned by a same-key journal retry. */
 function deliveryMatches(
 	command: Extract<RoomCommand, { type: 'deliver' }>,
 	message: Message,
 ): boolean {
-	return (
-		message.kind === 'said' &&
-		message.activationId === undefined &&
-		message.from === command.from &&
-		message.to === command.to &&
-		message.text === command.text
-	);
+	return deliveryRule(command.from, command.to, command.text, recorded(message));
 }
 
+/** Compare a commit with the body returned by a same-key journal retry. */
 function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	const { activation, intent } = commit;
-	// This activation check is the primary guard. It pins the returned entry to
-	// this activation, so the later branches compare content within one
-	// activation only. The summary branch relies on it: it accepts any recorded
-	// recipient when the intent omits one, which is safe only because the
-	// activation already matches. Do not loosen this check without tightening
-	// that branch.
-	if (message.activationId !== activation) return false;
-	const parsed = decodeActivationId(activation);
-	if (parsed !== undefined && message.from !== parsed.seat) return false;
-
-	if (intent.kind === 'seated' || intent.kind === 'unseated') {
-		return message.kind === intent.kind && message.subject === intent.name;
-	}
-	if (message.kind === 'said') return message.to === intent.to && message.text === intent.text;
-	// A closing agent says through the same `said` intent, but the room records
-	// its contribution as a summary addressed to the exchange owner. An omitted
-	// recipient is that canonical owner; a supplied recipient must still match.
-	return (
-		message.kind === 'summary' &&
-		(intent.to === undefined || message.to === intent.to) &&
-		message.text === intent.text
+	return contributionRule(
+		activation,
+		decodeActivationId(activation)?.seat ?? '',
+		intent,
+		intent.kind === 'said' ? intent.to : undefined,
+		recorded(message),
 	);
 }
 

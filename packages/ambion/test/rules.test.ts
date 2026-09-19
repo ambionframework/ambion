@@ -11,6 +11,7 @@ import {
 	applyChange,
 	type Change,
 	type CloseFact,
+	type Contribution,
 	cancelHold,
 	endingStands,
 	fromCatalog,
@@ -20,10 +21,12 @@ import {
 	type LeaseEndReason,
 	type LeasePhase,
 	leaseExpiry,
+	type MembershipKind,
 	type MessageKind,
 	mayEnd,
 	type Person,
 	type Presence,
+	type PresenceKind,
 	type Purpose,
 	permits,
 	type Seating as RuleSeating,
@@ -67,6 +70,9 @@ describe('verified rules', () => {
 		expectTypeOf<GrantPurpose>().toEqualTypeOf<ActivationPurpose>();
 		expectTypeOf<Close>().toMatchTypeOf<CloseFact>();
 		expectTypeOf<Seating>().toMatchTypeOf<RuleSeating>();
+		expectTypeOf<CommitRequest['intent']>().toMatchTypeOf<Contribution>();
+		expectTypeOf<MembershipKind>().toEqualTypeOf<Extract<Message['kind'], 'seated' | 'unseated'>>();
+		expectTypeOf<PresenceKind>().toEqualTypeOf<Extract<Message['kind'], 'arrived' | 'left'>>();
 		expectTypeOf<RuleSeating>().toMatchTypeOf<Seating>();
 		// The room's hold is the rule's hold plus the derived `cancelled` marker.
 		expectTypeOf<Hold>().toEqualTypeOf<LeaseHold>();

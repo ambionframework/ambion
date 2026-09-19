@@ -2,8 +2,8 @@
  * The rules the room decides by, as functions LemmaScript checks. Every
  * function here is pure, and `lease.ts`, `reconcile.ts`, `delivery.ts`,
  * `routing.ts`, `presence.ts`, `activation.ts`, `exchange.ts`, `fold.ts`,
- * `read.ts`, and `transition.ts` run these bodies: the proof is about the
- * code the room runs. `lsc check` turns the `//@` annotations into Dafny
+ * `read.ts`, `transition.ts`, and the host run these bodies: the proof is
+ * about the code the room runs. `lsc check` turns the `//@` annotations into Dafny
  * obligations, and CI verifies them.
  *
  * The string unions below are declared again beside the rules, because
@@ -1495,4 +1495,277 @@ export function foldRoster(
 		if (afterComposition(change.seq, compositionSeq)) roster = reseated(roster, change.membership);
 	}
 	return roster;
+}
+
+/** A claim or a renewal. The same union as the two lease commands. */
+export type LeaseKind = 'claim' | 'renew';
+
+/** What the admission answers a claim or a renewal. */
+export type Admission = 'granted' | 'ended' | 'held';
+
+//@ contract A first claim runs when the room owes the activation and its seat holds no other live lease. A repeated claim and a renewal run while the lease is live. A renewal never starts a lease. An ended or expired lease never runs again.
+export function admitsLease(
+	kind: LeaseKind,
+	known: LeasePhase | undefined,
+	live: boolean,
+	owed: boolean,
+	seatHeld: boolean,
+): Admission {
+	//@ requires known == undefined ==> !live
+	//@ requires known != undefined && known == 'ended' ==> !live
+	//@ ensures \result == 'granted' ==> (kind == 'claim' && known == undefined && owed && !seatHeld) || live
+	//@ ensures live ==> \result == 'granted'
+	//@ ensures kind == 'renew' && known == undefined ==> \result == 'ended'
+	//@ ensures known != undefined && !live ==> \result == 'ended'
+	//@ ensures known == undefined && !owed ==> \result == 'ended'
+	//@ ensures kind == 'claim' && known == undefined && owed && seatHeld ==> \result == 'held'
+	//@ ensures kind == 'claim' && known == undefined && owed && !seatHeld ==> \result == 'granted'
+	//@ ensures known != undefined ==> \result != 'held'
+	//@ ensures \result == 'held' ==> known == undefined && seatHeld
+	if (known === undefined && (kind === 'renew' || !owed)) return 'ended';
+	if (known === undefined && seatHeld) return 'held';
+	if (known !== undefined && !live) return 'ended';
+	return 'granted';
+}
+
+/** What a closing commit stamps: the recipient and the covered range. */
+export interface Stamped {
+	readonly to: string;
+	readonly covers: Range;
+}
+
+//@ contract The summary a closing commit stamps covers its own exchange, so a second closing commit for the same exchange is refused.
+export function stampedSummary(owner: string, from: number, through: number): Stamped {
+	//@ ensures \result.to == owner
+	//@ ensures \result.covers.from == from && \result.covers.through == through
+	//@ ensures coversExchange(\result.to, \result.covers.from, \result.covers.through, owner, from, through)
+	return { to: owner, covers: { from, through } };
+}
+
+//@ contract The recipient a closing commit names is the owner, or none.
+export function addressesOwner(to: string | undefined, owner: string): boolean {
+	//@ ensures to == undefined ==> \result
+	//@ ensures to != undefined ==> (\result <==> to == owner)
+	if (to === undefined) return true;
+	return to === owner;
+}
+
+/** A person's own presence change. */
+export type PresenceKind = 'arrived' | 'left';
+
+/** What a presence or membership change comes to. */
+export type Outcome = 'refused' | 'unchanged' | 'written';
+
+//@ contract An agent name cannot arrive. A present person arrives again only under the same identity, and that writes nothing. A departure of an absent person writes nothing. A departure is never refused.
+export function presenceOutcome(
+	kind: PresenceKind,
+	agentName: boolean,
+	present: boolean,
+	sameIdentity: boolean,
+): Outcome {
+	//@ ensures kind == 'arrived' && agentName ==> \result == 'refused'
+	//@ ensures kind == 'arrived' && !agentName && present && !sameIdentity ==> \result == 'refused'
+	//@ ensures kind == 'arrived' && !agentName && present && sameIdentity ==> \result == 'unchanged'
+	//@ ensures kind == 'arrived' && !agentName && !present ==> \result == 'written'
+	//@ ensures kind == 'left' ==> \result != 'refused'
+	//@ ensures kind == 'left' ==> (\result == 'written' <==> present)
+	//@ ensures \result == 'written' ==> !agentName || kind == 'left'
+	//@ ensures kind == 'arrived' ==> (\result == 'written' <==> !agentName && !present)
+	if (kind === 'arrived') {
+		if (agentName) return 'refused';
+		if (present) return sameIdentity ? 'unchanged' : 'refused';
+		return 'written';
+	}
+	return present ? 'written' : 'unchanged';
+}
+
+/** A membership change an activation or the host asks for. */
+export type MembershipKind = 'seated' | 'unseated';
+
+//@ contract From an activation: seating a member or unseating a reserve name changes nothing. Seating from the reserve and unseating a member write. Any other name is refused.
+export function membershipOutcome(
+	kind: MembershipKind,
+	onRoster: boolean,
+	inReserve: boolean,
+): Outcome {
+	//@ requires !(onRoster && inReserve)
+	//@ ensures kind == 'seated' ==> (\result == 'unchanged' <==> onRoster)
+	//@ ensures kind == 'seated' ==> (\result == 'written' <==> inReserve)
+	//@ ensures kind == 'unseated' ==> (\result == 'written' <==> onRoster)
+	//@ ensures kind == 'unseated' ==> (\result == 'unchanged' <==> inReserve)
+	//@ ensures !onRoster && !inReserve ==> \result == 'refused'
+	//@ ensures \result == 'refused' <==> (!onRoster && !inReserve)
+	if (kind === 'seated') return onRoster ? 'unchanged' : inReserve ? 'written' : 'refused';
+	return onRoster ? 'written' : inReserve ? 'unchanged' : 'refused';
+}
+
+//@ contract From the host: a seating is admitted when the name is neither a member nor a person the record knows; an unseating when the name is a member. An already satisfied request is refused.
+export function hostMembership(
+	kind: MembershipKind,
+	onRoster: boolean,
+	isPerson: boolean,
+): boolean {
+	//@ ensures kind == 'seated' ==> (\result <==> !onRoster && !isPerson)
+	//@ ensures kind == 'unseated' ==> (\result <==> onRoster)
+	//@ ensures isPerson && kind == 'seated' ==> !\result
+	if (kind === 'seated') return !onRoster && !isPerson;
+	return onRoster;
+}
+
+/** Why a directed message reaches its name, or does not. */
+export type Address = 'ok' | 'unknown' | 'self' | 'unreachable';
+
+//@ contract A directed message reaches a known name other than the author. A seat that wakes for nothing said is unreachable. An undirected message is always addressable.
+export function addressOutcome(
+	directed: boolean,
+	known: boolean,
+	self: boolean,
+	seatAttention: Attention | undefined,
+): Address {
+	//@ requires seatAttention != undefined ==> known
+	//@ ensures !directed ==> \result == 'ok'
+	//@ ensures directed && !known ==> \result == 'unknown'
+	//@ ensures directed && known && self ==> \result == 'self'
+	//@ ensures directed && known && !self && seatAttention != undefined && seatAttention == 'none' ==> \result == 'unreachable'
+	//@ ensures directed && known && !self && seatAttention == undefined ==> \result == 'ok'
+	//@ ensures directed && known && !self && seatAttention != undefined && seatAttention != 'none' ==> \result == 'ok'
+	//@ ensures \result == 'ok' && directed ==> known && !self
+	//@ ensures \result == 'ok' && directed && seatAttention != undefined ==> seatAttention != 'none'
+	if (!directed) return 'ok';
+	if (!known) return 'unknown';
+	if (self) return 'self';
+	if (seatAttention !== undefined && seatAttention === 'none') return 'unreachable';
+	return 'ok';
+}
+
+//@ contract No two names in the list are the same, and a repeated name is found.
+export function distinct(names: readonly string[]): boolean {
+	//@ ensures \result <==> forall(i, 0 <= i && i < names.length ==> forall(j, 0 <= j && j < i ==> names[i] != names[j]))
+	for (let i = 0; i < names.length; i++) {
+		//@ invariant 0 <= i && i <= names.length
+		//@ invariant forall(a, 0 <= a && a < i ==> forall(b, 0 <= b && b < a ==> names[a] != names[b]))
+		for (let j = 0; j < i; j++) {
+			//@ invariant 0 <= j && j <= i
+			//@ invariant forall(b, 0 <= b && b < j ==> names[i] != names[b])
+			if (names[i] === names[j]) return false;
+		}
+	}
+	return true;
+}
+
+/** What the room answers a commit about its lease and grant. */
+export type Authority = 'stale' | 'refused' | 'granted';
+
+//@ contract A commit lands only under a lease the fold holds as running and not past its expiry, and only with a room grant. A missing, ended, or expired lease reads as stale; a live lease without a grant as refused.
+export function commitAuthority(
+	known: LeasePhase | undefined,
+	pastExpiry: boolean,
+	granted: boolean,
+): Authority {
+	//@ ensures known == undefined ==> \result == 'stale'
+	//@ ensures known != undefined && known == 'ended' ==> \result == 'stale'
+	//@ ensures pastExpiry ==> \result == 'stale'
+	//@ ensures known != undefined && known == 'running' && !pastExpiry ==> (\result == 'granted' <==> granted)
+	//@ ensures known != undefined && known == 'running' && !pastExpiry ==> (\result == 'refused' <==> !granted)
+	//@ ensures \result == 'granted' ==> known != undefined && !pastExpiry && granted
+	//@ ensures \result == 'refused' ==> known != undefined && !pastExpiry && !granted
+	//@ ensures \result != 'stale' ==> known != undefined && !pastExpiry
+	if (known === undefined) return 'stale';
+	if (known === 'ended') return 'stale';
+	if (pastExpiry) return 'stale';
+	return granted ? 'granted' : 'refused';
+}
+
+/** A recorded message, as a retry reads it. `text` is empty for a presence change. */
+export interface Recorded {
+	readonly kind: MessageKind;
+	readonly from: string | undefined;
+	readonly to: string | undefined;
+	readonly text: string;
+	readonly subject: string | undefined;
+	readonly activationId: string | undefined;
+}
+
+/** What a repeated commit asked for, without the recipient a say names. */
+export type Contribution =
+	| { readonly kind: 'said'; readonly text: string }
+	| { readonly kind: 'seated'; readonly name: string }
+	| { readonly kind: 'unseated'; readonly name: string };
+
+//@ contract Two optional names agree when both are absent, or both are present and equal.
+function sameName(a: string | undefined, b: string | undefined): boolean {
+	//@ ensures a == undefined && b == undefined ==> \result
+	//@ ensures a == undefined && b != undefined ==> !\result
+	//@ ensures a != undefined && b == undefined ==> !\result
+	//@ ensures a != undefined && b != undefined ==> (\result <==> a == b)
+	if (a === undefined) return b === undefined;
+	if (b === undefined) return false;
+	return a === b;
+}
+
+//@ contract An optional name names a name when it is present and equal.
+function namedAs(optional: string | undefined, name: string): boolean {
+	//@ ensures optional == undefined ==> !\result
+	//@ ensures optional != undefined ==> (\result <==> optional == name)
+	if (optional === undefined) return false;
+	return optional === name;
+}
+
+//@ contract A recorded message answers a person's repeated delivery exactly when it is that person's say, with the same recipient or none in both, the same text, and no activation wrote it.
+export function deliveryMatches(
+	from: string,
+	to: string | undefined,
+	text: string,
+	message: Recorded,
+): boolean {
+	//@ ensures \result <==> (message.kind == 'said' && message.activationId == undefined && namedAs(message.from, from) && sameName(message.to, to) && message.text == text)
+	//@ ensures \result ==> message.kind == 'said'
+	//@ ensures \result ==> message.activationId == undefined
+	//@ ensures message.activationId != undefined ==> !\result
+	if (message.kind !== 'said') return false;
+	if (message.activationId !== undefined) return false;
+	if (!namedAs(message.from, from)) return false;
+	return sameName(message.to, to) && message.text === text;
+}
+
+//@ contract The recorded message is the membership change the intent names.
+function sameMembership(
+	kind: MessageKind,
+	subject: string | undefined,
+	intentKind: MessageKind,
+	name: string,
+): boolean {
+	//@ ensures \result <==> (kind == intentKind && namedAs(subject, name))
+	return kind === intentKind && namedAs(subject, name);
+}
+
+//@ contract A recorded message answers a repeated commit only under the same activation and seat, and then exactly when it is the same contribution: the same membership change, the same say to the same recipient, or a summary with the same text that addresses the recipient the commit names when it names one.
+export function contributionMatches(
+	activation: string,
+	seat: string,
+	intent: Contribution,
+	to: string | undefined,
+	message: Recorded,
+): boolean {
+	//@ ensures \result ==> namedAs(message.activationId, activation)
+	//@ ensures \result ==> namedAs(message.from, seat)
+	//@ ensures message.activationId == undefined ==> !\result
+	//@ ensures message.kind == 'arrived' || message.kind == 'left' ==> !\result
+	//@ ensures intent.kind == 'seated' ==> (\result <==> (namedAs(message.activationId, activation) && namedAs(message.from, seat) && message.kind == 'seated' && namedAs(message.subject, intent.name)))
+	//@ ensures intent.kind == 'unseated' ==> (\result <==> (namedAs(message.activationId, activation) && namedAs(message.from, seat) && message.kind == 'unseated' && namedAs(message.subject, intent.name)))
+	//@ ensures intent.kind == 'said' && message.kind == 'said' ==> (\result <==> (namedAs(message.activationId, activation) && namedAs(message.from, seat) && sameName(message.to, to) && message.text == intent.text))
+	//@ ensures intent.kind == 'said' && message.kind == 'summary' && to == undefined ==> (\result <==> (namedAs(message.activationId, activation) && namedAs(message.from, seat) && message.text == intent.text))
+	//@ ensures intent.kind == 'said' && message.kind == 'summary' && to != undefined ==> (\result <==> (namedAs(message.activationId, activation) && namedAs(message.from, seat) && namedAs(message.to, to) && message.text == intent.text))
+	//@ ensures intent.kind == 'said' && message.kind != 'said' && message.kind != 'summary' ==> !\result
+	//@ ensures \result && intent.kind == 'said' ==> message.text == intent.text
+	if (!namedAs(message.activationId, activation)) return false;
+	if (!namedAs(message.from, seat)) return false;
+	if (intent.kind === 'seated')
+		return sameMembership(message.kind, message.subject, 'seated', intent.name);
+	if (intent.kind === 'unseated')
+		return sameMembership(message.kind, message.subject, 'unseated', intent.name);
+	if (message.kind === 'said') return sameName(message.to, to) && message.text === intent.text;
+	if (message.kind !== 'summary') return false;
+	if (to !== undefined && !namedAs(message.to, to)) return false;
+	return message.text === intent.text;
 }

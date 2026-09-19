@@ -17,15 +17,24 @@ import {
 import { routes } from './routing.ts';
 import {
 	acknowledged,
+	addressesOwner,
+	addressOutcome,
 	admitsClose,
+	admitsLease,
+	commitAuthority,
 	coversExchange,
+	distinct,
 	speechFreshness as freshnessRule,
+	hostMembership,
 	leaseExpiry,
 	mayEnd,
+	membershipOutcome,
 	onRecord,
 	onRoster,
 	permits,
+	presenceOutcome,
 	present,
+	stampedSummary,
 } from './rules.verified.ts';
 
 /** A committed event includes the position assigned by the journal. */
@@ -196,13 +205,17 @@ function deliver(
 ): RoomDecision<'message'> {
 	const { from, to, text } = command;
 	if (!present(state.people.get(from))) return refused(`'${from}' is not present in this room.`);
-	const target = state.roster.find((seat) => seat.name === to);
-	if (to !== undefined && !state.people.has(to) && target === undefined) {
+	const target = to === undefined ? undefined : state.roster.find((seat) => seat.name === to);
+	const outcome = addressOutcome(
+		to !== undefined,
+		to !== undefined && (state.people.has(to) || target !== undefined),
+		false,
+		target?.attention,
+	);
+	if (outcome === 'unknown')
 		return refused(`Cannot direct a delivery to '${to}': not in this room.`);
-	}
-	if (target?.attention === 'none') {
+	if (outcome === 'unreachable')
 		return refused(`Cannot direct a delivery to '${to}': it wakes for nothing said.`);
-	}
 	return message(
 		state,
 		{ kind: 'said', at: iso(now), from, ...(to === undefined ? {} : { to }), text },
@@ -215,45 +228,43 @@ function presence(
 	command: Extract<MessageCommand, { type: 'presence' }>,
 	now: number,
 ): RoomDecision<'message'> {
-	const reason = presenceRefusal(state, command.change);
-	if (reason !== undefined) return refused(reason);
-	const known = state.people.get(command.change.subject);
-	if (
-		(command.change.kind === 'arrived' && known?.presence === 'present') ||
-		(command.change.kind === 'left' && known?.presence !== 'present')
-	)
-		return { event: undefined };
-	return message(state, { ...command.change, at: iso(now) }, now, command.route);
-}
-
-function presenceRefusal(state: RoomState, change: PresenceChange): string | undefined {
-	const seat = state.roster.find((candidate) => candidate.name === change.subject);
-	if (change.kind === 'seated' && (seat !== undefined || state.people.has(change.subject))) {
-		return `Duplicate agent name '${change.subject}': one name names one participant.`;
+	const { change } = command;
+	if (change.kind === 'seated' || change.kind === 'unseated') {
+		const reason = membershipRefusal(state, change.kind, change.subject);
+		if (reason !== undefined) return refused(reason);
+		return message(state, { ...change, at: iso(now) }, now, command.route);
 	}
-	if (change.kind === 'unseated') return unseatRefusal(seat, change.subject);
-	if (change.kind === 'arrived') return arrivalRefusal(state, change);
-	return undefined;
+	const known = state.people.get(change.subject);
+	const agentName = [...state.roster, ...state.reserve].some(
+		(seat) => seat.name === change.subject,
+	);
+	const outcome = presenceOutcome(
+		change.kind,
+		agentName,
+		present(known),
+		known !== undefined && known.identity === change.identity,
+	);
+	if (outcome === 'refused') return refused(arrivalRefusal(change.subject, agentName));
+	if (outcome === 'unchanged') return { event: undefined };
+	return message(state, { ...change, at: iso(now) }, now, command.route);
 }
 
-function unseatRefusal(
-	seat: RoomState['roster'][number] | undefined,
+/** The host's seating or unseating: the rule admits it, or this names why not. */
+function membershipRefusal(
+	state: RoomState,
+	kind: 'seated' | 'unseated',
 	name: string,
 ): string | undefined {
-	if (seat === undefined) return `'${name}' is not seated in this room.`;
-	return undefined;
+	if (hostMembership(kind, onRoster(state.roster, name), state.people.has(name))) return undefined;
+	return kind === 'seated'
+		? `Duplicate agent name '${name}': one name names one participant.`
+		: `'${name}' is not seated in this room.`;
 }
 
-function arrivalRefusal(state: RoomState, change: PresenceChange): string | undefined {
-	const name = change.subject;
-	if ([...state.roster, ...state.reserve].some((seat) => seat.name === name)) {
-		return `'${name}' is an agent in this room: one name names one participant.`;
-	}
-	const known = state.people.get(name);
-	if (known?.presence === 'present' && known.identity !== change.identity) {
-		return `'${name}' is already in this room under a different identity: one name is one person.`;
-	}
-	return undefined;
+function arrivalRefusal(name: string, agentName: boolean): string {
+	return agentName
+		? `'${name}' is an agent in this room: one name names one participant.`
+		: `'${name}' is already in this room under a different identity: one name is one person.`;
 }
 
 function commit(state: RoomState, request: CommitRequest, now: number): RoomDecision<'message'> {
@@ -278,7 +289,7 @@ function closingCommit(
 ): RoomDecision<'message'> {
 	const intent = request.intent;
 	if (intent.kind !== 'said') return refused('This activation cannot submit that intent.');
-	if (intent.to !== undefined && intent.to !== purpose.person)
+	if (!addressesOwner(intent.to, purpose.person))
 		return refused('A closing response must address the exchange owner.');
 	if (state.messages.some((entry) => isCoveringSummary(entry, purpose)))
 		return refused('This exchange already has a summary.');
@@ -287,8 +298,7 @@ function closingCommit(
 		{
 			kind: 'summary',
 			text: intent.text,
-			to: purpose.person,
-			covers: { from: purpose.exchange, through: purpose.through },
+			...stampedSummary(purpose.person, purpose.exchange, purpose.through),
 			at: iso(now),
 			activationId: request.activation,
 			from: live.seat,
@@ -337,9 +347,16 @@ function liveSpec(
 	now: number,
 ): ActivationSpec | { refusal: Refusal } {
 	const held = state.leases.get(id);
-	if (held === undefined || !isLive(held, now)) return stale('the lease ended');
-	if (spec === undefined) return refused('This activation has no room grant.');
-	return onRoster(state.roster, spec.seat) ? spec : stale('the lease ended');
+	const authority = commitAuthority(
+		held?.phase,
+		held !== undefined && isExpired(held, now),
+		spec !== undefined,
+	);
+	if (authority === 'stale') return stale('the lease ended');
+	// The grant already holds the seat on the roster. The re-test narrows the type only.
+	if (authority === 'refused' || spec === undefined)
+		return refused('This activation has no room grant.');
+	return spec;
 }
 
 function speechFreshness(
@@ -378,11 +395,11 @@ function seating(
 	stamp: { at: string; activationId: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
-	if (onRoster(state.roster, name)) {
-		return { unchanged: { kind: 'seated', name } };
-	}
 	const held = state.reserve.find((candidate) => candidate.name === name);
-	if (held === undefined) {
+	const outcome = membershipOutcome('seated', onRoster(state.roster, name), held !== undefined);
+	if (outcome === 'unchanged') return { unchanged: { kind: 'seated', name } };
+	// A written outcome has a reserve seat. The re-test narrows the type only.
+	if (outcome === 'refused' || held === undefined) {
 		const names = state.reserve.map((candidate) => candidate.name);
 		return refused(
 			`'${name}' is not in the reserve. ` +
@@ -408,11 +425,13 @@ function unseating(
 	stamp: { at: string; activationId: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
-	if (!onRoster(state.roster, name)) {
-		return state.reserve.some((seat) => seat.name === name)
-			? { unchanged: { kind: 'unseated', name } }
-			: refused(`'${name}' is not an agent in this room.`);
-	}
+	const outcome = membershipOutcome(
+		'unseated',
+		onRoster(state.roster, name),
+		state.reserve.some((seat) => seat.name === name),
+	);
+	if (outcome === 'unchanged') return { unchanged: { kind: 'unseated', name } };
+	if (outcome === 'refused') return refused(`'${name}' is not an agent in this room.`);
 	return message(state, { kind: 'unseated', subject: name, ...stamp }, now);
 }
 
@@ -421,14 +440,19 @@ function addressRefusal(
 	seat: string,
 	target: string | undefined,
 ): string | undefined {
-	if (target === undefined) return undefined;
-	const found = state.roster.find((candidate) => candidate.name === target);
-	if (!state.people.has(target) && found === undefined)
+	const found =
+		target === undefined ? undefined : state.roster.find((candidate) => candidate.name === target);
+	const outcome = addressOutcome(
+		target !== undefined,
+		target !== undefined && (state.people.has(target) || found !== undefined),
+		target !== undefined && target === seat,
+		found?.attention,
+	);
+	if (outcome === 'ok') return undefined;
+	if (outcome === 'unknown')
 		return `Unknown participant '${target}'. Address someone from the roster.`;
-	if (target === seat) return 'You cannot address yourself.';
-	return found?.attention === 'none'
-		? `'${target}' wakes for nothing said. Say it to the room, or to somebody else.`
-		: undefined;
+	if (outcome === 'self') return 'You cannot address yourself.';
+	return `'${target}' wakes for nothing said. Say it to the room, or to somebody else.`;
 }
 
 function claim(
@@ -450,7 +474,6 @@ function renew(
 	if (invalid !== undefined) return invalid;
 	if (activationSpec(command.id, state) === undefined)
 		return stale('the activation has no room grant');
-	if (!state.leases.has(command.id)) return stale('the lease ended');
 	return runningLease(state, command, now, command.readThrough ?? 0);
 }
 
@@ -461,18 +484,15 @@ function runningLease(
 	readThrough: number,
 ): RoomDecision<'lease'> {
 	const known = state.leases.get(command.id);
-	if (known === undefined && !state.due.some((due) => due.id === command.id))
-		return stale('the lease ended');
-	const seat = decodeActivationId(command.id)?.seat;
-	if (
-		known === undefined &&
-		seat !== undefined &&
-		[...state.leases.values()].some(
-			(lease) => lease.id !== command.id && seatOfLease(lease.id) === seat && isLive(lease, now),
-		)
-	)
-		return stale('another activation already holds this seat');
-	if (known !== undefined && !isLive(known, now)) return stale('the lease ended');
+	const admission = admitsLease(
+		command.type,
+		known?.phase,
+		known !== undefined && isLive(known, now),
+		state.due.some((due) => due.id === command.id),
+		seatHeld(state, command.id, now),
+	);
+	if (admission === 'ended') return stale('the lease ended');
+	if (admission === 'held') return stale('another activation already holds this seat');
 	const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
 	return {
 		event: {
@@ -489,6 +509,17 @@ function runningLease(
 }
 
 const seatOfLease = (id: string): string | undefined => decodeActivationId(id)?.seat;
+
+/** Another activation of the same seat holds a live lease. */
+function seatHeld(state: RoomState, id: string, now: number): boolean {
+	const seat = seatOfLease(id);
+	return (
+		seat !== undefined &&
+		[...state.leases.values()].some(
+			(lease) => lease.id !== id && seatOfLease(lease.id) === seat && isLive(lease, now),
+		)
+	);
+}
 
 function end(
 	state: RoomState,
@@ -533,11 +564,11 @@ function compose(state: RoomState, composition: Body<Composition>): RoomDecision
 		)
 	)
 		return refused(`Summary writer '${composition.summary}' is not defined in this room.`);
-	const names = new Set<string>();
-	for (const seat of [...composition.agents, ...composition.available]) {
-		if (names.has(seat.name) || state.people.has(seat.name))
-			return refused(`Duplicate agent name '${seat.name}': one name names one participant.`);
-		names.add(seat.name);
+	const names = [...composition.agents, ...composition.available].map((seat) => seat.name);
+	if (!distinct(names) || names.some((name) => state.people.has(name))) {
+		const taken =
+			names.find((name, index) => names.indexOf(name) !== index || state.people.has(name)) ?? '';
+		return refused(`Duplicate agent name '${taken}': one name names one participant.`);
 	}
 	return { event: { kind: 'composition', body: composition } };
 }

@@ -86,6 +86,26 @@ datatype Membership = seated(name: string, identity: string, attention: Attentio
 
 datatype RosterChange = RosterChange(seq_: int, membership: Membership)
 
+datatype LeaseKind = claim | renew
+
+datatype Admission = ended | granted | held
+
+datatype Stamped = Stamped(to: string, covers: Range)
+
+datatype PresenceKind = arrived | left
+
+datatype Outcome = refused | unchanged_ | written
+
+datatype MembershipKind = seated | unseated
+
+datatype Address = ok | unknown | self | unreachable
+
+datatype Authority = granted | refused | stale
+
+datatype Recorded = Recorded(kind: MessageKind, from: Option<string>, to: Option<string>, text: string, subject: Option<string>, activationId: Option<string>)
+
+datatype Contribution = said(text: string) | seated(name: string) | unseated(name: string)
+
 function expired(expiry: int, now: int): bool
 {
   (expiry <= now)
@@ -1520,6 +1540,342 @@ lemma afterComposition_ensures(seq_: int, compositionSeq: int)
 {
 }
 
+function admitsLease(kind: LeaseKind, known: Option<LeasePhase>, live: bool, owed: bool, seatHeld: bool): Admission
+  requires ((match known { case Some(i_) => false case None => true }) ==> !(live))
+  requires (match known { case Some(i_known_val) => (i_known_val.ended? ==> !(live)) case None => true })
+{
+  if ((match known { case Some(i_) => false case None => true }) && (kind.renew? || !(owed))) then
+    Admission.ended
+  else
+    if ((match known { case Some(i_) => false case None => true }) && seatHeld) then
+      Admission.held
+    else
+      match known {
+        case Some(i_known_val) =>
+          if !(live) then
+            Admission.ended
+          else
+            Admission.granted
+        case None =>
+          Admission.granted
+      }
+}
+
+lemma admitsLease_ensures(kind: LeaseKind, known: Option<LeasePhase>, live: bool, owed: bool, seatHeld: bool)
+  requires ((match known { case Some(i_) => false case None => true }) ==> !(live))
+  requires (match known { case Some(i_known_val) => (i_known_val.ended? ==> !(live)) case None => true })
+  ensures (admitsLease(kind, known, live, owed, seatHeld).granted? ==> ((((kind.claim? && (match known { case Some(i_) => false case None => true })) && owed) && !(seatHeld)) || live))
+  ensures (live ==> admitsLease(kind, known, live, owed, seatHeld).granted?)
+  ensures (kind.renew? ==> (match known { case Some(i_) => false case None => true }) ==> admitsLease(kind, known, live, owed, seatHeld).ended?)
+  ensures (match known { case Some(i_known_val) => (!(live) ==> admitsLease(kind, known, live, owed, seatHeld).ended?) case None => true })
+  ensures ((match known { case Some(i_) => false case None => true }) ==> !(owed) ==> admitsLease(kind, known, live, owed, seatHeld).ended?)
+  ensures (kind.claim? ==> (match known { case Some(i_) => false case None => true }) ==> owed ==> seatHeld ==> admitsLease(kind, known, live, owed, seatHeld).held?)
+  ensures (kind.claim? ==> (match known { case Some(i_) => false case None => true }) ==> owed ==> !(seatHeld) ==> admitsLease(kind, known, live, owed, seatHeld).granted?)
+  ensures (match known { case Some(i_known_val) => (!admitsLease(kind, known, live, owed, seatHeld).held?) case None => true })
+  ensures (admitsLease(kind, known, live, owed, seatHeld).held? ==> ((match known { case Some(i_) => false case None => true }) && seatHeld))
+{
+}
+
+function stampedSummary(owner: string, from: int, through: int): Stamped
+{
+  Stamped(owner, Range(from, through))
+}
+
+lemma stampedSummary_ensures(owner: string, from: int, through: int)
+  ensures (stampedSummary(owner, from, through).to == owner)
+  ensures (stampedSummary(owner, from, through).covers.from == from)
+  ensures (stampedSummary(owner, from, through).covers.through == through)
+  ensures coversExchange(stampedSummary(owner, from, through).to, stampedSummary(owner, from, through).covers.from, stampedSummary(owner, from, through).covers.through, owner, from, through)
+{
+}
+
+function addressesOwner(to: Option<string>, owner: string): bool
+{
+  match to {
+    case Some(i_to_val) =>
+      (i_to_val == owner)
+    case None =>
+      true
+  }
+}
+
+lemma addressesOwner_ensures(to: Option<string>, owner: string)
+  ensures ((match to { case Some(i_) => false case None => true }) ==> addressesOwner(to, owner))
+  ensures (match to { case Some(i_to_val) => (addressesOwner(to, owner) <==> (i_to_val == owner)) case None => true })
+{
+}
+
+function presenceOutcome(kind: PresenceKind, agentName: bool, present: bool, sameIdentity: bool): Outcome
+{
+  if kind.arrived? then
+    if agentName then
+      Outcome.refused
+    else
+      if present then
+        if sameIdentity then
+          Outcome.unchanged_
+        else
+          Outcome.refused
+      else
+        Outcome.written
+  else
+    if present then
+      Outcome.written
+    else
+      Outcome.unchanged_
+}
+
+lemma presenceOutcome_ensures(kind: PresenceKind, agentName: bool, present: bool, sameIdentity: bool)
+  ensures (kind.arrived? ==> agentName ==> presenceOutcome(kind, agentName, present, sameIdentity).refused?)
+  ensures (kind.arrived? ==> !(agentName) ==> present ==> !(sameIdentity) ==> presenceOutcome(kind, agentName, present, sameIdentity).refused?)
+  ensures (kind.arrived? ==> !(agentName) ==> present ==> sameIdentity ==> presenceOutcome(kind, agentName, present, sameIdentity).unchanged_?)
+  ensures (kind.arrived? ==> !(agentName) ==> !(present) ==> presenceOutcome(kind, agentName, present, sameIdentity).written?)
+  ensures (kind.left? ==> (!presenceOutcome(kind, agentName, present, sameIdentity).refused?))
+  ensures (kind.left? ==> (presenceOutcome(kind, agentName, present, sameIdentity).written? <==> present))
+  ensures (presenceOutcome(kind, agentName, present, sameIdentity).written? ==> (!(agentName) || kind.left?))
+  ensures (kind.arrived? ==> (presenceOutcome(kind, agentName, present, sameIdentity).written? <==> (!(agentName) && !(present))))
+{
+}
+
+function membershipOutcome(kind: MembershipKind, onRoster: bool, inReserve: bool): Outcome
+  requires !((onRoster && inReserve))
+{
+  if kind.seated? then
+    if onRoster then
+      Outcome.unchanged_
+    else
+      if inReserve then
+        Outcome.written
+      else
+        Outcome.refused
+  else
+    if onRoster then
+      Outcome.written
+    else
+      if inReserve then
+        Outcome.unchanged_
+      else
+        Outcome.refused
+}
+
+lemma membershipOutcome_ensures(kind: MembershipKind, onRoster: bool, inReserve: bool)
+  requires !((onRoster && inReserve))
+  ensures (kind.seated? ==> (membershipOutcome(kind, onRoster, inReserve).unchanged_? <==> onRoster))
+  ensures (kind.seated? ==> (membershipOutcome(kind, onRoster, inReserve).written? <==> inReserve))
+  ensures (kind.unseated? ==> (membershipOutcome(kind, onRoster, inReserve).written? <==> onRoster))
+  ensures (kind.unseated? ==> (membershipOutcome(kind, onRoster, inReserve).unchanged_? <==> inReserve))
+  ensures (!(onRoster) ==> !(inReserve) ==> membershipOutcome(kind, onRoster, inReserve).refused?)
+  ensures (membershipOutcome(kind, onRoster, inReserve).refused? <==> (!(onRoster) && !(inReserve)))
+{
+}
+
+function hostMembership(kind: MembershipKind, onRoster: bool, isPerson: bool): bool
+{
+  if kind.seated? then
+    (!(onRoster) && !(isPerson))
+  else
+    onRoster
+}
+
+lemma hostMembership_ensures(kind: MembershipKind, onRoster: bool, isPerson: bool)
+  ensures (kind.seated? ==> (hostMembership(kind, onRoster, isPerson) <==> (!(onRoster) && !(isPerson))))
+  ensures (kind.unseated? ==> (hostMembership(kind, onRoster, isPerson) <==> onRoster))
+  ensures (isPerson ==> kind.seated? ==> !(hostMembership(kind, onRoster, isPerson)))
+{
+}
+
+function addressOutcome(directed: bool, known: bool, self: bool, seatAttention: Option<Attention>): Address
+  requires (match seatAttention { case Some(i_seatAttention_val) => known case None => true })
+{
+  if !(directed) then
+    Address.ok
+  else
+    if !(known) then
+      Address.unknown
+    else
+      if self then
+        Address.self
+      else
+        match seatAttention {
+          case Some(i_seatAttention_val) =>
+            if i_seatAttention_val.none? then
+              Address.unreachable
+            else
+              Address.ok
+          case None =>
+            Address.ok
+        }
+}
+
+lemma addressOutcome_ensures(directed: bool, known: bool, self: bool, seatAttention: Option<Attention>)
+  requires (match seatAttention { case Some(i_seatAttention_val) => known case None => true })
+  ensures (!(directed) ==> addressOutcome(directed, known, self, seatAttention).ok?)
+  ensures (directed ==> !(known) ==> addressOutcome(directed, known, self, seatAttention).unknown?)
+  ensures (directed ==> known ==> self ==> addressOutcome(directed, known, self, seatAttention).self?)
+  ensures (match seatAttention { case Some(i_seatAttention_val) => (directed ==> known ==> !(self) ==> i_seatAttention_val.none? ==> addressOutcome(directed, known, self, seatAttention).unreachable?) case None => true })
+  ensures (directed ==> known ==> !(self) ==> (match seatAttention { case Some(i_) => false case None => true }) ==> addressOutcome(directed, known, self, seatAttention).ok?)
+  ensures (match seatAttention { case Some(i_seatAttention_val) => (directed ==> known ==> !(self) ==> (!i_seatAttention_val.none?) ==> addressOutcome(directed, known, self, seatAttention).ok?) case None => true })
+  ensures (addressOutcome(directed, known, self, seatAttention).ok? ==> directed ==> (known && !(self)))
+  ensures (match seatAttention { case Some(i_seatAttention_val) => (addressOutcome(directed, known, self, seatAttention).ok? ==> directed ==> (!i_seatAttention_val.none?)) case None => true })
+{
+}
+
+function commitAuthority(known: Option<LeasePhase>, pastExpiry: bool, granted: bool): Authority
+{
+  match known {
+    case Some(i_known_val) =>
+      if i_known_val.ended? then
+        Authority.stale
+      else
+        if pastExpiry then
+          Authority.stale
+        else
+          if granted then
+            Authority.granted
+          else
+            Authority.refused
+    case None =>
+      Authority.stale
+  }
+}
+
+lemma commitAuthority_ensures(known: Option<LeasePhase>, pastExpiry: bool, granted: bool)
+  ensures ((match known { case Some(i_) => false case None => true }) ==> commitAuthority(known, pastExpiry, granted).stale?)
+  ensures (match known { case Some(i_known_val) => (i_known_val.ended? ==> commitAuthority(known, pastExpiry, granted).stale?) case None => true })
+  ensures (pastExpiry ==> commitAuthority(known, pastExpiry, granted).stale?)
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> !(pastExpiry) ==> (commitAuthority(known, pastExpiry, granted).granted? <==> granted)) case None => true })
+  ensures (match known { case Some(i_known_val) => (i_known_val.running? ==> !(pastExpiry) ==> (commitAuthority(known, pastExpiry, granted).refused? <==> !(granted))) case None => true })
+  ensures (commitAuthority(known, pastExpiry, granted).granted? ==> (((match known { case Some(i_) => true case None => false }) && !(pastExpiry)) && granted))
+  ensures (commitAuthority(known, pastExpiry, granted).refused? ==> (((match known { case Some(i_) => true case None => false }) && !(pastExpiry)) && !(granted)))
+  ensures ((!commitAuthority(known, pastExpiry, granted).stale?) ==> ((match known { case Some(i_) => true case None => false }) && !(pastExpiry)))
+{
+}
+
+function sameName(a: Option<string>, b: Option<string>): bool
+{
+  match a {
+    case Some(i_a_val) =>
+      match b {
+        case Some(i_b_val) =>
+          (i_a_val == i_b_val)
+        case None =>
+          false
+      }
+    case None =>
+      match b {
+        case Some(i_) =>
+          false
+        case None =>
+          true
+      }
+  }
+}
+
+lemma sameName_ensures(a: Option<string>, b: Option<string>)
+  ensures ((match a { case Some(i_) => false case None => true }) ==> (match b { case Some(i_) => false case None => true }) ==> sameName(a, b))
+  ensures (match b { case Some(i_b_val) => ((match a { case Some(i_) => false case None => true }) ==> !(sameName(a, b))) case None => true })
+  ensures (match a { case Some(i_a_val) => ((match b { case Some(i_) => false case None => true }) ==> !(sameName(a, b))) case None => true })
+  ensures (match a { case Some(i_a_val) => (match b { case Some(i_b_val) => (sameName(a, b) <==> (i_a_val == i_b_val)) case None => true }) case None => true })
+{
+}
+
+function namedAs(optional: Option<string>, name: string): bool
+{
+  match optional {
+    case Some(i_optional_val) =>
+      (i_optional_val == name)
+    case None =>
+      false
+  }
+}
+
+lemma namedAs_ensures(optional: Option<string>, name: string)
+  ensures ((match optional { case Some(i_) => false case None => true }) ==> !(namedAs(optional, name)))
+  ensures (match optional { case Some(i_optional_val) => (namedAs(optional, name) <==> (i_optional_val == name)) case None => true })
+{
+}
+
+function deliveryMatches(from: string, to: Option<string>, text: string, message: Recorded): bool
+{
+  if (!message.kind.said?) then
+    false
+  else
+    match message.activationId {
+      case Some(i_message_activationId_val) =>
+        false
+      case None =>
+        if !(namedAs(message.from, from)) then
+          false
+        else
+          (sameName(message.to, to) && (message.text == text))
+    }
+}
+
+lemma deliveryMatches_ensures(from: string, to: Option<string>, text: string, message: Recorded)
+  ensures (deliveryMatches(from, to, text, message) <==> ((((message.kind.said? && (match message.activationId { case Some(i_) => false case None => true })) && namedAs(message.from, from)) && sameName(message.to, to)) && (message.text == text)))
+  ensures (deliveryMatches(from, to, text, message) ==> message.kind.said?)
+  ensures (deliveryMatches(from, to, text, message) ==> (match message.activationId { case Some(i_) => false case None => true }))
+  ensures (match message.activationId { case Some(i_message_activationId_val) => !(deliveryMatches(from, to, text, message)) case None => true })
+{
+}
+
+function sameMembership(kind: MessageKind, subject: Option<string>, intentKind: MessageKind, name: string): bool
+{
+  ((kind == intentKind) && namedAs(subject, name))
+}
+
+lemma sameMembership_ensures(kind: MessageKind, subject: Option<string>, intentKind: MessageKind, name: string)
+  ensures (sameMembership(kind, subject, intentKind, name) <==> ((kind == intentKind) && namedAs(subject, name)))
+{
+}
+
+function contributionMatches(activation: string, seat: string, intent: Contribution, to: Option<string>, message: Recorded): bool
+{
+  if !(namedAs(message.activationId, activation)) then
+    false
+  else
+    if !(namedAs(message.from, seat)) then
+      false
+    else
+      match intent {
+        case seated(i_intent_name) =>
+          sameMembership(message.kind, message.subject, MessageKind.seated, i_intent_name)
+        case unseated(i_intent_name) =>
+          sameMembership(message.kind, message.subject, MessageKind.unseated, i_intent_name)
+        case said(i_intent_text) =>
+          if message.kind.said? then
+            (sameName(message.to, to) && (message.text == i_intent_text))
+          else
+            if (!message.kind.summary?) then
+              false
+            else
+              match to {
+                case Some(i_to_val) =>
+                  if !(namedAs(message.to, i_to_val)) then
+                    false
+                  else
+                    (message.text == i_intent_text)
+                case None =>
+                  (message.text == i_intent_text)
+              }
+      }
+}
+
+lemma contributionMatches_ensures(activation: string, seat: string, intent: Contribution, to: Option<string>, message: Recorded)
+  ensures (contributionMatches(activation, seat, intent, to, message) ==> namedAs(message.activationId, activation))
+  ensures (contributionMatches(activation, seat, intent, to, message) ==> namedAs(message.from, seat))
+  ensures ((match message.activationId { case Some(i_) => false case None => true }) ==> !(contributionMatches(activation, seat, intent, to, message)))
+  ensures ((message.kind.arrived? || message.kind.left?) ==> !(contributionMatches(activation, seat, intent, to, message)))
+  ensures (intent.seated? ==> (contributionMatches(activation, seat, intent, to, message) <==> (((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && message.kind.seated?) && namedAs(message.subject, intent.name))))
+  ensures (intent.unseated? ==> (contributionMatches(activation, seat, intent, to, message) <==> (((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && message.kind.unseated?) && namedAs(message.subject, intent.name))))
+  ensures (intent.said? ==> message.kind.said? ==> (contributionMatches(activation, seat, intent, to, message) <==> (((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && sameName(message.to, to)) && (message.text == intent.text))))
+  ensures (intent.said? ==> message.kind.summary? ==> (match to { case Some(i_) => false case None => true }) ==> (contributionMatches(activation, seat, intent, to, message) <==> ((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && (message.text == intent.text))))
+  ensures (match to { case Some(i_to_val) => (intent.said? ==> message.kind.summary? ==> (contributionMatches(activation, seat, intent, to, message) <==> (((namedAs(message.activationId, activation) && namedAs(message.from, seat)) && namedAs(message.to, i_to_val)) && (message.text == intent.text)))) case None => true })
+  ensures (intent.said? ==> (!message.kind.said?) ==> (!message.kind.summary?) ==> !(contributionMatches(activation, seat, intent, to, message)))
+  ensures (contributionMatches(activation, seat, intent, to, message) ==> intent.said? ==> (message.text == intent.text))
+{
+}
+
 method latest(times: seq<int>, floor: int) returns (res: int)
   requires (floor >= 0)
   ensures (res >= floor)
@@ -1800,6 +2156,31 @@ method foldRoster(agents: seq<Seating>, changes: seq<RosterChange>, compositionS
     i := (i + 1);
   }
   return roster;
+}
+
+method distinct(names: seq<string>) returns (res: bool)
+  ensures (res <==> forall i: int :: ((0 <= i) ==> (i < |names|) ==> forall j: int :: ((0 <= j) ==> (j < i) ==> (names[i] != names[j]))))
+{
+  var i := 0;
+  while (i < |names|)
+    invariant (0 <= i)
+    invariant (i <= |names|)
+    invariant forall a: int :: ((0 <= a) ==> (a < i) ==> forall b: int :: ((0 <= b) ==> (b < a) ==> (names[a] != names[b])))
+  {
+    var j := 0;
+    while (j < i)
+      invariant (0 <= j)
+      invariant (j <= i)
+      invariant forall b: int :: ((0 <= b) ==> (b < j) ==> (names[i] != names[b]))
+    {
+      if (names[i] == names[j]) {
+        return false;
+      }
+      j := (j + 1);
+    }
+    i := (i + 1);
+  }
+  return true;
 }
 
 

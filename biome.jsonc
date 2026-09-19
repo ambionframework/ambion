@@ -42,7 +42,7 @@
 	},
 	"files": {
 		// Generated demo snapshots are captures, not source.
-		"includes": ["**", "!demos", "!planning/evidence"]
+		"includes": ["**", "!demos"]
 	},
 	// Formatting is Prettier's job (see prettier.config.js); Biome lints only.
 	"formatter": {

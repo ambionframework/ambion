@@ -21,7 +21,7 @@ import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
 import { viewOf } from '../src/room/view.ts';
 import * as vocabulary from '../src/rules.verified.ts';
-import { inProcessTransport } from '../src/transport.ts';
+import { inProcessTransport, runningRoom } from '../src/transport.ts';
 import type { Message } from '../src/types.ts';
 import { fakeClock } from './support/clock.ts';
 import { roomName } from './support/room.ts';
@@ -59,6 +59,17 @@ vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 		discussion: vi.fn(actual.discussion),
 		messagesSince: vi.fn(actual.messagesSince),
 		exchangeContaining: vi.fn(actual.exchangeContaining),
+		admitsLease: vi.fn(actual.admitsLease),
+		presenceOutcome: vi.fn(actual.presenceOutcome),
+		hostMembership: vi.fn(actual.hostMembership),
+		membershipOutcome: vi.fn(actual.membershipOutcome),
+		addressOutcome: vi.fn(actual.addressOutcome),
+		distinct: vi.fn(actual.distinct),
+		commitAuthority: vi.fn(actual.commitAuthority),
+		stampedSummary: vi.fn(actual.stampedSummary),
+		addressesOwner: vi.fn(actual.addressesOwner),
+		deliveryMatches: vi.fn(actual.deliveryMatches),
+		contributionMatches: vi.fn(actual.contributionMatches),
 	};
 });
 
@@ -406,6 +417,192 @@ describe('the room runs the verified rules', () => {
 			vi.mocked(rules.exchangeContaining).mockReturnValueOnce({ kind: 'outside' });
 			await expect(visit.send({ text: 'Question.' })).rejects.toThrow(/does not belong/);
 			expect((await visit.send({ text: 'Again.' })).owner).toBe('priya');
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
+	it('admits a claim or a renewal as admitsLease answers', () => {
+		const renew = { type: 'renew', id, expiry: 60_000, deadline: 600_000 } as const;
+		vi.mocked(rules.admitsLease).mockReturnValueOnce('granted');
+		expect(decide(asked(), renew, now)).toMatchObject({ event: { kind: 'lease' } });
+		expect(decide(asked(), renew, now)).toMatchObject({ refusal: { category: 'stale' } });
+	});
+
+	it('writes, skips, or refuses a presence change as the rules answer', () => {
+		const arrival = {
+			type: 'presence',
+			change: { kind: 'arrived', subject: 'sam', identity: 'Engineer.', from: 'sam' },
+			route: false,
+		} as const;
+		vi.mocked(rules.presenceOutcome).mockReturnValueOnce('refused');
+		expect(decide(asked(), arrival, now)).toMatchObject({ refusal: { category: 'refused' } });
+		expect(decide(asked(), arrival, now)).toMatchObject({
+			event: { kind: 'message', body: { kind: 'arrived', subject: 'sam' } },
+		});
+		const unseat = {
+			type: 'presence',
+			change: { kind: 'unseated', subject: 'product' },
+			route: false,
+		} as const;
+		vi.mocked(rules.hostMembership).mockReturnValueOnce(false);
+		expect(decide(asked(), unseat, now)).toMatchObject({ refusal: { category: 'refused' } });
+		expect(decide(asked(), unseat, now)).toMatchObject({
+			event: { kind: 'message', body: { kind: 'unseated', subject: 'product' } },
+		});
+	});
+
+	it('seats and unseats as membershipOutcome answers', () => {
+		const commit = (intent: CommitRequest['intent']): CommitRequest => ({
+			activation: id,
+			key: 'membership',
+			intent,
+			readThrough: 3,
+		});
+		vi.mocked(rules.membershipOutcome).mockReturnValueOnce('refused');
+		expect(
+			decide(
+				claimed(),
+				{ type: 'commit', commit: commit({ kind: 'unseated', name: 'product' }) },
+				now,
+			),
+		).toMatchObject({ refusal: { category: 'refused' } });
+		expect(
+			decide(
+				claimed(),
+				{ type: 'commit', commit: commit({ kind: 'unseated', name: 'product' }) },
+				now,
+			),
+		).toMatchObject({ event: { kind: 'message', body: { kind: 'unseated' } } });
+	});
+
+	it('addresses a message as addressOutcome answers', () => {
+		vi.mocked(rules.addressOutcome).mockReturnValueOnce('unknown');
+		const deliver = { type: 'deliver', from: 'priya', text: 'Hello.' } as const;
+		expect(decide(asked(), deliver, now)).toMatchObject({ refusal: { category: 'refused' } });
+		expect(decide(asked(), deliver, now)).toMatchObject({ event: { kind: 'message' } });
+		const commit: CommitRequest = {
+			activation: id,
+			key: 'say',
+			intent: { kind: 'said', text: 'Answer.' },
+			readThrough: 3,
+		};
+		vi.mocked(rules.addressOutcome).mockReturnValueOnce('self');
+		expect(decide(claimed(), { type: 'commit', commit }, now)).toMatchObject({
+			refusal: { reason: expect.stringMatching(/yourself/) },
+		});
+	});
+
+	it('admits a composition only when distinct says so', () => {
+		const compose = { type: 'compose', composition: composition.body } as const;
+		vi.mocked(rules.distinct).mockReturnValueOnce(false);
+		expect(decide(asked(), compose, now)).toMatchObject({ refusal: { category: 'refused' } });
+		expect(decide(asked(), compose, now)).toMatchObject({ event: { kind: 'composition' } });
+	});
+
+	it('lets a commit through only as commitAuthority answers', () => {
+		const commit: CommitRequest = {
+			activation: id,
+			key: 'say',
+			intent: { kind: 'said', text: 'Answer.' },
+			readThrough: 3,
+		};
+		vi.mocked(rules.commitAuthority).mockReturnValueOnce('stale');
+		expect(decide(claimed(), { type: 'commit', commit }, now)).toMatchObject({
+			refusal: { category: 'stale' },
+		});
+		expect(decide(claimed(), { type: 'commit', commit }, now)).toMatchObject({
+			event: { kind: 'message' },
+		});
+	});
+
+	it('stamps a closing commit as the rules answer', () => {
+		const named: Entry = { ...composition, body: { ...composition.body, summary: 'product' } };
+		const close: Entry = {
+			kind: 'close',
+			seq: 4,
+			body: { owner: 'priya', from: 3, through: 3, at, summary: 'product' },
+		};
+		const drafting: Entry = {
+			kind: 'lease',
+			seq: 5,
+			body: {
+				id: 'closed:3:product:1',
+				phase: 'running',
+				expiresAt: now + 60_000,
+				at,
+				readThrough: 4,
+			},
+		};
+		const state = foldRoom([named, person, question, close, drafting], options);
+		const commit: CommitRequest = {
+			activation: 'closed:3:product:1',
+			key: 'summary',
+			intent: { kind: 'said', text: 'What happened.' },
+			readThrough: 4,
+		};
+		vi.mocked(rules.addressesOwner).mockReturnValueOnce(false);
+		expect(decide(state, { type: 'commit', commit }, now)).toMatchObject({
+			refusal: { reason: expect.stringMatching(/exchange owner/) },
+		});
+		vi.mocked(rules.stampedSummary).mockReturnValueOnce({
+			to: 'ghost',
+			covers: { from: 1, through: 2 },
+		});
+		expect(decide(state, { type: 'commit', commit }, now)).toMatchObject({
+			event: { body: { kind: 'summary', to: 'ghost', covers: { from: 1, through: 2 } } },
+		});
+		expect(decide(state, { type: 'commit', commit }, now)).toMatchObject({
+			event: { body: { kind: 'summary', to: 'priya', covers: { from: 3, through: 3 } } },
+		});
+	});
+
+	it('answers a keyed retry as the match rules answer', async () => {
+		const opened = await memory.open();
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: fakeClock(),
+			transport: inProcessTransport(),
+			stream: scripted(() => quiet()),
+		});
+		const room = await startRoom({
+			name: roomName('binding-retry'),
+			runtime,
+			agents: [
+				defineAgent({
+					name: 'product',
+					identity: 'Product.',
+					instructions: 'Answer.',
+					model: 'scripted/product',
+				}),
+			],
+			streamFn: scripted(() => quiet()),
+		});
+		try {
+			const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));
+			const first = await visit.send({ key: 'k', text: 'Question.' });
+			vi.mocked(rules.deliveryMatches).mockReturnValueOnce(false);
+			await expect(visit.send({ key: 'k', text: 'Question.' })).rejects.toThrow(
+				/different room operation/,
+			);
+			expect((await visit.send({ key: 'k', text: 'Question.' })).from).toBe(first.from);
+			const peer = runningRoom(runtime, room.name);
+			if (peer === undefined) throw new Error('The room is absent.');
+			const activation = `message:${first.from}:product:1`;
+			expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
+			const request: CommitRequest = {
+				activation,
+				key: 'c',
+				readThrough: first.from,
+				intent: { kind: 'said', text: 'Answer.' },
+			};
+			expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
+			vi.mocked(rules.contributionMatches).mockReturnValueOnce(false);
+			expect(await peer.commit(request)).toMatchObject({
+				refused: expect.stringMatching(/different room operation/),
+			});
+			expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
 		} finally {
 			await room.stop();
 			await opened.dispose();

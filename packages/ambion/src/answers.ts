@@ -10,8 +10,8 @@ import type {
 } from './protocol.ts';
 import { activationSpec } from './room/activation.ts';
 import type { RoomState } from './room/fold.ts';
-import { isLive, seatOf } from './room/lease.ts';
-import { messagesSince, onRoster as seated } from './room/rules.verified.ts';
+import { isExpired, seatOf } from './room/lease.ts';
+import { commitAuthority, messagesSince, onRoster as seated } from './room/rules.verified.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
 import { copyMessage, type EndReason, type RoomNotification } from './types.ts';
@@ -74,8 +74,12 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 /** The seat holding a live lease under this id, or nothing. */
 function liveSeatOf(room: Answering, id: string, state: RoomState): string | undefined {
 	const lease = state.leases.get(id);
-	if (lease === undefined || !isLive(lease, room.now())) return undefined;
-	if (activationSpec(id, state) === undefined) return undefined;
+	const authority = commitAuthority(
+		lease?.phase,
+		lease !== undefined && isExpired(lease, room.now()),
+		activationSpec(id, state) !== undefined,
+	);
+	if (authority !== 'granted') return undefined;
 	const seat = seatOf(id);
 	return seat !== undefined && onRoster(state, seat) ? seat : undefined;
 }
