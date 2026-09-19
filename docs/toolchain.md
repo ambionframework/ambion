@@ -16,8 +16,7 @@ packages/
   journal/      append-only journal storage
   pi-journal/   Pi session persistence over journal storage
   workspace/    filesystem resource and tool bundles
-examples/site/        domain collaboration example
-examples/persistent/  Relay: persistent rooms, browser UI, shared workspace
+examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
 .github/        CI, live, and release workflows

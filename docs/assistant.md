@@ -357,11 +357,11 @@ credential. Run them after building:
 
 ```sh
 pnpm --filter @ambionframework/assistant test:live
-pnpm --filter @ambionframework-examples/persistent test:live
+pnpm --filter @ambionframework-examples/workbench test:live
 ```
 
 The assistant suite uses a real assistant with controlled specialist evidence.
 It checks routing, silence, correction of obsolete constraints, incomplete
-results, and application overrides. Relay's suite exercises the application
-with real agents and temporary workspace artifacts. These evaluations sample
+results, and application overrides. The Workbench suite runs two example rooms
+with real agents. These evaluations sample
 model behavior; they do not guarantee that every model follows the defaults.

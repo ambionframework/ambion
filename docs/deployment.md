@@ -21,8 +21,7 @@ or later and ESM. Supply agent definitions, provider credentials, and domain
 tools. Keep the process alive while agents work. The default in-memory
 journals lose their contents when their storage instance is lost.
 
-The [small room](../README.md#a-small-room) uses this model. The
-[site example](../examples/site) adds domain tools and a shared workspace.
+The [small room](../README.md#a-small-room) uses this model.
 Pi remains the supported model loop; its integration supplies provider access.
 
 ## Persistent Node
@@ -33,15 +32,16 @@ provides the journal adapter. `createRuntime` accepts the journal opener, and
 See the [runtime contract](agent.md) and [durability contract](durability.md)
 for the current signatures and failure rules.
 
-The [persistent Node example](../examples/persistent) hosts four sample rooms and
-multiple people in one process. HTTP clients send keyed messages, read by
-cursor, and reacquire exchanges. One SQLite database stores the room journals.
-Its `start` and `resume` commands supply the same agent definitions.
-Its single-file browser console adds a switch-user flow and room lifecycle
-controls. Selecting a room enters it; selecting another leaves the current
-room. All rooms share one local directory workspace. The assistant coordinates
-product, engineering, writing, and review agents. Stop and Resume preserve
-workspace files and room journals.
+The [Workbench example](../examples/workbench) hosts three sample rooms and
+several people in one process, behind an OpenTUI terminal. The terminal
+calls the host through a typed in-process API and sends keyed messages. The
+rooms run while the terminal runs. One SQLite database stores the room
+journals, and the next start resumes them with the same agent definitions.
+
+Selecting a room enters it; selecting another leaves the current room. All
+rooms share one local directory workspace. The assistant coordinates
+datasheet, design, and experiment agents. Stop and Resume preserve workspace
+files and room journals.
 
 A host must:
 
@@ -258,8 +258,8 @@ connect room and seat objects. Each object uses its own SQLite storage.
 Its workerd tests exercise serialization and recovery, including a room
 restart while remote seats continue to work.
 
-The [local Cloudflare example](../examples/site#the-same-room-on-cloudflare)
-provides a development harness. Publishing a supported deployment requires
+A project that `ambion new` generates (see [the CLI](../packages/cli))
+provides a local development harness through `ambion dev`. Publishing a supported deployment requires
 packaging, configuration, operations documentation, and deployment evidence.
 The Node directory workspace is not automatically available in a Durable Object.
 

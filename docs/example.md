@@ -1,131 +1,177 @@
-# The example: Fast Forward Engine
+# The example: Workbench
 
-**One runnable example ships with 0.1.0, and it is an agentic lab
-workspace.** It replaces the site example and Relay. It is the room a new
-reader opens first, the host the deployment guide describes, the user
-interface that drills from a room into one activation, and the evidence
-that the release claims hold. The [delivery plan](../planning/next.md)
-schedules its construction; the directory `examples/workbench` does not
-exist yet.
+**One runnable example ships with 0.1.0. It is an agentic lab workbench.**
+It replaces the site example and Relay. It is the room a new reader opens
+first, the host the deployment guide describes, and the evidence that the
+release claims hold. The directory is `examples/workbench`.
 
-The specification below is the product description. The sections after it
-map the specification onto the kernel and list what the example must show.
+Workbench is a narrow build of a larger idea. This page describes what the
+example does today, on the current kernel API. The section
+[Beyond the current scope](#beyond-the-current-scope) lists the lab
+capabilities that wait for later phases in [next.md](../planning/next.md).
 
-## Fast Forward Engine: an agentic lab workspace
+## Workbench: a lab bench for a toy Arduino kit
 
-A shared workspace where humans and specialized agents collaborate on
-electrical engineering, hardware, and electrochemistry: from technical
-questions and designs to experiments and measured results.
+**A person and a few specialized agents work on one toy Arduino kit.** A
+person asks a question. The agents read the datasheets, choose parts, and
+plan tests, on the record. The example connects no real hardware, so every
+measurement is a planned value.
 
-### Specialized agents
+### The people
 
-| Agent                   | Scope of responsibility                                                                                                                                                                                               |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Datasheets Agent**    | Find and interpret datasheets, manuals, application notes, and chemical safety data sheets. Compare specifications, identify operating limits, and cite exact sources and revisions.                                  |
-| **Design Agent**        | Develop and troubleshoot circuits, assemblies, materials, and formulations. Perform calculations and simulations, propose changes, and explain tradeoffs and failure hypotheses.                                      |
-| **Experiments Agent**   | Turn questions into test plans. Define procedures, variables, controls, measurement requirements, and acceptance criteria. Coordinate execution and recommend follow-up tests.                                        |
-| **Instruments Agent**   | Configure and operate connected equipment within approved procedures and limits. Check readiness, monitor runs, capture instrument settings and measurements, and request physical setup or intervention from humans. |
-| **Data Analysis Agent** | Convert measurements into reproducible results. Check data quality, visualize signals, fit models, quantify uncertainty, and compare runs against expectations.                                                       |
+**Three people share the kit. Each one reads a result a different way.** A
+person joins a room, asks a question, and reads the summary.
 
-### User-facing assistant
+| Person | Role              | Reads first                             |
+| ------ | ----------------- | --------------------------------------- |
+| Mira   | Hardware lead     | The part choice and the current margins |
+| Theo   | Firmware engineer | The pin assignments and the timing      |
+| Sol    | Lab technician    | The wiring steps in order               |
 
-The **Assistant** is the user's primary point of contact. It understands
-the request, brings together the right specialists, and communicates the
-outcome.
+### The assistant and the specialists
 
-- **Clarify:** Establish the goal, relevant context, and constraints. Ask
-  questions only when needed.
-- **Select:** Assign the smallest useful set of agents and provide a clear
-  brief.
-- **Stay available:** Surface meaningful progress, blockers, and requests
-  for human input or approval.
-- **Steer exceptionally:** Let specialists collaborate directly. Intervene
-  only when the conversation stalls, drifts from the goal, or needs a
-  decision about scope or ownership.
-- **Synthesize:** Return a concise answer covering results, supporting
-  evidence, unresolved questions, and recommended next steps. Preserve
-  material uncertainty and disagreement.
+**One assistant coordinates three specialists.** The assistant answers
+ordinary messages, seats a specialist, and writes the closing summary. It
+uses `defineAssistant` from `@ambionframework/assistant`, seated at
+`broadcast`. It writes the closing summary.
 
-Technical responsibility remains with the specialists; priorities and
-consequential decisions remain with humans.
+| Agent           | Scope                                                      |
+| --------------- | ---------------------------------------------------------- |
+| **Datasheets**  | Reads `/library` and states exact limits with their source |
+| **Design**      | Chooses parts and values, and shows the circuit math       |
+| **Experiments** | Turns a question into a short, repeatable test plan        |
 
-### Shared workspace
+Each room seats the specialists it needs. The reserve holds the rest. The
+specialists collaborate through directed messages and report back once.
 
-Agents collaborate through shared **projects, designs, test plans, runs,
-samples, equipment records, and results**. Scheduling, task ownership, and
-history are workspace capabilities.
+### The shared workspace
 
-Users can address a specialist directly or give the Assistant a goal.
-Either way, the work produces traceable artifacts and a clear result
-without requiring the user to manage every agent interaction.
+**Every room shares one directory workspace.** The workspace holds the
+datasheets and the team's artifacts, over the directory binding of the
+workspace resource.
 
-## How the specification maps onto the kernel
+- `/library`: datasheet summaries for the kit, copied from
+  `examples/workbench/library`.
+- `/shared`: `kit.md` and `notes.md`, the team's artifacts.
 
-**Every noun in the specification is one of four application concepts or
-one resource.** The table names the mechanism and the item in
-[next.md](../planning/next.md) that delivers it.
+The datasheets are simplified summaries for a runnable example. They are not
+the manufacturer datasheets.
 
-| Specification                                | Mechanism                                                                                          | Item    |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------- |
-| A project                                    | One room per project; rooms persist across questions                                               |         |
-| A user                                       | A visit with a definition and reading preferences                                                  |         |
-| Five specialized agents                      | Five definitions, each with its own executor; the reserve holds the ones a question does not need  | E1, F10 |
-| The Assistant                                | The assistant package's definition, seated at `broadcast`, named as the summary writer, fixed      | D4      |
-| "Ask questions only when needed"             | A directed say to the person; the exchange closes as `awaiting` that person                        | E7      |
-| "Requests for human input or approval"       | An `awaiting` exchange, and an `approval` step when an instrument tool needs a decision            | E7, F6  |
-| "Let specialists collaborate directly"       | Directed says between seats; attention `named` for specialists the Assistant brings in             |         |
-| "Synthesize"                                 | The closing activation writes one summary for the person who asked; it cites its sources           | E5      |
-| Projects, designs, test plans, runs, results | A SQL resource over one SQLite database, with `query` and `record` tools                           | E4      |
-| Datasheets, manuals, safety data sheets      | The directory workspace under `/library`, read through the workspace binding                       | E4      |
-| Equipment records and instrument operation   | A simulated instrument resource with readiness, run, and measurement tools, and approval on limits | E6, F6  |
-| "Traceable artifacts"                        | `refs` on messages and summaries; provenance on every resource change                              | E5, E6  |
-| "History" as a workspace capability          | The journal for collaboration; the resource's own change log keyed by activation for artifacts     | E6      |
-| "Scheduling" and "task ownership"            | Application state in the SQL resource; outside the kernel by design                                |         |
-| Results and measured data                    | Rows in the results table, with the run and the activation that produced them                      | E6      |
+### The rooms
 
-**The kernel owns the collaboration and nothing in the lab.** The example
-owns the schema, the library files, the instrument simulation, and the
-user interface. A reader who swaps the schema for their own domain keeps
-the rooms, the visits, the exchanges, and the drill-down.
+**Three rooms share one kit.** Each goal shows a distinct collaboration
+pattern. Each room offers a suggested prompt.
 
-## What the example must show
+| Room    | Pattern                  | Starting work                                |
+| ------- | ------------------------ | -------------------------------------------- |
+| bringup | Datasheet check → design | Blink one LED and choose its series resistor |
+| sensing | Design → test plan       | Wire the HC-SR04 and plan a distance test    |
+| power   | Datasheet check → budget | Add up the kit current and confirm USB power |
 
-**The example is the release evidence for the claims a reader will test
-first.** Each scenario runs on a scripted executor in CI and on a real
-provider in the live tier.
+### One process, one terminal
 
-| Scenario                                                                             | Claim                                                  |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| "Can this regulator supply 350 mA at 85 °C?" answered from a datasheet in `/library` | A specialist works from a shared artifact and cites it |
-| The Assistant seats the Design Agent for a balancing circuit and stays silent after  | Selection, silence, and one summary                    |
-| A test plan becomes runs, measurements, and a result row                             | Three specialists hand work along through resources    |
-| The Instruments Agent asks a person to connect a cell before a run                   | An exchange awaiting a person; an approval step        |
-| A person adds a constraint while the Design Agent works                              | Steering and a delta pass                              |
-| The host restarts during a run                                                       | Resume, inherited leases, no lost question             |
-| A person opens the run's exchange and one activation                                 | The drill-down reads: room, exchange, activation, step |
-| The Design Agent runs on the Claude Agent SDK while the rest run on Pi               | Two executor families in one room                      |
-| Cost per exchange in the user interface                                              | Usage on every activation                              |
+**One Node process runs the rooms and the terminal together.** The terminal
+calls the host through a typed in-process API. The example defines no HTTP
+interface.
+
+- **Lifecycle.** The rooms run while the terminal runs. When the person
+  quits, the host ends each visit, then closes the rooms. The journals stay
+  on disk. The next start resumes them.
+- **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
+  a multi-line composer with a room chip, and slash commands to switch person
+  or room, create a room, read workspace files, and stop, resume, or abort.
+  The person picks an identity on the first screen.
+- **Brand.** The terminal reads its colors from the repository brand kit in
+  `brand/tokens/ambion.tokens.json`.
+
+## How the example maps onto the kernel
+
+**Every application concept in Workbench is one kernel mechanism.** The
+kernel owns the collaboration. The example owns the library files, the
+domain instructions, and the two endpoints.
+
+| Application concept       | Kernel mechanism                                                  |
+| ------------------------- | ----------------------------------------------------------------- |
+| A kit project             | One room per topic; rooms persist across questions                |
+| A person                  | A visit with a definition and reading preferences                 |
+| Four definitions          | The assistant and three specialists; the reserve holds spares     |
+| The assistant             | The assistant definition, seated at `broadcast`, with the summary |
+| Bring in a specialist     | Attention `named`, and a directed say                             |
+| Specialists work together | Directed says between seats                                       |
+| One answer for the person | The closing activation writes one summary                         |
+| Datasheets and artifacts  | The directory workspace, read and written through its tools       |
+| History                   | The journal for collaboration; the workspace for files            |
+
+A reader who swaps the library and the instructions for their own domain
+keeps the rooms, the visits, and the exchanges.
+
+## What the example shows
+
+**The example is the evidence for the claims a reader tests first.** The
+table states what each test proves today. A row marked "By hand" has no
+automated test yet.
+
+| Scenario                                                        | Claim                                      | Evidence                                                                     |
+| --------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
+| A resistor question is answered from `led-5mm.md` in `/library` | A specialist works from a shared file      | Scripted: an agent reads the file. Live: the summary cites `/library`        |
+| The assistant routes a question to the Design specialist        | Selection, silence, and one summary        | Scripted: one summary after routing, and a silent close when no agent speaks |
+| A specialist writes a file to the workspace                     | An artifact survives a restart             | Scripted: the file is written, and read again after a restart                |
+| The Experiments specialist plans a distance test                | A question becomes a written plan          | Live: the summary describes a test. No test checks the plan file             |
+| A person adds a constraint while an agent works                 | Steering an open exchange                  | By hand: the thread shows the message in order                               |
+| The host stops, fails to stop, and resumes                      | Resume keeps the question and the files    | Scripted: clean stop, failed stop with retry, and resume from the journal    |
+| Two people work the kit through separate rooms                  | Visits, presence, and catch-up by position | Scripted                                                                     |
+
+The kernel chaos tier covers a kill during work. This example does not.
 
 ## Layout
 
-**One package, one process, one database, one directory.** The proposed
-layout keeps every concern in a file a reader can open in order.
+**One package, one process, one database, one directory.** The layout keeps
+every concern in a file a reader can open in order.
 
 ```text
 examples/workbench/
-  README.md            how to run it, what to look at, what each scenario shows
+  README.md            how to run it, and what each part shows
   package.json
   src/
-    definitions.ts     six definitions; executors chosen by environment
-    resources.ts       the SQL resource, the library workspace, the instrument
-    schema.sql         projects, designs, test_plans, runs, samples, equipment, results
-    server.ts          the persistent host: rooms per project, HTTP for the UI
-    main.ts            start or resume
-  library/             datasheets, manuals, and safety data sheets as text
-  ui/                  one page: projects, room, exchange, activation, steps
-  test/                the scenarios on the scripted executor
-  test/live/           the scenarios on a real provider
+    brand.ts           the product name and the terminal palette
+    definitions.ts     the assistant, three specialists, and the people
+    scenarios.ts       the rooms, and the workspace seed
+    rooms.ts           the host lifecycle and the room catalog
+    workbench.ts       the host: open, read, send, control, create, files
+    names.ts           the room name and goal rules
+    files.ts           the workspace list and one file preview
+    session.ts         the terminal's state and commands, without OpenTUI
+    feed.ts            the room feed: one read at a time
+    commands.ts        the slash commands and their suggestions
+    timeline.ts        the record grouped into questions, threads, and summaries
+    transcript.ts      the conversation
+    composer.ts        the composer, room chip, and palette
+    viewer.ts          the workspace file overlay
+    tui.ts             the terminal: layout, keys, and the run loop
+    main.ts            the entry point
+  library/             the datasheets as text
+  test/                scripted tests: host, session, feed, commands, timeline, recovery
+  test/live/           two scenarios on a real provider
 ```
 
-The `ambion new` Node template derives from this layout with one room, two
-definitions, and no resources.
+The example reads the repository brand kit from the root `brand/`
+directory. It adds no brand files of its own. A Node template for `ambion new` is planned to derive from this layout
+(item C3 in [next.md](../planning/next.md)). It does not exist yet.
+
+## Beyond the current scope
+
+**The fuller lab vision waits for later phases.** The original design named
+five specialists over data resources and instruments, with two executor
+families and a drill-down interface. These parts need kernel work that
+[next.md](../planning/next.md) schedules. Workbench grows into them as the
+phases land.
+
+| Deferred capability                                        | Item in next.md |
+| ---------------------------------------------------------- | --------------- |
+| A SQL resource for projects, test plans, runs, and results | E4, phase 5     |
+| A simulated instrument resource, with an approval step     | E6, F6          |
+| An Instruments agent and a Data Analysis agent             | E1, F10         |
+| The Claude Agent SDK executor beside the Pi executor       | F10, phase 4    |
+| Artifact references on messages and summaries              | E5              |
+| An exchange that reads as `awaiting` a person              | E7              |
+| Cost per exchange, and a drill-down into activation steps  | F7, F8          |
