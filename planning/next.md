@@ -419,6 +419,18 @@ that compares both under cancellation, reseating, late summaries, takeover,
 and restart. A room with a year of history answers at the speed of one with
 a day.
 
+**Hold each derived projection as an addressed value the entry updates.** The
+Pi 0.85.1 session storage names its derived state under a `Value<T>` address:
+a branch tip, a lane state, an operation state. Each commit updates that value
+as part of the write, so a read hits the value at its current version and
+replays nothing. Ambion applies the shape to the in-memory projection. The
+roster, the open exchange, the pending wakes, and the owed drafts each become
+an addressed field that one entry updates as it lands. `foldRoom` replays the
+whole log and stays the reference for correctness. The equivalence property
+test proves the projection and the fold agree. A durable checkpoint that lets
+a resume skip settled history is a later format change
+([backlog](backlog.md)).
+
 **B2. Split the room host by mechanism.** `room-host.ts` holds 1,468 lines
 and seven mechanisms; the complexity rule bounds a function and nothing
 bounds a file. Cut it into `host/room.ts` (phases, compose, recover,
@@ -563,6 +575,15 @@ older runtimes cannot read it; no test replays a journal an earlier build
 wrote. Declare format 1, write `format: 1` on the run entry, store golden
 journals per chaos scenario with expected folds, replay them in CI, and
 state the promise: a 0.1.x runtime reads every 0.1.0 journal.
+
+**Model the format as a header field with a named upgrade path.** The Pi
+0.85.1 storage carries a `storageVersion` in its header, and it ships a named
+upgrade from format 3 to format 4 that replays the old records into the new
+state (`openLegacyV3`, `upgradeLegacyV3ToV4`). Ambion mirrors the shape.
+`format: 1` on the run entry is the header field, and the reader dispatches
+on it. A later format adds its own reader and one named upgrade, so an older
+journal loads through a known path. The golden journals hold the promise: CI
+replays a journal each shipped build wrote and checks the fold.
 
 **D4. Membership authority for independently owned agents.** Any ordinary
 activation can unseat any agent, including the summary writer, after which
