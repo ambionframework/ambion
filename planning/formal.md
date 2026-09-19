@@ -61,24 +61,24 @@ file and omits the journal file.
 the plan uses, with the result of a `lsc gen` and `dafny verify` run on
 a small file. The rules below stay inside the rows that verify.
 
-| Construct                                                   | Result                                                                                                                |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Records, discriminated unions on a literal field            | Verifies; each lowers to a Dafny datatype                                                                             |
-| A named string-literal union (`type Reason = 'a' \| 'b'`)   | Verifies; an inline literal union in a parameter lowers to `string`, and a case split over it does not prove          |
-| `T \| undefined`, narrowed by `x !== undefined && x.f`      | Verifies; two optionals compared with `===` do not, so narrow both first                                              |
-| `Math.max`, `Math.min`, ternaries, object literals          | Verifies                                                                                                              |
-| `xs.some(cb)`                                               | Verifies; lowers to `exists`                                                                                          |
-| `forall(i, ...)` and `exists(i, ...)` in a contract         | Verifies; the Dafny `forall i ::` spelling does not parse                                                             |
-| An index loop with `//@ invariant` over `i`                 | Verifies when the body reads `xs[i]` under the loop bound only                                                        |
-| `for (const v of xs)`                                       | Lowers to a hidden index, so an index invariant cannot name it                                                        |
-| A read `xs[i]` tested with `!== undefined`                  | Does not lower                                                                                                        |
-| A mutable `let x: T \| undefined` changed in a loop         | Does not type in Dafny; fold a sequence by recursion instead                                                          |
-| Recursion over a sequence with `//@ decreases`              | Verifies                                                                                                              |
-| `xs.filter(cb)`                                             | Lowers to `Std.Collections.Seq.Filter` and needs `--standard-libraries` on the file's line in `LemmaScript-files.txt` |
-| `Map.has`, `Set.has`, `new Set(s).add(x)`                   | Verifies                                                                                                              |
-| An import of a rule from another verified file              | Verifies; the import lowers to an axiom that carries the imported contract                                            |
-| `switch` over a named string union                          | Verifies                                                                                                              |
-| Regular expressions, `Date.parse`, `structuredClone`, async | Outside the envelope                                                                                                  |
+| Construct                                                   | Result                                                                                                                                                     |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Records, discriminated unions on a literal field            | Verifies; each lowers to a Dafny datatype                                                                                                                  |
+| A named string-literal union (`type Reason = 'a' \| 'b'`)   | Verifies; an inline literal union in a parameter lowers to `string`, and a case split over it does not prove                                               |
+| `T \| undefined`, narrowed in an `if` or under `==>`        | Verifies; a narrowing inside a return expression or a `\|\|` does not lower, and two optionals compared with `===` do not, so narrow both in an `if` first |
+| `Math.max`, `Math.min`, ternaries, object literals          | Verifies                                                                                                                                                   |
+| `xs.some(cb)`                                               | Verifies; lowers to `exists`                                                                                                                               |
+| `forall(i, ...)` and `exists(i, ...)` in a contract         | Verifies; the Dafny `forall i ::` spelling does not parse                                                                                                  |
+| An index loop with `//@ invariant` over `i`                 | Verifies when the body reads `xs[i]` under the loop bound only                                                                                             |
+| `for (const v of xs)`                                       | Lowers to a hidden index, so an index invariant cannot name it                                                                                             |
+| A read `xs[i]` tested with `!== undefined`                  | Does not lower                                                                                                                                             |
+| A mutable `let x: T \| undefined` changed in a loop         | Does not type in Dafny; fold a sequence by recursion instead                                                                                               |
+| Recursion over a sequence with `//@ decreases`              | Verifies                                                                                                                                                   |
+| `xs.filter(cb)`                                             | Lowers to `Std.Collections.Seq.Filter` and needs `--standard-libraries` on the file's line in `LemmaScript-files.txt`                                      |
+| `Map.has`, `Set.has`, `new Set(s).add(x)`                   | Verifies                                                                                                                                                   |
+| An import of a rule from another verified file              | Verifies; the import lowers to an axiom that carries the imported contract                                                                                 |
+| `switch` over a named string union                          | Verifies                                                                                                                                                   |
+| Regular expressions, `Date.parse`, `structuredClone`, async | Outside the envelope                                                                                                                                       |
 
 ## A. The journal
 
@@ -140,8 +140,10 @@ A refuter built each one as a running probe against the code.
   not unfold. `journal.ts` `read` and `memory.ts` `read` run it.
 - **A2. The cursor rule in every consumer.** `packages/cloudflare/src/storage.ts`
   `refresh` and `packages/pi-journal/src/index.ts` `refresh` each keep a
-  cursor by hand, and the Pi one does not take the max. Both run
-  `scanned`. The journal package exports it from `index.ts` for that.
+  cursor by hand: the Cloudflare one assigns each entry's position and
+  takes a max only at the end, and the Pi one takes no max. Both run
+  `scanned` per entry. The journal package exports it from `index.ts` for
+  that.
 - **A3. A journal with no run.** `sameWriter(undefined, undefined)` is
   true, so a journal that writes for no run treats an unstamped run entry
   as its own fence, and a stamped run entry after it supersedes the
@@ -257,7 +259,10 @@ a case split today, with no contract, and each carries a promise of
 - **C2. `mayClose(stopped, endings, exchangeOpen, exchangeLive)`** is the
   gate before a close: not stopped, no lease ended this pass, an exchange
   open, and nothing of its work live. `planReconciliation` runs it where
-  the `settled` conjunction stands.
+  the `settled` conjunction stands. `docs/durability.md` §6 promises that
+  a stopped room closes nothing and wakes nobody; the sends, the
+  abandonments, and the alarm each gate on `stopped` by hand, and the
+  same rule gates all four.
 - **C3. `waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend)`**
   is the moment an owed activation waits for: the backoff when it is
   ahead, else the end of the resend window, else now. `readyToSend` is
@@ -480,8 +485,9 @@ and `docs/roster.md` state, each as a filter chain or a case split.
 - **G1. `openingQuestion(messages, people, closedThrough)`** is the open
   exchange: the first spoken message from a person after the last close's
   `through`, with soundness and completeness over the message list.
-  `opensExchange` is the per-message test. `openExchange` runs it with
-  the people map's keys. `lastOf(seqs)` is the last close's `through` and
+  `opensExchange` is the per-message test, and the search is an index
+  loop, because `find` is outside the envelope. `openExchange` runs it
+  with the people map's keys. `lastOf(seqs)` is the last close's `through` and
   the record's `lastSeq`, as one rule.
 - **G2. `summaryVerdict(covered, writer, writerRemoved, cancelledAfter,
 drafts)`** is the outcome lattice: a covering summary from the named
@@ -512,7 +518,8 @@ position, cancelledAt)`** is the boundary test `fold.ts` `project` and
   drops pending retries.
 - **G6. `reserveOf(catalog, roster)`** is the reserve: every catalog seat
   whose name is not on the roster, at broadcast attention, and nothing
-  else. **`reseated(roster, membership)`** applies one seating or
+  else. The catalog it takes is deduplicated by name at the call site,
+  and `distinct` (D8) is its precondition. **`reseated(roster, membership)`** applies one seating or
   unseating and keeps one seat per name. **`foldRoster(agents, changes,
 compositionSeq)`** applies every membership change after the
   composition's position and none at or before it, which is the restart
@@ -577,37 +584,66 @@ identifier. The section states the rows and the two commands.
 
 ## The order of work
 
-**Three tranches, each with its evidence.** A tranche lands when every rule
-in it has a caller, its `.dfy` verifies, `pnpm check` passes, and the rows
-below name it.
+**One tranche for the journal, six slices for the room, then the fold
+lemmas.** A slice lands when every rule in it has a caller, its `.dfy`
+verifies, `pnpm check` passes, and the rows in `docs/durability.md` §7
+name it. Each slice is one pull request with its `.dfy` regenerated by
+`lsc regen`, its binding test, the type test for every redeclared union,
+and its evidence rows.
 
-1. **The journal and the process.** Landed on this branch: A, the gate
-   changes, and the runtime guard for the cap that `givesUp` requires.
-   Evidence: `pnpm check` and `pnpm check:lemmascript` pass; the three
-   probes are regressions; 35 obligations verify in three seconds.
-2. **The room's step rules.** B through G, in the order B, D, C, E, F, G:
-   the lease step first, because `atWork` and `coversAttempt` read the
-   interval it pins; the transitions next, because they are the write
-   path; then the pass, the routing, the identity, and the exchange. One
-   rules file per layer file, one binding test per rules file, and a type
-   test per redeclared type. Each step is one pull request with its
-   `.dfy`, its binding test, and its rows in `docs/durability.md` §7.
-   Evidence: knip passes with every rule called; the rules file count in
-   `LemmaScript-files.txt` matches the table below.
-3. **The fold-level lemmas.** The lease fold as a recursion over one id's
-   changes, the exchange fold with at most one open exchange, the roster
-   fold with unique names, and a measure over the fold that the pass
-   decreases, so the reconciliation converges. This tranche needs the
-   addressed projection of B1 in `next.md`, because a lemma over the fold
-   is a lemma over that shape. Evidence: the lemmas verify, and the B1
-   equivalence test names them.
+| Slice | Files                                      | Rules                                                                                                                                                        | State  |
+| ----- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| 1     | `journal.ts`, `memory.ts`, `sqlite.ts`     | `fenceStep`, `keyed`, `writable`, `advanceSeq`, `scanned`, `admit`, `nextPosition`, `readPosition`, the fold lemmas                                          | Landed |
+| 1     | `journal.ts`, the two cursor consumers     | `visibleEntries` (A1), `scanned` at the Cloudflare and Pi cursors (A2)                                                                                       | Open   |
+| 2a    | `transition.ts`                            | `mayEnd`, `permits`, `leaseExpiry`, `acknowledged`, `onRecord`, `speechFreshness`, `admitsClose`, `coversExchange`, `survivesCancellation`                   | Landed |
+| 2a    | `transition.ts`, `answers.ts`              | `presenceOutcome`, `membershipOutcome`, `hostMembership`, `addressOutcome`, `distinct`, `stampedSummary`, `addressesOwner`, `commitAuthority`, `admitsLease` | Open   |
+| 2b    | `lease.ts`, `fold.ts`                      | `applyChange`, `cancelLease`, `answers`, `wakeAnswered`, `countsAgainst`, `schedule`, `latest`, `draftsClose`, `removedAfter`, `nextActivationId`            | Open   |
+| 2c    | `reconcile.ts`                             | `endingOf`, `staleLease`, `mayClose`, `waitsUntil`, `readyToSend`, `looksAgainAt`, `earliestAfter`, `forgets`, `exchangeLive`, `seatLive`                    | Open   |
+| 2d    | `routing.ts`, `delivery.ts`, `presence.ts` | `width`, `reachOf`, `targetOf`, `wakes`, `wokenBy`, `woken`, `rosterFor`, `steers`, `atWorkHold`, `stepPerson`, `foldPresence`, the `hearsWider` lemma       | Open   |
+| 2e    | `activation.ts`, `activation-id.ts`        | `activationGrant`, `closeFor`, `names`, `seated`, `wellFormed`, `positiveBounded`                                                                            | Open   |
+| 2f    | `exchange.ts`, `fold.ts`, `read.ts`        | `openingQuestion`, `discussion`, `summaryVerdict`, `coversSeq`, `reserveOf`, `reseated`, `foldRoster`, `lastOf`, `messagesSince`                             | Open   |
+| 3     | the two `.dfy` files                       | `AttemptIdsAreFresh`, the lease fold over one id, one open exchange, unique roster names, the stop-loop and the pass measures                                | Open   |
 
-**What each tranche does not prove.** The regular expression that decodes
-an id, `Date.parse` on a stamp, `typeof` and `Number.isSafeInteger` on the
-wire, and the storage's own compare-and-append in SQL stay outside the
-envelope; each is one line at a call site, and the binding test covers
-it. The clock never runs backwards, and the record is ordered by seq;
-the first is a host promise and the second the journal's proof.
+**The order inside tranche 2 is 2a, 2b, 2c, 2d, 2e, 2f.** The lease step
+first, because `atWork` and `coversAttempt` read the interval it pins;
+the pass next, because `mayClose` and `admitsClose` take `exchangeLive`
+from it; then the routing, the identity, and the exchange, each of which
+reshapes one file around its rules.
+
+**Names and types are settled once, before 2b.** The accepted set names
+`removedAfter` three ways, `answers` two ways, and `Seat` and `Hold`
+three ways each. The room's rules file keeps one `removedAfter` over
+`Unseating` records (F3), one `answers` over a `Taken` record (B), one
+`Seat` with name, identity, and attention, and one `LeaseHold` with the
+`cancelled` marker. `rules.test.ts` asserts each against `types.ts`.
+
+**A lemma with no caller lives in the `.dfy`.** `hearsWider`,
+`stillExpired`, `endingStands`, and `AttemptIdsAreFresh` state relations
+between rules and have no runtime call site. The rules file header says
+every function in it runs in the room, and Knip fails an export nobody
+imports, so a proof-only lemma is written in Dafny in the additions
+block, below the generated lemmas, and the binding test names it.
+
+**The room's rules file is measured before 2c.** A file listed with a
+timeout above 60 s runs as a generation check in CI. When `dafny verify`
+on the room file passes 40 s, the seq-quantified rules of 2d and 2f move
+to `rules.fold.verified.ts` beside it; an import from one rules file into
+another lowers to an axiom that carries the imported contract.
+
+**Tranche 3 waits for the addressed projection.** A lemma over the fold is
+a lemma over that shape, so the lease fold, the exchange fold, and the
+roster fold lemmas land with B1 in `next.md`. Two liveness facts belong
+here: a measure the stop loop decreases, and a measure each
+reconciliation pass decreases, so the `PASSES` bound is a proof. Today
+only the chaos drain and the walk's `drained` check witness them.
+`AttemptIdsAreFresh` is small enough to land with 2b.
+
+**What no tranche proves.** The regular expression that decodes an id,
+`Date.parse` on a stamp, `typeof` and `Number.isSafeInteger` on the wire,
+and the storage's compare-and-append in SQL stay outside the envelope;
+each is one line at a call site, and the binding test covers it. The
+clock never runs backwards, and the record is ordered by seq; the first
+is a host promise and the second the journal's proof.
 
 ## Evidence
 
