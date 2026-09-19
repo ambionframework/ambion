@@ -2,9 +2,8 @@ import tokens from '../../../brand/tokens/ambion.tokens.json' with { type: 'json
 
 /**
  * The example reads its identity from the repository brand kit in the root
- * `brand/` directory. The web endpoint links `brand/tokens/ambion.css` and the
- * brand icons. This file gives the terminal endpoint the same colors, from the
- * brand token file, so both surfaces stay on one brand.
+ * `brand/` directory. This file gives the terminal the brand colors from the
+ * token file, and adds the dark surfaces the terminal needs.
  */
 
 const colors = tokens.colors;
