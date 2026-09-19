@@ -656,6 +656,31 @@ describe('the just-bash adapter', () => {
 		});
 	});
 
+	it('spills the whole output to a file when the limits cut it', async () => {
+		const { env: alpha } = await env();
+		let viewSpill: string | undefined;
+		const result = await alpha.exec(
+			'printf "%s\\n" a b c d e',
+			{
+				capture: { limits: { maxBytes: 1_000_000, maxLines: 2 }, spill: true },
+				onUpdate: (update) => {
+					if (update.kind === 'replace') viewSpill = update.output.spillPath;
+				},
+			},
+			ctx,
+		);
+		expect(result.ok && result.value.truncation.truncated).toBe(true);
+		const spillPath = result.ok ? result.value.spillPath : undefined;
+		expect(spillPath).toMatch(/^\/tmp\/shell-[0-9a-f]+\.out$/);
+		expect(viewSpill).toBe(spillPath);
+		if (spillPath !== undefined) {
+			expect(await alpha.readTextFile(spillPath, ctx)).toEqual({
+				ok: true,
+				value: 'a\nb\nc\nd\ne\n',
+			});
+		}
+	});
+
 	it('holds 128 MB in memory, and refuses the write that goes past it', async () => {
 		expect(MEMORY_LIMIT_BYTES).toBe(128 * 1024 * 1024);
 		const { env: alpha } = await env();

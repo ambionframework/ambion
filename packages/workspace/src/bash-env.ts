@@ -238,7 +238,10 @@ export class BashEnv implements ExecutionEnv {
 	 * just-bash has no streaming callback and no per-call deadline. The
 	 * adapter awaits the command, bounds the combined output to the caller's
 	 * limits, hands one final view to `onUpdate`, and returns the metadata:
-	 * Pi's `bash` tool reads the output through that update. The deadline is a
+	 * Pi's `bash` tool reads the output through that update. When the caller
+	 * asks for a spill and the limits cut the output, the adapter writes the
+	 * whole output to a file under `/tmp` and names it as `spillPath`, so the
+	 * caller can point a reader at the part the view dropped. The deadline is a
 	 * timer on an abort controller of the adapter's own, so exit 124 from the
 	 * context's signal and exit 124 from the timer come back as different
 	 * errors. A call that names no timeout gets the adapter's default, so a
@@ -258,9 +261,17 @@ export class BashEnv implements ExecutionEnv {
 			});
 			const stopped = deadline.error();
 			if (stopped) return err(stopped);
-			const view = boundedView(result.stdout + result.stderr, options?.capture?.limits);
+			const combined = result.stdout + result.stderr;
+			const view = boundedView(combined, options?.capture?.limits);
+			if (view.truncation.truncated && options?.capture?.spill === true) {
+				view.spillPath = await this.spill(combined);
+			}
 			options?.onUpdate?.({ kind: 'replace', output: view }, context);
-			return ok({ exitCode: result.exitCode, truncation: view.truncation });
+			return ok({
+				exitCode: result.exitCode,
+				truncation: view.truncation,
+				...(view.spillPath === undefined ? {} : { spillPath: view.spillPath }),
+			});
 		} catch (error) {
 			const cause = error instanceof Error ? error : new Error(String(error));
 			return err(new ExecutionError('unknown', cause.message, cause));
@@ -269,13 +280,31 @@ export class BashEnv implements ExecutionEnv {
 		}
 	}
 
+	/** Keep the whole output in a file so a reader can reach what the view cut. */
+	private async spill(content: string): Promise<string | undefined> {
+		const path = posix.join(TMP, `shell-${randomName()}.out`);
+		try {
+			await this.bash.fs.mkdir(TMP, { recursive: true });
+			await this.bash.fs.writeFile(path, content);
+			return path;
+		} catch {
+			return undefined; // Spill is best-effort; a failed write leaves the view alone.
+		}
+	}
+
 	/** just-bash exposes nothing to dispose. The collector reclaims a dropped instance. */
 	async cleanup(): Promise<void> {}
 }
 
-/** Bound the combined command output to the caller's limits, tail by default. */
+/**
+ * Bound the combined command output to the caller's limits, tail by default.
+ * Absent limits leave the output whole: the caller named no bound.
+ */
 function boundedView(output: string, limits: ShellOutputLimits | undefined): ShellOutputView {
-	const options = { maxLines: limits?.maxLines, maxBytes: limits?.maxBytes };
+	const options = {
+		maxLines: limits?.maxLines ?? Number.POSITIVE_INFINITY,
+		maxBytes: limits?.maxBytes ?? Number.POSITIVE_INFINITY,
+	};
 	const result =
 		limits?.retain === 'head' ? truncateHead(output, options) : truncateTail(output, options);
 	const { content, ...truncation } = result;
