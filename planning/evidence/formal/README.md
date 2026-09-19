@@ -18,6 +18,7 @@ the generated ones, and `lsc check` holds the pair to additions only.
 | `transition.rules.ts` | 2a    | 37          | LemmaScript 0.6.1, Dafny 4.11 |
 | `exchange.rules.ts`   | 2f    | 52          | LemmaScript 0.6.1, Dafny 4.11 |
 | `routing.rules.ts`    | 2d    | 41          | LemmaScript 0.6.1, Dafny 4.11 |
+| `activation.rules.ts` | 2e    | 21          | LemmaScript 0.6.1, Dafny 4.11 |
 
 Verify one file at a desk:
 

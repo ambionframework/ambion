@@ -9,9 +9,12 @@ owns the 0.1.0 scope; this file feeds its phase 8 evidence line.
 
 The review behind this file ran on 2026-09-19 against main `914951c`. It
 read both packages, the design contracts, and the LemmaScript 0.6.1
-toolchain. Nine readers proposed 92 candidate gaps. A verifier and a
-refuter judged each one against the code with running probes. Every rule
-this file keeps survived both.
+toolchain. Nine readers proposed 92 candidate gaps, and a critic nine
+more. A verifier and a refuter judged each one against the code with
+running probes and differential fuzzing. Of the 101 candidates, 79
+survived both, 11 were refuted or restated, 8 were already carried, and
+1 was outside the envelope. Every rule this file keeps survived, and
+every group was then written as a LemmaScript file and proven by Dafny.
 
 **A rule is verified when the runtime runs its body.** LemmaScript turns
 a `//@ requires` and `//@ ensures` contract on a pure TypeScript function
@@ -19,10 +22,10 @@ into a Dafny obligation. The proof is about that function. The proof
 reaches the system only when the journal or the room imports the function
 and runs it on the path the contract describes.
 
-## What exists today
+## What existed at the start of the review
 
-**Two files carry ten rules and thirteen obligations.** Every rule is a
-boolean or an integer helper over scalars. `lsc check --backend=dafny`
+**Two files carried ten rules and thirteen obligations.** Every rule was
+a boolean or an integer helper over scalars. `lsc check --backend=dafny`
 regenerates each `.dfy.gen`, and Dafny proves the lemma beside each
 function.
 
@@ -480,6 +483,11 @@ cannot drift without a compile error.
 
 ## F. Activation identity and authority
 
+**Every rule below is proven and waits for its slice.** The file
+[`planning/evidence/formal/activation.rules.ts`](evidence/formal/activation.rules.ts)
+holds the rules with their contracts, and CI verifies its 21 obligations
+with the landed files.
+
 **The id's grammar stays in TypeScript; the authority it grants becomes a
 rule.** `decodeActivationId` is a regular expression, outside the envelope.
 Everything after the decode is pure logic over four fields, a roster, the
@@ -741,16 +749,16 @@ before it entered this plan; the files are under
 [`planning/evidence/formal/`](evidence/formal/README.md), and CI verifies
 them with the landed rules.
 
-| Group                   | File                                                            | Obligations   | Status                       |
-| ----------------------- | --------------------------------------------------------------- | ------------- | ---------------------------- |
-| A. Journal              | `packages/journal/src/rules.verified.ts`                        | 41            | Landed                       |
-| B. Lease fold           | `packages/ambion/src/room/rules.verified.ts`                    | 56 with D     | Landed                       |
-| C. Reconciliation       | `planning/evidence/formal/reconcile.rules.ts`                   | 35            | Proven, slice 2c open        |
-| D. Transitions          | `room/rules.verified.ts`, `evidence/formal/transition.rules.ts` | 56 with B, 37 | Nine landed, the rest proven |
-| E. Routing and presence | `planning/evidence/formal/routing.rules.ts`                     | 41            | Proven, slice 2d open        |
-| F. Activation identity  | `packages/ambion/src/room/rules.verified.ts`                    | prototype     | Planned, slice 2e            |
-| G. Exchange and roster  | `planning/evidence/formal/exchange.rules.ts`                    | 52            | Proven, slice 2f open        |
-| H. Vocabulary           | `packages/ambion/src/rules.verified.ts`                         | prototype     | Planned                      |
+| Group                   | File                                                            | Obligations        | Status                       |
+| ----------------------- | --------------------------------------------------------------- | ------------------ | ---------------------------- |
+| A. Journal              | `packages/journal/src/rules.verified.ts`                        | 41                 | Landed                       |
+| B. Lease fold           | `packages/ambion/src/room/rules.verified.ts`                    | 56 with D          | Landed                       |
+| C. Reconciliation       | `planning/evidence/formal/reconcile.rules.ts`                   | 35                 | Proven, slice 2c open        |
+| D. Transitions          | `room/rules.verified.ts`, `evidence/formal/transition.rules.ts` | 56 with B, 37      | Nine landed, the rest proven |
+| E. Routing and presence | `planning/evidence/formal/routing.rules.ts`                     | 41                 | Proven, slice 2d open        |
+| F. Activation identity  | `planning/evidence/formal/activation.rules.ts`                  | 21                 | Proven, slice 2e open        |
+| G. Exchange and roster  | `planning/evidence/formal/exchange.rules.ts`                    | 52                 | Proven, slice 2f open        |
+| H. Vocabulary           | `packages/ambion/src/rules.verified.ts`                         | two one-line rules | Planned                      |
 
 **Three defects and three decisions came out of the review.** The seq
 bound, the early stamped write, and the read past the head are fixed on

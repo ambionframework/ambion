@@ -4,3 +4,4 @@ planning/evidence/formal/reconcile.rules.ts 60
 planning/evidence/formal/transition.rules.ts 60
 planning/evidence/formal/exchange.rules.ts 60
 planning/evidence/formal/routing.rules.ts 60
+planning/evidence/formal/activation.rules.ts 60
