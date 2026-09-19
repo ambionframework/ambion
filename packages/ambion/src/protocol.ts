@@ -90,6 +90,24 @@ export interface CollaborationContext {
 	readonly reserve: readonly { readonly name: string; readonly identity: string }[];
 	/** Only the summary writer reads the owner's preferences. */
 	readonly preferences?: string;
+	/**
+	 * The lowest message position the record holds. The room reports it only for
+	 * a bounded page, so a seat that windows the record knows where the record
+	 * ends and stops paging.
+	 */
+	readonly earliest?: Seq;
+}
+
+/**
+ * A bounded read of the record for one view. The room returns the messages
+ * before `before` (the tail when it is absent), keeping the last `limit` of
+ * them. The room aligns a page floor to the summaries the page holds, so one
+ * page never renders a fold with a wrong count. A seat that wants an older
+ * range reads the next page from the lowest position it holds.
+ */
+export interface ViewRange {
+	readonly before?: Seq;
+	readonly limit: number;
 }
 
 export interface ActivationView {
@@ -155,7 +173,7 @@ export type LeaseRequest =
 export type LeaseResponse = { ok: { expiresAt: number; lastSeq: Seq } } | Stale;
 
 export interface SeatRoom {
-	view(activation: string): Promise<ViewResponse>;
+	view(activation: string, range?: ViewRange): Promise<ViewResponse>;
 	commit(commit: CommitRequest): Promise<CommitResult>;
 	lease(lease: LeaseRequest): Promise<LeaseResponse>;
 }

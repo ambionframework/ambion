@@ -47,7 +47,7 @@ function delayedClaimTransport(
 	return {
 		connect(room, context) {
 			const delayed: SeatRoom = {
-				view: (id) => room.view(id),
+				view: (id, range) => room.view(id, range),
 				commit: (commit) => room.commit(commit),
 				lease: async (request: LeaseRequest) => {
 					if (held && request.operation === 'claim') {

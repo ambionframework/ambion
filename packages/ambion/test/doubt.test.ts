@@ -86,7 +86,7 @@ describe('a room in doubt', () => {
 			connect(room, context) {
 				const port = base.connect(
 					{
-						view: (id) => room.view(id),
+						view: (id, range) => room.view(id, range),
 						lease: (lease) => room.lease(lease),
 						commit: async (commit) => {
 							if (retried || !commit.activation.startsWith('closed:')) return room.commit(commit);

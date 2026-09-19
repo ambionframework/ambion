@@ -6,8 +6,10 @@ import type {
 	ActivationView,
 	CollaborationContext,
 	ContextParticipant,
+	ViewRange,
 } from '../protocol.ts';
-import type { AgentParticipantInfo, Message, ParticipantInfo, Seq } from '../types.ts';
+import type { AgentParticipantInfo, ParticipantInfo, Seq } from '../types.ts';
+import { isSummary, type Message } from '../types.ts';
 import type { RoomState } from './fold.ts';
 
 /** What the view is built from: the fold and current host facts. */
@@ -45,16 +47,23 @@ function agentsOf(facts: Pick<RoomFacts, 'state' | 'live'>): AgentParticipantInf
 }
 
 /** Select collaboration facts without reading an executable agent definition. */
-export function viewOf(spec: ActivationSpec, facts: RoomFacts): ActivationView {
+export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange): ActivationView {
 	const state = facts.state;
 	const purpose = spec.purpose;
 	const goal = state.composition?.goal;
+	// A summary reads its fixed closed exchange; a range never pages it. An
+	// ordinary response reads the whole record, or one bounded page of it. A
+	// malformed range reads the whole record, because a seat's request is data.
+	const page =
+		purpose.kind === 'respond' && range !== undefined && validRange(range) ? range : undefined;
 	const messages =
 		purpose.kind === 'summarize'
 			? state.messages.filter(
 					(message) => message.seq >= purpose.exchange && message.seq <= purpose.through,
 				)
-			: state.messages;
+			: page !== undefined
+				? pageOf(state.messages, page)
+				: state.messages;
 	const context: CollaborationContext = {
 		name: facts.name,
 		now: facts.now,
@@ -65,6 +74,7 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts): ActivationView {
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
 			: { exchange: { owner: state.exchange.owner, from: state.exchange.from } }),
+		...earliestOf(page !== undefined, state.messages),
 		...purposeContext(purpose, state),
 	};
 	// In-process executors receive the same detached snapshot as remote executors.
@@ -73,6 +83,50 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts): ActivationView {
 		through: purpose.kind === 'summarize' ? purpose.through : state.lastSeq,
 		context,
 	});
+}
+
+/** A well-formed page request: a positive limit, and a non-negative cursor. */
+function validRange(range: ViewRange): boolean {
+	if (!Number.isSafeInteger(range.limit) || range.limit <= 0) return false;
+	return range.before === undefined || (Number.isSafeInteger(range.before) && range.before >= 0);
+}
+
+/** The record floor, reported only for a bounded page, so a seat can stop paging. */
+function earliestOf(paged: boolean, messages: readonly Message[]): { earliest?: Seq } {
+	const first = messages[0];
+	return paged && first !== undefined ? { earliest: first.seq } : {};
+}
+
+/**
+ * One bounded page of the record: the last `limit` messages before the cursor.
+ * The floor moves up past a range this page would split, so the page never
+ * renders a fold with a wrong count. A range this page holds no summary for
+ * stays whole when the seat pages to it; the seat assembles the pages.
+ */
+function pageOf(messages: readonly Message[], range: ViewRange): Message[] {
+	const before = range.before ?? Number.POSITIVE_INFINITY;
+	const upto = messages.filter((message) => message.seq < before);
+	const first = upto[Math.max(0, upto.length - range.limit)];
+	if (first === undefined) return [];
+	const floor = foldAlignedFloor(upto, first.seq);
+	return upto.filter((message) => message.seq >= floor);
+}
+
+/**
+ * A page floor that never splits a covered range. A fold that holds part of a
+ * summarised range renders a wrong count, so a floor inside a range moves up
+ * past it. The summary sits after its range, so the page still holds it and it
+ * stands for the whole range. A summary covers a disjoint range, so one pass
+ * finds the range that straddles the floor.
+ */
+function foldAlignedFloor(messages: readonly Message[], floor: Seq): Seq {
+	let aligned = floor;
+	for (const message of messages) {
+		if (!isSummary(message)) continue;
+		if (message.covers.from < aligned && message.covers.through >= aligned)
+			aligned = message.covers.through + 1;
+	}
+	return aligned;
 }
 
 /** Reading preferences enter context only through the recipient's summary purpose. */

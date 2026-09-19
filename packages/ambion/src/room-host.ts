@@ -39,6 +39,7 @@ import type {
 	SeatPort,
 	SeatRoom,
 	Steer,
+	ViewRange,
 	ViewResponse,
 } from './protocol.ts';
 import { activationSpec } from './room/activation.ts';
@@ -258,7 +259,7 @@ export class RoomHost implements Room, RunningRoom {
 	private readonly ports = new Map<string, SeatPort>();
 	/** The three room calls exposed to an in-process seat. */
 	readonly calls: SeatRoom = {
-		view: (id) => this.view(id),
+		view: (id, range) => this.view(id, range),
 		commit: (commit) => this.commit(commit),
 		lease: (lease) => this.lease(lease),
 	};
@@ -1167,8 +1168,8 @@ export class RoomHost implements Room, RunningRoom {
 
 	// -- what a seat asks -------------------------------------------------------
 
-	view(id: string): Promise<ViewResponse> {
-		return answerView(this, id);
+	view(id: string, range?: ViewRange): Promise<ViewResponse> {
+		return answerView(this, id, range);
 	}
 
 	commit(commit: CommitRequest): Promise<CommitResult> {

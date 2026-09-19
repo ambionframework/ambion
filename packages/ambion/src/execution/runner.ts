@@ -10,10 +10,18 @@ import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/
 import type { Agent as PiAgent } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { SeatContext, Transport } from '../host/runtime.ts';
-import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../protocol.ts';
-import type { RoomNotification } from '../types.ts';
+import type {
+	ActivationView,
+	SeatPort,
+	SeatRoom,
+	Steer,
+	ViewRange,
+	ViewResponse,
+	Wake,
+} from '../protocol.ts';
+import type { Message, RoomNotification, Seq } from '../types.ts';
 import { Activation, persistTurns } from './activation.ts';
-import { renderActivation, renderLine } from './render.ts';
+import { renderActivation, renderLine, windowToLimit } from './render.ts';
 import { seatSessionId } from './services.ts';
 import { binding, toolsFor } from './tools.ts';
 
@@ -325,6 +333,8 @@ export class AgentRunner implements SeatPort {
 		const { clock, room, seat, transcripts } = this.context;
 		return {
 			view: async () => {
+				const limit = this.context.definition.activationTokenLimit;
+				if (limit !== undefined) return this.windowedView(id, limit, cancelled);
 				const opened = await this.call(() => this.room.view(id), cancelled);
 				if (opened.kind === 'value') return opened.value;
 				if (opened.kind === 'cancelled') return { stale: 'the activation was cut' };
@@ -350,6 +360,58 @@ export class AgentRunner implements SeatPort {
 			emit: (event: RoomNotification) => this.emit(event),
 			now: () => clock.now(),
 		};
+	}
+
+	/**
+	 * The record windowed to the agent's token limit. The seat pages the record
+	 * from the tail, keeps the newest blocks that fit, and stops when the window
+	 * starts above the record it holds or the record reaches its floor. The open
+	 * exchange stays whole even past the limit.
+	 *
+	 * The first page fixes the frame — its purpose, exchange, participants, and
+	 * `through`. Later pages add only older messages, so the acknowledged
+	 * position stays what the tail page held. A summary activation reads its
+	 * whole fixed exchange, so it never windows.
+	 */
+	private async windowedView(
+		id: string,
+		limit: number,
+		cancelled: Promise<void>,
+	): Promise<ViewResponse> {
+		const estimate = this.context.definition.estimateTokens ?? defaultEstimate;
+		let before: number | undefined;
+		let held: Message[] = [];
+		let frame: ActivationView | undefined;
+		for (;;) {
+			const page = await this.pageView(id, before, cancelled);
+			if ('stop' in page) return page.stop;
+			if (frame === undefined) frame = page.view;
+			if (frame.spec.purpose.kind !== 'respond') return { view: frame };
+			const older = page.view.context.messages;
+			held = [...older, ...held];
+			const window = windowToLimit(held, estimate, limit, pinOf(frame));
+			before = held[0]?.seq;
+			if (pagingDone(window.from, held, frame.context.earliest, older.length))
+				return { view: withWindow(frame, window.kept) };
+		}
+	}
+
+	/** One bounded page of the record, or the response that stops the paging. */
+	private async pageView(
+		id: string,
+		before: number | undefined,
+		cancelled: Promise<void>,
+	): Promise<{ stop: ViewResponse } | { view: ActivationView }> {
+		const range: ViewRange =
+			before === undefined ? { limit: RECORD_PAGE } : { before, limit: RECORD_PAGE };
+		const opened = await this.call(() => this.room.view(id, range), cancelled);
+		if (opened.kind === 'cancelled') return { stop: { stale: 'the activation was cut' } };
+		if (opened.kind !== 'value') {
+			this.reportCallFailure(id, 'view', opened.error);
+			throw opened.error;
+		}
+		const response = opened.value;
+		return 'stale' in response ? { stop: response } : { view: response.view };
 	}
 
 	private reportCallFailure(
@@ -432,6 +494,43 @@ export class AgentRunner implements SeatPort {
 		});
 		return { agent, context: rendered.context };
 	}
+}
+
+// -- record windowing ---------------------------------------------------------
+
+/** How many messages one bounded page reads back from the record cursor. */
+const RECORD_PAGE = 64;
+
+/** The token estimate when an agent declares a budget but no estimator. */
+function defaultEstimate(text: string): number {
+	return Math.ceil(text.length / 4);
+}
+
+/** The open exchange is pinned whole for an ordinary response. */
+function pinOf(view: ActivationView): Seq | undefined {
+	return view.spec.purpose.kind === 'respond' ? view.context.exchange?.from : undefined;
+}
+
+/**
+ * Paging is done when the last page added nothing, the window starts above the
+ * held record, or the record has no earlier entry. Otherwise the window still
+ * reaches the oldest held message, so an earlier page may hold more of it.
+ */
+function pagingDone(
+	from: Seq,
+	held: readonly Message[],
+	earliest: Seq | undefined,
+	older: number,
+): boolean {
+	const lowest = held[0]?.seq;
+	if (older === 0 || lowest === undefined) return true;
+	if (from > lowest) return true;
+	return earliest === undefined || lowest <= earliest;
+}
+
+/** The view with its messages replaced by the windowed record the seat assembled. */
+function withWindow(view: ActivationView, kept: readonly Message[]): ActivationView {
+	return { ...view, context: { ...view.context, messages: [...kept] } };
 }
 
 // -- the transport ------------------------------------------------------------

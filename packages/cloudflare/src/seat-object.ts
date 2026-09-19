@@ -228,7 +228,7 @@ export class SeatObject extends DurableObject<Env> {
 	/** The three calls this seat makes on its room, each over a stub of its own. */
 	private roomFor(room: string): SeatRoom {
 		return {
-			view: (id) => this.roomStub(room).view(id),
+			view: (id, range) => this.roomStub(room).view(id, range),
 			commit: (commit) => this.roomStub(room).commit(commit),
 			lease: (lease) => this.roomStub(room).lease(lease),
 		};

@@ -31,6 +31,10 @@ export interface DefineAgentOptions {
 	tools?: readonly AmbionTool[];
 	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
 	bundles?: readonly ToolBundle[];
+	/** The token limit for the record one activation reads. Absent reads the whole record. */
+	activationTokenLimit?: number;
+	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
+	estimateTokens?: (text: string) => number;
 }
 
 export function defineAgent(options: DefineAgentOptions): AgentDefinition {
@@ -46,7 +50,28 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 		model: options.model,
 		tools,
 		...(guidance === undefined ? {} : { guidance }),
+		...recordLimit(options.activationTokenLimit, options.estimateTokens),
 	});
+}
+
+/** The record-window fields, validated and written only when a limit is set. */
+function recordLimit(
+	activationTokenLimit: number | undefined,
+	estimateTokens: ((text: string) => number) | undefined,
+): { activationTokenLimit?: number; estimateTokens?: (text: string) => number } {
+	if (activationTokenLimit === undefined) {
+		if (estimateTokens !== undefined)
+			throw new Error('An agent estimateTokens needs an activationTokenLimit.');
+		return {};
+	}
+	if (!Number.isSafeInteger(activationTokenLimit) || activationTokenLimit <= 0)
+		throw new Error('An agent activationTokenLimit must be a positive integer.');
+	if (estimateTokens !== undefined && typeof estimateTokens !== 'function')
+		throw new Error('An agent estimateTokens must be a function.');
+	return {
+		activationTokenLimit,
+		...(estimateTokens === undefined ? {} : { estimateTokens }),
+	};
 }
 
 /** Capture a structural definition at a room boundary without retaining mutable authoring data. */
@@ -66,6 +91,7 @@ export function captureAgent(agent: AgentDefinition): AgentDefinition {
 		model: agent.model,
 		tools,
 		...(agent.guidance === undefined ? {} : { guidance: agent.guidance }),
+		...recordLimit(agent.activationTokenLimit, agent.estimateTokens),
 	});
 }
 

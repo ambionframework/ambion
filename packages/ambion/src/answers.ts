@@ -6,6 +6,7 @@ import type {
 	LeaseRequest,
 	LeaseResponse,
 	Stale,
+	ViewRange,
 	ViewResponse,
 } from './protocol.ts';
 import { activationSpec } from './room/activation.ts';
@@ -54,7 +55,11 @@ const onRoster = (state: RoomState, name: string): boolean =>
 
 // -- view ---------------------------------------------------------------------
 
-export async function answerView(room: Answering, id: string): Promise<ViewResponse> {
+export async function answerView(
+	room: Answering,
+	id: string,
+	range?: ViewRange,
+): Promise<ViewResponse> {
 	if (room.gone()) return stale('the room is gone');
 	await room.ready;
 	const state = room.state();
@@ -62,7 +67,7 @@ export async function answerView(room: Answering, id: string): Promise<ViewRespo
 	if (seat === undefined) return stale('the lease ended');
 	const spec = activationSpec(id, state);
 	if (spec === undefined || spec.seat !== seat) return stale('the activation has no current grant');
-	return { view: viewOf(spec, facts(room, state)) };
+	return { view: viewOf(spec, facts(room, state), range) };
 }
 
 /** What a view is built from: the fold, and what the room holds beside it. */

@@ -57,7 +57,7 @@ function startTransport(): Transport {
 		connect(room, context) {
 			if (phase !== 'start' || context.seat !== slow.name) return local.connect(room, context);
 			const gated: SeatRoom = {
-				view: (activation) => room.view(activation),
+				view: (activation, range) => room.view(activation, range),
 				commit: (commit) => room.commit(commit),
 				lease: async (lease) => {
 					if (lease.operation === 'claim') await fastReleased.promise;
