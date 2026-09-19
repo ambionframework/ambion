@@ -1,27 +1,21 @@
 import type { ParticipantInfo } from '@ambionframework/ambion';
+import { FileBrowser } from './browser.ts';
 import { type Choices, type Parsed, parse, type Suggestion, suggest } from './commands.ts';
 import { RoomFeed } from './feed.ts';
 import { MAX_GOAL, ROOM_NAME } from './names.ts';
 import { type Block, buildTimeline } from './timeline.ts';
-import type {
-	FileContent,
-	FileEntry,
-	Person,
-	RoomAction,
-	RoomView,
-	Workbench,
-} from './workbench.ts';
+import type { FileEntry, Person, RoomAction, RoomView, Workbench } from './workbench.ts';
 
 /** What the terminal does after a command, beyond what the session already changed. */
-export type Intent =
-	{ type: 'quit' } | { type: 'file'; file: FileContent } | { type: 'compose'; text: string };
+export type Intent = { type: 'quit' } | { type: 'files' } | { type: 'compose'; text: string };
 
 const HELP = [
 	'Commands',
 	'  /room <name>      switch to another room. Ctrl+R lists the rooms.',
 	'  /new <name> [goal]  create a room. Without a goal, the next line is the goal.',
 	'  /user <name>      switch to another person',
-	'  /files            list the workspace files. /open <path> reads one.',
+	'  /files            search the workspace files and read one in a side panel',
+	'  /open <path>      open the files panel on one file',
 	'  /try              fill the composer with the room’s suggested question',
 	'  /abort            cancel the open exchange in this room',
 	'  /stop             stop the room. /resume starts it again.',
@@ -42,9 +36,6 @@ const DONE: Record<RoomAction, (room: string) => string> = {
 
 const errorText = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
-
-const bytes = (size: number): string =>
-	size < 1024 ? `${size} B` : `${(size / 1024).toFixed(1)} KB`;
 
 /** The reason an action does not apply to the room, or undefined when it does. */
 function refusal(action: RoomAction, view: RoomView | undefined): string | undefined {
@@ -80,6 +71,8 @@ export class Session {
 	identity: Person | undefined;
 	rooms: RoomView[] = [];
 	files: FileEntry[] = [];
+	/** The files panel. It searches `files` and loads the chosen one. */
+	readonly browser: FileBrowser;
 	room = '';
 	view: RoomView | undefined;
 	blocks: Block[] = [];
@@ -102,6 +95,7 @@ export class Session {
 		this.identity = identity;
 		this.changed = changed;
 		this.feed = new RoomFeed<RoomView>(host);
+		this.browser = new FileBrowser((path) => host.file(path), changed);
 	}
 
 	/** True once when the conversation should scroll to its end, as after a notice. */
@@ -252,7 +246,7 @@ export class Session {
 			case 'user':
 				return void (await this.chooseUser(argument));
 			case 'files':
-				return void (await this.listFiles());
+				return this.openFiles();
 			case 'open':
 				return this.openFile(argument);
 			case 'try':
@@ -410,37 +404,27 @@ export class Session {
 
 	// Files
 
-	private async listFiles(): Promise<void> {
+	private async openFiles(path?: string): Promise<Intent | undefined> {
 		try {
 			this.files = await this.host.files();
 		} catch (error) {
-			return this.fail(error);
+			this.fail(error);
+			return undefined;
 		}
-		const width = Math.max(0, ...this.files.map((file) => file.path.length));
-		const lines = this.files.map((file) => `  ${file.path.padEnd(width)}  ${bytes(file.size)}`);
-		this.say(['Workspace files', ...lines, 'Use /open <path> to read one.'].join('\n'));
+		this.browser.show(this.files, path);
+		return { type: 'files' };
 	}
 
 	private async openFile(argument: string): Promise<Intent | undefined> {
-		if (!argument) {
-			this.say('Name a file: /open <path>. Type /files to list them.');
-			return undefined;
-		}
+		if (!argument) return this.openFiles();
 		const wanted = argument.toLowerCase();
 		const matches = this.files.filter(
 			(file) => file.path.toLowerCase() === wanted || file.path.toLowerCase() === `/${wanted}`,
 		);
 		const found = matches[0] ?? this.files.find((file) => file.path.toLowerCase().includes(wanted));
-		if (!found) {
-			this.say(`No file matches ${argument}. Type /files to list them.`);
-			return undefined;
-		}
-		try {
-			return { type: 'file', file: await this.host.file(found.path) };
-		} catch (error) {
-			this.fail(error);
-			return undefined;
-		}
+		if (found) return this.openFiles(found.path);
+		this.say(`No file matches ${argument}. Type /files to search them.`);
+		return undefined;
 	}
 
 	// Discussions

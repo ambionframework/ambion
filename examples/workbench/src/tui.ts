@@ -11,10 +11,10 @@ import {
 import { brand, tui as palette } from './brand.ts';
 import { parse, type Suggestion } from './commands.ts';
 import { Composer } from './composer.ts';
+import { FilesPanel } from './files-panel.ts';
 import { emptyText, type Intent, Session } from './session.ts';
 import { discussionKeys } from './timeline.ts';
 import { Transcript } from './transcript.ts';
-import { Viewer } from './viewer.ts';
 import {
 	type OpenOptions,
 	openWorkbench,
@@ -33,6 +33,9 @@ const HINTS = {
 
 /** How far each browse key moves the selection. */
 const BROWSE_STEP: Record<string, number> = { up: -1, k: -1, down: 1, j: 1 };
+
+/** Below this width, the files panel replaces the conversation. */
+const NARROW = 100;
 
 const errorText = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
@@ -55,7 +58,7 @@ function roomLines(view: RoomView) {
 	];
 }
 
-type Mode = 'compose' | 'browse' | 'viewer';
+type Mode = 'compose' | 'browse' | 'files';
 
 /** The terminal. It draws a session, sends it what the person types, and holds no rules of its own. */
 class WorkbenchTui {
@@ -63,7 +66,8 @@ class WorkbenchTui {
 	private readonly session: Session;
 	private readonly transcript: Transcript;
 	private readonly composer: Composer;
-	private readonly viewer: Viewer;
+	private readonly panel: FilesPanel;
+	private readonly body: BoxRenderable;
 	private readonly header: TextRenderable;
 	private mode: Mode = 'compose';
 	private browsing: string | undefined;
@@ -79,7 +83,13 @@ class WorkbenchTui {
 		this.session = new Session(host, identity, () => this.render());
 		this.header = new TextRenderable(renderer, { content: '', flexShrink: 0, wrapMode: 'none' });
 		this.transcript = new Transcript(renderer);
-		this.viewer = new Viewer(renderer);
+		this.panel = new FilesPanel(renderer);
+		this.body = new BoxRenderable(renderer, {
+			flexDirection: 'row',
+			flexGrow: 1,
+			gap: 1,
+			minHeight: 0,
+		});
 		this.composer = new Composer(renderer, {
 			submit: () => void this.onSubmit(),
 			change: () => this.updatePalette(),
@@ -93,8 +103,9 @@ class WorkbenchTui {
 			backgroundColor: palette.bg,
 		});
 		root.add(this.header);
-		root.add(this.transcript.root);
-		root.add(this.viewer.root);
+		this.body.add(this.transcript.root);
+		this.body.add(this.panel.root);
+		root.add(this.body);
 		root.add(this.composer.root);
 		renderer.root.add(root);
 		renderer.keyInput.on('keypress', (key: KeyEvent) => this.onKey(key));
@@ -134,6 +145,7 @@ class WorkbenchTui {
 		if (this.stopped) return;
 		this.drawTranscript();
 		this.drawChrome();
+		if (this.mode === 'files') this.panel.draw(this.session.browser);
 	}
 
 	private drawTranscript(): void {
@@ -162,7 +174,7 @@ class WorkbenchTui {
 		this.composer.setPlaceholder(this.placeholder());
 		this.composer.setStatus(new StyledText(this.statusChunks()));
 		const roomy = this.transcript.root.width >= 96;
-		const quiet = session.error || session.offline || !roomy || this.mode === 'viewer';
+		const quiet = session.error || session.offline || !roomy || this.mode === 'files';
 		this.composer.setHints(quiet ? '' : HINTS[this.mode === 'browse' ? 'browse' : 'compose']);
 		this.updatePalette();
 	}
@@ -191,6 +203,8 @@ class WorkbenchTui {
 		const session = this.session;
 		if (session.error) return [fg(palette.red)(`Error: ${session.error}`)];
 		if (session.offline) return [fg(palette.red)(`Cannot read the rooms: ${session.offline}`)];
+		if (this.mode === 'files')
+			return [fg(palette.muted)('Browsing the workspace files. Esc closes the panel.')];
 		if (session.awaitingGoal)
 			return [
 				fg(palette.muted)(
@@ -233,55 +247,67 @@ class WorkbenchTui {
 	private apply(intent: Intent): void {
 		if (intent.type === 'quit') this.renderer.destroy();
 		else if (intent.type === 'compose') this.composer.setText(intent.text);
-		else this.openViewer(intent.file);
+		else this.openFiles();
 	}
 
-	// The file viewer
+	// The files panel
 
-	private openViewer(file: Parameters<Viewer['open']>[0]): void {
-		this.mode = 'viewer';
+	private openFiles(): void {
+		this.mode = 'files';
 		this.composer.blur();
-		this.transcript.root.visible = false;
-		this.composer.root.visible = false;
-		this.viewer.open(file);
+		// A narrow terminal has no room for both, so the panel takes the whole width.
+		const roomy = this.renderer.width >= NARROW;
+		this.transcript.root.visible = roomy;
+		this.panel.fill(!roomy);
 		this.render();
 	}
 
-	private closeViewer(): void {
-		this.viewer.close();
+	private closeFiles(): void {
+		this.session.browser.hide();
+		this.panel.draw(this.session.browser);
 		this.transcript.root.visible = true;
-		this.composer.root.visible = true;
 		this.mode = 'compose';
 		this.composer.focus();
 		this.drawn = '';
 		this.render();
 	}
 
-	/** What each key does in the file viewer. */
-	private readonly viewerKeys: Record<string, () => void> = {
-		escape: () => this.closeViewer(),
-		q: () => this.closeViewer(),
-		up: () => this.viewer.scrollBy(-1),
-		k: () => this.viewer.scrollBy(-1),
-		down: () => this.viewer.scrollBy(1),
-		j: () => this.viewer.scrollBy(1),
-		pageup: () => this.viewer.scrollBy(-this.viewer.page),
-		pagedown: () => this.viewer.scrollBy(this.viewer.page),
-		space: () => this.viewer.scrollBy(this.viewer.page),
-		home: () => this.viewer.scrollTo(0),
-		end: () => this.viewer.scrollTo(this.viewer.end),
-		y: () => this.copyFile(),
+	/** What each key does in the files panel. Any other printable key adds to the search. */
+	private readonly fileKeys: Record<string, () => void> = {
+		up: () => this.session.browser.move(-1),
+		down: () => this.session.browser.move(1),
+		pageup: () => this.panel.scrollBy(-this.panel.page),
+		pagedown: () => this.panel.scrollBy(this.panel.page),
+		escape: () => this.escapeFiles(),
+		backspace: () => this.session.browser.backspace(),
 	};
 
-	private viewerKey(key: KeyEvent): void {
+	private filesKey(key: KeyEvent): void {
 		key.preventDefault();
-		this.viewerKeys[key.name]?.();
+		const action = key.ctrl ? this.controlKeys[key.name] : this.fileKeys[key.name];
+		if (action) action();
+		else if (!key.ctrl && !key.meta && key.sequence.length === 1 && key.sequence >= ' ')
+			this.session.browser.type(key.sequence);
+	}
+
+	private readonly controlKeys: Record<string, () => void> = {
+		y: () => this.copyFile(),
+		u: () => this.session.browser.clear(),
+	};
+
+	/** Esc clears the search first, then closes the panel. */
+	private escapeFiles(): void {
+		if (this.session.browser.query) this.session.browser.clear();
+		else this.closeFiles();
 	}
 
 	private copyFile(): void {
-		const copied = this.viewer.copy();
-		this.viewer.flash(
-			copied ? 'Copied to the clipboard.' : 'This terminal does not accept a clipboard copy.',
+		const text = this.session.browser.file?.text;
+		if (text === undefined) return;
+		this.panel.flash(
+			this.panel.copy(text)
+				? 'Copied to the clipboard.'
+				: 'This terminal does not accept a clipboard copy.',
 		);
 	}
 
@@ -331,8 +357,8 @@ class WorkbenchTui {
 	// Keys
 
 	private onKey(key: KeyEvent): void {
-		if (this.mode === 'viewer') {
-			this.viewerKey(key);
+		if (this.mode === 'files') {
+			this.filesKey(key);
 			return;
 		}
 		if (key.name === 'pageup' || key.name === 'pagedown') {

@@ -48,8 +48,8 @@ press Ctrl+R to pick a room.
 | `/room <name>`         | Switch to another room                             |
 | `/new <name> [goal]`   | Create a room. Without a goal, the composer asks   |
 | `/user <person>`       | Act as another person                              |
-| `/files`               | List the workspace files                           |
-| `/open <path>`         | Read a workspace file in a scrolling overlay       |
+| `/files`               | Search the workspace files in a side panel         |
+| `/open <path>`         | Open the files panel on one file                   |
 | `/try`                 | Fill the composer with the room's suggested prompt |
 | `/abort`               | Cancel the open exchange                           |
 | `/stop`, `/resume`     | Stop the room, or start it again                   |
@@ -65,9 +65,11 @@ person leaves the current room, then enters it as the new person.
 | Ctrl+J, Alt+Enter     | Add a line to the message                                  |
 | Tab                   | Complete a command, or browse the discussions              |
 | Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
-| Esc                   | Close the palette or the overlay, or stop browsing         |
+| Esc                   | Close the palette, clear the search, or close the panel    |
 | PageUp, PageDown      | Scroll the conversation                                    |
-| y                     | In the file overlay: copy the file to the clipboard        |
+| Type, Up, Down        | In the files panel: search, and choose a file to read      |
+| PageUp, PageDown      | In the files panel: scroll the file                        |
+| Ctrl+Y                | In the files panel: copy the file to the clipboard         |
 
 A discussion is the thread between a question and its summary, with each
 steering message in its place. It starts closed. Start a message with `//` to
@@ -159,7 +161,8 @@ workspace resources.
 | `src/timeline.ts`    | The record grouped into questions, threads, summaries |
 | `src/transcript.ts`  | The conversation, with open and closed threads        |
 | `src/composer.ts`    | The composer, room chip, and palette                  |
-| `src/viewer.ts`      | The workspace file overlay                            |
+| `src/browser.ts`     | The files panel state: search, matches, chosen file   |
+| `src/files-panel.ts` | The files panel beside the conversation               |
 | `src/tui.ts`         | The terminal: layout, keys, and the run loop          |
 | `src/main.ts`        | The entry point                                       |
 | `src/brand.ts`       | The product name and the terminal palette             |

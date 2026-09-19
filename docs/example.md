@@ -79,7 +79,7 @@ interface.
   on disk. The next start resumes them.
 - **Terminal.** `src/tui.ts` is an OpenTUI application on a dark theme. It has
   a multi-line composer with a room chip, and slash commands to switch person
-  or room, create a room, read workspace files, and stop, resume, or abort.
+  or room, create a room, search workspace files in a side panel, and stop, resume, or abort.
   The person picks an identity on the first screen.
 - **Brand.** The terminal reads its colors from the repository brand kit in
   `brand/tokens/ambion.tokens.json`.
@@ -146,7 +146,8 @@ examples/workbench/
     timeline.ts        the record grouped into questions, threads, and summaries
     transcript.ts      the conversation
     composer.ts        the composer, room chip, and palette
-    viewer.ts          the workspace file overlay
+    browser.ts         the files panel state: search and the chosen file
+    files-panel.ts     the files panel beside the conversation
     tui.ts             the terminal: layout, keys, and the run loop
     main.ts            the entry point
   library/             the datasheets as text

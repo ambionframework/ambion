@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Session } from '../src/session.ts';
 import type { FileContent, FileEntry, Person, RoomView, Workbench } from '../src/workbench.ts';
 
@@ -282,36 +282,43 @@ describe('Session messages and control', () => {
 });
 
 describe('Session files and prompts', () => {
-	it('lists the workspace files with their sizes', async () => {
+	it('opens the files panel on the first file, and previews it', async () => {
 		const { session } = await started();
-		await session.submit('/files');
-		expect(session.notice).toContain('/library/led-5mm.md');
-		expect(session.notice).toContain('797 B');
-		expect(session.notice).toMatch(/Use \/open <path>/);
+		expect(await session.submit('/files')).toEqual({ type: 'files' });
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/library/led-5mm.md'));
+		expect(session.browser.open).toBe(true);
+		expect(session.browser.file?.text).toBe('text of /library/led-5mm.md');
 	});
 
-	it('opens a file by exact path, by path without the leading slash, and by a unique part', async () => {
+	it('narrows the files as the person types, and follows the selection', async () => {
+		const { session } = await started();
+		await session.submit('/files');
+		session.browser.type('NOTES');
+		expect(session.browser.matches.map((file) => file.path)).toEqual(['/shared/notes.md']);
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/shared/notes.md'));
+		session.browser.clear();
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/library/led-5mm.md'));
+		session.browser.move(1);
+		await vi.waitFor(() => expect(session.browser.file?.path).toBe('/shared/notes.md'));
+		session.browser.type('nothing');
+		expect(session.browser.selected).toBeUndefined();
+		await vi.waitFor(() => expect(session.browser.file).toBeUndefined());
+	});
+
+	it('opens the panel on one file for /open, by path or by a part of it', async () => {
 		const { session } = await started();
 		await session.refreshRooms();
 		for (const argument of ['/library/led-5mm.md', 'library/led-5mm.md', 'led-5']) {
-			const intent = await session.submit(`/open ${argument}`);
-			expect(intent).toEqual({
-				type: 'file',
-				file: {
-					path: '/library/led-5mm.md',
-					text: 'text of /library/led-5mm.md',
-					truncated: false,
-				},
-			});
+			expect(await session.submit(`/open ${argument}`)).toEqual({ type: 'files' });
+			expect(session.browser.selected?.path).toBe('/library/led-5mm.md');
 		}
 	});
 
-	it('says so when no file matches, or none is named', async () => {
+	it('says so when /open matches no file, and opens the panel with none named', async () => {
 		const { session } = await started();
 		expect(await session.submit('/open nothing')).toBeUndefined();
 		expect(session.notice).toMatch(/No file matches nothing/);
-		expect(await session.submit('/open')).toBeUndefined();
-		expect(session.notice).toMatch(/Name a file/);
+		expect(await session.submit('/open')).toEqual({ type: 'files' });
 	});
 
 	it('fills the composer with the room’s suggested question', async () => {
