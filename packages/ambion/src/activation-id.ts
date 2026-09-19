@@ -1,6 +1,5 @@
 /** The durable identity of one activation. */
 
-import { positiveBounded } from './rules.verified.ts';
 import type { Seq } from './types.ts';
 
 /** The journal fact that gives an activation its identity. */
@@ -50,7 +49,6 @@ function positiveInteger(text: string | undefined): number | undefined {
 	return safePositiveInteger(value) && String(value) === text ? value : undefined;
 }
 
-/** The wire guard stays here: a Dafny int has no fraction and no NaN. The rule bounds the rest. */
 function safePositiveInteger(value: number): boolean {
-	return Number.isInteger(value) && positiveBounded(value);
+	return Number.isSafeInteger(value) && value > 0;
 }

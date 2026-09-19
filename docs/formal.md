@@ -1,25 +1,32 @@
 # Formal verification
 
-**The rules the journal and the room decide by are proven, and the code
-runs the proven bodies.** A rule is a pure TypeScript function with a
+**The three core state machines are proven, and the code runs the proven
+bodies.** The journal's fence, the activation lifecycle, and the exchange
+lifecycle each decide by rules: pure TypeScript functions with a
 contract. LemmaScript turns the contract into Dafny obligations, Dafny
 proves them, and the gate fails when a proof breaks or a generated file is
-stale. Five files hold every rule, one per concern:
+stale. Two files hold every rule:
 
-| File                                                                                                        | Concern                                                           | Obligations                    |
-| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------ |
-| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)                       | The fence, the key, the seq counter, the cursor, the storage      | 18, and 23 in its proofs file  |
-| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts)               | The lease, the transitions, the pass, the grant, the verdict      | 106, and 14 in its proofs file |
-| [`packages/ambion/src/room/rules.roster.verified.ts`](../packages/ambion/src/room/rules.roster.verified.ts) | The routing, presence, the roster, and addressing                 | 48, and 12 in its proofs file  |
-| [`packages/ambion/src/room/rules.record.verified.ts`](../packages/ambion/src/room/rules.record.verified.ts) | The message list and the keyed retry                              | 18                             |
-| [`packages/ambion/src/rules.verified.ts`](../packages/ambion/src/rules.verified.ts)                         | The ranges the validator admits and the domain the id codec takes | 3                              |
+| File                                                                                          | Concern                                                                                         | Obligations                    |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------ |
+| [`packages/journal/src/rules.verified.ts`](../packages/journal/src/rules.verified.ts)         | The fence, the key, the seq counter, the cursor, the storage                                    | 18, and 23 in its proofs file  |
+| [`packages/ambion/src/room/rules.verified.ts`](../packages/ambion/src/room/rules.verified.ts) | The lease, the admissions, the grant, the steer, the exchange, the verdict, the pass, the close | 106, and 14 in its proofs file |
 
-**A change to the room's state management is a change to a rules file.**
-The room decides nothing by hand: `transition.ts`, `fold.ts`, and the
-pass project the state and run a rule. So an edit to how the room
-decides lands in one of these files, `pnpm rule:check` proves that file
-in seconds, and the gate refuses the edit until its proof, its binding
-case, and its type pin agree.
+**Everything else is ordinary TypeScript under the scripted and chaos
+suites.** Routing, presence, the roster, addressing, membership changes,
+the keyed retry, the reads, and the validator's shape checks decide in
+their own files with no contract. The line is deliberate: a proof pays
+for itself on a state machine whose failure loses or duplicates work, and
+it costs a redeclared type, a binding case, and a Dafny run on every
+edit. A concern crosses the line when a defect in it would corrupt the
+record or the lease history.
+
+**A change to a core state machine is a change to a rules file.** The
+fold, the transition, and the pass project the state and run a rule. So
+an edit to how the journal or the room decides lands in one of the two
+files, `pnpm rule:check` proves that file in seconds, and the gate
+refuses the edit until its proof, its binding case, and its type pin
+agree.
 
 This page states the mechanism: what a rule is, how its proof reaches the
 running code, what the generated files are, how the gate runs them, and
@@ -106,17 +113,15 @@ and never a merge.
 generator cannot write an inductive proof. The journal's proofs file
 proves the fence lemmas by induction over a read: a superseded journal
 stays superseded, the caller hears `lost` at most once, the cursor never
-moves back. The room's proofs files prove `AttemptIdsAreFresh` over a
-lease history, that the clock only moves forward, and that the roster
-loop wakes every seat the per-seat rule admits. A proofs file starts with
+moves back. The room's proofs file proves `AttemptIdsAreFresh` over a
+lease history and that the clock only moves forward. A proofs file starts with
 `include` of the generated file and calls the generated `_ensures`
 lemmas. `check-extra.sh` at the root verifies every proofs file, at a
 desk and in CI.
 
 **A contract states what Dafny proves on its own.** A clause that needs
 induction is a lemma in the proofs file, and the rule's `//@ contract`
-line names that lemma. `woken` carries no `ensures`; `WokenIsExact` in
-the roster proofs file states what it answers.
+line names that lemma.
 
 ## 4. The gate
 
@@ -132,7 +137,7 @@ A stale generation fails at the desk and in CI. The proof itself runs in
 the `lemmascript` job of `.github/workflows/ci.yml`, which calls the
 LemmaScript reusable workflow at a pinned reference that names the
 `lemmascript` version in `package.json`; that workflow runs
-`check-extra.sh` after the listed files. The largest file proves in about
+`check-extra.sh` after the listed files. The room file proves in about
 fifteen seconds, and a rule edit re-proves only its own file.
 
 **`LemmaScript-files.txt` lists what CI verifies.** One line per file:
@@ -153,15 +158,12 @@ flag column. `scripts/setup.sh` installs Dafny 4.11 for a desk run.
    redeclared type that drifted from its public type, an exported rule
    with no binding case, and a caller that stopped following the rule.
 
-**Add a rule where its caller may import it.** The core is laid out in
-layers, and an import points down only (`toolchain.md` §1). A decision
-over the lease, a transition, the pass, or a grant goes in the room's
-`rules.verified.ts`; one over the routing, presence, or the roster in
-`rules.roster.verified.ts`; one over the message list in
-`rules.record.verified.ts`. A check in `journal/validate.ts` or
-`activation-id.ts` goes in the vocabulary's rules file, because the
-vocabulary imports nothing from `room/`. A rule the journal package
-decides by goes in the journal's rules file. Then:
+**Add a rule only inside the line, and where its caller may import it.**
+A decision over the lease, an admission, a grant, the exchange, the
+verdict, or the pass goes in the room's rules file. A rule the journal
+decides by goes in the journal's rules file. A decision outside the three
+machines stays ordinary TypeScript. The core is laid out in layers, and
+an import points down only (`toolchain.md` §1). Then:
 
 1. Write the projection at the call site and make the caller follow the
    rule's answer.
@@ -172,8 +174,7 @@ decides by goes in the journal's rules file. Then:
    that names the code that establishes it.
 
 **A helper only a contract names is internal.** It carries a Biome
-ignore that says which contract names it, as `fromCatalog` and
-`markedCancelled` do. Two rules files cannot share a type: Dafny lowers
+ignore that says which contract names it, as `markedCancelled` does. Two rules files cannot share a type: Dafny lowers
 each file on its own, so a union both files read is declared in both and
 pinned in both.
 
@@ -217,7 +218,6 @@ doc it carries:
 - `docs/agent.md` for the activation rules;
 - `docs/exchange.md` for the exchange and `docs/summary.md` for the
   verdict;
-- `docs/roster.md` for the roster and `docs/presence.md` for presence;
 - `docs/durability.md` for the journal, the lease, and the retry.
 
 **The rules cover the decisions, and the tests cover the rest.**

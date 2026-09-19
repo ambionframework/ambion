@@ -3,7 +3,7 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { Message } from '../types.ts';
 import type { LeaseHold } from './lease.ts';
-import { steers } from './rules.roster.verified.ts';
+import { steers } from './rules.verified.ts';
 
 export interface MessageDelivery {
 	/** Seats the message explicitly wakes. */

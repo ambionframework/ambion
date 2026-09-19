@@ -7,14 +7,7 @@
  * does not hold is the handle a host delivers through, and that stays in
  * the running room.
  */
-import {
-	type HumanDefinition,
-	isPresence,
-	type Message,
-	type PresenceStatus,
-	type Seq,
-} from '../types.ts';
-import { foldPresence } from './rules.roster.verified.ts';
+import type { HumanDefinition, Message, PresenceStatus, Seq } from '../types.ts';
 
 /** One person in the room, for as long as they are in it. */
 export interface VisitRuntime {
@@ -41,15 +34,29 @@ export interface PersonState {
 
 /** Every person the record knows, in the order the record met them. */
 export function foldPeople(messages: readonly Message[]): Map<string, PersonState> {
-	// Only the projection is here. The verified `foldPresence` decides.
-	return foldPresence(
-		messages.filter(isPresence).map((message) => ({
-			kind: message.kind,
-			name: message.subject,
-			seq: message.seq,
-			at: message.at,
-			identity: message.identity,
-			preferences: message.preferences,
-		})),
-	);
+	const people = new Map<string, PersonState>();
+	for (const message of messages) {
+		if (message.kind === 'arrived') {
+			const known = people.get(message.subject);
+			people.set(message.subject, {
+				name: message.subject,
+				identity: message.identity ?? known?.identity ?? '',
+				presence: 'present',
+				since: known?.since,
+				changedAt: message.at,
+				preferences: message.preferences ?? known?.preferences,
+			});
+		} else if (message.kind === 'left') {
+			const known = people.get(message.subject);
+			if (known) {
+				people.set(message.subject, {
+					...known,
+					presence: 'absent',
+					since: message.seq,
+					changedAt: message.at,
+				});
+			}
+		}
+	}
+	return people;
 }

@@ -1,5 +1,2 @@
 packages/journal/src/rules.verified.ts
 packages/ambion/src/room/rules.verified.ts
-packages/ambion/src/rules.verified.ts
-packages/ambion/src/room/rules.roster.verified.ts
-packages/ambion/src/room/rules.record.verified.ts

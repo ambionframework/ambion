@@ -14,7 +14,6 @@
  */
 
 import type { ActivationView, ContextParticipant } from '../protocol.ts';
-import { coversSeq } from '../rules.verified.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
 import { isSpoken, isSummary, type Message, type Seq, type SummaryMessage } from '../types.ts';
 import { SUMMARY_DUTIES } from './summary.ts';
@@ -72,8 +71,8 @@ function foldedBy(record: readonly Message[]): Map<Seq, SummaryMessage> {
 	if (summaries.length === 0) return by;
 	for (const message of record) {
 		if (isSummary(message)) continue;
-		const stands = summaries.find(({ covers }) =>
-			coversSeq(covers.from, covers.through, message.seq),
+		const stands = summaries.find(
+			({ covers }) => message.seq >= covers.from && message.seq <= covers.through,
 		);
 		if (stands) by.set(message.seq, stands);
 	}

@@ -4,7 +4,6 @@ import { decodeActivationId } from '../activation-id.ts';
 import type { ActivationSpec } from '../protocol.ts';
 import type { RoomState } from './fold.ts';
 import { removalsOf } from './lease.ts';
-import { onRoster } from './rules.roster.verified.ts';
 import { activationGrant, closeFor, removedAfter, wellFormed } from './rules.verified.ts';
 
 /**
@@ -23,7 +22,7 @@ export function activationSpec(id: string, state: RoomState): ActivationSpec | u
 	const grant = activationGrant(
 		parsed,
 		state.cancelledAt,
-		onRoster(state.roster, parsed.seat),
+		state.roster.some((seat) => seat.name === parsed.seat),
 		removedAfter(removalsOf(state.messages, parsed.seat), parsed.position),
 		recorded,
 		close,

@@ -48,12 +48,7 @@ import { isLive, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { captureMessageSelection, type MessageSelection, readView } from './room/read.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
-import {
-	contributionMatches as contributionRule,
-	deliveryMatches as deliveryRule,
-	type Recorded,
-} from './room/rules.record.verified.ts';
-import { closeMoved, exchangeContaining } from './room/rules.verified.ts';
+import { closeMoved } from './room/rules.verified.ts';
 import {
 	decide,
 	evolve,
@@ -98,35 +93,43 @@ export type { RoomSnapshot } from './types.ts';
 type Phase = 'starting' | 'running' | 'stopped' | 'evicted';
 type DeliveryOperation = 'wake' | 'steer' | 'cut';
 
-/** A recorded message, projected to what the retry rules read. */
-function recorded(message: Message): Recorded {
-	return {
-		kind: message.kind,
-		from: message.from,
-		to: 'to' in message ? message.to : undefined,
-		text: 'text' in message ? message.text : '',
-		subject: 'subject' in message ? message.subject : undefined,
-		activationId: message.activationId,
-	};
-}
-
 /** Compare a delivery with the body returned by a same-key journal retry. */
 function deliveryMatches(
 	command: Extract<RoomCommand, { type: 'deliver' }>,
 	message: Message,
 ): boolean {
-	return deliveryRule(command.from, command.to, command.text, recorded(message));
+	return (
+		message.kind === 'said' &&
+		message.activationId === undefined &&
+		message.from === command.from &&
+		message.to === command.to &&
+		message.text === command.text
+	);
 }
 
-/** Compare a commit with the body returned by a same-key journal retry. */
 function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	const { activation, intent } = commit;
-	return contributionRule(
-		activation,
-		decodeActivationId(activation)?.seat ?? '',
-		intent,
-		intent.kind === 'said' ? intent.to : undefined,
-		recorded(message),
+	// This activation check is the primary guard. It pins the returned entry to
+	// this activation, so the later branches compare content within one
+	// activation only. The summary branch relies on it: it accepts any recorded
+	// recipient when the intent omits one, which is safe only because the
+	// activation already matches. Do not loosen this check without tightening
+	// that branch.
+	if (message.activationId !== activation) return false;
+	const parsed = decodeActivationId(activation);
+	if (parsed !== undefined && message.from !== parsed.seat) return false;
+
+	if (intent.kind === 'seated' || intent.kind === 'unseated') {
+		return message.kind === intent.kind && message.subject === intent.name;
+	}
+	if (message.kind === 'said') return message.to === intent.to && message.text === intent.text;
+	// A closing agent says through the same `said` intent, but the room records
+	// its contribution as a summary addressed to the exchange owner. An omitted
+	// recipient is that canonical owner; a supplied recipient must still match.
+	return (
+		message.kind === 'summary' &&
+		(intent.to === undefined || message.to === intent.to) &&
+		message.text === intent.text
 	);
 }
 
@@ -770,14 +773,14 @@ export class RoomHost implements Room, RunningRoom {
 	private handleForMessage(message: Message): ExchangeHandle {
 		if (message.kind !== 'said') throw new Error('A delivery did not commit a spoken message.');
 		const state = this.state();
-		const found = exchangeContaining(state.closes, state.exchange?.from, message.seq);
-		// The rule names the exchange by its opening; the lookups narrow the TypeScript type only.
+		const close = state.closes.find(
+			(candidate) => message.seq >= candidate.from && message.seq <= candidate.through,
+		);
 		const exchange =
-			found.kind === 'closed'
-				? state.closes.find((candidate) => candidate.from === found.from)
-				: found.kind === 'open'
-					? state.exchange
-					: undefined;
+			close ??
+			(state.exchange !== undefined && message.seq >= state.exchange.from
+				? state.exchange
+				: undefined);
 		if (exchange === undefined) throw new Error('A delivery does not belong to an exchange.');
 		return this.handleFor(exchange);
 	}

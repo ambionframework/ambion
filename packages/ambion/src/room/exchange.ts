@@ -40,10 +40,11 @@ import {
 	type SummaryOutcome,
 } from '../types.ts';
 import { type LeaseHold, removalsOf } from './lease.ts';
-import { discussion, lastOf, openingQuestion } from './rules.record.verified.ts';
 import {
 	coversExchange,
 	type Draft,
+	lastOf,
+	openingQuestion,
 	removedAfter,
 	summaryVerdict,
 	survivesCancellation,
@@ -139,7 +140,10 @@ export function discussionMessages(
 	from: number,
 	through: number,
 ): Message[] {
-	return discussion(messages, from, through).map(copyMessage);
+	return messages
+		.filter((message) => message.kind !== 'summary')
+		.filter((message) => message.seq >= from && message.seq <= through)
+		.map(copyMessage);
 }
 
 /** Build detached exchange views in journal order, including the current open exchange. */

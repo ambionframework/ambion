@@ -7,7 +7,6 @@ import type {
 	CollaborationContext,
 	ContextParticipant,
 } from '../protocol.ts';
-import { coversSeq } from '../rules.verified.ts';
 import type { AgentParticipantInfo, Message, ParticipantInfo, Seq } from '../types.ts';
 import type { RoomState } from './fold.ts';
 
@@ -52,8 +51,8 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts): ActivationView {
 	const goal = state.composition?.goal;
 	const messages =
 		purpose.kind === 'summarize'
-			? state.messages.filter((message) =>
-					coversSeq(purpose.exchange, purpose.through, message.seq),
+			? state.messages.filter(
+					(message) => message.seq >= purpose.exchange && message.seq <= purpose.through,
 				)
 			: state.messages;
 	const context: CollaborationContext = {

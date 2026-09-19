@@ -1,18 +1,21 @@
 /**
- * The rules the room decides by, as functions LemmaScript checks. Every
- * function here is pure, and `lease.ts`, `reconcile.ts`, `transition.ts`,
- * `activation.ts`, `exchange.ts`, `fold.ts`, `answers.ts`, and the host
- * run these bodies: the proof is about the code the room runs. `lsc check`
- * turns the `//@` annotations into Dafny obligations, and CI verifies them.
- * `rules.verified.proofs.dfy` beside this file carries the lemmas the
- * generator cannot write.
+ * The rules the room decides by, as functions LemmaScript checks: the
+ * activation lifecycle and the exchange lifecycle. Every function here is
+ * pure, and `lease.ts`, `reconcile.ts`, `transition.ts`, `activation.ts`,
+ * `delivery.ts`, `exchange.ts`, `fold.ts`, `answers.ts`, and the host run
+ * these bodies: the proof is about the code the room runs. `lsc check`
+ * turns the `//@` annotations into Dafny obligations, and CI verifies
+ * them. `rules.verified.proofs.dfy` beside this file carries the lemmas
+ * the generator cannot write.
  *
  * The string unions below are declared again beside the rules, because
  * LemmaScript lowers only the types in its own file. `rules.test.ts`
- * asserts each copy equals the public type in `types.ts`. The routing,
- * presence, and roster rules are in `rules.roster.verified.ts`, and the
- * rules over the message list in `rules.record.verified.ts`.
+ * asserts each copy equals the public type in `types.ts`. `Message` is
+ * the public union itself; the stub names the four fields the rules read.
  */
+
+import type { Message } from '../types.ts';
+//@ declare-type Message { kind: string, seq: number, from: string, at: string }
 
 /** The two phases a lease holds. */
 export type LeasePhase = 'running' | 'ended';
@@ -585,14 +588,6 @@ export function forgets(sentIds: readonly string[], dueIds: readonly string[]): 
 	return out;
 }
 
-//@ contract A close names the configured summary writer only when that writer is seated at the close.
-export function namesWriter(configured: boolean, seated: boolean): boolean {
-	//@ ensures \result ==> configured
-	//@ ensures \result ==> seated
-	//@ ensures configured && seated ==> \result
-	return configured && seated;
-}
-
 /** A lease as the liveness rules read it. */
 export interface LiveLease {
 	readonly source: Source;
@@ -840,45 +835,9 @@ export function summaryVerdict(
 }
 
 /** The range a close holds: the opening question through the last seq at the close. */
-export interface Range {
+interface Range {
 	readonly from: number;
 	readonly through: number;
-}
-
-/** The exchange a committed question belongs to. */
-export type Found =
-	| { readonly kind: 'closed'; readonly from: number }
-	| { readonly kind: 'open'; readonly from: number }
-	| { readonly kind: 'outside' };
-
-//@ contract A position is inside a closed range when it lies between its ends.
-function inside(range: Range, seq: number): boolean {
-	//@ ensures \result <==> (range.from <= seq && seq <= range.through)
-	return range.from <= seq && seq <= range.through;
-}
-
-//@ contract The exchange a question belongs to: the first close whose range holds it, else the open exchange when the question is at or after its opening, else none.
-export function exchangeContaining(
-	closes: readonly Range[],
-	open: number | undefined,
-	seq: number,
-): Found {
-	//@ ensures \result.kind == 'closed' ==> exists(i, 0 <= i && i < closes.length && inside(closes[i], seq) && closes[i].from == \result.from && forall(k, 0 <= k && k < i ==> !inside(closes[k], seq)))
-	//@ ensures \result.kind != 'closed' ==> forall(i, 0 <= i && i < closes.length ==> !inside(closes[i], seq))
-	//@ ensures open == undefined ==> \result.kind != 'open'
-	//@ ensures open != undefined && \result.kind == 'open' ==> open == \result.from && \result.from <= seq
-	//@ ensures open == undefined && \result.kind != 'closed' ==> \result.kind == 'outside'
-	//@ ensures open != undefined && \result.kind == 'outside' ==> open > seq
-	//@ ensures open != undefined && open <= seq ==> \result.kind != 'outside'
-	//@ ensures \result.kind == 'closed' || \result.kind == 'open' ==> \result.from <= seq
-	for (let i = 0; i < closes.length; i++) {
-		//@ invariant 0 <= i && i <= closes.length
-		//@ invariant forall(k, 0 <= k && k < i ==> !inside(closes[k], seq))
-		const close = closes[i] ?? { from: 0, through: -1 };
-		if (inside(close, seq)) return { kind: 'closed', from: close.from };
-	}
-	if (open !== undefined && open <= seq) return { kind: 'open', from: open };
-	return { kind: 'outside' };
 }
 
 /** A claim or a renewal. The same union as the two lease commands. */
@@ -934,83 +893,6 @@ export function addressesOwner(to: string | undefined, owner: string): boolean {
 	return to === owner;
 }
 
-/** A person's own presence change. */
-export type PresenceKind = 'arrived' | 'left';
-
-/** What a presence or membership change comes to. */
-export type Outcome = 'refused' | 'unchanged' | 'written';
-
-//@ contract An agent name cannot arrive. A present person arrives again only under the same identity, and that writes nothing. A departure of an absent person writes nothing. A departure is never refused.
-export function presenceOutcome(
-	kind: PresenceKind,
-	agentName: boolean,
-	present: boolean,
-	sameIdentity: boolean,
-): Outcome {
-	//@ ensures kind == 'arrived' && agentName ==> \result == 'refused'
-	//@ ensures kind == 'arrived' && !agentName && present && !sameIdentity ==> \result == 'refused'
-	//@ ensures kind == 'arrived' && !agentName && present && sameIdentity ==> \result == 'unchanged'
-	//@ ensures kind == 'arrived' && !agentName && !present ==> \result == 'written'
-	//@ ensures kind == 'left' ==> \result != 'refused'
-	//@ ensures kind == 'left' ==> (\result == 'written' <==> present)
-	//@ ensures \result == 'written' ==> !agentName || kind == 'left'
-	//@ ensures kind == 'arrived' ==> (\result == 'written' <==> !agentName && !present)
-	if (kind === 'arrived') {
-		if (agentName) return 'refused';
-		if (present) return sameIdentity ? 'unchanged' : 'refused';
-		return 'written';
-	}
-	return present ? 'written' : 'unchanged';
-}
-
-/** A membership change an activation or the host asks for. */
-export type MembershipKind = 'seated' | 'unseated';
-
-//@ contract From an activation: seating a member or unseating a reserve name changes nothing. Seating from the reserve and unseating a member write. Any other name is refused.
-export function membershipOutcome(
-	kind: MembershipKind,
-	onRoster: boolean,
-	inReserve: boolean,
-): Outcome {
-	//@ requires !(onRoster && inReserve)
-	//@ ensures kind == 'seated' ==> (\result == 'unchanged' <==> onRoster)
-	//@ ensures kind == 'seated' ==> (\result == 'written' <==> inReserve)
-	//@ ensures kind == 'unseated' ==> (\result == 'written' <==> onRoster)
-	//@ ensures kind == 'unseated' ==> (\result == 'unchanged' <==> inReserve)
-	//@ ensures !onRoster && !inReserve ==> \result == 'refused'
-	//@ ensures \result == 'refused' <==> (!onRoster && !inReserve)
-	if (kind === 'seated') return onRoster ? 'unchanged' : inReserve ? 'written' : 'refused';
-	return onRoster ? 'written' : inReserve ? 'unchanged' : 'refused';
-}
-
-//@ contract From the host: a seating is admitted when the name is neither a member nor a person the record knows; an unseating when the name is a member. An already satisfied request is refused.
-export function hostMembership(
-	kind: MembershipKind,
-	onRoster: boolean,
-	isPerson: boolean,
-): boolean {
-	//@ ensures kind == 'seated' ==> (\result <==> !onRoster && !isPerson)
-	//@ ensures kind == 'unseated' ==> (\result <==> onRoster)
-	//@ ensures isPerson && kind == 'seated' ==> !\result
-	if (kind === 'seated') return !onRoster && !isPerson;
-	return onRoster;
-}
-
-//@ contract No two names in the list are the same, and a repeated name is found.
-export function distinct(names: readonly string[]): boolean {
-	//@ ensures \result <==> forall(i, 0 <= i && i < names.length ==> forall(j, 0 <= j && j < i ==> names[i] != names[j]))
-	for (let i = 0; i < names.length; i++) {
-		//@ invariant 0 <= i && i <= names.length
-		//@ invariant forall(a, 0 <= a && a < i ==> forall(b, 0 <= b && b < a ==> names[a] != names[b]))
-		for (let j = 0; j < i; j++) {
-			//@ invariant 0 <= j && j <= i
-			//@ invariant forall(b, 0 <= b && b < j ==> names[i] != names[b])
-			if (names[i] === names[j]) return false;
-		}
-	}
-	return true;
-}
-
 /** What the room answers a commit about its lease and grant. */
 export type Authority = 'stale' | 'refused' | 'granted';
 
@@ -1032,4 +914,80 @@ export function commitAuthority(
 	if (known === 'ended') return 'stale';
 	if (pastExpiry) return 'stale';
 	return granted ? 'granted' : 'refused';
+}
+
+//@ contract This seat wrote the message. A seating the host decided has no author.
+function isAuthor(author: string | undefined, name: string): boolean {
+	//@ ensures author == undefined ==> !\result
+	//@ ensures author != undefined ==> (\result <==> author == name)
+	if (author !== undefined && author === name) return true;
+	return false;
+}
+
+//@ contract A lease was at work when a message landed: it held a change before the message, and ended, if it ended, after it.
+function atWork(since: number, ended: boolean, until: number, seq: number): boolean {
+	//@ ensures \result ==> since < seq
+	//@ ensures \result && ended ==> until >= seq
+	//@ ensures !ended ==> (\result <==> since < seq)
+	//@ ensures !\result ==> seq <= since || (ended && until < seq)
+	return since < seq && (!ended || until >= seq);
+}
+
+//@ contract A message steers an ordinary lease that was at work when the message landed, and never the author's seat, a seat the message wakes, or a closing lease.
+export function steers(
+	ordinary: boolean,
+	seat: string,
+	author: string | undefined,
+	woken: boolean,
+	since: number,
+	ended: boolean,
+	until: number,
+	seq: number,
+): boolean {
+	//@ ensures \result ==> ordinary
+	//@ ensures \result ==> !woken
+	//@ ensures isAuthor(author, seat) ==> !\result
+	//@ ensures \result ==> atWork(since, ended, until, seq)
+	//@ ensures ordinary && !woken && !isAuthor(author, seat) && atWork(since, ended, until, seq) ==> \result
+	if (!ordinary) return false;
+	if (woken) return false;
+	if (isAuthor(author, seat)) return false;
+	return atWork(since, ended, until, seq);
+}
+
+//@ contract The last position on an ordered record bounds every position on it; an empty record ends at 0.
+export function lastOf(seqs: readonly number[]): number {
+	//@ requires forall(i, forall(j, 0 <= i && i < j && j < seqs.length ==> seqs[i] <= seqs[j]))
+	//@ requires forall(i, 0 <= i && i < seqs.length ==> seqs[i] >= 1)
+	//@ ensures \result >= 0
+	//@ ensures seqs.length == 0 ==> \result == 0
+	//@ ensures seqs.length > 0 ==> \result == seqs[seqs.length - 1]
+	//@ ensures forall(i, 0 <= i && i < seqs.length ==> seqs[i] <= \result)
+	return seqs[seqs.length - 1] ?? 0;
+}
+
+//@ contract A message opens an exchange when a person spoke it after the last close: agent speech, arrivals and departures open nothing.
+function opensExchange(
+	message: Message,
+	people: readonly string[],
+	closedThrough: number,
+): boolean {
+	//@ ensures \result <==> message.kind == 'said' && people.includes(message.from) && message.seq > closedThrough
+	//@ ensures message.kind != 'said' ==> !\result
+	//@ ensures message.seq <= closedThrough ==> !\result
+	return message.kind === 'said' && people.includes(message.from) && message.seq > closedThrough;
+}
+
+//@ contract The open exchange is the first message that opens one after the last close; there is at most one, and its position is on the record.
+export function openingQuestion(
+	messages: readonly Message[],
+	people: readonly string[],
+	closedThrough: number,
+): Message | undefined {
+	//@ requires forall(i, forall(j, 0 <= i && i < j && j < messages.length ==> messages[i].seq < messages[j].seq))
+	//@ ensures \result != undefined ==> \result.kind == 'said' && people.includes(\result.from) && \result.seq > closedThrough
+	//@ ensures \result == undefined <==> !exists(i, 0 <= i && i < messages.length && opensExchange(messages[i], people, closedThrough))
+	//@ ensures \result != undefined ==> exists(i, 0 <= i && i < messages.length && messages[i] == \result && forall(j, 0 <= j && j < i ==> !opensExchange(messages[j], people, closedThrough)))
+	//@ ensures \result != undefined ==> messages.length > 0 && \result.seq <= messages[messages.length - 1].seq
+	return messages.find((message) => opensExchange(message, people, closedThrough));
 }

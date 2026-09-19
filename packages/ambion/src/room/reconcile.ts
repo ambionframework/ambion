@@ -22,7 +22,6 @@ import {
 	removalsOf,
 	seatOf,
 } from './lease.ts';
-import { onRoster } from './rules.roster.verified.ts';
 import {
 	earliestAfter,
 	endingOf,
@@ -179,7 +178,7 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
  */
 function isStale(state: RoomState, id: string): boolean {
 	const parsed = decodeActivationId(id);
-	const seated = parsed !== undefined && onRoster(state.roster, parsed.seat);
+	const seated = parsed !== undefined && state.roster.some((seat) => seat.name === parsed.seat);
 	const removedAfterCause =
 		parsed !== undefined && removedAfter(removalsOf(state.messages, parsed.seat), parsed.position);
 	return staleLease(parsed !== undefined, seated, removedAfterCause);

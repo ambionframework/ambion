@@ -11,8 +11,6 @@ import type {
 import { activationSpec } from './room/activation.ts';
 import type { RoomState } from './room/fold.ts';
 import { isExpired, seatOf } from './room/lease.ts';
-import { messagesSince } from './room/rules.record.verified.ts';
-import { onRoster as seated } from './room/rules.roster.verified.ts';
 import { commitAuthority } from './room/rules.verified.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
@@ -47,7 +45,8 @@ export interface Answering {
 	reconcile(): Promise<void>;
 }
 
-const onRoster = (state: RoomState, name: string): boolean => seated(state.roster, name);
+const onRoster = (state: RoomState, name: string): boolean =>
+	state.roster.some((seat) => seat.name === name);
 
 // -- view ---------------------------------------------------------------------
 
@@ -69,7 +68,7 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 		now: room.now(),
 		state,
 		live: room.live(state),
-		unseen: (since) => messagesSince(state.messages, since).length,
+		unseen: (since) => state.messages.filter((message) => message.seq > since).length,
 	};
 }
 

@@ -25,13 +25,7 @@ import {
 	pendingWakes,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
-import { lastOf } from './rules.record.verified.ts';
-import {
-	foldRoster as foldRosterRule,
-	type Membership,
-	reserveOf as reserveRule,
-} from './rules.roster.verified.ts';
-import { cancelHold, survivesCancellation } from './rules.verified.ts';
+import { cancelHold, lastOf, survivesCancellation } from './rules.verified.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends PendingActivation {
@@ -178,33 +172,40 @@ function cancelLeases(leases: Map<string, LeaseHold>, cancelledAt: Seq, at: stri
 
 function reserveOf(composition: Composition | undefined, roster: readonly Seating[]): Seating[] {
 	if (composition === undefined) return [];
+	const seated = new Set(roster.map((seat) => seat.name));
 	const catalog = new Map(
 		[...composition.agents, ...composition.available].map((seat) => [seat.name, seat]),
 	);
-	return reserveRule([...catalog.values()], roster);
+	return [...catalog.values()]
+		.filter((seat) => !seated.has(seat.name))
+		.map((seat) => ({ name: seat.name, identity: seat.identity, attention: 'broadcast' }));
 }
 
 /** The latest composition, then every seating and unseating after it, in order. */
 function foldRoster(composition: Composition | undefined, messages: readonly Message[]): Seating[] {
 	if (composition === undefined) return [];
-	return foldRosterRule(
-		composition.agents.map((seat) => ({ ...seat })),
-		messages.map((message) => ({ seq: message.seq, membership: membershipOf(message) })),
-		composition.seq,
-	);
+	const roster: Seating[] = composition.agents.map((seat) => ({ ...seat }));
+	for (const message of messages) {
+		if (message.seq > composition.seq) reseat(roster, message);
+	}
+	return roster;
 }
 
-/** What one message does to the roster: a seating, an unseating, or nothing. */
-function membershipOf(message: Message): Membership {
-	if (message.kind === 'seated')
-		return {
-			kind: 'seated',
+/**
+ * One seating or unseating applied to the roster. Any other message changes
+ * nothing.
+ */
+function reseat(roster: Seating[], message: Message): void {
+	if (message.kind !== 'seated' && message.kind !== 'unseated') return;
+	const at = roster.findIndex((seat) => seat.name === message.subject);
+	if (at >= 0) roster.splice(at, 1);
+	if (message.kind === 'seated') {
+		roster.push({
 			name: message.subject,
 			identity: message.identity ?? '',
 			attention: message.attention ?? 'broadcast',
-		};
-	if (message.kind === 'unseated') return { kind: 'unseated', name: message.subject };
-	return { kind: 'other' };
+		});
+	}
 }
 
 /**

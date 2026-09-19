@@ -1,7 +1,6 @@
 import { type TSchema, Type } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 import { decodeActivationId } from '../activation-id.ts';
-import { rangeWellFormed } from '../rules.verified.ts';
 import type { Kind } from './journal.ts';
 
 const extra = { additionalProperties: true } as const;
@@ -165,8 +164,8 @@ function validateRange(
 	if (range === undefined) return;
 	const { from, through } = range;
 	if (typeof from !== 'number' || typeof through !== 'number') return;
-	// The rule decides. The schema above already made both integers.
-	if (rangeWellFormed(from, through)) return;
+	// The schema above already made both integers.
+	if (from >= 1 && from <= through) return;
 	throw new Error(
 		`Invalid room journal body for kind '${kind}' at ${path}: expected a range from 1 that ends where it starts or later.`,
 	);

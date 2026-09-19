@@ -6,23 +6,13 @@
  * follows it.
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { encodeActivationId } from '../src/activation-id.ts';
 import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
-import { validateRoomBody } from '../src/journal/validate.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
-import { discussionMessages } from '../src/room/exchange.ts';
 import { foldRoom } from '../src/room/fold.ts';
-import { foldPeople } from '../src/room/presence.ts';
-import { readView } from '../src/room/read.ts';
-import { routes } from '../src/room/routing.ts';
-import * as record from '../src/room/rules.record.verified.ts';
-import * as roster from '../src/room/rules.roster.verified.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
-import { viewOf } from '../src/room/view.ts';
-import * as vocabulary from '../src/rules.verified.ts';
 import { inProcessTransport, runningRoom } from '../src/transport.ts';
 import type { Message } from '../src/types.ts';
 import { bindings } from './support/binding.ts';
@@ -35,20 +25,7 @@ vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 	const { mocked } = await import('./support/binding.ts');
 	return mocked(await importOriginal<typeof import('../src/room/rules.verified.ts')>());
 });
-vi.mock('../src/room/rules.roster.verified.ts', async (importOriginal) => {
-	const { mocked } = await import('./support/binding.ts');
-	return mocked(await importOriginal<typeof import('../src/room/rules.roster.verified.ts')>());
-});
-vi.mock('../src/room/rules.record.verified.ts', async (importOriginal) => {
-	const { mocked } = await import('./support/binding.ts');
-	return mocked(await importOriginal<typeof import('../src/room/rules.record.verified.ts')>());
-});
-vi.mock('../src/rules.verified.ts', async (importOriginal) => {
-	const { mocked } = await import('./support/binding.ts');
-	return mocked(await importOriginal<typeof import('../src/rules.verified.ts')>());
-});
-
-const bind = bindings({ rules, roster, record, vocabulary });
+const bind = bindings({ rules });
 afterAll(() => expect(bind.unbound()).toEqual([]));
 
 const at = '2026-01-01T09:00:00.000Z';
@@ -237,41 +214,12 @@ describe('the room runs the verified rules', () => {
 		expect(foldRoom([composition, person, question, cancel], options).pending).toEqual([]);
 	});
 
-	it('wakes the seats woken names', () => {
-		const said: Message = { kind: 'said', seq: 3, at, from: 'priya', text: 'Question.' };
-		bind.once(roster.woken, ['nobody']);
-		expect(routes(said, asked(), new Map())).toEqual(['nobody']);
-		expect(routes(said, asked(), new Map())).toEqual(['product']);
-	});
-
 	it('steers a lease only when steers says so', () => {
 		const later: Message = { kind: 'said', seq: 5, at, from: 'priya', text: 'More.', wakes: [] };
 		const leases = claimed().leases;
-		bind.once(roster.steers, false);
+		bind.once(rules.steers, false);
 		expect(messageDelivery(later, leases).steers).toEqual([]);
 		expect(messageDelivery(later, leases).steers).toEqual([{ seat: 'product', activation: id }]);
-	});
-
-	it('knows the people foldPresence answers', () => {
-		const ghost = {
-			name: 'ghost',
-			identity: '',
-			presence: 'absent',
-			since: undefined,
-			changedAt: undefined,
-			preferences: undefined,
-		} as const;
-		const arrival: Message = {
-			kind: 'arrived',
-			seq: 2,
-			at,
-			from: 'priya',
-			subject: 'priya',
-			identity: 'Person.',
-		};
-		bind.once(roster.foldPresence, new Map([['ghost', ghost]]));
-		expect([...foldPeople([arrival]).keys()]).toEqual(['ghost']);
-		expect([...foldPeople([arrival]).keys()]).toEqual(['priya']);
 	});
 
 	it('grants an activation only what activationGrant answers', () => {
@@ -294,33 +242,13 @@ describe('the room runs the verified rules', () => {
 		expect(asked().due.map((owed) => owed.id)).toEqual([id]);
 	});
 
-	it('refuses a range only when rangeWellFormed says so', () => {
-		const close = { owner: 'priya', from: 3, through: 3, at };
-		bind.once(vocabulary.rangeWellFormed, false);
-		expect(() => validateRoomBody('close', close)).toThrow(/range/);
-		expect(validateRoomBody('close', close)).toBe(true);
-	});
-
-	it('bounds a position as positiveBounded answers', () => {
-		const fields = { source: 'message', position: 3, seat: 'product', attempt: 1 } as const;
-		bind.once(vocabulary.positiveBounded, false);
-		expect(() => encodeActivationId(fields)).toThrow(/position/);
-		expect(encodeActivationId(fields)).toBe(id);
-	});
-
-	it('folds the roster, the reserve, the exchange, and the last seq as the rules answer', () => {
-		const ghost = { name: 'ghost', identity: 'Ghost.', attention: 'broadcast' } as const;
-		bind.once(roster.foldRoster, [ghost]);
-		expect(asked().roster).toEqual([ghost]);
-		bind.once(roster.reserveOf, [ghost]);
-		expect(asked().reserve).toEqual([ghost]);
-		expect(asked().reserve).toEqual([]);
-		bind.once(record.openingQuestion, undefined);
+	it('folds the exchange and the last seq as the rules answer', () => {
+		bind.once(rules.openingQuestion, undefined);
 		expect(asked().exchange).toBeUndefined();
 		expect(asked().exchange).toMatchObject({ owner: 'priya', from: 3 });
 		// The fold asks twice: the closes' end, then the record's.
-		bind.once(record.lastOf, 0);
-		bind.once(record.lastOf, 99);
+		bind.once(rules.lastOf, 0);
+		bind.once(rules.lastOf, 99);
 		expect(asked().lastSeq).toBe(99);
 		expect(asked().lastSeq).toBe(3);
 	});
@@ -341,135 +269,11 @@ describe('the room runs the verified rules', () => {
 		expect(closed().owed).toMatchObject([{ writer: 'product', through: 3 }]);
 	});
 
-	it('reads the discussion, the messages since a cursor, and a summary view as the rules answer', () => {
-		const state = asked();
-		bind.once(record.discussion, []);
-		expect(discussionMessages(state.messages, 1, 9)).toEqual([]);
-		expect(discussionMessages(state.messages, 1, 9)).toHaveLength(2);
-		bind.once(record.messagesSince, []);
-		expect(readView('r', state, now, 3, { since: 0 }).messages).toEqual([]);
-		expect(readView('r', state, now, 3, { since: 0 }).messages).toHaveLength(2);
-		const facts = { name: 'product', now, state, live: new Map(), unseen: () => 0 };
-		const spec = {
-			id: 'closed:3:product:1',
-			seat: 'product',
-			attempt: 1,
-			purpose: { kind: 'summarize', exchange: 3, person: 'priya', through: 3 },
-		} as const;
-		bind.always(vocabulary.coversSeq, () => false);
-		expect(viewOf(spec, facts).context.messages).toEqual([]);
-		bind.restore(vocabulary.coversSeq);
-		expect(viewOf(spec, facts).context.messages).toHaveLength(1);
-	});
-
-	it('hands a delivery to the exchange exchangeContaining names', async () => {
-		const opened = await memory.open();
-		const runtime = createRuntime({
-			storage: opened.storage,
-			clock: fakeClock(),
-			transport: inProcessTransport(),
-			stream: scripted(() => quiet()),
-		});
-		const room = await startRoom({
-			name: roomName('binding'),
-			runtime,
-			agents: [
-				defineAgent({
-					name: 'product',
-					identity: 'Product.',
-					instructions: 'Answer.',
-					model: 'scripted/product',
-				}),
-			],
-			streamFn: scripted(() => quiet()),
-		});
-		try {
-			const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));
-			bind.once(rules.exchangeContaining, { kind: 'outside' });
-			await expect(visit.send({ text: 'Question.' })).rejects.toThrow(/does not belong/);
-			expect((await visit.send({ text: 'Again.' })).owner).toBe('priya');
-		} finally {
-			await room.stop();
-			await opened.dispose();
-		}
-	});
-
 	it('admits a claim or a renewal as admitsLease answers', () => {
 		const renew = { type: 'renew', id, expiry: 60_000, deadline: 600_000 } as const;
 		bind.once(rules.admitsLease, 'granted');
 		expect(decide(asked(), renew, now)).toMatchObject({ event: { kind: 'lease' } });
 		expect(decide(asked(), renew, now)).toMatchObject({ refusal: { category: 'stale' } });
-	});
-
-	it('writes, skips, or refuses a presence change as the rules answer', () => {
-		const arrival = {
-			type: 'presence',
-			change: { kind: 'arrived', subject: 'sam', identity: 'Engineer.', from: 'sam' },
-			route: false,
-		} as const;
-		bind.once(rules.presenceOutcome, 'refused');
-		expect(decide(asked(), arrival, now)).toMatchObject({ refusal: { category: 'refused' } });
-		expect(decide(asked(), arrival, now)).toMatchObject({
-			event: { kind: 'message', body: { kind: 'arrived', subject: 'sam' } },
-		});
-		const unseat = {
-			type: 'presence',
-			change: { kind: 'unseated', subject: 'product' },
-			route: false,
-		} as const;
-		bind.once(rules.hostMembership, false);
-		expect(decide(asked(), unseat, now)).toMatchObject({ refusal: { category: 'refused' } });
-		expect(decide(asked(), unseat, now)).toMatchObject({
-			event: { kind: 'message', body: { kind: 'unseated', subject: 'product' } },
-		});
-	});
-
-	it('seats and unseats as membershipOutcome answers', () => {
-		const commit = (intent: CommitRequest['intent']): CommitRequest => ({
-			activation: id,
-			key: 'membership',
-			intent,
-			readThrough: 3,
-		});
-		bind.once(rules.membershipOutcome, 'refused');
-		expect(
-			decide(
-				claimed(),
-				{ type: 'commit', commit: commit({ kind: 'unseated', name: 'product' }) },
-				now,
-			),
-		).toMatchObject({ refusal: { category: 'refused' } });
-		expect(
-			decide(
-				claimed(),
-				{ type: 'commit', commit: commit({ kind: 'unseated', name: 'product' }) },
-				now,
-			),
-		).toMatchObject({ event: { kind: 'message', body: { kind: 'unseated' } } });
-	});
-
-	it('addresses a message as addressOutcome answers', () => {
-		bind.once(roster.addressOutcome, 'unknown');
-		const deliver = { type: 'deliver', from: 'priya', text: 'Hello.' } as const;
-		expect(decide(asked(), deliver, now)).toMatchObject({ refusal: { category: 'refused' } });
-		expect(decide(asked(), deliver, now)).toMatchObject({ event: { kind: 'message' } });
-		const commit: CommitRequest = {
-			activation: id,
-			key: 'say',
-			intent: { kind: 'said', text: 'Answer.' },
-			readThrough: 3,
-		};
-		bind.once(roster.addressOutcome, 'self');
-		expect(decide(claimed(), { type: 'commit', commit }, now)).toMatchObject({
-			refusal: { reason: expect.stringMatching(/yourself/) },
-		});
-	});
-
-	it('admits a composition only when distinct says so', () => {
-		const compose = { type: 'compose', composition: composition.body } as const;
-		bind.once(rules.distinct, false);
-		expect(decide(asked(), compose, now)).toMatchObject({ refusal: { category: 'refused' } });
-		expect(decide(asked(), compose, now)).toMatchObject({ event: { kind: 'composition' } });
 	});
 
 	it('lets a commit through only as commitAuthority answers', () => {
@@ -529,7 +333,7 @@ describe('the room runs the verified rules', () => {
 		});
 	});
 
-	it('answers a keyed retry as the match rules answer', async () => {
+	it('plans a refused close again as closeMoved answers', async () => {
 		const opened = await memory.open();
 		const runtime = createRuntime({
 			storage: opened.storage,
@@ -538,7 +342,7 @@ describe('the room runs the verified rules', () => {
 			stream: scripted(() => quiet()),
 		});
 		const room = await startRoom({
-			name: roomName('binding-retry'),
+			name: roomName('binding-close'),
 			runtime,
 			agents: [
 				defineAgent({
@@ -552,12 +356,7 @@ describe('the room runs the verified rules', () => {
 		});
 		try {
 			const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));
-			const first = await visit.send({ key: 'k', text: 'Question.' });
-			bind.once(record.deliveryMatches, false);
-			await expect(visit.send({ key: 'k', text: 'Question.' })).rejects.toThrow(
-				/different room operation/,
-			);
-			expect((await visit.send({ key: 'k', text: 'Question.' })).from).toBe(first.from);
+			const first = await visit.send({ text: 'Question.' });
 			const peer = runningRoom(runtime, room.name);
 			if (peer === undefined) throw new Error('The room is absent.');
 			const activation = `message:${first.from}:product:1`;
@@ -568,11 +367,6 @@ describe('the room runs the verified rules', () => {
 				readThrough: first.from,
 				intent: { kind: 'said', text: 'Answer.' },
 			};
-			expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
-			bind.once(record.contributionMatches, false);
-			expect(await peer.commit(request)).toMatchObject({
-				refused: expect.stringMatching(/different room operation/),
-			});
 			expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
 			// A close the decision refuses asks closeMoved whether the exchange moved; a
 			// moved exchange is planned again, and the next pass closes it.
@@ -686,15 +480,11 @@ describe('the room runs the verified rules', () => {
 		expect(decide(state, claim, now)).toMatchObject({ event: { kind: 'lease' } });
 	});
 
-	it('closes, names the writer, and sets the alarm as the pass rules answer', () => {
+	it('closes and sets the alarm as the pass rules answer', () => {
 		const quiet = foldRoom([writerNamed, person, quietQuestion], options);
 		expect(reconcile(quiet).events).toMatchObject([
 			{ kind: 'close', body: { summary: 'product' } },
 		]);
-		bind.once(rules.namesWriter, false);
-		expect(reconcile(quiet).events[0]?.body).not.toHaveProperty('summary');
-		bind.once(roster.onRoster, false);
-		expect(reconcile(quiet).events[0]?.body).not.toHaveProperty('summary');
 		bind.once(rules.exchangeLive, true);
 		expect(reconcile(quiet).events).toEqual([]);
 		const state = asked();
@@ -703,38 +493,6 @@ describe('the room runs the verified rules', () => {
 		bind.once(rules.looksAgainAt, now + 9);
 		expect(reconcile(state).effects.alarmAt).toBe(now + 9);
 		expect(reconcile(state).effects.alarmAt).toBe(now + 5_000);
-	});
-
-	it('routes as the reach, the target, and the roster rules answer', () => {
-		const state = asked();
-		const said: Message = { kind: 'said', seq: 3, at, from: 'priya', text: 'Question.' };
-		bind.once(roster.reachOf, 0);
-		expect(routes(said, state, new Map())).toEqual([]);
-		bind.once(roster.rosterFor, []);
-		expect(routes(said, state, new Map())).toEqual([]);
-		expect(routes(said, state, new Map())).toEqual(['product']);
-		const summary: Message = {
-			kind: 'summary',
-			seq: 4,
-			at,
-			from: 'assistant',
-			to: 'priya',
-			text: 'S.',
-			covers: { from: 3, through: 3 },
-		};
-		bind.once(roster.targetOf, 'product');
-		expect(routes(summary, state, new Map())).toEqual(['product']);
-		expect(routes(summary, state, new Map())).toEqual([]);
-	});
-
-	it('admits a delivery only when present says the author is present', () => {
-		const state = asked();
-		const deliver = { type: 'deliver', from: 'sam', text: 'Hello.' } as const;
-		bind.once(roster.present, true);
-		expect(decide(state, deliver, now)).toMatchObject({ event: { kind: 'message' } });
-		expect(decide(state, deliver, now)).toMatchObject({
-			refusal: { reason: expect.stringMatching(/not present/) },
-		});
 	});
 
 	it('writes off an activation at the cap only when givesUp says so', () => {

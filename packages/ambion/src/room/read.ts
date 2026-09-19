@@ -10,7 +10,6 @@ import {
 import { exchangeViews } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { liveWork } from './reconcile.ts';
-import { messagesSince } from './rules.record.verified.ts';
 import { participantsOf } from './view.ts';
 
 export type MessageSelection = false | { since?: Seq };
@@ -75,7 +74,7 @@ function selectMessages(
 ): readonly Message[] {
 	if (selection === false) return [];
 	const since = selection?.since;
-	const selected = since === undefined ? all : messagesSince(all, since);
+	const selected = since === undefined ? all : all.filter((message) => message.seq > since);
 	return selected.map(copyMessage);
 }
 
