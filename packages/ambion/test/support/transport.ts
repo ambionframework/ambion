@@ -33,7 +33,14 @@ export function serializing(transport: Transport): SerializingTransport {
 		violations,
 		connect(room, context) {
 			const wrapped: SeatRoom = {
-				view: async (id) => check('view response', await room.view(check('view', id))),
+				view: async (id, range) =>
+					check(
+						'view response',
+						await room.view(
+							check('view', id),
+							range === undefined ? undefined : check('view range', range),
+						),
+					),
 				commit: async (commit) =>
 					check('commit response', await room.commit(check('commit', commit))),
 				lease: async (lease) => check('lease response', await room.lease(check('lease', lease))),
@@ -98,7 +105,7 @@ export function faultyTransport(transport: Transport, faults: Fault[], clock: Cl
 	return {
 		connect(room, context) {
 			const wrapped: SeatRoom = {
-				view: (id) => through('view', id, () => room.view(id)),
+				view: (id, range) => through('view', id, () => room.view(id, range)),
 				commit: (commit) => through('commit', commit, () => room.commit(commit)),
 				lease: (lease) => through('lease', lease, () => room.lease(lease)),
 			};

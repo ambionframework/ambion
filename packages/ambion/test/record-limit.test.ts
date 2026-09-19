@@ -147,10 +147,56 @@ describe('a limit windows the record', () => {
 		await exchange.waitForClose();
 		await waitForRoom(room);
 
-		// The closing activation reads its fixed exchange whole, so the opener is
-		// present even though it sits past the writer's token limit.
+		// The closing activation reads its fixed exchange whole, so the opener line
+		// is present even though it sits past the writer's token limit. The worker
+		// echoes the question text, so the assertion reads the opener's own line,
+		// not the substring the echo also carries.
 		expect(closings.length).toBeGreaterThan(0);
-		expect(closings.every((text) => text.includes('opening question'))).toBe(true);
+		expect(closings.every((text) => text.includes('[andrei] opening question'))).toBe(true);
 		await room.stop();
 	});
+
+	it('pages the record across more than one page', async () => {
+		const pages: Page[] = [];
+		// A limit that wants the whole record, so the seat pages to the floor.
+		const reader = defineAgent({
+			name: 'reader',
+			identity: 'Reads and stays quiet.',
+			instructions: 'Stay quiet.',
+			model: 'scripted/reader',
+			activationTokenLimit: 100_000,
+			estimateTokens: () => 1,
+		});
+		const runtime = createRuntime({
+			transport: spyTransport(pages),
+			stream: scripted(() => quiet()),
+		});
+		// The reader starts in the reserve, so the record grows without any read.
+		const room = await startRoom({
+			name: roomName('limit-pages'),
+			runtime,
+			agents: [reader],
+			seats: {},
+		});
+
+		// More messages than one page holds (RECORD_PAGE is 64).
+		const visit = await room.visit(andrei);
+		for (let index = 0; index < 80; index += 1) await visit.send({ text: `message ${index}` });
+		await waitForRoom(room);
+		expect(pages).toHaveLength(0);
+
+		// Seat the reader and wake it once: it reads the whole record over pages.
+		await room.seat('reader');
+		await visit.send({ text: 'wake the reader' });
+		await waitForRoom(room);
+
+		const all = await messagesOf(room);
+		expect(all.length).toBeGreaterThan(64);
+		// No response carried more than one page, and at least one page was full,
+		// so the seat assembled the record over several bounded reads.
+		expect(pages.length).toBeGreaterThan(0);
+		expect(pages.every((page) => page.count <= 64)).toBe(true);
+		expect(pages.some((page) => page.count === 64)).toBe(true);
+		await room.stop();
+	}, 60_000);
 });

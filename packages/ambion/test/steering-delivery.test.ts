@@ -33,7 +33,7 @@ function heldReleaseTransport(holdRelease = true) {
 		connect(room, context) {
 			const port = base.connect(
 				{
-					view: (id) => room.view(id),
+					view: (id, range) => room.view(id, range),
 					commit: (request) => room.commit(request),
 					lease: async (request: LeaseRequest) => {
 						if (
