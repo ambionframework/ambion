@@ -138,12 +138,12 @@ A refuter built each one as a running probe against the code.
   completeness (every stored entry past `after` is in the result). The
   `filter` form proves soundness only, because Dafny's `Seq.Filter` does
   not unfold. `journal.ts` `read` and `memory.ts` `read` run it.
-- **A2. The cursor rule in every consumer.** `packages/cloudflare/src/storage.ts`
-  `refresh` and `packages/pi-journal/src/index.ts` `refresh` each keep a
-  cursor by hand: the Cloudflare one assigns each entry's position and
-  takes a max only at the end, and the Pi one takes no max. Both run
-  `scanned` per entry. The journal package exports it from `index.ts` for
-  that.
+- **A2. The cursor rule in every consumer.** Landed on this branch.
+  `packages/cloudflare/src/storage.ts` `refresh` and
+  `packages/pi-journal/src/index.ts` `refresh` each kept a cursor by
+  hand: the Cloudflare one assigned each entry's position and took a max
+  only at the end, and the Pi one took no max. Both run `scanned` per
+  entry, and the journal package exports it from `index.ts` for that.
 - **A3. A journal with no run.** `sameWriter(undefined, undefined)` is
   true, so a journal that writes for no run treats an unstamped run entry
   as its own fence, and a stamped run entry after it supersedes the
@@ -643,7 +643,8 @@ and its evidence rows.
 | Slice | Files                                      | Rules                                                                                                                                                                                                                     | State  |
 | ----- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 1     | `journal.ts`, `memory.ts`, `sqlite.ts`     | `fenceStep`, `keyed`, `writable`, `advanceSeq`, `scanned`, `admit`, `nextPosition`, `readPosition`, the fold lemmas                                                                                                       | Landed |
-| 1     | `journal.ts`, the two cursor consumers     | `visibleEntries` (A1), `scanned` at the Cloudflare and Pi cursors (A2)                                                                                                                                                    | Open   |
+| 1     | the two cursor consumers                   | `scanned` at the Cloudflare and Pi cursors (A2)                                                                                                                                                                           | Landed |
+| 1     | `journal.ts`, `memory.ts`                  | `visibleEntries` (A1)                                                                                                                                                                                                     | Open   |
 | 2a    | `transition.ts`                            | `mayEnd`, `permits`, `leaseExpiry`, `acknowledged`, `onRecord`, `speechFreshness`, `admitsClose`, `coversExchange`, `survivesCancellation`                                                                                | Landed |
 | 2a    | `transition.ts`, `answers.ts`              | `presenceOutcome`, `membershipOutcome`, `hostMembership`, `addressOutcome`, `deliveryOutcome`, `distinct`, `stampedSummary`, `addressesOwner`, `commitAuthority`, `admitsLease`, `deliveryMatches`, `contributionMatches` | Open   |
 | 2b    | `lease.ts`, `fold.ts`                      | `applyChange`, `cancelLease`, `answers`, `wakeAnswered`, `countsAgainst`, `schedule`, `latest`, `draftsClose`, `removedAfter`, `nextActivationId`                                                                         | Open   |
