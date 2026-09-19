@@ -18,7 +18,8 @@ rooms through the same HTTP API.**
   JavaScript. It has no build step. It shows the rooms, the conversation, the
   participants, and the library.
 - **Terminal.** [`src/tui.ts`](src/tui.ts) is an [OpenTUI](https://github.com/sst/opentui)
-  client. It shows the same rooms and conversation in a terminal.
+  client on a dark theme. It has a multi-line composer, slash commands, and
+  the same discussions as the web page. See [The terminal](#the-terminal).
 
 Both endpoints share the repository brand kit in the root
 [`brand/`](../../brand) directory. The web page loads `/brand/tokens/ambion.css`
@@ -59,6 +60,36 @@ ends your visit to the room. The web page for the same person then offers
 Both commands accept a directory argument. Set `PORT` to change the port. Set
 `AMBION_MODEL` and its provider credential to change the model. The default
 is `anthropic/claude-sonnet-5`.
+
+## The terminal
+
+**The composer is the control surface.** The room chip in front of the input
+shows where a message goes. Type `/` to see the commands, or press Ctrl+R to
+pick a room.
+
+| Command                | Effect                               |
+| ---------------------- | ------------------------------------ |
+| `/room <name>`         | Switch to another room               |
+| `/abort`               | Cancel the open exchange             |
+| `/stop`, `/resume`     | Stop the room, or start it again     |
+| `/expand`, `/collapse` | Open or close every discussion       |
+| `/help`, `/quit`       | Show the commands and keys, or leave |
+
+`/abort` runs at once. Typing the command is the confirmation. The web page
+asks for a second click instead.
+
+| Key                   | Effect                                                     |
+| --------------------- | ---------------------------------------------------------- |
+| Enter                 | Send                                                       |
+| Ctrl+J, Alt+Enter     | Add a line to the message                                  |
+| Tab                   | Complete a command, or browse the discussions              |
+| Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
+| Esc                   | Close the palette, or stop browsing                        |
+| PageUp, PageDown      | Scroll the conversation                                    |
+
+A discussion is the thread between a question and its summary, with each
+steering message in its place. It starts closed. Start a message with `//` to
+send a leading slash, as in `//library/led-5mm.md`.
 
 ## The team
 
@@ -151,15 +182,19 @@ access to rooms and workspace resources.
 
 ## Files
 
-| File                 | What                                                 |
-| -------------------- | ---------------------------------------------------- |
-| `src/definitions.ts` | The assistant, the three specialists, and the people |
-| `src/scenarios.ts`   | The rooms, and the workspace seed                    |
-| `src/rooms.ts`       | The host lifecycle and the room catalog              |
-| `src/server.ts`      | The HTTP routing for both endpoints                  |
-| `src/client.ts`      | The HTTP client the terminal uses                    |
-| `src/feed.ts`        | The terminal's room feed: one read at a time         |
-| `src/tui.ts`         | The terminal endpoint                                |
-| `src/brand.ts`       | The product name and the terminal palette            |
-| `ui/index.html`      | The web endpoint                                     |
-| `library/`           | The datasheets                                       |
+| File                 | What                                                    |
+| -------------------- | ------------------------------------------------------- |
+| `src/definitions.ts` | The assistant, the three specialists, and the people    |
+| `src/scenarios.ts`   | The rooms, and the workspace seed                       |
+| `src/rooms.ts`       | The host lifecycle and the room catalog                 |
+| `src/server.ts`      | The HTTP routing for both endpoints                     |
+| `src/client.ts`      | The HTTP client the terminal uses                       |
+| `src/feed.ts`        | The terminal's room feed: one read at a time            |
+| `src/tui.ts`         | The terminal endpoint: state, commands, and keys        |
+| `src/composer.ts`    | The terminal composer, room chip, and palette           |
+| `src/transcript.ts`  | The terminal conversation, with open and closed threads |
+| `src/commands.ts`    | The slash commands and their suggestions                |
+| `src/timeline.ts`    | The record grouped into questions, threads, summaries   |
+| `src/brand.ts`       | The product name and the terminal palette               |
+| `ui/index.html`      | The web endpoint                                        |
+| `library/`           | The datasheets                                          |

@@ -17,20 +17,23 @@ export const brand = {
 } as const;
 
 /**
- * The terminal palette. The brand colors set the accent, the text, and the
- * background. The UI scaffold colors below sit on top of them.
+ * The terminal palette, on the brand's dark surface. Ink is the ground, and paper
+ * is the text, as in the reverse logo. Coral keeps its brand meaning as the one
+ * warm accent. The other colors are tints derived from the brand hues, chosen so
+ * that text measures at least 4.5:1 on ink and a border at least 3:1.
  */
 export const tui = {
-	bg: colors.paper,
-	panel: colors.white,
-	text: colors.ink,
-	accent: colors.teal,
+	bg: colors.ink,
+	panel: '#1b3a44',
+	text: colors.paper,
+	muted: '#a9bcc1',
+	dim: '#8ea6ad',
+	accent: '#5cc6d8',
 	coral: colors.coral,
-	muted: colors.muted,
-	dim: '#66757b',
-	// A border needs 3:1 against the paper. The soft tints below are fills, not borders.
-	line: '#7f8c92',
-	selected: '#e2edef',
-	track: '#efeae1',
-	red: '#c0473a',
+	summary: '#e6c68f',
+	green: '#6fd3a1',
+	red: '#ff8f7d',
+	line: '#5a8794',
+	selected: '#1f4954',
+	steer: '#1e4550',
 } as const;

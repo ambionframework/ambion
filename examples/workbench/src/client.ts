@@ -7,6 +7,18 @@ export interface Person {
 	preferences?: string;
 }
 
+/** How the room closed an exchange's summary. */
+export type SummaryState = 'published' | 'pending' | 'failed' | 'silent';
+
+/** One exchange in a room read: a question, and everything until the room went quiet. */
+export interface ExchangeInfo {
+	from: number;
+	through?: number;
+	status: 'open' | 'closed';
+	owner: string;
+	summary?: { status: SummaryState; summary?: Message };
+}
+
 /** One room, as the list and read endpoints return it. */
 export interface RoomView {
 	name: string;
@@ -16,7 +28,13 @@ export interface RoomView {
 	prompt?: string;
 	participants: ParticipantInfo[];
 	messages?: Message[];
+	exchanges?: ExchangeInfo[];
+	/** The open exchange, when the room has one. */
+	exchange?: { owner: string; from: number; at: string };
 }
+
+/** A room lifecycle action. Abort cancels the open exchange; stop and resume end and start a run. */
+export type RoomAction = 'abort' | 'stop' | 'resume';
 
 /** The result of an accepted human message. */
 export interface Accepted {
@@ -43,6 +61,10 @@ export class WorkbenchClient {
 
 	read(name: string, since: number): Promise<RoomView> {
 		return this.request(`/rooms/${encodeURIComponent(name)}?since=${since}`);
+	}
+
+	control(name: string, action: RoomAction): Promise<RoomView> {
+		return this.request(`/rooms/${encodeURIComponent(name)}/${action}`, { method: 'POST' });
 	}
 
 	join(name: string, person: string): Promise<unknown> {

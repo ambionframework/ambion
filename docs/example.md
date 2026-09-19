@@ -76,8 +76,9 @@ rooms through one loopback HTTP API.**
 - **Web.** `ui/index.html` is one page with inline CSS and JavaScript. It
   has no build step. It shows the rooms, the conversation, the participants,
   and the library.
-- **Terminal.** `src/tui.ts` is an OpenTUI client. It shows the same rooms
-  and conversation in a terminal.
+- **Terminal.** `src/tui.ts` is an OpenTUI client on a dark theme. It has a
+  multi-line composer with a room chip, slash commands (`/room`, `/abort`,
+  `/stop`, `/resume`), and the same discussions as the web page.
 
 Both endpoints share the repository brand kit in the root `brand/`
 directory. The web page loads `/brand/tokens/ambion.css` and the brand icons
@@ -141,11 +142,15 @@ examples/workbench/
     server.ts          the persistent host: HTTP for both endpoints
     client.ts          the HTTP client the terminal uses
     feed.ts            the terminal's room feed: one read at a time
+    commands.ts        the slash commands and their suggestions
+    timeline.ts        the record grouped into questions, threads, and summaries
+    transcript.ts      the terminal conversation
+    composer.ts        the terminal composer, room chip, and palette
     tui.ts             the terminal endpoint
     main.ts            start or resume
   library/             the datasheets as text
   ui/                  the web page: rooms, conversation, and library
-  test/                scripted tests: host, client, feed, and recovery
+  test/                scripted tests: host, client, feed, commands, timeline, recovery
   test/live/           two scenarios on a real provider
 ```
 
