@@ -5,5 +5,5 @@ pnpm-lock.yaml
 CHANGELOG.md
 # generated demo snapshots — whitespace is content
 demos/
-# Local persistent-demo workspace artifacts are runtime data.
-examples/persistent/.data/
+# Local Workbench workspace artifacts are runtime data.
+examples/workbench/.data/
