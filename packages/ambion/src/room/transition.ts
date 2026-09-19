@@ -155,13 +155,16 @@ export function decide(
 	}
 }
 
-/** Select one recorded work item for a planned stop, including expired leases. */
+/**
+ * Select one running lease for a planned stop, including expired ones. A
+ * planned stop revokes work an activation claimed. Work no activation
+ * claimed stays on the record, and the next run over the journal wakes it.
+ */
 export function stopWork(state: RoomState, now: number): RoomDecision<'lease'> {
 	const running = [...state.leases.values()].find((lease) => lease.phase === 'running');
-	const id = running?.id ?? state.due[0]?.id;
-	return id === undefined
+	return running === undefined
 		? { event: undefined }
-		: end(state, { type: 'end', id, reason: 'revoked', readThrough: 0 }, now);
+		: end(state, { type: 'end', id: running.id, reason: 'revoked', readThrough: 0 }, now);
 }
 
 const iso = (now: number): string => new Date(now).toISOString();

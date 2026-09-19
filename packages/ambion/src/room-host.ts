@@ -1413,10 +1413,10 @@ export class RoomHost implements Room, RunningRoom {
 		if (!('entry' in appended)) throw new Error(`Room '${this.name}' stopped before cancellation.`);
 	}
 
-	/** Revoke every running lease and due obligation until a durable read finds none. */
+	/** Revoke every running lease until a durable read finds none. Unclaimed work stays for the next run. */
 	private async stopWork(): Promise<void> {
-		// Admission is closed. Each entry settles one recorded obligation;
-		// the final decision confirms the recovered journal has no work left.
+		// Admission is closed. Each entry revokes one running lease;
+		// the final decision confirms the recovered journal has no running lease.
 		for (;;) {
 			const result = await this.submit('lease', () => stopWorkDecision(this.state(), this.now()));
 			this.requireSubmission(result);
