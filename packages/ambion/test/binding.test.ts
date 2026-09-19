@@ -7,17 +7,26 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { encodeActivationId } from '../src/activation-id.ts';
+import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { validateRoomBody } from '../src/journal/validate.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
+import { discussionMessages } from '../src/room/exchange.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { foldPeople } from '../src/room/presence.ts';
+import { readView } from '../src/room/read.ts';
 import { routes } from '../src/room/routing.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
+import { viewOf } from '../src/room/view.ts';
 import * as vocabulary from '../src/rules.verified.ts';
+import { inProcessTransport } from '../src/transport.ts';
 import type { Message } from '../src/types.ts';
+import { fakeClock } from './support/clock.ts';
+import { roomName } from './support/room.ts';
+import { quiet, scripted } from './support/scripted.ts';
+import { memory } from './support/storage.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('../src/room/rules.verified.ts')>();
@@ -42,6 +51,14 @@ vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 		foldPresence: vi.fn(actual.foldPresence),
 		activationGrant: vi.fn(actual.activationGrant),
 		nextActivationId: vi.fn(actual.nextActivationId),
+		summaryVerdict: vi.fn(actual.summaryVerdict),
+		foldRoster: vi.fn(actual.foldRoster),
+		reserveOf: vi.fn(actual.reserveOf),
+		openingQuestion: vi.fn(actual.openingQuestion),
+		lastOf: vi.fn(actual.lastOf),
+		discussion: vi.fn(actual.discussion),
+		messagesSince: vi.fn(actual.messagesSince),
+		exchangeContaining: vi.fn(actual.exchangeContaining),
 	};
 });
 
@@ -51,6 +68,7 @@ vi.mock('../src/rules.verified.ts', async (importOriginal) => {
 		...actual,
 		rangeWellFormed: vi.fn(actual.rangeWellFormed),
 		positiveBounded: vi.fn(actual.positiveBounded),
+		coversSeq: vi.fn(actual.coversSeq),
 	};
 });
 
@@ -304,5 +322,93 @@ describe('the room runs the verified rules', () => {
 		vi.mocked(vocabulary.positiveBounded).mockReturnValueOnce(false);
 		expect(() => encodeActivationId(fields)).toThrow(/position/);
 		expect(encodeActivationId(fields)).toBe(id);
+	});
+
+	it('folds the roster, the reserve, the exchange, and the last seq as the rules answer', () => {
+		const ghost = { name: 'ghost', identity: 'Ghost.', attention: 'broadcast' } as const;
+		vi.mocked(rules.foldRoster).mockReturnValueOnce([ghost]);
+		expect(asked().roster).toEqual([ghost]);
+		vi.mocked(rules.reserveOf).mockReturnValueOnce([ghost]);
+		expect(asked().reserve).toEqual([ghost]);
+		expect(asked().reserve).toEqual([]);
+		vi.mocked(rules.openingQuestion).mockReturnValueOnce(undefined);
+		expect(asked().exchange).toBeUndefined();
+		expect(asked().exchange).toMatchObject({ owner: 'priya', from: 3 });
+		// The fold asks twice: the closes' end, then the record's.
+		vi.mocked(rules.lastOf).mockReturnValueOnce(0).mockReturnValueOnce(99);
+		expect(asked().lastSeq).toBe(99);
+		expect(asked().lastSeq).toBe(3);
+	});
+
+	it('owes a summary only when summaryVerdict says the close owes one', () => {
+		const named: Entry = {
+			...composition,
+			body: { ...composition.body, summary: 'product' },
+		};
+		const close: Entry = {
+			kind: 'close',
+			seq: 4,
+			body: { owner: 'priya', from: 3, through: 3, at, summary: 'product' },
+		};
+		const closed = () => foldRoom([named, person, question, close], options);
+		vi.mocked(rules.summaryVerdict).mockReturnValueOnce({ status: 'failed' });
+		expect(closed().owed).toEqual([]);
+		expect(closed().owed).toMatchObject([{ writer: 'product', through: 3 }]);
+	});
+
+	it('reads the discussion, the messages since a cursor, and a summary view as the rules answer', () => {
+		const state = asked();
+		vi.mocked(rules.discussion).mockReturnValueOnce([]);
+		expect(discussionMessages(state.messages, 1, 9)).toEqual([]);
+		expect(discussionMessages(state.messages, 1, 9)).toHaveLength(2);
+		vi.mocked(rules.messagesSince).mockReturnValueOnce([]);
+		expect(readView('r', state, now, 3, { since: 0 }).messages).toEqual([]);
+		expect(readView('r', state, now, 3, { since: 0 }).messages).toHaveLength(2);
+		const facts = { name: 'product', now, state, live: new Map(), unseen: () => 0 };
+		const spec = {
+			id: 'closed:3:product:1',
+			seat: 'product',
+			attempt: 1,
+			purpose: { kind: 'summarize', exchange: 3, person: 'priya', through: 3 },
+		} as const;
+		vi.mocked(vocabulary.coversSeq).mockReturnValue(false);
+		expect(viewOf(spec, facts).context.messages).toEqual([]);
+		vi.mocked(vocabulary.coversSeq).mockReset();
+		vi.mocked(vocabulary.coversSeq).mockImplementation(
+			(from, through, seq) => from <= seq && seq <= through,
+		);
+		expect(viewOf(spec, facts).context.messages).toHaveLength(1);
+	});
+
+	it('hands a delivery to the exchange exchangeContaining names', async () => {
+		const opened = await memory.open();
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: fakeClock(),
+			transport: inProcessTransport(),
+			stream: scripted(() => quiet()),
+		});
+		const room = await startRoom({
+			name: roomName('binding'),
+			runtime,
+			agents: [
+				defineAgent({
+					name: 'product',
+					identity: 'Product.',
+					instructions: 'Answer.',
+					model: 'scripted/product',
+				}),
+			],
+			streamFn: scripted(() => quiet()),
+		});
+		try {
+			const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));
+			vi.mocked(rules.exchangeContaining).mockReturnValueOnce({ kind: 'outside' });
+			await expect(visit.send({ text: 'Question.' })).rejects.toThrow(/does not belong/);
+			expect((await visit.send({ text: 'Again.' })).owner).toBe('priya');
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
 	});
 });

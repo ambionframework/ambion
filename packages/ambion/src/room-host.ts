@@ -48,7 +48,7 @@ import { isLive, seatOf } from './room/lease.ts';
 import type { VisitRuntime } from './room/presence.ts';
 import { captureMessageSelection, type MessageSelection, readView } from './room/read.ts';
 import { type LiveWork, liveWork } from './room/reconcile.ts';
-import { closeMoved } from './room/rules.verified.ts';
+import { closeMoved, exchangeContaining } from './room/rules.verified.ts';
 import {
 	decide,
 	evolve,
@@ -773,14 +773,14 @@ export class RoomHost implements Room, RunningRoom {
 	private handleForMessage(message: Message): ExchangeHandle {
 		if (message.kind !== 'said') throw new Error('A delivery did not commit a spoken message.');
 		const state = this.state();
-		const close = state.closes.find(
-			(candidate) => message.seq >= candidate.from && message.seq <= candidate.through,
-		);
+		const found = exchangeContaining(state.closes, state.exchange?.from, message.seq);
+		// The rule names the exchange by its opening; the lookups narrow the TypeScript type only.
 		const exchange =
-			close ??
-			(state.exchange !== undefined && message.seq >= state.exchange.from
-				? state.exchange
-				: undefined);
+			found.kind === 'closed'
+				? state.closes.find((candidate) => candidate.from === found.from)
+				: found.kind === 'open'
+					? state.exchange
+					: undefined;
 		if (exchange === undefined) throw new Error('A delivery does not belong to an exchange.');
 		return this.handleFor(exchange);
 	}

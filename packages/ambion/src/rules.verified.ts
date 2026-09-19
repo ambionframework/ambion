@@ -16,3 +16,9 @@ export function positiveBounded(value: number): boolean {
 	//@ ensures \result <==> (1 <= value && value <= 9007199254740991)
 	return value >= 1 && value <= 9007199254740991;
 }
+
+//@ contract A summary stands for a position inside its covered range.
+export function coversSeq(summaryFrom: number, summaryThrough: number, seq: number): boolean {
+	//@ ensures \result <==> summaryFrom <= seq && seq <= summaryThrough
+	return summaryFrom <= seq && seq <= summaryThrough;
+}

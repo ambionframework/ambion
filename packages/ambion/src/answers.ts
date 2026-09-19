@@ -11,7 +11,7 @@ import type {
 import { activationSpec } from './room/activation.ts';
 import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
-import { onRoster as seated } from './room/rules.verified.ts';
+import { messagesSince, onRoster as seated } from './room/rules.verified.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
 import { copyMessage, type EndReason, type RoomNotification } from './types.ts';
@@ -67,7 +67,7 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 		now: room.now(),
 		state,
 		live: room.live(state),
-		unseen: (since) => state.messages.filter((message) => message.seq > since).length,
+		unseen: (since) => messagesSince(state.messages, since).length,
 	};
 }
 

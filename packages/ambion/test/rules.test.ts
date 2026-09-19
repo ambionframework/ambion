@@ -1,7 +1,7 @@
 import type { JournalEntry as Entry } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
-import type { Close, LeaseChange } from '../src/journal/events.ts';
+import type { Close, LeaseChange, Seating } from '../src/journal/events.ts';
 import type { ActivationPurpose, ActivationSpec, CommitRequest } from '../src/protocol.ts';
 import { cameToNothing, foldLeases, type LeaseHold, pendingWakes } from '../src/room/lease.ts';
 import type { PersonState } from '../src/room/presence.ts';
@@ -13,6 +13,7 @@ import {
 	type CloseFact,
 	cancelHold,
 	endingStands,
+	fromCatalog,
 	type GrantPurpose,
 	type Hold,
 	type Intent,
@@ -25,6 +26,8 @@ import {
 	type Presence,
 	type Purpose,
 	permits,
+	type Seating as RuleSeating,
+	reserveOf,
 	type Source,
 	schedule,
 	stillExpired,
@@ -63,9 +66,10 @@ describe('verified rules', () => {
 		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
 		expectTypeOf<GrantPurpose>().toEqualTypeOf<ActivationPurpose>();
 		expectTypeOf<Close>().toMatchTypeOf<CloseFact>();
+		expectTypeOf<Seating>().toMatchTypeOf<RuleSeating>();
+		expectTypeOf<RuleSeating>().toMatchTypeOf<Seating>();
 		// The room's hold is the rule's hold plus the derived `cancelled` marker.
-		expectTypeOf<Hold>().toMatchTypeOf<LeaseHold>();
-		expectTypeOf<LeaseHold>().toMatchTypeOf<Hold>();
+		expectTypeOf<Hold>().toEqualTypeOf<LeaseHold>();
 	});
 
 	it('folds one lease entry: ended is final, since is fixed, readThrough never moves back', () => {
@@ -109,6 +113,7 @@ describe('verified rules', () => {
 		expect(cancelHold(running, 2, 6, at)).toMatchObject({
 			phase: 'ended',
 			reason: 'revoked',
+			cancelled: true,
 			until: 6,
 			since: 3,
 			readThrough: 2,
@@ -164,6 +169,18 @@ describe('verified rules', () => {
 		expect(leaseExpiry(1_000, 1_000, 60, 600)).toBe(1_060);
 		expect(leaseExpiry(1_590, 1_000, 60, 600)).toBe(1_600);
 		expect(leaseExpiry(1_700, 1_000, 60, 600)).toBe(1_600);
+	});
+});
+
+describe('roster rules', () => {
+	it('keeps the reserve disjoint from the roster and inside the catalog', () => {
+		const catalog: RuleSeating[] = [
+			{ name: 'a', identity: 'A.', attention: 'named' },
+			{ name: 'b', identity: 'B.', attention: 'presence' },
+		];
+		const reserve = reserveOf(catalog, [{ name: 'a', identity: 'A.', attention: 'named' }]);
+		expect(reserve).toEqual([{ name: 'b', identity: 'B.', attention: 'broadcast' }]);
+		expect(reserve.every((seat) => fromCatalog(catalog, seat))).toBe(true);
 	});
 });
 

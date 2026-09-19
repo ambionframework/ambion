@@ -20,3 +20,13 @@ lemma positiveBounded_ensures(value: int)
   ensures (positiveBounded(value) <==> ((1 <= value) && (value <= 9007199254740991)))
 {
 }
+
+function coversSeq(summaryFrom: int, summaryThrough: int, seq_: int): bool
+{
+  ((summaryFrom <= seq_) && (seq_ <= summaryThrough))
+}
+
+lemma coversSeq_ensures(summaryFrom: int, summaryThrough: int, seq_: int)
+  ensures (coversSeq(summaryFrom, summaryThrough, seq_) <==> ((summaryFrom <= seq_) && (seq_ <= summaryThrough)))
+{
+}

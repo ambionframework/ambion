@@ -20,6 +20,8 @@ function MathMin(a: int, b: int): int { if a <= b then a else b }
 
 function MathMax(a: int, b: int): int { if a >= b then a else b }
 
+datatype Message = Message(kind: string, seq_: int, from: string, at: string)
+
 datatype LeasePhase = running | ended
 
 datatype LeaseEndReason = released | failed | revoked | expired | abandoned
@@ -34,7 +36,7 @@ datatype OpenExchange = OpenExchange(owner: string, from: int)
 
 datatype CloseRef = CloseRef(owner: string, from: int, through: int)
 
-datatype Hold = running(id: string, at: string, claimedAt: string, since: int, readThrough: int, expiresAt: int) | ended(id: string, at: string, claimedAt: string, since: int, readThrough: int, reason: LeaseEndReason, until: int)
+datatype Hold = running(id: string, at: string, claimedAt: string, since: int, readThrough: int, expiresAt: int) | ended(id: string, at: string, claimedAt: string, since: int, readThrough: int, reason: LeaseEndReason, cancelled: Option<bool>, until: int)
 
 datatype Change = running(id: string, expiresAt: int, at: string, readThrough: int) | ended(id: string, reason: LeaseEndReason, at: string, readThrough: int)
 
@@ -69,6 +71,20 @@ datatype CloseFact = CloseFact(owner: string, from: int, through: int, summary: 
 datatype GrantPurpose = respond(message: int) | summarize(exchange: int, person: string, through: int)
 
 datatype Grant = Grant(seat: string, attempt: int, purpose: GrantPurpose)
+
+datatype Draft = running | ended(reason: LeaseEndReason, cancelled: bool)
+
+datatype Verdict = published | pending(owed: bool) | silent | failed
+
+datatype Range = Range(from: int, through: int)
+
+datatype Found = closed(from: int) | open(from: int) | outside
+
+datatype Seating = Seating(name: string, identity: string, attention: Attention)
+
+datatype Membership = seated(name: string, identity: string, attention: Attention) | unseated(name: string) | other
+
+datatype RosterChange = RosterChange(seq_: int, membership: Membership)
 
 function expired(expiry: int, now: int): bool
 {
@@ -288,15 +304,26 @@ lemma admitsClose_ensures(open: Option<OpenExchange>, close: CloseRef, lastSeq: 
 {
 }
 
+function coversClose(summaryFrom: int, summaryThrough: int, closeFrom: int, closeThrough: int): bool
+{
+  ((summaryFrom <= closeFrom) && (summaryThrough >= closeThrough))
+}
+
+lemma coversClose_ensures(summaryFrom: int, summaryThrough: int, closeFrom: int, closeThrough: int)
+  ensures (coversClose(summaryFrom, summaryThrough, closeFrom, closeThrough) <==> ((summaryFrom <= closeFrom) && (summaryThrough >= closeThrough)))
+{
+}
+
 function coversExchange(summaryTo: string, summaryFrom: int, summaryThrough: int, owner: string, from: int, through: int): bool
 {
-  (((summaryTo == owner) && (summaryFrom <= from)) && (summaryThrough >= through))
+  ((summaryTo == owner) && coversClose(summaryFrom, summaryThrough, from, through))
 }
 
 lemma coversExchange_ensures(summaryTo: string, summaryFrom: int, summaryThrough: int, owner: string, from: int, through: int)
   ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) <==> (((summaryTo == owner) && (summaryFrom <= from)) && (summaryThrough >= through)))
   ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) ==> (summaryTo == owner))
   ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) ==> (from <= through) ==> (summaryFrom <= summaryThrough))
+  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) <==> ((summaryTo == owner) && coversClose(summaryFrom, summaryThrough, from, through)))
 {
 }
 
@@ -335,7 +362,7 @@ function applyChange(known: Option<Hold>, change: Change, seq_: int): Hold
           case running(i_change_id, i_change_expiresAt, i_change_at, i_change_readThrough) =>
             Hold.running(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_expiresAt)
           case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough) =>
-            Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, seq_)
+            Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, None, seq_)
         }
     case None =>
       var since := (match known { case Some(i_known_val) => i_known_val.since case None => seq_ });
@@ -346,7 +373,7 @@ function applyChange(known: Option<Hold>, change: Change, seq_: int): Hold
         case running(i_change_id, i_change_expiresAt, i_change_at, i_change_readThrough) =>
           Hold.running(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_expiresAt)
         case ended(i_change_id, i_change_reason, i_change_at, i_change_readThrough) =>
-          Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, seq_)
+          Hold.ended(i_change_id, i_change_at, claimedAt, since, readThrough, i_change_reason, None, seq_)
       }
   }
 }
@@ -372,25 +399,37 @@ lemma applyChange_ensures(known: Option<Hold>, change: Change, seq_: int)
 {
 }
 
+function markedCancelled(hold: Hold): bool
+{
+  ((hold.ended? && hold.reason.revoked?) && (match hold.cancelled { case Some(i_value) => (i_value == true) case None => false }))
+}
+
+lemma markedCancelled_ensures(hold: Hold)
+  ensures (markedCancelled(hold) ==> hold.ended?)
+  ensures (markedCancelled(hold) ==> hold.reason.revoked?)
+{
+}
+
 function cancelHold(hold: Hold, position: int, cancelledAt: int, at: string): Hold
   requires (hold.since <= cancelledAt)
 {
   if (hold.ended? || !(beforeCancellation(position, cancelledAt))) then
     hold
   else
-    Hold.ended(hold.id, at, hold.claimedAt, hold.since, hold.readThrough, LeaseEndReason.revoked, cancelledAt)
+    Hold.ended(hold.id, at, hold.claimedAt, hold.since, hold.readThrough, LeaseEndReason.revoked, Some(true), cancelledAt)
 }
 
 lemma cancelHold_ensures(hold: Hold, position: int, cancelledAt: int, at: string)
   requires (hold.since <= cancelledAt)
   ensures (hold.ended? ==> (cancelHold(hold, position, cancelledAt, at) == hold))
   ensures (hold.running? ==> !(beforeCancellation(position, cancelledAt)) ==> (cancelHold(hold, position, cancelledAt, at) == hold))
-  ensures (hold.running? ==> beforeCancellation(position, cancelledAt) ==> (((cancelHold(hold, position, cancelledAt, at).ended? && cancelHold(hold, position, cancelledAt, at).reason.revoked?) && (cancelHold(hold, position, cancelledAt, at).until == cancelledAt)) && (cancelHold(hold, position, cancelledAt, at).at == at)))
+  ensures (hold.running? ==> beforeCancellation(position, cancelledAt) ==> ((((cancelHold(hold, position, cancelledAt, at).ended? && cancelHold(hold, position, cancelledAt, at).reason.revoked?) && markedCancelled(cancelHold(hold, position, cancelledAt, at))) && (cancelHold(hold, position, cancelledAt, at).until == cancelledAt)) && (cancelHold(hold, position, cancelledAt, at).at == at)))
   ensures (cancelHold(hold, position, cancelledAt, at).readThrough == hold.readThrough)
   ensures (cancelHold(hold, position, cancelledAt, at).since == hold.since)
   ensures (cancelHold(hold, position, cancelledAt, at).claimedAt == hold.claimedAt)
   ensures (cancelHold(hold, position, cancelledAt, at).id == hold.id)
   ensures (cancelHold(hold, position, cancelledAt, at).ended? ==> hold.running? ==> (cancelHold(hold, position, cancelledAt, at).since <= cancelHold(hold, position, cancelledAt, at).until))
+  ensures (markedCancelled(cancelHold(hold, position, cancelledAt, at)) ==> !(markedCancelled(hold)) ==> (hold.running? && beforeCancellation(position, cancelledAt)))
 {
 }
 
@@ -991,7 +1030,7 @@ function atWorkHold(hold: Hold, seq_: int): bool
   match hold {
     case running(i_hold_id, i_hold_at, i_hold_claimedAt, i_hold_since, i_hold_readThrough, i_hold_expiresAt) =>
       atWork(i_hold_since, false, 0, seq_)
-    case ended(i_hold_id, i_hold_at, i_hold_claimedAt, i_hold_since, i_hold_readThrough, i_hold_reason, i_hold_until) =>
+    case ended(i_hold_id, i_hold_at, i_hold_claimedAt, i_hold_since, i_hold_readThrough, i_hold_reason, i_hold_cancelled, i_hold_until) =>
       atWork(i_hold_since, true, i_hold_until, seq_)
   }
 }
@@ -1271,6 +1310,196 @@ lemma activationGrant_ensures(id: ActivationFields, cancelledAt: Option<int>, ro
 {
 }
 
+function stoodDown(drafts: seq<Draft>): bool
+{
+  (exists draft :: draft in drafts && (draft.ended? && ((draft.reason.released? || draft.reason.revoked?) || draft.reason.abandoned?)))
+}
+
+lemma stoodDown_ensures(drafts: seq<Draft>)
+  ensures (stoodDown(drafts) <==> exists i: int :: ((((0 <= i) && (i < |drafts|)) && drafts[i].ended?) && ((drafts[i].reason.released? || drafts[i].reason.revoked?) || drafts[i].reason.abandoned?)))
+  ensures (stoodDown(drafts) ==> (|drafts| > 0))
+{
+}
+
+function draftReleased(drafts: seq<Draft>): bool
+{
+  (exists draft :: draft in drafts && (draft.ended? && draft.reason.released?))
+}
+
+lemma draftReleased_ensures(drafts: seq<Draft>)
+  ensures (draftReleased(drafts) <==> exists i: int :: ((((0 <= i) && (i < |drafts|)) && drafts[i].ended?) && drafts[i].reason.released?))
+  ensures (draftReleased(drafts) ==> stoodDown(drafts))
+{
+}
+
+function draftRunning(drafts: seq<Draft>): bool
+{
+  (exists draft :: draft in drafts && draft.running?)
+}
+
+lemma draftRunning_ensures(drafts: seq<Draft>)
+  ensures (draftRunning(drafts) <==> exists i: int :: (((0 <= i) && (i < |drafts|)) && drafts[i].running?))
+{
+}
+
+function cancelledDraft(drafts: seq<Draft>, cancelledAfterClose: bool): bool
+{
+  (cancelledAfterClose && (exists draft :: draft in drafts && ((draft.ended? && draft.reason.revoked?) && draft.cancelled)))
+}
+
+lemma cancelledDraft_ensures(drafts: seq<Draft>, cancelledAfterClose: bool)
+  ensures (cancelledDraft(drafts, cancelledAfterClose) ==> cancelledAfterClose)
+  ensures (cancelledDraft(drafts, cancelledAfterClose) ==> stoodDown(drafts))
+  ensures (cancelledDraft(drafts, cancelledAfterClose) <==> (cancelledAfterClose && exists i: int :: (((((0 <= i) && (i < |drafts|)) && drafts[i].ended?) && drafts[i].reason.revoked?) && drafts[i].cancelled)))
+{
+}
+
+function summaryVerdict(covered: bool, writerNamed: bool, removedAfterClose: bool, drafts: seq<Draft>, cancelledAfterClose: bool): Verdict
+{
+  if covered then
+    Verdict.published
+  else
+    if !(writerNamed) then
+      Verdict.silent
+    else
+      if removedAfterClose then
+        Verdict.failed
+      else
+        var down := stoodDown(drafts);
+        if cancelledDraft(drafts, cancelledAfterClose) then
+          Verdict.failed
+        else
+          if (!(down) && cancelledAfterClose) then
+            Verdict.failed
+          else
+            if !(down) then
+              pending(true)
+            else
+              if draftRunning(drafts) then
+                pending(false)
+              else
+                if draftReleased(drafts) then
+                  Verdict.silent
+                else
+                  Verdict.failed
+}
+
+lemma summaryVerdict_ensures(covered: bool, writerNamed: bool, removedAfterClose: bool, drafts: seq<Draft>, cancelledAfterClose: bool)
+  ensures (covered ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).published?)
+  ensures (summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).published? ==> covered)
+  ensures (!(covered) ==> !(writerNamed) ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).silent?)
+  ensures (!(covered) ==> writerNamed ==> removedAfterClose ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
+  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> !(stoodDown(drafts)) ==> !(cancelledAfterClose) ==> (summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed))
+  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> !(stoodDown(drafts)) ==> cancelledAfterClose ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
+  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> cancelledDraft(drafts, cancelledAfterClose) ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
+  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> draftRunning(drafts) ==> (summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && !(summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed)))
+  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> !(draftRunning(drafts)) ==> draftReleased(drafts) ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).silent?)
+  ensures (!(covered) ==> writerNamed ==> !(removedAfterClose) ==> stoodDown(drafts) ==> !(cancelledDraft(drafts, cancelledAfterClose)) ==> !(draftRunning(drafts)) ==> !(draftReleased(drafts)) ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).failed?)
+  ensures ((summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? && summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed) <==> ((((!(covered) && writerNamed) && !(removedAfterClose)) && !(stoodDown(drafts))) && !(cancelledAfterClose)))
+  ensures (cancelledAfterClose ==> summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? ==> !(summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed))
+  ensures (summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).pending? ==> !(summaryVerdict(covered, writerNamed, removedAfterClose, drafts, cancelledAfterClose).owed) ==> (|drafts| > 0))
+{
+}
+
+function lastOf(seqs: seq<int>): int
+  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |seqs|) ==> (seqs[i] <= seqs[j]))
+  requires forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] >= 1))
+{
+  if ((0 <= (|seqs| - 1)) && ((|seqs| - 1) < |seqs|)) then
+    seqs[(|seqs| - 1)]
+  else
+    0
+}
+
+lemma lastOf_ensures(seqs: seq<int>)
+  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |seqs|) ==> (seqs[i] <= seqs[j]))
+  requires forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] >= 1))
+  ensures (lastOf(seqs) >= 0)
+  ensures ((|seqs| == 0) ==> (lastOf(seqs) == 0))
+  ensures ((|seqs| > 0) ==> (lastOf(seqs) == seqs[(|seqs| - 1)]))
+  ensures forall i: int :: ((0 <= i) ==> (i < |seqs|) ==> (seqs[i] <= lastOf(seqs)))
+{
+}
+
+function opensExchange(message: Message, people: seq<string>, closedThrough: int): bool
+{
+  (((message.kind == "said") && (message.from in people)) && (message.seq_ > closedThrough))
+}
+
+lemma opensExchange_ensures(message: Message, people: seq<string>, closedThrough: int)
+  ensures (opensExchange(message, people, closedThrough) <==> (((message.kind == "said") && (message.from in people)) && (message.seq_ > closedThrough)))
+  ensures ((message.kind != "said") ==> !(opensExchange(message, people, closedThrough)))
+  ensures ((message.seq_ <= closedThrough) ==> !(opensExchange(message, people, closedThrough)))
+{
+}
+
+function openingQuestion(messages: seq<Message>, people: seq<string>, closedThrough: int): Option<Message>
+  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |messages|) ==> (messages[i].seq_ < messages[j].seq_))
+{
+  SeqFind(messages, (message: Message) => opensExchange(message, people, closedThrough))
+}
+
+lemma openingQuestion_ensures(messages: seq<Message>, people: seq<string>, closedThrough: int)
+  requires forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |messages|) ==> (messages[i].seq_ < messages[j].seq_))
+  ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => (((i_result_val.kind == "said") && (i_result_val.from in people)) && (i_result_val.seq_ > closedThrough)) case None => true })
+  ensures ((match openingQuestion(messages, people, closedThrough) { case Some(i_) => false case None => true }) <==> !(exists i: int :: (((0 <= i) && (i < |messages|)) && opensExchange(messages[i], people, closedThrough))))
+  ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => exists i: int :: ((((0 <= i) && (i < |messages|)) && (messages[i] == i_result_val)) && forall j: int :: ((0 <= j) ==> (j < i) ==> !(opensExchange(messages[j], people, closedThrough)))) case None => true })
+  ensures (match openingQuestion(messages, people, closedThrough) { case Some(i_result_val) => ((|messages| > 0) && (i_result_val.seq_ <= messages[(|messages| - 1)].seq_)) case None => true })
+{
+}
+
+function inside(range: Range, seq_: int): bool
+{
+  ((range.from <= seq_) && (seq_ <= range.through))
+}
+
+lemma inside_ensures(range: Range, seq_: int)
+  ensures (inside(range, seq_) <==> ((range.from <= seq_) && (seq_ <= range.through)))
+{
+}
+
+function carries(roster: seq<Seating>, name: string): bool
+{
+  (exists seat :: seat in roster && (seat.name == name))
+}
+
+lemma carries_ensures(roster: seq<Seating>, name: string)
+  ensures (carries(roster, name) <==> exists k: int :: (((0 <= k) && (k < |roster|)) && (roster[k].name == name)))
+{
+}
+
+function fromCatalog(catalog: seq<Seating>, seat: Seating): bool
+{
+  (exists held :: held in catalog && ((held.name == seat.name) && (held.identity == seat.identity)))
+}
+
+lemma fromCatalog_ensures(catalog: seq<Seating>, seat: Seating)
+  ensures (fromCatalog(catalog, seat) <==> exists k: int :: ((((0 <= k) && (k < |catalog|)) && (catalog[k].name == seat.name)) && (catalog[k].identity == seat.identity)))
+{
+}
+
+function atBroadcast(seat: Seating): Seating
+{
+  Seating(seat.name, seat.identity, Attention.broadcast)
+}
+
+lemma atBroadcast_ensures(seat: Seating)
+  ensures (atBroadcast(seat).name == seat.name)
+  ensures (atBroadcast(seat).identity == seat.identity)
+  ensures atBroadcast(seat).attention.broadcast?
+{
+}
+
+function afterComposition(seq_: int, compositionSeq: int): bool
+{
+  (seq_ > compositionSeq)
+}
+
+lemma afterComposition_ensures(seq_: int, compositionSeq: int)
+  ensures (afterComposition(seq_, compositionSeq) <==> (seq_ > compositionSeq))
+{
+}
+
 method latest(times: seq<int>, floor: int) returns (res: int)
   requires (floor >= 0)
   ensures (res >= floor)
@@ -1344,4 +1573,211 @@ method foldPresence(entries: seq<PresenceEntry>) returns (res: map<string, Perso
     i := (i + 1);
   }
   return people;
+}
+
+method discussion(messages: seq<Message>, from: int, through: int) returns (res: seq<Message>)
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (((res[i].kind != "summary") && (from <= res[i].seq_)) && (res[i].seq_ <= through)))
+  ensures forall k: int :: ((0 <= k) ==> (k < |messages|) ==> (messages[k].kind != "summary") ==> (from <= messages[k].seq_) ==> (messages[k].seq_ <= through) ==> exists i: int :: (((0 <= i) && (i < |res|)) && (res[i] == messages[k])))
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in messages))
+  ensures (|res| <= |messages|)
+{
+  var out: seq<Message> := [];
+  var i := 0;
+  while (i < |messages|)
+    invariant (0 <= i)
+    invariant (i <= |messages|)
+    invariant (|out| <= i)
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (((out[m].kind != "summary") && (from <= out[m].seq_)) && (out[m].seq_ <= through)))
+    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (messages[k].kind != "summary") ==> (from <= messages[k].seq_) ==> (messages[k].seq_ <= through) ==> exists m: int :: (((0 <= m) && (m < |out|)) && (out[m] == messages[k])))
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m] in messages))
+  {
+    var head := messages[i];
+    if (((head.kind != "summary") && (head.seq_ >= from)) && (head.seq_ <= through)) {
+      ghost var before: seq<Message> := out;
+      out := (out + [head]);
+      assert forall m: int :: ((0 <= m) ==> (m < |before|) ==> (out[m] == before[m]));
+      assert (out[|before|] == head);
+    }
+    i := (i + 1);
+  }
+  return out;
+}
+
+method messagesSince(messages: seq<Message>, since: int) returns (res: seq<Message>)
+  requires forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |messages|) ==> (messages[a].seq_ < messages[b].seq_))
+  ensures (|res| <= |messages|)
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i].seq_ > since))
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in messages))
+  ensures forall k: int :: ((0 <= k) ==> (k < |messages|) ==> (messages[k].seq_ > since) ==> (messages[k] in res))
+  ensures forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |res|) ==> (res[a].seq_ < res[b].seq_))
+{
+  var out: seq<Message> := [];
+  var i := 0;
+  while (i < |messages|)
+    invariant (0 <= i)
+    invariant (i <= |messages|)
+    invariant (|out| <= i)
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m].seq_ > since))
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m] in messages))
+    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (messages[k].seq_ > since) ==> (messages[k] in out))
+    invariant forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |out|) ==> (out[a].seq_ < out[b].seq_))
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> forall k: int :: ((i <= k) ==> (k < |messages|) ==> (out[m].seq_ < messages[k].seq_)))
+  {
+    var head := messages[i];
+    if (head.seq_ > since) {
+      ghost var before: seq<Message> := out;
+      out := (out + [head]);
+      assert forall m: int :: ((0 <= m) ==> (m < |before|) ==> (out[m] == before[m]));
+      assert (out[|before|] == head);
+    }
+    i := (i + 1);
+  }
+  return out;
+}
+
+method exchangeContaining(closes: seq<Range>, open: Option<int>, seq_: int) returns (res: Found)
+  ensures (match res { case closed(i_result_from) => exists i: int :: (((((0 <= i) && (i < |closes|)) && inside(closes[i], seq_)) && (closes[i].from == i_result_from)) && forall k: int :: ((0 <= k) ==> (k < i) ==> !(inside(closes[k], seq_)))) case _ => true })
+  ensures ((!res.closed?) ==> forall i: int :: ((0 <= i) ==> (i < |closes|) ==> !(inside(closes[i], seq_))))
+  ensures ((match open { case Some(i_) => false case None => true }) ==> (!res.open?))
+  ensures (match open { case Some(i_open_val) => (res.open? ==> ((i_open_val == res.from) && (res.from <= seq_))) case None => true })
+  ensures ((match open { case Some(i_) => false case None => true }) ==> (!res.closed?) ==> res.outside?)
+  ensures (match open { case Some(i_open_val) => (res.outside? ==> (i_open_val > seq_)) case None => true })
+  ensures (match open { case Some(i_open_val) => ((i_open_val <= seq_) ==> (!res.outside?)) case None => true })
+  ensures ((res.closed? || res.open?) ==> (res.from <= seq_))
+{
+  var i := 0;
+  while (i < |closes|)
+    invariant (0 <= i)
+    invariant (i <= |closes|)
+    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> !(inside(closes[k], seq_)))
+  {
+    var close := (if ((0 <= i) && (i < |closes|)) then closes[i] else Range(0, -1));
+    var i_t1 := inside(close, seq_);
+    if i_t1 {
+      return Found.closed(close.from);
+    }
+    i := (i + 1);
+  }
+  match open {
+    case Some(i_open_val) =>
+      if (i_open_val <= seq_) {
+        return Found.open(i_open_val);
+      }
+    case None =>
+
+  }
+  return Found.outside;
+}
+
+method reserveOf(catalog: seq<Seating>, roster: seq<Seating>) returns (res: seq<Seating>)
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> !(carries(roster, res[i].name)))
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> res[i].attention.broadcast?)
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> fromCatalog(catalog, res[i]))
+  ensures forall k: int :: ((0 <= k) ==> (k < |catalog|) ==> (carries(roster, catalog[k].name) || exists i: int :: ((((0 <= i) && (i < |res|)) && (res[i].name == catalog[k].name)) && (res[i].identity == catalog[k].identity))))
+  ensures (|res| <= |catalog|)
+{
+  var out: seq<Seating> := [];
+  var i := 0;
+  while (i < |catalog|)
+    invariant (0 <= i)
+    invariant (i <= |catalog|)
+    invariant (|out| <= i)
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> !(carries(roster, out[m].name)))
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> out[m].attention.broadcast?)
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> fromCatalog(catalog, out[m]))
+    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (carries(roster, catalog[k].name) || exists m: int :: ((((0 <= m) && (m < |out|)) && (out[m].name == catalog[k].name)) && (out[m].identity == catalog[k].identity))))
+  {
+    var head := (if ((0 <= i) && (i < |catalog|)) then catalog[i] else Seating("", "", Attention.broadcast));
+    var i_t2 := carries(roster, head.name);
+    if !(i_t2) {
+      ghost var before: seq<Seating> := out;
+      var i_t3 := atBroadcast(head);
+      out := (out + [i_t3]);
+      assert forall m: int :: ((0 <= m) ==> (m < |before|) ==> (out[m] == before[m]));
+      assert ((out[|before|].name == head.name) && (out[|before|].identity == head.identity));
+    }
+    i := (i + 1);
+  }
+  return out;
+}
+
+method without(roster: seq<Seating>, name: string) returns (res: seq<Seating>)
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i].name != name))
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in roster))
+  ensures forall k: int :: ((0 <= k) ==> (k < |roster|) ==> (roster[k].name != name) ==> exists i: int :: (((0 <= i) && (i < |res|)) && (res[i] == roster[k])))
+  ensures ((forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |roster|) ==> (roster[i].name != roster[j].name))) ==> forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |res|) ==> (res[i].name != res[j].name)))
+  ensures (|res| <= |roster|)
+{
+  var out: seq<Seating> := [];
+  var i := 0;
+  while (i < |roster|)
+    invariant (0 <= i)
+    invariant (i <= |roster|)
+    invariant (|out| <= i)
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m].name != name))
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> exists k: int :: (((0 <= k) && (k < i)) && (roster[k] == out[m])))
+    invariant forall m: int :: ((0 <= m) ==> (m < |out|) ==> (out[m] in roster))
+    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> (roster[k].name != name) ==> exists m: int :: (((0 <= m) && (m < |out|)) && (out[m] == roster[k])))
+    invariant ((forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |roster|) ==> (roster[a].name != roster[b].name))) ==> forall m: int, n: int :: ((0 <= m) ==> (m < n) ==> (n < |out|) ==> (out[m].name != out[n].name)))
+  {
+    var head := (if ((0 <= i) && (i < |roster|)) then roster[i] else Seating("", "", Attention.broadcast));
+    if (head.name != name) {
+      ghost var before: seq<Seating> := out;
+      out := (out + [head]);
+      assert forall m: int :: ((0 <= m) ==> (m < |before|) ==> (out[m] == before[m]));
+      assert (out[|before|] == head);
+    }
+    i := (i + 1);
+  }
+  return out;
+}
+
+method reseated(roster: seq<Seating>, change: Membership) returns (res: seq<Seating>)
+  ensures (match change { case other => (res == roster) case _ => true })
+  ensures (match change { case unseated(i_change_name) => !(carries(res, i_change_name)) case _ => true })
+  ensures (match change { case seated(i_change_name, i_change_identity, i_change_attention) => ((((|res| >= 1) && (res[(|res| - 1)].name == i_change_name)) && (res[(|res| - 1)].identity == i_change_identity)) && (res[(|res| - 1)].attention == i_change_attention)) case _ => true })
+  ensures (match change { case seated(i_change_name, i_change_identity, i_change_attention) => forall i: int :: ((0 <= i) ==> (i < (|res| - 1)) ==> (res[i].name != i_change_name)) case _ => true })
+  ensures ((!change.other?) ==> forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i].name != change.name) ==> (res[i] in roster)))
+  ensures ((!change.other?) ==> forall k: int :: ((0 <= k) ==> (k < |roster|) ==> (roster[k].name != change.name) ==> exists i: int :: (((0 <= i) && (i < |res|)) && (res[i] == roster[k]))))
+  ensures ((forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |roster|) ==> (roster[i].name != roster[j].name))) ==> forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |res|) ==> (res[i].name != res[j].name)))
+{
+  match change {
+    case other =>
+      return roster;
+    case _ =>
+      var i_t4 := without(roster, change.name);
+      var rest := i_t4;
+      match change {
+        case unseated(i_change_name) =>
+          return rest;
+        case _ =>
+          var seat := Seating(change.name, change.identity, change.attention);
+          var out := (rest + [seat]);
+          assert forall m: int :: ((0 <= m) ==> (m < |rest|) ==> (out[m] == rest[m]));
+          assert (out[|rest|] == seat);
+          return out;
+      }
+  }
+}
+
+method foldRoster(agents: seq<Seating>, changes: seq<RosterChange>, compositionSeq: int) returns (res: seq<Seating>)
+  ensures ((forall i: int :: ((0 <= i) ==> (i < |changes|) ==> (!(afterComposition(changes[i].seq_, compositionSeq)) || changes[i].membership.other?))) ==> (res == agents))
+  ensures ((forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |agents|) ==> (agents[i].name != agents[j].name))) ==> forall i: int, j: int :: ((0 <= i) ==> (i < j) ==> (j < |res|) ==> (res[i].name != res[j].name)))
+{
+  var roster := agents;
+  var i := 0;
+  while (i < |changes|)
+    invariant (0 <= i)
+    invariant (i <= |changes|)
+    invariant ((forall k: int :: ((0 <= k) ==> (k < i) ==> (!(afterComposition(changes[k].seq_, compositionSeq)) || changes[k].membership.other?))) ==> (roster == agents))
+    invariant ((forall a: int, b: int :: ((0 <= a) ==> (a < b) ==> (b < |agents|) ==> (agents[a].name != agents[b].name))) ==> forall m: int, n: int :: ((0 <= m) ==> (m < n) ==> (n < |roster|) ==> (roster[m].name != roster[n].name)))
+  {
+    var change := (if ((0 <= i) && (i < |changes|)) then changes[i] else RosterChange(0, Membership.other));
+    var i_t5 := afterComposition(change.seq_, compositionSeq);
+    if i_t5 {
+      roster := reseated(roster, change.membership);
+    }
+    i := (i + 1);
+  }
+  return roster;
 }
