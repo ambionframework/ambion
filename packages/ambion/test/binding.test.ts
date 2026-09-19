@@ -6,12 +6,18 @@
  * follows it.
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
+import { inProcessTransport, runningRoom } from '../src/transport.ts';
 import { bindings } from './support/binding.ts';
+import { fakeClock } from './support/clock.ts';
+import { closedExchange, roomName, waitForRoom } from './support/room.ts';
+import { quiet, scripted } from './support/scripted.ts';
+import { memory } from './support/storage.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 	const { mocked } = await import('./support/binding.ts');
@@ -348,5 +354,54 @@ describe('the room runs the verified rules', () => {
 		]);
 		bind.once(rules.exchangeLive, true);
 		expect(reconcile(quiet).events).toEqual([]);
+	});
+
+	it('closes on a later pass when admitsClose refuses once', async () => {
+		const opened = await memory.open();
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: fakeClock(),
+			transport: inProcessTransport(),
+			stream: scripted(() => quiet()),
+		});
+		const room = await startRoom({
+			name: roomName('binding-close'),
+			runtime,
+			agents: [
+				defineAgent({
+					name: 'product',
+					identity: 'Product.',
+					instructions: 'Answer.',
+					model: 'scripted/product',
+				}),
+			],
+			streamFn: scripted(() => quiet()),
+		});
+		try {
+			const visit = await room.visit(defineHuman({ name: 'priya', identity: 'Person.' }));
+			const first = await visit.send({ text: 'Question.' });
+			const peer = runningRoom(runtime, room.name);
+			if (peer === undefined) throw new Error('The room is absent.');
+			const activation = `message:${first.from}:product:1`;
+			expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
+			const request: CommitRequest = {
+				activation,
+				key: 'c',
+				readThrough: first.from,
+				intent: { kind: 'said', text: 'Answer.' },
+			};
+			expect(await peer.commit(request)).toMatchObject({ committed: { text: 'Answer.' } });
+			// A refused close leaves the exchange open. A later pass asks admitsClose
+			// again, and the close lands.
+			bind.once(rules.admitsClose, false);
+			await peer.lease({ activation, operation: 'release', reason: 'released', readThrough: 4 });
+			await visit.send({ text: 'Again.' });
+			await waitForRoom(room);
+			expect(closedExchange(room, first.from)).toBeDefined();
+			expect(vi.mocked(rules.admitsClose).mock.calls.length).toBeGreaterThan(1);
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
 	});
 });

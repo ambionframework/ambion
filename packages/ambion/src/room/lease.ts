@@ -142,7 +142,7 @@ function pendingForMessage(
 ): PendingWake[] {
 	const pending: PendingWake[] = [];
 	for (const seat of reached(delivery, roster)) {
-		if (removalsOf(messages, seat).some((removal) => removal > message.seq)) continue;
+		if (removedAfter(messages, seat, message.seq)) continue;
 		const taken = (bySeat.get(seat) ?? []).filter((lease) => coversAttempt(lease, message.seq));
 		const wake = statusOf(message, seat, taken, options);
 		if (wake !== undefined) pending.push(wake);
@@ -151,10 +151,14 @@ function pendingForMessage(
 }
 
 /** The seqs of every durable removal of this seat. */
-export const removalsOf = (messages: readonly Message[], seat: string): number[] =>
+const removalsOf = (messages: readonly Message[], seat: string): number[] =>
 	messages.flatMap((message) =>
 		message.kind === 'unseated' && message.subject === seat ? [message.seq] : [],
 	);
+
+/** A removal of the seat landed after the position, so work caused at or before it is stale. */
+export const removedAfter = (messages: readonly Message[], seat: string, seq: number): boolean =>
+	removalsOf(messages, seat).some((removal) => removal > seq);
 
 /**
  * Every lease a wake claimed, by seat, for the seats on the roster. A
@@ -233,7 +237,8 @@ export function pendingActivation(
 	options: PendingActivationOptions,
 ): PendingActivation {
 	const unsuccessfulAttempts = failed.length;
-	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)));
+	// A stamp `Date.parse` cannot read counts as no time, so the backoff still holds.
+	const last = Math.max(0, ...failed.map((lease) => Date.parse(lease.at)).filter(Number.isFinite));
 	const next = nextActivationId(source, position, seat, unsuccessfulAttempts);
 	return {
 		id: encodeActivationId(next),

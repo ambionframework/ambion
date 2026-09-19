@@ -1360,6 +1360,9 @@ export class RoomHost implements Room, RunningRoom {
 		this.requireSubmission(written);
 		if ('entry' in written) return true;
 		const state = this.state();
+		// A close that did not land is progress when the same exchange is still open
+		// and the record moved or its work is live: the complement of what
+		// `admitsClose` admits, so the next pass decides the close again.
 		return (
 			state.exchange?.from === close.from &&
 			(state.lastSeq !== close.through || liveWork(state, this.now()).exchange)

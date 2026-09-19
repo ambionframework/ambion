@@ -3,7 +3,7 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { ActivationSpec } from '../protocol.ts';
 import type { RoomState } from './fold.ts';
-import { removalsOf } from './lease.ts';
+import { removedAfter } from './lease.ts';
 import { activationGrant, closeFor, wellFormed } from './rules.verified.ts';
 
 /**
@@ -23,7 +23,7 @@ export function activationSpec(id: string, state: RoomState): ActivationSpec | u
 		parsed,
 		state.cancelledAt,
 		state.roster.some((seat) => seat.name === parsed.seat),
-		removalsOf(state.messages, parsed.seat).some((removal) => removal > parsed.position),
+		removedAfter(state.messages, parsed.seat, parsed.position),
 		recorded,
 		close,
 	);

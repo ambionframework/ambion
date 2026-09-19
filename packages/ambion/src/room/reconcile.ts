@@ -19,7 +19,7 @@ import {
 	isLive,
 	type LeaseHold,
 	type PendingActivation,
-	removalsOf,
+	removedAfter,
 	seatOf,
 } from './lease.ts';
 import { endingOf, exchangeLive, type LiveLease, type OwedActivation } from './rules.verified.ts';
@@ -168,7 +168,7 @@ function isStale(state: RoomState, id: string): boolean {
 	const parsed = decodeActivationId(id);
 	if (parsed === undefined) return true;
 	if (!state.roster.some((seat) => seat.name === parsed.seat)) return true;
-	return removalsOf(state.messages, parsed.seat).some((removal) => removal > parsed.position);
+	return removedAfter(state.messages, parsed.seat, parsed.position);
 }
 
 /** Every lease that ends in this pass, by how it ends. A revocation wins over an expiry. */

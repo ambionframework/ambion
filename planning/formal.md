@@ -23,7 +23,10 @@ decision, because a proof pays for itself only on a machine whose
 failure loses or duplicates work. A second pass withdrew every rule
 whose contract only restated its body: the storage adapters' rules, the
 pass's scheduling, the purpose table, the commit authority, and the
-steer.
+steer. Sections A to H below are the record of the review: they describe
+each rule as it was proposed and landed. The order-of-work table and the
+evidence table at the end name what is a rule today and what was
+withdrawn.
 
 **A rule is verified when the runtime runs its body.** LemmaScript turns
 a `//@ requires` and `//@ ensures` contract on a pure TypeScript function

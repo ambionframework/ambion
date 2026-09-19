@@ -1,10 +1,11 @@
 /** SQLite storage for named journal entries. */
-import type {
-	JournalOpener,
-	JournalRead,
-	JournalStorage,
-	StoragePosition,
-	StoredEntry,
+import {
+	type JournalOpener,
+	type JournalRead,
+	type JournalStorage,
+	positionRead,
+	type StoragePosition,
+	type StoredEntry,
 } from './storage.ts';
 
 /** What a bound parameter and a column hold. */
@@ -37,9 +38,7 @@ class SqliteJournal implements JournalStorage {
 				after,
 			)
 			.map((row) => ({ position: Number(row.position), entry: JSON.parse(String(row.entry)) }));
-		const head = entries.at(-1)?.position;
-		// A read reports the highest position it scanned, and never one before `after`.
-		return { entries, position: head === undefined ? after : Math.max(after, head) };
+		return { entries, position: positionRead(after, entries.at(-1)?.position) };
 	}
 
 	async append(

@@ -39,7 +39,7 @@ import {
 	type SummaryMessage,
 	type SummaryOutcome,
 } from '../types.ts';
-import { type LeaseHold, removalsOf } from './lease.ts';
+import { type LeaseHold, removedAfter } from './lease.ts';
 import {
 	coversExchange,
 	type Draft,
@@ -74,7 +74,7 @@ export function summaryCompletion(
 	const verdict = summaryVerdict(
 		summary !== undefined,
 		writer !== undefined,
-		writer !== undefined && removalsOf(messages, writer).some((removal) => removal > close.through),
+		writer !== undefined && removedAfter(messages, writer, close.through),
 		draftsOf(leases, close.through, writer),
 		!survivesCancellation(close.through, cancelledAt),
 	);

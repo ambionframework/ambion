@@ -230,12 +230,10 @@ doc it carries:
 
 **The rules cover the decisions, and the tests cover the rest.**
 
-- The journal's storage adapters run the storage rules, and the SQL
-  compare-and-append in `sqlite.ts` is outside the envelope. The storage
-  tests hold it.
-- The record is ordered by seq, which the journal proves; `lastOf`,
-  `openingQuestion`, and `messagesSince` require it and no runtime check
-  repeats it.
+- The storage adapters and the SQL compare-and-append in `sqlite.ts` are
+  outside the rules. The storage tests hold them.
+- The record is ordered by seq, which the journal proves; `lastOf` and
+  `openingQuestion` require it and no runtime check repeats it.
 - The clock never runs backwards. That is a host promise.
 - A pass of the reconciliation converges. The chaos drain and the walk's
   `drained` check witness it; a measure over the fold is open work.

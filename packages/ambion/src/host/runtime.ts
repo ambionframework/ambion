@@ -168,10 +168,11 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	});
 	const retry = { attempts: 3, backoff: (attempt: number) => attempt * 30_000, ...options.retry };
 	const wake = { resend: 5_000, expiry: 60_000, deadline: 600_000, ...options.wake };
-	// The verified rules carry preconditions the runtime establishes here,
-	// once, for every room it runs: `givesUp` requires a cap of at least one
-	// attempt, and the alarm and the lease expiry require each wake interval
-	// to be at least one millisecond, so a resend and a claim always wait.
+	// The runtime establishes these bounds here, once, for every room it runs.
+	// The pass writes an activation off at the cap, so a cap below one would
+	// write every activation off before its first attempt. The verified
+	// `leaseExpiry` requires each wake interval to be at least one
+	// millisecond, so a resend and a claim always wait.
 	if (!Number.isInteger(retry.attempts) || retry.attempts < 1) {
 		throw new Error(
 			'Runtime retry.attempts must be a positive integer: the room makes at least one attempt.',

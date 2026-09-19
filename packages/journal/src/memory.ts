@@ -1,20 +1,19 @@
-import type {
-	JournalOpener,
-	JournalRead,
-	JournalStorage,
-	StoragePosition,
-	StoredEntry,
+import {
+	type JournalOpener,
+	type JournalRead,
+	type JournalStorage,
+	positionRead,
+	type StoragePosition,
+	type StoredEntry,
 } from './storage.ts';
 
 class MemoryJournal implements JournalStorage {
 	private readonly entries: StoredEntry[] = [];
 
 	async read(after: StoragePosition): Promise<JournalRead> {
-		const head = this.entries.at(-1)?.position;
 		return {
 			entries: structuredClone(this.entries.filter((stored) => stored.position > after)),
-			// A read reports the highest position it scanned, and never one before `after`.
-			position: head === undefined ? after : Math.max(after, head),
+			position: positionRead(after, this.entries.at(-1)?.position),
 		};
 	}
 
