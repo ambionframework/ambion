@@ -153,11 +153,19 @@ async function staticRoute(pathname: string, response: ServerResponse): Promise<
 	}
 }
 
+/** Resolve a request path inside the brand directory. A malformed path is not an asset. */
+function brandTarget(relative: string): string {
+	try {
+		return fileURLToPath(new URL(decodeURIComponent(relative), brandDirectory));
+	} catch {
+		return fail(404, 'Unknown brand asset.');
+	}
+}
+
 /** Serve one file from the repository brand kit. Return true when handled. */
 async function brandRoute(pathname: string, response: ServerResponse): Promise<boolean> {
 	if (!pathname.startsWith('/brand/')) return false;
-	const relative = decodeURIComponent(pathname.slice('/brand/'.length));
-	const target = fileURLToPath(new URL(relative, brandDirectory));
+	const target = brandTarget(pathname.slice('/brand/'.length));
 	if (!target.startsWith(brandRoot)) fail(403, 'The path escapes the brand directory.');
 	const type = brandTypes[extname(target)];
 	if (!type) fail(404, 'Unknown brand asset.');

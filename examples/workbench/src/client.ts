@@ -76,7 +76,13 @@ export class WorkbenchClient {
 			throw new Error(`Could not reach the Workbench at ${this.base}. Is the host running?`);
 		}
 		const text = await response.text();
-		const value: unknown = text ? JSON.parse(text) : {};
+		let value: unknown = {};
+		try {
+			value = text ? JSON.parse(text) : {};
+		} catch {
+			// A proxy can answer with an HTML page. Keep the status, not a parse error.
+			if (response.ok) throw new Error('The Workbench sent a reply that is not JSON.');
+		}
 		if (!response.ok) throw new Error(readError(value, response.status));
 		return value as T;
 	}

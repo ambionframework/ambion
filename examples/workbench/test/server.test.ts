@@ -165,6 +165,24 @@ describe('Workbench host', () => {
 		expect(String(css.body)).toContain('--ambion-teal');
 	});
 
+	it('serves brand files and refuses malformed or escaping paths', async () => {
+		const directory = await freshDirectory();
+		const { base } = await launch('start', joinPath(directory, 'run'));
+		const status = async (path: string) => (await fetch(`${base}${path}`)).status;
+		expect(await status('/brand/tokens/ambion.css')).toBe(200);
+		expect(await status('/brand/logos/svg/ambion-horizontal-primary.svg')).toBe(200);
+		expect(await status('/brand/tokens/missing.css')).toBe(404);
+		expect(await status('/brand/README.md')).toBe(404);
+		// A malformed escape is no asset. It must not reach the error handler as a 500.
+		expect(await status('/brand/tokens/%zz')).toBe(404);
+		// Three slashes make a protocol-relative URL with a foreign host, which cannot be a file path.
+		expect(await status('/brand///host/x')).toBe(404);
+		// Two slashes resolve to a rooted path outside the brand directory.
+		expect(await status('/brand//etc/passwd')).toBe(403);
+		// An encoded slash survives URL parsing, so the resolved path must stay guarded.
+		expect(await status('/brand/..%2f..%2fpackage.json')).toBe(403);
+	});
+
 	it('validates room creation and makes concurrent duplicates conflict', async () => {
 		const directory = await freshDirectory();
 		const { base } = await launch('start', joinPath(directory, 'run'));

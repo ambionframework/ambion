@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join as joinPath } from 'node:path';
 import type { CreateRuntimeOptions } from '@ambionframework/ambion';
@@ -52,6 +53,22 @@ describe('WorkbenchClient', () => {
 		expect(view.messages ?? []).toEqual(
 			expect.arrayContaining([expect.objectContaining({ from: 'mira', text: 'Which resistor?' })]),
 		);
+	});
+
+	it('reports the HTTP status when an error reply is not JSON', async () => {
+		const proxy = createServer((_request, response) => {
+			response.writeHead(502, { 'content-type': 'text/html' });
+			response.end('<html>Bad gateway</html>');
+		});
+		await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+		const address = proxy.address();
+		if (!address || typeof address === 'string') throw new Error('The stub did not bind.');
+		try {
+			const client = new WorkbenchClient(`http://127.0.0.1:${address.port}`);
+			await expect(client.rooms()).rejects.toThrow(/HTTP 502/);
+		} finally {
+			await new Promise((resolve) => proxy.close(resolve));
+		}
 	});
 
 	it('refuses a message before the person enters the room', async () => {
