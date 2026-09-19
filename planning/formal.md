@@ -415,7 +415,14 @@ the two outcomes the code has, and `liveSpec` drops the third.
 
 ## E. Routing, delivery, and presence
 
-**No routing rule is verified, and `docs/durability.md` §7 says one is.**
+**Every rule below is proven and waits for its slice.** The file
+[`planning/evidence/formal/routing.rules.ts`](evidence/formal/routing.rules.ts)
+holds the twelve rules with their contracts, and its `.dfy` carries four
+lemmas: a summary wakes nobody, a wider seat hears what a narrower one
+hears, the roster loop is sound and complete, and a seating wakes its
+newcomer. CI verifies its 41 obligations with the landed files.
+
+**No routing rule is verified, and `docs/durability.md` §7 said one is.**
 `routing.ts` imports nothing from the rules file. The attention scale, the
 reach of a message, and who wakes are three tables; each becomes a rule,
 and one lemma states the monotonicity the roster doc promises.
@@ -740,7 +747,7 @@ them with the landed rules.
 | B. Lease fold           | `packages/ambion/src/room/rules.verified.ts`                    | 56 with D     | Landed                       |
 | C. Reconciliation       | `planning/evidence/formal/reconcile.rules.ts`                   | 35            | Proven, slice 2c open        |
 | D. Transitions          | `room/rules.verified.ts`, `evidence/formal/transition.rules.ts` | 56 with B, 37 | Nine landed, the rest proven |
-| E. Routing and presence | `packages/ambion/src/room/rules.verified.ts`                    | prototype     | Planned, slice 2d            |
+| E. Routing and presence | `planning/evidence/formal/routing.rules.ts`                     | 41            | Proven, slice 2d open        |
 | F. Activation identity  | `packages/ambion/src/room/rules.verified.ts`                    | prototype     | Planned, slice 2e            |
 | G. Exchange and roster  | `planning/evidence/formal/exchange.rules.ts`                    | 52            | Proven, slice 2f open        |
 | H. Vocabulary           | `packages/ambion/src/rules.verified.ts`                         | prototype     | Planned                      |
