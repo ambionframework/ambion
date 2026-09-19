@@ -106,19 +106,19 @@ function blockText(block: Block): string {
 }
 
 /**
- * The record trimmed to a token budget: the newest blocks whose estimated
- * tokens stay within `budget`, and never fewer than one block, so an
+ * The record trimmed to a token limit: the newest blocks whose estimated
+ * tokens stay within `limit`, and never fewer than one block, so an
  * activation always reads the latest exchange. The walk runs over blocks, so a
  * summarised range counts once and is never split. `pin` keeps every message at
- * or after it, which holds the open exchange whole even past the budget.
+ * or after it, which holds the open exchange whole even past the limit.
  *
  * `from` is the lowest position the window keeps. The caller pages the record
  * until `from` sits above the record it holds, or the record reaches its floor.
  */
-export function windowByBudget(
+export function windowToLimit(
 	record: readonly Message[],
 	estimate: (text: string) => number,
-	budget: number,
+	limit: number,
 	pin?: Seq,
 ): { from: Seq; kept: Message[] } {
 	const bs = blocks(record);
@@ -130,7 +130,7 @@ export function windowByBudget(
 		const block = bs[index];
 		if (block === undefined) break;
 		cost += estimate(blockText(block));
-		if (cost > budget) break;
+		if (cost > limit) break;
 		cut = block;
 	}
 	let from = Math.min(...blockSeqs(cut));

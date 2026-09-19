@@ -13,7 +13,7 @@ import type { SeatContext, Transport } from '../host/runtime.ts';
 import type { ActivationView, SeatPort, SeatRoom, Steer, ViewResponse, Wake } from '../protocol.ts';
 import type { Message, RoomNotification, Seq } from '../types.ts';
 import { Activation, persistTurns } from './activation.ts';
-import { renderActivation, renderLine, windowByBudget } from './render.ts';
+import { renderActivation, renderLine, windowToLimit } from './render.ts';
 import { seatSessionId } from './services.ts';
 import { binding, toolsFor } from './tools.ts';
 
@@ -324,8 +324,8 @@ export class AgentRunner implements SeatPort {
 		const { clock, room, seat, transcripts } = this.context;
 		return {
 			view: async () => {
-				const budget = this.context.definition.tokenBudget;
-				if (budget !== undefined) return this.windowedView(id, budget, cancelled);
+				const limit = this.context.definition.activationTokensLimit;
+				if (limit !== undefined) return this.windowedView(id, limit, cancelled);
 				const opened = await this.call(() => this.room.view(id), cancelled);
 				if (opened.kind === 'value') return opened.value;
 				if (opened.kind === 'cancelled') return { stale: 'the activation was cut' };
@@ -354,14 +354,14 @@ export class AgentRunner implements SeatPort {
 	}
 
 	/**
-	 * The record windowed to the agent's token budget. The seat pages the record
+	 * The record windowed to the agent's token limit. The seat pages the record
 	 * from the tail, keeps the newest blocks that fit, and stops when the window
 	 * starts above the record it holds or the record reaches its floor. The open
-	 * exchange stays whole even past the budget.
+	 * exchange stays whole even past the limit.
 	 */
 	private async windowedView(
 		id: string,
-		budget: number,
+		limit: number,
 		cancelled: Promise<void>,
 	): Promise<ViewResponse> {
 		const estimate = this.context.definition.estimateTokens ?? defaultEstimate;
@@ -371,7 +371,7 @@ export class AgentRunner implements SeatPort {
 			const page = await this.pageView(id, before, cancelled);
 			if ('stop' in page) return page.stop;
 			held = [...page.view.context.messages, ...held];
-			const window = windowByBudget(held, estimate, budget, pinOf(page.view));
+			const window = windowToLimit(held, estimate, limit, pinOf(page.view));
 			before = held[0]?.seq;
 			if (before === undefined || windowSettled(window.from, held, page.view.context.earliest))
 				return { view: withWindow(page.view, window.kept) };

@@ -1,11 +1,11 @@
 /**
- * The record window: a seat with a token budget reads the newest part of the
+ * The record window: a seat with a token limit reads the newest part of the
  * record that fits, plus the open exchange whole. The room pages the record
  * and never splits a summarised range. Both halves are pure, so every test
  * hands them a value.
  */
 import { describe, expect, it } from 'vitest';
-import { windowByBudget } from '../src/execution/render.ts';
+import { windowToLimit } from '../src/execution/render.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { ActivationSpec } from '../src/protocol.ts';
 import { foldRoom, type RoomState } from '../src/room/fold.ts';
@@ -16,31 +16,31 @@ const at = '2026-01-01T09:00:00.000Z';
 const now = Date.parse(at);
 const options = { backoff: () => 0 };
 
-/** One token per character, so a budget reads as a length. */
+/** One token per character, so a limit reads as a length. */
 const byLength = (text: string): number => text.length;
 
 function said(seq: Seq, text: string): Message {
 	return { kind: 'said', seq, at, from: 'priya', text };
 }
 
-describe('windowByBudget', () => {
-	it('keeps the newest lines that fit the budget', () => {
+describe('windowToLimit', () => {
+	it('keeps the newest lines that fit the limit', () => {
 		const record = [said(2, 'aaaa'), said(3, 'bbbb'), said(4, 'cccc')];
-		// Each line renders as "[priya] xxxx" (12 chars). A budget of 30 holds two.
-		const window = windowByBudget(record, byLength, 30);
+		// Each line renders as "[priya] xxxx" (12 chars). A limit of 30 holds two.
+		const window = windowToLimit(record, byLength, 30);
 		expect(window.kept.map((message) => message.seq)).toEqual([3, 4]);
 		expect(window.from).toBe(3);
 	});
 
-	it('keeps at least the newest line when one line exceeds the budget', () => {
+	it('keeps at least the newest line when one line exceeds the limit', () => {
 		const record = [said(2, 'aaaa'), said(3, 'bbbb')];
-		const window = windowByBudget(record, byLength, 1);
+		const window = windowToLimit(record, byLength, 1);
 		expect(window.kept.map((message) => message.seq)).toEqual([3]);
 	});
 
-	it('pins the open exchange whole, even past the budget', () => {
+	it('pins the open exchange whole, even past the limit', () => {
 		const record = [said(2, 'aaaa'), said(3, 'bbbb'), said(4, 'cccc')];
-		const window = windowByBudget(record, byLength, 1, 2);
+		const window = windowToLimit(record, byLength, 1, 2);
 		expect(window.kept.map((message) => message.seq)).toEqual([2, 3, 4]);
 		expect(window.from).toBe(2);
 	});
@@ -56,8 +56,8 @@ describe('windowByBudget', () => {
 			covers: { from: 2, through: 3 },
 		};
 		const record = [said(2, 'aaaa'), said(3, 'bbbb'), summary, said(6, 'cccc')];
-		// A large budget keeps everything: the fold stands for seqs 2 and 3.
-		const window = windowByBudget(record, byLength, 1000);
+		// A large limit keeps everything: the fold stands for seqs 2 and 3.
+		const window = windowToLimit(record, byLength, 1000);
 		expect(window.kept.map((message) => message.seq)).toEqual([2, 3, 5, 6]);
 		expect(window.from).toBe(2);
 	});

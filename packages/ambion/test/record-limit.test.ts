@@ -1,5 +1,5 @@
 /**
- * A seat with a token budget reads a windowed record. The record keeps every
+ * A seat with a token limit reads a windowed record. The record keeps every
  * message; the seat pages the tail and reads the part that fits, plus the open
  * exchange whole. An older closed exchange with no summary falls out of context.
  */
@@ -8,7 +8,7 @@ import { createRuntime, defineAgent, startRoom } from '../src/index.ts';
 import { andrei, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import { answersEveryQuestion, contextText, type Script, scripted } from './support/scripted.ts';
 
-describe('a budget windows the record', () => {
+describe('a limit windows the record', () => {
 	it('drops an older unsummarised exchange but keeps the open one', async () => {
 		const contexts: string[] = [];
 		const answer = answersEveryQuestion(['andrei']);
@@ -21,12 +21,12 @@ describe('a budget windows the record', () => {
 			identity: 'Answers a question.',
 			instructions: 'Answer the current question.',
 			model: 'scripted/worker',
-			// A tight budget: one line fits, so only the open exchange stays.
-			tokenBudget: 40,
+			// A tight limit: one line fits, so only the open exchange stays.
+			activationTokensLimit: 40,
 			estimateTokens: (text) => text.length,
 		});
 		const runtime = createRuntime({ stream: scripted(capture) });
-		const room = await startRoom({ name: roomName('budget'), runtime, agents: [worker] });
+		const room = await startRoom({ name: roomName('limit'), runtime, agents: [worker] });
 
 		await (await room.visit(andrei)).send({ text: 'alpha marker' });
 		await waitForRoom(room);
