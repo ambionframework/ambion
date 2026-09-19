@@ -46,3 +46,7 @@ examples/*/demo-run.json
 
 # local secrets and ad-hoc end-to-end scripts
 .e2e/
+
+# LemmaScript merge scratch, left by `lsc regen` when a merge or a proof fails
+*.dfy.base
+*.dfy.merged

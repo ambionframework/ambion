@@ -375,6 +375,31 @@ describe('the envelope and storage cursor', () => {
 		);
 	});
 
+	it('keeps every seq below the largest safe integer, so its successor is exact', async () => {
+		const id = `journal-bound-${++names}`;
+		await store(id, {
+			kind: 'note',
+			body: note('past the last place'),
+			seq: Number.MAX_SAFE_INTEGER,
+		});
+		const journal = await open(id);
+		expect(journal.entries).toEqual([]);
+		expect(await journal.append('note', { decide: () => body(note('first')) })).toMatchObject({
+			entry: { seq: 1 },
+		});
+		const full = `journal-full-${++names}`;
+		await store(full, {
+			kind: 'note',
+			body: note('the last place'),
+			seq: Number.MAX_SAFE_INTEGER - 1,
+		});
+		const last = await open(full);
+		expect(last.lastSeq).toBe(Number.MAX_SAFE_INTEGER - 1);
+		await expect(last.append('note', { decide: () => body(note('one more')) })).rejects.toThrow(
+			/is full/,
+		);
+	});
+
 	it('does not append a proposal the vocabulary rejects', async () => {
 		const strict: Vocabulary<Kind> = {
 			run: 'run',
@@ -429,6 +454,22 @@ describe('the writer fence and uncertain append', () => {
 			/superseded/,
 		);
 		expect(lost).toBe(1);
+	});
+
+	it('refuses a stamped write before the run has its own fence, so nothing it acknowledges is void', async () => {
+		const id = `journal-early-${++names}`;
+		const first = await open(id, 'run-1');
+		await first.append('run', { decide: () => body({ owner: 'run-1' }) });
+		const second = await open(id, 'run-2');
+		await expect(second.append('note', { decide: () => body(note('early')) })).rejects.toThrow(
+			/run entry first/,
+		);
+		await second.append('run', { decide: () => body({ owner: 'run-2' }) });
+		const landed = await second.append('note', { decide: () => body(note('after')) });
+		expect(landed).toMatchObject({ entry: { seq: 3 } });
+		// Every stored entry is one a fresh reader takes: the storage holds nothing void.
+		const reader = await open(id);
+		expect(reader.entries.map((entry) => entry.seq)).toEqual([1, 2, 3]);
 	});
 
 	it('recovers a successful append whose confirmation was lost', async () => {

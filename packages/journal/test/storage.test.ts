@@ -77,6 +77,22 @@ describe.each(backends)('$name JournalStorage', ({ open }) => {
 		}
 	});
 
+	it('reports a read past the head at the position it read after', async () => {
+		const backend = open();
+		try {
+			const storage = await backend.opener.open('past');
+			await storage.append({ n: 1 }, 0);
+			await storage.append({ n: 2 }, 1);
+			expect(await storage.read(5)).toEqual({ entries: [], position: 5 });
+			expect(await storage.read(1)).toEqual({
+				entries: [{ position: 2, entry: { n: 2 } }],
+				position: 2,
+			});
+		} finally {
+			backend.dispose();
+		}
+	});
+
 	it('owns append and read snapshots', async () => {
 		const backend = open();
 		try {

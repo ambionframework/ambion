@@ -52,7 +52,18 @@
  *
  * The design contract is `docs/durability.md`.
  */
-import { keyConflict, nextSeq, supersedes, voided } from './rules.verified.ts';
+import {
+	advanceSeq,
+	type Fence,
+	fenceStep,
+	type Keyed,
+	keyed,
+	nextSeq,
+	type Passed,
+	type Seen,
+	scanned,
+	writable,
+} from './rules.verified.ts';
 import type { JournalStorage, StoredEntry } from './storage.ts';
 
 /** A journal sequence: monotonic, assigned at append, never reused. */
@@ -210,9 +221,19 @@ function envelope<TKind extends string>(
 	};
 }
 
+/**
+ * The last seq the journal gives out. A seq is a double, so the proof over
+ * integers holds only while every successor is exact: a cached seq stays
+ * below the largest safe integer, and the journal refuses to fill the place
+ * before it.
+ */
+const LAST_SEQ = Number.MAX_SAFE_INTEGER - 1;
+
 /** A place off a stored field, or nothing when the field holds no place. */
 function positionOf(value: unknown): Seq | undefined {
-	return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
+	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= LAST_SEQ
+		? value
+		: undefined;
 }
 
 /** A synchronous proposal made after the queue has recovered storage. */
@@ -260,12 +281,12 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	private cursor = 0;
 	/** The replay is over: every entry the journal takes from now on is news, and `hear` takes it. */
 	private replayed = false;
-	/** The run whose entry landed last: entries of any other run after it are void. */
-	private fence: string | undefined;
-	/** This run's entry is on the journal: one of another run found from now on is a later run's. */
-	private fenced = false;
-	/** A later run's entry was found: this run's writes are over. */
-	private superseded = false;
+	/**
+	 * The fence as the last read left it: the run whose entry landed last,
+	 * whether this run's own entry is on the journal, and whether a later
+	 * run's entry was found after it. `fenceStep` moves it, one entry at a time.
+	 */
+	private fence: Fence = { fence: undefined, fenced: false, superseded: false };
 
 	/**
 	 * `hear` takes every entry the journal takes after the replay: one this run
@@ -312,41 +333,25 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 			const known = envelope(this.words, entry.entry) as Entries<TKind, TBodies> | undefined;
 			// Validation must finish before the cursor moves. A malformed known
 			// entry therefore fails every later read at the same position.
-			this.cursor = entry.position;
+			this.cursor = scanned(this.cursor, entry.position);
 			if (known !== undefined) this.take(known, writerOf(entry.entry));
 		}
-		this.cursor = Math.max(this.cursor, found.position);
+		this.cursor = scanned(this.cursor, found.position);
 	}
 
 	/**
-	 * The read passed a run entry. The fence moves to that run. This
-	 * journal's own entry marks it fenced: one of another run past it is a
-	 * later run's, and supersedes this journal.
+	 * One entry a read found that the cache lacks, through the fence. A run
+	 * entry moves the fence to its run: this journal's own entry marks it
+	 * fenced, and one of another run past that supersedes it, once. Any
+	 * other entry is cached unless the fence voids it: written by a run other
+	 * than the one whose entry the read passed last. An entry written before
+	 * runs were fenced belongs to whatever run stood.
 	 */
-	private pass(run: string | undefined): void {
-		this.fence = run;
-		if (run === this.run) this.fenced = true;
-		else if (supersedes(this.fenced, false) && !this.superseded) {
-			this.superseded = true;
-			this.lost?.();
-		}
-	}
-
-	/** One entry a read found that the cache lacks: cached unless void. */
 	private take(entry: Entries<TKind, TBodies>, written: string | undefined): void {
-		if (entry.kind === this.words.run) this.pass(written);
-		if (this.voided(entry, written)) return;
-		this.remember(entry);
-	}
-
-	/**
-	 * Whether a stored entry is void: written by a run other than the one
-	 * whose entry the read passed last. An entry written before runs were
-	 * fenced belongs to whatever run stood.
-	 */
-	private voided(entry: Entries<TKind, TBodies>, written: string | undefined): boolean {
-		if (entry.kind === this.words.run) return false;
-		return voided(this.fence !== undefined, written !== undefined, written === this.fence);
+		const passed: Passed = fenceStep(this.fence, this.run, entry.kind === this.words.run, written);
+		this.fence = passed.state;
+		if (passed.lost) this.lost?.();
+		if (passed.keep) this.remember(entry);
 	}
 
 	/**
@@ -355,7 +360,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	 */
 	private remember(entry: Entries<TKind, TBodies>): void {
 		this.cache.push(entry);
-		this.sequence = Math.max(this.sequence, entry.seq);
+		this.sequence = advanceSeq(this.sequence, entry.seq);
 		if (entry.key !== undefined) this.byKey.set(entry.key, entry);
 		if (this.replayed) this.hear?.(detached(entry));
 	}
@@ -396,20 +401,29 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 	/**
 	 * The storage to write to, or the failure a closed or superseded journal
 	 * answers every write with. The journal reads the storage first: what
-	 * another run wrote, and what a write in doubt left.
+	 * another run wrote, and what a write in doubt left. `isRun` says whether
+	 * the write that follows is this run's own run entry.
 	 */
-	private async open(): Promise<JournalStorage> {
-		this.refuse();
+	private async open(isRun: boolean): Promise<JournalStorage> {
+		this.refuse(isRun);
 		const storage = await this.ready;
 		await this.read(storage);
 		// A journal closed or superseded while the read ran writes nothing more.
-		this.refuse();
+		this.refuse(isRun);
 		return storage;
 	}
 
-	private refuse(): void {
-		if (this.superseded) throw new Error('The run is superseded: another run holds the name.');
+	/**
+	 * A closed or superseded journal writes nothing. A run whose own entry is
+	 * not on the journal while another run's fence stands writes nothing but
+	 * that entry: every reader would void what it wrote before its fence.
+	 */
+	private refuse(isRun: boolean): void {
+		if (writable(this.closed, this.fence, this.run, isRun)) return;
+		if (this.fence.superseded)
+			throw new Error('The run is superseded: another run holds the name.');
 		if (this.closed) throw new Error('The journal is closed.');
+		throw new Error('Another run holds the fence: this run must land its run entry first.');
 	}
 
 	/**
@@ -422,7 +436,7 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 			return await this.landed(storage, entry);
 		} catch (error) {
 			// The storage may hold what the cache does not: the read that settles it is queued.
-			this.tail = this.tail.then(() => this.open()).catch(() => {});
+			this.tail = this.tail.then(() => this.open(true)).catch(() => {});
 			throw error;
 		}
 	}
@@ -457,20 +471,27 @@ export class Journal<TKind extends string, TBodies extends Bodies<TKind>> {
 		kind: K,
 		intent: AppendIntent<TBodies[K], TResult>,
 	): Promise<AppendResult<KindEntry<TKind, TBodies, K>, TResult>> {
-		const storage = await this.open();
+		const isRun = kind === this.words.run;
+		const storage = await this.open(isRun);
 		const seen = intent.key === undefined ? undefined : this.byKey.get(intent.key);
-		if (seen !== undefined) {
-			if (keyConflict(seen.kind === kind, kind === this.words.run, seen.run === this.run)) {
-				throw new Error(
-					`The key '${intent.key}' already names a '${seen.kind}' entry at seq ${seen.seq}.`,
-				);
-			}
+		const named: Seen | undefined =
+			seen === undefined ? undefined : { kind: seen.kind, run: seen.run };
+		const decided: Keyed = keyed(named, kind, this.words.run, this.run);
+		if (decided === 'conflict') {
+			throw new Error(
+				`The key '${intent.key}' already names a '${seen?.kind}' entry at seq ${seen?.seq}.`,
+			);
+		}
+		if (decided === 'replay' && seen !== undefined) {
 			return { entry: detached(seen) as KindEntry<TKind, TBodies, K> };
 		}
 		const proposal = intent.decide();
 		if ('result' in proposal) return proposal;
 		if (!('body' in proposal)) {
 			throw new Error('The append decision must return a body or a result.');
+		}
+		if (this.sequence >= LAST_SEQ) {
+			throw new Error(`The journal is full: no seq follows ${this.sequence}.`);
 		}
 		// Capture the draft before crossing the asynchronous storage boundary.
 		const stored = beside(
