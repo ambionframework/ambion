@@ -2,3 +2,4 @@ packages/journal/src/rules.verified.ts
 packages/ambion/src/room/rules.verified.ts
 planning/evidence/formal/reconcile.rules.ts 60
 planning/evidence/formal/transition.rules.ts 60
+planning/evidence/formal/exchange.rules.ts 60

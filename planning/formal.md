@@ -527,6 +527,11 @@ a schema change that D3 takes.
 
 ## G. The exchange, the summary, and the roster
 
+**Every rule below is proven and waits for its slice.** The file
+[`planning/evidence/formal/exchange.rules.ts`](evidence/formal/exchange.rules.ts)
+holds the twelve rules with their contracts, and CI verifies its 52
+obligations with the landed files.
+
 **The exchange is a fold, and none of it is verified.** `exchange.ts` and
 `fold.ts` hold the rules `docs/exchange.md` §3 and §5, `docs/summary.md`,
 and `docs/roster.md` state, each as a filter chain or a case split.
@@ -737,7 +742,7 @@ them with the landed rules.
 | D. Transitions          | `room/rules.verified.ts`, `evidence/formal/transition.rules.ts` | 56 with B, 37 | Nine landed, the rest proven |
 | E. Routing and presence | `packages/ambion/src/room/rules.verified.ts`                    | prototype     | Planned, slice 2d            |
 | F. Activation identity  | `packages/ambion/src/room/rules.verified.ts`                    | prototype     | Planned, slice 2e            |
-| G. Exchange and roster  | `packages/ambion/src/room/rules.verified.ts`                    | prototype     | Planned, slice 2f            |
+| G. Exchange and roster  | `planning/evidence/formal/exchange.rules.ts`                    | 52            | Proven, slice 2f open        |
 | H. Vocabulary           | `packages/ambion/src/rules.verified.ts`                         | prototype     | Planned                      |
 
 **Three defects and three decisions came out of the review.** The seq

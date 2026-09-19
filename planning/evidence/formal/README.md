@@ -15,6 +15,7 @@ the two differ.
 | --------------------- | ----- | ----------- | ----------------------------- |
 | `reconcile.rules.ts`  | 2c    | 35          | LemmaScript 0.6.1, Dafny 4.11 |
 | `transition.rules.ts` | 2a    | 37          | LemmaScript 0.6.1, Dafny 4.11 |
+| `exchange.rules.ts`   | 2f    | 52          | LemmaScript 0.6.1, Dafny 4.11 |
 
 Verify one file at a desk:
 
