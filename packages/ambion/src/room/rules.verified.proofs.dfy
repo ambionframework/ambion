@@ -105,3 +105,180 @@ lemma EndingStands(stale: bool, expiry: int, now: int, later: int)
 {
   StillExpired(expiry, now, later);
 }
+
+// ---- One lease history -----------------------------------------------------
+
+// One entry the fold applies to the lease it holds for one id: a lease change
+// at its seq, or a cancellation marker at its seq.
+datatype LeaseEvent =
+  | Changed(change: Change, seqNo: int)
+  | Cancelled(position: int, cancelledAt: int, stamp: string)
+
+// What the fold admits: a change at a seq at or after the lease's start with a
+// read position of zero or more, and a marker at or after the lease's start.
+// These are the preconditions of `applyChange` and `cancelHold`.
+predicate leaseAdmits(known: Option<Hold>, e: LeaseEvent) {
+  match e
+  case Changed(change, seqNo) =>
+    seqNo >= 1 && change.readThrough >= 0
+    && (known.Some? ==> known.value.readThrough >= 0 && known.value.since <= seqNo)
+  case Cancelled(position, cancelledAt, stamp) =>
+    known.Some? ==> known.value.since <= cancelledAt
+}
+
+function leaseStep(known: Option<Hold>, e: LeaseEvent): Option<Hold>
+  requires leaseAdmits(known, e)
+{
+  match e
+  case Changed(change, seqNo) => Some(applyChange(known, change, seqNo))
+  case Cancelled(position, cancelledAt, stamp) =>
+    (match known case None => None case Some(h) => Some(cancelHold(h, position, cancelledAt, stamp)))
+}
+
+predicate leaseHistoryAdmitted(known: Option<Hold>, es: seq<LeaseEvent>)
+  decreases |es|
+{
+  |es| == 0 || (leaseAdmits(known, es[0]) && leaseHistoryAdmitted(leaseStep(known, es[0]), es[1..]))
+}
+
+function leaseFold(known: Option<Hold>, es: seq<LeaseEvent>): Option<Hold>
+  requires leaseHistoryAdmitted(known, es)
+  decreases |es|
+{
+  if |es| == 0 then known else leaseFold(leaseStep(known, es[0]), es[1..])
+}
+
+// The lease the fold holds is well formed: an ended lease ended at or after it started.
+predicate leaseWellFormed(hold: Hold) {
+  hold.readThrough >= 0 && (hold.ended? ==> hold.until >= hold.since)
+}
+
+// One step keeps the start, never lowers the read position, never changes an
+// ended lease, and ends a lease only at or after its start.
+lemma LeaseStepKeeps(known: Hold, e: LeaseEvent)
+  requires leaseWellFormed(known)
+  requires leaseAdmits(Some(known), e)
+  ensures leaseStep(Some(known), e).Some?
+  ensures leaseWellFormed(leaseStep(Some(known), e).value)
+  ensures leaseStep(Some(known), e).value.since == known.since
+  ensures leaseStep(Some(known), e).value.claimedAt == known.claimedAt
+  ensures leaseStep(Some(known), e).value.readThrough >= known.readThrough
+  ensures known.ended? ==> leaseStep(Some(known), e).value == known
+{
+}
+
+// The invariant holds across every admitted history: the start is fixed by the
+// first change, the read position never moves back, and ended is final.
+lemma LeaseHistoryKeeps(known: Hold, es: seq<LeaseEvent>)
+  requires leaseWellFormed(known)
+  requires leaseHistoryAdmitted(Some(known), es)
+  decreases |es|
+  ensures leaseFold(Some(known), es).Some?
+  ensures leaseWellFormed(leaseFold(Some(known), es).value)
+  ensures leaseFold(Some(known), es).value.since == known.since
+  ensures leaseFold(Some(known), es).value.claimedAt == known.claimedAt
+  ensures leaseFold(Some(known), es).value.readThrough >= known.readThrough
+  ensures known.ended? ==> leaseFold(Some(known), es).value == known
+{
+  if |es| > 0 {
+    LeaseStepKeeps(known, es[0]);
+    LeaseHistoryKeeps(leaseStep(Some(known), es[0]).value, es[1..]);
+  }
+}
+
+// The first change fixes the start: every later reading of the lease keeps the
+// seq and the stamp of that change.
+lemma FirstChangeFixesStart(change: Change, seqNo: int, es: seq<LeaseEvent>)
+  requires leaseHistoryAdmitted(None, [Changed(change, seqNo)] + es)
+  ensures leaseFold(None, [Changed(change, seqNo)] + es).Some?
+  ensures leaseFold(None, [Changed(change, seqNo)] + es).value.since == seqNo
+  ensures leaseFold(None, [Changed(change, seqNo)] + es).value.claimedAt == change.at
+{
+  var first := applyChange(None, change, seqNo);
+  assert ([Changed(change, seqNo)] + es)[1..] == es;
+  LeaseHistoryKeeps(first, es);
+}
+
+// ---- One open exchange -----------------------------------------------------
+
+// The record's closes in the order they landed: each range is a range, and each
+// starts after the one before ends.
+predicate closesOrdered(closes: seq<CloseRef>) {
+  (forall i :: 0 <= i < |closes| ==> 1 <= closes[i].from <= closes[i].through)
+  && (forall i, j :: 0 <= i < j < |closes| ==> closes[i].through < closes[j].from)
+}
+
+function throughsOf(closes: seq<CloseRef>): seq<int> {
+  seq(|closes|, i requires 0 <= i < |closes| => closes[i].through)
+}
+
+function seqsOf(messages: seq<Message>): seq<int> {
+  seq(|messages|, i requires 0 <= i < |messages| => messages[i].seq_)
+}
+
+lemma ThroughsSorted(closes: seq<CloseRef>)
+  requires closesOrdered(closes)
+  ensures forall i, j :: 0 <= i < j < |throughsOf(closes)| ==> throughsOf(closes)[i] <= throughsOf(closes)[j]
+  ensures forall i :: 0 <= i < |throughsOf(closes)| ==> throughsOf(closes)[i] >= 1
+{
+}
+
+lemma SeqsSorted(messages: seq<Message>)
+  requires forall i, j :: 0 <= i < j < |messages| ==> messages[i].seq_ < messages[j].seq_
+  requires forall i :: 0 <= i < |messages| ==> messages[i].seq_ >= 1
+  ensures forall i, j :: 0 <= i < j < |seqsOf(messages)| ==> seqsOf(messages)[i] <= seqsOf(messages)[j]
+  ensures forall i :: 0 <= i < |seqsOf(messages)| ==> seqsOf(messages)[i] >= 1
+{
+}
+
+// The open exchange is the earliest question after the last close, and every
+// other question that could open one lands inside it.
+lemma OneOpenExchange(messages: seq<Message>, people: seq<string>, closedThrough: int)
+  requires forall i, j :: 0 <= i < j < |messages| ==> messages[i].seq_ < messages[j].seq_
+  requires openingQuestion(messages, people, closedThrough).Some?
+  ensures var q := openingQuestion(messages, people, closedThrough).value;
+    q.seq_ > closedThrough
+    && forall k :: 0 <= k < |messages| && opensExchange(messages[k], people, closedThrough) ==> messages[k].seq_ >= q.seq_
+{
+  openingQuestion_ensures(messages, people, closedThrough);
+  var q := openingQuestion(messages, people, closedThrough).value;
+  var i :| 0 <= i < |messages| && messages[i] == q && forall j :: 0 <= j < i ==> !opensExchange(messages[j], people, closedThrough);
+  forall k | 0 <= k < |messages| && opensExchange(messages[k], people, closedThrough)
+    ensures messages[k].seq_ >= q.seq_
+  {
+    if k < i { assert !opensExchange(messages[k], people, closedThrough); }
+  }
+}
+
+// A close the room admits extends the ordered record: it starts at the open
+// question, after every earlier close, and ends at the record's end. So no two
+// exchanges overlap, and no close lands inside a later exchange.
+lemma CloseExtendsTheRecord(messages: seq<Message>, people: seq<string>, closes: seq<CloseRef>, close: CloseRef, live: bool)
+  requires forall i, j :: 0 <= i < j < |messages| ==> messages[i].seq_ < messages[j].seq_
+  requires forall i :: 0 <= i < |messages| ==> messages[i].seq_ >= 1
+  requires closesOrdered(closes)
+  requires (ThroughsSorted(closes); openingQuestion(messages, people, lastOf(throughsOf(closes))).Some?)
+  requires (ThroughsSorted(closes); SeqsSorted(messages);
+    var q := openingQuestion(messages, people, lastOf(throughsOf(closes))).value;
+    admitsClose(Some(OpenExchange(q.from, q.seq_)), close, lastOf(seqsOf(messages)), live))
+  ensures closesOrdered(closes + [close])
+  ensures !live
+{
+  ThroughsSorted(closes);
+  SeqsSorted(messages);
+  var closedThrough := lastOf(throughsOf(closes));
+  var q := openingQuestion(messages, people, closedThrough).value;
+  openingQuestion_ensures(messages, people, closedThrough);
+  lastOf_ensures(throughsOf(closes));
+  lastOf_ensures(seqsOf(messages));
+  admitsClose_ensures(Some(OpenExchange(q.from, q.seq_)), close, lastOf(seqsOf(messages)), live);
+  assert close.from == q.seq_;
+  assert close.through == lastOf(seqsOf(messages));
+  var i :| 0 <= i < |messages| && messages[i] == q;
+  assert seqsOf(messages)[i] == q.seq_;
+  assert q.seq_ <= lastOf(seqsOf(messages));
+  forall k | 0 <= k < |closes| ensures closes[k].through < close.from {
+    assert throughsOf(closes)[k] == closes[k].through;
+    assert closes[k].through <= closedThrough;
+  }
+}

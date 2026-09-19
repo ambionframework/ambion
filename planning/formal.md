@@ -696,7 +696,8 @@ and its evidence rows.
 | 2e    | `activation.ts`                            | `activationGrant`, `closeFor`, `names`, `wellFormed`; `onRoster` and `positiveBounded` were proven once and withdrawn                                                                                                                                                                             | Landed    |
 | 2f    | `exchange.ts`, `fold.ts`                   | `openingQuestion`, `summaryVerdict`, `lastOf`; `discussion`, `coversSeq`, `reserveOf`, `reseated`, `foldRoster`, `exchangeContaining`, and `messagesSince` were proven once and withdrawn                                                                                                         | Landed    |
 | H     | `validate.ts`, `activation-id.ts`          | `rangeWellFormed` and `positiveBounded` were proven once and withdrawn; the checks stay as plain code                                                                                                                                                                                             | Withdrawn |
-| 3     | the two `.dfy` files                       | the lease fold over one id, one open exchange, unique roster names, the stop-loop and the pass measures; `seatLive` (C7), `draftsClose` (F7), `storedIdAccepted` (F8)                                                                                                                             | Open      |
+| 3a    | `room/rules.verified.proofs.dfy`           | `LeaseHistoryKeeps`, `FirstChangeFixesStart`, `OneOpenExchange`, `CloseExtendsTheRecord`: the lease fold over one id and one open exchange                                                                                                                                                        | Landed    |
+| 3b    | the two `.dfy` files                       | unique roster names, the stop-loop and the pass measures; `seatLive` (C7), `draftsClose` (F7), `storedIdAccepted` (F8)                                                                                                                                                                            | Open      |
 
 **The slices landed in the order 2a, 2b, 2c, 2d, 2e, 2f, then the rest
 of 2a and H.** The lease step first, because `atWork` and
@@ -714,9 +715,11 @@ one `Seat` for the routing and one `Seating` for the roster (E), and one
 against `types.ts`.
 
 **A lemma with no caller lives in the proofs file.** `AttemptIdsAreFresh`,
-`StillExpired`, and `EndingStands` state relations between rules and have
-no runtime call site, so they are written in Dafny in the `.proofs.dfy`
-beside the rules, and `check-extra.sh` verifies them. The `.dfy` equals
+`StillExpired`, `EndingStands`, `LeaseHistoryKeeps`,
+`FirstChangeFixesStart`, `OneOpenExchange`, and `CloseExtendsTheRecord`
+state relations between rules and have no runtime call site, so they are
+written in Dafny in the `.proofs.dfy` beside the rules, and
+`check-extra.sh` verifies them. The `.dfy` equals
 its generation, so a regeneration never merges.
 
 **The room's rules are one file.** `rules.verified.ts` holds the lease,
@@ -725,13 +728,16 @@ pass, and the close, and proves in about fifteen seconds. The routing,
 roster, and record rules were split into two more files for a time; the
 scope decision removed them.
 
-**Tranche 3 waits for the addressed projection.** A lemma over the fold is
-a lemma over that shape, so the lease fold, the exchange fold, and the
-roster fold lemmas land with B1 in `next.md`. Two liveness facts belong
-here: a measure the stop loop decreases, and a measure each
-reconciliation pass decreases, so the `PASSES` bound is a proof. Today
-only the chaos drain and the walk's `drained` check witness them.
-`AttemptIdsAreFresh` is small enough to land with 2b.
+**Tranche 3a landed over the rules' own inputs.** The lease lemmas fold a
+history of `Change` values and cancellation markers with `applyChange`
+and `cancelHold`, and the exchange lemmas take the `Message` and
+`CloseRef` values the rules take. Neither needs the addressed projection
+of B1 in `next.md`; the projection from an entry to those values stays
+with the scripted suites. The roster fold lemma waits for B1. Two
+liveness facts stay open: a measure the stop loop decreases, and a
+measure each reconciliation pass decreases, so the `PASSES` bound is a
+proof. Today only the chaos drain and the walk's `drained` check witness
+them.
 
 **What no tranche proves.** The regular expression that decodes an id,
 `Date.parse` on a stamp, `typeof` and `Number.isSafeInteger` on the wire,
