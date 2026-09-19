@@ -27,7 +27,10 @@ export const tui = {
 	accent: colors.teal,
 	coral: colors.coral,
 	muted: colors.muted,
-	dim: '#8a969b',
-	line: '#e3ddd2',
+	dim: '#66757b',
+	// A border needs 3:1 against the paper. The soft tints below are fills, not borders.
+	line: '#7f8c92',
+	selected: '#e2edef',
+	track: '#efeae1',
 	red: '#c0473a',
 } as const;

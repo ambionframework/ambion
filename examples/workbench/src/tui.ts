@@ -13,6 +13,7 @@ import {
 } from '@opentui/core';
 import { brand, tui as palette } from './brand.ts';
 import { type Person, type RoomView, WorkbenchClient } from './client.ts';
+import { RoomFeed } from './feed.ts';
 
 const POLL_INTERVAL_MS = 700;
 
@@ -52,8 +53,6 @@ class WorkbenchTui {
 	private readonly input: InputRenderable;
 	private rooms: RoomView[] = [];
 	private selected = '';
-	private messages: Message[] = [];
-	private cursor = 0;
 	private statusLine = 'Connecting…';
 	private error: string | undefined;
 	private sending = false;
@@ -61,24 +60,36 @@ class WorkbenchTui {
 	private readonly renderer: CliRenderer;
 	private readonly client: WorkbenchClient;
 	private readonly identity: Person;
+	private readonly feed: RoomFeed;
 
 	constructor(renderer: CliRenderer, client: WorkbenchClient, identity: Person) {
 		this.renderer = renderer;
 		this.client = client;
 		this.identity = identity;
+		this.feed = new RoomFeed(client);
 		this.header = new TextRenderable(renderer, { content: this.brandLine(), fg: palette.accent });
 		this.roomSelect = new SelectRenderable(renderer, {
 			options: [],
 			flexGrow: 1,
+			// Set every state. OpenTUI defaults to a dark theme, and a default left in
+			// place puts dark fills and near-white text on the light brand paper.
+			backgroundColor: palette.bg,
 			textColor: palette.muted,
+			focusedBackgroundColor: palette.bg,
 			focusedTextColor: palette.text,
+			selectedBackgroundColor: palette.selected,
 			selectedTextColor: palette.accent,
+			descriptionColor: palette.muted,
+			selectedDescriptionColor: palette.accent,
 			showDescription: false,
 		});
 		this.roomBox = new BoxRenderable(renderer, {
 			width: 24,
 			border: true,
+			backgroundColor: palette.bg,
 			borderColor: palette.line,
+			focusedBorderColor: palette.accent,
+			titleColor: palette.muted,
 			title: 'Rooms',
 			flexShrink: 0,
 		});
@@ -87,12 +98,21 @@ class WorkbenchTui {
 			stickyScroll: true,
 			stickyStart: 'bottom',
 			scrollY: true,
+			backgroundColor: palette.bg,
+			scrollbarOptions: {
+				trackOptions: { backgroundColor: palette.track, foregroundColor: palette.dim },
+			},
 		});
 		this.conversation = new TextRenderable(renderer, { content: 'Loading…', fg: palette.text });
 		this.status = new TextRenderable(renderer, { content: this.statusLine, fg: palette.muted });
 		this.input = new InputRenderable(renderer, {
 			placeholder: 'Message the room…',
 			maxLength: 2_000,
+			backgroundColor: palette.panel,
+			textColor: palette.text,
+			focusedBackgroundColor: palette.panel,
+			focusedTextColor: palette.text,
+			placeholderColor: palette.muted,
 		});
 		this.build();
 	}
@@ -108,6 +128,7 @@ class WorkbenchTui {
 			height: '100%',
 			padding: 1,
 			gap: 1,
+			backgroundColor: palette.bg,
 		});
 		const body = new BoxRenderable(this.renderer, { flexDirection: 'row', flexGrow: 1, gap: 1 });
 		const main = new BoxRenderable(this.renderer, {
@@ -167,8 +188,7 @@ class WorkbenchTui {
 		if (name === this.selected) return;
 		const previous = this.selected;
 		this.selected = name;
-		this.messages = [];
-		this.cursor = 0;
+		this.feed.select(name);
 		this.error = undefined;
 		if (previous) await this.client.leave(previous, this.identity.name).catch(() => {});
 		await this.enter(name);
@@ -203,10 +223,10 @@ class WorkbenchTui {
 	}
 
 	private async refresh(): Promise<void> {
-		if (this.stopped || !this.selected) return;
+		if (this.stopped) return;
 		try {
-			const view = await this.client.read(this.selected, this.cursor);
-			this.apply(view);
+			const view = await this.feed.refresh();
+			if (view) this.apply(view);
 		} catch (error) {
 			this.error = errorText(error);
 			this.renderStatus();
@@ -214,11 +234,6 @@ class WorkbenchTui {
 	}
 
 	private apply(view: RoomView): void {
-		const incoming = view.messages ?? [];
-		if (incoming.length > 0) {
-			this.messages = [...this.messages, ...incoming];
-			this.cursor = this.messages.at(-1)?.seq ?? this.cursor;
-		}
 		this.statusLine = working(view.participants) ? 'Working…' : 'Ready';
 		this.roomBox.title = view.name;
 		this.renderConversation();
@@ -227,7 +242,7 @@ class WorkbenchTui {
 	}
 
 	private renderConversation(): void {
-		const lines = this.messages.flatMap((message) => {
+		const lines = this.feed.messages.flatMap((message) => {
 			const line = messageLine(message);
 			return line === undefined ? [] : [line];
 		});
@@ -246,6 +261,11 @@ class WorkbenchTui {
 				: `Error: ${this.error}`;
 		this.status.fg = this.error === undefined ? palette.muted : palette.red;
 		this.renderer.requestRender();
+	}
+
+	/** End the person's visit, so the room shows them as gone after the terminal exits. */
+	async leave(): Promise<void> {
+		if (this.selected) await this.client.leave(this.selected, this.identity.name).catch(() => {});
 	}
 
 	/** Run until the renderer is destroyed. */
@@ -272,15 +292,29 @@ function pickIdentity(people: readonly Person[], requested: string | undefined):
 	return person;
 }
 
+/** OpenTUI draws through Node's FFI, which Node enables only with a flag. */
+async function openRenderer(): Promise<CliRenderer> {
+	try {
+		return await createCliRenderer({ exitOnCtrlC: true, targetFps: 30 });
+	} catch (error) {
+		const detail = errorText(error);
+		if (!/FFI/i.test(detail)) throw error;
+		throw new Error(
+			`${detail}\nStart the terminal with \`pnpm tui\`. It passes --experimental-ffi to Node.`,
+		);
+	}
+}
+
 /** Connect to a running Workbench and open the terminal endpoint. */
 export async function runWorkbenchTui(baseUrl: string, requestedPerson?: string): Promise<void> {
 	const client = new WorkbenchClient(baseUrl);
 	const people = await client.people();
 	const identity = pickIdentity(people, requestedPerson);
-	const renderer = await createCliRenderer({ exitOnCtrlC: true, targetFps: 30 });
+	const renderer = await openRenderer();
 	renderer.setBackgroundColor(palette.bg);
 	const app = new WorkbenchTui(renderer, client, identity);
 	await app.run();
+	await app.leave();
 }
 
 const entry = process.argv[1];
