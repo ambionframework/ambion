@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="318" height="318" viewBox="0 0 318 318" role="img" aria-label="Ambion"><title>Ambion</title><g transform="translate(53,53)"><circle cx="50" cy="50" r="50" fill="#FFFFFF"/>
+ <path d="M134 0H190Q212 0 212 22V78Q212 100 190 100H162A50 50 0 0 1 112 50V22Q112 0 134 0Z" fill="#F76B52"/>
+ <path d="M22 112H50A50 50 0 0 1 100 162V190Q100 212 78 212H22Q0 212 0 190V134Q0 112 22 112Z" fill="#FFFFFF"/>
+ <circle cx="162" cy="162" r="50" fill="#F76B52"/></g></svg>
