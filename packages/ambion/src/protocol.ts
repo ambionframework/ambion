@@ -119,11 +119,19 @@ export interface CommitRequest {
 	intent: Intent;
 }
 
+/**
+ * What a seat's commit call resolves to. The room stamps every case but
+ * `unknown`. A transport that loses the confirmation of a commit resolves the
+ * call to `unknown`: the message may or may not have landed. The commit key
+ * makes a retry safe, so the seat retries first and reports `unknown` only
+ * when no attempt confirms.
+ */
 export type CommitResult =
 	| { committed: Message }
 	| { unchanged: { kind: 'seated' | 'unseated'; name: string } }
 	| { missed: Message[] }
 	| { refused: string }
+	| { unknown: string }
 	| Stale;
 
 export type LeaseRequest =

@@ -371,11 +371,15 @@ export class AgentRunner implements SeatPort {
 		return {
 			view: (id) => this.room.view(id),
 			commit: async (request) => {
-				const committed = await this.call(() => this.room.commit(request), cancelled);
+				// The commit key is the tool call id, so a retry under it is
+				// idempotent: the room returns the message it already holds. A commit
+				// no attempt confirms is unknown; it may or may not have landed, and
+				// the tool ends the turn rather than speak again under a new key.
+				const committed = await this.calls(() => this.room.commit(request), cancelled);
 				if (committed.kind === 'value') return committed.value;
 				if (committed.kind === 'cancelled') return { stale: 'the activation was cut' };
 				this.reportCallFailure(request.activation, 'commit', committed.error);
-				throw committed.error;
+				return { unknown: committed.error.message };
 			},
 			lease: (request) => this.room.lease(request),
 		};
