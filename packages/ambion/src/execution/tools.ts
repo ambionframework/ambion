@@ -66,6 +66,14 @@ function landResponse(
 	if ('unchanged' in response) return delivered();
 	if ('refused' in response) throw new Error(response.refused);
 	if ('missed' in response) throw new Error('The room moved. Read what landed, then decide again.');
+	if ('unknown' in response) {
+		// The message may already be on the record, so the turn ends here. A
+		// second say under a new key would land the same message twice.
+		activation.abort();
+		return standDown(
+			'The room did not confirm your message, and it may already hold it.',
+		) as AgentToolResult<Record<string, never>>;
+	}
 	activation.abort();
 	return standDown(`Your turn ended: ${response.stale}.`) as AgentToolResult<Record<string, never>>;
 }
