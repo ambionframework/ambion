@@ -130,3 +130,82 @@ export function acknowledged(prior: number | undefined, incoming: number): numbe
 	//@ ensures \result >= 0
 	return prior === undefined ? incoming : Math.max(prior, incoming);
 }
+
+/** What a spoken commit's read position says: off the record, short of it, or at its end. */
+export type Freshness = 'invalid' | 'missed' | 'fresh';
+
+//@ contract A position is on the record when it is between zero and the last seq.
+export function onRecord(position: number, lastSeq: number): boolean {
+	//@ requires lastSeq >= 0
+	//@ ensures \result <==> (0 <= position && position <= lastSeq)
+	return position >= 0 && position <= lastSeq;
+}
+
+//@ contract The say lock: a spoken commit lands only at the record's last seq. A position short of it is missed, and one off the record is invalid.
+export function speechFreshness(readThrough: number | undefined, lastSeq: number): Freshness {
+	//@ requires lastSeq >= 0
+	//@ ensures readThrough == undefined ==> \result == 'invalid'
+	//@ ensures readThrough != undefined ==> (\result == 'invalid' <==> !onRecord(readThrough, lastSeq))
+	//@ ensures readThrough != undefined ==> (\result == 'fresh' <==> readThrough == lastSeq)
+	//@ ensures readThrough != undefined ==> (\result == 'missed' <==> (0 <= readThrough && readThrough < lastSeq))
+	//@ ensures \result == 'missed' ==> lastSeq > 0
+	if (readThrough === undefined || !onRecord(readThrough, lastSeq)) return 'invalid';
+	return readThrough < lastSeq ? 'missed' : 'fresh';
+}
+
+/** The open exchange, as the close admission reads it. */
+export interface OpenExchange {
+	readonly owner: string;
+	readonly from: number;
+}
+
+/** A close, as the close admission reads it. */
+export interface CloseRef {
+	readonly owner: string;
+	readonly from: number;
+	readonly through: number;
+}
+
+//@ contract A close is written only for the open exchange, at the record's last seq, with nothing of the exchange's work live.
+export function admitsClose(
+	open: OpenExchange | undefined,
+	close: CloseRef,
+	lastSeq: number,
+	exchangeLive: boolean,
+): boolean {
+	//@ ensures \result ==> open != undefined
+	//@ ensures open != undefined ==> (\result <==> (open.from == close.from && open.owner == close.owner && close.through == lastSeq && !exchangeLive))
+	//@ ensures exchangeLive ==> !\result
+	//@ ensures \result ==> close.through == lastSeq
+	if (open === undefined) return false;
+	return (
+		open.from === close.from &&
+		open.owner === close.owner &&
+		close.through === lastSeq &&
+		!exchangeLive
+	);
+}
+
+//@ contract A summary covers a closed exchange when it addresses the owner and its range contains the exchange's range.
+export function coversExchange(
+	summaryTo: string,
+	summaryFrom: number,
+	summaryThrough: number,
+	owner: string,
+	from: number,
+	through: number,
+): boolean {
+	//@ ensures \result <==> (summaryTo == owner && summaryFrom <= from && summaryThrough >= through)
+	//@ ensures \result ==> summaryTo == owner
+	//@ ensures \result && from <= through ==> summaryFrom <= summaryThrough
+	return summaryTo === owner && summaryFrom <= from && summaryThrough >= through;
+}
+
+//@ contract Work survives a cancellation when no marker stands, or its cause is at or after the marker.
+export function survivesCancellation(position: number, cancelledAt: number | undefined): boolean {
+	//@ ensures cancelledAt == undefined ==> \result
+	//@ ensures cancelledAt != undefined ==> (\result <==> !beforeCancellation(position, cancelledAt))
+	//@ ensures cancelledAt != undefined ==> (\result <==> position >= cancelledAt)
+	if (cancelledAt === undefined) return true;
+	return !beforeCancellation(position, cancelledAt);
+}

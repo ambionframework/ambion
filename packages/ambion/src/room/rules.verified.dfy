@@ -14,6 +14,12 @@ datatype Purpose = respond | summarize
 
 datatype Intent = said | seated | unseated
 
+datatype Freshness = invalid | missed | fresh_
+
+datatype OpenExchange = OpenExchange(owner: string, from: int)
+
+datatype CloseRef = CloseRef(owner: string, from: int, through: int)
+
 function expired(expiry: int, now: int): bool
 {
   (expiry <= now)
@@ -169,5 +175,91 @@ lemma acknowledged_ensures(prior: Option<int>, incoming: int)
   ensures (match prior { case Some(i_prior_val) => ((acknowledged(prior, incoming) == i_prior_val) || (acknowledged(prior, incoming) == incoming)) case None => true })
   ensures (match prior { case Some(i_prior_val) => ((incoming == 0) ==> (acknowledged(prior, incoming) == i_prior_val)) case None => true })
   ensures (acknowledged(prior, incoming) >= 0)
+{
+}
+
+function onRecord(position: int, lastSeq: int): bool
+  requires (lastSeq >= 0)
+{
+  ((position >= 0) && (position <= lastSeq))
+}
+
+lemma onRecord_ensures(position: int, lastSeq: int)
+  requires (lastSeq >= 0)
+  ensures (onRecord(position, lastSeq) <==> ((0 <= position) && (position <= lastSeq)))
+{
+}
+
+function speechFreshness(readThrough: Option<int>, lastSeq: int): Freshness
+  requires (lastSeq >= 0)
+{
+  match readThrough {
+    case Some(i_readThrough_val) =>
+      if !(onRecord(i_readThrough_val, lastSeq)) then
+        Freshness.invalid
+      else
+        if (i_readThrough_val < lastSeq) then
+          Freshness.missed
+        else
+          Freshness.fresh_
+    case None =>
+      Freshness.invalid
+  }
+}
+
+lemma speechFreshness_ensures(readThrough: Option<int>, lastSeq: int)
+  requires (lastSeq >= 0)
+  ensures ((match readThrough { case Some(i_) => false case None => true }) ==> speechFreshness(readThrough, lastSeq).invalid?)
+  ensures (match readThrough { case Some(i_readThrough_val) => (speechFreshness(readThrough, lastSeq).invalid? <==> !(onRecord(i_readThrough_val, lastSeq))) case None => true })
+  ensures (match readThrough { case Some(i_readThrough_val) => (speechFreshness(readThrough, lastSeq).fresh_? <==> (i_readThrough_val == lastSeq)) case None => true })
+  ensures (match readThrough { case Some(i_readThrough_val) => (speechFreshness(readThrough, lastSeq).missed? <==> ((0 <= i_readThrough_val) && (i_readThrough_val < lastSeq))) case None => true })
+  ensures (speechFreshness(readThrough, lastSeq).missed? ==> (lastSeq > 0))
+{
+}
+
+function admitsClose(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool): bool
+{
+  match open {
+    case Some(i_open_val) =>
+      ((((i_open_val.from == close.from) && (i_open_val.owner == close.owner)) && (close.through == lastSeq)) && !(exchangeLive))
+    case None =>
+      false
+  }
+}
+
+lemma admitsClose_ensures(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool)
+  ensures (admitsClose(open, close, lastSeq, exchangeLive) ==> (match open { case Some(i_) => true case None => false }))
+  ensures (match open { case Some(i_open_val) => (admitsClose(open, close, lastSeq, exchangeLive) <==> ((((i_open_val.from == close.from) && (i_open_val.owner == close.owner)) && (close.through == lastSeq)) && !(exchangeLive))) case None => true })
+  ensures (exchangeLive ==> !(admitsClose(open, close, lastSeq, exchangeLive)))
+  ensures (admitsClose(open, close, lastSeq, exchangeLive) ==> (close.through == lastSeq))
+{
+}
+
+function coversExchange(summaryTo: string, summaryFrom: int, summaryThrough: int, owner: string, from: int, through: int): bool
+{
+  (((summaryTo == owner) && (summaryFrom <= from)) && (summaryThrough >= through))
+}
+
+lemma coversExchange_ensures(summaryTo: string, summaryFrom: int, summaryThrough: int, owner: string, from: int, through: int)
+  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) <==> (((summaryTo == owner) && (summaryFrom <= from)) && (summaryThrough >= through)))
+  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) ==> (summaryTo == owner))
+  ensures (coversExchange(summaryTo, summaryFrom, summaryThrough, owner, from, through) ==> (from <= through) ==> (summaryFrom <= summaryThrough))
+{
+}
+
+function survivesCancellation(position: int, cancelledAt: Option<int>): bool
+{
+  match cancelledAt {
+    case Some(i_cancelledAt_val) =>
+      !(beforeCancellation(position, i_cancelledAt_val))
+    case None =>
+      true
+  }
+}
+
+lemma survivesCancellation_ensures(position: int, cancelledAt: Option<int>)
+  ensures ((match cancelledAt { case Some(i_) => false case None => true }) ==> survivesCancellation(position, cancelledAt))
+  ensures (match cancelledAt { case Some(i_cancelledAt_val) => (survivesCancellation(position, cancelledAt) <==> !(beforeCancellation(position, i_cancelledAt_val))) case None => true })
+  ensures (match cancelledAt { case Some(i_cancelledAt_val) => (survivesCancellation(position, cancelledAt) <==> (position >= i_cancelledAt_val)) case None => true })
 {
 }

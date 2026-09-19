@@ -25,7 +25,7 @@ import {
 	pendingWakes,
 } from './lease.ts';
 import { foldPeople, type PersonState } from './presence.ts';
-import { beforeCancellation } from './rules.verified.ts';
+import { beforeCancellation, survivesCancellation } from './rules.verified.ts';
 
 /** A summary one person is owed, and how the room has tried to write it. */
 interface Owed extends PendingActivation {
@@ -142,7 +142,7 @@ export function project(read: BaseFacts, options: FoldOptions): RoomState {
 		leases,
 		new Set(roster.map((s) => s.name)),
 		options,
-	).filter((wake) => cancelledAt === undefined || wake.position >= cancelledAt);
+	).filter((wake) => survivesCancellation(wake.position, cancelledAt));
 	const owed = foldOwed(closes, messages, leases, options, cancelledAt);
 	const state: RoomState = {
 		composition,

@@ -15,7 +15,16 @@ import {
 	type Reconciliation,
 } from './reconcile.ts';
 import { routes } from './routing.ts';
-import { acknowledged, leaseExpiry, mayEnd, permits } from './rules.verified.ts';
+import {
+	acknowledged,
+	admitsClose,
+	coversExchange,
+	leaseExpiry,
+	mayEnd,
+	onRecord,
+	permits,
+	speechFreshness as freshnessRule,
+} from './rules.verified.ts';
 
 /** A committed event includes the position assigned by the journal. */
 export type RoomEvent = Entry;
@@ -110,12 +119,14 @@ export function decide(
 			return compose(state, command.composition);
 		case 'close':
 			return {
-				event:
-					state.exchange?.from === command.close.from &&
-					state.lastSeq === command.close.through &&
-					!liveWork(state, now).exchange
-						? { kind: 'close', body: command.close }
-						: undefined,
+				event: admitsClose(
+					state.exchange,
+					command.close,
+					state.lastSeq,
+					liveWork(state, now).exchange,
+				)
+					? { kind: 'close', body: command.close }
+					: undefined,
 			};
 		case 'run':
 			return { event: { kind: 'run', body: { at: iso(now) } } };
@@ -307,9 +318,14 @@ function isCoveringSummary(
 ): boolean {
 	return (
 		message.kind === 'summary' &&
-		message.to === purpose.person &&
-		message.covers.from <= purpose.exchange &&
-		message.covers.through >= purpose.through
+		coversExchange(
+			message.to,
+			message.covers.from,
+			message.covers.through,
+			purpose.person,
+			purpose.exchange,
+			purpose.through,
+		)
 	);
 }
 
@@ -332,10 +348,12 @@ function speechFreshness(
 	request: CommitRequest,
 ): RoomDecision<'message'> | undefined {
 	if (request.intent.kind !== 'said') return undefined;
-	const { readThrough } = request;
-	if (!validReadThrough(readThrough, state.lastSeq))
+	// The wire guard stays here: a Dafny int has no fraction and no NaN.
+	const readThrough = safePosition(request.readThrough);
+	const freshness = freshnessRule(readThrough, state.lastSeq);
+	if (readThrough === undefined || freshness === 'invalid')
 		return refused('A spoken message must state a current record position.');
-	return readThrough < state.lastSeq
+	return freshness === 'missed'
 		? {
 				refusal: {
 					category: 'missed',
@@ -345,13 +363,14 @@ function speechFreshness(
 		: undefined;
 }
 
+/** A number off the wire that a rule may read: a safe integer, or nothing. */
+function safePosition(value: number | undefined): number | undefined {
+	return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
 function validReadThrough(readThrough: number | undefined, lastSeq: number): readThrough is number {
-	return (
-		typeof readThrough === 'number' &&
-		Number.isSafeInteger(readThrough) &&
-		readThrough >= 0 &&
-		readThrough <= lastSeq
-	);
+	const position = safePosition(readThrough);
+	return position !== undefined && onRecord(position, lastSeq);
 }
 
 function seating(

@@ -40,6 +40,7 @@ import {
 	type SummaryOutcome,
 } from '../types.ts';
 import type { LeaseHold } from './lease.ts';
+import { coversExchange, survivesCancellation } from './rules.verified.ts';
 
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
@@ -52,9 +53,14 @@ export function summaryCompletion(
 		(message): message is SummaryMessage =>
 			isSummary(message) &&
 			message.from === close.summary &&
-			message.to === close.owner &&
-			message.covers.from <= close.from &&
-			message.covers.through >= close.through,
+			coversExchange(
+				message.to,
+				message.covers.from,
+				message.covers.through,
+				close.owner,
+				close.from,
+				close.through,
+			),
 	);
 	if (summary !== undefined) return { status: 'published', summary };
 	const writer = close.summary;
@@ -90,15 +96,14 @@ function summaryDraftOutcome(
 			(lease) =>
 				lease.phase === 'ended' && (lease.reason === 'revoked' || lease.reason === 'abandoned'),
 		);
+	const cancelledAfterClose = !survivesCancellation(close.through, cancelledAt);
 	const cancelledDraft =
-		cancelledAt !== undefined &&
-		close.through < cancelledAt &&
+		cancelledAfterClose &&
 		drafts.some(
 			(lease) => lease.phase === 'ended' && lease.reason === 'revoked' && lease.cancelled === true,
 		);
 	if (cancelledDraft) return { status: 'failed' };
-	if (!stoodDown && cancelledAt !== undefined && close.through < cancelledAt)
-		return { status: 'failed' };
+	if (!stoodDown && cancelledAfterClose) return { status: 'failed' };
 	if (!stoodDown) return { status: 'pending', writer };
 	// Preserve reads of histories with a running draft beside a terminal one.
 	if (drafts.some((lease) => lease.phase === 'running')) return { status: 'pending' };
