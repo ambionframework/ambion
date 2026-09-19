@@ -1,9 +1,26 @@
 /**
  * The rules the room decides by, as functions LemmaScript checks. Every
- * function here is pure, and `lease.ts` and `reconcile.ts` run these
- * bodies: the proof is about the code the room runs. `lsc check` turns
- * the `//@` annotations into Dafny obligations, and CI verifies them.
+ * function here is pure, and `lease.ts`, `reconcile.ts`, `delivery.ts`,
+ * and `transition.ts` run these bodies: the proof is about the code the
+ * room runs. `lsc check` turns the `//@` annotations into Dafny
+ * obligations, and CI verifies them.
+ *
+ * The string unions below are declared again beside the rules, because
+ * LemmaScript lowers only the types in its own file. `rules.test.ts`
+ * asserts each copy equals the public type in `types.ts`.
  */
+
+/** The two phases a lease holds. */
+export type LeasePhase = 'running' | 'ended';
+
+/** Why a lease ended. The same union as `EndReason` in `types.ts`. */
+export type LeaseEndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandoned';
+
+/** What an activation is for: an answer to a message, or a closing summary. */
+export type Purpose = 'respond' | 'summarize';
+
+/** What a commit asks for. */
+export type Intent = 'said' | 'seated' | 'unseated';
 
 //@ contract A lease is past its expiry once now reaches it.
 export function expired(expiry: number, now: number): boolean {
@@ -47,4 +64,69 @@ export function nextAttempt(attempts: number): number {
 export function beforeCancellation(position: number, cancelledAt: number): boolean {
 	//@ ensures \result <==> position < cancelledAt
 	return position < cancelledAt;
+}
+
+//@ contract Ended is final. An activation that never claimed ends only by revocation or abandonment. A running lease is revoked at will, ends as expired only past its expiry, and as released or failed only before it.
+export function mayEnd(
+	known: LeasePhase | undefined,
+	reason: LeaseEndReason,
+	pastExpiry: boolean,
+): boolean {
+	//@ ensures known == undefined ==> (\result <==> (reason == 'revoked' || reason == 'abandoned'))
+	//@ ensures known != undefined && known == 'ended' ==> !\result
+	//@ ensures known != undefined && known == 'running' && reason == 'abandoned' ==> !\result
+	//@ ensures known != undefined && known == 'running' && reason == 'revoked' ==> \result
+	//@ ensures known != undefined && known == 'running' && reason == 'expired' ==> (\result <==> pastExpiry)
+	//@ ensures known != undefined && known == 'running' && reason == 'released' ==> (\result <==> !pastExpiry)
+	//@ ensures known != undefined && known == 'running' && reason == 'failed' ==> (\result <==> !pastExpiry)
+	if (known === undefined) return reason === 'revoked' || reason === 'abandoned';
+	if (known === 'ended' || reason === 'abandoned') return false;
+	if (reason === 'revoked') return true;
+	return pastExpiry === (reason === 'expired');
+}
+
+//@ contract Both purposes permit speech. Only a response permits a seating or an unseating. A closing activation can do nothing but speak.
+export function permits(purpose: Purpose, intent: Intent): boolean {
+	//@ ensures intent == 'said' ==> \result
+	//@ ensures intent != 'said' ==> (\result <==> purpose == 'respond')
+	//@ ensures purpose == 'summarize' ==> (\result <==> intent == 'said')
+	//@ ensures purpose == 'respond' ==> \result
+	switch (intent) {
+		case 'said':
+			return purpose === 'respond' || purpose === 'summarize';
+		case 'seated':
+		case 'unseated':
+			return purpose === 'respond';
+	}
+}
+
+//@ contract A claim or a renewal expires at the earlier of now plus the expiry and the first claim plus the deadline. A fresh claim expires after now, and a renewal expires after now exactly when the deadline has not passed.
+export function leaseExpiry(
+	now: number,
+	claimedAt: number,
+	expiry: number,
+	deadline: number,
+): number {
+	//@ requires expiry >= 1
+	//@ requires deadline >= 1
+	//@ ensures \result <= now + expiry
+	//@ ensures \result <= claimedAt + deadline
+	//@ ensures \result == now + expiry || \result == claimedAt + deadline
+	//@ ensures \result > now <==> claimedAt + deadline > now
+	//@ ensures claimedAt == now ==> \result > now
+	//@ ensures !expired(\result, now) <==> !expired(claimedAt + deadline, now)
+	return Math.min(now + expiry, claimedAt + deadline);
+}
+
+//@ contract The acknowledged position never moves back: a claim, and a renewal that states nothing, keep the prior acknowledgment.
+export function acknowledged(prior: number | undefined, incoming: number): number {
+	//@ requires incoming >= 0
+	//@ requires prior != undefined ==> prior >= 0
+	//@ ensures prior != undefined ==> \result >= prior
+	//@ ensures \result >= incoming
+	//@ ensures prior == undefined ==> \result == incoming
+	//@ ensures prior != undefined ==> (\result == prior || \result == incoming)
+	//@ ensures prior != undefined && incoming == 0 ==> \result == prior
+	//@ ensures \result >= 0
+	return prior === undefined ? incoming : Math.max(prior, incoming);
 }

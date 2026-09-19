@@ -7,7 +7,7 @@ import type { ActivationSpec, CommitRequest } from '../protocol.ts';
 import type { EndReason, Message, PresenceMessage } from '../types.ts';
 import { activationSpec } from './activation.ts';
 import { applyEvent, baseOf, type FoldOptions, project, type RoomState } from './fold.ts';
-import { isExpired, isLive, type LeaseHold } from './lease.ts';
+import { isExpired, isLive } from './lease.ts';
 import {
 	liveWork,
 	planReconciliation,
@@ -15,6 +15,7 @@ import {
 	type Reconciliation,
 } from './reconcile.ts';
 import { routes } from './routing.ts';
+import { acknowledged, leaseExpiry, mayEnd, permits } from './rules.verified.ts';
 
 /** A committed event includes the position assigned by the journal. */
 export type RoomEvent = Entry;
@@ -248,7 +249,8 @@ function commit(state: RoomState, request: CommitRequest, now: number): RoomDeci
 	const live = liveSpec(state, request.activation, spec, now);
 	if ('refusal' in live) return live;
 	const { intent } = request;
-	if (!permits(live, intent.kind)) return refused('This activation cannot submit that intent.');
+	if (!permits(live.purpose.kind, intent.kind))
+		return refused('This activation cannot submit that intent.');
 	const purpose = live.purpose;
 	if (intent.kind === 'said' && purpose.kind === 'summarize')
 		return closingCommit(state, request, live, purpose, now);
@@ -341,18 +343,6 @@ function speechFreshness(
 				},
 			}
 		: undefined;
-}
-
-function permits(spec: ActivationSpec, kind: CommitRequest['intent']['kind']): boolean {
-	switch (kind) {
-		case 'said':
-			return spec.purpose.kind === 'respond' || spec.purpose.kind === 'summarize';
-		case 'seated':
-		case 'unseated':
-			return spec.purpose.kind === 'respond';
-		default:
-			return false;
-	}
 }
 
 function validReadThrough(readThrough: number | undefined, lastSeq: number): readThrough is number {
@@ -466,16 +456,15 @@ function runningLease(
 		return stale('another activation already holds this seat');
 	if (known !== undefined && !isLive(known, now)) return stale('the lease ended');
 	const claimedAt = known === undefined ? now : Date.parse(known.claimedAt);
-	const expiry = Math.min(now + command.expiry, claimedAt + command.deadline);
 	return {
 		event: {
 			kind: 'lease',
 			body: {
 				id: command.id,
 				phase: 'running',
-				expiresAt: expiry,
+				expiresAt: leaseExpiry(now, claimedAt, command.expiry, command.deadline),
 				at: iso(now),
-				readThrough: Math.max(known?.readThrough ?? 0, readThrough),
+				readThrough: acknowledged(known?.readThrough, readThrough),
 			},
 		},
 	};
@@ -492,7 +481,8 @@ function end(
 	if (invalid !== undefined) return invalid;
 	const known = state.leases.get(command.id);
 	const { reason } = command;
-	if (!mayEnd(known, reason, now)) return { event: undefined };
+	if (!mayEnd(known?.phase, reason, known !== undefined && isExpired(known, now)))
+		return { event: undefined };
 	return {
 		event: {
 			kind: 'lease',
@@ -501,17 +491,10 @@ function end(
 				phase: 'ended',
 				reason,
 				at: iso(now),
-				readThrough: Math.max(known?.readThrough ?? 0, command.readThrough),
+				readThrough: acknowledged(known?.readThrough, command.readThrough),
 			},
 		},
 	};
-}
-
-function mayEnd(known: LeaseHold | undefined, reason: EndReason, now: number): boolean {
-	if (known === undefined) return reason === 'revoked' || reason === 'abandoned';
-	if (known.phase === 'ended' || reason === 'abandoned') return false;
-	if (reason === 'revoked') return true;
-	return isExpired(known, now) === (reason === 'expired');
 }
 
 function invalidProgress(

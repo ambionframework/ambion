@@ -32,7 +32,12 @@ import { type ActivationSource, decodeActivationId, encodeActivationId } from '.
 import type { LeaseChange } from '../journal/events.ts';
 import type { EndReason, Message, Seq } from '../types.ts';
 import type { MessageDelivery } from './delivery.ts';
-import { coversAttempt as coverageRule, expired, nextAttempt } from './rules.verified.ts';
+import {
+	acknowledged,
+	coversAttempt as coverageRule,
+	expired,
+	nextAttempt,
+} from './rules.verified.ts';
 
 /** What the lease entries for one activation fold to. */
 type LeaseFact = {
@@ -84,7 +89,7 @@ export function applyLease(
 	if (known?.phase === 'ended') return;
 	const since = known?.since ?? seq;
 	const claimedAt = known?.claimedAt ?? change.at;
-	const readThrough = Math.max(known?.readThrough ?? 0, change.readThrough);
+	const readThrough = acknowledged(known?.readThrough, change.readThrough);
 	leases.set(
 		change.id,
 		change.phase === 'running'

@@ -1,7 +1,18 @@
 import type { JournalEntry as Entry } from '@ambionframework/journal';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { LeaseChange } from '../src/journal/events.ts';
 import { cameToNothing, foldLeases, pendingWakes } from '../src/room/lease.ts';
+import {
+	type Intent,
+	type LeaseEndReason,
+	type LeasePhase,
+	leaseExpiry,
+	mayEnd,
+	permits,
+	type Purpose,
+} from '../src/room/rules.verified.ts';
+import type { CommitRequest } from '../src/protocol.ts';
+import type { ActivationSpec } from '../src/protocol.ts';
 import type { EndReason, Message } from '../src/types.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
@@ -13,6 +24,38 @@ const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
 
 const explicitDeliveries = (messages: Message[]) =>
 	new Map(messages.map((message) => [message.seq, { wakes: message.wakes ?? [], steers: [] }]));
+
+describe('verified rules', () => {
+	it('declares the same unions the public types declare', () => {
+		expectTypeOf<LeaseEndReason>().toEqualTypeOf<EndReason>();
+		expectTypeOf<LeasePhase>().toEqualTypeOf<'running' | 'ended'>();
+		expectTypeOf<Purpose>().toEqualTypeOf<ActivationSpec['purpose']['kind']>();
+		expectTypeOf<Intent>().toEqualTypeOf<CommitRequest['intent']['kind']>();
+	});
+
+	it('gates every end reason by the lease phase and the clock', () => {
+		expect(mayEnd(undefined, 'revoked', false)).toBe(true);
+		expect(mayEnd(undefined, 'released', false)).toBe(false);
+		expect(mayEnd('ended', 'revoked', true)).toBe(false);
+		expect(mayEnd('running', 'abandoned', false)).toBe(false);
+		expect(mayEnd('running', 'expired', true)).toBe(true);
+		expect(mayEnd('running', 'expired', false)).toBe(false);
+		expect(mayEnd('running', 'released', false)).toBe(true);
+		expect(mayEnd('running', 'failed', true)).toBe(false);
+	});
+
+	it('permits speech under both purposes and membership under a response only', () => {
+		expect(permits('summarize', 'said')).toBe(true);
+		expect(permits('summarize', 'seated')).toBe(false);
+		expect(permits('respond', 'unseated')).toBe(true);
+	});
+
+	it('expires a lease at the earlier of the renewal window and the deadline', () => {
+		expect(leaseExpiry(1_000, 1_000, 60, 600)).toBe(1_060);
+		expect(leaseExpiry(1_590, 1_000, 60, 600)).toBe(1_600);
+		expect(leaseExpiry(1_700, 1_000, 60, 600)).toBe(1_600);
+	});
+});
 
 describe('lease rules', () => {
 	it('keeps a lease interval through its terminal entry', () => {
