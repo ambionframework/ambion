@@ -19,6 +19,9 @@ import { type OpenOptions, openWorkbench, type Person, type Workbench } from './
 /** How often the slow fallback reads the room list and a stopped room. */
 const SLOW_MS = 4_000;
 
+/** The cells between the terminal edge and the content, on each side. */
+const PADDING = 1;
+
 const errorText = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
 
@@ -58,6 +61,7 @@ class WorkbenchTui {
 			composer: this.composer,
 			panel,
 			header,
+			width: () => renderer.width - 2 * PADDING,
 		});
 		this.palette = new Palette(this.composer);
 		this.keys = new Keys({
@@ -74,7 +78,7 @@ class WorkbenchTui {
 			flexDirection: 'column',
 			width: '100%',
 			height: '100%',
-			padding: 1,
+			padding: PADDING,
 			gap: 1,
 			backgroundColor: palette.bg,
 		});
@@ -85,6 +89,7 @@ class WorkbenchTui {
 		root.add(this.composer.root);
 		renderer.root.add(root);
 		renderer.keyInput.on('keypress', (key: KeyEvent) => this.keys.onKey(key));
+		renderer.on('resize', () => this.render());
 		this.composer.focus();
 		this.render();
 	}

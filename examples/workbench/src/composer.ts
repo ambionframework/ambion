@@ -37,8 +37,10 @@ export class Composer {
 	private readonly paletteText: TextRenderable;
 	private readonly status: TextRenderable;
 	private readonly hints: TextRenderable;
+	private readonly events: ComposerEvents;
 
 	constructor(renderer: CliRenderer, events: ComposerEvents) {
+		this.events = events;
 		this.root = new BoxRenderable(renderer, { flexDirection: 'column', flexShrink: 0 });
 		this.paletteText = new TextRenderable(renderer, { content: '' });
 		this.paletteBox = new BoxRenderable(renderer, {
@@ -97,10 +99,12 @@ export class Composer {
 		return this.input.plainText;
 	}
 
+	/** Replace the text. The input reports typed edits only, so this reports its own change. */
 	setText(text: string): void {
 		this.input.setText(text);
 		this.input.gotoBufferEnd();
 		this.resize();
+		this.events.change();
 	}
 
 	focus(): void {

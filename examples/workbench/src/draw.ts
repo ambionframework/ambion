@@ -41,6 +41,12 @@ export interface DrawParts {
 	composer: Composer;
 	panel: FilesPanel;
 	header: TextRenderable;
+	/**
+	 * The width the conversation has when the files panel is closed. A widget gets
+	 * its new width in the next layout pass, so a read right after the panel closes
+	 * returns the old width.
+	 */
+	width: () => number;
 }
 
 /**
@@ -54,6 +60,7 @@ export class Painter {
 	private readonly composer: Composer;
 	private readonly panel: FilesPanel;
 	private readonly header: TextRenderable;
+	private readonly width: () => number;
 	private drawn = '';
 	private reveal: string | undefined;
 
@@ -63,6 +70,7 @@ export class Painter {
 		this.composer = parts.composer;
 		this.panel = parts.panel;
 		this.header = parts.header;
+		this.width = parts.width;
 	}
 
 	/** Reveal one discussion at the next draw, so opening it keeps it in view. */
@@ -105,7 +113,7 @@ export class Painter {
 		);
 		this.composer.setPlaceholder(this.placeholder());
 		this.composer.setStatus(new StyledText(this.statusChunks(mode)));
-		const roomy = this.transcript.root.width >= ROOMY;
+		const roomy = this.width() >= ROOMY;
 		const quiet = session.error || session.offline || !roomy || mode === 'files';
 		this.composer.setHints(quiet ? '' : HINTS[mode === 'browse' ? 'browse' : 'compose']);
 	}
