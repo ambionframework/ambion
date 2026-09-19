@@ -22,7 +22,7 @@ describe('a limit windows the record', () => {
 			instructions: 'Answer the current question.',
 			model: 'scripted/worker',
 			// A tight limit: one line fits, so only the open exchange stays.
-			activationTokensLimit: 40,
+			activationTokenLimit: 40,
 			estimateTokens: (text) => text.length,
 		});
 		const runtime = createRuntime({ stream: scripted(capture) });

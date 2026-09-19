@@ -595,7 +595,7 @@ writer by default, and refuse an agent's unseat of a fixed seat in
 `transition.ts`; the host can always seat and unseat.
 
 **D5. Bounded activation context and message size.** An agent that sets
-`activationTokensLimit` now reads a windowed record. The seat pages the record
+`activationTokenLimit` now reads a windowed record. The seat pages the record
 through the seat call `view(activation, range)` and keeps the newest part that
 fits the limit, plus the open exchange whole. A summary stands for an older
 exchange it covers, and the page never splits a summarised range. An agent with

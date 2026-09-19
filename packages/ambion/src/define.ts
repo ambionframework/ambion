@@ -32,7 +32,7 @@ export interface DefineAgentOptions {
 	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
 	bundles?: readonly ToolBundle[];
 	/** The token limit for the record one activation reads. Absent reads the whole record. */
-	activationTokensLimit?: number;
+	activationTokenLimit?: number;
 	/** How the agent counts tokens against its limit. Absent uses a length estimate. */
 	estimateTokens?: (text: string) => number;
 }
@@ -50,22 +50,22 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 		model: options.model,
 		tools,
 		...(guidance === undefined ? {} : { guidance }),
-		...recordLimit(options.activationTokensLimit, options.estimateTokens),
+		...recordLimit(options.activationTokenLimit, options.estimateTokens),
 	});
 }
 
 /** The record-window fields, validated and written only when a limit is set. */
 function recordLimit(
-	activationTokensLimit: number | undefined,
+	activationTokenLimit: number | undefined,
 	estimateTokens: ((text: string) => number) | undefined,
-): { activationTokensLimit?: number; estimateTokens?: (text: string) => number } {
-	if (activationTokensLimit === undefined) return {};
-	if (!Number.isSafeInteger(activationTokensLimit) || activationTokensLimit <= 0)
-		throw new Error('An agent activationTokensLimit must be a positive integer.');
+): { activationTokenLimit?: number; estimateTokens?: (text: string) => number } {
+	if (activationTokenLimit === undefined) return {};
+	if (!Number.isSafeInteger(activationTokenLimit) || activationTokenLimit <= 0)
+		throw new Error('An agent activationTokenLimit must be a positive integer.');
 	if (estimateTokens !== undefined && typeof estimateTokens !== 'function')
 		throw new Error('An agent estimateTokens must be a function.');
 	return {
-		activationTokensLimit,
+		activationTokenLimit,
 		...(estimateTokens === undefined ? {} : { estimateTokens }),
 	};
 }
@@ -87,7 +87,7 @@ export function captureAgent(agent: AgentDefinition): AgentDefinition {
 		model: agent.model,
 		tools,
 		...(agent.guidance === undefined ? {} : { guidance: agent.guidance }),
-		...recordLimit(agent.activationTokensLimit, agent.estimateTokens),
+		...recordLimit(agent.activationTokenLimit, agent.estimateTokens),
 	});
 }
 

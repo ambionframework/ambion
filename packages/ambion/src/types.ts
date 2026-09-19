@@ -347,7 +347,7 @@ export interface AgentDefinition {
 	 * pages the record and keeps the newest part that fits the limit, plus the
 	 * open exchange whole. Absent reads the whole record.
 	 */
-	readonly activationTokensLimit?: number;
+	readonly activationTokenLimit?: number;
 	/**
 	 * How the agent counts tokens against its limit. Absent uses a length
 	 * estimate. The seat runs it, so it never crosses the wire.

@@ -31,7 +31,7 @@ const room = await startRoom({
 `name` identifies the agent inside the room and on the journal. `identity` is
 public roster text. `instructions` are private model guidance. `model` names a
 Pi provider model. `tools` and `bundles` supply the agent's domain tools.
-`activationTokensLimit` bounds the record one activation reads, and
+`activationTokenLimit` bounds the record one activation reads, and
 `estimateTokens` counts tokens against it. Without a limit, an activation reads
 the whole record. The seat runs `estimateTokens`, so it never crosses the wire.
 
@@ -217,7 +217,7 @@ Composition entries use version 2. The room rejects legacy compositions and
 does not reinterpret old assistant definitions or opening activation ids.
 Start a new journal or migrate the history outside Ambion before resuming it.
 
-The journal retains complete history. An agent that sets `activationTokensLimit`
+The journal retains complete history. An agent that sets `activationTokenLimit`
 reads a bounded record. The seat pages the record from the tail through the seat
 call `view(activation, range)`, and it keeps the newest part that fits the
 limit, plus the open exchange whole. An older exchange falls out of context; its

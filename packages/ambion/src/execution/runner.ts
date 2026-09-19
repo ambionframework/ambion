@@ -324,7 +324,7 @@ export class AgentRunner implements SeatPort {
 		const { clock, room, seat, transcripts } = this.context;
 		return {
 			view: async () => {
-				const limit = this.context.definition.activationTokensLimit;
+				const limit = this.context.definition.activationTokenLimit;
 				if (limit !== undefined) return this.windowedView(id, limit, cancelled);
 				const opened = await this.call(() => this.room.view(id), cancelled);
 				if (opened.kind === 'value') return opened.value;
