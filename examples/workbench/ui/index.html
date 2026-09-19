@@ -1487,7 +1487,8 @@
 							),
 						}));
 					groups.forEach((group) => {
-						group.direct = group.source.length === 1;
+						// A lone person's message is not a reply, so it keeps the closing mark.
+						group.direct = group.source.length === 1 && !isHuman(group.source[0].from);
 					});
 					const sourceGroup = new Map();
 					const directGroup = new Map();
