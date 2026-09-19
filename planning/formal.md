@@ -325,7 +325,12 @@ unions. `end` in `transition.ts` runs it with `isExpired` as the input.
 
 ## D. The transitions
 
-**`decide` is a set of case splits with no contract.** Each helper in
+**Nine rules landed on this branch.** D1, D2, D4, D5, D6, D7, and D9 are
+in the room's rules file with their proofs, `transition.ts`,
+`exchange.ts`, and `lease.ts` run them, and the binding test names them.
+D3, D8, D10, and D11 wait for slice 2a.
+
+**`decide` was a set of case splits with no contract.** Each helper in
 `transition.ts` is a table over a few booleans, and each table is a
 promise of `docs/agent.md`: the say lock, the lease deadline, one lease
 per seat, the reason gate, the purpose grant, the close admission, and the
