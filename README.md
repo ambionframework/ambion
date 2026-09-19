@@ -243,11 +243,11 @@ See [Contributing](CONTRIBUTING.md) to build and run from source.
 ## The example
 
 **One example ships: an agentic lab workspace.** [`examples/workbench`](examples/workbench)
-runs six definitions on two frameworks over a shared directory and a SQL
-resource, with a user interface that drills from a project's room into one
-activation. Nine scenarios run on a scripted executor in CI and on real
-providers in the live tier. [The example page](docs/example.md) describes
-what each scenario shows.
+runs an assistant and three specialists over a shared directory workspace. One
+command starts the rooms and an OpenTUI terminal in one process. Three sample
+rooms show a datasheet check, a design step, and a test plan. Scripted tests
+run in CI, and two scenarios run on a real provider in the live tier.
+[The example page](docs/example.md) describes each room.
 
 `ambion new` creates a project from the same layout, with one room and two
 definitions, as a Node service or a Cloudflare Worker. `ambion dev` opens its

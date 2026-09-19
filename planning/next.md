@@ -27,17 +27,17 @@ artifacts by reference, and waiting on a person as a derived outcome.
 **Nine functional areas, each with the acceptance it must meet on the
 tagged commit.** The phases below deliver them; the items explain them.
 
-| Area                              | Acceptance                                                                                                                                                                                                                             |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1 Definitions and executors      | A definition is a value with one executor. Two executor families run in one room: the Pi loop and the Claude Agent SDK harness. A fixed definition set per run; membership changes by name; a fixed seat that agents cannot remove.    |
-| F2 Rooms, participation, presence | One ordered journal per room; broadcast and directed messages; the attention scale; visits with recorded arrivals and departures; catch-up by position; refs on messages.                                                              |
-| F3 Concurrent contributions       | Freshness checked at commit; steering by capability; silence as a result; failures classified as permanent or transient; duplicate speech impossible after a lost reply.                                                               |
-| F4 Exchanges and summaries        | One open exchange per room; closure by quiescence; outcomes complete, cancelled, exhausted, and awaiting a person; one summary per person who spoke; summaries compact later context; the source stays readable.                       |
-| F5 Persistence and recovery       | Idempotent keys bound to content; conditional appends; writer fencing; leases; a graceful stop that loses no pending work; journal format 1 with golden fixtures; usage on every release entry.                                        |
-| F6 Tools and resources            | Neutral JSON Schema tools; three room tools on every surface; one resource contract with a filesystem binding and a SQL binding; provenance on every tool call; bounded context and message size.                                      |
-| F7 Observation and control        | Detached reads for room, exchange, activation, and step; live events with activation ids; typed refusals; abort and stop with documented scope; cost per exchange.                                                                     |
-| F8 Deployment                     | Embedded Node, persistent Node with SQLite, and Cloudflare Durable Objects, each with restart evidence; the Cloudflare object on the core read model; a Node template and a Cloudflare template from `ambion new`.                     |
-| F9 Distribution and evidence      | Nine packages on npmjs with provenance; packed consumers outside the monorepo; Node 22 and 24; the workbench example with nine scenarios scripted and live on two providers; conformance suites for storage, transport, and executors. |
+| Area                              | Acceptance                                                                                                                                                                                                                          |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1 Definitions and executors      | A definition is a value with one executor. Two executor families run in one room: the Pi loop and the Claude Agent SDK harness. A fixed definition set per run; membership changes by name; a fixed seat that agents cannot remove. |
+| F2 Rooms, participation, presence | One ordered journal per room; broadcast and directed messages; the attention scale; visits with recorded arrivals and departures; catch-up by position; refs on messages.                                                           |
+| F3 Concurrent contributions       | Freshness checked at commit; steering by capability; silence as a result; failures classified as permanent or transient; duplicate speech impossible after a lost reply.                                                            |
+| F4 Exchanges and summaries        | One open exchange per room; closure by quiescence; outcomes complete, cancelled, exhausted, and awaiting a person; one summary per person who spoke; summaries compact later context; the source stays readable.                    |
+| F5 Persistence and recovery       | Idempotent keys bound to content; conditional appends; writer fencing; leases; a graceful stop that loses no pending work; journal format 1 with golden fixtures; usage on every release entry.                                     |
+| F6 Tools and resources            | Neutral JSON Schema tools; three room tools on every surface; one resource contract with a filesystem binding and a SQL binding; provenance on every tool call; bounded context and message size.                                   |
+| F7 Observation and control        | Detached reads for room, exchange, activation, and step; live events with activation ids; typed refusals; abort and stop with documented scope; cost per exchange.                                                                  |
+| F8 Deployment                     | Embedded Node, persistent Node with SQLite, and Cloudflare Durable Objects, each with restart evidence; the Cloudflare object on the core read model; a Node template and a Cloudflare template from `ambion new`.                  |
+| F9 Distribution and evidence      | Nine packages on npmjs with provenance; packed consumers outside the monorepo; Node 22 and 24; the workbench example scripted and live on two providers; conformance suites for storage, transport, and executors.                  |
 
 **Deployment models.** The same rules serve four placements.
 
@@ -287,28 +287,30 @@ template on `read()`.
 
 ### Phase 6. The workbench example and the user interface (P1)
 
-**Goal:** one example that a new reader runs first, that the deployment
-guide describes, and that the drill-down UI is built on.
+**Goal:** one example that a new reader runs first, and that the deployment
+guide describes. The example is one terminal process with an assistant and
+three specialists ([docs/example.md](../docs/example.md)).
 
-1. [ ] Remove `examples/site` and `examples/persistent`; move their reports
-       and `docs/assistant-acceptance.md` under `planning/evidence/` (C7).
-2. [ ] `examples/workbench` per [docs/example.md](../docs/example.md): the
-       definitions, the SQL resource, the library workspace, the
-       instrument, the persistent host with a room per project, the
-       library files. Needs phases 4 and 5.
-3. [ ] The nine scenarios on the scripted executor, including the restart
-       scenario in a fresh process. Needs 2.
-4. [ ] The user interface: projects, room, exchange, activation, steps;
-       live steps merged by activation, pass, and index; cost per exchange;
-       `awaiting` and `approval` shown to the person (F8). Needs 3 and
-       phase 3 step 2.
-5. [ ] The scenarios on the live tier, on two providers. Needs 3.
-6. [ ] `ambion new --template node` derived from the example; the
-       Cloudflare template on `read()` (C3). Needs 2 and phase 3 step 4.
+1. [x] Remove `examples/site` and `examples/persistent`.
+2. [ ] Move the old example reports and `docs/assistant-acceptance.md` under
+       `planning/evidence/` (C7).
+3. [x] `examples/workbench`: the assistant, three specialists, the library
+       workspace, and a persistent host with a room per project. The host and
+       the terminal run in one process. The example builds no SQL resource
+       and no instrument, and no specialist runs on the Claude adapter.
+4. [x] Scripted tests for the rooms, including a restart of the host over
+       the same directory.
+5. [x] The terminal: rooms, exchanges with discussions and summaries, and a
+       files panel. It previews Markdown and SQLite databases.
+6. [ ] The terminal shows steps per activation, the cost per exchange, and
+       `awaiting` and `approval` to the person (F8). Needs phase 3 step 2.
+7. [x] Two scenarios on the live tier, on one provider.
+8. [ ] The same scenarios on a second provider.
+9. [ ] `ambion new --template node` derived from the example; the
+       Cloudflare template on `read()` (C3). Needs phase 3 step 4.
 
-**Evidence:** the nine scenarios pass scripted on memory and SQLite; the
-live tier runs them on two providers; a restart preserves the question; the
-Design Agent runs on the Claude adapter while the rest run on Pi.
+**Evidence:** the rooms pass scripted; the live tier runs two scenarios on
+one provider and on a second provider; a restart preserves the question.
 
 ### Phase 7. Documentation (P1)
 
@@ -336,7 +338,7 @@ code it describes, so the order follows the phases above.
        descriptions, comment voice, `demos/README.md` (C4). After 1.
 9. [ ] The `README.md` example typechecked against the packed entries;
        package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
-       floors. After phase 6 step 3.
+       floors. After phase 6 step 4.
 10. [ ] A generated API reference per entry with a CI staleness check
         (D10). P2; after 9.
 11. [ ] The 0.1.0 changelog entry. Last.
