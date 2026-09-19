@@ -708,15 +708,16 @@ branch with its proof. Every rule in B through G was written as a
 LemmaScript file in scratch and verified by Dafny 4.11 before it entered
 this plan; the obligation counts are the verifier's runs on this branch.
 
-| Group                   | File                                         | Obligations | Status  |
-| ----------------------- | -------------------------------------------- | ----------- | ------- |
-| A. Journal              | `packages/journal/src/rules.verified.ts`     | 35          | Landed  |
-| B. Lease fold           | `packages/ambion/src/room/rules.verified.ts` | see below   | Planned |
-| C. Reconciliation       | `packages/ambion/src/room/rules.verified.ts` | see below   | Planned |
-| D. Transitions          | `packages/ambion/src/room/rules.verified.ts` | see below   | Planned |
-| E. Routing and presence | `packages/ambion/src/room/rules.verified.ts` | see below   | Planned |
-| F. Activation identity  | `packages/ambion/src/room/rules.verified.ts` | see below   | Planned |
-| G. Exchange and roster  | `packages/ambion/src/room/rules.verified.ts` | see below   | Planned |
+| Group                   | File                                         | Obligations | Status                     |
+| ----------------------- | -------------------------------------------- | ----------- | -------------------------- |
+| A. Journal              | `packages/journal/src/rules.verified.ts`     | 41          | Landed                     |
+| B. Lease fold           | `packages/ambion/src/room/rules.verified.ts` | prototype   | Planned, slice 2b          |
+| C. Reconciliation       | `packages/ambion/src/room/rules.verified.ts` | prototype   | Planned, slice 2c          |
+| D. Transitions          | `packages/ambion/src/room/rules.verified.ts` | 22 landed   | Nine landed, slice 2a open |
+| E. Routing and presence | `packages/ambion/src/room/rules.verified.ts` | prototype   | Planned, slice 2d          |
+| F. Activation identity  | `packages/ambion/src/room/rules.verified.ts` | prototype   | Planned, slice 2e          |
+| G. Exchange and roster  | `packages/ambion/src/room/rules.verified.ts` | prototype   | Planned, slice 2f          |
+| H. Vocabulary           | `packages/ambion/src/rules.verified.ts`      | prototype   | Planned                    |
 
 **Three defects and three decisions came out of the review.** The seq
 bound, the early stamped write, and the read past the head are fixed on
