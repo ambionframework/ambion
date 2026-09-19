@@ -1,8 +1,8 @@
 /**
- * Tools reach a workspace. `docs/workspace.md` §5: an agent that names a
- * workspace holds `read`, `write`, `edit` and `bash`, rooted at its own home.
- * A real provider has to accept those four schemas, and a real model has to
- * pick them up and use them against a filesystem it has never seen.
+ * Tools reach a workspace. `docs/workspace.md`: an agent that names a workspace
+ * holds `read`, `write`, `edit`, `bash` and `sql`, rooted at its own home. A
+ * real provider has to accept those schemas, and a real model has to pick up
+ * the file tools and use them against a filesystem it has never seen.
  */
 
 import { expect, it } from 'vitest';

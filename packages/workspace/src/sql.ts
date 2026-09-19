@@ -236,7 +236,10 @@ async function writeScript(env: ExecutionEnv, sql: string): Promise<string> {
 	const temp = await env.createTempFile({ suffix: '.sql' });
 	if (!temp.ok) throw temp.error;
 	const written = await env.writeFile(temp.value, sql);
-	if (!written.ok) throw written.error;
+	if (!written.ok) {
+		await env.remove(temp.value, { force: true });
+		throw written.error;
+	}
 	return temp.value;
 }
 
