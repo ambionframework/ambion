@@ -28,6 +28,14 @@ datatype Taken = running(readThrough: int, position: int) | ended(reason: LeaseE
 
 datatype Schedule = Schedule(attempt: int, notBefore: Option<int>)
 
+datatype Ending = revoked | expired | stays
+
+datatype Source = message | closed
+
+datatype LiveLease = LiveLease(source: Source, seat: string, phase: LeasePhase, expiresAt: int)
+
+datatype OwedActivation = OwedActivation(source: Source, seat: string)
+
 function expired(expiry: int, now: int): bool
 {
   (expiry <= now)
@@ -476,6 +484,225 @@ lemma removedAfter_ensures(removals: seq<int>, seq_: int)
 {
 }
 
+function readyToSend(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int): bool
+  requires (resend >= 0)
+{
+  var backoffOver := (!(backedOff) || (notBefore <= now));
+  var windowOver := (!(wasSent) || ((sentAt + resend) <= now));
+  (backoffOver && windowOver)
+}
+
+lemma readyToSend_ensures(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int)
+  requires (resend >= 0)
+  ensures (readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend) <==> ((!(backedOff) || (notBefore <= now)) && (!(wasSent) || ((sentAt + resend) <= now))))
+  ensures (backedOff ==> (notBefore > now) ==> !(readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend)))
+  ensures (wasSent ==> (now < (sentAt + resend)) ==> !(readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend)))
+{
+}
+
+function waitsUntil(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int): int
+  requires (resend >= 0)
+{
+  var backoff := (if backedOff then notBefore else now);
+  if (backoff > now) then
+    backoff
+  else
+    if wasSent then
+      (sentAt + resend)
+    else
+      now
+}
+
+lemma waitsUntil_ensures(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int)
+  requires (resend >= 0)
+  ensures ((waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend) <= now) <==> readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend))
+  ensures (backedOff ==> (notBefore > now) ==> (waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend) == notBefore))
+  ensures ((!(backedOff) || (notBefore <= now)) ==> wasSent ==> (waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend) == (sentAt + resend)))
+  ensures ((!(backedOff) || (notBefore <= now)) ==> !(wasSent) ==> (waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend) == now))
+{
+}
+
+function looksAgainAt(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int): int
+  requires (resend >= 1)
+{
+  var at := waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend);
+  if (at > now) then
+    at
+  else
+    (now + resend)
+}
+
+lemma looksAgainAt_ensures(now: int, backedOff: bool, notBefore: int, wasSent: bool, sentAt: int, resend: int)
+  requires (resend >= 1)
+  ensures (looksAgainAt(now, backedOff, notBefore, wasSent, sentAt, resend) > now)
+  ensures (!(readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend)) ==> (looksAgainAt(now, backedOff, notBefore, wasSent, sentAt, resend) == waitsUntil(now, backedOff, notBefore, wasSent, sentAt, resend)))
+  ensures (readyToSend(now, backedOff, notBefore, wasSent, sentAt, resend) ==> (looksAgainAt(now, backedOff, notBefore, wasSent, sentAt, resend) == (now + resend)))
+{
+}
+
+function earliestAfter(now: int, times: seq<int>): Option<int>
+  decreases |times|
+{
+  if (|times| == 0) then
+    None
+  else
+    var head := (if ((0 <= 0) && (0 < |times|)) then times[0] else now);
+    var rest := earliestAfter(now, times[1..]);
+    if (head <= now) then
+      rest
+    else
+      match rest {
+        case Some(i_rest_val) =>
+          Some((if (head < i_rest_val) then head else i_rest_val))
+        case None =>
+          Some(head)
+      }
+}
+
+lemma earliestAfter_ensures(now: int, times: seq<int>)
+  ensures (match earliestAfter(now, times) { case Some(i_result_val) => (i_result_val > now) case None => true })
+  ensures ((match earliestAfter(now, times) { case Some(i_) => false case None => true }) <==> forall i: int :: ((0 <= i) ==> (i < |times|) ==> (times[i] <= now)))
+  ensures (match earliestAfter(now, times) { case Some(i_result_val) => forall i: int :: ((0 <= i) ==> (i < |times|) ==> (times[i] > now) ==> (i_result_val <= times[i])) case None => true })
+  ensures (match earliestAfter(now, times) { case Some(i_result_val) => exists i: int :: (((0 <= i) && (i < |times|)) && (times[i] == i_result_val)) case None => true })
+{
+}
+
+function staleLease(derived: bool, seated: bool, removedAfterCause: bool): bool
+{
+  ((!(derived) || !(seated)) || removedAfterCause)
+}
+
+lemma staleLease_ensures(derived: bool, seated: bool, removedAfterCause: bool)
+  ensures (staleLease(derived, seated, removedAfterCause) <==> ((!(derived) || !(seated)) || removedAfterCause))
+  ensures (derived ==> seated ==> !(removedAfterCause) ==> !(staleLease(derived, seated, removedAfterCause)))
+{
+}
+
+function endingOf(running: bool, stale: bool, pastExpiry: bool): Ending
+{
+  if !(running) then
+    Ending.stays
+  else
+    if stale then
+      Ending.revoked
+    else
+      if pastExpiry then
+        Ending.expired
+      else
+        Ending.stays
+}
+
+lemma endingOf_ensures(running: bool, stale: bool, pastExpiry: bool)
+  ensures (!(running) ==> endingOf(running, stale, pastExpiry).stays?)
+  ensures (running ==> stale ==> endingOf(running, stale, pastExpiry).revoked?)
+  ensures (running ==> !(stale) ==> pastExpiry ==> endingOf(running, stale, pastExpiry).expired?)
+  ensures (running ==> !(stale) ==> !(pastExpiry) ==> endingOf(running, stale, pastExpiry).stays?)
+  ensures (endingOf(running, stale, pastExpiry).expired? ==> !(stale))
+  ensures ((!endingOf(running, stale, pastExpiry).stays?) ==> running)
+{
+}
+
+function mayClose(stopped: bool, endings: int, exchangeOpen: bool, exchangeLive: bool): bool
+  requires (endings >= 0)
+{
+  (((!(stopped) && (endings == 0)) && exchangeOpen) && !(exchangeLive))
+}
+
+lemma mayClose_ensures(stopped: bool, endings: int, exchangeOpen: bool, exchangeLive: bool)
+  requires (endings >= 0)
+  ensures (mayClose(stopped, endings, exchangeOpen, exchangeLive) ==> !(stopped))
+  ensures (mayClose(stopped, endings, exchangeOpen, exchangeLive) ==> (endings == 0))
+  ensures (mayClose(stopped, endings, exchangeOpen, exchangeLive) ==> exchangeOpen)
+  ensures (mayClose(stopped, endings, exchangeOpen, exchangeLive) ==> !(exchangeLive))
+  ensures (!(stopped) ==> (endings == 0) ==> exchangeOpen ==> !(exchangeLive) ==> mayClose(stopped, endings, exchangeOpen, exchangeLive))
+{
+}
+
+function closeMoved(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool): bool
+{
+  match open {
+    case Some(i_open_val) =>
+      ((i_open_val.from == close.from) && ((lastSeq != close.through) || exchangeLive))
+    case None =>
+      false
+  }
+}
+
+lemma closeMoved_ensures(open: Option<OpenExchange>, close: CloseRef, lastSeq: int, exchangeLive: bool)
+  ensures (closeMoved(open, close, lastSeq, exchangeLive) ==> (match open { case Some(i_) => true case None => false }))
+  ensures (match open { case Some(i_open_val) => (closeMoved(open, close, lastSeq, exchangeLive) <==> ((i_open_val.from == close.from) && ((lastSeq != close.through) || exchangeLive))) case None => true })
+  ensures (closeMoved(open, close, lastSeq, exchangeLive) ==> !(admitsClose(open, close, lastSeq, exchangeLive)))
+  ensures (admitsClose(open, close, lastSeq, exchangeLive) ==> !(closeMoved(open, close, lastSeq, exchangeLive)))
+{
+}
+
+function namesWriter(configured: bool, seated: bool): bool
+{
+  (configured && seated)
+}
+
+lemma namesWriter_ensures(configured: bool, seated: bool)
+  ensures (namesWriter(configured, seated) ==> configured)
+  ensures (namesWriter(configured, seated) ==> seated)
+  ensures (configured ==> seated ==> namesWriter(configured, seated))
+{
+}
+
+function stillExpired(expiry: int, now: int, later: int): bool
+  requires (now <= later)
+{
+  (expired(expiry, now) || expired(expiry, later))
+}
+
+lemma stillExpired_ensures(expiry: int, now: int, later: int)
+  requires (now <= later)
+  ensures (expired(expiry, now) ==> stillExpired(expiry, now, later))
+  ensures (stillExpired(expiry, now, later) <==> expired(expiry, later))
+{
+}
+
+function endingStands(stale: bool, expiry: int, now: int, later: int): bool
+  requires (now <= later)
+{
+  var ending := endingOf(true, stale, expired(expiry, now));
+  if ending.expired? then
+    mayEnd(Some(LeasePhase.running), LeaseEndReason.expired, stillExpired(expiry, now, later))
+  else
+    (ending.revoked? && mayEnd(Some(LeasePhase.running), LeaseEndReason.revoked, expired(expiry, later)))
+}
+
+lemma endingStands_ensures(stale: bool, expiry: int, now: int, later: int)
+  requires (now <= later)
+  ensures (endingOf(true, stale, expired(expiry, now)).expired? ==> mayEnd(Some(LeasePhase.running), LeaseEndReason.expired, expired(expiry, later)))
+  ensures (endingOf(true, stale, expired(expiry, now)).revoked? ==> mayEnd(Some(LeasePhase.running), LeaseEndReason.revoked, expired(expiry, later)))
+  ensures (endingStands(stale, expiry, now, later) <==> (!endingOf(true, stale, expired(expiry, now)).stays?))
+{
+}
+
+function holdsExchange(source: Source): bool
+{
+  source.message?
+}
+
+lemma holdsExchange_ensures(source: Source)
+  ensures (holdsExchange(source) <==> source.message?)
+{
+}
+
+function exchangeLive(leases: seq<LiveLease>, due: seq<OwedActivation>, now: int): bool
+{
+  ((exists lease :: lease in leases && (isLive(lease.phase, lease.expiresAt, now) && holdsExchange(lease.source))) || (exists owed :: owed in due && holdsExchange(owed.source)))
+}
+
+lemma exchangeLive_ensures(leases: seq<LiveLease>, due: seq<OwedActivation>, now: int)
+  ensures (exchangeLive(leases, due, now) <==> ((exists i: int :: ((((0 <= i) && (i < |leases|)) && isLive(leases[i].phase, leases[i].expiresAt, now)) && holdsExchange(leases[i].source))) || exists j: int :: (((0 <= j) && (j < |due|)) && holdsExchange(due[j].source))))
+  ensures ((forall i: int :: ((0 <= i) ==> (i < |leases|) ==> leases[i].source.closed?)) ==> (forall j: int :: ((0 <= j) ==> (j < |due|) ==> due[j].source.closed?)) ==> !(exchangeLive(leases, due, now)))
+  ensures ((exists j: int :: (((0 <= j) && (j < |due|)) && due[j].source.message?)) ==> exchangeLive(leases, due, now))
+  ensures ((forall i: int :: ((0 <= i) ==> (i < |leases|) ==> !(isLive(leases[i].phase, leases[i].expiresAt, now)))) ==> (|due| == 0) ==> !(exchangeLive(leases, due, now)))
+  ensures ((|leases| == 0) ==> (|due| == 0) ==> !(exchangeLive(leases, due, now)))
+{
+}
+
 method latest(times: seq<int>, floor: int) returns (res: int)
   requires (floor >= 0)
   ensures (res >= floor)
@@ -496,6 +723,33 @@ method latest(times: seq<int>, floor: int) returns (res: int)
     i := (i + 1);
   }
   return best;
+}
+
+method forgets(sentIds: seq<string>, dueIds: seq<string>) returns (res: seq<string>)
+  ensures (|res| <= |sentIds|)
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> !((res[i] in dueIds)))
+  ensures forall i: int :: ((0 <= i) ==> (i < |res|) ==> (res[i] in sentIds))
+  ensures forall i: int :: ((0 <= i) ==> (i < |sentIds|) ==> !((sentIds[i] in dueIds)) ==> (sentIds[i] in res))
+  ensures forall i: int :: ((0 <= i) ==> (i < |dueIds|) ==> !((dueIds[i] in res)))
+{
+  var out: seq<string> := [];
+  var i := 0;
+  while (i < |sentIds|)
+    invariant (0 <= i)
+    invariant (i <= |sentIds|)
+    invariant (|out| <= i)
+    invariant forall k: int :: ((0 <= k) ==> (k < |out|) ==> !((out[k] in dueIds)))
+    invariant forall k: int :: ((0 <= k) ==> (k < |out|) ==> (out[k] in sentIds))
+    invariant forall k: int :: ((0 <= k) ==> (k < i) ==> !((sentIds[k] in dueIds)) ==> (sentIds[k] in out))
+    decreases (|sentIds| - i)
+  {
+    var id := (if ((0 <= i) && (i < |sentIds|)) then sentIds[i] else "");
+    if !((id in dueIds)) {
+      out := (out + [id]);
+    }
+    i := (i + 1);
+  }
+  return out;
 }
 
 // ---- Proof additions (hand-written, additions-only) ----------------------

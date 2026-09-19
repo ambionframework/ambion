@@ -6,6 +6,7 @@ import {
 	applyChange,
 	type Change,
 	cancelHold,
+	endingStands,
 	type Hold,
 	type Intent,
 	type LeaseEndReason,
@@ -15,8 +16,11 @@ import {
 	permits,
 	type Purpose,
 	schedule,
+	type Source,
+	stillExpired,
 	wakeAnswered,
 } from '../src/room/rules.verified.ts';
+import type { ActivationSource } from '../src/activation-id.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import type { ActivationSpec } from '../src/protocol.ts';
 import type { EndReason, Message } from '../src/types.ts';
@@ -38,6 +42,7 @@ describe('verified rules', () => {
 		expectTypeOf<Purpose>().toEqualTypeOf<ActivationSpec['purpose']['kind']>();
 		expectTypeOf<Intent>().toEqualTypeOf<CommitRequest['intent']['kind']>();
 		expectTypeOf<Change>().toEqualTypeOf<LeaseChange>();
+		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();
 		// The room's hold is the rule's hold plus the derived `cancelled` marker.
 		expectTypeOf<Hold>().toMatchTypeOf<LeaseHold>();
 		expectTypeOf<LeaseHold>().toMatchTypeOf<Hold>();
@@ -91,6 +96,16 @@ describe('verified rules', () => {
 		expect(cancelHold(running, 7, 6, at)).toBe(running);
 		const ended = cancelHold(running, 2, 6, at);
 		expect(cancelHold(ended, 2, 9, at)).toBe(ended);
+	});
+
+	it('accepts at the write the ending the decision made', () => {
+		expect(stillExpired(1_000, 1_000, 1_500)).toBe(true);
+		// Expired at the decision, and still expired at the write.
+		expect(endingStands(false, 1_000, 1_000, 1_500)).toBe(true);
+		// Revoked: no clock.
+		expect(endingStands(true, 9_000, 1_000, 1_500)).toBe(true);
+		// Neither: the lease stays.
+		expect(endingStands(false, 9_000, 1_000, 1_500)).toBe(false);
 	});
 
 	it('answers a wake by reason and schedules the next attempt after the backoff', () => {

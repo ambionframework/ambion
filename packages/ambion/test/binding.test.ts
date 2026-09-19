@@ -26,6 +26,10 @@ vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 		applyChange: vi.fn(actual.applyChange),
 		cancelHold: vi.fn(actual.cancelHold),
 		wakeAnswered: vi.fn(actual.wakeAnswered),
+		mayClose: vi.fn(actual.mayClose),
+		forgets: vi.fn(actual.forgets),
+		readyToSend: vi.fn(actual.readyToSend),
+		endingOf: vi.fn(actual.endingOf),
 	};
 });
 
@@ -167,6 +171,36 @@ describe('the room runs the verified rules', () => {
 		vi.mocked(rules.wakeAnswered).mockReturnValueOnce(true);
 		expect(asked().pending).toEqual([]);
 		expect(asked().pending.map((wake) => wake.id)).toEqual([id]);
+	});
+
+	it('closes, forgets, sends, and ends leases as the pass rules answer', () => {
+		const reconcile = (state: ReturnType<typeof asked>, sent: Map<string, number> = new Map()) =>
+			decide(
+				state,
+				{ type: 'reconcile', options: { resend: 5_000, attempts: 3, sent, stopped: false } },
+				now,
+			);
+		// A quiet room with an open exchange and no work closes it, unless mayClose refuses.
+		const quiet = foldRoom(
+			[composition, person, { ...question, body: { ...question.body, wakes: [] } }],
+			options,
+		);
+		vi.mocked(rules.mayClose).mockReturnValueOnce(false);
+		expect(reconcile(quiet).events).toEqual([]);
+		expect(reconcile(quiet).events).toMatchObject([{ kind: 'close' }]);
+		// The forget list is what forgets answers.
+		vi.mocked(rules.forgets).mockReturnValueOnce(['x']);
+		expect(reconcile(asked()).effects.forget).toEqual(['x']);
+		// A due wake is sent only when readyToSend says so.
+		vi.mocked(rules.readyToSend).mockReturnValueOnce(false);
+		expect(reconcile(asked()).effects.sends).toEqual([]);
+		expect(reconcile(asked()).effects.sends).toEqual([{ id, seat: 'product' }]);
+		// A running lease ends the way endingOf answers.
+		vi.mocked(rules.endingOf).mockReturnValueOnce('expired');
+		expect(reconcile(claimed()).events).toMatchObject([
+			{ kind: 'lease', body: { id, phase: 'ended', reason: 'expired' } },
+		]);
+		expect(reconcile(claimed()).events).toEqual([]);
 	});
 
 	it('keeps a pending wake only when survivesCancellation says so', () => {
