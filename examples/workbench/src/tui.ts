@@ -88,7 +88,10 @@ class WorkbenchTui {
 		root.add(body);
 		root.add(this.composer.root);
 		renderer.root.add(root);
-		renderer.keyInput.on('keypress', (key: KeyEvent) => this.keys.onKey(key));
+		renderer.keyInput.on('keypress', (key: KeyEvent) => {
+			this.keys.onKey(key);
+			this.followEdit();
+		});
 		renderer.on('resize', () => this.render());
 		this.composer.focus();
 		this.render();
@@ -115,6 +118,16 @@ class WorkbenchTui {
 
 	async leave(): Promise<void> {
 		await this.session.leave();
+	}
+
+	/**
+	 * The input reports a typed edit late: measured at up to 4 s, until the next repaint.
+	 * So the palette reads the text one macrotask after the key, when the input has applied it.
+	 */
+	private followEdit(): void {
+		setTimeout(() => {
+			if (!this.stopped) this.keys.refreshPalette();
+		}, 0);
 	}
 
 	private render(): void {
