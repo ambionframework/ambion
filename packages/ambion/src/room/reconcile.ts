@@ -14,7 +14,14 @@
 import { decodeActivationId } from '../activation-id.ts';
 import type { Close, LeaseChange } from '../journal/events.ts';
 import type { RoomState } from './fold.ts';
-import { isExpired, isLive, type LeaseHold, type PendingActivation, seatOf } from './lease.ts';
+import {
+	isExpired,
+	isLive,
+	type LeaseHold,
+	type PendingActivation,
+	removalsOf,
+	seatOf,
+} from './lease.ts';
 import {
 	earliestAfter,
 	endingOf,
@@ -25,6 +32,7 @@ import {
 	looksAgainAt,
 	mayClose,
 	type OwedActivation,
+	onRoster,
 	readyToSend,
 	removedAfter,
 	staleLease,
@@ -171,14 +179,9 @@ export function planReconciliation(state: RoomState, options: ReconcileOptions):
  */
 function isStale(state: RoomState, id: string): boolean {
 	const parsed = decodeActivationId(id);
-	const seated = parsed !== undefined && state.roster.some((seat) => seat.name === parsed.seat);
-	const removals =
-		parsed === undefined
-			? []
-			: state.messages.flatMap((message) =>
-					message.kind === 'unseated' && message.subject === parsed.seat ? [message.seq] : [],
-				);
-	const removedAfterCause = parsed !== undefined && removedAfter(removals, parsed.position);
+	const seated = parsed !== undefined && onRoster(state.roster, parsed.seat);
+	const removedAfterCause =
+		parsed !== undefined && removedAfter(removalsOf(state.messages, parsed.seat), parsed.position);
 	return staleLease(parsed !== undefined, seated, removedAfterCause);
 }
 

@@ -6,7 +6,9 @@
  * follows it.
  */
 import { describe, expect, it, vi } from 'vitest';
+import { encodeActivationId } from '../src/activation-id.ts';
 import type { Entry } from '../src/journal/journal.ts';
+import { validateRoomBody } from '../src/journal/validate.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { messageDelivery } from '../src/room/delivery.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -14,6 +16,7 @@ import { foldPeople } from '../src/room/presence.ts';
 import { routes } from '../src/room/routing.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
+import * as vocabulary from '../src/rules.verified.ts';
 import type { Message } from '../src/types.ts';
 
 vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
@@ -37,6 +40,17 @@ vi.mock('../src/room/rules.verified.ts', async (importOriginal) => {
 		woken: vi.fn(actual.woken),
 		steers: vi.fn(actual.steers),
 		foldPresence: vi.fn(actual.foldPresence),
+		activationGrant: vi.fn(actual.activationGrant),
+		nextActivationId: vi.fn(actual.nextActivationId),
+	};
+});
+
+vi.mock('../src/rules.verified.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../src/rules.verified.ts')>();
+	return {
+		...actual,
+		rangeWellFormed: vi.fn(actual.rangeWellFormed),
+		positiveBounded: vi.fn(actual.positiveBounded),
 	};
 });
 
@@ -256,5 +270,39 @@ describe('the room runs the verified rules', () => {
 		vi.mocked(rules.foldPresence).mockReturnValueOnce(new Map([['ghost', ghost]]));
 		expect([...foldPeople([arrival]).keys()]).toEqual(['ghost']);
 		expect([...foldPeople([arrival]).keys()]).toEqual(['priya']);
+	});
+
+	it('grants an activation only what activationGrant answers', () => {
+		const claim = { type: 'claim', id, expiry: 60_000, deadline: 600_000 } as const;
+		vi.mocked(rules.activationGrant).mockReturnValueOnce(undefined);
+		expect(decide(asked(), claim, now)).toMatchObject({
+			refusal: { reason: expect.stringMatching(/no room grant/) },
+		});
+		expect(decide(asked(), claim, now)).toMatchObject({ event: { kind: 'lease' } });
+	});
+
+	it('numbers the next attempt as nextActivationId answers', () => {
+		vi.mocked(rules.nextActivationId).mockReturnValueOnce({
+			source: 'message',
+			position: 3,
+			seat: 'product',
+			attempt: 7,
+		});
+		expect(asked().due.map((owed) => owed.id)).toEqual(['message:3:product:7']);
+		expect(asked().due.map((owed) => owed.id)).toEqual([id]);
+	});
+
+	it('refuses a range only when rangeWellFormed says so', () => {
+		const close = { owner: 'priya', from: 3, through: 3, at };
+		vi.mocked(vocabulary.rangeWellFormed).mockReturnValueOnce(false);
+		expect(() => validateRoomBody('close', close)).toThrow(/range/);
+		expect(validateRoomBody('close', close)).toBe(true);
+	});
+
+	it('bounds a position as positiveBounded answers', () => {
+		const fields = { source: 'message', position: 3, seat: 'product', attempt: 1 } as const;
+		vi.mocked(vocabulary.positiveBounded).mockReturnValueOnce(false);
+		expect(() => encodeActivationId(fields)).toThrow(/position/);
+		expect(encodeActivationId(fields)).toBe(id);
 	});
 });

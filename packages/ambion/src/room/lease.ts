@@ -40,6 +40,7 @@ import {
 	isExpired as isExpiredRule,
 	isLive as isLiveRule,
 	latest,
+	nextActivationId,
 	removedAfter,
 	schedule,
 	type Taken,
@@ -178,7 +179,7 @@ function pendingForMessage(
 }
 
 /** The seqs of every durable removal of this seat. */
-const removalsOf = (messages: readonly Message[], seat: string): number[] =>
+export const removalsOf = (messages: readonly Message[], seat: string): number[] =>
 	messages.flatMap((message) =>
 		message.kind === 'unseated' && message.subject === seat ? [message.seq] : [],
 	);
@@ -270,12 +271,10 @@ export function pendingActivation(
 		last,
 		unsuccessfulAttempts === 0 ? 0 : options.backoff(unsuccessfulAttempts),
 	);
+	const next = nextActivationId(source, position, seat, unsuccessfulAttempts);
 	return {
-		id: encodeActivationId({ source, position, seat, attempt: plan.attempt }),
-		source,
-		position,
-		seat,
-		attempt: plan.attempt,
+		id: encodeActivationId(next),
+		...next,
 		unsuccessfulAttempts,
 		notBefore: plan.notBefore,
 	};

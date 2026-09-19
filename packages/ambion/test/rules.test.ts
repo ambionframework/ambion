@@ -1,16 +1,19 @@
 import type { JournalEntry as Entry } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import type { ActivationSource } from '../src/activation-id.ts';
-import type { LeaseChange } from '../src/journal/events.ts';
-import type { ActivationSpec, CommitRequest } from '../src/protocol.ts';
+import type { ActivationId, ActivationSource } from '../src/activation-id.ts';
+import type { Close, LeaseChange } from '../src/journal/events.ts';
+import type { ActivationPurpose, ActivationSpec, CommitRequest } from '../src/protocol.ts';
 import { cameToNothing, foldLeases, type LeaseHold, pendingWakes } from '../src/room/lease.ts';
 import type { PersonState } from '../src/room/presence.ts';
 import {
+	type ActivationFields,
 	type Attention,
 	applyChange,
 	type Change,
+	type CloseFact,
 	cancelHold,
 	endingStands,
+	type GrantPurpose,
 	type Hold,
 	type Intent,
 	type LeaseEndReason,
@@ -57,6 +60,9 @@ describe('verified rules', () => {
 		expectTypeOf<Presence>().toEqualTypeOf<PresenceStatus>();
 		expectTypeOf<Person>().toMatchTypeOf<PersonState>();
 		expectTypeOf<PersonState>().toMatchTypeOf<Person>();
+		expectTypeOf<ActivationFields>().toEqualTypeOf<ActivationId>();
+		expectTypeOf<GrantPurpose>().toEqualTypeOf<ActivationPurpose>();
+		expectTypeOf<Close>().toMatchTypeOf<CloseFact>();
 		// The room's hold is the rule's hold plus the derived `cancelled` marker.
 		expectTypeOf<Hold>().toMatchTypeOf<LeaseHold>();
 		expectTypeOf<LeaseHold>().toMatchTypeOf<Hold>();

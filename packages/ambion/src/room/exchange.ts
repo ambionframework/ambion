@@ -39,8 +39,8 @@ import {
 	type SummaryMessage,
 	type SummaryOutcome,
 } from '../types.ts';
-import type { LeaseHold } from './lease.ts';
-import { coversExchange, survivesCancellation } from './rules.verified.ts';
+import { type LeaseHold, removalsOf } from './lease.ts';
+import { coversExchange, removedAfter, survivesCancellation } from './rules.verified.ts';
 
 /** The recorded response outcome, with its writer only while summary work remains owed. */
 export function summaryCompletion(
@@ -75,13 +75,7 @@ function summaryDraftOutcome(
 	leases: ReadonlyMap<string, LeaseHold>,
 	cancelledAt?: number,
 ): SummaryOutcome {
-	if (
-		messages.some(
-			(message) =>
-				message.kind === 'unseated' && message.subject === writer && message.seq > close.through,
-		)
-	)
-		return { status: 'failed' };
+	if (removedAfter(removalsOf(messages, writer), close.through)) return { status: 'failed' };
 	const drafts = [...leases.values()].filter((lease) => {
 		const parsed = decodeActivationId(lease.id);
 		// A terminal lease from another seat cannot settle this close.

@@ -11,6 +11,7 @@ import type {
 import { activationSpec } from './room/activation.ts';
 import type { RoomState } from './room/fold.ts';
 import { isLive, seatOf } from './room/lease.ts';
+import { onRoster as seated } from './room/rules.verified.ts';
 import type { Refusal } from './room/transition.ts';
 import { type RoomFacts, viewOf } from './room/view.ts';
 import { copyMessage, type EndReason, type RoomNotification } from './types.ts';
@@ -44,8 +45,7 @@ export interface Answering {
 	reconcile(): Promise<void>;
 }
 
-const onRoster = (state: RoomState, name: string): boolean =>
-	state.roster.some((seat) => seat.name === name);
+const onRoster = (state: RoomState, name: string): boolean => seated(state.roster, name);
 
 // -- view ---------------------------------------------------------------------
 

@@ -23,7 +23,9 @@ import {
 	leaseExpiry,
 	mayEnd,
 	onRecord,
+	onRoster,
 	permits,
+	present,
 } from './rules.verified.ts';
 
 /** A committed event includes the position assigned by the journal. */
@@ -193,8 +195,7 @@ function deliver(
 	now: number,
 ): RoomDecision<'message'> {
 	const { from, to, text } = command;
-	const author = state.people.get(from);
-	if (author?.presence !== 'present') return refused(`'${from}' is not present in this room.`);
+	if (!present(state.people.get(from))) return refused(`'${from}' is not present in this room.`);
 	const target = state.roster.find((seat) => seat.name === to);
 	if (to !== undefined && !state.people.has(to) && target === undefined) {
 		return refused(`Cannot direct a delivery to '${to}': not in this room.`);
@@ -338,9 +339,7 @@ function liveSpec(
 	const held = state.leases.get(id);
 	if (held === undefined || !isLive(held, now)) return stale('the lease ended');
 	if (spec === undefined) return refused('This activation has no room grant.');
-	return state.roster.some((candidate) => candidate.name === spec.seat)
-		? spec
-		: stale('the lease ended');
+	return onRoster(state.roster, spec.seat) ? spec : stale('the lease ended');
 }
 
 function speechFreshness(
@@ -379,7 +378,7 @@ function seating(
 	stamp: { at: string; activationId: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
-	if (state.roster.some((seat) => seat.name === name)) {
+	if (onRoster(state.roster, name)) {
 		return { unchanged: { kind: 'seated', name } };
 	}
 	const held = state.reserve.find((candidate) => candidate.name === name);
@@ -409,7 +408,7 @@ function unseating(
 	stamp: { at: string; activationId: string; from: string },
 	now: number,
 ): RoomDecision<'message'> {
-	if (!state.roster.some((seat) => seat.name === name)) {
+	if (!onRoster(state.roster, name)) {
 		return state.reserve.some((seat) => seat.name === name)
 			? { unchanged: { kind: 'unseated', name } }
 			: refused(`'${name}' is not an agent in this room.`);

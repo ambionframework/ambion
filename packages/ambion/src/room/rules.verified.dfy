@@ -2,6 +2,20 @@
 
 datatype Option<T> = None | Some(value: T)
 
+function SeqFind<T>(s: seq<T>, p: T -> bool): Option<T>
+  ensures SeqFind(s, p).Some? ==> p(SeqFind(s, p).value)
+  ensures SeqFind(s, p).Some? ==> SeqFind(s, p).value in s
+  ensures SeqFind(s, p).Some? ==>
+    exists i: nat :: i < |s| && s[i] == SeqFind(s, p).value && p(s[i]) &&
+                     (forall j: nat :: j < i ==> !p(s[j]))
+  ensures SeqFind(s, p).None? ==> forall i :: 0 <= i < |s| ==> !p(s[i])
+  decreases |s|
+{
+  if |s| == 0 then None
+  else if p(s[0]) then Some(s[0])
+  else SeqFind(s[1..], p)
+}
+
 function MathMin(a: int, b: int): int { if a <= b then a else b }
 
 function MathMax(a: int, b: int): int { if a >= b then a else b }
@@ -47,6 +61,14 @@ datatype Presence = present | absent
 datatype Person = Person(name: string, identity: string, presence: Presence, since: Option<int>, changedAt: Option<string>, preferences: Option<string>)
 
 datatype PresenceEntry = PresenceEntry(kind: MessageKind, name: string, seq_: int, at: string, identity: Option<string>, preferences: Option<string>)
+
+datatype ActivationFields = ActivationFields(source: Source, position: int, seat: string, attempt: int)
+
+datatype CloseFact = CloseFact(owner: string, from: int, through: int, summary: Option<string>)
+
+datatype GrantPurpose = respond(message: int) | summarize(exchange: int, person: string, through: int)
+
+datatype Grant = Grant(seat: string, attempt: int, purpose: GrantPurpose)
 
 function expired(expiry: int, now: int): bool
 {
@@ -1153,6 +1175,119 @@ lemma stepPerson_ensures(known: Option<Person>, entry: PresenceEntry)
   ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => ((match entry.identity { case Some(i_) => false case None => true }) ==> entry.kind.arrived? ==> (i_result_val.identity == i_known_val.identity)) case None => true }) case None => true })
   ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (entry.kind.left? ==> (i_result_val.identity == i_known_val.identity)) case None => true }) case None => true })
   ensures (match stepPerson(known, entry) { case Some(i_result_val) => (match known { case Some(i_known_val) => (entry.kind.left? ==> (i_result_val.preferences == i_known_val.preferences)) case None => true }) case None => true })
+{
+}
+
+function wellFormed(id: ActivationFields): bool
+{
+  (((id.position >= 1) && (id.attempt >= 1)) && (|id.seat| >= 1))
+}
+
+lemma wellFormed_ensures(id: ActivationFields)
+  ensures (wellFormed(id) <==> (((id.position >= 1) && (id.attempt >= 1)) && (|id.seat| >= 1)))
+{
+}
+
+function nextActivationId(source: Source, position: int, seat: string, unsuccessfulAttempts: int): ActivationFields
+  requires (position >= 1)
+  requires (|seat| >= 1)
+  requires (unsuccessfulAttempts >= 0)
+{
+  ActivationFields(source, position, seat, nextAttempt(unsuccessfulAttempts))
+}
+
+lemma nextActivationId_ensures(source: Source, position: int, seat: string, unsuccessfulAttempts: int)
+  requires (position >= 1)
+  requires (|seat| >= 1)
+  requires (unsuccessfulAttempts >= 0)
+  ensures (nextActivationId(source, position, seat, unsuccessfulAttempts).source == source)
+  ensures (nextActivationId(source, position, seat, unsuccessfulAttempts).position == position)
+  ensures (nextActivationId(source, position, seat, unsuccessfulAttempts).seat == seat)
+  ensures (nextActivationId(source, position, seat, unsuccessfulAttempts).attempt == nextAttempt(unsuccessfulAttempts))
+  ensures (nextActivationId(source, position, seat, unsuccessfulAttempts).attempt == (unsuccessfulAttempts + 1))
+  ensures wellFormed(nextActivationId(source, position, seat, unsuccessfulAttempts))
+{
+}
+
+function names(summary: Option<string>, writer: string): bool
+{
+  match summary {
+    case Some(i_summary_val) =>
+      (i_summary_val == writer)
+    case None =>
+      false
+  }
+}
+
+lemma names_ensures(summary: Option<string>, writer: string)
+  ensures ((match summary { case Some(i_) => false case None => true }) ==> !(names(summary, writer)))
+  ensures (match summary { case Some(i_summary_val) => (names(summary, writer) <==> (i_summary_val == writer)) case None => true })
+{
+}
+
+function closeMatches(close: CloseFact, through: int, writer: string): bool
+{
+  ((close.through == through) && names(close.summary, writer))
+}
+
+lemma closeMatches_ensures(close: CloseFact, through: int, writer: string)
+  ensures (closeMatches(close, through, writer) <==> ((close.through == through) && names(close.summary, writer)))
+{
+}
+
+function closeFor(closes: seq<CloseFact>, through: int, writer: string): Option<CloseFact>
+{
+  SeqFind(closes, (close: CloseFact) => closeMatches(close, through, writer))
+}
+
+lemma closeFor_ensures(closes: seq<CloseFact>, through: int, writer: string)
+  ensures (match closeFor(closes, through, writer) { case Some(i_result_val) => closeMatches(i_result_val, through, writer) case None => true })
+  ensures (match closeFor(closes, through, writer) { case Some(i_result_val) => exists j: int :: ((((0 <= j) && (j < |closes|)) && (closes[j] == i_result_val)) && forall k: int :: ((0 <= k) ==> (k < j) ==> !(closeMatches(closes[k], through, writer)))) case None => true })
+  ensures ((match closeFor(closes, through, writer) { case Some(i_) => false case None => true }) ==> forall j: int :: ((0 <= j) ==> (j < |closes|) ==> !(closeMatches(closes[j], through, writer))))
+{
+}
+
+function activationGrant(id: ActivationFields, cancelledAt: Option<int>, roster: seq<Seat>, removed: bool, recorded: bool, close: Option<CloseFact>): Option<Grant>
+  requires wellFormed(id)
+  requires (match close { case Some(i_close_val) => closeMatches(i_close_val, id.position, id.seat) case None => true })
+{
+  if !(survivesCancellation(id.position, cancelledAt)) then
+    None
+  else
+    if !(onRoster(roster, id.seat)) then
+      None
+    else
+      if removed then
+        None
+      else
+        if id.source.message? then
+          if !(recorded) then
+            None
+          else
+            Some(Grant(id.seat, id.attempt, GrantPurpose.respond(id.position)))
+        else
+          match close {
+            case Some(i_close_val) =>
+              Some(Grant(id.seat, id.attempt, GrantPurpose.summarize(i_close_val.from, i_close_val.owner, i_close_val.through)))
+            case None =>
+              None
+          }
+}
+
+lemma activationGrant_ensures(id: ActivationFields, cancelledAt: Option<int>, roster: seq<Seat>, removed: bool, recorded: bool, close: Option<CloseFact>)
+  requires wellFormed(id)
+  requires (match close { case Some(i_close_val) => closeMatches(i_close_val, id.position, id.seat) case None => true })
+  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => ((i_result_val.seat == id.seat) && (i_result_val.attempt == id.attempt)) case None => true })
+  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => survivesCancellation(id.position, cancelledAt) case None => true })
+  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (match cancelledAt { case Some(i_cancelledAt_val) => !(beforeCancellation(id.position, i_cancelledAt_val)) case None => true }) case None => true })
+  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => onRoster(roster, id.seat) case None => true })
+  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => !(removed) case None => true })
+  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (i_result_val.purpose.respond? <==> id.source.message?) case None => true })
+  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (id.source.message? ==> (recorded && (i_result_val.purpose.message == id.position))) case None => true })
+  ensures (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (id.source.closed? ==> ((match close { case Some(i_) => true case None => false }) && (i_result_val.purpose.through == id.position))) case None => true })
+  ensures (match close { case Some(i_close_val) => (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_result_val) => (id.source.closed? ==> (((i_result_val.purpose.exchange == i_close_val.from) && (i_result_val.purpose.person == i_close_val.owner)) && (i_result_val.purpose.through == i_close_val.through))) case None => true }) case None => true })
+  ensures (id.source.message? ==> recorded ==> survivesCancellation(id.position, cancelledAt) ==> onRoster(roster, id.seat) ==> !(removed) ==> (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_) => true case None => false }))
+  ensures (match close { case Some(i_close_val) => (id.source.closed? ==> survivesCancellation(id.position, cancelledAt) ==> onRoster(roster, id.seat) ==> !(removed) ==> (match activationGrant(id, cancelledAt, roster, removed, recorded, close) { case Some(i_) => true case None => false })) case None => true })
 {
 }
 

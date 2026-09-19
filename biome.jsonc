@@ -99,6 +99,7 @@
 		{
 			"includes": [
 				"packages/ambion/src/activation-id.ts",
+				"packages/ambion/src/rules.verified.ts",
 				"packages/ambion/src/types.ts",
 				"packages/ambion/src/protocol.ts",
 				"packages/ambion/src/define.ts"

@@ -1,8 +1,8 @@
 /**
  * The rules the room decides by, as functions LemmaScript checks. Every
  * function here is pure, and `lease.ts`, `reconcile.ts`, `delivery.ts`,
- * `routing.ts`, `presence.ts`, and `transition.ts` run these bodies: the
- * proof is about the code the room runs. `lsc check` turns the `//@` annotations into Dafny
+ * `routing.ts`, `presence.ts`, `activation.ts`, and `transition.ts` run
+ * these bodies: the proof is about the code the room runs. `lsc check` turns the `//@` annotations into Dafny
  * obligations, and CI verifies them.
  *
  * The string unions below are declared again beside the rules, because
@@ -64,7 +64,7 @@ function nextAttempt(attempts: number): number {
 }
 
 //@ contract A cause before a cancellation marker belongs to cancelled work.
-export function beforeCancellation(position: number, cancelledAt: number): boolean {
+function beforeCancellation(position: number, cancelledAt: number): boolean {
 	//@ ensures \result <==> position < cancelledAt
 	return position < cancelledAt;
 }
@@ -746,7 +746,7 @@ function held(busy: string[], name: string): boolean {
 }
 
 //@ contract A name is on the roster when some seat carries it.
-function onRoster(roster: Seat[], name: string): boolean {
+export function onRoster(roster: readonly Seat[], name: string): boolean {
 	//@ ensures \result <==> exists(i, 0 <= i && i < roster.length && roster[i].name == name)
 	return roster.some((seat) => seat.name === name);
 }
@@ -877,7 +877,7 @@ export interface PresenceEntry {
 }
 
 //@ contract A known person is present when the record says so; an unknown name is not present.
-function present(person: Person | undefined): boolean {
+export function present(person: Person | undefined): boolean {
 	//@ ensures person == undefined ==> !\result
 	//@ ensures person != undefined ==> (\result <==> person.presence == 'present')
 	if (person !== undefined && person.presence === 'present') return true;
@@ -987,4 +987,132 @@ export function foldPresence(entries: PresenceEntry[]): Map<string, Person> {
 		if (next !== undefined) people.set(entry.name, next);
 	}
 	return people;
+}
+
+/** The fields an activation id encodes. The same shape as `ActivationId` in `activation-id.ts`. */
+export interface ActivationFields {
+	readonly source: Source;
+	readonly position: number;
+	readonly seat: string;
+	readonly attempt: number;
+}
+
+/** A close, as the closing grant reads it. `Close` in `events.ts` passes as this. */
+export interface CloseFact {
+	readonly owner: string;
+	readonly from: number;
+	readonly through: number;
+	readonly summary?: string;
+}
+
+/** What an activation is for. The same shape as `ActivationPurpose` in `protocol.ts`. */
+export type GrantPurpose =
+	| { readonly kind: 'respond'; readonly message: number }
+	| {
+			readonly kind: 'summarize';
+			readonly exchange: number;
+			readonly person: string;
+			readonly through: number;
+	  };
+
+/** The authority one decoded id grants: `ActivationSpec` in `protocol.ts` without the id string. */
+export interface Grant {
+	readonly seat: string;
+	readonly attempt: number;
+	readonly purpose: GrantPurpose;
+}
+
+//@ contract A decoded id is well formed when its position and attempt are at least one and its seat has a name. The codec's pattern establishes it.
+export function wellFormed(id: ActivationFields): boolean {
+	//@ ensures \result <==> (id.position >= 1 && id.attempt >= 1 && id.seat.length >= 1)
+	return id.position >= 1 && id.attempt >= 1 && id.seat.length >= 1;
+}
+
+//@ contract The id of the next attempt carries the cause, its position and the seat unchanged, and numbers the attempt one past those that came to nothing. Nothing mints an id.
+export function nextActivationId(
+	source: Source,
+	position: number,
+	seat: string,
+	unsuccessfulAttempts: number,
+): ActivationFields {
+	//@ requires position >= 1
+	//@ requires seat.length >= 1
+	//@ requires unsuccessfulAttempts >= 0
+	//@ ensures \result.source == source && \result.position == position && \result.seat == seat
+	//@ ensures \result.attempt == nextAttempt(unsuccessfulAttempts)
+	//@ ensures \result.attempt == unsuccessfulAttempts + 1
+	//@ ensures wellFormed(\result)
+	return { source, position, seat, attempt: nextAttempt(unsuccessfulAttempts) };
+}
+
+//@ contract A close names a writer when it carries that name as its summary writer. A close with no writer names nobody.
+function names(summary: string | undefined, writer: string): boolean {
+	//@ ensures summary == undefined ==> !\result
+	//@ ensures summary != undefined ==> (\result <==> summary == writer)
+	if (summary === undefined) return false;
+	return summary === writer;
+}
+
+//@ contract A close answers a closed-source id when its boundary is the id's position and it names the id's seat as writer.
+function closeMatches(close: CloseFact, through: number, writer: string): boolean {
+	//@ ensures \result <==> (close.through == through && names(close.summary, writer))
+	return close.through === through && names(close.summary, writer);
+}
+
+//@ contract The close that answers a closed-source id is the first close that matches it. When none matches, there is no close.
+export function closeFor(
+	closes: readonly CloseFact[],
+	through: number,
+	writer: string,
+): CloseFact | undefined {
+	//@ ensures \result != undefined ==> closeMatches(\result, through, writer)
+	//@ ensures \result != undefined ==> exists(j, 0 <= j && j < closes.length && closes[j] == \result && forall(k, 0 <= k && k < j ==> !closeMatches(closes[k], through, writer)))
+	//@ ensures \result == undefined ==> forall(j, 0 <= j && j < closes.length ==> !closeMatches(closes[j], through, writer))
+	return closes.find((close) => closeMatches(close, through, writer));
+}
+
+//@ contract A decoded id grants exactly one authority, or nothing. Nothing for a cause before the cancellation marker, for a seat off the roster, or for a seat removed after the cause. A message id grants a response only for a recorded message. A closed id grants a summary only for the close that names the seat, and the summary is over that close's exchange, for its owner, through its boundary. The grant's seat and attempt are the id's own.
+export function activationGrant(
+	id: ActivationFields,
+	cancelledAt: number | undefined,
+	roster: readonly Seat[],
+	removed: boolean,
+	recorded: boolean,
+	close: CloseFact | undefined,
+): Grant | undefined {
+	//@ requires wellFormed(id)
+	//@ requires close != undefined ==> closeMatches(close, id.position, id.seat)
+	//@ ensures \result != undefined ==> \result.seat == id.seat && \result.attempt == id.attempt
+	//@ ensures \result != undefined ==> survivesCancellation(id.position, cancelledAt)
+	//@ ensures \result != undefined && cancelledAt != undefined ==> !beforeCancellation(id.position, cancelledAt)
+	//@ ensures \result != undefined ==> onRoster(roster, id.seat)
+	//@ ensures \result != undefined ==> !removed
+	//@ ensures \result != undefined ==> (\result.purpose.kind == 'respond' <==> id.source == 'message')
+	//@ ensures \result != undefined && id.source == 'message' ==> recorded && \result.purpose.message == id.position
+	//@ ensures \result != undefined && id.source == 'closed' ==> close != undefined && \result.purpose.through == id.position
+	//@ ensures \result != undefined && id.source == 'closed' && close != undefined ==> \result.purpose.exchange == close.from && \result.purpose.person == close.owner && \result.purpose.through == close.through
+	//@ ensures id.source == 'message' && recorded && survivesCancellation(id.position, cancelledAt) && onRoster(roster, id.seat) && !removed ==> \result != undefined
+	//@ ensures id.source == 'closed' && close != undefined && survivesCancellation(id.position, cancelledAt) && onRoster(roster, id.seat) && !removed ==> \result != undefined
+	if (!survivesCancellation(id.position, cancelledAt)) return undefined;
+	if (!onRoster(roster, id.seat)) return undefined;
+	if (removed) return undefined;
+	if (id.source === 'message') {
+		if (!recorded) return undefined;
+		return {
+			seat: id.seat,
+			attempt: id.attempt,
+			purpose: { kind: 'respond', message: id.position },
+		};
+	}
+	if (close === undefined) return undefined;
+	return {
+		seat: id.seat,
+		attempt: id.attempt,
+		purpose: {
+			kind: 'summarize',
+			exchange: close.from,
+			person: close.owner,
+			through: close.through,
+		},
+	};
 }
