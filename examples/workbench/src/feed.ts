@@ -1,9 +1,13 @@
 import type { Message } from '@ambionframework/ambion';
-import type { RoomView } from './client.ts';
 
-/** Where a feed reads a room from. The HTTP client is one source. */
-export interface FeedSource {
-	read(room: string, since: number): Promise<RoomView>;
+/** What a feed reads: a room's view, of which it needs only the messages. */
+export interface FeedView {
+	readonly messages: readonly Message[];
+}
+
+/** Where a feed reads a room from. The Workbench host is one source. */
+export interface FeedSource<View extends FeedView> {
+	read(room: string, since: number): Promise<View>;
 }
 
 /**
@@ -14,15 +18,15 @@ export interface FeedSource {
  * {@link select} starts a new generation. A read from an earlier generation
  * belongs to a room the feed left, so its result and its error are dropped.
  */
-export class RoomFeed {
-	private readonly source: FeedSource;
+export class RoomFeed<View extends FeedView> {
+	private readonly source: FeedSource<View>;
 	private room = '';
 	private generation = 0;
 	private cursor = 0;
 	private items: Message[] = [];
 	private reading = false;
 
-	constructor(source: FeedSource) {
+	constructor(source: FeedSource<View>) {
 		this.source = source;
 	}
 
@@ -40,14 +44,14 @@ export class RoomFeed {
 	}
 
 	/** Read new messages. Return the room view, or undefined when the read did not apply. */
-	async refresh(): Promise<RoomView | undefined> {
+	async refresh(): Promise<View | undefined> {
 		if (this.reading || this.room === '') return undefined;
 		this.reading = true;
 		const generation = this.generation;
 		try {
 			const view = await this.source.read(this.room, this.cursor);
 			if (generation !== this.generation) return undefined;
-			this.merge(view.messages ?? []);
+			this.merge(view.messages);
 			return view;
 		} catch (error) {
 			if (generation !== this.generation) return undefined;

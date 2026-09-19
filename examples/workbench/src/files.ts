@@ -3,9 +3,22 @@ import { fail } from './rooms.ts';
 
 const browser = { name: 'assistant', identity: 'Workspace browser' };
 
-export async function listFiles(workspace: Workspace) {
+/** One file in the workspace. */
+export interface FileEntry {
+	path: string;
+	size: number;
+}
+
+/** The text of one file. */
+export interface FileContent {
+	path: string;
+	text: string;
+	truncated: boolean;
+}
+
+export async function listFiles(workspace: Workspace): Promise<FileEntry[]> {
 	return workspace.use(browser, async (env) => {
-		const files: { path: string; size: number }[] = [];
+		const files: FileEntry[] = [];
 		const pending = ['/'];
 		let visited = 0;
 		while (pending.length > 0 && visited < 500) {
@@ -29,30 +42,29 @@ export async function listFiles(workspace: Workspace) {
 	});
 }
 
-export async function readFile(workspace: Workspace, path: string) {
+export async function readFile(workspace: Workspace, path: string): Promise<FileContent> {
 	const parts = path.split('/').slice(1);
 	if (
 		!path.startsWith('/') ||
 		parts.some((part) => !part || part === '.' || part === '..' || part.includes('\0'))
 	) {
-		fail(400, 'Use an absolute workspace file path.');
+		fail('Use an absolute workspace file path.');
 	}
 	return workspace.use(browser, async (env) => {
 		let prefix = '';
 		for (const part of parts) {
 			prefix += `/${part}`;
 			const info = await env.fileInfo(prefix, BACKGROUND_CONTEXT);
-			if (!info.ok) fail(404, 'File not found.');
+			if (!info.ok) fail('File not found.');
 			checkFile(info.value);
 		}
 		const result = await env.readTextFile(path, BACKGROUND_CONTEXT);
-		if (!result.ok) fail(400, result.error.message);
+		if (!result.ok) fail(result.error.message);
 		return { path, text: result.value, truncated: false };
 	});
 }
 
 function checkFile(info: { kind: string; size: number }): void {
-	if (info.kind === 'symlink') fail(400, 'The file browser does not follow symbolic links.');
-	if (info.kind === 'file' && info.size > 131_072)
-		fail(413, 'Preview supports files up to 128 KiB.');
+	if (info.kind === 'symlink') fail('The file browser does not follow symbolic links.');
+	if (info.kind === 'file' && info.size > 131_072) fail('Preview supports files up to 128 KiB.');
 }

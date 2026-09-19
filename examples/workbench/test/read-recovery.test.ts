@@ -7,7 +7,7 @@ import { createAssistantMessageEventStream, fauxAssistantMessage } from '@earend
 import { afterEach, describe, expect, it } from 'vitest';
 import { people } from '../src/definitions.ts';
 import { liveRoom, openRooms } from '../src/rooms.ts';
-import { openWorkbench } from '../src/server.ts';
+import { openWorkbench } from '../src/workbench.ts';
 
 const mira = people.at(0);
 if (!mira) throw new Error('The test team has no human.');
@@ -25,23 +25,6 @@ function quietStream(counter: { calls: number }): CreateRuntimeOptions['stream']
 	};
 }
 
-async function request(base: string, path: string, init?: RequestInit) {
-	const response = await fetch(`${base}${path}`, init);
-	const text = await response.text();
-	return { response, body: text ? (JSON.parse(text) as unknown) : {} };
-}
-
-async function launch(directory: string, stream: CreateRuntimeOptions['stream']) {
-	const workbench = await openWorkbench(directory, 'start', stream);
-	await new Promise<void>((resolve, reject) => {
-		workbench.server.once('error', reject);
-		workbench.server.listen(0, '127.0.0.1', () => resolve());
-	});
-	const address = workbench.server.address();
-	if (!address || typeof address === 'string') throw new Error('The test server did not bind.');
-	return { workbench, base: `http://127.0.0.1:${address.port}` };
-}
-
 describe('Workbench room reads and recovery', () => {
 	const directories: string[] = [];
 
@@ -51,40 +34,29 @@ describe('Workbench room reads and recovery', () => {
 	});
 
 	it('returns one coherent stopped room read and its recorded exchange', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'ambion-read-http-'));
+		const directory = await mkdtemp(join(tmpdir(), 'ambion-read-host-'));
 		directories.push(directory);
 		const counter = { calls: 0 };
-		const { workbench, base } = await launch(join(directory, 'workbench'), quietStream(counter));
+		const workbench = await openWorkbench({
+			directory: join(directory, 'run'),
+			stream: quietStream(counter),
+		});
 		try {
-			const path = '/rooms/bringup/humans/mira';
-			expect((await request(base, path, { method: 'PUT' })).response.status).toBe(200);
-			const sent = await request(base, path, {
-				method: 'POST',
-				body: JSON.stringify({ key: 'read-1', text: 'Read this room.' }),
-				headers: { 'content-type': 'application/json' },
-			});
-			const from = (sent.body as { from: number }).from;
-			await expect
-				.poll(async () => {
-					const current = await request(base, '/rooms/bringup');
-					const exchanges = (
-						current.body as {
-							exchanges?: {
-								from: number;
-								status: string;
-								summary?: { status: string };
-							}[];
-						}
-					).exchanges;
-					const exchange = exchanges?.find((candidate) => candidate.from === from);
-					return exchange?.status === 'closed' && exchange.summary?.status === 'silent';
-				})
-				.toBe(true);
+			await workbench.join('bringup', 'mira');
+			await workbench.send('bringup', 'mira', 'read-1', 'Read this room.');
+			const closedExchange = async () => {
+				const exchange = (await workbench.read('bringup', 0)).exchanges[0];
+				return exchange?.status === 'closed' && exchange.summary.status === 'silent'
+					? exchange
+					: undefined;
+			};
+			await expect.poll(async () => (await closedExchange()) !== undefined).toBe(true);
+			const from = (await closedExchange())?.from ?? 0;
 			const beforeRead = counter.calls;
-			const full = await request(base, '/rooms/bringup');
-			const selected = await request(base, `/rooms/bringup?since=${from}`);
+			const full = await workbench.read('bringup', 0);
+			const selected = await workbench.read('bringup', from);
 			expect(counter.calls).toBe(beforeRead);
-			expect(full.body).toMatchObject({
+			expect(full).toMatchObject({
 				initialized: true,
 				goal: expect.stringContaining('Bring up an Arduino Uno'),
 				status: 'running',
@@ -92,20 +64,11 @@ describe('Workbench room reads and recovery', () => {
 				exchanges: expect.any(Array),
 				watermark: expect.any(Number),
 			});
-			expect(
-				(selected.body as { messages: { seq: number }[] }).messages.every(
-					(message) => message.seq > from,
-				),
-			).toBe(true);
-			await request(base, '/rooms/bringup/stop', { method: 'POST' });
-			const stopped = await request(base, '/rooms/bringup');
-			const exchange = await request(base, `/rooms/bringup/exchanges/${from}`);
-			expect(stopped.body).toMatchObject({ status: 'stopped', initialized: true });
-			expect(exchange.response.status).toBe(200);
-			expect(exchange.body).toMatchObject({
-				exchange: expect.objectContaining({ from }),
-				messages: expect.any(Array),
-			});
+			expect(selected.messages.every((message) => message.seq > from)).toBe(true);
+			await workbench.control('bringup', 'stop');
+			const stopped = await workbench.read('bringup', 0);
+			expect(stopped).toMatchObject({ status: 'stopped', initialized: true });
+			expect(stopped.exchanges).toContainEqual(expect.objectContaining({ from, status: 'closed' }));
 			expect(counter.calls).toBe(beforeRead);
 		} finally {
 			await workbench.close().catch(() => undefined);

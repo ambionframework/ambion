@@ -9,24 +9,11 @@ the root [README](../../README.md) for what Ambion is. The full lab design
 is in [docs/example.md](../../docs/example.md); this package builds the part
 that runs on the current kernel API.
 
-## Two endpoints, one host
-
-**One Node process hosts the rooms. A web page and a terminal read the same
-rooms through the same HTTP API.**
-
-- **Web.** [`ui/index.html`](ui/index.html) is one page with inline CSS and
-  JavaScript. It has no build step. It shows the rooms, the conversation, the
-  participants, and the library.
-- **Terminal.** [`src/tui.ts`](src/tui.ts) is an [OpenTUI](https://github.com/sst/opentui)
-  client on a dark theme. It has a multi-line composer, slash commands, and
-  the same discussions as the web page. See [The terminal](#the-terminal).
-
-Both endpoints share the repository brand kit in the root
-[`brand/`](../../brand) directory. The web page loads `/brand/tokens/ambion.css`
-and the brand icons and logo. The terminal reads the colors from
-`brand/tokens/ambion.tokens.json`. One kit holds the identity.
-
 ## Run
+
+**One command starts the rooms and the terminal in one process.** The rooms
+run while the terminal runs. When you quit, the host ends your visit and
+closes the rooms. The journals stay on disk.
 
 From the repository root, install and build with Node 26.4 or later:
 
@@ -35,48 +22,42 @@ pnpm install
 pnpm build
 cd examples/workbench
 export ANTHROPIC_API_KEY=...
-pnpm start
+pnpm start                  # uses ./.data
+pnpm start ./bench --as mira   # a directory, and a person
 ```
 
-Open **http://127.0.0.1:3000**. Choose Mira, Theo, or Sol, then open a room.
-The browser remembers the person for that tab. Open another tab to work as
-another person.
-
-To open the terminal endpoint, keep the host running and start the terminal
-in a second shell:
-
-```sh
-cd examples/workbench
-pnpm tui              # connects to http://127.0.0.1:3000
-pnpm tui http://127.0.0.1:3000 theo   # a base URL and a person
-```
-
-`pnpm tui` starts Node with `--experimental-ffi`, which OpenTUI needs. Run the
-script through `pnpm`, or pass the flag yourself. When you exit, the terminal
-ends your visit to the room. The web page for the same person then offers
-**re-enter**.
-
-`start` creates a fresh `.data` directory. Use `pnpm resume` for later runs.
-Both commands accept a directory argument. Set `PORT` to change the port. Set
+`pnpm start` runs Node with `--experimental-ffi`, which OpenTUI needs. A
+directory with no `rooms.db` gets the three sample rooms and the datasheets.
+A directory that has one resumes its rooms, including a room you created
+and a room you stopped. Set `WORKBENCH_USER` instead of `--as` to pick a
+person. Without either, the first screen asks who you are. Set
 `AMBION_MODEL` and its provider credential to change the model. The default
 is `anthropic/claude-sonnet-5`.
 
+The terminal reads its colors from the repository brand kit in the root
+[`brand/`](../../brand) directory. The example has no HTTP interface.
+
 ## The terminal
 
-**The composer is the control surface.** The room chip in front of the input
-shows where a message goes. Type `/` to see the commands, or press Ctrl+R to
-pick a room.
+**The composer is the control surface.** The chip in front of the input
+shows the room that receives your message. Type `/` to see the commands, or
+press Ctrl+R to pick a room.
 
-| Command                | Effect                               |
-| ---------------------- | ------------------------------------ |
-| `/room <name>`         | Switch to another room               |
-| `/abort`               | Cancel the open exchange             |
-| `/stop`, `/resume`     | Stop the room, or start it again     |
-| `/expand`, `/collapse` | Open or close every discussion       |
-| `/help`, `/quit`       | Show the commands and keys, or leave |
+| Command                | Effect                                             |
+| ---------------------- | -------------------------------------------------- |
+| `/room <name>`         | Switch to another room                             |
+| `/new <name> [goal]`   | Create a room. Without a goal, the composer asks   |
+| `/user <person>`       | Act as another person                              |
+| `/files`               | List the workspace files                           |
+| `/open <path>`         | Read a workspace file in a scrolling overlay       |
+| `/try`                 | Fill the composer with the room's suggested prompt |
+| `/abort`               | Cancel the open exchange                           |
+| `/stop`, `/resume`     | Stop the room, or start it again                   |
+| `/expand`, `/collapse` | Open or close every discussion                     |
+| `/help`, `/quit`       | Show the commands and keys, or leave               |
 
-`/abort` runs at once. Typing the command is the confirmation. The web page
-asks for a second click instead.
+`/abort` runs at once. Typing the command is the confirmation. Switching
+person leaves the current room, then enters it as the new person.
 
 | Key                   | Effect                                                     |
 | --------------------- | ---------------------------------------------------------- |
@@ -84,8 +65,9 @@ asks for a second click instead.
 | Ctrl+J, Alt+Enter     | Add a line to the message                                  |
 | Tab                   | Complete a command, or browse the discussions              |
 | Up, Down, Enter, e, c | While browsing: choose, open or close, open all, close all |
-| Esc                   | Close the palette, or stop browsing                        |
+| Esc                   | Close the palette or the overlay, or stop browsing         |
 | PageUp, PageDown      | Scroll the conversation                                    |
+| y                     | In the file overlay: copy the file to the clipboard        |
 
 A discussion is the thread between a question and its summary, with each
 steering message in its place. It starts closed. Start a message with `//` to
@@ -142,59 +124,43 @@ own journal. All rooms share one workspace resource. A deliberately stopped
 room stays stopped across a restart. The host restores previously running
 rooms with the same definitions.
 
-The browser saves an uncertain delivery before it sends. A retry uses the
-same key, so a lost acknowledgement adds no duplicate message. This does not
-make tool effects exactly once: SQLite records and file changes are not one
+The terminal sends each message with a key. A retry uses the same key, so a
+lost acknowledgement adds no duplicate message. This does not make tool
+effects exactly once: SQLite records and file changes are not one
 transaction.
 
 ## Restart
 
 1. Send a message and wait for its acceptance.
-2. While an agent works, stop the process with the printed PID.
-3. Run `pnpm resume` with the same directory.
-4. Reload the browser, or start the terminal again. It reads the recovered
-   history.
+2. While an agent works, quit with `/quit`, or stop the process.
+3. Run `pnpm start` with the same directory.
 
 A crash writes no departure. A reconnecting join restores the visit without
 another arrival. The default lease expiry is 60 seconds, so lost local work
 can pause before it continues.
 
-## API
-
-The web page and the terminal use one loopback HTTP API.
-
-| Request                                                    | Result                                                     |
-| ---------------------------------------------------------- | ---------------------------------------------------------- |
-| `GET /people`                                              | The people identities                                      |
-| `GET /rooms`                                               | Rooms, status, participants, and recent activity           |
-| `POST /rooms` with `{name, goal}`                          | Create and start a room                                    |
-| `POST /rooms/:room/resume`, `/stop`, `/abort`              | Room lifecycle operations                                  |
-| `PUT /rooms/:room/humans/:person`                          | Join as a person                                           |
-| `POST /rooms/:room/humans/:person` with `{key, text, to?}` | Send as a present person; returns `202 Accepted`           |
-| `DELETE /rooms/:room/humans/:person`                       | Record the person's departure                              |
-| `GET /rooms/:room?since=:seq`                              | Room metadata, exchange views, and messages after a cursor |
-| `GET /workspace`, `GET /file?path=…`                       | The file list and one text preview                         |
-| `GET /brand/…`                                             | The repository brand kit: icons, logos, tokens, and font   |
-
-The server binds to loopback. The person picker is a local convention, not
-authentication. A deployed application must authenticate clients and control
-access to rooms and workspace resources.
+The person picker is a local convention, not authentication. A deployed
+application must authenticate people and control access to rooms and
+workspace resources.
 
 ## Files
 
-| File                 | What                                                    |
-| -------------------- | ------------------------------------------------------- |
-| `src/definitions.ts` | The assistant, the three specialists, and the people    |
-| `src/scenarios.ts`   | The rooms, and the workspace seed                       |
-| `src/rooms.ts`       | The host lifecycle and the room catalog                 |
-| `src/server.ts`      | The HTTP routing for both endpoints                     |
-| `src/client.ts`      | The HTTP client the terminal uses                       |
-| `src/feed.ts`        | The terminal's room feed: one read at a time            |
-| `src/tui.ts`         | The terminal endpoint: state, commands, and keys        |
-| `src/composer.ts`    | The terminal composer, room chip, and palette           |
-| `src/transcript.ts`  | The terminal conversation, with open and closed threads |
-| `src/commands.ts`    | The slash commands and their suggestions                |
-| `src/timeline.ts`    | The record grouped into questions, threads, summaries   |
-| `src/brand.ts`       | The product name and the terminal palette               |
-| `ui/index.html`      | The web endpoint                                        |
-| `library/`           | The datasheets                                          |
+| File                 | What                                                  |
+| -------------------- | ----------------------------------------------------- |
+| `src/definitions.ts` | The assistant, the three specialists, and the people  |
+| `src/scenarios.ts`   | The rooms, and the workspace seed                     |
+| `src/rooms.ts`       | The host lifecycle and the room catalog               |
+| `src/workbench.ts`   | The host API the terminal calls in process            |
+| `src/files.ts`       | The workspace list and one file preview               |
+| `src/names.ts`       | The room name and goal rules                          |
+| `src/session.ts`     | The terminal state and commands, without OpenTUI      |
+| `src/feed.ts`        | The room feed: one read at a time                     |
+| `src/commands.ts`    | The slash commands and their suggestions              |
+| `src/timeline.ts`    | The record grouped into questions, threads, summaries |
+| `src/transcript.ts`  | The conversation, with open and closed threads        |
+| `src/composer.ts`    | The composer, room chip, and palette                  |
+| `src/viewer.ts`      | The workspace file overlay                            |
+| `src/tui.ts`         | The terminal: layout, keys, and the run loop          |
+| `src/main.ts`        | The entry point                                       |
+| `src/brand.ts`       | The product name and the terminal palette             |
+| `library/`           | The datasheets                                        |

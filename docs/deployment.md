@@ -33,11 +33,11 @@ See the [runtime contract](agent.md) and [durability contract](durability.md)
 for the current signatures and failure rules.
 
 The [Workbench example](../examples/workbench) hosts three sample rooms and
-several people in one process. HTTP clients send keyed messages, read by
-cursor, and reacquire exchanges. One SQLite database stores the room journals.
-Its `start` and `resume` commands supply the same agent definitions.
+several people in one process, behind an OpenTUI terminal. The terminal
+calls the host through a typed in-process API and sends keyed messages. The
+rooms run while the terminal runs. One SQLite database stores the room
+journals, and the next start resumes them with the same agent definitions.
 
-A web page and a terminal client read the same rooms through one HTTP API.
 Selecting a room enters it; selecting another leaves the current room. All
 rooms share one local directory workspace. The assistant coordinates
 datasheet, design, and experiment agents. Stop and Resume preserve workspace
