@@ -9,10 +9,10 @@
  * script or another tool that reads outside SQL.
  *
  * The default path opens the database in `-json` mode, parses the last result,
- * and shows a Markdown table. It writes nothing to disk. The export path opens
- * the database in `-csv` mode, redirects the full result to the export file,
- * and shows the file's head. Each path runs the query once, so the preview and
- * the stored result agree.
+ * and shows a Markdown table. It writes nothing to disk. The export path writes
+ * the full result as CSV to a temporary file, then moves it to the export path.
+ * A failed query leaves the export path unchanged. Each path runs the query
+ * once, so the preview and the stored result agree.
  *
  * just-bash is one implementation of this contract. Its `sqlite3` loads the
  * main database into a WebAssembly engine that has no bridge to the virtual
@@ -39,8 +39,8 @@ const PREVIEW_ROWS = 50;
 /** The CSV text for a NULL value, so a NULL reads apart from an empty string. */
 const NULL_SENTINEL = '\\N';
 
-/** The largest `-json` output the default path parses before it asks for a LIMIT. */
-const MAX_JSON_BYTES = 1_000_000;
+/** The largest `-json` output, in characters, the default path parses before it asks for a LIMIT. */
+const MAX_JSON_CHARS = 1_000_000;
 
 const sqlSchema = Type.Object({
 	sql: Type.String({
@@ -130,7 +130,7 @@ async function preview(
 ): Promise<SqlResult> {
 	const result = await runSqlite(env, ['-json'], database, scriptPath, undefined, options);
 	if (result.exitCode !== 0) return failed(database, result.stderr);
-	if (result.stdout.length > MAX_JSON_BYTES) {
+	if (result.stdout.length > MAX_JSON_CHARS) {
 		const text =
 			'The result is large. Add a LIMIT for a preview, or set export to write the full result as CSV.';
 		return report(text, { database, rows: 0, truncated: true });
@@ -141,7 +141,11 @@ async function preview(
 	return report(table(rows, maxRows), { database, rows: rows.length });
 }
 
-/** Run the query, write the full result as CSV, and show the file's head. */
+/**
+ * Run the query, write the full result as CSV to a temporary file, then move
+ * it to the export path. The export path changes only after the query passes,
+ * so a failed query leaves an existing file unchanged.
+ */
 async function exportCsv(
 	env: ExecutionEnv,
 	database: string,
@@ -150,18 +154,24 @@ async function exportCsv(
 	maxRows: number,
 	options: ShellExecOptions,
 ): Promise<SqlResult> {
+	const temp = await env.createTempFile({ suffix: '.csv' });
+	if (!temp.ok) throw temp.error;
+	const tempOut = temp.value;
 	const flags = ['-csv', '-header', '-nullvalue', `'${NULL_SENTINEL}'`];
-	const result = await runSqlite(env, flags, database, scriptPath, exportPath, options);
-	if (result.exitCode !== 0) {
-		await env.remove(exportPath, { force: true });
-		return failed(database, result.stderr);
+	try {
+		const result = await runSqlite(env, flags, database, scriptPath, tempOut, options);
+		if (result.exitCode !== 0) return failed(database, result.stderr);
+		const head = await env.readTextLines(tempOut, { maxLines: maxRows + 1 });
+		const lines = head.ok ? head.value.filter((line) => line !== '') : [];
+		const rows = await countRows(env, tempOut);
+		const moved = await env.renameFile(tempOut, exportPath);
+		if (!moved.ok) throw moved.error;
+		const block = lines.length === 0 ? '(no rows)' : `\`\`\`csv\n${lines.join('\n')}\n\`\`\``;
+		const footer = `\n\nWrote ${rows} ${plural(rows)} to ${exportPath}. A NULL value reads as ${NULL_SENTINEL}.`;
+		return report(`${block}${footer}`, { database, rows, export: exportPath });
+	} finally {
+		await env.remove(tempOut, { force: true });
 	}
-	const head = await env.readTextLines(exportPath, { maxLines: maxRows + 1 });
-	const lines = head.ok ? head.value.filter((line) => line !== '') : [];
-	const rows = await countRows(env, exportPath);
-	const block = lines.length === 0 ? '(no rows)' : `\`\`\`csv\n${lines.join('\n')}\n\`\`\``;
-	const footer = `\n\nWrote ${rows} ${plural(rows)} to ${exportPath}. A NULL value reads as ${NULL_SENTINEL}.`;
-	return report(`${block}${footer}`, { database, rows, export: exportPath });
 }
 
 /** Build one `sqlite3` command that reads the script and, when asked, redirects to a file. */
@@ -180,13 +190,20 @@ async function runSqlite(
 	return result.value;
 }
 
-/** Parse a single JSON array of row objects, or undefined when the output is not one. */
+/**
+ * Parse the last JSON array of row objects. `sqlite3 -json` writes one array
+ * per query, and a newline separates one array from the next. A newline never
+ * sits inside a value, because `-json` escapes it, so the last `\n[` starts the
+ * last query's result.
+ */
 function parseRows(stdout: string): Record<string, unknown>[] | undefined {
 	const text = stdout.trim();
 	if (text === '') return [];
-	if (!text.startsWith('[')) return undefined;
+	const boundary = text.lastIndexOf('\n[');
+	const last = boundary === -1 ? text : text.slice(boundary + 1);
+	if (!last.startsWith('[')) return undefined;
 	try {
-		const value: unknown = JSON.parse(text);
+		const value: unknown = JSON.parse(last);
 		return Array.isArray(value) ? (value as Record<string, unknown>[]) : undefined;
 	} catch {
 		return undefined;
@@ -213,12 +230,12 @@ function cell(value: unknown): string {
 	return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
-/** Count the CSV data rows, without the header line. */
+/** Count the CSV data rows with xan, which reads RFC 4180 quoting and skips the header. */
 async function countRows(env: ExecutionEnv, path: string): Promise<number> {
-	const result = await env.exec(`wc -l < ${quote(path)}`);
+	const result = await env.exec(`xan count ${quote(path)}`);
 	if (!result.ok) return 0;
-	const lines = Number.parseInt(result.value.stdout.trim(), 10);
-	return Number.isFinite(lines) ? Math.max(lines - 1, 0) : 0;
+	const rows = Number.parseInt(result.value.stdout.trim(), 10);
+	return Number.isFinite(rows) ? rows : 0;
 }
 
 async function resolvePath(env: ExecutionEnv, path: string): Promise<string> {

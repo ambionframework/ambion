@@ -161,4 +161,43 @@ INSERT INTO big SELECT id FROM seq;`,
 		expect(result.details.rows).toBe(200);
 		await site.destroy();
 	});
+
+	it('previews the last query when the script has several', async () => {
+		const site = openWorkspace({ name: 'multi', backend: memoryBackend() });
+		const result = await sql(site, 'alpha', { sql: 'SELECT 1 AS a; SELECT 2 AS b, 3 AS c;' });
+		expect(result.text).toContain('| b | c |');
+		expect(result.text).toContain('| 2 | 3 |');
+		expect(result.text).not.toContain('| a |');
+		expect(result.details.rows).toBe(1);
+		await site.destroy();
+	});
+
+	it('counts exported rows with xan, so an embedded newline does not inflate the count', async () => {
+		const site = openWorkspace({ name: 'count', backend: memoryBackend() });
+		await sql(site, 'alpha', {
+			sql: "CREATE TABLE m(id INTEGER, note TEXT); INSERT INTO m VALUES (1,'line one\nline two'),(2,'plain');",
+		});
+		const result = await sql(site, 'alpha', {
+			sql: 'SELECT * FROM m ORDER BY id;',
+			export: '~/m.csv',
+		});
+		expect(result.details.rows).toBe(2);
+		expect(result.text).toContain('Wrote 2 rows');
+		await site.destroy();
+	});
+
+	it('leaves an existing export file unchanged when the query fails', async () => {
+		const site = openWorkspace({ name: 'safe-export', backend: memoryBackend() });
+		await sql(site, 'alpha', { sql: 'CREATE TABLE t(id INTEGER); INSERT INTO t VALUES (1);' });
+		const good = await sql(site, 'alpha', { sql: 'SELECT * FROM t;', export: '~/keep.csv' });
+		expect(good.details.rows).toBe(1);
+		const bad = await sql(site, 'alpha', { sql: 'SELECT * FROM nope;', export: '~/keep.csv' });
+		expect(bad.text).toContain('SQL error');
+		// The earlier good file is intact.
+		await site.use(agent('alpha'), async (env) => {
+			const csv = await env.readTextFile('/home/alpha/keep.csv');
+			expect(csv.ok && csv.value).toContain('1');
+		});
+		await site.destroy();
+	});
 });
