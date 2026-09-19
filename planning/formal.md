@@ -168,8 +168,8 @@ A refuter built each one as a running probe against the code.
 ## B. The lease fold
 
 **Landed on this branch.** Every rule below is in the room's rules file
-with its proof, `lease.ts` and `fold.ts` run them, the binding test
-names them, and the `AttemptIdsAreFresh` lemma is the first hand-written
+with its proof. `lease.ts` and `fold.ts` run them, and the binding test
+names them. The `AttemptIdsAreFresh` lemma is the first hand-written
 addition in the room's `.dfy`. Dafny proves the room file's 56
 obligations in seven seconds.
 
@@ -194,21 +194,21 @@ rule points `lease.ts` at the rules and never back. `LeaseHold` in
 adds after the rule answers.
 
 **A cancellation is a second step rule.** `cancelHold(hold, position,
-cancelledAt, at)` ends a running lease whose cause is before the marker as
-`revoked` with `until == cancelledAt`, keeps `id`, `since`, `claimedAt`,
-and `readThrough`, and leaves every other lease as it was. `fold.ts`
-`cancelLeases` runs it per lease. `docs/durability.md` "Cancellation"
+cancelledAt, at)` ends a running lease whose cause is before the marker.
+The lease ends as `revoked` with `until == cancelledAt`, and keeps `id`,
+`since`, `claimedAt`, and `readThrough`. Every other lease stays as it
+was. `fold.ts` `cancelLeases` runs it per lease. `docs/durability.md` "Cancellation"
 promises this boundary; today two comparisons in `fold.ts` and one in
 `exchange.ts` restate `beforeCancellation` by hand without calling it.
 
 **Which lease answers which message is one rule.** `answers(taken, seq)`
-over a `Taken` record (phase, reason, `readThrough`, and the position the
-id names) states what `docs/durability.md` §4 promises and `lease.ts`
-`answered` computes: a running lease answers every message it covers; a
-failed or expired lease answers nothing; a released lease answers only
-positions at or below its acknowledged `readThrough`; an abandoned or
-revoked lease answers the position its id names, or one it acknowledged.
-Two rules read it:
+reads a `Taken` record: the phase, the reason, `readThrough`, and the
+position the id names. It states what `docs/durability.md` §4 promises
+and `lease.ts` `answered` computed by hand. A running lease answers every
+message it covers. A failed or expired lease answers nothing. A released
+lease answers only positions at or below its acknowledged `readThrough`.
+An abandoned or revoked lease answers the position its id names, or one
+it acknowledged. Two rules read it:
 
 - `wakeAnswered(taken, seq)` is the `some` over the covering leases;
   `statusOf` returns no wake exactly when it holds, so a pending wake never
@@ -228,10 +228,10 @@ is the `Math.max(0, ...)` with a contract. `pendingActivation` runs both;
 `Date.parse` on the lease's `at` stays at the call site.
 
 **Two scalar rules gain the clauses that relate them.** `atWork` gains
-`\result ==> coversAttempt(ended, until, seq)`: every message a lease was
+`\result ==> coversAttempt(ended, until, seq)`. Every message a lease was
 steered with is one the lease covers, so an unanswered steer to a lease
-that came to nothing is pending again for that seat. `coversAttempt` gains
-downward closure in seq. No call site changes.
+that came to nothing is pending again for that seat. `coversAttempt`
+gains downward closure in seq. No call site changes.
 
 **`isLive` and `isExpired` become rules over the phase.** Today both are
 arrow functions in `lease.ts` around the verified `expired`. As rules over
@@ -249,16 +249,16 @@ copies.
 
 **Every rule below is proven and waits for its slice.** The file
 [`planning/evidence/formal/reconcile.rules.ts`](evidence/formal/reconcile.rules.ts)
-holds the eleven rules with their contracts; CI verifies its 35
-obligations with the landed files, and slice 2c moves them into the
-room's rules file and reshapes `reconcile.ts` around them.
+holds the eleven rules with their contracts. CI verifies its 35
+obligations with the landed files. Slice 2c moves them into the room's
+rules file and reshapes `reconcile.ts` around them.
 
 **The header of `reconcile.ts` overclaims, and a trace refutes it.** The
 file promises that "a second decision over the result writes nothing". A
-refuter traced the fold at a fixed clock: a pass expires a lease, the next
-pass finds the retry the fold now owes and writes it off at the cap, the
-next closes the exchange, and the next owes a summary draft. The room
-converges, and each pass writes something new. The header states what the
+refuter traced the fold at a fixed clock. A pass expires a lease. The
+next pass finds the retry the fold now owes and writes it off at the cap.
+The next closes the exchange, and the next owes a summary draft. The
+room converges, and each pass writes something new. The header states what the
 code does: each pass writes what the fold owes after the last, and the
 loop stops at the pass that writes nothing. A proof of convergence needs
 a measure over the fold and waits for tranche 3.
