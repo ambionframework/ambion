@@ -33,7 +33,7 @@ person joins a room, asks a question, and reads the summary.
 **One assistant coordinates three specialists.** The assistant answers
 ordinary messages, seats a specialist, and writes the closing summary. It
 uses `defineAssistant` from `@ambionframework/assistant`, seated at
-`broadcast` and fixed as the summary writer.
+`broadcast`. It writes the closing summary.
 
 | Agent           | Scope                                                      |
 | --------------- | ---------------------------------------------------------- |
@@ -90,35 +90,38 @@ One kit holds the identity.
 kernel owns the collaboration. The example owns the library files, the
 domain instructions, and the two endpoints.
 
-| Application concept       | Kernel mechanism                                              |
-| ------------------------- | ------------------------------------------------------------- |
-| A kit project             | One room per topic; rooms persist across questions            |
-| A person                  | A visit with a definition and reading preferences             |
-| Four definitions          | The assistant and three specialists; the reserve holds spares |
-| The assistant             | The assistant definition, seated at `broadcast`, fixed        |
-| Bring in a specialist     | Attention `named`, and a directed say                         |
-| Specialists work together | Directed says between seats                                   |
-| One answer for the person | The closing activation writes one summary                     |
-| Datasheets and artifacts  | The directory workspace, read and written through its tools   |
-| History                   | The journal for collaboration; the workspace for files        |
+| Application concept       | Kernel mechanism                                                  |
+| ------------------------- | ----------------------------------------------------------------- |
+| A kit project             | One room per topic; rooms persist across questions                |
+| A person                  | A visit with a definition and reading preferences                 |
+| Four definitions          | The assistant and three specialists; the reserve holds spares     |
+| The assistant             | The assistant definition, seated at `broadcast`, with the summary |
+| Bring in a specialist     | Attention `named`, and a directed say                             |
+| Specialists work together | Directed says between seats                                       |
+| One answer for the person | The closing activation writes one summary                         |
+| Datasheets and artifacts  | The directory workspace, read and written through its tools       |
+| History                   | The journal for collaboration; the workspace for files            |
 
 A reader who swaps the library and the instructions for their own domain
 keeps the rooms, the visits, and the exchanges.
 
 ## What the example shows
 
-**The example is the evidence for the claims a reader tests first.** Each
-scenario runs on a scripted executor in CI and on a real provider in the
-live tier.
+**The example is the evidence for the claims a reader tests first.** The
+table states what each test proves today. A row marked "By hand" has no
+automated test yet.
 
-| Scenario                                                               | Claim                                        |
-| ---------------------------------------------------------------------- | -------------------------------------------- |
-| A resistor question answered from `led-5mm.md` in `/library`           | A specialist works from a shared file, cited |
-| The assistant seats the Design specialist and stays silent after       | Selection, silence, and one summary          |
-| The Experiments specialist writes a numbered test plan under `/shared` | A question becomes a written artifact        |
-| A person adds a constraint with a follow-up while an agent works       | Steering an open exchange                    |
-| The host restarts during work                                          | Resume keeps the question and the files      |
-| Two people work the kit through separate rooms                         | Visits, presence, and catch-up by position   |
+| Scenario                                                        | Claim                                      | Evidence                                                                     |
+| --------------------------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------- |
+| A resistor question is answered from `led-5mm.md` in `/library` | A specialist works from a shared file      | Scripted: an agent reads the file. Live: the summary cites `/library`        |
+| The assistant routes a question to the Design specialist        | Selection, silence, and one summary        | Scripted: one summary after routing, and a silent close when no agent speaks |
+| A specialist writes a file to the workspace                     | An artifact survives a restart             | Scripted: the file is written, and read again after a restart                |
+| The Experiments specialist plans a distance test                | A question becomes a written plan          | Live: the summary describes a test. No test checks the plan file             |
+| A person adds a constraint while an agent works                 | Steering an open exchange                  | By hand: the thread shows the message in order                               |
+| The host stops, fails to stop, and resumes                      | Resume keeps the question and the files    | Scripted: clean stop, failed stop with retry, and resume from the journal    |
+| Two people work the kit through separate rooms                  | Visits, presence, and catch-up by position | Scripted                                                                     |
+
+The kernel chaos tier covers a kill during work. This example does not.
 
 ## Layout
 
@@ -137,17 +140,18 @@ examples/workbench/
     files.ts           the workspace list and one file preview
     server.ts          the persistent host: HTTP for both endpoints
     client.ts          the HTTP client the terminal uses
+    feed.ts            the terminal's room feed: one read at a time
     tui.ts             the terminal endpoint
     main.ts            start or resume
   library/             the datasheets as text
   ui/                  the web page: rooms, conversation, and library
-  test/                the scenarios on the scripted executor
-  test/live/           the scenarios on a real provider
+  test/                scripted tests: host, client, feed, and recovery
+  test/live/           two scenarios on a real provider
 ```
 
 The example serves the repository brand kit from the root `brand/`
-directory. It adds no brand files of its own. The `ambion new` Node template
-derives from this layout with one room and two definitions.
+directory. It adds no brand files of its own. A Node template for `ambion new` is planned to derive from this layout
+(item C3 in [next.md](../planning/next.md)). It does not exist yet.
 
 ## Beyond the current scope
 

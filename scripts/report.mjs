@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Writes one demo report from the JSON that `examples/site`'s `pnpm demo`
- * captured. Nothing in the numbers is typed by hand: every figure on the page
+ * Writes one demo report from the JSON that a demo run captured. The example
+ * that once produced it, `examples/site`, no longer exists. Nothing in the numbers is typed by hand: every figure on the page
  * is read off the run. The prose around the figures belongs to the change the
  * run was made for, and moves with it.
  *
