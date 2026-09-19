@@ -556,6 +556,11 @@
 			.message.compact .message-text {
 				font-size: 13px;
 			}
+			/* A person's steering message stands out in a thread of agent messages. */
+			.message.compact .message-card.steer {
+				border-color: var(--accent-edge);
+				background: var(--accent-soft);
+			}
 			.closed-note {
 				margin: -8px 0 21px calc(var(--gutter) + var(--gap));
 				color: var(--dim);
@@ -1428,15 +1433,25 @@
 					message.text || (message.kind === 'arrived' ? 'presence recorded' : 'presence changed');
 				// A compact message sits inside a discussion. Its time joins the byline,
 				// because the discussion has no time gutter.
-				const messageNode = (message, compact = false) => {
-					const item = node('article', compact ? 'message compact' : 'message');
-					const card = node('div', `message-card ${messageKind(message)}`);
+				const isHuman = (name) =>
+					(currentRoom()?.participants || []).some(
+						(participant) => participant.kind === 'human' && participant.name === name,
+					);
+				const messageCard = (message, compact) => {
+					// A person's message inside a thread steers the exchange, so it gets its own mark.
+					const steer = compact && isHuman(message.from);
+					const card = node('div', `message-card ${messageKind(message)}${steer ? ' steer' : ''}`);
 					const byline = node('div', 'message-byline');
-					byline.append(node('span', 'kind', message.kind));
+					byline.append(node('span', 'kind', steer ? 'steer' : message.kind));
 					byline.append(node('span', '', messageLabel(message)));
 					if (compact) byline.append(node('time', '', formatTime(message.at)));
 					card.append(byline);
 					card.append(node('div', 'message-text', messageBody(message)));
+					return card;
+				};
+				const messageNode = (message, compact = false) => {
+					const item = node('article', compact ? 'message compact' : 'message');
+					const card = messageCard(message, compact);
 					if (compact) {
 						item.append(card);
 						return item;
@@ -1448,11 +1463,8 @@
 				};
 				const timelineGroups = (messages) => {
 					const exchanges = currentRoom()?.exchanges || [];
-					const humanNames = new Set(
-						(currentRoom()?.participants || [])
-							.filter((participant) => participant.kind === 'human')
-							.map((participant) => participant.name),
-					);
+					// The thread holds every spoken message after the opening question, in
+					// order. A person's steering message belongs to it, beside the agents' replies.
 					const groups = exchanges
 						.filter((exchange) => exchange.status === 'closed')
 						.map((exchange) => ({
@@ -1464,8 +1476,7 @@
 								(message) =>
 									message.seq > exchange.from &&
 									message.seq <= exchange.through &&
-									message.kind === 'said' &&
-									!humanNames.has(message.from),
+									message.kind === 'said',
 							),
 						}));
 					groups.forEach((group) => {
