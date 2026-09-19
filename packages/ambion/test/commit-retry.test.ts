@@ -21,8 +21,9 @@ const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 
 /**
  * A seat that says one text until a room call confirms it. It reads the tool
- * results, not the record, so a lost reply makes it speak again. This is the
- * seat that turns a lost reply into a duplicate under the old runner.
+ * results to decide whether to speak, so a lost reply makes it speak again.
+ * This is the seat that turns a lost reply into a duplicate under the old
+ * runner.
  */
 const saysUntilDelivered =
 	(text: string): Script =>
