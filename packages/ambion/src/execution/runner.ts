@@ -10,10 +10,10 @@ import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/
 import type { Agent as PiAgent } from '@earendil-works/pi-agent-core';
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { SeatContext, Transport } from '../host/runtime.ts';
-import type { ActivationView, SeatPort, SeatRoom, Steer, Wake } from '../protocol.ts';
-import type { RoomNotification } from '../types.ts';
+import type { ActivationView, SeatPort, SeatRoom, Steer, ViewResponse, Wake } from '../protocol.ts';
+import type { Message, RoomNotification, Seq } from '../types.ts';
 import { Activation, persistTurns } from './activation.ts';
-import { renderActivation, renderLine } from './render.ts';
+import { renderActivation, renderLine, windowByBudget } from './render.ts';
 import { seatSessionId } from './services.ts';
 import { binding, toolsFor } from './tools.ts';
 
@@ -324,6 +324,8 @@ export class AgentRunner implements SeatPort {
 		const { clock, room, seat, transcripts } = this.context;
 		return {
 			view: async () => {
+				const budget = this.context.definition.tokenBudget;
+				if (budget !== undefined) return this.windowedView(id, budget, cancelled);
 				const opened = await this.call(() => this.room.view(id), cancelled);
 				if (opened.kind === 'value') return opened.value;
 				if (opened.kind === 'cancelled') return { stale: 'the activation was cut' };
@@ -349,6 +351,50 @@ export class AgentRunner implements SeatPort {
 			emit: (event: RoomNotification) => this.emit(event),
 			now: () => clock.now(),
 		};
+	}
+
+	/**
+	 * The record windowed to the agent's token budget. The seat pages the record
+	 * from the tail, keeps the newest blocks that fit, and stops when the window
+	 * starts above the record it holds or the record reaches its floor. The open
+	 * exchange stays whole even past the budget.
+	 */
+	private async windowedView(
+		id: string,
+		budget: number,
+		cancelled: Promise<void>,
+	): Promise<ViewResponse> {
+		const estimate = this.context.definition.estimateTokens ?? defaultEstimate;
+		let before: number | undefined;
+		let held: Message[] = [];
+		for (;;) {
+			const page = await this.pageView(id, before, cancelled);
+			if ('stop' in page) return page.stop;
+			held = [...page.view.context.messages, ...held];
+			const window = windowByBudget(held, estimate, budget, pinOf(page.view));
+			before = held[0]?.seq;
+			if (before === undefined || windowSettled(window.from, held, page.view.context.earliest))
+				return { view: withWindow(page.view, window.kept) };
+		}
+	}
+
+	/** One bounded page of the record, or the response that stops the paging. */
+	private async pageView(
+		id: string,
+		before: number | undefined,
+		cancelled: Promise<void>,
+	): Promise<{ stop: ViewResponse } | { view: ActivationView }> {
+		const opened = await this.call(
+			() => this.room.view(id, { before, limit: RECORD_PAGE }),
+			cancelled,
+		);
+		if (opened.kind === 'cancelled') return { stop: { stale: 'the activation was cut' } };
+		if (opened.kind !== 'value') {
+			this.reportCallFailure(id, 'view', opened.error);
+			throw opened.error;
+		}
+		const response = opened.value;
+		return 'stale' in response ? { stop: response } : { view: response.view };
 	}
 
 	private reportCallFailure(
@@ -426,6 +472,34 @@ export class AgentRunner implements SeatPort {
 		});
 		return { agent, context: rendered.context };
 	}
+}
+
+// -- record windowing ---------------------------------------------------------
+
+/** How many messages one bounded page reads back from the record cursor. */
+const RECORD_PAGE = 64;
+
+/** The token estimate when an agent declares a budget but no estimator. */
+function defaultEstimate(text: string): number {
+	return Math.ceil(text.length / 4);
+}
+
+/** The open exchange is pinned whole for an ordinary response. */
+function pinOf(view: ActivationView): Seq | undefined {
+	return view.spec.purpose.kind === 'respond' ? view.context.exchange?.from : undefined;
+}
+
+/** The window is done when it starts above the held record, or the record has no earlier entry. */
+function windowSettled(from: Seq, held: readonly Message[], earliest: Seq | undefined): boolean {
+	const lowest = held[0]?.seq;
+	if (lowest === undefined) return true;
+	if (from > lowest) return true;
+	return earliest === undefined || lowest <= earliest;
+}
+
+/** The view with its messages replaced by the windowed record the seat assembled. */
+function withWindow(view: ActivationView, kept: readonly Message[]): ActivationView {
+	return { ...view, context: { ...view.context, messages: [...kept] } };
 }
 
 // -- the transport ------------------------------------------------------------

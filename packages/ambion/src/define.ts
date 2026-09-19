@@ -31,6 +31,10 @@ export interface DefineAgentOptions {
 	tools?: readonly AmbionTool[];
 	/** Composable tool bundles with guidance. Bundles are flattened at definition time. */
 	bundles?: readonly ToolBundle[];
+	/** The token budget for the record one activation reads. Absent reads the whole record. */
+	tokenBudget?: number;
+	/** How the agent counts tokens against its budget. Absent uses a length estimate. */
+	estimateTokens?: (text: string) => number;
 }
 
 export function defineAgent(options: DefineAgentOptions): AgentDefinition {
@@ -46,7 +50,21 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 		model: options.model,
 		tools,
 		...(guidance === undefined ? {} : { guidance }),
+		...budget(options.tokenBudget, options.estimateTokens),
 	});
+}
+
+/** The record-window fields, validated and written only when a budget is set. */
+function budget(
+	tokenBudget: number | undefined,
+	estimateTokens: ((text: string) => number) | undefined,
+): { tokenBudget?: number; estimateTokens?: (text: string) => number } {
+	if (tokenBudget === undefined) return {};
+	if (!Number.isSafeInteger(tokenBudget) || tokenBudget <= 0)
+		throw new Error('An agent tokenBudget must be a positive integer.');
+	if (estimateTokens !== undefined && typeof estimateTokens !== 'function')
+		throw new Error('An agent estimateTokens must be a function.');
+	return { tokenBudget, ...(estimateTokens === undefined ? {} : { estimateTokens }) };
 }
 
 /** Capture a structural definition at a room boundary without retaining mutable authoring data. */
@@ -66,6 +84,7 @@ export function captureAgent(agent: AgentDefinition): AgentDefinition {
 		model: agent.model,
 		tools,
 		...(agent.guidance === undefined ? {} : { guidance: agent.guidance }),
+		...budget(agent.tokenBudget, agent.estimateTokens),
 	});
 }
 

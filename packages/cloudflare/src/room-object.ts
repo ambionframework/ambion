@@ -29,6 +29,7 @@ import type {
 	SeatContext,
 	SeatRoom,
 	Transport,
+	ViewRange,
 	ViewResponse,
 } from '@ambionframework/ambion/transport';
 import { runningRoom } from '@ambionframework/ambion/transport';
@@ -305,8 +306,8 @@ export class RoomObject extends DurableObject<Env> {
 
 	// -- what a seat asks, in wire types --------------------------------------
 
-	async view(activation: string): Promise<ViewResponse> {
-		return this.seatRoom().view(activation);
+	async view(activation: string, range?: ViewRange): Promise<ViewResponse> {
+		return this.seatRoom().view(activation, range);
 	}
 
 	async commit(commit: CommitRequest): Promise<CommitResult> {

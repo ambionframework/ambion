@@ -342,6 +342,17 @@ export interface AgentDefinition {
 	readonly tools: readonly AmbionTool[];
 	/** Guidance composed from the agent's tool bundles. */
 	readonly guidance?: string;
+	/**
+	 * The token budget for the record one activation reads. When set, the seat
+	 * pages the record and keeps the newest part that fits the budget, plus the
+	 * open exchange whole. Absent reads the whole record.
+	 */
+	readonly tokenBudget?: number;
+	/**
+	 * How the agent counts tokens against its budget. Absent uses a length
+	 * estimate. The seat runs it, so it never crosses the wire.
+	 */
+	readonly estimateTokens?: (text: string) => number;
 }
 
 export interface HumanDefinition {

@@ -39,6 +39,7 @@ import type {
 	SeatPort,
 	SeatRoom,
 	Steer,
+	ViewRange,
 	ViewResponse,
 } from './protocol.ts';
 import { activationSpec } from './room/activation.ts';
@@ -1161,8 +1162,8 @@ export class RoomHost implements Room, RunningRoom {
 
 	// -- what a seat asks -------------------------------------------------------
 
-	view(id: string): Promise<ViewResponse> {
-		return answerView(this, id);
+	view(id: string, range?: ViewRange): Promise<ViewResponse> {
+		return answerView(this, id, range);
 	}
 
 	commit(commit: CommitRequest): Promise<CommitResult> {

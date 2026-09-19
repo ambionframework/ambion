@@ -96,6 +96,48 @@ function blocks(record: readonly Message[]): Block[] {
 	return out;
 }
 
+/** The seqs one block stands for, and the text a token estimate reads. */
+function blockSeqs(block: Block): Seq[] {
+	return 'fold' in block ? block.fold.map((message) => message.seq) : [block.line.seq];
+}
+
+function blockText(block: Block): string {
+	return renderLine('fold' in block ? block.by : block.line);
+}
+
+/**
+ * The record trimmed to a token budget: the newest blocks whose estimated
+ * tokens stay within `budget`, and never fewer than one block, so an
+ * activation always reads the latest exchange. The walk runs over blocks, so a
+ * summarised range counts once and is never split. `pin` keeps every message at
+ * or after it, which holds the open exchange whole even past the budget.
+ *
+ * `from` is the lowest position the window keeps. The caller pages the record
+ * until `from` sits above the record it holds, or the record reaches its floor.
+ */
+export function windowByBudget(
+	record: readonly Message[],
+	estimate: (text: string) => number,
+	budget: number,
+	pin?: Seq,
+): { from: Seq; kept: Message[] } {
+	const bs = blocks(record);
+	const newest = bs.at(-1);
+	if (newest === undefined) return { from: 0, kept: [] };
+	let cost = 0;
+	let cut = newest;
+	for (let index = bs.length - 1; index >= 0; index -= 1) {
+		const block = bs[index];
+		if (block === undefined) break;
+		cost += estimate(blockText(block));
+		if (cost > budget) break;
+		cut = block;
+	}
+	let from = Math.min(...blockSeqs(cut));
+	if (pin !== undefined && pin < from) from = pin;
+	return { from, kept: record.filter((message) => message.seq >= from) };
+}
+
 /**
  * The record, with each line's age, and a divider where each person in the
  * room stopped reading. The divider is what lets an agent tell somebody the

@@ -594,12 +594,21 @@ model to keep itself seated. Add `fixed: true` on a seat, fix the summary
 writer by default, and refuse an agent's unseat of a fixed seat in
 `transition.ts`; the host can always seat and unseat.
 
-**D5. Bounded activation context and message size.** Every ordinary
-activation renders the whole record, and only a summary writer compacts;
-the kernel accepts a message of any size. Add `limits.context.messages`
-(the open exchange whole, then earlier exchanges newest first, with an
-omission line) and `limits.message.bytes` with a typed refusal, both
-defaulting to current behavior.
+**D5. Bounded activation context and message size.** An agent that sets
+`tokenBudget` now reads a windowed record. The seat pages the record through
+the seat call `view(activation, range)` and keeps the newest part that fits the
+budget, plus the open exchange whole. A summary stands for an older exchange it
+covers, and the page never splits a summarised range. An agent with no budget
+reads the whole record, so the default is unchanged. This is a per-agent axis,
+because an agent owns its model; it is not the room-level `limits.context`
+that B3 names.
+
+What remains: an omission line where the window drops uncompacted history, so a
+seat reads that a gap exists; `limits.message.bytes` with a typed refusal for
+message size; and a decision on whether a room-level message-count cap still
+earns its place beside the per-agent budget. Recording the window start on the
+activation record, for reconstruction across an estimator change, is deferred
+until a durability promise needs it.
 
 **D6. Conformance suites for storage and transport.** Five storage cases
 exist in `packages/journal/test/storage.test.ts` and transport cases only in

@@ -40,6 +40,7 @@ export type {
 	SeatRoom,
 	Stale,
 	Steer,
+	ViewRange,
 	ViewResponse,
 	Wake,
 } from './protocol.ts';

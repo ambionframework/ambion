@@ -31,6 +31,9 @@ const room = await startRoom({
 `name` identifies the agent inside the room and on the journal. `identity` is
 public roster text. `instructions` are private model guidance. `model` names a
 Pi provider model. `tools` and `bundles` supply the agent's domain tools.
+`tokenBudget` bounds the record one activation reads, and `estimateTokens`
+counts tokens against it. Without a budget, an activation reads the whole
+record. The seat runs `estimateTokens`, so it never crosses the wire.
 
 `summary` is an optional name from `agents`. It assigns closing work to that
 ordinary agent. `assistant` accepts an ordinary agent definition and supplies
@@ -214,7 +217,14 @@ Composition entries use version 2. The room rejects legacy compositions and
 does not reinterpret old assistant definitions or opening activation ids.
 Start a new journal or migrate the history outside Ambion before resuming it.
 
-The journal retains complete history. Context can grow with the room's life.
-Ambion does not promise bounded replay or model input. Domain tools can act
-before a contribution commits; room freshness does not make external effects
-transactional. Hosts own credentials, process lifetime, and recovery.
+The journal retains complete history. An agent that sets `tokenBudget` reads a
+bounded record. The seat pages the record from the tail through the seat call
+`view(activation, range)`, and it keeps the newest part that fits the budget,
+plus the open exchange whole. An older exchange falls out of context; its
+summary stands for it when one exists. An agent with no budget reads the whole
+record. The record keeps every message for human review either way.
+
+Ambion does not promise bounded replay. The record window bounds model input,
+not the journal fold. Domain tools can act before a contribution commits; room
+freshness does not make external effects transactional. Hosts own credentials,
+process lifetime, and recovery.
