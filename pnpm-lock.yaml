@@ -30,7 +30,7 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
-  examples/persistent:
+  examples/workbench:
     dependencies:
       '@ambionframework/ambion':
         specifier: workspace:*
@@ -44,6 +44,9 @@ importers:
       '@ambionframework/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
+      '@opentui/core':
+        specifier: 0.5.11
+        version: 0.5.11(typescript@7.0.2)(web-tree-sitter@0.25.10)
     devDependencies:
       '@earendil-works/pi-ai':
         specifier: ^0.85.1
@@ -54,37 +57,6 @@ importers:
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  examples/site:
-    dependencies:
-      '@ambionframework/ambion':
-        specifier: workspace:*
-        version: link:../../packages/ambion
-      '@ambionframework/journal':
-        specifier: workspace:*
-        version: link:../../packages/journal
-      '@ambionframework/pi-journal':
-        specifier: workspace:*
-        version: link:../../packages/pi-journal
-      '@ambionframework/workspace':
-        specifier: workspace:*
-        version: link:../../packages/workspace
-      typebox:
-        specifier: ^1.3.18
-        version: 1.3.18
-    devDependencies:
-      '@ambionframework/cloudflare':
-        specifier: workspace:*
-        version: link:../../packages/cloudflare
-      '@cloudflare/workers-types':
-        specifier: ^5.20260801.0
-        version: 5.20260910.1
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
-      wrangler:
-        specifier: ^4.124.0
-        version: 4.124.0(@cloudflare/workers-types@5.20260910.1)
 
   packages/ambion:
     dependencies:
