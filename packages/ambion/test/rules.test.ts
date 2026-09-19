@@ -10,6 +10,7 @@ import {
 	type Change,
 	type CloseFact,
 	cancelHold,
+	type FailureCause,
 	type GrantPurpose,
 	type Hold,
 	type LeaseEndReason,
@@ -19,7 +20,7 @@ import {
 	type Source,
 	wakeAnswered,
 } from '../src/room/rules.verified.ts';
-import type { EndReason, Message } from '../src/types.ts';
+import type { EndReason, Message, FailureCause as PublicFailureCause } from '../src/types.ts';
 
 const at = '2026-01-01T09:00:00.000Z';
 const lease = (seq: number, body: LeaseChange): Entry<LeaseChange> => ({
@@ -34,6 +35,7 @@ const explicitDeliveries = (messages: Message[]) =>
 describe('verified rules', () => {
 	it('declares the same unions the public types declare', () => {
 		expectTypeOf<LeaseEndReason>().toEqualTypeOf<EndReason>();
+		expectTypeOf<FailureCause>().toEqualTypeOf<PublicFailureCause>();
 		expectTypeOf<LeasePhase>().toEqualTypeOf<'running' | 'ended'>();
 		expectTypeOf<Change>().toEqualTypeOf<LeaseChange>();
 		expectTypeOf<Source>().toEqualTypeOf<ActivationSource>();

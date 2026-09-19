@@ -234,7 +234,7 @@ describe('a lease', () => {
 
 		// the room gives up: the attempt it does not make is on the record, once
 		expect(events.filter((e) => e.type === 'abandoned')).toEqual([
-			{ type: 'abandoned', agent: 'solo', activation: 'message:4:solo:4' },
+			{ type: 'abandoned', agent: 'solo', activation: 'message:4:solo:4', cause: 'transient' },
 		]);
 		const stored = await storedOf(runtime.journals, session.name);
 		const gaveUp = stored.filter((entry) => {

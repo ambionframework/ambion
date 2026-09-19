@@ -24,6 +24,9 @@ export type LeasePhase = 'running' | 'ended';
 /** Why a lease ended. The same union as `EndReason` in `types.ts`. */
 export type LeaseEndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandoned';
 
+/** Why an activation failed. The same union as `FailureCause` in `types.ts`. */
+export type FailureCause = 'permanent' | 'transient';
+
 //@ contract A lease is past its expiry once now reaches it.
 function expired(expiry: number, now: number): boolean {
 	//@ ensures \result <==> expiry <= now
@@ -214,13 +217,22 @@ export type Hold =
 			reason: LeaseEndReason;
 			/** The marker of a lease a cancellation ended. */
 			cancelled?: true;
+			/** Why the activation failed, on a failed or abandoned lease. */
+			cause?: FailureCause;
 			until: number;
 	  };
 
 /** One lease entry, as the journal records it. The same shape as `LeaseChange` in `events.ts`. */
 export type Change =
 	| { id: string; phase: 'running'; expiresAt: number; at: string; readThrough: number }
-	| { id: string; phase: 'ended'; reason: LeaseEndReason; at: string; readThrough: number };
+	| {
+			id: string;
+			phase: 'ended';
+			reason: LeaseEndReason;
+			at: string;
+			readThrough: number;
+			cause?: FailureCause;
+	  };
 
 /** A lease that covers a message, as the wake rules read it: its phase, reason, acknowledgment, and the position its id names. */
 export type Taken =
@@ -240,8 +252,8 @@ export function applyChange(known: Hold | undefined, change: Change, seq: number
 	//@ ensures known != undefined && known.phase == 'running' ==> \result.readThrough >= change.readThrough
 	//@ ensures known == undefined ==> \result.id == change.id && \result.at == change.at
 	//@ ensures known != undefined && known.phase == 'running' ==> \result.id == change.id && \result.at == change.at
-	//@ ensures known == undefined && change.phase == 'ended' ==> \result.phase == 'ended' && \result.until == seq && \result.reason == change.reason
-	//@ ensures known != undefined && known.phase == 'running' && change.phase == 'ended' ==> \result.phase == 'ended' && \result.until == seq && \result.reason == change.reason
+	//@ ensures known == undefined && change.phase == 'ended' ==> \result.phase == 'ended' && \result.until == seq && \result.reason == change.reason && \result.cause == change.cause
+	//@ ensures known != undefined && known.phase == 'running' && change.phase == 'ended' ==> \result.phase == 'ended' && \result.until == seq && \result.reason == change.reason && \result.cause == change.cause
 	//@ ensures known == undefined && change.phase == 'running' ==> \result.phase == 'running' && \result.expiresAt == change.expiresAt
 	//@ ensures known != undefined && known.phase == 'running' && change.phase == 'running' ==> \result.phase == 'running' && \result.expiresAt == change.expiresAt
 	//@ ensures known == undefined && \result.phase == 'ended' ==> \result.since <= \result.until
@@ -270,6 +282,7 @@ export function applyChange(known: Hold | undefined, change: Change, seq: number
 		since,
 		readThrough,
 		reason: change.reason,
+		cause: change.cause,
 		until: seq,
 	};
 }

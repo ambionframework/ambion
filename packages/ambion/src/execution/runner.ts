@@ -231,7 +231,7 @@ export class AgentRunner implements SeatPort {
 	 * leaves the room to end the lease on its side.
 	 */
 	private async release(id: string, activation: Activation): Promise<void> {
-		const { reason } = activation;
+		const { reason, cause } = activation;
 		const released = await this.calls(
 			() =>
 				this.room.lease({
@@ -239,6 +239,7 @@ export class AgentRunner implements SeatPort {
 					operation: 'release',
 					reason,
 					readThrough: activation.readThrough,
+					...(cause === undefined ? {} : { cause }),
 				}),
 			this.current?.cutOff,
 		);

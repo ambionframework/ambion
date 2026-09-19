@@ -200,9 +200,9 @@ function forgotten(state: RoomState, options: ReconcileOptions): string[] {
 	return [...options.sent.keys()].filter((id) => !due.has(id));
 }
 
-/** An activation the room owes whose attempts reached the cap. */
+/** An activation the room gives up on: a permanent failure, or the attempt cap. */
 const capped = (owed: PendingActivation, options: ReconcileOptions): boolean =>
-	owed.unsuccessfulAttempts >= options.attempts;
+	owed.permanent || owed.unsuccessfulAttempts >= options.attempts;
 
 /**
  * The attempt at each activation at the cap, ended before it starts. The
@@ -219,6 +219,7 @@ function abandonments(state: RoomState, options: ReconcileOptions): Ended[] {
 			reason: 'abandoned' as const,
 			at,
 			readThrough: 0,
+			cause: owed.permanent ? ('permanent' as const) : ('transient' as const),
 		}));
 }
 

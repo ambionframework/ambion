@@ -63,6 +63,7 @@ import type {
 	ClosedExchange,
 	EndReason,
 	ExchangeRef,
+	FailureCause,
 	HumanDefinition,
 	Message,
 	PresenceMessage,
@@ -1010,7 +1011,12 @@ export class RoomHost implements Room, RunningRoom {
 			this.publish(() => {
 				if (revoked) this.cutPort(seat, lease.id);
 				if (lease.reason === 'abandoned') {
-					this.emit({ type: 'abandoned', agent: seat, activation: lease.id });
+					this.emit({
+						type: 'abandoned',
+						agent: seat,
+						activation: lease.id,
+						cause: lease.cause ?? 'transient',
+					});
 					void this.reconcile();
 				}
 				this.notifyExchangeWaiters();
@@ -1253,9 +1259,14 @@ export class RoomHost implements Room, RunningRoom {
 		id: string,
 		reason: EndReason,
 		readThrough: Seq,
+		cause?: FailureCause,
 	): Promise<boolean | { refusal: Refusal }> {
 		const appended = await this.submit('lease', () =>
-			decide(this.state(), { type: 'end', id, reason, readThrough }, this.now()),
+			decide(
+				this.state(),
+				{ type: 'end', id, reason, readThrough, ...(cause === undefined ? {} : { cause }) },
+				this.now(),
+			),
 		);
 		if ('entry' in appended) return true;
 		if (appended.result !== undefined && 'refusal' in appended.result)
@@ -1339,7 +1350,12 @@ export class RoomHost implements Room, RunningRoom {
 
 	private applyEvent(event: ReconcileDecision['events'][number]): Promise<boolean> {
 		if (event.kind === 'lease' && event.body.phase === 'ended')
-			return this.end(event.body.id, event.body.reason, event.body.readThrough).then((result) => {
+			return this.end(
+				event.body.id,
+				event.body.reason,
+				event.body.readThrough,
+				event.body.cause,
+			).then((result) => {
 				return this.requireEnd(result);
 			});
 		return event.kind === 'close' ? this.close(event.body) : Promise.resolve(false);
