@@ -182,6 +182,18 @@ the assistant is visible in the shared record. During ordinary work, do not
 repeat that result or write a preliminary summary. End the activation when
 no useful work remains. The room assigns closing work separately.
 
+**The guidance names the marker that a mid-activation result carries.** The
+room delivers a message that lands while the assistant works as a user message
+that starts with `[new]`. A specialist result reads
+`[new] [specialist → assistant] text`. The ordinary guidance names this marker
+and says to end without a tool call. Change the marker and the guidance
+together.
+
+**A trial measured the effect.** The specialist answered after the assistant
+had decided to end. With the original guidance, the assistant relayed the
+result in 5 of 30 runs. With the marker `[steer]`, it relayed in 18 of 30.
+With the new guidance and `[new]`, it relayed in 0 of 30.
+
 Assignment deduplication is scoped to the current exchange. A later human
 request that explicitly asks for a specialist to be involved, to recheck, or to
 revise is new direction even when an earlier exchange left a similar answer or
