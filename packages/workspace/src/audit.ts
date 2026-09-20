@@ -1,15 +1,23 @@
 /**
- * A rotating, append-only JSONL audit log for workspace tool calls.
+ * A rotating, append-only JSONL log of workspace tool calls, kept on the
+ * workspace's own filesystem.
  *
- * The log lives outside the backend's filesystem: a shell or file tool an
- * agent calls cannot read, edit, or remove its own record. Every write
- * serializes through one queue, so two calls that finish out of order still
- * land as separate, complete lines.
+ * The log is an ordinary file: an agent reads it with `read` or `bash cat`,
+ * the same as any file a peer wrote. Writing one entry runs inside the same
+ * queued operation as the tool call it records, over the same `ExecutionEnv`,
+ * so the entry and the call it describes never separate under concurrent
+ * work, and a rotation never races another agent's write.
  */
 
 import { randomBytes } from 'node:crypto';
-import { appendFile, mkdir, rename, stat } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { posix } from 'node:path';
+import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
+
+/** Where the log lives when the caller names no path. */
+export const DEFAULT_AUDIT_LOG = '/workspace/audit.jsonl';
+
+/** Bytes the file may hold before the next entry rotates it, when the caller names none. */
+const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 
 /** One workspace tool call, as the audit log records it. */
 export interface AuditEntry {
@@ -31,8 +39,8 @@ export interface AuditEntry {
 }
 
 export interface AuditLogOptions {
-	/** The JSONL file this log appends to. A rotated file sits beside it. */
-	readonly path: string;
+	/** The JSONL file this log appends to. The default is `/workspace/audit.jsonl`. */
+	readonly path?: string;
 	/** Bytes the file may hold before the next entry rotates it. Default 5 MiB. */
 	readonly maxBytes?: number;
 	/** Told about a write or rotation failure. The call that triggered it still returns. */
@@ -40,11 +48,11 @@ export interface AuditLogOptions {
 }
 
 export interface AuditLog {
-	/** Append one entry. Never rejects: a failure goes to `onError` instead. */
-	record(entry: AuditEntry): Promise<void>;
+	readonly path: string;
+	readonly maxBytes: number;
+	/** Append one entry over `env`. Never throws: a failure goes to `onError` instead. */
+	record(env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void>;
 }
-
-const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
 
 /** One JSONL line for `entry`, falling back to a short notice if it will not serialize. */
 function line(entry: AuditEntry): string {
@@ -64,45 +72,67 @@ function line(entry: AuditEntry): string {
 }
 
 /**
- * Move the current file aside so the next append starts a fresh one. The
- * random suffix keeps two rotations in the same millisecond from naming the
- * same file, which would otherwise drop the earlier one.
+ * The name a rotated file takes. The random suffix keeps two rotations in
+ * the same millisecond from naming the same file, which would otherwise
+ * drop the earlier one.
  */
-async function rotate(path: string): Promise<void> {
+function rotatedName(path: string): string {
 	const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const suffix = randomBytes(3).toString('hex');
-	await rename(path, `${path}.${stamp}-${suffix}`);
+	return `${path}.${stamp}-${randomBytes(3).toString('hex')}`;
+}
+
+/** Append one line, creating the parent directory first, and rotate past `maxBytes`. */
+async function append(
+	env: ExecutionEnv,
+	path: string,
+	maxBytes: number,
+	entry: AuditEntry,
+	context: Context,
+): Promise<void> {
+	const made = await env.createDir(posix.dirname(path), { recursive: true }, context);
+	if (!made.ok) throw made.error;
+	const appended = await env.appendFile(path, line(entry), context);
+	if (!appended.ok) throw appended.error;
+	const info = await env.fileInfo(path, context);
+	if (!info.ok) throw info.error;
+	if (info.value.size >= maxBytes) {
+		const renamed = await env.renameFile(path, rotatedName(path), context);
+		if (!renamed.ok) throw renamed.error;
+	}
 }
 
 /**
- * Open one rotating JSONL audit log at `options.path`. Every `record` call
- * queues behind the one before it, so the file, and its rotation, stay
- * correct under concurrent calls.
+ * Open one rotating JSONL audit log. `record` runs inside the caller's own
+ * `use` operation, so it needs no queue of its own: the workspace resource
+ * already lets one operation touch the filesystem at a time.
  */
-export function openAuditLog(options: AuditLogOptions): AuditLog {
+export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
+	const path = options.path ?? DEFAULT_AUDIT_LOG;
 	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
-	let tail = Promise.resolve();
-
-	const append = async (entry: AuditEntry): Promise<void> => {
-		await mkdir(dirname(options.path), { recursive: true });
-		await appendFile(options.path, line(entry), 'utf8');
-		const info = await stat(options.path);
-		if (info.size >= maxBytes) await rotate(options.path);
-	};
-
-	const record = (entry: AuditEntry): Promise<void> => {
-		const task = tail.then(
-			() => append(entry),
-			() => append(entry),
-		);
-		tail = task.then(
-			() => undefined,
-			() => undefined,
-		);
-		return task.catch((error: unknown) => {
+	const record = async (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> => {
+		try {
+			await append(env, path, maxBytes, entry, context);
+		} catch (error) {
 			options.onError?.(error instanceof Error ? error : new Error(String(error)));
-		});
+		}
 	};
+	return Object.freeze({ path, maxBytes, record });
+}
 
-	return Object.freeze({ record });
+/** `maxBytes` as whole mebibytes or kibibytes when it divides evenly, bytes otherwise. */
+function humanBytes(bytes: number): string {
+	if (bytes % (1024 * 1024) === 0) return `${bytes / (1024 * 1024)} MiB`;
+	if (bytes % 1024 === 0) return `${bytes / 1024} KiB`;
+	return `${bytes} bytes`;
+}
+
+/** Guidance telling an agent the log exists, where it lives, and what it holds. */
+export function auditGuidance(log: AuditLog): string {
+	return [
+		`Every tool call on this workspace is recorded at ${log.path}, one JSON line per`,
+		`call: the room, the agent, the tool, its full arguments, and its full result or`,
+		`error. Read it to see what happened here, including calls other agents made. Past`,
+		`${humanBytes(log.maxBytes)} the file rotates: it moves beside itself under a`,
+		`timestamped name, and a new file starts at ${log.path}.`,
+	].join('\n');
 }

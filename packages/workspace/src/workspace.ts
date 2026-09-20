@@ -1,6 +1,5 @@
 import type { ToolBundle } from '@ambionframework/ambion';
-import type { AuditLogOptions } from './audit.ts';
-import { openAuditLog } from './audit.ts';
+import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
 import type { WorkspaceBackend } from './backend.ts';
 import { openResource, type WorkspaceResource } from './resource.ts';
 import { bindTools } from './tools.ts';
@@ -11,10 +10,22 @@ export interface Workspace extends WorkspaceResource {
 	tools(): ToolBundle;
 }
 
+/** The backend's own guidance, with a note about the audit log appended when one is set. */
+function guidanceFor(
+	backendGuidance: string | undefined,
+	audit: AuditLog | undefined,
+): string | undefined {
+	if (audit === undefined) return backendGuidance;
+	const note = auditGuidance(audit);
+	return backendGuidance === undefined ? note : `${backendGuidance}\n\n${note}`;
+}
+
 /**
  * Open one workspace resource and bind its backend tools to that owner. Set
- * `audit` to record every bound tool call as one JSONL line, rotated once
- * the file passes its configured size.
+ * `audit` to record every bound tool call as one JSONL line on the
+ * workspace's own filesystem, rotated once the file passes its configured
+ * size. Tool guidance then tells every agent the log exists and where to
+ * read it.
  */
 export function openWorkspace(options: {
 	name: string;
@@ -26,7 +37,7 @@ export function openWorkspace(options: {
 	const toolBundle = bindTools(
 		options.backend.tools,
 		resource.use,
-		options.backend.guidance,
+		guidanceFor(options.backend.guidance, audit),
 		audit,
 	);
 	const tools = (): ToolBundle => toolBundle;

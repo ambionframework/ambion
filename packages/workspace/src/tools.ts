@@ -69,26 +69,27 @@ function bindTool(tool: HarnessTool, use: WorkspaceResource['use'], audit?: Audi
 				ctx.signal === undefined
 					? BACKGROUND_CONTEXT
 					: withAbortSignal(ctx.signal, BACKGROUND_CONTEXT);
-			try {
-				const result = await use(
-					ctx.agent,
-					(env) =>
-						tool.execute(
+			return use(
+				ctx.agent,
+				async (env) => {
+					try {
+						const result = await tool.execute(
 							ctx.callId,
 							params,
 							ctx.onUpdate ?? (() => undefined),
 							{ env },
 							invocationOf(ctx.callId),
 							context,
-						),
-					ctx.signal,
-				);
-				await audit?.record(auditEntry(tool.name, params, ctx, { result }));
-				return result;
-			} catch (error) {
-				await audit?.record(auditEntry(tool.name, params, ctx, { error }));
-				throw error;
-			}
+						);
+						await audit?.record(env, auditEntry(tool.name, params, ctx, { result }), context);
+						return result;
+					} catch (error) {
+						await audit?.record(env, auditEntry(tool.name, params, ctx, { error }), context);
+						throw error;
+					}
+				},
+				ctx.signal,
+			);
 		},
 	});
 }

@@ -88,31 +88,38 @@ a room. `ToolContext` holds no workspace or resource field.
 
 ## Record every tool call
 
-**`openWorkspace` can record every bound tool call to a rotating JSONL file.**
-Set `audit` with a `path`, and every call through `workspace.tools()` appends
-one line: the room, the agent, the tool, the full arguments, and the full
-result or error.
+**`openWorkspace` can record every bound tool call to a rotating JSONL file
+on the workspace's own filesystem.** Set `audit`, and every call through
+`workspace.tools()` appends one line: the room, the agent, the tool, the
+full arguments, and the full result or error.
 
 ```ts
 const drive = openWorkspace({
   name: 'team-site',
   backend: memoryBackend(),
-  audit: { path: '/var/log/ambion/team-site-audit.jsonl' },
+  audit: {},
 });
 ```
 
-**The log lives outside the backend's filesystem.** An agent's own tools
-reach the backend, never the log file. A `bash` or `write` call cannot read,
-edit, or remove its own record.
+**The log is an ordinary file an agent reads.** The default path is
+`/workspace/audit.jsonl`; set `path` to change it. An agent reads it with
+`read` or `bash cat`, the same as any file a peer wrote, and sees every
+call any agent made, including its own past calls.
+
+**Tool guidance tells every agent the log exists.** `openWorkspace` appends
+a note naming the path and what each line holds to the bundle's guidance, so
+an agent that reads its own tool guidance already knows to look for it.
 
 **A file rotates once it reaches `maxBytes`.** The default is 5 MiB
 (5 &times; 1024 &times; 1024 bytes). A rotated file keeps its old lines under
 a timestamped name beside the active file. The active file starts empty at
 the same path.
 
-**Writes serialize through one queue.** Two tool calls that finish out of
-order still land as two separate, complete lines. Neither call waits on the
-other beyond that queue.
+**Recording one entry runs inside the tool call's own queued operation.**
+The workspace resource lets one operation touch the filesystem at a time
+(see [Open one resource](#open-one-resource)), and the audit write shares
+the same `ExecutionEnv` as the call it records. The entry and the call never
+separate under concurrent work from other agents.
 
 **A write or rotation failure goes to `onError`, not to the tool call.** The
 call that triggered the failure still returns its own result. The log is
@@ -121,6 +128,11 @@ best-effort: a full disk delays the record, not the agent.
 **Only a call through `workspace.tools()` is recorded.** A direct
 `workspace.use` call reaches the backend with no entry. It is host code, not
 a tool a model called.
+
+**The log shares the workspace's boundary.** just-bash gives no wall between
+one agent's home and another's (see [Backends and limits](#backends-and-limits)),
+and the log is no exception: any agent's `bash` or `write` call can alter or
+remove it, the same as any other file on the workspace.
 
 ## Query the shared database
 
