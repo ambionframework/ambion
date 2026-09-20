@@ -109,6 +109,10 @@ describe('structured activation context', () => {
 		for (const view of views) {
 			expect(() => assertWire(view)).not.toThrow();
 			expect(roundTrip(view)).toStrictEqual(view);
+			const capped = viewOf(view.spec, { ...facts(), limits: { messages: 1 } });
+			expect(capped.context.omitted).toBeGreaterThan(0);
+			expect(() => assertWire(capped)).not.toThrow();
+			expect(roundTrip(capped)).toStrictEqual(capped);
 			expect(JSON.stringify(view.context)).not.toContain('PRIVATE');
 			expect(view).not.toHaveProperty('model');
 			expect(view).not.toHaveProperty('systemPrompt');

@@ -14,6 +14,7 @@ import { answersEveryQuestion, contextText, summarise } from './support/scripted
 /** A page seen by the seat: the record floor it reported, and how many messages it carried. */
 interface Page {
 	earliest: number | undefined;
+	omitted?: number;
 	count: number;
 }
 
@@ -29,6 +30,7 @@ function spyTransport(pages: Page[]): Transport {
 					if ('view' in response)
 						pages.push({
 							earliest: response.view.context.earliest,
+							omitted: response.view.context.omitted,
 							count: response.view.context.messages.length,
 						});
 					return response;
@@ -69,10 +71,71 @@ describe('a limit windows the record', () => {
 		expect(answering.length).toBeGreaterThan(0);
 		// The open exchange is present; the older closed one is windowed out.
 		expect(answering.every((text) => !text.includes('alpha marker'))).toBe(true);
+		expect(answering.every((text) => text.includes('earlier message'))).toBe(true);
 
 		// The record still holds the dropped exchange for human review.
 		const all = await messagesOf(room);
 		expect(all.some((message) => 'text' in message && message.text === 'alpha marker')).toBe(true);
+	});
+
+	it('caps the record at the room, for a seat with no token limit', async () => {
+		const contexts: string[] = [];
+		const answer = answersEveryQuestion(['andrei']);
+		const capture: Script = (context, name, call) => {
+			contexts.push(contextText(context));
+			return answer(context, name, call);
+		};
+		const worker = defineAgent({
+			name: 'worker',
+			identity: 'Answers a question.',
+			executor: pi({ instructions: 'Answer the current question.', model: 'scripted/worker' }),
+		});
+		const runtime = createRuntime({
+			stream: scripted(capture),
+			limits: { context: { messages: 1 } },
+		});
+		const room = await startRoom({ name: roomName('room-cap'), runtime, agents: [worker] });
+
+		await (await room.visit(andrei)).send({ text: 'alpha marker' });
+		await waitForRoom(room);
+		await (await room.visit(andrei)).send({ text: 'omega marker' });
+		await waitForRoom(room);
+
+		const answering = contexts.filter((text) => text.includes('omega marker'));
+		expect(answering.length).toBeGreaterThan(0);
+		expect(answering.every((text) => !text.includes('alpha marker'))).toBe(true);
+		expect(answering.every((text) => /\d+ earlier messages? not shown/.test(text))).toBe(true);
+		const all = await messagesOf(room);
+		expect(all.some((message) => 'text' in message && message.text === 'alpha marker')).toBe(true);
+		await room.stop();
+	});
+
+	it('stops a token-limited seat at the room floor and reports the count on every page', async () => {
+		const pages: Page[] = [];
+		const worker = defineAgent({
+			name: 'worker',
+			identity: 'Answers a question.',
+			executor: pi({
+				instructions: 'Answer the current question.',
+				model: 'scripted/worker',
+				activationTokenLimit: 4000,
+				estimateTokens: (text) => text.length,
+			}),
+		});
+		const runtime = createRuntime({
+			transport: spyTransport(pages),
+			stream: scripted(answersEveryQuestion(['andrei'])),
+			limits: { context: { messages: 2 } },
+		});
+		const room = await startRoom({ name: roomName('room-cap-wire'), runtime, agents: [worker] });
+		for (const text of ['one', 'two', 'three']) {
+			await (await room.visit(andrei)).send({ text });
+			await waitForRoom(room);
+		}
+		expect(pages.length).toBeGreaterThan(0);
+		expect(pages.every((page) => page.omitted !== undefined)).toBe(true);
+		expect(pages.some((page) => (page.omitted ?? 0) > 0)).toBe(true);
+		await room.stop();
 	});
 
 	it('pages the room over the wire, so a budgeted seat reads bounded responses', async () => {

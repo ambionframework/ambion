@@ -41,6 +41,15 @@ const stored: Record<string, LeaseChange | Close | Composition> = {
 		at,
 		readThrough: 0,
 	},
+	endWithUsage: {
+		id: 'message:2:product:1',
+		seq: 4,
+		phase: 'ended',
+		reason: 'released',
+		at,
+		readThrough: 0,
+		usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 1 },
+	},
 	close: { owner: 'priya', from: 2, through: 4, seq: 4, at, summary: 'assistant' },
 	composition: {
 		version: 2,
@@ -132,6 +141,13 @@ const requests: Record<string, CommitRequest | LeaseRequest | string> = {
 		operation: 'release',
 		reason: 'released',
 		readThrough: 0,
+	},
+	releaseWithUsage: {
+		activation: 'message:2:product:1',
+		operation: 'release',
+		reason: 'released',
+		readThrough: 0,
+		usage: { input: 5, output: 3, cacheRead: 2, cacheWrite: 1, cost: 0.01 },
 	},
 	viewOf: 'message:2:product:1',
 };

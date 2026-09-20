@@ -53,6 +53,28 @@ describe('createRuntime', () => {
 		expect(overridden.lease).toEqual({ ttl: 1, deadline: 600_000 });
 	});
 
+	it('validates the room-level caps and keeps their defaults', () => {
+		for (const messages of [0, 1.5, Number.NaN]) {
+			expect(() => createRuntime({ limits: { context: { messages } } })).toThrow(
+				/limits.context.messages/,
+			);
+		}
+		expect(() => createRuntime({ limits: { message: { bytes: 0 } } })).toThrow(
+			/limits.message.bytes/,
+		);
+		expect(() =>
+			createRuntime({
+				limits: {
+					context: { messages: Number.POSITIVE_INFINITY },
+					message: { bytes: Number.POSITIVE_INFINITY },
+				},
+			}),
+		).not.toThrow();
+		const limits = hostingOf(createRuntime({ limits: { context: { messages: 200 } } })).limits;
+		expect(limits.context.messages).toBe(200);
+		expect(limits.message.bytes).toBe(Number.POSITIVE_INFINITY);
+	});
+
 	it('keeps two runtimes apart: one name runs in both, and neither reads the other', async () => {
 		const name = roomName('runtime');
 		const [one, two] = await Promise.all([memory.open(), memory.open()]);

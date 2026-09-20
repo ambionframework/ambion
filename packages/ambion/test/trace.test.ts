@@ -228,6 +228,36 @@ describe('the trace limits and policy', () => {
 		expect(sorted(steps)).toEqual(['pass', 'thinking', 'end']);
 	});
 
+	it('sums usage steps, and keeps the sum when the pass cap drops steps', async () => {
+		const options = {
+			room: 'usage-sum',
+			agent: 'product',
+			activation: 'message:2:product:1',
+			traces: memoryJournals(),
+			limits: { toolOutputBytes: 100, stepsPerPass: 1 },
+			policy: { thinking: 'full', toolOutput: 'full' } as const,
+			emit: () => {},
+			now: () => 0,
+		};
+		const sink = openTrace(options);
+		expect(sink.usage()).toBeUndefined();
+		sink.startPass('view', 1);
+		sink.record({ type: 'usage', input: 1, output: 2, cacheRead: 3, cacheWrite: 4, cost: 0.5 });
+		sink.record({ type: 'usage', input: 10, output: 20, cacheRead: 30, cacheWrite: 40, cost: 1 });
+		expect(sink.usage()).toEqual({
+			input: 11,
+			output: 22,
+			cacheRead: 33,
+			cacheWrite: 44,
+			cost: 1.5,
+		});
+		await sink.close();
+		const costless = openTrace({ ...options, activation: 'message:2:product:2' });
+		costless.record({ type: 'usage', input: 5, output: 1, cacheRead: 0, cacheWrite: 0 });
+		expect(costless.usage()).toEqual({ input: 5, output: 1, cacheRead: 0, cacheWrite: 0 });
+		await costless.close();
+	});
+
 	it('refuses a policy it does not know', () => {
 		expect(() =>
 			defineAgent({

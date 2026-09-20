@@ -36,9 +36,10 @@ configuration. `pi` is the only executor today. Its `instructions` are private
 model guidance. `model` names a Pi provider model. `tools` and `bundles`
 supply the agent's domain tools. `activationTokenLimit` bounds the record one
 activation reads, and `estimateTokens` counts tokens against it. Without a
-limit, an activation reads the whole record. The seat runs `estimateTokens`,
-so it never crosses the wire. `trace` sets what the trace keeps of the agent's
-work; see [Steps and the trace](#steps-and-the-trace).
+limit, an activation reads the whole record the room serves. See
+`limits.context.messages` under History and limits. The seat runs
+`estimateTokens`, so it never crosses the wire. `trace` sets what the trace
+keeps of the agent's work; see [Steps and the trace](#steps-and-the-trace).
 
 `summary` is an optional name from `agents`. It assigns closing work to that
 ordinary agent. `assistant` accepts an ordinary agent definition and supplies
@@ -84,6 +85,12 @@ room.
 whitespace-only human messages, agent messages, and summaries before writing.
 A refusal does not reserve the request key. Direct calls preserve accepted
 text exactly; `say` trims its input. An agent can finish silently without `say`.
+
+**A message has a size limit.** `limits.message.bytes` sets the most UTF-8
+bytes one human message, agent message, or summary text carries. The default
+is unbounded. The room refuses a longer text with the code `message_too_large`
+before it writes. An agent reads the refusal as a tool error and can say a
+shorter text. The limit counts `text` only.
 
 **A ref is one absolute URI that a message cites.** A ref has a scheme, at
 most 2048 characters, and no whitespace. A message carries at most 16 refs
@@ -153,8 +160,8 @@ recorded entries. A host can resume the same behavior by replaying the journal.
 
 The journal records messages, membership changes, leases, exchange closes,
 composition, cancellation boundaries, and run fences. It also records the
-activation id that authorized an agent contribution. The room stamps provenance fields; callers cannot claim
-another participant's name.
+activation id that authorized an agent contribution. The room stamps
+provenance fields; callers cannot claim another participant's name.
 
 The room serializes accepted writes. Agents can reason concurrently. A speech
 commit carries `readThrough`, the highest message position its activation read.
@@ -314,7 +321,23 @@ reads a bounded record. The seat pages the record from the tail through the seat
 call `view(activation, range)`, and it keeps the newest part that fits the
 limit, plus the open exchange whole. An older exchange falls out of context; its
 summary stands for it when one exists. An agent with no limit reads the whole
-record. The record keeps every message for human review either way.
+record the room serves. The record keeps every message for human review
+either way.
+
+`limits.context.messages` caps the record at the room, for every seat and
+for every executor. The room serves the newest `messages` entries of the
+record an activation may read. The floor moves past a summarised range it
+would split. The open exchange stays whole, so a cap smaller than the open
+exchange serves the exchange in full. The view holds up to `messages` entries
+plus the open exchange. The cap counts messages; it does not count
+bytes. The default is unbounded. A seat with `activationTokenLimit`
+windows further, inside what the room serves.
+
+When a view holds less than the whole record, `context.omitted` counts the
+messages below the first one served, and the rendered record opens with one
+line: `── N earlier messages not shown ──`. The line shows for summarised and
+unsummarised history alike. The room does not record the cap. A room resumed
+under another cap serves a different view of the same record.
 
 Ambion does not promise bounded replay. The record window bounds model input,
 not the journal fold. Domain tools can act before a contribution commits; room

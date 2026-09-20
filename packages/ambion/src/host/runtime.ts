@@ -62,9 +62,15 @@ export interface Limits {
 	 * bounds are separate from activation attempts, which can repeat model work.
 	 */
 	readonly call: { readonly attempts: number; readonly timeout: number };
-	/** How many messages one activation reads. Nothing reads it yet; D5 does. */
+	/**
+	 * The most messages one activation's view holds beyond the open exchange.
+	 * The room applies it to every seat. `Infinity` is unbounded.
+	 */
 	readonly context: { readonly messages: number };
-	/** How many bytes one message carries. Nothing reads it yet; D5 does. */
+	/**
+	 * The most UTF-8 bytes one spoken message or summary text carries. The room
+	 * refuses a longer text with `message_too_large`. `Infinity` is unbounded.
+	 */
 	readonly message: { readonly bytes: number };
 	/** How many bytes of tool output a step keeps, and how many steps one pass keeps. */
 	readonly trace: { readonly toolOutputBytes: number; readonly stepsPerPass: number };
@@ -213,6 +219,18 @@ export interface CreateRuntimeOptions {
 
 export { systemClock } from './clock.ts';
 
+/** A cap is a positive integer, or Infinity for no cap. */
+function validateCaps(limits: Limits): void {
+	for (const [name, value] of [
+		['context.messages', limits.context.messages],
+		['message.bytes', limits.message.bytes],
+	] as const) {
+		if (value !== Number.POSITIVE_INFINITY && !(Number.isSafeInteger(value) && value > 0)) {
+			throw new Error(`Runtime limits.${name} must be a positive integer or Infinity.`);
+		}
+	}
+}
+
 export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const running = new Map<string, RunningRoom>();
 	const storage = options.storage ?? memoryJournals();
@@ -248,6 +266,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 			'Runtime limits.activation.attempts must be a positive integer: the room makes at least one attempt.',
 		);
 	}
+	validateCaps(limits);
 	const intervals = {
 		'delivery.resend': limits.delivery.resend,
 		'lease.ttl': limits.lease.ttl,

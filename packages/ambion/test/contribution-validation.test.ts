@@ -13,7 +13,8 @@ import {
 	startRoom,
 } from '../src/index.ts';
 import { refusal } from './support/errors.ts';
-import { messagesOf, roomName, stateOf } from './support/room.ts';
+import { collect, messagesOf, roomName, stateOf, waitForRoom } from './support/room.ts';
+import { quiet, scripted, speak, toolResultTexts } from './support/scripted.ts';
 import {
 	faultyJournals,
 	memory,
@@ -73,6 +74,52 @@ async function protocol(runtime: Runtime, name: string): Promise<RoomProtocol> {
 	if (peer === undefined) throw new Error('The room is absent.');
 	return peer;
 }
+
+describe('the message byte limit', () => {
+	const limits = { limits: { message: { bytes: 16 } } };
+	const long = 'a message that is far over sixteen bytes';
+
+	it('refuses a long delivery, reserves no key, and lets a short retry land', async () => {
+		const runtime = createRuntime({ ...limits, transport: passiveTransport });
+		const room = await startRoom({ name: roomName('byte-delivery'), runtime, agents: [] });
+		try {
+			const visit = await room.visit(person);
+			await expect(visit.send({ text: long, key: 'k' })).rejects.toEqual(
+				refusal('message_too_large'),
+			);
+			expect((await messagesOf(room)).some((m) => 'text' in m && m.text === long)).toBe(false);
+			await expect(visit.send({ text: 'short', key: 'k' })).resolves.toMatchObject({
+				owner: person.name,
+			});
+		} finally {
+			await room.stop();
+		}
+	});
+
+	it('gives an agent a tool error for a long say and leaves no mark', async () => {
+		const results: string[][] = [];
+		const runtime = createRuntime({
+			...limits,
+			stream: scripted((context) => {
+				results.push(toolResultTexts(context));
+				return toolResultTexts(context).length === 0 ? speak(long) : quiet();
+			}),
+		});
+		const room = await startRoom({ name: roomName('byte-say'), runtime, agents: [worker] });
+		const events = collect(room);
+		try {
+			await (await room.visit(person)).send({ text: 'Hi.' });
+			await waitForRoom(room);
+			expect(results.flat().some((text) => /bytes/.test(text))).toBe(true);
+			expect((await messagesOf(room)).some((m) => m.from === 'worker' && m.kind === 'said')).toBe(
+				false,
+			);
+			expect(events.some((e) => e.type === 'activation_end' && e.spoke === false)).toBe(true);
+		} finally {
+			await room.stop();
+		}
+	});
+});
 
 const blankTexts = ['', '\u00a0\u2003\u202f'];
 

@@ -64,7 +64,12 @@ export type SummaryOutcome =
 /** A detached exchange view that can be read without starting a room. */
 export type ExchangeView =
 	| (ExchangeRef & { readonly status: 'open' })
-	| (ClosedExchange & { readonly status: 'closed'; readonly summary: SummaryOutcome });
+	| (ClosedExchange & {
+			readonly status: 'closed';
+			readonly summary: SummaryOutcome;
+			/** The sum of every activation in the range, the summary activation included. */
+			readonly usage?: Usage;
+	  });
 
 interface RoomReadFields {
 	readonly name: string;
@@ -326,7 +331,14 @@ export type ExecutionEvent =
 	| { type: 'tool_execution_start'; agent: string; activation: string; toolName: string }
 	| { type: 'tool_execution_end'; agent: string; activation: string; toolName: string }
 	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
-	| { type: 'activation_end'; agent: string; activation: string; spoke: boolean }
+	| {
+			type: 'activation_end';
+			agent: string;
+			activation: string;
+			spoke: boolean;
+			/** What the activation spent. Absent when it reached no provider or the room ended it. */
+			usage?: Usage;
+	  }
 	| { type: 'error'; agent: string; activation: string; error: Error; cause?: FailureCause }
 	/** A room delivery or seat call failed, or its result became unknown. */
 	| {
@@ -360,6 +372,33 @@ export type ExecutionEvent =
  * The trace journal holds each step once, and the event stream carries the
  * same step live. A step is plain JSON.
  */
+/**
+ * What an activation spent, or the sum of what activations spent. `cost` is
+ * present when at least one contributing step carried it.
+ */
+export interface Usage {
+	readonly input: number;
+	readonly output: number;
+	readonly cacheRead: number;
+	readonly cacheWrite: number;
+	readonly cost?: number;
+}
+
+/** Two totals added. `cost` stays absent until a step carries it. */
+export function addUsage(total: Usage | undefined, step: Usage): Usage {
+	const cost =
+		total?.cost === undefined && step.cost === undefined
+			? undefined
+			: (total?.cost ?? 0) + (step.cost ?? 0);
+	return {
+		input: (total?.input ?? 0) + step.input,
+		output: (total?.output ?? 0) + step.output,
+		cacheRead: (total?.cacheRead ?? 0) + step.cacheRead,
+		cacheWrite: (total?.cacheWrite ?? 0) + step.cacheWrite,
+		...(cost === undefined ? {} : { cost }),
+	};
+}
+
 export type Step =
 	/** A pass begins. `view` reads the whole record; `delta` follows a record that moved. */
 	| { type: 'pass'; pass: number; input: 'view' | 'delta'; through: Seq }
@@ -380,14 +419,7 @@ export type Step =
 	/** A message landed mid-activation. `consumed` says whether the model received it in that pass. */
 	| { type: 'steer'; seq: Seq; consumed: boolean }
 	| { type: 'approval'; call: string; name: string; decision?: 'allow' | 'deny' }
-	| {
-			type: 'usage';
-			input: number;
-			output: number;
-			cacheRead: number;
-			cacheWrite: number;
-			cost?: number;
-	  }
+	| ({ type: 'usage' } & Usage)
 	/** The activation stops. `failure` is present when it failed. */
 	| {
 			type: 'end';
