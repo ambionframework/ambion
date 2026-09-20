@@ -28,7 +28,7 @@ call is work that the room does not replay.
 | Visit      | A person's speaking identity and presence lifetime                   | [presence.md](presence.md)                       |
 | Exchange   | A person's question and every activation until the room is quiet     | [exchange.md](exchange.md)                       |
 | Activation | The room waking one seat: a bounded execution with one room grant    | This page                                        |
-| Step       | One recorded unit of an activation's work. PENDING: phase 2 step 12  | `executors.md`, not yet written                  |
+| Step       | One recorded unit of an activation's work                            | [agent.md](agent.md)                             |
 | Resource   | Application data that an agent's tools reach, with provenance        | [workspace.md](workspace.md)                     |
 | Journal    | The ordered, append-only record that the room folds into its state   | [durability.md](durability.md)                   |
 | Entry      | One item that the journal holds                                      | [durability.md](durability.md)                   |

@@ -106,7 +106,8 @@ Steering carries explicit consumed ranges, so reordered or duplicated context
 cannot acknowledge a gap. A fresh activation reconstructs missed context from
 the record. Transcript audit failure is reported separately as `audit_error`;
 it does not turn successful or deliberately silent collaboration into failed
-work, and no durable audit backlog is promised.
+work, and no durable audit backlog is promised. The trace journal follows the
+same rule: a failed step write is a `trace_error` and changes no outcome.
 
 ### Transport calls and unclaimed work
 

@@ -12,6 +12,7 @@ import type {
 	ViewResponse,
 } from '../src/hosting.ts';
 import { type AgentDefinition, defineAgent, pi } from '../src/index.ts';
+import { noTrace } from './support/trace.ts';
 
 const worker = defineAgent({
 	name: 'worker',
@@ -46,7 +47,7 @@ function executorOptions(definition: AgentDefinition): PiExecutorOptions {
 
 function activationFor(id: string, definition: AgentDefinition): Activation {
 	return new Activation(
-		{ id, room: unusedRoom, emit: () => {} },
+		{ id, room: unusedRoom, emit: () => {}, trace: noTrace },
 		executorOptions(definition),
 		() => {
 			throw new Error('unused');

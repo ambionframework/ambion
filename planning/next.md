@@ -632,7 +632,7 @@ type Step =
       type: 'room';
       call: string;
       intent: Intent;
-      result: 'committed' | 'unchanged' | 'missed' | 'refused' | 'stale';
+      result: 'committed' | 'unchanged' | 'missed' | 'refused' | 'stale' | 'unknown';
       seq?: Seq;
     }
   | { type: 'steer'; seq: Seq; consumed: boolean }
@@ -645,8 +645,16 @@ type Step =
       cacheWrite: number;
       cost?: number;
     }
-  | { type: 'end'; stop: PassResult['stop']; failure?: PassResult['failure'] };
+  | {
+      type: 'end';
+      stop: PassResult['stop'];
+      failure?: { cause: 'permanent' | 'transient'; message: string };
+    };
 ```
+
+The `unknown` result is a commit whose outcome the room cannot read. The
+`end` failure carries a `message`, not an `Error`, so a live step and a
+journal step have one wire form.
 
 Every step carries `activation`, `pass`, `at`, and an index. Pi deltas and
 tool events, Anthropic content blocks, Claude Agent SDK messages and hooks,

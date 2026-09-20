@@ -37,7 +37,8 @@ model guidance. `model` names a Pi provider model. `tools` and `bundles`
 supply the agent's domain tools. `activationTokenLimit` bounds the record one
 activation reads, and `estimateTokens` counts tokens against it. Without a
 limit, an activation reads the whole record. The seat runs `estimateTokens`,
-so it never crosses the wire.
+so it never crosses the wire. `trace` sets what the trace keeps of the agent's
+work; see [Steps and the trace](#steps-and-the-trace).
 
 `summary` is an optional name from `agents`. It assigns closing work to that
 ordinary agent. `assistant` accepts an ordinary agent definition and supplies
@@ -122,7 +123,7 @@ model calls, including when they use the same agent names.
 that facade. The returned `AgentPort` handles `wake`, `steer`, and `cut`.
 
 `AgentExecutionContext` supplies one captured agent definition, the room and seat names,
-clock, call retry policy, an executor, and notifications. The in-process
+clock, call retry policy, an executor, a trace opener, and notifications. The in-process
 `AgentRunner` uses these values directly. Remote hosts resolve their
 execution dependencies where the agent runs. Only protocol data crosses RPC.
 
@@ -149,3 +150,58 @@ Executors use `ActivationView`, `CommitResult`, and `LeaseResponse`.
 `EndReason` is part of lease requests. Participant views omit `sessionId`.
 Audit consumers import `seatSessionId` from `/hosting` and supply the room
 and agent names.
+
+## Steps and the trace
+
+This section moves to `executors.md` in phase 7 step 4. That page does not
+exist yet.
+
+**A step is one thing an activation did.** The step vocabulary has ten
+kinds, and every executor family shares it: `pass`, `thinking`, `text`,
+`tool_call`, `tool_result`, `room`, `steer`, `approval`, `usage`, and
+`end`. A step is plain JSON. The trace stamps each step with `activation`,
+`pass`, `at`, and `index`. `index` counts from zero in each pass. The
+`TraceStep` type is the stamped form.
+
+| Step          | Recorded by | Meaning                                                                                            |
+| ------------- | ----------- | -------------------------------------------------------------------------------------------------- |
+| `pass`        | driver      | A pass begins. `view` is the first pass; `delta` follows a record that moved.                      |
+| `thinking`    | executor    | A block of reasoning. `final` closes the block.                                                    |
+| `text`        | executor    | A block of model text. `final` closes the block.                                                   |
+| `tool_call`   | executor    | A tool starts, with its input.                                                                     |
+| `tool_result` | executor    | A tool ends, with its output, or with `error`.                                                     |
+| `room`        | driver      | The room answered a commit: `committed`, `unchanged`, `missed`, `refused`, `stale`, or `unknown`.  |
+| `steer`       | executor    | A message landed mid-activation. `consumed` says whether the model received it.                    |
+| `approval`    | executor    | A tool call waits for a decision. No executor emits it yet.                                        |
+| `usage`       | executor    | Tokens and cost of one provider request.                                                           |
+| `end`         | driver      | The activation stops: `stopped`, `length`, or `aborted`. A failure adds its `cause` and `message`. |
+
+**The trace journal holds one activation.** The driver opens a
+`TraceSink` for each activation and passes it to the executor at `open`.
+The sink writes to a journal named by the room and the activation, in the
+`ambion/trace` namespace of the host storage. A trace that takes no step
+opens no journal. Each step has the key `pass:index`, so a repeated
+activation writes each step once. The record and the trace never share an
+entry.
+
+**The trace never gates the activation.** A failed trace write raises a
+`trace_error` event. The activation outcome and the lease do not change. The
+driver closes the sink after it releases the lease.
+
+**The sink applies the policy and the limits.** The sink joins the deltas of
+a `thinking` or `text` block into one step, so a block is one entry and one
+event. `limits.trace.stepsPerPass` caps the steps of one pass, and an `end`
+step is always kept. `limits.trace.toolOutputBytes` cuts a tool output that
+is larger, and the step keeps the start of it with a note of the size.
+
+**A definition sets its trace policy.** `defineAgent({ trace })` takes
+`thinking` (`omit`, `summary`, or `full`) and `toolOutput` (`omit` or
+`full`). The default is `{ thinking: 'summary', toolOutput: 'full' }`.
+`summary` keeps the first 280 characters of each thinking block.
+
+**Each step also arrives live.** The event stream carries a `step` event
+for each step the trace writes, in the same order as the journal. A reader
+merges the two by `activation`, `pass`, and `index`. In a separated host the
+trace lives in the storage of the seat, so a read across objects needs a call
+to the seat. The public read of a trace (`readActivation`) is pending release
+work and is not part of this contract yet.

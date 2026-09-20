@@ -338,9 +338,10 @@ describe('startRoom', () => {
 		await orderedVisit.send({ text: 'say hi' });
 		await waitForRoom(ordered);
 		// one event per message on the record, whoever wrote it, and the exchange
-		// that message opened around it. One answer needs no summary, so the room
+		// that message opened around it. The fine `step` events have their own
+		// tests in trace.test.ts. One answer needs no summary, so the room
 		// goes quiet in the same tick the exchange closes: nothing is owed.
-		expect(events.map((e) => e.type)).toEqual([
+		expect(events.filter((e) => e.type !== 'step').map((e) => e.type)).toEqual([
 			'message',
 			'exchange_opened',
 			'activation_start',
