@@ -96,30 +96,29 @@ rename in step 15. Three priorities sort the work: **P0** blocks the tag;
 
 | Lane | Chain                                                             | Priority |
 | ---- | ----------------------------------------------------------------- | -------- |
-| A    | Phase 2: 15, then 8, 9, 10, 11 together; 12; 13 and 14; 16; 17    | P0       |
+| A    | Phase 2: 11; 13 and 14; 16; 17                                    | P0       |
 | B    | Phase 4: 1 then 2; 3 then 4; 5 then 6 and 7; 8 beside all of them | P1       |
 | C    | Phase 3: 1 then 2; 3 then 4                                       | P1       |
 | D    | Phase 5: 1, then 2, 3, and 5 together; 4                          | P1       |
 | E    | Phase 8: 1 now; 2 and 3 as each package lands; 4 to 8 last        | P0       |
 | F    | Phases 6 and 7: each item after the code it describes             | P1       |
 
-**The critical path is 10, 12, 13, 14, then 6.2, then 8.** Step 12 also
-gates the Claude adapter (4.5) and the instrument resource (5.4). Start
+**The critical path is 13, 14, then 6.2, then 8.** Start
 lane A first; when hands run short, take lane B before D and D before C:
 the adapters carry the story, the resources feed the example, and the fold
 has the least user-visible surface.
 
-**Expect merge conflicts in three files.** Steps 8, 10, 11, and 12 edit
-`room-host.ts` and the driver. Land them in small pull requests, one per
-step. Phase 3 step 3 splits `room-host.ts`, so it waits for step 12.
+**Expect merge conflicts in `room-host.ts` and the driver.** Step 11
+edits both. Phase 3 step 3 splits `room-host.ts`, so land step 11 in a
+small pull request.
 
 ### Phase 2. The public shape, then the freeze (P0)
 
 **Goal:** every journal field and every read the release needs land, then
 the freeze.
 
-Each label is a stable name that other steps cite. Steps 8, 10, and 15
-landed (#185, #190, #187), so the labels skip them.
+Each label is a stable name that other steps cite. Steps 8, 9, 10, 12, and 15
+landed (#185, #189, #190, #197, #187), so the labels skip them.
 
 Step 10 decisions: a ref is an absolute URI, opaque except for the
 canonical `ambion` scheme. A message holds at most 16 refs of at most
@@ -128,19 +127,14 @@ list is stored as absent. The key binds to the refs in order. Replay
 applies the same check. Room URIs are pure functions with no `uri` field
 on the wire.
 
-- [ ] **9.** `limits.context.messages` and `limits.message.bytes` (D5). Needs 15.
 - [ ] **11.** `activation`, `exchange`, and `room` on `ToolContext`, supplied by
       the driver (E6). Needs 15.
-- [ ] **12.** The `Step` vocabulary; the trace journal per activation;
-      `limits.trace`; the trace policy per definition; live `step`
-      events (F4, F7). Needs 10.
 - [ ] **13.** Usage on `activation_end` and on the release entry; a closed
-      exchange sums its activations (D2). Needs 12.
-- [ ] **14.** `activations` on the exchange read; `readActivation` (F8). Needs
-      12 and 13.
+      exchange sums its activations (D2).
+- [ ] **14.** `activations` on the exchange read; `readActivation` (F8). Needs 13.
 - [ ] **16.** `format: 1` on the run entry; golden journals per chaos scenario
       with expected folds, replayed in CI; the compatibility promise in
-      `durability.md` (D3). Needs 8, 9, 10, 13, 14, and phase 3 step 2,
+      `durability.md` (D3). Needs 13, 14, and phase 3 step 2,
       because the goldens must hold every field and every outcome.
 - [ ] **17.** The freeze: a note at the top of this file; additive changes only
       from here to the tag. Needs 16.
@@ -161,8 +155,8 @@ journals replay; `activation_end` carries usage.
 3. [ ] `@ambionframework/pi`: the Pi executor moved out of the kernel, so
        the kernel imports no model library; the `Agent` kept across passes;
        `prompt()` with the delta; the Pi journal as its private audit (E2,
-       F2, F5). Needs 11 and 15. The move starts at once and adopts the
-       trace sink when step 12 of phase 2 lands.
+       F2, F5). Needs 11 and 15. The Pi executor writes its steps to the
+       trace sink; step 12 of phase 2 landed.
 4. [ ] Three prompt parts and `renderDelta`; the default speaking policy as
        one replaceable constant; prompt snapshots for an ordinary and a
        closing activation (B6, F3). Needs 3.
@@ -170,8 +164,7 @@ journals replay; `activation_end` carries usage.
        per activation; streaming input for steer with the user echo
        advancing `readThrough`; hooks and tool messages as steps; a
        permission request as an `approval` step; policy options passed
-       through; a fake executable in CI (F5, F6). Needs 2, 4, 11, and
-       phase 2 step 12.
+       through; a fake executable in CI (F5, F6). Needs 2, 4, and 11.
 6. [ ] `memory: 'activation' | 'seat'` on both adapters (F9). Needs 3
        and 5.
 7. [ ] `examples/codex`: a thread per activation; the stdio room tools
@@ -200,7 +193,7 @@ them, and the workspace is one binding of one resource contract.
 3. [ ] A read-only SQL resource over `node:sqlite` with `query` and
        `record` tools, for the example (E4). Needs 1.
 4. [ ] The instrument resource for the example, with approval on a limit.
-       Needs 3 and phase 2 step 12 for the `approval` step.
+       Needs 3.
 5. [ ] Workspace `/dev/null` and the backend matrix on both backends.
        Needs 1.
 
@@ -220,7 +213,7 @@ mechanism reads in one place.
        `pendingFor(person)`; a summary for each person who spoke (E7).
        Needs 1.
 3. [ ] `room-host.ts` split by mechanism with a file budget in the gate
-       (B2). Needs 1 and phase 2 step 12, so the split moves each edited
+       (B2). Needs 1 and phase 2 step 11, so the split moves each edited
        file once.
 4. [ ] The Cloudflare object on the core read model; alarms through
        `reconcileRoom` in hosting (B9). Needs 3.
@@ -262,7 +255,7 @@ the code it describes lands, so pages run beside the code.
 2. [ ] `durability.md`: the format promise, stop semantics, permanent
        failure, commit retry (A1, A2, D1, D3). Needs phase 2 step 16.
 3. [ ] `docs/envelope.md`: the limits table and the measured envelope (B1,
-       D5). Needs phase 3 step 1 and phase 2 step 9.
+       D5). Needs phase 3 step 1.
 4. [ ] `docs/executors.md`: the contract, the steps, the harness matrix,
        how to write an adapter (F). Needs phase 4 step 5.
 5. [ ] `docs/resources.md`: the contract, references, provenance;
@@ -676,15 +669,6 @@ Domain tools written with `defineTool` reach harnesses through the same
 stdio server, which serves JSON Schema through the low-level MCP server
 API. Pass harness policy through adapter options; a permission request
 becomes an `approval` step the application answers.
-
-**F7. The activation trace, durable and live.** The Pi transcript is
-written once at the end of an activation, in Pi's shape, so nothing is
-visible while an agent works. Let the driver write every step to
-`ambion/trace/<room>/<activation>` as it arrives, coalesced per block,
-bounded by `limits.trace`, under a per-definition policy
-`trace: { thinking: 'omit' | 'summary' | 'full', toolOutput: 'omit' | 'full' }`,
-and emit the same steps live as `{ type: 'step', activation, step }`. Keep
-the Pi journal as the Pi executor's private audit.
 
 **F8. The drill-down read path.** `readRoom` lists exchanges;
 `readExchange` gains `activations` (id, seat, attempt, purpose, outcome,
