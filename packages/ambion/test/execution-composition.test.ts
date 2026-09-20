@@ -1,6 +1,14 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import {
+	hostingOf,
+	inProcessTransport,
+	type SeatContext,
+	type SeatRoom,
+	seatSessionId,
+	type Transport,
+} from '../src/hosting.ts';
+import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
@@ -10,14 +18,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import {
-	hostingOf,
-	inProcessTransport,
-	type SeatContext,
-	type SeatRoom,
-	seatSessionId,
-	type Transport,
-} from '../src/transport.ts';
 import { andrei, roomName, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
 import { memory } from './support/storage.ts';

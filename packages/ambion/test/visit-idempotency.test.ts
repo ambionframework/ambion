@@ -1,5 +1,6 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
@@ -9,7 +10,6 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import { hostingOf } from '../src/transport.ts';
 import { messagesOf, roomName } from './support/room.ts';
 import { gatedJournals, storages, tappedJournals } from './support/storage.ts';
 

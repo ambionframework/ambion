@@ -1,7 +1,6 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Context, Model } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
 import {
 	AgentRunner,
 	type CommitResult,
@@ -12,7 +11,8 @@ import {
 	type SeatRoom,
 	type Steer,
 	type ViewResponse,
-} from '../src/transport.ts';
+} from '../src/hosting.ts';
+import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
 import { tick } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';

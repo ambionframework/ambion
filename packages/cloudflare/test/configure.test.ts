@@ -1,5 +1,5 @@
 import { defineAgent, pi } from '@ambionframework/ambion';
-import { hostingOf } from '@ambionframework/ambion/transport';
+import { hostingOf } from '@ambionframework/ambion/hosting';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { configure, definitionOf, executionFor, runtimeFor } from '../src/configure.ts';

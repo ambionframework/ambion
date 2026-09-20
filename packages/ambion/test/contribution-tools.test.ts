@@ -2,7 +2,6 @@ import type { SessionOpener } from '@ambionframework/pi-journal';
 import { describe, expect, it, vi } from 'vitest';
 import { Activation, type PiExecutorOptions } from '../src/execution/activation.ts';
 import { binding, toolsFor } from '../src/execution/tools.ts';
-import { type AgentDefinition, defineAgent, pi } from '../src/index.ts';
 import type {
 	ActivationView,
 	CommitRequest,
@@ -11,7 +10,8 @@ import type {
 	LeaseResponse,
 	SeatRoom,
 	ViewResponse,
-} from '../src/transport.ts';
+} from '../src/hosting.ts';
+import { type AgentDefinition, defineAgent, pi } from '../src/index.ts';
 
 const worker = defineAgent({
 	name: 'worker',

@@ -2,6 +2,7 @@ import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderRecord } from '../src/execution/render.ts';
+import { hostingOf, seatSessionId } from '../src/hosting.ts';
 import type { AgentDefinition } from '../src/index.ts';
 import {
 	createRuntime,
@@ -17,7 +18,6 @@ import {
 	type SummaryMessage,
 	startRoom,
 } from '../src/index.ts';
-import { hostingOf, seatSessionId } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import {
 	assistantEnded,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -12,7 +13,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { inProcessTransport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import {
 	closedExchange,

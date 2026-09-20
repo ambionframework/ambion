@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -7,7 +8,6 @@ import {
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
-import { hostingOf } from '../src/transport.ts';
 import { collect, roomName, waitForRoom } from './support/room.ts';
 import { scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';

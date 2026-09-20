@@ -4,6 +4,7 @@
  * way it hears what it wrote.
  */
 import { describe, expect, it } from 'vitest';
+import { type CommitResult, inProcessTransport, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -15,7 +16,6 @@ import {
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
-import { type CommitResult, inProcessTransport, type Transport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { collect, messagesOf, roomName, storedOf, waitForRoom } from './support/room.ts';
 import {

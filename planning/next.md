@@ -61,8 +61,7 @@ ingress are future work.
 - **One example.** The site example and Relay are replaced by the agentic
   lab workspace in [docs/example.md](../docs/example.md).
 - **Two entries.** `@ambionframework/ambion` for applications and
-  `@ambionframework/ambion/hosting` for hosts and adapters. `/transport`
-  goes away before the tag (B5).
+  `@ambionframework/ambion/hosting` for hosts and adapters (B5).
 - **The kernel imports no model library.** Pi becomes an executor package
   and the Claude Agent SDK a second one (E2, F10).
 - **Speech enters the record through `say` only**, on every executor (F4).
@@ -129,11 +128,13 @@ the one before it and no file is reshaped twice.
 3. [x] Brand `Runtime`; create the default on first use; narrow the
        application view to `clock` and `storage` (B4). `hostingOf(runtime)`
        reaches the rest — the journal namespace, the model call, wake and
-       retry policy, and the room registry — and ships from `/transport`
-       until item 4 gives it its own entry. Needs 1.
-4. [ ] Two entries, `.` and `/hosting`; `/transport` removed; the export
-       list of each entry asserted (B5). Needs 2 and 3, because hosting
-       holds the driver and the executor types.
+       retry policy, and the room registry. Needs 1.
+4. [x] Two entries, `.` and `/hosting`; `/transport` removed; the export
+       list of each entry asserted (B5). `Room.reconcile()` stays on the
+       main entry's `Room` type for now: splitting an application-facing
+       `Room` from a host-facing one is its own design, not a rename.
+       Needs 2 and 3, because hosting holds the driver and the executor
+       types.
 5. [ ] `AmbionError` with codes at every throw site (B7). Needs 4, so the
        files are in their final place.
 6. [ ] An activation id on every execution event; `RoomEvent` and
@@ -391,11 +392,12 @@ call. `defaultRuntime` is created at import. Brand the type, narrow the
 application view to `clock` and `storage`, move the rest to hosting, and
 create the default on first use.
 
-**B5. Two entries: application and hosting.** `/transport` exports the
-runner, the execution services, the audit id, the live-room lookup,
-`hostingOf`, and the wire types; the main entry exports `Room.reconcile()`,
-which only a host calls. Ship `.` and `/hosting`, remove `/transport`, and
-assert the sorted export list of each entry in `package.test.ts`.
+**B5. Two entries: application and hosting.** `/hosting` (renamed from
+`/transport`) exports the runner, the execution services, the audit id, the
+live-room lookup, `hostingOf`, and the wire types; the main entry still
+exports `Room.reconcile()`, which only a host calls — narrowing `Room`
+itself is a separate design, left open. `package.test.ts` asserts the
+sorted export list of each entry.
 
 **B6. Separate mechanism text from speaking policy in prompts.**
 [`render.ts`](../packages/ambion/src/execution/render.ts) holds about 11,600

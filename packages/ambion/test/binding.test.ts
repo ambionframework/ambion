@@ -6,13 +6,13 @@
  * follows it.
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { inProcessTransport, runningRoom } from '../src/hosting.ts';
 import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import * as rules from '../src/room/rules.verified.ts';
 import { decide } from '../src/room/transition.ts';
-import { inProcessTransport, runningRoom } from '../src/transport.ts';
 import { bindings } from './support/binding.ts';
 import { fakeClock } from './support/clock.ts';
 import { closedExchange, roomName, waitForRoom } from './support/room.ts';

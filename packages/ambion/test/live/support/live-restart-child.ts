@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { sqliteJournals } from '@ambionframework/journal';
+import { inProcessTransport, type SeatRoom, type Transport } from '../../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -15,7 +16,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../../../src/index.ts';
-import { inProcessTransport, type SeatRoom, type Transport } from '../../../src/transport.ts';
 import { messagesOf, participantsOf } from '../../support/room.ts';
 import { nodeSql } from '../../support/storage.ts';
 

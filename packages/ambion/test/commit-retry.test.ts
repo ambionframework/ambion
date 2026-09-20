@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { inProcessTransport, type SeatRoom, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -8,7 +9,6 @@ import {
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
-import { inProcessTransport, type SeatRoom, type Transport } from '../src/transport.ts';
 import { messagesOf, roomName, waitForRoom } from './support/room.ts';
 import { quiet, type Script, scripted, speak, toolResultTexts } from './support/scripted.ts';
 import { storages } from './support/storage.ts';

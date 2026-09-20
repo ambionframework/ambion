@@ -12,6 +12,7 @@
 import { memoryJournals } from '@ambionframework/journal';
 import type { Usage } from '@earendil-works/pi-ai';
 import { describe } from 'vitest';
+import { hostingOf, seatSessionId } from '../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -26,7 +27,6 @@ import {
 	type StartRoomOptions,
 	startRoom,
 } from '../../src/index.ts';
-import { hostingOf, seatSessionId } from '../../src/transport.ts';
 import { collect, participantsOf, roomName, waitForRoom } from '../support/room.ts';
 
 /** The model every live seat runs on. The example reads the same variable. */

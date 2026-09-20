@@ -1,14 +1,15 @@
 /**
- * The package's two entries, and what each one names. `index.ts` is what a
- * host needs to build a room. `transport.ts` is the wire between a room and
- * a seat, for a host that runs the two apart.
+ * The package's two entries, and what each one names. `index.ts` is what an
+ * application needs to build a room. `hosting.ts` is the wire between a room
+ * and a seat, and everything beyond the application view a host needs from a
+ * `Runtime`, for a host that runs the two apart.
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
+import * as hosting from '../src/hosting.ts';
 import * as main from '../src/index.ts';
 import { PACKAGE_NAME } from '../src/index.ts';
-import * as transport from '../src/transport.ts';
 
 const read = async (name: string) =>
 	readFile(fileURLToPath(new URL(`../${name}`, import.meta.url)), 'utf8');
@@ -27,7 +28,7 @@ it('builds every entry the manifest names', async () => {
 	const { exports } = await manifest();
 	const config = await read('tsdown.config.ts');
 	const built = [...config.matchAll(/'(src\/[^']+)'/g)].map((m) => m[1]);
-	expect(built).toEqual(['src/index.ts', 'src/transport.ts']);
+	expect(built).toEqual(['src/index.ts', 'src/hosting.ts']);
 	// Each subpath names a file the build writes, under the name it builds it by.
 	for (const [path, target] of Object.entries(exports)) {
 		if (path === './package.json') continue;
@@ -38,23 +39,40 @@ it('builds every entry the manifest names', async () => {
 	}
 });
 
-it('keeps the wire off the entry a host builds a room with', () => {
-	// A host that never runs a seat elsewhere reads none of these.
-	for (const name of [
+it('exports exactly what an application needs to build a room, and nothing a host needs beyond it', () => {
+	expect(Object.keys(main).sort()).toEqual([
+		'PACKAGE_NAME',
+		'createRuntime',
+		'defaultRuntime',
+		'defineAgent',
+		'defineHuman',
+		'defineTool',
+		'fromPiTool',
+		'isPresence',
+		'isSpoken',
+		'isSummary',
+		'pi',
+		'readExchange',
+		'readRoom',
+		'resumeRoom',
+		'startRoom',
+		'systemClock',
+	]);
+});
+
+it('exports exactly the wire and the hosting escape hatch, and nothing an application already has', () => {
+	expect(Object.keys(hosting).sort()).toEqual([
 		'AgentRunner',
-		'createExecutionServices',
-		'seatSessionId',
-		'inProcessTransport',
 		'assertWire',
+		'createExecutionServices',
+		'createPiExecutor',
+		'hostingOf',
+		'inProcessTransport',
 		'roundTrip',
-	]) {
-		expect(transport).toHaveProperty(name);
-		expect(main).not.toHaveProperty(name);
-	}
-	expect(transport).not.toHaveProperty('SeatActor');
-	// The room primitives stay where a host looks for them.
-	for (const name of ['defineAgent', 'defineHuman', 'defineTool', 'fromPiTool', 'startRoom']) {
-		expect(main).toHaveProperty(name);
-		expect(transport).not.toHaveProperty(name);
+		'runningRoom',
+		'seatSessionId',
+	]);
+	for (const name of Object.keys(main)) {
+		expect(hosting).not.toHaveProperty(name);
 	}
 });

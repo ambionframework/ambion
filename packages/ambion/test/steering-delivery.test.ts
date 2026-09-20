@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
 import {
 	inProcessTransport,
 	type LeaseRequest,
 	type Steer,
 	type Transport,
 	type Wake,
-} from '../src/transport.ts';
+} from '../src/hosting.ts';
+import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
 import { assistant, deferred, messagesOf, roomName, stateOf, waitForRoom } from './support/room.ts';
 import { byAgent, contextText, quiet, scripted } from './support/scripted.ts';

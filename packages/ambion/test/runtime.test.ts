@@ -5,8 +5,8 @@
  */
 import { readdir } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
+import { hostingOf } from '../src/hosting.ts';
 import { createRuntime, isSpoken, readRoom, startRoom } from '../src/index.ts';
-import { hostingOf } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { andrei, assistant, messagesOf, roomName, waitForRoom } from './support/room.ts';
 import { quiet, scripted } from './support/scripted.ts';

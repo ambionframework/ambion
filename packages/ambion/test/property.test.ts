@@ -8,6 +8,7 @@
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
 import { describe, expect, it } from 'vitest';
+import { hostingOf, inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -21,7 +22,6 @@ import {
 	startRoom,
 	type Visit,
 } from '../src/index.ts';
-import { hostingOf, inProcessTransport } from '../src/transport.ts';
 import { liveLeases } from './support/chaos.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import { invariants } from './support/invariants.ts';

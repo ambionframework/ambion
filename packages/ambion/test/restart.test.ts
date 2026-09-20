@@ -5,6 +5,7 @@
  * still owed all fold back, on every storage.
  */
 import { describe, expect, it } from 'vitest';
+import { hostingOf, inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -18,7 +19,6 @@ import {
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
-import { hostingOf, inProcessTransport } from '../src/transport.ts';
 import { type FakeClock, fakeClock } from './support/clock.ts';
 import {
 	assistantEnded,

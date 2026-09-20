@@ -10,7 +10,7 @@ import type {
 	Runtime,
 } from '@ambionframework/ambion';
 import { createRuntime } from '@ambionframework/ambion';
-import { createExecutionServices } from '@ambionframework/ambion/transport';
+import { createExecutionServices } from '@ambionframework/ambion/hosting';
 
 /**
  * One event a seat raised inside its own object, flat enough to be a journal

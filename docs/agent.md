@@ -198,13 +198,13 @@ passes the windowed record to it. A session renders a prompt, runs its own
 model loop for one pass, and reports where it left off. Pi is the only
 executor Ambion ships today: `createPiExecutor` builds it from the model
 call, the model resolver, and transcript storage that `createExecutionServices`
-supplies. Both are available from `/transport` for remote hosts.
+supplies. Both are available from `/hosting` for remote hosts.
 
 The runtime keeps lifecycle control separately. `runningRoom(runtime, name)`
 returns the same restricted room-call surface. Room decisions use the journal
 projection and an explicit clock value. They do not require model services.
 
-**The transport entry exports the execution protocol.** It includes requests,
+**The hosting entry exports the execution protocol.** It includes requests,
 responses, activation context, and delivery operations. Journal events and
 projected lease state stay internal. Protocol data and stored events retain
 their existing JSON shapes.
@@ -212,7 +212,7 @@ their existing JSON shapes.
 Hosts use room reads and exchange handles for collaboration history.
 Executors use `ActivationView`, `CommitResult`, and `LeaseResponse`.
 `EndReason` is part of lease requests. Participant views omit `sessionId`.
-Audit consumers import `seatSessionId` from `/transport` and supply the room
+Audit consumers import `seatSessionId` from `/hosting` and supply the room
 and agent names.
 
 ## History and limits

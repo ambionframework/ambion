@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { renderActivation } from '../src/execution/render.ts';
+import type { ActivationSpec, ContextParticipant } from '../src/hosting.ts';
+import { assertWire, roundTrip } from '../src/hosting.ts';
 import { defineAgent, pi } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';
-import type { ActivationSpec, ContextParticipant } from '../src/transport.ts';
-import { assertWire, roundTrip } from '../src/transport.ts';
 import type { Message } from '../src/types.ts';
 
 const at = '2026-01-01T09:00:00.000Z';

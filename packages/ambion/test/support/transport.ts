@@ -2,9 +2,10 @@
  * Transports for the tests: one that proves every request and response is
  * plain JSON, and one that loses, repeats or delays them on purpose.
  */
+
+import type { SeatPort, SeatRoom, Transport } from '../../src/hosting.ts';
+import { assertWire, roundTrip } from '../../src/hosting.ts';
 import type { Clock } from '../../src/index.ts';
-import type { SeatPort, SeatRoom, Transport } from '../../src/transport.ts';
-import { assertWire, roundTrip } from '../../src/transport.ts';
 
 export interface SerializingTransport extends Transport {
 	/** Every value that would not have survived the wire. Empty when the design holds. */

@@ -6,6 +6,7 @@
  */
 import type { Context } from '@earendil-works/pi-ai';
 import { expect } from 'vitest';
+import { hostingOf, inProcessTransport } from '../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -18,7 +19,6 @@ import {
 	type Runtime,
 	startRoom,
 } from '../../src/index.ts';
-import { hostingOf, inProcessTransport } from '../../src/transport.ts';
 import { fakeClock } from './clock.ts';
 import { invariants } from './invariants.ts';
 import { collect, messagesOf, participantsOf, roomName, waitForRoom } from './room.ts';

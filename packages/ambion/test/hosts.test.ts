@@ -9,8 +9,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { runningRoom } from '../src/host/runtime.ts';
+import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
-import { inProcessTransport } from '../src/transport.ts';
 import {
 	agents,
 	assistant,

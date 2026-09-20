@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { runningRoom, type SeatRoom, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -10,7 +11,6 @@ import {
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
-import { runningRoom, type SeatRoom, type Transport } from '../src/transport.ts';
 import { messagesOf, roomName, stateOf } from './support/room.ts';
 import {
 	faultyJournals,

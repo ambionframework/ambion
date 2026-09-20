@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { hostingOf, seatSessionId } from '../src/hosting.ts';
 import {
 	type AgentParticipantInfo,
 	createRuntime,
@@ -9,7 +10,6 @@ import {
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
-import { hostingOf, seatSessionId } from '../src/transport.ts';
 import { participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted, speak } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
