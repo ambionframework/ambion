@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { core, journal, piJournal } from './vitest.config.ts';
+import { core, journal, piJournal, transport } from './vitest.config.ts';
 
 /**
  * The live tier: a room on a real model, with a real key, reaching a real
@@ -13,6 +13,7 @@ import { core, journal, piJournal } from './vitest.config.ts';
 export default defineConfig({
 	resolve: {
 		alias: [
+			{ find: '@ambionframework/ambion/transport', replacement: transport },
 			{ find: '@ambionframework/ambion', replacement: core },
 			{ find: '@ambionframework/pi-journal', replacement: piJournal },
 			{ find: '@ambionframework/journal', replacement: journal },
