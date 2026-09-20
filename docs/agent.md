@@ -187,13 +187,18 @@ model calls, including when they use the same agent names.
 that facade. The returned `SeatPort` handles `wake`, `steer`, and `cut`.
 
 `SeatContext` supplies one captured agent definition, the room and seat names,
-clock, call retry policy, model services, transcript storage, and notifications.
-The in-process executor uses these values directly. Remote hosts resolve their
+clock, call retry policy, an executor, and notifications. The in-process
+`AgentRunner` uses these values directly. Remote hosts resolve their
 execution dependencies where the agent runs. Only protocol data crosses RPC.
 
-`AgentRunner` executes activations through those three room calls.
-`createExecutionServices` supplies its model and transcript services without
-creating a room runtime. Both are available from `/transport` for remote hosts.
+**`AgentRunner` is the driver.** It owns the lease, its renewal, the wake
+queue, and the record window. It knows no model and no provider. For each
+activation it opens one `ExecutorSession` from `SeatContext.executor` and
+passes the windowed record to it. A session renders a prompt, runs its own
+model loop for one pass, and reports where it left off. Pi is the only
+executor Ambion ships today: `createPiExecutor` builds it from the model
+call, the model resolver, and transcript storage that `createExecutionServices`
+supplies. Both are available from `/transport` for remote hosts.
 
 The runtime keeps lifecycle control separately. `runningRoom(runtime, name)`
 returns the same restricted room-call surface. Room decisions use the journal

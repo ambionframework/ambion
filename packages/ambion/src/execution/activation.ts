@@ -1,5 +1,6 @@
 /**
- * One activation: the room wakes a seat, it reads the room, it acts, it stops.
+ * The Pi executor: one activation's session, from the pass the driver hands
+ * it until the pass ends.
  *
  * A seat is seated for as long as the room runs. An activation lasts seconds,
  * and it owns what belongs to one:
@@ -14,9 +15,9 @@
  *   in. It reaches the provider after the request it lands during. PiContext
  *   records the structured range only when that later request receives it.
  *
- * The room supplies structured facts as a view;
- * the seat side renders the prompt, resolves the model and binds the tools, runs it,
- * and reads again while the room keeps moving underneath.
+ * The driver hands a session one view per pass; the session renders the
+ * prompt, resolves the model and binds the tools, runs it, and reports where
+ * it left off.
  *
  * **Three spans, and only two are ours.** Pi has a *turn* — one request to a
  * provider and the tools it calls — and a *run*, which is one `prompt()` and
@@ -27,53 +28,106 @@
  * has called it that all along: every one lands in the seat's downstream
  * session as an `ambion/activation` entry.
  */
-import type { AuditSession as PiSession } from '@ambionframework/pi-journal';
-import type { Agent, AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core';
-import type { ActivationView, LeaseResponse, ViewResponse } from '../protocol.ts';
-import type { EndReason, FailureCause, RoomNotification, Seq } from '../types.ts';
+import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
+import type {
+	AgentEvent,
+	AgentMessage,
+	Agent as PiAgent,
+	StreamFn,
+} from '@earendil-works/pi-agent-core';
+import { Agent } from '@earendil-works/pi-agent-core';
+import type { ActivationView, SeatRoom } from '../protocol.ts';
+import type {
+	AgentDefinition,
+	FailureCause,
+	ModelResolver,
+	RoomNotification,
+	Seq,
+} from '../types.ts';
+import type { Executor, ExecutorActivation, ExecutorSession, PassResult } from './executor.ts';
 import { PiContext } from './pi.ts';
+import { renderActivation } from './render.ts';
+import { seatSessionId } from './services.ts';
+import { binding, toolsFor } from './tools.ts';
 
-/** What only the seat side can give an activation: the room's view, and a model over it. */
-export interface ActivationHost {
-	/** What this activation reads, as structured room facts. */
-	view(): Promise<ViewResponse>;
-	/** Renew the lease. The answer says how far the record has moved. */
-	renew(readThrough: Seq): Promise<LeaseResponse>;
-	/** Build the model over the view, with the tool its purpose names. */
-	build(view: ActivationView, activation: Activation): Promise<{ agent: Agent; context: string }>;
-	/** Keep what the model did, in the seat's own downstream session. */
-	persist(agent: Agent): Promise<void>;
-	emit(event: RoomNotification): void;
-	/** The room's clock: Pi stamps every message it is handed. */
-	now(): number;
+/** What builds a Pi executor for one seat: its definition, and the room's model services. */
+export interface PiExecutorOptions {
+	readonly definition: AgentDefinition;
+	readonly model: ModelResolver;
+	readonly stream: StreamFn;
+	readonly transcripts: SessionOpener;
+	readonly room: string;
+	/** The room's clock. Pi stamps every message it is handed with it. */
+	readonly now: () => number;
+}
+
+/** The Pi executor. One instance per seat, for as long as the room runs. */
+export function createPiExecutor(options: PiExecutorOptions): Executor {
+	let audit: Promise<PiSession> | undefined;
+	const openAudit = (): Promise<PiSession> => {
+		if (audit !== undefined) return audit;
+		const id = seatSessionId(options.room, options.definition.name);
+		const opening = options.transcripts.open(id, options.room);
+		const retained: Promise<PiSession> = opening.then(
+			(session) => session,
+			(error: unknown) => {
+				if (audit === retained) audit = undefined;
+				throw error;
+			},
+		);
+		audit = retained;
+		return retained;
+	};
+	return {
+		open(activation: ExecutorActivation): ExecutorSession {
+			return new Activation(activation, options, openAudit);
+		},
+	};
 }
 
 /** One activation, from the moment the room wakes a seat until it stops. */
-export class Activation {
+export class Activation implements ExecutorSession {
 	readonly id: string;
-	readonly seat: string;
-	private readonly host: ActivationHost;
+	private readonly room: SeatRoom;
+	private readonly roomName: string;
+	private readonly emit: (event: RoomNotification) => void;
+	private readonly definition: AgentDefinition;
+	private readonly model: ModelResolver;
+	private readonly stream: StreamFn;
+	private readonly now: () => number;
+	private readonly openAudit: () => Promise<PiSession>;
 	/** How much record context the provider consumed. */
 	private readonly context = new PiContext();
 	/** The steers held before Pi first polls its queue. */
 	private held: { after: Seq; seq: Seq; line: string }[] = [];
 	private providerStarted = false;
-	private agent: Agent | undefined;
-	private cancelled = false;
-	/** Whether it ended without reaching the record at all. The room's second. */
-	failed = false;
-	/** Why it failed, when it did: a permanent cause stops the retries. */
-	private failureCause: FailureCause | undefined;
+	private agent: PiAgent | undefined;
+	private stopped = false;
 
-	constructor(id: string, seat: string, host: ActivationHost) {
-		this.id = id;
-		this.seat = seat;
-		this.host = host;
+	constructor(
+		activation: ExecutorActivation,
+		options: PiExecutorOptions,
+		openAudit: () => Promise<PiSession>,
+	) {
+		this.id = activation.id;
+		this.room = activation.room;
+		this.roomName = options.room;
+		this.emit = activation.emit;
+		this.definition = options.definition;
+		this.model = options.model;
+		this.stream = options.stream;
+		this.now = options.now;
+		this.openAudit = openAudit;
 	}
 
 	/** The seq this activation may commit against: rule 5's `readThrough`. */
 	get readThrough(): Seq {
 		return this.context.readThrough;
+	}
+
+	/** Whether `abort` was called. The driver checks this before another room round trip. */
+	get cancelled(): boolean {
+		return this.stopped;
 	}
 
 	/** An accepted ordinary say confirms this activation consumed the record through here. */
@@ -93,93 +147,52 @@ export class Activation {
 	steer(after: Seq, seq: Seq, line: string): void {
 		const context = { after, seq, line };
 		if (this.providerStarted && this.agent !== undefined) {
-			this.context.steer(this.agent, context, this.host.now());
+			this.context.steer(this.agent, context, this.now());
 		} else {
 			this.held.push(context);
 		}
 	}
 
-	/**
-	 * A provider request begins after Pi chose its input. A steer queued from
-	 * here follows that request and cannot advance this request's progress.
-	 * The seat side calls this from the stream function it hands Pi.
-	 */
-	providerRequestStarted(messages: readonly object[]): void {
-		this.context.providerRequestStarted(messages);
-		this.providerStarted = true;
-		for (const context of this.held.splice(0)) {
-			if (this.agent !== undefined) this.context.steer(this.agent, context, this.host.now());
-		}
-	}
-
-	/** Pi's abort ends the run but not its queues; this stops the rebuild too. */
+	/** Pi's abort ends the run but not its queues; the driver stops rebuilding it too. */
 	abort(): void {
-		this.cancelled = true;
+		this.stopped = true;
 		this.agent?.abort();
-	}
-
-	/** Why the lease ends, read off how the activation went. */
-	get reason(): EndReason {
-		if (this.failed) return 'failed';
-		return 'released';
-	}
-
-	/** Why a failed activation failed, so the room decides whether to try again. */
-	get cause(): FailureCause | undefined {
-		return this.failureCause;
-	}
-
-	/**
-	 * Take it: read, act, and read again while the room keeps moving. One pass
-	 * is the whole activation when nothing landed underneath it.
-	 */
-	async run(): Promise<void> {
-		while (await this.pass()) {
-			// nothing: the next pass reads the record as it now stands.
-		}
-		this.agent = undefined;
-	}
-
-	/** One pass. True when the record moved past acknowledged context. */
-	private async pass(): Promise<boolean> {
-		try {
-			const opened = await this.host.view();
-			if ('stale' in opened || this.cancelled) return false;
-			const view = opened.view;
-			// The fresh view becomes acknowledged only when Pi sends it to a provider.
-			this.held = [];
-			this.providerStarted = false;
-			const built = await this.host.build(view, this);
-			if (this.cancelled) return false;
-			const { agent, context } = built;
-			this.agent = agent;
-			agent.subscribe((event) => this.note(event));
-			await agent.prompt(this.context.initial(view.through, context, this.host.now()));
-			const failure = this.executionFailure(agent);
-			await this.audit(agent);
-			if (failure !== undefined) return false;
-			// An aborted activation stays cancelled, and one that does not rebuild
-			// is a single pass whatever landed: a summarising activation answers its
-			// fixed closed exchange.
-			if (this.cancelled || view.spec.purpose.kind !== 'respond') return false;
-			// Awaited here, so a renewal that fails is caught below and not returned as a rejection.
-			return await this.needsRefresh(agent);
-		} catch (error) {
-			return this.broke(error instanceof Error ? error : new Error(String(error)));
-		}
 	}
 
 	/**
 	 * Whether the record moved past acknowledged context. A queued steer or a
-	 * newer room position requires a fresh view. A dropped steer stays on the
-	 * record and is delivered again by that view.
+	 * newer room position requires a fresh pass. A dropped steer stays on the
+	 * record and is delivered again by that later pass's view. A cancelled
+	 * session always answers no, though the driver checks `cancelled` itself
+	 * first, before it ever renews on this session's behalf.
 	 */
-	private async needsRefresh(agent: Agent): Promise<boolean> {
-		const renewed = await this.host.renew(this.readThrough);
-		if ('stale' in renewed) return false;
-		if (!agent.hasQueuedMessages() && renewed.ok.lastSeq <= this.readThrough) return false;
-		agent.clearAllQueues();
+	shouldRefresh(lastSeq: Seq): boolean {
+		if (this.stopped) return false;
+		const agent = this.agent;
+		if (!(agent?.hasQueuedMessages() ?? false) && lastSeq <= this.readThrough) return false;
+		agent?.clearAllQueues();
 		return true;
+	}
+
+	/** One pass: read, act, and report where this session left off. */
+	async pass(view: ActivationView): Promise<PassResult> {
+		try {
+			if (this.stopped) return { failed: false };
+			// The fresh view becomes acknowledged only when Pi sends it to a provider.
+			this.held = [];
+			this.providerStarted = false;
+			const built = await this.build(view);
+			if (this.stopped) return { failed: false };
+			const { agent, context } = built;
+			this.agent = agent;
+			agent.subscribe((event) => this.note(event));
+			await agent.prompt(this.context.initial(view.through, context, this.now()));
+			const failure = this.executionFailure(agent);
+			await this.audit(agent);
+			return failure === undefined ? { failed: false } : { failed: true, cause: failure.cause };
+		} catch (error) {
+			return this.broke(error instanceof Error ? error : new Error(String(error)));
+		}
 	}
 
 	/**
@@ -190,31 +203,34 @@ export class Activation {
 		if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
 			// `say` is the room's own event, not a tool's.
 			if (event.toolName !== 'say') {
-				this.host.emit({ type: event.type, agent: this.seat, toolName: event.toolName });
+				this.emit({ type: event.type, agent: this.definition.name, toolName: event.toolName });
 			}
 			return;
 		}
 	}
 
 	/** Record the provider outcome before audit I/O can delay a lease release. */
-	private executionFailure(agent: Agent): Error | undefined {
+	private executionFailure(agent: PiAgent): { error: Error; cause: FailureCause } | undefined {
 		const failure = failureOf(agent);
 		if (failure === undefined) return undefined;
-		this.failed = true;
-		this.failureCause = failure.cause;
-		this.host.emit({ type: 'error', agent: this.seat, error: failure.error, cause: failure.cause });
-		return failure.error;
+		this.emit({
+			type: 'error',
+			agent: this.definition.name,
+			error: failure.error,
+			cause: failure.cause,
+		});
+		return failure;
 	}
 
 	/** Audit failure is diagnostic only. It never changes the provider outcome. */
-	private async audit(agent: Agent): Promise<void> {
+	private async audit(agent: PiAgent): Promise<void> {
 		try {
-			await this.host.persist(agent);
+			await persistTurns(this.openAudit, agent, new Date(this.now()).toISOString());
 		} catch (error) {
 			try {
-				this.host.emit({
+				this.emit({
 					type: 'audit_error',
-					agent: this.seat,
+					agent: this.definition.name,
 					activation: this.id,
 					error: asError(error),
 				});
@@ -229,16 +245,53 @@ export class Activation {
 	 * fault, such as a lost room call or a build error, so its cause is
 	 * transient and the room tries the activation again.
 	 */
-	private broke(error: Error): false {
-		this.failed = true;
-		this.failureCause = 'transient';
-		this.host.emit({ type: 'error', agent: this.seat, error, cause: 'transient' });
-		return false;
+	private broke(error: Error): PassResult {
+		this.emit({ type: 'error', agent: this.definition.name, error, cause: 'transient' });
+		return { failed: true, cause: 'transient' };
+	}
+
+	/**
+	 * The model over the view: the executor renders the prompt, resolves the
+	 * definition's model, and binds the permitted tools. The stream function tells the activation
+	 * when the model is asked, so a steer never joins the request it lands during.
+	 */
+	private async build(view: ActivationView): Promise<{ agent: PiAgent; context: string }> {
+		const def = this.definition;
+		if (view.spec.seat !== def.name)
+			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
+		const rendered = renderActivation(view, def);
+		const agent = new Agent({
+			streamFn: (model, context, options) => {
+				this.providerRequestStarted(context.messages);
+				return this.stream(model, context, options);
+			},
+			initialState: {
+				systemPrompt: rendered.systemPrompt,
+				model: await this.model(def.executor.model, def.name),
+				thinkingLevel: 'off',
+				tools: toolsFor(view, def, binding(this, this.room), this.roomName),
+				messages: [],
+			},
+		});
+		return { agent, context: rendered.context };
+	}
+
+	/**
+	 * A provider request begins after Pi chose its input. A steer queued from
+	 * here follows that request and cannot advance this request's progress.
+	 * The seat side calls this from the stream function it hands Pi.
+	 */
+	private providerRequestStarted(messages: readonly object[]): void {
+		this.context.providerRequestStarted(messages);
+		this.providerStarted = true;
+		for (const context of this.held.splice(0)) {
+			if (this.agent !== undefined) this.context.steer(this.agent, context, this.now());
+		}
 	}
 }
 
 /** A failed provider message: name it in the error, and classify its cause. */
-function failureOf(agent: Agent): { error: Error; cause: FailureCause } | undefined {
+function failureOf(agent: PiAgent): { error: Error; cause: FailureCause } | undefined {
 	const last = agent.state.messages.at(-1);
 	if (last && 'stopReason' in last && last.stopReason === 'error') {
 		const message = ('errorMessage' in last && last.errorMessage) || 'The activation failed.';
@@ -318,7 +371,7 @@ function permanentText(text: string | undefined): boolean {
 /** Every turn a model took, in the downstream session that owns it. */
 export async function persistTurns(
 	open: () => Promise<PiSession>,
-	agent: Agent,
+	agent: PiAgent,
 	at: string,
 ): Promise<void> {
 	const batch = crypto.randomUUID();

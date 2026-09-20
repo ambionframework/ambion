@@ -17,6 +17,13 @@
  * contract for the wire.
  */
 
+export { createPiExecutor, type PiExecutorOptions } from './execution/activation.ts';
+export type {
+	Executor,
+	ExecutorActivation,
+	ExecutorSession,
+	PassResult,
+} from './execution/executor.ts';
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';
 export {
 	createExecutionServices,

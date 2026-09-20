@@ -12,7 +12,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Clock, RoomNotification } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
 import type { ExecutionServices, SeatRoom, Steer, Wake } from '@ambionframework/ambion/transport';
-import { AgentRunner } from '@ambionframework/ambion/transport';
+import { AgentRunner, createPiExecutor } from '@ambionframework/ambion/transport';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent } from './configure.ts';
 import type { Env } from './room-object.ts';
@@ -149,11 +149,22 @@ export class SeatObject extends DurableObject<Env> {
 			return;
 		}
 		await this.metadata.change(() => ({ patch: { phase: 'running' } }));
+		const definition = definitionOf(seat);
+		const executor = createPiExecutor({
+			definition,
+			model: execution.model,
+			stream: execution.stream,
+			transcripts: execution.transcripts,
+			room,
+			now: () => execution.clock.now(),
+		});
 		this.runner = new AgentRunner(seatRoom, {
-			...execution,
-			definition: definitionOf(seat),
+			clock: execution.clock,
+			call: execution.call,
+			definition,
 			room,
 			seat,
+			executor,
 			emit: (event) => seatEvent(seatLine(room, seat, activation, event)),
 		});
 		try {

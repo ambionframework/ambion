@@ -13,6 +13,7 @@
 import { type JournalOpener, memoryJournals, namespaced } from '@ambionframework/journal';
 import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { Executor } from '../execution/executor.ts';
 import { createExecutionServices } from '../execution/services.ts';
 import type { SeatPort, SeatRoom } from '../protocol.ts';
 import type { AgentDefinition, Clock, ModelResolver, RoomNotification } from '../types.ts';
@@ -52,9 +53,8 @@ export interface SeatContext {
 	readonly definition: AgentDefinition;
 	readonly room: string;
 	readonly seat: string;
-	readonly transcripts: SessionOpener;
-	readonly stream: StreamFn;
-	readonly model: ModelResolver;
+	/** Opens one session per activation. Pi today; a later model family gets its own. */
+	readonly executor: Executor;
 	readonly emit?: (event: RoomNotification) => void;
 }
 

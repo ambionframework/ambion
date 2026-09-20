@@ -1,12 +1,30 @@
 import { type JournalOpener, type JournalStorage, memoryJournals } from '@ambionframework/journal';
+import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
 import { piSessions } from '@ambionframework/pi-journal';
-import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Agent, AgentMessage, StreamFn } from '@earendil-works/pi-agent-core';
+import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { Activation, type ActivationHost, persistTurns } from '../src/execution/activation.ts';
-import type { ActivationView } from '../src/protocol.ts';
+import { Activation, type PiExecutorOptions, persistTurns } from '../src/execution/activation.ts';
+import { stubModel } from '../src/execution/services.ts';
+import { defineAgent, pi } from '../src/index.ts';
+import type { ActivationView, SeatRoom } from '../src/protocol.ts';
+import type { RoomNotification } from '../src/types.ts';
+import { quiet, scripted } from './support/scripted.ts';
 
 const message: AgentMessage = { role: 'user', content: 'hello', timestamp: 1 };
 const agent = { state: { messages: [message] } } as unknown as Agent;
+
+const product = defineAgent({
+	name: 'product',
+	identity: 'The one product.',
+	executor: pi({ instructions: 'answer', model: 'scripted/product' }),
+});
+
+const unusedRoom: SeatRoom = {
+	view: async () => ({ stale: 'unused' }),
+	commit: async () => ({ stale: 'unused' }),
+	lease: async () => ({ stale: 'unused' }),
+};
 
 function activationView(): ActivationView {
 	return {
@@ -21,15 +39,28 @@ function activationView(): ActivationView {
 	};
 }
 
-function fakeAgent(messages: readonly object[]): Agent {
-	return {
-		state: { messages },
-		subscribe: () => {},
-		prompt: async () => {},
-		abort: () => {},
-		hasQueuedMessages: () => false,
-		clearAllQueues: () => {},
-	} as unknown as Agent;
+function stubSession(): PiSession {
+	return { appendEntry: async () => {} } as unknown as PiSession;
+}
+
+function activationFor(
+	stream: StreamFn,
+	openAudit: () => Promise<PiSession>,
+	emit: (event: RoomNotification) => void,
+): Activation {
+	const options: PiExecutorOptions = {
+		definition: product,
+		model: stubModel,
+		stream,
+		transcripts: {
+			open: async () => {
+				throw new Error('unused');
+			},
+		} as SessionOpener,
+		room: 'room',
+		now: () => 0,
+	};
+	return new Activation({ id: 'activation', room: unusedRoom, emit }, options, openAudit);
 }
 
 function intercepted(
@@ -45,7 +76,7 @@ function intercepted(
 }
 
 describe('audit persistence', () => {
-	it('keeps a successful activation released when cut during a blocked audit', async () => {
+	it('resolves the pass with no failure when it is cut while its audit write is blocked', async () => {
 		let startPersist: () => void = () => {};
 		let releasePersist: () => void = () => {};
 		const persistStarted = new Promise<void>((resolve) => {
@@ -54,50 +85,41 @@ describe('audit persistence', () => {
 		const persist = new Promise<void>((resolve) => {
 			releasePersist = resolve;
 		});
-		let renewals = 0;
-		const host: ActivationHost = {
-			view: async () => ({ view: activationView() }),
-			renew: async () => {
-				renewals += 1;
-				return { stale: 'unused' };
-			},
-			build: async () => ({ agent: fakeAgent([{ stopReason: 'stop' }]), context: '' }),
-			persist: async () => {
-				startPersist();
-				await persist;
-			},
-			emit: () => {},
-			now: () => 0,
+		const openAudit = async (): Promise<PiSession> => {
+			startPersist();
+			await persist;
+			return stubSession();
 		};
-		const activation = new Activation('activation', 'product', host);
-		const running = activation.run();
+		const activation = activationFor(
+			scripted(() => quiet()),
+			openAudit,
+			() => {},
+		);
+		const running = activation.pass(activationView());
 		await persistStarted;
 		activation.abort();
 		releasePersist();
-		await running;
 
-		expect(activation.failed).toBe(false);
-		expect(renewals).toBe(0);
+		expect(await running).toEqual({ failed: false });
+		// A cancelled session earns no further room round trip on its behalf:
+		// the driver's freshness check reads this before it renews anything.
+		expect(activation.cancelled).toBe(true);
+		expect(activation.shouldRefresh(Number.MAX_SAFE_INTEGER)).toBe(false);
 	});
 
 	it('does not turn an audit notification failure into an execution failure', async () => {
-		const host: ActivationHost = {
-			view: async () => ({ view: activationView() }),
-			renew: async () => ({ stale: 'unused' }),
-			build: async () => ({ agent: fakeAgent([{ stopReason: 'stop' }]), context: '' }),
-			persist: async () => {
-				throw new Error('audit unavailable');
-			},
-			emit: (event) => {
+		const openAudit = async (): Promise<PiSession> => {
+			throw new Error('audit unavailable');
+		};
+		const activation = activationFor(
+			scripted(() => quiet()),
+			openAudit,
+			(event) => {
 				if (event.type === 'audit_error') throw new Error('notification unavailable');
 			},
-			now: () => 0,
-		};
-		const activation = new Activation('activation', 'product', host);
+		);
 
-		await activation.run();
-
-		expect(activation.failed).toBe(false);
+		expect(await activation.pass(activationView())).toEqual({ failed: false });
 	});
 
 	it('records provider failure before a blocked audit can be cut', async () => {
@@ -109,31 +131,26 @@ describe('audit persistence', () => {
 		const persist = new Promise<void>((resolve) => {
 			releasePersist = resolve;
 		});
-		const events: string[] = [];
-		const host: ActivationHost = {
-			view: async () => ({ view: activationView() }),
-			renew: async () => ({ stale: 'unused' }),
-			build: async () => ({
-				agent: fakeAgent([{ stopReason: 'error', errorMessage: 'provider' }]),
-				context: '',
-			}),
-			persist: async () => {
-				startPersist();
-				await persist;
-			},
-			emit: (event) => {
-				if (event.type === 'error') events.push(event.error.message);
-			},
-			now: () => 0,
+		const openAudit = async (): Promise<PiSession> => {
+			startPersist();
+			await persist;
+			return stubSession();
 		};
-		const activation = new Activation('activation', 'product', host);
-		const running = activation.run();
+		const events: string[] = [];
+		const stream = scripted(() =>
+			fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'provider' }),
+		);
+		const activation = activationFor(stream, openAudit, (event) => {
+			if (event.type === 'error') events.push(event.error.message);
+		});
+		const running = activation.pass(activationView());
 		await persistStarted;
-		expect(activation.failed).toBe(true);
+		// The provider failure is recorded before the blocked audit write can be cut.
+		expect(events).toEqual(['provider']);
 		activation.abort();
 		releasePersist();
-		await running;
 
+		expect(await running).toEqual({ failed: true, cause: 'transient' });
 		expect(events).toEqual(['provider']);
 	});
 
@@ -257,3 +274,14 @@ describe('audit persistence', () => {
 		expect(opens).toBe(2);
 	});
 });
+
+function fakeAgent(messages: readonly object[]): Agent {
+	return {
+		state: { messages },
+		subscribe: () => {},
+		prompt: async () => {},
+		abort: () => {},
+		hasQueuedMessages: () => false,
+		clearAllQueues: () => {},
+	} as unknown as Agent;
+}

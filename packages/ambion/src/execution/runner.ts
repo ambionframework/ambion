@@ -1,14 +1,13 @@
 /**
- * Runs agent activations over the SeatRoom protocol.
+ * The driver: runs activations over the SeatRoom protocol.
  *
- * AgentRunner owns the Pi loop and transcript audit. The room owns routing,
- * leases, and the collaboration record. Wake, steer, and cut reach this runner
- * through the transport.
+ * AgentRunner owns the lease, its renewal, the cut, the wake queue, the
+ * record a seat reads, and the decision to run another pass. It knows
+ * nothing about a model, a provider, or a transcript: an activation's
+ * executor renders the prompt, runs its own loop, and reports where it left
+ * off. Wake, steer, and cut reach this driver through the transport.
  */
 
-import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
-import type { Agent as PiAgent } from '@earendil-works/pi-agent-core';
-import { Agent } from '@earendil-works/pi-agent-core';
 import type { SeatContext, Transport } from '../host/runtime.ts';
 import type {
 	ActivationView,
@@ -19,11 +18,9 @@ import type {
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
-import type { Message, RoomNotification, Seq } from '../types.ts';
-import { Activation, persistTurns } from './activation.ts';
-import { renderActivation, renderLine, windowToLimit } from './render.ts';
-import { seatSessionId } from './services.ts';
-import { binding, toolsFor } from './tools.ts';
+import type { EndReason, FailureCause, Message, RoomNotification, Seq } from '../types.ts';
+import type { ExecutorSession, PassResult } from './executor.ts';
+import { renderLine, windowToLimit } from './render.ts';
 
 type CallResult<T> =
 	{ kind: 'value'; value: T } | { kind: 'lost'; error: Error } | { kind: 'cancelled' };
@@ -33,12 +30,14 @@ type CallResult<T> =
 /** One activation the actor holds while it runs. */
 interface Current {
 	id: string;
-	activation: Activation;
+	session: ExecutorSession;
 	/** The activation ran to its end, and its release is in flight. It takes no steer. */
 	over: boolean;
 	/** Ends local waits after a room cut or the last confirmed lease expiry. */
 	cut: () => void;
 	cutOff: Promise<void>;
+	/** Set on a local lease expiry: the release reports it failed whatever the last pass said. */
+	expired: boolean;
 }
 
 /**
@@ -51,7 +50,6 @@ export class AgentRunner implements SeatPort {
 	private current: Current | undefined;
 	/** The wakes that arrived while an activation ran, in order. They run next, once each. */
 	private readonly queued: string[] = [];
-	private audit: Promise<PiSession> | undefined;
 
 	constructor(room: SeatRoom, context: SeatContext) {
 		this.room = room;
@@ -76,7 +74,7 @@ export class AgentRunner implements SeatPort {
 	async steer(steer: Steer): Promise<void> {
 		const current = this.current;
 		if (current === undefined || current.over || current.id !== steer.activation) return;
-		current.activation.steer(steer.after, steer.message.seq, renderLine(steer.message));
+		current.session.steer?.(steer.after, steer.message.seq, renderLine(steer.message));
 	}
 
 	/**
@@ -114,7 +112,7 @@ export class AgentRunner implements SeatPort {
 	private cutCurrent(): void {
 		const current = this.current;
 		if (current === undefined) return;
-		current.activation.abort();
+		current.session.abort();
 		current.cut();
 	}
 
@@ -125,35 +123,84 @@ export class AgentRunner implements SeatPort {
 		const cutOff = new Promise<void>((resolve) => {
 			cut = resolve;
 		});
-		const activation = new Activation(id, this.context.seat, this.host(id, cutOff));
-		const current: Current = { id, activation, over: false, cut, cutOff };
+		const session = this.context.executor.open({
+			id,
+			room: this.boundedRoom(cutOff),
+			emit: (event) => this.emit(event),
+		});
+		const current: Current = { id, session, over: false, cut, cutOff, expired: false };
 		this.current = current;
 		try {
 			const claimed = await this.claim(id);
-			if (claimed !== undefined) {
-				const expired = claimed.expiresAt <= this.context.clock.now();
-				if (expired) {
-					activation.failed = true;
-					this.cutCurrent();
-				}
-				const stopRenewing = expired ? () => {} : this.renewUntil(current, claimed.expiresAt);
-				try {
-					if (!expired) {
-						// The cut ends the wait, and never the run: a run that ignores the
-						// abort finishes on its own, past a seat that took its next wake.
-						await Promise.race([activation.run(), cutOff]);
-					}
-				} finally {
-					stopRenewing();
-					// Over, and holding the seat through the release: a wake that lands
-					// now runs next, and never beside the activation that is releasing.
-					current.over = true;
-					await this.release(id, activation);
-				}
-			}
+			if (claimed !== undefined) await this.runClaimed(id, current, claimed);
 		} finally {
 			if (this.current === current) this.current = undefined;
 			await this.next();
+		}
+	}
+
+	/** Run and release one claimed activation: renewed until it stops, then released once. */
+	private async runClaimed(
+		id: string,
+		current: Current,
+		claimed: { expiresAt: number },
+	): Promise<void> {
+		current.expired = claimed.expiresAt <= this.context.clock.now();
+		if (current.expired) this.cutCurrent();
+		const stopRenewing = current.expired ? () => {} : this.renewUntil(current, claimed.expiresAt);
+		let last: PassResult | undefined;
+		try {
+			if (!current.expired) {
+				// The cut ends the wait, and never the run: a run that ignores the
+				// abort finishes on its own, past a seat that took its next wake.
+				last = await Promise.race([
+					this.runPasses(id, current.session, current.cutOff),
+					current.cutOff.then(() => undefined),
+				]);
+			}
+		} finally {
+			stopRenewing();
+			// Over, and holding the seat through the release: a wake that lands
+			// now runs next, and never beside the activation that is releasing.
+			current.over = true;
+			const failed = current.expired || (last?.failed ?? false);
+			await this.release(
+				id,
+				failed ? 'failed' : 'released',
+				current.session.readThrough,
+				last?.cause,
+			);
+		}
+	}
+
+	/**
+	 * Pass over the record until the activation stops: an executor failure, a
+	 * closing purpose (which never rebuilds), a cancelled session, or nothing
+	 * left the executor or the room needs it to see again. A cancelled
+	 * session earns no further room call on its behalf: an abort mid-pass is
+	 * not a provider failure, but it still ends the loop here, before the
+	 * freshness check would otherwise renew a lease this activation no
+	 * longer holds. A room call this loop cannot recover from (a lost view
+	 * or renewal) ends the activation as a transient failure, the same as a
+	 * broken pass.
+	 */
+	private async runPasses(
+		id: string,
+		session: ExecutorSession,
+		cancelled: Promise<void>,
+	): Promise<PassResult | undefined> {
+		let last: PassResult | undefined;
+		try {
+			for (;;) {
+				const opened = await this.viewFor(id, cancelled);
+				if ('stale' in opened) return last;
+				const view = opened.view;
+				last = await session.pass(view);
+				if (last.failed || session.cancelled || view.spec.purpose.kind !== 'respond') return last;
+				if (!(await this.needsRefresh(id, session, cancelled))) return last;
+			}
+		} catch {
+			return { failed: true, cause: 'transient' };
 		}
 	}
 
@@ -238,15 +285,19 @@ export class AgentRunner implements SeatPort {
 	 * answers stale, and that is fine. A release no attempt got through
 	 * leaves the room to end the lease on its side.
 	 */
-	private async release(id: string, activation: Activation): Promise<void> {
-		const { reason, cause } = activation;
+	private async release(
+		id: string,
+		reason: EndReason,
+		readThrough: Seq,
+		cause: FailureCause | undefined,
+	): Promise<void> {
 		const released = await this.calls(
 			() =>
 				this.room.lease({
 					activation: id,
 					operation: 'release',
 					reason,
-					readThrough: activation.readThrough,
+					readThrough,
 					...(cause === undefined ? {} : { cause }),
 				}),
 			this.current?.cutOff,
@@ -258,18 +309,13 @@ export class AgentRunner implements SeatPort {
 	 * One renewal: the new expiry, `stale` when the room refused it, or
 	 * `lost` when no reply confirms the result.
 	 */
-	private async renew(activation: Activation): Promise<number | 'stale' | 'lost'> {
+	private async renew(id: string, readThrough: Seq): Promise<number | 'stale' | 'lost'> {
 		const renewed = await this.call(
-			() =>
-				this.room.lease({
-					activation: activation.id,
-					operation: 'renew',
-					readThrough: activation.readThrough,
-				}),
+			() => this.room.lease({ activation: id, operation: 'renew', readThrough }),
 			this.current?.cutOff,
 		);
 		if (renewed.kind !== 'value') {
-			if (renewed.kind === 'lost') this.reportCallFailure(activation.id, 'renew', renewed.error);
+			if (renewed.kind === 'lost') this.reportCallFailure(id, 'renew', renewed.error);
 			return renewed.kind === 'cancelled' ? 'stale' : 'lost';
 		}
 		return 'stale' in renewed.value ? 'stale' : renewed.value.ok.expiresAt;
@@ -297,7 +343,7 @@ export class AgentRunner implements SeatPort {
 			if (this.current !== current) return;
 			// A local expiry is an execution failure even when the room may still
 			// accept a late renewal. The room's journal remains authoritative.
-			current.activation.failed = true;
+			current.expired = true;
 			this.cutCurrent();
 		};
 		const schedule = (expiry: number) => {
@@ -310,7 +356,7 @@ export class AgentRunner implements SeatPort {
 			cancelExpiry = clock.alarm(expiry, expire);
 		};
 		const again = async (held: number) => {
-			const renewed = await this.renew(current.activation);
+			const renewed = await this.renew(current.id, current.session.readThrough);
 			if (stopped) return;
 			if (renewed === 'stale') cut();
 			else if (renewed === 'lost') {
@@ -329,37 +375,30 @@ export class AgentRunner implements SeatPort {
 		};
 	}
 
-	private host(id: string, cancelled: Promise<void>) {
-		const { clock, room, seat, transcripts } = this.context;
-		return {
-			view: async () => {
-				const limit = this.context.definition.executor.activationTokenLimit;
-				if (limit !== undefined) return this.windowedView(id, limit, cancelled);
-				const opened = await this.call(() => this.room.view(id), cancelled);
-				if (opened.kind === 'value') return opened.value;
-				if (opened.kind === 'cancelled') return { stale: 'the activation was cut' };
-				this.reportCallFailure(id, 'view', opened.error);
-				throw opened.error;
-			},
-			renew: async (readThrough: number) => {
-				const renewed = await this.call(
-					() => this.room.lease({ activation: id, operation: 'renew', readThrough }),
-					cancelled,
-				);
-				if (renewed.kind === 'value') return renewed.value;
-				if (renewed.kind === 'cancelled') return { stale: 'the activation was cut' };
-				this.reportCallFailure(id, 'renew', renewed.error);
-				throw renewed.error;
-			},
-			build: (view: ActivationView, activation: Activation) =>
-				this.build(view, activation, cancelled),
-			persist: (agent: PiAgent) => {
-				const open = () => this.openAudit(transcripts, seatSessionId(room, seat), room);
-				return persistTurns(open, agent, new Date(clock.now()).toISOString());
-			},
-			emit: (event: RoomNotification) => this.emit(event),
-			now: () => clock.now(),
-		};
+	/**
+	 * Whether the record moved past what this pass consumed. A renewal
+	 * confirms the room's current position; the executor reports whether it
+	 * still has work queued even without one. A renewal no attempt confirms
+	 * is unknown, not stale, so it fails the activation the same as a
+	 * broken pass rather than ending it quietly.
+	 */
+	private async needsRefresh(
+		id: string,
+		session: ExecutorSession,
+		cancelled: Promise<void>,
+	): Promise<boolean> {
+		const renewed = await this.call(
+			() =>
+				this.room.lease({ activation: id, operation: 'renew', readThrough: session.readThrough }),
+			cancelled,
+		);
+		if (renewed.kind === 'cancelled') return false;
+		if (renewed.kind !== 'value') {
+			this.reportCallFailure(id, 'renew', renewed.error);
+			throw renewed.error;
+		}
+		if ('stale' in renewed.value) return false;
+		return session.shouldRefresh(renewed.value.ok.lastSeq);
 	}
 
 	/**
@@ -393,6 +432,17 @@ export class AgentRunner implements SeatPort {
 			if (pagingDone(window.from, held, frame.context.earliest, older.length))
 				return { view: withWindow(frame, window.kept) };
 		}
+	}
+
+	/** The record a pass reads: windowed to the agent's limit, or the room's whole answer. */
+	private async viewFor(id: string, cancelled: Promise<void>): Promise<ViewResponse> {
+		const limit = this.context.definition.executor.activationTokenLimit;
+		if (limit !== undefined) return this.windowedView(id, limit, cancelled);
+		const opened = await this.call(() => this.room.view(id), cancelled);
+		if (opened.kind === 'value') return opened.value;
+		if (opened.kind === 'cancelled') return { stale: 'the activation was cut' };
+		this.reportCallFailure(id, 'view', opened.error);
+		throw opened.error;
 	}
 
 	/** One bounded page of the record, or the response that stops the paging. */
@@ -446,57 +496,6 @@ export class AgentRunner implements SeatPort {
 			},
 			lease: (request) => this.room.lease(request),
 		};
-	}
-
-	private openAudit(transcripts: SessionOpener, id: string, parent: string): Promise<PiSession> {
-		if (this.audit !== undefined) return this.audit;
-		const opening = transcripts.open(id, parent);
-		let retained: Promise<PiSession>;
-		retained = opening.then(
-			(session) => session,
-			(error: unknown) => {
-				if (this.audit === retained) this.audit = undefined;
-				throw error;
-			},
-		);
-		this.audit = retained;
-		return retained;
-	}
-
-	/**
-	 * The model over the view: the executor renders the prompt, resolves the
-	 * definition's model, and binds the permitted tools. The stream function tells the activation
-	 * when the model is asked, so a steer never joins the request it lands during.
-	 */
-	private async build(
-		view: ActivationView,
-		activation: Activation,
-		cancelled: Promise<void>,
-	): Promise<{ agent: PiAgent; context: string }> {
-		const def = this.context.definition;
-		if (view.spec.seat !== def.name)
-			throw new Error(`Activation names another seat: '${view.spec.seat}'.`);
-		const rendered = renderActivation(view, def);
-		const stream = this.context.stream;
-		const agent = new Agent({
-			streamFn: (model, context, options) => {
-				activation.providerRequestStarted(context.messages);
-				return stream(model, context, options);
-			},
-			initialState: {
-				systemPrompt: rendered.systemPrompt,
-				model: await this.context.model(def.executor.model, def.name),
-				thinkingLevel: 'off',
-				tools: toolsFor(
-					view,
-					def,
-					binding(activation, this.boundedRoom(cancelled)),
-					this.context.room,
-				),
-				messages: [],
-			},
-		});
-		return { agent, context: rendered.context };
 	}
 }
 

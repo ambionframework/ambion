@@ -2,6 +2,7 @@
 
 import type { ExecutionConnector, Runtime, Transport } from '../host/runtime.ts';
 import type { SeatRoom } from '../protocol.ts';
+import { createPiExecutor } from './activation.ts';
 import { inProcessTransport } from './runner.ts';
 import { stubModel } from './services.ts';
 
@@ -15,15 +16,21 @@ export function composeExecution(
 	const model = streamFn === undefined ? runtime.model : stubModel;
 	return {
 		connect(room: SeatRoom, request) {
+			const executor = createPiExecutor({
+				definition: request.definition,
+				model,
+				stream,
+				transcripts: runtime.transcripts,
+				room: request.room,
+				now: () => runtime.clock.now(),
+			});
 			return transport.connect(room, {
 				clock: runtime.clock,
 				call: runtime.call,
 				definition: request.definition,
 				room: request.room,
 				seat: request.seat,
-				transcripts: runtime.transcripts,
-				stream,
-				model,
+				executor,
 				emit: request.emit,
 			});
 		},

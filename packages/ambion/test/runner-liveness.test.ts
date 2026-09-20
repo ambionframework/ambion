@@ -7,6 +7,7 @@ import {
 	AgentRunner,
 	type CommitRequest,
 	type CommitResult,
+	createPiExecutor,
 	type LeaseRequest,
 	type LeaseResponse,
 	type SeatRoom,
@@ -107,15 +108,21 @@ function fixture(
 		view: options.view,
 		commit: options.commit,
 	});
+	const executor = createPiExecutor({
+		definition: worker,
+		model: runtime.model,
+		stream: runtime.stream,
+		transcripts: runtime.transcripts,
+		room: 'liveness',
+		now: () => clock.now(),
+	});
 	const actor = new AgentRunner(room, {
 		clock,
 		call: runtime.call,
 		definition: worker,
 		room: 'liveness',
 		seat: worker.name,
-		transcripts: runtime.transcripts,
-		stream: runtime.stream,
-		model: runtime.model,
+		executor,
 		emit: options.emit,
 	});
 	return { actor, clock, room };

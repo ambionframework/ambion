@@ -5,6 +5,7 @@ import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
 import {
 	AgentRunner,
 	type CommitResult,
+	createPiExecutor,
 	type LeaseRequest,
 	type LeaseResponse,
 	type SeatRoom,
@@ -68,15 +69,21 @@ function actorFor(
 	modelResolver: (id: string, agent: string) => Promise<Model<Api>>,
 ) {
 	const runtime = createRuntime({ clock, stream });
+	const executor = createPiExecutor({
+		definition: product,
+		model: modelResolver,
+		stream: runtime.stream,
+		transcripts: runtime.transcripts,
+		room: 'model-test',
+		now: () => clock.now(),
+	});
 	return new AgentRunner(room, {
 		clock,
 		call: runtime.call,
 		definition: product,
 		room: 'model-test',
 		seat: product.name,
-		transcripts: runtime.transcripts,
-		stream: runtime.stream,
-		model: modelResolver,
+		executor,
 	});
 }
 

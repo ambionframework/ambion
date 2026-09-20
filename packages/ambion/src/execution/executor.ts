@@ -1,0 +1,67 @@
+/**
+ * The contract between the driver and one activation's executor.
+ *
+ * The driver owns the lease, its renewal, the cut, the wake queue, and the
+ * decision to run another pass. An executor owns one pass over the record
+ * it is handed: it renders a prompt, runs its model loop once, and reports
+ * where it left off. Pi is the only executor today; a session's `steer` is
+ * optional because a later executor family may only take context between
+ * passes, never during one.
+ */
+import type { ActivationView, SeatRoom } from '../protocol.ts';
+import type { FailureCause, RoomNotification, Seq } from '../types.ts';
+
+/** What one activation gives its executor to open a session. */
+export interface ExecutorActivation {
+	readonly id: string;
+	/** The bounded room facade: the driver's own retries and cancellation. */
+	readonly room: SeatRoom;
+	readonly emit: (event: RoomNotification) => void;
+}
+
+/** What one pass reports back to the driver. */
+export interface PassResult {
+	readonly failed: boolean;
+	/** Set only when `failed`: whether a retry can pass. */
+	readonly cause?: FailureCause;
+}
+
+/**
+ * One activation's session with its executor: opened once, passed over as
+ * the record moves, then discarded. `readThrough` is rule 5's boundary — the
+ * highest position the session has consumed — and the driver reads it both
+ * mid-pass, to renew the lease, and after, to release it.
+ */
+export interface ExecutorSession {
+	readonly readThrough: Seq;
+	/**
+	 * Whether `abort` was called. The driver checks this before it asks the
+	 * room for anything else on this session's behalf: a cancelled session
+	 * never earns another round trip, whatever `shouldRefresh` would say.
+	 */
+	readonly cancelled: boolean;
+	pass(view: ActivationView): Promise<PassResult>;
+	/**
+	 * Steer context into a live pass. Absent when the executor family cannot
+	 * steer mid-run; a dropped steer is not lost, because the record already
+	 * holds it, and the next pass the driver runs rereads the record whole.
+	 */
+	steer?(after: Seq, seq: Seq, line: string): void;
+	/**
+	 * Whether the session has work queued for another pass without new room
+	 * content, given the room's current last position. A cancelled session
+	 * always answers no.
+	 */
+	shouldRefresh(lastSeq: Seq): boolean;
+	/**
+	 * Cut a pass in flight. This is not itself a provider failure, so the
+	 * pass in progress still reports whatever it was already going to
+	 * report; `cancelled` is what stops the driver from running another.
+	 */
+	abort(): void;
+}
+
+/** Builds sessions for one seat's activations. One executor per seat, for its whole lifetime. */
+export interface Executor {
+	open(activation: ExecutorActivation): ExecutorSession;
+}

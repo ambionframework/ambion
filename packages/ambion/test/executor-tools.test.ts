@@ -1,9 +1,10 @@
+import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { Activation, type ActivationHost } from '../src/execution/activation.ts';
+import { Activation, type PiExecutorOptions } from '../src/execution/activation.ts';
 import { binding, toolsFor } from '../src/execution/tools.ts';
-import { defineAgent, defineTool, pi } from '../src/index.ts';
+import { type AgentDefinition, defineAgent, defineTool, pi } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -19,7 +20,6 @@ import type {
 	SeatRoom,
 	ViewResponse,
 } from '../src/transport.ts';
-import type { RoomNotification } from '../src/types.ts';
 
 const worker = defineAgent({
 	name: 'worker',
@@ -52,16 +52,40 @@ const oldAuthority: ActivationSpec = {
 };
 void oldAuthority;
 
-const host: ActivationHost = {
+const unusedRoom: SeatRoom = {
 	view: async (): Promise<ViewResponse> => ({ stale: 'unused' }),
-	renew: async (): Promise<LeaseResponse> => ({ stale: 'unused' }),
-	build: async () => {
-		throw new Error('unused');
-	},
-	persist: async () => {},
-	emit: (_event: RoomNotification) => {},
-	now: () => 0,
+	commit: async (): Promise<CommitResult> => ({ stale: 'unused' }),
+	lease: async (): Promise<LeaseResponse> => ({ stale: 'unused' }),
 };
+
+function executorOptions(definition: AgentDefinition): PiExecutorOptions {
+	return {
+		definition,
+		model: async () => {
+			throw new Error('unused');
+		},
+		stream: () => {
+			throw new Error('unused');
+		},
+		transcripts: {
+			open: async () => {
+				throw new Error('unused');
+			},
+		} as SessionOpener,
+		room: 'room',
+		now: () => 0,
+	};
+}
+
+function activationFor(id: string, definition: AgentDefinition): Activation {
+	return new Activation(
+		{ id, room: unusedRoom, emit: () => {} },
+		executorOptions(definition),
+		() => {
+			throw new Error('unused');
+		},
+	);
+}
 
 function view(purpose: ActivationView['spec']['purpose']): ActivationView {
 	return {
@@ -96,7 +120,7 @@ const names = (tools: readonly AgentTool[]) => tools.map((tool) => tool.name);
 
 describe('executor tool authority', () => {
 	it('binds only the tool named by each activation purpose', () => {
-		const activation = new Activation('activation', worker.name, host);
+		const activation = activationFor('activation', worker);
 		const room = roomThatCommits([]);
 		const held = binding(activation, room);
 
@@ -120,7 +144,7 @@ describe('executor tool authority', () => {
 
 	it('sends summary text only and lets the room stamp recipient and range', async () => {
 		const commits: CommitRequest[] = [];
-		const activation = new Activation('closed:4:worker:1', worker.name, host);
+		const activation = activationFor('closed:4:worker:1', worker);
 		const tools = toolsFor(
 			view({ kind: 'summarize', exchange: 4, person: 'priya', through: 7 }),
 			worker,
@@ -146,7 +170,7 @@ describe('executor tool authority', () => {
 	});
 
 	it('does not mark context consumed for membership or an unchanged membership result', async () => {
-		const activation = new Activation('message:4:worker:1', worker.name, host);
+		const activation = activationFor('message:4:worker:1', worker);
 		const commits: CommitRequest[] = [];
 		const room: SeatRoom = {
 			view: async () => ({ stale: 'unused' }),

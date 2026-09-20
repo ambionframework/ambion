@@ -71,7 +71,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 			assertRoomCalls(connection.room);
 			expect(connection.room).not.toBe(room);
 			expect(connection.context.definition).toEqual(writer);
-			expect(connection.context.stream).toBe(stream);
+			expect(connection.context.executor).toBeDefined();
 			expect(connection.context).not.toHaveProperty('runtime');
 			expect(connection.context).not.toHaveProperty('evict');
 			const { view } = connection.room;
