@@ -11,6 +11,7 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/pi-agent-core';
 import type { AuditEntry, AuditLog } from './audit.ts';
+import type { WorkspaceEnv } from './backend.ts';
 import type { WorkspaceResource } from './resource.ts';
 
 type HarnessTool = AgentHarnessTool<ExecutionToolContext>;
@@ -58,7 +59,11 @@ function auditEntry(
 }
 
 /** Bind a Pi harness tool through the owner's whole-operation queue. */
-function bindTool(tool: HarnessTool, use: WorkspaceResource['use'], audit?: AuditLog): AmbionTool {
+function bindTool(
+	tool: HarnessTool,
+	use: WorkspaceResource<WorkspaceEnv>['use'],
+	audit?: AuditLog,
+): AmbionTool {
 	return defineTool({
 		name: tool.name,
 		description: tool.description,
@@ -109,7 +114,7 @@ function bindTool(tool: HarnessTool, use: WorkspaceResource['use'], audit?: Audi
 /** Compose backend tools through the owner's whole-operation queue. */
 export function bindTools(
 	tools: readonly HarnessTool[],
-	use: WorkspaceResource['use'],
+	use: WorkspaceResource<WorkspaceEnv>['use'],
 	guidance?: string,
 	audit?: AuditLog,
 ): ToolBundle {
