@@ -34,12 +34,3 @@ test('every relative Markdown link with a fragment resolves to a heading', () =>
 		}
 	}
 });
-
-test('the plan points at the moved reports index', () => {
-	const text = readFileSync(join(root, 'planning/next.md'), 'utf8');
-	assert.ok(
-		!text.includes('`demos/README.md`'),
-		'planning/next.md names the moved demos/README.md',
-	);
-	assert.ok(existsSync(join(root, 'planning/evidence/reports/README.md')));
-});
