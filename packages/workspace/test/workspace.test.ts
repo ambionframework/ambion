@@ -30,7 +30,12 @@ import {
 } from '../../ambion/test/support/scripted.ts';
 import { BashEnv, DEFAULT_TIMEOUT_SECONDS } from '../src/bash-env.ts';
 import type { WorkspaceBackend } from '../src/index.ts';
-import { directoryBackend, memoryBackend, openWorkspace } from '../src/index.ts';
+import {
+	directoryBackend,
+	memoryBackend,
+	openWorkspace,
+	ROOM_MIRROR_GUIDANCE,
+} from '../src/index.ts';
 import { MEMORY_LIMIT_BYTES } from '../src/just-bash.ts';
 
 const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` });
@@ -232,7 +237,9 @@ describe('the workspace resource owner', () => {
 		});
 		expect(workspace.tools()).toBe(workspace.tools());
 		expect(workspace.tools().tools).toEqual([]);
-		expect(workspace.tools().guidance).toBeUndefined();
+		// The /rooms guidance is unconditional: it names no room, so a
+		// workspace states it even with no other guidance to add.
+		expect(workspace.tools().guidance).toBe(ROOM_MIRROR_GUIDANCE);
 		await workspace.destroy();
 	});
 
@@ -263,7 +270,7 @@ describe('the workspace resource owner', () => {
 			},
 		});
 		const bundle = workspace.tools();
-		expect(bundle.guidance).toBe('Custom backend guidance.');
+		expect(bundle.guidance).toBe(`Custom backend guidance.\n\n${ROOM_MIRROR_GUIDANCE}`);
 		expect(bundle.tools.map((tool) => tool.name)).toEqual(['inspect']);
 		const tool = bundle.tools[0];
 		if (tool === undefined) throw new Error('The backend tool is missing.');

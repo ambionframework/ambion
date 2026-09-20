@@ -193,6 +193,79 @@ one agent's home and another's (see [Backends and limits](#backends-and-limits))
 and the log is no exception: any agent's `bash` or `write` call can alter or
 remove it, the same as any other file on the workspace.
 
+## Mirror a room's messages
+
+**`workspace.mirror(room)` mirrors one room's message record to
+`/rooms/<room name>/messages.jsonl`, built on `openLog`.** Call it once the
+room has started; it needs no other setup.
+
+```ts
+import { memoryBackend, openWorkspace } from '@ambionframework/workspace';
+import { startRoom } from '@ambionframework/ambion';
+
+const site = openWorkspace({ name: 'town', backend: memoryBackend() });
+const session = await startRoom({ name: 'lobby', agents: [/* ... */] });
+
+const mirror = await site.mirror(session);
+// later, on shutdown:
+await session.stop();
+await mirror.stop();
+```
+
+`mirror()` writes as an identity the workspace owns; a caller names only the
+room. Stop the room before the mirror. The room's own shutdown commits a
+`left` message for every present visitor; a mirror already stopped never
+sees it.
+
+**`await site.mirror(room)` returns once recovery is caught up, not once
+every message is durably on disk.** Its promise resolves after the
+backfill has queued every past message for the workspace to write. The
+writes themselves still run on the workspace's own queue; `mirror.stop()`
+is what waits for the last of them to land.
+
+**One line per message, in the room's own order.** Every line is the
+room's own `Message` type — `said`, `arrived`, `left`, `seated`, `unseated`,
+or `summary` — plus `room`, the room's name. Every kind also carries `at`,
+an ISO timestamp the runtime stamps when the message lands:
+
+| `kind`                                  | Fields beyond `room`, `kind`, `seq`, `at`           |
+| --------------------------------------- | --------------------------------------------------- |
+| `said`                                  | `from`, `to` (absent for a broadcast), `text`       |
+| `arrived`, `left`, `seated`, `unseated` | `subject`, and `identity` on `arrived` and `seated` |
+| `summary`                               | `from`, `to`, `text`, `covers: { from, through }`   |
+
+An agent reads its own room's file with `read` or `bash cat`, the same as
+any file a peer wrote.
+
+**This is a secondary, best-effort copy.** `packages/journal` remains the
+source of truth for the room. A write failure calls `onError` and the room
+keeps running; a gap is possible, and not retried.
+
+**Recovery needs no cursor of its own.** `mirror()` subscribes to the room
+before it reads, then backfills from the highest `seq` already on disk —
+the same recipe [durability](durability.md) gives any external reader. A
+message the subscription sees while that backfill is still in flight is
+held, not written early: writing it first would mark it accounted for, and
+the backfill would then skip it as already written. A restart neither
+misses a message nor writes one twice; a message seen from both the live
+subscription and the backfill is written once.
+
+**A room's name is not validated at the kernel today.** This is the first
+place a room name turns into a filesystem path. A name holding `..` or an
+extra `/` would resolve outside `/rooms`; `mirror()` refuses that name and
+writes nothing.
+
+**Every workspace's guidance names the `/rooms` convention, whether or not
+anything mirrors there.** The note is generic — it names no room — so it
+costs nothing to state unconditionally, the same way an agent already
+learns its `/home/<name>` convention. An agent finds the field guide above
+by reading a room's own file; the guidance only points at the path.
+
+**Directory-per-room organizes the data; it does not wall it off.** Every
+room sharing one workspace still shares its filesystem boundary (see
+[Backends and limits](#backends-and-limits)): an agent seated in one room
+can read another room's file the same way it can read another agent's home.
+
 ## Query the shared database
 
 **The `sql` tool runs SQLite statements on one shared database.** The default
