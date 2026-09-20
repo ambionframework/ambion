@@ -1,12 +1,12 @@
-# The agent
+# Definitions and tools
 
 **An agent owns its instructions, model, tools, and domain behavior.** The
 room owns the journal, membership, presence, execution authority, and exchange
 rules. `agents` supplies every executable definition for one room run.
 
-The [documentation index](README.md) links the other contracts. The
-[plan](../planning/next.md) defines the scope and records the work that
-remains.
+This page is not the entry point. Read [The room](room.md) first for the
+overview, the glossary, and the room-wide mechanisms. The
+[documentation index](README.md) links the other contracts.
 
 ## Definitions
 
@@ -102,104 +102,10 @@ another absolute URI that the application chooses.
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.
 
-## Rooms and membership
-
-`startRoom` writes a version 2 composition and starts the room. `seats` names
-initial members and their attention. If `seats` is omitted, every defined
-agent starts as a member with `broadcast` attention. An empty map starts all
-defined agents in the reserve.
-
-```ts
-const room = await startRoom({
-  name: 'weekly',
-  goal: 'Prepare the weekly report.',
-  agents: [researcher, editor],
-  seats: { researcher: 'broadcast', editor: 'none' },
-  summary: 'editor',
-});
-```
-
-`room.seat(name)` adds a defined agent to membership. `room.unseat(name)`
-removes a member and returns the definition to the reserve. A live activation
-may call the same operations for another agent or itself, unless the target
-seat is fixed: the summary writer's seat is fixed by default, and only the
-host can unseat it. The room refuses an unknown name and a name that belongs
-to a human visitor.
-
-See [Roster](roster.md) for membership, attention, and duplicate-operation
-semantics. Attention selects work; it does not authorize contributions. The
-room checks execution authority and consumed context at the commit boundary.
-
-## People and exchanges
-
-`defineHuman` supplies a name, identity, and optional reading preferences.
-`room.visit(human)` records arrival and returns a visit. `visit.send` records a
-question or delivery and returns an exchange handle. `visit.leave` records the
-departure.
-
-One exchange starts with a person's question and ends when the room has no
-remaining discussion work. The room records its fixed source range. Later
-messages do not change that range. `exchange.waitForClose()` returns the source
-discussion for human review. `exchange.waitForSummary()` returns the optional
-summary result. See [exchange.md](exchange.md), [presence.md](presence.md), and
-[summary.md](summary.md).
-
-## Journal authority
-
-**The journal is the authority.** A room derives membership, presence,
-activations, leases, routing, exchange boundaries, and completion by folding
-recorded entries. A host can resume the same behavior by replaying the journal.
-
-The journal records messages, membership changes, leases, exchange closes,
-composition, cancellation boundaries, and run fences. It also records the
-activation id that authorized an agent contribution. The room stamps provenance fields; callers cannot claim
-another participant's name.
-
-The room serializes accepted writes. Agents can reason concurrently. A speech
-commit carries `readThrough`, the highest message position its activation read.
-The room refuses a stale commit and returns the missed messages. Lease renewal
-extends execution time and does not acknowledge new context.
-
-An agent may finish without calling `say`. The room records the lease outcome.
-Model failure, retry exhaustion, deliberate silence, and an accepted message
-remain distinct outcomes.
-
-## Value ownership
-
-**Room reads return detached values.** Messages, participant lists, reads,
-exchange discussions, and summary responses belong to their caller. Changing
-these values cannot change the room's journal, projection, or later reads.
-Nested routing lists and summary ranges follow the same rule.
-
-**Each listener receives its own notification value.** Collaboration facts
-inside that notification are detached from the room and other listeners.
-Error notifications retain the original `Error` object, including its cause
-and provider-specific fields. Errors describe execution; they are not room facts.
-An execution event names its activation.
-
-**In-process transports have the same ownership boundary as remote calls.**
-The room captures commit and lease requests before awaiting work. Results and
-steering messages carry detached collaboration facts. A caller's later edits
-cannot change the submitted request or another executor's context.
-
-## Activation and context
-
-An activation is a bounded execution with one room grant. Its purpose is either
-to answer a message or to write a closing summary. The room derives purpose
-from the activation id and current journal state. A caller cannot construct
-authority by changing fields in a request.
-
-An ordinary activation reads the goal, participants, reserve identities, and
-the messages allowed by its context boundary. A summary activation reads
-every message through its fixed exchange, plus its recipient and that
-person's preferences. It cannot change the recipient or the exchange it
-covers.
-
-Active agents receive new eligible context between provider requests. A steer
-does not acknowledge that context. The next contribution must report what the
-activation consumed.
-
 ## Execution boundary
+
+This section moves to `executors.md` in phase 7 step 4. That page does not
+exist yet.
 
 **The host configures execution before starting the room.** A connector captures
 the model call, model resolver, transcript storage, clock, and call retry policy.
@@ -243,21 +149,3 @@ Executors use `ActivationView`, `CommitResult`, and `LeaseResponse`.
 `EndReason` is part of lease requests. Participant views omit `sessionId`.
 Audit consumers import `seatSessionId` from `/hosting` and supply the room
 and agent names.
-
-## History and limits
-
-Composition entries use version 2. The room rejects legacy compositions and
-does not reinterpret old assistant definitions or opening activation ids.
-Start a new journal or migrate the history outside Ambion before resuming it.
-
-The journal retains complete history. An agent that sets `activationTokenLimit`
-reads a bounded record. The seat pages the record from the tail through the seat
-call `view(activation, range)`, and it keeps the newest part that fits the
-limit, plus the open exchange whole. An older exchange falls out of context; its
-summary stands for it when one exists. An agent with no limit reads the whole
-record. The record keeps every message for human review either way.
-
-Ambion does not promise bounded replay. The record window bounds model input,
-not the journal fold. Domain tools can act before a contribution commits; room
-freshness does not make external effects transactional. Hosts own credentials,
-process lifetime, and recovery.
