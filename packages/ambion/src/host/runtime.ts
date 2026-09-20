@@ -27,6 +27,7 @@ import type { SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Executor } from '../execution/executor.ts';
 import { createExecutionServices } from '../execution/services.ts';
+import type { TraceOpener } from '../execution/trace.ts';
 import type { AgentPort, RoomProtocol } from '../protocol.ts';
 import type { AgentDefinition, Clock, ExecutionEvent, ModelResolver } from '../types.ts';
 
@@ -65,7 +66,7 @@ export interface Limits {
 	readonly context: { readonly messages: number };
 	/** How many bytes one message carries. Nothing reads it yet; D5 does. */
 	readonly message: { readonly bytes: number };
-	/** How much of a step the trace keeps, and how many steps per pass. Nothing reads it yet; F7 does. */
+	/** How many bytes of tool output a step keeps, and how many steps one pass keeps. */
 	readonly trace: { readonly toolOutputBytes: number; readonly stepsPerPass: number };
 }
 
@@ -77,6 +78,8 @@ export interface Limits {
  */
 export interface Hosting {
 	readonly journals: JournalOpener;
+	/** Opens the trace journal of an activation, one journal per activation. */
+	readonly traces: JournalOpener;
 	readonly transcripts: SessionOpener;
 	/** How the room reaches a seat. Absent, every seat is an actor in this process. */
 	readonly transport?: Transport;
@@ -105,6 +108,7 @@ export function hostingOf(runtime: Runtime): Hosting {
 	const found = state(runtime);
 	return {
 		journals: found.journals,
+		traces: found.traces,
 		transcripts: found.transcripts,
 		...(found.transport === undefined ? {} : { transport: found.transport }),
 		stream: found.stream,
@@ -140,6 +144,8 @@ export interface AgentExecutionContext {
 	/** Opens one session per activation. Pi today; a later model family gets its own. */
 	readonly executor: Executor;
 	readonly emit?: (event: ExecutionEvent) => void;
+	/** Opens the trace sink of each activation. The driver closes it. */
+	readonly trace: TraceOpener;
 }
 
 /** A room the runtime keeps in its lifecycle registry. */
@@ -213,6 +219,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	const journals = namespaced(storage, 'ambion/room');
 	const services = createExecutionServices({
 		storage,
+		trace: options.limits?.trace,
 		clock: options.clock,
 		call: options.limits?.call,
 		stream: options.stream,
@@ -229,7 +236,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 		call: services.call,
 		context: { messages: Number.POSITIVE_INFINITY, ...given.context },
 		message: { bytes: Number.POSITIVE_INFINITY, ...given.message },
-		trace: { toolOutputBytes: 65_536, stepsPerPass: 1_000, ...given.trace },
+		trace: services.trace,
 	};
 	// The runtime establishes these bounds here, once, for every room it runs.
 	// The pass writes an activation off at the cap, so a cap below one would
@@ -256,6 +263,7 @@ export function createRuntime(options: CreateRuntimeOptions = {}): Runtime {
 	stateFor.set(runtime, {
 		running,
 		journals,
+		traces: services.traces,
 		transcripts: services.transcripts,
 		...(options.transport === undefined ? {} : { transport: options.transport }),
 		stream: services.stream,

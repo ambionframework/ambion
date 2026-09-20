@@ -255,8 +255,12 @@ function notificationFor(event: RoomNotification): RoomNotification {
 			return { ...event, exchange: { ...event.exchange } };
 		case 'exchange_closed':
 			return { ...event, exchange: { ...event.exchange } };
+		case 'step':
+			// A step holds tool input and output, which are unknown values.
+			return { ...event, step: structuredClone(event.step) };
 		case 'error':
 		case 'audit_error':
+		case 'trace_error':
 			// Execution diagnostics retain their original Error object and cause.
 			return { ...event };
 		default:

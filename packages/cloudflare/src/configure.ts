@@ -89,6 +89,7 @@ export function executionFor(
 		...options,
 		...(settings.stream === undefined ? {} : { stream: settings.stream }),
 		...(settings.limits?.call === undefined ? {} : { call: settings.limits.call }),
+		...(settings.limits?.trace === undefined ? {} : { trace: settings.limits.trace }),
 	});
 }
 
