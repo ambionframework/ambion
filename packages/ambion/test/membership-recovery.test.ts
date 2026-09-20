@@ -1,7 +1,7 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, defineTool, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, defineTool, pi, startRoom } from '../src/index.ts';
 import { deferred, messagesOf, participantsOf, roomName, waitForRoom } from './support/room.ts';
 import { callTool, quiet, scripted, toolNames } from './support/scripted.ts';
 import { faultyJournals, gatedJournals, memory, tappedJournals } from './support/storage.ts';
@@ -10,19 +10,21 @@ const agent = (name: string, tool: string, calls: string[]) =>
 	defineAgent({
 		name,
 		identity: name,
-		instructions: name,
-		model: `scripted/${name}`,
-		tools: [
-			defineTool({
-				name: tool,
-				description: tool,
-				parameters: Type.Object({}),
-				execute: () => {
-					calls.push(tool);
-					return tool;
-				},
-			}),
-		],
+		executor: pi({
+			instructions: name,
+			model: `scripted/${name}`,
+			tools: [
+				defineTool({
+					name: tool,
+					description: tool,
+					parameters: Type.Object({}),
+					execute: () => {
+						calls.push(tool);
+						return tool;
+					},
+				}),
+			],
+		}),
 	});
 
 const runTool = (tool: string) =>

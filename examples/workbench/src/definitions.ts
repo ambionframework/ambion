@@ -1,4 +1,4 @@
-import { defineAgent, defineHuman } from '@ambionframework/ambion';
+import { defineAgent, defineHuman, pi } from '@ambionframework/ambion';
 import { defineAssistant } from '@ambionframework/assistant';
 import type { Workspace } from '@ambionframework/workspace';
 
@@ -75,9 +75,11 @@ export function team(workspace: Workspace) {
 	const specialistDefinitions = specialists.map(({ instructions, ...definition }) =>
 		defineAgent({
 			...definition,
-			instructions: `${shared}${instructions} Report your result to the assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
-			model,
-			bundles: [workspace.tools()],
+			executor: pi({
+				instructions: `${shared}${instructions} Report your result to the assistant, or to the specialist who asked you. Reply once when your assignment is done. Stay silent on acknowledgments and when there is no new work.`,
+				model,
+				bundles: [workspace.tools()],
+			}),
 		}),
 	);
 	return {

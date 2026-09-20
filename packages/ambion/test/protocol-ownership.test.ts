@@ -4,6 +4,7 @@ import {
 	defineAgent,
 	isSpoken,
 	type Message,
+	pi,
 	type RoomNotification,
 	readRoom,
 	startRoom,
@@ -20,7 +21,11 @@ import { andrei, participantsOf, roomName } from './support/room.ts';
 import { type Storage, storages } from './support/storage.ts';
 
 const agents = ['alpha', 'beta'].map((name) =>
-	defineAgent({ name, identity: name, instructions: 'Answer.', model: `scripted/${name}` }),
+	defineAgent({
+		name,
+		identity: name,
+		executor: pi({ instructions: 'Answer.', model: `scripted/${name}` }),
+	}),
 );
 
 async function controlled(storage: Storage, mutateSteering = false) {

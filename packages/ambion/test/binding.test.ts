@@ -6,7 +6,7 @@
  * follows it.
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { CommitRequest } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -371,8 +371,7 @@ describe('the room runs the verified rules', () => {
 				defineAgent({
 					name: 'product',
 					identity: 'Product.',
-					instructions: 'Answer.',
-					model: 'scripted/product',
+					executor: pi({ instructions: 'Answer.', model: 'scripted/product' }),
 				}),
 			],
 			streamFn: scripted(() => quiet()),

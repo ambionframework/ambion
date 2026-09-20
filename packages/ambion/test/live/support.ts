@@ -14,11 +14,12 @@ import type { Usage } from '@earendil-works/pi-ai';
 import { describe } from 'vitest';
 import {
 	createRuntime,
-	type DefineAgentOptions,
 	defineAgent,
 	defineHuman,
 	isSpoken,
 	type Message,
+	type PiOptions,
+	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -42,11 +43,13 @@ export const live: ReturnType<typeof describe.skipIf> = describe.skipIf(!process
 /** How long a live room may take to go quiet before the test gives up on it. */
 export const QUIET_MS = 150_000;
 
-type AgentOptions = Omit<DefineAgentOptions, 'name' | 'model'> & { model?: string };
+type AgentOptions = { identity: string } & Omit<PiOptions, 'model'> & { model?: string };
 
 /** An agent on the live model. */
-export const agent = (name: string, options: AgentOptions) =>
-	defineAgent({ name, model: MODEL, ...options });
+export const agent = (name: string, options: AgentOptions) => {
+	const { identity, model, ...piOptions } = options;
+	return defineAgent({ name, identity, executor: pi({ model: model ?? MODEL, ...piOptions }) });
+};
 
 /** The room's assistant, with the judgment both of its activations share. */
 export const assistant = defineAgent({
@@ -54,8 +57,9 @@ export const assistant = defineAgent({
 	identity:
 		'Seats a specialist from the reserve when a question needs one, and writes the one ' +
 		'message a person reads when their exchange closes.',
-	model: MODEL,
-	instructions: `
+	executor: pi({
+		model: MODEL,
+		instructions: `
 		When a question opens and specialists are on call, seat each specialist
 		whose identity touches the question. Leave a specialist in the reserve
 		when its identity has nothing to do with the question.
@@ -63,6 +67,7 @@ export const assistant = defineAgent({
 		When the room is quiet, write the one message your person reads, in the
 		shape their preferences ask for, and nothing more.
 	`,
+	}),
 });
 
 export const person = defineHuman({

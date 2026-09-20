@@ -3,7 +3,7 @@ import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { Activation, type ActivationHost } from '../src/execution/activation.ts';
 import { binding, toolsFor } from '../src/execution/tools.ts';
-import { defineAgent, defineTool } from '../src/index.ts';
+import { defineAgent, defineTool, pi } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { activationSpec } from '../src/room/activation.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -24,16 +24,18 @@ import type { RoomNotification } from '../src/types.ts';
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Works on room decisions.',
-	instructions: 'Use the tool that the room gives you.',
-	model: 'scripted/assistant',
-	tools: [
-		defineTool({
-			name: 'record_decision',
-			description: 'Record a private decision.',
-			parameters: Type.Object({}),
-			execute: () => 'recorded',
-		}),
-	],
+	executor: pi({
+		instructions: 'Use the tool that the room gives you.',
+		model: 'scripted/assistant',
+		tools: [
+			defineTool({
+				name: 'record_decision',
+				description: 'Record a private decision.',
+				parameters: Type.Object({}),
+				execute: () => 'recorded',
+			}),
+		],
+	}),
 });
 
 // @ts-expect-error The room has no summary intent; closing work uses said.

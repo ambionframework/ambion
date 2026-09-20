@@ -9,6 +9,7 @@ import {
 	defineAgent,
 	defineHuman,
 	isSpoken,
+	pi,
 	type Room,
 	type Runtime,
 	resumeRoom,
@@ -29,8 +30,7 @@ import { type OpenedStorage, type Storage, storages } from './support/storage.ts
 const runner = defineAgent({
 	name: 'runner',
 	identity: 'Runs on a separate host.',
-	instructions: 'Answer once.',
-	model: 'scripted/runner',
+	executor: pi({ instructions: 'Answer once.', model: 'scripted/runner' }),
 });
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 

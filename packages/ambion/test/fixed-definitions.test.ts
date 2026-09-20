@@ -5,6 +5,7 @@ import {
 	defineAgent,
 	defineHuman,
 	defineTool,
+	pi,
 	type Room,
 	readRoom,
 	resumeRoom,
@@ -26,20 +27,17 @@ import { storages } from './support/storage.ts';
 const alpha = defineAgent({
 	name: 'alpha',
 	identity: 'Alpha.',
-	instructions: 'Answer.',
-	model: 'scripted/alpha',
+	executor: pi({ instructions: 'Answer.', model: 'scripted/alpha' }),
 });
 const beta = defineAgent({
 	name: 'beta',
 	identity: 'Beta.',
-	instructions: 'Answer.',
-	model: 'scripted/beta',
+	executor: pi({ instructions: 'Answer.', model: 'scripted/beta' }),
 });
 const gamma = defineAgent({
 	name: 'gamma',
 	identity: 'Gamma.',
-	instructions: 'Answer.',
-	model: 'scripted/gamma',
+	executor: pi({ instructions: 'Answer.', model: 'scripted/gamma' }),
 });
 const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
 const silent = () => scripted(() => quiet());
@@ -143,9 +141,12 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		const definition = {
 			name: 'alpha',
 			identity: 'Original.',
-			instructions: 'Original instructions.',
-			model: 'scripted/alpha',
-			tools: [tool],
+			executor: {
+				kind: 'pi' as const,
+				instructions: 'Original instructions.',
+				model: 'scripted/alpha',
+				tools: [tool],
+			},
 		};
 		const agents = [definition];
 		const seats = { alpha: 'named' as const };
@@ -163,7 +164,7 @@ describe.each(storages)('fixed definitions on $name', (storage) => {
 		try {
 			definition.name = 'replacement';
 			definition.identity = 'Changed.';
-			definition.instructions = 'Changed instructions.';
+			definition.executor.instructions = 'Changed instructions.';
 			tool.invoke = () => {
 				calls.push('replacement');
 				return 'changed';

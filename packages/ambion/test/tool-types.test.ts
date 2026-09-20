@@ -6,18 +6,15 @@ import {
 	defineAgent,
 	defineTool,
 	fromPiTool,
+	pi,
 	startRoom,
 	type ToolBundle,
 } from '../src/index.ts';
 import { roomName, storedOf } from './support/room.ts';
 import { memory } from './support/storage.ts';
 
-const author = {
-	name: 'worker',
-	identity: 'Worker.',
-	instructions: 'Work.',
-	model: 'scripted/worker',
-};
+const author = { name: 'worker', identity: 'Worker.' };
+const authorPi = { instructions: 'Work.', model: 'scripted/worker' };
 const parameters = Type.Object({ count: Type.Number() });
 const native: AgentTool<typeof parameters, { count: number }> = {
 	name: 'count',
@@ -51,20 +48,25 @@ it('preserves schema inference while composing heterogeneous tools', () => {
 		},
 	});
 	const bundle: ToolBundle = { tools: [lookup, count] };
-	expect(defineAgent({ ...author, bundles: [bundle] }).tools.map((tool) => tool.name)).toEqual([
-		'lookup',
-		'count',
-	]);
-	expect(defineAgent({ ...author, tools: [lookup, fromPiTool(native)] }).tools).toHaveLength(2);
+	expect(
+		defineAgent({
+			...author,
+			executor: pi({ ...authorPi, bundles: [bundle] }),
+		}).executor.tools.map((tool) => tool.name),
+	).toEqual(['lookup', 'count']);
+	expect(
+		defineAgent({ ...author, executor: pi({ ...authorPi, tools: [lookup, fromPiTool(native)] }) })
+			.executor.tools,
+	).toHaveLength(2);
 
 	// These calls are checked by tsc but deliberately never executed.
 	const rejectedInputs = () => {
 		// @ts-expect-error A native Pi tool needs an explicit adapter.
-		defineAgent({ ...author, tools: [native] });
+		defineAgent({ ...author, executor: pi({ ...authorPi, tools: [native] }) });
 		// @ts-expect-error A bundle belongs in bundles, not tools.
-		defineAgent({ ...author, tools: [bundle] });
+		defineAgent({ ...author, executor: pi({ ...authorPi, tools: [bundle] }) });
 		// @ts-expect-error Malformed tool values are not accepted.
-		defineAgent({ ...author, tools: [{ name: 'missing-execute' }] });
+		defineAgent({ ...author, executor: pi({ ...authorPi, tools: [{ name: 'missing-execute' }] }) });
 		defineTool({
 			name: 'wrong',
 			description: 'Wrong callback.',
@@ -87,7 +89,7 @@ it('preserves schema inference while composing heterogeneous tools', () => {
 it.each([null, 12, {}, { name: 'missing-execute' }, { tools: [] }])(
 	'rejects malformed tool input at definition time: %j',
 	(tool) => {
-		expect(() => Reflect.apply(defineAgent, undefined, [{ ...author, tools: [tool] }])).toThrow();
+		expect(() => Reflect.apply(pi, undefined, [{ ...authorPi, tools: [tool] }])).toThrow();
 	},
 );
 
@@ -100,7 +102,7 @@ it('rejects malformed structural tools before a room writes its journal', async 
 				{
 					name,
 					runtime: createRuntime({ storage: opened.storage }),
-					agents: [{ ...author, tools: [{ name: 'bad' }] }],
+					agents: [{ ...author, executor: { kind: 'pi', ...authorPi, tools: [{ name: 'bad' }] } }],
 				},
 			]),
 		).rejects.toThrow();

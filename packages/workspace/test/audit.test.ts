@@ -1,4 +1,4 @@
-import { defineAgent, startRoom } from '@ambionframework/ambion';
+import { defineAgent, pi, startRoom } from '@ambionframework/ambion';
 import type { ExecutionEnv, FileInfo } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, err, FileError, ok } from '@earendil-works/pi-agent-core';
 import { Bash, InMemoryFs } from 'just-bash';
@@ -217,9 +217,7 @@ describe('the workspace audit log', () => {
 		const worker = defineAgent({
 			name: 'worker',
 			identity: 'Writes one note.',
-			instructions: 'write',
-			model: 'scripted/worker',
-			bundles: [site.tools()],
+			executor: pi({ instructions: 'write', model: 'scripted/worker', bundles: [site.tools()] }),
 		});
 		const session = await startRoom({
 			name: roomId,

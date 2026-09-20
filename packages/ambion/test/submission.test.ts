@@ -3,6 +3,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	pi,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
@@ -96,8 +97,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 		const agent = defineAgent({
 			name: 'watcher',
 			identity: 'Watches the room.',
-			instructions: 'Stay quiet.',
-			model: 'scripted/watcher',
+			executor: pi({ instructions: 'Stay quiet.', model: 'scripted/watcher' }),
 		});
 		const held = deferred();
 		const started = deferred();
@@ -208,8 +208,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 		const agent = defineAgent({
 			name: 'watcher',
 			identity: 'Watches the room.',
-			instructions: 'Stay quiet.',
-			model: 'scripted/watcher',
+			executor: pi({ instructions: 'Stay quiet.', model: 'scripted/watcher' }),
 		});
 		const held = deferred();
 		const started = deferred();
@@ -412,8 +411,7 @@ describe.each(storages)('submission and effects on $name storage', (storage) => 
 		const agent = defineAgent({
 			name: 'watcher',
 			identity: 'Watches the room.',
-			instructions: 'Stay quiet.',
-			model: 'scripted/watcher',
+			executor: pi({ instructions: 'Stay quiet.', model: 'scripted/watcher' }),
 		});
 		const held = deferred();
 		const started = deferred();

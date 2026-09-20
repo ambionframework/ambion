@@ -32,8 +32,10 @@ the agent that may write summaries.
 const editor = defineAgent({
   name: 'editor',
   identity: 'Keeps decisions clear.',
-  instructions: 'State facts that change the next action.',
-  model: 'anthropic/claude-sonnet-5',
+  executor: pi({
+    instructions: 'State facts that change the next action.',
+    model: 'anthropic/claude-sonnet-5',
+  }),
 });
 
 const room = await startRoom({

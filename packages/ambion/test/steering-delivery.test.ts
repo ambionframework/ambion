@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, defineHuman, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '../src/index.ts';
 import {
 	inProcessTransport,
 	type LeaseRequest,
@@ -15,8 +15,7 @@ import { storages } from './support/storage.ts';
 const alpha = defineAgent({
 	name: 'alpha',
 	identity: 'Answers questions.',
-	instructions: 'Answer.',
-	model: 'scripted/alpha',
+	executor: pi({ instructions: 'Answer.', model: 'scripted/alpha' }),
 });
 const priya = defineHuman({ name: 'priya', identity: 'Asks questions.' });
 

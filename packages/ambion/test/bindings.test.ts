@@ -5,6 +5,7 @@ import {
 	defineAgent,
 	defineHuman,
 	defineTool,
+	pi,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
@@ -19,36 +20,40 @@ describe('room bindings', () => {
 		const first = defineAgent({
 			name: 'analyst',
 			identity: 'First analyst.',
-			instructions: 'Use first.',
-			model: 'scripted/analyst',
-			tools: [
-				defineTool({
-					name: 'first',
-					description: 'First room only.',
-					parameters: Type.Object({}),
-					execute: () => {
-						calls.push('first');
-						return 'done';
-					},
-				}),
-			],
+			executor: pi({
+				instructions: 'Use first.',
+				model: 'scripted/analyst',
+				tools: [
+					defineTool({
+						name: 'first',
+						description: 'First room only.',
+						parameters: Type.Object({}),
+						execute: () => {
+							calls.push('first');
+							return 'done';
+						},
+					}),
+				],
+			}),
 		});
 		const second = defineAgent({
 			name: 'analyst',
 			identity: 'Second analyst.',
-			instructions: 'Use second.',
-			model: 'scripted/analyst',
-			tools: [
-				defineTool({
-					name: 'second',
-					description: 'Second room only.',
-					parameters: Type.Object({}),
-					execute: () => {
-						calls.push('second');
-						return 'done';
-					},
-				}),
-			],
+			executor: pi({
+				instructions: 'Use second.',
+				model: 'scripted/analyst',
+				tools: [
+					defineTool({
+						name: 'second',
+						description: 'Second room only.',
+						parameters: Type.Object({}),
+						execute: () => {
+							calls.push('second');
+							return 'done';
+						},
+					}),
+				],
+			}),
 		});
 		const runtime = createRuntime();
 		const one = await startRoom({
@@ -86,8 +91,7 @@ describe('room bindings', () => {
 		const analyst = defineAgent({
 			name: 'analyst',
 			identity: 'Analyst.',
-			instructions: 'Stay quiet.',
-			model: 'scripted/analyst',
+			executor: pi({ instructions: 'Stay quiet.', model: 'scripted/analyst' }),
 		});
 		const name = roomName('resume-bindings');
 		const first = await startRoom({
@@ -119,8 +123,7 @@ describe('room bindings', () => {
 		const original = defineAgent({
 			name: 'surveyor',
 			identity: 'Original surveyor.',
-			instructions: 'Count.',
-			model: 'scripted/surveyor',
+			executor: pi({ instructions: 'Count.', model: 'scripted/surveyor' }),
 		});
 		const session = await startRoom({
 			name: roomName('fixed-binding'),

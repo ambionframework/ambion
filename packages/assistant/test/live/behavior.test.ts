@@ -6,6 +6,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type Message,
+	pi,
 	startRoom,
 } from '@ambionframework/ambion';
 import {
@@ -49,8 +50,7 @@ async function evaluate(options: {
 	const specialist = defineAgent({
 		name: 'inventory',
 		identity: 'Checks warehouse stock and prepares dispatch plans.',
-		instructions: 'Report the stock evidence once.',
-		model: 'scripted/inventory',
+		executor: pi({ instructions: 'Report the stock evidence once.', model: 'scripted/inventory' }),
 	});
 	const room = await startRoom({
 		name: `assistant-eval-${crypto.randomUUID()}`,

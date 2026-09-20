@@ -8,6 +8,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	pi,
 	readRoom,
 	resumeRoom,
 	startRoom,
@@ -27,8 +28,7 @@ const human = defineHuman({ name: 'owner', identity: 'Owns the request.' });
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Answers the request.',
-	instructions: 'Answer once.',
-	model: 'scripted/worker',
+	executor: pi({ instructions: 'Answer once.', model: 'scripted/worker' }),
 });
 const request = { text: 'Recover this request.', key: 'persisted-delivery' };
 const checkpointPath = join(directory, 'client.json');

@@ -1,4 +1,4 @@
-import { defineAgent } from '@ambionframework/ambion';
+import { defineAgent, pi } from '@ambionframework/ambion';
 import { memoryJournals } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
 import { configure, definitionOf, executionFor, runtimeFor } from '../src/configure.ts';
@@ -8,8 +8,7 @@ const agent = (name: string) =>
 	defineAgent({
 		name,
 		identity: `${name} identity`,
-		instructions: `${name} instructions`,
-		model: 'scripted/test',
+		executor: pi({ instructions: `${name} instructions`, model: 'scripted/test' }),
 	});
 
 describe('configure', () => {

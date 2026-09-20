@@ -9,6 +9,8 @@ import {
 	type AgentDefinition,
 	defineAgent,
 	defineTool,
+	type PiOptions,
+	pi,
 	type Room,
 	startRoom,
 	type ToolBundle,
@@ -17,13 +19,11 @@ import {
 import { assistant, enter, roomName as name, waitForRoom } from './support/room.ts';
 import { byAgent, callTool, quiet, type Script, scripted } from './support/scripted.ts';
 
-function agent(agentName: string, options: Partial<Parameters<typeof defineAgent>[0]> = {}) {
+function agent(agentName: string, options: Partial<PiOptions> = {}) {
 	return defineAgent({
 		name: agentName,
 		identity: `Identity of ${agentName}.`,
-		instructions: 'work',
-		model: `scripted/${agentName}`,
-		...options,
+		executor: pi({ instructions: 'work', model: `scripted/${agentName}`, ...options }),
 	});
 }
 
@@ -62,19 +62,17 @@ describe('ordinary tool bundles', () => {
 		const agentDef = defineAgent({
 			name: 'capturer',
 			identity: 'Captures values.',
-			instructions: 'Work.',
-			model: 'scripted/capturer',
-			bundles,
+			executor: pi({ instructions: 'Work.', model: 'scripted/capturer', bundles }),
 		});
 
 		bundles.push({ tools: [tool('later')], guidance: 'Later guidance.' });
 		bundle.tools.length = 0;
 		bundle.guidance = 'Changed guidance.';
-		expect(agentDef.tools).toHaveLength(1);
-		expect(agentDef.tools[0]?.name).toBe('inspect');
-		expect(agentDef.guidance).toBe('Use inspect for this domain.');
+		expect(agentDef.executor.tools).toHaveLength(1);
+		expect(agentDef.executor.tools[0]?.name).toBe('inspect');
+		expect(agentDef.executor.guidance).toBe('Use inspect for this domain.');
 		expect(Object.isFrozen(agentDef)).toBe(true);
-		expect(Object.isFrozen(agentDef.tools)).toBe(true);
+		expect(Object.isFrozen(agentDef.executor.tools)).toBe(true);
 	});
 
 	it('rejects duplicate ordinary names after flattening bundles', () => {
@@ -84,10 +82,12 @@ describe('ordinary tool bundles', () => {
 			defineAgent({
 				name: 'duplicate',
 				identity: 'Checks names.',
-				instructions: 'Work.',
-				model: 'scripted/duplicate',
-				tools: [tool('inspect')],
-				bundles: [bundle],
+				executor: pi({
+					instructions: 'Work.',
+					model: 'scripted/duplicate',
+					tools: [tool('inspect')],
+					bundles: [bundle],
+				}),
 			}),
 		).toThrow(/duplicate tools named 'inspect'/i);
 	});

@@ -5,6 +5,7 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
+	pi,
 	type Room,
 	type Runtime,
 	readRoom,
@@ -27,20 +28,20 @@ import { memory, type OpenedStorage, storages } from './support/storage.ts';
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes one summary for each exchange.',
-	instructions: 'Write one summary when the room closes an exchange.',
-	model: 'scripted/assistant',
+	executor: pi({
+		instructions: 'Write one summary when the room closes an exchange.',
+		model: 'scripted/assistant',
+	}),
 });
 const alpha = defineAgent({
 	name: 'alpha',
 	identity: 'Answers questions.',
-	instructions: 'Answer each question once.',
-	model: 'scripted/alpha',
+	executor: pi({ instructions: 'Answer each question once.', model: 'scripted/alpha' }),
 });
 const beta = defineAgent({
 	name: 'beta',
 	identity: 'Checks answers.',
-	instructions: 'Answer each question once.',
-	model: 'scripted/beta',
+	executor: pi({ instructions: 'Answer each question once.', model: 'scripted/beta' }),
 });
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });

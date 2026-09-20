@@ -64,7 +64,7 @@ ingress are future work.
   `@ambionframework/ambion/hosting` for hosts and adapters. `/transport`
   goes away before the tag (B5).
 - **The kernel imports no model library.** Pi becomes an executor package
-  and the Claude Agent SDK a second one (E1, F10).
+  and the Claude Agent SDK a second one (E2, F10).
 - **Speech enters the record through `say` only**, on every executor (F4).
 - **The freeze.** After phase 2, every change to the main entry and to the
   journal bodies is additive until the tag.
@@ -118,13 +118,14 @@ the fold has the least user-visible surface.
 release needs land in one window, in an order where each step builds on
 the one before it and no file is reshaped twice.
 
-1. [ ] `AgentDefinition` becomes `{ name, identity, executor }`; Pi's
-       fields move into `pi({})`; `Runtime` loses `stream`, `model`, and
-       `transcripts` (E1).
+1. [x] `AgentDefinition` becomes `{ name, identity, executor }`; Pi's
+       fields move into `pi({})` (E1).
 2. [ ] The executor contract: `open(activation)` returns a session with
        `pass`, optional `steer`, and `close`; the driver (leases, renewals,
        cuts, the wake queue, freshness, delta passes) moves out of the
-       runner and the activation into the kernel (E2, F2). Needs 1.
+       runner and the activation into the kernel; `Runtime` loses `stream`,
+       `model`, and `transcripts` once the driver gives them a home (E2,
+       F2). Needs 1.
 3. [ ] Brand `Runtime`; create the default on first use; narrow the
        application view to `clock` and `storage` (B4). Needs 1.
 4. [ ] Two entries, `.` and `/hosting`; `/transport` removed; the export
@@ -547,20 +548,13 @@ holds a model is an executor. Everything that holds data is a resource.
 seat reaches the room through `view`, `commit`, and `lease`, and the room
 reaches a seat through `wake`, `steer`, and `cut`, in plain JSON.
 
-**E1. Take Pi out of the kernel vocabulary.** The room reads two fields of
-a definition, `name` and `identity`; every other field is Pi's, and
-[`types.ts`](../packages/ambion/src/types.ts) imports Pi's result, callback,
-execution mode, and model types. `Runtime` carries a Pi stream, resolver,
-and transcript opener. Let a definition be `{ name, identity, executor }`,
-move Pi's fields into `pi({ model, instructions, tools })`, and remove the
-three Pi fields from `Runtime`. The composition entry already stores only
-name, identity, and attention, so stored rooms are unaffected.
-
 **E2. One executor contract and one activation driver.** The runner and
 the activation hold a neutral half (claims, renewals, cuts, the wake queue,
 the pass loop, freshness) and a Pi half (building an `Agent`, steering it,
 reading its stop reason, persisting its transcript). Keep the driver in the
-hosting entry and reduce a framework to the contract in F2. Ship Pi as
+hosting entry and reduce a framework to the contract in F2. `Runtime` still
+carries a Pi stream, resolver, and transcript opener; remove those three
+fields once the driver gives them a home outside it. Ship Pi as
 `@ambionframework/pi`.
 
 **E3. Neutral room tools and a headless adapter as the proof.** Nothing in

@@ -3,6 +3,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	pi,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
@@ -22,8 +23,7 @@ import { storages } from './support/storage.ts';
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Answers questions.',
-	instructions: 'Answer.',
-	model: 'scripted/worker',
+	executor: pi({ instructions: 'Answer.', model: 'scripted/worker' }),
 });
 const human = defineHuman({ name: 'priya', identity: 'Asks questions.' });
 

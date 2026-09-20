@@ -14,6 +14,7 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
+	pi,
 	type Room,
 	type Runtime,
 	startRoom,
@@ -54,8 +55,7 @@ import { type Fault, faultyTransport } from './support/transport.ts';
 const solo = defineAgent({
 	name: 'solo',
 	identity: 'Speaks once.',
-	instructions: 'speak',
-	model: 'scripted/solo',
+	executor: pi({ instructions: 'speak', model: 'scripted/solo' }),
 });
 
 const started: Room[] = [];

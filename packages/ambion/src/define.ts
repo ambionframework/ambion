@@ -12,8 +12,10 @@ import { IsSchema, type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
 import type {
 	AgentDefinition,
+	AgentExecutor,
 	AmbionTool,
 	HumanDefinition,
+	PiExecutor,
 	ToolBundle,
 	ToolContext,
 } from './types.ts';
@@ -23,6 +25,11 @@ export interface DefineAgentOptions {
 	name: string;
 	/** The agent's public face — injected into every participant's context as part of the roster. */
 	identity: string;
+	/** The executor this agent runs on. Build one with `pi()`. */
+	executor: AgentExecutor;
+}
+
+export interface PiOptions {
 	/** The private half: the agent's own voice, and the home of all judgment. */
 	instructions: string;
 	/** A Pi model identifier, `provider/model-id`. */
@@ -37,20 +44,28 @@ export interface DefineAgentOptions {
 	estimateTokens?: (text: string) => number;
 }
 
-export function defineAgent(options: DefineAgentOptions): AgentDefinition {
-	assertName(options.name);
+/** The Pi executor: Pi's agent loop, model, instructions, and tools. */
+export function pi(options: PiOptions): PiExecutor {
 	const input = flattenTools(options.tools, options.bundles);
 	const guidance = guidanceOf(options.bundles);
 	const tools = Object.freeze(input.map((tool) => captureTool(tool)));
-	assertAgentTools(options.name, tools);
 	return Object.freeze({
-		name: options.name,
-		identity: options.identity,
+		kind: 'pi',
 		instructions: options.instructions,
 		model: options.model,
 		tools,
 		...(guidance === undefined ? {} : { guidance }),
 		...recordLimit(options.activationTokenLimit, options.estimateTokens),
+	});
+}
+
+export function defineAgent(options: DefineAgentOptions): AgentDefinition {
+	assertName(options.name);
+	assertAgentTools(options.name, options.executor.tools);
+	return Object.freeze({
+		name: options.name,
+		identity: options.identity,
+		executor: options.executor,
 	});
 }
 
@@ -77,21 +92,30 @@ function recordLimit(
 /** Capture a structural definition at a room boundary without retaining mutable authoring data. */
 export function captureAgent(agent: AgentDefinition): AgentDefinition {
 	assertName(agent.name);
+	const executor = captureExecutor(agent.executor);
+	assertAgentTools(agent.name, executor.tools);
+	return Object.freeze({
+		name: agent.name,
+		identity: agent.identity,
+		executor,
+	});
+}
+
+/** Capture one executor at a room boundary. Pi is the only executor today. */
+function captureExecutor(executor: PiExecutor): PiExecutor {
 	const tools = Object.freeze(
-		agent.tools.map((tool) => {
+		executor.tools.map((tool) => {
 			assertTool(tool);
 			return captureTool(tool);
 		}),
 	);
-	assertAgentTools(agent.name, tools);
 	return Object.freeze({
-		name: agent.name,
-		identity: agent.identity,
-		instructions: agent.instructions,
-		model: agent.model,
+		kind: 'pi',
+		instructions: executor.instructions,
+		model: executor.model,
 		tools,
-		...(agent.guidance === undefined ? {} : { guidance: agent.guidance }),
-		...recordLimit(agent.activationTokenLimit, agent.estimateTokens),
+		...(executor.guidance === undefined ? {} : { guidance: executor.guidance }),
+		...recordLimit(executor.activationTokenLimit, executor.estimateTokens),
 	});
 }
 

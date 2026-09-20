@@ -6,6 +6,7 @@ import {
 	defineHuman,
 	isSpoken,
 	type Message,
+	pi,
 	resumeRoom,
 	startRoom,
 } from '../src/index.ts';
@@ -30,8 +31,7 @@ function definition(identity: string, instructions: string) {
 	return defineAgent({
 		name: 'writer',
 		identity,
-		instructions,
-		model: 'scripted/writer',
+		executor: pi({ instructions, model: 'scripted/writer' }),
 	});
 }
 
@@ -111,19 +111,27 @@ describe('execution composition', () => {
 				true,
 			);
 			expect(
-				firstCalls.every((call) => call.systemPrompt.includes(firstDefinition.instructions)),
+				firstCalls.every((call) =>
+					call.systemPrompt.includes(firstDefinition.executor.instructions),
+				),
 			).toBe(true);
 			expect(
 				secondCalls.some((call) => call.systemPrompt.includes(secondDefinition.identity)),
 			).toBe(true);
 			expect(
-				secondCalls.every((call) => call.systemPrompt.includes(secondDefinition.instructions)),
+				secondCalls.every((call) =>
+					call.systemPrompt.includes(secondDefinition.executor.instructions),
+				),
 			).toBe(true);
 			expect(
-				firstCalls.every((call) => !call.systemPrompt.includes(secondDefinition.instructions)),
+				firstCalls.every(
+					(call) => !call.systemPrompt.includes(secondDefinition.executor.instructions),
+				),
 			).toBe(true);
 			expect(
-				secondCalls.every((call) => !call.systemPrompt.includes(firstDefinition.instructions)),
+				secondCalls.every(
+					(call) => !call.systemPrompt.includes(firstDefinition.executor.instructions),
+				),
 			).toBe(true);
 		} finally {
 			await Promise.all([first.stop(), second.stop()]);
@@ -208,9 +216,9 @@ describe('execution composition', () => {
 			expect(connection.context.definition).toEqual(wrapped);
 			expect(connection.context.stream).toBe(wrappedStream);
 			expect(connection.context.transcripts).toBe(runtime.transcripts);
-			expect(wrappedCalls.some((call) => call.systemPrompt.includes(wrapped.instructions))).toBe(
-				true,
-			);
+			expect(
+				wrappedCalls.some((call) => call.systemPrompt.includes(wrapped.executor.instructions)),
+			).toBe(true);
 			const transcript = await runtime.transcripts.open(seatSessionId(room.name, wrapped.name));
 			expect(await transcript.getMetadata()).toMatchObject({
 				id: seatSessionId(room.name, wrapped.name),

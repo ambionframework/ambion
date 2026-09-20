@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderActivation } from '../src/execution/render.ts';
-import { defineAgent } from '../src/index.ts';
+import { defineAgent, pi } from '../src/index.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { viewOf } from '../src/room/view.ts';
@@ -87,15 +87,13 @@ const spec = {
 const product = defineAgent({
 	name: 'product',
 	identity: 'Owns product facts.',
-	instructions: 'PRIVATE PRODUCT INSTRUCTIONS.',
-	model: 'scripted/product',
+	executor: pi({ instructions: 'PRIVATE PRODUCT INSTRUCTIONS.', model: 'scripted/product' }),
 });
 
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Writes decisions.',
-	instructions: 'PRIVATE WORKER INSTRUCTIONS.',
-	model: 'scripted/worker',
+	executor: pi({ instructions: 'PRIVATE WORKER INSTRUCTIONS.', model: 'scripted/worker' }),
 });
 
 describe('structured activation context', () => {

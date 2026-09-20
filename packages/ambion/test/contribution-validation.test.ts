@@ -3,6 +3,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	pi,
 	type Room,
 	type Runtime,
 	readRoom,
@@ -24,20 +25,17 @@ const secondPerson = defineHuman({ name: 'sam', identity: 'Engineer.' });
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Answers questions.',
-	instructions: 'Answer the record.',
-	model: 'scripted/worker',
+	executor: pi({ instructions: 'Answer the record.', model: 'scripted/worker' }),
 });
 const writer = defineAgent({
 	name: 'writer',
 	identity: 'Writes summaries.',
-	instructions: 'Summarise the record.',
-	model: 'scripted/writer',
+	executor: pi({ instructions: 'Summarise the record.', model: 'scripted/writer' }),
 });
 const reserveAgent = defineAgent({
 	name: 'reserve',
 	identity: 'Joins when invited.',
-	instructions: 'Wait.',
-	model: 'scripted/reserve',
+	executor: pi({ instructions: 'Wait.', model: 'scripted/reserve' }),
 });
 
 const passiveTransport: Transport = {

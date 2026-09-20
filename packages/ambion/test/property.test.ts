@@ -13,6 +13,7 @@ import {
 	defineAgent,
 	defineHuman,
 	isSummary,
+	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -60,26 +61,22 @@ function mulberry32(seed: number): () => number {
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes the one message a person reads.',
-	instructions: 'Answer what was asked, once.',
-	model: 'scripted/assistant',
+	executor: pi({ instructions: 'Answer what was asked, once.', model: 'scripted/assistant' }),
 });
 const alpha = defineAgent({
 	name: 'alpha',
 	identity: 'Alpha.',
-	instructions: 'x',
-	model: 'scripted/alpha',
+	executor: pi({ instructions: 'x', model: 'scripted/alpha' }),
 });
 const beta = defineAgent({
 	name: 'beta',
 	identity: 'Beta.',
-	instructions: 'x',
-	model: 'scripted/beta',
+	executor: pi({ instructions: 'x', model: 'scripted/beta' }),
 });
 const gamma = defineAgent({
 	name: 'gamma',
 	identity: 'Gamma.',
-	instructions: 'x',
-	model: 'scripted/gamma',
+	executor: pi({ instructions: 'x', model: 'scripted/gamma' }),
 });
 const people = [
 	defineHuman({

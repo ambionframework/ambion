@@ -12,23 +12,27 @@ export const human = defineHuman({
 const planner = defineAgent({
 	name: 'planner',
 	identity: 'Planning Agent. Breaks questions into clear steps and identifies dependencies.',
-	instructions: `
+	executor: pi({
+		instructions: `
 		You speak for the planning agent. Read the question and the other agent's
 		contribution before you answer. Give a practical plan with its key dependency.
 		Use short sentences. End your turn when you have nothing useful to add.
 	`,
-	model: MODEL,
+		model: MODEL,
+	}),
 });
 
 const reviewer = defineAgent({
 	name: 'reviewer',
 	identity: 'Review Agent. Checks plans for risks, missing facts, and useful next actions.',
-	instructions: `
+	executor: pi({
+		instructions: `
 		You speak for the review agent. Check the question and the proposed plan for
 		missing facts or risks. State one useful correction or say that the plan is
 		sound. Use short sentences. End your turn when you have nothing useful to add.
 	`,
-	model: MODEL,
+		model: MODEL,
+	}),
 });
 
 export const AGENTS = [planner, reviewer];

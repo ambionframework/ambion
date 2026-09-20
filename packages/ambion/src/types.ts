@@ -345,9 +345,12 @@ export interface AmbionTool {
 	) => Promise<string | AgentToolResult<unknown>> | string | AgentToolResult<unknown>;
 }
 
-export interface AgentDefinition {
-	readonly name: string;
-	readonly identity: string;
+/**
+ * An agent's Pi executor: Pi's agent loop, model, instructions, and tools.
+ * Built by `pi()`. The room reads none of these fields; the Pi runner does.
+ */
+export interface PiExecutor {
+	readonly kind: 'pi';
 	readonly instructions: string;
 	readonly model: string;
 	readonly tools: readonly AmbionTool[];
@@ -364,6 +367,15 @@ export interface AgentDefinition {
 	 * estimate. The seat runs it, so it never crosses the wire.
 	 */
 	readonly estimateTokens?: (text: string) => number;
+}
+
+/** The executor family a definition runs on. Pi is the only one today. */
+export type AgentExecutor = PiExecutor;
+
+export interface AgentDefinition {
+	readonly name: string;
+	readonly identity: string;
+	readonly executor: AgentExecutor;
 }
 
 export interface HumanDefinition {

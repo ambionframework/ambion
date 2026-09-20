@@ -5,6 +5,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type HumanParticipantInfo,
+	pi,
 	readRoom,
 	startRoom,
 } from '../src/index.ts';
@@ -17,8 +18,7 @@ const writer = (instructions = 'Answer the room.') =>
 	defineAgent({
 		name: 'writer',
 		identity: 'Writes room answers.',
-		instructions,
-		model: 'scripted/writer',
+		executor: pi({ instructions, model: 'scripted/writer' }),
 	});
 
 describe('participant views', () => {

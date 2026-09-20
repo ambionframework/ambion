@@ -11,6 +11,7 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
+	pi,
 	type Room,
 	type Runtime,
 	readRoom,
@@ -47,20 +48,17 @@ import { faultyTransport } from './support/transport.ts';
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes the one message a person reads.',
-	instructions: 'Answer what was asked, once.',
-	model: 'scripted/assistant',
+	executor: pi({ instructions: 'Answer what was asked, once.', model: 'scripted/assistant' }),
 });
 const alpha = defineAgent({
 	name: 'alpha',
 	identity: 'Alpha.',
-	instructions: 'x',
-	model: 'scripted/alpha',
+	executor: pi({ instructions: 'x', model: 'scripted/alpha' }),
 });
 const beta = defineAgent({
 	name: 'beta',
 	identity: 'Beta.',
-	instructions: 'x',
-	model: 'scripted/beta',
+	executor: pi({ instructions: 'x', model: 'scripted/beta' }),
 });
 const priya = defineHuman({
 	name: 'priya',
