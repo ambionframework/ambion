@@ -4,6 +4,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	exchangeUri,
 	pi,
 	type Room,
 	type Runtime,
@@ -454,6 +455,42 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			}
 		},
 	);
+
+	it('stores refs on a closing summary and binds its key to them', async () => {
+		const { opened, room, runtime } = await openWorld(storage, {
+			agents: [writer],
+			summary: writer.name,
+			seats: { [writer.name]: 'none' },
+		});
+		try {
+			const exchange = await (await room.visit(person)).send({ text: 'Question?' });
+			await room.reconcile();
+			const owed = stateOf(room).due.find((work) => work.source === 'closed');
+			if (owed === undefined) throw new Error('The room has no closing assignment.');
+			const peer = await protocol(runtime, room.name);
+			expect(await peer.lease({ activation: owed.id, operation: 'claim' })).toHaveProperty('ok');
+			const key = 'summary-refs';
+			const refs = [exchangeUri(room.name, exchange.from)];
+			const commit = (cited: string[]) =>
+				peer.commit({
+					activation: owed.id,
+					key,
+					intent: { kind: 'said', text: 'Summary.', refs: cited },
+				});
+			const first = await commit(refs);
+			expect(first).toMatchObject({ committed: { kind: 'summary', refs } });
+			expect(await commit([...refs])).toEqual(first);
+			expect(await commit(['https://x/other'])).toEqual({
+				refused: expect.stringMatching(/different room operation/),
+			});
+			const stored = (await messagesOf(room)).filter((message) => message.kind === 'summary');
+			expect(stored).toHaveLength(1);
+			expect(stored[0]).toMatchObject({ refs });
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
 
 	it('replays an exact committed key and rejects a replacement under that key', async () => {
 		const { opened, room, runtime } = await openWorld(storage, {
