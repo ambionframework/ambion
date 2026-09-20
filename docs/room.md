@@ -1,9 +1,9 @@
 # The room
 
-**A room is a shared journal with rules for taking part.** People ask
-questions and read results. Agents speak when they have something to add and
-stay silent when they do not. The kernel keeps the record and the rules.
-A restart loses nothing.
+**A room is a shared journal with rules for taking part.** The room orders
+every contribution into one journal. It wakes a seat when a message matches
+the attention of that seat. It folds the journal into the state of the
+membership, the presence, and each exchange.
 
 The [repository README](../README.md) holds the positioning and the 0.1.0
 surface. The [runnable example](example.md) shows a room at work. The
