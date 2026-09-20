@@ -14,6 +14,7 @@
  */
 
 import type { ActivationView, ContextParticipant } from '../protocol.ts';
+import { exchangeUri, roomUri } from '../refs.ts';
 import type { AgentDefinition, Attention } from '../types.ts';
 import { isSpoken, isSummary, type Message, type Seq, type SummaryMessage } from '../types.ts';
 import { SUMMARY_DUTIES } from './summary.ts';
@@ -48,7 +49,8 @@ function plural(n: number, unit: string): string {
  */
 export function renderLine(message: Message): string {
 	if (isSpoken(message) || isSummary(message)) {
-		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}`;
+		const refs = message.refs === undefined ? '' : ` (refs: ${message.refs.join(' ')})`;
+		return `[${message.from}${message.to ? ` → ${message.to}` : ''}] ${message.text}${refs}`;
 	}
 	const by = message.from === undefined || message.from === message.subject;
 	return `· ${message.subject} ${message.kind}${by ? '' : ` by ${message.from}`}`;
@@ -377,12 +379,13 @@ function askOf(view: ActivationView, def: AgentDefinition): string {
 		const from = numbered(context.messages, purpose.exchange);
 		return (
 			`${purpose.person}'s exchange is over: messages ${from} ` +
-			`to ${numbered(context.messages, purpose.through)}. ${action(purpose.kind)}`
+			`to ${numbered(context.messages, purpose.through)}. ` +
+			`The exchange URI is ${exchangeUri(context.name, purpose.exchange)}. ${action(purpose.kind)}`
 		);
 	}
 	// A seat seated during an exchange reads which question it was seated for.
 	const open = context.exchange
-		? `${context.exchange.owner}'s exchange opened by message ${numbered(context.messages, context.exchange.from)} is active; the marked request is the current human direction. `
+		? `${context.exchange.owner}'s exchange opened by message ${numbered(context.messages, context.exchange.from)} is active; the marked request is the current human direction. Its URI is ${exchangeUri(context.name, context.exchange.from)}. `
 		: '';
 	return (
 		`${open}Take your turn, ${def.name}: this is ordinary work. ` +
@@ -420,6 +423,8 @@ const HANDOFF_PARAGRAPH = [
 	`reader finds it. Your identity on the roster names your work. When a task falls under a`,
 	`colleague's identity, hand it to them with a directed say. Seat them first if they are in`,
 	`the reserve. Do not do their work, and do not copy what they already hold into the record.`,
+	`Put the URI of what you cite or changed in refs on the say, and keep the text for what the`,
+	`reader must know.`,
 ];
 
 /**
@@ -429,6 +434,8 @@ function header(view: ActivationView, def: AgentDefinition): string[] {
 	return [
 		`You are '${def.name}', an agent seated in the room '${view.context.name}' — a shared`,
 		`room with a record. Every participant sees what is said; nobody sees your tool use.`,
+		`This room's URI is ${roomUri(view.context.name)}. An exchange's URI is`,
+		`${roomUri(view.context.name)}/exchange/<n>; the ask line below gives the current one.`,
 	];
 }
 

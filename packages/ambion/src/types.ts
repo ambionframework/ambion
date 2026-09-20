@@ -111,6 +111,11 @@ export interface SpokenMessage {
 	key?: string;
 	/** The activation that wrote it. Absent on a person's delivery. */
 	activationId?: string;
+	/**
+	 * URIs the message cites. The room validates and stores them and never reads
+	 * behind one. Absent when the author cited nothing.
+	 */
+	refs?: string[];
 	/** The seats the room decided to wake for it, written with the message. */
 	wakes?: string[];
 	/** ISO timestamp, stamped by the runtime at the moment it landed. */
@@ -189,6 +194,11 @@ export interface SummaryMessage {
 	text: string;
 	/** The range it stands for, ending at the last message before this one. */
 	covers: { from: Seq; through: Seq };
+	/**
+	 * URIs the message cites. The room validates and stores them and never reads
+	 * behind one. Absent when the author cited nothing.
+	 */
+	refs?: string[];
 }
 
 /** One entry on a room's record. */

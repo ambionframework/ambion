@@ -261,6 +261,13 @@ export const SAY = {
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 		text: Type.String(),
+		refs: Type.Optional(
+			Type.Array(
+				Type.String({
+					description: 'A URI the message cites: a file, a table, a room, or an exchange.',
+				}),
+			),
+		),
 	}),
 };
 
@@ -402,9 +409,13 @@ function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
 
 const NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 
+/** Whether a value is a name the room can address. */
+export function isName(value: unknown): value is string {
+	return typeof value === 'string' && NAME_PATTERN.test(value);
+}
+
 function assertName(name: unknown): asserts name is string {
-	const match = typeof name === 'string' ? NAME_PATTERN.exec(name) : undefined;
-	if (typeof name !== 'string' || match?.[0] !== name) {
+	if (!isName(name)) {
 		throw new AmbionError(
 			'invalid_name',
 			`Invalid participant name '${name}': names are lowercase, alphanumeric plus dashes.`,
@@ -414,8 +425,7 @@ function assertName(name: unknown): asserts name is string {
 
 /** A room name follows the same rule as a participant name: lowercase, alphanumeric plus dashes. */
 export function assertRoomName(name: unknown): asserts name is string {
-	const match = typeof name === 'string' ? NAME_PATTERN.exec(name) : undefined;
-	if (typeof name !== 'string' || match?.[0] !== name) {
+	if (!isName(name)) {
 		throw new AmbionError(
 			'invalid_name',
 			`Invalid room name '${name}': names are lowercase, alphanumeric plus dashes.`,

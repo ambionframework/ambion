@@ -5,6 +5,7 @@ import type { AmbionErrorCode } from '../errors.ts';
 import type { Close, Composition, Seating } from '../journal/events.ts';
 import type { Bodies, Body, Entry, Kind } from '../journal/journal.ts';
 import type { ActivationSpec, CommitRequest } from '../protocol.ts';
+import { refsRefusal } from '../refs.ts';
 import type { EndReason, FailureCause, Message, PresenceMessage } from '../types.ts';
 import { activationSpec } from './activation.ts';
 import { applyEvent, baseOf, type FoldOptions, isFixed, project, type RoomState } from './fold.ts';
@@ -34,7 +35,7 @@ type ProposedEvent<K extends Kind = Kind> = {
 
 type PresenceChange = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 type MessageCommand =
-	| { type: 'deliver'; from: string; to?: string; text: string }
+	| { type: 'deliver'; from: string; to?: string; text: string; refs?: string[] }
 	| { type: 'presence'; change: PresenceChange; route: boolean }
 	| { type: 'commit'; commit: CommitRequest };
 type LeaseCommand =
@@ -191,21 +192,34 @@ function message(
 	now: number,
 	route = true,
 ): RoomDecision<'message'> {
-	if ((body.kind === 'said' || body.kind === 'summary') && body.text.trim() === '') {
-		return refused('The message is empty. Say something, or end your turn instead.');
-	}
+	const content = contentRefusal(body);
+	if (content !== undefined) return content;
 	const wakes = route ? routes(body, state, liveWork(state, now).seats) : [];
 	return {
 		event: { kind: 'message', body: { ...body, ...(wakes.length === 0 ? {} : { wakes }) } },
 	};
 }
 
+/** The room refuses empty text first, then a ref the grammar refuses. */
+function contentRefusal(body: Body<Message>): { refusal: Refusal } | undefined {
+	if (body.kind !== 'said' && body.kind !== 'summary') return undefined;
+	if (body.text.trim() === '')
+		return refused('The message is empty. Say something, or end your turn instead.');
+	if (body.refs === undefined) return undefined;
+	const reason = refsRefusal(body.refs);
+	return reason === undefined ? undefined : refused(reason);
+}
+
+/** A list of refs enters the record when it holds an entry. */
+const refsField = (refs: string[] | undefined): { refs?: string[] } =>
+	refs === undefined || refs.length === 0 ? {} : { refs };
+
 function deliver(
 	state: RoomState,
 	command: Extract<MessageCommand, { type: 'deliver' }>,
 	now: number,
 ): RoomDecision<'message'> {
-	const { from, to, text } = command;
+	const { from, to, text, refs } = command;
 	const author = state.people.get(from);
 	if (author?.presence !== 'present')
 		return refused(`'${from}' is not present in this room.`, 'not_present');
@@ -218,7 +232,14 @@ function deliver(
 	}
 	return message(
 		state,
-		{ kind: 'said', at: iso(now), from, ...(to === undefined ? {} : { to }), text },
+		{
+			kind: 'said',
+			at: iso(now),
+			from,
+			...(to === undefined ? {} : { to }),
+			text,
+			...refsField(refs),
+		},
 		now,
 	);
 }
@@ -339,6 +360,7 @@ function closingCommit(
 		{
 			kind: 'summary',
 			text: intent.text,
+			...refsField(intent.refs),
 			...stampedSummary(purpose.person, purpose.exchange, purpose.through),
 			at: iso(now),
 			activationId: request.activation,
@@ -361,7 +383,9 @@ function ordinaryCommit(
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
 	if (intent.kind === 'unseated') return unseating(state, intent.name, stamp, now);
 	const refusal = addressRefusal(state, live.seat, intent.to);
-	return refusal ?? message(state, { ...intent, ...stamp }, now);
+	if (refusal !== undefined) return refusal;
+	const { refs, ...rest } = intent;
+	return message(state, { ...rest, ...refsField(refs), ...stamp }, now);
 }
 
 function isCoveringSummary(

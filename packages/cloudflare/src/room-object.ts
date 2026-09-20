@@ -86,7 +86,7 @@ function alarmClock(state: DurableObjectState): Clock {
 }
 
 /** The room reaches a seat over RPC to the seat object named for it. */
-function rpcTransport(env: Env): Transport {
+export function rpcTransport(env: Env): Transport {
 	return {
 		connect(_room, context: AgentExecutionContext) {
 			const { room: roomName, seat } = context;
@@ -198,11 +198,13 @@ export class RoomObject extends DurableObject<Env> {
 		from: string;
 		to?: string;
 		text: string;
+		refs?: string[];
 		key?: string;
 	}): Promise<ExchangeRef> {
 		const visit = this.visitOf(input.from);
 		const exchange = await visit.send({
 			text: input.text,
+			...(input.refs === undefined ? {} : { refs: input.refs }),
 			...(input.to === undefined ? {} : { to: input.to }),
 			...(input.key === undefined ? {} : { key: input.key }),
 		});

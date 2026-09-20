@@ -19,12 +19,16 @@ import { configDefaults, defineConfig } from 'vitest/config';
  * exports; `test:live` builds workspace dependencies before those tests run.
  */
 export const journal = fileURLToPath(new URL('../journal/src/index.ts', import.meta.url));
+export const journalConformance = fileURLToPath(
+	new URL('../journal/src/conformance.ts', import.meta.url),
+);
 export const piJournal = fileURLToPath(new URL('../pi-journal/src/index.ts', import.meta.url));
 
 export default defineConfig({
 	resolve: {
 		alias: [
 			{ find: '@ambionframework/pi-journal', replacement: piJournal },
+			{ find: '@ambionframework/journal/conformance', replacement: journalConformance },
 			{ find: '@ambionframework/journal', replacement: journal },
 		],
 	},

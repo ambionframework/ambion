@@ -127,7 +127,7 @@ export type ViewResponse = { view: ActivationView } | Stale;
 
 /** What a seat asks the room to put on the record. The room stamps everything else. */
 export type Intent =
-	| { kind: 'said'; to?: string; text: string }
+	| { kind: 'said'; to?: string; text: string; refs?: string[] }
 	| { kind: 'seated'; name: string }
 	| { kind: 'unseated'; name: string };
 

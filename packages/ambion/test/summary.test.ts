@@ -259,7 +259,7 @@ describe('closing summaries', () => {
 		// them: one counter gives out every place, so a place is not a number
 		// a reader can find.
 		expect(contexts[0]).toContain(
-			"priya's exchange is over: messages 2 to 4. Write the one message with say",
+			"priya's exchange is over: messages 2 to 4. The exchange URI is ambion://room/",
 		);
 	});
 

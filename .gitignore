@@ -41,7 +41,7 @@ worker-configuration.d.ts
 dist-release/
 
 # One scripted run's own JSON, produced by an example's demo.ts. Disposable:
-# a dated report under demos/ is what a branch checks in, built from this.
+# a dated report under planning/evidence/reports/ is what a branch checks in, built from this.
 examples/*/demo-run.json
 
 # local secrets and ad-hoc end-to-end scripts
