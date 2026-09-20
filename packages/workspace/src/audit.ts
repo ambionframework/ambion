@@ -54,20 +54,25 @@ export interface AuditLog {
 	record(env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void>;
 }
 
+/** A short line in place of the full entry, naming why the full one could not be written. */
+function notice(entry: AuditEntry, name: string, message: string): string {
+	return `${JSON.stringify({
+		time: entry.time,
+		room: entry.room,
+		agent: entry.agent,
+		tool: entry.tool,
+		callId: entry.callId,
+		error: { name, message },
+	})}\n`;
+}
+
 /** One JSONL line for `entry`, falling back to a short notice if it will not serialize. */
 function line(entry: AuditEntry): string {
 	try {
 		return `${JSON.stringify(entry)}\n`;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		return `${JSON.stringify({
-			time: entry.time,
-			room: entry.room,
-			agent: entry.agent,
-			tool: entry.tool,
-			callId: entry.callId,
-			error: { name: 'SerializationError', message },
-		})}\n`;
+		return notice(entry, 'SerializationError', message);
 	}
 }
 
@@ -81,7 +86,12 @@ function rotatedName(path: string): string {
 	return `${path}.${stamp}-${randomBytes(3).toString('hex')}`;
 }
 
-/** Append one line, creating the parent directory first, and rotate past `maxBytes`. */
+/**
+ * Append one line, creating the parent directory first, and rotate past
+ * `maxBytes`. A full entry that the filesystem refuses (an oversized
+ * `write` call's content, past what's left of a bounded backend) falls back
+ * to a short notice, so the call still leaves a trace instead of vanishing.
+ */
 async function append(
 	env: ExecutionEnv,
 	path: string,
@@ -92,7 +102,14 @@ async function append(
 	const made = await env.createDir(posix.dirname(path), { recursive: true }, context);
 	if (!made.ok) throw made.error;
 	const appended = await env.appendFile(path, line(entry), context);
-	if (!appended.ok) throw appended.error;
+	if (!appended.ok) {
+		const fallback = await env.appendFile(
+			path,
+			notice(entry, 'RecordTooLarge', appended.error.message),
+			context,
+		);
+		if (!fallback.ok) throw fallback.error;
+	}
 	const info = await env.fileInfo(path, context);
 	if (!info.ok) throw info.error;
 	if (info.value.size >= maxBytes) {
@@ -108,15 +125,30 @@ async function append(
  */
 export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
 	const path = options.path ?? DEFAULT_AUDIT_LOG;
+	if (!posix.isAbsolute(path)) {
+		// A relative path resolves against the calling agent's own home, so
+		// two agents would each write, and read, a different file.
+		throw new Error(`An audit log path must be absolute: '${path}'.`);
+	}
 	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
 	const record = async (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> => {
 		try {
 			await append(env, path, maxBytes, entry, context);
 		} catch (error) {
-			options.onError?.(error instanceof Error ? error : new Error(String(error)));
+			reportError(options.onError, error);
 		}
 	};
 	return Object.freeze({ path, maxBytes, record });
+}
+
+/** Tell `onError`, if one was given. A throwing callback must not replace the tool's own outcome. */
+function reportError(onError: ((error: Error) => void) | undefined, error: unknown): void {
+	try {
+		onError?.(error instanceof Error ? error : new Error(String(error)));
+	} catch {
+		// Best-effort: the log already failed once for this call; a broken
+		// onError callback does not get a second chance to break the call itself.
+	}
 }
 
 /** `maxBytes` as whole mebibytes or kibibytes when it divides evenly, bytes otherwise. */

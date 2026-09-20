@@ -102,9 +102,12 @@ const drive = openWorkspace({
 ```
 
 **The log is an ordinary file an agent reads.** The default path is
-`/workspace/audit.jsonl`; set `path` to change it. An agent reads it with
-`read` or `bash cat`, the same as any file a peer wrote, and sees every
-call any agent made, including its own past calls.
+`/workspace/audit.jsonl`; set `path` to change it. `path` must be absolute:
+a relative path would resolve against whichever agent's home connects
+first, splitting the log one way for that agent and another way for every
+other. An agent reads the log with `read` or `bash cat`, the same as any
+file a peer wrote, and sees every call any agent made, including its own
+past calls.
 
 **Tool guidance tells every agent the log exists.** `openWorkspace` appends
 a note naming the path and what each line holds to the bundle's guidance, so
@@ -121,9 +124,20 @@ The workspace resource lets one operation touch the filesystem at a time
 the same `ExecutionEnv` as the call it records. The entry and the call never
 separate under concurrent work from other agents.
 
+**A cut or aborted call is still recorded.** The record runs after the call
+ends, whatever ended it, over its own unconditional context rather than the
+caller's abort signal. A room that cuts an activation mid-call still leaves
+a trace of what that call was doing.
+
+**An entry too large for the backend to hold falls back to a short notice.**
+A `write` call whose content the filesystem has no room for still leaves one
+line naming the call and the failure, in place of the full entry, instead of
+leaving no trace at all.
+
 **A write or rotation failure goes to `onError`, not to the tool call.** The
 call that triggered the failure still returns its own result. The log is
-best-effort: a full disk delays the record, not the agent.
+best-effort: a full disk delays the record, not the agent. A throwing
+`onError` callback is caught, and never replaces the tool call's own outcome.
 
 **Only a call through `workspace.tools()` is recorded.** A direct
 `workspace.use` call reaches the backend with no entry. It is host code, not

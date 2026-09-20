@@ -81,10 +81,20 @@ function bindTool(tool: HarnessTool, use: WorkspaceResource['use'], audit?: Audi
 							invocationOf(ctx.callId),
 							context,
 						);
-						await audit?.record(env, auditEntry(tool.name, params, ctx, { result }), context);
+						// The record itself runs over BACKGROUND_CONTEXT, never ctx's own
+						// signal: a cut activation must still leave a trace of what it did.
+						await audit?.record(
+							env,
+							auditEntry(tool.name, params, ctx, { result }),
+							BACKGROUND_CONTEXT,
+						);
 						return result;
 					} catch (error) {
-						await audit?.record(env, auditEntry(tool.name, params, ctx, { error }), context);
+						await audit?.record(
+							env,
+							auditEntry(tool.name, params, ctx, { error }),
+							BACKGROUND_CONTEXT,
+						);
 						throw error;
 					}
 				},

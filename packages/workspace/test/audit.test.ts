@@ -1,5 +1,6 @@
 import { defineAgent, startRoom } from '@ambionframework/ambion';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
+import type { ExecutionEnv, FileInfo } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT, err, FileError, ok } from '@earendil-works/pi-agent-core';
 import { Bash, InMemoryFs } from 'just-bash';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
@@ -13,8 +14,8 @@ const workspaceAgent = (name: string) => ({ name, identity: `${name} identity` }
 const ctx = BACKGROUND_CONTEXT;
 
 /** A bare `ExecutionEnv` over its own in-memory filesystem, for testing `openAuditLog` alone. */
-function bareEnv(maxTotalBytes?: number): BashEnv {
-	const fs = new InMemoryFs(undefined, maxTotalBytes === undefined ? undefined : { maxTotalBytes });
+function bareEnv(): BashEnv {
+	const fs = new InMemoryFs();
 	const home = '/home/scribe';
 	return new BashEnv(new Bash({ fs, cwd: home, env: { HOME: home } }), home);
 }
@@ -32,6 +33,53 @@ async function listNames(env: BashEnv, path: string): Promise<string[]> {
 	const listed = await env.listDir(path, ctx);
 	if (!listed.ok) throw new Error(listed.error.message);
 	return listed.value.map((file) => file.name).sort();
+}
+
+/**
+ * A minimal `ExecutionEnv` double, backing only the four members `openAuditLog`
+ * calls, over a plain in-process file map. `appendFile` can be told to fail its
+ * first N calls, so a test can force the path `append()` takes when the
+ * filesystem refuses the full entry but has room for a short fallback.
+ */
+function fakeEnv(
+	options: { failFirstAppends?: number } = {},
+): ExecutionEnv & { files: Map<string, string> } {
+	const files = new Map<string, string>();
+	let appendCalls = 0;
+	const failFirstAppends = options.failFirstAppends ?? 0;
+	const env = {
+		files,
+		createDir: async () => ok(undefined),
+		appendFile: async (path: string, content: string | Uint8Array) => {
+			appendCalls += 1;
+			if (appendCalls <= failFirstAppends) {
+				return err(new FileError('invalid', 'ENOSPC: no room for this entry', path));
+			}
+			const text = typeof content === 'string' ? content : new TextDecoder().decode(content);
+			files.set(path, (files.get(path) ?? '') + text);
+			return ok(undefined);
+		},
+		fileInfo: async (path: string) => {
+			const text = files.get(path);
+			if (text === undefined) return err(new FileError('not_found', 'no such file', path));
+			const info: FileInfo = {
+				name: path,
+				path,
+				kind: 'file',
+				size: text.length,
+				mtimeMs: Date.now(),
+			};
+			return ok(info);
+		},
+		renameFile: async (source: string, destination: string) => {
+			const text = files.get(source);
+			if (text === undefined) return err(new FileError('not_found', 'no such file', source));
+			files.delete(source);
+			files.set(destination, text);
+			return ok(undefined);
+		},
+	};
+	return env as unknown as ExecutionEnv & { files: Map<string, string> };
 }
 
 function entryFor(callId: string) {
@@ -223,19 +271,6 @@ describe('openAuditLog', () => {
 		expect(await readLines(env, log.path)).toHaveLength(1);
 	});
 
-	it('reports a write failure to onError instead of throwing', async () => {
-		const env = bareEnv(200);
-		const errors: Error[] = [];
-		const log = openAuditLog({
-			path: '/workspace/audit.jsonl',
-			onError: (error) => errors.push(error),
-		});
-
-		await expect(log.record(env, entryFor('one'), ctx)).resolves.toBeUndefined();
-
-		expect(errors).toHaveLength(1);
-	});
-
 	it('falls back to a short notice when an entry will not serialize', async () => {
 		const env = bareEnv();
 		const log = openAuditLog({ path: '/workspace/audit.jsonl' });
@@ -246,5 +281,125 @@ describe('openAuditLog', () => {
 
 		const entries = await readLines(env, log.path);
 		expect(entries[0]).toMatchObject({ callId: 'bad', error: { name: 'SerializationError' } });
+	});
+
+	it('rejects a relative path, since it would resolve inside whichever agent home connects first', () => {
+		expect(() => openAuditLog({ path: 'audit.jsonl' })).toThrow(/absolute/i);
+		expect(() => openAuditLog({ path: '' })).toThrow(/absolute/i);
+	});
+
+	it('falls back to a short notice, instead of dropping the call, when the full entry will not fit', async () => {
+		const env = fakeEnv({ failFirstAppends: 1 });
+		const errors: Error[] = [];
+		const log = openAuditLog({
+			path: '/workspace/audit.jsonl',
+			onError: (error) => errors.push(error),
+		});
+
+		await log.record(env, { ...entryFor('big'), arguments: { content: 'x'.repeat(1000) } }, ctx);
+
+		expect(errors).toHaveLength(0);
+		const text = env.files.get('/workspace/audit.jsonl') ?? '';
+		const [entry] = text
+			.split('\n')
+			.filter((one) => one.length > 0)
+			.map((one) => JSON.parse(one) as Record<string, unknown>);
+		expect(entry).toMatchObject({ callId: 'big', error: { name: 'RecordTooLarge' } });
+		expect(entry).not.toHaveProperty('arguments');
+	});
+
+	it('reports to onError, and never throws, when even the fallback notice does not fit', async () => {
+		const env = fakeEnv({ failFirstAppends: 2 });
+		const errors: Error[] = [];
+		const log = openAuditLog({
+			path: '/workspace/audit.jsonl',
+			onError: (error) => errors.push(error),
+		});
+
+		await expect(log.record(env, entryFor('one'), ctx)).resolves.toBeUndefined();
+
+		expect(errors).toHaveLength(1);
+		expect(env.files.has('/workspace/audit.jsonl')).toBe(false);
+	});
+
+	it('never lets a throwing onError propagate and replace the tool outcome it is reporting on', async () => {
+		const env = fakeEnv({ failFirstAppends: 2 });
+		const log = openAuditLog({
+			path: '/workspace/audit.jsonl',
+			onError: () => {
+				throw new Error('a broken onError callback');
+			},
+		});
+
+		await expect(log.record(env, entryFor('one'), ctx)).resolves.toBeUndefined();
+	});
+});
+
+describe('recording under an aborted signal', () => {
+	it('still records a call the caller cut mid-flight, instead of losing it to the abort', async () => {
+		const inner = memoryBackend();
+		const started = Promise.withResolvers<void>();
+		const slow = {
+			tools: [
+				{
+					name: 'slow',
+					label: 'Slow',
+					description: 'Waits for the caller to abort, then throws.',
+					parameters: Type.Object({}),
+					execute: async (
+						_toolCallId: string,
+						_params: unknown,
+						_onUpdate: unknown,
+						_toolContext: unknown,
+						_invocation: unknown,
+						context: { abortSignal?: AbortSignal },
+					) => {
+						started.resolve();
+						return new Promise<never>((_resolve, reject) => {
+							if (context.abortSignal?.aborted) {
+								reject(new Error('cut mid-flight'));
+								return;
+							}
+							context.abortSignal?.addEventListener(
+								'abort',
+								() => reject(new Error('cut mid-flight')),
+								{ once: true },
+							);
+						});
+					},
+				},
+			],
+			connect: (agent: { name: string; identity: string }) => inner.connect(agent),
+			destroy: async () => {},
+		};
+		const site = openWorkspace({ name: name('cut-mid-flight'), backend: slow, audit: {} });
+		const tool = site.tools().tools[0];
+		if (tool === undefined) throw new Error('The custom tool is missing.');
+		const controller = new AbortController();
+
+		const call = tool.invoke(
+			{},
+			{
+				agent: workspaceAgent('scribe'),
+				callId: 'call-cut',
+				room: 'lobby',
+				signal: controller.signal,
+			},
+		);
+		// The call must actually be running — connected, past use()'s own
+		// precondition check — before the abort, or nothing runs to be cut.
+		await started.promise;
+		controller.abort();
+		await expect(call).rejects.toThrow('cut mid-flight');
+
+		const entries = await site.use(workspaceAgent('scribe'), (env) =>
+			readLines(env as BashEnv, DEFAULT_AUDIT_LOG),
+		);
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			tool: 'slow',
+			error: { message: 'cut mid-flight' },
+		});
+		await site.destroy();
 	});
 });
