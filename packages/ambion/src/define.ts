@@ -19,6 +19,7 @@ import type {
 	ToolContext,
 	ToolExecutionMode,
 	ToolResult,
+	TracePolicy,
 } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -28,6 +29,27 @@ export interface DefineAgentOptions {
 	identity: string;
 	/** The executor this agent runs on. Build one with the executor package, such as `pi()`. */
 	executor: AgentExecutor;
+	/** What the trace keeps of this agent's work. Absent keeps `DEFAULT_TRACE`. */
+	trace?: TracePolicy;
+}
+
+/** The default trace policy: full tool output, and the start of each thinking block. */
+export const DEFAULT_TRACE: TracePolicy = Object.freeze({
+	thinking: 'summary',
+	toolOutput: 'full',
+});
+
+const THINKING = new Set(['omit', 'summary', 'full']);
+const TOOL_OUTPUT = new Set(['omit', 'full']);
+
+/** A policy checked and copied. Absent gives the default. */
+function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePolicy {
+	if (policy === undefined) return DEFAULT_TRACE;
+	if (!THINKING.has(policy.thinking))
+		throw new Error(`Agent '${agent}' trace.thinking must be omit, summary, or full.`);
+	if (!TOOL_OUTPUT.has(policy.toolOutput))
+		throw new Error(`Agent '${agent}' trace.toolOutput must be omit or full.`);
+	return Object.freeze({ thinking: policy.thinking, toolOutput: policy.toolOutput });
 }
 
 /** What `describeExecutor` reads: the fields every executor family shares. */
@@ -69,6 +91,7 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 		name: options.name,
 		identity: options.identity,
 		executor: options.executor,
+		trace: capturePolicy(options.name, options.trace),
 	});
 }
 
@@ -101,6 +124,7 @@ export function captureAgent(agent: AgentDefinition): AgentDefinition {
 		name: agent.name,
 		identity: agent.identity,
 		executor,
+		trace: capturePolicy(agent.name, agent.trace),
 	});
 }
 

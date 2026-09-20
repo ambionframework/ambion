@@ -12,7 +12,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Clock, ExecutionEvent } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
 import type { RoomProtocol, Steer, Wake } from '@ambionframework/ambion/hosting';
-import { AgentRunner } from '@ambionframework/ambion/hosting';
+import { AgentRunner, DEFAULT_TRACE, traceOpener } from '@ambionframework/ambion/hosting';
 import { createPiExecutor, type ExecutionServices } from '@ambionframework/pi';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent } from './configure.ts';
@@ -154,6 +154,10 @@ export class SeatObject extends DurableObject<Env> {
 			room,
 			now: () => execution.clock.now(),
 		});
+		// The trace journal holds each step. The log line stays for the coarse events.
+		const emit = (event: ExecutionEvent) => {
+			if (event.type !== 'step') seatEvent(seatLine(room, seat, event));
+		};
 		this.runner = new AgentRunner(protocol, {
 			clock: execution.clock,
 			call: execution.call,
@@ -161,7 +165,16 @@ export class SeatObject extends DurableObject<Env> {
 			room,
 			seat,
 			executor,
-			emit: (event) => seatEvent(seatLine(room, seat, event)),
+			emit,
+			trace: traceOpener({
+				room,
+				agent: seat,
+				traces: execution.traces,
+				limits: execution.trace,
+				policy: definition.trace ?? DEFAULT_TRACE,
+				emit,
+				now: () => execution.clock.now(),
+			}),
 		});
 		try {
 			await this.runner.run(activation);

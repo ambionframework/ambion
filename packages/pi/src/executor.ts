@@ -43,6 +43,7 @@ import type {
 	PassResult,
 	RoomProtocol,
 	Seq,
+	TraceSink,
 } from '@ambionframework/ambion/hosting';
 import { renderActivation, renderLine } from '@ambionframework/ambion/hosting';
 import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
@@ -55,6 +56,7 @@ import type {
 import { Agent } from '@earendil-works/pi-agent-core';
 import { asError, persistTurns } from './audit.ts';
 import { PiContext } from './context.ts';
+import { PiSteps } from './pi-trace.ts';
 import { type ModelResolver, seatSessionId } from './services.ts';
 import { binding, toolsFor } from './tools.ts';
 
@@ -103,6 +105,9 @@ export class Activation implements ExecutorSession {
 	private readonly stream: StreamFn;
 	private readonly now: () => number;
 	private readonly openAudit: () => Promise<PiSession>;
+	/** The sink for the steps this executor owns. The driver closes it. */
+	private readonly trace: TraceSink;
+	private readonly steps = new PiSteps();
 	/** How much record context the provider consumed. */
 	private readonly context = new PiContext();
 	/** The steers held before Pi first polls its queue. */
@@ -124,6 +129,7 @@ export class Activation implements ExecutorSession {
 		this.id = activation.id;
 		this.room = activation.room;
 		this.emit = activation.emit;
+		this.trace = activation.trace;
 		this.definition = options.definition;
 		this.model = options.model;
 		this.stream = options.stream;
@@ -159,6 +165,7 @@ export class Activation implements ExecutorSession {
 		const context = { after, seq, line };
 		if (this.providerStarted && this.agent !== undefined) {
 			this.context.steer(this.agent, context, this.now());
+			this.trace.record({ type: 'steer', seq, consumed: true });
 		} else {
 			this.held.push(context);
 		}
@@ -190,7 +197,10 @@ export class Activation implements ExecutorSession {
 		try {
 			if (this.stopped) return { failed: false };
 			// The fresh view becomes acknowledged only when Pi sends it to a provider.
-			this.held = [];
+			// A steer held past its pass never reached the model as a steer.
+			for (const dropped of this.held.splice(0)) {
+				this.trace.record({ type: 'steer', seq: dropped.seq, consumed: false });
+			}
 			this.providerStarted = false;
 			this.view = input.view;
 			const agent = await this.agentFor(input.view);
@@ -200,7 +210,10 @@ export class Activation implements ExecutorSession {
 			await agent.prompt(prompt);
 			const failure = this.executionFailure(agent);
 			await this.audit(agent);
-			return failure === undefined ? { failed: false } : { failed: true, cause: failure.cause };
+			if (failure !== undefined) {
+				return { failed: true, cause: failure.cause, message: failure.error.message };
+			}
+			return endedForLength(agent) ? { failed: false, stop: 'length' } : { failed: false };
 		} catch (error) {
 			return this.broke(asError(error));
 		}
@@ -234,6 +247,7 @@ export class Activation implements ExecutorSession {
 	 * provider request boundary by `PiContext`, not by transcript event text.
 	 */
 	private note(event: AgentEvent): void {
+		for (const step of this.steps.steps(event)) this.trace.record(step);
 		if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
 			// `say` is the room's own event, not a tool's.
 			if (event.toolName !== 'say') {
@@ -295,7 +309,7 @@ export class Activation implements ExecutorSession {
 			error,
 			cause: 'transient',
 		});
-		return { failed: true, cause: 'transient' };
+		return { failed: true, cause: 'transient', message: error.message };
 	}
 
 	/**
@@ -347,7 +361,9 @@ export class Activation implements ExecutorSession {
 		this.context.providerRequestStarted(messages);
 		this.providerStarted = true;
 		for (const context of this.held.splice(0)) {
-			if (this.agent !== undefined) this.context.steer(this.agent, context, this.now());
+			if (this.agent === undefined) continue;
+			this.context.steer(this.agent, context, this.now());
+			this.trace.record({ type: 'steer', seq: context.seq, consumed: true });
 		}
 	}
 }
@@ -367,6 +383,12 @@ function deltaText(view: ActivationView, since: Seq): string | undefined {
 	const fresh = view.context.messages.filter((message) => message.seq > since);
 	if (fresh.length === 0) return undefined;
 	return fresh.map((message) => `[new] ${renderLine(message)}`).join('\n');
+}
+
+/** Whether the last model message stopped at a length limit. */
+function endedForLength(agent: PiAgent): boolean {
+	const last = agent.state.messages.at(-1);
+	return last !== undefined && 'stopReason' in last && last.stopReason === 'length';
 }
 
 /** A failed provider message: name it in the error, and classify its cause. */

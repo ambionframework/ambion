@@ -26,6 +26,12 @@ export type EndReason = 'released' | 'failed' | 'revoked' | 'expired' | 'abandon
  */
 export type FailureCause = 'permanent' | 'transient';
 
+/** What a seat asks the room to record. The room stamps everything else. */
+export type Intent =
+	| { kind: 'said'; to?: string; text: string; refs?: string[] }
+	| { kind: 'seated'; name: string }
+	| { kind: 'unseated'; name: string };
+
 /** A question the room is working on. */
 export interface ExchangeRef {
 	/** The person whose question opened it, and who owns what follows. */
@@ -52,7 +58,12 @@ export type SummaryOutcome =
 /** A detached exchange view that can be read without starting a room. */
 export type ExchangeView =
 	| (ExchangeRef & { readonly status: 'open' })
-	| (ClosedExchange & { readonly status: 'closed'; readonly summary: SummaryOutcome });
+	| (ClosedExchange & {
+			readonly status: 'closed';
+			readonly summary: SummaryOutcome;
+			/** The sum of every activation in the range, the summary activation included. */
+			readonly usage?: Usage;
+	  });
 
 interface RoomReadFields {
 	readonly name: string;
@@ -311,7 +322,14 @@ export type ExecutionEvent =
 	| { type: 'tool_execution_start'; agent: string; activation: string; toolName: string }
 	| { type: 'tool_execution_end'; agent: string; activation: string; toolName: string }
 	/** The seat stopped, and `spoke` says whether it left a mark on the record. */
-	| { type: 'activation_end'; agent: string; activation: string; spoke: boolean }
+	| {
+			type: 'activation_end';
+			agent: string;
+			activation: string;
+			spoke: boolean;
+			/** What the activation spent. Absent when it reached no provider or the room ended it. */
+			usage?: Usage;
+	  }
 	| { type: 'error'; agent: string; activation: string; error: Error; cause?: FailureCause }
 	/** A room delivery or seat call failed, or its result became unknown. */
 	| {
@@ -323,6 +341,13 @@ export type ExecutionEvent =
 	  }
 	/** Transcript persistence failed independently of the execution outcome. */
 	| { type: 'audit_error'; agent: string; activation: string; error: Error }
+	/** The trace journal failed to take a step. The activation and its lease are unaffected. */
+	| { type: 'trace_error'; agent: string; activation: string; error: Error }
+	/**
+	 * One step of an activation, as the trace journal holds it. The steps of
+	 * one activation arrive in the order of `pass`, then `index`.
+	 */
+	| { type: 'step'; agent: string; activation: string; step: TraceStep }
 	/**
 	 * The room gave up: a permanent failure, or every attempt at a wake or a
 	 * draft came to nothing and the cap is reached. `activation` names the
@@ -330,6 +355,85 @@ export type ExecutionEvent =
 	 * the entry that says so.
 	 */
 	| { type: 'abandoned'; agent: string; activation: string; cause: FailureCause };
+
+// -- steps --------------------------------------------------------------------
+
+/**
+ * One thing an activation did, in a vocabulary every executor family shares.
+ * The trace journal holds each step once, and the event stream carries the
+ * same step live. A step is plain JSON.
+ */
+/**
+ * What an activation spent, or the sum of what activations spent. `cost` is
+ * present when at least one contributing step carried it.
+ */
+export interface Usage {
+	readonly input: number;
+	readonly output: number;
+	readonly cacheRead: number;
+	readonly cacheWrite: number;
+	readonly cost?: number;
+}
+
+/** Two totals added. `cost` stays absent until a step carries it. */
+export function addUsage(total: Usage | undefined, step: Usage): Usage {
+	const cost =
+		total?.cost === undefined && step.cost === undefined
+			? undefined
+			: (total?.cost ?? 0) + (step.cost ?? 0);
+	return {
+		input: (total?.input ?? 0) + step.input,
+		output: (total?.output ?? 0) + step.output,
+		cacheRead: (total?.cacheRead ?? 0) + step.cacheRead,
+		cacheWrite: (total?.cacheWrite ?? 0) + step.cacheWrite,
+		...(cost === undefined ? {} : { cost }),
+	};
+}
+
+export type Step =
+	/** A pass begins. `view` reads the whole record; `delta` follows a record that moved. */
+	| { type: 'pass'; pass: number; input: 'view' | 'delta'; through: Seq }
+	/** A block of the model's reasoning. `final` closes the block. */
+	| { type: 'thinking'; text: string; final: boolean }
+	/** A block of the model's text. `final` closes the block. */
+	| { type: 'text'; text: string; final: boolean }
+	| { type: 'tool_call'; call: string; name: string; input: unknown }
+	| { type: 'tool_result'; call: string; output: unknown; error?: string }
+	/** What the room answered to a commit the seat made. */
+	| {
+			type: 'room';
+			call: string;
+			intent: Intent;
+			result: 'committed' | 'unchanged' | 'missed' | 'refused' | 'stale' | 'unknown';
+			seq?: Seq;
+	  }
+	/** A message landed mid-activation. `consumed` says whether the model received it in that pass. */
+	| { type: 'steer'; seq: Seq; consumed: boolean }
+	| { type: 'approval'; call: string; name: string; decision?: 'allow' | 'deny' }
+	| ({ type: 'usage' } & Usage)
+	/** The activation stops. `failure` is present when it failed. */
+	| {
+			type: 'end';
+			stop: 'stopped' | 'length' | 'aborted';
+			failure?: { cause: FailureCause; message: string };
+	  };
+
+/** A step as the trace holds it: stamped with where and when it happened. */
+export type TraceStep = Step & {
+	readonly activation: string;
+	readonly pass: number;
+	/** ISO timestamp from the runtime clock. */
+	readonly at: string;
+	/** The place in the pass, from zero. One counter per pass. */
+	readonly index: number;
+};
+
+/** What the trace keeps of an agent's work. */
+export interface TracePolicy {
+	/** `summary` keeps the start of each block. */
+	readonly thinking: 'omit' | 'summary' | 'full';
+	readonly toolOutput: 'omit' | 'full';
+}
 
 /** The room's event stream: room facts and execution events, under one `subscribe`. */
 export type RoomNotification = RoomEvent | ExecutionEvent;
@@ -424,6 +528,8 @@ export interface AgentDefinition {
 	readonly name: string;
 	readonly identity: string;
 	readonly executor: AgentExecutor;
+	/** What the trace keeps. `defineAgent` and `captureAgent` set the default when absent. */
+	readonly trace?: TracePolicy;
 }
 
 export interface HumanDefinition {

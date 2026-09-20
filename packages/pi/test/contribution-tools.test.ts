@@ -10,6 +10,7 @@ import type {
 } from '@ambionframework/ambion/hosting';
 import type { SessionOpener } from '@ambionframework/pi-journal';
 import { describe, expect, it, vi } from 'vitest';
+import { noTrace } from '../../ambion/test/support/trace.ts';
 import { Activation, type PiExecutorOptions } from '../src/executor.ts';
 import { pi } from '../src/index.ts';
 import { binding, toolsFor } from '../src/tools.ts';
@@ -47,7 +48,7 @@ function executorOptions(definition: AgentDefinition): PiExecutorOptions {
 
 function activationFor(id: string, definition: AgentDefinition): Activation {
 	return new Activation(
-		{ id, room: unusedRoom, emit: () => {} },
+		{ id, room: unusedRoom, emit: () => {}, trace: noTrace },
 		executorOptions(definition),
 		() => {
 			throw new Error('unused');

@@ -10,6 +10,7 @@
  */
 import type { ActivationView, RoomProtocol } from '../protocol.ts';
 import type { ExecutionEvent, FailureCause, Seq } from '../types.ts';
+import type { TraceSink } from './trace.ts';
 
 /** What one activation gives its executor to open a session. */
 export interface ExecutorActivation {
@@ -17,6 +18,8 @@ export interface ExecutorActivation {
 	/** The bounded room facade: the driver's own retries and cancellation. */
 	readonly room: RoomProtocol;
 	readonly emit: (event: ExecutionEvent) => void;
+	/** Where the executor records the steps it owns. The driver owns the sink and closes it. */
+	readonly trace: TraceSink;
 }
 
 /**
@@ -36,6 +39,10 @@ export interface PassResult {
 	readonly failed: boolean;
 	/** Set only when `failed`: whether a retry can pass. */
 	readonly cause?: FailureCause;
+	/** Set only when `failed`: what went wrong, for the `end` step. */
+	readonly message?: string;
+	/** Set when the model stopped because it reached a length limit. */
+	readonly stop?: 'length';
 }
 
 /**

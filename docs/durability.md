@@ -106,7 +106,8 @@ Steering carries explicit consumed ranges, so reordered or duplicated context
 cannot acknowledge a gap. A fresh activation reconstructs missed context from
 the record. Transcript audit failure is reported separately as `audit_error`;
 it does not turn successful or deliberately silent collaboration into failed
-work, and no durable audit backlog is promised.
+work, and no durable audit backlog is promised. The trace journal follows the
+same rule: a failed step write is a `trace_error` and changes no outcome.
 
 ### Transport calls and unclaimed work
 
@@ -176,6 +177,11 @@ Provider calls and tools may repeat after timeout, expiry, or cancellation;
 applications own effect idempotency and transaction rules. It also does not
 repair torn storage, reconcile disagreeing clocks, or coordinate two live hosts
 over storage without conditional append.
+
+Usage has a coverage limit. The driver writes usage on the release entry
+of an activation, so `released` and `failed` ends carry it. An end the room
+writes (`expired`, `revoked`, `abandoned`) carries none, and the exchange sum
+omits what those attempts spent.
 
 Platform behavior remains a host concern. The Cloudflare adapter relies on one
 Durable Object instance and its SQLite storage; a resumed object fences stale

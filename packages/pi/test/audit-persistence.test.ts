@@ -8,6 +8,7 @@ import type { Agent, AgentMessage, StreamFn } from '@earendil-works/pi-agent-cor
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import { quiet, scripted } from '../../ambion/test/support/scripted.ts';
+import { noTrace } from '../../ambion/test/support/trace.ts';
 import { persistTurns } from '../src/audit.ts';
 import { Activation, type PiExecutorOptions } from '../src/executor.ts';
 import { pi } from '../src/index.ts';
@@ -62,7 +63,11 @@ function activationFor(
 		room: 'room',
 		now: () => 0,
 	};
-	return new Activation({ id: 'activation', room: unusedRoom, emit }, options, openAudit);
+	return new Activation(
+		{ id: 'activation', room: unusedRoom, emit, trace: noTrace },
+		options,
+		openAudit,
+	);
 }
 
 function intercepted(
@@ -154,7 +159,7 @@ describe('audit persistence', () => {
 		activation.abort();
 		releasePersist();
 
-		expect(await running).toEqual({ failed: true, cause: 'transient' });
+		expect(await running).toMatchObject({ failed: true, cause: 'transient' });
 		expect(events).toEqual(['provider']);
 	});
 

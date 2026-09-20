@@ -17,6 +17,7 @@ export type AmbionErrorCode =
 	| 'invalid_name'
 	| 'invalid_tool'
 	| 'refused'
+	| 'message_too_large'
 	| 'stale';
 
 /** An error the room throws on purpose. `code` says which refusal; `message` says why. */

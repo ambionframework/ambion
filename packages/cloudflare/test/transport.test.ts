@@ -34,6 +34,14 @@ const harness: TransportHarness = {
 			room: names.room,
 			seat: names.seat,
 			executor: speakOnce(),
+			trace: {
+				open: () => ({
+					startPass() {},
+					record() {},
+					usage: () => undefined,
+					close: async () => {},
+				}),
+			},
 		});
 	},
 };

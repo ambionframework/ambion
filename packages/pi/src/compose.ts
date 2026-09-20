@@ -7,7 +7,7 @@ import type {
 	RoomProtocol,
 	Transport,
 } from '@ambionframework/ambion/hosting';
-import { inProcessTransport } from '@ambionframework/ambion/hosting';
+import { DEFAULT_TRACE, inProcessTransport, traceOpener } from '@ambionframework/ambion/hosting';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createPiExecutor } from './executor.ts';
 import { createExecutionServices } from './services.ts';
@@ -35,6 +35,7 @@ function connectorFor(host: ExecutionHost, options: PiExecutionOptions): Executi
 		storage: host.storage,
 		clock: host.clock,
 		call: host.limits.call,
+		trace: host.limits.trace,
 		...(options.stream === undefined ? {} : { stream: options.stream }),
 	});
 	const transport: Transport = host.transport ?? inProcessTransport();
@@ -56,6 +57,15 @@ function connectorFor(host: ExecutionHost, options: PiExecutionOptions): Executi
 				seat: request.seat,
 				executor,
 				emit: request.emit,
+				trace: traceOpener({
+					room: request.room,
+					agent: request.seat,
+					traces: services.traces,
+					limits: services.trace,
+					policy: request.definition.trace ?? DEFAULT_TRACE,
+					emit: request.emit,
+					now: () => host.clock.now(),
+				}),
 			});
 		},
 	};

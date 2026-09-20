@@ -24,7 +24,7 @@
  */
 
 export type { ExecutorOptions } from './define.ts';
-export { describeExecutor, SAY, SEAT, UNSEAT } from './define.ts';
+export { DEFAULT_TRACE, describeExecutor, SAY, SEAT, UNSEAT } from './define.ts';
 export type {
 	Executor,
 	ExecutorActivation,
@@ -35,6 +35,13 @@ export type {
 export { refusal, renderActivation, renderLine } from './execution/render.ts';
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';
 export { summaryToolDescription } from './execution/summary.ts';
+export {
+	type TraceOpener,
+	type TraceOptions,
+	type TraceSink,
+	traceJournals,
+	traceOpener,
+} from './execution/trace.ts';
 export type {
 	AgentExecutionContext,
 	Execution,

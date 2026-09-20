@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { fakeClock } from '../../ambion/test/support/clock.ts';
 import { tick } from '../../ambion/test/support/room.ts';
 import { quiet, scripted } from '../../ambion/test/support/scripted.ts';
+import { noTraces } from '../../ambion/test/support/trace.ts';
 import { createExecutionServices, createPiExecutor, pi } from '../src/index.ts';
 
 const product = defineAgent({
@@ -86,6 +87,7 @@ function actorFor(
 		room: 'model-test',
 		seat: product.name,
 		executor,
+		trace: noTraces,
 	});
 }
 

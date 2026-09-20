@@ -1,9 +1,10 @@
 /** Public room facade that composes collaboration and execution services. */
 
-import { assertRoomName, captureAgent } from './define.ts';
+import { assertRoomName, captureAgent, DEFAULT_TRACE } from './define.ts';
 import { AmbionError } from './errors.ts';
 import type { Executor } from './execution/executor.ts';
 import { inProcessTransport } from './execution/runner.ts';
+import { traceOpener } from './execution/trace.ts';
 import {
 	defaultRuntime,
 	type Execution,
@@ -89,6 +90,15 @@ function connectorFor(runtime: Runtime, own: Execution | undefined): ExecutionCo
 				seat: request.seat,
 				executor: missingExecutor(request.seat),
 				emit: request.emit,
+				trace: traceOpener({
+					room: request.room,
+					agent: request.seat,
+					traces: hostingOf(runtime).traces,
+					limits: host.limits.trace,
+					policy: request.definition.trace ?? DEFAULT_TRACE,
+					emit: request.emit,
+					now: () => host.clock.now(),
+				}),
 			});
 		},
 	};

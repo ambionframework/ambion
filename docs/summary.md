@@ -77,7 +77,8 @@ A divider marks where its own exchange begins, so the writer can tell
 background history from the exchange it covers. What it may write stays
 fixed to that exchange. An `activationTokenLimit` windows this read the same
 way it windows an ordinary activation, pinning the writer's own exchange
-whole and trimming the background before it.
+whole and trimming the background before it. The room cap
+`limits.context.messages` pins the closing exchange whole the same way.
 
 The closing activation receives the regular `say` tool with this shape:
 

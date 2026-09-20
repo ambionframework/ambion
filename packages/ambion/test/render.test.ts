@@ -7,10 +7,39 @@
  */
 import { describe, expect, it } from 'vitest';
 import { pi } from '../../pi/src/index.ts';
-import { renderActivation, renderLine } from '../src/execution/render.ts';
+import { renderActivation, renderLine, renderRecord } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
 import { defineAgent, exchangeUri, roomUri } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
+
+describe('the omission line', () => {
+	const at = '2026-01-01T09:00:00.000Z';
+	const record: Message[] = [
+		{ kind: 'said', seq: 5, at, from: 'priya', text: 'Newer.' },
+		{ kind: 'said', seq: 6, at, from: 'worker', text: 'Reply.' },
+	];
+	const now = Date.parse(at);
+
+	it('leads the record with a count of the earlier messages', () => {
+		expect(renderRecord(record, [], now, 6, 3).split('\n')[0]).toBe(
+			'── 3 earlier messages not shown ──',
+		);
+		expect(renderRecord(record, [], now, undefined, 1).split('\n')[0]).toBe(
+			'── 1 earlier message not shown ──',
+		);
+	});
+
+	it('shows the line before the exchange divider', () => {
+		const lines = renderRecord(record, [], now, 5, 2).split('\n');
+		expect(lines[0]).toContain('2 earlier messages');
+		expect(lines[1]).toContain('Current exchange begins here');
+	});
+
+	it('shows no line for zero or an unset count', () => {
+		expect(renderRecord(record, [], now, undefined, 0)).not.toContain('not shown');
+		expect(renderRecord(record, [], now)).not.toContain('not shown');
+	});
+});
 
 describe('one line of the record', () => {
 	const at = '2026-01-01T09:00:00.000Z';

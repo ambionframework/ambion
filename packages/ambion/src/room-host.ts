@@ -26,7 +26,7 @@
  */
 
 import { decodeActivationId } from './activation-id.ts';
-import { answerCommit, answerLease, answerView } from './answers.ts';
+import { type Answering, answerCommit, answerLease, answerView } from './answers.ts';
 import { captureHuman } from './define.ts';
 import { AmbionError } from './errors.ts';
 import type { ExecutionConnector, RoomRuntime, RunningRoom } from './host/runtime.ts';
@@ -82,7 +82,7 @@ import type {
 	SummaryMessage,
 	Without,
 } from './types.ts';
-import { copyMessage } from './types.ts';
+import { copyMessage, type Usage } from './types.ts';
 
 export type { RoomRead } from './types.ts';
 
@@ -249,8 +249,12 @@ function notificationFor(event: RoomNotification): RoomNotification {
 			return { ...event, exchange: { ...event.exchange } };
 		case 'exchange_closed':
 			return { ...event, exchange: { ...event.exchange } };
+		case 'step':
+			// A step holds tool input and output, which are unknown values.
+			return { ...event, step: structuredClone(event.step) };
 		case 'error':
 		case 'audit_error':
+		case 'trace_error':
 			// Execution diagnostics retain their original Error object and cause.
 			return { ...event };
 		default:
@@ -474,6 +478,11 @@ export class RoomHost implements Room, RunningRoom {
 	}
 
 	// -- what the room holds --------------------------------------------------
+
+	/** The bounds the room applies to what an activation reads. */
+	get limits(): Answering['limits'] {
+		return this.runtime.limits;
+	}
 
 	now(): number {
 		return this.runtime.clock.now();
@@ -822,6 +831,7 @@ export class RoomHost implements Room, RunningRoom {
 			from,
 			...(to === undefined ? {} : { to }),
 			text: input.text,
+			bytes: this.runtime.limits.message.bytes,
 			...(input.refs === undefined ? {} : { refs: input.refs }),
 		});
 		return this.handleForMessage(committed);
@@ -1088,7 +1098,13 @@ export class RoomHost implements Room, RunningRoom {
 		const spoke = this.state().messages.some((m) => m.activationId === lease.id);
 		this.publish(() => {
 			if (revoked) this.cutPort(seat, lease.id);
-			this.emit({ type: 'activation_end', agent: seat, activation: lease.id, spoke });
+			this.emit({
+				type: 'activation_end',
+				agent: seat,
+				activation: lease.id,
+				spoke,
+				...(lease.usage === undefined ? {} : { usage: lease.usage }),
+			});
 			this.notifyExchangeWaiters();
 			if (lease.reason === 'expired')
 				this.emit({
@@ -1248,7 +1264,12 @@ export class RoomHost implements Room, RunningRoom {
 	async write(commit: CommitRequest): Promise<CommitResult | { refusal: Refusal }> {
 		const appended = await this.submit(
 			'message',
-			() => decide(this.state(), { type: 'commit', commit }, this.now()),
+			() =>
+				decide(
+					this.state(),
+					{ type: 'commit', commit, bytes: this.runtime.limits.message.bytes },
+					this.now(),
+				),
 			spaced('commit', commit.key),
 		);
 		if ('entry' in appended) {
@@ -1323,11 +1344,19 @@ export class RoomHost implements Room, RunningRoom {
 		reason: EndReason,
 		readThrough: Seq,
 		cause?: FailureCause,
+		usage?: Usage,
 	): Promise<boolean | { refusal: Refusal }> {
 		const appended = await this.submit('lease', () =>
 			decide(
 				this.state(),
-				{ type: 'end', id, reason, readThrough, ...(cause === undefined ? {} : { cause }) },
+				{
+					type: 'end',
+					id,
+					reason,
+					readThrough,
+					...(cause === undefined ? {} : { cause }),
+					...(usage === undefined ? {} : { usage }),
+				},
 				this.now(),
 			),
 		);
@@ -1418,6 +1447,7 @@ export class RoomHost implements Room, RunningRoom {
 				event.body.reason,
 				event.body.readThrough,
 				event.body.cause,
+				event.body.usage,
 			).then((result) => {
 				return this.requireEnd(result);
 			});

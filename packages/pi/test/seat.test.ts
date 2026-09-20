@@ -24,6 +24,7 @@ import { describe, expect, it } from 'vitest';
 import { fakeClock } from '../../ambion/test/support/clock.ts';
 import { deferred, tick } from '../../ambion/test/support/room.ts';
 import { contextText, quiet, scripted } from '../../ambion/test/support/scripted.ts';
+import { noTraces } from '../../ambion/test/support/trace.ts';
 import { createExecutionServices, createPiExecutor, pi } from '../src/index.ts';
 
 const product = defineAgent({
@@ -128,6 +129,7 @@ function play(stream: StreamFn = scripted(() => quiet()), transcripts?: SessionO
 		room: 'played',
 		seat: 'product',
 		executor,
+		trace: noTraces,
 	});
 	return { room, actor, clock, runtime, services };
 }

@@ -1,6 +1,6 @@
 /** The room journal event vocabulary. */
 
-import type { Attention, EndReason, FailureCause, Seq } from '../types.ts';
+import type { Attention, EndReason, FailureCause, Seq, Usage } from '../types.ts';
 
 /**
  * One entry about an activation: it holds a lease, or its lease ended. A
@@ -16,6 +16,8 @@ export type LeaseChange =
 			at: string;
 			readThrough: Seq;
 			cause?: FailureCause;
+			/** What the activation spent, on an end its driver wrote. */
+			usage?: Usage;
 	  };
 
 /** A run took the name and fenced earlier runs. */

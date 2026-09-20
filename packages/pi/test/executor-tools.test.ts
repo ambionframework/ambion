@@ -23,6 +23,7 @@ import type { Entry } from '../../ambion/src/journal/journal.ts';
 import { activationSpec } from '../../ambion/src/room/activation.ts';
 import { foldRoom } from '../../ambion/src/room/fold.ts';
 import { viewOf } from '../../ambion/src/room/view.ts';
+import { noTrace } from '../../ambion/test/support/trace.ts';
 import { Activation, type PiExecutorOptions } from '../src/executor.ts';
 import { pi } from '../src/index.ts';
 import { binding, toolsFor } from '../src/tools.ts';
@@ -85,7 +86,7 @@ function executorOptions(definition: AgentDefinition): PiExecutorOptions {
 
 function activationFor(id: string, definition: AgentDefinition): Activation {
 	return new Activation(
-		{ id, room: unusedRoom, emit: () => {} },
+		{ id, room: unusedRoom, emit: () => {}, trace: noTrace },
 		executorOptions(definition),
 		() => {
 			throw new Error('unused');

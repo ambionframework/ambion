@@ -8,6 +8,7 @@ import { speakOnce, type TransportHarness, transportConformance } from '../src/c
 import type { Transport } from '../src/hosting.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import { defineAgent, systemClock } from '../src/index.ts';
+import { noTraces } from './support/trace.ts';
 import { serializing } from './support/transport.ts';
 
 const harnessOver = (transport: Transport): TransportHarness => ({
@@ -23,6 +24,7 @@ const harnessOver = (transport: Transport): TransportHarness => ({
 			room: names.room,
 			seat: names.seat,
 			executor: speakOnce(),
+			trace: noTraces,
 		}),
 });
 
