@@ -46,13 +46,34 @@ class FakeHost implements Workbench {
 	async rooms() {
 		return [...this.table.values()];
 	}
+	/** How many times the session read a room. */
+	readCount = 0;
+	/** While set, a read waits for it. A test uses it to hold a read open. */
+	gate: Promise<void> | undefined;
+	/** The listeners for each room, as `watch` registered them. */
+	readonly watching = new Map<string, Set<() => void>>();
+
 	async read(room: string) {
+		this.readCount += 1;
+		if (this.gate) await this.gate;
 		const found = this.table.get(room);
 		if (!found) throw new Error(`No room ${room}`);
 		return found;
 	}
-	watch(_room: string, _changed: () => void) {
-		return () => {};
+	watch(room: string, changed: () => void) {
+		const listeners = this.watching.get(room) ?? new Set<() => void>();
+		listeners.add(changed);
+		this.watching.set(room, listeners);
+		return () => {
+			listeners.delete(changed);
+		};
+	}
+	/** Tell every listener of a room that it changed, as the host does on a room event. */
+	notify(room: string): void {
+		for (const listener of [...(this.watching.get(room) ?? [])]) listener();
+	}
+	listeners(room: string): number {
+		return this.watching.get(room)?.size ?? 0;
 	}
 	async join(room: string, who: string) {
 		this.record(`join:${room}:${who}`);
@@ -334,5 +355,66 @@ describe('Session files and prompts', () => {
 		expect(await session.submit('/quit')).toEqual({ type: 'quit' });
 		await session.submit('/nope');
 		expect(session.notice).toMatch(/Unknown command \/nope/);
+	});
+});
+
+describe('Session push updates', () => {
+	it('reads the open room when the host reports a change', async () => {
+		const { host, session } = await started();
+		const before = host.readCount;
+		host.table.set('bringup', view('bringup', { exchange: { owner: 'mira', from: 4, at: '' } }));
+		host.notify('bringup');
+		await vi.waitFor(() => expect(session.view?.exchange).toBeDefined());
+		expect(host.readCount).toBeGreaterThan(before);
+	});
+
+	it('watches only the open room, and moves the watch when the room changes', async () => {
+		const { host, session } = await started();
+		expect(host.listeners('bringup')).toBe(1);
+		await session.submit('/room power');
+		expect(host.listeners('bringup')).toBe(0);
+		expect(host.listeners('power')).toBe(1);
+	});
+
+	it('ends the watch when the person leaves', async () => {
+		const { host, session } = await started();
+		await session.leave();
+		expect(host.listeners('bringup')).toBe(0);
+	});
+
+	it('reads once more, not once per change, when changes land during a read', async () => {
+		const { host, session } = await started();
+		const gate = Promise.withResolvers<void>();
+		host.gate = gate.promise;
+		const before = host.readCount;
+		for (let change = 0; change < 5; change += 1) host.notify('bringup');
+		host.gate = undefined;
+		gate.resolve();
+		await vi.waitFor(() => expect(host.readCount).toBe(before + 2));
+		await new Promise<void>((resolve) => setTimeout(resolve, 30));
+		expect(host.readCount).toBe(before + 2);
+		expect(session.offline).toBeUndefined();
+	});
+
+	it('reads a stopped room on the slow poll, and leaves a running room to the watch', async () => {
+		const { host, session } = await started();
+		const running = host.readCount;
+		await session.poll();
+		expect(host.readCount).toBe(running);
+		host.table.set('bringup', view('bringup', { status: 'stopped' }));
+		await session.refresh();
+		const stopped = host.readCount;
+		await session.poll();
+		expect(host.readCount).toBeGreaterThan(stopped);
+	});
+
+	it('reports a failed read from a change, and recovers on the next one', async () => {
+		const { host, session } = await started();
+		host.table.delete('bringup');
+		host.notify('bringup');
+		await vi.waitFor(() => expect(session.offline).toMatch(/No room bringup/));
+		host.table.set('bringup', view('bringup'));
+		host.notify('bringup');
+		await vi.waitFor(() => expect(session.offline).toBeUndefined());
 	});
 });
