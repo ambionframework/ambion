@@ -2,8 +2,8 @@
 
 Reports below preserve historical runs. API names in those reports describe
 the version that produced each run. Current code uses `agents`, `seats`, and
-`room.read()` as documented in [`docs/roster.md`](../docs/roster.md) and
-[`docs/exchange.md`](../docs/exchange.md).
+`room.read()` as documented in [`docs/roster.md`](../../../docs/roster.md) and
+[`docs/exchange.md`](../../../docs/exchange.md).
 
 These are dated reports of live runs. One report belongs to one merged
 change, and the newest report belongs to the change in flight.
@@ -29,18 +29,18 @@ showed.
 
 ## The runs
 
-| Date       | Report                                                                | Model      | Published                                                                        |
-| ---------- | --------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------- |
-| 2026-08-26 | [The Room, Verbatim](2026-08-26-the-room-verbatim.html)               | sonnet-4-5 | [artifact](https://claude.ai/code/artifact/bb9a4ec2-2f2d-4ee0-8803-182e2bbc5797) |
-| 2026-08-28 | [Three Apps, One Site](2026-08-28-three-apps-one-site.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/e170799d-5176-491f-a887-9bde86f0ac02) |
-| 2026-08-31 | [One Exchange, One Message](2026-08-31-one-exchange-one-message.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/f73ba11a-3189-4313-9b97-b61d89bd7089) |
-| 2026-08-31 | [How Each Person Reads](2026-08-31-how-each-person-reads.html)     | sonnet-5   | [artifact](https://claude.ai/code/artifact/203189de-f717-4e0e-9793-b991947349de) |
-| 2026-09-02 | [The Site Drive](2026-09-02-the-site-drive.html)                     | sonnet-5   | [artifact](https://claude.ai/code/artifact/bb026bd2-1ce3-4aeb-b496-68416695bb63) |
-| 2026-09-03 | [One Assistant, Three Readers](2026-09-03-one-assistant-three-readers.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/52643e13-6b26-4311-8ab9-f1e9d9cea242) |
-| 2026-09-03 | [Who the Question Needs](2026-09-03-who-the-question-needs.html)           | sonnet-5   | [artifact](https://claude.ai/code/artifact/8cbbe725-691f-449f-828e-479221fc9bde) |
-| 2026-09-11 | [The Room Comes Back](2026-09-11-the-room-comes-back.html)                 | sonnet-5   | [artifact](https://claude.ai/code/artifact/15d2e9e4-5b3b-4275-a8e4-2982912c661f) |
+| Date       | Report                                                                        | Model      | Published                                                                        |
+| ---------- | ----------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------- |
+| 2026-08-26 | [The Room, Verbatim](2026-08-26-the-room-verbatim.html)                       | sonnet-4-5 | [artifact](https://claude.ai/code/artifact/bb9a4ec2-2f2d-4ee0-8803-182e2bbc5797) |
+| 2026-08-28 | [Three Apps, One Site](2026-08-28-three-apps-one-site.html)                   | sonnet-5   | [artifact](https://claude.ai/code/artifact/e170799d-5176-491f-a887-9bde86f0ac02) |
+| 2026-08-31 | [One Exchange, One Message](2026-08-31-one-exchange-one-message.html)         | sonnet-5   | [artifact](https://claude.ai/code/artifact/f73ba11a-3189-4313-9b97-b61d89bd7089) |
+| 2026-08-31 | [How Each Person Reads](2026-08-31-how-each-person-reads.html)                | sonnet-5   | [artifact](https://claude.ai/code/artifact/203189de-f717-4e0e-9793-b991947349de) |
+| 2026-09-02 | [The Site Drive](2026-09-02-the-site-drive.html)                              | sonnet-5   | [artifact](https://claude.ai/code/artifact/bb026bd2-1ce3-4aeb-b496-68416695bb63) |
+| 2026-09-03 | [One Assistant, Three Readers](2026-09-03-one-assistant-three-readers.html)   | sonnet-5   | [artifact](https://claude.ai/code/artifact/52643e13-6b26-4311-8ab9-f1e9d9cea242) |
+| 2026-09-03 | [Who the Question Needs](2026-09-03-who-the-question-needs.html)              | sonnet-5   | [artifact](https://claude.ai/code/artifact/8cbbe725-691f-449f-828e-479221fc9bde) |
+| 2026-09-11 | [The Room Comes Back](2026-09-11-the-room-comes-back.html)                    | sonnet-5   | [artifact](https://claude.ai/code/artifact/15d2e9e4-5b3b-4275-a8e4-2982912c661f) |
 | 2026-09-11 | [The Room Goes, The Seats Stay](2026-09-11-the-room-goes-the-seats-stay.html) | sonnet-5   | [artifact](https://claude.ai/code/artifact/bfcaa808-211d-45f0-bd99-880e9dee38d6) |
-| 2026-09-14 | [The Refactored Room](2026-09-14-workspace-tools.html)                    | sonnet-5   | local report                                                                        |
+| 2026-09-14 | [The Refactored Room](2026-09-14-workspace-tools.html)                        | sonnet-5   | local report                                                                     |
 
 ## What each run changed
 
@@ -62,13 +62,13 @@ is a message on the record rather than a cursor the host kept. Every
 activation is in the report in full — the context each seat read, its
 reasoning, its API calls and results, and the says the lock refused. The report
 also projects where an aide would have engaged, against
-[`docs/aide.md`](../docs/aide.md), which that change designed.
+[`docs/aide.md`](../../../docs/aide.md), which that change designed.
 
 **One Exchange, One Message.** The run that the aide was built against. It is
 the same suite and the same three people, and each person now brings an aide.
 Four questions open four exchanges, and each one closes into one message: 19
 agent messages become 4, of 94 words each on average. The report holds the
-comparison [`docs/aide.md`](../docs/aide.md) §18 asks for: the same scenario
+comparison [`docs/aide.md`](../../../docs/aide.md) §18 asks for: the same scenario
 runs twice, once with the aides and once with none. The last seat activation
 reads 8,391 characters, with 14 messages that stand as 3 summaries; the same
 record with nothing folded is 11,698, so the fold takes 28% off what that seat
@@ -101,7 +101,7 @@ run put an empty message on the record, so `say` refuses one now.
 documented as holding two things: its person's brief, and their preferences. A
 question is a message with a seq, and what a person owns is their `identity`,
 which every seat's context already carries. Both were names for something the
-aide reads, so [`docs/aide.md`](../docs/aide.md) §2 now holds the one fact no
+aide reads, so [`docs/aide.md`](../../../docs/aide.md) §2 now holds the one fact no
 message carries: how its person reads. The three aides in the example stopped
 opening with a restatement of who their person is, and their briefs are a third
 shorter — 1,410 characters to 960. The summaries came out at 100 words against
