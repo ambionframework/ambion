@@ -200,7 +200,7 @@ function message(
 	};
 }
 
-/** Empty text is refused first, then a ref the grammar refuses. */
+/** The room refuses empty text first, then a ref the grammar refuses. */
 function contentRefusal(body: Body<Message>): { refusal: Refusal } | undefined {
 	if (body.kind !== 'said' && body.kind !== 'summary') return undefined;
 	if (body.text.trim() === '')

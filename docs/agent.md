@@ -93,7 +93,7 @@ ones. A direct `visit.send` keeps refs exactly and refuses a bad one.
 **The room owns the `ambion` scheme.** `roomUri(name)` gives
 `ambion://room/<name>`. `exchangeUri(name, from)` gives
 `ambion://room/<name>/exchange/<from>`. `parseRoomUri` reads only these
-canonical forms. An `ambion:` ref that is not canonical is refused. The
+canonical forms. The room refuses an `ambion:` ref that is not canonical. The
 prompt states the room URI and the URI of the open or covered exchange. An
 agent reads numbered positions, so it cannot build the URI of an older
 exchange. A workspace path is not a ref. Cite a file with a `file:` URI or
