@@ -137,22 +137,29 @@ examples/workbench/
     definitions.ts     the assistant, three specialists, and the people
     scenarios.ts       the rooms, and the workspace seed
     rooms.ts           the host lifecycle and the room catalog
-    workbench.ts       the host: open, read, send, control, create, files
+    workbench.ts       the host: open, read, watch, send, control, create, files
     names.ts           the room name and goal rules
     files.ts           the workspace list and one file preview
     session.ts         the terminal's state and commands, without OpenTUI
     feed.ts            the room feed: one read at a time
     commands.ts        the slash commands and their suggestions
     timeline.ts        the record grouped into questions, threads, and summaries
+    text.ts            one line of text fitted to a width, with an ellipsis
+    header-fit.ts      what the header rows show at one width
     transcript.ts      the conversation
-    composer.ts        the composer, room chip, and palette
+    header.ts          the panel above the conversation: room, goal, people, pattern
+    composer.ts        the composer, room chip, and palette rows
+    palette.ts         the palette state: rows, the picked row, and dismissal
     browser.ts         the files panel state: search and the chosen file
     files-panel.ts     the files panel beside the conversation
     database.ts        the SQLite preview: tables and their first rows
-    tui.ts             the terminal: layout, keys, and the run loop
+    draw.ts            the painter: header, conversation, and composer chrome
+    keys.ts            the input: mode, browse selection, and key routing
+    tui.ts             the terminal: builds the parts and runs the loop
     main.ts            the entry point
   library/             the datasheets as text
-  test/                scripted tests: host, session, feed, commands, timeline, recovery
+  test/                scripted tests: host, session, feed, commands, timeline, text, header,
+                       recovery
   test/live/           two scenarios on a real provider
 ```
 

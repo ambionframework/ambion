@@ -1,13 +1,11 @@
-import type { ParticipantInfo } from '@ambionframework/ambion';
-import { bold, fg, StyledText, type TextRenderable } from '@opentui/core';
-import { brand, tui as palette } from './brand.ts';
+import { fg, StyledText } from '@opentui/core';
+import { tui as palette } from './brand.ts';
 import type { Composer } from './composer.ts';
 import type { FilesPanel } from './files-panel.ts';
+import type { Header } from './header.ts';
 import type { Mode } from './keys.ts';
 import { emptyText, type Session } from './session.ts';
-import { ellipsize } from './text.ts';
 import type { Transcript } from './transcript.ts';
-import type { RoomView } from './workbench.ts';
 
 const HINTS = {
 	compose: 'Enter sends   Ctrl+J newline   / commands   Ctrl+R rooms   Tab discussions',
@@ -17,43 +15,13 @@ const HINTS = {
 /** At this width or wider, the composer shows its hint line. */
 const ROOMY = 96;
 
-/** True when an agent is at work or a person is present. */
-function lit(participant: ParticipantInfo): boolean {
-	return participant.kind === 'agent'
-		? participant.status === 'active'
-		: participant.presence === 'present';
-}
-
-/** A participant's color: coral at work, green present, dim otherwise. */
-function participantColor(participant: ParticipantInfo): string {
-	if (!lit(participant)) return palette.dim;
-	return participant.kind === 'agent' ? palette.coral : palette.green;
-}
-
-/**
- * The header lines for one room: its name and goal, then who is in it. A filled
- * dot marks a lit participant and an empty dot marks the others, so the state
- * reads without color. The goal ends with an ellipsis when it does not fit.
- */
-function roomLines(view: RoomView, width: number) {
-	const goal = ellipsize(view.goal ?? '', width - view.name.length - 2);
-	return [
-		fg(palette.muted)('\n'),
-		bold(fg(palette.accent)(view.name)),
-		fg(palette.dim)(`  ${goal}\n`),
-		...view.participants.map((participant) =>
-			fg(participantColor(participant))(`${lit(participant) ? '●' : '○'} ${participant.name}  `),
-		),
-	];
-}
-
 /** The parts the painter draws into. */
 export interface DrawParts {
 	session: Session;
 	transcript: Transcript;
 	composer: Composer;
 	panel: FilesPanel;
-	header: TextRenderable;
+	header: Header;
 	/**
 	 * The width the conversation has when the files panel is closed. A widget gets
 	 * its new width in the next layout pass, so a read right after the panel closes
@@ -72,7 +40,7 @@ export class Painter {
 	private readonly transcript: Transcript;
 	private readonly composer: Composer;
 	private readonly panel: FilesPanel;
-	private readonly header: TextRenderable;
+	private readonly header: Header;
 	private readonly width: () => number;
 	private drawn = '';
 	private reveal: string | undefined;
@@ -139,16 +107,7 @@ export class Painter {
 	}
 
 	private drawHeader(): void {
-		const identity = this.session.identity;
-		const who = identity
-			? `   as ${identity.name}, ${identity.role.toLowerCase()}`
-			: '   choose a person with /user';
-		const view = this.session.view;
-		this.header.content = new StyledText([
-			fg(palette.accent)(`${brand.name} ${brand.product}`),
-			fg(palette.muted)(who),
-			...(view ? roomLines(view, this.width()) : []),
-		]);
+		this.header.draw({ identity: this.session.identity, view: this.session.view }, this.width());
 	}
 
 	private statusChunks(mode: Mode) {

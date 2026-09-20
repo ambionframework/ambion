@@ -1,15 +1,10 @@
-import {
-	BoxRenderable,
-	type CliRenderer,
-	createCliRenderer,
-	type KeyEvent,
-	TextRenderable,
-} from '@opentui/core';
+import { BoxRenderable, type CliRenderer, createCliRenderer, type KeyEvent } from '@opentui/core';
 import { tui as palette } from './brand.ts';
 import { parse } from './commands.ts';
 import { Composer } from './composer.ts';
 import { Painter } from './draw.ts';
 import { FilesPanel } from './files-panel.ts';
+import { Header } from './header.ts';
 import { Keys } from './keys.ts';
 import { Palette } from './palette.ts';
 import { type Intent, Session } from './session.ts';
@@ -42,7 +37,7 @@ class WorkbenchTui {
 	constructor(renderer: CliRenderer, host: Workbench, identity: Person | undefined) {
 		this.renderer = renderer;
 		this.session = new Session(host, identity, () => this.render());
-		const header = new TextRenderable(renderer, { content: '', flexShrink: 0, wrapMode: 'none' });
+		const header = new Header(renderer);
 		const transcript = new Transcript(renderer);
 		const panel = new FilesPanel(renderer);
 		const body = new BoxRenderable(renderer, {
@@ -82,7 +77,7 @@ class WorkbenchTui {
 			gap: 1,
 			backgroundColor: palette.bg,
 		});
-		root.add(header);
+		root.add(header.root);
 		body.add(transcript.root);
 		body.add(panel.root);
 		root.add(body);
