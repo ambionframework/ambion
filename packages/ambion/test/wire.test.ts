@@ -151,6 +151,17 @@ const responses: Record<string, ViewResponse | CommitResult | LeaseResponse> = {
 	missed: {
 		missed: [{ kind: 'said', seq: 3, key: 'k', at, from: 'priya', text: 'And the pump?' }],
 	},
+	committedWithRefs: {
+		committed: {
+			kind: 'said',
+			seq: 3,
+			key: 'call-2',
+			at,
+			from: 'product',
+			text: 'Done.',
+			refs: ['https://x/a'],
+		},
+	},
 	refused: { refused: "'nobody' is not in the reserve." },
 	ok: { ok: { expiresAt: 1767258060000, lastSeq: 3 } },
 };

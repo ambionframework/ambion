@@ -18,6 +18,18 @@ describe('room journal body validation', () => {
 				text: 'hello',
 				activationId: 'message:1:alpha:1',
 				wakes: ['beta'],
+				refs: ['https://x/a', 'ambion://room/site/exchange/3'],
+			}),
+		).toBe(true);
+		expect(
+			validateRoomBody('message', {
+				kind: 'summary',
+				at,
+				from: 'assistant',
+				to: 'andrei',
+				text: 'Done.',
+				covers: { from: 1, through: 4 },
+				refs: ['https://x/a'],
 			}),
 		).toBe(true);
 		expect(
@@ -46,6 +58,28 @@ describe('room journal body validation', () => {
 				fixed: true,
 			}),
 		).toBe(true);
+	});
+
+	it.each([
+		['a non-array', 'https://x/a', /body\.refs/],
+		['a number entry', [1], /body\.refs\[0\]/],
+		['a relative path', ['shared/report.md'], /body\.refs: refs\[0\]/],
+		['a duplicate', ['https://x/a', 'https://x/a'], /body\.refs: refs\[1\]/],
+	])('rejects refs that hold %s', (_name, refs, message) => {
+		expect(() =>
+			validateRoomBody('message', { kind: 'said', at, from: 'a', text: 'x', refs }),
+		).toThrow(message);
+		expect(() =>
+			validateRoomBody('message', {
+				kind: 'summary',
+				at,
+				from: 'a',
+				to: 'b',
+				text: 'x',
+				covers: { from: 1, through: 2 },
+				refs,
+			}),
+		).toThrow(message);
 	});
 
 	it('rejects a non-boolean fixed field on a seating', () => {

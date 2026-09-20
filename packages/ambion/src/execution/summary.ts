@@ -8,9 +8,10 @@ export const SUMMARY_DUTIES = [
 	``,
 	`Use the fixed recipient and range in this activation. Do not answer another person, extend the`,
 	`exchange, or mention private context. Write one short message with no preamble or sign-off.`,
+	`Put the URI of the exchange, and of any result that it made, in the refs of the say.`,
 	`Ending your turn without calling say leaves the range whole for whoever reads it.`,
 ];
 
 export function summaryToolDescription(person: string): string {
-	return `Write the one message ${person} reads for this exchange. Use the assigned recipient and exchange. Call it once, or end your turn to leave the range whole.`;
+	return `Write the one message ${person} reads for this exchange. Use the assigned recipient and exchange. Call it once, or end your turn to leave the range whole. Put the URI of what the message cites in refs.`;
 }

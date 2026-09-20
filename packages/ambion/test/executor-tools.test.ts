@@ -173,6 +173,30 @@ describe('executor tool authority', () => {
 		expect(activation.readThrough).toBe(0);
 	});
 
+	it('passes trimmed refs from the say tool into the intent', async () => {
+		for (const closing of [false, true]) {
+			const commits: CommitRequest[] = [];
+			const activation = activationFor(
+				closing ? 'closed:4:worker:1' : 'message:4:worker:1',
+				worker,
+			);
+			const purpose: ActivationView['spec']['purpose'] = closing
+				? { kind: 'summarize', exchange: 4, person: 'priya', through: 7 }
+				: { kind: 'respond', message: 4 };
+			const held = binding(activation, roomThatCommits(commits));
+			const say = toolsFor(view(purpose), worker, held, 'room')[0];
+			if (say === undefined) throw new Error('The purpose has no say tool.');
+			await say.execute('c1', { text: 'x', refs: [' https://x/a ', '', 'https://x/b'] });
+			await say.execute('c2', { text: 'x', refs: [] });
+			await say.execute('c3', { text: 'x', refs: ['  '] });
+			expect(commits.map((commit) => commit.intent)).toEqual([
+				{ kind: 'said', text: 'x', refs: ['https://x/a', 'https://x/b'] },
+				{ kind: 'said', text: 'x' },
+				{ kind: 'said', text: 'x' },
+			]);
+		}
+	});
+
 	it('does not mark context consumed for membership or an unchanged membership result', async () => {
 		const activation = activationFor('message:4:worker:1', worker);
 		const commits: CommitRequest[] = [];

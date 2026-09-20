@@ -69,6 +69,9 @@ When the room records a close, it assigns a dedicated activation only when
 the person who opened it. It receives that person's current preferences.
 Later messages do not change the source range or recipient.
 
+The closing `say` may carry `refs`. The room stores them on the summary. The
+prompt gives the writer the URI of the exchange it covers.
+
 The closing activation reads every message through the end of its exchange.
 A divider marks where its own exchange begins, so the writer can tell
 background history from the exchange it covers. What it may write stays

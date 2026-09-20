@@ -67,7 +67,7 @@ const lookup = defineTool({
 
 Every ordinary activation receives `say`, `seat`, and `unseat`, plus the tools
 from its definition. A closing activation receives only `say`. `say` accepts
-`{ text, to? }`. The room stamps the author, activation, time, and routing
+`{ text, to?, refs? }`. The room stamps the author, activation, time, and routing
 facts. `seat` and `unseat` accept an agent name. The room validates operations
 at the commit boundary.
 
@@ -83,6 +83,21 @@ room.
 whitespace-only human messages, agent messages, and summaries before writing.
 A refusal does not reserve the request key. Direct calls preserve accepted
 text exactly; `say` trims its input. An agent can finish silently without `say`.
+
+**A ref is one absolute URI that a message cites.** A ref has a scheme, at
+most 2048 characters, and no whitespace. A message carries at most 16 refs
+without duplicates. The room stores the list in order, omits an empty list,
+and never reads behind a ref. The `say` tool trims each ref and drops blank
+ones. A direct `visit.send` keeps refs exactly and refuses a bad one.
+
+**The room owns the `ambion` scheme.** `roomUri(name)` gives
+`ambion://room/<name>`. `exchangeUri(name, from)` gives
+`ambion://room/<name>/exchange/<from>`. `parseRoomUri` reads only these
+canonical forms. An `ambion:` ref that is not canonical is refused. The
+prompt states the room URI and the URI of the open or covered exchange. An
+agent reads numbered positions, so it cannot build the URI of an older
+exchange. A workspace path is not a ref. Cite a file with a `file:` URI or
+another absolute URI that the application chooses.
 
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.

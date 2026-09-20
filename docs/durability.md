@@ -48,7 +48,8 @@ contract.
   recorded routing remain on the journal.
 - **Refused:** a stopped room, ended visit, invalid recipient, or stale
   conditional append writes nothing and rejects.
-- **In doubt:** retry with the same `key`, author, recipient, and exact text.
+- **In doubt:** retry with the same `key`, author, recipient, exact text, and
+  refs in the same order.
   The message is either absent or already present; an exact retry lands at most
   once and returns the original exchange handle, including after restart.
 - **Superseded:** a later run's fence prevents future writes from an earlier
