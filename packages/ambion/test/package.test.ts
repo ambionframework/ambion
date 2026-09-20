@@ -41,6 +41,7 @@ it('builds every entry the manifest names', async () => {
 
 it('exports exactly what an application needs to build a room, and nothing a host needs beyond it', () => {
 	expect(Object.keys(main).sort()).toEqual([
+		'AmbionError',
 		'PACKAGE_NAME',
 		'createRuntime',
 		'defaultRuntime',

@@ -2,6 +2,7 @@
 
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { captureAgent } from './define.ts';
+import { AmbionError } from './errors.ts';
 import { composeExecution } from './execution/compose.ts';
 import {
 	defaultRuntime,
@@ -152,7 +153,10 @@ export async function readExchange(
 
 function assertFree(runtime: Runtime, name: string): void {
 	if (registeredRoom(runtime, name) !== undefined)
-		throw new Error(`Room '${name}' is already running: stop it before starting it again.`);
+		throw new AmbionError(
+			'room_running',
+			`Room '${name}' is already running: stop it before starting it again.`,
+		);
 }
 
 function composeFrom(options: StartRoomOptions): CompositionDraft {
@@ -173,11 +177,14 @@ function normalizeAssistant(options: StartRoomOptions): StartRoomOptions {
 	const name = assistant.name;
 	if (options.agents?.some((agent) => agent.name === name)) throw duplicate(name);
 	if (options.summary !== undefined && options.summary !== name)
-		throw new Error(`Assistant '${name}' conflicts with summary agent '${options.summary}'.`);
+		throw new AmbionError(
+			'refused',
+			`Assistant '${name}' conflicts with summary agent '${options.summary}'.`,
+		);
 	const hasConfiguredAttention = options.seats !== undefined && Object.hasOwn(options.seats, name);
 	const configuredAttention = hasConfiguredAttention ? options.seats?.[name] : undefined;
 	if (configuredAttention !== undefined && configuredAttention !== 'broadcast')
-		throw new Error(`Assistant '${name}' must use 'broadcast' attention.`);
+		throw new AmbionError('refused', `Assistant '${name}' must use 'broadcast' attention.`);
 	const seats =
 		options.seats === undefined ? undefined : { ...options.seats, [name]: 'broadcast' as const };
 	return {
@@ -196,7 +203,7 @@ function capturedDefinitions(options: StartRoomOptions): AgentDefinition[] {
 		names.add(definition.name);
 	}
 	if (options.summary !== undefined && !names.has(options.summary))
-		throw new Error(`Unknown summary agent '${options.summary}'.`);
+		throw new AmbionError('missing_definition', `Unknown summary agent '${options.summary}'.`);
 	return definitions;
 }
 
@@ -211,7 +218,8 @@ function initialSeats(
 			: Object.keys(configured),
 	);
 	const names = new Set(definitions.map((agent) => agent.name));
-	for (const name of selected) if (!names.has(name)) throw new Error(`Unknown agent '${name}'.`);
+	for (const name of selected)
+		if (!names.has(name)) throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
 	return new Map(
 		definitions
 			.filter((agent) => selected.has(agent.name))
@@ -229,6 +237,9 @@ function definitionsOf(agents: readonly AgentDefinition[]): Map<string, AgentDef
 	return bindings;
 }
 
-function duplicate(name: string): Error {
-	return new Error(`Duplicate agent name '${name}': one name names one participant.`);
+function duplicate(name: string): AmbionError {
+	return new AmbionError(
+		'duplicate_name',
+		`Duplicate agent name '${name}': one name names one participant.`,
+	);
 }

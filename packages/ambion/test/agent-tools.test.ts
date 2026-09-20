@@ -1,6 +1,7 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { defineAgent, defineHuman, defineTool, pi, type ToolBundle } from '../src/index.ts';
+import { refusal } from './support/errors.ts';
 
 const tool = (name: string) =>
 	defineTool({
@@ -23,6 +24,9 @@ describe('agent tools', () => {
 			const human = { name: 'priya', identity: 'A person.' };
 			expect(() => Reflect.apply(defineAgent, undefined, [{ ...agent, name }])).toThrow(
 				/Invalid participant name/,
+			);
+			expect(() => Reflect.apply(defineAgent, undefined, [{ ...agent, name }])).toThrow(
+				refusal('invalid_name'),
 			);
 			expect(() => Reflect.apply(defineHuman, undefined, [{ ...human, name }])).toThrow(
 				/Invalid participant name/,
@@ -53,6 +57,13 @@ describe('agent tools', () => {
 					executor: pi({ instructions: 'Work.', model: 'scripted/agent', tools: [tool(name)] }),
 				}),
 			).toThrow(/room supplies it for an activation/);
+			expect(() =>
+				defineAgent({
+					name: `agent-${name}`,
+					identity: 'An agent.',
+					executor: pi({ instructions: 'Work.', model: 'scripted/agent', tools: [tool(name)] }),
+				}),
+			).toThrow(refusal('invalid_tool'));
 		}
 	});
 
@@ -70,6 +81,18 @@ describe('agent tools', () => {
 				}),
 			}),
 		).toThrow(/duplicate tools named 'read'/);
+		expect(() =>
+			defineAgent({
+				name: 'workspace-reader',
+				identity: 'An agent.',
+				executor: pi({
+					instructions: 'Read.',
+					model: 'scripted/reader',
+					tools: [tool('read')],
+					bundles: [bundle],
+				}),
+			}),
+		).toThrow(refusal('invalid_tool'));
 	});
 
 	it('allows an agent-defined tool with an unrelated name', () => {

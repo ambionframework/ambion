@@ -11,6 +11,7 @@ import {
 	type StartRoomOptions,
 	startRoom,
 } from '../src/index.ts';
+import { refusal } from './support/errors.ts';
 import { messagesOf, roomName, stateOf } from './support/room.ts';
 import {
 	faultyJournals,
@@ -84,6 +85,9 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			const original = await first.send({ key, to: secondPerson.name, text: 'Original.' });
 			await expect(first.send({ key, to: secondPerson.name, text: 'Changed.' })).rejects.toThrow(
 				/different room operation/,
+			);
+			await expect(first.send({ key, to: secondPerson.name, text: 'Changed.' })).rejects.toEqual(
+				refusal('refused'),
 			);
 			await expect(first.send({ key, to: person.name, text: 'Original.' })).rejects.toThrow(
 				/different room operation/,

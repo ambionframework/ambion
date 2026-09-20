@@ -10,6 +10,7 @@
 import type { AgentTool, AgentToolResult, ToolExecutionMode } from '@earendil-works/pi-agent-core';
 import { IsSchema, type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
+import { AmbionError } from './errors.ts';
 import type {
 	AgentDefinition,
 	AgentExecutor,
@@ -329,12 +330,16 @@ function assertAgentTools(agent: string, tools: readonly AmbionTool[]): void {
 	for (const tool of tools) {
 		const name = tool.name;
 		if (names.has(name)) {
-			throw new Error(`Agent '${agent}' brings duplicate tools named '${name}'.`);
+			throw new AmbionError(
+				'invalid_tool',
+				`Agent '${agent}' brings duplicate tools named '${name}'.`,
+			);
 		}
 		names.add(name);
 		const roomTool = name === SAY.name || name === SEAT.name || name === UNSEAT.name;
 		if (roomTool)
-			throw new Error(
+			throw new AmbionError(
+				'invalid_tool',
 				`Agent '${agent}' brings a tool named '${name}': the room supplies it for an activation. Give it another name.`,
 			);
 	}
@@ -396,7 +401,8 @@ function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
 function assertName(name: unknown): asserts name is string {
 	const match = typeof name === 'string' ? /^[a-z][a-z0-9-]*$/.exec(name) : undefined;
 	if (typeof name !== 'string' || match?.[0] !== name) {
-		throw new Error(
+		throw new AmbionError(
+			'invalid_name',
 			`Invalid participant name '${name}': names are lowercase, alphanumeric plus dashes.`,
 		);
 	}

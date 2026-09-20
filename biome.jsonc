@@ -84,7 +84,7 @@
 		},
 		// The core is laid out in layers, and an import points down only:
 		//
-		//   types, protocol, define      the vocabulary: public and protocol shapes
+		//   types, protocol, define, errors  the vocabulary: public and protocol shapes
 		//   activation-id.ts               the vocabulary's durable activation identity codec
 		//   host/                         what a host owns: the runtime value
 		//   journal/                      the room's kinds, over @ambionframework/journal
@@ -101,7 +101,8 @@
 				"packages/ambion/src/activation-id.ts",
 				"packages/ambion/src/types.ts",
 				"packages/ambion/src/protocol.ts",
-				"packages/ambion/src/define.ts"
+				"packages/ambion/src/define.ts",
+				"packages/ambion/src/errors.ts"
 			],
 			"linter": {
 				"rules": {

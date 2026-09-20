@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRuntime, defineHuman, startRoom } from '../src/index.ts';
+import { refusal } from './support/errors.ts';
 import { messagesOf, participantsOf, roomName } from './support/room.ts';
 import { faultyJournals, gatedJournals, storages } from './support/storage.ts';
 
@@ -194,6 +195,8 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			releaseArrival.resolve();
 			await first;
 			await expect(second).rejects.toThrow(/different identity/);
+			const third = room.visit(differentPerson);
+			await expect(third).rejects.toEqual(refusal('duplicate_name'));
 		} finally {
 			releaseArrival.resolve();
 			await room.stop();
@@ -307,6 +310,7 @@ describe.each(storages)('durable lifecycle acknowledgements (%s)', (storage) => 
 			void stop.catch(() => {});
 
 			await expect(room.visit(person)).rejects.toThrow(/stopped/);
+			await expect(room.visit(person)).rejects.toEqual(refusal('room_stopped'));
 			expect(await settlesAfterTurn(stop)).toBe(false);
 
 			releaseArrival.resolve();
