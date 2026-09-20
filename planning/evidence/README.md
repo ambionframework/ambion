@@ -1,7 +1,7 @@
 # Evidence
 
 **This directory holds dated evidence.** Each file records one run or one
-review. A dated file is named `YYYY-MM-DD-<slug>.<ext>`.
+review. Name a dated file `YYYY-MM-DD-<slug>.<ext>`.
 
 | Entry                                | What it holds                                                                           |
 | ------------------------------------ | --------------------------------------------------------------------------------------- |
