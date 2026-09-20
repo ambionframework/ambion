@@ -86,12 +86,62 @@ const readPlan = defineTool({
 `room` names the room the call ran in; it is absent for a call made outside
 a room. `ToolContext` holds no workspace or resource field.
 
+## Write an append-only log
+
+**`openLog` writes JSON Lines to one absolute path, and rotates it by
+size.** `append` writes one JSON-compatible record as one line over a
+caller's `env`, then rotates the file once it has reached the byte
+threshold: the active file is renamed aside under a timestamped name, and a
+fresh file starts at the same path. A record is never split by a rotation.
+
+```ts
+import {
+  BACKGROUND_CONTEXT,
+  directoryBackend,
+  openLog,
+  openWorkspace,
+} from '@ambionframework/workspace';
+
+const drive = openWorkspace({ name: 'town', backend: directoryBackend('./data') });
+const host = { name: 'host', identity: 'Writes the room record.' };
+const journal = openLog({ path: '/var/log/room/journal.jsonl' });
+
+await drive.use(host, (env) =>
+  journal.append(env, { kind: 'said', text: 'hi' }, BACKGROUND_CONTEXT),
+);
+```
+
+**A log names one absolute path, not a directory.** `path` must be
+absolute: a relative path would resolve against whichever agent's home
+connects first, splitting the log one way for that agent and another way
+for every other. A caller scopes two logs apart by giving them two paths; a
+room's full record, an audit trail, and a metrics feed each open one log at
+its own path, over one shared workspace, with no collision.
+
+**A log carries no state of its own.** `openLog` does no I/O and holds no
+count: every fact rotation needs — whether the active file exists, and how
+large it is — comes from the path on the caller's `env` at the time of the
+call. Opening a log again after a restart, or opening a second handle to the
+same path, needs no recovery step, because there is nothing to recover.
+
+**`rotateBytes` sets the byte threshold, and the default is 8 MiB.**
+Rotation runs after a write, never before: the record that first pushes the
+file past the threshold stays in the file it landed in, and the next record
+starts the fresh one. A log does not delete a rotated file; a host that
+wants retention lists the directory and prunes its own way.
+
+**`append` must run one call at a time over one log.** Concurrent calls
+racing the same rotation decision could both decide to rotate, or neither.
+A caller inside `resource.use()` gets serialization for free from the
+owner's queue (see [Open one resource](#open-one-resource)); a caller
+holding `env` directly serializes its own calls.
+
 ## Record every tool call
 
 **`openWorkspace` can record every bound tool call to a rotating JSONL file
-on the workspace's own filesystem.** Set `audit`, and every call through
-`workspace.tools()` appends one line: the room, the agent, the tool, the
-full arguments, and the full result or error.
+on the workspace's own filesystem, built on `openLog`.** Set `audit`, and
+every call through `workspace.tools()` appends one line: the room, the
+agent, the tool, the full arguments, and the full result or error.
 
 ```ts
 const drive = openWorkspace({
@@ -102,27 +152,21 @@ const drive = openWorkspace({
 ```
 
 **The log is an ordinary file an agent reads.** The default path is
-`/workspace/audit.jsonl`; set `path` to change it. `path` must be absolute:
-a relative path would resolve against whichever agent's home connects
-first, splitting the log one way for that agent and another way for every
-other. An agent reads the log with `read` or `bash cat`, the same as any
-file a peer wrote, and sees every call any agent made, including its own
-past calls.
+`/workspace/audit.jsonl`; set `path` to change it, and `maxBytes` to change
+the 5 MiB rotation threshold. An agent reads the log with `read` or
+`bash cat`, the same as any file a peer wrote, and sees every call any agent
+made, including its own past calls.
 
 **Tool guidance tells every agent the log exists.** `openWorkspace` appends
 a note naming the path and what each line holds to the bundle's guidance, so
 an agent that reads its own tool guidance already knows to look for it.
 
-**A file rotates once it reaches `maxBytes`.** The default is 5 MiB
-(5 &times; 1024 &times; 1024 bytes). A rotated file keeps its old lines under
-a timestamped name beside the active file. The active file starts empty at
-the same path.
-
 **Recording one entry runs inside the tool call's own queued operation.**
 The workspace resource lets one operation touch the filesystem at a time
 (see [Open one resource](#open-one-resource)), and the audit write shares
 the same `ExecutionEnv` as the call it records. The entry and the call never
-separate under concurrent work from other agents.
+separate under concurrent work from other agents, and this is also what
+serializes the log's own rotation decision.
 
 **A cut or aborted call is still recorded.** The record runs after the call
 ends, whatever ended it, over its own unconditional context. It does not
@@ -250,51 +294,6 @@ the destruction. A failed release or deletion leaves its operation retryable.
 A `use` callback must not await another `use`, `dispose`, or `destroy` call
 on the same owner. The owner serializes those operations, so such nesting
 would wait for the callback that is already running.
-
-## Write an append-only log
-
-**`openLog` writes JSON Lines to one file, and rotates it by size.** A log
-holds one active file and every file it has rotated, all under one root
-directory a caller names at open. `append` writes one JSON-compatible record
-as one line, and rotates the active file first when it has reached the byte
-threshold. A record is never split across a rotation.
-
-```ts
-import {
-  BACKGROUND_CONTEXT,
-  directoryBackend,
-  openLog,
-  openWorkspace,
-} from '@ambionframework/workspace';
-
-const drive = openWorkspace({ name: 'town', backend: directoryBackend('./data') });
-const host = { name: 'host', identity: 'Writes the room record.' };
-
-await drive.use(host, async (env) => {
-  const journal = openLog(env, { root: '/var/log/room', fileName: 'journal.jsonl' });
-  await journal.append({ kind: 'said', text: 'hi' }, BACKGROUND_CONTEXT);
-});
-```
-
-**A log stays inside its root.** `fileName` names one plain file, with no
-path separator, so a caller cannot point a log's writes outside `root`
-through the name. Two logs at two roots on one workspace never collide, so a
-host opens one log per concern: a room's full record, an audit trail, a
-metrics feed, each at its own path.
-
-**Rotation reads the directory, not memory.** `rotateBytes` sets the byte
-threshold, and the default is 8 MiB. Once the active file reaches it,
-`append` renames the active file to `<name>.<index><extension>` before it
-writes the new record, then starts a fresh active file at the original name.
-The index counts up from the highest one already on disk, so a log opened
-again after a restart keeps counting where the last run left off, with no
-in-memory count to lose. A log does not delete a rotated file; a host that
-wants retention lists the root and prunes its own way.
-
-**A log is one core over the workspace filesystem.** It runs on every
-backend, in memory or on a directory, the same way `read`, `write`, and `sql`
-do. `append` must run one call at a time over one log; a caller inside
-`use()` gets this for free from the owner's queue.
 
 ## Backends and limits
 

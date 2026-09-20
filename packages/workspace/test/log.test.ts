@@ -2,7 +2,7 @@ import { posix } from 'node:path';
 import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceAgent } from '../src/index.ts';
-import { BACKGROUND_CONTEXT, DEFAULT_LOG_FILE, openLog } from '../src/index.ts';
+import { BACKGROUND_CONTEXT, openLog } from '../src/index.ts';
 import { backends } from './support/backends.ts';
 
 const host: WorkspaceAgent = { name: 'host', identity: 'Writes the record.' };
@@ -17,20 +17,34 @@ async function linesOf(env: ExecutionEnv, path: string): Promise<unknown[]> {
 		.map((line) => JSON.parse(line) as unknown);
 }
 
+/** Every record across `path` and whatever it has rotated to, in no particular file order. */
+async function allRecords(env: ExecutionEnv, path: string): Promise<{ i: number }[]> {
+	const dir = posix.dirname(path);
+	const listed = await env.listDir(dir, BACKGROUND_CONTEXT);
+	if (!listed.ok) throw listed.error;
+	const prefix = posix.basename(path);
+	const names = listed.value
+		.map((entry) => entry.name)
+		.filter((name) => name === prefix || name.startsWith(`${prefix}.`));
+	const records: { i: number }[] = [];
+	for (const name of names) {
+		records.push(...((await linesOf(env, posix.join(dir, name))) as { i: number }[]));
+	}
+	return records;
+}
+
 describe.each(backends)('a workspace log on $name', (backend) => {
-	it('appends one JSON line per record, and creates its root', async () => {
+	it('appends one JSON line per record, and creates its parent directory', async () => {
 		const opened = await backend.open();
 		const env = await opened.backend.connect(host);
 		try {
-			const log = openLog(env, { root: '/var/log/room' });
-			expect(log.root).toBe('/var/log/room');
-			expect(log.fileName).toBe(DEFAULT_LOG_FILE);
-			expect(log.activePath).toBe('/var/log/room/log.jsonl');
+			const log = openLog({ path: '/var/log/room/journal.jsonl' });
+			expect(log.path).toBe('/var/log/room/journal.jsonl');
 
-			await log.append({ kind: 'joined', who: 'alpha' }, BACKGROUND_CONTEXT);
-			await log.append({ kind: 'said', text: 'hi' }, BACKGROUND_CONTEXT);
+			await log.append(env, { kind: 'joined', who: 'alpha' }, BACKGROUND_CONTEXT);
+			await log.append(env, { kind: 'said', text: 'hi' }, BACKGROUND_CONTEXT);
 
-			expect(await linesOf(env, log.activePath)).toEqual([
+			expect(await linesOf(env, log.path)).toEqual([
 				{ kind: 'joined', who: 'alpha' },
 				{ kind: 'said', text: 'hi' },
 			]);
@@ -40,16 +54,16 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 		}
 	});
 
-	it('rotates the active file once it reaches the byte threshold, never splitting a record', async () => {
+	it('rotates the active file once it reaches the byte threshold, keeping every record', async () => {
 		const opened = await backend.open();
 		const env = await opened.backend.connect(host);
 		try {
-			const log = openLog(env, { root: '/logs', fileName: 'j.jsonl', rotateBytes: 24 });
-			for (let i = 0; i < 8; i++) await log.append({ i }, BACKGROUND_CONTEXT);
+			const log = openLog({ path: '/logs/j.jsonl', rotateBytes: 24 });
+			for (let i = 0; i < 8; i++) await log.append(env, { i }, BACKGROUND_CONTEXT);
 
 			const listed = await env.listDir('/logs', BACKGROUND_CONTEXT);
 			if (!listed.ok) throw listed.error;
-			const names = listed.value.map((entry) => entry.name).sort();
+			const names = listed.value.map((entry) => entry.name);
 			expect(names).toContain('j.jsonl');
 			expect(names.length).toBeGreaterThan(1);
 
@@ -59,67 +73,47 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 				expect(entry.size).toBeGreaterThanOrEqual(24);
 			}
 
-			// Every record survives, across whichever files it landed in, in order.
-			const all: number[] = [];
-			for (const name of names) {
-				const records = (await linesOf(env, posix.join('/logs', name))) as { i: number }[];
-				all.push(...records.map((r) => r.i));
-			}
-			expect(all).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+			const records = await allRecords(env, log.path);
+			expect(records.map((r) => r.i).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
 		} finally {
 			await env.cleanup(BACKGROUND_CONTEXT);
 			await opened.dispose();
 		}
 	});
 
-	it('recovers its rotation count from disk, so a fresh log continues numbering after a restart', async () => {
+	it('needs no memory of its own: a second openLog over the same path continues correctly', async () => {
 		const opened = await backend.open();
 		const env = await opened.backend.connect(host);
 		try {
-			const options = { root: '/logs', fileName: 'j.jsonl', rotateBytes: 24 } as const;
-			const first = openLog(env, options);
-			for (let i = 0; i < 8; i++) await first.append({ i }, BACKGROUND_CONTEXT);
+			const options = { path: '/logs/j.jsonl', rotateBytes: 24 } as const;
+			const first = openLog(options);
+			for (let i = 0; i < 4; i++) await first.append(env, { i }, BACKGROUND_CONTEXT);
 
-			const before = await env.listDir('/logs', BACKGROUND_CONTEXT);
-			if (!before.ok) throw before.error;
-			const rotatedBefore = before.value.map((entry) => entry.name).filter((n) => n !== 'j.jsonl');
-			expect(rotatedBefore.length).toBeGreaterThan(0);
+			// A fresh `openLog` over the same path and env: no state carries over
+			// but the path on disk, and none needs to.
+			const second = openLog(options);
+			for (let i = 4; i < 8; i++) await second.append(env, { i }, BACKGROUND_CONTEXT);
 
-			// A fresh `openLog` over the same env and root: no in-memory count survives.
-			const second = openLog(env, options);
-			for (let i = 8; i < 16; i++) await second.append({ i }, BACKGROUND_CONTEXT);
-
-			const after = await env.listDir('/logs', BACKGROUND_CONTEXT);
-			if (!after.ok) throw after.error;
-			const rotatedAfter = after.value.map((entry) => entry.name).filter((n) => n !== 'j.jsonl');
-			// The restart never overwrote a file the first log had already rotated.
-			for (const name of rotatedBefore) expect(rotatedAfter).toContain(name);
-			expect(rotatedAfter.length).toBeGreaterThan(rotatedBefore.length);
-
-			const all: number[] = [];
-			for (const name of rotatedAfter.concat('j.jsonl').sort()) {
-				const records = (await linesOf(env, posix.join('/logs', name))) as { i: number }[];
-				all.push(...records.map((r) => r.i));
-			}
-			expect(all).toEqual(Array.from({ length: 16 }, (_v, i) => i));
+			const records = await allRecords(env, options.path);
+			expect(records.map((r) => r.i).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
 		} finally {
 			await env.cleanup(BACKGROUND_CONTEXT);
 			await opened.dispose();
 		}
 	});
 
-	it('scopes two logs at two roots on one workspace, with no collision', async () => {
+	it('scopes two logs at two paths on one workspace, with no collision', async () => {
 		const opened = await backend.open();
 		const env = await opened.backend.connect(host);
 		try {
-			const journal = openLog(env, { root: '/var/log/room', fileName: 'journal.jsonl' });
-			const audit = openLog(env, { root: '/var/log/audit', fileName: 'audit.jsonl' });
+			const journal = openLog({ path: '/var/log/room/journal.jsonl' });
+			const audit = openLog({ path: '/var/log/audit/audit.jsonl' });
 
-			await journal.append({ kind: 'said' }, BACKGROUND_CONTEXT);
-			await audit.append({ kind: 'checked' }, BACKGROUND_CONTEXT);
+			await journal.append(env, { kind: 'said' }, BACKGROUND_CONTEXT);
+			await audit.append(env, { kind: 'checked' }, BACKGROUND_CONTEXT);
 
-			expect(await linesOf(env, journal.activePath)).toEqual([{ kind: 'said' }]);
-			expect(await linesOf(env, audit.activePath)).toEqual([{ kind: 'checked' }]);
+			expect(await linesOf(env, journal.path)).toEqual([{ kind: 'said' }]);
+			expect(await linesOf(env, audit.path)).toEqual([{ kind: 'checked' }]);
 
 			const roomDir = await env.listDir('/var/log/room', BACKGROUND_CONTEXT);
 			expect(roomDir.ok && roomDir.value.map((entry) => entry.name)).toEqual(['journal.jsonl']);
@@ -131,26 +125,13 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 		}
 	});
 
-	it('refuses a file name with a path separator', async () => {
-		const opened = await backend.open();
-		const env = await opened.backend.connect(host);
-		try {
-			expect(() => openLog(env, { root: '/logs', fileName: 'a/b.jsonl' })).toThrow(/path/i);
-		} finally {
-			await env.cleanup(BACKGROUND_CONTEXT);
-			await opened.dispose();
-		}
+	it('refuses a relative path, since it would resolve inside whichever agent home connects first', () => {
+		expect(() => openLog({ path: 'journal.jsonl' })).toThrow(/absolute/i);
+		expect(() => openLog({ path: '' })).toThrow(/absolute/i);
 	});
 
-	it('refuses a non-positive rotateBytes', async () => {
-		const opened = await backend.open();
-		const env = await opened.backend.connect(host);
-		try {
-			expect(() => openLog(env, { root: '/logs', rotateBytes: 0 })).toThrow(/rotateBytes/);
-			expect(() => openLog(env, { root: '/logs', rotateBytes: -1 })).toThrow(/rotateBytes/);
-		} finally {
-			await env.cleanup(BACKGROUND_CONTEXT);
-			await opened.dispose();
-		}
+	it('refuses a non-positive rotateBytes', () => {
+		expect(() => openLog({ path: '/logs/j.jsonl', rotateBytes: 0 })).toThrow(/rotateBytes/);
+		expect(() => openLog({ path: '/logs/j.jsonl', rotateBytes: -1 })).toThrow(/rotateBytes/);
 	});
 });
