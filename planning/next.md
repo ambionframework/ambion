@@ -177,9 +177,12 @@ journals replay; `activation_end` carries usage.
 7. [ ] `examples/codex`: a thread per activation; the stdio room tools
        server over a local socket; items as steps; `file_change` paths as
        `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 5.
-8. [ ] The storage and transport conformance suites, published and run on
+8. [x] The storage and transport conformance suites, published and run on
        memory, SQLite, the in-process transport, and the Cloudflare RPC
-       transport (D6). Needs 15. Runs beside every other step.
+       transport (D6). Needs 15. Runs beside every other step. Two
+       entries publish the suites: `@ambionframework/journal/conformance`
+       and `@ambionframework/ambion/conformance`. Four runs use them:
+       memory, SQLite, in-process, and Cloudflare RPC.
 
 **Evidence:** both adapters pass the executor suite on fakes; a room with
 one Pi seat and one Claude seat in CI; prompt snapshots; the assistant

@@ -11,7 +11,7 @@ tracks the evidence still required for release.
 | ----------------------------- | -------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------- |
 | Embedded Node application     | Room and runners in one process  | In-memory journals           | Implemented; storage lasts for the instance's lifetime                                |
 | Persistent Node service       | Application-managed service      | SQLite journals              | SQLite recovery tests include a fresh process after SIGKILL; see evidence below       |
-| Separate room and agent hosts | Calls cross the JSON protocol    | Each host chooses storage    | Extension contract exercised by the Cloudflare reference                              |
+| Separate room and agent hosts | Calls cross the JSON protocol    | Each host chooses storage    | Extension contract with a published conformance suite                                 |
 | Cloudflare Durable Objects    | One object per room and per seat | Each object's SQLite storage | Publishable adapter tested in workerd; local CLI support, deployment commands pending |
 
 ## Embedded Node
