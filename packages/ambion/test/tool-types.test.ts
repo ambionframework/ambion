@@ -35,6 +35,9 @@ it('preserves schema inference while composing heterogeneous tools', () => {
 		execute: ({ name }, context) => {
 			expectTypeOf(name).toEqualTypeOf<string>();
 			expectTypeOf(context.callId).toEqualTypeOf<string>();
+			expectTypeOf(context.activation).toEqualTypeOf<string | undefined>();
+			expectTypeOf(context.exchange?.from).toEqualTypeOf<number | undefined>();
+			expectTypeOf(context.exchange?.owner).toEqualTypeOf<string | undefined>();
 			return name;
 		},
 	});

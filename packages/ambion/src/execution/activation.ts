@@ -89,7 +89,6 @@ export function createPiExecutor(options: PiExecutorOptions): Executor {
 export class Activation implements ExecutorSession {
 	readonly id: string;
 	private readonly room: RoomProtocol;
-	private readonly roomName: string;
 	private readonly emit: (event: ExecutionEvent) => void;
 	private readonly definition: AgentDefinition;
 	private readonly model: ModelResolver;
@@ -111,7 +110,6 @@ export class Activation implements ExecutorSession {
 	) {
 		this.id = activation.id;
 		this.room = activation.room;
-		this.roomName = options.room;
 		this.emit = activation.emit;
 		this.definition = options.definition;
 		this.model = options.model;
@@ -281,7 +279,7 @@ export class Activation implements ExecutorSession {
 				systemPrompt: rendered.systemPrompt,
 				model: await this.model(def.executor.model, def.name),
 				thinkingLevel: 'off',
-				tools: toolsFor(view, def, binding(this, this.room), this.roomName),
+				tools: toolsFor(view, def, binding(this, this.room)),
 				messages: [],
 			},
 		});

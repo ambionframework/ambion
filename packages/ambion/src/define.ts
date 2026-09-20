@@ -162,7 +162,9 @@ export interface DefineToolOptions<TParameters extends TSchema> {
 	/**
 	 * Return a string (or Pi's full content shape when needed). Throw on failure.
 	 * `ctx.agent` identifies the calling agent and `ctx.signal` is the abort
-	 * signal Pi gives the tool call.
+	 * signal Pi gives the tool call. `ctx.room`, `ctx.activation`, and
+	 * `ctx.exchange` name the room, the activation, and the open exchange the
+	 * call ran in.
 	 */
 	execute: (
 		params: Static<TParameters>,

@@ -101,7 +101,13 @@ describe('the workspace audit log', () => {
 
 		await write.invoke(
 			{ path: 'notes.txt', content: 'hello\n' },
-			{ agent: workspaceAgent('scribe'), callId: 'call-1', room: 'lobby' },
+			{
+				agent: workspaceAgent('scribe'),
+				callId: 'call-1',
+				room: 'lobby',
+				activation: 'message:4:scribe:1',
+				exchange: { owner: 'andrei', from: 4 },
+			},
 		);
 
 		const entries = await site.use(workspaceAgent('scribe'), (env) =>
@@ -113,6 +119,8 @@ describe('the workspace audit log', () => {
 			agent: 'scribe',
 			tool: 'write',
 			callId: 'call-1',
+			activation: 'message:4:scribe:1',
+			exchange: { owner: 'andrei', from: 4 },
 			arguments: { path: 'notes.txt', content: 'hello\n' },
 		});
 		expect(entries[0]).toHaveProperty('result');
@@ -147,6 +155,7 @@ describe('the workspace audit log', () => {
 		expect(guidance).toContain(DEFAULT_AUDIT_LOG);
 		expect(guidance).toMatch(/read it/i);
 		expect(guidance).toContain('the room, the agent, the tool');
+		expect(guidance).toContain('activation');
 	});
 
 	it('keeps the backend guidance, and adds nothing about audit, when no audit log is set', () => {
@@ -169,6 +178,8 @@ describe('the workspace audit log', () => {
 			readLines(env as BashEnv, DEFAULT_AUDIT_LOG),
 		);
 		expect(entries[0]).toMatchObject({ room: '' });
+		expect(entries[0]).not.toHaveProperty('activation');
+		expect(entries[0]).not.toHaveProperty('exchange');
 		await site.destroy();
 	});
 

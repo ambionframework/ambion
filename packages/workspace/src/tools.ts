@@ -50,6 +50,8 @@ function auditEntry(
 		agent: ctx.agent.name,
 		tool,
 		callId: ctx.callId,
+		...(ctx.activation === undefined ? {} : { activation: ctx.activation }),
+		...(ctx.exchange === undefined ? {} : { exchange: ctx.exchange }),
 		arguments: params,
 		...('result' in outcome ? { result: outcome.result } : { error: auditError(outcome.error) }),
 	};
