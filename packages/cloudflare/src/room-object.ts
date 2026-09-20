@@ -198,11 +198,13 @@ export class RoomObject extends DurableObject<Env> {
 		from: string;
 		to?: string;
 		text: string;
+		refs?: string[];
 		key?: string;
 	}): Promise<ExchangeRef> {
 		const visit = this.visitOf(input.from);
 		const exchange = await visit.send({
 			text: input.text,
+			...(input.refs === undefined ? {} : { refs: input.refs }),
 			...(input.to === undefined ? {} : { to: input.to }),
 			...(input.key === undefined ? {} : { key: input.key }),
 		});

@@ -118,12 +118,17 @@ step. Phase 3 step 3 splits `room-host.ts`, so it waits for step 12.
 **Goal:** every journal field and every read the release needs land, then
 the freeze.
 
-Each label is a stable name that other steps cite. Steps 8 and 15
-landed (#185, #187), so the labels skip them.
+Each label is a stable name that other steps cite. Steps 8, 10, and 15
+landed (#185, #190, #187), so the labels skip them.
+
+Step 10 decisions: a ref is an absolute URI, opaque except for the
+canonical `ambion` scheme. A message holds at most 16 refs of at most
+2048 characters. The room refuses duplicates and keeps order. An empty
+list is stored as absent. The key binds to the refs in order. Replay
+applies the same check. Room URIs are pure functions with no `uri` field
+on the wire.
 
 - [ ] **9.** `limits.context.messages` and `limits.message.bytes` (D5). Needs 15.
-- [ ] **10.** `refs` on spoken messages and summaries; room URIs; `refs` on the
-      `say` parameters (E5). Needs 15.
 - [ ] **11.** `activation`, `exchange`, and `room` on `ToolContext`, supplied by
       the driver (E6). Needs 15.
 - [ ] **12.** The `Step` vocabulary; the trace journal per activation;

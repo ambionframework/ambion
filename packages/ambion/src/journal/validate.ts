@@ -1,6 +1,7 @@
 import { type TSchema, Type } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 import { decodeActivationId } from '../activation-id.ts';
+import { refsRefusal } from '../refs.ts';
 import type { Kind } from './journal.ts';
 
 const extra = { additionalProperties: true } as const;
@@ -12,6 +13,7 @@ const attention = Type.Union([
 	Type.Literal('presence'),
 ]);
 const wakes = Type.Optional(Type.Array(Type.String()));
+const refs = Type.Optional(Type.Array(Type.String()));
 const activationId = Type.Optional(Type.String());
 const commonMessage = { activationId, wakes, at: Type.String() };
 const seating = Type.Object(
@@ -37,6 +39,7 @@ const messageSchemas: Record<string, TSchema> = {
 			from: Type.String(),
 			to: Type.Optional(Type.String()),
 			text: Type.String(),
+			refs,
 		},
 		extra,
 	),
@@ -52,6 +55,7 @@ const messageSchemas: Record<string, TSchema> = {
 			to: Type.String(),
 			text: Type.String(),
 			covers,
+			refs,
 		},
 		extra,
 	),
@@ -148,7 +152,18 @@ export function validateRoomBody(kind: string, body: unknown): kind is Kind {
 		);
 	validateActivationId(kind, objectBody(body));
 	validateRanges(kind, objectBody(body));
+	validateRefs(kind, objectBody(body));
 	return true;
+}
+
+/** The refs of a spoken message or a summary follow the grammar the commit path applies. */
+function validateRefs(kind: string, body: Record<string, unknown> | undefined): void {
+	if (kind !== 'message' || body === undefined) return;
+	if (body.kind !== 'said' && body.kind !== 'summary') return;
+	if (body.refs === undefined) return;
+	const reason = refsRefusal(body.refs);
+	if (reason === undefined) return;
+	throw new Error(`Invalid room journal body for kind '${kind}' at body.refs: ${reason}.`);
 }
 
 /** Every range a body carries: a close, the close a cancel carries, and what a summary covers. */

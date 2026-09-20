@@ -98,7 +98,7 @@ function sayTool(bound: Binding, closingPerson?: string): AgentTool {
 		label: SAY.name,
 		description:
 			closingPerson === undefined
-				? 'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly.'
+				? 'Speak on the record. Omit `to` to address the room; set `to` to address a participant directly. Put the URI of anything the message cites in `refs`.'
 				: summaryToolDescription(closingPerson),
 		execute: async (toolCallId, rawParams) => say(bound, toolCallId, rawParams, closingPerson),
 	};
@@ -110,10 +110,16 @@ async function say(
 	rawParams: unknown,
 	closingPerson?: string,
 ): Promise<AgentToolResult<Record<string, never>>> {
-	const params = rawParams as { to?: string; text: string };
+	const params = rawParams as { to?: string; text: string; refs?: string[] };
 	const text = params.text.trim();
 	const to = params.to?.trim() ? params.to.trim() : undefined;
-	const intent: Intent = { kind: 'said', ...(to === undefined ? {} : { to }), text };
+	const refs = params.refs?.map((ref) => ref.trim()).filter((ref) => ref.length > 0);
+	const intent: Intent = {
+		kind: 'said',
+		...(to === undefined ? {} : { to }),
+		text,
+		...(refs === undefined || refs.length === 0 ? {} : { refs }),
+	};
 	const response = await bound.room.commit({
 		activation: bound.activation.id,
 		key: toolCallId,
