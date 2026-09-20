@@ -15,7 +15,15 @@
  */
 import { Journal, type JournalOpener } from '@ambionframework/journal';
 import type { Limits } from '../host/runtime.ts';
-import type { ExecutionEvent, Seq, Step, TracePolicy, TraceStep } from '../types.ts';
+import {
+	addUsage,
+	type ExecutionEvent,
+	type Seq,
+	type Step,
+	type TracePolicy,
+	type TraceStep,
+	type Usage,
+} from '../types.ts';
 
 /** The entry kinds of a trace journal. */
 type TraceKind = 'run' | 'step';
@@ -62,6 +70,11 @@ export interface TraceSink {
 	 * another type.
 	 */
 	record(step: Step): void;
+	/**
+	 * The sum of every `usage` step recorded so far, or nothing when none came.
+	 * The sum counts steps the pass cap dropped and writes the journal failed.
+	 */
+	usage(): Usage | undefined;
 	/** Write the block in progress, wait for every write, and close the trace journal. */
 	close(): Promise<void>;
 }
@@ -118,6 +131,7 @@ class Trace implements TraceSink {
 	private index = 0;
 	/** The steps written in this pass, against `stepsPerPass`. */
 	private written = 0;
+	private total: Usage | undefined;
 	private pending: { type: 'thinking' | 'text'; text: string } | undefined;
 	private journal: TraceJournal | undefined;
 	private fence: Promise<unknown> | undefined;
@@ -135,7 +149,12 @@ class Trace implements TraceSink {
 		this.stamp({ type: 'pass', pass: this.pass, input, through });
 	}
 
+	usage(): Usage | undefined {
+		return this.total;
+	}
+
 	record(step: Step): void {
+		if (step.type === 'usage') this.total = addUsage(this.total, step);
 		if (step.type === 'thinking' || step.type === 'text') {
 			this.block(step);
 			return;

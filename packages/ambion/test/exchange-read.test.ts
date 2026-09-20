@@ -188,6 +188,57 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 		}
 	});
 
+	it('sums the usage of every attempt and the summary activation on a closed exchange', async () => {
+		const opened = await storage.open();
+		const name = roomName(`exchange-read-usage-${storage.name}`);
+		const ended = (id: string, reason: 'failed' | 'released', usage?: object, seq = 0) => ({
+			kind: 'lease',
+			body: { id, phase: 'ended', reason, at, readThrough: 0, ...(usage ? { usage } : {}) },
+			seq,
+			run,
+		});
+		const spent = (input: number, cost?: number) => ({
+			input,
+			output: input * 2,
+			cacheRead: 1,
+			cacheWrite: 0,
+			...(cost === undefined ? {} : { cost }),
+		});
+		await appendRecord(opened.journals, name, [
+			...record,
+			ended('message:4:assistant:1', 'failed', spent(10, 0.5), 9),
+			ended('message:4:assistant:2', 'released', spent(20, 0.25), 10),
+			ended('closed:4:assistant:1', 'released', spent(5), 11),
+			// Outside the range of the first exchange.
+			ended('message:6:assistant:1', 'released', spent(1000, 9), 12),
+		]);
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: { now: () => 0, alarm: () => () => {} },
+		});
+		try {
+			const read = await readExchange(name, firstFrom, { runtime });
+			if (read === undefined || read.exchange.status !== 'closed')
+				throw new Error('Expected the first exchange to be closed.');
+			expect(read.exchange.usage).toEqual({
+				input: 35,
+				output: 70,
+				cacheRead: 3,
+				cacheWrite: 0,
+				cost: 0.75,
+			});
+			const quietRoom = await seeded(storage, `exchange-read-nousage-${storage.name}`);
+			try {
+				const bare = await readExchange(quietRoom.name, firstFrom, { runtime: quietRoom.runtime });
+				expect(bare?.exchange).not.toHaveProperty('usage');
+			} finally {
+				await quietRoom.opened.dispose();
+			}
+		} finally {
+			await opened.dispose();
+		}
+	});
+
 	it('returns undefined for interior positions, missing exchanges, and missing rooms', async () => {
 		const { name, opened, runtime } = await seeded(
 			storage,
