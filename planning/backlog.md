@@ -72,8 +72,8 @@ handles.
 - A `SeatObject` class rename in the Cloudflare adapter.
 - A provider-neutral plugin ecosystem beyond the executor contract.
 - A second live-tier provider job; Pi's transport is expected to keep
-  behavior provider-neutral (D9). Add one only if a provider-specific
-  defect turns up.
+  behavior provider-neutral. Add one only if a provider-specific defect
+  turns up.
 
 ## Pull requests to close or hold
 

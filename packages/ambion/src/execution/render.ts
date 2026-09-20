@@ -277,7 +277,13 @@ function renderSystemPrompt(view: ActivationView, def: AgentDefinition): string 
 /** What this seat is for, read off the activation purpose. */
 function duties(view: ActivationView, def: AgentDefinition): string[] {
 	const purpose = view.spec.purpose.kind;
-	if (purpose === 'summarize') return [...SUMMARY_DUTIES];
+	if (purpose === 'summarize') {
+		const lines = [...SUMMARY_DUTIES];
+		// The background this activation now reads may hold a fold; only such a
+		// record tells its seat how to read one.
+		if (view.context.messages.some(isSummary)) lines.push(``, ...SUMMARY_PARAGRAPH);
+		return lines;
+	}
 	const lines = [
 		`Speaking is the say tool. Silence is the default: if this does not concern you, end`,
 		`your turn without saying anything, and no mark is left. Speak only when your reply`,
@@ -329,7 +335,7 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 			context.messages,
 			people,
 			context.now,
-			view.spec.purpose.kind === 'respond' ? context.exchange?.from : undefined,
+			view.spec.purpose.kind === 'respond' ? context.exchange?.from : view.spec.purpose.exchange,
 		),
 		``,
 		askOf(view, def),
