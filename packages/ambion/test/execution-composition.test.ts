@@ -214,8 +214,7 @@ describe('execution composition', () => {
 			expect(connection.context.room).toBe(room.name);
 			expect(connection.context.seat).toBe(wrapped.name);
 			expect(connection.context.definition).toEqual(wrapped);
-			expect(connection.context.stream).toBe(wrappedStream);
-			expect(connection.context.transcripts).toBe(runtime.transcripts);
+			expect(connection.context.executor).toBeDefined();
 			expect(
 				wrappedCalls.some((call) => call.systemPrompt.includes(wrapped.executor.instructions)),
 			).toBe(true);

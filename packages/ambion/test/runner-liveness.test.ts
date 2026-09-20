@@ -7,6 +7,7 @@ import {
 	AgentRunner,
 	type CommitRequest,
 	type CommitResult,
+	createPiExecutor,
 	type LeaseRequest,
 	type LeaseResponse,
 	type SeatRoom,
@@ -107,15 +108,21 @@ function fixture(
 		view: options.view,
 		commit: options.commit,
 	});
+	const executor = createPiExecutor({
+		definition: worker,
+		model: runtime.model,
+		stream: runtime.stream,
+		transcripts: runtime.transcripts,
+		room: 'liveness',
+		now: () => clock.now(),
+	});
 	const actor = new AgentRunner(room, {
 		clock,
 		call: runtime.call,
 		definition: worker,
 		room: 'liveness',
 		seat: worker.name,
-		transcripts: runtime.transcripts,
-		stream: runtime.stream,
-		model: runtime.model,
+		executor,
 		emit: options.emit,
 	});
 	return { actor, clock, room };
@@ -418,6 +425,26 @@ describe('runner liveness', () => {
 		await actor.run(second);
 		expect(room.calls.filter((call) => call.operation === 'claim')).toHaveLength(2);
 		expect(room.calls.filter((call) => call.operation === 'release')).toHaveLength(2);
+	});
+
+	it('fails the activation and reports it when the view the pass loop needs is lost', async () => {
+		const events: Array<{ type: string; cause?: string }> = [];
+		const { actor, room } = fixture({
+			view: async () => {
+				throw new Error('view unavailable');
+			},
+			emit: (event) => {
+				if (event.type === 'error' || event.type === 'delivery_error') {
+					events.push({ type: event.type, cause: 'cause' in event ? event.cause : undefined });
+				}
+			},
+		});
+		await actor.run(first);
+		expect(room.calls).toContainEqual(
+			expect.objectContaining({ operation: 'release', reason: 'failed' }),
+		);
+		expect(events).toContainEqual({ type: 'delivery_error', cause: undefined });
+		expect(events).toContainEqual({ type: 'error', cause: 'transient' });
 	});
 
 	it('keeps an applied commit when its reply is lost', async () => {

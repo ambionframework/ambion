@@ -120,12 +120,12 @@ the one before it and no file is reshaped twice.
 
 1. [x] `AgentDefinition` becomes `{ name, identity, executor }`; Pi's
        fields move into `pi({})` (E1).
-2. [ ] The executor contract: `open(activation)` returns a session with
-       `pass`, optional `steer`, and `close`; the driver (leases, renewals,
-       cuts, the wake queue, freshness, delta passes) moves out of the
-       runner and the activation into the kernel; `Runtime` loses `stream`,
-       `model`, and `transcripts` once the driver gives them a home (E2,
-       F2). Needs 1.
+2. [x] The executor contract: `open(activation)` returns a session with
+       `pass`, optional `steer`, and `abort`; the driver (leases, renewals,
+       cuts, the wake queue, freshness) moves out of the runner and the
+       activation into one driver, `AgentRunner` (E2, F2). Delta passes wait
+       on a later step; item 3 removes `stream`, `model`, and `transcripts`
+       from `Runtime`. Needs 1.
 3. [ ] Brand `Runtime`; create the default on first use; narrow the
        application view to `clock` and `storage` (B4). Needs 1.
 4. [ ] Two entries, `.` and `/hosting`; `/transport` removed; the export

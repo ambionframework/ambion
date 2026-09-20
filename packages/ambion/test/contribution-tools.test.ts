@@ -1,7 +1,8 @@
+import type { SessionOpener } from '@ambionframework/pi-journal';
 import { describe, expect, it, vi } from 'vitest';
-import { Activation, type ActivationHost } from '../src/execution/activation.ts';
+import { Activation, type PiExecutorOptions } from '../src/execution/activation.ts';
 import { binding, toolsFor } from '../src/execution/tools.ts';
-import { defineAgent, pi } from '../src/index.ts';
+import { type AgentDefinition, defineAgent, pi } from '../src/index.ts';
 import type {
 	ActivationView,
 	CommitRequest,
@@ -11,7 +12,6 @@ import type {
 	SeatRoom,
 	ViewResponse,
 } from '../src/transport.ts';
-import type { RoomNotification } from '../src/types.ts';
 
 const worker = defineAgent({
 	name: 'worker',
@@ -19,16 +19,40 @@ const worker = defineAgent({
 	executor: pi({ instructions: 'Use the room tools.', model: 'scripted/worker' }),
 });
 
-const host: ActivationHost = {
+const unusedRoom: SeatRoom = {
 	view: async (): Promise<ViewResponse> => ({ stale: 'unused' }),
-	renew: async (): Promise<LeaseResponse> => ({ stale: 'unused' }),
-	build: async () => {
-		throw new Error('unused');
-	},
-	persist: async () => {},
-	emit: (_event: RoomNotification) => {},
-	now: () => 0,
+	commit: async (): Promise<CommitResult> => ({ stale: 'unused' }),
+	lease: async (): Promise<LeaseResponse> => ({ stale: 'unused' }),
 };
+
+function executorOptions(definition: AgentDefinition): PiExecutorOptions {
+	return {
+		definition,
+		model: async () => {
+			throw new Error('unused');
+		},
+		stream: () => {
+			throw new Error('unused');
+		},
+		transcripts: {
+			open: async () => {
+				throw new Error('unused');
+			},
+		} as SessionOpener,
+		room: 'room',
+		now: () => 0,
+	};
+}
+
+function activationFor(id: string, definition: AgentDefinition): Activation {
+	return new Activation(
+		{ id, room: unusedRoom, emit: () => {} },
+		executorOptions(definition),
+		() => {
+			throw new Error('unused');
+		},
+	);
+}
 
 function view(purpose: ActivationView['spec']['purpose']): ActivationView {
 	return {
@@ -54,7 +78,7 @@ function roomThatCommits(commits: CommitRequest[], responses: CommitResult[]): S
 describe('contribution tools', () => {
 	it('keeps a refused blank open, then accepts a corrected retry under the same key', async () => {
 		const commits: CommitRequest[] = [];
-		const activation = new Activation('message:0:worker:1', worker.name, host);
+		const activation = activationFor('message:0:worker:1', worker);
 		const abort = vi.spyOn(activation, 'abort');
 		const acknowledge = vi.spyOn(activation, 'acknowledgeThrough');
 		const tool = toolsFor(
@@ -100,7 +124,7 @@ describe('contribution tools', () => {
 
 	it('terminates after a closing contribution lands', async () => {
 		const commits: CommitRequest[] = [];
-		const activation = new Activation('closed:4:worker:1', worker.name, host);
+		const activation = activationFor('closed:4:worker:1', worker);
 		const abort = vi.spyOn(activation, 'abort');
 		const acknowledge = vi.spyOn(activation, 'acknowledgeThrough');
 		const tool = toolsFor(
