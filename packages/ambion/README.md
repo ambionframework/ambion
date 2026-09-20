@@ -43,13 +43,13 @@ const inventory = defineAgent({
   name: 'inventory',
   identity: 'Checks stock constraints.',
   instructions: 'Use supplied stock facts. State a constraint only when it changes the answer.',
-  model: 'anthropic/claude-sonnet-4-5',
+  model: 'anthropic/claude-sonnet-5',
 });
 const editor = defineAgent({
   name: 'editor',
   identity: 'Consolidates the closed exchange.',
   instructions: 'Preserve the decision and the facts that support it.',
-  model: 'anthropic/claude-sonnet-4-5',
+  model: 'anthropic/claude-sonnet-5',
 });
 
 const room = await startRoom({

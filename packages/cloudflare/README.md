@@ -59,6 +59,6 @@ its recorded summary outcome.
 
 `pnpm test` runs the adapter tests inside workerd, through `@cloudflare/vitest-pool-workers`, as part of
 the repository's `turbo test`. The tests serialize every value that crosses
-between a seat and its room, which is what the design in
-[`docs/agent.md`](../../docs/agent.md) §5 promises. `subscribe` over RPC is
+between a seat and its room, which is what the
+[execution boundary](../../docs/agent.md#execution-boundary) promises. `subscribe` over RPC is
 not built.

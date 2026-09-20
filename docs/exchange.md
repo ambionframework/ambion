@@ -132,12 +132,6 @@ if (recorded) {
 }
 ```
 
-**Pre-0.1 migration:** replace room `messages()` and `participants()` with
-fields from `await room.read()`. Pass `{ messages: false }` when only metadata
-is needed. Exchange `messages()` becomes `waitForClose()`; `response()` becomes
-`waitForSummary()`. The identity type `Exchange` becomes `ExchangeRef`.
-The old names have no aliases. Stored messages and exchange identities are unchanged.
-
 Cancellation closes the current discussion without assigning a new summary. It
 settles existing pending summary work as failed. See the
 [cancellation contract](durability.md#cancellation) for ordering and retry behavior.

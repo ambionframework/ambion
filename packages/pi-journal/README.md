@@ -33,11 +33,3 @@ Conditional appends recover conflicts and lost acknowledgements.
 **A transcript records execution.** Ambion keeps accepted collaboration facts
 in the room journal. Its executor reports audit failures separately from
 model failures. This package provides persistence; its caller owns that policy.
-
-## Migration
-
-Replace imports from `@ambionframework/journal/pi` with
-`@ambionframework/pi-journal`. Add the new package to your dependencies.
-The old subpath is removed. `piSessions` and `SessionOpener` keep their API.
-Session names and stored mutations are unchanged. Existing transcripts need
-no data migration.

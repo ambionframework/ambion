@@ -2,7 +2,8 @@
 
 Reports below preserve historical runs. API names in those reports describe
 the version that produced each run. Current code uses `agents`, `seats`, and
-`participants()` as documented in [`docs/roster.md`](../docs/roster.md).
+`room.read()` as documented in [`docs/roster.md`](../docs/roster.md) and
+[`docs/exchange.md`](../docs/exchange.md).
 
 These are dated reports of live runs. One report belongs to one merged
 change, and the newest report belongs to the change in flight.

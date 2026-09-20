@@ -15,13 +15,14 @@ pnpm format     # biome --write, then prettier --write
 ```
 
 Run `pnpm format` after edits, then `pnpm check` before pushing. CI also verifies
-contracts, tests Node 22/24, and checks packed CLI artifacts; local checks do not
-replace that platform coverage.
+the Dafny contracts, runs the suites on Node 26, and checks the packed CLI
+artifacts; local checks do not replace that coverage.
 
 `pnpm test:live` runs the room on a real model. It needs the key for the
 provider in `AMBION_MODEL` (`ANTHROPIC_API_KEY` by default), it costs money,
-and `pnpm check` never runs it. CI runs it weekly, on demand, and for same-repository
-PRs opened by a repository admin; see [the workflow](.github/workflows/live.yml).
+and `pnpm check` never runs it. CI runs it after a change lands on `main`, on a
+weekly schedule, and on demand, and never on a pull request; see
+[the workflow](.github/workflows/live.yml).
 
 [Toolchain decisions](docs/toolchain.md) explain the package boundaries, test
 tiers, and release process. Keep design rationale there; scripts and workflows

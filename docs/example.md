@@ -88,7 +88,7 @@ interface.
 
 **Every application concept in Workbench is one kernel mechanism.** The
 kernel owns the collaboration. The example owns the library files, the
-domain instructions, and the two endpoints.
+domain instructions, and the terminal.
 
 | Application concept       | Kernel mechanism                                                  |
 | ------------------------- | ----------------------------------------------------------------- |

@@ -21,10 +21,10 @@ access token with `read:packages`. Add these lines to your user `~/.npmrc`:
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-Install the prerelease from the `next` tag:
+Install the CLI:
 
 ```sh
-npm install --global @ambionframework/cli@next
+npm install --global @ambionframework/cli
 ```
 
 ## Create and start a team

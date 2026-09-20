@@ -71,21 +71,12 @@ of returned entries. The full `entries` snapshot does not grow after it is read.
 Decisions still run inside the queue. Their proposed body is captured before
 awaiting storage; later caller mutations do not change that append.
 
-**Migration:** `append` replaces `commit` and `write`. Remove the vocabulary's
-`record` field and the third `Journal` type parameter. The caller derives
-message views and freshness from entries. `record`, `since`, `lastCommitted`,
-and generic `readThrough` are removed. The stored envelope is unchanged.
-
 `sqliteJournals(sql)` provides SQLite storage with native compare-and-append.
 `memoryJournals()` provides independent in-memory journals for one process.
 
 Pi transcript storage lives in
 [`@ambionframework/pi-journal`](https://github.com/ambionframework/ambion/tree/main/packages/pi-journal).
 It uses the same storage backends and keeps each session in a separate journal.
-
-**Migration:** replace imports from `@ambionframework/journal/pi` with
-`@ambionframework/pi-journal`. Add the new package to your dependencies.
-The old subpath is removed. Stored transcripts keep their format and names.
 
 See the [durability contract](https://github.com/ambionframework/ambion/blob/main/docs/durability.md)
 for failure guarantees. The journal stores ordered facts; applications own
