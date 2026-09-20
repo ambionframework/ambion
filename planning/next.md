@@ -274,7 +274,8 @@ the code it describes lands, so pages run beside the code.
        harness memory (D8, D4, F9). Needs phase 4 step 6 and phase 2
        step 8.
 8. [ ] Retire the residue: rule citations, migration notes, package
-       descriptions, comment voice, `planning/evidence/reports/README.md` (C4). Needs 1.
+       descriptions, comment voice, and
+       `planning/evidence/reports/README.md` (C4). Needs 1.
 9. [ ] The `README.md` example typechecked against the packed entries;
        package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
        floors. Needs phase 6 step 3.
@@ -387,10 +388,11 @@ definitions, and make it the default.
 **C4. Retire pre-release residue.** Eight source comments cite numbered
 rules that `docs/agent.md` no longer has; four migration notes describe
 renames before any release; the core manifest describes "a minimalist
-framework for ambient-aware, always-on agents"; `planning/evidence/reports/README.md` names a
-removed API. Fix each before the tag, and state two limits the docs omit:
-passes share no model context without an adapter session, and a second
-person's question inside an open exchange belongs to that exchange.
+framework for ambient-aware, always-on agents";
+`planning/evidence/reports/README.md` names a removed API. Fix each before
+the tag, and state two limits the docs omit: passes share no model context
+without an adapter session, and a second person's question inside an open
+exchange belongs to that exchange.
 
 **C5. One word, one meaning.** "Seat" names membership, the `seats` map,
 the `seat()` operation, the executor dependencies, and the wire. "Exchange"

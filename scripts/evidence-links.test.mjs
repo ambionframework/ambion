@@ -34,3 +34,16 @@ test('every relative Markdown link with a fragment resolves to a heading', () =>
 		}
 	}
 });
+
+test('prose lines the evidence move rewrote stay within 78 columns', () => {
+	const lines = [
+		['docs/assistant.md', 'acceptance review'],
+		['planning/next.md', 'planning/evidence/reports/README.md'],
+	];
+	for (const [page, needle] of lines) {
+		const text = readFileSync(join(root, page), 'utf8').split('\n');
+		for (const line of text.filter((l) => l.includes(needle) && !l.startsWith('|'))) {
+			assert.ok(line.length <= 78, `${page}: ${line.length} columns: ${line}`);
+		}
+	}
+});
