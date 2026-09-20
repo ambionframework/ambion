@@ -1,26 +1,28 @@
-import type { ExecutionEnv } from '@earendil-works/pi-agent-core';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
-
 /** The stable identity a backend uses for one calling agent. */
 export interface WorkspaceAgent {
 	readonly name: string;
 	readonly identity: string;
 }
 
+/** The minimal environment the resource owner can clean up. Every binding's env extends it. */
+export interface ResourceEnv {
+	cleanup(): Promise<void>;
+}
+
 /** Storage operations beneath one workspace resource owner. */
-export interface ResourceBackend {
-	connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<ExecutionEnv>;
+export interface ResourceBackend<Env extends ResourceEnv = ResourceEnv> {
+	connect(agent: WorkspaceAgent, signal?: AbortSignal): Promise<Env>;
 	destroy(): Promise<void>;
 	/** Release host-local resources without deleting the persisted workspace. */
 	dispose?(): Promise<void>;
 }
 
 /** A workspace resource and its single lifecycle and coordination owner. */
-export interface WorkspaceResource {
+export interface WorkspaceResource<Env extends ResourceEnv = ResourceEnv> {
 	readonly name: string;
 	use<T>(
 		agent: WorkspaceAgent,
-		operation: (env: ExecutionEnv) => Promise<T> | T,
+		operation: (env: Env) => Promise<T> | T,
 		signal?: AbortSignal,
 	): Promise<T>;
 	dispose(): Promise<void>;
@@ -36,10 +38,10 @@ const CLOSED = 'Workspace is no longer available.';
  * including connection and callback work, so every agent sharing it observes
  * one explicit ordering policy.
  */
-export function openResource(options: {
+export function openResource<Env extends ResourceEnv = ResourceEnv>(options: {
 	name: string;
-	backend: ResourceBackend;
-}): WorkspaceResource {
+	backend: ResourceBackend<Env>;
+}): WorkspaceResource<Env> {
 	if (!/^[a-z][a-z0-9-]*$/.test(options.name)) {
 		throw new Error(
 			`Invalid workspace name '${options.name}': names are lowercase, alphanumeric plus dashes.`,
@@ -64,7 +66,7 @@ export function openResource(options: {
 
 	const use = <T>(
 		agent: WorkspaceAgent,
-		operation: (env: ExecutionEnv) => Promise<T> | T,
+		operation: (env: Env) => Promise<T> | T,
 		signal?: AbortSignal,
 	): Promise<T> => {
 		try {
@@ -79,7 +81,7 @@ export function openResource(options: {
 				ensureUsable(signal);
 				return await operation(env);
 			} finally {
-				await env.cleanup(BACKGROUND_CONTEXT);
+				await env.cleanup();
 			}
 		};
 		const task = tail.then(run, run);

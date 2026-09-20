@@ -1,6 +1,6 @@
 import type { Room, ToolBundle } from '@ambionframework/ambion';
 import { type AuditLog, type AuditLogOptions, auditGuidance, openAuditLog } from './audit.ts';
-import type { WorkspaceBackend } from './backend.ts';
+import type { WorkspaceBackend, WorkspaceEnv } from './backend.ts';
 import {
 	mirrorRoom,
 	ROOM_MIRROR_GUIDANCE,
@@ -11,7 +11,7 @@ import { openResource, type WorkspaceAgent, type WorkspaceResource } from './res
 import { bindTools } from './tools.ts';
 
 /** A workspace resource with an ordinary Ambion tool bundle. */
-export interface Workspace extends WorkspaceResource {
+export interface Workspace extends WorkspaceResource<WorkspaceEnv> {
 	/** Return the backend tools and optional model guidance as one stable bundle. */
 	tools(): ToolBundle;
 	/**
@@ -44,7 +44,7 @@ export function openWorkspace(options: {
 	backend: WorkspaceBackend;
 	audit?: AuditLogOptions;
 }): Workspace {
-	const resource = openResource(options);
+	const resource = openResource<WorkspaceEnv>(options);
 	const audit = options.audit === undefined ? undefined : openAuditLog(options.audit);
 	const toolBundle = bindTools(
 		options.backend.tools,
