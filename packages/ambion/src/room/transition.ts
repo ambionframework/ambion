@@ -34,9 +34,9 @@ type ProposedEvent<K extends Kind = Kind> = {
 
 type PresenceChange = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 type MessageCommand =
-	| { type: 'deliver'; from: string; to?: string; text: string }
+	| { type: 'deliver'; from: string; to?: string; text: string; bytes?: number }
 	| { type: 'presence'; change: PresenceChange; route: boolean }
-	| { type: 'commit'; commit: CommitRequest };
+	| { type: 'commit'; commit: CommitRequest; bytes?: number };
 type LeaseCommand =
 	| { type: 'claim'; id: string; expiry: number; deadline: number }
 	| { type: 'renew'; id: string; expiry: number; deadline: number; readThrough?: number }
@@ -65,6 +65,7 @@ type RefusalCode = Extract<
 	| 'unknown_participant'
 	| 'duplicate_name'
 	| 'missing_definition'
+	| 'message_too_large'
 >;
 
 export type Refusal =
@@ -118,7 +119,7 @@ export function decide(
 		case 'presence':
 			return presence(state, command, now);
 		case 'commit':
-			return commit(state, command.commit, now);
+			return commit(state, command.commit, now, command.bytes);
 		case 'claim':
 			return claim(state, command, now);
 		case 'renew':
@@ -190,14 +191,29 @@ function message(
 	body: Body<Message>,
 	now: number,
 	route = true,
+	bytes?: number,
 ): RoomDecision<'message'> {
 	if ((body.kind === 'said' || body.kind === 'summary') && body.text.trim() === '') {
 		return refused('The message is empty. Say something, or end your turn instead.');
 	}
+	const oversize = oversizeRefusal(body, bytes);
+	if (oversize !== undefined) return oversize;
 	const wakes = route ? routes(body, state, liveWork(state, now).seats) : [];
 	return {
 		event: { kind: 'message', body: { ...body, ...(wakes.length === 0 ? {} : { wakes }) } },
 	};
+}
+
+/** The room takes at most `bytes` UTF-8 bytes of text in one message. Absent means no bound. */
+function oversizeRefusal(body: Body<Message>, bytes?: number): { refusal: Refusal } | undefined {
+	if (bytes === undefined || (body.kind !== 'said' && body.kind !== 'summary')) return undefined;
+	const size = new TextEncoder().encode(body.text).byteLength;
+	return size > bytes
+		? refused(
+				`The message is ${size} bytes. This room takes at most ${bytes} bytes in one message. Shorten it.`,
+				'message_too_large',
+			)
+		: undefined;
 }
 
 function deliver(
@@ -220,6 +236,8 @@ function deliver(
 		state,
 		{ kind: 'said', at: iso(now), from, ...(to === undefined ? {} : { to }), text },
 		now,
+		true,
+		command.bytes,
 	);
 }
 
@@ -309,7 +327,12 @@ function arrivalRefusal(
 	return undefined;
 }
 
-function commit(state: RoomState, request: CommitRequest, now: number): RoomDecision<'message'> {
+function commit(
+	state: RoomState,
+	request: CommitRequest,
+	now: number,
+	bytes?: number,
+): RoomDecision<'message'> {
 	const spec = activationSpec(request.activation, state);
 	const live = liveSpec(state, request.activation, spec, now);
 	if ('refusal' in live) return live;
@@ -317,8 +340,8 @@ function commit(state: RoomState, request: CommitRequest, now: number): RoomDeci
 	if (!permits(live, intent.kind)) return refused('This activation cannot submit that intent.');
 	const purpose = live.purpose;
 	if (intent.kind === 'said' && purpose.kind === 'summarize')
-		return closingCommit(state, request, live, purpose, now);
-	return ordinaryCommit(state, request, live, now);
+		return closingCommit(state, request, live, purpose, now, bytes);
+	return ordinaryCommit(state, request, live, now, bytes);
 }
 
 function closingCommit(
@@ -327,6 +350,7 @@ function closingCommit(
 	live: ActivationSpec,
 	purpose: Extract<ActivationSpec['purpose'], { kind: 'summarize' }>,
 	now: number,
+	bytes?: number,
 ): RoomDecision<'message'> {
 	const intent = request.intent;
 	if (intent.kind !== 'said') return refused('This activation cannot submit that intent.');
@@ -345,6 +369,8 @@ function closingCommit(
 			from: live.seat,
 		},
 		now,
+		true,
+		bytes,
 	);
 }
 
@@ -353,6 +379,7 @@ function ordinaryCommit(
 	request: CommitRequest,
 	live: ActivationSpec,
 	now: number,
+	bytes?: number,
 ): RoomDecision<'message'> {
 	const { intent } = request;
 	const fresh = speechFreshness(state, request);
@@ -361,7 +388,7 @@ function ordinaryCommit(
 	if (intent.kind === 'seated') return seating(state, intent.name, stamp, now);
 	if (intent.kind === 'unseated') return unseating(state, intent.name, stamp, now);
 	const refusal = addressRefusal(state, live.seat, intent.to);
-	return refusal ?? message(state, { ...intent, ...stamp }, now);
+	return refusal ?? message(state, { ...intent, ...stamp }, now, true, bytes);
 }
 
 function isCoveringSummary(

@@ -26,7 +26,7 @@
  */
 
 import { decodeActivationId } from './activation-id.ts';
-import { answerCommit, answerLease, answerView } from './answers.ts';
+import { type Answering, answerCommit, answerLease, answerView } from './answers.ts';
 import { captureHuman } from './define.ts';
 import { AmbionError } from './errors.ts';
 import type { ExecutionConnector, RoomRuntime, RunningRoom } from './host/runtime.ts';
@@ -456,6 +456,11 @@ export class RoomHost implements Room, RunningRoom {
 
 	// -- what the room holds --------------------------------------------------
 
+	/** The bounds the room applies to what an activation reads. */
+	get limits(): Answering['limits'] {
+		return this.runtime.limits;
+	}
+
 	now(): number {
 		return this.runtime.clock.now();
 	}
@@ -803,6 +808,7 @@ export class RoomHost implements Room, RunningRoom {
 			from,
 			...(to === undefined ? {} : { to }),
 			text: input.text,
+			bytes: this.runtime.limits.message.bytes,
 		});
 		return this.handleForMessage(committed);
 	}
@@ -1228,7 +1234,12 @@ export class RoomHost implements Room, RunningRoom {
 	async write(commit: CommitRequest): Promise<CommitResult | { refusal: Refusal }> {
 		const appended = await this.submit(
 			'message',
-			() => decide(this.state(), { type: 'commit', commit }, this.now()),
+			() =>
+				decide(
+					this.state(),
+					{ type: 'commit', commit, bytes: this.runtime.limits.message.bytes },
+					this.now(),
+				),
 			spaced('commit', commit.key),
 		);
 		if ('entry' in appended) {

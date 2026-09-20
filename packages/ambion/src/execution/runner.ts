@@ -433,17 +433,20 @@ export class AgentRunner implements AgentPort {
 		const estimate = this.context.definition.executor.estimateTokens ?? defaultEstimate;
 		let before: number | undefined;
 		let held: Message[] = [];
+		let omitted = 0;
 		let frame: ActivationView | undefined;
 		for (;;) {
 			const page = await this.pageView(id, before, cancelled);
 			if ('stop' in page) return page.stop;
 			if (frame === undefined) frame = page.view;
 			const older = page.view.context.messages;
+			// The last page fetched is the oldest, so its count is the room's.
+			omitted = page.view.context.omitted ?? 0;
 			held = [...older, ...held];
 			const window = windowToLimit(held, estimate, limit, pinOf(frame));
 			before = held[0]?.seq;
 			if (pagingDone(window.from, held, frame.context.earliest, older.length))
-				return { view: withWindow(frame, window.kept) };
+				return { view: withWindow(frame, window.kept, omitted + held.length - window.kept.length) };
 		}
 	}
 
@@ -550,8 +553,16 @@ function pagingDone(
 }
 
 /** The view with its messages replaced by the windowed record the seat assembled. */
-function withWindow(view: ActivationView, kept: readonly Message[]): ActivationView {
-	return { ...view, context: { ...view.context, messages: [...kept] } };
+function withWindow(
+	view: ActivationView,
+	kept: readonly Message[],
+	omitted: number,
+): ActivationView {
+	const { omitted: _first, ...context } = view.context;
+	return {
+		...view,
+		context: { ...context, messages: [...kept], ...(omitted > 0 ? { omitted } : {}) },
+	};
 }
 
 // -- the transport ------------------------------------------------------------

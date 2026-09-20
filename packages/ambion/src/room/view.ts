@@ -12,6 +12,11 @@ import type { AgentParticipantInfo, ParticipantInfo, Seq } from '../types.ts';
 import { isSummary, type Message } from '../types.ts';
 import type { RoomState } from './fold.ts';
 
+/** The most messages a view holds beyond the pinned exchange. */
+interface ViewLimits {
+	readonly messages: number;
+}
+
 /** What the view is built from: the fold and current host facts. */
 export interface RoomFacts {
 	readonly name: string;
@@ -19,6 +24,8 @@ export interface RoomFacts {
 	readonly state: RoomState;
 	/** The seats live now, by name, with the ids that make them live. */
 	readonly live: ReadonlyMap<string, string[]>;
+	/** The room's cap on the record. Absent means no cap. */
+	readonly limits?: ViewLimits;
 	/** How many messages landed after this seq. */
 	messagesSince(seq: Seq): number;
 }
@@ -61,7 +68,9 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 			? state.messages.filter((message) => message.seq <= purpose.through)
 			: state.messages;
 	const page = range !== undefined && validRange(range) ? range : undefined;
-	const messages = page !== undefined ? pageOf(bounded, page) : bounded;
+	const pin = purpose.kind === 'respond' ? state.exchange?.from : purpose.exchange;
+	const served = capOf(bounded, facts.limits?.messages, pin);
+	const messages = page !== undefined ? pageOf(served, page) : served;
 	const context: CollaborationContext = {
 		name: facts.name,
 		now: facts.now,
@@ -72,7 +81,13 @@ export function viewOf(spec: ActivationSpec, facts: RoomFacts, range?: ViewRange
 		...(purpose.kind !== 'respond' || state.exchange === undefined
 			? {}
 			: { exchange: { owner: state.exchange.owner, from: state.exchange.from } }),
-		...earliestOf(page !== undefined, state.messages),
+		...reachOf(
+			page !== undefined || served.length < bounded.length,
+			bounded,
+			served,
+			messages,
+			page,
+		),
 		...purposeContext(purpose, state),
 	};
 	// In-process executors receive the same detached snapshot as remote executors.
@@ -89,10 +104,40 @@ function validRange(range: ViewRange): boolean {
 	return range.before === undefined || (Number.isSafeInteger(range.before) && range.before >= 0);
 }
 
-/** The record floor, reported only for a bounded page, so a seat can stop paging. */
-function earliestOf(paged: boolean, messages: readonly Message[]): { earliest?: Seq } {
-	const first = messages[0];
-	return paged && first !== undefined ? { earliest: first.seq } : {};
+/**
+ * The record floor and the count below the view, reported when the view holds
+ * less than the whole record, so a seat can stop paging and a reader can see
+ * that a gap exists.
+ */
+function reachOf(
+	limited: boolean,
+	bounded: readonly Message[],
+	served: readonly Message[],
+	messages: readonly Message[],
+	page: ViewRange | undefined,
+): { earliest?: Seq; omitted?: number } {
+	if (!limited) return {};
+	const first = served[0];
+	const lowest = messages[0]?.seq ?? page?.before ?? Number.POSITIVE_INFINITY;
+	const omitted = bounded.filter((message) => message.seq < lowest).length;
+	return first === undefined ? { omitted } : { earliest: first.seq, omitted };
+}
+
+/**
+ * The newest `cap` messages of the record. The floor moves past a summarised
+ * range it would split, and down to the pin, so the open exchange stays whole.
+ */
+function capOf(
+	messages: readonly Message[],
+	cap: number | undefined,
+	pin: Seq | undefined,
+): Message[] {
+	if (cap === undefined || !Number.isFinite(cap) || messages.length <= cap) return [...messages];
+	const first = messages[messages.length - cap];
+	if (first === undefined) return [...messages];
+	let floor = foldAlignedFloor(messages, first.seq);
+	if (pin !== undefined && pin < floor) floor = pin;
+	return messages.filter((message) => message.seq >= floor);
 }
 
 /**

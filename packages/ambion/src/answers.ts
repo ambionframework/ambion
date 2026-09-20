@@ -25,6 +25,8 @@ const stale = (why: string): Stale => ({ stale: why });
 export interface Answering {
 	// -- the room as a value --
 	readonly name: string;
+	/** How much of the record one activation reads. */
+	readonly limits: { readonly context: { readonly messages: number } };
 	now(): number;
 	// -- what the room does --
 	/** The room answers nothing more: the host stopped it, or it was dropped. */
@@ -76,6 +78,7 @@ function facts(room: Answering, state: RoomState): RoomFacts {
 		name: room.name,
 		now: room.now(),
 		state,
+		limits: room.limits.context,
 		live: room.live(state),
 		messagesSince: (seq) => state.messages.filter((message) => message.seq > seq).length,
 	};

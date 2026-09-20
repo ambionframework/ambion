@@ -84,6 +84,13 @@ whitespace-only human messages, agent messages, and summaries before writing.
 A refusal does not reserve the request key. Direct calls preserve accepted
 text exactly; `say` trims its input. An agent can finish silently without `say`.
 
+**A message has a size limit.** `limits.message.bytes` sets the most UTF-8
+bytes one human message, agent message, or summary text carries. The default
+is unbounded. The room refuses a longer text with the code `message_too_large`
+before it writes. A refusal does not reserve the request key. An agent reads
+the refusal as a tool error and can say a shorter text. The limit counts
+`text` only.
+
 **A refusal is typed.** The room throws `AmbionError`. Its `code` is one of
 the closed set in `errors.ts`; its message is for a person.
 
@@ -241,6 +248,20 @@ call `view(activation, range)`, and it keeps the newest part that fits the
 limit, plus the open exchange whole. An older exchange falls out of context; its
 summary stands for it when one exists. An agent with no limit reads the whole
 record. The record keeps every message for human review either way.
+
+`limits.context.messages` caps the record at the room, for every seat and
+for every executor. The room serves the newest `messages` entries of the
+record an activation may read. The floor moves past a summarised range it
+would split. The open exchange stays whole, so a cap smaller than the open
+exchange serves the exchange in full. The bound on the view is `messages`
+plus the open exchange, not a byte bound. The default is unbounded. A seat
+with `activationTokenLimit` windows further, inside what the room serves.
+
+When a view holds less than the whole record, `context.omitted` counts the
+messages below the first one served, and the rendered record opens with one
+line: `── N earlier messages not shown ──`. The line shows for summarised and
+unsummarised history alike. The room does not record the cap. A room resumed
+under another cap serves a different view of the same record.
 
 Ambion does not promise bounded replay. The record window bounds model input,
 not the journal fold. Domain tools can act before a contribution commits; room
