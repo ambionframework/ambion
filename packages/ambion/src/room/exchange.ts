@@ -217,7 +217,16 @@ export function openExchange(
 	closes: readonly Close[],
 	people: readonly string[],
 ): ExchangeRef | undefined {
-	const question = openingQuestion(messages, people, lastOf(closes.map((close) => close.through)));
+	return exchangeAfter(messages, people, lastOf(closes.map((close) => close.through)));
+}
+
+/** The open exchange over the messages after a boundary, for a projection that keeps only those. */
+export function exchangeAfter(
+	messages: readonly Message[],
+	people: readonly string[],
+	closedThrough: Seq,
+): ExchangeRef | undefined {
+	const question = openingQuestion(messages, people, closedThrough);
 	// The re-test narrows the TypeScript type only: the contract fixes the kind.
 	return question !== undefined && isSpoken(question)
 		? { owner: question.from, from: question.seq, at: question.at }
