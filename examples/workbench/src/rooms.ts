@@ -10,7 +10,7 @@ import {
 	startRoom,
 } from '@ambionframework/ambion';
 import { type Sql, type SqlValue, sqliteJournals } from '@ambionframework/journal';
-import { directoryBackend, openWorkspace } from '@ambionframework/workspace';
+import { directoryBackend, openWorkspace, type RoomMirror } from '@ambionframework/workspace';
 import { team } from './definitions.ts';
 import { scenarios, seedWorkspace } from './scenarios.ts';
 
@@ -33,7 +33,9 @@ interface Activity {
 	text: string;
 }
 type HostLifecycle =
-	{ status: 'stopped' } | { status: 'running'; room: Room } | { status: 'stopping'; room: Room };
+	| { status: 'stopped' }
+	| { status: 'running'; room: Room; mirror?: RoomMirror }
+	| { status: 'stopping'; room: Room; mirror?: RoomMirror };
 interface HostedRoom extends CatalogEntry {
 	lifecycle: HostLifecycle;
 	team: ReturnType<typeof team>;
@@ -62,7 +64,11 @@ export async function openRooms(
 	const entries = new Map<string, HostedRoom>();
 	let closing = false;
 	const workspacePath = resolve(directory, 'workspace');
-	const workspace = openWorkspace({ name: 'workbench', backend: directoryBackend(workspacePath) });
+	const workspace = openWorkspace({
+		name: 'workbench',
+		backend: directoryBackend(workspacePath),
+		audit: {},
+	});
 	try {
 		await seedWorkspace(workspacePath);
 	} catch (error) {
@@ -126,6 +132,13 @@ export async function openRooms(
 		// usable running room that shutdown can still clean up.
 		entry.lifecycle = { status: 'running', room };
 		room.subscribe((event) => notify(entry, event));
+		try {
+			// The mirror is a secondary, best-effort copy. A failure to attach
+			// one must not stop the room itself from running.
+			entry.lifecycle = { status: 'running', room, mirror: await workspace.mirror(room) };
+		} catch {
+			// Left unmirrored; the room keeps running on its own journal.
+		}
 	}
 	async function status(entry: HostedRoom) {
 		return roomView(entry, await readRoom(entry.name, { runtime, messages: false }));
@@ -190,10 +203,13 @@ export async function openRooms(
 	}
 	async function stopEntry(entry: HostedRoom): Promise<void> {
 		if (entry.lifecycle.status === 'stopped') return;
-		const room = entry.lifecycle.room;
+		const { room, mirror } = entry.lifecycle;
 		// Keep the handle while cleanup is in flight and after a failed write.
-		entry.lifecycle = { status: 'stopping', room };
+		entry.lifecycle = { status: 'stopping', room, mirror };
 		await room.stop();
+		// Stop the room, and its shutdown-triggered "left", before the mirror:
+		// a mirror stopped first must not miss what the shutdown itself writes.
+		await mirror?.stop();
 		entry.lifecycle = { status: 'stopped' };
 	}
 	try {
