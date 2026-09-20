@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SpokenMessage } from '../src/index.ts';
-import { roomJournal } from '../src/journal/journal.ts';
+import { placed, roomJournal, spaced } from '../src/journal/journal.ts';
 import { foldRoom } from '../src/room/fold.ts';
 import { deferred, roomName } from './support/room.ts';
 import { faultyJournals, gatedJournals, memory } from './support/storage.ts';
@@ -35,6 +35,23 @@ const message = (journal: OpenJournal, key: string | undefined, text: string) =>
 	});
 
 const messages = (journal: OpenJournal) => foldRoom(journal.entries, options).messages;
+
+describe('key spaces', () => {
+	it('strips the space tag back off a placed entry, leaving the caller its own token', () => {
+		const entry = {
+			kind: 'message' as const,
+			seq: 1,
+			key: spaced('delivery', 'k1'),
+			body: say('one'),
+		};
+		expect(placed(entry)).toEqual({ ...say('one'), seq: 1, key: 'k1' });
+	});
+
+	it('passes an untagged key through unchanged, for an entry from before key spaces', () => {
+		const entry = { kind: 'message' as const, seq: 1, key: 'k1', body: say('one') };
+		expect(placed(entry)).toEqual({ ...say('one'), seq: 1, key: 'k1' });
+	});
+});
 
 describe('roomJournal', () => {
 	it('lands a repeated key once, bypasses its decision, and recovers it after a restart', async () => {

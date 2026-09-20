@@ -67,7 +67,7 @@ describe('membership writes with fixed definitions', () => {
 				session.seat(chosen.name),
 				session.seat(chosen.name),
 			]);
-			expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+			expect(results.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled']);
 			expect(
 				(await messagesOf(session)).filter((message) => message.kind === 'seated'),
 			).toHaveLength(1);
@@ -167,9 +167,7 @@ describe('membership writes with fixed definitions', () => {
 			try {
 				await expect(session.seat(chosen.name)).rejects.toThrow(/disk is full/);
 				unreadable.fail(false);
-				if (mode === 'before') await session.seat(chosen.name);
-				else
-					await expect(session.seat(chosen.name)).rejects.toThrow(/one name names one participant/);
+				await session.seat(chosen.name);
 				await waitForRoom(session);
 				expect(calls).toEqual(['chosen']);
 				expect(

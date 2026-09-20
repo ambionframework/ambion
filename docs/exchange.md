@@ -98,6 +98,15 @@ failure. Retrying the same delivery key and payload returns the same handle;
 conflicting reuse rejects. Concurrent sends into one open exchange share its
 identity. See [delivery guarantees](durability.md#2-what-a-delivery-promises).
 
+**The handle's `opened` field marks the delivery that started the exchange.**
+It is `true` only for the send whose message is the exchange's own opening
+position; a later send that joins an already-open exchange gets `opened:
+false`, even though `handle.from` matches. A retry of the opening delivery
+key also reads back `opened: true`. `room.exchange(from)` always returns
+`opened: false`, because reacquiring a handle is never the act that opens
+the exchange. `owner` can name a person other than the one who sent a given
+message, when that message joined an exchange another person opened.
+
 Live notifications include `message`, `exchange_opened`, and
 `exchange_closed` events, plus execution events. An execution event names its
 activation. Notifications and pending waits belong to the current run and

@@ -166,7 +166,7 @@ function membershipTool(
 		description:
 			kind === 'seated'
 				? 'Seat one agent from the reserve. It joins the room and reads the record.'
-				: 'Remove one seated agent from the room.',
+				: "Remove one seated agent from the room. A fixed seat, such as the summary writer's, stays.",
 		execute: async (toolCallId, rawParams) => {
 			const name = (rawParams as { name: string }).name.trim();
 			const intent: Intent = { kind, name };

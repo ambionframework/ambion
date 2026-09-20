@@ -21,7 +21,15 @@ const room = await startRoom({
 If `seats` is omitted, every catalog agent starts as a member at `broadcast`.
 An empty map starts every catalog agent in the reserve. `summary` names one
 catalog agent that may receive closing work. It does not create a separate
-membership type.
+membership type. `summary` must name an agent in `seats`. A room start
+rejects a `summary` name that is not seated.
+
+A `seats` entry takes an attention value, or a `SeatOptions` object with
+`attention` and `fixed`. Use the object form to set `fixed` at start:
+
+```ts
+seats: { editor: { attention: 'broadcast', fixed: true } }
+```
 
 The optional `assistant` property registers an ordinary agent, seats it at
 `broadcast`, and selects it as the summary writer. With this property,
@@ -53,14 +61,26 @@ checks the activation, lease, recipient, and consumed context for every write.
 ## Membership operations
 
 An agent activation can use `seat({ name })` and `unseat({ name })`. The room
-also exposes `room.seat(name)` and `room.unseat(name)` for the host.
+also exposes `room.seat(name, options?)` and `room.unseat(name)` for the host.
 
 - `seat` accepts a name from the catalog and reserve.
 - `unseat` accepts a currently seated agent, including the calling agent.
 - An unknown name or a human name is refused.
 - Agent tool commits return `unchanged` when the requested membership already holds.
-- Host `room.seat` / `room.unseat` calls reject an already-satisfied request.
+- A host `room.seat` / `room.unseat` call that repeats an already-satisfied
+  request resolves without writing a new entry.
 - Neither path writes another membership entry for that request.
+
+## Fixed seats
+
+A seat can be fixed: an agent cannot unseat it through the room's `unseat`
+tool, though the host always can through `room.unseat`. A seating is fixed
+when its `SeatOptions` set `fixed: true`, or, absent that option, when the
+seat is the room's configured summary writer. Set `fixed: false` on the
+summary writer's seat to let an agent unseat it.
+
+A fixed seat still leaves through the ordinary channel when the host removes
+it. The room does not otherwise protect a fixed seat from crashes or replay.
 
 When an agent leaves, its definition remains available in the reserve. Pending
 work for that seat settles according to the room's recorded lease rules. A

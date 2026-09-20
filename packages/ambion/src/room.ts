@@ -1,7 +1,7 @@
 /** Public room facade that composes collaboration and execution services. */
 
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { captureAgent } from './define.ts';
+import { assertRoomName, captureAgent } from './define.ts';
 import { AmbionError } from './errors.ts';
 import { composeExecution } from './execution/compose.ts';
 import {
@@ -25,6 +25,7 @@ import type {
 	ExchangeView,
 	Message,
 	RoomSnapshot,
+	SeatOptions,
 	Seq,
 } from './types.ts';
 
@@ -38,7 +39,7 @@ export interface StartRoomOptions {
 	/** The fixed executable catalog for this run. */
 	agents?: readonly AgentDefinition[];
 	/** Initial members and attention. Omit to seat all agents at broadcast; `{}` keeps all in reserve. */
-	seats?: Readonly<Record<string, Attention>>;
+	seats?: Readonly<Record<string, Attention | SeatOptions>>;
 	/** An ordinary catalog agent that writes closed exchange summaries. */
 	summary?: string;
 	/** Public context that states what the room is for. */
@@ -66,6 +67,7 @@ export interface ResumeRoomOptions {
 }
 
 export async function startRoom(options: StartRoomOptions): Promise<Room> {
+	assertRoomName(options.name);
 	const runtime = options.runtime ?? defaultRuntime();
 	assertFree(runtime, options.name);
 	const room = RoomHost.start(
@@ -85,6 +87,7 @@ export async function startRoom(options: StartRoomOptions): Promise<Room> {
 }
 
 export async function resumeRoom(name: string, options: ResumeRoomOptions): Promise<Room> {
+	assertRoomName(name);
 	const runtime = options.runtime ?? defaultRuntime();
 	assertFree(runtime, name);
 	const room = RoomHost.resume(
@@ -105,6 +108,7 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 
 /** Observe a room's recorded state without requiring a running handle. */
 export async function readRoom(name: string, options: ReadRoomOptions = {}): Promise<RoomSnapshot> {
+	assertRoomName(name);
 	const runtime = options.runtime ?? defaultRuntime();
 	const messages = captureMessageSelection(options.messages);
 	const live = registeredRoom(runtime, name);
@@ -170,6 +174,11 @@ function composeFrom(options: StartRoomOptions): CompositionDraft {
 	};
 }
 
+/** A bare attention shorthand, normalized to the options shape it stands for. */
+function seatOptionsOf(value: Attention | SeatOptions | undefined): SeatOptions {
+	return typeof value === 'string' ? { attention: value } : (value ?? {});
+}
+
 /** Expand the assistant shorthand before the existing composition validation path. */
 function normalizeAssistant(options: StartRoomOptions): StartRoomOptions {
 	const assistant = options.assistant;
@@ -181,12 +190,13 @@ function normalizeAssistant(options: StartRoomOptions): StartRoomOptions {
 			'refused',
 			`Assistant '${name}' conflicts with summary agent '${options.summary}'.`,
 		);
-	const hasConfiguredAttention = options.seats !== undefined && Object.hasOwn(options.seats, name);
-	const configuredAttention = hasConfiguredAttention ? options.seats?.[name] : undefined;
-	if (configuredAttention !== undefined && configuredAttention !== 'broadcast')
+	const configured = seatOptionsOf(options.seats?.[name]);
+	if (configured.attention !== undefined && configured.attention !== 'broadcast')
 		throw new AmbionError('refused', `Assistant '${name}' must use 'broadcast' attention.`);
 	const seats =
-		options.seats === undefined ? undefined : { ...options.seats, [name]: 'broadcast' as const };
+		options.seats === undefined
+			? undefined
+			: { ...options.seats, [name]: { ...configured, attention: 'broadcast' as const } };
 	return {
 		...options,
 		agents: [assistant, ...(options.agents ?? [])],
@@ -210,7 +220,7 @@ function capturedDefinitions(options: StartRoomOptions): AgentDefinition[] {
 function initialSeats(
 	options: StartRoomOptions,
 	definitions: readonly AgentDefinition[],
-): Map<string, Attention> {
+): Map<string, SeatOptions> {
 	const configured = options.seats;
 	const selected = new Set(
 		configured === undefined
@@ -220,10 +230,15 @@ function initialSeats(
 	const names = new Set(definitions.map((agent) => agent.name));
 	for (const name of selected)
 		if (!names.has(name)) throw new AmbionError('missing_definition', `Unknown agent '${name}'.`);
+	if (options.summary !== undefined && !selected.has(options.summary))
+		throw new AmbionError(
+			'refused',
+			`Summary writer '${options.summary}' is not seated: add it to 'seats' or omit 'summary'.`,
+		);
 	return new Map(
 		definitions
 			.filter((agent) => selected.has(agent.name))
-			.map((agent) => [agent.name, configured?.[agent.name] ?? 'broadcast']),
+			.map((agent) => [agent.name, seatOptionsOf(configured?.[agent.name])]),
 	);
 }
 

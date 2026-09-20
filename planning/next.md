@@ -122,10 +122,21 @@ the freeze.
         `RoomProtocol`, `lastDeparture`, `messagesSinceDeparture`,
         `ExchangeRead`. Needs nothing. Land it first, as one mechanical
         pull request, so every later step writes against the final names.
-16. [ ] A `fixed` seat with the summary writer fixed by default (D4), and
+16. [x] A `fixed` seat with the summary writer fixed by default (D4), and
         the sharp edges: room name validation, the unheld summary name,
         `opened` on the handle, idempotent host `seat`, prefixed key kinds
-        (C6). Needs 15.
+        (C6). Landed ahead of 15: the sharp edges needed only the typed
+        refusals, not the renaming list.
+        `isFixed` derives the fixed state at read time from the seating
+        and the composition; nothing bakes it into the draft. The host's
+        `presence()` and the agent tool's `seating()`/`unseating()` stay
+        two decisions: only the tool path checks `fixed`, so the host can
+        always remove a fixed seat. `startRoom` rejects a `summary` name
+        outside `seats`; a resumed room still tolerates a writer the host
+        removed earlier, since `compose()` never re-checks that name.
+        `spaced` and `placed` tag and strip a caller's key at one choke
+        point, so a delivery key and a commit key never collide though
+        `Message.key` reads back unprefixed either way.
 17. [ ] `limits.context.messages` and `limits.message.bytes` (D5). Needs 15.
 18. [ ] `refs` on spoken messages and summaries; room URIs; `refs` on the
         `say` parameters (E5). Needs 15.

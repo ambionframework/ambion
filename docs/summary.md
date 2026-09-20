@@ -47,9 +47,10 @@ const room = await startRoom({
 ```
 
 If `seats` is omitted, every defined agent starts as a member with
-`broadcast` attention. An empty `seats` map starts every defined agent in the
-reserve. The summary writer must be seated when the human exchange closes.
-Otherwise that exchange has no summary assignment.
+`broadcast` attention. `summary` must name a seated agent: `startRoom`
+rejects a `summary` name outside `seats`. The host can still unseat the
+writer later; the exchange closing at that time then has no summary
+assignment.
 
 `startRoom({ assistant })` accepts an ordinary agent definition and supplies
 its catalog entry, broadcast seat, and summary assignment. A conflicting
@@ -115,7 +116,10 @@ All ordinary activations use the same membership operations. A live ordinary
 activation may call `seat({ name })` or `unseat({ name })` and may call `say`.
 The room refuses an unknown name. A request to seat an agent that is already
 seated returns the existing no-op result and writes no journal entry, wake, or
-acknowledgement. An agent may unseat itself.
+acknowledgement. An agent may unseat itself unless its own seat is fixed. The
+summary writer's seat is fixed by default, so it cannot unseat itself; the
+host can still unseat it through `room.unseat`. See [Roster](roster.md) for
+the fixed-seat rule.
 
 Attention controls which messages wake an idle member. It does not create a
 summary role or restrict an agent's tools. There is no scheduler, role system,

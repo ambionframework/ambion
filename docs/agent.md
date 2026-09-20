@@ -91,15 +91,17 @@ const room = await startRoom({
   name: 'weekly',
   goal: 'Prepare the weekly report.',
   agents: [researcher, editor],
-  seats: { researcher: 'broadcast' },
+  seats: { researcher: 'broadcast', editor: 'none' },
   summary: 'editor',
 });
 ```
 
 `room.seat(name)` adds a catalog agent to membership. `room.unseat(name)`
 removes a member and returns the definition to the reserve. A live activation
-may call the same operations for another agent or itself. The room refuses an
-unknown name and a name that belongs to a human visitor.
+may call the same operations for another agent or itself, unless the target
+seat is fixed: the summary writer's seat is fixed by default, and only the
+host can unseat it. The room refuses an unknown name and a name that belongs
+to a human visitor.
 
 See [Roster](roster.md) for membership, attention, and duplicate-operation
 semantics. Attention selects work; it does not authorize contributions. The

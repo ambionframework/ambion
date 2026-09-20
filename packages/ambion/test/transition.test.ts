@@ -120,6 +120,35 @@ describe('room transition', () => {
 				now,
 			),
 		).toEqual({ event: undefined });
+
+		const seated = foldRoom([composition()], options);
+		expect(
+			decide(
+				seated,
+				{
+					type: 'presence',
+					change: {
+						kind: 'seated',
+						subject: 'product',
+						identity: 'Product.',
+						attention: 'broadcast',
+					},
+					route: false,
+				},
+				now,
+			),
+		).toEqual({ event: undefined });
+		expect(
+			decide(
+				seated,
+				{
+					type: 'presence',
+					change: { kind: 'unseated', subject: 'reserve' },
+					route: false,
+				},
+				now,
+			),
+		).toEqual({ event: undefined });
 	});
 
 	it('grants ordinary response to any seated agent and only summary work to the writer', () => {
@@ -269,9 +298,73 @@ describe('room transition', () => {
 		expect(alreadyUnseated).toEqual({ unchanged: { kind: 'unseated', name: 'reserve' } });
 	});
 
-	it('allows the summary writer to unseat itself and removes its authority after the event', () => {
+	it('refuses the summary writer unseating itself, because its seat is fixed by default', () => {
 		const state = foldRoom(
 			[composition('writer'), person(), question(), lease('message:3:writer:1', 4)],
+			options,
+		);
+		const decision = decide(
+			state,
+			{
+				type: 'commit',
+				commit: {
+					activation: 'message:3:writer:1',
+					key: 'leave',
+					intent: { kind: 'unseated', name: 'writer' },
+				},
+			},
+			now,
+		);
+		expect(decision).toMatchObject({ refusal: { category: 'refused' } });
+	});
+
+	it('refuses an ordinary seat unseating itself when its seating said fixed: true', () => {
+		const fixedComposition: Entry = {
+			kind: 'composition',
+			seq: 1,
+			body: {
+				version: 2,
+				agents: [{ name: 'product', identity: 'Product.', attention: 'broadcast', fixed: true }],
+				available: [],
+				at,
+			},
+		};
+		const state = foldRoom(
+			[fixedComposition, person(), question(), lease('message:3:product:1', 4)],
+			options,
+		);
+		const decision = decide(
+			state,
+			{
+				type: 'commit',
+				commit: {
+					activation: 'message:3:product:1',
+					key: 'leave',
+					intent: { kind: 'unseated', name: 'product' },
+				},
+			},
+			now,
+		);
+		expect(decision).toMatchObject({ refusal: { category: 'refused' } });
+	});
+
+	it('allows the summary writer to unseat itself when its seating said fixed: false, and removes its authority after the event', () => {
+		const unfixedWriter: Entry = {
+			kind: 'composition',
+			seq: 1,
+			body: {
+				version: 2,
+				summary: 'writer',
+				agents: [
+					{ name: 'product', identity: 'Product.', attention: 'broadcast' },
+					{ name: 'writer', identity: 'Writer.', attention: 'broadcast', fixed: false },
+				],
+				available: [{ name: 'reserve', identity: 'Reserve.', attention: 'broadcast' }],
+				at,
+			},
+		};
+		const state = foldRoom(
+			[unfixedWriter, person(), question(), lease('message:3:writer:1', 4)],
 			options,
 		);
 		const decision = decide(

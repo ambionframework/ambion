@@ -233,7 +233,9 @@ describe('a split: two live hosts over one SQLite database', () => {
 			paused.kill();
 			const after = await storedOf(childJournals('sqlite', dir), name);
 			expect(after).toEqual(before);
-			expect(after).toContainEqual(expect.objectContaining({ kind: 'message', key: second.key }));
+			expect(after).toContainEqual(
+				expect.objectContaining({ kind: 'message', key: `delivery:${second.key}` }),
+			);
 			await session.stop();
 		} finally {
 			paused.kill();

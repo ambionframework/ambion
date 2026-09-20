@@ -31,7 +31,14 @@ import { captureHuman } from './define.ts';
 import { AmbionError } from './errors.ts';
 import type { ExecutionConnector, RoomRuntime, RunningRoom } from './host/runtime.ts';
 import type { Close, Composition, LeaseChange } from './journal/events.ts';
-import { type Entry, type Kind, placed, type RoomJournal, roomJournal } from './journal/journal.ts';
+import {
+	type Entry,
+	type Kind,
+	placed,
+	type RoomJournal,
+	roomJournal,
+	spaced,
+} from './journal/journal.ts';
 import type {
 	CommitRequest,
 	CommitResult,
@@ -61,7 +68,6 @@ import {
 } from './room/transition.ts';
 import type {
 	AgentDefinition,
-	Attention,
 	ClosedExchange,
 	EndReason,
 	ExchangeRef,
@@ -71,6 +77,7 @@ import type {
 	PresenceMessage,
 	RoomNotification,
 	RoomSnapshot,
+	SeatOptions,
 	Seq,
 	SummaryMessage,
 	Without,
@@ -151,13 +158,19 @@ export interface CompositionDraft {
 	goal: string | undefined;
 	summary: string | undefined;
 	definitions: AgentDefinition[];
-	seats: ReadonlyMap<string, Attention>;
+	seats: ReadonlyMap<string, SeatOptions>;
 }
 
 /** A presence change before the room stamps when it happened. */
 type PresenceDraft = Omit<PresenceMessage, 'seq' | 'key' | 'at' | 'wakes'>;
 
 export interface ExchangeHandle extends ExchangeRef {
+	/**
+	 * True when the delivery that returned this handle asked the question
+	 * that opened the exchange. False when it joined one already open, or
+	 * when the handle came from `room.exchange(from)` instead of a delivery.
+	 */
+	readonly opened: boolean;
 	/**
 	 * Resolve with the fixed non-summary conversation after the durable close.
 	 * Reject if the room stops before the exchange closes.
@@ -181,7 +194,7 @@ export interface Room {
 	/**
 	 * Put a registered agent on the roster while the room runs. The seating lands on the record, and it wakes the seat it names.
 	 */
-	seat(name: string, options?: { attention?: Attention }): Promise<void>;
+	seat(name: string, options?: SeatOptions): Promise<void>;
 	/**
 	 * Take an agent off the roster. Its lease in flight is revoked, the
 	 * record says it left, and its definition remains in the reserve.
@@ -544,16 +557,17 @@ export class RoomHost implements Room, RunningRoom {
 			(candidate): candidate is Extract<Message, { kind: 'said' }> =>
 				candidate.seq === from && candidate.kind === 'said',
 		);
-		return message === undefined ? undefined : this.handleFor(exchange);
+		return message === undefined ? undefined : this.handleFor(exchange, false);
 	}
 
-	private handleFor(exchange: ExchangeRef): ExchangeHandle {
+	private handleFor(exchange: ExchangeRef, opened: boolean): ExchangeHandle {
 		const at =
 			this.state().messages.find((message) => message.seq === exchange.from)?.at ?? exchange.at;
 		return {
 			owner: exchange.owner,
 			from: exchange.from,
 			at,
+			opened,
 			waitForClose: () => this.exchangeMessages(exchange.from),
 			waitForSummary: () => this.responseFor(exchange.from),
 		};
@@ -805,13 +819,13 @@ export class RoomHost implements Room, RunningRoom {
 				? state.exchange
 				: undefined);
 		if (exchange === undefined) throw new Error('A delivery does not belong to an exchange.');
-		return this.handleFor(exchange);
+		return this.handleFor(exchange, message.seq === exchange.from);
 	}
 
 	// -- the roster -------------------------------------------------------------
 
 	/** The host seats a registered agent. Executable definitions stay fixed for the run. */
-	async seat(name: string, options: { attention?: Attention } = {}): Promise<void> {
+	async seat(name: string, options: SeatOptions = {}): Promise<void> {
 		const attention = options.attention ?? 'broadcast';
 		this.assertRunning();
 		await this.ready;
@@ -823,6 +837,7 @@ export class RoomHost implements Room, RunningRoom {
 			subject: name,
 			identity: definition.identity,
 			attention,
+			...(options.fixed === undefined ? {} : { fixed: options.fixed }),
 		};
 		this.validatePresence(change);
 		await this.commitPresence(change);
@@ -855,7 +870,7 @@ export class RoomHost implements Room, RunningRoom {
 		const appended = await this.submit(
 			'message',
 			() => decide(this.state(), command, this.now()),
-			key,
+			spaced('delivery', key),
 		);
 		this.requireSubmission(appended);
 		if (!('entry' in appended)) throw new Error('The room command did not append a message.');
@@ -1214,7 +1229,7 @@ export class RoomHost implements Room, RunningRoom {
 		const appended = await this.submit(
 			'message',
 			() => decide(this.state(), { type: 'commit', commit }, this.now()),
-			commit.key,
+			spaced('commit', commit.key),
 		);
 		if ('entry' in appended) {
 			const message = placed(appended.entry);
@@ -1557,11 +1572,15 @@ function compositionOf(cast: CompositionDraft, at: string): Without<Composition,
 		...(cast.summary === undefined ? {} : { summary: cast.summary }),
 		agents: cast.definitions
 			.filter((agent) => cast.seats.has(agent.name))
-			.map((agent) => ({
-				name: agent.name,
-				identity: agent.identity,
-				attention: cast.seats.get(agent.name) ?? 'broadcast',
-			})),
+			.map((agent) => {
+				const seat = cast.seats.get(agent.name);
+				return {
+					name: agent.name,
+					identity: agent.identity,
+					attention: seat?.attention ?? 'broadcast',
+					...(seat?.fixed === undefined ? {} : { fixed: seat.fixed }),
+				};
+			}),
 		available: cast.definitions
 			.filter((agent) => !cast.seats.has(agent.name))
 			.map((agent) => ({

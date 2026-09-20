@@ -298,7 +298,10 @@ describe('the room API', () => {
 				conversation.some((message) => message.kind === 'arrived' && message.from === sam.name),
 			).toBe(true);
 			expect(conversation.every((message) => message.kind !== 'summary')).toBe(true);
+			expect(first.opened).toBe(true);
+			expect(second.opened).toBe(false);
 			expect(room.exchange(first.from)).toBeDefined();
+			expect(room.exchange(first.from)?.opened).toBe(false);
 		} finally {
 			await room.stop();
 			await opened.dispose();
@@ -317,6 +320,7 @@ describe('the room API', () => {
 
 			const retry = await visit.send({ text: 'First?', key: 'replay-1' });
 			expect(retry.from).toBe(first.from);
+			expect(retry.opened).toBe(true);
 			expect(await retry.waitForClose()).toEqual(firstConversation);
 			expect(firstClose).toBeDefined();
 		} finally {
@@ -377,6 +381,26 @@ describe('the room API', () => {
 			} finally {
 				await resumed.stop();
 			}
+		} finally {
+			await opened.dispose();
+		}
+	});
+
+	it('rejects an invalid room name for start, resume, and read', async () => {
+		const opened = await memory.open();
+		const runtime = createRuntime({
+			storage: opened.storage,
+			clock: fakeClock(),
+			transport: inProcessTransport(),
+		});
+		try {
+			await expect(startRoom({ name: 'Invalid Name', runtime, agents: [alpha] })).rejects.toThrow(
+				/name/,
+			);
+			await expect(resumeRoom('Invalid Name', { runtime, agents: [alpha] })).rejects.toThrow(
+				/name/,
+			);
+			await expect(readRoom('Invalid Name', { runtime })).rejects.toThrow(/name/);
 		} finally {
 			await opened.dispose();
 		}
