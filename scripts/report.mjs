@@ -5,7 +5,7 @@
  * is read off the run. The prose around the figures belongs to the change the
  * run was made for, and moves with it.
  *
- *   node scripts/report.mjs demo-run.json demos/YYYY-MM-DD-<slug>.html
+ *   node scripts/report.mjs demo-run.json planning/evidence/reports/YYYY-MM-DD-<slug>.html
  *
  * The stylesheet beside this script, `report.css`, is the house style every
  * report shares; the run-specific colours are added below it.

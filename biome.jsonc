@@ -41,8 +41,8 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		// Generated demo snapshots are captures, not source.
-		"includes": ["**", "!demos"]
+		// Generated report snapshots are captures, not source.
+		"includes": ["**", "!planning/evidence/reports"]
 	},
 	// Formatting is Prettier's job (see prettier.config.js); Biome lints only.
 	"formatter": {
@@ -99,6 +99,7 @@
 		{
 			"includes": [
 				"packages/ambion/src/activation-id.ts",
+				"packages/ambion/src/refs.ts",
 				"packages/ambion/src/types.ts",
 				"packages/ambion/src/protocol.ts",
 				"packages/ambion/src/define.ts",
@@ -299,6 +300,42 @@
 											"../hosting.ts"
 										],
 										"message": "The seat side reaches its room through the wire alone: no log, no fold, no session."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			// The transport suite plays the room from outside the wire. It reaches
+			// the protocol and the executor types, and nothing that runs a room.
+			"includes": ["packages/ambion/src/conformance.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": [
+											"./journal/*",
+											"./room/*",
+											"./tools/*",
+											"./execution/runner*",
+											"./execution/compose*",
+											"./execution/activation*",
+											"./execution/services*",
+											"./room.ts",
+											"./room-host.ts",
+											"./index.ts",
+											"./hosting.ts",
+											"@earendil-works/pi-*",
+											"@ambionframework/pi-journal"
+										],
+										"message": "A conformance suite drives the wire from outside: no log, no fold, no seat, no model."
 									}
 								]
 							}

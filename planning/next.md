@@ -118,12 +118,17 @@ step. Phase 3 step 3 splits `room-host.ts`, so it waits for step 12.
 **Goal:** every journal field and every read the release needs land, then
 the freeze.
 
-Each label is a stable name that other steps cite. Steps 8 and 15
-landed (#185, #187), so the labels skip them.
+Each label is a stable name that other steps cite. Steps 8, 10, and 15
+landed (#185, #190, #187), so the labels skip them.
+
+Step 10 decisions: a ref is an absolute URI, opaque except for the
+canonical `ambion` scheme. A message holds at most 16 refs of at most
+2048 characters. The room refuses duplicates and keeps order. An empty
+list is stored as absent. The key binds to the refs in order. Replay
+applies the same check. Room URIs are pure functions with no `uri` field
+on the wire.
 
 - [ ] **9.** `limits.context.messages` and `limits.message.bytes` (D5). Needs 15.
-- [ ] **10.** `refs` on spoken messages and summaries; room URIs; `refs` on the
-      `say` parameters (E5). Needs 15.
 - [ ] **11.** `activation`, `exchange`, and `room` on `ToolContext`, supplied by
       the driver (E6). Needs 15.
 - [ ] **12.** The `Step` vocabulary; the trace journal per activation;
@@ -172,9 +177,12 @@ journals replay; `activation_end` carries usage.
 7. [ ] `examples/codex`: a thread per activation; the stdio room tools
        server over a local socket; items as steps; `file_change` paths as
        `refs`; a fake `codex` on `PATH` in CI (F6, F10). Needs 5.
-8. [ ] The storage and transport conformance suites, published and run on
+8. [x] The storage and transport conformance suites, published and run on
        memory, SQLite, the in-process transport, and the Cloudflare RPC
-       transport (D6). Needs 15. Runs beside every other step.
+       transport (D6). Needs 15. Runs beside every other step. Two
+       entries publish the suites: `@ambionframework/journal/conformance`
+       and `@ambionframework/ambion/conformance`. Four runs use them:
+       memory, SQLite, in-process, and Cloudflare RPC.
 
 **Evidence:** both adapters pass the executor suite on fakes; a room with
 one Pi seat and one Claude seat in CI; prompt snapshots; the assistant
@@ -227,8 +235,8 @@ template on `read()`.
 guide describes. The example is one terminal process with an assistant and
 three specialists ([docs/example.md](../docs/example.md)).
 
-1. [ ] Move the old example reports and `docs/assistant-acceptance.md` under
-       `planning/evidence/` (C7). Needs nothing.
+1. [x] Move the old example reports and `docs/assistant-acceptance.md` under
+       `planning/evidence/` (C7). The reports sit in `planning/evidence/reports/`.
 2. [ ] The terminal shows steps per activation, the cost per exchange, and
        `awaiting` and `approval` to the person (F8). Needs phase 3 step 2
        and phase 2 steps 13 and 14, plus phase 5 step 4 for `approval`.
@@ -266,7 +274,8 @@ the code it describes lands, so pages run beside the code.
        harness memory (D8, D4, F9). Needs phase 4 step 6 and phase 2
        step 8.
 8. [ ] Retire the residue: rule citations, migration notes, package
-       descriptions, comment voice, `demos/README.md` (C4). Needs 1.
+       descriptions, comment voice, and
+       `planning/evidence/reports/README.md` (C4). Needs 1.
 9. [ ] The `README.md` example typechecked against the packed entries;
        package READMEs; the CLI README; `CONTRIBUTING.md` with the Node
        floors. Needs phase 6 step 3.
@@ -379,10 +388,11 @@ definitions, and make it the default.
 **C4. Retire pre-release residue.** Eight source comments cite numbered
 rules that `docs/agent.md` no longer has; four migration notes describe
 renames before any release; the core manifest describes "a minimalist
-framework for ambient-aware, always-on agents"; `demos/README.md` names a
-removed API. Fix each before the tag, and state two limits the docs omit:
-passes share no model context without an adapter session, and a second
-person's question inside an open exchange belongs to that exchange.
+framework for ambient-aware, always-on agents";
+`planning/evidence/reports/README.md` names a removed API. Fix each before
+the tag, and state two limits the docs omit: passes share no model context
+without an adapter session, and a second person's question inside an open
+exchange belongs to that exchange.
 
 **C5. One word, one meaning.** "Seat" names membership, the `seats` map,
 the `seat()` operation, the executor dependencies, and the wire. "Exchange"
@@ -622,7 +632,7 @@ type Step =
       type: 'room';
       call: string;
       intent: Intent;
-      result: 'committed' | 'unchanged' | 'missed' | 'refused' | 'stale';
+      result: 'committed' | 'unchanged' | 'missed' | 'refused' | 'stale' | 'unknown';
       seq?: Seq;
     }
   | { type: 'steer'; seq: Seq; consumed: boolean }
@@ -635,8 +645,16 @@ type Step =
       cacheWrite: number;
       cost?: number;
     }
-  | { type: 'end'; stop: PassResult['stop']; failure?: PassResult['failure'] };
+  | {
+      type: 'end';
+      stop: PassResult['stop'];
+      failure?: { cause: 'permanent' | 'transient'; message: string };
+    };
 ```
+
+The `unknown` result is a commit whose outcome the room cannot read. The
+`end` failure carries a `message`, not an `Error`, so a live step and a
+journal step have one wire form.
 
 Every step carries `activation`, `pass`, `at`, and an index. Pi deltas and
 tool events, Anthropic content blocks, Claude Agent SDK messages and hooks,

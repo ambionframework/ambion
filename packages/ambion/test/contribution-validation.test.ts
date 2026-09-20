@@ -4,6 +4,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	exchangeUri,
 	pi,
 	type Room,
 	type Runtime,
@@ -163,6 +164,49 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 		}
 	});
 
+	it('keeps a delivery key bound to its refs', async () => {
+		const { opened, room } = await openWorld(storage, { agents: [] });
+		try {
+			const visit = await room.visit(person);
+			const key = 'delivery-refs';
+			const refs = ['https://x/a', 'https://x/b'];
+			const original = await visit.send({ key, text: 'Cited.', refs });
+			const retry = await visit.send({ key, text: 'Cited.', refs: [...refs] });
+			expect(retry).toMatchObject({ owner: original.owner, from: original.from });
+			for (const changed of [['https://x/a'], [...refs].reverse(), undefined])
+				await expect(
+					visit.send({ key, text: 'Cited.', ...(changed === undefined ? {} : { refs: changed }) }),
+				).rejects.toThrow(/different room operation/);
+			const stored = (await messagesOf(room)).filter((message) => message.key === key);
+			expect(stored).toHaveLength(1);
+			expect(stored[0]).toMatchObject({ refs });
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
+	it('refuses an invalid ref on a delivery without consuming the key', async () => {
+		const { opened, room } = await openWorld(storage, { agents: [] });
+		try {
+			const visit = await room.visit(person);
+			const key = 'delivery-bad-ref';
+			const before = (await messagesOf(room)).length;
+			await expect(visit.send({ key, text: 'Cited.', refs: ['shared/report.md'] })).rejects.toEqual(
+				refusal('refused'),
+			);
+			await expect(visit.send({ key, text: 'Cited.', refs: ['shared/report.md'] })).rejects.toThrow(
+				/ref/,
+			);
+			expect((await messagesOf(room)).length).toBe(before);
+			await visit.send({ key, text: 'Cited.', refs: ['https://x/a'] });
+			expect((await messagesOf(room)).filter((message) => message.key === key)).toHaveLength(1);
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
 	it('serializes concurrent retries under one delivery key', async () => {
 		const { opened, room } = await openWorld(storage, { agents: [] });
 		try {
@@ -230,6 +274,41 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			expect(
 				(await messagesOf(room)).filter((message) => message.key === 'cross-operation'),
 			).toHaveLength(2);
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
+
+	it('binds an agent commit key to its refs', async () => {
+		const { opened, room, runtime } = await openWorld(storage, {
+			agents: [worker],
+			seats: { [worker.name]: 'broadcast' },
+		});
+		try {
+			const exchange = await (await room.visit(person)).send({ text: 'Question?' });
+			const peer = await protocol(runtime, room.name);
+			const activation = `message:${exchange.from}:${worker.name}:1`;
+			expect(await peer.lease({ activation, operation: 'claim' })).toHaveProperty('ok');
+			const view = await peer.view(activation);
+			if (!('view' in view)) throw new Error('The ordinary activation is absent.');
+			const request = (refs: string[]) => ({
+				activation,
+				key: 'refs-key',
+				readThrough: view.view.through,
+				intent: { kind: 'said' as const, text: 'An answer.', refs },
+			});
+			const bad = await peer.commit(request(['shared/report.md']));
+			expect(bad).toHaveProperty('refused');
+			const first = await peer.commit(request(['https://x/a']));
+			expect(first).toHaveProperty('committed');
+			expect(await peer.commit(request(['https://x/a']))).toEqual(first);
+			expect(await peer.commit(request(['https://x/b']))).toEqual({
+				refused: expect.stringMatching(/different room operation/),
+			});
+			const stored = (await messagesOf(room)).filter((message) => message.key === 'refs-key');
+			expect(stored).toHaveLength(1);
+			expect(stored[0]).toMatchObject({ refs: ['https://x/a'] });
 		} finally {
 			await room.stop();
 			await opened.dispose();
@@ -423,6 +502,42 @@ describe.each(storages)('contribution validation on $name storage', (storage) =>
 			}
 		},
 	);
+
+	it('stores refs on a closing summary and binds its key to them', async () => {
+		const { opened, room, runtime } = await openWorld(storage, {
+			agents: [writer],
+			summary: writer.name,
+			seats: { [writer.name]: 'none' },
+		});
+		try {
+			const exchange = await (await room.visit(person)).send({ text: 'Question?' });
+			await room.reconcile();
+			const owed = stateOf(room).due.find((work) => work.source === 'closed');
+			if (owed === undefined) throw new Error('The room has no closing assignment.');
+			const peer = await protocol(runtime, room.name);
+			expect(await peer.lease({ activation: owed.id, operation: 'claim' })).toHaveProperty('ok');
+			const key = 'summary-refs';
+			const refs = [exchangeUri(room.name, exchange.from)];
+			const commit = (cited: string[]) =>
+				peer.commit({
+					activation: owed.id,
+					key,
+					intent: { kind: 'said', text: 'Summary.', refs: cited },
+				});
+			const first = await commit(refs);
+			expect(first).toMatchObject({ committed: { kind: 'summary', refs } });
+			expect(await commit([...refs])).toEqual(first);
+			expect(await commit(['https://x/other'])).toEqual({
+				refused: expect.stringMatching(/different room operation/),
+			});
+			const stored = (await messagesOf(room)).filter((message) => message.kind === 'summary');
+			expect(stored).toHaveLength(1);
+			expect(stored[0]).toMatchObject({ refs });
+		} finally {
+			await room.stop();
+			await opened.dispose();
+		}
+	});
 
 	it('replays an exact committed key and rejects a replacement under that key', async () => {
 		const { opened, room, runtime } = await openWorld(storage, {

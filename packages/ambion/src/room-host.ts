@@ -112,9 +112,17 @@ function deliveryMatches(
 		message.activationId === undefined &&
 		message.from === command.from &&
 		message.to === command.to &&
-		message.text === command.text
+		message.text === command.text &&
+		sameRefs(message.refs, command.refs)
 	);
 }
+
+/** Refs match in order. An absent list and an empty list are the same. */
+const sameRefs = (a: readonly string[] | undefined, b: readonly string[] | undefined): boolean => {
+	const left = a ?? [];
+	const right = b ?? [];
+	return left.length === right.length && left.every((ref, index) => ref === right[index]);
+};
 
 function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	const { activation, intent } = commit;
@@ -131,14 +139,20 @@ function contributionMatches(commit: CommitRequest, message: Message): boolean {
 	if (intent.kind === 'seated' || intent.kind === 'unseated') {
 		return message.kind === intent.kind && message.subject === intent.name;
 	}
-	if (message.kind === 'said') return message.to === intent.to && message.text === intent.text;
+	if (message.kind === 'said')
+		return (
+			message.to === intent.to &&
+			message.text === intent.text &&
+			sameRefs(message.refs, intent.refs)
+		);
 	// A closing agent says through the same `said` intent, but the room records
 	// its contribution as a summary addressed to the exchange owner. An omitted
 	// recipient is that canonical owner; a supplied recipient must still match.
 	return (
 		message.kind === 'summary' &&
 		(intent.to === undefined || message.to === intent.to) &&
-		message.text === intent.text
+		message.text === intent.text &&
+		sameRefs(message.refs, intent.refs)
 	);
 }
 
@@ -215,7 +229,12 @@ export interface Visit {
 	 * token landed carries it back, so a host reads which delivery it was.
 	 * A host that names none gets a token of its own that matches nothing.
 	 */
-	send(input: { to?: string; text: string; key?: string }): Promise<ExchangeHandle>;
+	send(input: {
+		to?: string;
+		text: string;
+		refs?: string[];
+		key?: string;
+	}): Promise<ExchangeHandle>;
 	leave(): Promise<void>;
 }
 
@@ -230,8 +249,12 @@ function notificationFor(event: RoomNotification): RoomNotification {
 			return { ...event, exchange: { ...event.exchange } };
 		case 'exchange_closed':
 			return { ...event, exchange: { ...event.exchange } };
+		case 'step':
+			// A step holds tool input and output, which are unknown values.
+			return { ...event, step: structuredClone(event.step) };
 		case 'error':
 		case 'audit_error':
+		case 'trace_error':
 			// Execution diagnostics retain their original Error object and cause.
 			return { ...event };
 		default:
@@ -799,7 +822,7 @@ export class RoomHost implements Room, RunningRoom {
 
 	private async deliverFrom(
 		from: string,
-		input: { to?: string; text: string; key?: string },
+		input: { to?: string; text: string; refs?: string[]; key?: string },
 	): Promise<ExchangeHandle> {
 		const to = input.to;
 		const key = input.key ?? crypto.randomUUID();
@@ -809,6 +832,7 @@ export class RoomHost implements Room, RunningRoom {
 			...(to === undefined ? {} : { to }),
 			text: input.text,
 			bytes: this.runtime.limits.message.bytes,
+			...(input.refs === undefined ? {} : { refs: input.refs }),
 		});
 		return this.handleForMessage(committed);
 	}

@@ -12,15 +12,18 @@ import type { AgentExecutionContext, Transport } from '../host/runtime.ts';
 import type {
 	ActivationView,
 	AgentPort,
+	CommitRequest,
+	CommitResult,
 	RoomProtocol,
 	Steer,
 	ViewRange,
 	ViewResponse,
 	Wake,
 } from '../protocol.ts';
-import type { EndReason, ExecutionEvent, FailureCause, Message, Seq } from '../types.ts';
+import type { EndReason, ExecutionEvent, FailureCause, Message, Seq, Step } from '../types.ts';
 import type { ExecutorSession, PassResult } from './executor.ts';
 import { renderLine, windowToLimit } from './render.ts';
+import type { TraceSink } from './trace.ts';
 
 type CallResult<T> =
 	{ kind: 'value'; value: T } | { kind: 'lost'; error: Error } | { kind: 'cancelled' };
@@ -31,6 +34,8 @@ type CallResult<T> =
 interface Current {
 	id: string;
 	session: ExecutorSession;
+	/** The steps of this activation. The driver closes it when the activation ends. */
+	trace: TraceSink;
 	/** The activation ran to its end, and its release is in flight. It takes no steer. */
 	over: boolean;
 	/** Ends local waits after a room cut or the last confirmed lease expiry. */
@@ -123,18 +128,23 @@ export class AgentRunner implements AgentPort {
 		const cutOff = new Promise<void>((resolve) => {
 			cut = resolve;
 		});
+		const trace = this.context.trace.open(id);
 		const session = this.context.executor.open({
 			id,
-			room: this.boundedRoom(cutOff),
+			room: this.boundedRoom(cutOff, trace),
 			emit: (event) => this.emit(event),
+			trace,
 		});
-		const current: Current = { id, session, over: false, cut, cutOff, expired: false };
+		const current: Current = { id, session, trace, over: false, cut, cutOff, expired: false };
 		this.current = current;
 		try {
 			const claimed = await this.claim(id);
 			if (claimed !== undefined) await this.runClaimed(id, current, claimed);
 		} finally {
 			if (this.current === current) this.current = undefined;
+			// A trace that never took a step opens no journal. A failed write is a
+			// `trace_error`, and it never reaches the lease.
+			await trace.close();
 			await this.next();
 		}
 	}
@@ -154,7 +164,7 @@ export class AgentRunner implements AgentPort {
 				// The cut ends the wait, and never the run: a run that ignores the
 				// abort finishes on its own, past a seat that took its next wake.
 				last = await Promise.race([
-					this.runPasses(id, current.session, current.cutOff),
+					this.runPasses(id, current.session, current.trace, current.cutOff),
 					current.cutOff.then(() => undefined),
 				]);
 			}
@@ -164,6 +174,7 @@ export class AgentRunner implements AgentPort {
 			// now runs next, and never beside the activation that is releasing.
 			current.over = true;
 			const failed = current.expired || (last?.failed ?? false);
+			current.trace.record(endStep(current, last));
 			await this.release(
 				id,
 				failed ? 'failed' : 'released',
@@ -187,6 +198,7 @@ export class AgentRunner implements AgentPort {
 	private async runPasses(
 		id: string,
 		session: ExecutorSession,
+		trace: TraceSink,
 		cancelled: Promise<void>,
 	): Promise<PassResult | undefined> {
 		let last: PassResult | undefined;
@@ -195,7 +207,7 @@ export class AgentRunner implements AgentPort {
 				const opened = await this.viewFor(id, cancelled);
 				if ('stale' in opened) return last;
 				const view = opened.view;
-				last = await session.pass(view);
+				last = await passOver(session, trace, view, last === undefined);
 				if (last.failed || session.cancelled || view.spec.purpose.kind !== 'respond') return last;
 				if (!(await this.needsRefresh(id, session, cancelled))) return last;
 			}
@@ -214,7 +226,7 @@ export class AgentRunner implements AgentPort {
 			error: broken,
 			cause: 'transient',
 		});
-		return { failed: true, cause: 'transient' };
+		return { failed: true, cause: 'transient', message: broken.message };
 	}
 
 	/**
@@ -495,24 +507,75 @@ export class AgentRunner implements AgentPort {
 		}
 	}
 
-	private boundedRoom(cancelled: Promise<void>): RoomProtocol {
+	private boundedRoom(cancelled: Promise<void>, trace: TraceSink): RoomProtocol {
 		return {
 			view: (id) => this.room.view(id),
 			commit: async (request) => {
-				// The commit key is the tool call id, so a retry under it is
-				// idempotent: the room returns the message it already holds. A commit
-				// no attempt confirms is unknown; it may or may not have landed. The
-				// tool then ends the turn. A second say under a new key would land the
-				// same message twice.
-				const committed = await this.calls(() => this.room.commit(request), cancelled);
-				if (committed.kind === 'value') return committed.value;
-				if (committed.kind === 'cancelled') return { stale: 'the activation was cut' };
-				this.reportCallFailure(request.activation, 'commit', committed.error);
-				return { unknown: committed.error.message };
+				const response = await this.commitOnce(request, cancelled);
+				trace.record(roomStep(request, response));
+				return response;
 			},
 			lease: (request) => this.room.lease(request),
 		};
 	}
+
+	/**
+	 * The commit key is the tool call id, so a retry under it is idempotent:
+	 * the room returns the message it already holds. A commit no attempt
+	 * confirms is unknown; it may or may not have landed. The tool then ends
+	 * the turn. A second say under a new key would land the same message twice.
+	 */
+	private async commitOnce(
+		request: CommitRequest,
+		cancelled: Promise<void>,
+	): Promise<CommitResult> {
+		const committed = await this.calls(() => this.room.commit(request), cancelled);
+		if (committed.kind === 'value') return committed.value;
+		if (committed.kind === 'cancelled') return { stale: 'the activation was cut' };
+		this.reportCallFailure(request.activation, 'commit', committed.error);
+		return { unknown: committed.error.message };
+	}
+}
+
+// -- the trace ----------------------------------------------------------------
+
+/** One pass, opened in the trace. The first pass reads the view; a later one follows the record. */
+function passOver(
+	session: ExecutorSession,
+	trace: TraceSink,
+	view: ActivationView,
+	first: boolean,
+): Promise<PassResult> {
+	trace.startPass(first ? 'view' : 'delta', view.through);
+	return session.pass(view);
+}
+
+/** What the room answered to a commit, as a `room` step. */
+function roomStep(request: CommitRequest, response: CommitResult): Step {
+	const base = { type: 'room' as const, call: request.key, intent: request.intent };
+	if ('committed' in response) return { ...base, result: 'committed', seq: response.committed.seq };
+	if ('unchanged' in response) return { ...base, result: 'unchanged' };
+	if ('missed' in response) return { ...base, result: 'missed' };
+	if ('refused' in response) return { ...base, result: 'refused' };
+	if ('stale' in response) return { ...base, result: 'stale' };
+	return { ...base, result: 'unknown' };
+}
+
+/** How the activation stopped. A cut or an expired lease is `aborted`. */
+function endStep(current: Current, last: PassResult | undefined): Step {
+	const aborted = current.expired || current.session.cancelled;
+	const stop = aborted ? 'aborted' : (last?.stop ?? 'stopped');
+	if (last?.failed === true) {
+		const failure = {
+			cause: last.cause ?? 'transient',
+			message: last.message ?? 'The activation failed.',
+		};
+		return { type: 'end', stop, failure };
+	}
+	if (current.expired) {
+		return { type: 'end', stop, failure: { cause: 'transient', message: 'The lease expired.' } };
+	}
+	return { type: 'end', stop };
 }
 
 // -- record windowing ---------------------------------------------------------

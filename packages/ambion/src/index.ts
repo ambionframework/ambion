@@ -17,6 +17,8 @@ export type { AmbionErrorCode } from './errors.ts';
 export { AmbionError } from './errors.ts';
 export type { CreateRuntimeOptions, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
+export type { RoomUri } from './refs.ts';
+export { exchangeUri, parseRoomUri, roomUri } from './refs.ts';
 export type {
 	ExchangeHandle,
 	ExchangeRead,
@@ -54,10 +56,13 @@ export type {
 	SeatStatus,
 	Seq,
 	SpokenMessage,
+	Step,
 	SummaryMessage,
 	SummaryOutcome,
 	ToolBundle,
 	ToolContext,
+	TracePolicy,
+	TraceStep,
 } from './types.ts';
 export { isPresence, isSpoken, isSummary } from './types.ts';
 

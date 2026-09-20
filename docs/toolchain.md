@@ -19,6 +19,7 @@ packages/
 examples/workbench/   Workbench: rooms and an OpenTUI terminal in one process
 scripts/        package discovery, versioning, publishing, reports
 docs/           design and operational contracts
+planning/       the plan, the backlog, the rules to write, and dated evidence
 .github/        CI, live, and release workflows
 ```
 
@@ -41,8 +42,12 @@ See [`scripts/cli-team-smoke.mjs`](../scripts/cli-team-smoke.mjs) and
 [`scripts/journal-smoke.mjs`](../scripts/journal-smoke.mjs) for detailed
 consumer checks.
 
-The core has two published entries: `@ambionframework/ambion` for hosts and
-`@ambionframework/ambion/hosting` for a room and seat separated by a wire.
+The core has three published entries:
+
+- `@ambionframework/ambion` for hosts.
+- `@ambionframework/ambion/hosting` for a room and seat separated by a wire.
+- `@ambionframework/ambion/conformance` for the transport suite.
+
 The core imports no platform modules. Workspace filesystem code owns Node
 dependencies; Cloudflare code owns Durable Object integration.
 

@@ -19,6 +19,7 @@ import type {
 	PiExecutor,
 	ToolBundle,
 	ToolContext,
+	TracePolicy,
 } from './types.ts';
 
 export interface DefineAgentOptions {
@@ -28,6 +29,27 @@ export interface DefineAgentOptions {
 	identity: string;
 	/** The executor this agent runs on. Build one with `pi()`. */
 	executor: AgentExecutor;
+	/** What the trace keeps of this agent's work. Absent keeps `DEFAULT_TRACE`. */
+	trace?: TracePolicy;
+}
+
+/** The default trace policy: full tool output, and the start of each thinking block. */
+export const DEFAULT_TRACE: TracePolicy = Object.freeze({
+	thinking: 'summary',
+	toolOutput: 'full',
+});
+
+const THINKING = new Set(['omit', 'summary', 'full']);
+const TOOL_OUTPUT = new Set(['omit', 'full']);
+
+/** A policy checked and copied. Absent gives the default. */
+function capturePolicy(agent: string, policy: TracePolicy | undefined): TracePolicy {
+	if (policy === undefined) return DEFAULT_TRACE;
+	if (!THINKING.has(policy.thinking))
+		throw new Error(`Agent '${agent}' trace.thinking must be omit, summary, or full.`);
+	if (!TOOL_OUTPUT.has(policy.toolOutput))
+		throw new Error(`Agent '${agent}' trace.toolOutput must be omit or full.`);
+	return Object.freeze({ thinking: policy.thinking, toolOutput: policy.toolOutput });
 }
 
 export interface PiOptions {
@@ -67,6 +89,7 @@ export function defineAgent(options: DefineAgentOptions): AgentDefinition {
 		name: options.name,
 		identity: options.identity,
 		executor: options.executor,
+		trace: capturePolicy(options.name, options.trace),
 	});
 }
 
@@ -99,6 +122,7 @@ export function captureAgent(agent: AgentDefinition): AgentDefinition {
 		name: agent.name,
 		identity: agent.identity,
 		executor,
+		trace: capturePolicy(agent.name, agent.trace),
 	});
 }
 
@@ -261,6 +285,13 @@ export const SAY = {
 	parameters: Type.Object({
 		to: Type.Optional(Type.String({ description: 'A participant name from the roster.' })),
 		text: Type.String(),
+		refs: Type.Optional(
+			Type.Array(
+				Type.String({
+					description: 'A URI the message cites: a file, a table, a room, or an exchange.',
+				}),
+			),
+		),
 	}),
 };
 
@@ -402,9 +433,13 @@ function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
 
 const NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 
+/** Whether a value is a name the room can address. */
+export function isName(value: unknown): value is string {
+	return typeof value === 'string' && NAME_PATTERN.test(value);
+}
+
 function assertName(name: unknown): asserts name is string {
-	const match = typeof name === 'string' ? NAME_PATTERN.exec(name) : undefined;
-	if (typeof name !== 'string' || match?.[0] !== name) {
+	if (!isName(name)) {
 		throw new AmbionError(
 			'invalid_name',
 			`Invalid participant name '${name}': names are lowercase, alphanumeric plus dashes.`,
@@ -414,8 +449,7 @@ function assertName(name: unknown): asserts name is string {
 
 /** A room name follows the same rule as a participant name: lowercase, alphanumeric plus dashes. */
 export function assertRoomName(name: unknown): asserts name is string {
-	const match = typeof name === 'string' ? NAME_PATTERN.exec(name) : undefined;
-	if (typeof name !== 'string' || match?.[0] !== name) {
+	if (!isName(name)) {
 		throw new AmbionError(
 			'invalid_name',
 			`Invalid room name '${name}': names are lowercase, alphanumeric plus dashes.`,
