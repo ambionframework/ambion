@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Answering, answerLease } from '../src/answers.ts';
+import { type Answering, answerLease, answerView } from '../src/answers.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { LeaseRequest } from '../src/protocol.ts';
 import { foldRoom } from '../src/room/fold.ts';
@@ -35,10 +35,12 @@ const question: Entry = {
 function fakeRoom(
 	state: ReturnType<typeof foldRoom>,
 	ended: string[],
+	messages = Number.POSITIVE_INFINITY,
 	usages: unknown[] = [],
 ): Answering {
 	return {
 		name: 'release-test',
+		limits: { context: { messages } },
 		now: () => now,
 		gone: () => false,
 		ready: Promise.resolve(),
@@ -58,6 +60,39 @@ function fakeRoom(
 		},
 	};
 }
+
+describe('a view under the room cap', () => {
+	it('reports how many messages the cap left out', async () => {
+		const state = foldRoom(
+			[
+				composition,
+				{ kind: 'message', seq: 2, body: { kind: 'said', from: 'priya', text: 'Earlier.', at } },
+				{ kind: 'message', seq: 3, body: { kind: 'said', from: 'priya', text: 'Question.', at } },
+				{
+					kind: 'close',
+					seq: 4,
+					body: { owner: 'priya', from: 3, through: 3, at, summary: 'assistant' },
+				},
+				{
+					kind: 'lease',
+					seq: 5,
+					body: {
+						id: 'closed:3:assistant:1',
+						phase: 'running',
+						expiresAt: now + 100,
+						at,
+						readThrough: 0,
+					},
+				},
+			],
+			options,
+		);
+		const response = await answerView(fakeRoom(state, [], 1), 'closed:3:assistant:1');
+		if (!('view' in response)) throw new Error('Expected a view.');
+		expect(response.view.context.messages.map((m) => m.seq)).toEqual([3]);
+		expect(response.view.context.omitted).toBe(1);
+	});
+});
 
 describe('seat lease answers', () => {
 	it('rejects an unclaimed designated summary activation', async () => {
@@ -131,7 +166,7 @@ describe('seat lease answers', () => {
 		);
 		const usage = { input: 4, output: 2, cacheRead: 0, cacheWrite: 1 };
 		const usages: unknown[] = [];
-		await answerLease(fakeRoom(state, [], usages), {
+		await answerLease(fakeRoom(state, [], undefined, usages), {
 			activation: 'closed:2:assistant:1',
 			operation: 'release',
 			reason: 'released',
