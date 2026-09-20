@@ -10,17 +10,16 @@
  * `../room.test.ts` and its neighbours prove that, deterministically.
  */
 import { memoryJournals } from '@ambionframework/journal';
+import { piSessions } from '@ambionframework/pi-journal';
 import type { Usage } from '@earendil-works/pi-ai';
 import { describe } from 'vitest';
-import { hostingOf, seatSessionId } from '../../src/hosting.ts';
+import { type PiOptions, pi, seatSessionId } from '../../../pi/src/index.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSpoken,
 	type Message,
-	type PiOptions,
-	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -142,7 +141,7 @@ export async function spent(runtime: Runtime, session: Room): Promise<Spent> {
 	const total: Spent = { activations: 0, tokens: 0, cost: 0 };
 	for (const info of await participantsOf(session)) {
 		if (info.kind !== 'agent') continue;
-		const seat = await hostingOf(runtime).transcripts.open(seatSessionId(session.name, info.name));
+		const seat = await piSessions(runtime.storage).open(seatSessionId(session.name, info.name));
 		for (const entry of await seat.findEntries()) add(total, entry);
 	}
 	return total;

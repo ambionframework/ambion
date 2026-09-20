@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { pi } from '../../pi/src/index.ts';
 import { type RoomProtocol, runningRoom, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	exchangeUri,
-	pi,
 	type Room,
 	type Runtime,
 	readRoom,

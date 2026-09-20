@@ -8,6 +8,7 @@
  * `AMBION_CHAOS=all` widens the handover to a crash at every write.
  */
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
 import { inProcessTransport } from '../src/hosting.ts';
 import { createRuntime, resumeRoom, startRoom } from '../src/index.ts';
@@ -99,7 +100,7 @@ describe('a split: two live hosts over one journal', () => {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		const events = collect(room);
 		const hers = await room.visit(priya);
@@ -110,7 +111,7 @@ describe('a split: two live hosts over one journal', () => {
 		const taken = await resumeRoom(name, {
 			runtime: second,
 			agents,
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		const his = await taken.visit(sam);
 		await his.send({ text: 'Second?', key: 'q2' });
@@ -129,7 +130,7 @@ describe('a split: two live hosts over one journal', () => {
 			const third = await resumeRoom(name, {
 				runtime: host(),
 				agents,
-				stream: scripted(script),
+				execution: piExecution({ stream: scripted(script) }),
 			});
 			expect((await messagesOf(third)).map((m) => m.seq)).toEqual(record.map((m) => m.seq));
 			await third.stop();

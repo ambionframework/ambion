@@ -3,10 +3,11 @@
  * the one that sends every request and answer through JSON.
  */
 import { describe, expect, it } from 'vitest';
+import { pi } from '../../pi/src/index.ts';
 import { speakOnce, type TransportHarness, transportConformance } from '../src/conformance.ts';
 import type { Transport } from '../src/hosting.ts';
 import { inProcessTransport } from '../src/hosting.ts';
-import { defineAgent, pi, systemClock } from '../src/index.ts';
+import { defineAgent, systemClock } from '../src/index.ts';
 import { serializing } from './support/transport.ts';
 
 const harnessOver = (transport: Transport): TransportHarness => ({

@@ -8,6 +8,7 @@ export type AmbionErrorCode =
 	| 'room_stopped'
 	| 'room_running'
 	| 'no_composition'
+	| 'no_execution'
 	| 'missing_definition'
 	| 'visit_ended'
 	| 'not_present'

@@ -1,15 +1,17 @@
+import type { RoomNotification } from '@ambionframework/ambion';
+import { defineAgent } from '@ambionframework/ambion';
+import type { ActivationView, RoomProtocol } from '@ambionframework/ambion/hosting';
 import { type JournalOpener, type JournalStorage, memoryJournals } from '@ambionframework/journal';
 import type { AuditSession as PiSession, SessionOpener } from '@ambionframework/pi-journal';
 import { piSessions } from '@ambionframework/pi-journal';
 import type { Agent, AgentMessage, StreamFn } from '@earendil-works/pi-agent-core';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { Activation, type PiExecutorOptions, persistTurns } from '../src/execution/activation.ts';
-import { stubModel } from '../src/execution/services.ts';
-import { defineAgent, pi } from '../src/index.ts';
-import type { ActivationView, RoomProtocol } from '../src/protocol.ts';
-import type { RoomNotification } from '../src/types.ts';
-import { quiet, scripted } from './support/scripted.ts';
+import { quiet, scripted } from '../../ambion/test/support/scripted.ts';
+import { persistTurns } from '../src/audit.ts';
+import { Activation, type PiExecutorOptions } from '../src/executor.ts';
+import { pi } from '../src/index.ts';
+import { stubModel } from '../src/services.ts';
 
 const message: AgentMessage = { role: 'user', content: 'hello', timestamp: 1 };
 const agent = { state: { messages: [message] } } as unknown as Agent;
@@ -95,7 +97,7 @@ describe('audit persistence', () => {
 			openAudit,
 			() => {},
 		);
-		const running = activation.pass(activationView());
+		const running = activation.pass({ kind: 'view', view: activationView() });
 		await persistStarted;
 		activation.abort();
 		releasePersist();
@@ -119,7 +121,9 @@ describe('audit persistence', () => {
 			},
 		);
 
-		expect(await activation.pass(activationView())).toEqual({ failed: false });
+		expect(await activation.pass({ kind: 'view', view: activationView() })).toEqual({
+			failed: false,
+		});
 	});
 
 	it('records provider failure before a blocked audit can be cut', async () => {
@@ -143,7 +147,7 @@ describe('audit persistence', () => {
 		const activation = activationFor(stream, openAudit, (event) => {
 			if (event.type === 'error') events.push(event.error.message);
 		});
-		const running = activation.pass(activationView());
+		const running = activation.pass({ kind: 'view', view: activationView() });
 		await persistStarted;
 		// The provider failure is recorded before the blocked audit write can be cut.
 		expect(events).toEqual(['provider']);

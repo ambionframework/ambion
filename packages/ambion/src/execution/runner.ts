@@ -19,7 +19,7 @@ import type {
 	Wake,
 } from '../protocol.ts';
 import type { EndReason, ExecutionEvent, FailureCause, Message, Seq } from '../types.ts';
-import type { ExecutorSession, PassResult } from './executor.ts';
+import type { ExecutorSession, PassInput, PassResult } from './executor.ts';
 import { renderLine, windowToLimit } from './render.ts';
 
 type CallResult<T> =
@@ -190,12 +190,14 @@ export class AgentRunner implements AgentPort {
 		cancelled: Promise<void>,
 	): Promise<PassResult | undefined> {
 		let last: PassResult | undefined;
+		let since: Seq | undefined;
 		try {
 			for (;;) {
 				const opened = await this.viewFor(id, cancelled);
 				if ('stale' in opened) return last;
 				const view = opened.view;
-				last = await session.pass(view);
+				last = await session.pass(passInput(view, since));
+				since = session.readThrough;
 				if (last.failed || session.cancelled || view.spec.purpose.kind !== 'respond') return last;
 				if (!(await this.needsRefresh(id, session, cancelled))) return last;
 			}
@@ -527,6 +529,11 @@ function defaultEstimate(text: string): number {
  * activation pins its own closed exchange the same way, so the window never
  * trims the range it is writing about.
  */
+/** The first pass reads the whole view. A later pass reads what came after `since`. */
+function passInput(view: ActivationView, since: Seq | undefined): PassInput {
+	return since === undefined ? { kind: 'view', view } : { kind: 'delta', since, view };
+}
+
 function pinOf(view: ActivationView): Seq | undefined {
 	const { purpose } = view.spec;
 	return purpose.kind === 'respond' ? view.context.exchange?.from : purpose.exchange;

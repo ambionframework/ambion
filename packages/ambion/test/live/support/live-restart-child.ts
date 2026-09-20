@@ -4,13 +4,13 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { sqliteJournals } from '@ambionframework/journal';
+import { pi } from '../../../../pi/src/index.ts';
 import { inProcessTransport, type RoomProtocol, type Transport } from '../../../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSpoken,
-	pi,
 	type Room,
 	type RoomNotification,
 	resumeRoom,

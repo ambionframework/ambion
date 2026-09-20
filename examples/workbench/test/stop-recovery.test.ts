@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { CreateRuntimeOptions } from '@ambionframework/ambion';
+import type { PiExecutionOptions } from '@ambionframework/pi';
 import { afterEach, describe, expect, it } from 'vitest';
 import { people } from '../src/definitions.ts';
 import { liveRoom, openRooms } from '../src/rooms.ts';
@@ -91,7 +91,7 @@ if (!mira) throw new Error('The test team has no human.');
 
 function noModelStream() {
 	let calls = 0;
-	const stream: CreateRuntimeOptions['stream'] = () => {
+	const stream: PiExecutionOptions['stream'] = () => {
 		calls += 1;
 		throw new Error('model calls are forbidden in lifecycle recovery tests');
 	};
@@ -290,7 +290,7 @@ describe('Workbench host stop recovery', () => {
 		const directory = await mkdtemp(joinPath(tmpdir(), 'ambion-host-stop-recovery-'));
 		const failure = failNextDeparture();
 		let modelCalls = 0;
-		const stream: CreateRuntimeOptions['stream'] = () => {
+		const stream: PiExecutionOptions['stream'] = () => {
 			modelCalls += 1;
 			throw new Error('model calls are forbidden in host lifecycle recovery tests');
 		};

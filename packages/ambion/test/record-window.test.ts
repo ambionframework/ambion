@@ -5,7 +5,7 @@
  * hands them a value.
  */
 import { describe, expect, it } from 'vitest';
-import { pi } from '../src/define.ts';
+import { pi } from '../../pi/src/index.ts';
 import { windowToLimit } from '../src/execution/render.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { ActivationSpec, ViewRange } from '../src/protocol.ts';

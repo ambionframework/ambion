@@ -4,20 +4,33 @@
  * A closing activation receives only `say`; the room turns that said intent
  * into the assigned summary and supplies its recipient and range.
  */
+import type { AmbionTool, Message } from '@ambionframework/ambion';
+import type {
+	ActivationView,
+	AgentDefinition,
+	CommitResult,
+	Intent,
+	RoomProtocol,
+} from '@ambionframework/ambion/hosting';
+import {
+	refusal,
+	SAY,
+	SEAT,
+	summaryToolDescription,
+	UNSEAT,
+} from '@ambionframework/ambion/hosting';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
-import { SAY, SEAT, UNSEAT } from '../define.ts';
-import type { ActivationView, CommitResult, Intent, RoomProtocol } from '../protocol.ts';
-import type { AgentDefinition, AmbionTool, Message } from '../types.ts';
-import type { Activation } from './activation.ts';
-import { refusal } from './render.ts';
-import { summaryToolDescription } from './summary.ts';
+import type { Activation } from './executor.ts';
 
-/** A Pi tool from a normalized tool. */
+/**
+ * A Pi tool from a normalized tool. The tool reads the view of the pass that
+ * runs it, so the room and the open exchange it names are current.
+ */
 function toPiTool(
 	tool: AmbionTool,
 	agent: AgentDefinition,
-	view: ActivationView,
+	current: () => ActivationView,
 ): AgentTool<TSchema, unknown> {
 	return {
 		name: tool.name,
@@ -27,6 +40,7 @@ function toPiTool(
 		...(tool.prepareArguments === undefined ? {} : { prepareArguments: tool.prepareArguments }),
 		...(tool.executionMode === undefined ? {} : { executionMode: tool.executionMode }),
 		execute: async (toolCallId, params, signal, onUpdate) => {
+			const view = current();
 			const exchange = view.context.exchange;
 			const result = await tool.invoke(
 				params,
@@ -194,16 +208,25 @@ function membershipTool(
 	};
 }
 
-/** What an activation holds from its purpose. */
-export function toolsFor(view: ActivationView, def: AgentDefinition, held: Binding): AgentTool[] {
-	if (view.spec.purpose.kind === 'summarize') {
-		return [sayTool(held, view.spec.purpose.person)];
+/**
+ * What an activation holds from its purpose. `current` names the view of the
+ * running pass, and defaults to the view the tools are built from.
+ */
+export function toolsFor(
+	view: ActivationView,
+	def: AgentDefinition,
+	held: Binding,
+	current: () => ActivationView = () => view,
+): AgentTool[] {
+	const { purpose } = view.spec;
+	if (purpose.kind === 'summarize') {
+		return [sayTool(held, purpose.person)];
 	}
 	return [
 		sayTool(held),
 		seatTool(held),
 		unseatTool(held),
-		...def.executor.tools.map((tool) => toPiTool(tool, def, view)),
+		...def.executor.tools.map((tool) => toPiTool(tool, def, current)),
 	];
 }
 

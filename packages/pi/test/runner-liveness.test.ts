@@ -1,23 +1,23 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
-import { describe, expect, it } from 'vitest';
-import type { AgentExecutionContext } from '../src/host/runtime.ts';
+import { type Clock, createRuntime, defineAgent } from '@ambionframework/ambion';
+import type { AgentExecutionContext } from '@ambionframework/ambion/hosting';
 import {
 	AgentRunner,
 	type CommitRequest,
 	type CommitResult,
-	createPiExecutor,
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
 	type RoomProtocol,
 	type ViewResponse,
 	type Wake,
-} from '../src/hosting.ts';
-import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
-import { tick } from './support/room.ts';
-import { quiet, scripted, speak } from './support/scripted.ts';
+} from '@ambionframework/ambion/hosting';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
+import { describe, expect, it } from 'vitest';
+import { fakeClock } from '../../ambion/test/support/clock.ts';
+import { tick } from '../../ambion/test/support/room.ts';
+import { quiet, scripted, speak } from '../../ambion/test/support/scripted.ts';
+import { createExecutionServices, createPiExecutor, pi } from '../src/index.ts';
 
 const worker = defineAgent({
 	name: 'worker',
@@ -99,10 +99,11 @@ function fixture(
 	} = {},
 ) {
 	const clock = fakeClock(0);
-	const runtime = createRuntime({
+	const runtime = createRuntime({ clock, limits: { call: options.call } });
+	const services = createExecutionServices({
+		storage: runtime.storage,
 		clock,
 		stream: options.stream ?? scripted(() => quiet()),
-		limits: { call: options.call },
 	});
 	const room = new LivenessRoom(clock, {
 		lease: options.lease,
@@ -111,9 +112,9 @@ function fixture(
 	});
 	const executor = createPiExecutor({
 		definition: worker,
-		model: hostingOf(runtime).model,
-		stream: hostingOf(runtime).stream,
-		transcripts: hostingOf(runtime).transcripts,
+		model: services.model,
+		stream: services.stream,
+		transcripts: services.transcripts,
 		room: 'liveness',
 		now: () => clock.now(),
 	});

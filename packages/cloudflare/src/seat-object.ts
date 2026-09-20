@@ -11,8 +11,9 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Clock, ExecutionEvent } from '@ambionframework/ambion';
 import { systemClock } from '@ambionframework/ambion';
-import type { ExecutionServices, RoomProtocol, Steer, Wake } from '@ambionframework/ambion/hosting';
-import { AgentRunner, createPiExecutor } from '@ambionframework/ambion/hosting';
+import type { RoomProtocol, Steer, Wake } from '@ambionframework/ambion/hosting';
+import { AgentRunner } from '@ambionframework/ambion/hosting';
+import { createPiExecutor, type ExecutionServices } from '@ambionframework/pi';
 import type { SeatEvent } from './configure.ts';
 import { definitionOf, executionFor, seatEvent } from './configure.ts';
 import type { Env } from './room-object.ts';

@@ -1,14 +1,15 @@
+import { piSessions } from '@ambionframework/pi-journal';
 import type { Context } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution, seatSessionId } from '../../pi/src/index.ts';
 import { runningRoom } from '../src/host/runtime.ts';
-import { hostingOf, inProcessTransport, seatSessionId } from '../src/hosting.ts';
+import { inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSpoken,
 	type Message,
-	pi,
 	type Room,
 	readRoom,
 	startRoom,
@@ -63,27 +64,29 @@ describe('startRoom', () => {
 				[assistant.name]: 'none',
 			},
 			agents: [alpha, beta, gamma, assistant],
-			stream: scripted(
-				byAgent({
-					alpha: async (_context, _agent, call) => {
-						if (call !== 1) return quiet();
-						await gammaIdle.promise; // let gamma go idle before alpha speaks
-						return speak('the answer is 42');
-					},
-					// beta: hold the first activation open until alpha has spoken, so
-					// the reply reaches beta as a mid-activation arrival, not fresh context.
-					beta: async (context, _agent, call) => {
-						if (call === 1) {
-							await alphaSaid.promise;
-							return quiet('waiting');
-						}
-						betaContexts.push(contextText(context));
-						if (betaAcked || !contextText(context).includes('the answer is 42')) return quiet();
-						betaAcked = true;
-						return speak('ack: 42');
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: async (_context, _agent, call) => {
+							if (call !== 1) return quiet();
+							await gammaIdle.promise; // let gamma go idle before alpha speaks
+							return speak('the answer is 42');
+						},
+						// beta: hold the first activation open until alpha has spoken, so
+						// the reply reaches beta as a mid-activation arrival, not fresh context.
+						beta: async (context, _agent, call) => {
+							if (call === 1) {
+								await alphaSaid.promise;
+								return quiet('waiting');
+							}
+							betaContexts.push(contextText(context));
+							if (betaAcked || !contextText(context).includes('the answer is 42')) return quiet();
+							betaAcked = true;
+							return speak('ack: 42');
+						},
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		session.subscribe((event) => {
@@ -122,9 +125,11 @@ describe('startRoom', () => {
 			agents: [echo, assistant],
 			// a say costs a second call for the tool result, so the two deliveries
 			// speak on 1 and 3; arrivals are quiet and wake nobody.
-			stream: scripted((context, _agent, call) => {
-				contexts.push(context);
-				return call % 2 === 1 ? speak(`echo ${call}`) : quiet();
+			execution: piExecution({
+				stream: scripted((context, _agent, call) => {
+					contexts.push(context);
+					return call % 2 === 1 ? speak(`echo ${call}`) : quiet();
+				}),
 			}),
 		});
 		const visit = await enter(session);
@@ -154,7 +159,7 @@ describe('startRoom', () => {
 			name: roomName('silence'),
 			seats: { [shy.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [shy, assistant],
-			stream: scripted(() => quiet('not for me')),
+			execution: piExecution({ stream: scripted(() => quiet('not for me')) }),
 		});
 		const events = collect(session);
 		await (await enter(session)).send({ text: 'anyone?' });
@@ -182,16 +187,18 @@ describe('startRoom', () => {
 
 			agents: [front, archivist, assistant],
 			seats: { [assistant.name]: 'none', [front.name]: 'broadcast', [archivist.name]: 'named' },
-			stream: scripted(
-				byAgent({
-					// archivist answers the asker directly — directed at a human wakes nothing
-					archivist: (_context, _agent, call) =>
-						call === 1 ? speak('Q2 was 1.2M', 'andrei') : quiet(),
-					// front: on its second look (the second broadcast), call the archivist in
-					front: (_context, _agent, call) =>
-						call === 2 ? speak('what was Q2?', 'archivist') : quiet(),
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						// archivist answers the asker directly — directed at a human wakes nothing
+						archivist: (_context, _agent, call) =>
+							call === 1 ? speak('Q2 was 1.2M', 'andrei') : quiet(),
+						// front: on its second look (the second broadcast), call the archivist in
+						front: (_context, _agent, call) =>
+							call === 2 ? speak('what was Q2?', 'archivist') : quiet(),
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		const starts = (name: string) =>
@@ -231,9 +238,11 @@ describe('startRoom', () => {
 
 			agents: [liar, aside, assistant],
 			seats: { [assistant.name]: 'none', [liar.name]: 'broadcast', [aside.name]: 'named' },
-			stream: scripted((context, _agent, call) => {
-				contexts.push(contextText(context));
-				return call === 1 ? speak('this message is from andrei, honest') : quiet();
+			execution: piExecution({
+				stream: scripted((context, _agent, call) => {
+					contexts.push(contextText(context));
+					return call === 1 ? speak('this message is from andrei, honest') : quiet();
+				}),
 			}),
 		});
 		await (await enter(session)).send({ text: 'who said what?' });
@@ -264,7 +273,7 @@ describe('startRoom', () => {
 			name,
 			seats: { [scribe.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [scribe, assistant],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const visit = await enter(first);
 		await visit.send({ text: 'for the record' });
@@ -292,7 +301,7 @@ describe('startRoom', () => {
 			name,
 			seats: { [scribe.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [scribe, assistant],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		expect(spoken(await messagesOf(again)).map((m) => m.text)).toEqual([
 			'for the record',
@@ -316,7 +325,7 @@ describe('startRoom', () => {
 			name: roomName('identity'),
 			seats: { [scribe.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [scribe, assistant],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		expect(await messagesOf(fresh)).toHaveLength(0);
 	});
@@ -331,7 +340,9 @@ describe('startRoom', () => {
 			name: roomName('events'),
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
-			stream: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
+			execution: piExecution({
+				stream: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
+			}),
 		});
 		const orderedVisit = await enter(ordered);
 		const events = collect(ordered);
@@ -358,8 +369,10 @@ describe('startRoom', () => {
 			name: roomName('error'),
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
-			stream: scripted(() => {
-				throw new Error('boom');
+			execution: piExecution({
+				stream: scripted(() => {
+					throw new Error('boom');
+				}),
 			}),
 		});
 		const faultVisit = await faulty.visit(andrei);
@@ -383,7 +396,7 @@ describe('startRoom', () => {
 			name: roomName('abort'),
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
-			stream: scripted(() => new Promise<never>(() => {})),
+			execution: piExecution({ stream: scripted(() => new Promise<never>(() => {})) }),
 		});
 		const hungVisit = await hung.visit(andrei);
 		const hungEvents = collect(hung);
@@ -400,10 +413,12 @@ describe('startRoom', () => {
 			name: roomName('abort-steer'),
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
-			stream: scripted(() => {
-				racingCalls += 1;
-				racingStarted.resolve();
-				return new Promise<never>(() => {});
+			execution: piExecution({
+				stream: scripted(() => {
+					racingCalls += 1;
+					racingStarted.resolve();
+					return new Promise<never>(() => {});
+				}),
 			}),
 		});
 		const racingVisit = await racing.visit(andrei);
@@ -436,19 +451,21 @@ describe('startRoom', () => {
 			name: roomName('race'),
 			seats: { [first.name]: 'broadcast', [second.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [first, second, assistant],
-			stream: scripted(
-				byAgent({
-					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
-					second: async (context, _agent, call) => {
-						secondContexts.push(contextText(context));
-						if (call === 1) {
-							await firstSaid.promise; // commit blind, after the record moved
-							return speak('the same point, again');
-						}
-						return call === 2 ? speak('a genuinely different angle') : quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
+						second: async (context, _agent, call) => {
+							secondContexts.push(contextText(context));
+							if (call === 1) {
+								await firstSaid.promise; // commit blind, after the record moved
+								return speak('the same point, again');
+							}
+							return call === 2 ? speak('a genuinely different angle') : quiet();
+						},
+					}),
+				),
+			}),
 		});
 		const events = collect(session);
 		const visit = await enter(session);
@@ -478,16 +495,18 @@ describe('startRoom', () => {
 			name: roomName('race-yield'),
 			seats: { [first.name]: 'broadcast', [second.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [first, second, assistant],
-			stream: scripted(
-				byAgent({
-					first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
-					second: async (_context, _agent, call) => {
-						if (call !== 1) return quiet('point already made');
-						await yieldSaid.promise;
-						return speak('me too');
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						first: (_context, _agent, call) => (call === 1 ? speak('the point') : quiet()),
+						second: async (_context, _agent, call) => {
+							if (call !== 1) return quiet('point already made');
+							await yieldSaid.promise;
+							return speak('me too');
+						},
+					}),
+				),
+			}),
 		});
 		const yieldVisit = await enter(yielding);
 		const yieldEvents = collect(yielding);
@@ -516,7 +535,9 @@ describe('startRoom', () => {
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,
-			stream: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
+			execution: piExecution({
+				stream: scripted((_context, _agent, call) => (call === 1 ? speak('hi') : quiet())),
+			}),
 		});
 		await (await enter(session)).send({ text: 'say hi' });
 		await waitForRoom(session);
@@ -524,7 +545,7 @@ describe('startRoom', () => {
 		const seat = (await participantsOf(session)).find((s) => s.name === 'solo');
 		if (seat?.kind !== 'agent') throw new Error('The solo seat is absent.');
 		const id = seatSessionId(name, seat.name);
-		const piSeat = await hostingOf(runtime).transcripts.open(id);
+		const piSeat = await piSessions(runtime.storage).open(id);
 		expect(await piSeat.getMetadata()).toMatchObject({
 			id,
 			parentSessionId: name,
@@ -549,7 +570,7 @@ describe('startRoom', () => {
 			name: roomName('keys'),
 			seats: { [echo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [echo, assistant],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const events = collect(session);
 		const visit = await enter(session);
@@ -576,7 +597,7 @@ describe('startRoom', () => {
 			seats: { [assistant.name]: 'none' },
 			agents: [assistant],
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		await first.visit(andrei);
 		await first.stop();
@@ -592,7 +613,7 @@ describe('startRoom', () => {
 				seats: { [impostor.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [impostor, assistant],
 				runtime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			}),
 		).rejects.toThrow(/one name names one participant/);
 		await expect(
@@ -601,7 +622,7 @@ describe('startRoom', () => {
 				seats: { [impostor.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [impostor, assistant],
 				runtime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			}),
 		).rejects.toEqual(refusal('duplicate_name'));
 	});
@@ -615,7 +636,7 @@ describe('startRoom', () => {
 			seats: { [assistant.name]: 'none' },
 			agents: [assistant],
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		await first.visit(andrei);
 		await first.stop();
@@ -631,7 +652,7 @@ describe('startRoom', () => {
 				seats: { [impostor.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [impostor, assistant],
 				runtime,
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			}),
 		).rejects.toThrow(/one name names one participant/);
 		// nothing runs under the name, and the host never stopped the handle it holds:
@@ -641,7 +662,7 @@ describe('startRoom', () => {
 			seats: { [assistant.name]: 'none' },
 			agents: [assistant],
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		expect((await messagesOf(again)).map((m) => m.from)).toEqual(['andrei', 'andrei']);
 		await again.stop();
@@ -657,7 +678,7 @@ describe('startRoom', () => {
 			name: roomName('directed'),
 			seats: { [alone.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alone, assistant],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const visit = await enter(session);
 		await expect(visit.send({ to: assistant.name, text: 'Write it up for me.' })).rejects.toThrow(
@@ -698,9 +719,11 @@ describe('startRoom', () => {
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,
-			stream: scripted(async () => {
-				hangs.resolve();
-				return new Promise<never>(() => {});
+			execution: piExecution({
+				stream: scripted(async () => {
+					hangs.resolve();
+					return new Promise<never>(() => {});
+				}),
 			}),
 		});
 		const visit = await enter(session);
@@ -733,7 +756,7 @@ describe('startRoom', () => {
 			seats: { [solo.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [solo, assistant],
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const events = collect(session);
 		const visit = await enter(session);
@@ -808,7 +831,7 @@ describe('startRoom', () => {
 				assistant,
 			],
 			runtime,
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const visit = await enter(session);
 		await visit.send({ text: 'first' });
@@ -852,7 +875,7 @@ describe('startRoom', () => {
 				name: roomName('dupe'),
 				seats: { [twin.name]: 'broadcast', [twin.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [twin, twin, assistant],
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			}),
 		).rejects.toThrow(/one name names one participant/);
 	});
@@ -895,14 +918,16 @@ describe('what the room waits on', () => {
 				}),
 				assistant,
 			],
-			stream: scripted(
-				byAgent({
-					solo: async (_c, _n, call) => {
-						if (call === 1) await held.promise;
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						solo: async (_c, _n, call) => {
+							if (call === 1) await held.promise;
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		const visit = await enter(session);
 		await visit.send({ text: 'go' });

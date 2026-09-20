@@ -10,7 +10,7 @@ import type {
 	Runtime,
 } from '@ambionframework/ambion';
 import { createRuntime } from '@ambionframework/ambion';
-import { createExecutionServices } from '@ambionframework/ambion/hosting';
+import { createExecutionServices, type PiExecutionOptions, piExecution } from '@ambionframework/pi';
 
 /**
  * One event a seat raised inside its own object, flat enough to be a journal
@@ -33,7 +33,7 @@ export interface ConfigureOptions {
 	/** Every definition a room in this worker may seat, by name. */
 	agents: readonly AgentDefinition[];
 	/** The model call. Defaults to Pi's registry, keyed from the environment. */
-	stream?: CreateRuntimeOptions['stream'];
+	stream?: PiExecutionOptions['stream'];
 	limits?: CreateRuntimeOptions['limits'];
 	/**
 	 * What to do with an event a seat raised. An activation runs inside the
@@ -72,7 +72,7 @@ export function runtimeFor(
 		throw new Error('Call configure() at module scope before an object runs.');
 	}
 	return createRuntime({
-		...(settings.stream === undefined ? {} : { stream: settings.stream }),
+		execution: piExecution(settings.stream === undefined ? {} : { stream: settings.stream }),
 		...(settings.limits === undefined ? {} : { limits: settings.limits }),
 		...options,
 	});

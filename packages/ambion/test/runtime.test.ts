@@ -5,6 +5,7 @@
  */
 import { readdir } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
+import { piExecution } from '../../pi/src/index.ts';
 import { hostingOf } from '../src/hosting.ts';
 import { createRuntime, isSpoken, readRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
@@ -64,14 +65,14 @@ describe('createRuntime', () => {
 			runtime: first,
 			seats: { [assistant.name]: 'none' },
 			agents: [assistant],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		const b = await startRoom({
 			name,
 			runtime: second,
 			seats: { [assistant.name]: 'none' },
 			agents: [assistant],
-			stream: scripted(() => quiet()),
+			execution: piExecution({ stream: scripted(() => quiet()) }),
 		});
 		await (await a.visit(andrei)).send({ text: 'in the first' });
 		await (await b.visit(andrei)).send({ text: 'in the second' });
@@ -98,7 +99,7 @@ describe('createRuntime', () => {
 				runtime: writer,
 				seats: { [assistant.name]: 'none' },
 				agents: [assistant],
-				stream: scripted(() => quiet()),
+				execution: piExecution({ stream: scripted(() => quiet()) }),
 			});
 			const visit = await session.visit(andrei);
 			await visit.send({ text: 'kept on disk' });

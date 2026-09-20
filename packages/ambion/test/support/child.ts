@@ -7,6 +7,8 @@
  *
  *   node child.ts <dir> <name> <delay-ms> <storage>
  */
+
+import { piExecution } from '../../../pi/src/index.ts';
 import { createRuntime, startRoom } from '../../src/index.ts';
 import { assistant, colleague, priya, product, questions, sam, slowly, TIMING } from './cast.ts';
 import { waitForRoom } from './room.ts';
@@ -31,7 +33,7 @@ const session = await startRoom({
 	summary: assistant.name,
 	seats: { [product.name]: 'broadcast', [colleague.name]: 'broadcast', [assistant.name]: 'none' },
 	agents: [product, colleague, assistant],
-	stream: scripted(slowly(Number(delay ?? 40))),
+	execution: piExecution({ stream: scripted(slowly(Number(delay ?? 40))) }),
 });
 
 const [first, second, third] = questions;

@@ -1,13 +1,7 @@
 import type { JournalOpener, JournalStorage } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
-import {
-	createRuntime,
-	defineAgent,
-	defineHuman,
-	pi,
-	readExchange,
-	startRoom,
-} from '../src/index.ts';
+import { pi, piExecution } from '../../pi/src/index.ts';
+import { createRuntime, defineAgent, defineHuman, readExchange, startRoom } from '../src/index.ts';
 import { deferred, roomName, tick, waitForRoom } from './support/room.ts';
 import { contextText, quiet, scripted } from './support/scripted.ts';
 import { storages } from './support/storage.ts';
@@ -111,11 +105,13 @@ describe.each(storages)('readExchange on $name storage', (storage) => {
 			name: roomName(`exchange-read-open-${storage.name}`),
 			runtime,
 			agents: [agent],
-			stream: scripted(async (context) => {
-				if (!contextText(context).includes('What is open?')) return quiet();
-				started.resolve();
-				await release.promise;
-				return quiet();
+			execution: piExecution({
+				stream: scripted(async (context) => {
+					if (!contextText(context).includes('What is open?')) return quiet();
+					started.resolve();
+					await release.promise;
+					return quiet();
+				}),
 			}),
 		});
 		try {

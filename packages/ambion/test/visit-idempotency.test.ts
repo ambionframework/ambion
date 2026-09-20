@@ -1,10 +1,10 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { pi } from '../../pi/src/index.ts';
 import { hostingOf } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineHuman,
-	pi,
 	type Room,
 	resumeRoom,
 	startRoom,

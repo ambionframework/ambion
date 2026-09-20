@@ -5,6 +5,7 @@
  * still owed all fold back, on every storage.
  */
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { hostingOf, inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
@@ -12,7 +13,6 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
-	pi,
 	type Room,
 	type Runtime,
 	readRoom,
@@ -136,7 +136,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [alpha, beta, assistant],
 				runtime: first,
-				stream: scripted(script),
+				execution: piExecution({ stream: scripted(script) }),
 			});
 			const visit = await session.visit(priya);
 			await visit.send({ text: 'Can I tell the client Thursday?' });
@@ -155,7 +155,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const resumed = await resumeRoom(name, {
 				runtime: second,
 				agents,
-				stream: scripted(script),
+				execution: piExecution({ stream: scripted(script) }),
 			});
 			const events = collect(resumed);
 			// the fold before the crash is the fold after the resume
@@ -210,7 +210,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [alpha, assistant],
 				runtime: first,
-				stream: scripted(script),
+				execution: piExecution({ stream: scripted(script) }),
 			});
 			const visit = await session.visit(priya);
 			await visit.send({ text: 'Anyone?' });
@@ -222,7 +222,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const resumed = await resumeRoom(name, {
 				runtime: runtime(),
 				agents,
-				stream: scripted(script),
+				execution: piExecution({ stream: scripted(script) }),
 			});
 			const events = collect(resumed);
 			// the resume itself expired the lease: the wake it took is pending again,
@@ -256,7 +256,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [alpha, assistant],
 				runtime: runtime(),
-				stream: scripted(byAgent({})),
+				execution: piExecution({ stream: scripted(byAgent({})) }),
 			});
 			await waitForRoom(one);
 			expect((await participantsOf(one)).map((s) => s.name)).toEqual(['alpha', 'assistant']);
@@ -268,7 +268,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [beta.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [beta, assistant],
 				runtime: runtime(),
-				stream: scripted(byAgent({})),
+				execution: piExecution({ stream: scripted(byAgent({})) }),
 			});
 			await waitForRoom(two);
 			expect((await participantsOf(two)).map((s) => s.name)).toEqual(['beta', 'assistant']);
@@ -292,7 +292,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				agents: [alpha, beta, assistant],
 				seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast' },
 				runtime: runtime(),
-				stream: scripted(byAgent({})),
+				execution: piExecution({ stream: scripted(byAgent({})) }),
 			});
 			// before the replay, the seats fold from the composition the run is about to write
 			expect((await participantsOf(session)).map((s) => [s.name, s.identity])).toEqual([
@@ -330,15 +330,17 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [alpha, assistant],
 				runtime: runtime(),
-				stream: scripted(
-					byAgent({
-						alpha: async () => {
-							working.resolve();
-							await new Promise(() => {});
-							return quiet();
-						},
-					}),
-				),
+				execution: piExecution({
+					stream: scripted(
+						byAgent({
+							alpha: async () => {
+								working.resolve();
+								await new Promise(() => {});
+								return quiet();
+							},
+						}),
+					),
+				}),
 			});
 			const heard = collect(one);
 			const visit = await one.visit(priya);
@@ -357,7 +359,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [alpha, assistant],
 				runtime: runtime(),
-				stream: scripted(byAgent({})),
+				execution: piExecution({ stream: scripted(byAgent({})) }),
 			});
 			await waitForRoom(two);
 			// Startup may durably close before subscribers attach; the journal assertion below is authoritative.
@@ -385,7 +387,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [assistant.name]: 'none' },
 				agents: [assistant],
 				runtime: first,
-				stream: scripted(byAgent({})),
+				execution: piExecution({ stream: scripted(byAgent({})) }),
 			});
 			await session.visit(priya);
 			await session.visit(sam);
@@ -394,7 +396,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const resumed = await resumeRoom(name, {
 				runtime: runtime(),
 				agents,
-				stream: scripted(byAgent({})),
+				execution: piExecution({ stream: scripted(byAgent({})) }),
 			});
 			// no `left` was written, so both are still present, and visiting again writes nothing
 			expect(
@@ -444,7 +446,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [alpha, beta, assistant],
 				runtime: first,
-				stream: scripted(script),
+				execution: piExecution({ stream: scripted(script) }),
 			});
 			const visit = await session.visit(priya);
 			const drafted = assistantEnded(session);
@@ -465,7 +467,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const resumed = await resumeRoom(name, {
 				runtime: runtime(),
 				agents,
-				stream: scripted(writing),
+				execution: piExecution({ stream: scripted(writing) }),
 			});
 			// the resumed room takes on the draft the first run left owed, so it is
 			// not quiet either: it settled, and the backoff has not passed
@@ -503,7 +505,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [alpha, assistant],
 				runtime: runtime(),
-				stream: scripted(byAgent({ alpha: says(['alpha one', 'alpha two']), assistant: hangs })),
+				execution: piExecution({
+					stream: scripted(byAgent({ alpha: says(['alpha one', 'alpha two']), assistant: hangs })),
+				}),
 			});
 			const visit = await session.visit(priya);
 			await visit.send({ text: 'First?' });
@@ -514,7 +518,9 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const resumed = await resumeRoom(name, {
 				runtime: runtime(),
 				agents,
-				stream: scripted(byAgent({ assistant: writes('Never written.') })),
+				execution: piExecution({
+					stream: scripted(byAgent({ assistant: writes('Never written.') })),
+				}),
 			});
 			const events = collect(resumed);
 			await waitForRoom(resumed);
@@ -549,7 +555,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [alpha, assistant],
 				runtime: first,
-				stream: scripted(script),
+				execution: piExecution({ stream: scripted(script) }),
 			});
 			const visit = await session.visit(priya);
 			await visit.send({ text: 'Anyone?' });
@@ -583,7 +589,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 			const resumed = await resumeRoom(name, {
 				runtime: second,
 				agents,
-				stream: scripted(script),
+				execution: piExecution({ stream: scripted(script) }),
 			});
 			expect((await participantsOf(resumed)).find((s) => s.name === 'alpha')).toMatchObject({
 				status: 'active',
@@ -609,7 +615,7 @@ describe.each(storages)('a room resumed on $name', (storage) => {
 				seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 				agents: [alpha, assistant],
 				runtime: runtime(),
-				stream: scripted(byAgent({})),
+				execution: piExecution({ stream: scripted(byAgent({})) }),
 			});
 			await waitForRoom(session);
 			await session.stop();
@@ -661,7 +667,7 @@ describe('a room dropped from memory', () => {
 			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, beta, assistant],
 			runtime,
-			stream: scripted(byAgent({})),
+			execution: piExecution({ stream: scripted(byAgent({})) }),
 		});
 		hostingOf(runtime).evict(name);
 		expect((await participantsOf(session)).map((s) => s.name)).toEqual([
@@ -686,15 +692,17 @@ describe('a room dropped from memory', () => {
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, assistant],
 			runtime,
-			stream: scripted(
-				byAgent({
-					alpha: async (_c, _n, call) => {
-						if (call !== 1) return quiet();
-						await held.promise;
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: async (_c, _n, call) => {
+							if (call !== 1) return quiet();
+							await held.promise;
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'go' });
@@ -736,15 +744,17 @@ describe('a room dropped from memory', () => {
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, assistant],
 			runtime,
-			stream: scripted(
-				byAgent({
-					alpha: async (_c, _n, call) => {
-						if (call !== 1) return quiet();
-						await held.promise;
-						return quiet();
-					},
-				}),
-			),
+			execution: piExecution({
+				stream: scripted(
+					byAgent({
+						alpha: async (_c, _n, call) => {
+							if (call !== 1) return quiet();
+							await held.promise;
+							return quiet();
+						},
+					}),
+				),
+			}),
 		});
 		const visit = await session.visit(priya);
 		const exchange = await visit.send({ text: 'go' });

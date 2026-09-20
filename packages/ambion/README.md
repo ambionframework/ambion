@@ -23,7 +23,9 @@ npm install @ambionframework/ambion
 The main library includes its journal dependency. Add
 `@ambionframework/workspace` when agents need optional filesystem tools.
 Add `@ambionframework/assistant` for the default assistant implementation.
-Model execution uses Pi and needs credentials for the chosen provider.
+Model execution comes from an executor package. `@ambionframework/pi` is the
+Pi executor: pass `execution: piExecution()` to `startRoom` or `createRuntime`.
+It needs credentials for the chosen provider.
 
 ## Use
 
@@ -101,8 +103,9 @@ absent from that map form the reserve. If omitted, every agent starts at
 Attention controls idle agents; active agents receive new context.
 An agent can finish silently, and the room refuses speech based on stale context.
 
-Adapt a native Pi tool with `fromPiTool(nativePiTool)` before you put it in
-`tools` or a bundle. The adapter gives the executor one typed tool shape.
+Adapt a native Pi tool with `fromPiTool(nativePiTool)`, from
+`@ambionframework/pi`, before you put it in `tools` or a bundle. The adapter
+gives the executor one typed tool shape.
 
 ## Persistence and limits
 

@@ -1,9 +1,9 @@
-import type { SessionOpener } from '@ambionframework/pi-journal';
-import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { Type } from 'typebox';
-import { describe, expect, it } from 'vitest';
-import { Activation, type PiExecutorOptions } from '../src/execution/activation.ts';
-import { binding, toolsFor } from '../src/execution/tools.ts';
+import {
+	type AgentDefinition,
+	defineAgent,
+	defineTool,
+	type ToolContext,
+} from '@ambionframework/ambion';
 import type {
 	ActivationSpec,
 	ActivationView,
@@ -14,18 +14,18 @@ import type {
 	LeaseResponse,
 	RoomProtocol,
 	ViewResponse,
-} from '../src/hosting.ts';
-import {
-	type AgentDefinition,
-	defineAgent,
-	defineTool,
-	pi,
-	type ToolContext,
-} from '../src/index.ts';
-import type { Entry } from '../src/journal/journal.ts';
-import { activationSpec } from '../src/room/activation.ts';
-import { foldRoom } from '../src/room/fold.ts';
-import { viewOf } from '../src/room/view.ts';
+} from '@ambionframework/ambion/hosting';
+import type { SessionOpener } from '@ambionframework/pi-journal';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { Type } from 'typebox';
+import { describe, expect, it } from 'vitest';
+import type { Entry } from '../../ambion/src/journal/journal.ts';
+import { activationSpec } from '../../ambion/src/room/activation.ts';
+import { foldRoom } from '../../ambion/src/room/fold.ts';
+import { viewOf } from '../../ambion/src/room/view.ts';
+import { Activation, type PiExecutorOptions } from '../src/executor.ts';
+import { pi } from '../src/index.ts';
+import { binding, toolsFor } from '../src/tools.ts';
 
 const worker = defineAgent({
 	name: 'worker',

@@ -6,9 +6,10 @@
  * context tests; this file holds the one line.
  */
 import { describe, expect, it } from 'vitest';
+import { pi } from '../../pi/src/index.ts';
 import { renderActivation, renderLine } from '../src/execution/render.ts';
 import type { ActivationView } from '../src/hosting.ts';
-import { defineAgent, exchangeUri, pi, roomUri } from '../src/index.ts';
+import { defineAgent, exchangeUri, roomUri } from '../src/index.ts';
 import type { Message } from '../src/types.ts';
 
 describe('one line of the record', () => {

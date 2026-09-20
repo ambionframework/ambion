@@ -1,21 +1,21 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
-import type { Api, Context, Model } from '@earendil-works/pi-ai';
-import { describe, expect, it } from 'vitest';
+import { type Clock, createRuntime, defineAgent } from '@ambionframework/ambion';
 import {
 	AgentRunner,
 	type CommitResult,
-	createPiExecutor,
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
 	type RoomProtocol,
 	type Steer,
 	type ViewResponse,
-} from '../src/hosting.ts';
-import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
-import { fakeClock } from './support/clock.ts';
-import { tick } from './support/room.ts';
-import { quiet, scripted } from './support/scripted.ts';
+} from '@ambionframework/ambion/hosting';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { Api, Context, Model } from '@earendil-works/pi-ai';
+import { describe, expect, it } from 'vitest';
+import { fakeClock } from '../../ambion/test/support/clock.ts';
+import { tick } from '../../ambion/test/support/room.ts';
+import { quiet, scripted } from '../../ambion/test/support/scripted.ts';
+import { createExecutionServices, createPiExecutor, pi } from '../src/index.ts';
 
 const product = defineAgent({
 	name: 'product',
@@ -69,12 +69,13 @@ function actorFor(
 	stream: StreamFn,
 	modelResolver: (id: string, agent: string) => Promise<Model<Api>>,
 ) {
-	const runtime = createRuntime({ clock, stream });
+	const runtime = createRuntime({ clock });
+	const services = createExecutionServices({ storage: runtime.storage, clock, stream });
 	const executor = createPiExecutor({
 		definition: product,
 		model: modelResolver,
-		stream: hostingOf(runtime).stream,
-		transcripts: hostingOf(runtime).transcripts,
+		stream: services.stream,
+		transcripts: services.transcripts,
 		room: 'model-test',
 		now: () => clock.now(),
 	});

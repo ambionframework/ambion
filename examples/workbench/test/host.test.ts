@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join as joinPath } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { CreateRuntimeOptions } from '@ambionframework/ambion';
+import type { PiExecutionOptions } from '@ambionframework/pi';
 import {
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
@@ -47,7 +47,7 @@ function scriptedResponse(agent: string, call: number, closing: boolean) {
 	return fauxAssistantMessage('quiet', { stopReason: 'stop' });
 }
 
-const makeStream = (): CreateRuntimeOptions['stream'] => {
+const makeStream = (): PiExecutionOptions['stream'] => {
 	const calls = new Map<string, number>();
 	return (_model, context, options) => {
 		const output = createAssistantMessageEventStream();

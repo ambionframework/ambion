@@ -2,7 +2,8 @@
  * The worker the workerd tier runs: it configures the definitions and the
  * scripted model call, and exports the two objects `wrangler.jsonc` binds.
  */
-import { defineAgent, pi } from '@ambionframework/ambion';
+import { defineAgent } from '@ambionframework/ambion';
+import { pi } from '@ambionframework/pi';
 import { configure, RoomObject, SeatObject } from '../src/index.ts';
 import { scripted } from './scripted.ts';
 

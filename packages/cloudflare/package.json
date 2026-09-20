@@ -25,7 +25,8 @@
 	},
 	"dependencies": {
 		"@ambionframework/ambion": "workspace:*",
-		"@ambionframework/journal": "workspace:*"
+		"@ambionframework/journal": "workspace:*",
+		"@ambionframework/pi": "workspace:*"
 	},
 	"devDependencies": {
 		"@ambionframework/pi-journal": "workspace:*",

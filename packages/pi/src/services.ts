@@ -1,16 +1,15 @@
-/** Model, stream and transcript services that an execution host composes. */
+/** Model, stream and transcript services that a Pi execution host composes. */
 
+import { systemClock } from '@ambionframework/ambion';
+import type { Clock, Limits } from '@ambionframework/ambion/hosting';
+import { callLimits } from '@ambionframework/ambion/hosting';
 import type { JournalOpener } from '@ambionframework/journal';
 import { piSessions, type SessionOpener } from '@ambionframework/pi-journal';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, Model, Models } from '@earendil-works/pi-ai';
-import { systemClock } from '../host/clock.ts';
-import type { Clock, ModelResolver } from '../types.ts';
 
-interface ExecutionCall {
-	readonly attempts: number;
-	readonly timeout: number;
-}
+/** Resolves an agent's `provider/model-id` to the model Pi's loop runs. */
+export type ModelResolver = (id: string, agent: string) => Model<Api> | Promise<Model<Api>>;
 
 /** A collision safe id for the Pi session that one agent owns in one room. */
 export function seatSessionId(room: string, seat: string): string {
@@ -19,7 +18,7 @@ export function seatSessionId(room: string, seat: string): string {
 
 export interface ExecutionServices {
 	readonly clock: Clock;
-	readonly call: ExecutionCall;
+	readonly call: Limits['call'];
 	readonly transcripts: SessionOpener;
 	readonly stream: StreamFn;
 	readonly model: ModelResolver;
@@ -27,8 +26,9 @@ export interface ExecutionServices {
 
 export interface ExecutionServicesOptions {
 	readonly storage: JournalOpener;
+	/** Absent, the system clock. */
 	readonly clock?: Clock;
-	readonly call?: Partial<ExecutionCall>;
+	readonly call?: Partial<Limits['call']>;
 	readonly stream?: StreamFn;
 }
 
@@ -61,15 +61,9 @@ export const stubModel: ModelResolver = (id) =>
 
 export function createExecutionServices(options: ExecutionServicesOptions): ExecutionServices {
 	const custom = options.stream !== undefined;
-	const attempts = options.call?.attempts ?? 2;
-	const timeout = options.call?.timeout ?? 10_000;
-	if (!Number.isSafeInteger(attempts) || attempts < 1)
-		throw new Error('Room call attempts must be a positive safe integer.');
-	if (!Number.isFinite(timeout) || timeout <= 0)
-		throw new Error('Room call timeout must be a finite positive number.');
 	return {
 		clock: options.clock ?? systemClock(),
-		call: { attempts, timeout },
+		call: callLimits(options.call),
 		transcripts: piSessions(options.storage),
 		stream: options.stream ?? registryStream,
 		model: custom ? stubModel : registryModel,

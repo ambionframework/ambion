@@ -8,13 +8,13 @@
  * `AMBION_SEEDS` widens the walk; the seed prints on failure.
  */
 import { describe, expect, it } from 'vitest';
+import { pi, piExecution } from '../../pi/src/index.ts';
 import { hostingOf, inProcessTransport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
 	isSummary,
-	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -179,7 +179,7 @@ class Walk {
 			summary: assistant.name,
 			agents: [alpha, beta, gamma, assistant],
 			seats: { [assistant.name]: 'none', [alpha.name]: 'broadcast', [beta.name]: 'named' },
-			stream: scripted(script),
+			execution: piExecution({ stream: scripted(script) }),
 		});
 		this.watch();
 		await messagesOf(this.session);
@@ -266,7 +266,7 @@ class Walk {
 				this.session = await resumeRoom(this.name, {
 					runtime: this.runtime,
 					agents: [assistant, alpha, beta, gamma],
-					stream: scripted(script),
+					execution: piExecution({ stream: scripted(script) }),
 				});
 				break;
 			} catch (error) {
