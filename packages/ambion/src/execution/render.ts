@@ -268,7 +268,7 @@ function renderSystemPrompt(view: ActivationView, def: AgentDefinition): string 
 		`Your identity, as the room knows it: ${def.identity}`,
 		``,
 		`Your instructions:`,
-		def.instructions.trim(),
+		def.executor.instructions.trim(),
 	);
 	if (view.spec.purpose.kind === 'summarize') lines.push(``, ...reader(view));
 	return lines.join('\n');
@@ -301,7 +301,7 @@ function duties(view: ActivationView, def: AgentDefinition): string[] {
 		``,
 		...AUDIENCE_PARAGRAPH,
 	];
-	if (def.guidance) lines.push(``, def.guidance);
+	if (def.executor.guidance) lines.push(``, def.executor.guidance);
 	// A fold renders once the record holds a summary, so only such a record
 	// tells its seats how to read one.
 	if (view.context.messages.some(isSummary)) lines.push(``, ...SUMMARY_PARAGRAPH);

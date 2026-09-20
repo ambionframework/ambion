@@ -46,7 +46,7 @@ describe('provider loading', () => {
 			`const { createAssistantMessageEventStream, fauxAssistantMessage } = await import(
 				'@earendil-works/pi-ai'
 			);
-			const { startRoom, defineAgent, defineHuman } = await import(${JSON.stringify(entry)});
+			const { startRoom, defineAgent, defineHuman, pi } = await import(${JSON.stringify(entry)});
 			const streamFn = (_model, _context, options) => {
 				const stream = createAssistantMessageEventStream();
 				const message = fauxAssistantMessage('', { stopReason: 'stop' });
@@ -60,14 +60,12 @@ describe('provider loading', () => {
 			const assistant = defineAgent({
 				name: 'assistant',
 				identity: 'summarizes',
-				instructions: 'quiet',
-				model: 'scripted/assistant',
+				executor: pi({ instructions: 'quiet', model: 'scripted/assistant' }),
 			});
 			const worker = defineAgent({
 				name: 'worker',
 				identity: 'answers',
-				instructions: 'quiet',
-				model: 'scripted/worker',
+				executor: pi({ instructions: 'quiet', model: 'scripted/worker' }),
 			});
 			const room = await startRoom({
 				name: 'lazy-scripted-check',

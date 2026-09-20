@@ -6,6 +6,8 @@ import {
 	defineAgent,
 	defineTool,
 	isSpoken,
+	type PiOptions,
+	pi,
 	type Room,
 	startRoom,
 	type ToolContext,
@@ -74,13 +76,11 @@ function toolResults(context: Context): { tool: string; text: string; failed: bo
 	});
 }
 
-function agent(agentName: string, options: Partial<Parameters<typeof defineAgent>[0]> = {}) {
+function agent(agentName: string, options: Partial<PiOptions> = {}) {
 	return defineAgent({
 		name: agentName,
 		identity: 'Works in a workspace.',
-		instructions: 'work',
-		model: `scripted/${agentName}`,
-		...options,
+		executor: pi({ instructions: 'work', model: `scripted/${agentName}`, ...options }),
 	});
 }
 

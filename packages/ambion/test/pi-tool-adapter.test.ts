@@ -1,7 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { Type } from 'typebox';
 import { expect, it, vi } from 'vitest';
-import { defineAgent, defineTool, fromPiTool, startRoom } from '../src/index.ts';
+import { defineAgent, defineTool, fromPiTool, pi, startRoom } from '../src/index.ts';
 import { enter, roomName, waitForRoom } from './support/room.ts';
 import { callTool, quiet, scripted, toolResultTexts } from './support/scripted.ts';
 
@@ -80,18 +80,20 @@ it('prepares native arguments once per call and validates before execution', asy
 	const worker = defineAgent({
 		name: 'worker',
 		identity: 'Worker.',
-		instructions: 'Work.',
-		model: 'scripted/worker',
-		tools: [
-			fromPiTool({
-				name: 'count',
-				label: 'Count',
-				description: 'Count.',
-				parameters,
-				prepareArguments,
-				execute,
-			}),
-		],
+		executor: pi({
+			instructions: 'Work.',
+			model: 'scripted/worker',
+			tools: [
+				fromPiTool({
+					name: 'count',
+					label: 'Count',
+					description: 'Count.',
+					parameters,
+					prepareArguments,
+					execute,
+				}),
+			],
+		}),
 	});
 	const results: string[] = [];
 	const room = await startRoom({

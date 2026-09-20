@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { createRuntime, defineAgent, readRoom, resumeRoom, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, pi, readRoom, resumeRoom, startRoom } from '../src/index.ts';
 import {
 	inProcessTransport,
 	runningRoom,
@@ -15,8 +15,7 @@ import { serializing } from './support/transport.ts';
 const writer = defineAgent({
 	name: 'writer',
 	identity: 'Answers and summarizes.',
-	instructions: 'Keep the answer concise.',
-	model: 'scripted/writer',
+	executor: pi({ instructions: 'Keep the answer concise.', model: 'scripted/writer' }),
 });
 
 function assertRoomCalls(room: SeatRoom): void {

@@ -4,7 +4,7 @@
  * exchange whole. An older closed exchange with no summary falls out of context.
  */
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, pi, startRoom } from '../src/index.ts';
 import { inProcessTransport, type SeatRoom, type Transport } from '../src/transport.ts';
 import { priya, sam } from './support/cast.ts';
 import { andrei, messagesOf, roomName, waitForRoom } from './support/room.ts';
@@ -57,11 +57,12 @@ describe('a limit windows the record', () => {
 		const worker = defineAgent({
 			name: 'worker',
 			identity: 'Answers a question.',
-			instructions: 'Answer the current question.',
-			model: 'scripted/worker',
-			// A tight limit: one line fits, so only the open exchange stays.
-			activationTokenLimit: 40,
-			estimateTokens: (text) => text.length,
+			executor: pi({
+				instructions: 'Answer the current question.',
+				model: 'scripted/worker',
+				activationTokenLimit: 40,
+				estimateTokens: (text) => text.length,
+			}),
 		});
 		const runtime = createRuntime({ stream: scripted(capture) });
 		const room = await startRoom({ name: roomName('limit'), runtime, agents: [worker] });
@@ -86,10 +87,12 @@ describe('a limit windows the record', () => {
 		const worker = defineAgent({
 			name: 'worker',
 			identity: 'Answers a question.',
-			instructions: 'Answer the current question.',
-			model: 'scripted/worker',
-			activationTokenLimit: 40,
-			estimateTokens: (text) => text.length,
+			executor: pi({
+				instructions: 'Answer the current question.',
+				model: 'scripted/worker',
+				activationTokenLimit: 40,
+				estimateTokens: (text) => text.length,
+			}),
 		});
 		const runtime = createRuntime({
 			transport: spyTransport(pages),
@@ -117,17 +120,18 @@ describe('a limit windows the record', () => {
 		const worker = defineAgent({
 			name: 'worker',
 			identity: 'Answers.',
-			instructions: 'Answer.',
-			model: 'scripted/worker',
+			executor: pi({ instructions: 'Answer.', model: 'scripted/worker' }),
 		});
 		// A limit small enough to trim the exchange if the closing activation windowed.
 		const scribe = defineAgent({
 			name: 'scribe',
 			identity: 'Writes the closing message.',
-			instructions: 'Summarize the exchange.',
-			model: 'scripted/scribe',
-			activationTokenLimit: 20,
-			estimateTokens: (text) => text.length,
+			executor: pi({
+				instructions: 'Summarize the exchange.',
+				model: 'scripted/scribe',
+				activationTokenLimit: 20,
+				estimateTokens: (text) => text.length,
+			}),
 		});
 		const runtime = createRuntime({
 			stream: scripted((context, name, call) =>
@@ -169,17 +173,18 @@ describe('a limit windows the record', () => {
 		const worker = defineAgent({
 			name: 'worker',
 			identity: 'Answers.',
-			instructions: 'Answer.',
-			model: 'scripted/worker',
+			executor: pi({ instructions: 'Answer.', model: 'scripted/worker' }),
 		});
 		// A limit wide enough for priya's own exchange, too tight to also hold sam's.
 		const scribe = defineAgent({
 			name: 'scribe',
 			identity: 'Writes the closing message.',
-			instructions: 'Summarize the exchange.',
-			model: 'scripted/scribe',
-			activationTokenLimit: 60,
-			estimateTokens: (text) => text.length,
+			executor: pi({
+				instructions: 'Summarize the exchange.',
+				model: 'scripted/scribe',
+				activationTokenLimit: 60,
+				estimateTokens: (text) => text.length,
+			}),
 		});
 		const runtime = createRuntime({
 			stream: scripted((context, name, call) =>
@@ -217,10 +222,12 @@ describe('a limit windows the record', () => {
 		const reader = defineAgent({
 			name: 'reader',
 			identity: 'Reads and stays quiet.',
-			instructions: 'Stay quiet.',
-			model: 'scripted/reader',
-			activationTokenLimit: 100_000,
-			estimateTokens: () => 1,
+			executor: pi({
+				instructions: 'Stay quiet.',
+				model: 'scripted/reader',
+				activationTokenLimit: 100_000,
+				estimateTokens: () => 1,
+			}),
 		});
 		const runtime = createRuntime({
 			transport: spyTransport(pages),

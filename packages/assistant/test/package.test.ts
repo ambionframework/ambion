@@ -6,11 +6,10 @@ it('builds the default ordinary assistant definition', () => {
 
 	expect(assistant).toMatchObject({
 		name: 'assistant',
-		model: 'scripted/assistant',
-		tools: [],
+		executor: { model: 'scripted/assistant', tools: [] },
 	});
 	expect(assistant.identity).toContain('room');
-	expect(assistant.instructions).toContain('Application instructions take precedence');
+	expect(assistant.executor.instructions).toContain('Application instructions take precedence');
 });
 
 it('keeps application instructions after and alongside maintained defaults', () => {
@@ -23,9 +22,9 @@ it('keeps application instructions after and alongside maintained defaults', () 
 
 	expect(assistant.name).toBe('guide');
 	expect(assistant.identity).toBe('A local guide.');
-	expect(assistant.instructions).toContain('Help the room advance');
-	expect(assistant.instructions).toContain('Application instructions:');
-	expect(assistant.instructions).toContain('Prefer small changes.');
+	expect(assistant.executor.instructions).toContain('Help the room advance');
+	expect(assistant.executor.instructions).toContain('Application instructions:');
+	expect(assistant.executor.instructions).toContain('Prefer small changes.');
 });
 
 it('passes tool bundles through the ordinary agent definition', () => {
@@ -35,9 +34,9 @@ it('passes tool bundles through the ordinary agent definition', () => {
 		bundles: [{ tools: [], guidance: 'Use the workspace when evidence is needed.' }],
 	});
 
-	expect(assistant.tools).toEqual([]);
-	expect(assistant.guidance).toContain('This is an ordinary activation.');
-	expect(assistant.guidance).toContain('Use the workspace when evidence is needed.');
+	expect(assistant.executor.tools).toEqual([]);
+	expect(assistant.executor.guidance).toContain('This is an ordinary activation.');
+	expect(assistant.executor.guidance).toContain('Use the workspace when evidence is needed.');
 });
 
 it('keeps ordinary guidance out of closing work and preserves overrides in both', async () => {

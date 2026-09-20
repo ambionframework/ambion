@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Activation, type ActivationHost } from '../src/execution/activation.ts';
 import { binding, toolsFor } from '../src/execution/tools.ts';
-import { defineAgent } from '../src/index.ts';
+import { defineAgent, pi } from '../src/index.ts';
 import type {
 	ActivationView,
 	CommitRequest,
@@ -16,8 +16,7 @@ import type { RoomNotification } from '../src/types.ts';
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Writes room contributions.',
-	instructions: 'Use the room tools.',
-	model: 'scripted/worker',
+	executor: pi({ instructions: 'Use the room tools.', model: 'scripted/worker' }),
 });
 
 const host: ActivationHost = {

@@ -4,6 +4,7 @@ import {
 	defineAgent,
 	isSpoken,
 	type Message,
+	pi,
 	type RoomNotification,
 	readRoom,
 	startRoom,
@@ -15,8 +16,7 @@ import { storages } from './support/storage.ts';
 const writer = defineAgent({
 	name: 'writer',
 	identity: 'Writes the closing result.',
-	instructions: 'Summarize the discussion.',
-	model: 'scripted/writer',
+	executor: pi({ instructions: 'Summarize the discussion.', model: 'scripted/writer' }),
 });
 
 function changeMessage(message: Message): void {

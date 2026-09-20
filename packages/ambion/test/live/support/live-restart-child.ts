@@ -9,6 +9,7 @@ import {
 	defineAgent,
 	defineHuman,
 	isSpoken,
+	pi,
 	type Room,
 	type RoomNotification,
 	resumeRoom,
@@ -30,18 +31,22 @@ const person = defineHuman({ name: 'andrei', identity: 'Founder. Asks the questi
 const fast = defineAgent({
 	name: 'fast',
 	identity: 'Answers the key fact in one short sentence.',
-	instructions:
-		'Answer exactly once in one short sentence. Include the words FAST_CONFIRMED. ' +
-		'Do not send another answer after that.',
-	model: process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5',
+	executor: pi({
+		instructions:
+			'Answer exactly once in one short sentence. Include the words FAST_CONFIRMED. ' +
+			'Do not send another answer after that.',
+		model: process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5',
+	}),
 });
 const slow = defineAgent({
 	name: 'slow',
 	identity: 'Answers the key fact after a restart.',
-	instructions:
-		'Answer exactly once in one short sentence. Include the words SLOW_RECOVERED. ' +
-		'Do not send another answer after that.',
-	model: process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5',
+	executor: pi({
+		instructions:
+			'Answer exactly once in one short sentence. Include the words SLOW_RECOVERED. ' +
+			'Do not send another answer after that.',
+		model: process.env.AMBION_MODEL ?? 'anthropic/claude-sonnet-5',
+	}),
 });
 
 const database = new DatabaseSync(join(directory, 'room.db'));

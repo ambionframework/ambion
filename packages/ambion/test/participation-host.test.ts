@@ -1,13 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { type Runtime, runningRoom } from '../src/host/runtime.ts';
-import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
+import {
+	createRuntime,
+	defineAgent,
+	defineHuman,
+	pi,
+	resumeRoom,
+	startRoom,
+} from '../src/index.ts';
 import type { Intent } from '../src/protocol.ts';
 import { fakeClock } from './support/clock.ts';
 import { crash, messagesOf, roomName, stateOf } from './support/room.ts';
 import { storages } from './support/storage.ts';
 
 const agent = (name: string) =>
-	defineAgent({ name, identity: name, instructions: 'Collaborate.', model: `scripted/${name}` });
+	defineAgent({
+		name,
+		identity: name,
+		executor: pi({ instructions: 'Collaborate.', model: `scripted/${name}` }),
+	});
 const alpha = agent('alpha');
 const beta = agent('beta');
 const reserve = agent('reserve');

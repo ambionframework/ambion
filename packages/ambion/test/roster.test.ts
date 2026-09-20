@@ -7,6 +7,7 @@ import {
 	defineHuman,
 	isPresence,
 	type Message,
+	pi,
 	type Room,
 	type RoomNotification,
 	startRoom,
@@ -35,32 +36,33 @@ import {
 const product = defineAgent({
 	name: 'product',
 	identity: 'The product lead.',
-	instructions: 'Answer questions and bring in a specialist when needed.',
-	model: 'scripted/product',
+	executor: pi({
+		instructions: 'Answer questions and bring in a specialist when needed.',
+		model: 'scripted/product',
+	}),
 });
 const surveyor = defineAgent({
 	name: 'surveyor',
 	identity: 'Quantity surveyor. Holds the tonnage.',
-	instructions: 'Answer questions about quantities.',
-	model: 'scripted/surveyor',
+	executor: pi({ instructions: 'Answer questions about quantities.', model: 'scripted/surveyor' }),
 });
 const architect = defineAgent({
 	name: 'architect',
 	identity: 'Architect. Holds the drawings.',
-	instructions: 'Answer questions about drawings.',
-	model: 'scripted/architect',
+	executor: pi({ instructions: 'Answer questions about drawings.', model: 'scripted/architect' }),
 });
 const greeter = defineAgent({
 	name: 'greeter',
 	identity: 'Meets people at the door.',
-	instructions: 'Notice arrivals and departures.',
-	model: 'scripted/greeter',
+	executor: pi({ instructions: 'Notice arrivals and departures.', model: 'scripted/greeter' }),
 });
 const writer = defineAgent({
 	name: 'writer',
 	identity: 'Writes the one message a person reads at the close.',
-	instructions: 'Write only the useful answer for the person.',
-	model: 'scripted/writer',
+	executor: pi({
+		instructions: 'Write only the useful answer for the person.',
+		model: 'scripted/writer',
+	}),
 });
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 

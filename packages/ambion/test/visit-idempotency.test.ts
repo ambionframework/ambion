@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
 	createRuntime,
 	defineHuman,
+	pi,
 	type Room,
 	resumeRoom,
 	startRoom,
@@ -134,9 +135,7 @@ describe.each(storages)('idempotent visits on $name storage', (storage) => {
 				{
 					name: 'watcher',
 					identity: 'Watches the room.',
-					instructions: 'Stay quiet.',
-					model: 'scripted/watcher',
-					tools: [],
+					executor: pi({ instructions: 'Stay quiet.', model: 'scripted/watcher', tools: [] }),
 				},
 			],
 			seats: {},

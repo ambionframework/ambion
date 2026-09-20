@@ -194,7 +194,7 @@ export function toolsFor(
 		sayTool(held),
 		seatTool(held),
 		unseatTool(held),
-		...def.tools.map((tool) => toPiTool(tool, def, room)),
+		...def.executor.tools.map((tool) => toPiTool(tool, def, room)),
 	];
 }
 

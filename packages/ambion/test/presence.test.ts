@@ -5,6 +5,7 @@ import {
 	defineAgent,
 	defineHuman,
 	isSpoken,
+	pi,
 	type Room,
 	readRoom,
 	startRoom,
@@ -38,8 +39,7 @@ const recording = scripted((context) => {
 const watcher = defineAgent({
 	name: 'watcher',
 	identity: 'Watches the room.',
-	instructions: 'stay quiet',
-	model: 'scripted/watcher',
+	executor: pi({ instructions: 'stay quiet', model: 'scripted/watcher' }),
 });
 
 const mara = defineHuman({ name: 'mara', identity: 'Design lead.' });
@@ -102,14 +102,12 @@ describe('presence', () => {
 		const greeter = defineAgent({
 			name: 'greeter',
 			identity: 'Meets people.',
-			instructions: 'greet',
-			model: 'scripted/greeter',
+			executor: pi({ instructions: 'greet', model: 'scripted/greeter' }),
 		});
 		const quiet2 = defineAgent({
 			name: 'aside',
 			identity: 'Named only.',
-			instructions: 'wait',
-			model: 'scripted/aside',
+			executor: pi({ instructions: 'wait', model: 'scripted/aside' }),
 		});
 		const session = track(
 			await open({

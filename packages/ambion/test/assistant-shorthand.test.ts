@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
+import {
+	createRuntime,
+	defineAgent,
+	defineHuman,
+	pi,
+	resumeRoom,
+	startRoom,
+} from '../src/index.ts';
 import { inProcessTransport } from '../src/transport.ts';
 import { fakeClock } from './support/clock.ts';
 import { roomName, storedOf, waitForRoom } from './support/room.ts';
@@ -9,20 +16,17 @@ import { memory, storages } from './support/storage.ts';
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Coordinates the room.',
-	instructions: 'Stay concise.',
-	model: 'scripted/assistant',
+	executor: pi({ instructions: 'Stay concise.', model: 'scripted/assistant' }),
 });
 const builder = defineAgent({
 	name: 'builder',
 	identity: 'Builds the result.',
-	instructions: 'Build.',
-	model: 'scripted/builder',
+	executor: pi({ instructions: 'Build.', model: 'scripted/builder' }),
 });
 const reviewer = defineAgent({
 	name: 'reviewer',
 	identity: 'Reviews the result.',
-	instructions: 'Review.',
-	model: 'scripted/reviewer',
+	executor: pi({ instructions: 'Review.', model: 'scripted/reviewer' }),
 });
 
 async function open(options: Partial<Parameters<typeof startRoom>[0]> = {}) {
@@ -137,8 +141,7 @@ describe('assistant room shorthand', () => {
 		const special = defineAgent({
 			name: 'constructor',
 			identity: 'Special assistant.',
-			instructions: 'Stay quiet.',
-			model: 'scripted/constructor',
+			executor: pi({ instructions: 'Stay quiet.', model: 'scripted/constructor' }),
 		});
 		const opened = await memory.open();
 		const runtime = createRuntime({

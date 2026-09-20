@@ -1,6 +1,6 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { defineAgent, defineHuman, defineTool, type ToolBundle } from '../src/index.ts';
+import { defineAgent, defineHuman, defineTool, pi, type ToolBundle } from '../src/index.ts';
 
 const tool = (name: string) =>
 	defineTool({
@@ -39,9 +39,7 @@ describe('agent tools', () => {
 			defineAgent({
 				name: 'reader',
 				identity: 'An agent.',
-				instructions: 'Read.',
-				model: 'scripted/reader',
-				tools: [tool('read')],
+				executor: pi({ instructions: 'Read.', model: 'scripted/reader', tools: [tool('read')] }),
 			}),
 		).not.toThrow();
 	});
@@ -52,9 +50,7 @@ describe('agent tools', () => {
 				defineAgent({
 					name: `agent-${name}`,
 					identity: 'An agent.',
-					instructions: 'Work.',
-					model: 'scripted/agent',
-					tools: [tool(name)],
+					executor: pi({ instructions: 'Work.', model: 'scripted/agent', tools: [tool(name)] }),
 				}),
 			).toThrow(/room supplies it for an activation/);
 		}
@@ -66,10 +62,12 @@ describe('agent tools', () => {
 			defineAgent({
 				name: 'workspace-reader',
 				identity: 'An agent.',
-				instructions: 'Read.',
-				model: 'scripted/reader',
-				tools: [tool('read')],
-				bundles: [bundle],
+				executor: pi({
+					instructions: 'Read.',
+					model: 'scripted/reader',
+					tools: [tool('read')],
+					bundles: [bundle],
+				}),
 			}),
 		).toThrow(/duplicate tools named 'read'/);
 	});
@@ -79,9 +77,7 @@ describe('agent tools', () => {
 			defineAgent({
 				name: 'flagger',
 				identity: 'An agent.',
-				instructions: 'Flag.',
-				model: 'scripted/flagger',
-				tools: [tool('flag')],
+				executor: pi({ instructions: 'Flag.', model: 'scripted/flagger', tools: [tool('flag')] }),
 			}),
 		).not.toThrow();
 	});
@@ -100,9 +96,7 @@ describe('agent tools', () => {
 		const agent = defineAgent({
 			name: 'inspector',
 			identity: 'An inspector.',
-			instructions: 'Inspect.',
-			model: 'scripted/inspector',
-			tools,
+			executor: pi({ instructions: 'Inspect.', model: 'scripted/inspector', tools }),
 		});
 
 		tools.length = 0;
@@ -110,13 +104,13 @@ describe('agent tools', () => {
 		supplied.description = 'Changed after capture.';
 		(parameters.properties as Record<string, unknown>).query = Type.Number();
 
-		const captured = agent.tools[0];
-		expect(agent.tools).toHaveLength(1);
+		const captured = agent.executor.tools[0];
+		expect(agent.executor.tools).toHaveLength(1);
 		expect(captured).toMatchObject({ name: 'inspect', description: 'Inspects one thing.' });
 		expect(captured).not.toBe(supplied);
 		expect(captured?.parameters).not.toBe(parameters);
 		expect(captured?.parameters).toMatchObject({ properties: { query: { type: 'string' } } });
 		expect(Object.isFrozen(agent)).toBe(true);
-		expect(Object.isFrozen(agent.tools)).toBe(true);
+		expect(Object.isFrozen(agent.executor.tools)).toBe(true);
 	});
 });

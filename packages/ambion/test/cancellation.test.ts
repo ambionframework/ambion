@@ -3,6 +3,7 @@ import {
 	createRuntime,
 	defineAgent,
 	defineHuman,
+	pi,
 	type Room,
 	resumeRoom,
 	startRoom,
@@ -30,14 +31,12 @@ const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Works on the question.',
-	instructions: 'answer the question',
-	model: 'scripted/worker',
+	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
 });
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes a closing summary.',
-	instructions: 'summarise the discussion',
-	model: 'scripted/assistant',
+	executor: pi({ instructions: 'summarise the discussion', model: 'scripted/assistant' }),
 });
 
 const deaf = scripted(() => new Promise<never>(() => {}));

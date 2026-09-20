@@ -6,8 +6,13 @@
  * needed to resume a room; executable definitions are supplied for each run.
  */
 
-export type { DefineAgentOptions, DefineHumanOptions, DefineToolOptions } from './define.ts';
-export { defineAgent, defineHuman, defineTool, fromPiTool } from './define.ts';
+export type {
+	DefineAgentOptions,
+	DefineHumanOptions,
+	DefineToolOptions,
+	PiOptions,
+} from './define.ts';
+export { defineAgent, defineHuman, defineTool, fromPiTool, pi } from './define.ts';
 export type { CreateRuntimeOptions, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type {
@@ -23,6 +28,7 @@ export type {
 export { readExchange, readRoom, resumeRoom, startRoom } from './room.ts';
 export type {
 	AgentDefinition,
+	AgentExecutor,
 	AgentParticipantInfo,
 	AmbionTool,
 	Attention,
@@ -35,6 +41,7 @@ export type {
 	Message,
 	ModelResolver,
 	ParticipantInfo,
+	PiExecutor,
 	PresenceChange,
 	PresenceMessage,
 	PresenceStatus,

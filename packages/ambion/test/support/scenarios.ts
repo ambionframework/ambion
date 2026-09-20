@@ -12,6 +12,8 @@ import {
 	defineHuman,
 	isSpoken,
 	isSummary,
+	type PiOptions,
+	pi,
 	type Room,
 	type Runtime,
 	startRoom,
@@ -52,8 +54,10 @@ export interface Scenario {
 export const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Composes the room, and writes the one message a person reads.',
-	instructions: 'Seat who the question needs. Answer what was asked, once.',
-	model: 'scripted/assistant',
+	executor: pi({
+		instructions: 'Seat who the question needs. Answer what was asked, once.',
+		model: 'scripted/assistant',
+	}),
 });
 
 export const priya = defineHuman({
@@ -63,17 +67,11 @@ export const priya = defineHuman({
 });
 const sam = defineHuman({ name: 'sam', identity: 'Site foreman.' });
 
-export const agent = (
-	name: string,
-	identity: string,
-	extra: Partial<Parameters<typeof defineAgent>[0]> = {},
-) =>
+export const agent = (name: string, identity: string, extra: Partial<PiOptions> = {}) =>
 	defineAgent({
 		name,
 		identity,
-		instructions: `You are ${name}.`,
-		model: `scripted/${name}`,
-		...extra,
+		executor: pi({ instructions: `You are ${name}.`, model: `scripted/${name}`, ...extra }),
 	});
 
 const product = agent('product', 'The product.');

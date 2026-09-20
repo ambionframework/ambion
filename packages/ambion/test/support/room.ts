@@ -4,6 +4,7 @@ import {
 	defineHuman,
 	type Message,
 	type ParticipantInfo,
+	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -15,8 +16,7 @@ import { liveWork } from '../../src/room/reconcile.ts';
 export const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes the one message a person reads.',
-	instructions: 'stay quiet',
-	model: 'scripted/assistant',
+	executor: pi({ instructions: 'stay quiet', model: 'scripted/assistant' }),
 });
 
 export const andrei = defineHuman({ name: 'andrei', identity: 'Founder. Owns the room.' });

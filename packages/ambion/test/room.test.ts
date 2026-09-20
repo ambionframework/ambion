@@ -7,6 +7,7 @@ import {
 	defineHuman,
 	isSpoken,
 	type Message,
+	pi,
 	type Room,
 	readRoom,
 	startRoom,
@@ -38,20 +39,17 @@ describe('startRoom', () => {
 		const alpha = defineAgent({
 			name: 'alpha',
 			identity: 'Answers questions.',
-			instructions: 'answer',
-			model: 'scripted/alpha',
+			executor: pi({ instructions: 'answer', model: 'scripted/alpha' }),
 		});
 		const beta = defineAgent({
 			name: 'beta',
 			identity: 'Acknowledges answers.',
-			instructions: 'ack',
-			model: 'scripted/beta',
+			executor: pi({ instructions: 'ack', model: 'scripted/beta' }),
 		});
 		const gamma = defineAgent({
 			name: 'gamma',
 			identity: 'Rarely relevant.',
-			instructions: 'quiet',
-			model: 'scripted/gamma',
+			executor: pi({ instructions: 'quiet', model: 'scripted/gamma' }),
 		});
 		const betaContexts: string[] = [];
 		let betaAcked = false;
@@ -115,8 +113,7 @@ describe('startRoom', () => {
 		const echo = defineAgent({
 			name: 'echo',
 			identity: 'Echoes.',
-			instructions: 'echo',
-			model: 'scripted/echo',
+			executor: pi({ instructions: 'echo', model: 'scripted/echo' }),
 		});
 		const session = await startRoom({
 			name: roomName('reset'),
@@ -150,8 +147,7 @@ describe('startRoom', () => {
 		const shy = defineAgent({
 			name: 'shy',
 			identity: 'Speaks only when required.',
-			instructions: 'stay quiet',
-			model: 'scripted/shy',
+			executor: pi({ instructions: 'stay quiet', model: 'scripted/shy' }),
 		});
 		const session = await startRoom({
 			name: roomName('silence'),
@@ -173,14 +169,12 @@ describe('startRoom', () => {
 		const front = defineAgent({
 			name: 'front',
 			identity: 'Front desk.',
-			instructions: 'route questions',
-			model: 'scripted/front',
+			executor: pi({ instructions: 'route questions', model: 'scripted/front' }),
 		});
 		const archivist = defineAgent({
 			name: 'archivist',
 			identity: 'The expert in the corner.',
-			instructions: 'answer archive questions',
-			model: 'scripted/archivist',
+			executor: pi({ instructions: 'answer archive questions', model: 'scripted/archivist' }),
 		});
 		const session = await startRoom({
 			name: roomName('passive'),
@@ -224,14 +218,12 @@ describe('startRoom', () => {
 		const liar = defineAgent({
 			name: 'liar',
 			identity: 'Claims to be other people.',
-			instructions: 'lie about who you are',
-			model: 'scripted/liar',
+			executor: pi({ instructions: 'lie about who you are', model: 'scripted/liar' }),
 		});
 		const aside = defineAgent({
 			name: 'aside',
 			identity: 'Watches quietly.',
-			instructions: 'observe',
-			model: 'scripted/aside',
+			executor: pi({ instructions: 'observe', model: 'scripted/aside' }),
 		});
 		const session = await startRoom({
 			name: roomName('stamp'),
@@ -265,8 +257,7 @@ describe('startRoom', () => {
 		const scribe = defineAgent({
 			name: 'scribe',
 			identity: 'Writes nothing down.',
-			instructions: 'stay quiet',
-			model: 'scripted/scribe',
+			executor: pi({ instructions: 'stay quiet', model: 'scripted/scribe' }),
 		});
 		const first = await startRoom({
 			name,
@@ -326,8 +317,7 @@ describe('startRoom', () => {
 		const solo = defineAgent({
 			name: 'solo',
 			identity: 'Speaks once.',
-			instructions: 'speak',
-			model: 'scripted/solo',
+			executor: pi({ instructions: 'speak', model: 'scripted/solo' }),
 		});
 		const ordered = await startRoom({
 			name: roomName('events'),
@@ -426,14 +416,12 @@ describe('startRoom', () => {
 		const first = defineAgent({
 			name: 'first',
 			identity: 'Fast.',
-			instructions: 'answer',
-			model: 'scripted/first',
+			executor: pi({ instructions: 'answer', model: 'scripted/first' }),
 		});
 		const second = defineAgent({
 			name: 'second',
 			identity: 'Slow.',
-			instructions: 'answer',
-			model: 'scripted/second',
+			executor: pi({ instructions: 'answer', model: 'scripted/second' }),
 		});
 		const secondContexts: string[] = [];
 		const session = await startRoom({
@@ -509,8 +497,7 @@ describe('startRoom', () => {
 		const solo = defineAgent({
 			name: 'solo',
 			identity: 'Speaks once.',
-			instructions: 'speak',
-			model: 'scripted/solo',
+			executor: pi({ instructions: 'speak', model: 'scripted/solo' }),
 		});
 		const name = roomName('downstream');
 		const session = await startRoom({
@@ -545,8 +532,7 @@ describe('startRoom', () => {
 		const echo = defineAgent({
 			name: 'echo',
 			identity: 'Echoes.',
-			instructions: 'echo',
-			model: 'scripted/echo',
+			executor: pi({ instructions: 'echo', model: 'scripted/echo' }),
 		});
 		const session = await startRoom({
 			name: roomName('keys'),
@@ -587,8 +573,7 @@ describe('startRoom', () => {
 		const impostor = defineAgent({
 			name: 'andrei',
 			identity: "An agent wearing a person's name.",
-			instructions: 'confuse',
-			model: 'scripted/impostor',
+			executor: pi({ instructions: 'confuse', model: 'scripted/impostor' }),
 		});
 		await expect(
 			startRoom({
@@ -618,8 +603,7 @@ describe('startRoom', () => {
 		const impostor = defineAgent({
 			name: 'andrei',
 			identity: "An agent wearing a person's name.",
-			instructions: 'confuse',
-			model: 'scripted/impostor',
+			executor: pi({ instructions: 'confuse', model: 'scripted/impostor' }),
 		});
 		await expect(
 			startRoom({
@@ -647,8 +631,7 @@ describe('startRoom', () => {
 		const alone = defineAgent({
 			name: 'alone',
 			identity: 'The one agent.',
-			instructions: 'answer',
-			model: 'scripted/alone',
+			executor: pi({ instructions: 'answer', model: 'scripted/alone' }),
 		});
 		const session = await startRoom({
 			name: roomName('directed'),
@@ -670,8 +653,7 @@ describe('startRoom', () => {
 		const solo = defineAgent({
 			name: 'solo',
 			identity: 'Never stops.',
-			instructions: 'wait',
-			model: 'scripted/solo',
+			executor: pi({ instructions: 'wait', model: 'scripted/solo' }),
 		});
 		// a transport of the host's own: the room reaches it through the wire alone
 		const cuts: string[] = [];
@@ -718,8 +700,7 @@ describe('startRoom', () => {
 		const solo = defineAgent({
 			name: 'solo',
 			identity: 'Speaks once.',
-			instructions: 'speak',
-			model: 'scripted/solo',
+			executor: pi({ instructions: 'speak', model: 'scripted/solo' }),
 		});
 		// the seats hear no wake, so the test holds the seat's side of the wire itself
 		const runtime = createRuntime({
@@ -790,8 +771,7 @@ describe('startRoom', () => {
 						defineAgent({
 							name: 'solo',
 							identity: 'S.',
-							instructions: '.',
-							model: 'scripted/solo',
+							executor: pi({ instructions: '.', model: 'scripted/solo' }),
 						}),
 					].map((agent) => [agent.name, 'broadcast' as const]),
 				),
@@ -799,7 +779,11 @@ describe('startRoom', () => {
 			},
 			agents: [
 				...[
-					defineAgent({ name: 'solo', identity: 'S.', instructions: '.', model: 'scripted/solo' }),
+					defineAgent({
+						name: 'solo',
+						identity: 'S.',
+						executor: pi({ instructions: '.', model: 'scripted/solo' }),
+					}),
 				],
 				assistant,
 			],
@@ -841,8 +825,7 @@ describe('startRoom', () => {
 		const twin = defineAgent({
 			name: 'solo',
 			identity: 'An agent wearing a name already taken.',
-			instructions: 'confuse',
-			model: 'scripted/twin',
+			executor: pi({ instructions: 'confuse', model: 'scripted/twin' }),
 		});
 		await expect(
 			startRoom({
@@ -874,14 +857,22 @@ describe('what the room waits on', () => {
 			name: roomName('waits'),
 			seats: {
 				...Object.fromEntries(
-					[defineAgent({ name: 'solo', identity: 'S.', instructions: 'x', model: 'm/solo' })].map(
-						(agent) => [agent.name, 'broadcast' as const],
-					),
+					[
+						defineAgent({
+							name: 'solo',
+							identity: 'S.',
+							executor: pi({ instructions: 'x', model: 'm/solo' }),
+						}),
+					].map((agent) => [agent.name, 'broadcast' as const]),
 				),
 				[assistant.name]: 'none',
 			},
 			agents: [
-				defineAgent({ name: 'solo', identity: 'S.', instructions: 'x', model: 'm/solo' }),
+				defineAgent({
+					name: 'solo',
+					identity: 'S.',
+					executor: pi({ instructions: 'x', model: 'm/solo' }),
+				}),
 				assistant,
 			],
 			streamFn: scripted(

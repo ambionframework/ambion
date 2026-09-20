@@ -2,7 +2,7 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import type { SeatContext } from '../src/host/runtime.ts';
-import { type Clock, createRuntime, defineAgent } from '../src/index.ts';
+import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
 import {
 	AgentRunner,
 	type CommitRequest,
@@ -20,8 +20,7 @@ import { quiet, scripted, speak } from './support/scripted.ts';
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'The worker.',
-	instructions: 'answer',
-	model: 'scripted/worker',
+	executor: pi({ instructions: 'answer', model: 'scripted/worker' }),
 });
 
 const first = 'message:1:worker:1';

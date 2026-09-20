@@ -11,6 +11,7 @@ import {
 	isPresence,
 	isSpoken,
 	isSummary,
+	pi,
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
@@ -32,14 +33,12 @@ import { faultyJournals, memory, tappedJournals } from './support/storage.ts';
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes the one message.',
-	instructions: 'x',
-	model: 'scripted/assistant',
+	executor: pi({ instructions: 'x', model: 'scripted/assistant' }),
 });
 const alpha = defineAgent({
 	name: 'alpha',
 	identity: 'Alpha.',
-	instructions: 'x',
-	model: 'scripted/alpha',
+	executor: pi({ instructions: 'x', model: 'scripted/alpha' }),
 });
 const priya = defineHuman({ name: 'priya', identity: 'PM.' });
 

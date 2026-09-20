@@ -9,6 +9,7 @@ import {
 	defineHuman,
 	isSpoken,
 	type Message,
+	pi,
 	type Room,
 	readRoom,
 	resumeRoom,
@@ -22,8 +23,7 @@ import { gatedJournals, storages } from './support/storage.ts';
 const watcher = defineAgent({
 	name: 'watcher',
 	identity: 'Records room activity.',
-	instructions: 'Stay quiet.',
-	model: 'scripted/watcher',
+	executor: pi({ instructions: 'Stay quiet.', model: 'scripted/watcher' }),
 });
 
 const priya = defineHuman({

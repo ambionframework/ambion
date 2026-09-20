@@ -5,6 +5,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type ExchangeHandle,
+	pi,
 	type Room,
 	resumeRoom,
 	startRoom,
@@ -38,20 +39,17 @@ import { faultyJournals, memory, storages } from './support/storage.ts';
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes summaries.',
-	instructions: 'Summarise every exchange.',
-	model: 'scripted/assistant',
+	executor: pi({ instructions: 'Summarise every exchange.', model: 'scripted/assistant' }),
 });
 const alpha = defineAgent({
 	name: 'alpha',
 	identity: 'Answers questions.',
-	instructions: 'Answer every question.',
-	model: 'scripted/alpha',
+	executor: pi({ instructions: 'Answer every question.', model: 'scripted/alpha' }),
 });
 const beta = defineAgent({
 	name: 'beta',
 	identity: 'Checks answers.',
-	instructions: 'Check every question.',
-	model: 'scripted/beta',
+	executor: pi({ instructions: 'Check every question.', model: 'scripted/beta' }),
 });
 const priya = defineHuman({ name: 'priya', identity: 'Project manager.' });
 

@@ -1,6 +1,13 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, defineHuman, resumeRoom, startRoom } from '../src/index.ts';
+import {
+	createRuntime,
+	defineAgent,
+	defineHuman,
+	pi,
+	resumeRoom,
+	startRoom,
+} from '../src/index.ts';
 import { runningRoom, type SeatPort, type Wake } from '../src/transport.ts';
 import {
 	deferred,
@@ -24,14 +31,12 @@ const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Works on the question.',
-	instructions: 'answer the question',
-	model: 'scripted/worker',
+	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
 });
 const other = defineAgent({
 	name: 'other',
 	identity: 'Works on newer questions.',
-	instructions: 'answer the question',
-	model: 'scripted/other',
+	executor: pi({ instructions: 'answer the question', model: 'scripted/other' }),
 });
 
 describe.each(storages)('stop recovery after an unread claim on $name storage', (storage) => {
@@ -349,8 +354,7 @@ it('takes up unread steering work after a stop and resume', async () => {
 const summary = defineAgent({
 	name: 'summary',
 	identity: 'Writes the closing summary.',
-	instructions: 'summarise the exchange',
-	model: 'scripted/summary',
+	executor: pi({ instructions: 'summarise the exchange', model: 'scripted/summary' }),
 });
 
 describe.each(storages)('stopped summary recovery on $name storage', (storage) => {

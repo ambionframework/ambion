@@ -48,9 +48,11 @@ import { defineAgent, defineTool } from '@ambionframework/ambion';
 const surveyor = defineAgent({
   name: 'surveyor',
   identity: 'Quantity surveyor. Holds the tonnage.',
-  instructions: 'Read the pour plan before you answer.',
-  model: 'anthropic/claude-sonnet-5',
-  bundles: [drive.tools()],
+  executor: pi({
+    instructions: 'Read the pour plan before you answer.',
+    model: 'anthropic/claude-sonnet-5',
+    bundles: [drive.tools()],
+  }),
 });
 ```
 

@@ -10,6 +10,7 @@ import {
 	defineTool,
 	isSpoken,
 	type Message,
+	pi,
 	type Room,
 	type RoomNotification,
 	type Runtime,
@@ -63,31 +64,30 @@ const roomName = () => name('assistant');
 const product = defineAgent({
 	name: 'product',
 	identity: 'The one product in this room.',
-	instructions: 'answer what is asked',
-	model: 'scripted/product',
+	executor: pi({ instructions: 'answer what is asked', model: 'scripted/product' }),
 });
 
 /** The seat that meets people at the door, and works on what nobody asked for. */
 const greeter = defineAgent({
 	name: 'greeter',
 	identity: 'Meets people at the door.',
-	instructions: 'check what is blocked on whoever just arrived',
-	model: 'scripted/greeter',
+	executor: pi({
+		instructions: 'check what is blocked on whoever just arrived',
+		model: 'scripted/greeter',
+	}),
 });
 
 const colleague = defineAgent({
 	name: 'colleague',
 	identity: 'The second product.',
-	instructions: 'answer what is asked',
-	model: 'scripted/colleague',
+	executor: pi({ instructions: 'answer what is asked', model: 'scripted/colleague' }),
 });
 
 /** The room's assistant: it writes for everybody who visits, each in their own way. */
 const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes the one message a person reads.',
-	instructions: 'Answer what was asked, once.',
-	model: 'scripted/assistant',
+	executor: pi({ instructions: 'Answer what was asked, once.', model: 'scripted/assistant' }),
 });
 
 const priya = defineHuman({
@@ -670,8 +670,7 @@ describe('closing summaries', () => {
 		const clash = defineAgent({
 			name: 'product',
 			identity: 'Writes the one message a person reads.',
-			instructions: 'summarise',
-			model: 'scripted/assistant',
+			executor: pi({ instructions: 'summarise', model: 'scripted/assistant' }),
 		});
 		await expect(open({ script: byAgent({}), assistant: clash })).rejects.toThrow(
 			/one name names one participant/,
@@ -946,8 +945,7 @@ describe('an exchange', () => {
 	const surveyor = defineAgent({
 		name: 'surveyor',
 		identity: 'Quantity surveyor.',
-		instructions: 'x',
-		model: 'scripted/surveyor',
+		executor: pi({ instructions: 'x', model: 'scripted/surveyor' }),
 	});
 
 	const ranges = (events: RoomNotification[]) =>
@@ -1213,9 +1211,11 @@ describe('a summary writer with domain tools', () => {
 			assistant: defineAgent({
 				name: 'assistant',
 				identity: 'Coordinates the answer.',
-				instructions: 'Collaborate.',
-				model: 'scripted/assistant',
-				bundles: [{ tools: [book], guidance: 'Book guidance.' }],
+				executor: pi({
+					instructions: 'Collaborate.',
+					model: 'scripted/assistant',
+					bundles: [{ tools: [book], guidance: 'Book guidance.' }],
+				}),
 			}),
 			agents: [product, colleague],
 			seats: { product: 'broadcast', assistant: 'broadcast' },

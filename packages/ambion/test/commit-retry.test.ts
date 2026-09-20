@@ -4,6 +4,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type Message,
+	pi,
 	type RoomNotification,
 	startRoom,
 } from '../src/index.ts';
@@ -15,8 +16,7 @@ import { storages } from './support/storage.ts';
 const worker = defineAgent({
 	name: 'worker',
 	identity: 'Answers the question.',
-	instructions: 'answer the question',
-	model: 'scripted/worker',
+	executor: pi({ instructions: 'answer the question', model: 'scripted/worker' }),
 });
 const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 

@@ -16,9 +16,11 @@ Define each agent once and pass the definitions in `agents`.
 const researcher = defineAgent({
   name: 'researcher',
   identity: 'Checks evidence and states uncertainty.',
-  instructions: 'Use the supplied evidence. Speak when it changes the answer.',
-  model: 'anthropic/claude-sonnet-5',
-  tools: [lookup],
+  executor: pi({
+    instructions: 'Use the supplied evidence. Speak when it changes the answer.',
+    model: 'anthropic/claude-sonnet-5',
+    tools: [lookup],
+  }),
 });
 
 const room = await startRoom({
@@ -29,11 +31,13 @@ const room = await startRoom({
 ```
 
 `name` identifies the agent inside the room and on the journal. `identity` is
-public roster text. `instructions` are private model guidance. `model` names a
-Pi provider model. `tools` and `bundles` supply the agent's domain tools.
-`activationTokenLimit` bounds the record one activation reads, and
-`estimateTokens` counts tokens against it. Without a limit, an activation reads
-the whole record. The seat runs `estimateTokens`, so it never crosses the wire.
+public roster text. `executor` names the loop the agent runs on and its
+configuration. `pi` is the only executor today. Its `instructions` are private
+model guidance. `model` names a Pi provider model. `tools` and `bundles`
+supply the agent's domain tools. `activationTokenLimit` bounds the record one
+activation reads, and `estimateTokens` counts tokens against it. Without a
+limit, an activation reads the whole record. The seat runs `estimateTokens`,
+so it never crosses the wire.
 
 `summary` is an optional name from `agents`. It assigns closing work to that
 ordinary agent. `assistant` accepts an ordinary agent definition and supplies

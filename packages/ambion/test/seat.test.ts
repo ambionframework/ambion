@@ -9,7 +9,7 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
 import type { Message } from '../src/index.ts';
-import { type Clock, createRuntime, defineAgent } from '../src/index.ts';
+import { type Clock, createRuntime, defineAgent, pi } from '../src/index.ts';
 import {
 	AgentRunner,
 	type CommitResult,
@@ -27,8 +27,7 @@ import { contextText, quiet, scripted } from './support/scripted.ts';
 const product = defineAgent({
 	name: 'product',
 	identity: 'The one product.',
-	instructions: 'answer',
-	model: 'scripted/product',
+	executor: pi({ instructions: 'answer', model: 'scripted/product' }),
 });
 
 /**

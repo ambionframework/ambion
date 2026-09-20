@@ -333,7 +333,7 @@ export class AgentRunner implements SeatPort {
 		const { clock, room, seat, transcripts } = this.context;
 		return {
 			view: async () => {
-				const limit = this.context.definition.activationTokenLimit;
+				const limit = this.context.definition.executor.activationTokenLimit;
 				if (limit !== undefined) return this.windowedView(id, limit, cancelled);
 				const opened = await this.call(() => this.room.view(id), cancelled);
 				if (opened.kind === 'value') return opened.value;
@@ -378,7 +378,7 @@ export class AgentRunner implements SeatPort {
 		limit: number,
 		cancelled: Promise<void>,
 	): Promise<ViewResponse> {
-		const estimate = this.context.definition.estimateTokens ?? defaultEstimate;
+		const estimate = this.context.definition.executor.estimateTokens ?? defaultEstimate;
 		let before: number | undefined;
 		let held: Message[] = [];
 		let frame: ActivationView | undefined;
@@ -485,7 +485,7 @@ export class AgentRunner implements SeatPort {
 			},
 			initialState: {
 				systemPrompt: rendered.systemPrompt,
-				model: await this.context.model(def.model, def.name),
+				model: await this.context.model(def.executor.model, def.name),
 				thinkingLevel: 'off',
 				tools: toolsFor(
 					view,

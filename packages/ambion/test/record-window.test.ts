@@ -5,7 +5,7 @@
  * hands them a value.
  */
 import { describe, expect, it } from 'vitest';
-import { defineAgent } from '../src/define.ts';
+import { pi } from '../src/define.ts';
 import { windowToLimit } from '../src/execution/render.ts';
 import type { Entry } from '../src/journal/journal.ts';
 import type { ActivationSpec, ViewRange } from '../src/protocol.ts';
@@ -184,26 +184,24 @@ describe('the room pages the record', () => {
 
 describe('activationTokenLimit validation', () => {
 	const base = {
-		name: 'reader',
-		identity: 'Reads.',
 		instructions: 'Read.',
 		model: 'scripted/reader',
 	};
 
 	it('rejects an estimator without a limit', () => {
-		expect(() => defineAgent({ ...base, estimateTokens: (text) => text.length })).toThrow(
+		expect(() => pi({ ...base, estimateTokens: (text: string) => text.length })).toThrow(
 			/activationTokenLimit/,
 		);
 	});
 
 	it('rejects a nonpositive limit', () => {
-		expect(() => defineAgent({ ...base, activationTokenLimit: 0 })).toThrow(/positive integer/);
+		expect(() => pi({ ...base, activationTokenLimit: 0 })).toThrow(/positive integer/);
 	});
 
-	it('keeps the limit and estimator on the definition', () => {
+	it('keeps the limit and estimator on the executor', () => {
 		const estimate = (text: string) => text.length;
-		const agent = defineAgent({ ...base, activationTokenLimit: 500, estimateTokens: estimate });
-		expect(agent.activationTokenLimit).toBe(500);
-		expect(agent.estimateTokens).toBe(estimate);
+		const executor = pi({ ...base, activationTokenLimit: 500, estimateTokens: estimate });
+		expect(executor.activationTokenLimit).toBe(500);
+		expect(executor.estimateTokens).toBe(estimate);
 	});
 });

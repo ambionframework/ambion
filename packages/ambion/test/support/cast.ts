@@ -9,6 +9,7 @@ import {
 	defineAgent,
 	defineHuman,
 	type HumanDefinition,
+	pi,
 } from '../../src/index.ts';
 import {
 	answersEveryQuestion,
@@ -25,20 +26,17 @@ import {
 export const assistant = defineAgent({
 	name: 'assistant',
 	identity: 'Writes the one message a person reads.',
-	instructions: 'Answer what was asked, once.',
-	model: 'scripted/assistant',
+	executor: pi({ instructions: 'Answer what was asked, once.', model: 'scripted/assistant' }),
 });
 export const product = defineAgent({
 	name: 'product',
 	identity: 'The product.',
-	instructions: 'x',
-	model: 'scripted/product',
+	executor: pi({ instructions: 'x', model: 'scripted/product' }),
 });
 export const colleague = defineAgent({
 	name: 'colleague',
 	identity: 'The second product.',
-	instructions: 'x',
-	model: 'scripted/colleague',
+	executor: pi({ instructions: 'x', model: 'scripted/colleague' }),
 });
 export const priya = defineHuman({
 	name: 'priya',

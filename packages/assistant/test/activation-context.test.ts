@@ -1,4 +1,4 @@
-import { createRuntime, defineAgent, defineHuman, startRoom } from '@ambionframework/ambion';
+import { createRuntime, defineAgent, defineHuman, pi, startRoom } from '@ambionframework/ambion';
 import {
 	type Context,
 	createAssistantMessageEventStream,
@@ -80,8 +80,10 @@ async function captureActivations(attention: 'reserve' | 'named'): Promise<Captu
 			defineAgent({
 				name: 'writer',
 				identity: 'Customer writer.',
-				instructions: 'Draft within the user constraints.',
-				model: 'scripted/writer',
+				executor: pi({
+					instructions: 'Draft within the user constraints.',
+					model: 'scripted/writer',
+				}),
 			}),
 		],
 		seats: attention === 'named' ? { writer: 'named' } : {},

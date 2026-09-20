@@ -1,6 +1,6 @@
 import type { JournalOpener } from '@ambionframework/journal';
 import { describe, expect, it } from 'vitest';
-import { createRuntime, defineAgent, type Room, resumeRoom, startRoom } from '../src/index.ts';
+import { createRuntime, defineAgent, pi, type Room, resumeRoom, startRoom } from '../src/index.ts';
 import { fakeClock } from './support/clock.ts';
 import {
 	andrei,
@@ -25,8 +25,7 @@ import { storages } from './support/storage.ts';
 const product = defineAgent({
 	name: 'product',
 	identity: 'Answers questions.',
-	instructions: 'Contribute when useful.',
-	model: 'scripted/product',
+	executor: pi({ instructions: 'Contribute when useful.', model: 'scripted/product' }),
 });
 
 /** Fail only transcript writes; the collaboration journal remains available. */
