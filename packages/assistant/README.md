@@ -30,7 +30,7 @@ await startRoom({
 });
 ```
 
-The room expands the shorthand into the ordinary catalog before it validates
+The room expands the shorthand into the ordinary definitions before it validates
 or composes the room. The assistant joins with `broadcast` attention and writes
 the optional closing summary. It has no kernel authority beyond its ordinary
 room tools.
@@ -39,9 +39,9 @@ Application instructions follow the maintained defaults and take precedence
 when they conflict. The room still enforces membership, activation authority,
 freshness, recipients, exchange closure, and summary provenance.
 
-Omitting `seats` starts all catalog agents at broadcast attention. Use
+Omitting `seats` starts all defined agents at broadcast attention. Use
 `seats: {}` to start with only the assistant. Supply the assistant definition
-again in the complete `agents` catalog when calling `resumeRoom`.
+again in the complete `agents` definitions when calling `resumeRoom`.
 
 The default assistant uses corrective steering extremely rarely, when the
 record shows divergence or context rot. It avoids repeated assignments and

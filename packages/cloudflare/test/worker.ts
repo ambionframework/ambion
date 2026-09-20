@@ -1,5 +1,5 @@
 /**
- * The worker the workerd tier runs: it configures the catalog and the
+ * The worker the workerd tier runs: it configures the definitions and the
  * scripted model call, and exports the two objects `wrangler.jsonc` binds.
  */
 import { defineAgent, pi } from '@ambionframework/ambion';

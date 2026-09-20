@@ -5,7 +5,7 @@ import type { Close } from '../src/journal/events.ts';
 import type { RoomState } from '../src/room/fold.ts';
 import type { LeaseHold } from '../src/room/lease.ts';
 import { readView } from '../src/room/read.ts';
-import type { Message, RoomSnapshot } from '../src/types.ts';
+import type { Message, RoomRead } from '../src/types.ts';
 import { roomName } from './support/room.ts';
 import { storages } from './support/storage.ts';
 
@@ -190,7 +190,7 @@ describe('coherent room reads', () => {
 			4,
 			false,
 		);
-		const outcome = (snapshot: RoomSnapshot) => {
+		const outcome = (snapshot: RoomRead) => {
 			if (!snapshot.initialized) throw new Error('Expected an initialized room.');
 			const exchange = snapshot.exchanges[0];
 			if (exchange?.status !== 'closed') throw new Error('Expected a closed exchange.');

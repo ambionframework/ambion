@@ -173,10 +173,10 @@ function cancelLeases(leases: Map<string, LeaseHold>, cancelledAt: Seq, at: stri
 function reserveOf(composition: Composition | undefined, roster: readonly Seating[]): Seating[] {
 	if (composition === undefined) return [];
 	const seated = new Set(roster.map((seat) => seat.name));
-	const catalog = new Map(
+	const definitions = new Map(
 		[...composition.agents, ...composition.available].map((seat) => [seat.name, seat]),
 	);
-	return [...catalog.values()]
+	return [...definitions.values()]
 		.filter((seat) => !seated.has(seat.name))
 		.map((seat) => ({
 			name: seat.name,

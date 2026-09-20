@@ -3,7 +3,7 @@
  * plain JSON, and one that loses, repeats or delays them on purpose.
  */
 
-import type { SeatPort, SeatRoom, Transport } from '../../src/hosting.ts';
+import type { AgentPort, RoomProtocol, Transport } from '../../src/hosting.ts';
 import { assertWire, roundTrip } from '../../src/hosting.ts';
 import type { Clock } from '../../src/index.ts';
 
@@ -33,7 +33,7 @@ export function serializing(transport: Transport): SerializingTransport {
 	return {
 		violations,
 		connect(room, context) {
-			const wrapped: SeatRoom = {
+			const wrapped: RoomProtocol = {
 				view: async (id, range) =>
 					check(
 						'view response',
@@ -105,12 +105,12 @@ export function faultyTransport(transport: Transport, faults: Fault[], clock: Cl
 	};
 	return {
 		connect(room, context) {
-			const wrapped: SeatRoom = {
+			const wrapped: RoomProtocol = {
 				view: (id, range) => through('view', id, () => room.view(id, range)),
 				commit: (commit) => through('commit', commit, () => room.commit(commit)),
 				lease: (lease) => through('lease', lease, () => room.lease(lease)),
 			};
-			const port: SeatPort = transport.connect(wrapped, context);
+			const port: AgentPort = transport.connect(wrapped, context);
 			return {
 				wake: (wake) => through('wake', wake, () => port.wake(wake)).catch(() => {}),
 				steer: (steer) => through('steer', steer, () => port.steer(steer)).catch(() => {}),

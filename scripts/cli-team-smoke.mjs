@@ -117,8 +117,8 @@ async function packFixture(destination) {
   inProcessTransport,
   roundTrip,
   type EndReason,
-  type SeatContext,
-  type SeatRoom,
+  type AgentExecutionContext,
+  type RoomProtocol,
   type Transport,
 } from '@ambionframework/ambion/transport';
 
@@ -137,8 +137,8 @@ import type { Seating } from '@ambionframework/ambion/transport';
 
 const local = inProcessTransport();
 export const transport: Transport = {
-  connect(room: SeatRoom, context: SeatContext) {
-    const calls: SeatRoom = {
+  connect(room: RoomProtocol, context: AgentExecutionContext) {
+    const calls: RoomProtocol = {
       view: async (activation) => roundTrip(await room.view(activation)),
       commit: async (request) => {
         assertWire(request);
@@ -155,7 +155,7 @@ export const transport: Transport = {
   },
 };
 
-export function release(room: SeatRoom, activation: string, readThrough: number) {
+export function release(room: RoomProtocol, activation: string, readThrough: number) {
   const reason: EndReason = 'released';
   return room.lease({ activation, operation: 'release', reason, readThrough });
 }

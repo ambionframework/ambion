@@ -24,28 +24,28 @@ import type {
 	Attention,
 	ExchangeView,
 	Message,
-	RoomSnapshot,
+	RoomRead,
 	SeatOptions,
 	Seq,
 } from './types.ts';
 
-export type { ExchangeHandle, Room, RoomSnapshot, Visit } from './room-host.ts';
+export type { ExchangeHandle, Room, RoomRead, Visit } from './room-host.ts';
 
 export interface StartRoomOptions {
 	/** The room name shared by all runs over its journal. */
 	name: string;
 	/** A reusable assistant definition that joins the ordinary composition as a broadcast summary writer. */
 	assistant?: AgentDefinition;
-	/** The fixed executable catalog for this run. */
+	/** The fixed executable definitions for this run. */
 	agents?: readonly AgentDefinition[];
 	/** Initial members and attention. Omit to seat all agents at broadcast; `{}` keeps all in reserve. */
 	seats?: Readonly<Record<string, Attention | SeatOptions>>;
-	/** An ordinary catalog agent that writes closed exchange summaries. */
+	/** An ordinary defined agent that writes closed exchange summaries. */
 	summary?: string;
 	/** Public context that states what the room is for. */
 	goal?: string;
 	/** A room specific model stream override. */
-	streamFn?: StreamFn;
+	stream?: StreamFn;
 	/** The runtime that owns storage and lifecycle. Defaults to `defaultRuntime`. */
 	runtime?: Runtime;
 }
@@ -63,7 +63,7 @@ export interface ResumeRoomOptions {
 	/** The runtime that owns the room journal. */
 	runtime?: Runtime;
 	/** A room specific model stream override. */
-	streamFn?: StreamFn;
+	stream?: StreamFn;
 }
 
 export async function startRoom(options: StartRoomOptions): Promise<Room> {
@@ -74,7 +74,7 @@ export async function startRoom(options: StartRoomOptions): Promise<Room> {
 		options.name,
 		roomRuntime(runtime, options.name),
 		composeFrom(options),
-		composeExecution(runtime, options.streamFn),
+		composeExecution(runtime, options.stream),
 	);
 	registerRoom(runtime, room);
 	try {
@@ -94,7 +94,7 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 		name,
 		roomRuntime(runtime, name),
 		definitionsOf(options.agents),
-		composeExecution(runtime, options.streamFn),
+		composeExecution(runtime, options.stream),
 	);
 	registerRoom(runtime, room);
 	try {
@@ -107,7 +107,7 @@ export async function resumeRoom(name: string, options: ResumeRoomOptions): Prom
 }
 
 /** Observe a room's recorded state without requiring a running handle. */
-export async function readRoom(name: string, options: ReadRoomOptions = {}): Promise<RoomSnapshot> {
+export async function readRoom(name: string, options: ReadRoomOptions = {}): Promise<RoomRead> {
 	assertRoomName(name);
 	const runtime = options.runtime ?? defaultRuntime();
 	const messages = captureMessageSelection(options.messages);
@@ -127,7 +127,7 @@ export async function readRoom(name: string, options: ReadRoomOptions = {}): Pro
 }
 
 /** An exchange and its original discussion at one observed journal position. */
-export interface ExchangeSnapshot {
+export interface ExchangeRead {
 	readonly exchange: ExchangeView;
 	readonly messages: readonly Message[];
 	readonly watermark: Seq;
@@ -138,7 +138,7 @@ export async function readExchange(
 	name: string,
 	from: Seq,
 	options: { runtime?: Runtime } = {},
-): Promise<ExchangeSnapshot | undefined> {
+): Promise<ExchangeRead | undefined> {
 	if (!Number.isSafeInteger(from) || from <= 0)
 		throw new RangeError('Exchange reference must be a positive safe integer.');
 	const snapshot = await readRoom(name, {

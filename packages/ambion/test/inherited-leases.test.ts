@@ -5,10 +5,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+	type AgentPort,
 	hostingOf,
+	type RoomProtocol,
 	runningRoom,
-	type SeatPort,
-	type SeatRoom,
 	type Transport,
 	type Wake,
 } from '../src/hosting.ts';
@@ -38,13 +38,13 @@ const person = defineHuman({ name: 'priya', identity: 'Project manager.' });
 interface RecordingTransport {
 	readonly transport: Transport;
 	readonly wakes: Wake[];
-	calls: SeatRoom | undefined;
+	calls: RoomProtocol | undefined;
 }
 
 /** Keep a detached seat endpoint that a test can call like a remote runner. */
 function recordingTransport(): RecordingTransport {
 	const wakes: Wake[] = [];
-	let calls: SeatRoom | undefined;
+	let calls: RoomProtocol | undefined;
 	return {
 		wakes,
 		get calls() {
@@ -53,7 +53,7 @@ function recordingTransport(): RecordingTransport {
 		transport: {
 			connect(room, _context) {
 				calls = room;
-				const port: SeatPort = {
+				const port: AgentPort = {
 					wake: async (wake) => void wakes.push(wake),
 					steer: async () => {},
 					cut: async () => {},
@@ -64,7 +64,7 @@ function recordingTransport(): RecordingTransport {
 	};
 }
 
-function requiredCalls(recording: RecordingTransport): SeatRoom {
+function requiredCalls(recording: RecordingTransport): RoomProtocol {
 	if (recording.calls === undefined) throw new Error('The room did not open a seat endpoint.');
 	return recording.calls;
 }
@@ -73,7 +73,7 @@ interface InterruptedRoom {
 	readonly opened: OpenedStorage;
 	readonly clock: FakeClock;
 	readonly first: Runtime;
-	readonly firstCalls: SeatRoom;
+	readonly firstCalls: RoomProtocol;
 	readonly name: string;
 	readonly activation: string;
 	readonly exchangeFrom: number;
@@ -97,7 +97,7 @@ async function interrupted(storage: Storage): Promise<InterruptedRoom> {
 		agents: [runner],
 		seats: { [runner.name]: 'broadcast' },
 		runtime: first,
-		streamFn: scripted(() => quiet()),
+		stream: scripted(() => quiet()),
 	});
 	const visit = await session.visit(person);
 	await session.reconcile();
@@ -125,7 +125,7 @@ async function interrupted(storage: Storage): Promise<InterruptedRoom> {
 	};
 }
 
-function resumedCalls(runtime: Runtime, name: string): SeatRoom {
+function resumedCalls(runtime: Runtime, name: string): RoomProtocol {
 	const calls = runningRoom(runtime, name);
 	if (calls === undefined) throw new Error('The resumed room did not register.');
 	return calls;
@@ -153,7 +153,7 @@ async function assertOldHostStale(state: InterruptedRoom): Promise<void> {
 }
 
 async function answer(
-	calls: SeatRoom,
+	calls: RoomProtocol,
 	activation: string,
 	readThrough: number,
 	text: string,
@@ -197,7 +197,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 			resumed = await resumeRoom(state.name, {
 				runtime: second,
 				agents: [runner],
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			const calls = resumedCalls(second, state.name);
 			expect(recording.wakes).toEqual([]);
@@ -245,7 +245,7 @@ describe.each(storages)('inherited leases on $name', (storage) => {
 			resumed = await resumeRoom(state.name, {
 				runtime: second,
 				agents: [runner],
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			expect(recording.wakes).toEqual([]);
 			await state.clock.advance(999);

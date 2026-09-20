@@ -217,7 +217,7 @@ export class World {
 				[assistant.name]: 'none',
 			},
 			agents: [product, colleague, assistant],
-			streamFn: scripted(this.cast.script),
+			stream: scripted(this.cast.script),
 		});
 		this.watch();
 	}
@@ -234,7 +234,7 @@ export class World {
 			this.session = await resumeRoom(this.name, {
 				runtime: this.runtime,
 				agents,
-				streamFn: scripted(this.cast.script),
+				stream: scripted(this.cast.script),
 			});
 		} catch (error) {
 			if (!/no composition/.test(String(error))) throw error;

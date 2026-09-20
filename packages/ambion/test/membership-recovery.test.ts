@@ -60,7 +60,7 @@ describe('membership writes with fixed definitions', () => {
 			name: roomName('seat-race'),
 			agents: [chosen],
 			seats: {},
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			const results = await Promise.allSettled([
@@ -93,7 +93,7 @@ describe('membership writes with fixed definitions', () => {
 			agents: [chosen],
 			seats: {},
 			runtime: createRuntime({ storage: journals }),
-			streamFn: runTool('chosen'),
+			stream: runTool('chosen'),
 		});
 		try {
 			const seating = session.seat(chosen.name);
@@ -122,7 +122,7 @@ describe('membership writes with fixed definitions', () => {
 			agents: [chosen],
 			seats: {},
 			runtime: createRuntime({ storage: faulty.journals }),
-			streamFn: runTool('chosen'),
+			stream: runTool('chosen'),
 		});
 		try {
 			faulty.fail('after', 'message');
@@ -162,7 +162,7 @@ describe('membership writes with fixed definitions', () => {
 				agents: [chosen],
 				seats: {},
 				runtime: createRuntime({ storage: journals }),
-				streamFn: runTool('chosen'),
+				stream: runTool('chosen'),
 			});
 			try {
 				await expect(session.seat(chosen.name)).rejects.toThrow(/disk is full/);

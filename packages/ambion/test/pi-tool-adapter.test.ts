@@ -99,7 +99,7 @@ it('prepares native arguments once per call and validates before execution', asy
 	const room = await startRoom({
 		name: roomName('native-adapter'),
 		agents: [worker],
-		streamFn: scripted((context, _agent, call) => {
+		stream: scripted((context, _agent, call) => {
 			results.splice(0, results.length, ...toolResultTexts(context));
 			if (call === 1) return callTool('count', { count: 'invalid' });
 			return call === 2 ? callTool('count', { count: '7' }) : quiet();

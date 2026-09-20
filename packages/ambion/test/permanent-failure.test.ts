@@ -37,7 +37,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			streamFn: scripted(() => {
+			stream: scripted(() => {
 				calls += 1;
 				throw new Error('400 Your credit balance is too low to make this request');
 			}),
@@ -72,7 +72,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			streamFn: scripted(() => {
+			stream: scripted(() => {
 				calls += 1;
 				// The token count reads like a 400 status, but a rate limit is transient.
 				throw new Error('429 rate limit of 400,000 input tokens per minute exceeded');
@@ -105,7 +105,7 @@ describe.each(storages)('provider failure classification on $name storage', (sto
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			streamFn: scripted(() => {
+			stream: scripted(() => {
 				calls += 1;
 				throw new Error('503 the provider is overloaded');
 			}),

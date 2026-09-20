@@ -59,7 +59,7 @@ export interface Steer {
 	message: Message;
 }
 
-export interface SeatPort {
+export interface AgentPort {
 	wake(wake: Wake): Promise<void>;
 	steer(steer: Steer): Promise<void>;
 	/** The room ended this activation's lease: stop it, and run what queued behind it. */
@@ -73,8 +73,8 @@ export type ContextParticipant =
 	| AgentParticipantInfo
 	| (HumanParticipantInfo & {
 			readonly changedAt?: string;
-			readonly since?: Seq;
-			readonly unseen: number;
+			readonly lastDeparture?: Seq;
+			readonly messagesSinceDeparture: number;
 	  });
 
 /** Collaboration facts selected for one activation. Private executable definitions stay with the executor. */
@@ -172,7 +172,7 @@ export type LeaseRequest =
  */
 export type LeaseResponse = { ok: { expiresAt: number; lastSeq: Seq } } | Stale;
 
-export interface SeatRoom {
+export interface RoomProtocol {
 	view(activation: string, range?: ViewRange): Promise<ViewResponse>;
 	commit(commit: CommitRequest): Promise<CommitResult>;
 	lease(lease: LeaseRequest): Promise<LeaseResponse>;

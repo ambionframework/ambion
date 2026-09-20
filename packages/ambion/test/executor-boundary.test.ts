@@ -1,10 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
+	type AgentExecutionContext,
 	hostingOf,
 	inProcessTransport,
+	type RoomProtocol,
 	runningRoom,
-	type SeatContext,
-	type SeatRoom,
 	type Transport,
 } from '../src/hosting.ts';
 import { createRuntime, defineAgent, pi, readRoom, resumeRoom, startRoom } from '../src/index.ts';
@@ -19,8 +19,8 @@ const writer = defineAgent({
 	executor: pi({ instructions: 'Keep the answer concise.', model: 'scripted/writer' }),
 });
 
-function assertRoomCalls(room: SeatRoom): void {
-	expectTypeOf<keyof SeatRoom>().toEqualTypeOf<'view' | 'commit' | 'lease'>();
+function assertRoomCalls(room: RoomProtocol): void {
+	expectTypeOf<keyof RoomProtocol>().toEqualTypeOf<'view' | 'commit' | 'lease'>();
 	expect(Object.keys(room).sort()).toEqual(['commit', 'lease', 'view']);
 	expect(Object.getPrototypeOf(room)).toBe(Object.prototype);
 }
@@ -34,7 +34,7 @@ const reply = (text: string, exerciseTool = false) =>
 
 describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (mode) => {
 	it('passes only room calls and preserves room-local execution and notifications', async () => {
-		const connections: Array<{ room: SeatRoom; context: SeatContext }> = [];
+		const connections: Array<{ room: RoomProtocol; context: AgentExecutionContext }> = [];
 		const local = inProcessTransport();
 		const observed: Transport = {
 			connect(room, context) {
@@ -56,7 +56,7 @@ describe.each(['direct', 'json'] as const)('executor boundary over %s calls', (m
 			agents: [writer],
 			summary: writer.name,
 			runtime,
-			streamFn: stream,
+			stream: stream,
 		});
 		const events = collect(room);
 		try {
@@ -146,7 +146,7 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 			name,
 			agents: [writer],
 			runtime,
-			streamFn: reply('First run.'),
+			stream: reply('First run.'),
 		});
 		let resumed: Awaited<ReturnType<typeof resumeRoom>> | undefined;
 		try {
@@ -157,7 +157,7 @@ describe.each(storages)('executor lifecycle on $name', (storage) => {
 			await firstExchange.waitForClose();
 			hostingOf(runtime).evict(name);
 			expect(runningRoom(runtime, name)).toBeUndefined();
-			resumed = await resumeRoom(name, { agents: [writer], runtime, streamFn: reply('New run.') });
+			resumed = await resumeRoom(name, { agents: [writer], runtime, stream: reply('New run.') });
 			const current = runningRoom(runtime, name);
 			expect(current).not.toBe(old);
 			await expect(old.view('unknown')).resolves.toEqual({ stale: 'the room is gone' });

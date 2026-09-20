@@ -131,7 +131,7 @@ async function open(options: {
 			[(options.assistant ?? assistant).name]:
 				options.seats?.[(options.assistant ?? assistant).name] ?? 'none',
 		},
-		streamFn: scripted(options.script),
+		stream: scripted(options.script),
 		runtime: options.runtime ?? runtime,
 	});
 	started.push(session);
@@ -1164,7 +1164,7 @@ describe('a room without a summary writer', () => {
 			name: roomName(),
 			agents: [product],
 			runtime,
-			streamFn: scripted(byAgent({ product: insists('Thursday is out.') })),
+			stream: scripted(byAgent({ product: insists('Thursday is out.') })),
 		});
 		const events = collect(session);
 

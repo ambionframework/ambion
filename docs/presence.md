@@ -15,7 +15,7 @@ presence.
 ## 1. Two lifetimes
 
 Agent membership and human visits are independent. `agents` is the executable
-catalog; `seats` chooses its initial members and attention. A person is admitted
+definitions; `seats` chooses its initial members and attention. A person is admitted
 through a visit. Hosts decide what “present” means for their medium and must
 reconcile multiple tabs or connections before calling Ambion. The runtime has
 no idle timer and a crash writes no departure.
@@ -63,11 +63,11 @@ They wait on the journal and are available after the person returns.
 
 ## 4. The visit
 
-The public handle is deliberately small: a `human` definition, a live `since`
+The public handle is deliberately small: a `human` definition, a live `lastDeparture`
 cursor, `send(input)`, and `leave()`. See the [`Visit` declaration](../packages/ambion/src/room-host.ts)
 for the exact TypeScript signature.
 
-`since` is a live read of the person's latest durable `left` message. It is
+`lastDeparture` is a live read of the person's latest durable `left` message. It is
 `undefined` before the first departure, remains fixed during the visit, and
 moves when a later departure lands. A visit does not become usable until its
 `arrived` write is confirmed.
@@ -143,7 +143,7 @@ recorded departure:
 
 ```ts
 const visit = await room.visit(andrei);
-const { messages: missed } = await room.read({ messages: { since: visit.since } });
+const { messages: missed } = await room.read({ messages: { since: visit.lastDeparture } });
 ```
 
 The result includes room messages, including speech and presence, in journal
@@ -160,7 +160,7 @@ downstream session and are not presence history.
 
 Every activation gets the current clock, goal when configured, roster, people,
 and rendered record. The renderer marks each person's presence and places a
-divider at their `since` cursor so the agent can see what they have not read.
+divider at their `lastDeparture` so the agent can see what they have not read.
 An arrival is information, not a request: a seat should use it to aim work it
 was already doing and should not greet, summarize, or start work merely because
 someone entered.

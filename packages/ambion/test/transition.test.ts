@@ -510,7 +510,13 @@ describe('room transition', () => {
 		);
 		const spec = activationSpec('closed:3:writer:1', state);
 		if (spec === undefined) throw new Error('Expected summary grant.');
-		const view = viewOf(spec, { name: 'room', now, state, live: new Map(), unseen: () => 0 });
+		const view = viewOf(spec, {
+			name: 'room',
+			now,
+			state,
+			live: new Map(),
+			messagesSince: () => 0,
+		});
 		expect(view.through).toBe(3);
 		expect(view.context.reserve).toEqual([{ name: 'reserve', identity: 'Reserve.' }]);
 		expect(view.context.messages.map((message) => message.seq)).toEqual([2, 3]);

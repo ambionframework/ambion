@@ -1,12 +1,6 @@
 /** Coherent, detached room reads built from one folded projection. */
 
-import {
-	copyMessage,
-	type ExchangeView,
-	type Message,
-	type RoomSnapshot,
-	type Seq,
-} from '../types.ts';
+import { copyMessage, type ExchangeView, type Message, type RoomRead, type Seq } from '../types.ts';
 import { exchangeViews } from './exchange.ts';
 import type { RoomState } from './fold.ts';
 import { liveWork } from './reconcile.ts';
@@ -31,7 +25,7 @@ export function readView(
 	now: number,
 	watermark: Seq,
 	messages: MessageSelection | undefined,
-): RoomSnapshot {
+): RoomRead {
 	validateSelection(messages);
 	if (state.composition === undefined)
 		return {

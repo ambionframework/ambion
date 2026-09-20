@@ -65,7 +65,7 @@ async function room(name: string) {
 		summary: assistant.name,
 		seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 		agents: [alpha, assistant],
-		streamFn: scripted(script),
+		stream: scripted(script),
 	});
 	return { opened, faulty, clock, session, events: collect(session) };
 }
@@ -108,7 +108,7 @@ describe('a room in doubt', () => {
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, assistant],
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					alpha: says(['one', 'two']),
 					assistant: (context) =>
@@ -162,7 +162,7 @@ describe('a room in doubt', () => {
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, assistant],
-			streamFn: scripted(script),
+			stream: scripted(script),
 		});
 		const events = collect(session);
 		const visit = await session.visit(priya);

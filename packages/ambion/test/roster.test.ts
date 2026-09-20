@@ -93,7 +93,7 @@ async function open(options: {
 		seats,
 		...(options.summary ? { summary: writer.name } : {}),
 		runtime,
-		streamFn: scripted(options.script),
+		stream: scripted(options.script),
 	});
 	started.push(session);
 	return session;
@@ -314,7 +314,7 @@ describe('ordinary unseating and host membership', () => {
 		const resumed = await resumeRoom(name, {
 			agents: [product, surveyor],
 			runtime,
-			streamFn: scripted(byAgent({})),
+			stream: scripted(byAgent({})),
 		});
 		started.push(resumed);
 		expect(await seatNames(resumed)).toEqual([product.name]);

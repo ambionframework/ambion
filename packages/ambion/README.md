@@ -90,7 +90,7 @@ to inspect durable state without a live handle. Reads never wait for completion.
 Use `startRoom({ assistant, agents })` to register an assistant definition,
 seat it at `broadcast`, and select it as the summary writer. Supply specialists
 in `agents`; omit the assistant from that list. An explicit `seats: {}` starts
-only the assistant. Omitting `seats` starts all catalog agents at `broadcast`.
+only the assistant. Omitting `seats` starts all defined agents at `broadcast`.
 See the [assistant contract](https://github.com/ambionframework/ambion/blob/main/docs/assistant.md).
 
 Use `defineTool` for an agent's ordinary typed tools. Put reusable tool bundles

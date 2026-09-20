@@ -7,7 +7,7 @@
 
 import { env, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import type { Message } from '@ambionframework/ambion';
-import type { LeaseResponse, SeatRoom, Steer } from '@ambionframework/ambion/hosting';
+import type { LeaseResponse, RoomProtocol, Steer } from '@ambionframework/ambion/hosting';
 import { namespaced } from '@ambionframework/journal';
 import { piSessions } from '@ambionframework/pi-journal';
 import { expect, it } from 'vitest';
@@ -210,7 +210,7 @@ it('bounds recovery release and clears local state after an unknown result', asy
 						},
 					) => Promise<unknown>;
 				};
-				roomFor: (room: string) => SeatRoom;
+				roomFor: (room: string) => RoomProtocol;
 			};
 			const object = instance as unknown as Internal;
 			await object.metadata.change(() => ({
@@ -275,7 +275,7 @@ it('keeps newer metadata when a timed out recovery release replies late', async 
 						},
 					) => Promise<unknown>;
 				};
-				roomFor: (room: string) => SeatRoom;
+				roomFor: (room: string) => RoomProtocol;
 			};
 			const object = instance as unknown as Internal;
 			await object.metadata.change(() => ({

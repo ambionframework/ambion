@@ -48,7 +48,7 @@ describe('provider loading', () => {
 				'@earendil-works/pi-ai'
 			);
 			const { startRoom, defineAgent, defineHuman, pi } = await import(${JSON.stringify(entry)});
-			const streamFn = (_model, _context, options) => {
+			const stream = (_model, _context, options) => {
 				const stream = createAssistantMessageEventStream();
 				const message = fauxAssistantMessage('', { stopReason: 'stop' });
 				queueMicrotask(() => {
@@ -72,7 +72,7 @@ describe('provider loading', () => {
 				name: 'lazy-scripted-check',
 				agents: [worker, assistant],
 				summary: assistant.name,
-				streamFn,
+				stream,
 			});
 			const visit = await room.visit(defineHuman({ name: 'person', identity: 'tester' }));
 			const exchange = await visit.send({ text: 'hello' });

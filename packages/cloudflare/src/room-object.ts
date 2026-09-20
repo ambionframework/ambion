@@ -15,19 +15,19 @@ import type {
 	ParticipantInfo,
 	ReadRoomOptions,
 	Room,
-	RoomSnapshot,
+	RoomRead,
 	Runtime,
 	Seq,
 	Visit,
 } from '@ambionframework/ambion';
 import { defineHuman, readRoom, resumeRoom, startRoom } from '@ambionframework/ambion';
 import type {
+	AgentExecutionContext,
 	CommitRequest,
 	CommitResult,
 	LeaseRequest,
 	LeaseResponse,
-	SeatContext,
-	SeatRoom,
+	RoomProtocol,
 	Transport,
 	ViewRange,
 	ViewResponse,
@@ -88,7 +88,7 @@ function alarmClock(state: DurableObjectState): Clock {
 /** The room reaches a seat over RPC to the seat object named for it. */
 function rpcTransport(env: Env): Transport {
 	return {
-		connect(_room, context: SeatContext) {
+		connect(_room, context: AgentExecutionContext) {
 			const { room: roomName, seat } = context;
 			const stub = env.SEAT.get(
 				env.SEAT.idFromName(JSON.stringify(['ambion/seat-object', roomName, seat])),
@@ -122,7 +122,8 @@ export class RoomObject extends DurableObject<Env> {
 		ctx.blockConcurrencyWhile(async () => {
 			const { name, agents, stopped } = await this.metadata.read();
 			if (name === undefined || stopped === true) return;
-			if (agents === undefined) throw new Error(`Room '${name}' has no catalog in its metadata.`);
+			if (agents === undefined)
+				throw new Error(`Room '${name}' has no definitions in its metadata.`);
 			const recorded = await readRoom(name, { runtime: this.runtime, messages: false });
 			if (!recorded.initialized) return;
 			const room = await resumeRoom(name, {
@@ -248,7 +249,7 @@ export class RoomObject extends DurableObject<Env> {
 	}
 
 	/** Read a detached coherent projection, including stopped records. */
-	async read(options: Pick<ReadRoomOptions, 'messages'> = {}): Promise<RoomSnapshot> {
+	async read(options: Pick<ReadRoomOptions, 'messages'> = {}): Promise<RoomRead> {
 		const name = (await this.metadata.read()).name;
 		if (name === undefined) throw new Error('The room is not started.');
 		return readRoom(name, { ...options, runtime: this.runtime });
@@ -307,15 +308,15 @@ export class RoomObject extends DurableObject<Env> {
 	// -- what a seat asks, in wire types --------------------------------------
 
 	async view(activation: string, range?: ViewRange): Promise<ViewResponse> {
-		return this.seatRoom().view(activation, range);
+		return this.protocol().view(activation, range);
 	}
 
 	async commit(commit: CommitRequest): Promise<CommitResult> {
-		return this.seatRoom().commit(commit);
+		return this.protocol().commit(commit);
 	}
 
 	async lease(lease: LeaseRequest): Promise<LeaseResponse> {
-		return this.seatRoom().lease(lease);
+		return this.protocol().lease(lease);
 	}
 
 	/** The room's alarm is its clock: it folds, decides, writes and sends. */
@@ -328,7 +329,7 @@ export class RoomObject extends DurableObject<Env> {
 		return this.room;
 	}
 
-	private seatRoom(): SeatRoom {
+	private protocol(): RoomProtocol {
 		const room = runningRoom(this.runtime, this.running().name);
 		if (room === undefined) throw new Error('The room is not running.');
 		return room;

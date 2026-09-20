@@ -64,14 +64,14 @@ describe('createRuntime', () => {
 			runtime: first,
 			seats: { [assistant.name]: 'none' },
 			agents: [assistant],
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		const b = await startRoom({
 			name,
 			runtime: second,
 			seats: { [assistant.name]: 'none' },
 			agents: [assistant],
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		await (await a.visit(andrei)).send({ text: 'in the first' });
 		await (await b.visit(andrei)).send({ text: 'in the second' });
@@ -98,7 +98,7 @@ describe('createRuntime', () => {
 				runtime: writer,
 				seats: { [assistant.name]: 'none' },
 				agents: [assistant],
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			const visit = await session.visit(andrei);
 			await visit.send({ text: 'kept on disk' });

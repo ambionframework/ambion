@@ -175,7 +175,7 @@ describe.each(['sqlite'])('a room killed from outside on %s', (storage) => {
 				const session = await resumeRoom(name, {
 					runtime,
 					agents,
-					streamFn: scripted(script),
+					stream: scripted(script),
 				});
 				const events = collect(session);
 				const inheritedExchange = (await currentExchange(session)) !== undefined;

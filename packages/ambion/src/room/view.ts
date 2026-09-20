@@ -20,7 +20,7 @@ export interface RoomFacts {
 	/** The seats live now, by name, with the ids that make them live. */
 	readonly live: ReadonlyMap<string, string[]>;
 	/** How many messages landed after this seq. */
-	unseen(since: Seq): number;
+	messagesSince(seq: Seq): number;
 }
 
 /** The roster and people returned by the public participants query. */
@@ -153,7 +153,8 @@ function peopleOf(facts: RoomFacts): Extract<ContextParticipant, { kind: 'human'
 		identity: person.identity,
 		presence: person.presence,
 		...(person.changedAt === undefined ? {} : { changedAt: person.changedAt }),
-		...(person.since === undefined ? {} : { since: person.since }),
-		unseen: person.since === undefined ? 0 : facts.unseen(person.since),
+		...(person.lastDeparture === undefined ? {} : { lastDeparture: person.lastDeparture }),
+		messagesSinceDeparture:
+			person.lastDeparture === undefined ? 0 : facts.messagesSince(person.lastDeparture),
 	}));
 }

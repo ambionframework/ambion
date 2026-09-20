@@ -60,7 +60,7 @@ export type ExchangeView =
 	| (ExchangeRef & { readonly status: 'open' })
 	| (ClosedExchange & { readonly status: 'closed'; readonly summary: SummaryOutcome });
 
-interface RoomSnapshotFields {
+interface RoomReadFields {
 	readonly name: string;
 	readonly messages: readonly Message[];
 	readonly participants: readonly ParticipantInfo[];
@@ -71,8 +71,8 @@ interface RoomSnapshotFields {
 }
 
 /** A detached room read. Missing records have no room facts. */
-export type RoomSnapshot =
-	| (RoomSnapshotFields & {
+export type RoomRead =
+	| (RoomReadFields & {
 			readonly initialized: false;
 			readonly goal?: undefined;
 			readonly messages: readonly [];
@@ -80,7 +80,7 @@ export type RoomSnapshot =
 			readonly exchanges: readonly [];
 			readonly exchange: undefined;
 	  })
-	| (RoomSnapshotFields & {
+	| (RoomReadFields & {
 			readonly initialized: true;
 			readonly goal?: string;
 	  });

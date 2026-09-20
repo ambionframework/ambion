@@ -2,7 +2,7 @@
 
 **A summary is an optional message for the person who opened a human
 exchange.** The room assigns a writer by name. The name refers to one agent in
-the room's `agents` catalog.
+the room's `agents` definitions.
 
 The writer is an ordinary agent. It has the same identity, instructions,
 model, domain tools, membership, and attention rules as every other agent.
@@ -53,7 +53,7 @@ writer later; the exchange closing at that time then has no summary
 assignment.
 
 `startRoom({ assistant })` accepts an ordinary agent definition and supplies
-its catalog entry, broadcast seat, and summary assignment. A conflicting
+its definition entry, broadcast seat, and summary assignment. A conflicting
 explicit summary writer is refused. This shorthand preserves the closing
 activation and membership rules described here. See
 [Default assistant](assistant.md) for the built-in implementation.

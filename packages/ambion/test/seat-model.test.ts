@@ -8,7 +8,7 @@ import {
 	hostingOf,
 	type LeaseRequest,
 	type LeaseResponse,
-	type SeatRoom,
+	type RoomProtocol,
 	type Steer,
 	type ViewResponse,
 } from '../src/hosting.ts';
@@ -30,7 +30,7 @@ const model = {
 	provider: 'scripted',
 } as unknown as Model<Api>;
 
-class ModelRoom implements SeatRoom {
+class ModelRoom implements RoomProtocol {
 	readonly claims: string[] = [];
 	readonly releases: Extract<LeaseRequest, { operation: 'release' }>[] = [];
 	lastSeq = 1;

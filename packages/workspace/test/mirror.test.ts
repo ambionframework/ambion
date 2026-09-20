@@ -4,7 +4,7 @@ import type {
 	Message,
 	Room,
 	RoomNotification,
-	RoomSnapshot,
+	RoomRead,
 	Seq,
 	Visit,
 } from '@ambionframework/ambion';
@@ -35,7 +35,7 @@ function fakeRoom(
 	const listeners = new Set<(event: RoomNotification) => void>();
 	return {
 		name: roomName,
-		async read(options): Promise<RoomSnapshot> {
+		async read(options): Promise<RoomRead> {
 			const selection = options?.messages;
 			const since = selection === false ? undefined : selection?.since;
 			const messages =
@@ -251,7 +251,7 @@ describe('Workspace.mirror', () => {
 		const session = await startRoom({
 			name: roomId,
 			agents: [worker],
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({
 					worker: (_context, _who, call) => {
 						if (call === 1) return speak('first');

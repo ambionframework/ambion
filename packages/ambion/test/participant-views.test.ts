@@ -29,7 +29,7 @@ describe('participant views', () => {
 			name: roomName('participants'),
 			agents: [writer()],
 			runtime,
-			streamFn: scripted((context) => {
+			stream: scripted((context) => {
 				contexts.push(`${context.systemPrompt ?? ''}\n${contextText(context)}`);
 				const text = contextText(context);
 				return text.includes('Question?') && !text.includes('Answer.') ? speak('Answer.') : quiet();
@@ -57,7 +57,10 @@ describe('participant views', () => {
 			}
 			expectTypeOf<Extract<'sessionId', keyof AgentParticipantInfo>>().toEqualTypeOf<never>();
 			expectTypeOf<
-				Extract<'changedAt' | 'since' | 'unseen' | 'preferences', keyof HumanParticipantInfo>
+				Extract<
+					'changedAt' | 'lastDeparture' | 'messagesSinceDeparture' | 'preferences',
+					keyof HumanParticipantInfo
+				>
 			>().toEqualTypeOf<never>();
 			const snapshot = await readRoom(room.name, {
 				runtime: createRuntime({ storage: runtime.storage }),
@@ -93,7 +96,7 @@ describe('participant views', () => {
 			agents: [writer()],
 			seats: { writer: 'none' },
 			runtime,
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			await room.visit(defineHuman({ name: 'reader', identity: 'Reads the room.' }));
@@ -124,7 +127,7 @@ describe('participant views', () => {
 			name: roomName('participant-audit'),
 			agents: [writer()],
 			runtime,
-			streamFn: scripted((context) => {
+			stream: scripted((context) => {
 				const text = contextText(context);
 				return text.includes('Question?') && !text.includes('Answer.') ? speak('Answer.') : quiet();
 			}),

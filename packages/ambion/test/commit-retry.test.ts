@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inProcessTransport, type SeatRoom, type Transport } from '../src/hosting.ts';
+import { inProcessTransport, type RoomProtocol, type Transport } from '../src/hosting.ts';
 import {
 	createRuntime,
 	defineAgent,
@@ -42,7 +42,7 @@ function losingCommit(lose: number | 'all'): {
 		commits: () => commits,
 		transport: {
 			connect(room, context) {
-				const wrapped: SeatRoom = {
+				const wrapped: RoomProtocol = {
 					view: (id) => room.view(id),
 					lease: (request) => room.lease(request),
 					commit: async (request) => {
@@ -72,7 +72,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			streamFn: scripted(saysUntilDelivered('answer')),
+			stream: scripted(saysUntilDelivered('answer')),
 		});
 		try {
 			const visit = await room.visit(person);
@@ -102,7 +102,7 @@ describe.each(storages)('commit retry on $name storage', (storage) => {
 			agents: [worker],
 			seats: { [worker.name]: 'named' },
 			runtime,
-			streamFn: scripted(saysUntilDelivered('answer')),
+			stream: scripted(saysUntilDelivered('answer')),
 		});
 		const off = room.subscribe((event) => events.push(event));
 		try {

@@ -39,16 +39,16 @@ What is built:
   storage.
   It composes `AgentRunner` services directly from that storage and the worker
   configuration. It does not create a room runtime.
-- **`configure`** names the complete agent catalog the objects resolve by name,
+- **`configure`** names the complete agent definitions the objects resolve by name,
   and the model call they make.
 
-`RoomObject.start` receives the complete agent catalog in `agents`, an optional
+`RoomObject.start` receives the complete agent definitions in `agents`, an optional
 `summary` name, and an optional `seats` map. The map sets initial members and
 attention. An omitted map seats every supplied agent at `broadcast`; an empty
 map starts them in the reserve. `seat` and `unseat` take names and cannot
-install a new definition. The room metadata retains the catalog names, so
+install a new definition. The room metadata retains the definition names, so
 automatic resume resolves the same definitions through `configure`. Resume
-requires catalog names in the room metadata. Every seat uses the same room
+requires definition names in the room metadata. Every seat uses the same room
 tools, including `say`, `seat`, and `unseat`.
 
 `read()` returns the detached coherent room projection, including stopped

@@ -43,7 +43,7 @@ async function open(options: Partial<Parameters<typeof startRoom>[0]> = {}) {
 		assistant,
 		agents: [builder, reviewer],
 		seats: { builder: 'named', reviewer: 'none' },
-		streamFn: scripted(() => quiet()),
+		stream: scripted(() => quiet()),
 		...options,
 	});
 	return { opened, room };
@@ -79,7 +79,7 @@ describe('assistant room shorthand', () => {
 		}
 	});
 
-	it('keeps every catalog agent at broadcast when seats is omitted', async () => {
+	it('keeps every defined agent at broadcast when seats is omitted', async () => {
 		const { opened, room } = await open({ seats: undefined });
 		try {
 			expect(
@@ -179,7 +179,7 @@ describe('assistant room shorthand', () => {
 			assistant,
 			agents: [builder],
 			seats: { builder: 'broadcast' },
-			streamFn: scripted((context, agent, call) => {
+			stream: scripted((context, agent, call) => {
 				if (agent === 'builder' && call === 1) return speak('The answer.');
 				if (agent === 'assistant' && isClosing(context)) {
 					closingTools.push(toolNames(context));
@@ -235,9 +235,7 @@ describe('assistant room shorthand', () => {
 				const resumed = await resumeRoom(room.name, {
 					runtime: resumedRuntime,
 					agents: [assistant, builder, reviewer],
-					streamFn: scripted((context) =>
-						isClosing(context) ? speak('Resumed summary.') : quiet(),
-					),
+					stream: scripted((context) => (isClosing(context) ? speak('Resumed summary.') : quiet())),
 				});
 				try {
 					expect((await resumed.read()).participants.map((seat) => seat.name)).toEqual([

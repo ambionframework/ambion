@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type {
+	AgentExecutionContext,
 	CommitRequest,
 	LeaseRequest,
-	SeatContext,
-	SeatRoom,
+	RoomProtocol,
 	Steer,
 	Transport,
 } from '../src/hosting.ts';
@@ -32,7 +32,7 @@ async function controlled(storage: Storage, mutateSteering = false) {
 	const opened = await storage.open();
 	const connections = new Map<
 		string,
-		{ calls: SeatRoom; context: SeatContext; activation: string }
+		{ calls: RoomProtocol; context: AgentExecutionContext; activation: string }
 	>();
 	const steered: Steer[] = [];
 	const transport: Transport = {
@@ -65,7 +65,7 @@ async function controlled(storage: Storage, mutateSteering = false) {
 	return { opened, runtime, room, visit, connection, steered };
 }
 
-async function claim(connection: { calls: SeatRoom; activation: string }) {
+async function claim(connection: { calls: RoomProtocol; activation: string }) {
 	expect(
 		await connection.calls.lease({ activation: connection.activation, operation: 'claim' }),
 	).toHaveProperty('ok');

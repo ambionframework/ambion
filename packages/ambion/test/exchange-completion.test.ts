@@ -89,7 +89,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			agents: [alpha, assistant],
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({ alpha: says(['First fact.', 'Second fact.']), assistant: summaryFor(outcome) }),
 			),
 		});
@@ -104,7 +104,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			resumed = await resumeRoom(room.name, {
 				runtime: runtime(),
 				agents: [alpha, assistant],
-				streamFn: scripted(() => {
+				stream: scripted(() => {
 					calls += 1;
 					return quiet();
 				}),
@@ -139,7 +139,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			agents: [alpha, assistant],
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [assistant.name]: 'none' },
-			streamFn: scripted(
+			stream: scripted(
 				byAgent({ alpha: says(['First fact.', 'Second fact.']), assistant: summaryFor('failed') }),
 			),
 		});
@@ -152,7 +152,7 @@ describe.each(storages)('replayed exchange responses on $name', (storage) => {
 			resumed = await resumeRoom(room.name, {
 				runtime: runtime(),
 				agents: [alpha, assistant],
-				streamFn: scripted(byAgent({ assistant: summaryFor('published') })),
+				stream: scripted(byAgent({ assistant: summaryFor('published') })),
 			});
 			const recovered = resumed.exchange(exchange.from);
 			if (recovered === undefined) throw new Error('Expected the recorded exchange.');
@@ -191,7 +191,7 @@ describe('exchange completion handles', () => {
 				storage: faulty.journals,
 				transport: inProcessTransport(),
 			}),
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			const visit = await room.visit(priya);
@@ -258,7 +258,7 @@ describe('exchange completion handles', () => {
 			agents: [alpha, beta, assistant],
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
-			streamFn: scripted((context, agent) =>
+			stream: scripted((context, agent) =>
 				agent === assistant.name ? summaryReply(context) : specialistReply(context, agent),
 			),
 		});
@@ -317,7 +317,7 @@ describe('exchange completion handles', () => {
 			agents: [alpha, beta, assistant],
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
-			streamFn: scripted(async (context, agent) => {
+			stream: scripted(async (context, agent) => {
 				if (agent === assistant.name) {
 					if (!isClosing(context)) return quiet();
 					summaryStarted.resolve();

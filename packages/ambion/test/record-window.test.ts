@@ -102,7 +102,7 @@ function facts(state: RoomState): RoomFacts {
 		now,
 		state,
 		live: new Map([['worker', ['message:2:worker:0']]]),
-		unseen: () => 0,
+		messagesSince: () => 0,
 	};
 }
 

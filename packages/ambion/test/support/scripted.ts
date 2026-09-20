@@ -14,7 +14,7 @@ export type Script = (
 ) => AssistantMessage | Promise<AssistantMessage>;
 
 /**
- * A deterministic streamFn. It routes on the model's id: every test agent is
+ * A deterministic stream. It routes on the model's id: every test agent is
  * defined as `scripted/<name>`, so the seat is the part after the slash and
  * no script ever reads the prompt to find out who it is. It counts calls per
  * agent, answers an abort with an aborted message, and turns a script that

@@ -30,7 +30,7 @@ An exchange records its owner, opening time, and opening message position
 (`from`). A durable close fixes its inclusive final message position
 (`through`). Journal administration can occupy positions between messages.
 `ExchangeRef` carries identity. `ExchangeView` carries recorded state.
-`ExchangeHandle` provides live waits. An `ExchangeSnapshot` contains a view,
+`ExchangeHandle` provides live waits. An `ExchangeRead` contains a view,
 its original discussion, and the observed journal watermark.
 See [the public types](../packages/ambion/src/types.ts) for the exact shapes.
 
@@ -113,7 +113,7 @@ activation. Notifications and pending waits belong to the current run and
 must be recreated after interruption.
 
 **`room.read()` returns detached state from one journal position.** It starts
-no agents and performs no reconciliation. `RoomSnapshot` reports initialization,
+no agents and performs no reconciliation. `RoomRead` reports initialization,
 recorded goal, participants, exchange views, and the journal `watermark`.
 Use `readRoom(name, { runtime })` without a running handle, including stopped rooms.
 A stopped open exchange remains open until the journal records its close.
@@ -126,11 +126,11 @@ The watermark includes close and lease entries. Activity can change when a lease
 expires without another append, so the watermark cannot validate a cached view.
 An active host reads its observed journal prefix after local writes settle;
 a read does not force synchronization with another host's writes.
-See [`RoomSnapshot` and `ExchangeView`](../packages/ambion/src/types.ts) for types.
+See [`RoomRead` and `ExchangeView`](../packages/ambion/src/types.ts) for types.
 
 **`readExchange(name, from, { runtime })` reads the original discussion immediately.**
 It returns `undefined` for a missing exchange. The reference must be a positive
-safe integer. The snapshot includes the exchange view and excludes summaries
+safe integer. The read includes the exchange view and excludes summaries
 from its discussion. A closed discussion uses its fixed inclusive source range;
 an open discussion contains the messages recorded so far. Reading never waits
 for close or summary completion. Late summaries appear in the exchange outcome.

@@ -19,7 +19,7 @@
  */
 
 import { posix } from 'node:path';
-import type { Message, Room, RoomSnapshot, Seq } from '@ambionframework/ambion';
+import type { Message, Room, RoomRead, Seq } from '@ambionframework/ambion';
 import type { Context, ExecutionEnv, JsonValue } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core';
 import { openLog } from './log.ts';
@@ -190,7 +190,7 @@ export async function mirrorRoom(
 		else append(event.message);
 	});
 
-	let snapshot: RoomSnapshot;
+	let snapshot: RoomRead;
 	try {
 		snapshot = await room.read({ messages: { since: appendedSeq } });
 	} catch (error) {

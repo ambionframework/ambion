@@ -25,7 +25,7 @@ export interface PersonState {
 	identity: string;
 	presence: PresenceStatus;
 	/** The seq of their last `left`, or undefined before their first. */
-	since: Seq | undefined;
+	lastDeparture: Seq | undefined;
 	/** When their presence last changed, ISO. */
 	changedAt: string | undefined;
 	/** How they read, as their latest arrival said it. */
@@ -42,7 +42,7 @@ export function foldPeople(messages: readonly Message[]): Map<string, PersonStat
 				name: message.subject,
 				identity: message.identity ?? known?.identity ?? '',
 				presence: 'present',
-				since: known?.since,
+				lastDeparture: known?.lastDeparture,
 				changedAt: message.at,
 				preferences: message.preferences ?? known?.preferences,
 			});
@@ -52,7 +52,7 @@ export function foldPeople(messages: readonly Message[]): Map<string, PersonStat
 				people.set(message.subject, {
 					...known,
 					presence: 'absent',
-					since: message.seq,
+					lastDeparture: message.seq,
 					changedAt: message.at,
 				});
 			}

@@ -1,5 +1,5 @@
 /**
- * The collaboration kernel: define agents and tools, supply a fixed catalog,
+ * The collaboration kernel: define agents and tools, supply fixed definitions,
  * then seat agents and address participants by name. People visit rooms and
  * their questions open exchanges. Agents can seat and unseat colleagues.
  * An optional closing activation summarizes each completed exchange. The journal preserves the facts
@@ -19,11 +19,11 @@ export type { CreateRuntimeOptions, Runtime } from './host/runtime.ts';
 export { createRuntime, defaultRuntime, systemClock } from './host/runtime.ts';
 export type {
 	ExchangeHandle,
-	ExchangeSnapshot,
+	ExchangeRead,
 	ReadRoomOptions,
 	ResumeRoomOptions,
 	Room,
-	RoomSnapshot,
+	RoomRead,
 	StartRoomOptions,
 	Visit,
 } from './room.ts';

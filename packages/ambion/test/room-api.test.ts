@@ -88,7 +88,7 @@ async function world(
 		name: roomName('room-api'),
 		runtime,
 		agents: [alpha],
-		streamFn: answer,
+		stream: answer,
 		...options,
 	});
 	return { opened, runtime, room };
@@ -185,7 +185,7 @@ describe('the room API', () => {
 				transport: inProcessTransport(),
 			});
 			const name = roomName(`room-read-open-${storage.name}`);
-			const room = await startRoom({ name, runtime, agents: [alpha], streamFn: answer });
+			const room = await startRoom({ name, runtime, agents: [alpha], stream: answer });
 			try {
 				await (await room.visit(priya)).send({ text: 'Stay open?', key: 'open-1' });
 				crash(runtime, room);
@@ -203,7 +203,7 @@ describe('the room API', () => {
 			summary: assistant.name,
 			seats: { [alpha.name]: 'broadcast', [beta.name]: 'broadcast', [assistant.name]: 'none' },
 			agents: [alpha, beta, assistant],
-			streamFn: withSummary(),
+			stream: withSummary(),
 		});
 		try {
 			const visit = await room.visit(priya);
@@ -256,7 +256,7 @@ describe('the room API', () => {
 			summary: assistant.name,
 			seats: { [assistant.name]: 'none' },
 			agents: [assistant],
-			streamFn: scripted((_context, agent, call) =>
+			stream: scripted((_context, agent, call) =>
 				agent === 'assistant' ? quiet() : call === 2 ? speak('One answer.') : quiet(),
 			),
 		});
@@ -275,7 +275,7 @@ describe('the room API', () => {
 	it('maps a send to its final close when a newer message arrives before close commit', async () => {
 		const gate = deferred();
 		const { opened, room } = await world(memory, {
-			streamFn: scripted(async (_context, _agent, call) => {
+			stream: scripted(async (_context, _agent, call) => {
 				if (call !== 2) return quiet();
 				await gate.promise;
 				return quiet();
@@ -332,7 +332,7 @@ describe('the room API', () => {
 	it('rejects an exchange conversation wait when the room is stopped before close', async () => {
 		const held = deferred();
 		const { opened, room } = await world(memory, {
-			streamFn: scripted(async (_context, _agent, call) => {
+			stream: scripted(async (_context, _agent, call) => {
 				if (call !== 2) return quiet();
 				await held.promise;
 				return quiet();
@@ -360,7 +360,7 @@ describe('the room API', () => {
 			name,
 			runtime,
 			agents: [alpha],
-			streamFn: scripted(() => quiet()),
+			stream: scripted(() => quiet()),
 		});
 		try {
 			const sent = await (await first.visit(priya)).send({ text: 'Persist?', key: 'resume-1' });
@@ -372,7 +372,7 @@ describe('the room API', () => {
 			const resumed = await resumeRoom(name, {
 				runtime,
 				agents: [alpha],
-				streamFn: scripted(() => quiet()),
+				stream: scripted(() => quiet()),
 			});
 			try {
 				const recovered = resumed.exchange(sent.from);
