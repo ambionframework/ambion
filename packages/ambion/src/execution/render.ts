@@ -155,10 +155,12 @@ export function renderRecord(
 	people: readonly HumanContextParticipant[],
 	now: number,
 	exchangeFrom?: Seq,
+	omitted = 0,
 ): string {
 	if (record.length === 0) return '(the record is empty)';
 	const dividers = departureDividers(people);
-	const lines: string[] = [];
+	const lines: string[] =
+		omitted > 0 ? [`── ${count(omitted, 'earlier message')} not shown ──`] : [];
 	for (const block of blocks(record)) {
 		if ('line' in block && block.line.seq === exchangeFrom)
 			lines.push('── Current exchange begins here; earlier exchanges are background ──');
@@ -346,6 +348,7 @@ function renderTurnContext(view: ActivationView, def: AgentDefinition): string {
 			people,
 			context.now,
 			view.spec.purpose.kind === 'respond' ? context.exchange?.from : view.spec.purpose.exchange,
+			context.omitted,
 		),
 		``,
 		askOf(view, def),
