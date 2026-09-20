@@ -153,9 +153,12 @@ journals replay; `activation_end` carries usage.
 
 **Goal:** two executor families run in one room, proven on fakes in CI.
 
-1. [ ] `@ambionframework/ambion/testing`: `scripted`, `speak`, `quiet`,
+1. [x] `@ambionframework/ambion/testing`: `scripted`, `speak`, `quiet`,
        `callTool`, `byAgent`, `fakeClock`, `settled`; the `stubModel` cast
        removed; the repository's tests moved onto it (C2). Needs 15.
+       Landed with an eighth export, `isClosing`, the tool-set closing
+       rule; it stays until step 4 rewrites the prompt. `settled` never
+       calls `reconcile()`.
 2. [ ] The executor conformance suite on the scripted executor (D6, F10).
        Needs 1.
 3. [ ] `@ambionframework/pi`: the Pi executor moved out of the kernel, so
