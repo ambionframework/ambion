@@ -33,7 +33,7 @@ const editor = defineAgent({
   name: 'editor',
   identity: 'Keeps decisions clear.',
   instructions: 'State facts that change the next action.',
-  model: 'anthropic/claude-sonnet-4-5',
+  model: 'anthropic/claude-sonnet-5',
 });
 
 const room = await startRoom({

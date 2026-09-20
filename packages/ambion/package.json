@@ -2,7 +2,7 @@
 	"name": "@ambionframework/ambion",
 	"version": "0.1.0-alpha.1",
 	"type": "module",
-	"description": "A minimalist framework for ambient-aware, always-on agents.",
+	"description": "The collaboration kernel for agents and humans: rooms, the journal vocabulary, the rules, and the room driver.",
 	"license": "Apache-2.0",
 	"homepage": "https://ambionframework.com",
 	"repository": {
@@ -12,10 +12,10 @@
 	},
 	"keywords": [
 		"agents",
-		"ambient",
-		"cloudflare",
-		"durable-objects",
-		"framework"
+		"collaboration",
+		"journal",
+		"kernel",
+		"rooms"
 	],
 	"exports": {
 		".": {

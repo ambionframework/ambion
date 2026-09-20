@@ -17,7 +17,7 @@ const researcher = defineAgent({
   name: 'researcher',
   identity: 'Checks evidence and states uncertainty.',
   instructions: 'Use the supplied evidence. Speak when it changes the answer.',
-  model: 'anthropic/claude-sonnet-4-5',
+  model: 'anthropic/claude-sonnet-5',
   tools: [lookup],
 });
 
@@ -200,17 +200,11 @@ responses, activation context, and delivery operations. Journal events and
 projected lease state stay internal. Protocol data and stored events retain
 their existing JSON shapes.
 
-**Migration:** `/transport` no longer exports `Close`, `Composition`, `Fence`,
-`Seating`, `LeaseChange`, or `LeaseHold`. Hosts use room reads and exchange
-handles for collaboration history. Executors use `ActivationView`,
-`CommitResult`, and `LeaseResponse`. `EndReason` remains part of lease requests.
-`AgentRunner` replaces `SeatActor`; the old name has no alias.
-
-**Participant migration:** `ParticipantInfo`, `AgentParticipantInfo`, and
-`HumanParticipantInfo` replace `SeatInfo`, `AgentSeatInfo`, and `HumanSeatInfo`.
-The old names have no aliases. Participant views omit `sessionId`.
+Hosts use room reads and exchange handles for collaboration history.
+Executors use `ActivationView`, `CommitResult`, and `LeaseResponse`.
+`EndReason` is part of lease requests. Participant views omit `sessionId`.
 Audit consumers import `seatSessionId` from `/transport` and supply the room
-and agent names. Existing transcript identifiers remain unchanged.
+and agent names.
 
 ## History and limits
 

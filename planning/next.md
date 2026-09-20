@@ -36,7 +36,7 @@ tagged commit.** The phases below deliver them; the items explain them.
 | F6 Tools and resources            | Neutral JSON Schema tools; three room tools on every surface; one resource contract with a filesystem binding and a SQL binding; provenance on every tool call; bounded context and message size.                                   |
 | F7 Observation and control        | Detached reads for room, exchange, activation, and step; live events with activation ids; typed refusals; abort and stop with documented scope; cost per exchange.                                                                  |
 | F8 Deployment                     | Embedded Node, persistent Node with SQLite, and Cloudflare Durable Objects, each with restart evidence; the Cloudflare object on the core read model; a Node template and a Cloudflare template from `ambion new`.                  |
-| F9 Distribution and evidence      | Nine packages on npmjs with provenance; packed consumers outside the monorepo; Node 22 and 24; the workbench example scripted and live on two providers; conformance suites for storage, transport, and executors.                  |
+| F9 Distribution and evidence      | Nine packages on npmjs with provenance; packed consumers outside the monorepo; Node 26; the workbench example scripted and live on two providers; conformance suites for storage, transport, and executors.                         |
 
 **Deployment models.** The same rules serve four placements.
 
@@ -309,7 +309,7 @@ the scope has evidence on the tagged commit.
        Needs 1.
 3. [ ] One TypeBox version; ESM exports and declarations; package
        contents; lockstep versions. Needs 2.
-4. [ ] Node 22 and 24 tests; Node 26 CLI; workerd tests; the historical
+4. [ ] Node 26 tests and CLI; workerd tests; the historical
        Cloudflare wake and cut races reproduced on current code.
 5. [ ] The chaos sweep at 200 seeds; Dafny proofs for every changed rule;
        golden journals; the live tier on one provider; results recorded

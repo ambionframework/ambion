@@ -13,7 +13,8 @@
  * `assertWire` and `roundTrip` hold a value to what the wire can carry.
  *
  * The main entry is what a host needs to build a room, and it names no part
- * of this. `docs/agent.md` §6 is the design contract for the wire.
+ * of this. The execution boundary section of `docs/agent.md` is the design
+ * contract for the wire.
  */
 
 export { AgentRunner, inProcessTransport } from './execution/runner.ts';

@@ -2,8 +2,8 @@
 
 **The assistant package supplies a default implementation for ordinary rooms.**
 `@ambionframework/assistant` provides `defineAssistant()`. The
-`startRoom({ assistant })` option supplies its room configuration. Relay uses
-both. This document defines the behavior and the evidence needed to evaluate it.
+`startRoom({ assistant })` option supplies its room configuration. The
+workbench example uses both. This document defines the behavior and the evidence needed to evaluate it.
 See the [acceptance review](assistant-acceptance.md) for observed results and
 remaining behavioral blockers.
 
@@ -70,7 +70,7 @@ const assistant = defineAssistant({
 
 const room = await startRoom({
   name: 'delivery',
-  goal: 'Implement and verify the agreed Relay milestone.',
+  goal: 'Implement and verify the agreed milestone.',
   assistant,
   agents: [builder, reviewer],
   seats: { builder: 'named', reviewer: 'named' },
@@ -82,7 +82,7 @@ With the default assistant name, the shorthand expands before composition:
 ```ts
 const room = await startRoom({
   name: 'delivery',
-  goal: 'Implement and verify the agreed Relay milestone.',
+  goal: 'Implement and verify the agreed milestone.',
   agents: [assistant, builder, reviewer],
   seats: {
     assistant: 'broadcast',
@@ -129,8 +129,8 @@ that choice for the application.
 
 **The journal records the expanded ordinary composition.** The shorthand adds
 no durable assistant role or new history format. Resume still requires all
-recorded agent definitions, including the assistant. Relay must retain the
-complete catalog for resume and preserve recorded membership.
+recorded agent definitions, including the assistant. A host retains the
+complete catalog for resume and preserves recorded membership.
 
 ## Speak only when the message adds value
 
@@ -298,16 +298,14 @@ recipient. It cannot seat agents, use domain tools, or reopen investigation.
 Necessary steering must occur during ordinary work before the exchange closes.
 See [Summaries](summary.md) for the existing authority and completion rules.
 
-## Relay integration and evaluation
+## Integration and evaluation
 
-**Relay is the first consumer and the acceptance target.** Its team uses the
-package factory with Relay-specific domain context and workspace tools.
-The team exposes the assistant, specialist definitions, and complete catalog.
-Startup uses the shorthand; resume supplies the complete catalog.
-
-Scenario configuration specifies specialist attention only. Design, delivery,
-and launch start with named specialists. Triage starts with only the assistant.
-Exercise all four scenarios when evaluating changes to the shared behavior.
+**The workbench example is the first consumer and the acceptance target.** Its
+rooms use the package factory with the lab's domain context and workspace
+tools. The example exposes the assistant, the specialist definitions, and the
+complete catalog. Startup uses the shorthand; resume supplies the complete
+catalog. [The example page](example.md) describes each room. Exercise every
+room when evaluating changes to the shared behavior.
 
 **Deterministic checks and behavioral evaluations establish different facts.**
 
@@ -343,7 +341,7 @@ completion. A shorter conversation alone does not prove better behavior.
 
 The initial project adds no scheduler, workflow engine, privileged capability
 system, separate goal database, or automatic preference persistence. Further
-configuration should follow evidence from Relay and other consumers.
+configuration should follow evidence from consumers.
 
 ## Validation commands
 
