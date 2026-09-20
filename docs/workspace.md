@@ -132,11 +132,16 @@ file past the threshold stays in the file it landed in, and the next record
 starts the fresh one. A log does not delete a rotated file; a host that
 wants retention lists the directory and prunes its own way.
 
-**`append` must run one call at a time over one log.** Concurrent calls
-racing the same rotation decision could both decide to rotate, or neither.
-A caller inside `resource.use()` gets serialization for free from the
-owner's queue (see [Open one resource](#open-one-resource)); a caller
-holding `env` directly serializes its own calls.
+**`append` must run one call at a time over one log.** A concurrent call can
+still land its record; the hazard is a spurious failure, not a lost one. Two
+calls racing the same rotation can both see the file past the threshold and
+both try to rename it aside, so the second rename fails once the first has
+already moved the file. That call's append then reports a failure for a
+record the file already holds, which is a caller's cue to retry and write a
+duplicate rather than proof the record is missing. A caller inside
+`resource.use()` gets serialization for free from the owner's queue (see
+[Open one resource](#open-one-resource)); a caller holding `env` directly
+serializes its own calls.
 
 ## Record every tool call
 

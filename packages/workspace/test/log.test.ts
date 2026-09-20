@@ -130,6 +130,13 @@ describe.each(backends)('a workspace log on $name', (backend) => {
 		expect(() => openLog({ path: '' })).toThrow(/absolute/i);
 	});
 
+	it('refuses a trailing slash or an unnormalized path, which can name a different file per backend', () => {
+		expect(() => openLog({ path: '/logs/' })).toThrow(/absolute/i);
+		expect(() => openLog({ path: '/logs//j.jsonl' })).toThrow(/absolute/i);
+		expect(() => openLog({ path: '/logs/./j.jsonl' })).toThrow(/absolute/i);
+		expect(() => openLog({ path: '/logs/../j.jsonl' })).toThrow(/absolute/i);
+	});
+
 	it('refuses a non-positive rotateBytes', () => {
 		expect(() => openLog({ path: '/logs/j.jsonl', rotateBytes: 0 })).toThrow(/rotateBytes/);
 		expect(() => openLog({ path: '/logs/j.jsonl', rotateBytes: -1 })).toThrow(/rotateBytes/);

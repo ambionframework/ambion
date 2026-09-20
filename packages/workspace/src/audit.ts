@@ -15,7 +15,7 @@
  */
 
 import type { Context, ExecutionEnv } from '@earendil-works/pi-agent-core';
-import { appendLine, checkedLogPath, rotateIfDue } from './log.ts';
+import { appendOnly, checkedByteThreshold, checkedLogPath, ensureDir, rotateIfDue } from './log.ts';
 
 /** Where the log lives when the caller names no path. */
 export const DEFAULT_AUDIT_LOG = '/workspace/audit.jsonl';
@@ -85,6 +85,10 @@ function line(entry: AuditEntry): string {
  * refuses the full entry (an oversized `write` call's content, past the
  * room left on a bounded backend), so the call still leaves a trace. Rotates
  * past `maxBytes` once whichever line landed.
+ *
+ * The directory is made once, outside the fallback: a directory failure is
+ * not retried, so it is never mistaken for the write failure the fallback
+ * notice is about, and it still reaches `onError` on its own.
  */
 async function recordEntry(
 	env: ExecutionEnv,
@@ -93,11 +97,12 @@ async function recordEntry(
 	entry: AuditEntry,
 	context: Context,
 ): Promise<void> {
+	await ensureDir(env, path, context);
 	try {
-		await appendLine(env, path, line(entry), context);
+		await appendOnly(env, path, line(entry), context);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		await appendLine(env, path, notice(entry, 'RecordTooLarge', message), context);
+		await appendOnly(env, path, notice(entry, 'RecordTooLarge', message), context);
 	}
 	await rotateIfDue(env, path, maxBytes, context);
 }
@@ -109,7 +114,7 @@ async function recordEntry(
  */
 export function openAuditLog(options: AuditLogOptions = {}): AuditLog {
 	const path = checkedLogPath(options.path ?? DEFAULT_AUDIT_LOG, 'An audit log path');
-	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+	const maxBytes = checkedByteThreshold(options.maxBytes ?? DEFAULT_MAX_BYTES, 'maxBytes');
 	const record = async (env: ExecutionEnv, entry: AuditEntry, context: Context): Promise<void> => {
 		try {
 			await recordEntry(env, path, maxBytes, entry, context);

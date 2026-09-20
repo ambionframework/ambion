@@ -40,16 +40,26 @@ async function listNames(env: BashEnv, path: string): Promise<string[]> {
  * calls, over a plain in-process file map. `appendFile` can be told to fail its
  * first N calls, so a test can force the path `append()` takes when the
  * filesystem refuses the full entry but has room for a short fallback.
+ * `createDir` can likewise be told to fail its first N calls, so a test can
+ * force a transient directory failure distinct from a write failure.
  */
 function fakeEnv(
-	options: { failFirstAppends?: number } = {},
+	options: { failFirstAppends?: number; failFirstCreateDirs?: number } = {},
 ): ExecutionEnv & { files: Map<string, string> } {
 	const files = new Map<string, string>();
 	let appendCalls = 0;
+	let createDirCalls = 0;
 	const failFirstAppends = options.failFirstAppends ?? 0;
+	const failFirstCreateDirs = options.failFirstCreateDirs ?? 0;
 	const env = {
 		files,
-		createDir: async () => ok(undefined),
+		createDir: async (path: string) => {
+			createDirCalls += 1;
+			if (createDirCalls <= failFirstCreateDirs) {
+				return err(new FileError('permission_denied', 'EACCES: transient', path));
+			}
+			return ok(undefined);
+		},
 		appendFile: async (path: string, content: string | Uint8Array) => {
 			appendCalls += 1;
 			if (appendCalls <= failFirstAppends) {
@@ -286,6 +296,11 @@ describe('openAuditLog', () => {
 		expect(() => openAuditLog({ path: '' })).toThrow(/absolute/i);
 	});
 
+	it('rejects a non-positive maxBytes', () => {
+		expect(() => openAuditLog({ maxBytes: 0 })).toThrow(/maxBytes/);
+		expect(() => openAuditLog({ maxBytes: -1 })).toThrow(/maxBytes/);
+	});
+
 	it('falls back to a short notice, instead of dropping the call, when the full entry will not fit', async () => {
 		const env = fakeEnv({ failFirstAppends: 1 });
 		const errors: Error[] = [];
@@ -330,6 +345,25 @@ describe('openAuditLog', () => {
 		});
 
 		await expect(log.record(env, entryFor('one'), ctx)).resolves.toBeUndefined();
+	});
+
+	it('reports a directory failure to onError, and never retries it as if the entry were too large', async () => {
+		// A transient failure that would succeed on a second try must still be
+		// reported: retrying the directory step inside the fallback would instead
+		// silently write a RecordTooLarge notice naming the mkdir error, drop the
+		// entry's own fields, and never call onError.
+		const env = fakeEnv({ failFirstCreateDirs: 1 });
+		const errors: Error[] = [];
+		const log = openAuditLog({
+			path: '/workspace/audit.jsonl',
+			onError: (error) => errors.push(error),
+		});
+
+		await log.record(env, entryFor('one'), ctx);
+
+		expect(errors).toHaveLength(1);
+		expect(errors[0]?.message).toMatch(/EACCES/);
+		expect(env.files.has('/workspace/audit.jsonl')).toBe(false);
 	});
 });
 
