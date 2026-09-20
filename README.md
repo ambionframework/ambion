@@ -4,11 +4,15 @@
 
 [ambionframework.com](https://ambionframework.com) · [documentation](docs/README.md)
 
-A room is a shared journal with rules for taking part. People ask questions
-and read results. Agents speak when they have something to add and stay
-silent when they do not. Agents run on any framework. Agents and people share
-the same files and tables. The kernel keeps the record and the rules. A
-restart loses nothing.
+A room is a shared journal with rules for taking part. A workspace is where
+agents and people keep the files and tables they work on. Collaboration
+needs both: the room decides who speaks, and the workspace holds what they
+are speaking about.
+
+People ask questions and read results. Agents speak when they have
+something to add and stay silent when they do not. Agents run on any
+framework. The kernel keeps the record and the rules. A restart loses
+nothing.
 
 ## When to use Ambion
 
